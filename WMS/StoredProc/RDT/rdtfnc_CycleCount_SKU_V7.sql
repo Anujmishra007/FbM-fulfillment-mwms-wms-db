@@ -1,13 +1,11 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_Id = OBJECT_ID(N'[RDT].[rdtfnc_CycleCount_SKU_V7]') AND OBJECTPROPERTY(object_Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdtfnc_CycleCount_SKU_V7]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdtfnc_CycleCount_SKU_V7                            */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
@@ -15,9 +13,11 @@ GO
 /* 06-May-2019 1.0  James    WMS-8649 Created                           */
 /* 07-May-2021 1.1  Chermain WMS-16932 remove rdt_CycleCount_GetLottables*/
 /*                           at screen 12 (cc01)                        */
+/* 13-Nov-2025 1.2  James    UWP-43652 Add retrieve LottableCode when   */
+/*                           user add new sku (james02)                 */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_CycleCount_SKU_V7] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount_SKU_V7] (
    @nMobile    INT,
    @nErrNo     INT            OUTPUT,
    @cErrMsg    NVARCHAR( 1024) OUTPUT -- screen limitation, 20 char max
@@ -48,9 +48,9 @@ DECLARE
    @cNewLottable05    NVARCHAR( 18),
    @cNewSKUDescr      NVARCHAR( 60),
    @cLotLabel01       NVARCHAR( 20), -- labels
-   @cLotLabel02       NVARCHAR( 20), 
-   @cLotLabel03       NVARCHAR( 20), 
-   @cLotLabel04       NVARCHAR( 20), 
+   @cLotLabel02       NVARCHAR( 20),
+   @cLotLabel03       NVARCHAR( 20),
+   @cLotLabel04       NVARCHAR( 20),
    @cLotLabel05       NVARCHAR( 20)
 
 -- RDT.RDTMobRec variables
@@ -155,12 +155,12 @@ DECLARE @c_debug  NVARCHAR(1)
    SET @c_debug = 0
 
 -- SOS#81879 (Start)
-DECLARE  
-	@cLottable01_Code    NVARCHAR( 20), 
-   @cLottable02_Code    NVARCHAR( 20), 
-   @cLottable03_Code    NVARCHAR( 20), 
-   @cLottable04_Code    NVARCHAR( 20), 
-   @cLottable05_Code    NVARCHAR( 20), 
+DECLARE
+	@cLottable01_Code    NVARCHAR( 20),
+   @cLottable02_Code    NVARCHAR( 20),
+   @cLottable03_Code    NVARCHAR( 20),
+   @cLottable04_Code    NVARCHAR( 20),
+   @cLottable05_Code    NVARCHAR( 20),
    @cLottableLabel      NVARCHAR( 20),
    @cTempLottable01     NVARCHAR( 18),
    @cTempLottable02     NVARCHAR( 18),
@@ -327,7 +327,7 @@ SELECT
    @dLottable13       = V_Lottable13,
    @dLottable14       = V_Lottable14,
    @dLottable15       = V_Lottable15,
-   
+
 
    @nQTY              = V_Integer1,
    @nCCCountNo        = V_Integer2,
@@ -344,10 +344,10 @@ SELECT
    @nCCDLinesPerLOCID = V_Integer13,
    @nCtnCount         = V_Integer14,
    @nFromScn          = V_Integer15,
-   
-   @dNewLottable04    = V_DateTime1, 
+
+   @dNewLottable04    = V_DateTime1,
    @dNewLottable05    = V_DateTime2,
-   
+
    @cCCRefNo          = V_String1,
    @cCCSheetNo        = V_String2,
    @cLottableCode     = V_String3,
@@ -454,12 +454,12 @@ DECLARE
 
 SELECT
    @nStep_CCRef                    = 1,  @nScn_CCRef                    = 5430,
-   @nStep_SheetNo_Criteria         = 2,  @nScn_SheetNo_Criteria         = 5431, 
+   @nStep_SheetNo_Criteria         = 2,  @nScn_SheetNo_Criteria         = 5431,
    @nStep_CountNo                  = 3,  @nScn_CountNo                  = 5432,
    @nStep_LOC                      = 4,  @nScn_LOC                      = 5433,
-   @nStep_LOC_Option               = 5,  @nScn_LOC_Option               = 5434, 
-   @nStep_LAST_LOC_Option          = 6,  @nScn_LAST_LOC_Option          = 5435, 
-   @nStep_RECOUNT_LOC_Option       = 7,  @nScn_RECOUNT_LOC_Option       = 5436, 
+   @nStep_LOC_Option               = 5,  @nScn_LOC_Option               = 5434,
+   @nStep_LAST_LOC_Option          = 6,  @nScn_LAST_LOC_Option          = 5435,
+   @nStep_RECOUNT_LOC_Option       = 7,  @nScn_RECOUNT_LOC_Option       = 5436,
    @nStep_ID                       = 8,  @nScn_ID                       = 5437,
    @nStep_SKU                      = 9,  @nScn_SKU                      = 5438,
    @nStep_SKU_Add_Sku              = 10, @nScn_SKU_Add_Sku              = 5439,
@@ -973,18 +973,18 @@ BEGIN
       END
 
       -- (james26)
-      IF @cExtendedInfoSP <> '' AND 
+      IF @cExtendedInfoSP <> '' AND
          EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
       BEGIN
          SET @cExtendedInfo = ''
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +     
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
               ' @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel, ' +
               ' @cLOC, @cID, @cUCC, @cSKU, @nQty, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
               ' @cLottable06, @cLottable07, @cLottable08, @dLottable09, @dLottable10, ' +
               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
-              ' @tExtInfo, @cExtendedInfo OUTPUT '         
-         SET @cSQLParam =    
+              ' @tExtInfo, @cExtendedInfo OUTPUT '
+         SET @cSQLParam =
             ' @nMobile        INT,           ' +
             ' @nFunc          INT,           ' +
             ' @cLangCode      NVARCHAR( 3),  ' +
@@ -1027,17 +1027,17 @@ BEGIN
             ' @cExtendedInfo  NVARCHAR( 20) OUTPUT '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel, 
-            @cLOC, @cID, @cUCC, @cSKU, @nQty, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+            @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel,
+            @cLOC, @cID, @cUCC, @cSKU, @nQty, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
             @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-            @tExtInfo, @cExtendedInfo OUTPUT 
+            @tExtInfo, @cExtendedInfo OUTPUT
 
          IF @cExtendedInfo <> ''
             SET @cOutField15 = @cExtendedInfo
       END
-      
+
       -- Go to next screen
       SET @nScn = @nScn_CountNo
       SET @nStep = @nStep_CountNo
@@ -1911,18 +1911,18 @@ BEGIN
       SET @cAddNewLocFlag = ''
 
       -- (james26)
-      IF @cExtendedInfoSP <> '' AND 
+      IF @cExtendedInfoSP <> '' AND
          EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
       BEGIN
          SET @cExtendedInfo = ''
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +     
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
               ' @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel, ' +
               ' @cLOC, @cID, @cUCC, @cSKU, @nQty, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
               ' @cLottable06, @cLottable07, @cLottable08, @dLottable09, @dLottable10, ' +
               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
-              ' @tExtInfo, @cExtendedInfo OUTPUT '         
-         SET @cSQLParam =    
+              ' @tExtInfo, @cExtendedInfo OUTPUT '
+         SET @cSQLParam =
             ' @nMobile        INT,           ' +
             ' @nFunc          INT,           ' +
             ' @cLangCode      NVARCHAR( 3),  ' +
@@ -1965,12 +1965,12 @@ BEGIN
             ' @cExtendedInfo  NVARCHAR( 20) OUTPUT '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel, 
-            @cLOC, @cID, @cUCC, @cSKU, @nQty, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+            @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel,
+            @cLOC, @cID, @cUCC, @cSKU, @nQty, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
             @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-            @tExtInfo, @cExtendedInfo OUTPUT 
+            @tExtInfo, @cExtendedInfo OUTPUT
 
          IF @cExtendedInfo <> ''
             SET @cOutField15 = @cExtendedInfo
@@ -2529,7 +2529,7 @@ BEGIN
             @cEmptyRecFlag OUTPUT
 
          -- Dynamic lottable
-         EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 5, 9, 
+         EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 5, 9,
             @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
             @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
             @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -3313,7 +3313,7 @@ BEGIN
          END
 
          -- Dynamic lottable
-         EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 6, 9, 
+         EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 6, 9,
             @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
             @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
             @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -3334,7 +3334,7 @@ BEGIN
             @cErrMsg     OUTPUT,
             '',      -- SourceKey
             @nFunc   -- SourceType
-            
+
 
          -- Prepare current screen var
          SET @cOutField01 = @cSKU
@@ -3659,7 +3659,7 @@ BEGIN
             SET @cOutField08 = ''
 
             -- Dynamic lottable
-            EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 6, 9, 
+            EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 6, 9,
                @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
                @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
                @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -3680,7 +3680,7 @@ BEGIN
                @cErrMsg     OUTPUT,
                '',      -- SourceKey
                @nFunc   -- SourceType
-               
+
 
             -- Go to next screen
             SET @nScn  = @nScn_SKU_Edit_Qty
@@ -3789,7 +3789,7 @@ BEGIN
       SET @cOutField04 = @cSuggestLOC
       SET @cOutField05 = @cLOC
       SET @cOutField06 = '' -- ID
-      SET @cOutField07 = '' 
+      SET @cOutField07 = ''
       SET @cOutField08 = ''
       SET @cOutField09 = ''
       SET @cOutField10 = ''
@@ -4203,7 +4203,8 @@ BEGIN
          @cNewEachUOM  = PAC.PACKUOM3,
          @cNewPPK      = CASE WHEN SKU.PrePackIndicator = '2'
                            THEN 'PPK:' + CAST( SKU.PackQtyIndicator AS NVARCHAR( 2))
-                         ELSE '' END
+                         ELSE '' END,
+         @cLottableCode = LottableCode -- (james02)
       FROM dbo.SKU SKU (NOLOCK)
       INNER JOIN dbo.PACK PAC (NOLOCK) ON (SKU.PackKey = PAC.PackKey)
       WHERE SKU.StorerKey = @cStorerKey
@@ -4290,18 +4291,18 @@ BEGIN
       SET @cSKU = @cNewSKU -- (james10)
 
       -- (james26)
-      IF @cExtendedInfoSP <> '' AND 
+      IF @cExtendedInfoSP <> '' AND
          EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
       BEGIN
          SET @cExtendedInfo = ''
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +     
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
               ' @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel, ' +
               ' @cLOC, @cID, @cUCC, @cSKU, @nQty, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
               ' @cLottable06, @cLottable07, @cLottable08, @dLottable09, @dLottable10, ' +
               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
-              ' @tExtInfo, @cExtendedInfo OUTPUT '         
-         SET @cSQLParam =    
+              ' @tExtInfo, @cExtendedInfo OUTPUT '
+         SET @cSQLParam =
             ' @nMobile        INT,           ' +
             ' @nFunc          INT,           ' +
             ' @cLangCode      NVARCHAR( 3),  ' +
@@ -4344,17 +4345,17 @@ BEGIN
             ' @cExtendedInfo  NVARCHAR( 20) OUTPUT '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel, 
-            @cLOC, @cID, @cUCC, @cSKU, @nQty, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+            @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel,
+            @cLOC, @cID, @cUCC, @cSKU, @nQty, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
             @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-            @tExtInfo, @cExtendedInfo OUTPUT 
+            @tExtInfo, @cExtendedInfo OUTPUT
 
          IF @cExtendedInfo <> ''
             SET @cOutField15 = @cExtendedInfo
       END
-      
+
       -- Go to next screen
       SET @nScn  = @nScn_SKU_Add_Qty
       SET @nStep = @nStep_SKU_Add_Qty
@@ -4555,7 +4556,7 @@ BEGIN
          END
 
          -- Check if the len of the qty cannot > 10
-  IF LEN(LTRIM(RTRIM(@cNewCaseQTY))) > 10
+         IF LEN(LTRIM(RTRIM(@cNewCaseQTY))) > 10
          BEGIN
             SET @nErrNo = 66845
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'Invalid QTY'
@@ -4686,10 +4687,10 @@ BEGIN
       --   '', --@dIn_Lottable04
       --   '', --@dIn_Lottable05
       --   @cLotLabel01      OUTPUT, @cLotLabel06      OUTPUT, @cLotLabel11      OUTPUT,
-      --   @cLotLabel02      OUTPUT, @cLotLabel07      OUTPUT, @cLotLabel12      OUTPUT,   
-      --   @cLotLabel03      OUTPUT, @cLotLabel08      OUTPUT, @cLotLabel13      OUTPUT,   
-      --   @cLotLabel04      OUTPUT, @cLotLabel09      OUTPUT, @cLotLabel14      OUTPUT,   
-      --   @cLotLabel05      OUTPUT, @cLotLabel10      OUTPUT, @cLotLabel15      OUTPUT,   
+      --   @cLotLabel02      OUTPUT, @cLotLabel07      OUTPUT, @cLotLabel12      OUTPUT,
+      --   @cLotLabel03      OUTPUT, @cLotLabel08      OUTPUT, @cLotLabel13      OUTPUT,
+      --   @cLotLabel04      OUTPUT, @cLotLabel09      OUTPUT, @cLotLabel14      OUTPUT,
+      --   @cLotLabel05      OUTPUT, @cLotLabel10      OUTPUT, @cLotLabel15      OUTPUT,
       --   @cLottable01_Code OUTPUT, @cLottable06_Code OUTPUT, @cLottable11_Code OUTPUT,
       --   @cLottable02_Code OUTPUT, @cLottable07_Code OUTPUT, @cLottable12_Code OUTPUT,
       --   @cLottable03_Code OUTPUT, @cLottable08_Code OUTPUT, @cLottable13_Code OUTPUT,
@@ -4708,9 +4709,9 @@ BEGIN
 
       --IF ISNULL(@cErrMsg, '') <> ''
       --   GOTO SKU_Add_Qty_Fail
-      
+
       -- Dynamic lottable
-      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1, 
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
          @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
          @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -4731,8 +4732,8 @@ BEGIN
          @cErrMsg     OUTPUT,
          '',
          @nFunc
-         
-       
+
+
       IF @nErrNo <> 0
          GOTO Quit
 
@@ -4837,7 +4838,7 @@ BEGIN
       --   EXEC rdt.rdtSetFocusField @nMobile, 1   -- Lottable01 value
 
       ---- Dynamic lottable
-      --EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1, 
+      --EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1,
       --   @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
       --   @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
       --   @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -4861,7 +4862,7 @@ BEGIN
 
       --    INSERT INTO traceInfo (traceName,Col1,Col2,Col3,Col4,Col5)
       --    VALUES ('cc_v76',@cInField02,@cOutField02,@cFieldAttr02,@cLottable02,@cLottable06)
-       
+
       --IF @nErrNo <> 0
       --   GOTO Quit
 
@@ -5203,7 +5204,7 @@ BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
       -- Dynamic lottable
-      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'CHECK', 5, 1, 
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'CHECK', 5, 1,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
          @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
          @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -5269,7 +5270,7 @@ BEGIN
       SET @cFieldAttr14 = ''
       SET @cFieldAttr15 = ''
       -- (Vicky02) - End
-      
+
       -- (MaryVong01)
       SET @cErrMsg = ''
       /*
@@ -5505,9 +5506,9 @@ BEGIN
       SET @cLottable03 = @cNewLottable03
       SET @dLottable04 = @dNewLottable04
       SET @dLottable05 = @dNewLottable05
-      
+
       -- Dynamic lottable
-      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 5, 9, 
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 5, 9,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
          @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
          @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -6044,7 +6045,7 @@ BEGIN
          END
 
          -- Dynamic lottable
-         EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 5, 9, 
+         EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 5, 9,
             @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
             @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
             @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -6430,13 +6431,13 @@ BEGIN
       V_Lottable03   = @cLottable03,
       V_Lottable04   = @dLottable04,
       V_Lottable05   = @dLottable05,
-      V_Lottable06   = @cLottable06,  
-      V_Lottable07   = @cLottable07, 
-      V_Lottable08   = @cLottable08, 
-      V_Lottable09   = @cLottable09, 
-      V_Lottable10   = @cLottable10, 
-      V_Lottable11   = @cLottable11, 
-      V_Lottable12   = @cLottable12,  
+      V_Lottable06   = @cLottable06,
+      V_Lottable07   = @cLottable07,
+      V_Lottable08   = @cLottable08,
+      V_Lottable09   = @cLottable09,
+      V_Lottable10   = @cLottable10,
+      V_Lottable11   = @cLottable11,
+      V_Lottable12   = @cLottable12,
       V_Lottable13   = @dLottable13,
       V_Lottable14   = @dLottable14,
       V_Lottable15   = @dLottable15,
@@ -6513,10 +6514,10 @@ BEGIN
       V_Integer13    = @nCCDLinesPerLOCID,
       V_Integer14    = @nCtnCount,
       V_Integer15    = @nFromScn,
-      
+
       V_DateTime1    = @dNewLottable04,
       V_DateTime2    = @dNewLottable05,
-      
+
       I_Field01 = '',  O_Field01 = @cOutField01,
       I_Field02 = '',  O_Field02 = @cOutField02,
       I_Field03 = '',  O_Field03 = @cOutField03,
@@ -6548,9 +6549,5 @@ BEGIN
 
 END
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON [rdt].[rdtfnc_CycleCount_SKU_V7] TO NSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_CycleCount_SKU_V7] TO [NSQL]
 GO
