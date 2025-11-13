@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV20]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV20]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -57,7 +52,7 @@ GO
 /* 2021-10-28  Wan05    2.1   WMS-16805 CR 2.0 - Add Validation         */
 /* 2025-10-10  SSA01    2.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/  
-CREATE PROC [dbo].[ispRLWAV20]  
+CREATE OR ALTER PROC [dbo].[ispRLWAV20]
         @c_wavekey      NVARCHAR(10)    
        ,@b_Success      INT            OUTPUT    
        ,@n_err          INT            OUTPUT    

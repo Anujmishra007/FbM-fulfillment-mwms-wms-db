@@ -22,6 +22,8 @@ GO
 /* 2021-10-21  NJOW01   1.0   WMS-18109 Prepack qty restriction check   */
 /* 2021-10-21  NJOW01   1.0   DEVOPS Combine script                     */
 /* 2022-05-11  Wan01    1.1   WMS-19632 - TH-Nike-Wave Allocate         */
+/* 2024-05-03  NJOW02   1.2   WMS-25347 TH Remove ucc count checking for*/
+/*                            allocated qty                             */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[ispPRNKP06]        
     @c_WaveKey                      NVARCHAR(10)
@@ -88,6 +90,7 @@ BEGIN
          , @n_Pos                   INT            = 0
          , @c_Subset                NVARCHAR(MAX)  = ''
          , @c_Result                NVARCHAR(MAX)  = ''
+         , @c_Country               NVARCHAR(10)   = '' --NJOW02
          
          , @CUR_ORDERLINES          CURSOR
          , @CUR_COMBINATION         CURSOR
@@ -109,6 +112,11 @@ BEGIN
    SET @b_Success=1
    SET @n_Err=0
    SET @c_ErrMsg=''
+
+   --NJOW02
+   SELECT @c_Country = NSQLValue
+   FROM NSQLCONFIG (NOLOCK)
+   WHERE Configkey = 'COUNTRY'   
 
    IF EXISTS ( SELECT 1
                FROM WAVE WITH (NOLOCK)
@@ -418,7 +426,11 @@ BEGIN
       -- FIXED: Corrected number of carton (UCC) that can be allocated (UCC.Status does not update until pallet build)
       SET @c_SQL = 
                 N'INSERT INTO #UCCxLOTxLOCxID (UCCQty, AvailCTNCount, Loc, LocationHandling, LogicalLocation, Lot, ID, UCCNo) '
-   + CHAR(13) +  'SELECT UCC.Qty, UCC.CTNCount - CEILING(LOTxLOCxID.QTYALLOCATED/(UCC.Qty * 1.0)) As CTNCount '
+              + CASE WHEN @c_Country = 'TH' THEN 
+                     CHAR(13) +  'SELECT UCC.Qty, UCC.CTNCount As CTNCount '   --NJOW02
+                ELSE     
+                     CHAR(13) +  'SELECT UCC.Qty, UCC.CTNCount - CEILING(LOTxLOCxID.QTYALLOCATED/(UCC.Qty * 1.0)) As CTNCount '
+                END                       
    + CHAR(13) +  ', LOC.Loc, LOC.LocationHandling, LOC.LogicalLocation, LOTxLOCxID.Lot, LOTxLOCxID.ID, UCC.UCCNo '
    + CHAR(13) +  'FROM LOTxLOCxID WITH (NOLOCK) '     
    + CHAR(13) +  'JOIN LOC WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC AND LOC.Status <> ''HOLD'') '     
@@ -441,7 +453,10 @@ BEGIN
    + CHAR(13) +  'AND LOC.Facility = @c_Facility '   
    + CHAR(13) +  'AND LOTxLOCxID.Storerkey = @c_StorerKey '
    + CHAR(13) +  'AND LOTxLOCxID.Sku = @c_SKU ' 
-   + CHAR(13) +  'AND UCC.CTNCount - CEILING(LOTxLOCxID.QTYALLOCATED/(UCC.Qty * 1.0)) > 0 '
+   + CASE WHEN @c_Country = 'TH' THEN ' '  --NJOW02
+     ELSE
+          CHAR(13) +  'AND UCC.CTNCount - CEILING(LOTxLOCxID.QTYALLOCATED/(UCC.Qty * 1.0)) > 0 '
+     END
    + CHAR(13) +  'AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED > 0 '              -- 2022-07-05 Fix UCC Not Tally with Lotxlocxid Qty
    + CHAR(13) + CASE WHEN ISNULL(RTRIM(@c_LocationType),'') = '' THEN ' ' 
                      ELSE 'AND LOC.LocationType = ''' + @c_LocationType + ''' ' END      

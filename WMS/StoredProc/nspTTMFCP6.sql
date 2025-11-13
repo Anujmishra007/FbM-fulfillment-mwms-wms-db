@@ -14,6 +14,7 @@ GO
 /* Date        Author    Ver  Purposes                                  */
 /* 2018-04-19  Ung       1.0  WMS-3273 Separate PND for pick            */
 /* 2023-01-30  Ung       1.1  WMS-21599 Migrate to SCE                  */
+/* 2024-11-13  Ung       1.2  INC7415944 Performance tuning             */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspTTMFCP6]
     @c_UserID        NVARCHAR(18)
@@ -58,6 +59,7 @@ BEGIN
       ,@cTransitLOC NVARCHAR( 10)
       ,@cUserKeyOverRide NVARCHAR(18)
       ,@cFacility   NVARCHAR(5)
+      ,@cStorerKey  NVARCHAR(15)
 
     SELECT 
        @b_debug = 0
@@ -68,6 +70,13 @@ BEGIN
       ,@c_errmsg = ''
       ,@c_TaskDetailkey = ''
       ,@c_LastLOCAisle = ''
+
+   -- Get session info
+   SELECT 
+      @cStorerKey = StorerKey, 
+      @cFacility = Facility 
+   FROM rdt.rdtMobRec WITH (NOLOCK) 
+   WHERE UserName = SUSER_SNAME()      
             
    -- Handling transaction
    DECLARE @nTranCount INT
@@ -95,11 +104,14 @@ BEGIN
          WHERE AreaDetail.AreaKey = @c_AreaKey01
             AND TaskDetail.TaskType IN ('FCP', 'FCP1')
             AND TaskDetail.Status = '0'
+            AND TaskDetail.StorerKey = @cStorerKey -- To suit IDX_TASKDETAIL_CASEID (TaskType, Storerkey, Status, Groupkey, Caseid, FromID) even thou TM can be cross storer
             AND TaskDetail.UserKeyOverRide IN (@c_userid, '')
-            AND NOT EXISTS( SELECT 1
+            AND NOT EXISTS( SELECT TOP 1 1
                FROM TaskDetail T1 WITH (NOLOCK)
                WHERE TaskDetail.GroupKey <> '' 
                   AND T1.GroupKey = TaskDetail.GroupKey 
+                  AND T1.TaskType = TaskDetail.TaskType -- So that it use IDX_TASKDETAIL_CASEID to seek GroupKey, instead of scan entire IDX_TASKDETAIL_CASEID2 (CaseID, Status)
+                  AND T1.StorerKey = TaskDetail.StorerKey
                   AND T1.Status < '9'
                   AND T1.UserKey NOT IN (@c_userid, ''))
             AND EXISTS( SELECT 1 
@@ -117,9 +129,6 @@ BEGIN
             ,TaskDetail.TaskDetailKey
    ELSE
    BEGIN
-      -- Get facility
-      SELECT @cFacility = Facility FROM rdt.rdtMobRec WITH (NOLOCK) WHERE UserName = SUSER_SNAME()
-      
       DECLARE Cursor_FPKTaskCandidates CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT TaskDetailkey, 
            (SELECT COUNT(1) 
@@ -137,12 +146,14 @@ BEGIN
             JOIN dbo.Booking_Out WITH (NOLOCK) ON (TMS_Shipment.BookingNo = Booking_Out.BookingNo)
          WHERE dbo.TaskDetail.TaskType IN ('FCP', 'FCP1')
             AND TaskDetail.Status = '0'
+            AND TaskDetail.StorerKey = @cStorerKey -- To suit IDX_TASKDETAIL_CASEID (TaskType, Storerkey, Status, Groupkey, Caseid, FromID) even thou TM can be cross storer
             AND TaskDetail.UserKeyOverRide IN (@c_userid, '')
             AND LOC.Facility = @cFacility
-            AND NOT EXISTS( SELECT 1
+            AND NOT EXISTS( SELECT TOP 1 1
                FROM TaskDetail T1 WITH (NOLOCK)
                WHERE TaskDetail.GroupKey <> '' 
                   AND T1.GroupKey = TaskDetail.GroupKey 
+                  AND T1.TaskType = TaskDetail.TaskType -- So that it use IDX_TASKDETAIL_CASEID to seek GroupKey, instead of scan entire IDX_TASKDETAIL_CASEID2 (CaseID, Status)
                   AND T1.Status < '9'
                   AND T1.UserKey NOT IN (@c_userid, ''))
             AND EXISTS( SELECT 1 
