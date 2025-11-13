@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-09-08  Michael  1.0   DevOps Combined                           */
+/* 2025-11-12  Michael  1.1   UWP-43723 Fix UCC Loc Not updated (ML01)  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPostReplen03]
            @c_Replenishmentkey   NVARCHAR(10)
@@ -69,7 +70,8 @@ BEGIN
         , @c_ToLocType = ISNULL(SL.LocationType,'')
      FROM dbo.REPLENISHMENT RP WITH(NOLOCK)
      JOIN dbo.ITRN         ITR WITH(NOLOCK) ON RP.Replenishmentkey = ITR.Sourcekey AND ITR.SourceType = 'ntrReplenishmentUpdate' AND ITR.TranType = 'MV'
-                                           AND RP.Lot = ITR.Lot AND RP.FromLoc = ITR.FromLoc AND RP.ToLoc = ITR.ToLoc AND RP.ID = ITR.FromID AND RP.ToID = ITR.ToID
+                                           AND RP.Lot = ITR.Lot AND RP.FromLoc = ITR.FromLoc AND RP.ToLoc = ITR.ToLoc AND RP.ID = ITR.FromID
+--ML01                                       AND RP.ToID = ITR.ToID
      JOIN dbo.LOC          LOC WITH(NOLOCK) ON ITR.ToLoc = LOC.Loc
      LEFT JOIN dbo.SKUxLOC  SL WITH(NOLOCK) ON ITR.Storerkey = SL.Storerkey AND ITR.Sku = SL.Sku AND ITR.ToLoc = SL.Loc
      CROSS APPLY dbo.fnc_SelectGetRight(LOC.Facility, ITR.Storerkey, '', 'UCC') CFG
