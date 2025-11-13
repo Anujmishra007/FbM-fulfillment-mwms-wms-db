@@ -153,7 +153,7 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_err = 552705
-            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': UI Movment allowed. Please use RDT for SerialNo Movement. (lsp_Move_Wrapper)'
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': UI Movment NOT allowed. Please use RDT for SerialNo Move. (lsp_Move_Wrapper)'
          END
       END
       --ML02-E
