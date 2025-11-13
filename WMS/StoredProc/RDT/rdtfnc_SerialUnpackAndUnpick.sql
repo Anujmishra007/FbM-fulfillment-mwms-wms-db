@@ -499,9 +499,6 @@ Step_4_QUIT:
       SET @cOutField03 = ''
       SET @cOutField04 = ''
    END
-
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN
    GOTO QUIT
 
 
