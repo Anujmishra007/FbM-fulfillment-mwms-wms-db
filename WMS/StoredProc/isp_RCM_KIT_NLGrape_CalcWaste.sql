@@ -22,6 +22,7 @@ GO
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */
 /* 19-MAY-2025 Michael  1.0   DEVOPS combine script                      */
+/* 12-NOV-2025 Michael  1.1   FCR-8632 Allow Multi To-Detail Sku (ML01)  */
 /*************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RCM_KIT_NLGrape_CalcWaste]
       @c_Kitkey      NVARCHAR(MAX)
@@ -71,6 +72,7 @@ BEGIN
    END
 
    IF @n_continue IN(1,2)
+      AND 1=2  --ML01 Skip checking
    BEGIN
       IF (SELECT COUNT(DISTINCT KD.Sku)
           FROM dbo.KIT       KH (NOLOCK)
