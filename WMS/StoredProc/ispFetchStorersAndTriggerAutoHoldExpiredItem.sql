@@ -16,6 +16,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author     Ver   Purposes                                  */
 /* 02-Sep-2025  MICHAEL    1.1   UWP-40390 - Change Hold Status (ML01)     */
+/* 12-Nov-2025  MICHAEL    1.2   FCR-8872 - Add @c_ExpiredThreshold (ML02) */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispFetchStorersAndTriggerAutoHoldExpiredItem](
@@ -40,6 +41,7 @@ BEGIN
             ,@c_Lot          NVARCHAR(10)
             ,@c_OPTION5      NVARCHAR(MAX) = ''   --ML01
             ,@c_HoldStatus   NVARCHAR(10)  = ''   --ML01
+            ,@c_ExpiredThreshold NVARCHAR(10)     --ML02
 
         BEGIN
             DECLARE CUR_TEMP CURSOR LOCAL FORWARD_ONLY STATIC FOR
@@ -63,6 +65,11 @@ BEGIN
                         SET @c_HoldStatus = 'Auto-Block'
                     --ML01-E
                     
+                    --ML02-S
+                    SET @c_ExpiredThreshold = ''
+                    SET @c_ExpiredThreshold = dbo.fnc_GetParamValueFromString('@c_ExpiredThreshold', @c_OPTION5, @c_ExpiredThreshold)
+                    --ML02-E
+                    
                     SET @c_Lot = SPACE(10)
                     WHILE(1=1)
                     BEGIN
@@ -77,7 +84,8 @@ BEGIN
 --ML01                            AND STO.Qty > STO.QtyAllocated
                             AND STO.Qty > 0                        --ML01
                             AND SKU.Lottable04Label = 'EXP_DATE'   --ML01
-                            AND ATTR.Lottable04 <= GETDATE()
+--ML02                            AND ATTR.Lottable04 <= GETDATE()
+                            AND DATEDIFF(DAY, GETDATE(), ATTR.Lottable04) <= ISNULL(TRY_PARSE(ISNULL(@c_ExpiredThreshold,'') AS INT),0)   --ML02
                             AND LOT.Lot > @c_Lot
                            ORDER BY LOT.Lot
 
