@@ -76,7 +76,7 @@ BEGIN
       ,@cMonthChar  NVARCHAR(10)
       ,@cDateChar   NVARCHAR(10)
 
-   SET @cBarcode = TRIM(@cUCC)
+   SET @cBarcode = replace(TRIM(@cUCC),' ','')
    IF @nFunc = 898 -- UCC receiving
    BEGIN
       IF @nStep = 6 -- UCC
