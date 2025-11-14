@@ -168,17 +168,18 @@ BEGIN
          SET @cLocShowDescr = rdt.RDTGetConfig( @nFunc, 'LocShowDescr', @cStorerkey)
          
          SELECT TOP 1 
-            @cPendingTaskDetailKey   = TaskDetailKey,
-            @cDropID          = DropID,
-            @cAreaKey         = AreaKey
-         FROM dbo.TaskDetail WITH(NOLOCK) 
-         WHERE StorerKey = @cStorerKey
-            AND Status = '5'
-            AND UserKey = @cUserName
-            AND DropID <> ''
-            AND TaskType = 'RPF'
-            AND PickMethod = 'PP'
-            AND Message03 NOT IN ('MoveInProgress', 'MoveCompleted')
+            @cPendingTaskDetailKey   = TD.TaskDetailKey,
+            @cDropID          = TD.DropID,
+            @cAreaKey         = TD.AreaKey
+         FROM dbo.TaskDetail TD WITH(NOLOCK)
+         INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey AND PD.Status <> '4'
+         WHERE TD.StorerKey = @cStorerKey
+            AND TD.Status = '5'
+            AND TD.UserKey = @cUserName
+            AND TD.DropID <> ''
+            AND TD.TaskType = 'RPF'
+            AND TD.PickMethod = 'PP'
+            AND TD.Message03 NOT IN ('MoveInProgress', 'MoveCompleted')
 
          SET @cMessage01 = 'Pending DropID is found, need close it.'
          SET @cMessage02 = 'Area Key: ' + @cAreaKey
