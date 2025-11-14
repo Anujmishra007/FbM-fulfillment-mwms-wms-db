@@ -94,7 +94,8 @@ BEGIN
       UPDATE TD
       SET Message03 = 'MoveInProgress',
          EditDate = GETDATE(),
-         EditWho  = SUSER_SNAME()
+         EditWho  = SUSER_SNAME(),
+         TrafficCop = NULL
       FROM dbo.TaskDetail TD WITH(ROWLOCK)
       INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
    END
