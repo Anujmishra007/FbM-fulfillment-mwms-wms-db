@@ -130,18 +130,18 @@ BEGIN
 
    SET @cUDF01  = ''
 
-      DECLARE @tPickDetail TABLE
-      (
-         RowIndex INT IDENTITY(1,1),
-         PickDetailKey NVARCHAR(18)
-      )
+   DECLARE @tPickDetail TABLE
+   (
+      RowIndex INT IDENTITY(1,1),
+      PickDetailKey NVARCHAR(18) PRIMARY KEY
+   )
 
-      DECLARE @tTaskDetail TABLE
-      (
-         RowIndex INT IDENTITY(1,1),
-         TaskDetailKey NVARCHAR(10) PRIMARY KEY
-      )
- 
+   DECLARE @tTaskDetail TABLE
+   (
+      RowIndex INT IDENTITY(1,1),
+      TaskDetailKey NVARCHAR(10) PRIMARY KEY
+   )
+
    SELECT 
       @nCurrentStep        = Step,
       @nCurrentScn         = Scn,
@@ -152,10 +152,6 @@ BEGIN
 
    SELECT @nTranCount = @@TRANCOUNT
 
-   DECLARE @tTaskDetail TABLE
-   (
-      TaskDetailKey NVARCHAR(10) PRIMARY KEY
-   )
 
    IF @nFunc = 1764 -- TM Replen
    BEGIN
