@@ -16,6 +16,7 @@ GO
 /* 2025-07-11 1.2.0  NLT013   UWP-37578 Option issue                        */
 /* 2025-10-10 1.3.0  NickT    FCR-7928 Reallocate for short task            */
 /* 2025-11-08 1.3.0  NLT013   UWP-43838 Skip InProgress/Completed Task      */
+/* 2025-11-14 1.4.0  NLT013   UWP-43847 Fix issue: PickDetail status is not updated */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn01] (
@@ -81,6 +82,7 @@ BEGIN
       @nScn_ShortPick         INT         = 2687,
       @nStep_99               INT         = 99,  
       @nScn_NewExit           INT         = 6527,
+      @nStep_Reason           INT         = 9,  
 
       @cTTMTaskType           NVARCHAR(10),
       @cSuggID                NVARCHAR(18),
@@ -149,6 +151,11 @@ BEGIN
    WHERE Mobile = @nMobile
 
    SELECT @nTranCount = @@TRANCOUNT
+
+   DECLARE @tTaskDetail TABLE
+   (
+      TaskDetailKey NVARCHAR(10) PRIMARY KEY
+   )
 
    IF @nFunc = 1764 -- TM Replen
    BEGIN
@@ -219,14 +226,6 @@ BEGIN
             WHERE StorerKey = @cStorerKey
                AND TaskDetailKey = @cPendingTaskDetailKey
 
-            INSERT INTO @tTaskDetail (TaskDetailKey)
-            SELECT TaskDetailKey
-            FROM dbo.TaskDetail WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND ListKey = @cListKey
-            UNION
-            SELECT @cPendingTaskDetailKey
-
             --Release new task which is assigned this time 
             SELECT 
                @cTaskDetailKey = V_TaskDetailKey
@@ -251,6 +250,12 @@ BEGIN
                   AND Loc = @cToLoc
             END
 
+            INSERT INTO @tTaskDetail ( TaskDetailKey )
+            SELECT DISTINCT TaskDetailKey
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND (ListKey = @cListKey OR TaskDetailKey = @cPendingTaskDetailKey)
+
             IF @nTranCount = 0
                BEGIN TRAN
             ELSE
@@ -259,9 +264,10 @@ BEGIN
             BEGIN TRY
                --Mark Pending task as PENDING
                UPDATE TD
-               SET TD.Message01 = 'PENDING'
+               SET Message01 = 'PENDING' 
                FROM dbo.TaskDetail TD WITH (ROWLOCK)
-               INNER JOIN @tTaskDetail TTD  ON TD.TaskDetailKey = TTD.TaskDetailKey
+               INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
+               WHERE TD.StorerKey = @cStorerKey
                   
                --Rollback ToLoc, FinalLoc, TransitLoc of new assigned tasks
                IF @cToLOCCat IN ('PND', 'PND_IN', 'PND_OUT') AND @cTaskStatus IN ('3','X','H') AND @cFinalLOC <> '' AND @cFinalLOC <> @cToLoc
@@ -336,6 +342,14 @@ BEGIN
             SET @cUDF11 = @cDropID
             SET @cUDF12 = @cListKey
             SET @cUDF13 = @cPendingTaskDetailKey
+         END
+      END
+      ELSE IF @nCurrentStep = @nStep_Reason -- ReasonCOde
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            -- Reset QTY to 0 if SKIP/SHORT Task
+            SET @cUDF01 = '0'
          END
       END
       ELSE IF @nCurrentStep = @nStep_ShortPick -- Short Pick
@@ -550,8 +564,10 @@ BEGIN
                         AND Status IN ( '5', '9' )
                         AND TaskType = 'RPF')
             BEGIN
-               SET @nAfterScn = 2686
-               SET @nAfterStep = 7
+               SET @cOutField02 = '' --Option
+
+               SET @nAfterScn = @nScn_NewExit
+               SET @nAfterStep = @nStep_99
                GOTO Quit
             END
 
