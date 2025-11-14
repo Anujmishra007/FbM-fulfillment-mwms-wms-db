@@ -65,7 +65,6 @@ BEGIN
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
    DECLARE @cCurrentTaskDetailKey NVARCHAR(10)
-   DECLARE @cStatus                 NVARCHAR( 10)
 
    DECLARE @tTaskDetail TABLE 
    (
@@ -609,40 +608,24 @@ BEGIN
    -- 2. Print ZPL label
 
    -- Update PickDetail as 3
-   DECLARE 
-      @cToID                     NVARCHAR(18),
+   DECLARE
       @cLocationType             NVARCHAR(10),
       @cLocationCategory         NVARCHAR(10),
       @cCaseID                   NVARCHAR(20),
       @cTaskStatus               NVARCHAR(10),
+      @cWSCTOTALLOCLOG           NVARCHAR(10),
       @nLoopIndex                INT,
-      @nRowCount                 INT
-
-   SET @cTaskDetailKey = @cCurrentTaskDetailKey
+      @nRowCount                 INT,
+      @bSuccess                  INT
 
    SELECT 
       @cToID = TD.ToID,
       @cLocationType = LOC.LocationType,
       @cLocationCategory = LOC.LocationCategory,
-      @cToLoc = TD.ToLoc,
-      @cStatus = TD.Status
+      @cToLoc = TD.ToLoc
    FROM dbo.TaskDetail TD WITH(NOLOCK)
    INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
    WHERE TD.TaskDetailKey = @cTaskDetailKey
-
-   IF @cStatus <> '9'
-   BEGIN
-      SELECT TOP 1
-         @cToLoc = Loc,
-         @cLocationType = LOC.LocationType
-      FROM dbo.TaskDetail TD WITH(NOLOCK)
-      INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
-      WHERE TD.StorerKey = @cStorerKey
-         AND TD.ListKey = @cListKey
-         AND TD.TaskType = 'RPF'
-         AND TD.Status = '9'
-         AND TD.UserKey = SUSER_NAME()
-   END
 
    IF @cLocationType = 'PND'
    BEGIN
@@ -779,7 +762,7 @@ BEGIN
                      ,@cLangCode    = @cLangCode
                      ,@cStorerKey   = @cStorerKey
                      ,@nStep        = 6
-                     ,@nInputKey    = @nInputKey
+                     ,@nInputKey    = 1
                      ,@cDropID      = @cACTCaseID
                      ,@cPrintType   = 'ZPL'
                      ,@nErrNo       = @nErrNo      OUTPUT
@@ -802,6 +785,7 @@ BEGIN
    END
 
    -- Generate TransmitLog for WSCTOTALLOCLOG if needed
+   SET @cTaskDetailKey = @cCurrentTaskDetailKey
    SELECT
       @cSKU = SKU,
       @cWaveKey = WaveKey,
