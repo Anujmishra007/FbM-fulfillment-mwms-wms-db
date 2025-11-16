@@ -71,6 +71,11 @@ BEGIN
       TaskDetailKey NVARCHAR(10) PRIMARY KEY
    )
 
+   DECLARE @trRDTRPFLog TABLE 
+   (
+      RowRef INT PRIMARY KEY
+   )
+
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -488,7 +493,18 @@ BEGIN
                END
 
                -- Clear rdtRPFLog
-               DELETE rdt.rdtRPFLog WHERE TaskDetailKey = @cTaskDetailKey AND UCCNo = @cUCCNo
+               DELETE FROM @trRDTRPFLog
+
+               INSERT INTO @trRDTRPFLog ( RowRef )
+               SELECT RowRef
+               FROM rdt.rdtRPFLog WITH (NOLOCK)
+               WHERE TaskDetailKey = @cTaskDetailKey
+                  AND UCCNo = @cUCCNo
+
+               DELETE RR
+               FROM rdt.rdtRPFLog RR WITH(ROWLOCK)
+               INNER JOIN @trRDTRPFLog TRR ON RR.RowRef = TRR.RowRef
+
                IF @@ERROR <> 0
                BEGIN
                   SET @nErrNo = 78505
