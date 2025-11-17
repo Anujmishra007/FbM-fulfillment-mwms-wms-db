@@ -87,7 +87,6 @@ CREATE OR ALTER PROC [RDT].[RDTResumeSession] (
       SET mobile = (CASE WHEN mobile = @cMobile01 THEN @cMobile02 ELSE @cMobile01 END),        
       EditDate = GETDATE()        
       WHERE mobile = @cMobile02 OR mobile=@cMobile01        
-        
    END        
         
    ELSE IF @cInField01 = '9'         
