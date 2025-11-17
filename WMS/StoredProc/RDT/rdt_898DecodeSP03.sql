@@ -204,7 +204,7 @@ BEGIN
                @cDateChar = Short
             FROM CodeLKUP WITH (NOLOCK)
             WHERE ListName = 'BAT_MFGDT' AND StorerKey = @cStorerKey
-            AND CODE2 = @cSecondChar AND Code = '3'
+            AND CODE2 = @cThirdChar AND Code = '3'
 
             SET @cLottable03 =   @cYearChar + RIGHT(@cMonthChar, 2) + RIGHT(@cDateChar, 2) 
          END
