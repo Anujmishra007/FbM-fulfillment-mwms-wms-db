@@ -195,13 +195,13 @@ BEGIN
       WHERE Loc = @c_ToLoc
     
 
-      IF @CurrentPalletCount >= @MaxPallet
+      IF (@CurrentPalletCount + 1) > @MaxPallet
       BEGIN
          SET @b_Success = 0;
          SET @n_Err = 70005;
          SET @c_ErrMsg = 
            'Move blocked: Location ' + @c_ToLoc +
-           ' has reached maximum pallet capacity (' + CAST(@MaxPallet AS NVARCHAR(10)) + ').';
+           ' will exceed maximum pallet capacity (' + CAST(@MaxPallet AS NVARCHAR(10)) + ') after this move.';
          RETURN;
       END
    END
