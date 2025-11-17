@@ -1,0 +1,214 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+/******************************************************************************/
+/* Stored Procedure : ispMoveVal                                              */
+/* Copyright        : Maersk                                                  */
+/*                                                                            */
+/* Purpose          : Extended validation for Inventory Move operations       */
+/*                    Validates destination location and LPN before move      */
+/* SKE140           : CREATED : 2025-11-15                                    */
+/*                                                                            */
+/* HOW IT'S CALLED:                                                           */
+/* ---------------                                                            */
+/* This SP is automatically invoked by the WMS move                           */
+/*                                                                            */
+/*   1. UI: Direct Move Screen                                                */
+/*      └─> User selects ToLoc and ToID, clicks Execute                       */
+/*                                                                            */
+/*   2. WM.lsp_Move_Wrapper                                                   */
+/*      └─> Main move wrapper SP (handles user input)                         */
+/*          └─> Calls: dbo.nspItrnAddMove                                     */
+/*                                                                            */
+/*   3. dbo.nspItrnAddMove (lines ~180-220)                                   */
+/*      └─> Creates #MOVE temp table with all move parameters including       */
+/*          ToLoc and ToID                                                    */
+/*      └─> Checks STORERCONFIG for 'MoveExtendedValidation' config           */
+/*      └─> If configured, dynamically calls: ispMoveVal                      */
+/*          EXEC @c_MOVEValidationRules                                       */
+/*               @c_Lot, @c_FromLoc, @c_FromID,                               */
+/*               @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT           */
+/*                                                                            */
+/*   4. THIS SP: dbo.ispMoveVal                                               */
+/*      └─> Reads ToLoc/ToID from #MOVE temp table                            */
+/*      └─> Validates location and LPN flags/status                           */
+/*      └─> Validates max pallet capacity                                     */
+/*      └─> Returns success/failure to nspItrnAddMove                         */
+/*                                                                            */
+/*   5. If validation fails (@b_Success=0):                                   */
+/*      └─> nspItrnAddMove rolls back transaction                             */
+/*      └─> Error logged to ERRORLOG table                                    */
+/*      └─> Error message displayed to user in UI                             */
+/*                                                                            */
+/* CONFIGURATION REQUIRED:                                                    */
+/* ----------------------                                                     */
+/* 1. STORERCONFIG entry:                                                     */
+/*    StorerKey  : [Your Storer]                                              */
+/*    ConfigKey  : MoveExtendedValidation                                     */
+/*    sValue     : ispMoveVal (this SP name)                                  */
+/*                                                                            */
+/* ----------------------                                                     */
+/* 2. CODELKUP entry (defines the stored procedure reference):                */
+/*    Listname  : ispMoveVal                                                  */
+/*    Code      : 1                                                           */
+/*    Short     : STOREDPROC                                                  */
+/*    Long      : ispMoveVal (actual SP name to execute)                      */
+/*    Notes     : Custom ToLoc, LPN, MaxPallet validation                     */
+/*                                                                            */
+/* VALIDATION RULES:                                                          */
+/* ----------------                                                           */
+/* 1. Location Flag     : Blocks if INACTIVE or HOLD                          */
+/* 2. Location Status   : Blocks if HOLD                                      */
+/* 3. LPN Status        : Blocks if HOLD (when ToID provided)                 */
+/* 4. Max Pallet Count  : Blocks if location at capacity                      */
+/*                                                                            */
+/* INPUT PARAMETERS (from nspItrnAddMove):                                    */
+/* ---------------------------------------                                    */
+/*   @c_Lot       : Lot number from source                                    */
+/*   @c_FromLoc   : Source location                                           */
+/*   @c_FromID    : Source LPN/ID                                             */
+/*                                                                            */
+/* OUTPUT PARAMETERS:                                                         */
+/* -----------------                                                          */
+/*   @b_Success   : 1=Pass, 0=Fail                                            */
+/*   @n_Err       : Error number (70001-70005)                                */
+/*   @c_ErrMsg    : Error message for user                                    */
+/*                                                                            */
+/* TEMP TABLE DEPENDENCY:                                                     */
+/* ---------------------                                                      */
+/* Requires #MOVE temp table created by nspItrnAddMove with structure:       */
+/*   - ToLoc      : Destination location (read by this SP)                    */
+/*   - ToID       : Destination LPN (read by this SP)                         */
+/*   - Other fields available but not used by this validation                 */
+/*                                                                            */
+/* ERROR CODES:                                                               */
+/* -----------                                                                */
+/*   70001 : Location Flag is INACTIVE or HOLD                                */
+/*   70002 : Location Status is HOLD                                          */
+/*   70004 : LPN Status is HOLD                                               */
+/*   70005 : Location at maximum pallet capacity                              */
+/*                                                                            */
+/* Date       Rev  Author   Purpose                                           */
+/* ---------- ---  -------  ------------------------------------------------- */
+/* 2025-11-15 1.0  SKE140   Initial version - Added MaxPallet and ToLoc      */
+/*                          validation for JCB during move validation         */
+/******************************************************************************/
+
+CREATE or ALTER PROCEDURE [dbo].[ispMoveVal]
+   @c_Lot NVARCHAR(10),
+   @c_FromLoc NVARCHAR(10),
+   @c_FromID NVARCHAR(18),
+   @b_Success INT OUTPUT,
+   @n_Err INT OUTPUT,
+   @c_ErrMsg NVARCHAR(250) OUTPUT
+AS
+BEGIN
+   SET NOCOUNT ON;
+
+   DECLARE @c_ToLoc NVARCHAR(18) = '',
+           @c_ToID  NVARCHAR(18) = '',
+           @MaxPallet INT,
+           @CurrentPalletCount INT;
+
+   -- Read ToLoc / ToID from the #move temp table
+   SELECT TOP 1
+       @c_ToLoc = ToLoc,
+       @c_ToID  = ToID
+   FROM #move;
+
+   -- Initialize
+   SET @b_Success = 1;
+   SET @n_Err = 0;
+   SET @c_ErrMsg = '';
+
+   IF ISNULL(@c_ToLoc,'') = ''
+      RETURN;
+
+   --------------------------------------------------------------------
+   -- 1) FLAG VALIDATIONS
+   --------------------------------------------------------------------
+   IF EXISTS (
+      SELECT 1
+      FROM LOC WITH (NOLOCK)
+      WHERE Loc = @c_ToLoc
+        AND (ISNULL(LocationFlag,'') = 'INACTIVE' OR ISNULL(LocationFlag,'') = 'HOLD')
+   )
+   BEGIN
+      SET @b_Success = 0;
+      SET @n_Err = 70001;
+      SET @c_ErrMsg = 'Move blocked: Location ' + @c_ToLoc + ' Flag is INACTIVE/HOLD.';
+      RETURN;
+   END
+
+   --------------------------------------------------------------------
+   -- 2) STATUS VALIDATION (LOC)
+   --------------------------------------------------------------------
+   IF EXISTS (
+      SELECT 1
+      FROM LOC WITH (NOLOCK)
+      WHERE Loc = @c_ToLoc
+        AND ISNULL(Status,'') = 'HOLD'
+   )
+   BEGIN
+      SET @b_Success = 0;
+      SET @n_Err = 70002;
+      SET @c_ErrMsg = 'Move blocked: Location ' + @c_ToLoc + ' Status is HOLD.';
+      RETURN;
+   END
+
+   --------------------------------------------------------------------
+   -- 3) LPN VALIDATIONS (if ToID present)
+   --------------------------------------------------------------------
+   IF ISNULL(@c_ToID,'') <> ''
+   BEGIN
+    
+      -- LPN Status
+      IF EXISTS (
+         SELECT 1
+         FROM ID WITH (NOLOCK)
+         WHERE ID = @c_ToID
+           AND ISNULL(STATUS,'') = 'HOLD'
+      )
+      BEGIN
+         SET @b_Success = 0;
+         SET @n_Err = 70004;
+         SET @c_ErrMsg = 'Move blocked: LPN ' + @c_ToID + ' Status is HOLD.';
+         RETURN;
+      END
+   END
+
+   --------------------------------------------------------------------
+   -- 4) NEW RULE — MAX PALLET CAPACITY
+   --------------------------------------------------------------------
+   -- Find MaxPallet capacity on the ToLoc
+   SELECT @MaxPallet = MaxPallet
+   FROM LOC WITH (NOLOCK)
+   WHERE Loc = @c_ToLoc;
+
+   IF ISNULL(@MaxPallet,0) > 0  -- Only check if location is configured
+   BEGIN
+      -- Count how many pallets currently in that location
+      SELECT @CurrentPalletCount = COUNT(*)
+      FROM LOTxLOCxID WITH (NOLOCK)
+      WHERE Loc = @c_ToLoc
+    
+
+      IF @CurrentPalletCount >= @MaxPallet
+      BEGIN
+         SET @b_Success = 0;
+         SET @n_Err = 70005;
+         SET @c_ErrMsg = 
+           'Move blocked: Location ' + @c_ToLoc +
+           ' has reached maximum pallet capacity (' + CAST(@MaxPallet AS NVARCHAR(10)) + ').';
+         RETURN;
+      END
+   END
+
+   --------------------------------------------------------------------
+   -- If all validation passed
+   --------------------------------------------------------------------
+   SET @b_Success = 1;
+END
+GO
