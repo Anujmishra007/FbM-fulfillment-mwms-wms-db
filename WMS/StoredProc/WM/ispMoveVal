@@ -131,7 +131,7 @@ BEGIN
    --------------------------------------------------------------------
    IF EXISTS (
       SELECT 1
-      FROM LOC WITH (NOLOCK)
+      FROM LOC
       WHERE Loc = @c_ToLoc
         AND (ISNULL(LocationFlag,'') = 'INACTIVE' OR ISNULL(LocationFlag,'') = 'HOLD')
    )
