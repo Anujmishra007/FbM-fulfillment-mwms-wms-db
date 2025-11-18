@@ -73,7 +73,7 @@ GO
 /* 26-JUN-2025  SSA01     UWP-3982- Added PalletType in inventory         */
 /* 26-Sep-2025  TLTING02  UWP-41813 skip blank ID update                  */
 /* 10-Oct-2025  SSA02     UWP-42248 -Enhanced session management          */
-/* 21-Oct-2025  Michael   1.3 FCR-8378-StrCfg SerialNoUpdateLotLocID(ML01)*/
+/* 21-Oct-2025  Michael   FCR-8378 -StrCfg SerialNoUpdateLotLocID (ML01)  */
 /*              Ung       Not update serial no when SerialNoUpdateLotLocID*/
 /* 05-Nov-2025  SSA03     2.2 UWP-43625- updated sequence of update       */
 /*                            channelInv table to avoid deadlock          */
@@ -294,7 +294,7 @@ BEGIN
             ,@c_ToLocStatus= LOC.Status                --(Wan08)
             ,@c_ToLocTypeSkipChannel = CASE WHEN CODELKUP.UDF01 = 'MOVESKIPCHANNEL' THEN  'Y' ELSE 'N' END  --NJOW01
       FROM LOC (NOLOCK)
-      JOIN CODELKUP(NOLOCK) ON LOC.LocationType = CODELKUP.Code AND CODELKUP.ListName = 'LOCTYPE'  --NJOW01
+      LEFT JOIN CODELKUP(NOLOCK) ON LOC.LocationType = CODELKUP.Code AND CODELKUP.ListName = 'LOCTYPE'  --NJOW01 --ML01
       WHERE LOC.LOC = @c_ToLoc
 
       Select @b_success = 0
@@ -2395,7 +2395,8 @@ BEGIN
          END
       END
    END
-    --NJOW05 S --SSA03 -Start
+
+   --NJOW05 S --SSA03 -Start
    IF (@n_continue = 1 or @n_continue = 2) AND ISNULL(@c_Channel, '') <> ''
    BEGIN
       SELECT @c_FromFacility = LOC.Facility

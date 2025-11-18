@@ -5,15 +5,15 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_1868UnpackConfirm                               */
+/* Store procedure: rdt_1868UnpackCfm01                                 */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Date         Rev   Author      Purposes                              */
-/* 2024-11-05   1.0   TLE109      FCR-917 Serial Unpack and Unpick      */
+/* 2025-11-10   1.0   Dennis      FCR-8467 Created                      */
 /************************************************************************/
 
 
-CREATE OR ALTER PROC rdt.rdt_1868UnpackConfirm (
+CREATE OR ALTER PROC rdt.rdt_1868UnpackCfm01 (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -41,48 +41,6 @@ BEGIN
    @cSQLParam        NVARCHAR( MAX)
 
    SET @nTranCount = @@TRANCOUNT
-
-   SET @cUnPackConfirmSP = rdt.RDTGetConfig( @nFunc, 'UnPackConfirmSP', @cStorerKey)
-   IF @cUnPackConfirmSP = '0'
-   BEGIN
-      SET @cUnPackConfirmSP = ''
-   END 
--------------------------------------------Customer---------------------------------------------
-
-   IF @cUnPackConfirmSP <> '' AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cUnPackConfirmSP AND type = 'P')
-   BEGIN
-      SET @cSQL = 'EXEC rdt.' + RTRIM( @cUnPackConfirmSP) +
-      ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-      ' @cSerialNo, @cPickSlipNo,' +
-      ' @nErrNo OUTPUT, @cErrMsg OUTPUT ' 
-
-      SET @cSQLParam = 
-      ' @nMobile        INT,           ' +
-      ' @nFunc          INT,           ' +
-      ' @cLangCode      NVARCHAR( 3),  ' +
-      ' @nStep          INT,           ' +
-      ' @nInputKey      INT,           ' +
-      ' @cFacility      NVARCHAR( 5),  ' +
-      ' @cStorerKey     NVARCHAR( 15), ' +
-      ' @cSerialNo      NVARCHAR( 100),' +
-      ' @cPickSlipNo    NVARCHAR( 20), ' + 
-      ' @nErrNo         INT OUTPUT,     ' +
-      ' @cErrMsg        NVARCHAR( 20)  OUTPUT' 
-
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-         @cSerialNo, @cPickslipNo,
-         @nErrNo OUTPUT, @cErrMsg OUTPUT
-      IF @nErrNo <> 0
-      BEGIN
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-      END
-      GOTO Quit 
-   END
-
-
-
--------------------------------------------Standard---------------------------------------------
 
    DECLARE
    @nCartonNo      INT,
@@ -192,7 +150,7 @@ BEGIN
       BEGIN
          UPDATE dbo.PackHeader WITH(ROWLOCK)
          SET
-            Status = '9',
+            Status = '5',
             EditDate = GETDATE(),
             EditWho = SUSER_SNAME()
          WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey AND Status = '0'
@@ -236,5 +194,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_1868UnpackConfirm TO NSQL
+GRANT EXECUTE ON RDT.rdt_1868UnpackCfm01 TO NSQL
 GO

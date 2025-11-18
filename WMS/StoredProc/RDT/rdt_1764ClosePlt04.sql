@@ -17,7 +17,9 @@ GO
 /*                                                                             */
 /* Date        Rev      Author    Purposes                                     */
 /* 2025-10-02  1.0.0    NLT013    FCR-7730 Created                             */
-/* 2025-11-08  1.0.1    NLT013    UWP-43838 Mark TaskDetail as MoveInProgress  */
+/* 2025-11-08  1.1.0    NLT013    UWP-43838 Mark TaskDetail as MoveInProgress  */
+/* 2025-11-08  1.2.0    NLT013    UWP-44117 Update TaskDetail by Primary Key   */
+/* 2025-11-04  1.3.0    NLT013    UWP-43847 Mark Pickdetail as 3, print ZPL    */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
@@ -44,7 +46,7 @@ BEGIN
    DECLARE @cWaveKey       NVARCHAR( 10)
    DECLARE @cFromLOC       NVARCHAR( 10)
    DECLARE @cFromID        NVARCHAR( 18)
-   DECLARE @cToLOC         NVARCHAR( 10)
+   DECLARE @cToLoc         NVARCHAR( 10)
    DECLARE @cToID          NVARCHAR( 18)
    DECLARE @cSKU           NVARCHAR( 20)
    DECLARE @cLOT           NVARCHAR( 10)
@@ -62,24 +64,46 @@ BEGIN
    DECLARE @cClosePalletSP NVARCHAR( 20)
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
+   DECLARE @cCurrentTaskDetailKey NVARCHAR(10)
+
+   DECLARE @tTaskDetail TABLE 
+   (
+      TaskDetailKey NVARCHAR(10) PRIMARY KEY
+   )
+
+   DECLARE @trRDTRPFLog TABLE 
+   (
+      RowRef INT PRIMARY KEY
+   )
 
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
 
-   SELECT @cStorerKey = StorerKey
+   SELECT @cStorerKey = StorerKey,
+      @cCurrentTaskDetailKey = V_TaskDetailKey
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   UPDATE dbo.TaskDetail WITH(ROWLOCK)
-   SET Message03 = 'MoveInProgress',
-       EditDate = GETDATE(),
-       EditWho  = SUSER_SNAME()
+   INSERT INTO @tTaskDetail ( TaskDetailKey )
+   SELECT TaskDetailKey
+   FROM dbo.TaskDetail WITH(NOLOCK)
    WHERE ListKey = @cListKey
       AND UserKey = @cUserName
       AND Status = '5'
       AND TaskType = 'RPF'
       AND StorerKey = @cStorerKey
+
+   IF EXISTS (SELECT 1 FROM @tTaskDetail)
+   BEGIN
+      UPDATE TD
+      SET Message03 = 'MoveInProgress',
+         EditDate = GETDATE(),
+         EditWho  = SUSER_SNAME(),
+         TrafficCop = NULL
+      FROM dbo.TaskDetail TD WITH(ROWLOCK)
+      INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
+   END
 
    /***********************************************************************************************
                                      Standard Close Pallet
@@ -103,11 +127,7 @@ BEGIN
 
       IF @nCurrentStep = 6
       BEGIN
-         DECLARE @tTaskDetail TABLE 
-         (
-            TaskDetailKey NVARCHAR(10) PRIMARY KEY
-         )
-
+         DELETE FROM @tTaskDetail
          INSERT INTO @tTaskDetail ( TaskDetailKey )
          SELECT DISTINCT TD.TaskDetailKey
          FROM dbo.TaskDetail TD WITH(NOLOCK)
@@ -183,7 +203,7 @@ BEGIN
          AND Status = '5' -- 3=Fetch, 5=Picked, 9=Complete
       ORDER BY TaskDetailKey
    OPEN @curRPTask
-   FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLOC, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey
+   FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLoc, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey
    WHILE @@FETCH_STATUS = 0
    BEGIN
       SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
@@ -213,7 +233,7 @@ BEGIN
             @cStorerKey  = @cStorerKey,
             @cFacility   = @cFacility,
             @cFromLOC    = @cFromLOC,
-            @cToLOC      = @cToLOC,
+            @cToLoc      = @cToLoc,
             @cFromID     = @cFromID,
             @cToID       = @cFromID,
             @nFunc       = @nFunc
@@ -228,7 +248,7 @@ BEGIN
             @cFacility      = @cFacility,
             @cStorerKey     = @cStorerKey,
             @cLocation      = @cFromLOC,
-            @cToLocation    = @cToLOC,
+            @cToLocation    = @cToLoc,
             @cID            = @cFromID,
             @cToID          = @cToID,
             @cRefNo5        = @cListKey,
@@ -296,7 +316,7 @@ BEGIN
                      @cStorerKey  = @cStorerKey,
                      @cFacility   = @cFacility,
                      @cFromLOC    = @cFromLOC,
-                     @cToLOC      = @cToLOC,
+                     @cToLoc      = @cToLoc,
                      @cFromID     = @cFromID,
                      @cToID       = @cToID,
                      @cUCC        = @cUCCNo,
@@ -315,7 +335,7 @@ BEGIN
                      @cFacility      = @cFacility,
                      @cStorerKey     = @cStorerKey,
                      @cLocation      = @cFromLOC,
-                     @cToLocation    = @cToLOC,
+                     @cToLocation    = @cToLoc,
                      @cID            = @cFromID,
                      @cToID          = @cToID,
                      @cRefNo1        = @cUCCNo,
@@ -390,7 +410,7 @@ BEGIN
                         @cStorerKey  = @cStorerKey,
                         @cFacility   = @cFacility,
                         @cFromLOC    = @cFromLOC,
-                        @cToLOC      = @cToLOC,
+                        @cToLoc      = @cToLoc,
                         @cFromID     = @cFromID,
                         @cToID       = @cToID,
                         @cSKU        = @cUCC_SKU,
@@ -409,7 +429,7 @@ BEGIN
                      FROM dbo.SKUxLOC SL (NOLOCK)
                      WHERE SL.StorerKey = @cStorerKey
                      AND   SL.SKU = @cUCC_SKU
-                     AND   SL.LOC = @cToLOC
+                     AND   SL.LOC = @cToLoc
 
                      SET @cLoseUCC = ''
                      SET @cLoseID = ''
@@ -417,11 +437,11 @@ BEGIN
                         @cLoseID = LoseID,
                         @cLoseUCC = LoseUCC
                      FROM dbo.LOC (NOLOCK)
-                     WHERE LOC = @cToLOC
+                     WHERE LOC = @cToLoc
 
                      -- Update UCC (rdt_move not support move ucc with multisku ucc)
                      UPDATE dbo.UCC WITH (ROWLOCK) SET
-                        LOC = @cToLOC,
+                        LOC = @cToLoc,
                         ID = CASE
                               WHEN @cLoseID = '1' THEN '' -- Lose ID
                               WHEN @cToID IS NULL THEN ID -- ID not change
@@ -459,7 +479,7 @@ BEGIN
                         @cFacility      = @cFacility,
                         @cStorerKey     = @cStorerKey,
                         @cLocation      = @cFromLOC,
-                        @cToLocation    = @cToLOC,
+                        @cToLocation    = @cToLoc,
                         @cID            = @cFromID,
                         @cToID          = @cToID,
                         @cSKU           = @cSKU,
@@ -473,7 +493,18 @@ BEGIN
                END
 
                -- Clear rdtRPFLog
-               DELETE rdt.rdtRPFLog WHERE TaskDetailKey = @cTaskDetailKey AND UCCNo = @cUCCNo
+               DELETE FROM @trRDTRPFLog
+
+               INSERT INTO @trRDTRPFLog ( RowRef )
+               SELECT RowRef
+               FROM rdt.rdtRPFLog WITH (NOLOCK)
+               WHERE TaskDetailKey = @cTaskDetailKey
+                  AND UCCNo = @cUCCNo
+
+               DELETE RR
+               FROM rdt.rdtRPFLog RR WITH(ROWLOCK)
+               INNER JOIN @trRDTRPFLog TRR ON RR.RowRef = TRR.RowRef
+
                IF @@ERROR <> 0
                BEGIN
                   SET @nErrNo = 78505
@@ -522,7 +553,7 @@ BEGIN
                   @cStorerKey  = @cStorerKey,
                   @cFacility   = @cFacility,
                   @cFromLOC    = @cFromLOC,
-                  @cToLOC      = @cToLOC,
+                  @cToLoc      = @cToLoc,
                   @cFromID     = @cFromID,
                   @cToID       = @cToID,
                   @cSKU        = @cSKU,
@@ -544,7 +575,7 @@ BEGIN
                   @cFacility      = @cFacility,
                   @cStorerKey     = @cStorerKey,
                   @cLocation      = @cFromLOC,
-                  @cToLocation    = @cToLOC,
+                  @cToLocation    = @cToLoc,
                   @cID            = @cFromID,
                   @cToID          = @cToID,
                   @cSKU           = @cSKU,
@@ -563,7 +594,7 @@ BEGIN
       EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
          ,''      --@cFromLOC
          ,@cFromID--@cFromID
-         ,@cToLOC --@cSuggestedLOC
+         ,@cToLoc --@cSuggestedLOC
          ,''      --@cStorerKey
          ,@nErrNo  OUTPUT
          ,@cErrMsg OUTPUT
@@ -587,7 +618,247 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
          GOTO RollBackTran
       END
-      FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLOC, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey
+      FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLoc, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey
+   END
+
+   -- 1. Update PickDetail as 3
+   -- 2. Print ZPL label
+
+   -- Update PickDetail as 3
+   DECLARE
+      @cLocationType             NVARCHAR(10),
+      @cLocationCategory         NVARCHAR(10),
+      @cCaseID                   NVARCHAR(20),
+      @cTaskStatus               NVARCHAR(10),
+      @cWSCTOTALLOCLOG           NVARCHAR(10),
+      @nLoopIndex                INT,
+      @nRowCount                 INT,
+      @bSuccess                  INT
+
+   SELECT 
+      @cToID = TD.ToID,
+      @cLocationType = LOC.LocationType,
+      @cLocationCategory = LOC.LocationCategory,
+      @cToLoc = TD.ToLoc
+   FROM dbo.TaskDetail TD WITH(NOLOCK)
+   INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
+   WHERE TD.TaskDetailKey = @cTaskDetailKey
+
+   IF @cLocationType = 'PND'
+   BEGIN
+      DECLARE @tPickDetail TABLE
+      (
+         PickDetailKey  NVARCHAR(18) PRIMARY KEY
+      )
+      DECLARE @tCases TABLE
+      (
+         ID    INT IDENTITY(1,1),
+         CaseID NVARCHAR(20),
+         SKU    NVARCHAR(20)
+      )
+         
+      DELETE FROM @tPickDetail
+
+      INSERT INTO @tPickDetail( PickDetailKey )
+      SELECT DISTINCT PD.PickDetailKey
+      FROM dbo.PickDetail PD WITH (NOLOCK)
+      INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey AND PD.SKU = TD.SKU
+      INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.StorerKey = SI.StorerKey AND TD.SKU = SI.SKU 
+      WHERE PD.StorerKey = @cStorerKey
+         AND TD.ListKey = @cListKey
+         AND PD.Status = '0'
+         AND TD.Status = '9'
+         AND TD.TaskType = 'RPF'
+         AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE' 
+         AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
+
+      IF @@ROWCOUNT > 0
+      BEGIN
+         BEGIN TRY
+            UPDATE PD
+            SET Status = '3',
+               Loc = @cToLoc,
+               EditDate = GETDATE(),
+               EditWho  = SUSER_SNAME()
+            FROM dbo.PickDetail PD WITH (ROWLOCK) 
+            INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 248402
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PickDetail Failed
+            GOTO RollBackTran
+         END CATCH
+      END
+
+      -- Print ZPL
+      DECLARE @cRefTaskKey       NVARCHAR(10) = ''
+      DELETE FROM @tCases
+
+      INSERT INTO @tCases(CaseID, SKU)
+      SELECT DISTINCT CaseID, SKU
+      FROM dbo.TaskDetail WITH (NOLOCK)
+      WHERE ListKey = @cListKey
+         AND Status = '9'
+         AND TaskType = 'RPF'
+         AND Qty > 0
+
+      SET @nLoopIndex = -1
+      WHILE 1 = 1
+      BEGIN
+         SELECT TOP 1
+            @cCaseID = CASEID,
+            @cSKU = SKU,
+            @nLoopIndex = id
+         FROM @tCases
+         WHERE id > @nLoopIndex
+         ORDER BY id
+
+         IF @@ROWCOUNT = 0
+            BREAK
+
+         IF EXISTS(SELECT 1
+                  FROM dbo.SkuInfo WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND SKU = @cSKU
+                     AND ISNULL(ExtendedField06, '') = 'SORTABLE'
+                     AND ISNULL(ExtendedField07, '') = 'CONVEYABLE')
+         BEGIN
+            DECLARE @nCaseCount INT = 0
+
+            SELECT @nCaseCount = COUNT(DISTINCT CASEID) 
+            FROM dbo.PICKDETAIL PD WITH(NOLOCK) 
+            WHERE PD.StorerKey= @cStorerKey 
+               AND PD.DropID = @cCaseID
+
+            DECLARE @nVASCount INT = 0
+            DECLARE @cPrePackIndicator NVARCHAR(30) = ''
+
+            SELECT @cPrePackIndicator = ISNULL(SKU.PrePackIndicator, '')
+            FROM dbo.SKU WITH(NOLOCK) 
+            WHERE StorerKey= @cStorerKey 
+               AND SKU = @cSKU
+
+            SELECT @nVASCount = COUNT(*)
+            FROM dbo.PickDetail PD WITH(NOLOCK)
+            INNER JOIN dbo.WorkOrderDetail WOD WITH(NOLOCK) 
+               ON WOD.ExternWorkOrderKey IS NOT NULL 
+               AND WOD.ExternLineNo IS NOT NULL
+               AND WOD.ExternWorkOrderKey = PD.OrderKey 
+               AND WOD.ExternLineNo = PD.OrderLineNumber
+            INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+               ON CL.StorerKey = PD.StorerKey
+               AND ISNULL(WOD.Type, '') = CL.short
+            WHERE PD.StorerKey = @cStorerKey
+               AND PD.DropID = @cCaseID
+               AND PD.UOM = '2'
+               AND CL.LISTNAME = 'WCSVAS'
+
+            IF @nCaseCount = 1 AND (@nVASCount = 0 OR @cPrePackIndicator = 'Y')
+               AND EXISTS (SELECT 1 FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cCaseID AND StorerKey = @cStorerKey)
+               AND NOT EXISTS (SELECT 1
+                           FROM dbo.ORDERS ORM WITH(NOLOCK)
+                           INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) 
+                              ON PD.StorerKey = ORM.StorerKey 
+                              AND PD.OrderKey = ORM.OrderKey
+                           INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+                              ON CL.StorerKey = ORM.StorerKey
+                              AND CL.LISTNAME = 'WSCourier'
+                              AND CL.Code = 'ECL-1'
+                              AND ORM.ShipperKey = CL.short
+                           WHERE PD.StorerKey = @cStorerKey
+                              AND PD.DropID = @cCaseID
+                              AND PD.UOM = '2')
+            BEGIN
+               DECLARE @cACTCaseID NVARCHAR(20)
+               SELECT @cACTCaseID = CASEID FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cCaseID
+               -- Login user's printer must = 'PANDA', then goes to ZPL print
+               BEGIN TRY
+                  EXEC rdt.rdt_LevisPrintCartonLabel
+                     @nMobile       = @nMobile
+                     ,@nFunc        = @nFunc
+                     ,@cLangCode    = @cLangCode
+                     ,@cStorerKey   = @cStorerKey
+                     ,@nStep        = 6
+                     ,@nInputKey    = 1
+                     ,@cDropID      = @cACTCaseID
+                     ,@cPrintType   = 'ZPL'
+                     ,@nErrNo       = @nErrNo      OUTPUT
+                     ,@cErrMsg      = @cErrMsg     OUTPUT
+                     ,@cSourceName  = 'rdt_1764ClosePlt04'
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 248403
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Print ZPL Failed
+                  GOTO RollBackTran
+               END CATCH
+
+               IF @nErrNo <> 0
+               BEGIN
+                  GOTO RollBackTran
+               END
+            END
+         END
+      END
+   END
+
+   -- Generate TransmitLog for WSCTOTALLOCLOG if needed
+   SET @cTaskDetailKey = @cCurrentTaskDetailKey
+   SELECT
+      @cSKU = SKU,
+      @cWaveKey = WaveKey,
+      @cCaseID = CaseID,
+      @cTaskStatus = Status,
+      @nQty = Qty
+   FROM dbo.TaskDetail WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+      AND TaskdetailKey = @cTaskDetailKey
+      AND TaskType = 'RPF'
+      
+   IF @cTaskStatus IN ( '5', '9' ) AND @nQty > 0 -- RPF task is completed
+   BEGIN
+      SELECT @nRowCount = COUNT(*)
+      FROM dbo.SkuInfo WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND SKU = @cSKU
+         AND ISNULL(ExtendedField06, '') = 'SORTABLE'
+         AND ISNULL(ExtendedField07, '') = 'CONVEYABLE'
+
+      SET @cWSCTOTALLOCLOG = rdt.RDTGetConfig( @nFunc, 'WSCTOTALLOCLOG', @cStorerKey)
+
+      IF @nRowCount > 0 AND @cWSCTOTALLOCLOG = '1'
+      BEGIN
+         SELECT @nRowCount = COUNT(*)
+         FROM dbo.Transmitlog2 WITH (NOLOCK)
+         WHERE TableName = 'WSCTOTALLOCLOG' 
+            AND Key1 = @cWaveKey
+            AND Key2 = @cCaseID
+            AND Key3 = @cStorerKey
+
+         IF @nRowCount = 0 -- No record exist, then generate TransmitLog
+         BEGIN
+            BEGIN TRY
+               EXEC ispGenTransmitLog2
+                  @c_TableName        = 'WSCTOTALLOCLOG'
+                  ,@c_Key1             = @cWaveKey
+                  ,@c_Key2             = @cCaseID
+                  ,@c_Key3             = @cStorerKey
+                  ,@c_TransmitBatch    = ''
+                  ,@b_Success          = @bSuccess   OUTPUT
+                  ,@n_err              = @nErrNo     OUTPUT
+                  ,@c_errmsg           = @cErrMsg    OUTPUT
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 233652
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Generate TransmitLog Failed
+               GOTO RollBackTran
+            END CATCH
+
+            IF @bSuccess <> 1
+            BEGIN
+               GOTO RollBackTran
+            END
+         END
+      END
    END
 
    -- Create next task

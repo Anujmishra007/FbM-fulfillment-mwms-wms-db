@@ -23,6 +23,7 @@ GO
 /*                             if variance is less than tolerance                */
 /* 2025-11-05 1.2.1 NickT      FCR-8158 If adjustment is closed, createa new one */
 /* 2025-11-08 1.2.2 NickT      FCR-8158 Create Adjust if variance less than tolerance */
+/* 2025-11-18 1.3.0 NickT      UWP-44224 QtyPicked should be considered          */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
@@ -95,6 +96,7 @@ BEGIN --(CLVN01)
    DECLARE @nQtyAlloc         INT = 0
    DECLARE @nOriCCQty         INT
    DECLARE @nInvQty           INT
+   DECLARE @nInvQtyPicked     INT
    DECLARE @nLoopIndex        INT = -1
 
    --V1.1.3
@@ -219,33 +221,36 @@ BEGIN --(CLVN01)
                   BEGIN
                      IF @cPostADJ = '1'
                      BEGIN
-                         SELECT @nQtyAlloc = SUM( LLI.QtyAllocated),
-                           @nInvQty = SUM( LLI.Qty)
-                           FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-                           JOIN dbo.CCDetail CCD WITH (NOLOCK) ON ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.ID)
-                           WHERE CCD.CCDetailKey = @cCCDetailKey
+                        SELECT @nQtyAlloc = SUM( LLI.QtyAllocated),
+                           @nInvQty = SUM( LLI.Qty),
+                           @nInvQtyPicked = SUM( LLI.QtyPicked)
+                        FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                        JOIN dbo.CCDetail CCD WITH (NOLOCK) ON ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.ID)
+                        WHERE CCD.CCDetailKey = @cCCDetailKey
 
-                           -- If Qty Allocated > 0 and CCDQty > 0, then skip this CCDetailKey
-                           --Qty 20 @nQtyAlloc 2
-                              --@nOriCCQty 0 -> Qty 2 @nQtyAlloc 2
-                              --@nOriCCQty 2 -> Qty 2 @nQtyAlloc 2
-                              --@nOriCCQty 3 -> Qty 3 @nQtyAlloc 2
-                              --@nOriCCQty 20 -> Qty 20 @nQtyAlloc 2
-                              --@nOriCCQty 21 -> Qty 21 @nQtyAlloc 2
-                           IF @nQtyAlloc > 0 
-                           BEGIN 
-                              IF @nOriCCQty <= @nQtyAlloc
-                              BEGIN
-                                 SELECT @nCCDQty = @nQtyAlloc - @nInvQty
-                              END
-                              ELSE
-                              BEGIN
-                                 IF @nOriCCQty = @nInvQty
-                                    GOTO CONTINUE_curCCD_CC
-                                 ELSE
-                                    SET @nCCDQty = @nOriCCQty - @nInvQty
-                              END
+                        SET @nInvQty = @nInvQty - @nInvQtyPicked
+
+                        -- If Qty Allocated > 0 and CCDQty > 0, then skip this CCDetailKey
+                        --Qty 20 @nQtyAlloc 2
+                           --@nOriCCQty 0 -> Qty 2 @nQtyAlloc 2
+                           --@nOriCCQty 2 -> Qty 2 @nQtyAlloc 2
+                           --@nOriCCQty 3 -> Qty 3 @nQtyAlloc 2
+                           --@nOriCCQty 20 -> Qty 20 @nQtyAlloc 2
+                           --@nOriCCQty 21 -> Qty 21 @nQtyAlloc 2
+                        IF @nQtyAlloc > 0 
+                        BEGIN 
+                           IF @nOriCCQty <= @nQtyAlloc
+                           BEGIN
+                              SELECT @nCCDQty = @nQtyAlloc - @nInvQty
                            END
+                           ELSE
+                           BEGIN
+                              IF @nOriCCQty = @nInvQty
+                                 GOTO CONTINUE_curCCD_CC
+                              ELSE
+                                 SET @nCCDQty = @nOriCCQty - @nInvQty
+                           END
+                        END
 
                         -- Create Adjustment Header
                         -- If the adjustment does not exist, create a new adjustment
@@ -388,10 +393,13 @@ BEGIN --(CLVN01)
                   WHILE @@FETCH_STATUS = 0
                   BEGIN
                      SELECT @nQtyAlloc = SUM( LLI.QtyAllocated),
-                        @nInvQty = SUM( LLI.Qty)
+                        @nInvQty = SUM( LLI.Qty),
+                        @nInvQtyPicked = SUM( LLI.QtyPicked)
                      FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
                      JOIN dbo.CCDetail CCD WITH (NOLOCK) ON ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.ID)
                      WHERE CCD.CCDetailKey = @cCCDetailKey
+
+                     SET @nInvQty = @nInvQty - @nInvQtyPicked
 
                      -- If Qty Allocated > 0 and CCDQty > 0, then skip this CCDetailKey
                      --Qty 20 @nQtyAlloc 2

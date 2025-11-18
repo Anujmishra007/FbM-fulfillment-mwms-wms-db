@@ -4,26 +4,25 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-/************************************************************************************/
-/* Store procedure: rdt_PickSKU_Confirm                                             */
-/* Copyright      : Maersk                                                          */
-/*                                                                                  */
-/* Purpose: Pick confirm task                                                       */
-/*                                                                                  */
-/* Date        Rev   Author      Purposes                                           */
-/* 21-06-2016  1.0   Ung         SOS372037 Created                                  */
-/* 21-02-2017  1.1   Ung         WMS-1715 Add balance type                          */
-/* 03-10-2017  1.2   Ung         WMS-3052 Add VerifyID                              */
-/* 26-04-2019  1.3   Ung         INC0678825 Fix SKU declare                         */
-/* 12-03-2019  1.4   YeeKung     WMS-8281 Add eventlog                              */  
-/* 16-10-2019  1.5   James       WMS-10860 Add move to dropid (james01)             */  
-/* 22-12-2020  1.6   YeeKung     WMS-15995 Add PickZone (yeekung01)                 */
-/* 24-05-2022  1.7   YeeKung     Add Close Cursor (yeekung02)                       */
-/* 10-07-2023  1.8   YeeKUng     JSM-162074 Fix Join bug (yeekung03)                */ 
-/* 18-06-2023  1.9   Ung         WMS-22819 Add UpdatePackDetail                     */
-/* 27-03-2025  2.0.0 JCH507      UWP-32111 Not update short status to 4             */
-/* 10-10-2025  2.1.0 Jackc       FCR-7331 Add more values to STDEventLog (jack01)   */
-/************************************************************************************/
+/************************************************************************/
+/* Store procedure: rdt_PickSKU_Confirm                                 */
+/* Copyright      : Maersk                                              */
+/*                                                                      */
+/* Purpose: Pick confirm task                                           */
+/*                                                                      */
+/* Date        Rev   Author      Purposes                                */
+/* 21-06-2016  1.0   Ung         SOS372037 Created                       */
+/* 21-02-2017  1.1   Ung         WMS-1715 Add balance type               */
+/* 03-10-2017  1.2   Ung         WMS-3052 Add VerifyID                   */
+/* 26-04-2019  1.3   Ung         INC0678825 Fix SKU declare              */
+/* 12-03-2019  1.4   YeeKung     WMS-8281 Add eventlog                   */  
+/* 16-10-2019  1.5   James       WMS-10860 Add move to dropid (james01)  */  
+/* 22-12-2020  1.6   YeeKung     WMS-15995 Add PickZone (yeekung01)      */
+/* 24-05-2022  1.7   YeeKung     Add Close Cursor (yeekung02)            */
+/* 10-07-2023  1.8   YeeKUng     JSM-162074 Fix Join bug (yeekung03)     */ 
+/* 18-06-2023  1.9   Ung         WMS-22819 Add UpdatePackDetail          */
+/* 27-03-2025  2.0.0 JCH507      UWP-32111 Not update short status to 4  */
+/************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_PickSKU_Confirm
    @nMobile          INT, 
@@ -729,19 +728,13 @@ BEGIN
    
    -- EventLog
    EXEC RDT.rdt_STD_EventLog      
-      @cActionType   = '3', -- Picking
-      @cUserID       = @cUserName,      
+      @cActionType   = '3', -- Picking      
       @nMobileNo     = @nMobile,      
       @nFunctionID   = @nFunc,     
       @cFacility     = @cFacility,      
       @cStorerKey    = @cStorerkey,      
       @cPickSlipNo   = @cPickSlipNo, 
-      @cLocation     = @cLOC,
-      @cToLocation   = @cToLOC,  --V2.1 start
-      @cID           = @cID,     
-      @cToID         = @cToID,   
-      @cDropID       = @cDropID, 
-      @cLoadKey      = @cLoadKey, --V2.1 end
+      @cLocation     = @cLOC,      
       @cSKU          = @cSKU ,      
       @cUOM          = @cPackUOM3,      
       @nQTY          = @nQTY,      

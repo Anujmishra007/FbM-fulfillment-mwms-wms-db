@@ -68,6 +68,8 @@ GO
 /* 2025-10-10 4.9.0 NickT     FCR-7928 Reallocate for short task              */
 /* 2025-11-08 4.10.0 NickT    UWP-43838 If move start, no need proceed again, */
 /*                            Special fix for USA levis, customized logic     */
+/* 2025-11-13 4.11.0 NLT013   UWP-44117 Fix issue: Cannot drop pending pallet */
+/* 2025-11-14 4.12.0 NLT013   UWP-43847 Fix issue: PickDetail status is not updated*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -2674,6 +2676,8 @@ BEGIN
          IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
                      WHERE StorerKey = @cStorerKey
                        AND DropID = @cDropID
+                       AND ListKey = @cListKey
+                       AND UserKey = @cUserName
                        AND Message03 IN ('MoveInProgress', 'MoveCompleted')
                        AND Status IN ('5','9')
                   )
@@ -3787,6 +3791,18 @@ BEGIN
                   BEGIN
                      IF @cUDF01 <> ''
                         SET @cReasonCode = @cUDF01
+                  END
+               END
+
+               IF @nPreviousStep = @nStep_Reason
+               BEGIN
+                  IF @nInputKey = 1 -- ENTER
+                  BEGIN
+                     -- Reset QTY to 0 if SKIP/SHORT Task
+                     IF @cUDF01 = '0'
+                     BEGIN
+                        SET @nQTY = 0
+                     END
                   END
                END
 

@@ -136,6 +136,17 @@ BEGIN
          AND LOC.LocationType IN (SELECT Value FROM #LocationTypeList)
          AND LLI.StorerKey = @cStorerKey
          AND LLI.SKU = @cSKU
+         AND (
+            LOC.commingleSKU = '1'
+            OR (
+                LOC.commingleSKU <> '1'
+                AND (
+                    SELECT COUNT(DISTINCT LLI2.SKU)
+                    FROM LOTxLOCxID LLI2 WITH (NOLOCK)
+                    WHERE LLI2.LOC = LOC.LOC
+                ) = 1
+            )
+         )
          GROUP BY LOC.CubicCapacity, LOC.LOC, LOC.Floor, LOC.Logicallocation
          HAVING ISNULL(SUM((LLI.Qty - LLI.QtyPicked) + LLI.PendingMoveIn), 0) > 0  -- Not Empty
          AND MAX( LOC.CubicCapacity) -

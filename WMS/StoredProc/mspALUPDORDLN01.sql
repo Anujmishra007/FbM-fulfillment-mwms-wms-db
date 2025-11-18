@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 01-Oct-2025 WLChooi  1.0   Initial Version                           */
+/* 13-Nov-2025 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[mspALUPDORDLN01]
@@ -60,27 +60,47 @@ BEGIN
 
    IF @n_Continue IN ( 1, 2 )
    BEGIN
-      --Remove OrderLineNumber from pool if the SKU is not shorted (Pickdetail.Status = 4)
-      --RDT will update shorted Pickdetail.Qty to QtyMoved
-      WITH ORD AS (
-          SELECT WD.OrderKey
-          FROM WAVEDETAIL WD (NOLOCK)
-          WHERE WD.WaveKey = @c_Wavekey
+      CREATE TABLE #TMP_PD (   Storerkey  NVARCHAR(15)
+                             , SKU        NVARCHAR(20) 
+                           )
+      CREATE NONCLUSTERED INDEX IDX_TMP_PD_Storerkey_SKU ON #TMP_PD (Storerkey, SKU)
+
+      ;WITH WV AS
+      (
+         SELECT Orderkey
+         FROM WAVEDETAIL (NOLOCK)
+         WHERE Wavekey = @c_Wavekey
       )
-      DELETE OL
-      FROM #OPORDERLINES OL
-      WHERE NOT EXISTS (
-          SELECT 1
-          FROM PICKDETAIL PD (NOLOCK)
-          JOIN ORD ON ORD.OrderKey = PD.OrderKey
-          WHERE PD.[Status] = '4'
-            AND PD.Storerkey = OL.Storerkey
-            AND PD.SKU = OL.SKU
-            AND PD.QtyMoved > 0   --Not to impact normal allocation
-      )
+      INSERT INTO #TMP_PD (Storerkey, SKU)
+      SELECT DISTINCT PD.Storerkey, PD.SKU
+      FROM PICKDETAIL PD (NOLOCK)
+      JOIN WV ON WV.Orderkey = PD.OrderKey
+      JOIN #OPORDERLINES ORD ON ORD.OrderKey = WV.OrderKey
+      WHERE PD.[Status] = '4'
+        AND PD.Storerkey = ORD.Storerkey
+        AND PD.SKU = ORD.SKU
+        AND PD.QtyMoved > 0   --Not to impact normal allocation
+   END
+
+   IF @n_Continue IN ( 1, 2 )
+   BEGIN
+      IF EXISTS ( SELECT 1
+                  FROM #TMP_PD )
+      BEGIN
+         --Remove OrderLineNumber from pool if the SKU is not shorted (Pickdetail.Status = 4)
+         --RDT will update shorted Pickdetail.Qty to QtyMoved
+         DELETE FROM #OPORDERLINES
+         WHERE NOT EXISTS ( SELECT 1
+                            FROM #TMP_PD TMP
+                            WHERE TMP.Storerkey = #OPORDERLINES.Storerkey
+                              AND TMP.SKU = #OPORDERLINES.SKU )
+      END
    END
 
    QUIT_SP:
+   IF OBJECT_ID('tempdb..#TMP_PD') IS NOT NULL
+      DROP TABLE #TMP_PD
+
    IF @n_Continue = 3 -- Error Occured - Process AND Return
    BEGIN
       SET @b_Success = 0

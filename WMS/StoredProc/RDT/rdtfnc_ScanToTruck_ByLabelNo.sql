@@ -66,6 +66,7 @@ GO
 /* 2025-07-11 0.0  JackC    !!!Cuotover!!! Use V0 repo for work         */
 /****************************Migrated into V0****************************/
 /* 2025-07-28 3.9  YeeKung  FCR-2901 Add AutoMBOL (yeekung01)           */
+/* 2025-11-12 4.0  Jackc    FCR-8675 Extend DropID barcode length       */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_ByLabelNo] (
    @nMobile    INT,
@@ -144,6 +145,7 @@ DECLARE
    @cUPC                    NVARCHAR( 30),
    @cCloseMBOL              NVARCHAR( 20),  
    @cConfirmStatus          NVARCHAR( 20),
+   @cMobBarcode             NVARCHAR( MAX), --V4.0
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -181,6 +183,7 @@ SELECT
    @cLabelNo    = V_CaseID,
    @cPickSlipNo = V_PickSlipNo,
    @nCartonNo   = V_Cartonno,
+   @cMobBarcode = V_Barcode,
 
    @cMBOLKey    = V_String1,
    @cType       = V_String2,
@@ -636,6 +639,7 @@ BEGIN
          SET @cOutField02 = CASE WHEN @cType = 'L' THEN @cLoadKey  ELSE '' END
          SET @cOutField03 = CASE WHEN @cType = 'O' THEN @cOrderKey ELSE '' END
          SET @cOutField04 = '' -- ID
+         SET @cMobBarcode = '' -- ID barcode
          SET @cOutField05 = '' -- Last ID
          SET @cOutField06 = CAST( @nScanCarton AS NVARCHAR( 10))
          SET @cOutField07 = CAST( @nTotalCarton AS NVARCHAR( 10))
@@ -740,8 +744,12 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
-      SET @cLabelNo = @cInField04
-      SET @cBarcode = @cInField04
+      --SET @cLabelNo = @cInField04
+      --SET @cBarcode = @cInField04
+      DECLARE @cLabelNoBarcode NVARCHAR(MAX)
+
+      SET @cLabelNo = LEFT(@cMobBarcode, 20) 
+      SET @cLabelNoBarcode = LEFT(@cMobBarcode, 2000)
 
       -- Check label
       IF @cLabelNo = ''
@@ -755,7 +763,7 @@ BEGIN
       -- Standard decode
       IF @cDecodeSP = '1'
       BEGIN
-         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cLabelNoBarcode,
             @cID     = @cLabelNo    OUTPUT,
             @nErrNo  = @nErrNo      OUTPUT,
             @cErrMsg = @cErrMsg     OUTPUT,
@@ -773,7 +781,7 @@ BEGIN
                SELECT @cID = '',  @cLabelNo = ''
 
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cMBOLKey, @cLoadKey, @cOrderKey, @cBarcode OUTPUT, @cFieldName, ' +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNoBarcode OUTPUT, @cFieldName, ' +
                   ' @cLabelNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
                SET @cSQLParam =
                   ' @nMobile      INT,             ' +
@@ -785,14 +793,14 @@ BEGIN
                   ' @cMBOLKey     NVARCHAR( 10),   ' +
                   ' @cLoadKey     NVARCHAR( 10),   ' +
                   ' @cOrderKey    NVARCHAR( 10),   ' +
-                  ' @cBarcode     NVARCHAR( MAX) OUTPUT, ' +
+                  ' @cLabelNoBarcode     NVARCHAR( MAX) OUTPUT, ' +
                   ' @cFieldName   NVARCHAR( 10),   ' +
                   ' @cLabelNo     NVARCHAR( 20)  OUTPUT, ' +
                   ' @nErrNo       INT            OUTPUT, ' +
                   ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cMBOLKey, @cLoadKey, @cOrderKey, @cBarcode OUTPUT, 'ID',
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNoBarcode OUTPUT, 'ID',
                   @cLabelNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
@@ -1400,6 +1408,7 @@ BEGIN
       SET @cOutField02 = CASE WHEN @cType = 'L' THEN @cLoadKey  ELSE '' END
       SET @cOutField03 = CASE WHEN @cType = 'O' THEN @cOrderKey ELSE '' END
       SET @cOutField04 = ''
+      SET @cMobBarcode = '' -- ID barcode
       SET @cOutField05 = @cLabelNo -- Last
       SET @cOutField06 = CAST( @nScanCarton AS NVARCHAR( 10))
       SET @cOutField07 = CAST( @nTotalCarton AS NVARCHAR( 10))
@@ -1464,6 +1473,7 @@ BEGIN
    BEGIN
       SET @cLabelNo = ''
       SET @cOutField04 = ''
+      SET @cMobBarcode = ''
    END
 END
 GOTO Quit
@@ -1666,6 +1676,7 @@ BEGIN
       SET @cOutField02 = CASE WHEN @cType = 'L' THEN @cLoadKey  ELSE '' END
       SET @cOutField03 = CASE WHEN @cType = 'O' THEN @cOrderKey ELSE '' END
       SET @cOutField04 = ''
+      SET @cMobBarcode = ''
       SET @cOutField05 = @cLabelNo -- Last
       SET @cOutField06 = CAST( @nScanCarton AS NVARCHAR( 10))
       SET @cOutField07 = CAST( @nTotalCarton AS NVARCHAR( 10))
@@ -1776,6 +1787,7 @@ BEGIN
       SET @cOutField02 = CASE WHEN @cType = 'L' THEN @cLoadKey  ELSE '' END
       SET @cOutField03 = CASE WHEN @cType = 'O' THEN @cOrderKey ELSE '' END
       SET @cOutField04 = '' -- ID
+      SET @cMobBarcode = '' -- ID Barcode
       SET @cOutField05 = '' -- Last ID
       SET @cOutField06 = CAST( @nScanCarton AS NVARCHAR( 10))
       SET @cOutField07 = CAST( @nTotalCarton AS NVARCHAR( 10))
@@ -2056,6 +2068,7 @@ BEGIN
       V_OrderKey = @cOrderKey,
       V_PickSlipNo = @cPickSlipNo,
       V_Cartonno = @nCartonNo,
+      V_Barcode  = @cMobBarcode,
 
       V_String1  = @cMBOLKey,
       V_String2  = @cType,

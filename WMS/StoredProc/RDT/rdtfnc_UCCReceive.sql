@@ -4676,17 +4676,22 @@ BEGIN
          IF @cExtScnSP = 'rdt_898ExtScn02' AND @nInputKey = 1
          BEGIN
             IF @nStepBak = 99
-               BEGIN
-                  SET @cUCC = @cUDF01
-                  SET @nQTY = CAST(@cUDF02 AS INT)
-                  SET @nCaseCntQty = CAST(@cUDF03 AS INT)
-                  SET @nCnt = CAST(@cUDF04 AS INT)
-                  SET @cReceiveAllowAddNewUCC = @cUDF05
-               END
+            BEGIN
+               SET @cUCC = @cUDF01
+               SET @nQTY = CAST(@cUDF02 AS INT)
+               SET @nCaseCntQty = CAST(@cUDF03 AS INT)
+               SET @nCnt = CAST(@cUDF04 AS INT)
+               SET @cReceiveAllowAddNewUCC = @cUDF05
+            END
             ELSE IF @nStepBak = 10
-               BEGIN
-                  SET @cCartonCnt = @cUDF01
-               END
+            BEGIN
+               SET @cCartonCnt = @cUDF01
+            END
+
+            IF @nScn = 1305 -- ucc scan
+            BEGIN
+               SET @cMax = ''
+            END
          END
          IF @cExtScnSP = 'rdt_898ExtScn03'
          BEGIN

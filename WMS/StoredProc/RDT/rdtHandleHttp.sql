@@ -19,6 +19,7 @@ GO
 /* 03-Apr-2025 1.3.0 NLT013  UWP-32244 Extend Menu number               */
 /* 23-Jul-2025 1.4.0 Dennis   Add trace id                              */
 /* 31-Aug-2025 1.5.0 NickT   FCR-7417 Fix an issue: infinity tran loop  */
+/* 06-Nov-2025 1.6.0 NickT   UWP-43698 Check duplicate request          */
 /************************************************************************/
 CREATE OR ALTER PROC  [RDT].[rdtHandleHttp]
   @InMobile      INT ,
@@ -71,6 +72,16 @@ BEGIN
    ELSE
       SELECT @InMessage = REPLACE( @InMessage, 'encoding="UTF-8"', 'encoding="UTF-16"')
 
+   -- Check if it is a duplicate request
+   DECLARE @nDuplicateRequestFlag INT
+   EXEC RDT.rdtCheckDuplicateRequest @InMobile, @InMessage, @nErrNo OUTPUT, @cErrMsg OUTPUT, @OutMessage OUTPUT, @nDuplicateRequestFlag OUTPUT, @cTraceID OUTPUT
+
+   -- If previous OutMessage is not null, means last request is complete, return directly
+   IF @nDuplicateRequestFlag = 1 
+   BEGIN
+      RETURN
+   END
+
    -- Get the function, screen, step from the XML (also assign a new mobile no if 1st time login)
    EXEC RDT.rdtSetMobile
       @InMobile    OUTPUT,
@@ -92,7 +103,7 @@ BEGIN
    -- EXEC RDT.rdtRecordXML @InMobile, 'IN', @InMessage
 
    -- Base on the XML received, update RDTMobRec.InFieldXX, and determine user press ENTER or ESC
-   EXEC RDT.rdtSetMobColRetActionHttp @InMobile, @InMessage, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cActionKey OUTPUT, @cClientIP OUTPUT,@cTraceID OUTPUT
+   EXEC RDT.rdtSetMobColRetActionHttp @InMobile, @InMessage, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cActionKey OUTPUT, @cClientIP OUTPUT
 
    --Print 'HELLO'
    -- SOS90411
@@ -105,6 +116,8 @@ BEGIN
    BEGIN
    IF @cActionKey <> ''
    BEGIN
+      EXEC RDT.rdtUpdRDTMOBTraceID  @InMobile, @InMessage, @cTraceID, @nErrNo OUTPUT, @cErrMsg OUTPUT, @OutMessage OUTPUT
+
       IF @nFunction < 500 -- Menu
       BEGIN
          SET @nErrNo = 0
@@ -113,7 +126,7 @@ BEGIN
          BEGIN
             IF @nFunction = 0  -- login screen
             BEGIN
-               EXEC RDT.rdtLogin @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT, @cClientIP, @cSessionID
+               EXEC RDT.rdtLogin @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT, @cClientIP, @cSessionID, @cTraceID, @InMessage
                SET @nErrNo = @@ERROR
                IF @nErrNo <> 0
                   GOTO EXIT_PROCESS_MENU
@@ -430,6 +443,11 @@ BEGIN
       INSERT INTO RDT.RDTMessage(Mobile, Message, MessageOut, InFunc, InScn, InStep,TraceID)
       VALUES (@InMobile, @InMessage, @OutMessage, @nStartFunc, @nStartScn, @nStartStep,@cTraceID)
    END
+
+   UPDATE RDT.RDTMOBTraceID WITH (ROWLOCK)
+   SET MessageOut = @OutMessage,
+      OutTime = GETDATE()
+   WHERE Mobile = @InMobile
 
    BEGIN TRY
       WHILE @@TRANCOUNT > 0 AND XACT_STATE() = 1

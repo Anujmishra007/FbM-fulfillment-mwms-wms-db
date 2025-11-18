@@ -4,62 +4,61 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/*************************************************************************/
-/* Store procedure: rdt_Cluster_Pick_ConfirmTask                         */
-/* Copyright      : IDS                                                  */
-/*                                                                       */
-/* Purpose: Comfirm Pick                                                 */
-/*                                                                       */
-/* Called from: rdtfnc_Cluster_Pick                                      */
-/*                                                                       */
-/* Exceed version: 5.4                                                   */
-/*                                                                       */
-/* Modifications log:                                                    */
-/*                                                                       */
-/* Date        Rev   Author      Purposes                                */
-/* 26-Sep-2008 1.0   James       Created                                 */
-/* 12-Dec-2008 1.1   Vicky       Add TraceInfo (Vicky02)                 */
-/* 03-Feb-2008 1.2   James       Update Pickdetail.Status = '4' for short*/
-/*                               picked qty and Status = '5' for fully   */
-/*                               picked qty                              */
-/* 19-Mar-2009 1.3   James       SOS131967 - Bug fix. When split pd line,*/
-/*                               update status '4' if short pick else    */
-/*                               update with status = '0'                */
-/* 23-Apr-2009 1.4   James       SOS133222 - Insert PackDetail (james01) */
-/* 28-Aug-2009 1.50  Vicky       Add in EventLog (Vicky06)               */
-/* 03-May-2010 1.14  James       SOS170848 - Picking by Conso (james02)  */
-/* 24-Jun-2010 1.15  Leong       SOS# 176144 - Bug Fix                   */
-/* 20-May-2010 1.18  James       SOS172041 - L'Oreal enhancement(james03)*/
-/* 20-Jul-2010 1.19  James       Bug Fix (james04)                       */
-/* 09-Aug-2010 1.20  James       Prevent overpack (james05)              */
-/* 17-Aug-2010 1.21  ChewKP      Bug Fix (ChewKP01)                      */   
-/* 18-Feb-2013 1.22  ChewKP      Bug Fix (ChewKP03)                      */
-/* 30-Apr-2013 1.23  James       SOS276235 - Allow multi storer (james06)*/
-/* 05-Jun-2013 1.24  James       Bug Fix (james07)                       */
-/* 12-Jul-2013 1.47  James       AEO enhancement (james08)               */
-/* 04-Apr-2014 1.48  James       Bug fix for conso pick (james09)        */
-/* 19-Jun-2014 1.49  James       SOS313608 - Enable insert Dropid even no*/
-/*                               packing (james10)                       */
-/*                               Change Dropid to 20 chars               */
-/* 01-Sep-2014 1.50  James       Allow reuse DropID if exists (james11)  */
-/* 17-Jan-2017 1.51  James       IN00236610 - Bug fix on eventlog qty    */
-/*                               insertion (james12)                     */
-/* 23-Feb-2017 1.52  James       Performance tuning (james13)            */
-/* 24-Feb-2017 1.53  TLTING      Performance Tune - Editdate,editwho     */
-/* 07-Mar-2017 1.54  James       IN00284550 - Ins Refkeylookup (james14) */
-/* 14-Apr-2017 1.55  James       WMS1626-Stamp pickdetail.caseid(james15)*/
-/* 11-Sep-2017 1.56  James       WMS2941 - Add custom generate labelno   */
-/*                               stored proc (james16)                   */
-/* 14-May-2018 1.57  James       WMS4303 - Bug fix. Update labelno=caseid*/
-/*                               only when labelno <> '' (james17)       */
-/* 22-Oct-2020 1.58  James       WMS-15456 Add packinfo (james18)        */
-/* 13-Aug-2020 1.59  James       INC1237019 - Temporarily fix check 1    */
-/*                               order 1 dropid (james19)                */
-/* 19-May-2021 1.60  James       WMS16756-Bug fix on short pick couldn't */
-/*                               handle multi same sku, loc line(james20)*/
-/* 14-Sep-2021 1.61  ian         INC1611727 - picking Error(ian01)       */
-/* 14-Oct-2025 1.7.0 Jackc       FCR-7331 Enhance eventlog (jackc01)     */
-/*************************************************************************/
+/************************************************************************/
+/* Store procedure: rdt_Cluster_Pick_ConfirmTask                        */
+/* Copyright      : IDS                                                 */
+/*                                                                      */
+/* Purpose: Comfirm Pick                                                */
+/*                                                                      */
+/* Called from: rdtfnc_Cluster_Pick                                     */
+/*                                                                      */
+/* Exceed version: 5.4                                                  */
+/*                                                                      */
+/* Modifications log:                                                   */
+/*                                                                      */
+/* Date        Rev  Author      Purposes                                */
+/* 26-Sep-2008 1.0  James       Created                                 */
+/* 12-Dec-2008 1.1  Vicky       Add TraceInfo (Vicky02)                 */
+/* 03-Feb-2008 1.2  James       Update Pickdetail.Status = '4' for short*/
+/*                              picked qty and Status = '5' for fully   */
+/*                              picked qty                              */
+/* 19-Mar-2009 1.3  James       SOS131967 - Bug fix. When split pd line,*/
+/*                              update status '4' if short pick else    */
+/*                              update with status = '0'                */
+/* 23-Apr-2009 1.4  James       SOS133222 - Insert PackDetail (james01) */
+/* 28-Aug-2009 1.50 Vicky       Add in EventLog (Vicky06)               */
+/* 03-May-2010 1.14 James       SOS170848 - Picking by Conso (james02)  */
+/* 24-Jun-2010 1.15 Leong       SOS# 176144 - Bug Fix                   */
+/* 20-May-2010 1.18 James       SOS172041 - L'Oreal enhancement(james03)*/
+/* 20-Jul-2010 1.19 James       Bug Fix (james04)                       */
+/* 09-Aug-2010 1.20 James       Prevent overpack (james05)              */
+/* 17-Aug-2010 1.21 ChewKP      Bug Fix (ChewKP01)                      */   
+/* 18-Feb-2013 1.22 ChewKP      Bug Fix (ChewKP03)                      */
+/* 30-Apr-2013 1.23 James       SOS276235 - Allow multi storer (james06)*/
+/* 05-Jun-2013 1.24 James       Bug Fix (james07)                       */
+/* 12-Jul-2013 1.47 James       AEO enhancement (james08)               */
+/* 04-Apr-2014 1.48 James       Bug fix for conso pick (james09)        */
+/* 19-Jun-2014 1.49 James       SOS313608 - Enable insert Dropid even no*/
+/*                              packing (james10)                       */
+/*                              Change Dropid to 20 chars               */
+/* 01-Sep-2014 1.50 James       Allow reuse DropID if exists (james11)  */
+/* 17-Jan-2017 1.51 James       IN00236610 - Bug fix on eventlog qty    */
+/*                              insertion (james12)                     */
+/* 23-Feb-2017 1.52 James       Performance tuning (james13)            */
+/* 24-Feb-2017 1.53 TLTING      Performance Tune - Editdate,editwho     */
+/* 07-Mar-2017 1.54 James       IN00284550 - Ins Refkeylookup (james14) */
+/* 14-Apr-2017 1.55 James       WMS1626-Stamp pickdetail.caseid(james15)*/
+/* 11-Sep-2017 1.56 James       WMS2941 - Add custom generate labelno   */
+/*                              stored proc (james16)                   */
+/* 14-May-2018 1.57 James       WMS4303 - Bug fix. Update labelno=caseid*/
+/*                              only when labelno <> '' (james17)       */
+/* 22-Oct-2020 1.58 James       WMS-15456 Add packinfo (james18)        */
+/* 13-Aug-2020 1.59 James       INC1237019 - Temporarily fix check 1    */
+/*                              order 1 dropid (james19)                */
+/* 19-May-2021 1.60 James       WMS16756-Bug fix on short pick couldn't */
+/*                              handle multi same sku, loc line(james20)*/
+/* 14-Sep-2021 1.61 ian         INC1611727 - picking Error(ian01)       */
+/************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_Cluster_Pick_ConfirmTask] (
    @cStorerKey       NVARCHAR( 15),
@@ -460,10 +459,7 @@ BEGIN
 	                 @cRefNo1       = @cPutAwayZone,
 	                 @cRefNo2       = @cPickZone,
 	                 @cRefNo3       = @cOrderKey,
-	                 @cRefNo4       = @cPickSlipNo,
-                    @cOrderKey     = @cOrderKey, --(jackc01)
-                    @cLoadKey      = @cLoadKey, --(jackc01)
-                    @cPickSlipNo   = @cPickSliPNo --(jackc01)
+	                 @cRefNo4       = @cPickSlipNo
 	            END
 
 	            SET @d_step2 = GETDATE() - @d_step2        -- (Vicky02)
@@ -543,10 +539,7 @@ BEGIN
                  @cRefNo1       = @cPutAwayZone,
                  @cRefNo2       = @cPickZone,
                  @cRefNo3       = @cOrderKey,
-                 @cRefNo4       = @cPickSlipNo,
-                 @cOrderKey     = @cOrderKey, --(jackc01)
-                 @cLoadKey      = @cLoadKey, --(jackc01)
-                 @cPickSlipNo   = @cPickSliPNo --(jackc01)
+                 @cRefNo4       = @cPickSlipNo
             END
             SET @nPickQty = @nPickQty - @nQTY_PD -- Reduce balance -- SOS# 176144
             SET @d_step2 = GETDATE() - @d_step2        -- (Vicky02)
@@ -605,11 +598,7 @@ BEGIN
                  @cRefNo1       = @cPutAwayZone,
                  @cRefNo2       = @cPickZone,
                  @cRefNo3       = @cOrderKey,
-                 @cRefNo4       = @cPickSlipNo,
-                 @cOrderKey     = @cOrderKey, --(jackc01)
-                 @cLoadKey      = @cLoadKey, --(jackc01)
-                 @cPickSlipNo   = @cPickSliPNo --(jackc01)
-                 
+                 @cRefNo4       = @cPickSlipNo
             END
 
             SET @nPickQty = @nPickQty - @nQTY_PD -- Reduce balance
@@ -766,10 +755,7 @@ BEGIN
                     @cRefNo1       = @cPutAwayZone,
                     @cRefNo2       = @cPickZone,
                     @cRefNo3       = @cOrderKey,
-                    @cRefNo4       = @cPickSlipNo,
-                    @cOrderKey     = @cOrderKey, --(jackc01)
-                    @cLoadKey      = @cLoadKey, --(jackc01)
-                    @cPickSlipNo   = @cPickSliPNo --(jackc01)
+                    @cRefNo4       = @cPickSlipNo
                END
 
                SET @d_step2 = GETDATE() - @d_step2        -- (Vicky02)

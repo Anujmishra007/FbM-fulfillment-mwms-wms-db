@@ -107,6 +107,15 @@ BEGIN
 
    IF @nFunc = 898 -- UCC Receive
    BEGIN
+      IF @nStep = 3
+      BEGIN
+         IF LEN(@cTOID) <> 10
+         BEGIN
+            SET @nErrNo = 250752
+            SET @cErrMsg = [rdt].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP') 
+            GOTO Quit
+         END
+      END
       IF @nStep = 5
       BEGIN
       	IF @nInputKey = 1

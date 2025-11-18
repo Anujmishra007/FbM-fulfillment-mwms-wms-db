@@ -19,7 +19,7 @@ GO
 /* 2025-09-16   NLT013   1.3.0   UWP-41254 No need fire trigger if short   */
 /* 2025-09-15   NLT013   1.4.0   FCR-7730 Print ZPL                        */
 /* 2025-09-30   NLT013   1.4.1   FCR-7730 No need print ZPL if VAS exists  */
-/* 2025-10-09   NLT013   1.5.0   UWP-42271 Fix: update pickdetail failed   */
+/* 2025-11-14   NLT013   1.5.0   UWP-43847 Move Logic of step6 0 ClosePlt04*/
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
@@ -57,7 +57,6 @@ BEGIN
    DECLARE @nLoopIndex              INT
    DECLARE @cOption                 NVARCHAR( 2)
    DECLARE @cListKey                NVARCHAR( 10)
-   DECLARE @cStatus                 NVARCHAR( 10)
 
    DECLARE @tCases TABLE
    (
@@ -85,7 +84,7 @@ BEGIN
       IF @nTranCount = 0
          BEGIN TRAN
 
-      IF @nStep = 5 OR @nStep = 6 -- CONT NEXT TASK or ToLoc
+      IF @nStep = 5 -- CONT NEXT TASK
       BEGIN
          IF @nInputKey = 1
          BEGIN
@@ -98,185 +97,171 @@ BEGIN
 
             -- 1. Update PickDetail as 3
             -- 2. Print ZPL label
-            IF @nStep = 6
-            BEGIN
-               -- Update PickDetail as 3
-               DECLARE 
-                  @cToID               NVARCHAR(18),
-                  @cLocationType       NVARCHAR(10),
-                  @cLocationCategory   NVARCHAR(10)
+            -- Moved to rdt_1764ClosePlt04
+            -- IF @nStep = 6
+            -- BEGIN
+            --    -- Update PickDetail as 3
+            --    DECLARE 
+            --       @cToID               NVARCHAR(18),
+            --       @cLocationType       NVARCHAR(10),
+            --       @cLocationCategory   NVARCHAR(10)
 
-               SELECT 
-                  @cToID = TD.ToID,
-                  @cLocationType = LOC.LocationType,
-                  @cLocationCategory = LOC.LocationCategory,
-                  @cListKey = TD.ListKey,
-                  @cToLoc = TD.ToLoc,
-                  @cStatus = TD.Status
-               FROM dbo.TaskDetail TD WITH(NOLOCK)
-               INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
-               WHERE TD.TaskDetailKey = @cTaskDetailKey
+            --    SELECT 
+            --       @cToID = TD.ToID,
+            --       @cLocationType = LOC.LocationType,
+            --       @cLocationCategory = LOC.LocationCategory,
+            --       @cListKey = TD.ListKey,
+            --       @cToLoc = TD.ToLoc
+            --    FROM dbo.TaskDetail TD WITH(NOLOCK)
+            --    INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
+            --    WHERE TD.TaskDetailKey = @cTaskDetailKey
 
-               IF @cStatus <> '9'
-               BEGIN
-                  SELECT TOP 1
-                     @cToLoc = Loc,
-                     @cLocationType = LOC.LocationType
-                  FROM dbo.TaskDetail TD WITH(NOLOCK)
-                  INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
-                  WHERE TD.StorerKey = @cStorerKey
-                     AND TD.ListKey = @cListKey
-                     AND TD.TaskType = 'RPF'
-                     AND TD.Status = '9'
-                     AND TD.UserKey = SUSER_NAME()
-               END
+            --    IF @cLocationType = 'PND'
+            --    BEGIN
+            --       DELETE FROM @tPickDetail
 
-               IF @cLocationType = 'PND'
-               BEGIN
-                  DELETE FROM @tPickDetail
+            --       INSERT INTO @tPickDetail( PickDetailKey )
+            --       SELECT DISTINCT PD.PickDetailKey
+            --       FROM dbo.PickDetail PD WITH (NOLOCK)
+            --       INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey AND PD.SKU = TD.SKU
+            --       INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.StorerKey = SI.StorerKey AND TD.SKU = SI.SKU 
+            --       WHERE PD.StorerKey = @cStorerKey
+            --          AND TD.ListKey = @cListKey
+            --          AND PD.Status = '0'
+            --          AND TD.Status = '9'
+            --          AND TD.TaskType = 'RPF'
+            --          AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE' 
+            --          AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
 
-                  INSERT INTO @tPickDetail( PickDetailKey )
-                  SELECT DISTINCT PD.PickDetailKey
-                  FROM dbo.PickDetail PD WITH (NOLOCK)
-                  INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey AND PD.SKU = TD.SKU
-                  INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.StorerKey = SI.StorerKey AND TD.SKU = SI.SKU 
-                  WHERE PD.StorerKey = @cStorerKey
-                     AND TD.ListKey = @cListKey
-                     AND PD.Status = '0'
-                     AND TD.Status = '9'
-                     AND TD.TaskType = 'RPF'
-                     AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE' 
-                     AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
+            --       IF @@ROWCOUNT > 0
+            --       BEGIN
+            --          BEGIN TRY
+            --             UPDATE PD
+            --             SET Status = '3',
+            --                Loc = @cToLoc,
+            --                EditDate = GETDATE(),
+            --                EditWho  = SUSER_SNAME()
+            --             FROM dbo.PickDetail PD WITH (ROWLOCK) 
+            --             INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
+            --          END TRY
+            --          BEGIN CATCH
+            --             SET @nErrNo = 233653
+            --             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PickDetail Failed
+            --             GOTO RollbackTran
+            --          END CATCH
+            --       END
 
-                  IF @@ROWCOUNT > 0
-                  BEGIN
-                     BEGIN TRY
-                        UPDATE PD
-                        SET Status = '3',
-                           Loc = @cToLoc,
-                           EditDate = GETDATE(),
-                           EditWho  = SUSER_SNAME()
-                        FROM dbo.PickDetail PD WITH (ROWLOCK) 
-                        INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
-                     END TRY
-                     BEGIN CATCH
-                        SET @nErrNo = 233653
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PickDetail Failed
-                        GOTO RollbackTran
-                     END CATCH
-                  END
+            --       -- Print ZPL
+            --       DECLARE @cRefTaskKey       NVARCHAR(10) = ''
+            --       DELETE FROM @tCases
 
-                  -- Print ZPL
-                  DECLARE @cRefTaskKey       NVARCHAR(10) = ''
-                  DELETE FROM @tCases
+            --       INSERT INTO @tCases(CaseID, SKU)
+            --       SELECT DISTINCT CaseID, SKU
+            --       FROM dbo.TaskDetail WITH (NOLOCK)
+            --       WHERE ListKey = @cListKey
+            --          AND Status = '9'
+            --          AND TaskType = 'RPF'
+            --          AND Qty > 0
 
-                  INSERT INTO @tCases(CaseID, SKU)
-                  SELECT DISTINCT CaseID, SKU
-                  FROM dbo.TaskDetail WITH (NOLOCK)
-                  WHERE ListKey = @cListKey
-                     AND Status = '9'
-                     AND TaskType = 'RPF'
-                     AND Qty > 0
+            --       SET @nLoopIndex = -1
+            --       WHILE 1 = 1
+            --       BEGIN
+            --          SELECT TOP 1
+            --             @cCaseID = CASEID,
+            --             @cSKU = SKU,
+            --             @nLoopIndex = id
+            --          FROM @tCases
+            --          WHERE id > @nLoopIndex
+            --          ORDER BY id
 
-                  SET @nLoopIndex = -1
-                  WHILE 1 = 1
-                  BEGIN
-                     SELECT TOP 1
-                        @cCaseID = CASEID,
-                        @cSKU = SKU,
-                        @nLoopIndex = id
-                     FROM @tCases
-                     WHERE id > @nLoopIndex
-                     ORDER BY id
+            --          IF @@ROWCOUNT = 0
+            --             BREAK
 
-                     IF @@ROWCOUNT = 0
-                        BREAK
+            --          IF EXISTS(SELECT 1
+            --                   FROM dbo.SkuInfo WITH (NOLOCK)
+            --                   WHERE StorerKey = @cStorerKey
+            --                      AND SKU = @cSKU
+            --                      AND ISNULL(ExtendedField06, '') = 'SORTABLE'
+            --                      AND ISNULL(ExtendedField07, '') = 'CONVEYABLE')
+            --          BEGIN
+            --             DECLARE @nCaseCount INT = 0
 
-                     IF EXISTS(SELECT 1
-                              FROM dbo.SkuInfo WITH (NOLOCK)
-                              WHERE StorerKey = @cStorerKey
-                                 AND SKU = @cSKU
-                                 AND ISNULL(ExtendedField06, '') = 'SORTABLE'
-                                 AND ISNULL(ExtendedField07, '') = 'CONVEYABLE')
-                     BEGIN
-                        DECLARE @nCaseCount INT = 0
+            --             SELECT @nCaseCount = COUNT(DISTINCT CASEID) 
+            --             FROM dbo.PICKDETAIL PD WITH(NOLOCK) 
+            --             WHERE PD.StorerKey= @cStorerKey 
+            --                AND PD.DropID = @cCaseID
 
-                        SELECT @nCaseCount = COUNT(DISTINCT CASEID) 
-                        FROM dbo.PICKDETAIL PD WITH(NOLOCK) 
-                        WHERE PD.StorerKey= @cStorerKey 
-                           AND PD.DropID = @cCaseID
+            --             DECLARE @nVASCount INT = 0
+            --             DECLARE @cPrePackIndicator NVARCHAR(30) = ''
 
-                        DECLARE @nVASCount INT = 0
-                        DECLARE @cPrePackIndicator NVARCHAR(30) = ''
+            --             SELECT @cPrePackIndicator = ISNULL(SKU.PrePackIndicator, '')
+            --             FROM dbo.SKU WITH(NOLOCK) 
+            --             WHERE StorerKey= @cStorerKey 
+            --                AND SKU = @cSKU
 
-                        SELECT @cPrePackIndicator = ISNULL(SKU.PrePackIndicator, '')
-                        FROM dbo.SKU WITH(NOLOCK) 
-                        WHERE StorerKey= @cStorerKey 
-                           AND SKU = @cSKU
+            --             SELECT @nVASCount = COUNT(*)
+            --             FROM dbo.PickDetail PD WITH(NOLOCK)
+            --             INNER JOIN dbo.WorkOrderDetail WOD WITH(NOLOCK) 
+            --                ON WOD.ExternWorkOrderKey IS NOT NULL 
+            --                AND WOD.ExternLineNo IS NOT NULL
+            --                AND WOD.ExternWorkOrderKey = PD.OrderKey 
+            --                AND WOD.ExternLineNo = PD.OrderLineNumber
+            --             INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+            --                ON CL.StorerKey = PD.StorerKey
+            --                AND ISNULL(WOD.Type, '') = CL.short
+            --             WHERE PD.StorerKey = @cStorerKey
+            --                AND PD.DropID = @cCaseID
+            --                AND PD.UOM = '2'
+            --                AND CL.LISTNAME = 'WCSVAS'
 
-                        SELECT @nVASCount = COUNT(*)
-                        FROM dbo.PickDetail PD WITH(NOLOCK)
-                        INNER JOIN dbo.WorkOrderDetail WOD WITH(NOLOCK) 
-                           ON WOD.ExternWorkOrderKey IS NOT NULL 
-                           AND WOD.ExternLineNo IS NOT NULL
-                           AND WOD.ExternWorkOrderKey = PD.OrderKey 
-                           AND WOD.ExternLineNo = PD.OrderLineNumber
-                        INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
-                           ON CL.StorerKey = PD.StorerKey
-                           AND ISNULL(WOD.Type, '') = CL.short
-                        WHERE PD.StorerKey = @cStorerKey
-                           AND PD.DropID = @cCaseID
-                           AND PD.UOM = '2'
-                           AND CL.LISTNAME = 'WCSVAS'
+            --             IF @nCaseCount = 1 AND (@nVASCount = 0 OR @cPrePackIndicator = 'Y')
+            --                AND EXISTS (SELECT 1 FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cCaseID AND StorerKey = @cStorerKey)
+            --                AND NOT EXISTS (SELECT 1
+            --                            FROM dbo.ORDERS ORM WITH(NOLOCK)
+            --                            INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) 
+            --                               ON PD.StorerKey = ORM.StorerKey 
+            --                               AND PD.OrderKey = ORM.OrderKey
+            --                            INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+            --                               ON CL.StorerKey = ORM.StorerKey
+            --                               AND CL.LISTNAME = 'WSCourier'
+            --                               AND CL.Code = 'ECL-1'
+            --                               AND ORM.ShipperKey = CL.short
+            --                            WHERE PD.StorerKey = @cStorerKey
+            --                               AND PD.DropID = @cCaseID
+            --                               AND PD.UOM = '2')
+            --             BEGIN
+            --                DECLARE @cACTCaseID NVARCHAR(20)
+            --                SELECT @cACTCaseID = CASEID FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cCaseID
+            --                -- Login user's printer must = 'PANDA', then goes to ZPL print
+            --                BEGIN TRY
+            --                   EXEC rdt.rdt_LevisPrintCartonLabel
+            --                      @nMobile       = @nMobile
+            --                      ,@nFunc        = @nFunc
+            --                      ,@cLangCode    = @cLangCode
+            --                      ,@cStorerKey   = @cStorerKey
+            --                      ,@nStep        = @nStep
+            --                      ,@nInputKey    = @nInputKey
+            --                      ,@cDropID      = @cACTCaseID
+            --                      ,@cPrintType   = 'ZPL'
+            --                      ,@nErrNo       = @nErrNo      OUTPUT
+            --                      ,@cErrMsg      = @cErrMsg     OUTPUT
+            --                      ,@cSourceName  = 'rdt_1764ExtUpd21'
+            --                END TRY
+            --                BEGIN CATCH
+            --                   SET @nErrNo = 233654
+            --                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Print ZPL Failed
+            --                   GOTO RollbackTran
+            --                END CATCH
 
-                        IF @nCaseCount = 1 AND (@nVASCount = 0 OR @cPrePackIndicator = 'Y')
-                           AND EXISTS (SELECT 1 FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cCaseID AND StorerKey = @cStorerKey)
-                           AND NOT EXISTS (SELECT 1
-                                       FROM dbo.ORDERS ORM WITH(NOLOCK)
-                                       INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) 
-                                          ON PD.StorerKey = ORM.StorerKey 
-                                          AND PD.OrderKey = ORM.OrderKey
-                                       INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
-                                          ON CL.StorerKey = ORM.StorerKey
-                                          AND CL.LISTNAME = 'WSCourier'
-                                          AND CL.Code = 'ECL-1'
-                                          AND ORM.ShipperKey = CL.short
-                                       WHERE PD.StorerKey = @cStorerKey
-                                          AND PD.DropID = @cCaseID
-                                          AND PD.UOM = '2')
-                        BEGIN
-                           DECLARE @cACTCaseID NVARCHAR(20)
-                           SELECT @cACTCaseID = CASEID FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cCaseID
-                           -- Login user's printer must = 'PANDA', then goes to ZPL print
-                           BEGIN TRY
-                              EXEC rdt.rdt_LevisPrintCartonLabel
-                                 @nMobile       = @nMobile
-                                 ,@nFunc        = @nFunc
-                                 ,@cLangCode    = @cLangCode
-                                 ,@cStorerKey   = @cStorerKey
-                                 ,@nStep        = @nStep
-                                 ,@nInputKey    = @nInputKey
-                                 ,@cDropID      = @cACTCaseID
-                                 ,@cPrintType   = 'ZPL'
-                                 ,@nErrNo       = @nErrNo      OUTPUT
-                                 ,@cErrMsg      = @cErrMsg     OUTPUT
-                                 ,@cSourceName  = 'rdt_1764ExtUpd21'
-                           END TRY
-                           BEGIN CATCH
-                              SET @nErrNo = 233654
-                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Print ZPL Failed
-                              GOTO RollbackTran
-                           END CATCH
-
-                           IF @nErrNo <> 0
-                           BEGIN
-                              GOTO RollBackTran
-                           END
-                        END
-                     END
-                  END
-               END
-            END
+            --                IF @nErrNo <> 0
+            --                BEGIN
+            --                   GOTO RollBackTran
+            --                END
+            --             END
+            --          END
+            --       END
+            --    END
+            -- END
 
             -- Get task info
             DECLARE @nQty INT

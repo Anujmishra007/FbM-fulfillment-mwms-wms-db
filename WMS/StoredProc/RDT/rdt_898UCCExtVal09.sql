@@ -131,6 +131,24 @@ BEGIN
             SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- UCC Not Exist
             GOTO Quit
          END
+         IF @cDocType = 'A'
+         BEGIN
+            IF NOT EXISTS(
+               SELECT 1 FROM dbo.RECEIPTDETAIL RD (NOLOCK)
+               JOIN dbo.RECEIPT R (NOLOCK) ON RD.ReceiptKey = R.ReceiptKey AND R.StorerKey = RD.StorerKey
+               JOIN dbo.UCC UCC (NOLOCK) ON RD.StorerKey = UCC.StorerKey AND RD.UserDefine01 = UCC.UCCNO
+               JOIN dbo.PO WITH (NOLOCK) ON RD.StorerKey = PO.StorerKey AND RD.POKEY = PO.POKEY
+               WHERE RD.ReceiptKey = @cReceiptKey
+               AND R.DOCTYPE = 'A'
+               AND UCC.UCCNo = @cUCC
+               AND PO.STATUS = '0'
+            )
+            BEGIN
+               SET @nErrNo = 225308 
+               SET @cErrMsg = rdt.rdtgetmessageLong( @nErrNo, @cLangCode, 'DSP') -- UCC from PO closed/ Unavailable
+               GOTO Quit
+            END
+         END
       END
 
       --GET SKU
