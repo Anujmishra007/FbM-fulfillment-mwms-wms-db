@@ -47,6 +47,7 @@ GO
 /* 2025-09-22 1.22.0 NickT    FCR-7845 Print 4X2 labels for all automation orders  */
 /* 2025-10-22 1.23.0 Jackc    UWP-42787 Not archive dropid if tote id is empty     */
 /* 2025-10-24 1.24.0 NickT    UWP-42897 Performance tuning                         */
+/* 2025-11-18 1.25.0 NickT    FCR-9164 Not trigger WSCTNAdd if wave.userdefine09<>Y */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -1425,36 +1426,40 @@ BEGIN
                   INSERT INTO @tWaveKeys (WaveKey)
                   SELECT DISTINCT UserDefine09
                   FROM dbo.ORDERS ord WITH(NOLOCK)
-                          INNER JOIN dbo.PickDetail pd WITH(NOLOCK) ON ord.OrderKey = pd.OrderKey
+                  INNER JOIN dbo.PickDetail pd WITH(NOLOCK) ON ord.OrderKey = pd.OrderKey
                   WHERE ord.StorerKey = @cStorerKey
                     AND pd.StorerKey = @cStorerKey
-                    AND pd.CaseID = @cDropID;
+                    AND pd.CaseID = @cDropID
 
                   SELECT @nWaveKeyCount = COUNT(*) FROM @tWaveKeys;
 
                   -- add record into transmitlog2
-                  --BEGIN TRAN  --1.21.0
-                  --SAVE TRAN rdt_855TransLog2 --1.21.0
+                  --BEGIN TRAN  --1.20.0
+                  --SAVE TRAN rdt_855TransLog2 --1.20.0
 
                   WHILE @nWaveKeyCount > 0
                   BEGIN
                      SELECT TOP 1 @cWaveKey = WaveKey FROM @tWaveKeys
-                     EXECUTE ispGenTransmitLog2
-                              @c_TableName      = 'WSCTNAdd',
-                              @c_Key1           = @cWaveKey,
-                              @c_Key2           = @cDropID, -- LabelNo/CaseID
-                              @c_Key3           = @cStorerkey,
-                              @c_TransmitBatch  = '',
-                              @b_Success        = @bSuccess   OUTPUT,
-                              @n_err            = @nErrNo     OUTPUT,
-                              @c_errmsg         = @cErrMsg    OUTPUT
-                     IF @nErrNo <> 0 OR @bSuccess <> 1
+
+                     IF EXISTS(SELECT 1 FROM dbo.Wave WITH(NOLOCK) WHERE WaveKey = @cWaveKey AND ISNULL(UserDefine09, '') = 'Y')
                      BEGIN
-                        IF @nTranCount > 0
-                           ROLLBACK TRAN rdt_855TransLog2
-                        ELSE
-                           ROLLBACK TRAN
-                        GOTO Quit
+                        EXECUTE ispGenTransmitLog2
+                                 @c_TableName      = 'WSCTNAdd',
+                                 @c_Key1           = @cWaveKey,
+                                 @c_Key2           = @cDropID, -- LabelNo/CaseID
+                                 @c_Key3           = @cStorerkey,
+                                 @c_TransmitBatch  = '',
+                                 @b_Success        = @bSuccess   OUTPUT,
+                                 @n_err            = @nErrNo     OUTPUT,
+                                 @c_errmsg         = @cErrMsg    OUTPUT
+                        IF @nErrNo <> 0 OR @bSuccess <> 1
+                        BEGIN
+                           IF @nTranCount > 0
+                              ROLLBACK TRAN rdt_855TransLog2
+                           ELSE
+                              ROLLBACK TRAN
+                           GOTO Quit
+                        END
                      END
 
                      --V1.13.0 start
