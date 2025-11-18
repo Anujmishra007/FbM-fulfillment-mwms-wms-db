@@ -548,6 +548,30 @@ BEGIN
             SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
          END
       END
+      -- SSA04 start --
+       IF @n_continue=1 or @n_continue=2
+       BEGIN
+          IF ISNULL(RTRIM(@c_toid), '') <> ''
+          BEGIN
+             UPDATE PALLET with (ROWLOCK) SET PalletType = @c_PalletType
+             WHERE PalletKey = @c_toid
+             /* Check SQL Error Message */
+            SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+            IF @n_err <> 0
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 62084
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Pallet. (nspItrnAddDepositCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
+            END
+             ELSE IF @n_cnt = 0
+             BEGIN
+                SELECT @n_continue = 3
+                SELECT @n_err = 62085
+                SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table Pallet Returned Zero Rows Affected. (nspItrnAddDepositCheck)'
+             END
+          END
+       END
+       -- SSA04 End --
 
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN

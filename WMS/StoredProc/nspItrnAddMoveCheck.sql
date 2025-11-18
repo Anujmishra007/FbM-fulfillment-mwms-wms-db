@@ -77,6 +77,7 @@ GO
 /*              Ung       Not update serial no when SerialNoUpdateLotLocID*/
 /* 05-Nov-2025  SSA03     2.2 UWP-43625- updated sequence of update       */
 /*                            channelInv table to avoid deadlock          */
+/* 05-Nov-2025  SSA04     FCR-8415 - update PalletType in pallet table    */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -1857,6 +1858,31 @@ BEGIN
          END
       END  -- END TLTING02
    END
+   -- SSA04 start --
+   IF @n_continue=1 or @n_continue=2
+   BEGIN
+   	  IF ISNULL(RTRIM(@c_fromID), '') <> ''
+   	  BEGIN
+         UPDATE PALLET with (ROWLOCK) SET
+		     PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END
+		     WHERE PalletKey = @c_fromID
+	       /* Check SQL Error Message */
+	      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+	      IF @n_err <> 0
+	      BEGIN
+	         SELECT @n_continue = 3
+	         SELECT @n_err = 62082
+	         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Pallet. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
+	      END
+         ELSE IF @n_cnt = 0
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 62083
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table Pallet Returned Zero Rows Affected. (nspItrnAddMoveCheck)'
+         END
+      END
+   END
+   -- SSA04 End --
 /* Update the ID table with TIxHI numbers */
 IF (@n_continue =1 or @n_continue=2)
 BEGIN
@@ -1944,12 +1970,37 @@ BEGIN
    --TLTING02
    SET @n_cnt = 0
    SELECT @n_cnt = COUNT(1) FROM  ID with (NOLOCK) WHERE ID = @c_toid
-IF @n_cnt = 0
+   IF @n_cnt = 0
    BEGIN
       SELECT @n_continue = 3
       SELECT @n_err = 62034 --62219
       SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table ID Returned Zero Rows Affected. (nspItrnAddMoveCheck)'
    END
+   -- SSA04 start --
+   IF @n_continue=1 or @n_continue=2
+   BEGIN
+   	  IF ISNULL(RTRIM(@c_TOID), '') <> ''
+   	  BEGIN
+         UPDATE PALLET with (ROWLOCK) SET
+		     PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END
+		     WHERE PalletKey = @c_TOID
+	       /* Check SQL Error Message */
+	      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+	      IF @n_err <> 0
+	      BEGIN
+	         SELECT @n_continue = 3
+	         SELECT @n_err = 62084
+	         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Pallet. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
+	      END
+         ELSE IF @n_cnt = 0
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 62085
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table Pallet Returned Zero Rows Affected. (nspItrnAddMoveCheck)'
+         END
+      END
+   END
+   -- SSA04 End --
    /* Update the ID table with TIxHI numbers */
    IF (@n_continue =1 or @n_continue=2)
    BEGIN
