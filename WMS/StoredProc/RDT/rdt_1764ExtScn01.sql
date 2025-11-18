@@ -15,7 +15,8 @@ GO
 /* 2025-05-21 1.1    NLT013   UWP-34785 Add new Exit Screen                 */
 /* 2025-07-11 1.2.0  NLT013   UWP-37578 Option issue                        */
 /* 2025-10-10 1.3.0  NickT    FCR-7928 Reallocate for short task            */
-/* 2025-11-08 1.3.0  NLT013   UWP-43838 Skip InProgress/Completed Task      */
+/* 2025-10-10 1.3.1  NickT    FCR-7928 Do not clear ListKey                 */
+/* 2025-11-08 1.4.0  NLT013   UWP-43838 Skip InProgress/Completed Task      */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn01] (
@@ -376,8 +377,7 @@ BEGIN
                -- Update TaskDetail status to 9 - Short Picked
                BEGIN TRY
                   UPDATE dbo.TaskDetail WITH (ROWLOCK)
-                  SET Status = '9',
-                     ListKey = '',
+                  SET 
                      ReasonKey = @cDefaultSkipReason,
                      EditDate = GETDATE(),
                      EditWho  = SUSER_SNAME(),
