@@ -104,6 +104,7 @@ GO
 /* 2025-07-14   7.8 Cuize       FCR-990 STEP9 Need go to extscn after validation                */
 /* 2025-08-18   0.0 Jackc       !!!Cutover. Use V0 repo for work!!!                             */
 /* 2025-11-11   7.9 Jackc       FCR-8675 Extend SKU, UCC barcode length                         */
+/* 2025-11-12   8.0 NickT       UWP-43907 Merge code from V0                                    */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -259,6 +260,7 @@ DECLARE
    @tExtScnData			VariableTable, --(JHU151)
    @cPackByFromDropID   NVARCHAR( 1),
    @cDefaultCursor      NVARCHAR( 2), --(v7.5)
+   @cPackByToDropID     NVARCHAR( 1),
    @nScan               INT,
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),   @cFieldAttr01 NVARCHAR( 1), @cLottable01  NVARCHAR( 18),
@@ -379,6 +381,7 @@ SELECT
    @cDefaultcartontype  = V_String49,
    @cPackByFromDropID   = V_String50,
    @cDefaultCursor      = V_String51, --(v7.5)
+   @cPackByToDropID     = V_String52,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -438,6 +441,7 @@ BEGIN
    SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
    SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
    SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
+   SET @cPackByToDropID = rdt.rdtGetConfig( @nFunc, 'PackByToDropID', @cStorerKey)
    SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
    SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)
 
@@ -739,6 +743,15 @@ BEGIN
          GOTO Quit
       END
 
+      -- Check blank
+      IF @cPackDtlDropID = '' AND @cPackByToDropID = '1'
+      BEGIN
+         SET @nErrNo = 100251
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ToDropID
+         EXEC rdt.rdtSetFocusField @nMobile, 3  -- ToDropID
+         GOTO Quit
+      END
+
       -- Check PickSlipNo
       EXEC rdt.rdt_Pack_Validate @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'PICKSLIPNO'
          ,@cPickSlipNo
@@ -875,9 +888,38 @@ BEGIN
       SET @nTotalPick   = 0
       SET @nTotalPack   = 0
       SET @nTotalShort  = 0
+      SET @cType        = 'NEXT'
+      
+      -- Lookup carton, if provided
+      IF @cPackByToDropID = '1' 
+      BEGIN
+         IF @cPackDtlDropID IN ('', 'NEW')
+            SET @cType = 'CURRENT'
+         ELSE
+         BEGIN 
+            -- Get carton info
+            SELECT TOP 1 
+               @nCartonNo = CartonNo, 
+               @cLabelNo = LabelNo
+            FROM dbo.PackDetail WITH (NOLOCK) 
+            WHERE PickSlipNo = @cPickSlipNo 
+               AND LabelNo = @cPackDtlDropID
+
+            IF @nCartonNo > 0
+               SET @cType = 'CURRENT'
+            ELSE
+            BEGIN
+               SET @nErrNo = 100252
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad ToDropID
+               EXEC rdt.rdtSetFocusField @nMobile, 3  -- ToDropID
+               SET @cOutField03 = ''
+               GOTO Quit
+            END
+         END
+      END
 
       -- Get task
-      EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXT'
+      EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType
          ,@cPickSlipNo
          ,@cFromDropID
          ,@cPackDtlDropID
@@ -2832,6 +2874,8 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
+            DELETE @tVar 
+
             INSERT INTO @tVar (Variable, Value) VALUES
                ('@cPickSlipNo',     @cPickSlipNo),
                ('@cFromDropID',     @cFromDropID),
@@ -6647,6 +6691,7 @@ BEGIN
       V_String49     = @cDefaultcartontype,
       V_String50     = @cPackByFromDropID,
       V_String51     = @cDefaultCursor, --(v7.5)
+      V_String52     = @cPackByToDropID,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
