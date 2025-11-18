@@ -32,6 +32,7 @@ GO
 /* 2023-09-20   JLC042   2.5  Add Sound Level and Vibration Level(JLC042)     */
 /* 2023-10-26   JLC042   2.6  Reset default vaule of storer-faclity           */
 /* 2025-07-23   Dennis   2.7  Add Trace ID                                    */
+/* 2025-11-06   NickT    2.8  UWP-43698 Block deuplicate request              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtSetMobColRetActionHttp] (
@@ -40,8 +41,7 @@ CREATE OR ALTER PROC [RDT].[rdtSetMobColRetActionHttp] (
    @nErrNo     INT             OUTPUT,
    @cErrMsg    NVARCHAR( 1024) OUTPUT,
    @cActionKey NVARCHAR( 3)    OUTPUT,
-   @cClientIP  NVARCHAR( 15)   OUTPUT,
-   @cTraceID   NVARCHAR( 100)  OUTPUT
+   @cClientIP  NVARCHAR( 15)   OUTPUT
 )
 AS
 SET NOCOUNT ON
@@ -76,16 +76,6 @@ BEGIN
    SET @iStart = @iStart + LEN( 'clientIP="')
    SET @iLength = CHARINDEX( '"', SUBSTRING( @cInMessage, @iStart, LEN( @cInMessage)))
    SET @cClientIP = SUBSTRING( @cInMessage, @iStart, ABS( @iLength - 1))
-END
-
--- Get TraceID
-SET @cTraceID = ''
-SET @iStart = CHARINDEX( 'traceID="', @cInMessage)
-IF @iStart > 0
-BEGIN
-   SET @iStart = @iStart + LEN( 'traceID="')
-   SET @iLength = CHARINDEX( '"', SUBSTRING( @cInMessage, @iStart, LEN( @cInMessage)))
-   SET @cTraceID = SUBSTRING( @cInMessage, @iStart, ABS( @iLength - 1))
 END
 
 -- Get SoundLevel

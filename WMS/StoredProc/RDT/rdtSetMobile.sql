@@ -26,6 +26,7 @@ GO
 /* 07-Dec-2011 1.4  TLTING   Reset Mobile# after 9000                   */  
 /* 02-Oct-2015 1.5  Ung      Performance tuning for CN Nov 11           */
 /* 24-May-2024 1.6  NLT013   Add session id to get unique mobile        */
+/* 06-Nov-2025 1.7  NickT    UWP-43698 Block deuplicate request         */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtSetMobile] (  
@@ -73,7 +74,7 @@ AS
       SET @nLength = CHARINDEX( '"', SUBSTRING( @cInMessage, @nStartIndex, LEN( @cInMessage)))  
       SET @cClientIP = SUBSTRING( @cInMessage, @nStartIndex, ABS( @nLength - 1))  
    END  
-  
+
    SET @CheckMobile = 0  
 
    IF @cSessionID IS NOT NULL AND TRIM(@cSessionID) <> ''
@@ -147,14 +148,28 @@ AS
      
       BEGIN TRAN  
 
-      IF NOT EXISTS(SELECT 1 FROM RDT.RDTXML_Root (NOLOCK) WHERE Mobile = @nMobile)
-         INSERT INTO RDT.RDTXML_Root (mobile) VALUES (@nMobile)
+      BEGIN TRY
+         IF NOT EXISTS(SELECT 1 FROM RDT.RDTXML_Root (NOLOCK) WHERE Mobile = @nMobile)
+            INSERT INTO RDT.RDTXML_Root (mobile) VALUES (@nMobile)
+      END TRY
+      BEGIN CATCH
+         SELECT @nErrNo = @@ERROR  
+         SELECT @cErrMsg = 'Insert into RDTXML_Root Failed! '
+         ROLLBACK
+      END CATCH
      
+     BEGIN TRY
       INSERT INTO RDT.RDTMOBREC(  
           Mobile,        Func,          Scn,           Step,         Menu,  
           InputKey)  
       VALUES(@nMobile,   @nFunction,    @nScn,         @nStep,       @nMenu,  
-             @nKey)  
+             @nKey)
+      END TRY
+      BEGIN CATCH
+         SELECT @nErrNo = @@ERROR  
+         SELECT @cErrMsg = 'Insert into RDTMOBREC Failed! '
+         ROLLBACK
+      END CATCH
      
       IF @@ERROR <> 0  
       BEGIN  
