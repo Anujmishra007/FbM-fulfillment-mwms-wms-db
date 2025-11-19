@@ -768,7 +768,8 @@ BEGIN
       SELECT DISTINCT P.OrderKey, P.Storerkey, P.SKU, 0
       FROM #PickDetail_WIP P
       WHERE P.WaveKey = @c_Wavekey
-      AND P.UOM IN ('2','6')
+      --AND P.UOM IN ('2','6')
+      AND P.UOM IN ('2')
       AND (P.TaskDetailKey = '' OR P.TaskDetailKey IS NULL)
       AND P.[Status] = '0'
       AND P.Storerkey  = @c_StorerKey
@@ -849,6 +850,7 @@ BEGIN
                              AND OD.Sku = P.Sku
          JOIN LOC L (NOLOCK) ON L.Loc = P.Loc
          WHERE P.WaveKey = @c_Wavekey
+         --AND P.UOM IN ('2','6')
          AND P.UOM IN ('2')
          AND (P.TaskDetailKey = '' OR P.TaskDetailKey IS NULL)
          AND P.[Status] = '0'
