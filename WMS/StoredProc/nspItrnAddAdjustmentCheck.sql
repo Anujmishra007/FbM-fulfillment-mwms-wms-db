@@ -903,12 +903,6 @@ BEGIN
 	         SELECT @n_err = 62084
 	         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Pallet. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
 	      END
-         ELSE IF @n_cnt = 0
-         BEGIN
-            SELECT @n_continue = 3
-            SELECT @n_err = 62085
-            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table Pallet Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
-         END
       END
    END
    -- SSA04 End --
