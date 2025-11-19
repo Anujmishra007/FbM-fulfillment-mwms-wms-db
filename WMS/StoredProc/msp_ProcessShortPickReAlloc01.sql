@@ -21,8 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 01-Oct-2025 WLChooi  1.0   Initial Version                           */
-/* 10-Oct-2025 SSA01    1.1   UWP-42248 -Enhanced session management    */
+/* 18-Nov-2025 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -49,7 +48,6 @@ BEGIN
          , @c_StorerKey                NVARCHAR(15) = ''
          , @c_LOT                      NVARCHAR(10) = ''
          , @c_ID                       NVARCHAR(18) = ''
-         , @c_PackKey                  NVARCHAR(10) = ''
          , @c_SourceKey                NVARCHAR(50) = ''
 
    DECLARE @c_StrategykeyParm          NVARCHAR(10) = ''
@@ -93,8 +91,20 @@ BEGIN
          , @c_Facility                 NVARCHAR(5)  = ''
          , @c_AreaKey                  NVARCHAR(10) = ''
          , @c_TaskdetailKey            NVARCHAR(10) = ''
+         , @c_NewPickdetailkey         NVARCHAR(10) = ''
          , @c_Message02                NVARCHAR(20) = ''
          , @c_TableName                NVARCHAR(30) = ''
+         , @c_Consigneekey             NVARCHAR(15)
+         , @c_OrderType                NVARCHAR(10)
+         , @c_LabelLine                NVARCHAR(5)
+         , @c_Pickslipno               NVARCHAR(10)
+         , @n_CartonNo                 INT = 0
+         , @n_PackQty                  INT = 0
+         , @c_DefaultPackInfoFlag      NVARCHAR(10) = '0'
+         , @n_TotCartonWeight          DECIMAL(15,7) = 0.00
+         , @CUR_UCC                    CURSOR
+         , @CUR_PICKDET_UPDATE         CURSOR
+         , @n_splitqty                 INT = 0
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -102,7 +112,6 @@ BEGIN
    SET @c_ErrMsg  = ''
    SET @b_debug = ISNULL(@b_debug, 0)
    SET @c_SourceKey = @c_Wavekey
-   SET @c_PackKey = ''
    SET @c_UOM = ''
    SET @c_StrategykeyParm = ''
    SET @c_SourceType = 'msp_ProcessShortPickReAlloc01'
@@ -111,7 +120,7 @@ BEGIN
    
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      CREATE TABLE #T_AllocOrders (    
+      CREATE TABLE #T_ShortOrders (    
             OrderKey    NVARCHAR(10) PRIMARY KEY
       )
 
@@ -153,10 +162,10 @@ BEGIN
        , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
        , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
        , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (getdate())              --(SSA01)
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())          --(SSA01)
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (getdate())              --(SSA01)
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())          --(SSA01)
+       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
+       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
+       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
        , [TrafficCop]           [NVARCHAR](1)    NULL
        , [ArchiveCop]           [NVARCHAR](1)    NULL
        , [OptimizeCop]          [NVARCHAR](1)    NULL
@@ -174,30 +183,52 @@ BEGIN
       CREATE INDEX IX_PickDetail_WIP_OrderKey_Status ON #PickDetail_WIP (OrderKey, [Status]) INCLUDE (Qty, QtyMoved, PickDetailKey)
       CREATE INDEX IX_PickDetail_WIP_WaveKey_UOM_Status ON #PickDetail_WIP (WaveKey, UOM, [Status]) INCLUDE (OrderKey, Storerkey, SKU, TaskDetailKey)
       CREATE INDEX IX_PickDetail_WIP_TaskUpdate ON #PickDetail_WIP (UOM, PickMethod, Lot, Loc, ID, DropID) INCLUDE (PickDetailKey)
+
+      CREATE TABLE #T_ALLORDER
+      (
+            Orderkey NVARCHAR(10) PRIMARY KEY
+      )
+
+      CREATE TABLE #T_CaseID (
+            Storerkey   NVARCHAR(15)
+          , CaseID      NVARCHAR(20)
+          , SKU         NVARCHAR(20)
+          , PRIMARY KEY (Storerkey, CaseID, SKU)
+      )
+
+      CREATE TABLE #T_Packdetail (
+            PickSlipNo  NVARCHAR(10)
+          , CartonNo    INT
+         PRIMARY KEY (PickSlipNo, CartonNo)
+      )
    END
 
-   IF @b_debug = 0
+   IF @b_debug = 0 AND @n_Continue IN (1,2)
    BEGIN
       WHILE @@TRANCOUNT > 0
       BEGIN
          COMMIT TRAN
       END
    END
-        
-   SELECT @c_StorerKey  = OH.StorerKey
-        , @c_Facility   = OH.Facility
-        , @c_Automation = ISNULL(W.Userdefine09, '')
-   FROM WAVE W WITH (NOLOCK)
-   JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.WaveKey = W.WaveKey
-   JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
-   WHERE WD.WaveKey = @c_Wavekey
+   
+   --Initialize Data
+   IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
+      SELECT @c_StorerKey  = OH.StorerKey
+           , @c_Facility   = OH.Facility
+           , @c_Automation = ISNULL(W.Userdefine09, '')
+      FROM WAVE W WITH (NOLOCK)
+      JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.WaveKey = W.WaveKey
+      JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
+      WHERE W.WaveKey = @c_Wavekey
 
-   SELECT @c_PackKey = S.PackKey
-        , @c_UOM     = P.PackUOM3
-   FROM SKU S WITH (NOLOCK)
-   JOIN PACK P WITH (NOLOCK) ON S.PackKey = P.PackKey
-   WHERE S.STORERKEY = @c_StorerKey
-   AND   S.SKU       = @c_SKU
+      INSERT INTO #T_ALLORDER (Orderkey)
+      SELECT DISTINCT Orderkey
+      FROM WAVEDETAIL (NOLOCK)
+      WHERE Wavekey = @c_Wavekey
+
+      SELECT @c_DefaultPackInfoFlag = dbo.fnc_GetRight('', @c_StorerKey, '', 'DEFAULT_PACKINFO')
+   END
 
    --Get Storerconfig setup
    IF (@n_Continue = 1 OR @n_Continue = 2)
@@ -226,7 +257,8 @@ BEGIN
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
       IF NOT EXISTS ( SELECT 1
-                      FROM dbo.PICKDETAIL PD WITH (NOLOCK)    
+                      FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+                      JOIN #T_ALLORDER T ON T.Orderkey = PD.OrderKey
                       WHERE PD.Storerkey = @c_StorerKey
                       AND PD.Sku = @c_SKU    
                       AND PD.DropID = @c_UCCNo    
@@ -244,9 +276,10 @@ BEGIN
    --Get Orderkeys that have UCC being shorted
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      INSERT INTO #T_AllocOrders (OrderKey)
+      INSERT INTO #T_ShortOrders (OrderKey)
       SELECT PD.OrderKey
-      FROM PICKDETAIL PD WITH (NOLOCK)    
+      FROM PICKDETAIL PD WITH (NOLOCK)
+      JOIN #T_ALLORDER T ON T.Orderkey = PD.OrderKey
       WHERE PD.Storerkey = @c_StorerKey    
       AND   PD.Sku = @c_SKU    
       AND   PD.DropID = @c_UCCNo    
@@ -279,7 +312,7 @@ BEGIN
          SET @c_ErrMsg = ERROR_MESSAGE()
       END CATCH
 
-      IF @b_debug = 0
+      IF @b_debug = 0 AND @n_Continue IN (1,2)
       BEGIN
          WHILE @@TRANCOUNT > 0
          BEGIN
@@ -343,7 +376,6 @@ BEGIN
       END CATCH
    END
 
-   --Compare Pickdetail Line
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
       --Initialize Pickdetail work in progress staging table   
@@ -360,7 +392,260 @@ BEGIN
       BEGIN
          SET @n_Continue = 3
       END
+   END
 
+   -- Delete Packdetail based on CaseID
+   -- Clear Caseid for shorted lines
+   IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
+      INSERT INTO #T_CaseID (CaseID, Storerkey, SKU)
+      SELECT SP.CaseID, SP.Storerkey, SP.SKU
+      FROM #PickDetail_WIP SP
+      JOIN #T_ShortOrders T ON SP.OrderKey = T.OrderKey
+      WHERE SP.WaveKey = @c_Wavekey
+      AND SP.UOM = '2'
+      AND SP.[Status] = '4'
+      AND SP.DropID = @c_UCCNo
+      AND SP.Storerkey  = @c_StorerKey
+      AND SP.SKU = @c_SKU
+      AND (SP.CaseID IS NOT NULL AND SP.CaseID <> '')
+
+      INSERT INTO #T_Packdetail (PickSlipNo, CartonNo)
+      SELECT DISTINCT PD.PickSlipNo, PD.CartonNo
+      FROM PACKDETAIL PD (NOLOCK)
+      JOIN #T_CaseID T ON PD.LabelNo = T.CaseID AND PD.StorerKey = T.Storerkey AND PD.SKU = T.SKU
+      
+      IF @b_debug = 0
+      BEGIN
+         BEGIN TRAN
+      END
+
+      -- Delete Packdetail
+      DELETE PD
+      FROM PACKDETAIL PD
+      JOIN #T_Packdetail T ON PD.PickSlipNo = T.PickSlipNo AND PD.CartonNo = T.CartonNo
+
+      -- Delete Packinfo
+      DELETE PIF
+      FROM PACKINFO PIF
+      JOIN #T_Packdetail T ON PIF.PickSlipNo = T.PickSlipNo AND PIF.CartonNo = T.CartonNo
+
+      IF @b_debug = 0 AND @n_Continue IN (1,2) 
+      BEGIN
+         WHILE @@TRANCOUNT > 0
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+
+      -- Clear CaseID
+      ;WITH MatchingRows AS (
+         SELECT SP.PickDetailKey
+         FROM #PickDetail_WIP SP
+         JOIN #T_ShortOrders T ON SP.OrderKey = T.OrderKey
+         WHERE SP.WaveKey = @c_Wavekey
+         AND SP.UOM = '2'
+         AND SP.[Status] = '4'
+         AND SP.DropID = @c_UCCNo
+         AND SP.Storerkey  = @c_StorerKey
+         AND SP.SKU = @c_SKU
+         AND (SP.CaseID IS NOT NULL AND SP.CaseID <> '')
+      )
+      UPDATE SP
+      SET SP.CaseID = ''
+      FROM #PickDetail_WIP SP
+      JOIN MatchingRows MR ON SP.PickDetailKey = MR.PickDetailKey
+   END
+
+   -- Redo Pre-cartonization
+   IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
+      SET @CUR_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT PD.OrderKey, PD.DropID, Qty = SUM(PD.Qty), PH.PickSlipNo
+      FROM #PickDetail_WIP PD
+      JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
+      JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = T.OrderKey
+      WHERE PD.[Status] NOT IN ('4', '9')
+      AND PD.WaveKey = @c_Wavekey
+      AND PD.UOM = '2'
+      AND PD.Storerkey  = @c_StorerKey
+      AND PD.SKU = @c_SKU
+      AND (PD.CaseID IS NULL OR PD.CaseID = '')
+      AND (PD.DropID IS NOT NULL AND PD.DropID <> '')
+      GROUP BY PD.OrderKey, PD.DropID, PH.PickSlipNo
+      ORDER BY PD.DropID
+
+      OPEN @CUR_UCC
+
+      FETCH NEXT FROM @CUR_UCC INTO @c_Orderkey, @c_UCCNo, @n_PackQty, @c_Pickslipno
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+      BEGIN
+         SET @c_Consigneekey = N''
+         SET @c_OrderType = N''
+         SET @c_LabelNo = N''
+         SET @c_LabelLine = N''
+         SET @n_TotCartonWeight = 0.00
+
+         SELECT @c_Consigneekey = O.Consigneekey
+              , @c_OrderType = O.[Type]
+         FROM ORDERS O WITH (NOLOCK)
+         WHERE O.Orderkey = @c_Orderkey
+
+         IF EXISTS ( SELECT 1
+                      FROM CODELKUP CL WITH (NOLOCK)
+                      WHERE CL.ListName = 'GS1xLabel'
+                      AND CL.Code = @c_Consigneekey
+                    )
+         BEGIN
+            IF EXISTS ( SELECT 1
+                        FROM CODELKUP CL WITH (NOLOCK)
+                        WHERE CL.ListName = 'LVSSTO'
+                        AND CL.Storerkey = @c_Storerkey
+                        AND CL.Code = @c_Consigneekey
+                        AND CL.Short = @c_OrderType
+                      )
+            BEGIN
+               SET @c_LabelNo = @c_UCCNo
+            END
+         END
+         
+         SET @n_CartonNo = 0
+         SELECT @n_CartonNo = MAX(CartonNo)
+         FROM PACKDETAIL (NOLOCK)
+         WHERE Pickslipno = @c_Pickslipno
+
+         SET @n_CartonNo = ISNULL(@n_CartonNo, 0) + 1
+
+         IF ISNULL(@c_LabelNo, '') = ''
+         BEGIN
+            EXEC dbo.isp_GenUCCLabelNo_Std
+                  @cPickslipNo = @c_Pickslipno,
+                  @nCartonNo   = @n_CartonNo,
+                  @cLabelNo    = @c_LabelNo  OUTPUT,
+                  @b_success   = @b_Success  OUTPUT,
+                  @n_err       = @n_Err      OUTPUT,
+                  @c_errmsg    = @c_Errmsg   OUTPUT  
+         END
+
+         SELECT @c_LabelLine = RIGHT('00000' + CAST(CAST(ISNULL(MAX(PD.LabelLine), 0) AS INT) + 1 AS NVARCHAR(5)), 5)
+         FROM PACKDETAIL PD (NOLOCK)
+         WHERE PD.Pickslipno = @c_Pickslipno
+         AND PD.CartonNo = @n_CartonNo
+
+         -- Insert Packdetail
+         INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, DropId)
+         VALUES (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_StorerKey, @c_SKU, @n_PackQty, @c_UCCNo, '')
+
+         -- Delete existing Packinfo
+         DELETE FROM PACKINFO
+         WHERE Pickslipno = @c_PickslipNo
+         AND CartonNo = @n_CartonNo
+
+         SELECT @n_TotCartonWeight = @n_PackQty * ISNULL(SKU.STDNETWGT, 0)
+         FROM SKU (NOLOCK)
+         WHERE Storerkey = @c_StorerKey
+         AND SKU = @c_SKU
+         
+         -- Insert Packinfo
+         INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Qty, Weight, Cube, Length, Width, Height, RefNo)
+         SELECT @c_PickslipNo, @n_CartonNo, '9999', @n_PackQty
+              , CASE WHEN @c_DefaultPackInfoFlag = '1' THEN 0 ELSE @n_TotCartonWeight END
+              , 0, 0, 0, 0, @c_LabelNo
+         
+         --Update Labelno to Pickdetail.Caseid
+         SET @CUR_PICKDET_UPDATE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PD.PickDetailKey, PD.Qty
+            FROM #PICKDETAIL_WIP PD (NOLOCK) 
+            WHERE PD.OrderKey = @c_Orderkey
+            AND PD.Storerkey = @c_Storerkey
+            AND PD.Sku = @c_Sku
+            AND (PD.CaseID IS NULL OR PD.CaseID = '')
+            AND PD.UOM = '2'
+            AND PD.[Status] NOT IN ('4', '9')
+            ORDER BY CASE WHEN PD.DropID = @c_UCCNo THEN 1 ELSE 2 END, PD.PickDetailKey
+         
+         OPEN @CUR_PICKDET_UPDATE
+         
+         FETCH NEXT FROM @CUR_PICKDET_UPDATE INTO @c_PickDetailKey, @n_PickdetQty
+         
+         WHILE @@FETCH_STATUS <> -1 AND @n_packqty > 0
+         BEGIN
+            IF @n_PickdetQty <= @n_packqty
+            BEGIN
+               UPDATE #PICKDETAIL_WIP WITH (ROWLOCK)
+               SET CaseId = @c_labelno,
+                   UOMQty = CASE WHEN UOM = '6' THEN Qty ELSE UOMQty END
+               WHERE PickDetailKey = @c_PickDetailKey
+         
+              SELECT @n_packqty = @n_packqty - @n_PickdetQty
+            END
+            ELSE
+            BEGIN  -- pickqty > packqty
+               SELECT @n_splitqty = @n_PickdetQty - @n_packqty
+               
+               EXECUTE dbo.nspg_GetKey
+               'PICKDETAILKEY',
+               10,
+               @c_NewPickdetailkey OUTPUT,
+               @b_Success OUTPUT,
+               @n_Err OUTPUT,
+               @c_Errmsg OUTPUT
+               
+               IF NOT @b_Success = 1
+               BEGIN
+                  SELECT @n_continue = 3
+               END
+         
+               INSERT #PICKDETAIL_WIP
+                      (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,
+                       Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,
+                       DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,
+                       ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,
+                       WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, Taskdetailkey, TaskManagerReasonkey, Notes, WIP_Refno, Channel_ID)
+               SELECT @c_newpickdetailkey, '', PD.PickHeaderKey, PD.OrderKey, PD.OrderLineNumber, PD.Lot,
+                      PD.Storerkey, PD.Sku, PD.AltSku, PD.UOM, 
+                      CASE WHEN PD.UOM = '6' THEN @n_splitqty 
+                           WHEN PD.UOM = '2' AND CaseCnt > 0 AND @n_splitqty % CAST(IIF(CaseCnt > 0, CaseCnt, 1) AS INT) = 0 THEN FLOOR(@n_splitqty / CaseCnt) 
+                      ELSE PD.UOMQty END , 
+                      @n_splitqty, PD.QtyMoved, PD.Status,
+                      PD.DropID, PD.Loc, PD.ID, PD.PackKey, PD.UpdateSource, PD.CartonGroup, PD.CartonType,
+                      PD.ToLoc, PD.DoReplenish, PD.ReplenishZone, PD.DoCartonize, PD.PickMethod,
+                      PD.WaveKey, PD.EffectiveDate, '9', PD.ShipFlag, PD.PickSlipNo, PD.TaskDetailKey, PD.TaskManagerReasonKey, PD.Notes, PD.WIP_Refno, PD.Channel_ID
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN dbo.SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
+               JOIN dbo.PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+               WHERE PD.PickDetailKey = @c_PickDetailKey
+                  
+               UPDATE #PICKDETAIL_WIP 
+               SET CaseID = @c_labelno,
+                   Qty = @n_packqty,
+                   UOMQty = 
+                   CASE WHEN UOM = '6' THEN @n_packqty 
+                        WHEN UOM = '2' AND CaseCnt > 0 AND @n_packqty % CAST(IIF(CaseCnt > 0, CaseCnt, 1) AS INT) = 0 THEN FLOOR(@n_packqty / CaseCnt) 
+                   ELSE UOMQty END 
+                   --UOMQTY = CASE UOM WHEN '6' THEN @n_packqty ELSE UOMQty END
+               FROM #PICKDETAIL_WIP 
+               JOIN dbo.SKU (NOLOCK) ON #PICKDETAIL_WIP .Storerkey = SKU.Storerkey AND #PICKDETAIL_WIP .Sku = SKU.Sku
+               JOIN dbo.PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+               WHERE PickDetailKey = @c_PickDetailKey
+         
+               SELECT @n_packqty = 0
+            END
+            FETCH NEXT FROM @CUR_PICKDET_UPDATE INTO @c_PickDetailKey, @n_PickdetQty
+         END
+         CLOSE @CUR_PICKDET_UPDATE
+         DEALLOCATE @CUR_PICKDET_UPDATE
+
+         FETCH NEXT FROM @CUR_UCC INTO @c_Orderkey, @c_UCCNo, @n_PackQty, @c_Pickslipno
+      END
+      CLOSE @CUR_UCC
+      DEALLOCATE @CUR_UCC
+   END
+
+   --Compare Pickdetail Line
+   IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
       IF @b_debug = 0
       BEGIN
          BEGIN TRAN
@@ -376,16 +661,23 @@ BEGIN
               , ReAllocStatus = CASE WHEN SUM(PD.Qty) = 0 THEN '0' ELSE '1' END
               , QtyInDiff = ABS(SUM(PD.QtyMoved) - SUM(PD.Qty))
          FROM #PickDetail_WIP PD (NOLOCK)
-         JOIN #T_AllocOrders T ON PD.OrderKey = T.OrderKey
+         JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
          WHERE PD.[Status] <= '4'
+         AND PD.WaveKey = @c_Wavekey
+         AND PD.Storerkey  = @c_StorerKey
+         AND PD.SKU = @c_SKU
          GROUP BY PD.OrderKey
          HAVING SUM(PD.Qty) < SUM(PD.QtyMoved)   --Only check Not/Partial allocated after reallocation
       ), ShortPick AS (
          SELECT Orderkey = PD.Orderkey
               , Pickdetailkey = PD.PickDetailKey
          FROM #PickDetail_WIP PD (NOLOCK)
-         JOIN #T_AllocOrders T ON PD.OrderKey = T.OrderKey
+         JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
          WHERE PD.[Status] IN ('4')
+         AND PD.WaveKey = @c_Wavekey
+         AND PD.DropID = @c_UCCNo
+         AND PD.Storerkey  = @c_StorerKey
+         AND PD.SKU = @c_SKU
          GROUP BY PD.PickDetailKey, PD.OrderKey
       )
       SELECT AP.OrderKey
@@ -443,7 +735,7 @@ BEGIN
       CLOSE @CUR_UpdatePick
       DEALLOCATE @CUR_UpdatePick
 
-      IF @b_debug = 0
+      IF @b_debug = 0 AND @n_Continue IN (1,2) 
       BEGIN
          WHILE @@TRANCOUNT > 0
          BEGIN
@@ -470,9 +762,12 @@ BEGIN
       SELECT DISTINCT P.OrderKey, P.Storerkey, P.SKU, 0
       FROM #PickDetail_WIP P
       WHERE P.WaveKey = @c_Wavekey
-      AND P.UOM IN ('2','6')
+      --AND P.UOM IN ('2','6')
+      AND P.UOM IN ('2')
       AND (P.TaskDetailKey = '' OR P.TaskDetailKey IS NULL)
       AND P.[Status] = '0'
+      AND P.Storerkey  = @c_StorerKey
+      AND P.SKU = @c_SKU
       AND (P.DropID <> '' AND P.DropID IS NOT NULL)
 
       SET @c_WCSPack = ''
@@ -549,7 +844,8 @@ BEGIN
                              AND OD.Sku = P.Sku
          JOIN LOC L (NOLOCK) ON L.Loc = P.Loc
          WHERE P.WaveKey = @c_Wavekey
-         AND P.UOM IN ('2','6')
+         --AND P.UOM IN ('2','6')
+         AND P.UOM IN ('2')
          AND (P.TaskDetailKey = '' OR P.TaskDetailKey IS NULL)
          AND P.[Status] = '0'
          AND (P.DropID <> '' AND P.DropID IS NOT NULL)
@@ -584,7 +880,7 @@ BEGIN
       
          WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
          BEGIN
-            SET @c_TaskStatus    = 'H'
+            SET @c_TaskStatus    = '0'
             SET @c_ToLoc         = ''
             SET @c_ToLocType     = ''
             SET @c_ToLocCategory = ''
@@ -977,7 +1273,7 @@ BEGIN
          DEALLOCATE @CUR_PTASK
       END
 
-      IF @b_debug = 0
+      IF @b_debug = 0 AND @n_Continue IN (1,2)
       BEGIN
          WHILE @@TRANCOUNT > 0
          BEGIN
@@ -1023,16 +1319,30 @@ BEGIN
    END
 
    QUIT_SP:
-   IF OBJECT_ID('tempdb..#T_AllocOrders ','u') IS NOT NULL 
-      DROP TABLE #T_AllocOrders
+   IF OBJECT_ID('tempdb..#T_ShortOrders ','u') IS NOT NULL 
+      DROP TABLE #T_ShortOrders
 
    IF OBJECT_ID('tempdb..#T_ORDERSKU ','u') IS NOT NULL 
       DROP TABLE #T_ORDERSKU
 
+   IF OBJECT_ID('tempdb..#T_ALLORDER ','u') IS NOT NULL 
+      DROP TABLE #T_ALLORDER
+      
+   IF OBJECT_ID('tempdb..#T_CaseID ','u') IS NOT NULL 
+      DROP TABLE #T_CaseID
+
+   IF OBJECT_ID('tempdb..#T_Packdetail ','u') IS NOT NULL 
+      DROP TABLE #T_Packdetail
+      
    IF (XACT_STATE()) = -1 
    BEGIN
       SET @n_Continue = 3
       ROLLBACK TRAN
+   END
+
+   WHILE @@TRANCOUNT < @n_StartTCnt
+   BEGIN
+      BEGIN TRAN
    END
 
    IF @n_Continue = 3  -- Error Occured    
