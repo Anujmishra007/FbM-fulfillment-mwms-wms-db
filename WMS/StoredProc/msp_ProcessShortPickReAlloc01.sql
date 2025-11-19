@@ -533,32 +533,26 @@ BEGIN
          WHERE PD.Pickslipno = @c_Pickslipno
          AND PD.CartonNo = @n_CartonNo
 
+         -- Insert Packdetail
          INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, DropId)
          VALUES (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_StorerKey, @c_SKU, @n_PackQty, @c_UCCNo, '')
 
-         IF EXISTS ( SELECT 1 
-                     FROM dbo.PackInfo (NOLOCK) 
-                     WHERE Pickslipno = @c_PickslipNo
-                     AND CartonNo = @n_CartonNo )
-         BEGIN
-            UPDATE PACKINFO 
-            SET RefNo = @c_LabelNo
-            WHERE Pickslipno = @c_PickslipNo
-            AND CartonNo = @n_CartonNo 
-         END
-         ELSE
-         BEGIN
-            SELECT @n_TotCartonWeight = @n_PackQty * ISNULL(SKU.STDNETWGT, 0)
-            FROM SKU (NOLOCK)
-            WHERE Storerkey = @c_StorerKey
-            AND SKU = @c_SKU
+         -- Delete existing Packinfo
+         DELETE FROM PACKINFO
+         WHERE Pickslipno = @c_PickslipNo
+         AND CartonNo = @n_CartonNo
 
-            INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Qty, Weight, Cube, Length, Width, Height, RefNo)
-            SELECT @c_PickslipNo, @n_CartonNo, '9999', @n_PackQty
-                 , CASE WHEN @c_DefaultPackInfoFlag = '1' THEN 0 ELSE @n_TotCartonWeight END
-                 , 0, 0, 0, 0, @c_LabelNo
-         END
-
+         SELECT @n_TotCartonWeight = @n_PackQty * ISNULL(SKU.STDNETWGT, 0)
+         FROM SKU (NOLOCK)
+         WHERE Storerkey = @c_StorerKey
+         AND SKU = @c_SKU
+         
+         -- Insert Packinfo
+         INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Qty, Weight, Cube, Length, Width, Height, RefNo)
+         SELECT @c_PickslipNo, @n_CartonNo, '9999', @n_PackQty
+              , CASE WHEN @c_DefaultPackInfoFlag = '1' THEN 0 ELSE @n_TotCartonWeight END
+              , 0, 0, 0, 0, @c_LabelNo
+         
          --Update Labelno to Pickdetail.Caseid
          SET @CUR_PICKDET_UPDATE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT PD.PickDetailKey, PD.Qty
