@@ -24,6 +24,7 @@ GO
 /* 2025-07-30    NLT013   1.4.0  UWP-38609 Performance tuning              */
 /* 2025-08-15    NLT013   1.5.0  UWP-39510 SQL Server exception            */
 /* 2025-10-10    NickT    1.6.0  FCR-7928 Reallocate for short task        */
+/* 2025-11-07    Cuize    1.7.0  UWP-43757 Add orderby on pickdetails      */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -195,21 +196,42 @@ BEGIN
             SELECT 'Full UCC short'
 
          BEGIN TRY
-            INSERT INTO @tPickDetail (PickDetailKey)
-            SELECT DISTINCT PickDetailKey
-            FROM dbo.PickDetail WITH (NOLOCK)
-            WHERE TaskDetailKey = @cTaskDetailKey
 
-            UPDATE PD WITH (ROWLOCK)
-            SET
-               Status =  '4', 
-               EditWho  = SUSER_SNAME(), 
-               EditDate = GETDATE(),
-               Trafficcop = NULL
-            FROM dbo.PickDetail PD WITH (ROWLOCK)
-            INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
+            DECLARE @currPickDetailKey NVARCHAR(50);
+
+            DECLARE curTaskDtlPickDtl CURSOR LOCAL FAST_FORWARD FOR
+               SELECT PD.PickDetailKey
+               FROM dbo.PickDetail PD WITH (ROWLOCK, READPAST)
+               WHERE PD.TaskDetailKey = @cTaskDetailKey
+               ORDER BY PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey;
+
+            OPEN curTaskDtlPickDtl;
+            FETCH NEXT FROM curTaskDtlPickDtl INTO @currPickDetailKey;
+
+            WHILE @@FETCH_STATUS = 0
+               BEGIN
+                  IF @bDebugFlag = 1
+                     SELECT '@currPickDetailKey:' + @currPickDetailKey
+
+                  UPDATE dbo.PickDetail WITH (ROWLOCK)
+                  SET Status = '4',
+                      EditWho = SUSER_SNAME(),
+                      EditDate = GETDATE(),
+                      Trafficcop = NULL
+                  WHERE PickDetailKey = @currPickDetailKey;
+
+                  FETCH NEXT FROM curTaskDtlPickDtl INTO @currPickDetailKey;
+               END
+
+            CLOSE curTaskDtlPickDtl;
+            DEALLOCATE curTaskDtlPickDtl;
+
          END TRY
          BEGIN CATCH
+
+            CLOSE curTaskDtlPickDtl;
+            DEALLOCATE curTaskDtlPickDtl;
+
             SET @nErrNo = 231257
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
             GOTO RollBackTran
@@ -275,6 +297,7 @@ BEGIN
             WHERE PD.TaskDetailKey = @cTaskDetailKey
                AND PD.QTY > 0
                AND PD.Status = '4'
+            Order by PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
       
          OPEN @curPD
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD, @cDropID, @cOrderKey
@@ -317,7 +340,7 @@ BEGIN
             WHERE PD.TaskDetailKey = @cTaskDetailKey
                AND PD.QTY > 0
                AND PD.Status = '0'
-      
+            Order by PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
          OPEN @curPD
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD, @cDropID
          WHILE @@FETCH_STATUS = 0
