@@ -23,6 +23,7 @@ GO
 /* 2025-04-28   1.1.4  Dennis   FCR-3925  Udpate TD,PD CaseID                 */
 /* 2025-04-29   1.1.5  JackC    FCR-3925  Clear groupkey value when generating*/ 
 /*                               1st short task                               */
+/* 2025-11-10   1.1.6  Dennis   UWP-43759 Enhancement                         */ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1855CfmSP01 (  
@@ -144,7 +145,7 @@ BEGIN
       AND   PD.[Status] < @cPickConfirmStatus
       AND   PD.QTY > 0 
       AND   PD.Status <> '4'
-      ORDER BY 1
+      ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
    END
    ELSE
    BEGIN
@@ -183,7 +184,7 @@ BEGIN
             AND PD.[Status] < @cPickConfirmStatus
             AND PD.QTY > 0 
             AND PD.Status <> '4'
-         ORDER BY 1
+         ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
       END
       ELSE
       BEGIN
@@ -204,7 +205,7 @@ BEGIN
             AND PD.[Status] < @cPickConfirmStatus
             AND PD.QTY > 0 
             AND PD.Status <> '4'
-         ORDER BY 1
+         ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
       END
    END
 

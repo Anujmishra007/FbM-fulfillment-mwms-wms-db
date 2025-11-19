@@ -326,8 +326,8 @@ BEGIN
 			   SET @c_ReplenQtyFlag = '0'
 
          IF EXISTS(SELECT 1 FROM TASKDETAIL TD WITH (NOLOCK)
-                   WHERE TD.Status IN ( '0','3')
-                     AND TD.TaskType = 'DRP'
+                   WHERE TD.Status IN ( '0','3','5')
+                     AND TD.TaskType = 'RPF'
                      AND TD.ToLoc = @c_CurrentLoc
                      AND TD.Storerkey = @c_CurrentStorer
                      AND TD.Sku       = @c_CurrentSKU)
@@ -956,18 +956,58 @@ BEGIN
                      R.UCCNo          --ML01
              FROM    #REPLENISHMENT R
       OPEN CUR1
+	DECLARE 
+    @prevFromLoc NVARCHAR(10) = '',
+    @prevToLoc   NVARCHAR(10) = '',
+    @prevSKU     NVARCHAR(20) = '',
+    @prevGroup   NVARCHAR(10) = ''
+
       FETCH NEXT FROM CUR1 INTO @c_FromLoc, @c_FromId, @c_CurrentLoc,
          @c_CurrentSKU, @n_FromQty, @c_CurrentStorer, @c_FromLot, @c_PackKey,
          @c_Priority, @c_UOM,
          @c_UCCNo   --ML01
       WHILE @@FETCH_STATUS <> -1
       BEGIN
+	  -- Check if the same FromLoc, ToLoc, SKU combination repeats
+    IF @c_FromLoc = @prevFromLoc 
+       AND @c_CurrentLoc = @prevToLoc 
+       AND @c_CurrentSKU = @prevSKU
+    BEGIN
+        -- Reuse previous replenishment group
+        SET @c_ReplenishmentGroup = @prevGroup
+    END
+    ELSE
+    BEGIN
+        -- Generate a new replenishment group
+        EXECUTE nspg_GetKey
+                @keyname       = 'REPLENISHGROUP',
+                @fieldlength   = 10,
+                @keystring     = @c_ReplenishmentGroup OUTPUT,
+                @b_success     = @b_success OUTPUT,
+                @n_err         = @n_err OUTPUT,
+                @c_errmsg      = @c_errmsg OUTPUT
+
+        IF @b_success <> 1
+        BEGIN
+            SET @n_continue = 3
+            BREAK
+        END
+
+        -- Save current as previous
+        SET @prevFromLoc = @c_FromLoc
+        SET @prevToLoc   = @c_CurrentLoc
+        SET @prevSKU     = @c_CurrentSKU
+        SET @prevGroup   = @c_ReplenishmentGroup
+    END
+
+    -- Now generate ReplenishmentKey (unique per line)
          EXECUTE nspg_GetKey 'REPLENISHKEY', 10, @c_ReplenishmentKey OUTPUT,
             @b_success OUTPUT, @n_err OUTPUT, @c_errmsg OUTPUT
          IF NOT @b_success = 1
             BEGIN
                BREAK
             END
+			
          IF @b_success = 1
             BEGIN
                INSERT   REPLENISHMENT

@@ -308,6 +308,7 @@ BEGIN
             WHERE PD.TaskDetailKey = @cTaskDetailKey
                AND PD.QTY > 0
                AND PD.Status = '4'
+            Order by PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
       
          OPEN @curPD
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD, @cDropID, @cOrderKey
@@ -350,7 +351,7 @@ BEGIN
             WHERE PD.TaskDetailKey = @cTaskDetailKey
                AND PD.QTY > 0
                AND PD.Status = '0'
-      
+            Order by PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
          OPEN @curPD
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD, @cDropID
          WHILE @@FETCH_STATUS = 0

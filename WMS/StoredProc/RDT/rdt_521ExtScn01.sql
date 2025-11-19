@@ -13,6 +13,7 @@ GO
 /* Date       Rev     Author   Purposes                                           */
 /* 2025-03-14 1.0.0   Dennis   FCR-3449                                           */
 /* 2025-08-26 1.1.0   Dennis   UWP-40042 Fix Bug                                  */
+/* 2025-11-17 1.2.0   YeeKung  FCR-7296 Change V_barcode                          */
 /**********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdt_521ExtScn01] (
@@ -96,7 +97,8 @@ BEGIN
    @nMenu               INT
    DECLARE  
    @cSQL                NVARCHAR( MAX),  
-   @cSQLParam           NVARCHAR( MAX)  
+   @cSQLParam           NVARCHAR( MAX),
+   @cBarcodeUCC         NVARCHAR( 200)  
 
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
@@ -117,6 +119,7 @@ BEGIN
       ,@cUserName           = UserName
       ,@nMenu               = Menu
       ,@cAllowAllocatedUCCPutaway = C_STRING1
+      ,@cBarcodeUCC        = V_Barcode
    FROM rdt.rdtMobRec WITH (NOLOCK)  
    WHERE Mobile = @nMobile  
 
@@ -136,7 +139,7 @@ BEGIN
          IF @nInputKey = 1 -- Yes or Send  
          BEGIN  
             -- Screen mapping  
-            SET @cUCCNo = @cInField01  
+            SET @cUCCNo = LEFT(@cBarcodeUCC,20) 
 
             SET @cUCCNo = RTRIM(LTRIM(ISNULL(@cUCCNo,'')))
 

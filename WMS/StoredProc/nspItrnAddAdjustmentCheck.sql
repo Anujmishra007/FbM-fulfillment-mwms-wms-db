@@ -888,6 +888,24 @@ BEGIN
             END
          END
       END
+   -- SSA04 start --
+   IF @n_continue=1 or @n_continue=2
+   BEGIN
+   	  IF ISNULL(RTRIM(@c_toid), '') <> ''
+   	  BEGIN
+         UPDATE PALLET with (ROWLOCK) SET PalletType = @c_PalletType
+		     WHERE PalletKey = @c_toid
+	       /* Check SQL Error Message */
+	      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+	      IF @n_err <> 0
+	      BEGIN
+	         SELECT @n_continue = 3
+	         SELECT @n_err = 62084
+	         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Pallet. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
+	      END
+      END
+   END
+   -- SSA04 End --
       IF @n_continue=1 or @n_continue=2
       BEGIN
          SELECT @n_rcnt=NULL, @n_curqty=NULL
