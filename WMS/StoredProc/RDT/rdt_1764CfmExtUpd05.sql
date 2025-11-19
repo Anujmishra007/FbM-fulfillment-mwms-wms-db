@@ -24,6 +24,9 @@ GO
 /* 2025-07-30    NLT013   1.4.0  UWP-38609 Performance tuning              */
 /* 2025-08-15    NLT013   1.5.0  UWP-39510 SQL Server exception            */
 /* 2025-10-10    NickT    1.6.0  FCR-7928 Reallocate for short task        */
+/* 2025-11-19    NickT    1.6.1  FCR-7928 No need update Qty/QtyMoved if   */
+/*                                short happens on DropID screen           */
+/* 2025-11-07    Cuize    1.7.0  UWP-43757 Add orderby on pickdetails      */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -70,6 +73,7 @@ BEGIN
    DECLARE @cAutomationPick   NVARCHAR(1) = 'N'
    DECLARE @cRefTaskKey       NVARCHAR(10) = ''
    DECLARE @cTaskDetailMessage02   NVARCHAR(20)
+   DECLARE @nCurrentStep         INT
 
    DECLARE @tPickDetail TABLE 
    (
@@ -82,6 +86,10 @@ BEGIN
    )
 
    -- All logics are copied from 1764CfmExtUpd01, update the rdtmobrec retrieving logic.  By JCH507
+
+   SELECT @nCurrentStep = Step
+   FROM rdt.RDTMOBREC WITH(NOLOCK)
+   WHERE Mobile = @nMobile
 
    -- Get orginal task info
    SELECT 
@@ -98,6 +106,8 @@ BEGIN
       @cTaskDetailMessage02 = Message02
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskdetailKey
+
+
 
    IF @bDebugFlag = 1
       SELECT @nOrgSystemQTY AS nOrgSystemQTY, @nOrgTaskQty AS OrgTaskQty, @nShortQTY AS ShortQTY, @cPickMethod AS PickMethod,
@@ -184,9 +194,6 @@ BEGIN
    -- Split or short PickDetail
    IF @nQTY < @nSystemQTY
    BEGIN
-      -- Need reallocate if @cTaskDetailMessage02 <> 'SKIP1'
-      IF @cTaskDetailMessage02 <> 'SKIP1'
-         GOTO Quit
 
       --V1.0.1 start --fullshort
       IF @nQTY = 0 AND @nShortQTY > 0 AND @nShortQty = @nSystemQTY
@@ -195,25 +202,51 @@ BEGIN
             SELECT 'Full UCC short'
 
          BEGIN TRY
-            INSERT INTO @tPickDetail (PickDetailKey)
-            SELECT DISTINCT PickDetailKey
-            FROM dbo.PickDetail WITH (NOLOCK)
-            WHERE TaskDetailKey = @cTaskDetailKey
 
-            UPDATE PD WITH (ROWLOCK)
-            SET
-               Status =  '4', 
-               EditWho  = SUSER_SNAME(), 
-               EditDate = GETDATE(),
-               Trafficcop = NULL
-            FROM dbo.PickDetail PD WITH (ROWLOCK)
-            INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
+            DECLARE @currPickDetailKey NVARCHAR(50);
+
+            DECLARE curTaskDtlPickDtl CURSOR LOCAL FAST_FORWARD FOR
+               SELECT PD.PickDetailKey
+               FROM dbo.PickDetail PD WITH (ROWLOCK, READPAST)
+               WHERE PD.TaskDetailKey = @cTaskDetailKey
+               ORDER BY PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey;
+
+            OPEN curTaskDtlPickDtl;
+            FETCH NEXT FROM curTaskDtlPickDtl INTO @currPickDetailKey;
+
+            WHILE @@FETCH_STATUS = 0
+               BEGIN
+                  IF @bDebugFlag = 1
+                     SELECT '@currPickDetailKey:' + @currPickDetailKey
+
+                  UPDATE dbo.PickDetail WITH (ROWLOCK)
+                  SET Status = '4',
+                     QtyMoved = IIF (@cTaskDetailMessage02 <> 'SKIP1' AND @nCurrentStep = 8, Qty, QtyMoved), -- Only short happens on ShortPickScreen, need update QtyMoved
+                     Qty = IIF (@cTaskDetailMessage02 <> 'SKIP1' AND @nCurrentStep = 8, 0, Qty), -- Only short happens on ShortPickScreen, need update QtyMoved
+                     EditWho = SUSER_SNAME(),
+                     EditDate = GETDATE(),
+                     Trafficcop = NULL
+                  WHERE PickDetailKey = @currPickDetailKey;
+
+                  FETCH NEXT FROM curTaskDtlPickDtl INTO @currPickDetailKey;
+               END
+
+            CLOSE curTaskDtlPickDtl;
+            DEALLOCATE curTaskDtlPickDtl;
+
          END TRY
          BEGIN CATCH
+
+            CLOSE curTaskDtlPickDtl;
+            DEALLOCATE curTaskDtlPickDtl;
+
             SET @nErrNo = 231257
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
             GOTO RollBackTran
          END CATCH
+
+         IF @cTaskDetailMessage02 <> 'SKIP1'
+            GOTO Quit
 
          BEGIN TRY
             IF @cRefTaskKey <> ''
