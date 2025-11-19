@@ -20,6 +20,7 @@ GO
 /* 2025-11-08  1.1.0    NLT013    UWP-43838 Mark TaskDetail as MoveInProgress  */
 /* 2025-11-08  1.2.0    NLT013    UWP-44117 Update TaskDetail by Primary Key   */
 /* 2025-11-04  1.3.0    NLT013    UWP-43847 Mark Pickdetail as 3, print ZPL    */
+/* 2025-11-10  1.4.0    Cuize     UWP-43757 Performance Issue Fix              */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
@@ -66,12 +67,12 @@ BEGIN
    DECLARE @cSQLParam      NVARCHAR( MAX)
    DECLARE @cCurrentTaskDetailKey NVARCHAR(10)
 
-   DECLARE @tTaskDetail TABLE 
+   DECLARE @tTaskDetail TABLE
    (
       TaskDetailKey NVARCHAR(10) PRIMARY KEY
    )
 
-   DECLARE @trRDTRPFLog TABLE 
+   DECLARE @trRDTRPFLog TABLE
    (
       RowRef INT PRIMARY KEY
    )
@@ -131,7 +132,7 @@ BEGIN
          INSERT INTO @tTaskDetail ( TaskDetailKey )
          SELECT DISTINCT TD.TaskDetailKey
          FROM dbo.TaskDetail TD WITH(NOLOCK)
-         INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.SKU = SI.SKU 
+         INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON (TD.StorerKey = SI.StorerKey AND TD.SKU = SI.SKU)
          WHERE TD.StorerKey = @cStorerKey
             AND TD.ListKey = @cListKey
             AND TD.Status = '5'
@@ -635,7 +636,7 @@ BEGIN
       @nRowCount                 INT,
       @bSuccess                  INT
 
-   SELECT 
+   SELECT
       @cToID = TD.ToID,
       @cLocationType = LOC.LocationType,
       @cLocationCategory = LOC.LocationCategory,
@@ -656,20 +657,20 @@ BEGIN
          CaseID NVARCHAR(20),
          SKU    NVARCHAR(20)
       )
-         
+
       DELETE FROM @tPickDetail
 
       INSERT INTO @tPickDetail( PickDetailKey )
       SELECT DISTINCT PD.PickDetailKey
       FROM dbo.PickDetail PD WITH (NOLOCK)
       INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey AND PD.SKU = TD.SKU
-      INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.StorerKey = SI.StorerKey AND TD.SKU = SI.SKU 
+      INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.StorerKey = SI.StorerKey AND TD.SKU = SI.SKU
       WHERE PD.StorerKey = @cStorerKey
          AND TD.ListKey = @cListKey
          AND PD.Status = '0'
          AND TD.Status = '9'
          AND TD.TaskType = 'RPF'
-         AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE' 
+         AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE'
          AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
 
       IF @@ROWCOUNT > 0
@@ -680,7 +681,7 @@ BEGIN
                Loc = @cToLoc,
                EditDate = GETDATE(),
                EditWho  = SUSER_SNAME()
-            FROM dbo.PickDetail PD WITH (ROWLOCK) 
+            FROM dbo.PickDetail PD WITH (ROWLOCK)
             INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
          END TRY
          BEGIN CATCH
@@ -725,25 +726,25 @@ BEGIN
          BEGIN
             DECLARE @nCaseCount INT = 0
 
-            SELECT @nCaseCount = COUNT(DISTINCT CASEID) 
-            FROM dbo.PICKDETAIL PD WITH(NOLOCK) 
-            WHERE PD.StorerKey= @cStorerKey 
+            SELECT @nCaseCount = COUNT(DISTINCT CASEID)
+            FROM dbo.PICKDETAIL PD WITH(NOLOCK)
+            WHERE PD.StorerKey= @cStorerKey
                AND PD.DropID = @cCaseID
 
             DECLARE @nVASCount INT = 0
             DECLARE @cPrePackIndicator NVARCHAR(30) = ''
 
             SELECT @cPrePackIndicator = ISNULL(SKU.PrePackIndicator, '')
-            FROM dbo.SKU WITH(NOLOCK) 
-            WHERE StorerKey= @cStorerKey 
+            FROM dbo.SKU WITH(NOLOCK)
+            WHERE StorerKey= @cStorerKey
                AND SKU = @cSKU
 
             SELECT @nVASCount = COUNT(*)
             FROM dbo.PickDetail PD WITH(NOLOCK)
-            INNER JOIN dbo.WorkOrderDetail WOD WITH(NOLOCK) 
-               ON WOD.ExternWorkOrderKey IS NOT NULL 
+            INNER JOIN dbo.WorkOrderDetail WOD WITH(NOLOCK)
+               ON WOD.ExternWorkOrderKey IS NOT NULL
                AND WOD.ExternLineNo IS NOT NULL
-               AND WOD.ExternWorkOrderKey = PD.OrderKey 
+               AND WOD.ExternWorkOrderKey = PD.OrderKey
                AND WOD.ExternLineNo = PD.OrderLineNumber
             INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
                ON CL.StorerKey = PD.StorerKey
@@ -757,8 +758,8 @@ BEGIN
                AND EXISTS (SELECT 1 FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cCaseID AND StorerKey = @cStorerKey)
                AND NOT EXISTS (SELECT 1
                            FROM dbo.ORDERS ORM WITH(NOLOCK)
-                           INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) 
-                              ON PD.StorerKey = ORM.StorerKey 
+                           INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
+                              ON PD.StorerKey = ORM.StorerKey
                               AND PD.OrderKey = ORM.OrderKey
                            INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
                               ON CL.StorerKey = ORM.StorerKey
@@ -813,7 +814,7 @@ BEGIN
    WHERE StorerKey = @cStorerKey
       AND TaskdetailKey = @cTaskDetailKey
       AND TaskType = 'RPF'
-      
+
    IF @cTaskStatus IN ( '5', '9' ) AND @nQty > 0 -- RPF task is completed
    BEGIN
       SELECT @nRowCount = COUNT(*)
@@ -829,7 +830,7 @@ BEGIN
       BEGIN
          SELECT @nRowCount = COUNT(*)
          FROM dbo.Transmitlog2 WITH (NOLOCK)
-         WHERE TableName = 'WSCTOTALLOCLOG' 
+         WHERE TableName = 'WSCTOTALLOCLOG'
             AND Key1 = @cWaveKey
             AND Key2 = @cCaseID
             AND Key3 = @cStorerKey
