@@ -3,20 +3,22 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-/************************************************************************/
-/* Store procedure: rdtfnc_ActivityTrack                               */
-/* Copyright      : IDS                                                 */
-/*                                                                      */
-/* Purpose: To Track the time the Driver Check in At Office             */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date         Rev  Author     Purposes                                */
-/* 2022-03-25   1.0  yeekung    WMS-18920 Created                       */
-/* 2024-05-27   1.1  Cuize      FCR-242                                 */
-/* 2025-06-04   0.0  JACKC      !!!Cutover. Use V0 for development!!!   */
-/* 2025-10-17   1.2  yeekung    FCR-8146 Add FieldAttribute             */
-/************************************************************************/
+/*****************************************************************************/
+/* Store procedure: rdtfnc_ActivityTrack                                      */
+/* Copyright      : IDS                                                       */
+/*                                                                            */
+/* Purpose: To Track the time the Driver Check in At Office                   */
+/*                                                                            */
+/* Modifications log:                                                         */
+/*                                                                            */
+/* Date         Rev  Author     Purposes                                      */
+/* 2022-03-25   1.0  yeekung    WMS-18920 Created                             */
+/* 2024-05-27   1.1  Cuize      FCR-242                                       */
+/* 2025-06-04   0.0  JACKC      !!!Cutover. Use V0 for development!!!         */
+/* 2025-10-17   1.2  yeekung    FCR-8146 Add FieldAttribute                   */
+/* 2025-11-17   1.3  Jackc      FCR-8947 Fixed step value in ext upd at st2   */
+/*                              Make St2 screen labels configable (jack01)    */
+/******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_ActivityTrack] (
    @nMobile    INT,
@@ -436,7 +438,15 @@ BEGIN
       IF @cFocusStep2 = '' OR @cFocusStep2 = '0'
          SET @cFocusStep2 = 3
 
-       EXEC rdt.rdtSetFocusField @nMobile, @cFocusStep2
+      EXEC rdt.rdtSetFocusField @nMobile, @cFocusStep2
+
+      --(jack01) start
+      -- Set defalut label values at step2
+      IF ISNULL(@cOutField07, '') = ''
+         SET @cOutField07 = 'CONTAINER NO:'
+      IF ISNULL(@cOutField08, '') = ''
+         SET @cOutField08 = 'APPT NO:'
+      --(jack01) end
    
       -- Go to next screen        
       SET @nScn = @nScn+1        
@@ -619,7 +629,18 @@ BEGIN
          END        
         
          IF @nErrNo <> 0        
-            GOTO Quit        
+            GOTO Quit
+
+         --(jack01) start
+         -- Set defalut label values at step2
+         IF @nStep = 2
+         BEGIN
+            IF ISNULL(@cOutField07, '') = ''
+               SET @cOutField07 = 'CONTAINER NO:'
+            IF ISNULL(@cOutField08, '') = ''
+               SET @cOutField08 = 'APPT NO:'
+         END
+         --(jack01) end        
       
          SET @cOption = '' 
          SET @cInField04  = ''
@@ -658,7 +679,7 @@ BEGIN
                           '@cErrMsg             NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                       @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+                       @nMobile, @nFunc, @cLangCode, 2, @nInputKey, @cStorerKey, @cFacility,
                        @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus,
                        @nErrNo OUTPUT, @cErrMsg OUTPUT
             IF @nErrNo <> 0
@@ -843,7 +864,18 @@ BEGIN
          END        
         
          IF @nErrNo <> 0        
-            GOTO Quit        
+            GOTO Quit
+
+         --(jack01) start
+         -- Set defalut label values at step2
+         IF @nStep = 2
+         BEGIN
+            IF ISNULL(@cOutField07, '') = ''
+               SET @cOutField07 = 'CONTAINER NO:'
+            IF ISNULL(@cOutField08, '') = ''
+               SET @cOutField08 = 'APPT NO:'
+         END
+         --(jack01) end        
       
          SET @cOption = ''      
       END  
@@ -925,7 +957,15 @@ BEGIN
             GOTO Quit        
       
          SET @cOption = ''      
-      END 
+      END
+
+      --(jack01) start
+      -- Set defalut label values at step2
+      IF ISNULL(@cOutField07, '') = ''
+         SET @cOutField07 = 'CONTAINER NO:'
+      IF ISNULL(@cOutField08, '') = ''
+         SET @cOutField08 = 'APPT NO:'
+      --(jack01) end     
 
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
@@ -1029,7 +1069,18 @@ BEGIN
          END        
         
          IF @nErrNo <> 0        
-            GOTO Quit         
+            GOTO Quit
+
+         --(jack01) start
+         -- Set defalut label values at step2
+         IF @nStep = 2
+         BEGIN
+            IF ISNULL(@cOutField07, '') = ''
+               SET @cOutField07 = 'CONTAINER NO:'
+            IF ISNULL(@cOutField08, '') = ''
+               SET @cOutField08 = 'APPT NO:'
+         END
+         --(jack01) end         
       END              
       SET @cFieldAttr01 = ''
       SET @cFieldAttr02 = ''
@@ -1138,7 +1189,18 @@ BEGIN
          END        
         
          IF @nErrNo <> 0        
-            GOTO Quit        
+            GOTO Quit
+
+         --(jack01) start
+         -- Set defalut label values at step2
+         IF @nStep = 2
+         BEGIN
+            IF ISNULL(@cOutField07, '') = ''
+               SET @cOutField07 = 'CONTAINER NO:'
+            IF ISNULL(@cOutField08, '') = ''
+               SET @cOutField08 = 'APPT NO:'
+         END
+         --(jack01) end        
       
          SET @cOption = ''      
       END         

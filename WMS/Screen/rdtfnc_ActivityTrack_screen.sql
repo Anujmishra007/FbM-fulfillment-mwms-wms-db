@@ -5,7 +5,7 @@
       VALUES ('652', 'ENG', 'FNC', 'Activity Tracker', 'rdtfnc_ActivityTrack', '0')
    END
 
-   -- 5450 = Label, value screen
+   -- 6050 = Label, value screen
    DELETE rdt.RDTScn WHERE Scn = 6050 AND Lang_Code = 'ENG'
    EXECUTE rdt.rdtAddScn 6050, 'ENG'
       ,@cLine01 = 'Activity Tracking:'
@@ -24,13 +24,16 @@
       ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5","6","7","8","9","10","11"],"3":["13"]}'
       ,@nFunc   = 652
 
+   --6051 Input screen
    DELETE rdt.RDTScn WHERE Scn = 6051 AND Lang_Code = 'ENG'
    EXECUTE rdt.rdtAddScn 6051, 'ENG', 
       @cLine01 = '%20d01',
-      @cLine03 = 'CONTAINER NO:',
+      --@cLine03 = 'CONTAINER NO:',
+      @cLine03 = '%60d07', -- FCR-8974
       @cLine04 = '%20i02',
       @cLine05 = 'OR',       
-      @cLine06 = 'APPT NO:', 
+      --@cLine06 = 'APPT NO:',
+      @cLine06 = '%60d08', --FCR-8974
       @cLine07 = '%20i03',   
       @cLine09 = '%20d04',  
       @cLine10 = '%20d05',  
