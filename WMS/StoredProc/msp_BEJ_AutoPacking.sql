@@ -112,7 +112,7 @@ BEGIN
               AND o.Facility = @c_Facility
               AND o.Type = 'XDOCK'
               AND o.Status = '5'
-              AND o.Priority = '1'
+              AND o.Priority = '2'
               AND o.OrderKey NOT IN (
               SELECT ph.OrderKey FROM PackHeader ph WHERE ph.StorerKey = @c_StorerKey
               )
