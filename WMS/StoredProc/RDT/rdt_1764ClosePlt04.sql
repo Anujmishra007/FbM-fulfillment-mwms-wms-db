@@ -21,6 +21,7 @@ GO
 /* 2025-11-08  1.2.0    NLT013    UWP-44117 Update TaskDetail by Primary Key   */
 /* 2025-11-04  1.3.0    NLT013    UWP-43847 Mark Pickdetail as 3, print ZPL    */
 /* 2025-11-10  1.4.0    Cuize     UWP-43757 Performance Issue Fix              */
+/* 2025-11-20  1.5.0    NLT013    UWP-44502 Do not send WSCTOTALLOCLOG for SHORT*/
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
@@ -66,6 +67,7 @@ BEGIN
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
    DECLARE @cCurrentTaskDetailKey NVARCHAR(10)
+   DECLARE @cReasonKey     NVARCHAR( 10)
 
    DECLARE @tTaskDetail TABLE
    (
@@ -809,56 +811,108 @@ BEGIN
       @cWaveKey = WaveKey,
       @cCaseID = CaseID,
       @cTaskStatus = Status,
-      @nQty = Qty
+      @nQty = Qty,
+      @cReasonKey = ReasonKey
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND TaskdetailKey = @cTaskDetailKey
       AND TaskType = 'RPF'
 
-   IF @cTaskStatus IN ( '5', '9' ) AND @nQty > 0 -- RPF task is completed
+   IF @cTaskStatus IN ( '5', '9' ) -- RPF task is completed
    BEGIN
-      SELECT @nRowCount = COUNT(*)
-      FROM dbo.SkuInfo WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND SKU = @cSKU
-         AND ISNULL(ExtendedField06, '') = 'SORTABLE'
-         AND ISNULL(ExtendedField07, '') = 'CONVEYABLE'
-
-      SET @cWSCTOTALLOCLOG = rdt.RDTGetConfig( @nFunc, 'WSCTOTALLOCLOG', @cStorerKey)
-
-      IF @nRowCount > 0 AND @cWSCTOTALLOCLOG = '1'
+      IF @nQty > 0 AND @cReasonKey <> 'SHORT'
       BEGIN
          SELECT @nRowCount = COUNT(*)
-         FROM dbo.Transmitlog2 WITH (NOLOCK)
-         WHERE TableName = 'WSCTOTALLOCLOG'
-            AND Key1 = @cWaveKey
-            AND Key2 = @cCaseID
-            AND Key3 = @cStorerKey
+         FROM dbo.SkuInfo WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND SKU = @cSKU
+            AND ISNULL(ExtendedField06, '') = 'SORTABLE'
+            AND ISNULL(ExtendedField07, '') = 'CONVEYABLE'
 
-         IF @nRowCount = 0 -- No record exist, then generate TransmitLog
+         SET @cWSCTOTALLOCLOG = rdt.RDTGetConfig( @nFunc, 'WSCTOTALLOCLOG', @cStorerKey)
+
+         IF @nRowCount > 0 AND @cWSCTOTALLOCLOG = '1'
          BEGIN
-            BEGIN TRY
+            SELECT @nRowCount = COUNT(*)
+            FROM dbo.Transmitlog2 WITH (NOLOCK)
+            WHERE TableName = 'WSCTOTALLOCLOG'
+               AND Key1 = @cWaveKey
+               AND Key2 = @cCaseID
+               AND Key3 = @cStorerKey
+
+            IF @nRowCount = 0 -- No record exist, then generate TransmitLog
+            BEGIN
+               BEGIN TRY
+                  EXEC ispGenTransmitLog2
+                     @c_TableName        = 'WSCTOTALLOCLOG'
+                     ,@c_Key1             = @cWaveKey
+                     ,@c_Key2             = @cCaseID
+                     ,@c_Key3             = @cStorerKey
+                     ,@c_TransmitBatch    = ''
+                     ,@b_Success          = @bSuccess   OUTPUT
+                     ,@n_err              = @nErrNo     OUTPUT
+                     ,@c_errmsg           = @cErrMsg    OUTPUT
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 233652
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Generate TransmitLog Failed
+                  GOTO RollBackTran
+               END CATCH
+
+               IF @bSuccess <> 1
+               BEGIN
+                  GOTO RollBackTran
+               END
+            END
+         END
+      END
+      ELSE
+      BEGIN
+         DECLARE @curPKD            CURSOR
+         DECLARE @cPickDetailKey    NVARCHAR(10)
+         DECLARE @nQTY_PD           INT
+
+         SET @curPKD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PD.PickDetailKey, PD.QTY, PD.OrderKey
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+            WHERE PD.TaskDetailKey = @cTaskDetailKey
+               AND PD.Status = '4'
+            Order by PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
+      
+         OPEN @curPKD
+         FETCH NEXT FROM @curPKD INTO @cPickDetailKey, @nQTY_PD, @cOrderKey
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            IF NOT EXISTS(SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK)
+                        WHERE TableName = 'WSSOAlloUpd'
+                           AND Key1 = @cOrderKey
+                           AND Key2 = @cPickDetailKey
+                           AND Key3 = @cStorerkey)
+            BEGIN
                EXEC ispGenTransmitLog2
-                  @c_TableName        = 'WSCTOTALLOCLOG'
-                  ,@c_Key1             = @cWaveKey
-                  ,@c_Key2             = @cCaseID
-                  ,@c_Key3             = @cStorerKey
+                  @c_TableName        = 'WSSOAlloUpd'
+                  ,@c_Key1             = @cOrderKey
+                  ,@c_Key2             = @cPickDetailKey
+                  ,@c_Key3             = @cStorerkey
                   ,@c_TransmitBatch    = ''
                   ,@b_Success          = @bSuccess   OUTPUT
                   ,@n_err              = @nErrNo     OUTPUT
                   ,@c_errmsg           = @cErrMsg    OUTPUT
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 233652
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Generate TransmitLog Failed
-               GOTO RollBackTran
-            END CATCH
 
-            IF @bSuccess <> 1
-            BEGIN
-               GOTO RollBackTran
+               IF @bSuccess <> 1
+               BEGIN
+                  SET @nErrNo = 248404
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Generate transmitlog2 failed 
+                  CLOSE @curPKD
+                  DEALLOCATE @curPKD
+                  GOTO RollBackTran
+               END
             END
-         END
+
+            FETCH NEXT FROM @curPKD INTO @cPickDetailKey, @nQTY_PD, @cOrderKey
+         END -- cursor end
+         CLOSE @curPKD
+         DEALLOCATE @curPKD
       END
    END
 

@@ -20,7 +20,7 @@ GO
 /* 2025-09-15   NLT013   1.4.0   FCR-7730 Print ZPL                        */
 /* 2025-09-30   NLT013   1.4.1   FCR-7730 No need print ZPL if VAS exists  */
 /* 2025-11-14   NLT013   1.5.0   UWP-43847 Move Logic of step6 0 ClosePlt04*/
-/* UWP-44502    NLT013   1.6.0   UWP-44502 Do not send WSCTOTALLOCLOG for SHORT*/
+/* 2025-11-20   NLT013   1.6.0   UWP-44502 Do not send WSCTOTALLOCLOG for SHORT*/
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
