@@ -1,7 +1,8 @@
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO 
+GO
+
 
 /************************************************************************/  
 /* Store procedure: rdt_600ExtScn05                                     */  
@@ -11,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-10-11 1.0  LJQ006     FCR-911  Created                          */  
 /* 2025-07-11 1.1  Dennis     FCR-5716 For Cold Store                   */
+/* 2025-11-19 1.2  James      FCR-8591 Extend CaseId var length(james01)*/
 /************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_600ExtScn05] (
@@ -76,7 +78,7 @@ BEGIN
       @cPackKey             NVARCHAR(10),
       @cMUOM_Desc           NVARCHAR(10),
       @nMOBScn              INT,
-      @cCaseID              NVARCHAR(18),
+      @cCaseID              NVARCHAR( 30),	-- (james01)
       @cLottableCode        NVARCHAR(30),
       @cSKUDesc             NVARCHAR( 60),
       @cIVAS                NVARCHAR( 20),
@@ -225,13 +227,8 @@ BEGIN
          BEGIN
             SET @cBarcode = @cInField01
 
-            SELECT TOP 1 @cBUSR10 = BUSR10 FROM SKU WHERE itemclass='PVAR' AND SKU = @cSKU
-            IF @cBUSR10 = 'BRAZIL'
-            BEGIN
-               SELECT @cCaseID = SUBSTRING(@cBarcode, 3, 18)
-            END
-            ELSE
-               SET @cCaseID = @cBarcode
+            SET @cCaseID = @cBarcode
+
             IF EXISTS (SELECT 1 FROM ReceiptDetail(NOLOCK) WHERE ReceiptKey = @cReceiptKey AND UserDefine10 = @cCaseID)
             BEGIN
                SET @nErrNo = 240751
@@ -436,10 +433,10 @@ Quit:
 END
 GO
 
+
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-GRANT EXECUTE ON rdt.rdt_600ExtScn05 to nSQL
+GRANT EXECUTE ON [rdt].[rdt_600ExtScn05] TO NSQL
 GO
