@@ -20,6 +20,7 @@ GO
 /* 2025-09-15   NLT013   1.4.0   FCR-7730 Print ZPL                        */
 /* 2025-09-30   NLT013   1.4.1   FCR-7730 No need print ZPL if VAS exists  */
 /* 2025-11-14   NLT013   1.5.0   UWP-43847 Move Logic of step6 0 ClosePlt04*/
+/* UWP-44502    NLT013   1.6.0   UWP-44502 Do not send WSCTOTALLOCLOG for SHORT*/
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
@@ -57,6 +58,7 @@ BEGIN
    DECLARE @nLoopIndex              INT
    DECLARE @cOption                 NVARCHAR( 2)
    DECLARE @cListKey                NVARCHAR( 10)
+   DECLARE @cReasonKey              NVARCHAR( 10)
 
    DECLARE @tCases TABLE
    (
@@ -88,12 +90,9 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            IF @nStep = 5  -- Continue next task, get originak TaskDetailKey from rdtmobrec
-            BEGIN
-               SELECT @cTaskDetailKey = V_TaskDetailKey
-               FROM RDT.RDTMOBREC WITH(NOLOCK)
-               WHERE Mobile = @nMobile
-            END
+            SELECT @cTaskDetailKey = V_TaskDetailKey
+            FROM RDT.RDTMOBREC WITH(NOLOCK)
+            WHERE Mobile = @nMobile
 
             -- 1. Update PickDetail as 3
             -- 2. Print ZPL label
@@ -270,13 +269,14 @@ BEGIN
                @cWaveKey = WaveKey,
                @cCaseID = CaseID,
                @cTaskStatus = Status,
-               @nQty = Qty
+               @nQty = Qty,
+               @cReasonKey = ReasonKey
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
                AND TaskdetailKey = @cTaskDetailKey
                AND TaskType = 'RPF'
                
-            IF @cTaskStatus IN ( '5', '9' ) AND @nQty > 0 -- RPF task is completed
+            IF @cTaskStatus IN ( '5', '9' ) AND @nQty > 0 AND @cReasonKey = '' -- RPF task is completed
             BEGIN
                SELECT @nRowCount = COUNT(*)
                FROM dbo.SkuInfo WITH (NOLOCK)
