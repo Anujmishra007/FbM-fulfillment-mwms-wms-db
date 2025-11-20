@@ -97,6 +97,7 @@ GO
 /*                           into multiple cartons for full case (WL17) */
 /* 11-Sep-2025 WLC015    5.6 FCR-7727 Change RPF ToLoc logic (WL18)     */
 /* 10-Oct-2025 SSA05     5.7 UWP-42248 -Enhanced session management     */
+/* 20-Nov-2025 WLC015    5.8 UWP-44475 Performance Tune (WL19)          */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -346,7 +347,7 @@ BEGIN
       WHERE WD.WaveKey = @c_WaveKey                      
       AND STDCUBE = 0 
       AND (Width = 0 OR Length = 0 OR Height = 0)
-      ORDER BY OD.Sku
+      --ORDER BY OD.Sku   --WL19
 
       IF ISNULL(@c_Sku,'') <> ''
       BEGIN
@@ -1656,9 +1657,13 @@ BEGIN
          SELECT TOP 1 
                @c_VAS_CartonType= REPLACE(WOD.Type, 'U', 'RS')   --WL01
          FROM dbo.WorkOrderDetail WOD WITH (NOLOCK) 
-         JOIN #ORDERSKU OG ON OG.OrderKey = WOD.ExternWorkOrderKey
-         WHERE OG.OrderGroup = @c_OrderGroup
-         AND WOD.Remarks='LPNSIZE'    
+         --JOIN #ORDERSKU OG ON OG.OrderKey = WOD.ExternWorkOrderKey   --WL19
+         WHERE WOD.Remarks='LPNSIZE'
+         --WL19 S
+         AND EXISTS ( SELECT 1 FROM #ORDERSKU OG
+                      WHERE OG.OrderKey = WOD.ExternWorkOrderKey
+                      AND OG.OrderGroup = @c_OrderGroup )
+         --WL19 E
          ORDER BY WOD.ExternLineNo            
 
          IF @c_VAS_CartonType <> '' 
