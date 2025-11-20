@@ -48,7 +48,8 @@ BEGIN
             @c_Type NVARCHAR(10),
             @c_OrderLineNo NVARCHAR(5),
             @c_GetLoadkey NVARCHAR(10) = '',
-            @c_MBOLKey NVARCHAR(10) = ''
+            @c_MBOLKey NVARCHAR(10) = '',
+            @c_PackCartonGID NVARCHAR(10) = ''
 
     DECLARE @dt_OrderDate         DATETIME
          , @dt_Delivery_Date     DATETIME
@@ -79,7 +80,7 @@ BEGIN
          , @c_GetCaseID             NVARCHAR(50) = ''
 
   DECLARE  @c_GetPickslipno      NVARCHAR(10),
-           @c_DropId            NVARCHAR(10),
+           @c_DropId            NVARCHAR(20),
            @c_GetSKU             NVARCHAR(20),
            @n_GetQty             INT,
            @n_CartonNo           INT = 0,
@@ -141,7 +142,7 @@ BEGIN
                 BEGIN CATCH
                     SET @n_Err = 556008
                     SET @c_ErrMsg
-                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) + 'OrderKey: '+ @c_Orderkey
                           + ': Error Executing nspg_GetKey - Loadkey. (msp_BEJ_AutoPacking)'
                     EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
                 END CATCH
@@ -206,7 +207,7 @@ BEGIN
                     SET @c_ErrMsg = ERROR_MESSAGE()
                     SET @n_Err = 556009
                     SET @c_ErrMsg
-                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) + 'OrderKey: '+ @c_Orderkey
                           + ': Insert Into LOADPLAN Failed. (msp_BEJ_AutoPacking) ' + '(' + @c_ErrMsg + ') '
                     EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
                 END CATCH
@@ -314,7 +315,7 @@ BEGIN
                     SET @c_ErrMsg = ERROR_MESSAGE()
                     SET @n_Err = 556010
                     SET @c_ErrMsg
-                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) + 'OrderKey: '+ @c_Orderkey
                           + ': Update Orders/Orderdetail Fail. (msp_BEJ_AutoPacking) ' + '(' + @c_ErrMsg + ') '
                     EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
                 END CATCH
@@ -340,7 +341,7 @@ BEGIN
                 BEGIN CATCH
                     SET @n_Err = 556011
                     SET @c_ErrMsg
-                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) + 'OrderKey: '+ @c_Orderkey
                           + ': Error Executing nspg_GetKey - MBOLKey. (msp_BEJ_AutoPacking)'
                     EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
                 END CATCH
@@ -417,7 +418,7 @@ BEGIN
                     SET @c_ErrMsg = ERROR_MESSAGE()
                     SET @n_Err = 556012
                     SET @c_ErrMsg
-                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) + 'OrderKey: '+ @c_Orderkey
                           + ': Insert / Update MBOL/MBODetail Fail. (msp_BEJ_AutoPacking) ' + '(' + @c_ErrMsg + ') '
                     EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
             END CATCH
@@ -455,80 +456,89 @@ BEGIN
             BEGIN
               EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
             END
+              SELECT @c_GetPickslipno = PH.Pickheaderkey
+              FROM PICKHEADER PH (NOLOCK)
+              WHERE PH.OrderKey = @c_Orderkey
+              AND PH.[Zone] = '3'
 
-            SELECT @c_GetPickslipno = PH.Pickheaderkey
-            FROM PICKHEADER PH (NOLOCK)
-            WHERE PH.OrderKey = @c_Orderkey
-            AND PH.[Zone] = '3'
+              print('@c_GetPickslipno::'+@c_GetPickslipno)
 
-            print('@c_GetPickslipno::'+@c_GetPickslipno)
 
-            IF ISNULL(@c_GetPickslipno, '') <> '' AND NOT EXISTS (SELECT 1 FROM PACKHEADER WITH (NOLOCK) WHERE PickSlipNo = @c_GetPickslipno)
-            BEGIN
 
-               -- Create packheader
-               INSERT INTO PackHeader ([Route], OrderKey, OrderRefNo, Loadkey, Consigneekey, StorerKey, PickSlipNo)
-               SELECT OH.[Route], OH.OrderKey, SUBSTRING(OH.ExternOrderKey, 1, 18), OH.LoadKey, OH.ConsigneeKey, OH.Storerkey, @c_GetPickslipno
-               FROM PICKHEADER PH WITH (NOLOCK)
-               JOIN ORDERS OH WITH (NOLOCK) ON (PH.Orderkey = OH.Orderkey)
-               WHERE PH.PickHeaderKey = @c_GetPickslipno
+              IF ISNULL(@c_GetPickslipno, '') <> '' AND NOT EXISTS (SELECT 1 FROM PACKHEADER WITH (NOLOCK) WHERE PickSlipNo = @c_GetPickslipno)
+              BEGIN
 
-               IF @@ERROR <> 0
-               BEGIN
-                   EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
-               END
-            END
+                 -- Create packheader
+                 INSERT INTO PackHeader ([Route], OrderKey, OrderRefNo, Loadkey, Consigneekey, StorerKey, PickSlipNo)
+                 SELECT OH.[Route], OH.OrderKey, SUBSTRING(OH.ExternOrderKey, 1, 18), OH.LoadKey, OH.ConsigneeKey, OH.Storerkey, @c_GetPickslipno
+                 FROM PICKHEADER PH WITH (NOLOCK)
+                 JOIN ORDERS OH WITH (NOLOCK) ON (PH.Orderkey = OH.Orderkey)
+                 WHERE PH.PickHeaderKey = @c_GetPickslipno
 
-            DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT SKU, ID, CaseID, SUM(QTY), DropId
-            FROM   PICKDETAIL WITH (NOLOCK)
-            WHERE  OrderKey = @c_Orderkey
-            AND    Qty > 0
-            GROUP BY SKU, ID, CaseID, DropId
+                 IF @@ERROR <> 0
+                 BEGIN
+                     EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
+                 END
+              END
 
-            OPEN CUR_PICKDETAIL
+              DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+              SELECT SKU, ID, CaseID, SUM(QTY), DropId
+              FROM   PICKDETAIL WITH (NOLOCK)
+              WHERE  OrderKey = @c_Orderkey
+              AND    Qty > 0
+              GROUP BY SKU, ID, CaseID, DropId
 
-            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_GetSKU, @c_GetID, @c_GetCaseID, @n_GetQty , @c_DropId
-            WHILE @@FETCH_STATUS<>-1
-            BEGIN
+              OPEN CUR_PICKDETAIL
 
-               -- Create packdetail
-               IF (ISNULL((select CartonNo from PackDetail (NOLOCK) where PickSlipNo = @c_GetPickslipno),0)) = 0
-               BEGIN
-                  SET @n_CartonNo = 1
-               END
-               ELSE
-               BEGIN
-                   SET @n_CartonNo = @n_CartonNo+ 1
-               END
+              FETCH NEXT FROM CUR_PICKDETAIL INTO @c_GetSKU, @c_GetID, @c_GetCaseID, @n_GetQty , @c_DropId
+              WHILE @@FETCH_STATUS<>-1
+              BEGIN
 
-               INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)
-               SELECT @c_GetPickslipno, @n_CartonNo,'00'+@c_DropId, '00001', @c_StorerKey, @c_GetSKU,
-                      @n_GetQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(),dbo.fnc_GetDate()
+                  -- Create packdetail
+                 IF (ISNULL((select Top 1 CartonNo from PackDetail (NOLOCK) where PickSlipNo = @c_GetPickslipno),0)) = 0
+                 BEGIN
+                    SET @n_CartonNo = 1
+                 END
+                 ELSE
+                 BEGIN
+                     SET @n_CartonNo = @n_CartonNo+ 1
+                 END
+                 IF LEN(@c_DropId) = 18
+                 SET @c_DropId = '00' + @c_DropId
 
-               IF @@ERROR <> 0
-               BEGIN
-                   EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
-               END
+                 INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate,RefNo)
+                 SELECT @c_GetPickslipno, @n_CartonNo,@c_DropId, '00001', @c_StorerKey, @c_GetSKU,
+                        @n_GetQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(),dbo.fnc_GetDate(),'TMSAutoPacking'
 
-                -- Create packinfo
-               SET @n_PackInfoWeight = ISNULL((@n_GetQty *
-               (SELECT SKU.STDGROSSWGT FROM SKU (NOLOCK)
-                    WHERE SKU.STORERKEY = @c_StorerKey
-                    AND SKU.SKU = @c_GetSKU
-                )),0)
-               INSERT INTO PACKINFO (PickSlipNo, CartonNo, CartonType, AddWho, EditWho, Qty, Weight, cube)
-               VALUES (@c_GetPickslipno, @n_CartonNo, 'SMALL',dbo.fnc_GetUserName(), dbo.fnc_GetUserName(), @n_GetQty, @n_PackInfoWeight, '1')
+                 IF @@ERROR <> 0
+                 BEGIN
+                   SET @c_ErrMsg
+                          = 'OrderKey :'+@c_OrderKey
+                            + ': Update PackDetail. (msp_BEJ_AutoPacking) ' + '(' + @c_ErrMsg + ') '
+                     EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
+                 END
 
-               IF @@ERROR <> 0
-               BEGIN
-                   EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
-               END
+                  -- Create packinfo
+                 SET @n_PackInfoWeight = ISNULL((@n_GetQty *
+                 (SELECT SKU.STDGROSSWGT FROM SKU (NOLOCK)
+                      WHERE SKU.STORERKEY = @c_StorerKey
+                      AND SKU.SKU = @c_GetSKU
+                  )),0)
+                 INSERT INTO PACKINFO (PickSlipNo, CartonNo, CartonType, AddWho, EditWho, Qty, Weight, cube)
+                 VALUES (@c_GetPickslipno,@n_CartonNo, 'SMALL',dbo.fnc_GetUserName(), dbo.fnc_GetUserName(), @n_GetQty, @n_PackInfoWeight, '1')
 
-               FETCH NEXT FROM CUR_PICKDETAIL INTO @c_GetSKU, @c_GetID, @c_GetCaseID, @n_GetQty ,  @c_DropId
-            END
-            CLOSE CUR_PICKDETAIL
-            DEALLOCATE CUR_PICKDETAIL
+                 IF @@ERROR <> 0
+                 BEGIN
+                     SET @c_ErrMsg
+                          = 'OrderKey :'+@c_OrderKey
+                            + ': Update Packinfo. (msp_BEJ_AutoPacking) ' + '(' + @c_ErrMsg + ') '
+                     EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
+                 END
+
+                 FETCH NEXT FROM CUR_PICKDETAIL INTO @c_GetSKU, @c_GetID, @c_GetCaseID, @n_GetQty ,  @c_DropId
+              END
+              CLOSE CUR_PICKDETAIL
+              DEALLOCATE CUR_PICKDETAIL
 
             --Pack Confirm
             UPDATE PACKHEADER
@@ -537,6 +547,9 @@ BEGIN
 
             IF @@ERROR <> 0
             BEGIN
+              SET @c_ErrMsg
+                        = 'OrderKey :'+@c_OrderKey
+                          + ': Update PACKHeader. (msp_BEJ_AutoPacking) ' + '(' + @c_ErrMsg + ') '
                EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
             END
             END TRY
@@ -545,9 +558,11 @@ BEGIN
                     SET @c_ErrMsg = ERROR_MESSAGE()
                     SET @n_Err = 556013
                     SET @c_ErrMsg
-                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)+@c_OrderKey
-                          + ': Update PACKHeared/PackDetail/PackInfo Fail. (msp_BEJ_AutoPacking) ' + '(' + @c_ErrMsg + ') '
+                        = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)+'OrderKey :'+@c_OrderKey
+                          + ': Update PACKHeader/PackDetail/PackInfo Fail. (msp_BEJ_AutoPacking) ' + '(' + @c_ErrMsg + ') '
                     EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
+                    IF CURSOR_STATUS('local', 'CUR_PICKDETAIL') >= -1
+                     DEALLOCATE CUR_PICKDETAIL
              END CATCH
             END
          END
