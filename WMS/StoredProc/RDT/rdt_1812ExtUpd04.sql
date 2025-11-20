@@ -45,6 +45,7 @@ BEGIN
             @cExtUpdPrintSP   NVARCHAR(20),
             @cStorerKey       NVARCHAR(15),
             @cToLocCate       NVARCHAR(10),
+            @cOrderKey        NVARCHAR(10),
             @nToLocMaxPallet  INT,
             @nToLocIDCount    INT,
             --V1.0.2 start
@@ -67,6 +68,79 @@ BEGIN
    
    IF @nFunc = 1812 -- PickSKU
    BEGIN
+      IF @nStep = 2
+      BEGIN
+         DECLARE @c_PickSlipNo NVARCHAR(10) = '',@b_success INT = 0
+
+         SELECT @cOrderKey = OrderKey
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE TaskDetailKey = @cTaskdetailKey
+
+         SELECT @c_PickSlipNo = PickHeaderKey
+         FROM PICKHEADER WITH (NOLOCK)
+         WHERE OrderKey = @cOrderKey
+
+         IF ISNULL(@c_PickSlipNo,'' )= ''
+         BEGIN
+            EXECUTE nspg_GetKey 
+                  @KeyName     = 'PICKSLIP'
+                  , @fieldlength = 9
+                  , @keystring   = @c_PickSlipNo  OUTPUT
+                  , @b_success   = @b_success     OUTPUT
+                  , @n_err       = @nErrNO        OUTPUT
+                  , @c_errmsg    = @cErrMsg       OUTPUT
+                  , @b_resultset = 0
+                  , @n_batch     = 1
+         
+            SET @c_PickSlipNo = 'P' + @c_PickSlipNo
+
+            INSERT INTO PICKHEADER 
+               (  PickHeaderKey
+               ,  Orderkey
+               ,  Storerkey
+               ,  ExternOrderkey
+               ,  Priority
+               ,  Type
+               ,  Zone
+               ,  Status
+               ,  PickType
+               ,  WAVEKEY
+               )
+            SELECT @c_PickSlipNo
+               ,  Orderkey
+               ,  Storerkey
+               ,  Loadkey
+               ,  Priority
+               ,  Priority --TYPE
+               ,  'DEFAULT' --ZONE
+               ,  '0'
+               ,  '0'
+               ,  @c_PickSlipNo
+            FROM ORDERS WITH (NOLOCK)
+            WHERE Orderkey = @cOrderKey
+         END
+
+         IF NOT EXISTS (   SELECT 1
+                           FROM PICKINGINFO WITH (NOLOCK)
+                           WHERE PickSlipNo = @c_PickSlipNo
+                        )
+         BEGIN
+            INSERT INTO PICKINGINFO 
+               (  PickSlipNo
+               ,  ScanInDate
+               ,  ScanOutDate
+               ,  PickerID
+               --,  TrafficCop         -- Fixed for Order status update to '3' 
+               )
+            VALUES 
+               (  @c_PickSlipNo
+               ,  GETDATE()
+               ,  NULL
+               ,  SUSER_NAME()
+               --,  NULL               -- Fixed for Order status update to '3'
+               )
+         END
+      END
       IF @nStep = 6 --ToLoc
       BEGIN
          IF @nInputKey = 1
@@ -256,9 +330,17 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            IF (SELECT TOP 1 I_Field01 
-               FROM RDT.RDTMOBREC WITH (NOLOCK) 
-               WHERE Mobile = @nMobile) = 'SKIP'
+            BEGIN
+               UPDATE RDT.RDTMOBREC
+                  SET C_String29 = I_Field01
+               WHERE Mobile = @nMobile
+            END
+
+            IF (SELECT TOP 1 RemoveTaskFromUserQueue 
+               FROM RDT.RDTMOBREC R WITH (NOLOCK) 
+               INNER JOIN TaskManagerReason TMR WITH(NOLOCK)
+                 ON R.I_Field01 = TMR.TaskManagerReasonKey
+               WHERE Mobile = @nMobile) = 1
             BEGIN
                SET @dDateTimeNow = GETDATE()
 

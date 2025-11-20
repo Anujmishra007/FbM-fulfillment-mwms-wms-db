@@ -21,5 +21,12 @@ execute rdt.rdtAddMsg 239664, 10, '239664DefaultLocNotFound',   'us_english', 18
 execute rdt.rdtAddMsg 239665, 10, '239665PleaseChooseAnOption',   'us_english', 1812, 0, '239665PleaseChooseAnOption'
 execute rdt.rdtAddMsg 239666, 10, '239666NothingToClose',   'us_english', 1812, 0, '239666NothingToClose'
 
+EXEC sp_addmessage 218252, 10, '218252^Order on hold', 'us_english', 'FALSE';
+EXEC sp_addmessage 218253, 10, '218253^Loc on hold or flag', 'us_english', 'FALSE';
+EXEC sp_addmessage 218254, 10, '218254^OverMaxPallet', 'us_english', 'FALSE';
+EXEC sp_addmessage 218255, 10, '218255^Aisle in use', 'us_english', 'FALSE';
+EXEC sp_addmessage 218257, 10, '218257^Multiple task blocks', 'us_english', 'FALSE';
+EXEC sp_addmessage 218258, 10, '218258^No PickDetail', 'us_english', 'FALSE';
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 239651 AND 239700
 
