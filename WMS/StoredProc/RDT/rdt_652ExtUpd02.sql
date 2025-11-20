@@ -93,7 +93,7 @@ BEGIN
                         BREAK
 
                      EXECUTE ispGenTransmitLog2 
-                     @c_TableName      = 'WSRTNRFID', 
+                     @c_TableName      = 'WSASNRFID', 
                      @c_Key1           = @cReceiptKey, 
                      @c_Key2           = '', 
                      @c_Key3           = @cStorerkey, 
