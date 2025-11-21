@@ -1,3 +1,7 @@
+IF NOT EXISTS(SELECT 1 FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID = 777 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
+   INSERT INTO rdt.RDTMsg(Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, EventType, Func, URL, Message_Text_Long)
+   VALUES( 777, 'ENG', 'FNC', 'Pack(For WCS)', 'rdtfnc_Pack_Rescue', '0', '0', '', '' )
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
