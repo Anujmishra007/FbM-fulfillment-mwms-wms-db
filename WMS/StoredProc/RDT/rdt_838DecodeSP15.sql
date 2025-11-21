@@ -46,7 +46,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   SET @cBarcode = LTRIM(RTRIM(@cBarcode))
+   SET @cBarcode = REPLACE(LTRIM(RTRIM(@cBarcode)), ' ', '')
 
    IF @nFunc = 838
    BEGIN
@@ -66,7 +66,7 @@ BEGIN
                               CHARINDEX('(21)', @cBarcode) + 4,
                               CHARINDEX('(241)', @cBarcode) - CHARINDEX('(21)', @cBarcode) - 4
                            )
-                     ELSE NULL
+                     ELSE @cBarcode
                   END
 
                   GOTO Quit
@@ -76,6 +76,11 @@ BEGIN
                   SELECT  @cSKU = SUBSTRING(@cBarcode, 51, 8)
                   GOTO Quit
                END --label 5
+               ELSE
+               BEGIN
+                  SET @cSKU = @cBarcode
+                  GOTO Quit
+               END
             END
          END
       END -- st3
@@ -85,7 +90,7 @@ BEGIN
          BEGIN
             IF @cBarcode <> ''  -- UCC  Decode
             BEGIN
-               IF LEN(@cBarcode) = 40 --label2
+               IF LEN(@cBarcode) = 40 OR LEN(@cBarcode) = 44 --label2
                BEGIN
                   SELECT 
                   @cUCCNo = 
@@ -96,7 +101,7 @@ BEGIN
                               CHARINDEX('(240)', @cBarcode) + 5,
                               LEN(@cBarcode)
                            )
-                     ELSE NULL
+                     ELSE @cBarcode
                   END
                   GOTO Quit
                END--label2 
@@ -109,6 +114,10 @@ BEGIN
                BEGIN
                   SELECT @cUCCNo = SUBSTRING(@cBarcode, 19, 19)
                   GOTO Quit
+               END
+               ELSE
+               BEGIN
+                  SET @cUCCNo = @cBarcode
                END
             END      
          END
