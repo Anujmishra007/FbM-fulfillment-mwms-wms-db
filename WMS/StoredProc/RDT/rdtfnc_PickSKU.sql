@@ -4,44 +4,47 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/***************************************************************************************/
-/* Store procedure: rdtfnc_PickSKU                                                     */
-/* Copyright      : Maersk                                                             */
-/*                                                                                     */
-/* Purpose: Pick SKU/UPC                                                               */
-/*                                                                                     */
-/* Date         Rev  Author     Purposes                                               */
-/* 2016-06-20   1.0  Ung        SOS372037 Migrate from 860 Pick SKU/UPC                */
-/* 2017-02-09   1.1  Ung        WMS-1000 Add verify lottable                           */
-/* 2017-02-21   1.2  Ung        WMS-1715 Add DefaultToLOC, SkipLOC,                    */
-/*                              balance pick later                                     */
-/* 2017-10-03   1.3  Ung        WMS-3052 Add VerifyID                                  */
-/* 2018-09-25   1.4  Ung        WMS-6410 Add ExtendedInfo at LOC screen                */
-/*                              Add rdtMobRec Field16..20                              */
-/* 2019-10-18   1.5  James      WMS-10860 Add auto scan in (james01)                   */
-/* 2019-12-23   1.6  James      WMS-11487 Add ExtValid @ qty screen (james02)          */
-/* 2020-02-20   1.7  James      WMS-12097 Add MultiSKUBarcode (james03)                */
-/* 2020-10-10   1.8  YeeKung    WMS-15415 Add DecodeidSP (yeekung01)                   */
-/* 2020-08-28   1.9  YeeKung    WMS-14706 Add clearid (yeekung02)                      */
-/* 2020-12-28   2.0  YeeKung    WMS-15995 Add PickZone (yeekung03 )                    */
-/* 2020-12-28   2.1  WyeChun    Add in PickZone (WC01)                                 */  
-/* 2022-04-08   2.2  Ung        WMS-19402 Add AutoScanOut                              */
-/* 2021-10-04   2.3  YeeKung    WMS-16543 Fix multisku (yeekung04)                     */   
-/*                              Add SwapIDSP                                           */
-/* 2022-12-30   2.4  Calvin     JSM-119684 Reset Pickzone Variable (CLVN01)            */
-/* 2022-11-24   2.5  Ung        WMS-21032 Fix ExtendedInfoSP at LOC screen             */
-/*                              Add DefaultQTY                                         */
-/* 2023-03-15   2.6  YeeKung    WMS-21872 Fix Bug (yeekung05)                          */
-/* 2024-07-04   2.7  JHU151     FCR-537 @cDefaultQTY to NVARCHAR(10)                   */
-/* 2024-07-08   2.8  JHU151     FCR-330 SSCC code generator                            */
-/* 2024-10-17   2.9  PXL009     FCR-759 ID and UCC Length Issue                        */
-/* 2025-04-29   3.0.0 NickT     UWP-33739 Add Extended Validation SP in step 1         */
-/* 2025-06-05   3.1.0 JACKC     FCR-4328 Add ExtScn to ST4 when short                  */
-/* 2025-06-20   0.0.0 Jackc     !!!Cutover. Use V0 repo for work!!!                    */
-/* 2025-08-22   3.7   Cuize       FCR-7251 Check Digit                                 */
-/* 2025-09-18   3.8   Dennis    UWP-41326 Fix CheckDigit Bug                           */
-/* 2025-11-10   3.8   JackC     FCR-8676 Set value to V_barcode when decode required   */
-/***************************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdtfnc_PickSKU                                               */
+/* Copyright      : Maersk                                                       */
+/*                                                                               */
+/* Purpose: Pick SKU/UPC                                                         */
+/*                                                                               */
+/* Date         Rev  Author     Purposes                                         */
+/* 2016-06-20   1.0  Ung        SOS372037 Migrate from 860 Pick SKU/UPC          */
+/* 2017-02-09   1.1  Ung        WMS-1000 Add verify lottable                     */
+/* 2017-02-21   1.2  Ung        WMS-1715 Add DefaultToLOC, SkipLOC,              */
+/*                              balance pick later                               */
+/* 2017-10-03   1.3  Ung        WMS-3052 Add VerifyID                            */
+/* 2018-09-25   1.4  Ung        WMS-6410 Add ExtendedInfo at LOC screen          */
+/*                              Add rdtMobRec Field16..20                        */
+/* 2019-10-18   1.5  James      WMS-10860 Add auto scan in (james01)             */
+/* 2019-12-23   1.6  James      WMS-11487 Add ExtValid @ qty screen (james02)    */
+/* 2020-02-20   1.7  James      WMS-12097 Add MultiSKUBarcode (james03)          */
+/* 2020-10-10   1.8  YeeKung    WMS-15415 Add DecodeidSP (yeekung01)             */
+/* 2020-08-28   1.9  YeeKung    WMS-14706 Add clearid (yeekung02)                */
+/* 2020-12-28   2.0  YeeKung    WMS-15995 Add PickZone (yeekung03 )              */
+/* 2020-12-28   2.1  WyeChun    Add in PickZone (WC01)                           */  
+/* 2022-04-08   2.2  Ung        WMS-19402 Add AutoScanOut                        */
+/* 2021-10-04   2.3  YeeKung    WMS-16543 Fix multisku (yeekung04)               */   
+/*                              Add SwapIDSP                                     */
+/* 2022-12-30   2.4  Calvin     JSM-119684 Reset Pickzone Variable (CLVN01)      */
+/* 2022-11-24   2.5  Ung        WMS-21032 Fix ExtendedInfoSP at LOC screen       */
+/*                              Add DefaultQTY                                   */
+/* 2023-03-15   2.6  YeeKung    WMS-21872 Fix Bug (yeekung05)                    */
+/* 2024-07-04   2.7  JHU151     FCR-537 @cDefaultQTY to NVARCHAR(10)             */
+/* 2024-07-08   2.8  JHU151     FCR-330 SSCC code generator                      */
+/* 2024-10-17   2.9  PXL009     FCR-759 ID and UCC Length Issue                  */
+/* 2025-04-29   3.0.0 NickT     UWP-33739 Add Extended Validation SP in step 1   */
+/* 2025-06-05   3.1.0 JACKC     FCR-4328 Add ExtScn to ST4 when short            */
+/* 2025-06-20   0.0.0 Jackc     !!!Cutover. Use V0 repo for work!!!              */
+/* 2025-04-29   3.5.0 NickT      UWP-33739 Add Extended Validation SP in step 1  */
+/* 2025-08-22   3.6   Ung        UWP-39875 Reset @cSuggLOC if PickZone changed   */
+/* 2025-08-22   3.7   Cuize      FCR-7251 Check Digit                            */
+/* 2025-09-18   3.8   Dennis     UWP-41326 Fix CheckDigit Bug                    */
+/* 2025-11-20   3.9   Jackc      FCR-8295 Merge 3.6 from v0 to v2                */
+/*********************************************************************************/
+/*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
    @nMobile    INT,
@@ -865,6 +868,10 @@ BEGIN
             END
          END
       END
+
+      -- Reset suggest LOC, if PickZone changed
+      IF @cOutField05 <> @cPickZone AND @cSuggLOC <> ''
+         SET @cSuggLOC = ''
       SET @cOutField05 = @cPickZone
 
       IF @cLOC <> ''
@@ -900,6 +907,8 @@ BEGIN
 
             -- Remain in current screen
             SET @cOutField02 = @cSuggLOC
+            EXEC rdt.rdtSetFocusField @nMobile, 3 -- LOC
+            
             GOTO Quit
          END
          ELSE
