@@ -55,7 +55,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   SET @cBarcode = LTRIM(RTRIM(@cBarcode))
+   SET @cBarcode = REPLACE(LTRIM(RTRIM(@cBarcode)), ' ', '')
     
    IF @nFunc = 830
    BEGIN

@@ -54,7 +54,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   SET @cBarcode = LTRIM(RTRIM(@cBarcode))
+   SET @cBarcode = REPLACE(LTRIM(RTRIM(@cBarcode)), ' ', '')
     
    IF @nFunc = 957
    BEGIN
@@ -64,7 +64,7 @@ BEGIN
          BEGIN
             IF @cBarcode <> ''  -- UCC  Decode
             BEGIN
-               IF LEN(@cBarcode) = 40 --label2
+               IF LEN(@cBarcode) = 40 OR LEN(@cBarcode) = 44 --label2
                BEGIN
                   SELECT 
                   @cUCCNo = 
