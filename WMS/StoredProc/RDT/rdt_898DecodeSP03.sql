@@ -81,8 +81,14 @@ BEGIN
    BEGIN
       IF @nStep = 6 -- UCC
       BEGIN
+         IF LEN(@cBarcode) < 20
+         BEGIN
+            SET @nErrNO = 250753
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+            GOTO QUIT
+         END
          SELECT @cLottable01 = EXTERNRECEIPTKEY FROM Receipt (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
-         IF LEN(@cBarcode) = 40
+         IF LEN(@cBarcode) IN( 40 , 44)
          BEGIN
             SELECT 
             @cUCC = CASE 
