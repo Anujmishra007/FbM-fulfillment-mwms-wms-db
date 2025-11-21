@@ -75,7 +75,7 @@ BEGIN
                               CHARINDEX('(240)', @cBarcode) + 5,
                               LEN(@cBarcode)
                            )
-                     ELSE NULL
+                     ELSE @cBarcode
                   END
                   GOTO Quit
                END--label2 
@@ -89,8 +89,8 @@ BEGIN
                   SELECT @cUCCNo = SUBSTRING(@cBarcode, 19, 19)
                   GOTO Quit
                END
-
-               
+               ELSE
+                  SET @cUCCNo = @cBarcode 
             END      
          END -- enter
       END --st3

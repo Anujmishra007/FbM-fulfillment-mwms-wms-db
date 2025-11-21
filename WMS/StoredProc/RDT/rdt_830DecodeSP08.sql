@@ -75,7 +75,7 @@ BEGIN
                               CHARINDEX('(21)', @cBarcode) + 4,
                               CHARINDEX('(241)', @cBarcode) - CHARINDEX('(21)', @cBarcode) - 4
                            )
-                     ELSE NULL
+                     ELSE @cBarcode
                   END
 
                   GOTO Quit
@@ -85,6 +85,8 @@ BEGIN
                   SELECT  @cUPC = SUBSTRING(@cBarcode, 51, 8)
                   GOTO Quit
                END --label 5
+               ELSE
+                  SET @cUPC = @cBarcode
             END
          END
       END --st3
