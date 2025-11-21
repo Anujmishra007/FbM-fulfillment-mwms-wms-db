@@ -68,7 +68,7 @@ AS
             FROM CODELKUP (NOLOCK)
             WHERE LISTNAME =  'SKUGRP_FLR'
                AND StorerKey = @cStorerKey 
-               AND Code = @cSKUGroup
+               AND Short = @cSKUGroup
 
             IF EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOlOCK)
                         WHERE LOC = @cToLOC
