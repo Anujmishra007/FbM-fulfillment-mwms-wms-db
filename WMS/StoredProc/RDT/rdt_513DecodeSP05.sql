@@ -36,7 +36,7 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   SET @cBarcode = LTRIM(RTRIM(@cBarcode))
+   SET @cBarcode = REPLACE(LTRIM(RTRIM(@cBarcode)), ' ','')
    
    IF @nFunc = 513 -- Move by SKU
    BEGIN
@@ -56,7 +56,7 @@ BEGIN
                               CHARINDEX('(21)', @cBarcode) + 4,
                               CHARINDEX('(241)', @cBarcode) - CHARINDEX('(21)', @cBarcode) - 4
                            )
-                     ELSE NULL
+                     ELSE @cBarcode
                   END
 
                   GOTO Quit
@@ -66,6 +66,11 @@ BEGIN
                   SELECT  @cSKU = SUBSTRING(@cBarcode, 51, 8)
                   GOTO Quit
                END --label 5
+               ELSE
+               BEGIN
+                  SET @cSKU = @cBarcode
+                  GOTO Quit
+               END
             END
          END   -- ENTER
       END   -- @nStep = 3
