@@ -13,7 +13,8 @@ GO
 /* Modifications log:                                                         */
 /*                                                                            */
 /* Date       Rev  Author      Purposes                                       */
-/* 2025-10-29 1.0  Dennis      FCR-8472 Created                               */                               
+/* 2025-10-29 1.0  Dennis      FCR-8472 Created                               */ 
+/* 2025-11-20 1.1  Dennis      FCR-8897 Add inventory Hold                    */                               
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898RcvCfm19] (
@@ -2561,6 +2562,38 @@ BEGIN
          IF @nErrNo <> 0 OR @b_Success = 0
             GOTO RollBackTran
          
+         IF EXISTS (SELECT 1 FROM RECEIPT R WITH (NOLOCK) 
+         JOIN dbo.ReceiptDetail RD ON R.ReceiptKey = RD.ReceiptKey AND ReceiptLineNumber = @cReceiptLineNumber
+         WHERE R.ReceiptKey = @cReceiptKey AND R.DOCTYPE = 'R' AND RD.ConditionCode = 'RTH')
+         BEGIN
+            EXEC nspInventoryHoldWrapper
+               '',               -- lot
+               '',               -- loc
+               @cToID,               -- id
+               @cStorerKey,     -- storerkey
+               @cSKU,           -- sku
+               '',               -- lottable01
+               '',               -- lottable01
+               '',               -- lottable01
+               NULL,             -- lottable01
+               NULL,             -- lottable01
+               '',
+               '',
+               '',
+               '',
+               '',
+               '',
+               '',
+               NULL,
+               NULL,
+               NULL,
+               'RTH',      -- status
+               '1',              -- hold
+               @b_success OUTPUT,
+               @nErrNo OUTPUT,
+               @cErrMsg OUTPUT,
+               ''   -- remark
+         END
          FETCH NEXT FROM @curRD INTO @cReceiptLineNumber
       END
    END
