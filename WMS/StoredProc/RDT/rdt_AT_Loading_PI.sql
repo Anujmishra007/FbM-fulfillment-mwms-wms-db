@@ -587,8 +587,8 @@ AS
                GOTO QUIT
             END
 
-            INSERT INTO RDT.RDTVASLOG (Type,UserName,Facility,StartDate,EndDate,Ref1,Ref2,Ref3,Ref4,Ref5,Status)
-            Values(@cActivityStatus,SUSER_SNAME(),@cFacility,GETDATE(),GETDATE(),@cRef1,@cInput01,@cInput02,@cInput03,@cInput04,@cNewStatus)
+            INSERT INTO RDT.RDTVASLOG (Type,UserName,Facility,StartDate,EndDate,Ref1,Ref2,Ref3,Ref4,Ref5,Status,QTY)
+            Values(@cActivityStatus,SUSER_SNAME(),@cFacility,GETDATE(),GETDATE(),@cRef1,@cInput01,@cInput02,@cInput03,@cInput04,@cNewStatus,1)
 
             IF @@ERROR<>0
             BEGIN
