@@ -6,7 +6,7 @@ DECLARE @command NVARCHAR(MAX)
 
 -- Get the job_id of the existing job
 SELECT @jobId = job_id
-FROM msdb.dbo.sysjobs
+FROM msdb.dbo.sysjobs WITH (NOLOCK)
 WHERE name = N'IML - SP - ' + @c_CountryCode + N' - TMS_Outbound(' + @c_CountryCode + N')'
 
 IF @jobId IS NULL
@@ -16,47 +16,57 @@ BEGIN
 END
 
 -- Step 11 command
-SET @command = N'SET ANSI_DEFAULTS OFF
-EXEC isp0000P_WMS_OTM_PACK_Export 
-    @c_DataStream = ''A2A0040'', 
-    @c_ClientID = '''', 
-    @c_ClientCountry = ''' + @c_CountryCode + N''', 
-    @b_debug=0, 
-    @b_Success=0, 
-    @n_err=0, 
-    @c_errmsg='''''
+IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobsteps WITH (NOLOCK) 
+               WHERE job_id = @jobId
+               AND step_id = 11)
+BEGIN
+   SET @command = N'SET ANSI_DEFAULTS OFF
+   EXEC isp0000P_WMS_OTM_PACK_Export 
+       @c_DataStream = ''A2A0040'', 
+       @c_ClientID = '''', 
+       @c_ClientCountry = ''' + @c_CountryCode + N''', 
+       @b_debug=0, 
+       @b_Success=0, 
+       @n_err=0, 
+       @c_errmsg='''''
 
--- Add Step 11
-EXEC @ReturnCode = msdb.dbo.sp_add_jobstep
-    @job_id = @jobId,
-    @step_name = N'PACK OUT - A2A0040',
-    @step_id = 11,
-    @cmdexec_success_code = 0,
-    @on_success_action = 2,  -- 1=Go to next step, 2=Quit with success
-    @on_success_step_id = 0,
-    @on_fail_action = 2,     -- Quit with failure
-    @on_fail_step_id = 0,
-    @retry_attempts = 0,
-    @retry_interval = 0,
-    @os_run_priority = 0,
-    @subsystem = N'TSQL',
-    @command = @command,
-    @database_name = @c_CountryITFDB,
-    @flags = 0
+   -- Add Step 11
+   EXEC @ReturnCode = msdb.dbo.sp_add_jobstep
+       @job_id = @jobId,
+       @step_name = N'PACK OUT - A2A0040',
+       @step_id = 11,
+       @cmdexec_success_code = 0,
+       @on_success_action = 2,  -- 1=Go to next step, 2=Quit with success
+       @on_success_step_id = 0,
+       @on_fail_action = 2,     -- Quit with failure
+       @on_fail_step_id = 0,
+       @retry_attempts = 0,
+       @retry_interval = 0,
+       @os_run_priority = 0,
+       @subsystem = N'TSQL',
+       @command = @command,
+       @database_name = @c_CountryITFDB,
+       @flags = 0
 
-IF (@@ERROR <> 0 OR @ReturnCode <> 0)
-    PRINT 'Error adding Step 11!'
-ELSE
-    PRINT 'Step 11 added successfully!'
+   IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+       PRINT 'Error adding Step 11!'
+   ELSE
+       PRINT 'Step 11 added successfully!'
 
-EXEC @ReturnCode = msdb.dbo.sp_update_jobstep
-    @job_id = @jobId,
-    @step_id = 10,
-    @on_success_action = 1     -- 1 = Go to next step
+   IF EXISTS (SELECT 1 FROM msdb.dbo.sysjobsteps WITH (NOLOCK) 
+              WHERE job_id = @jobId
+              AND step_id = 10)
+   BEGIN
+      EXEC @ReturnCode = msdb.dbo.sp_update_jobstep
+          @job_id = @jobId,
+          @step_id = 10,
+          @on_success_action = 1     -- 1 = Go to next step
 
-IF (@@ERROR <> 0 OR @ReturnCode <> 0)
-    PRINT 'Error updating Step 10!'
-ELSE
-    PRINT 'Step 10 updated to go to Step 11 on success.'
+      IF (@@ERROR <> 0 OR @ReturnCode <> 0)
+          PRINT 'Error updating Step 10!'
+      ELSE
+          PRINT 'Step 10 updated to go to Step 11 on success.'
+   END
+END
 
 QUIT:
