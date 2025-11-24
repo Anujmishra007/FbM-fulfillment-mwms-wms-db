@@ -106,6 +106,7 @@ BEGIN
                FROM dbo.PackInfo WITH (NOLOCK)
                WHERE RefNo IS NOT NULL
                   AND RefNo = @cLabelNo
+                  AND AddWho = SUSER_NAME()
                ORDER BY PickSlipNo, CartonNo
 
             OPEN @curPackInfo

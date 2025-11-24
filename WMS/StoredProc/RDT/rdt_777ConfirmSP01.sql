@@ -314,9 +314,8 @@ BEGIN
       END
       ELSE
       BEGIN
-         UPDATE dbo.PackInfo SET
+         UPDATE dbo.PackInfo WITH(ROWLOCK) SET
             UCCNo = @cUCCNo,
-            Qty = Qty + @nQTY,
             EditDate = GETDATE(), 
             EditWho = SUSER_SNAME(), 
             TrafficCop = NULL
@@ -758,9 +757,8 @@ BEGIN
          ELSE
          BEGIN
             BEGIN TRY
-               UPDATE dbo.PackInfo SET
+               UPDATE dbo.PackInfo WITH(ROWLOCK) SET
                   UCCNo = @cUCCNo,
-                  Qty = Qty + @nQTY,
                   EditDate = GETDATE(), 
                   EditWho = SUSER_SNAME(), 
                   TrafficCop = NULL
