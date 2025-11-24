@@ -47,7 +47,7 @@ GO
 /* 2025-06-23 3.4.0  NickT      FCR-5753 No need CAST @nDecodeQTY to @nUCCQty,  */
 /*                              expand QTY to support 6 digitals                */
 /* 2025-08-25 3.5.0  Dennis     FCR-3959 Extended Screen                         */
-/* 2025-11-24 3.6.0  NickT      UWP-44566 Reset QTY when get new task           */
+/* 2025-11-24 3.6.0  NickT      UWP-44566 Reset QTY when get new task or on ToLoc*/
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -2685,6 +2685,8 @@ BEGIN
                END
          END
       END
+      
+      SET @nQTY = 0
 
       -- Prepare next screen var
       SET @cOutField01 = @cToLOC
