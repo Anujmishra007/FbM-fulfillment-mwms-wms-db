@@ -15,6 +15,7 @@ GO
 /* 2025-05-31 1.3.0  NickT      UWP-35355 Add additional validation        */
 /* 2025-07-23 1.4.0  Dennis     FCR-6157                                   */
 /* 2025-08-14 1.5.0  Dennis     FCR-6157 Multi PO only when Return         */
+/* 2025-11-21 1.6.0  Dennis     FCR-8723 Sku validation                    */
 /***************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal05]
@@ -167,6 +168,39 @@ BEGIN
                SET @nErrNo = 225301 
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToIDClosed
                GOTO Quit
+            END
+         END
+      END
+      ELSE IF @nStep = 8 -- SKU
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF EXISTS(SELECT 1 FROM RECEIPT WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey AND DocType ='R')
+            BEGIN
+               DECLARE @cStyle NVARCHAR(20)
+
+               SELECT @cStyle = STYLE
+               FROM dbo.SKU SKU WITH(NOLOCK) 
+               WHERE SKU.SKU = @cSKU 
+                  AND SKU.StorerKey = @cStorerKey
+
+               IF EXISTS(
+                  SELECT 1 FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK) 
+                  WHERE RD.ReceiptKey = @cReceiptKey 
+                     AND RD.StorerKey = @cStorerKey
+               ) AND NOT EXISTS(
+                  SELECT 1 FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK) 
+                  JOIN SKU SKU WITH(NOLOCK) 
+                     ON RD.SKU = SKU.SKU AND RD.StorerKey = SKU.StorerKey
+                  WHERE RD.ReceiptKey = @cReceiptKey 
+                     AND RD.StorerKey = @cStorerKey
+                     AND SKU.STYLE = @cStyle
+               )
+               BEGIN
+                  SET @nErrNo = 225309 
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKUStyleDoesNotMatch
+                  GOTO Quit
+               END
             END
          END
       END
