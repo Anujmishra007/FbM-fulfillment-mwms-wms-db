@@ -13,6 +13,7 @@ GO
 /* Date        Author    Ver.  Purposes                                       */
 /* 2024-10-26  PXL009    1.0   FCR-759 ID and UCC Length Issue                */
 /* 2025-07-03  JackC     1.1   FCR-2961 Adapt for new types labels ()         */
+/* 2025-11-10  Cuize     1.2   FCR-8407 Swedish label58                       */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_922DecodeSP01 ( 
@@ -95,6 +96,25 @@ BEGIN
                   IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
                   BEGIN
                      SET @nErrNo = 227005
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END -- swedish label
+               ELSE IF LEN(@cBarCode) = 58 --Swedish label58
+               BEGIN
+                  SET @cUCC = SUBSTRING(@cBarcode, 19, 18)
+                  SET @cSKU = SUBSTRING(@cBarcode, 40, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 227006
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 227007
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO Quit
                   END

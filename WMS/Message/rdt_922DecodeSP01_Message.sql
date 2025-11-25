@@ -8,6 +8,8 @@ execute rdt.rdtAddMsg 227002, 10, '227002^InvalidUCC,',     'us_english',  922, 
 execute rdt.rdtAddMsg 227003, 10, '227003^InvalidUCC,',     'us_english',  922, 0, '227003: Invalid UCC barcode(SKU)'
 execute rdt.rdtAddMsg 227004, 10, '227004^InvalidUCC,',     'us_english',  922, 0, '227004: Invalid UCC barcode(SKU Prefix)'
 execute rdt.rdtAddMsg 227005, 10, '227005^InvalidUCC,',     'us_english',  922, 0, '227005: Invalid UCC barcode(SKU)'
+execute rdt.rdtAddMsg 227006, 10, '227006^InvalidUCC,',     'us_english',  922, 0, '227006: Invalid UCC barcode(SKU Prefix)'
+execute rdt.rdtAddMsg 227007, 10, '227007^InvalidUCC,',     'us_english',  922, 0, '227007: Invalid UCC barcode(SKU)'
 
 
 

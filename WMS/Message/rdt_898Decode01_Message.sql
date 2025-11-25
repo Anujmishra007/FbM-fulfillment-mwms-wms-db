@@ -7,5 +7,7 @@ execute rdt.rdtAddMsg 226803, 10, '226803^InvalidUCC,',          'us_english',  
 execute rdt.rdtAddMsg 226804, 10, '226804^InvalidUCC,',          'us_english',  898, 0, '226804: Invalid UCC barcode(SKU)'
 execute rdt.rdtAddMsg 226805, 10, '226805^InvalidUCC,',          'us_english',  898, 0, '226805: Invalid UCC barcode(SKU Prefix)'
 execute rdt.rdtAddMsg 226806, 10, '226806^InvalidUCC,',          'us_english',  898, 0, '226806: Invalid UCC barcode(SKU)'
+execute rdt.rdtAddMsg 226807, 10, '226807^InvalidUCC,',          'us_english',  898, 0, '226807: Invalid UCC barcode(SKU Prefix)'
+execute rdt.rdtAddMsg 226808, 10, '226808^InvalidUCC,',          'us_english',  898, 0, '226808: Invalid UCC barcode(SKU)'
 
 select * from rdt.rdtmsg (nolock) where message_id between 226801 and 226850

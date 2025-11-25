@@ -11,7 +11,8 @@ GO
 /*                                                                      */
 /* Date        Author   Ver.  Purposes                                  */
 /* 2024-10-17  PXL009   1.0   FCR-759 ID and UCC Length Issue           */
-/* 2025-09-08  Jackc    1.1   FCR-7545 ID and UCC Length Issue           */
+/* 2025-09-08  Jackc    1.1   FCR-7545 ID and UCC Length Issue          */
+/* 2025-11-10  Cuize    1.2   FCR-8407 Swedish label58                  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_838DecodeSP11]
@@ -135,7 +136,26 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO Quit
                   END
-               END -- swedish label 
+               END -- swedish label
+               ELSE IF LEN(@cBarcode) = 58 --Swedish label58
+               BEGIN
+                  SET @cUCC = SUBSTRING(@cBarcode, 19, 18)
+                  SET @cUCCSKU = SUBSTRING(@cBarcode, 40, 11)
+
+                  IF LEFT(@cUCCSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 246105
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUCCSKU)
+                  BEGIN
+                     SET @nErrNo = 246106
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END -- swedish label
                --V1.1 end
                ELSE --V1.0 existing logic
                BEGIN

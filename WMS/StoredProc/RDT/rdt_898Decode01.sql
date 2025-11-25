@@ -6,8 +6,9 @@
 /* Purpose: Decode PMI GS1 ID/UCC Label                                       */
 /*                                                                            */
 /* Date        Author    Ver.    Purposes                                     */
-/* 08-10-2024  CYU027    1.0     FCR-759 Created                              */
-/* 2025-07-30  Jackc     1.1.0   FCR-2961 Support new types of UCC barcode    */
+/* 08-10-2024  Cuize    1.0     FCR-759 Created                               */
+/* 2025-07-30  Jackc    1.1.0   FCR-2961 Support new types of UCC barcode     */
+/* 2025-11-10  Cuize    1.2     FCR-8407 Swedish label58                      */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_898Decode01] (
    @nMobile             INT,
@@ -112,7 +113,7 @@ BEGIN
                      GOTO Quit
                   END
                END--len 49 
-               ELSE IF LEN(@cUCC) = 57 --Swedish label 
+               ELSE IF LEN(@cUCC) = 57 --Swedish label 57
                BEGIN
                   SET @cLocalUCC = SUBSTRING(@cUCC, 19, 17)
                   SET @cUserDefine09 = RIGHT(@cUCC, 6)
@@ -127,7 +128,27 @@ BEGIN
 
                   IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
                   BEGIN
-                     SET @nErrNo = 226803
+                     SET @nErrNo = 226804
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END-- len57
+               ELSE IF LEN(@cUCC) = 58 --Swedish label 58
+               BEGIN
+                  SET @cLocalUCC = SUBSTRING(@cUCC, 19, 18)
+                  SET @cUserDefine09 = RIGHT(@cUCC, 6)
+                  SET @cSKU = SUBSTRING(@cUCC, 40, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 226807
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 226808
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO Quit
                   END

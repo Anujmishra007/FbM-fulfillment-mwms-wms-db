@@ -7,7 +7,8 @@
 /* Purpose: Extended putaway                                                  */  
 /*                                                                            */  
 /* Date        Author    Ver.  Purposes                                       */  
-/* 2025-09-09  Jackc     1.0   FCR-7545 Created                               */  
+/* 2025-09-09  Jackc     1.0   FCR-7545 Created                               */
+/* 2025-11-10  Cuize     1.1   FCR-8407 Swedish label58                       */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_861DecodeSP01] (  
@@ -104,7 +105,26 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO Quit
                   END
-               END -- swedish label 
+               END -- swedish label
+               ELSE IF LEN(@cBarcode) = 58 --Swedish label
+               BEGIN
+                  SET @cUCCNo = SUBSTRING(@cBarcode, 19, 18)
+                  SET @cUCCSKU = SUBSTRING(@cBarcode, 40, 11)
+
+                  IF LEFT(@cUCCSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 246155
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUCCSKU)
+                  BEGIN
+                     SET @nErrNo = 246156
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END -- swedish label
                --V1.1 end
                ELSE -- existing standard logic
                BEGIN

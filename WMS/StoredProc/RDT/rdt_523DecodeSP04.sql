@@ -14,6 +14,7 @@ GO
 /* 2024-10-22  ShaoAn    1.0   FCR-759-999 ID and UCC Length Issue            */
 /* 2024-10-24  ShaoAn    1.0.1 Extended parameter definition                  */
 /* 2025-07-31  Jackc     1.1.0 FCR-2961 Support new types of labels           */
+/* 2025-11-10  Cuize     1.2   FCR-8407 Swedish label58                       */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_523DecodeSP04] (
    @nMobile           INT,           
@@ -103,7 +104,7 @@ BEGIN
 
                   GOTO Quit
                END--Fertin label
-               ELSE IF LEN(@cBarcodeUCC) = 57 --Swedish label
+               ELSE IF LEN(@cBarcodeUCC) = 57 --Swedish label 57
                BEGIN
                   SET @cUCC = SUBSTRING(@cBarcodeUCC, 19, 17)
                   SET @cUCCSKU = SUBSTRING(@cBarcodeUCC, 39, 11)
@@ -118,6 +119,27 @@ BEGIN
                   IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUCCSKU)
                   BEGIN
                      SET @nErrNo = 243106
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  GOTO Quit
+               END -- swedish label
+               ELSE IF LEN(@cBarcodeUCC) = 58 --Swedish label 58
+               BEGIN
+                  SET @cUCC = SUBSTRING(@cBarcodeUCC, 19, 18)
+                  SET @cUCCSKU = SUBSTRING(@cBarcodeUCC, 40, 11)
+
+                  IF LEFT(@cUCCSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 243107
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUCCSKU)
+                  BEGIN
+                     SET @nErrNo = 243108
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO Quit
                   END
