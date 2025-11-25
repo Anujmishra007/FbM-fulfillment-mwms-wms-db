@@ -313,7 +313,7 @@ BEGIN
       
       --NJOW01
       SELECT TOP 1 @n_ConMinShelfLife = S.MinShelflife,
-    	             @n_SkuGroupShelfLife = CASE WHEN @c_DmgBoxTester='Y' AND CL.Code2='TESTER' AND O.Userdefine04='DMG-BOX' AND ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT)  --ML01
+    	             @n_SkuGroupShelfLife = CASE WHEN @c_DmgBoxTester='Y' AND CL.Code2='TESTER' AND ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT)  --ML01
                                                WHEN ISNUMERIC(CL3.Short) = 1 THEN CAST(CL3.Short AS INT)  --NJOW05
     	                                         WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END, --NJOW04
     	             @n_SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 THEN CAST(CL2.Short AS INT) ELSE 0 END, --NJOW04

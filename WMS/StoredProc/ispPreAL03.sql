@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 2.4                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -40,6 +40,7 @@ GO
 /* 25/10/2024  NJOW11   2.2   WMS-26521 lottable03 with ok status is not*/
 /*                            allow allocate from hold loc.             */
 /* 07/07/2025  MICHAEL  2.3   FCR-6166 Alloc by DMG-BOX for Tester(ML01)*/
+/* 17/11/2025  MICHAEL  2.5   FCR-6166 Fix Lottable07 issue (ML02)      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispPreAL03]
@@ -128,6 +129,7 @@ BEGIN
 --ML01-S
    DECLARE @c_DmgBoxTester       NVARCHAR(10) = 'N'
          , @c_SKUGroup           NVARCHAR(10)
+         , @c_DMG_BOX            NVARCHAR(1)  = ''
 
    IF EXISTS ( SELECT TOP 1 1
       FROM ORDERS OH WITH (NOLOCK)
@@ -236,17 +238,18 @@ BEGIN
          ,ConMinShelfLife = CASE WHEN @c_DmgBoxTester='Y' AND ISNULL(SKU.Strategykey,'')<>'PPDFEFO' AND CL7.Code IS NOT NULL THEN ISNULL(CONS.MinShelflife,0) --ML01
                                  WHEN CL4.Code IS NULL AND CL5.Code IS NULL THEN ISNULL(CONS.MinShelflife,0) ELSE 0 END --NJOW01  --NJOW09
          ,SkuOGShelflife = CASE WHEN ISNUMERIC(SKU.Susr2) = 1 AND CL4.Code IS NULL AND CL5.Code IS NULL THEN CAST(SKU.Susr2 AS INT) ELSE 0 END --NJOW03  --NJOW09
-         ,SkuGroupShelfLife = CASE WHEN @c_DmgBoxTester='Y' AND CL.Code2='TESTER' AND OH.Userdefine04='DMG-BOX' AND ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT)  --ML01
+         ,SkuGroupShelfLife = CASE WHEN @c_DmgBoxTester='Y' AND CL.Code2='TESTER' AND ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT)  --ML01
                                    WHEN ISNUMERIC(CL3.Short) = 1 AND CL4.Code IS NULL AND CL5.Code IS NULL THEN CAST(CL3.Short AS INT)  --NJOW08  --NJOW09
                                    WHEN ISNUMERIC(CL.Short) = 1 AND CL4.Code IS NULL AND CL5.Code IS NULL THEN CAST(CL.Short AS INT) ELSE 0 END --NJOW06  --NJOW09
          ,SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 AND CL4.Code IS NULL AND CL5.Code IS NULL THEN CAST(CL2.Short AS INT) ELSE 0 END --NJOW06 --NJOW09
          ,SortMode = ISNULL(CL.Long,'')  --NJOW08
-         ,AllowHoldLoc = CASE WHEN (CL3.Code IS NOT NULL OR CL4.Code IS NOT NULL OR CL5.Code IS NOT NULL OR CL6.Code IS NOT NULL) THEN 'Y' ELSE 'N' END --NJOW08  --NJOW09 --NJOW10
+         ,AllowHoldLoc = CASE WHEN (CL3.Code IS NOT NULL OR CL4.Code IS NOT NULL OR CL5.Code IS NOT NULL OR CL6.Code IS NOT NULL OR CL7.Code IS NOT NULL) THEN 'Y' ELSE 'N' END --NJOW08  --NJOW09 --NJOW10 --ML01
          ,SortByHold = CASE WHEN CL5.Code IS NOT NULL THEN 'Y' ELSE 'N' END --NJOW09
          ,ISNULL(CL6.Code2,'') --NJOW10
          ,Userdefine04 = CASE WHEN CL4.Code IS NOT NULL THEN ISNULL(OH.Userdefine04,'') ELSE '' END --NJOW09
          ,ALLOBYSHSL = CASE WHEN CL5.Code IS NOT NULL THEN 'Y' ELSE 'N' END --NJOW11
          ,SKU.SKUGroup  --ML01
+         ,DMG_BOX = CASE WHEN CL7.Code IS NULL THEN 'N' ELSE 'Y' END  --ML01
    FROM ORDERS OH      WITH (NOLOCK)
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey  = OD.Orderkey)
    JOIN SKU        SKU WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey)
@@ -280,7 +283,7 @@ BEGIN
    OUTER APPLY (SELECT TOP 1 CL06.Code FROM CODELKUP CL06 (NOLOCK) WHERE OH.Storerkey = CL06.Storerkey AND CL06.Listname = 'PRESTALLOC' AND CL06.Code = 'ALLOBYSHSL' AND OH.Userdefine03 = CL06.Code2 AND ISNULL(OH.Userdefine03,'') <> '') CL5   --NJOW09               
    OUTER APPLY (SELECT TOP 1 CL07.Code2, CL07.Code FROM CODELKUP CL07 (NOLOCK) WHERE OH.Storerkey = CL07.Storerkey AND CL07.Listname = 'MDMALLOC' AND CL07.Code = 'BENKING' AND OH.C_Company = CL07.Long AND ISNULL(OH.C_Company,'') <> '') CL6   --NJOW10                  
    OUTER APPLY (SELECT TOP 1 Code FROM CODELKUP WITH(NOLOCK) WHERE Storerkey=OH.Storerkey AND Listname='PRESTALLOC' AND Code='*DMGBOX-TESTER' AND Code2=SKU.SKUGroup       --ML01
-                AND Notes=OH.Userdefine04 AND ISNULL(OH.Userdefine04,'')<>'' AND CONS.Secondary IN (UDF01,UDF02,UDF03,UDF04,UDF05) AND ISNULL(CONS.Secondary,'')<>'') CL7  --ML01
+                AND CONS.Secondary IN (UDF01,UDF02,UDF03,UDF04,UDF05) AND ISNULL(CONS.Secondary,'')<>'') CL7  --ML01
    WHERE OH.Orderkey = @c_Orderkey
    AND   OH.SOStatus <> 'CANC'
    AND   OH.Status < '9'
@@ -327,6 +330,7 @@ BEGIN
                               , @c_Userdefine04 --NJOW09
                               , @c_ALLOBYSHSL --NJOW11
                               , @c_SKUGroup --ML01
+                              , @c_DMG_BOX --ML01
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       IF @b_debug = 1
@@ -364,12 +368,7 @@ BEGIN
 
       IF @c_Lottable03 <> ''  --NJOW09
       BEGIN
-         --ML01-S
-         IF @c_DmgBoxTester='Y' AND @c_Lottable03 = 'DMG-BOX' AND @c_SKUGroup = 'TESTER'
-            SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 IN (@c_Lottable03,''OK'')'
-         ELSE
-         --ML01-E
-            SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 = @c_Lottable03'
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 = @c_Lottable03'
       END
       ELSE
       BEGIN
@@ -400,7 +399,12 @@ BEGIN
             ELSE
                 SET @c_Lottable03Inc = @c_Lottable03Inc + ',''OK-RTN'',''OK'''
          END
-         
+
+         --ML01-S
+         IF @c_DmgBoxTester='Y' AND @c_SKUGroup = 'TESTER' AND @c_DMG_BOX = 'Y'
+            SET @c_Lottable03Inc = '''DMG-BOX'',''DMG-OK'',''OK'''
+         --ML01-E
+
          IF @c_Lottable03Inc <> ''
             SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 IN(' + @c_Lottable03Inc + ') '
       END
@@ -463,10 +467,16 @@ BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable06 = @c_Lottable06'
       END
                                      
- 	    IF @c_Lottable07 <> ''
+ 	   IF @c_Lottable07 <> ''
       BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable07 = @c_Lottable07'
       END
+      --ML02-S
+      ELSE IF EXISTS(SELECT TOP 1 1 FROM CODELKUP(NOLOCK) WHERE ListName='ALLOBYLTBL' AND Storerkey=@c_Storerkey AND Code2<>'')
+      BEGIN
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable07 NOT IN (SELECT DISTINCT Code2 FROM CODELKUP(NOLOCK) WHERE ListName=''ALLOBYLTBL'' AND Storerkey=LLI.Storerkey)'
+      END
+      --ML02-E
 
       IF @c_Lottable08 <> ''
       BEGIN
@@ -779,6 +789,7 @@ BEGIN
                                  , @c_Userdefine04 --NJOW09           
                                  , @c_ALLOBYSHSL --NJOW11                                                                                                          
                                  , @c_SKUGroup --ML01
+                                 , @c_DMG_BOX --ML01
    END
 
    QUIT_SP:
@@ -826,5 +837,3 @@ END -- Procedure
 GO
 GRANT EXECUTE ON [dbo].[ispPreAL03] TO nSQL
 GO
-
-
