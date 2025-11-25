@@ -21,13 +21,14 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 18-Nov-2025 WLChooi  1.0   Initial Version                           */
+/* 25-Nov-2025 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
        @c_Wavekey          NVARCHAR(10)
      , @c_SKU              NVARCHAR(20)
      , @c_UCCNo            NVARCHAR(20)
+     , @c_Taskdetailkey    NVARCHAR(10)   = ''
      , @b_Success          INT            = 0   OUTPUT
      , @n_Err              INT            = 0   OUTPUT
      , @c_ErrMsg           NVARCHAR(225)  = ''  OUTPUT
@@ -90,7 +91,7 @@ BEGIN
          , @c_ToLoc                    NVARCHAR(10) = ''
          , @c_Facility                 NVARCHAR(5)  = ''
          , @c_AreaKey                  NVARCHAR(10) = ''
-         , @c_TaskdetailKey            NVARCHAR(10) = ''
+         , @c_NewTaskdetailKey         NVARCHAR(10) = ''
          , @c_NewPickdetailkey         NVARCHAR(10) = ''
          , @c_Message02                NVARCHAR(20) = ''
          , @c_TableName                NVARCHAR(30) = ''
@@ -105,6 +106,7 @@ BEGIN
          , @CUR_UCC                    CURSOR
          , @CUR_PICKDET_UPDATE         CURSOR
          , @n_splitqty                 INT = 0
+         , @n_SkipNumber               INT = 0
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -115,7 +117,6 @@ BEGIN
    SET @c_UOM = ''
    SET @c_StrategykeyParm = ''
    SET @c_SourceType = 'msp_ProcessShortPickReAlloc01'
-   SET @c_Message02 = 'SKIP1'
    SET @c_TableName = N'WSSOAlloUpd'
    
    IF (@n_Continue = 1 OR @n_Continue = 2)
@@ -184,11 +185,6 @@ BEGIN
       CREATE INDEX IX_PickDetail_WIP_WaveKey_UOM_Status ON #PickDetail_WIP (WaveKey, UOM, [Status]) INCLUDE (OrderKey, Storerkey, SKU, TaskDetailKey)
       CREATE INDEX IX_PickDetail_WIP_TaskUpdate ON #PickDetail_WIP (UOM, PickMethod, Lot, Loc, ID, DropID) INCLUDE (PickDetailKey)
 
-      CREATE TABLE #T_ALLORDER
-      (
-            Orderkey NVARCHAR(10) PRIMARY KEY
-      )
-
       CREATE TABLE #T_CaseID (
             Storerkey   NVARCHAR(15)
           , CaseID      NVARCHAR(20)
@@ -222,12 +218,34 @@ BEGIN
       JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
       WHERE W.WaveKey = @c_Wavekey
 
-      INSERT INTO #T_ALLORDER (Orderkey)
-      SELECT DISTINCT Orderkey
-      FROM WAVEDETAIL (NOLOCK)
-      WHERE Wavekey = @c_Wavekey
-
       SELECT @c_DefaultPackInfoFlag = dbo.fnc_GetRight('', @c_StorerKey, '', 'DEFAULT_PACKINFO')
+
+      IF ISNULL(@c_Taskdetailkey, '') <> ''
+      BEGIN
+         SELECT @c_Message02 = ISNULL(TD.Message02, '')
+         FROM TASKDETAIL TD WITH (NOLOCK)
+         WHERE TD.TaskDetailKey = @c_Taskdetailkey
+      END
+      ELSE
+      BEGIN
+         SELECT @c_Message02 = MAX(ISNULL(TD.Message02, ''))
+         FROM TASKDETAIL TD WITH (NOLOCK)
+         WHERE TD.WaveKey = @c_Wavekey
+         AND TD.Storerkey = @c_StorerKey
+         AND TD.SKU = @c_SKU
+         AND TD.Caseid = @c_UCCNo
+      END
+
+      IF ISNULL(@c_Message02, '') = ''
+      BEGIN
+         SET @c_Message02 = 'SKIP1'
+      END
+      ELSE
+      BEGIN
+         SET @n_SkipNumber = TRY_CAST(REPLACE(@c_Message02, 'SKIP', '') AS INT)
+         SET @n_SkipNumber = ISNULL(@n_SkipNumber, 0) + 1
+         SET @c_Message02 = 'SKIP' + CAST(@n_SkipNumber AS NVARCHAR(10))
+      END
    END
 
    --Get Storerconfig setup
@@ -258,13 +276,17 @@ BEGIN
    BEGIN
       IF NOT EXISTS ( SELECT 1
                       FROM dbo.PICKDETAIL PD WITH (NOLOCK)
-                      JOIN #T_ALLORDER T ON T.Orderkey = PD.OrderKey
                       WHERE PD.Storerkey = @c_StorerKey
                       AND PD.Sku = @c_SKU    
                       AND PD.DropID = @c_UCCNo    
                       AND PD.QtyMoved > 0
                       AND PD.Qty = 0
-                      AND PD.[Status] = '4' )    
+                      AND PD.[Status] = '4'
+                      AND EXISTS ( SELECT 1 
+                                   FROM WAVEDETAIL WD (NOLOCK)
+                                   WHERE WD.WaveKey = @c_Wavekey
+                                   AND WD.OrderKey = PD.OrderKey ) 
+                    )    
       BEGIN
          SELECT @n_Continue = 3
          SELECT @n_Err = 64503
@@ -279,11 +301,14 @@ BEGIN
       INSERT INTO #T_ShortOrders (OrderKey)
       SELECT PD.OrderKey
       FROM PICKDETAIL PD WITH (NOLOCK)
-      JOIN #T_ALLORDER T ON T.Orderkey = PD.OrderKey
       WHERE PD.Storerkey = @c_StorerKey    
       AND   PD.Sku = @c_SKU    
       AND   PD.DropID = @c_UCCNo    
       AND   PD.[Status] = '4'
+      AND   EXISTS ( SELECT 1 
+                     FROM WAVEDETAIL WD (NOLOCK)
+                     WHERE WD.WaveKey = @c_Wavekey
+                     AND WD.OrderKey = PD.OrderKey )
       GROUP BY PD.OrderKey
    END
 
@@ -1148,7 +1173,7 @@ BEGIN
                   EXECUTE dbo.nspg_Getkey
                      @KeyName       = 'TaskDetailKey'
                   ,  @fieldlength   =  10
-                  ,  @keystring     =  @c_TaskdetailKey OUTPUT
+                  ,  @keystring     =  @c_NewTaskdetailKey OUTPUT
                   ,  @b_Success     =  @b_success       OUTPUT
                   ,  @n_err         =  @n_err           OUTPUT
                   ,  @c_errmsg      =  @c_errmsg        OUTPUT
@@ -1163,7 +1188,7 @@ BEGIN
                      SET @c_RefTaskkey = ''
                      IF @c_ToLoc <> @c_FinalLoc AND @c_FinalLoc > ''
                      BEGIN
-                        SET @c_RefTaskkey = @c_TaskdetailKey
+                        SET @c_RefTaskkey = @c_NewTaskdetailKey
                      END
    
                      SET @n_PendingMoveIn = 0
@@ -1180,7 +1205,7 @@ BEGIN
                            , PickMethod, STATUS, WaveKey, Areakey, Message01, Message02
                            , SystemQty, PendingMoveIn, FinalLoc, GroupKey, RefTaskKey)  
                      VALUES (
-                       @c_TaskDetailKey
+                       @c_NewTaskdetailKey
                      , @c_TaskType
                      , @c_Storerkey
                      , @c_Sku
@@ -1246,7 +1271,7 @@ BEGIN
                   WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
                   BEGIN
                      UPDATE #PickDetail_WIP
-                     SET TaskDetailKey = @c_TaskDetailKey 
+                     SET TaskDetailKey = @c_NewTaskdetailKey 
                      WHERE PickDetailKey = @c_PickDetailKey
 
                      SET @n_err = @@ERROR
@@ -1325,9 +1350,6 @@ BEGIN
    IF OBJECT_ID('tempdb..#T_ORDERSKU ','u') IS NOT NULL 
       DROP TABLE #T_ORDERSKU
 
-   IF OBJECT_ID('tempdb..#T_ALLORDER ','u') IS NOT NULL 
-      DROP TABLE #T_ALLORDER
-      
    IF OBJECT_ID('tempdb..#T_CaseID ','u') IS NOT NULL 
       DROP TABLE #T_CaseID
 
