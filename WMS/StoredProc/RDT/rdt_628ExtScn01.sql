@@ -876,6 +876,7 @@ BEGIN
             SET @cOutField02 = '' -- ID
             SET @cOutField03 = '' -- SKU
             SET @cOutField04 = '' -- SKU
+            GOTO QUIT
          END
       END
       IF @nMOBRECStep = 99 AND @nMOBRECScn = 6679
@@ -1116,7 +1117,7 @@ BEGIN
                   IF @nTotalRec <> -1  -- -1 indicates no more record
                   BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                     GOTO Step_1_Fail
+                     GOTO Quit
                   END
                   ELSE
                   BEGIN
