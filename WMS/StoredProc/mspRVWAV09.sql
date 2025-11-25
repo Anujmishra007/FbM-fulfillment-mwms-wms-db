@@ -20,6 +20,7 @@ GO
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
+/* 2025-11-24  ABS060   1.0   UWP-44685 Vivo - Wave Reverse SP           */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE   PROCEDURE [dbo].[mspRVWAV09]
   @c_Wavekey      NVARCHAR(10)
