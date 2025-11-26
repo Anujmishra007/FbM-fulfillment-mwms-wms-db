@@ -605,6 +605,30 @@ BEGIN
       END  
       IF @nMOBRECStep = 5
       BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF @cInField01 = '9' -- Close Pallet
+            BEGIN
+               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
+               AND EXISTS (SELECT 1 FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = '0')
+               BEGIN
+                  SET @nAfterStep = 7
+                  SET @nAfterScn = 4026
+                  SET @cOutField01 = ''
+                  GOTO Quit
+               END
+                       
+               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE (ListKey = @cListKey AND Status = '5') OR (TaskDetailKey = @cTaskdetailKey AND Status = '3'))
+               BEGIN
+                  SET @nErrNo = 239666
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
+                  SET @nAfterStep = @nMOBRECStep
+                  SET @nAfterScn = @nMOBRECScn
+                  SET @cOutField01 = ''
+                  GOTO Quit
+               END
+            END
+         END
          IF @nInputKey = 0 -- ESC
          BEGIN
             IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND STATUS = 'S')

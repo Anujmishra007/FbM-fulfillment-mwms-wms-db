@@ -42,7 +42,7 @@ BEGIN
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskDetailKey
 
-         SET @cExtendedInfo1 = 'Case: ' + @cCaseID
+         SET @cExtendedInfo1 = CASE WHEN ISNULL(@cCaseID,'') <> '' THEN 'Case: ' + @cCaseID ELSE 'SKU' END
       END --st4
    END--1812
 
