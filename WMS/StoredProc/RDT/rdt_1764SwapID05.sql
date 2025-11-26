@@ -1,17 +1,18 @@
 
-/******************************************************************************/
-/* Store procedure: rdt_1764SwapID05                                          */
-/* Copyright      : Maersk WMS                                                */
-/* Customer       : BRF BRASIL FOODS SA                                       */
-/*                                                                            */
-/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                     */
-/*                                                                            */
-/* Date        Rev      Author      Purposes                                  */
-/* 2025-04-08  1.0.0    Jackc       FCR-3916 Create                           */
-/* 2025-08-06  1.0.1    NickT       UWP-38905 Reallocate pick task            */
-/* 2025-08-13  1.0.2    Jackc       UWP-38905 Improve pkd retriving logic,    */
-/*                                  2.Bypass QtyAllocated when lock rfputaway */
-/******************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_1764SwapID05                                             */
+/* Copyright      : Maersk WMS                                                   */
+/* Customer       : BRF BRASIL FOODS SA                                          */
+/*                                                                               */
+/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                        */
+/*                                                                               */
+/* Date        Rev      Author      Purposes                                     */
+/* 2025-04-08  1.0.0    Jackc       FCR-3916 Create                              */
+/* 2025-08-06  1.0.1    NickT       UWP-38905 Reallocate pick task               */
+/* 2025-08-13  1.0.2    Jackc       UWP-38905 Improve pkd retriving logic,       */
+/*                                  2.Bypass QtyAllocated when lock rfputaway    */
+/* 2025-11-15  1.0.3    Jackc       UWP-38905 unallocate task id via ID, toLoc   */
+/*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764SwapID05
    @nMobile           INT,
@@ -846,7 +847,9 @@ BEGIN
       @nCurrRPFPendingMoveIn = QTY, 
       @cCurrRPFSuggLOC = SuggestedLOC
    FROM RFPutaway WITH (NOLOCK) 
-   WHERE TaskDetailKey = @cTaskDetailKey
+   --WHERE TaskDetailKey = @cTaskDetailKey --V1.0.2
+   WHERE FromID = @cTaskID
+      AND FromLoc = @cTaskLoc
 
    -- Get other RFPutaway info
    SET @nOtherRPFRowRef = 0
@@ -920,12 +923,12 @@ BEGIN
       SET @nErrNo = 0
       EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK' 
          ,''        --@cLOC      
-         ,''        --@cID       
-         ,''        --@cSuggLOC 
+         ,@cTaskID  --@cID             --v1.0.2
+         ,@cCurrRPFSuggLOC --@cSuggLOC --V1.0.2
          ,''        --@cStorerKey
          ,@nErrNo  OUTPUT
          ,@cErrMsg OUTPUT
-         ,@cTaskDetailKey = @cTaskDetailKey
+         --,@cTaskDetailKey = @cTaskDetailKey --V1.0.2
       IF @nErrNo <> 0
       BEGIN
          SET @nErrNo = 238179
