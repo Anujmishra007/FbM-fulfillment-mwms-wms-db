@@ -74,15 +74,17 @@ BEGIN
       @nCurrentScn            INT,
       @cTaskDetailKey         NVARCHAR(10) = '',
       @cPendingTaskDetailKey    NVARCHAR(10) = '',
+      @nStep_SKU              INT         = 4,
+      @nScn_SKU               INT         = 2683,
       @nStep_NextTask         INT         = 5,
       @nScn_NextTask          INT         = 2684,
-      @nStep_ToLOC            INT         = 6,  
+      @nStep_ToLOC            INT         = 6,
       @nScn_ToLOC             INT         = 2685,
-      @nStep_Exit             INT         = 7,  
+      @nStep_Exit             INT         = 7,
       @nScn_Exit              INT         = 2686,
-      @nStep_ShortPick        INT         = 8,  
+      @nStep_ShortPick        INT         = 8,
       @nScn_ShortPick         INT         = 2687,
-      @nStep_99               INT         = 99,  
+      @nStep_99               INT         = 99,
       @nScn_NewExit           INT         = 6527,
       @nStep_Reason           INT         = 9,  
 
@@ -119,10 +121,14 @@ BEGIN
       @cCaseID                NVARCHAR(20),
       @cSKU                   NVARCHAR(20),
       @nQTY                   INT,
+      @nLoopIndex             INT,
       @cFromLoc               NVARCHAR(10),
       @cFromID                NVARCHAR(18),
       @cWaveKey               NVARCHAR(10),
+      @cReasonKey             NVARCHAR(10),
       @nTranCount             INT,
+      @cUCCNo                 NVARCHAR(20),
+      @cPickDetailKey         NVARCHAR(18),
 
       @cMessage01              NVARCHAR(125),
       @cMessage02              NVARCHAR(125),
@@ -148,12 +154,12 @@ BEGIN
       @nCurrentStep        = Step,
       @nCurrentScn         = Scn,
       @cUserName           = UserName,
-      @cListKey            = V_String7
+      @cListKey            = V_String7,
+      @cUCCNo              = I_Field08
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
    SELECT @nTranCount = @@TRANCOUNT
-
 
    IF @nFunc = 1764 -- TM Replen
    BEGIN
@@ -255,10 +261,8 @@ BEGIN
             WHERE StorerKey = @cStorerKey
                AND (ListKey = @cListKey OR TaskDetailKey = @cPendingTaskDetailKey)
 
-            IF @nTranCount = 0
-               BEGIN TRAN
-            ELSE
-               SAVE TRAN rdt_1764ExtScn01
+            BEGIN TRAN
+            SAVE TRAN rdt_1764ExtScn01
 
             BEGIN TRY
                --Mark Pending task as PENDING
@@ -298,7 +302,7 @@ BEGIN
                GOTO RollBack_rdt_1764ExtScn01
             END CATCH
 
-            COMMIT TRAN  -- Only commit change made here
+            COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
 
             SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cSuggFromLOC
             IF ISNULL( @cLocDescr, '') = ''
@@ -343,12 +347,104 @@ BEGIN
             SET @cUDF13 = @cPendingTaskDetailKey
          END
       END
-      ELSE IF @nCurrentStep = @nStep_Reason -- ReasonCOde
+      ELSE IF @nCurrentStep = @nStep_SKU -- SKU/UCC
       BEGIN
-         IF @nInputKey = 1 -- ENTER
+         SELECT 
+            @cTaskDetailKey = V_TaskDetailKey
+         FROM RDT.RDTMOBREC WITH(NOLOCK)
+         WHERE Mobile = @nMobile
+         
+         -- If no enough qty for full UCC, mark the task as BADUCC
+         IF NOT EXISTS(
+            SELECT 1 
+            FROM dbo.LOTXLOCXID LLI WITH(NOLOCK)
+            INNER JOIN dbo.UCC WITH(NOLOCK)
+               ON LLI.StorerKey = UCC.StorerKey
+                  AND LLI.Loc = UCC.Loc
+                  AND LLI.ID = UCC.ID
+                  AND LLI.LOT = UCC.LOT
+                  AND LLI.SKU = UCC.SKU
+            INNER JOIN dbo.TaskDetail TD WITH(NOLOCK)
+               ON TD.StorerKey = UCC.StorerKey
+                  AND TD.CaseID = UCC.UCCNo
+                  AND TD.SKU = UCC.SKU
+                  AND TD.LOT = UCC.LOT
+            WHERE UCC.StorerKey = @cStorerKey
+               AND UCC.UCCNo = @cUCCNo
+               AND LLI.Qty - LLI.QtyPicked >= TD.Qty 
+               AND TD.TaskDetailKey = @cTaskDetailKey
+               )
          BEGIN
-            -- Reset QTY to 0 if SKIP/SHORT Task
-            SET @cUDF01 = '0'
+            INSERT INTO @tPickDetail (PickDetailKey)
+            SELECT PickDetailKey
+            FROM dbo.PickDetail WITH (NOLOCK)
+            WHERE TaskDetailKey = @cTaskDetailKey
+
+            BEGIN TRAN
+            SAVE TRAN rdt_1764ExtScn01
+
+            SET @nLoopIndex = -1
+
+            WHILE 1 = 1
+            BEGIN
+               SELECT TOP 1 
+                  @nLoopIndex = RowIndex,
+                  @cPickDetailKey = PickDetailKey
+               FROM @tPickDetail
+               WHERE RowIndex > @nLoopIndex
+               ORDER BY RowIndex
+
+               IF @@ROWCOUNT = 0
+                  BREAK
+
+               BEGIN TRY
+                  UPDATE dbo.PickDetail WITH (ROWLOCK)
+                  SET
+                     Status =  '4',
+                     QtyMoved = Qty,
+                     Qty = 0,
+                     EditWho  = SUSER_SNAME(), 
+                     EditDate = GETDATE(),
+                     Trafficcop = NULL
+                  WHERE PickDetailKey = @cPickDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 234859
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
+                  GOTO RollBack_rdt_1764ExtScn01
+               END CATCH
+
+               BEGIN TRY
+                  UPDATE dbo.TaskDetail WITH(ROWLOCK)
+                  SET ReasonKey = 'BADUCC',
+                     Status = '9',
+                     EditWho  = SUSER_SNAME(), 
+                     EditDate = GETDATE(),
+                     TrafficCop = NULL
+                  WHERE TaskDetailKey = @cTaskDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 234860
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail Failed
+                  GOTO RollBack_rdt_1764ExtScn01
+               END CATCH
+            END
+
+            COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
+
+            SET @nErrNo = 0
+            SET @cErrMsg = ''
+
+            EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+               @nErrNo = @nErrNo,
+               @cErrMsg = @cErrMsg,
+               @cLine01 = 'BAD UCC',
+               @cLine02 = 'Will reallocate.',
+               @nDisplayMsg = 0
+
+            SET @nCurrentStep = @nStep_ShortPick
+            SET @nCurrentScn = @nScn_ShortPick
+            GOTO REALLOCATION
          END
       END
       ELSE IF @nCurrentStep = @nStep_ShortPick -- Short Pick
@@ -364,6 +460,7 @@ BEGIN
                FROM RDT.RDTMOBREC WITH(NOLOCK)
                WHERE Mobile = @nMobile
 
+               REALLOCATION:
                SELECT 
                   @cTaskDetailMessage02 = Message02,
                   @cCaseID = CaseID,
@@ -371,26 +468,37 @@ BEGIN
                   @nQTY = QTY,
                   @cFromLoc = FromLOC,
                   @cFromID = FromID,
-                  @cWaveKey = WaveKey
+                  @cWaveKey = WaveKey,
+                  @cReasonKey = ReasonKey
                FROM dbo.TaskDetail WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND TaskDetailKey = @cTaskDetailKey
 
-               IF @cTaskDetailMessage02  = 'SKIP1'
+               DECLARE 
+                  @cRealloNumberofRetry      NVARCHAR(5),
+                  @cMaxRealloNumberofRetry   NVARCHAR(5)
+
+               SET @cRealloNumberofRetry = rdt.RDTGetConfig( @nFunc, 'RealloNumberofRetry', @cStorerKey)
+               IF @cRealloNumberofRetry = '0'
+                  SET @cRealloNumberofRetry = '99'
+               
+               SET @cMaxRealloNumberofRetry = 'SKIP' + @cRealloNumberofRetry
+
+               IF @cTaskDetailMessage02 = @cMaxRealloNumberofRetry
                   GOTO Quit
 
                SET @cDefaultSkipReason = rdt.rdtGetConfig( @nFunc, 'DefaultSkipReason', @cStorerKey)
 
-               IF @nTranCount = 0
-                  BEGIN TRAN
-               ELSE
-                  SAVE TRAN rdt_1764ExtScn01
+               SET @cDefaultSkipReason = IIF (@cReasonKey = 'BADUCC', @cReasonKey, @cDefaultSkipReason)
+
+               BEGIN TRAN
+               SAVE TRAN rdt_1764ExtScn01
 
                -- Update TaskDetail status to 9 - Short Picked
                BEGIN TRY
                   UPDATE dbo.TaskDetail WITH (ROWLOCK)
                   SET 
-                     ReasonKey = @cDefaultSkipReason,
+                     ReasonKey = IIF( ReasonKey = 'BADUCC', ReasonKey, @cDefaultSkipReason),
                      EditDate = GETDATE(),
                      EditWho  = SUSER_SNAME(),
                      TrafficCop = NULL
@@ -398,7 +506,7 @@ BEGIN
                      AND TaskDetailKey = @cTaskDetailKey
                END TRY
                BEGIN CATCH
-                  SET @nErrNo = 234854
+                  SET @nErrNo = 234861
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update Task Failed
                   GOTO RollBack_rdt_1764ExtScn01
                END CATCH
@@ -473,7 +581,6 @@ BEGIN
                IF @nErrNo <> 0
                   GOTO RollBack_rdt_1764ExtScn01
 
-
                DECLARE 
                   @cAPP_DB_Name              NVARCHAR(20),
                   @cDataStream               VARCHAR(10),
@@ -510,6 +617,7 @@ BEGIN
                                     + ' @c_Wavekey = ''' + @cWaveKey + ''''
                                     + ', @c_SKU = ''' + @cSKU + ''''
                                     + ', @c_UCCNo = ''' + @cCaseID + ''''
+                                    + ', @c_TaskDetailKey = ''' + @cTaskDetailKey + ''''
 
                -- Submit task to QCommander
                BEGIN TRY
@@ -541,12 +649,20 @@ BEGIN
                IF @nErrNo <> 0
                   GOTO RollBack_rdt_1764ExtScn01
 
-               COMMIT TRAN -- Only commit change made here
+               COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
 
                SET @nAfterScn = @nScn_NextTask
                SET @nAfterStep = @nStep_NextTask
                SET @cUDF01 = @cDefaultSkipReason
             END
+         END
+      END
+      ELSE IF @nCurrentStep = @nStep_Reason -- ReasonCOde
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            -- Reset QTY to 0 if SKIP/SHORT Task
+            SET @cUDF01 = '0'
          END
       END
       ELSE IF @nCurrentStep = @nStep_ToLOC -- ToLoc
