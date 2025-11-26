@@ -4,20 +4,15 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /***************************************************************************/
-/* Store procedure: rdt_898ExtVal05                                        */
+/* Store procedure: rdt_898ExtVal13                                        */
 /* Copyright      : Maersk WMS                                             */
 /* Customer       : Granite                                                */
 /*                                                                         */
 /* Date       Rev    Author     Purposes                                   */
-/* 2024-10-01 1.0    NLT013     FCR-926 Created                            */
-/* 2025-02-13 1.1.0  ASK138     FCR-2724                                   */
-/* 2025-05-19 1.2.0  Dennis     FCR-4531                                   */
-/* 2025-05-31 1.3.0  NickT      UWP-35355 Add additional validation        */
-/* 2025-07-23 1.4.0  Dennis     FCR-6157                                   */
-/* 2025-08-14 1.5.0  Dennis     FCR-6157 Multi PO only when Return         */
+/* 2025-11-21 1.1.0  Dennis     FCR-8723 Sku validation                    */
 /***************************************************************************/
 
-CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal05]
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal13]
     @nMobile     INT
    ,@nFunc       INT
    ,@cLangCode   NVARCHAR(  3)
@@ -170,6 +165,39 @@ BEGIN
             END
          END
       END
+      ELSE IF @nStep = 8 -- SKU
+      BEGIN 
+         IF @nInputKey = 1
+         BEGIN
+            IF EXISTS(SELECT 1 FROM RECEIPT WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey AND DocType ='R')
+            BEGIN
+               DECLARE @cStyle NVARCHAR(20)
+
+               SELECT @cStyle = STYLE
+               FROM dbo.SKU SKU WITH(NOLOCK) 
+               WHERE SKU.SKU = @cSKU 
+                  AND SKU.StorerKey = @cStorerKey
+
+               IF EXISTS(
+                  SELECT 1 FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK) 
+                  WHERE RD.ReceiptKey = @cReceiptKey 
+                     AND RD.StorerKey = @cStorerKey
+               ) AND NOT EXISTS(
+                  SELECT 1 FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK) 
+                  JOIN SKU SKU WITH(NOLOCK) 
+                     ON RD.SKU = SKU.SKU AND RD.StorerKey = SKU.StorerKey
+                  WHERE RD.ReceiptKey = @cReceiptKey 
+                     AND RD.StorerKey = @cStorerKey
+                     AND SKU.STYLE = @cStyle
+               )
+               BEGIN
+                  SET @nErrNo = 225309 
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKUStyleDoesNotMatch
+                  GOTO Quit
+               END
+            END
+         END
+      END
    END
 
 Quit:
@@ -181,5 +209,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_898ExtVal05 TO NSQL
+GRANT EXECUTE ON rdt.rdt_898ExtVal13 TO NSQL
 GO
