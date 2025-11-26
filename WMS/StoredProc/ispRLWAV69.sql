@@ -41,6 +41,8 @@ GO
 /*                            FromID = ToID for RP1 task. Hence need to  */
 /*                            maintain FromID to ToID for RPF task       */
 /* 10-Oct-2025  SSA02   2.0   UWP-42248 -Enhanced session management     */
+/* 20-Nov-2025  AndyWu01 2.1  FCR-9066 - BRF BRASIL FOODS SA - Change the*/
+/*                                       grouping logic for FCP tasks    */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -139,6 +141,11 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
         
          , @CUR_UPDPICK                CURSOR                                       --(Wan02) 
          , @CUR_VNAOUT_RPF             CURSOR                                       --(Wan03) 
+
+   --AndyWu01 Start
+   DECLARE @c_FCPGroupFieldList          NVARCHAR(2000) = ''  --field to determine the grouping of conso pallet/carton. e.g. ORDERS.ECOM_SINGLE_Flag,ORDERS.Userdefine01
+   DECLARE @c_FCPGroupFlag               NVARCHAR(2) = 'N' 
+   --AndyWu01 END
 
    SET @c_SourceType = 'ispRLWAV69'
             
@@ -999,9 +1006,52 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
    --FCP Task for UOM 2/3
    IF (@n_continue = 1 OR @n_continue = 2)                                          --(Wan03)
    BEGIN
+      --AndyWu01 Start 
+      SELECT @c_FCPGroupFieldList = dbo.fnc_GetParamValueFromString('@c_FCPGroupFieldList'
+                                                          , @c_RLWav_Opt5, @c_FCPGroupFieldList) 
+      SET @c_FCPGroupFlag = 'Y'
+
+      IF ISNULL(@c_FCPGroupFieldList,'') = ''
+      BEGIN
+         SET @c_FCPGroupFieldList = ' ORDERS.Orderkey '    
+         SET @c_FCPGroupFlag = 'N'
+      END
+
+      IF @c_FCPGroupFieldList > ''
+      BEGIN
+         ;WITH SplitValues AS (
+            SELECT 
+               [Value] = LTRIM([Value]),                                            --2025-07-29
+               ROW_NUMBER() OVER (ORDER BY (SELECT '')) AS RowNum
+            FROM STRING_SPLIT(@c_FCPGroupFieldList, ',')
+         )
+         SELECT @c_SQLBatch=', Batch1 = ' + MAX(CASE WHEN RowNum = 1 THEN [Value] ELSE '''''' END) 
+                           +', Batch2 = ' + MAX(CASE WHEN RowNum = 2 THEN [Value] ELSE '''''' END) 
+                           +', Batch3 = ' + MAX(CASE WHEN RowNum = 3 THEN [Value] ELSE '''''' END) 
+                           +', Batch4 = ' + MAX(CASE WHEN RowNum = 4 THEN [Value] ELSE '''''' END) 
+                           +', Batch5 = ' + MAX(CASE WHEN RowNum = 5 THEN [Value] ELSE '''''' END) 
+               ,@c_SQLCond = MAX(CASE WHEN RowNum = 1 THEN ' AND ' + [Value]  + '= @c_Batch1' ELSE '' END)
+                           + MAX(CASE WHEN RowNum = 2 THEN ' AND ' + [Value]  + '= @c_Batch2' ELSE '' END)
+                           + MAX(CASE WHEN RowNum = 3 THEN ' AND ' + [Value]  + '= @c_Batch3' ELSE '' END)
+                           + MAX(CASE WHEN RowNum = 4 THEN ' AND ' + [Value]  + '= @c_Batch4' ELSE '' END)
+                           + MAX(CASE WHEN RowNum = 5 THEN ' AND ' + [Value]  + '= @c_Batch5' ELSE '' END)  
+               ,@c_SQLGroupBy = MAX(CASE WHEN RowNum = 1 THEN ' , ' + [Value] ELSE '' END)
+                              + MAX(CASE WHEN RowNum = 2 THEN ' , ' + [Value] ELSE '' END)
+                              + MAX(CASE WHEN RowNum = 3 THEN ' , ' + [Value] ELSE '' END)
+                              + MAX(CASE WHEN RowNum = 4 THEN ' , ' + [Value] ELSE '' END)
+                              + MAX(CASE WHEN RowNum = 5 THEN ' , ' + [Value] ELSE '' END)                
+         FROM SplitValues;
+      END
+
+      IF CURSOR_STATUS('global','CUR_PICK_FCP') >= 0
+      BEGIN
+         CLOSE CUR_PICK_FCP
+         DEALLOCATE CUR_PICK_FCP
+      END
+
       IF @c_AllowOverAllocations = '1' OR @b_FPP = 0                                --(Wan05)
       BEGIN
-         DECLARE CUR_PICK_FCP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+         /*DECLARE CUR_PICK_FCP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
           SELECT PICKDETAIL.Storerkey 
                , PICKDETAIL.Sku 
                , PICKDETAIL.Lot
@@ -1031,12 +1081,52 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                , PICKDETAIL.Loc 
                , PICKDETAIL.ID 
                , ORDERS.LoadKey
-               , ORDERS.OrderKey
+               , ORDERS.OrderKey */
+
+         SET @c_SQL  = N' DECLARE CUR_PICK_FCP CURSOR FAST_FORWARD READ_ONLY FOR '
+                      + ' SELECT PICKDETAIL.Storerkey '
+                      + '      , PICKDETAIL.Sku '
+                      + '      , PICKDETAIL.Lot '
+                      + '      , PICKDETAIL.Loc '
+                      + '      , PICKDETAIL.ID '
+                      + '      , MAX(PICKDETAIL.UOM) '
+                      + '      , SUM(PICKDETAIL.UOMQty) AS UOMQty '
+                      + '      , SUM(PICKDETAIL.Qty) AS Qty '
+                      + '      , ORDERS.LoadKey '
+                      + '      , ORDERS.OrderKey '
+                      + '      , ReplFromLoc = '''' '                                                   
+                      + '      , ReplFromID  = '''' '                                                   
+                      + '      , ReplTaskKey = '''' '                                                                       
+                      + ' FROM WAVEDETAIL (NOLOCK) '
+                      + ' JOIN WAVE (NOLOCK) ON WAVEDETAIL.WaveKey = WAVE.WaveKey '
+                      + ' JOIN ORDERS (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey '
+                      + ' JOIN #PickDetail_WIP PICKDETAIL ON ORDERS.OrderKey = PICKDETAIL.OrderKey '
+                      + ' JOIN LOC (NOLOCK) ON LOC.LOC = PICKDETAIL.LOC '
+                      + ' WHERE WAVEDETAIL.WaveKey = @c_Wavekey  '
+                      + ' AND PICKDETAIL.[Status] = ''0''  '
+                      + ' AND PICKDETAIL.WIP_Refno = @c_SourceType '
+                      + ' AND PICKDETAIL.UOM IN (''2'',''3'',''6'')  '                                                                      
+                      + ' AND LOC.LocationType = ''VNA'' '
+                      + ' GROUP BY PICKDETAIL.Storerkey  '
+                      + '      , PICKDETAIL.Sku '
+                      + '      , PICKDETAIL.Lot '
+                      + '      , PICKDETAIL.Loc '
+                      + '      , PICKDETAIL.ID '
+                      + '      , ORDERS.LoadKey '
+                      + @c_SQLGroupBy +';'
+
+         SET @c_SQLParms = N'@c_Wavekey      NVARCHAR(10)'
+                         + ',@c_SourceType   NVARCHAR(30)'
+	     
+         EXEC sp_ExecuteSQL @c_SQL
+                           ,@c_SQLParms
+                           ,@c_Wavekey
+                           ,@c_SourceType
       END
       ELSE
       BEGIN
          --ML11 OR No Lot07 ='' with Replenishment
-         DECLARE CUR_PICK_FCP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+         /*DECLARE CUR_PICK_FCP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
          SELECT PICKDETAIL.Storerkey 
             , PICKDETAIL.Sku 
             , PICKDETAIL.Lot
@@ -1075,8 +1165,57 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             , ORDERS.OrderKey
             , TaskDetail.FromLoc                                                    --(Wan03)
             , TaskDetail.FromID                                                     --(Wan03)
-            , TaskDetail.TaskDetailKey                                              --(Wan04)            
+            , TaskDetail.TaskDetailKey                                              --(Wan04)         */   
+         SET @c_SQL  = N' DECLARE CUR_PICK_FCP CURSOR FAST_FORWARD READ_ONLY FOR '
+		              + '  SELECT PICKDETAIL.Storerkey '
+                      + '       , PICKDETAIL.Sku '
+                      + '       , PICKDETAIL.Lot '
+                      + '       , TaskDetail.FinalLoc '
+                      + '       , TaskDetail.FinalID '
+                      + '       , MAX(PICKDETAIL.UOM) AS UOM '
+                      + '       , SUM(PICKDETAIL.UOMQty) AS UOMQty '
+                      + '       , SUM(PICKDETAIL.Qty) AS Qty '
+                      + '       , ORDERS.LoadKey '
+                      + '       , ORDERS.OrderKey '
+                      + '       , ReplFromLoc = TaskDetail.FromLoc '                              
+                      + '       , ReplFromID  = TaskDetail.FromID  '                                     
+                      + '       , ReplTaskKey = TaskDetail.TaskDetailKey '                                       
+                      + '  FROM WAVEDETAIL (NOLOCK) '
+                      + '  JOIN WAVE (NOLOCK) ON WAVEDETAIL.WaveKey = WAVE.WaveKey '
+                      + '  JOIN ORDERS (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey '
+                      + '  JOIN #PickDetail_WIP PICKDETAIL ON ORDERS.OrderKey = PICKDETAIL.OrderKey '
+                      + '  JOIN LOC (NOLOCK) ON LOC.LOC = PICKDETAIL.LOC '
+                      + '  JOIN TaskDetail (NOLOCK) ON  TaskDetail.Storerkey = PICKDETAIL.Storerkey '
+                      + '                           AND TaskDetail.TaskType IN ( ''VNAOUT'', ''RPF'' )   '
+                      + '                           AND TaskDetail.FromLoc  = PICKDETAIL.Loc '
+                      + '                           AND TaskDetail.FromID   = PICKDETAIL.ID '
+                      + '                           AND TaskDetail.[Status] NOT IN (''9'',''X'') '
+                      + '                           AND TaskDetail.Message03 = ''RPF'' '
+                      + '  WHERE WAVEDETAIL.WaveKey = @c_Wavekey  '
+                      + '  AND PICKDETAIL.[Status] = ''0''  '
+                      + '  AND PICKDETAIL.WIP_Refno = @c_SourceType '
+                      + '  AND PICKDETAIL.UOM IN (''2'',''3'',''6'') '                                     
+                      + '  AND LOC.LocationType IN (''VNA'',''BULK'') '                                   
+                      + '  GROUP BY PICKDETAIL.Storerkey '
+                      + '     , PICKDETAIL.Sku '
+                      + '     , PICKDETAIL.Lot '
+                      + '     , TaskDetail.FinalLoc '
+                      + '     , TaskDetail.FinalID '
+                      + '     , ORDERS.LoadKey '
+                      + '     , TaskDetail.FromLoc '                                               
+                      + '     , TaskDetail.FromID  '                                                
+                      + '     , TaskDetail.TaskDetailKey '   
+                      + @c_SQLGroupBy +';'					 
+
+         SET @c_SQLParms = N'@c_Wavekey      NVARCHAR(10)'
+                         + ',@c_SourceType   NVARCHAR(30)'
+	     
+         EXEC sp_ExecuteSQL @c_SQL
+                           ,@c_SQLParms
+                           ,@c_Wavekey
+                           ,@c_SourceType
       END
+      --AndyWu01 END
 
       OPEN CUR_PICK_FCP
 
@@ -1262,6 +1401,15 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                       ELSE @c_GroupKey
                                       END
                   WHERE TaskDetailKey = @c_Taskdetailkey
+
+                  --AndyWu01 Start
+                  IF @c_FCPGroupFlag = 'Y'
+                  BEGIN
+                     UPDATE TASKDETAIL WITH (ROWLOCK)
+                     SET Groupkey = @c_Orderkey
+                     WHERE TaskDetailKey = @c_Taskdetailkey
+                  END
+                  --AndyWu01 End
 
                   IF @@ERROR <> 0
                   BEGIN
