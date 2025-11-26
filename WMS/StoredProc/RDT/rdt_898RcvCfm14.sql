@@ -2578,7 +2578,18 @@ BEGIN
 END  
 
 BEGIN TRY
+   DECLARE @cNewExternLineNo NVARCHAR(20)
+
+   SET @cNewExternLineNo = ''
+   SELECT TOP 1 @cNewExternLineNo =
+      RIGHT( '00000' + CAST( CAST( IsNULL( MAX( ExternLineNo), 0) AS INT) + 1 AS NVARCHAR( 5)), 5),
+      @cExternReceiptKey = MAX( ExternReceiptKey)
+   FROM dbo.ReceiptDetail (NOLOCK)
+   WHERE ReceiptKey = @cReceiptKey
+
    UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET  
+               ExternReceiptKey = @cExternReceiptKey,
+               ExternLineNo = @cNewExternLineNo,
                UserDefine01 = CASE WHEN @cDocType = 'R' THEN @cUCC ELSE RD.UserDefine01 END,
                UserDefine02 = @cUCC
          FROM dbo.ReceiptDetail RD  
