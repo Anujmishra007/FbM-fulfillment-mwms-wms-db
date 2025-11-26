@@ -61,15 +61,12 @@ GO
 /* 2025-07-10 0.0  JackC      !!!Cutover!!! Use V0 repo for work              */
 /* 2025-08-04 4.4.0 NickT     UWP-37578 Extend length of  @cOption            */
 /* 2025-08-08 4.5.0 NickT     UWP-39061 SuggestToLoc is reset by mistake      */
-/* 2025-06-16 4.6.0 Dennis    FCR-3959 Extended Update on Step 7              */
-/* 2025-08-20 4.6.1 Dennis    FCR-3959 New Feature                            */
-/* 2025-08-10 4.7.0 NickT     FCR-7730 Support OverwriteToLOC                 */
-/* 2025-09-09 4.8.0 NickT     UWP-42269 Continue pending task                 */
-/* 2025-10-10 4.9.0 NickT     FCR-7928 Reallocate for short task              */
-/* 2025-11-08 4.10.0 NickT    UWP-43838 If move start, no need proceed again, */
+/* 2025-08-10 4.6.0 NickT     FCR-7730 Support OverwriteToLOC                 */
+/* 2025-10-10 4.7.0 NickT     FCR-7928 Reallocate for short task              */
+/* 2025-11-08 4.8.0 NickT     UWP-43838 If move start, no need proceed again, */
 /*                            Special fix for USA levis, customized logic     */
-/* 2025-11-13 4.11.0 NLT013   UWP-44117 Fix issue: Cannot drop pending pallet */
-/* 2025-11-14 4.12.0 NLT013   UWP-43847 Fix issue: PickDetail status is not updated*/
+/* 2025-11-13 4.9.0 NickT     UWP-44117 Fix issue: Cannot drop pending pallet */
+/* 2025-11-14 4.10.0 NickT    UWP-43847 Fix issue: PickDetail status is not updated*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -382,7 +379,7 @@ BEGIN
    IF @nStep = 7 GOTO Step_Exit        -- Scn = 2686 Pallet is close. Next task / Exit
    IF @nStep = 8 GOTO Step_ShortPick   -- Scn = 2687 Short pick / Close pallet
    IF @nStep = 9 GOTO Step_Reason      -- Scn = 2109 Reason code
-   IF @nStep = 99  GOTO Step_99        -- Scn = Extended Screen
+   IF @nStep = 99 GOTO Step_99         -- Step 99 
 END
 RETURN -- Do nothing if incorrect step
 
@@ -907,13 +904,6 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
-   IF @cExtScnSP <> ''
-   BEGIN
-       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-       BEGIN
-           GOTO Step_99
-      END
-   END
    GOTO Quit
 
    Step_DropID_Fail:
@@ -1187,15 +1177,6 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
-
-   IF @cExtScnSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-      BEGIN
-         GOTO Step_99
-      END
-   END
-
    GOTO Quit
 
    Step_FromLOC_Fail:
@@ -2189,6 +2170,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+   
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_SKU_Fail:
@@ -2624,14 +2614,6 @@ BEGIN
             @nMobile, @nFunc, @cLangCode, @nStep_NextTask, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
 
          SET @cOutField10 = @cExtendedInfo1
-      END
-   END
-
-   IF @cExtScnSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-      BEGIN
-         GOTO Step_99
       END
    END
 
@@ -3160,30 +3142,6 @@ BEGIN
        @cFacility   = @cFacility,
        @cStorerKey  = @cStorerKey
 
-      -- Extended update
-      IF @cExtendedUpdateSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
-         BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
-            SET @cSQLParam =
-               '@nMobile         INT,        ' +
-               '@nFunc           INT,        ' +
-               '@cLangCode       NVARCHAR( 3),   ' +
-               '@nStep           INT,        ' +
-               '@cTaskdetailKey  NVARCHAR( 10),  ' +
-               '@nErrNo          INT OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT'
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-            IF @nErrNo <> 0
-               GOTO Quit
-         END
-      END
-
       -- Enable field
       SET @cFieldAttr14 = '' -- @nPQTY
       SET @cFieldAttr15 = '' -- @nMQTY
@@ -3358,13 +3316,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
    IF @cExtScnSP <> ''
    BEGIN
-       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-       BEGIN
-           GOTO Step_99
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
       END
    END
+
    GOTO Quit
 
    Step_ShortPick_Fail:
@@ -3793,7 +3753,7 @@ BEGIN
                         SET @cReasonCode = @cUDF01
                   END
                END
-
+               
                IF @nPreviousStep = @nStep_Reason
                BEGIN
                   IF @nInputKey = 1 -- ENTER
@@ -3825,11 +3785,6 @@ BEGIN
                   GOTO Step_Exit
                END
             END  
-         END
-         ELSE IF @cExtScnSP = 'rdt_1764ExtScn02'
-         BEGIN
-            IF @nStep = @nStep_FromLOC
-               SET @cDropID = @cUDF01
          END
       END
    END

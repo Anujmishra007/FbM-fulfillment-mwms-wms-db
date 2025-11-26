@@ -201,6 +201,16 @@ BEGIN
          IF @bDebugFlag = 1
             SELECT 'Full UCC short'
 
+         DECLARE 
+            @cRealloNumberofRetry      NVARCHAR(5),
+            @cMaxRealloNumberofRetry   NVARCHAR(5)
+
+         SET @cRealloNumberofRetry = rdt.RDTGetConfig( @nFunc, 'RealloNumberofRetry', @cStorerKey)
+         IF @cRealloNumberofRetry = '0'
+            SET @cRealloNumberofRetry = '99'
+         
+         SET @cMaxRealloNumberofRetry = 'SKIP' + @cRealloNumberofRetry
+
          BEGIN TRY
 
             DECLARE @currPickDetailKey NVARCHAR(50);
@@ -221,8 +231,8 @@ BEGIN
 
                   UPDATE dbo.PickDetail WITH (ROWLOCK)
                   SET Status = '4',
-                     QtyMoved = IIF (@cTaskDetailMessage02 <> 'SKIP1' AND @nCurrentStep = 8, Qty, QtyMoved), -- Only short happens on ShortPickScreen, need update QtyMoved
-                     Qty = IIF (@cTaskDetailMessage02 <> 'SKIP1' AND @nCurrentStep = 8, 0, Qty), -- Only short happens on ShortPickScreen, need update QtyMoved
+                     QtyMoved = IIF (@cTaskDetailMessage02 <> @cMaxRealloNumberofRetry AND @nCurrentStep = 8, Qty, QtyMoved), -- Only short happens on ShortPickScreen, need update QtyMoved
+                     Qty = IIF (@cTaskDetailMessage02 <> @cMaxRealloNumberofRetry AND @nCurrentStep = 8, 0, Qty), -- Only short happens on ShortPickScreen, need update QtyMoved
                      EditWho = SUSER_SNAME(),
                      EditDate = GETDATE(),
                      Trafficcop = NULL
@@ -245,7 +255,14 @@ BEGIN
             GOTO RollBackTran
          END CATCH
 
-         IF @cTaskDetailMessage02 <> 'SKIP1'
+         DECLARE 
+            @nTryCounter               INT,
+            @nRealloNumberofRetry      INT
+
+         SELECT @nTryCounter = ISNULL(TRY_CAST( RIGHT(@cTaskDetailMessage02, LEN(@cTaskDetailMessage02) - 4 ) AS INT), 0)
+         SELECT @nRealloNumberofRetry = ISNULL(TRY_CAST( @cRealloNumberofRetry AS INT), 99)
+
+         IF @nTryCounter < @nRealloNumberofRetry
             GOTO Quit
 
          BEGIN TRY
