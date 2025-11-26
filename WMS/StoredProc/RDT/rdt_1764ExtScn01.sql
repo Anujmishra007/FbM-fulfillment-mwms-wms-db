@@ -353,6 +353,16 @@ BEGIN
             @cTaskDetailKey = V_TaskDetailKey
          FROM RDT.RDTMOBREC WITH(NOLOCK)
          WHERE Mobile = @nMobile
+
+         IF @cUCCNo = '99'
+         BEGIN
+            SET @nAfterStep = @nStep_ShortPick
+            SET @nAfterScn = @nScn_ShortPick
+            GOTO Quit
+         END
+
+         BEGIN TRAN
+         SAVE TRAN rdt_1764ExtScn01
          
          -- If no enough qty for full UCC, mark the task as BADUCC
          IF NOT EXISTS(
@@ -379,9 +389,6 @@ BEGIN
             SELECT PickDetailKey
             FROM dbo.PickDetail WITH (NOLOCK)
             WHERE TaskDetailKey = @cTaskDetailKey
-
-            BEGIN TRAN
-            SAVE TRAN rdt_1764ExtScn01
 
             SET @nLoopIndex = -1
 
@@ -430,8 +437,6 @@ BEGIN
                END CATCH
             END
 
-            COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
-
             SET @nErrNo = 0
             SET @cErrMsg = ''
 
@@ -446,6 +451,27 @@ BEGIN
             SET @nCurrentScn = @nScn_ShortPick
             GOTO REALLOCATION
          END
+
+         BEGIN TRY
+            UPDATE TaskDetail WITH (ROWLOCK)
+            SET 
+               ReasonKey = '',
+               Message01 = '',
+               Message02 = '',
+               Message03 = '',
+               EditDate = GETDATE(),
+               EditWho  = SUSER_SNAME(),
+               TrafficCop = NULL
+            WHERE StorerKey = @cStorerKey
+               AND TaskDetailKey = @cTaskDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 234862
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail Failed
+            GOTO RollBack_rdt_1764ExtScn01
+         END CATCH
+
+         COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
       END
       ELSE IF @nCurrentStep = @nStep_ShortPick -- Short Pick
       BEGIN

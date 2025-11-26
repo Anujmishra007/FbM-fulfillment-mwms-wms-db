@@ -16,6 +16,7 @@ execute rdt.rdtAddMsg 234858, 10, '234858 SubmitQTaskFail', 'us_english', 1764, 
 execute rdt.rdtAddMsg 234859, 10, '234859 UPD PKDtl Fail',  'us_english', 1764, 0, '234859 Update PickDetail Failed'
 execute rdt.rdtAddMsg 234860, 10, '234860 UPD TskDtl Fail', 'us_english', 1764, 0, '234860 Update TaskDetail Failed'
 execute rdt.rdtAddMsg 234861, 10, '234861 UpdTaskFail',     'us_english', 1764, 0, '234861 Update Task Failed'
+execute rdt.rdtAddMsg 234862, 10, '234862 UpdTaskFail',     'us_english', 1764, 0, '234862 Update Task Failed'
 --UWP-43838
 execute rdt.rdtAddMsg 234854, 10, '234854 DropIDIsNotClosed',   'us_english', 1764, 0, '234854 DropID is not closed yet'
 
