@@ -2107,6 +2107,15 @@ BEGIN
       FROM dbo.ReceiptDetail (NOLOCK)
       WHERE ReceiptKey = @cReceiptKey
 
+      IF EXISTS( SELECT 1 FROM dbo.ReceiptDetail RD(NOLOCK)
+                  JOIN dbo.Receipt R (NOLOCK) ON RD.ReceiptKey = R.ReceiptKey
+                 WHERE RD.ReceiptKey = @cReceiptKey AND RD.ConditionCode ='RTH'
+                 AND R.DocType = 'R'
+                 AND RD.ReceiptLineNumber = @cReceiptLineNo_Borrowed)
+      BEGIN
+         SET @cConditionCode = 'RTH'
+      END
+
       -- Insert new ReceiptDetail line
       INSERT INTO dbo.ReceiptDetail
          (ReceiptKey, ReceiptLineNumber, POKey, StorerKey, SKU, QTYExpected, BeforeReceivedQTY,
@@ -2221,7 +2230,7 @@ BEGIN
          Lottable02 = CASE WHEN @cSkipLottable02 = '1' THEN Lottable02 ELSE @cLottable02 END,
          Lottable03 = CASE WHEN @cSkipLottable03 = '1' THEN Lottable03 ELSE @cLottable03 END,
          Lottable04 = CASE WHEN @cSkipLottable04 = '1' THEN Lottable04 ELSE @dLottable04 END,
-         ConditionCode = @cConditionCode,
+         ConditionCode = CASE WHEN ConditionCode = 'RTH' THEN 'RTH' ELSE @cConditionCode END,
          SubreasonCode = @cSubreasonCode, 
          UserDefine01 = @cUCC,
          EditDate = GETDATE(),  
