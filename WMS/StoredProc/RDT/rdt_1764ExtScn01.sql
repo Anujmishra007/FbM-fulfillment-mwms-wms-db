@@ -349,102 +349,132 @@ BEGIN
       END
       ELSE IF @nCurrentStep = @nStep_SKU -- SKU/UCC
       BEGIN
-         SELECT 
-            @cTaskDetailKey = V_TaskDetailKey
-         FROM RDT.RDTMOBREC WITH(NOLOCK)
-         WHERE Mobile = @nMobile
-         
-         -- If no enough qty for full UCC, mark the task as BADUCC
-         IF NOT EXISTS(
-            SELECT 1 
-            FROM dbo.LOTXLOCXID LLI WITH(NOLOCK)
-            INNER JOIN dbo.UCC WITH(NOLOCK)
-               ON LLI.StorerKey = UCC.StorerKey
-                  AND LLI.Loc = UCC.Loc
-                  AND LLI.ID = UCC.ID
-                  AND LLI.LOT = UCC.LOT
-                  AND LLI.SKU = UCC.SKU
-            INNER JOIN dbo.TaskDetail TD WITH(NOLOCK)
-               ON TD.StorerKey = UCC.StorerKey
-                  AND TD.CaseID = UCC.UCCNo
-                  AND TD.SKU = UCC.SKU
-                  AND TD.LOT = UCC.LOT
-            WHERE UCC.StorerKey = @cStorerKey
-               AND UCC.UCCNo = @cUCCNo
-               AND LLI.Qty - LLI.QtyPicked >= TD.Qty 
-               AND TD.TaskDetailKey = @cTaskDetailKey
-               )
+         IF @nInputKey = 1 -- ENTER
          BEGIN
-            INSERT INTO @tPickDetail (PickDetailKey)
-            SELECT PickDetailKey
-            FROM dbo.PickDetail WITH (NOLOCK)
-            WHERE TaskDetailKey = @cTaskDetailKey
+            SELECT 
+               @cTaskDetailKey = V_TaskDetailKey
+            FROM RDT.RDTMOBREC WITH(NOLOCK)
+            WHERE Mobile = @nMobile
+
+            IF @cUCCNo = '99'
+            BEGIN
+               SET @nAfterStep = @nStep_ShortPick
+               SET @nAfterScn = @nScn_ShortPick
+               GOTO Quit
+            END
 
             BEGIN TRAN
             SAVE TRAN rdt_1764ExtScn01
-
-            SET @nLoopIndex = -1
-
-            WHILE 1 = 1
+            
+            -- If no enough qty for full UCC, mark the task as BADUCC
+            IF @cUCCNo <> '' AND 
+               NOT EXISTS(
+                  SELECT 1 
+                  FROM dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                  INNER JOIN dbo.UCC WITH(NOLOCK)
+                     ON LLI.StorerKey = UCC.StorerKey
+                        AND LLI.Loc = UCC.Loc
+                        AND LLI.ID = UCC.ID
+                        AND LLI.LOT = UCC.LOT
+                        AND LLI.SKU = UCC.SKU
+                  INNER JOIN dbo.TaskDetail TD WITH(NOLOCK)
+                     ON TD.StorerKey = UCC.StorerKey
+                        AND TD.CaseID = UCC.UCCNo
+                        AND TD.SKU = UCC.SKU
+                        AND TD.LOT = UCC.LOT
+                  WHERE UCC.StorerKey = @cStorerKey
+                     AND UCC.UCCNo = @cUCCNo
+                     AND LLI.Qty - LLI.QtyPicked >= TD.Qty 
+                     AND TD.TaskDetailKey = @cTaskDetailKey
+                  )
             BEGIN
-               SELECT TOP 1 
-                  @nLoopIndex = RowIndex,
-                  @cPickDetailKey = PickDetailKey
-               FROM @tPickDetail
-               WHERE RowIndex > @nLoopIndex
-               ORDER BY RowIndex
+               INSERT INTO @tPickDetail (PickDetailKey)
+               SELECT PickDetailKey
+               FROM dbo.PickDetail WITH (NOLOCK)
+               WHERE TaskDetailKey = @cTaskDetailKey
 
-               IF @@ROWCOUNT = 0
-                  BREAK
+               SET @nLoopIndex = -1
 
-               BEGIN TRY
-                  UPDATE dbo.PickDetail WITH (ROWLOCK)
-                  SET
-                     Status =  '4',
-                     QtyMoved = Qty,
-                     Qty = 0,
-                     EditWho  = SUSER_SNAME(), 
-                     EditDate = GETDATE(),
-                     Trafficcop = NULL
-                  WHERE PickDetailKey = @cPickDetailKey
-               END TRY
-               BEGIN CATCH
-                  SET @nErrNo = 234859
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
-                  GOTO RollBack_rdt_1764ExtScn01
-               END CATCH
+               WHILE 1 = 1
+               BEGIN
+                  SELECT TOP 1 
+                     @nLoopIndex = RowIndex,
+                     @cPickDetailKey = PickDetailKey
+                  FROM @tPickDetail
+                  WHERE RowIndex > @nLoopIndex
+                  ORDER BY RowIndex
 
-               BEGIN TRY
-                  UPDATE dbo.TaskDetail WITH(ROWLOCK)
-                  SET ReasonKey = 'BADUCC',
-                     Status = '9',
-                     EditWho  = SUSER_SNAME(), 
-                     EditDate = GETDATE(),
-                     TrafficCop = NULL
-                  WHERE TaskDetailKey = @cTaskDetailKey
-               END TRY
-               BEGIN CATCH
-                  SET @nErrNo = 234860
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail Failed
-                  GOTO RollBack_rdt_1764ExtScn01
-               END CATCH
+                  IF @@ROWCOUNT = 0
+                     BREAK
+
+                  BEGIN TRY
+                     UPDATE dbo.PickDetail WITH (ROWLOCK)
+                     SET
+                        Status =  '4',
+                        QtyMoved = Qty,
+                        Qty = 0,
+                        EditWho  = SUSER_SNAME(), 
+                        EditDate = GETDATE(),
+                        Trafficcop = NULL
+                     WHERE PickDetailKey = @cPickDetailKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 234859
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
+                     GOTO RollBack_rdt_1764ExtScn01
+                  END CATCH
+
+                  BEGIN TRY
+                     UPDATE dbo.TaskDetail WITH(ROWLOCK)
+                     SET ReasonKey = 'BADUCC',
+                        Status = '9',
+                        EditWho  = SUSER_SNAME(), 
+                        EditDate = GETDATE(),
+                        TrafficCop = NULL
+                     WHERE TaskDetailKey = @cTaskDetailKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 234860
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail Failed
+                     GOTO RollBack_rdt_1764ExtScn01
+                  END CATCH
+               END
+
+               SET @nErrNo = 0
+               SET @cErrMsg = ''
+
+               EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                  @nErrNo = @nErrNo,
+                  @cErrMsg = @cErrMsg,
+                  @cLine01 = 'BAD UCC',
+                  @cLine02 = 'Will reallocate.',
+                  @nDisplayMsg = 0
+
+               SET @nCurrentStep = @nStep_ShortPick
+               SET @nCurrentScn = @nScn_ShortPick
+               GOTO REALLOCATION
             END
 
+            BEGIN TRY
+               UPDATE TaskDetail WITH (ROWLOCK)
+               SET 
+                  ReasonKey = '',
+                  Message01 = '',
+                  Message02 = '',
+                  Message03 = '',
+                  EditDate = GETDATE(),
+                  EditWho  = SUSER_SNAME(),
+                  TrafficCop = NULL
+               WHERE StorerKey = @cStorerKey
+                  AND TaskDetailKey = @cTaskDetailKey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 234862
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail Failed
+               GOTO RollBack_rdt_1764ExtScn01
+            END CATCH
+
             COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
-
-            SET @nErrNo = 0
-            SET @cErrMsg = ''
-
-            EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
-               @nErrNo = @nErrNo,
-               @cErrMsg = @cErrMsg,
-               @cLine01 = 'BAD UCC',
-               @cLine02 = 'Will reallocate.',
-               @nDisplayMsg = 0
-
-            SET @nCurrentStep = @nStep_ShortPick
-            SET @nCurrentScn = @nScn_ShortPick
-            GOTO REALLOCATION
          END
       END
       ELSE IF @nCurrentStep = @nStep_ShortPick -- Short Pick

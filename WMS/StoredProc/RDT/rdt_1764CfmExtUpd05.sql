@@ -259,7 +259,10 @@ BEGIN
             @nTryCounter               INT,
             @nRealloNumberofRetry      INT
 
-         SELECT @nTryCounter = ISNULL(TRY_CAST( RIGHT(@cTaskDetailMessage02, LEN(@cTaskDetailMessage02) - 4 ) AS INT), 0)
+         IF LEN(@cTaskDetailMessage02) > 4 AND LEFT(@cTaskDetailMessage02,4) = 'SKIP'
+            SELECT @nTryCounter = ISNULL(TRY_CAST( RIGHT(@cTaskDetailMessage02, LEN(@cTaskDetailMessage02) - 4 ) AS INT), 0)
+         ELSE
+            SET @nTryCounter = 0
          SELECT @nRealloNumberofRetry = ISNULL(TRY_CAST( @cRealloNumberofRetry AS INT), 99)
 
          IF @nTryCounter < @nRealloNumberofRetry
