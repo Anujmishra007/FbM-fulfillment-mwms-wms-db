@@ -367,24 +367,25 @@ BEGIN
             SAVE TRAN rdt_1764ExtScn01
             
             -- If no enough qty for full UCC, mark the task as BADUCC
-            IF NOT EXISTS(
-               SELECT 1 
-               FROM dbo.LOTXLOCXID LLI WITH(NOLOCK)
-               INNER JOIN dbo.UCC WITH(NOLOCK)
-                  ON LLI.StorerKey = UCC.StorerKey
-                     AND LLI.Loc = UCC.Loc
-                     AND LLI.ID = UCC.ID
-                     AND LLI.LOT = UCC.LOT
-                     AND LLI.SKU = UCC.SKU
-               INNER JOIN dbo.TaskDetail TD WITH(NOLOCK)
-                  ON TD.StorerKey = UCC.StorerKey
-                     AND TD.CaseID = UCC.UCCNo
-                     AND TD.SKU = UCC.SKU
-                     AND TD.LOT = UCC.LOT
-               WHERE UCC.StorerKey = @cStorerKey
-                  AND UCC.UCCNo = @cUCCNo
-                  AND LLI.Qty - LLI.QtyPicked >= TD.Qty 
-                  AND TD.TaskDetailKey = @cTaskDetailKey
+            IF @cUCCNo <> '' AND 
+               NOT EXISTS(
+                  SELECT 1 
+                  FROM dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                  INNER JOIN dbo.UCC WITH(NOLOCK)
+                     ON LLI.StorerKey = UCC.StorerKey
+                        AND LLI.Loc = UCC.Loc
+                        AND LLI.ID = UCC.ID
+                        AND LLI.LOT = UCC.LOT
+                        AND LLI.SKU = UCC.SKU
+                  INNER JOIN dbo.TaskDetail TD WITH(NOLOCK)
+                     ON TD.StorerKey = UCC.StorerKey
+                        AND TD.CaseID = UCC.UCCNo
+                        AND TD.SKU = UCC.SKU
+                        AND TD.LOT = UCC.LOT
+                  WHERE UCC.StorerKey = @cStorerKey
+                     AND UCC.UCCNo = @cUCCNo
+                     AND LLI.Qty - LLI.QtyPicked >= TD.Qty 
+                     AND TD.TaskDetailKey = @cTaskDetailKey
                   )
             BEGIN
                INSERT INTO @tPickDetail (PickDetailKey)
