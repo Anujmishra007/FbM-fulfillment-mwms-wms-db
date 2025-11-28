@@ -125,6 +125,26 @@ BEGIN
    --(SSA01) - END
 
    BEGIN TRY
+
+    -- *** NEW: Check invalid AdjustmentKey ***
+    IF NOT EXISTS (
+        SELECT 1 FROM dbo.ADJUSTMENT WITH (NOLOCK)
+        WHERE AdjustmentKey = @c_AdjustmentKey
+    )
+    BEGIN
+        SET @n_Continue = 3;
+        SET @n_Err = 561953;
+        SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                    + ': Invalid AdjustmentKey. (lsp_ADJ_PopulateUCC_Wrapper)';
+
+        INSERT INTO @t_WMSErrorList
+        (TableName, SourceType, Refkey1, WriteType, ErrCode, ErrMsg)
+        VALUES ('Adjustment', @c_SourceType, @c_AdjustmentKey,
+            'ERROR', @n_Err, @c_ErrMsg);
+
+        GOTO EXIT_SP;
+    END
+
       SELECT @c_Facility = a.Facility
             ,@c_Storerkey= a.Storerkey
       FROM dbo.ADJUSTMENT AS a (NOLOCK)
@@ -186,6 +206,21 @@ BEGIN
 
       INSERT INTO #tUCC ( UCC_RowRef, UCCNo )
       EXEC sp_ExecuteSQL @c_SearchSQL
+
+       IF NOT EXISTS (SELECT 1 FROM #tUCC)
+       BEGIN
+        SET @n_Continue = 3;
+        SET @n_Err = 561954;
+        SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                        + ': Invalid or No UCCNo found for the given criteria. (lsp_ADJ_PopulateUCC_Wrapper)';
+
+        INSERT INTO @t_WMSErrorList
+            (TableName, SourceType, Refkey1, WriteType, ErrCode, ErrMsg)
+        VALUES ('UCC', @c_SourceType, @c_AdjustmentKey,
+                'ERROR', @n_Err, @c_ErrMsg);
+
+        GOTO EXIT_SP;
+       END
 
       SELECT TOP 1 @n_AdjLineNo = CONVERT(INT, a.AdjustmentLineNumber)
       FROM dbo.ADJUSTMENTDETAIL AS a (NOLOCK)
