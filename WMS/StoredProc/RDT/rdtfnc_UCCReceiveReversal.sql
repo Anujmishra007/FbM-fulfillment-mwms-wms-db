@@ -1739,7 +1739,8 @@ BEGIN
             @cID           = @cID, 
             @cUCC          = @cCurrentUCC, 
             @cQTY          = @cQTY, 
-            @cNewQty       = @cNewQty, 
+            --@cNewQty       = @cNewQty, --V1.6
+            @cNewQty       = '0',
             @cReceiptLineNo= @cReceiptLineNo,
             @cType         = 'DEL',
             @nErrNo        = @nErrNo      OUTPUT,
