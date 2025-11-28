@@ -19,7 +19,7 @@ GO
 /* 04-06-2024 1.3  NJOW03     WMS-25578 When susr1 len is 7-9 adjust the  */
 /*                            running# len to for making the labelno      */
 /*                            len to 19 plus check digit become len 20    */
-/* 14-05-2025 1.4  Michael    FCR-2087 get @cPacktype from OPTION5(ML01)  */
+/* 09-09-2025 1.4  AK01       FCR-7708 SSCC_Generation_Enhancement        */
 /**************************************************************************/
 CREATE OR ALTER PROC [dbo].[nsp_GenLabelNo] (
 	@c_orderkey	   NVARCHAR(10),
@@ -38,25 +38,25 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 /* 25 March 2004 WANYT Timberland FBR#20720: RF Stock Take Entry */
 	declare @n_continue  		int,
-		@n_starttcnt 		      int,
-		@local_n_err 		      int,
-		@local_c_errmsg 	      NVARCHAR(255),
-		@n_cnt       		      int,
-		@n_rowcnt       	      int,
-		@c_authority		      NVARCHAR(30),
-		@c_vat			         NVARCHAR(18),
-		@n_odd			         int,
-		@n_even			         int,
-		@n_totalodd		         int,
-		@n_totaleven		      int,
-		@n_checkdigit		      int,
-		@b_resultset		      int,
-		@n_batch		            int,
-		@c_SQL                NVARCHAR(2000), --NJOW02
-		@c_PickSlipNo         NVARCHAR(10), --NJOW02
-    @n_RunNoLen           INT = 9,  --NJOW03		
-    @c_SSCCDynSerialByCompPrefix NVARCHAR(10) = 'N',  --NJOW03
-    @c_Option5      NVARCHAR(1000) --NJOW03    
+           @n_starttcnt       int,
+           @local_n_err       int,
+           @local_c_errmsg 	      NVARCHAR(255),
+           @n_cnt       		      int,
+           @n_rowcnt       	      int,
+           @c_authority		      NVARCHAR(30),
+           @c_vat			         NVARCHAR(18),
+           @n_odd			         int,
+           @n_even			         int,
+           @n_totalodd		         int,
+           @n_totaleven		      int,
+           @n_checkdigit		      int,
+           @b_resultset		      int,
+           @n_batch		            int,
+           @c_SQL                  NVARCHAR(2000), --NJOW02
+           @c_PickSlipNo           NVARCHAR(10), --NJOW02
+           @n_RunNoLen             INT = 9,  --NJOW03		
+           @c_SSCCDynSerialByCompPrefix NVARCHAR(10) = 'N',  --NJOW03
+           @c_Option5              NVARCHAR(1000) --NJOW03    
 		
    DECLARE
       @cIdentifier            NVARCHAR( 2),
@@ -72,7 +72,11 @@ BEGIN
       @nOddCnt                INT,
       @nEvenCnt               INT,
       @nOdd                   INT,
-      @nEven                  INT
+      @nEven                  INT,
+
+      --AK01 S
+      @c_NoAI                 NVARCHAR(1)    = 'N'
+      --AK01 E
 
    DECLARE       
       @c_nCounter             NVARCHAR( 25)
@@ -159,9 +163,16 @@ BEGIN
             SET @cIdentifier = '00'
             SET @cPacktype = '0'
             SET @c_LabelNo = ''
+            
+            --AK01 S
+            SELECT @cPackType = dbo.fnc_GetParamValueFromString ('@c_PackType', @c_option5, @cPackType)
+            SELECT @c_NoAI = dbo.fnc_GetParamValueFromString ('@c_NoAI', @c_option5, @c_NoAI)
 
-            SELECT @cPacktype = dbo.fnc_GetParamValueFromString ('@cPacktype', @c_option5, @cPacktype)    --ML01
-            IF ISNULL(@cPacktype,'') NOT LIKE '[0-9]' SET @cPacktype = '0'                                --ML01
+            IF @c_NoAI = 'Y'
+            BEGIN
+               SET @cIdentifier = ''
+            END
+            --AK01 E
 
             SELECT @cSUSR1 = ISNULL(SUSR1, '0')
             FROM dbo.Storer WITH (NOLOCK)
@@ -178,19 +189,22 @@ BEGIN
             IF (@n_continue = 1 OR @n_continue = 2)
             BEGIN
                --NJOW03 S
-               IF LEN(@cSUSR1) IN(7,8,9) AND @c_SSCCDynSerialByCompPrefix = 'Y'       
+               IF LEN(@cSUSR1) BETWEEN 7 AND 10 AND @c_SSCCDynSerialByCompPrefix = 'Y'  --AK01
                BEGIN
-               	  SET @n_RunNoLen = 9 - (LEN(@cSUSR1) - 7)
-               
-	                EXEC isp_getucckey
-			              @c_StorerKey,
-			              @n_RunNoLen,     --SSCC serial reference (running number)
-			              @c_nCounter OUTPUT ,
-			              @b_success  OUTPUT,
-			              @n_err      OUTPUT,
-			              @c_errmsg   OUTPUT,
-			              0,
-			              1        	
+                  --AK01 S
+                  --SET @n_RunNoLen = 9 - (LEN(@cSUSR1) - 7)
+                  SET @n_RunNoLen = 16 - LEN(@cSUSR1)
+                  --AK01 E
+
+                  EXEC isp_getucckey
+                      @c_StorerKey,
+                      @n_RunNoLen,     --SSCC serial reference (running number)
+                      @c_nCounter OUTPUT ,
+                      @b_success  OUTPUT,
+                      @n_err      OUTPUT,
+                      @c_errmsg   OUTPUT,
+                      0,
+                      1        	
                END --NJOW03 E    
                ELSE         
                BEGIN  	               	               	
