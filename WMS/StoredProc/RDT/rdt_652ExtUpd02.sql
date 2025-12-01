@@ -37,6 +37,8 @@ BEGIN
    DECLARE @cReceiptKey    NVARCHAR(10)
    DECLARE @nTranCount     INT
    DECLARE @bSuccess       INT
+   DECLARE @cRcptContNo    NVARCHAR(18)
+   DECLARE @cRcptASNNo     NVARCHAR(10)
 
    IF @nFunc = 652
    BEGIN
@@ -48,22 +50,27 @@ BEGIN
             BEGIN
                DECLARE @tReceiptList TABLE 
                (
-                  ID          INT IDENTITY,
-                  ReceiptKey  NVARCHAR(10) NOT NULL
+                  ID             INT IDENTITY,
+                  ReceiptKey     NVARCHAR(10) NOT NULL,
+                  ContainerKey   NVARCHAR(18)
                )
 
                DECLARE @nLoopIndex  INT
 
                IF ISNULL(@cContainerNo, '') <> ''
                   INSERT INTO @tReceiptList
-                  SELECT ReceiptKey
+                  SELECT 
+                     ReceiptKey,
+                     @cContainerNo
                   FROM dbo.Receipt WITH (NOLOCK)
                   WHERE StorerKey = @cStorerKey
                   AND ContainerKey = @cContainerNo
                   AND ASNStatus <> '9'
                ELSE IF ISNULL(@cAppointmentNo, '') <> ''
                   INSERT INTO @tReceiptList
-                  SELECT ReceiptKey
+                  SELECT 
+                     ReceiptKey,
+                     ContainerKey
                   FROM dbo.Receipt WITH (NOLOCK)
                   WHERE StorerKey = @cStorerKey
                   AND ReceiptKey = @cAppointmentNo
@@ -83,8 +90,9 @@ BEGIN
                   WHILE 1 = 1
                   BEGIN
                      SELECT TOP 1 
-                        @cReceiptKey = ReceiptKey,
-                        @nLoopIndex = id
+                        @cRcptASNNo    = ReceiptKey,
+                        @cRcptContNo   = ContainerKey,
+                        @nLoopIndex    = id
                      FROM @tReceiptList
                         WHERE id > @nLoopIndex
                      ORDER BY id
@@ -93,17 +101,30 @@ BEGIN
                         BREAK
 
                      EXECUTE ispGenTransmitLog2 
-                     @c_TableName      = 'WSASNRFID', 
-                     @c_Key1           = @cReceiptKey, 
-                     @c_Key2           = '', 
-                     @c_Key3           = @cStorerkey, 
-                     @c_TransmitBatch  = '', 
+                        @c_TableName      = 'WSASNRFID', 
+                        @c_Key1           = @cRcptASNNo, 
+                        @c_Key2           = '', 
+                        @c_Key3           = @cStorerkey, 
+                        @c_TransmitBatch  = '', 
+                        @b_Success        = @bSuccess   OUTPUT,    
+                        @n_err            = @nErrNo     OUTPUT,    
+                        @c_errmsg         = @cErrMsg    OUTPUT
+
+                     IF @nErrNo <> 0 OR @bSuccess <> 1
+                        GOTO RollbackTran
+
+                     EXEC dbo.ispGenTransmitLog2 
+                     @c_TableName      = 'WSONLOTLOG', 
+                     @c_Key1           = @cRcptASNNo, 
+                     @c_Key2           = @cRcptContNo, 
+                     @c_Key3           =  @cStorerKey, 
+                     @c_TransmitBatch  = '',
                      @b_Success        = @bSuccess   OUTPUT,    
                      @n_err            = @nErrNo     OUTPUT,    
                      @c_errmsg         = @cErrMsg    OUTPUT
 
                      IF @nErrNo <> 0 OR @bSuccess <> 1
-                        GOTO RollbackTran
+                        GOTO RollbackTran 
                   END -- end loop
 
                   COMMIT TRAN
