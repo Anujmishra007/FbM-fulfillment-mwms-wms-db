@@ -24,7 +24,8 @@ GO
 /* 2025-09-24 1.6.0 NickT     UWP-41178 Stay in PrintPackingList scn                   */
 /*                            if input invalid option                                  */
 /* 2025-09-25 1.7.0 JackC     FCR-7348 Support UPC at SKU screen when Single unit order*/
-/* 2025-10-15 1.8.0 CYU027     FCR-6657 validation to AVOID SHORT                      */
+/* 2025-10-15 1.8.0 CYU027    FCR-6657 validation to AVOID SHORT                       */
+/* 2025-12-01 1.8.0 NickT     UWP-44802 Correct parameter text string                  */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn01] (
@@ -549,7 +550,7 @@ BEGIN
                IF rdt.rdtGetConfig (@nFunc, 'PPAShowSummary', @cStorerKey) = '1'
                BEGIN
                   SELECT @nCSKU = 0, @nCQTY = 0, @nPSKU = 0, @nPQTY = 0
-                  EXECUTE rdt.rdt_PostPickAudit_GetStat @nMobile, @nFunc, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cID, @cTaskDetailKey, cStorerKey, @cFacility, @cPUOM,
+                  EXECUTE rdt.rdt_PostPickAudit_GetStat @nMobile, @nFunc, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cID, @cTaskDetailKey, @cStorerKey, @cFacility, @cPUOM,
                      @nCSKU = @nCSKU OUTPUT,
                      @nCQTY = @nCQTY OUTPUT,
                      @nPSKU = @nPSKU OUTPUT,
@@ -1758,6 +1759,7 @@ BEGIN
          --V1.4.0 END
 
       END -- step99
+
       -- fcr 1109
       IF @nStep IN (0, 2, 4, 5, 8)
             OR (@nStep = 99 AND @nScn = 6464 ) -- Print Scn
