@@ -23,6 +23,8 @@ GO
 /* 2025-06-16  USH022   1.0   Created & DevOps Combine Script           */
 /* 2025-10-06  SSA01    1.1   UWP-42142 -Enhanced session management    */
 /*                             and cleanup.                             */
+/* 2025-11-22  USH022-1 1.2   UWP-44139 -UCCNo and AdjustmentKey        */
+/*                            Validation added                          */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_ADJ_PopulateUCC_Wrapper]
    @c_AdjustmentKey        NVARCHAR(10)
@@ -126,7 +128,7 @@ BEGIN
 
    BEGIN TRY
 
-    -- *** NEW: Check invalid AdjustmentKey ***
+    -- *** NEW: Check invalid AdjustmentKey ***                                 --USH022-1
     IF NOT EXISTS (
         SELECT 1 FROM dbo.ADJUSTMENT WITH (NOLOCK)
         WHERE AdjustmentKey = @c_AdjustmentKey
@@ -143,7 +145,7 @@ BEGIN
             'ERROR', @n_Err, @c_ErrMsg);
 
         GOTO EXIT_SP;
-    END
+    END                                                                         --USH022-1
 
       SELECT @c_Facility = a.Facility
             ,@c_Storerkey= a.Storerkey
@@ -207,7 +209,7 @@ BEGIN
       INSERT INTO #tUCC ( UCC_RowRef, UCCNo )
       EXEC sp_ExecuteSQL @c_SearchSQL
 
-       IF NOT EXISTS (SELECT 1 FROM #tUCC)
+       IF NOT EXISTS (SELECT 1 FROM #tUCC)                                                      --USH022-1
        BEGIN
         SET @n_Continue = 3;
         SET @n_Err = 561954;
@@ -220,7 +222,7 @@ BEGIN
                 'ERROR', @n_Err, @c_ErrMsg);
 
         GOTO EXIT_SP;
-       END
+       END                                                                                      --USH022-1
 
       SELECT TOP 1 @n_AdjLineNo = CONVERT(INT, a.AdjustmentLineNumber)
       FROM dbo.ADJUSTMENTDETAIL AS a (NOLOCK)
