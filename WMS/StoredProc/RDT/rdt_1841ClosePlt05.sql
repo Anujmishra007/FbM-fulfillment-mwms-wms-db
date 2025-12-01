@@ -16,6 +16,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author     Purposes                                 */
 /* 2025-11-28  1.0  NickT      FCR-9027. Created                        */
+/* 2025-12-01  1.0.1 NickT     FCR-9027 ReceiptDetail.UserDefine01 = UCC*/
 /************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_1841ClosePlt05] (
@@ -132,7 +133,7 @@ AS
   
       IF EXISTS ( SELECT 1 FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
                   WHERE ReceiptKey = @cReceiptKey
-                  AND   Lottable10 = @cUCC)
+                     AND UserDefine01 = @cUCC)
       BEGIN
          SELECT TOP 1
             @cLottable01 = Lottable01,
@@ -151,6 +152,7 @@ AS
             @cPOKey = POKey
          FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
          WHERE ReceiptKey = @cReceiptKey
+            AND UserDefine01 = @cUCC
             AND Sku = @cUCCSKU
             AND FinalizeFlag <> 'Y'
          ORDER BY 1
@@ -208,6 +210,22 @@ AS
       BEGIN CATCH
          SET @nErrNo = 252457
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update new UCC Failed
+         GOTO RollBackTran
+      END CATCH
+
+      -- Replace ReceiptDetail.UserDefine01 with new UCC (CartonID)
+      BEGIN TRY
+         UPDATE dbo.ReceiptDetail WITH(ROWLOCK)
+         SET UserDefine01 = @cCartonID,
+            EditWho = SUser_sName(),
+            EditDate = GETDATE()
+         WHERE UserDefine01 = @cUCC
+            AND StorerKey = @cStorerKey
+            AND ReceiptKey = @cReceiptKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 252458
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update ReceiptDetail Failed
          GOTO RollBackTran
       END CATCH
 

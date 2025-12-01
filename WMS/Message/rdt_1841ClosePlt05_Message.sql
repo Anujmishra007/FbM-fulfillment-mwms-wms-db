@@ -9,5 +9,6 @@ execute rdt.rdtAddMsg 252454, 10, '252454^InsTaskFail',        'us_english', 184
 execute rdt.rdtAddMsg 252455, 10, '252455^ClosePltFail',       'us_english', 1841
 execute rdt.rdtAddMsg 252456, 10, '252456^InsUCCFail',         'us_english', 1841, 0, '252456 Create new UCC Failed'
 execute rdt.rdtAddMsg 252457, 10, '252457^UpdUCCFail',         'us_english', 1841, 0, '252457 Update new UCC Failed'
+execute rdt.rdtAddMsg 252458, 10, '252458^UpdRcptFail',        'us_english', 1841, 0, '252458 Update ReceiptDetail Failed'
 
 SELECT * FROM rdt.rdtMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 252451 AND 252500
