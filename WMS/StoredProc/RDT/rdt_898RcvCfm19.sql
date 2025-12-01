@@ -2607,7 +2607,17 @@ BEGIN
       END
    END
 END  
-  
+
+UPDATE PI SET
+   UCCNo = ''
+FROM dbo.PackInfo PI WITH (ROWLOCK)
+INNER JOIN PackDetail PD ON PI.PickSlipNo = PD.PickSlipNo AND PI.CartonNo = PD.CartonNo
+INNER JOIN PACKHEADER PH ON PD.PickSlipNo = PH.PickSlipNo
+INNER JOIN dbo.ORDERS ORM ON PH.StorerKey = ORM.StorerKey AND PH.OrderKey = ORM.OrderKey
+WHERE PH.StorerKey = @cStorerKey
+   AND PI.UCCNo = @cUCC
+   AND ORM.Status = '9'
+
 IF @cDebug = '1'  
 BEGIN
    SELECT * FROM @tRD  
