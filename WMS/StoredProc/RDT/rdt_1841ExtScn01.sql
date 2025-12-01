@@ -194,7 +194,7 @@ BEGIN
                SET @nRowRef = -1
                WHILE 1=1
                BEGIN
-                  SELECT 
+                  SELECT TOP 1
                      @nRowRef = RowRef
                   FROM @tRowRef
                   WHERE RowRef > @nRowRef
