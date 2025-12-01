@@ -159,6 +159,8 @@ BEGIN
          BEGIN
             IF @nInputKey = 1 -- Yes
             BEGIN
+               DECLARE @tRowRef TABLE (RowRef INT PRIMARY KEY)
+
                SET @cCartonID = LTRIM(RTRIM(@cInField04))
                IF @cCartonID = ''
                BEGIN
@@ -177,9 +179,11 @@ BEGIN
                   GOTO Quit
                END
 
-               DECLARE @nRowRef INT
+               DECLARE 
+                  @nRowRef       INT
 
-               SELECT TOP 1 @nRowRef = RowRef
+               INSERT INTO @tRowRef (RowRef)
+               SELECT RowRef
                FROM rdt.rdtPreReceiveSort WITH (NOLOCK)
                WHERE ReceiptKey = @cReceiptKey
                   AND LOC = @cLane
@@ -187,8 +191,19 @@ BEGIN
                   AND UCCNo = @cUCC
                ORDER BY 1
 
-               IF @@ROWCOUNT = 1
+               SET @nRowRef = -1
+               WHILE 1=1
                BEGIN
+                  SELECT 
+                     @nRowRef = RowRef
+                  FROM @tRowRef
+                  WHERE RowRef > @nRowRef
+                  ORDER BY RowRef
+
+                  IF @@ROWCOUNT = 0 
+                     BREAK
+
+                  -- Update UDF05 with CartonID
                   BEGIN TRY
                      UPDATE rdt.rdtPreReceiveSort WITH(ROWLOCK)
                      SET 
