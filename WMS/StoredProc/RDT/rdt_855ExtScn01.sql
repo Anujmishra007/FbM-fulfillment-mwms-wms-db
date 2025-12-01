@@ -25,7 +25,7 @@ GO
 /*                            if input invalid option                                  */
 /* 2025-09-25 1.7.0 JackC     FCR-7348 Support UPC at SKU screen when Single unit order*/
 /* 2025-10-15 1.8.0 CYU027    FCR-6657 validation to AVOID SHORT                       */
-/* 2025-12-01 1.8.0 NickT     UWP-44802 Correct parameter text string                  */
+/* 2025-12-01 1.9.0 NickT     UWP-44802 Correct parameter text string                  */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn01] (
