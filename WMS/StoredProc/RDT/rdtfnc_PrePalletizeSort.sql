@@ -35,9 +35,10 @@ GO
 /*                            Check UserDefine02 in UCC                 */
 /*                            Upd beforereceivedqty                     */
 /* 2025-06-18   0.0.0 Jackc   !!!Cutover. Use V0 repor for work!!!      */
-/* 2024-02-07   2.2  James    WMS-23878 Enhance packinfo (james07)      */
-/* 2024-03-19   2.3  James    WMS-24851 Add ExtUpdSP at step2 (james08) */
-/* 2024-05-08   2.4  James    WMS-25413-Add ExtValSP at step8 (james09) */
+/* 2025-11-28   2.2.0 NickT   FCR-9027 Add ExtScnSP                     */
+/* 2024-02-07   2.3  James    WMS-23878 Enhance packinfo (james07)      */
+/* 2024-03-19   2.4  James    WMS-24851 Add ExtUpdSP at step2 (james08) */
+/* 2024-05-08   2.5  James    WMS-25413-Add ExtValSP at step8 (james09) */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_PrePalletizeSort] (    
@@ -302,7 +303,8 @@ SELECT
    @cCapturePackInfoSP     = V_String40,
    @cPackInfo              = V_String41,
    @cDefaultCartonType     = V_String42,
-   @cCartonType            = V_String43,
+   @cExtendedScnSP         = V_String43,
+   @cCartonType            = V_String44,
    @cCube                  = V_String44,
    @cWeight                = V_String45,
    @cRefNo                 = V_String46,
@@ -2685,7 +2687,7 @@ BEGIN
       SET @cOutField03 = @cSuggID    
       SET @cOutField04 = ''    
       SET @cOutField15 = @cExtendedInfo    
-          
+
       --INC1250618    
       SET @nFromScn  = @nScn_Qty         
       SET @nFromStep = @nStep_Qty     
@@ -3489,10 +3491,11 @@ BEGIN
       V_String40 = @cCapturePackInfoSP,
       V_String41 = @cPackInfo,
       V_String42 = @cDefaultCartonType,
-      V_String43 = @cCartonType,
-      V_String44 = @cCube,
-      V_String45 = @cWeight,
-      V_String46 = @cRefNo,
+      V_String43 = @cExtendedScnSP,
+      V_String44 = @cCartonType,
+      V_String45 = @cCube,
+      V_String46 = @cWeight,
+      V_String47 = @cRefNo,
    
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,    
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,    
