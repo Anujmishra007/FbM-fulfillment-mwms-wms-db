@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author       Purposes                               */
 /* 09-07-2025  1.0  YeeKung      FCR-5719 Created                       */
+/* 02-12-2025  1.1  YeeKung      FCR-9540 Add Dynamic delimeter(yeekung01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_598DecodeSN01]
@@ -37,6 +38,11 @@ BEGIN
 
    DECLARE @nReceiveSerialNoLogKey INT
    DECLARE @nRowCount INT
+   DECLARE @cShort NVARCHAR(30)
+   DECLARE @tCurTable  TABLE ( --yeekung01
+      Delimiter NVARCHAR( 10)
+   )
+   DECLARE @curDelimeter CURSOR --yeekung01
 
    SELECT TOP 1
       @nReceiveSerialNoLogKey = ReceiveSerialNoLogKey
@@ -65,74 +71,109 @@ BEGIN
    DECLARE @cLength NVARCHAR( 250) = ''
    DECLARE @nLength INT
    SELECT
-      @cDelimiter = ISNULL( Short, ''), 
+      @cShort = ISNULL( Short, ''), 
       @cLength = ISNULL( Long, '')
    FROM dbo.CodeLKUP WITH (NOLOCK)
    WHERE ListName = 'DecodeSN'
       AND StorerKey = @cStorerKey
       AND Code = @cSKUGroup
 
-   -- Code lookup is setup
-   IF @@ROWCOUNT > 0
+
+   IF @cDelimiter <> '' --yeekung01
    BEGIN
-      IF @cDelimiter <> ''
+      INSERT INTO @tCurTable (Delimiter)
+      SELECT ColValue
+      FROM dbo.fnc_DelimSplit (',', @cShort)
+      
+      -- Open cursor
+
+      SET @curDelimeter = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+      SELECT
+         Delimiter
+      FROM @tCurTable 
+      OPEN @curDelimeter 
+
+      FETCH NEXT FROM @curDelimeter INTO @cDelimiter
+      WHILE @@FETCH_STATUS = 0
       BEGIN
+         IF CHARINDEX(@cDelimiter, @cBarcode) <> 0
+		   BEGIN
+            IF @cDelimiter = ';'
+            BEGIN
+               INSERT INTO rdt.rdtReceiveSerialNoLog (Mobile, Func, StorerKey, SKU, SerialNo, QTY)
+               SELECT TOP 1 @nMobile, @nFunc, @cStorerKey, @cSKU, ColValue, 1
+               FROM dbo.fnc_DelimSplit (@cDelimiter, @cBarcode)
+               WHERE ColValue <> ''
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 241601
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail
+                  GOTO Quit
+               END
+            end 
+            ELSE
+            BEGIN
+               INSERT INTO rdt.rdtReceiveSerialNoLog (Mobile, Func, StorerKey, SKU, SerialNo, QTY)
+               SELECT @nMobile, @nFunc, @cStorerKey, @cSKU, ColValue, 1
+               FROM dbo.fnc_DelimSplit (@cDelimiter, @cBarcode)
+               WHERE ColValue <> ''
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 241606
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail
+                  GOTO Quit
+               END
+            END
+         END
+
+         FETCH NEXT FROM @curDelimeter INTO @cDelimiter
+      END
+      CLOSE @curDelimeter
+      DEALLOCATE @curDelimeter
+   END
+   ELSE IF ISNULL(@cLength,'') <> ''
+   BEGIN
+      SET @nLength = TRY_CAST( @cLength AS INT)
+
+      -- Check length setup
+      IF @nLength IS NULL
+      BEGIN
+         SET @nErrNo = 241602
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad SNO setup
+         GOTO Quit
+      END
+
+      -- Check length
+      IF @nLength NOT BETWEEN 1 AND 30
+      BEGIN
+         SET @nErrNo = 241603
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad SNO setup
+         GOTO Quit
+      END
+
+      IF LEN(@cBarcode)% @nLength <> 0
+      BEGIN
+         SET @nErrNo = 241605
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LengthNotMat
+         GOTO Quit
+      END
+
+      -- Loop 
+      DECLARE @cSubString NVARCHAR( 30)
+      WHILE @cBarcode <> ''
+      BEGIN
+         SET @cSubString = LEFT( @cBarcode, @nLength)
+         SET @cBarcode = SUBSTRING( @cBarcode, @nLength + 1, LEN( @cBarcode))
+
          INSERT INTO rdt.rdtReceiveSerialNoLog (Mobile, Func, StorerKey, SKU, SerialNo, QTY)
-         SELECT @nMobile, @nFunc, @cStorerKey, @cSKU, ColValue, 1
-         FROM dbo.fnc_DelimSplit (@cDelimiter, @cBarcode)
-         WHERE ColValue <> ''
+         VALUES (@nMobile, @nFunc, @cStorerKey, @cSKU, @cSubString, 1)
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 241601
+            SET @nErrNo = 241604
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail
             GOTO Quit
          END
       END
-      ELSE
-      BEGIN
-         SET @nLength = TRY_CAST( @cLength AS INT)
-
-         -- Check length setup
-         IF @nLength IS NULL
-         BEGIN
-            SET @nErrNo = 241602
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad SNO setup
-            GOTO Quit
-         END
-
-         -- Check length
-         IF @nLength NOT BETWEEN 1 AND 30
-         BEGIN
-            SET @nErrNo = 241603
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad SNO setup
-            GOTO Quit
-         END
-
-         IF LEN(@cBarcode)% @nLength <> 0
-         BEGIN
-            SET @nErrNo = 241605
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LengthNotMat
-            GOTO Quit
-         END
-
-         -- Loop 
-         DECLARE @cSubString NVARCHAR( 30)
-         WHILE @cBarcode <> ''
-         BEGIN
-            SET @cSubString = LEFT( @cBarcode, @nLength)
-            SET @cBarcode = SUBSTRING( @cBarcode, @nLength + 1, LEN( @cBarcode))
-
-            INSERT INTO rdt.rdtReceiveSerialNoLog (Mobile, Func, StorerKey, SKU, SerialNo, QTY)
-            VALUES (@nMobile, @nFunc, @cStorerKey, @cSKU, @cSubString, 1)
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 241604
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail
-               GOTO Quit
-            END
-
-         END
-      END   
 
       IF (SELECT COUNT(1)
          FROM rdt.rdtReceiveSerialNoLog WITH (NOLOCK)
