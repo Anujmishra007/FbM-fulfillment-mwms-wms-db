@@ -111,20 +111,42 @@ BEGIN
                         @c_errmsg         = @cErrMsg    OUTPUT
 
                      IF @nErrNo <> 0 OR @bSuccess <> 1
+                     BEGIN
+                        SET @nErrNo = 252701
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTransmit2Fail
                         GOTO RollbackTran
+                     END
 
                      EXEC dbo.ispGenTransmitLog2 
-                     @c_TableName      = 'WSONLOTLOG', 
-                     @c_Key1           = @cRcptASNNo, 
-                     @c_Key2           = @cRcptContNo, 
-                     @c_Key3           =  @cStorerKey, 
-                     @c_TransmitBatch  = '',
-                     @b_Success        = @bSuccess   OUTPUT,    
-                     @n_err            = @nErrNo     OUTPUT,    
-                     @c_errmsg         = @cErrMsg    OUTPUT
+                        @c_TableName      = 'WSONLOTLOG', 
+                        @c_Key1           = @cRcptASNNo, 
+                        @c_Key2           = @cRcptContNo, 
+                        @c_Key3           =  @cStorerKey, 
+                        @c_TransmitBatch  = '',
+                        @b_Success        = @bSuccess   OUTPUT,    
+                        @n_err            = @nErrNo     OUTPUT,    
+                        @c_errmsg         = @cErrMsg    OUTPUT
 
                      IF @nErrNo <> 0 OR @bSuccess <> 1
-                        GOTO RollbackTran 
+                     BEGIN
+                        SET @nErrNo = 252702
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTransmit2Fail
+                        GOTO RollbackTran
+                     END
+
+                     IF EXISTS (SELECT 1 FROM dbo.RECEIPT RH WITH (NOLOCK)
+                              JOIN dbo.TRANSMITLOG2 TL2 WITH (NOLOCK) ON (RH.RECEIPTKEY = TL2.KEY1 AND TL2.TABLENAME = 'WSONLOTLOG')
+                              WHERE RH.RECEIPTKEY = @cRcptASNNo)
+                     BEGIN
+                        UPDATE dbo.RECEIPT WITH (ROWLOCK) SET USERDEFINE06 = GETDATE() WHERE RECEIPTKEY = @cRcptASNNo
+                     END
+
+                     IF @@ROWCOUNT = 0
+                     BEGIN
+                        SET @nErrNo = 252703
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd rcpt fail
+                        GOTO Quit
+                     END 
                   END -- end loop
 
                   COMMIT TRAN
