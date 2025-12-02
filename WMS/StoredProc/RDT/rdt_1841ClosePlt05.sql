@@ -17,6 +17,7 @@ GO
 /* Date        Rev  Author     Purposes                                 */
 /* 2025-11-28  1.0  NickT      FCR-9027. Created                        */
 /* 2025-12-01  1.0.1 NickT     FCR-9027 ReceiptDetail.UserDefine01 = UCC*/
+/* 2025-12-02  1.0.2 NickT     FCR-9027 Clear old UCC.ReceiptDetail info*/
 /************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_1841ClosePlt05] (
@@ -201,9 +202,12 @@ AS
          UPDATE dbo.UCC WITH(ROWLOCK)
          SET Status = '6',
             Userdefined10 = @cCartonID,
+            ReceiptKey = '',
+            ReceiptLineNumber = '',
             EditWho = SUser_sName(),
             EditDate = GETDATE()
          WHERE UCCNo = @cUCC
+            AND SKU = @cUCCSKU
             AND StorerKey = @cStorerKey
             AND Status = '0'
       END TRY
@@ -220,6 +224,7 @@ AS
             EditWho = SUser_sName(),
             EditDate = GETDATE()
          WHERE UserDefine01 = @cUCC
+            AND SKU = @cUCCSKU
             AND StorerKey = @cStorerKey
             AND ReceiptKey = @cReceiptKey
       END TRY
