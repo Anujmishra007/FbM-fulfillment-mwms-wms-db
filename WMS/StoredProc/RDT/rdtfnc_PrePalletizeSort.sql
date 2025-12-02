@@ -129,6 +129,9 @@ DECLARE
    @cUserDefine05       NVARCHAR( 60),    --(cc02)  
    @cClsPltCond         NVARCHAR( 1),     --(cc02)  
    @cCond               NVARCHAR( 10),    --(cc02)  
+   @cExtendedScnSP      NVARCHAR( 20),
+   @tExtScnData         VariableTable,
+   @nAction             INT,
     
    @cLottable01         NVARCHAR( 18),    
    @cLottable02         NVARCHAR( 18),    
@@ -194,7 +197,18 @@ DECLARE
    @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),    
    @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),    
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),    
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)    
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1),
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
     
 -- Getting Mobile information    
 SELECT    
@@ -362,6 +376,7 @@ BEGIN
    IF @nStep = 10 GOTO Step_EndSort    -- Scn = 5668. End Sort    
    IF @nStep = 11 GOTO Step_Msg        -- Scn = 5669. Msg    
    IF @nStep = 14 GOTO Step_PackInfo   -- Scn = 6310. PackInfo    
+   IF @nStep = 99 GOTO Step_99  -- Extend Screen
 END    
     
 RETURN -- Do nothing if incorrect step    
@@ -398,6 +413,10 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerkey)    
    IF @cExtendedUpdateSP IN ('0', '')    
       SET @cExtendedUpdateSP = ''    
+
+   SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerkey)
+   IF @cExtendedScnSP = '0'
+      SET @cExtendedScnSP = ''
  
     
    SET @cPalletizeAllowAddNewUCC = rdt.RDTGetConfig( @nFunc, 'PalletizeAllowAddNewUCC', @cStorerkey)    
@@ -1079,6 +1098,13 @@ BEGIN
       SET @nScn  = @nScn_ASNLane    
       SET @nStep = @nStep_ASNLane    
    END    
+
+   IF @cExtendedScnSP <> '' 
+      AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit    
     
    Step_UCC_Fail:    
@@ -1466,7 +1492,14 @@ BEGIN
                 
       SET @nScn  = @nScn_UCC    
       SET @nStep = @nStep_UCC    
-   END    
+   END
+
+   IF @cExtendedScnSP <> '' 
+      AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit    
     
    Step_TOID_Fail:    
@@ -3311,6 +3344,59 @@ BEGIN
 
 END
 GOTO Quit
+
+Step_99:
+BEGIN
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtendedScnSP,
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         GOTO Quit
+      END
+   END
+
+   Step_99_Fail:
+      GOTO Quit
+END
+
 
 /********************************************************************************    
 Quit. Update back to I/O table, ready to be pick up by JBOSS    

@@ -24,7 +24,9 @@ GO
 /* 2025-09-24 1.6.0 NickT     UWP-41178 Stay in PrintPackingList scn                   */
 /*                            if input invalid option                                  */
 /* 2025-09-25 1.7.0 JackC     FCR-7348 Support UPC at SKU screen when Single unit order*/
-/* 2025-10-15 1.8.0 CYU027     FCR-6657 validation to AVOID SHORT                      */
+/* 2025-10-15 1.8.0 CYU027    FCR-6657 validation to AVOID SHORT                       */
+/* 2025-12-01 1.9.0 NickT     UWP-44802 Correct parameter text string                  */
+/* 2025-12-01 1.9.1 NickT     UWP-44802 Return variable values to main SP              */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn01] (
@@ -549,7 +551,7 @@ BEGIN
                IF rdt.rdtGetConfig (@nFunc, 'PPAShowSummary', @cStorerKey) = '1'
                BEGIN
                   SELECT @nCSKU = 0, @nCQTY = 0, @nPSKU = 0, @nPQTY = 0
-                  EXECUTE rdt.rdt_PostPickAudit_GetStat @nMobile, @nFunc, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cID, @cTaskDetailKey, cStorerKey, @cFacility, @cPUOM,
+                  EXECUTE rdt.rdt_PostPickAudit_GetStat @nMobile, @nFunc, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cID, @cTaskDetailKey, @cStorerKey, @cFacility, @cPUOM,
                      @nCSKU = @nCSKU OUTPUT,
                      @nCQTY = @nCQTY OUTPUT,
                      @nPSKU = @nPSKU OUTPUT,
@@ -575,6 +577,18 @@ BEGIN
                SET @cOutField08 = '' -- @cExtendedInfo
                SET @cOutField09 = @cID
                SET @cOutField10 = @cTaskDetailKey
+
+               SET @cUDF01 = @cDropID
+               SET @cUDF02 = CAST(@nCSKU AS NVARCHAR(10))
+               SET @cUDF03 = CAST(@nPSKU AS NVARCHAR(10))
+               SET @cUDF04 = CAST(@nPQTY AS NVARCHAR(10))
+               SET @cUDF05 = CAST(@nCQTY AS NVARCHAR(10))
+               SET @cUDF06 = @cSKUStat
+               SET @cUDF07 = @cQTYStat
+               SET @cUDF08 = @cExtendedInfo
+               SET @cUDF09 = @cPPACartonIDByPackDetailLabelNo
+               SET @cUDF10 = @cPPACartonIDByPickDetailCaseID
+               SET @cUDF12 = @cOrderKey --V1.5.0
 
                -- Enable all fields
                SET @cFieldAttr01 = ''
@@ -1415,6 +1429,18 @@ BEGIN
                SET @cOutField09 = @cID
                SET @cOutField10 = @cTaskDetailKey
 
+               SET @cUDF01 = @cDropID
+               SET @cUDF02 = CAST(@nCSKU AS NVARCHAR(10))
+               SET @cUDF03 = CAST(@nPSKU AS NVARCHAR(10))
+               SET @cUDF04 = CAST(@nPQTY AS NVARCHAR(10))
+               SET @cUDF05 = CAST(@nCQTY AS NVARCHAR(10))
+               SET @cUDF06 = @cSKUStat
+               SET @cUDF07 = @cQTYStat
+               SET @cUDF08 = @cExtendedInfo
+               SET @cUDF09 = @cPPACartonIDByPackDetailLabelNo
+               SET @cUDF10 = @cPPACartonIDByPickDetailCaseID
+               SET @cUDF12 = @cOrderKey --V1.5.0
+
                -- Go to prev screen
                SET @nAfterScn = 815
                SET @nAfterStep = 2
@@ -1758,6 +1784,7 @@ BEGIN
          --V1.4.0 END
 
       END -- step99
+
       -- fcr 1109
       IF @nStep IN (0, 2, 4, 5, 8)
             OR (@nStep = 99 AND @nScn = 6464 ) -- Print Scn

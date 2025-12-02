@@ -14,7 +14,7 @@ GO
 /*                                                                        */
 /* Parameters:                                                            */
 /*                                                                        */
-/* PVCS Version: 1.0	                                                     */
+/* PVCS Version: 1.0	                                                    */
 /*                                                                        */
 /* Version: 5.4                                                           */
 /*                                                                        */
@@ -25,7 +25,7 @@ GO
 /* 04-Jun-2024  NJOW01    1.0   WMS-25578 When susr1 len is 7-9 adjust the*/
 /*                              running# len to for making the labelno    */
 /*                              len to 19 plus check digit become len 20  */
-/* 14-May-2025  Michael   1.1   FCR-2087 get @cPacktype from OPTION5(ML01)*/
+/* 09-Sep-2025  AK01      1.1   FCR-7708 SSCC_Generation_Enhancement      */
 /**************************************************************************/
 
 CREATE OR ALTER PROC isp_GenUCCLabelNo (
@@ -61,7 +61,8 @@ BEGIN
    @nEven          INT,
    @n_RunNoLen     INT = 9,  --NJOW01
    @c_SSCCDynSerialByCompPrefix NVARCHAR(10) = 'N',  --NJOW01
-   @c_Option5      NVARCHAR(1000) --NJOW01
+   @c_Option5      NVARCHAR(1000), --NJOW01
+   @c_NoAI         NVARCHAR(1) = 'N'    --AK01
 
 	 SELECT @b_success = 1, @c_errmsg='', @n_err=0 
 
@@ -83,11 +84,18 @@ BEGIN
      SELECT @c_Option5 = SC.Option5
      FROM dbo.fnc_GetRight2('', @cStorerkey,'','GenUCCLabelNoConfig') AS SC	   
      
+     --AK01 S
+      SELECT @cPackType = dbo.fnc_GetParamValueFromString ('@c_PackType', @c_option5, @cPackType)
+      SELECT @c_NoAI = dbo.fnc_GetParamValueFromString ('@c_NoAI', @c_option5, @c_NoAI)
+      
+      IF @c_NoAI = 'Y'
+      BEGIN
+         SET @cIdentifier = ''
+      END
+      --AK01 E
+
      SELECT @c_SSCCDynSerialByCompPrefix = dbo.fnc_GetParamValueFromString ('@c_SSCCDynSerialByCompPrefix', @c_option5, @c_SSCCDynSerialByCompPrefix)
      --NJOW01 E     
-
-     SELECT @cPacktype = dbo.fnc_GetParamValueFromString ('@cPacktype', @c_option5, @cPacktype)    --ML01
-     IF ISNULL(@cPacktype,'') NOT LIKE '[0-9]' SET @cPacktype = '0'                                --ML01
 
 	   IF LEN(@cSUSR1) >= 9 AND @c_SSCCDynSerialByCompPrefix <> 'Y' --NJOW01
      BEGIN
@@ -98,9 +106,12 @@ BEGIN
      END 
      
      --NJOW01 S
-     IF LEN(@cSUSR1) IN(7,8,9) AND @c_SSCCDynSerialByCompPrefix = 'Y'
+     IF LEN(@cSUSR1) BETWEEN 7 AND 10  AND @c_SSCCDynSerialByCompPrefix = 'Y' --AK01
      BEGIN
-     	  SET @n_RunNoLen = 9 - (LEN(@cSUSR1) - 7)
+     	   --AK01 S
+         --SET @n_RunNoLen = 9 - (LEN(@cSUSR1) - 7)
+         SET @n_RunNoLen = 16 - LEN(@cSUSR1)
+         --AK01 E
 
 	      EXEC isp_getucckey
 			   @cStorerkey,

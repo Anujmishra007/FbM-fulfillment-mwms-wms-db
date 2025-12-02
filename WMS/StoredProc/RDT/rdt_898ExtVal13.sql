@@ -55,6 +55,23 @@ BEGIN
 
    IF @nFunc = 898
    BEGIN
+      IF @nStep = 1  -- ASN 
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF EXISTS(SELECT 1
+               FROM dbo.RECEIPT WITH(NOLOCK) 
+               WHERE ReceiptKey = @cReceiptKey 
+                  AND Facility = @cFacility
+                  AND StorerKey = @cStorerKey 
+                  AND ISNULL(UserDefine06, '') = '')
+            BEGIN
+               SET @nErrNo = 225302 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- OnLOT not triggered
+               GOTO Quit
+            END
+         END
+      END
       IF @nStep = 8 -- SKU
       BEGIN 
          IF @nInputKey = 1

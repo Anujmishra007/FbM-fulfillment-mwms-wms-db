@@ -1039,49 +1039,6 @@ BEGIN
                 END
             END
 
-            --(ung02)
-            IF @c_TTMTaskType IN ('PAF', 'PA1')
-               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride IN ('PAF', 'PA1'))
-               AND OBJECT_ID('nspTTMEvaluatePAFTasks') IS NOT NULL
-               AND EXISTS (
-                       SELECT 1
-                       FROM   TaskManagerUserDetail WITH (NOLOCK)
-                       WHERE  USERKEY = @c_userid
-                              AND PERMISSIONTYPE IN ('PAF', 'PA1')
-                              AND PERMISSION = '1'
-                   )
-            BEGIN
-                SELECT @b_success = 0
-                SELECT @c_appflag = 'TPA'
-                EXECUTE nspTTMEvaluatePAFTasks
-                @c_senddelimiter=@c_senddelimiter
-                , @c_userid=@c_userid
-                , @c_Strategykey=@c_Strategykey
-                , @c_ttmStrategykey=@c_ttmStrategykey
-                , @c_ttmpickcode=@c_ttmpickcode
-                , @c_ttmoverride=@c_ttmoverride
-                , @c_AreaKey01=@c_AreaKey01
-                , @c_AreaKey02=@c_AreaKey02
-                , @c_AreaKey03=@c_AreaKey03
-                , @c_AreaKey04=@c_AreaKey04
-                , @c_AreaKey05=@c_AreaKey05
-                , @c_LastLOC=@c_LastLOC
-                , @c_outstring=@c_outstring OUTPUT
-                , @b_Success=@b_success OUTPUT
-                , @n_err=@n_err OUTPUT
-                , @c_errmsg=@c_errmsg OUTPUT
-                , @c_ptcid=@c_ptcid
-                , @c_fromloc=@c_fromloc OUTPUT
-                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT
-
-                SET @c_RefKey01 = @c_fromloc
-
-                IF @b_success<>1
-                BEGIN
-                    SELECT @n_continue = 3
-                END
-            END
-
             --(ung01)
             IF @c_TTMTaskType='PAT'
                AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='PAT')

@@ -2,22 +2,16 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/******************************************************************************/
-/* Store procedure: rdt_898RcvCfm19                                           */
-/* Copyright      :                                                           */
-/*                                                                            */
-/* Purpose: Lookup qualified ReceiptDetail lines to receive in the QTY        */
-/*                                                                            */
-/* PVCS Version: 2.1                                                          */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev  Author      Purposes                                       */
-/* 2025-10-29 1.0  Dennis      FCR-8472 Created                               */ 
-/* 2025-11-20 1.1  Dennis      FCR-8897 Add inventory Hold                    */                               
-/******************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_898RcvCfm21                                              */
+/* Copyright      : Maersk                                                       */
+/*                                                                               */
+/*                                                                               */
+/* Date       Rev    Author      Purposes                                        */   
+/* 2025-11-24 1.0.0  Dennis      FCR-8723 Created                                */                            
+/*********************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_898RcvCfm19] (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_898RcvCfm21] (
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
@@ -105,6 +99,8 @@ BEGIN
    SET @cPOKey = ''
 END
 
+SET @cSubreasonCode = 'OK'
+
 -- NSQLConfig 'DisAllowDuplicateIdsOnRFRcpt'
 SET @nDisAllowDuplicateIdsOnRFRcpt = 0 -- Default Off
 SELECT @nDisAllowDuplicateIdsOnRFRcpt = NSQLValue
@@ -175,12 +171,15 @@ IF @cLottable01 IS NULL SET @cLottable01 = ''
 IF @cLottable02 IS NULL SET @cLottable02 = ''
 IF @cLottable03 IS NULL SET @cLottable03 = ''
 IF @dLottable04 = 0     SET @dLottable04 = NULL
+IF @dLottable05 = 0     SET @dLottable05 = NULL
 IF @cSerialNo   IS NULL SET @cSerialNo   = ''
 IF @nSerialQTY  IS NULL SET @nSerialQTY  = 0
 
 -- Truncate the time portion
 IF @dLottable04 IS NOT NULL
    SET @dLottable04 = CONVERT( DATETIME, CONVERT( NVARCHAR( 10), @dLottable04, 120), 120)
+IF @dLottable05 IS NOT NULL
+   SET @dLottable05 = CONVERT( DATETIME, CONVERT( NVARCHAR( 10), @dLottable05, 120), 120)
 
 
 /*-------------------------------------------------------------------------------
@@ -446,6 +445,7 @@ BEGIN
       FROM dbo.UCC (NOLOCK)
       WHERE StorerKey = @cStorerKey
         AND UCCNo = @cUCC
+        AND Status <> CASE WHEN @cDocType = 'R' THEN '6' ELSE '-1' END --(ShaoAn For FCR-1103)
         AND LEFT(ISNULL(Sourcekey, ''),10) = @cPOKey -- (Vicky02)
         AND SKU = CASE WHEN @cUCCWithMultiSKU = '1' THEN @cUCCSKU ELSE SKU END
 
@@ -458,6 +458,7 @@ BEGIN
       FROM dbo.UCC (NOLOCK)
       WHERE StorerKey = @cStorerKey
         AND UCCNo = @cUCC
+        AND Status <> CASE WHEN @cDocType = 'R' THEN '6' ELSE '-1' END --(ShaoAn For FCR-1103)
         AND SKU = CASE WHEN @cUCCWithMultiSKU = '1' THEN @cUCCSKU ELSE SKU END
    END
 
@@ -603,7 +604,7 @@ BEGIN
    IF RDT.rdtIsValidQTY( @nUCCQTY, 1) = 0 -- 1=Check for zero
    BEGIN
       SET @nErrNo = 60332
-      SET @cErrMsg = rdt.rdtgetmessage( 60332, @cLangCode, 'DSP') --'Invalid QTY'
+      SET @cErrMsg = 'XXXX'--rdt.rdtgetmessage( 60332, @cLangCode, 'DSP') --'Invalid QTY'
       GOTO Fail
    END
 
@@ -655,10 +656,11 @@ DECLARE @cSkipLottable03 NVARCHAR( 1)
 DECLARE @cSkipLottable04 NVARCHAR( 1)
 DECLARE @cAddRCPTValidtn NVARCHAR( 1)
 
-SET @cSkipLottable01 = 0
-SET @cSkipLottable02 = 0
-SET @cSkipLottable03 = 0
-SET @cSkipLottable04 = 0
+
+SET @cSkipLottable01 = rdt.RDTGetConfig( @nFunc, 'SkipLottable01', @cStorerKey)
+SET @cSkipLottable02 = rdt.RDTGetConfig( @nFunc, 'SkipLottable02', @cStorerKey)
+SET @cSkipLottable03 = rdt.RDTGetConfig( @nFunc, 'SkipLottable03', @cStorerKey)
+SET @cSkipLottable04 = rdt.RDTGetConfig( @nFunc, 'SkipLottable04', @cStorerKey)
 
 -- For Fcr-549
 SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddRCPTValidtn', @cStorerKey)
@@ -895,7 +897,7 @@ SET @cCustomSQL =
 IF @nNOPOFlag <> 1 -- POKey <> NOPO
    SET @cCustomSQL = @cCustomSQL + ' AND POKey = @cPOKey '
 
-IF @cReceiptDetailFilterSP <> ''
+IF @cReceiptDetailFilterSP <> '' AND @cDocType <> 'R'
 BEGIN
    IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cReceiptDetailFilterSP AND type = 'P')
    BEGIN
@@ -1081,23 +1083,23 @@ BEGIN
 --   IF @nLineBal >= @nUCCQTY -- UCC cannot receive into 2 ReceiptDetails
 --   BEGIN
       -- Update ReceiptDetail
-      UPDATE @tRD SET
-         BeforeReceivedQTY = BeforeReceivedQTY + @nQTY
+   UPDATE @tRD SET
+      BeforeReceivedQTY = BeforeReceivedQTY + @nQTY
          -- Lottable05 = @dLottable05 -- Lottable05 is not match, but always overwrite
-      WHERE ReceiptLineNumber = @cReceiptLineNumber
+   WHERE ReceiptLineNumber = @cReceiptLineNumber
 
       -- Update UCC
-      IF @cUCC <> ''
+   IF @cUCC <> ''
+   BEGIN
+      IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC) 
       BEGIN
-         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)
-         BEGIN
-            INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber)
-            VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber)
-         END
+         INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber)
+         VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber)
       END
+   END
 
       -- Reduce balance
-      SET @nQTY_Bal = @nQTY_Bal - @nQTY
+   SET @nQTY_Bal = @nQTY_Bal - @nQTY
 --   END
    -- Exit loop
    IF @cDebug = '1'
@@ -1220,7 +1222,7 @@ BEGIN
       -- Update UCC
       IF @cUCC <> ''
       BEGIN
-         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)
+         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)  
          BEGIN
             INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber)
             VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @c1stExactMatch_ReceiptLineNumber)
@@ -1306,7 +1308,7 @@ BEGIN
       -- Update UCC
       IF @cUCC <> ''
       BEGIN
-         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)
+         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)   
          BEGIN
             INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber)
             VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber)
@@ -1431,7 +1433,7 @@ BEGIN
       -- Update UCC
       IF @cUCC <> ''
       BEGIN
-         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)
+         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)   
          BEGIN
             INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber)
             VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @c1stBlank_ReceiptLineNumber)
@@ -1515,7 +1517,7 @@ BEGIN
       -- Update UCC
       IF @cUCC <> ''
       BEGIN
-         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)
+         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC) 
          BEGIN
             INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber)
             VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber)
@@ -1582,7 +1584,7 @@ BEGIN
       -- Update UCC
       IF @cUCC <> ''
       BEGIN
-         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)
+         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)   
          BEGIN
             INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber)
             VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber)
@@ -1640,7 +1642,7 @@ BEGIN
          -- Update UCC
          IF @cUCC <> ''
          BEGIN
-            IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)
+            IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)   
             BEGIN
                INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber)
                VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber)
@@ -1783,7 +1785,7 @@ BEGIN
       -- Update UCC
       IF @cUCC <> ''
       BEGIN
-         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)
+         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC) 
          BEGIN
             INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber, POKey) -- (Vicky04)
             VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @cNewReceiptLineNumber, '') -- (Vicky04)
@@ -1842,7 +1844,7 @@ BEGIN
       -- Update UCC
       IF @cUCC <> ''
       BEGIN
-         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)
+         IF NOT EXISTS( SELECT 1 FROM @tUCC WHERE UCCNo = @cUCC)  
          BEGIN
             INSERT INTO @tUCC (StorerKey, UCCNo, Status, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber, POKey) -- (Vicky04)
             VALUES ( @cStorerKey, @cUCC, @cUCCStatus, @nUCCQTY, @cToLOC, @cToID, @cReceiptKey, @cNewReceiptLineNumber, '') -- (Vicky04)
@@ -1872,7 +1874,7 @@ Saving:
 -- Handling transaction
 SET @nTranCount = @@TRANCOUNT
 BEGIN TRAN  -- Begin our own transaction
-SAVE TRAN rdt_898RcvCfm19 -- For rollback or commit only our own transaction
+SAVE TRAN rdt_Receive -- For rollback or commit only our own transaction
 
 DECLARE @cOrg_ReceiptLineNumber NVARCHAR( 5)
 DECLARE @nOrg_QTYExpected       INT
@@ -2107,15 +2109,6 @@ BEGIN
       FROM dbo.ReceiptDetail (NOLOCK)
       WHERE ReceiptKey = @cReceiptKey
 
-      IF EXISTS( SELECT 1 FROM dbo.ReceiptDetail RD(NOLOCK)
-                  JOIN dbo.Receipt R (NOLOCK) ON RD.ReceiptKey = R.ReceiptKey
-                 WHERE RD.ReceiptKey = @cReceiptKey AND RD.ConditionCode ='RTH'
-                 AND R.DocType = 'R'
-                 AND RD.ReceiptLineNumber = @cReceiptLineNo_Borrowed)
-      BEGIN
-         SET @cConditionCode = 'RTH'
-      END
-
       -- Insert new ReceiptDetail line
       INSERT INTO dbo.ReceiptDetail
          (ReceiptKey, ReceiptLineNumber, POKey, StorerKey, SKU, QTYExpected, BeforeReceivedQTY,
@@ -2207,7 +2200,7 @@ BEGIN
       DTL = ReceiptDetail
       HDR = Receipt
       
-      rdt_898RcvCfm19 
+      rdt_receive 
          --> ntrReceiptDetailUpdate (update Receipt.OpenQTY)
             --> ntrReceiptUpdate
       */
@@ -2230,9 +2223,8 @@ BEGIN
          Lottable02 = CASE WHEN @cSkipLottable02 = '1' THEN Lottable02 ELSE @cLottable02 END,
          Lottable03 = CASE WHEN @cSkipLottable03 = '1' THEN Lottable03 ELSE @cLottable03 END,
          Lottable04 = CASE WHEN @cSkipLottable04 = '1' THEN Lottable04 ELSE @dLottable04 END,
-         ConditionCode = CASE WHEN ConditionCode = 'RTH' THEN 'RTH' ELSE @cConditionCode END,
+         ConditionCode = @cConditionCode,
          SubreasonCode = @cSubreasonCode, 
-         UserDefine01 = @cUCC,
          EditDate = GETDATE(),  
          EditWho = SUSER_SNAME()    
          -- Commented by SHONG on 20th Sept 2007 SOS# 87068
@@ -2297,7 +2289,9 @@ BEGIN
          FROM dbo.UCC (NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND UCCNo = @cUCC
-            AND Status = @cUCCStatus
+            AND (
+                  (@cDocType = 'R' AND Status <> '6') OR (@cDocType <> 'R' AND Status = @cUCCStatus)   --(ShaoAn For FCR-1103)
+                )  
             AND LEFT(ISNULL(Sourcekey, ''),10) = @cPOKey) -- (Vicky02) --(yeekung01)
       BEGIN
          -- Update UCC
@@ -2354,7 +2348,9 @@ BEGIN
          FROM dbo.UCC (NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND UCCNo = @cUCC
-            AND Status = @cUCCStatus
+           AND (
+                  (@cDocType = 'R' AND Status <> '6') OR (@cDocType <> 'R' AND Status = @cUCCStatus)   --(ShaoAn For FCR-1103)
+                )  
             AND SKU = @cSKU)
       BEGIN
          -- Update UCC
@@ -2534,19 +2530,21 @@ BEGIN
    BEGIN
       -- Bulk update (so that trigger fire only once, compare with row update that fire trigger each time)  
       UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET  
-         QTYReceived = RD.BeforeReceivedQTY,  
-         FinalizeFlag = 'Y', 
-         EditDate = GETDATE(),  
-         EditWho = SUSER_SNAME()    
+            QTYReceived = RD.BeforeReceivedQTY,  
+            FinalizeFlag = 'Y', 
+            EditDate = GETDATE(),  
+            EditWho = SUSER_SNAME()    
       FROM dbo.ReceiptDetail RD  
-         INNER JOIN @tRD T ON (T.ReceiptLineNumber = RD.ReceiptLineNumber)  
+            INNER JOIN @tRD T ON (T.ReceiptLineNumber = RD.ReceiptLineNumber)  
       WHERE RD.ReceiptKey = @cReceiptKey  
-         AND T.BeforeReceivedQTY <> T.Org_BeforeReceivedQTY  
-      IF @@ERROR <> 0  
+            AND T.BeforeReceivedQTY <> T.Org_BeforeReceivedQTY  
+
+      
+      IF @@ERROR <> 0 
       BEGIN  
          SET @nErrNo = 60348  
-         SET @cErrMsg = rdt.rdtgetmessage( 60348, @cLangCode, 'DSP') --'Finalize fail'   -- (ChewKP03)
-         GOTO RollBackTran  
+         SET @cErrMsg = @@ERROR-- rdt.rdtgetmessage( 60348, @cLangCode, 'DSP') --'Finalize fail'   -- (ChewKP03)
+        GOTO RollBackTran  
       END
    END
    
@@ -2571,52 +2569,129 @@ BEGIN
          IF @nErrNo <> 0 OR @b_Success = 0
             GOTO RollBackTran
          
-         IF EXISTS (SELECT 1 FROM RECEIPT R WITH (NOLOCK) 
-         JOIN dbo.ReceiptDetail RD ON R.ReceiptKey = RD.ReceiptKey AND ReceiptLineNumber = @cReceiptLineNumber
-         WHERE R.ReceiptKey = @cReceiptKey AND R.DOCTYPE = 'R' AND RD.ConditionCode = 'RTH')
-         BEGIN
-            EXEC nspInventoryHoldWrapper
-               '',               -- lot
-               '',               -- loc
-               @cToID,               -- id
-               @cStorerKey,     -- storerkey
-               @cSKU,           -- sku
-               '',               -- lottable01
-               '',               -- lottable01
-               '',               -- lottable01
-               NULL,             -- lottable01
-               NULL,             -- lottable01
-               '',
-               '',
-               '',
-               '',
-               '',
-               '',
-               '',
-               NULL,
-               NULL,
-               NULL,
-               'RTH',      -- status
-               '1',              -- hold
-               @b_success OUTPUT,
-               @nErrNo OUTPUT,
-               @cErrMsg OUTPUT,
-               ''   -- remark
-         END
          FETCH NEXT FROM @curRD INTO @cReceiptLineNumber
       END
    END
 END  
 
-UPDATE PI SET
-   UCCNo = ''
-FROM dbo.PackInfo PI WITH (ROWLOCK)
-INNER JOIN PackDetail PD ON PI.PickSlipNo = PD.PickSlipNo AND PI.CartonNo = PD.CartonNo
-INNER JOIN PACKHEADER PH ON PD.PickSlipNo = PH.PickSlipNo
-INNER JOIN dbo.ORDERS ORM ON PH.StorerKey = ORM.StorerKey AND PH.OrderKey = ORM.OrderKey
-WHERE PH.StorerKey = @cStorerKey
-   AND PI.UCCNo = @cUCC
-   AND ORM.Status = '9'
+BEGIN TRY
+   DECLARE @cNewExternLineNo NVARCHAR(20)
+
+   SET @cNewExternLineNo = ''
+   SELECT TOP 1 @cNewExternLineNo =
+      RIGHT( '00000' + CAST( CAST( IsNULL( MAX( ExternLineNo), 0) AS INT) + 1 AS NVARCHAR( 6)), 6),
+      @cExternReceiptKey = MAX( ExternReceiptKey)
+   FROM dbo.ReceiptDetail (NOLOCK)
+   WHERE ReceiptKey = @cReceiptKey
+
+   UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET  
+               ExternReceiptKey = @cExternReceiptKey,
+               --ExternLineNo = @cNewExternLineNo,
+               UserDefine01 = CASE WHEN @cDocType = 'R' THEN @cUCC ELSE RD.UserDefine01 END,
+               UserDefine02 = @cUCC
+         FROM dbo.ReceiptDetail RD  
+               INNER JOIN @tRD T ON (T.ReceiptLineNumber = RD.ReceiptLineNumber)  
+         WHERE RD.ReceiptKey = @cReceiptKey  
+               AND T.BeforeReceivedQTY <> T.Org_BeforeReceivedQTY 
+END TRY 
+BEGIN CATCH 
+   SET @nErrNo = 231401  
+   SET @cErrMsg = ERROR_MESSAGE()
+   GOTO RollBackTran  
+END CATCH
+
+--v1.0.1 start
+-- Split the ucc receipt line if the beforeReceivedQty < QTYExpected
+DECLARE @cReciptLineToSplit NVARCHAR(5),
+         @nNewRcptLineQty INT
+
+SELECT TOP 1 
+   @cReciptLineToSplit = ReceiptLineNumber,
+   @nNewRcptLineQty = QTYExpected - BeforeReceivedQTY 
+FROM dbo.RECEIPTDETAIL rd (NOLOCK)
+JOIN dbo.RECEIPT rm (NOLOCK) ON rd.RECEIPTKEY = rm.RECEIPTKEY
+WHERE rm.RECEIPTKEY = @cReceiptKey 
+AND rm.DOCTYPE = 'R' 
+AND BeforeReceivedQTY < QTYExpected
+AND rd.UserDefine02 = @cUCC
+
+IF @cDebug = '1'
+BEGIN
+   SELECT 'The splitted received receipt line for not fully received UCC'
+   SELECT *
+   FROM dbo.RECEIPTDETAIL rd (NOLOCK)
+   JOIN dbo.RECEIPT rm (NOLOCK) ON rd.RECEIPTKEY = rm.RECEIPTKEY
+   WHERE rm.RECEIPTKEY = @cReceiptKey 
+   AND rm.DOCTYPE = 'R' 
+   AND BeforeReceivedQTY < QTYExpected
+   AND rd.UserDefine02 = @cUCC
+END
+
+IF ISNULL(@cReciptLineToSplit,'') <> ''
+BEGIN
+   BEGIN TRY
+      UPDATE dbo.RECEIPTDETAIL WITH (ROWLOCK) SET  
+               QTYExpected = BeforeReceivedQTY,
+               TrafficCop = NULL,
+               EditDate = GETDATE(),  
+               EditWho = SUSER_SNAME()    
+         WHERE ReceiptKey = @cReceiptKey  
+               AND ReceiptLineNumber = @cReciptLineToSplit
+   END TRY
+   BEGIN CATCH
+      SET @cErrMsg = ERROR_MESSAGE() -- Update Receiptdetail fail
+      SET @nErrNo = 231402  
+      GOTO RollBackTran  
+   END CATCH
+
+   SET @cNewReceiptLineNumber = ''
+   SELECT @cNewReceiptLineNumber =
+      RIGHT( '00000' + CAST( CAST( IsNULL( MAX( ReceiptLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+   FROM dbo.ReceiptDetail (NOLOCK)
+   WHERE ReceiptKey = @cReceiptKey
+
+   SET @cNewExternLineNo = ''
+   SELECT @cNewExternLineNo =
+      RIGHT( '00000' + CAST( CAST( IsNULL( MAX( ExternLineNo), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+   FROM dbo.ReceiptDetail (NOLOCK)
+   WHERE ReceiptKey = @cReceiptKey
+
+   IF @cDebug = '1'
+      SELECT 'NewReceiptLine', @cNewReceiptLineNumber
+
+   -- Insert new ReceiptDetail line
+   BEGIN TRY
+      INSERT INTO dbo.ReceiptDetail
+         (ReceiptKey, ReceiptLineNumber, POKey, StorerKey, SKU, QTYExpected, BeforeReceivedQTY,
+         ToID, ToLOC, Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,
+         Status, DateReceived, UOM, PackKey, ConditionCode, EffectiveDate, TariffKey, FinalizeFlag, SplitPalletFlag,
+         ExternReceiptKey, ExternLineNo, AltSku, VesselKey, -- Added By Vicky
+         VoyageKey, XdockKey, ContainerKey, UnitPrice, ExtendedPrice, FreeGoodQtyExpected,
+         FreeGoodQtyReceived, ExportStatus, LoadKey, ExternPoKey,
+         UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05,
+         UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, POLineNumber, SubReasonCode, DuplicateFrom, Channel) 
+      SELECT
+         @cReceiptKey, @cNewReceiptLineNumber, POKey, StorerKey, SKU, @nNewRcptLineQty, 0,  
+         '', ToLOC, Lottable01, Lottable02, Lottable03, Lottable04, --@dLottable05,
+         '0', GETDATE(), UOM, PackKey, ConditionCode, GETDATE(), TariffKey, 'N', 'N',
+         ExternReceiptKey, @cNewExternLineNo, AltSku, VesselKey,
+         VoyageKey, XdockKey, ContainerKey, UnitPrice, ExtendedPrice, FreeGoodQtyExpected,
+         FreeGoodQtyReceived, ExportStatus, LoadKey, ExternPoKey,
+         '', '', UserDefine03, UserDefine04, UserDefine05,
+         UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10,
+         POLineNumber, SubreasonCode , @cReciptLineToSplit, Channel
+      FROM Receiptdetail (NOLOCK)
+      WHERE ReceiptKey = @cReceiptKey
+         AND ReceiptLineNumber = @cReciptLineToSplit
+   END TRY
+   BEGIN CATCH
+      SET @cErrMsg = ERROR_MESSAGE() -- Insert Receiptdetail fail
+      SET @nErrNo = 231403  
+      GOTO RollBackTran  
+   END CATCH
+END
+
+--v1.0.1 end
 
 IF @cDebug = '1'  
 BEGIN
@@ -2625,12 +2700,12 @@ BEGIN
 END  
 ELSE  
 BEGIN  
-   COMMIT TRAN rdt_898RcvCfm19 -- Only commit change made in here  
+   COMMIT TRAN rdt_Receive -- Only commit change made in here  
    GOTO Quit  
 END  
   
 RollBackTran:  
-   ROLLBACK TRAN rdt_898RcvCfm19  
+   ROLLBACK TRAN rdt_Receive  
 Fail:  
 Quit:  
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
@@ -2643,5 +2718,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_898RcvCfm19] TO NSQL
+GRANT EXECUTE ON [rdt].[rdt_898RcvCfm21] TO NSQL
 GO

@@ -702,8 +702,101 @@ BEGIN
 
             IF @nInputKey = 0 -- ESC
             BEGIN
+               IF @nFromStep = 99 AND @nFromScn = 6672
+               BEGIN
+                  SET @cOutField01 = ''
+                  IF ISNULL(@cSuggSKU ,'') = ''
+                  BEGIN -- Multi Sku
+                     WITH TargetID AS (
+                        SELECT SKU, SUM(Qty) AS QTY
+                        FROM LOTXLOCXID 
+                        WHERE Id = @cSuggID
+                           AND Qty > 0 
+                        GROUP BY SKU
+                     ),
+                     SkuSummary AS (
+                        SELECT 
+                           Id,
+                           Loc,
+                           STRING_AGG(CONCAT(LLI.Sku, '|', LLI.Qty), ',') WITHIN GROUP (ORDER BY LLI.Sku,LLI.Loc) as SkuQtyPattern
+                        FROM LOTXLOCXID lli
+                        JOIN TargetID TID ON TID.Sku = LLI.Sku
+                        WHERE LLI.QTY > 0 
+                        AND (ID  = @cSuggID OR LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen = 0)
+                        GROUP BY Id, Loc
+                        HAVING COUNT(DISTINCT LLI.SKU)  = (SELECT COUNT(1) FROM TargetID)
+                     ),
+                     MatchingIds AS (
+                        SELECT top 3
+                           a.Id as OriginalId,
+                           a.Loc as OriginalLoc,
+                           b.Id as MatchId,
+                           b.Loc as MatchLoc,
+                           a.SkuQtyPattern,
+                           ROW_NUMBER() OVER (ORDER BY b.Id, b.Loc) as RowNum
+                        FROM SkuSummary a
+                        INNER JOIN SkuSummary b ON a.SkuQtyPattern = b.SkuQtyPattern
+                        WHERE a.Id <> b.Id
+                           AND a.Id = @cSuggID
+                     )
+                     INSERT INTO @tOptions (ID,LOC)
+                     SELECT 
+                        MatchId,
+                        MatchLoc
+                     FROM MatchingIds
+                  END
+                  ELSE -- Single SKU
+                  BEGIN
+                     SELECT @cOutField01 = Lottable03 FROM LOTAttribute (NOLOCK)
+                     WHERE lot = @cSuggLOT AND Storerkey = @cStorerKey AND SKU = @cSuggSKU
+
+                     INSERT INTO @tOptions (LOC,ID)
+                     SELECT TOP 3 LLI.LOC,LLI.ID
+                     FROM LOTxLOCxID LLI(NOLOCK)
+                     JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
+                     WHERE LLI.QTY > 0
+                     AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
+                     AND LLI.StorerKey = @cStorerKey
+                     AND LLI.SKU = @cSuggSKU
+                     AND LLI.QTY = @nQTY_RPL
+                     AND LA.Lottable03 = @cOutField01
+                     AND LLI.ID <> @cSuggID
+                     ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
+                  END
+
+                  SELECT
+                     @cOutField02 = ISNULL(MAX(CASE WHEN count = 1 THEN LOC ELSE NULL END),''),
+                     @cOutField03 = ISNULL(MAX(CASE WHEN count = 1 THEN ID ELSE NULL END),''),
+                     @cOutField04 = ISNULL(MAX(CASE WHEN count = 2 THEN LOC ELSE NULL END),''),
+                     @cOutField06 = ISNULL(MAX(CASE WHEN count = 2 THEN ID ELSE NULL END),''),
+                     @cOutField07 = ISNULL(MAX(CASE WHEN count = 3 THEN LOC ELSE NULL END),''),
+                     @cOutField08 = ISNULL(MAX(CASE WHEN count = 3 THEN ID ELSE NULL END),'')
+                  FROM @tOptions
+
+                  INSERT INTO @tInventory (SKU,QTY)
+                  SELECT TOP 3 LLI.SKU,SUM(LLI.QTY)
+                  FROM LOTxLOCxID LLI(NOLOCK)
+                  WHERE LLI.QTY - LLI.QTYPICKED > 0
+                  AND LLI.StorerKey = @cStorerKey
+                  AND LLI.ID = @cSuggID
+                  AND LLI.LOC = @cSuggFromLOC
+                  GROUP BY LLI.SKU
+                  ORDER BY SKU
+
+                  SELECT
+                     @cOutField09 = ISNULL(CASE WHEN count = 1 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,''),
+                     @cOutField11 = ISNULL(CASE WHEN count = 2 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,''),
+                     @cOutField12 = ISNULL(CASE WHEN count = 3 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,'')
+                  FROM @tInventory
+
+                  SET @cOutField05 = ''
+                  SET @cOutField15 = @cSuggSKU
+                  SET @nAfterStep = 99
+                  SET @nAfterScn = 6672
+                  GOTO QUIT
+               END
                -- Go to DropID screen
-               IF @nFromStep = 99
+               ELSE IF @nFromStep = 99
                BEGIN
                   -- Prepare next screen variable
                   SET @cDropID = ''
@@ -769,56 +862,6 @@ BEGIN
                   SET @cOutField01 = '' -- Option
                END
 
-               IF @nFromStep = 99 AND @nFromScn = 6672
-               BEGIN
-                  SET @cOutField01 = ''
-                  SELECT @cOutField01 = Lottable03 FROM LOTAttribute (NOLOCK)
-                  WHERE lot = @cSuggLOT AND Storerkey = @cStorerKey AND SKU = @cSuggSKU
-
-                  INSERT INTO @tOptions (LOC,ID)
-                  SELECT TOP 3 LLI.LOC,LLI.ID
-                  FROM LOTxLOCxID LLI(NOLOCK)
-                  JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
-                  WHERE LLI.QTY - LLI.QTYPICKED > 0
-                  AND LLI.StorerKey = @cStorerKey
-                  AND LLI.SKU = @cSuggSKU
-                  AND LLI.QTY = @nQTY_RPL
-                  AND LA.Lottable03 = @cOutField01
-                  AND LLI.ID <> @cSuggID
-                  ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
-
-                  SELECT
-                     @cOutField02 = ISNULL(MAX(CASE WHEN count = 1 THEN LOC ELSE NULL END),''),
-                     @cOutField03 = ISNULL(MAX(CASE WHEN count = 1 THEN ID ELSE NULL END),''),
-                     @cOutField04 = ISNULL(MAX(CASE WHEN count = 2 THEN LOC ELSE NULL END),''),
-                     @cOutField06 = ISNULL(MAX(CASE WHEN count = 2 THEN ID ELSE NULL END),''),
-                     @cOutField07 = ISNULL(MAX(CASE WHEN count = 3 THEN LOC ELSE NULL END),''),
-                     @cOutField08 = ISNULL(MAX(CASE WHEN count = 3 THEN ID ELSE NULL END),'')
-                  FROM @tOptions
-
-                  INSERT INTO @tInventory (SKU,QTY)
-                  SELECT TOP 3 LLI.SKU,SUM(LLI.QTY)
-                  FROM LOTxLOCxID LLI(NOLOCK)
-                  WHERE LLI.QTY - LLI.QTYPICKED > 0
-                  AND LLI.StorerKey = @cStorerKey
-                  AND LLI.ID = @cSuggID
-                  AND LLI.LOC = @cSuggFromLOC
-                  GROUP BY LLI.SKU
-                  ORDER BY SKU
-
-                  SELECT
-                     @cOutField09 = ISNULL(CASE WHEN count = 1 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,''),
-                     @cOutField11 = ISNULL(CASE WHEN count = 2 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,''),
-                     @cOutField12 = ISNULL(CASE WHEN count = 3 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,'')
-                  FROM @tInventory
-
-                  SET @cOutField05 = ''
-                  SET @cOutField15 = @cSuggSKU
-                  SET @nAfterStep = 99
-                  SET @nAfterScn = 6672
-                  GOTO QUIT
-               END
-
                -- Back to prev screen
                SET @nAfterScn = @nFromScn
                SET @nAfterStep = @nFromStep
@@ -874,21 +917,64 @@ BEGIN
                   IF @cFromID = '99' AND @nScn = 4022
                   BEGIN
                      SET @cOutField01 = ''
-                     SELECT @cOutField01 = Lottable03 FROM LOTAttribute (NOLOCK)
-                     WHERE lot = @cSuggLOT AND Storerkey = @cStorerKey AND SKU = @cSuggSKU
+                     IF ISNULL(@cSuggSKU ,'') = ''
+                     BEGIN -- Multi Sku
+                        WITH TargetID AS (
+                           SELECT SKU, SUM(Qty) AS QTY
+                           FROM LOTXLOCXID 
+                           WHERE Id = @cSuggID
+                              AND Qty > 0 
+                           GROUP BY SKU
+                        ),
+                        SkuSummary AS (
+                           SELECT 
+                              Id,
+                              Loc,
+                              STRING_AGG(CONCAT(LLI.Sku, '|', LLI.Qty), ',') WITHIN GROUP (ORDER BY LLI.Sku,LLI.Loc) as SkuQtyPattern
+                           FROM LOTXLOCXID lli
+                           JOIN TargetID TID ON TID.Sku = LLI.Sku
+                           WHERE LLI.QTY > 0 
+                           AND (ID  = @cSuggID OR LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen = 0)
+                           GROUP BY Id, Loc
+                           HAVING COUNT(DISTINCT LLI.SKU)  = (SELECT COUNT(1) FROM TargetID)
+                        ),
+                        MatchingIds AS (
+                           SELECT top 3
+                              a.Id as OriginalId,
+                              a.Loc as OriginalLoc,
+                              b.Id as MatchId,
+                              b.Loc as MatchLoc,
+                              a.SkuQtyPattern,
+                              ROW_NUMBER() OVER (ORDER BY b.Id, b.Loc) as RowNum
+                           FROM SkuSummary a
+                           INNER JOIN SkuSummary b ON a.SkuQtyPattern = b.SkuQtyPattern
+                           WHERE a.Id <> b.Id
+                              AND a.Id = @cSuggID
+                        )
+                        INSERT INTO @tOptions (ID,LOC)
+                        SELECT 
+                           MatchId,
+                           MatchLoc
+                        FROM MatchingIds
+                     END
+                     ELSE -- Single SKU
+                     BEGIN
+                        SELECT @cOutField01 = Lottable03 FROM LOTAttribute (NOLOCK)
+                        WHERE lot = @cSuggLOT AND Storerkey = @cStorerKey AND SKU = @cSuggSKU
 
-                     INSERT INTO @tOptions (LOC,ID)
-                     SELECT TOP 3 LLI.LOC,LLI.ID
-                     FROM LOTxLOCxID LLI(NOLOCK)
-                     JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
-                     WHERE LLI.QTY > 0
-                     AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
-                     AND LLI.StorerKey = @cStorerKey
-                     AND LLI.SKU = @cSuggSKU
-                     AND LLI.QTY = @nQTY_RPL
-                     AND LA.Lottable03 = @cOutField01
-                     AND LLI.ID <> @cSuggID
-                     ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
+                        INSERT INTO @tOptions (LOC,ID)
+                        SELECT TOP 3 LLI.LOC,LLI.ID
+                        FROM LOTxLOCxID LLI(NOLOCK)
+                        JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
+                        WHERE LLI.QTY > 0
+                        AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
+                        AND LLI.StorerKey = @cStorerKey
+                        AND LLI.SKU = @cSuggSKU
+                        AND LLI.QTY = @nQTY_RPL
+                        AND LA.Lottable03 = @cOutField01
+                        AND LLI.ID <> @cSuggID
+                        ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
+                     END
 
                      SELECT
                         @cOutField02 = ISNULL(MAX(CASE WHEN count = 1 THEN LOC ELSE NULL END),''),
@@ -899,6 +985,7 @@ BEGIN
                         @cOutField08 = ISNULL(MAX(CASE WHEN count = 3 THEN ID ELSE NULL END),'')
                      FROM @tOptions
 
+                     DELETE FROM @tInventory
                      INSERT INTO @tInventory (SKU,QTY)
                      SELECT TOP 3 LLI.SKU,SUM(LLI.QTY)
                      FROM LOTxLOCxID LLI(NOLOCK)

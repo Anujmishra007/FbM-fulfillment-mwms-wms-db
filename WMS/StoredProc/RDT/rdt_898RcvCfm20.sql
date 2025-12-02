@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /******************************************************************************/
-/* Store procedure: rdt_898RcvCfm19                                           */
+/* Store procedure: rdt_898RcvCfm20                                           */
 /* Copyright      :                                                           */
 /*                                                                            */
 /* Purpose: Lookup qualified ReceiptDetail lines to receive in the QTY        */
@@ -13,11 +13,10 @@ GO
 /* Modifications log:                                                         */
 /*                                                                            */
 /* Date       Rev  Author      Purposes                                       */
-/* 2025-10-29 1.0  Dennis      FCR-8472 Created                               */ 
-/* 2025-11-20 1.1  Dennis      FCR-8897 Add inventory Hold                    */                               
+/* 2025-10-29 1.0  Dennis      FCR-9273 Created                               */ 
 /******************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_898RcvCfm19] (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_898RcvCfm20] (
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
@@ -1872,7 +1871,7 @@ Saving:
 -- Handling transaction
 SET @nTranCount = @@TRANCOUNT
 BEGIN TRAN  -- Begin our own transaction
-SAVE TRAN rdt_898RcvCfm19 -- For rollback or commit only our own transaction
+SAVE TRAN rdt_898RcvCfm20 -- For rollback or commit only our own transaction
 
 DECLARE @cOrg_ReceiptLineNumber NVARCHAR( 5)
 DECLARE @nOrg_QTYExpected       INT
@@ -2107,15 +2106,6 @@ BEGIN
       FROM dbo.ReceiptDetail (NOLOCK)
       WHERE ReceiptKey = @cReceiptKey
 
-      IF EXISTS( SELECT 1 FROM dbo.ReceiptDetail RD(NOLOCK)
-                  JOIN dbo.Receipt R (NOLOCK) ON RD.ReceiptKey = R.ReceiptKey
-                 WHERE RD.ReceiptKey = @cReceiptKey AND RD.ConditionCode ='RTH'
-                 AND R.DocType = 'R'
-                 AND RD.ReceiptLineNumber = @cReceiptLineNo_Borrowed)
-      BEGIN
-         SET @cConditionCode = 'RTH'
-      END
-
       -- Insert new ReceiptDetail line
       INSERT INTO dbo.ReceiptDetail
          (ReceiptKey, ReceiptLineNumber, POKey, StorerKey, SKU, QTYExpected, BeforeReceivedQTY,
@@ -2207,7 +2197,7 @@ BEGIN
       DTL = ReceiptDetail
       HDR = Receipt
       
-      rdt_898RcvCfm19 
+      rdt_898RcvCfm20 
          --> ntrReceiptDetailUpdate (update Receipt.OpenQTY)
             --> ntrReceiptUpdate
       */
@@ -2230,7 +2220,7 @@ BEGIN
          Lottable02 = CASE WHEN @cSkipLottable02 = '1' THEN Lottable02 ELSE @cLottable02 END,
          Lottable03 = CASE WHEN @cSkipLottable03 = '1' THEN Lottable03 ELSE @cLottable03 END,
          Lottable04 = CASE WHEN @cSkipLottable04 = '1' THEN Lottable04 ELSE @dLottable04 END,
-         ConditionCode = CASE WHEN ConditionCode = 'RTH' THEN 'RTH' ELSE @cConditionCode END,
+         ConditionCode = @cConditionCode,
          SubreasonCode = @cSubreasonCode, 
          UserDefine01 = @cUCC,
          EditDate = GETDATE(),  
@@ -2571,52 +2561,20 @@ BEGIN
          IF @nErrNo <> 0 OR @b_Success = 0
             GOTO RollBackTran
          
-         IF EXISTS (SELECT 1 FROM RECEIPT R WITH (NOLOCK) 
-         JOIN dbo.ReceiptDetail RD ON R.ReceiptKey = RD.ReceiptKey AND ReceiptLineNumber = @cReceiptLineNumber
-         WHERE R.ReceiptKey = @cReceiptKey AND R.DOCTYPE = 'R' AND RD.ConditionCode = 'RTH')
-         BEGIN
-            EXEC nspInventoryHoldWrapper
-               '',               -- lot
-               '',               -- loc
-               @cToID,               -- id
-               @cStorerKey,     -- storerkey
-               @cSKU,           -- sku
-               '',               -- lottable01
-               '',               -- lottable01
-               '',               -- lottable01
-               NULL,             -- lottable01
-               NULL,             -- lottable01
-               '',
-               '',
-               '',
-               '',
-               '',
-               '',
-               '',
-               NULL,
-               NULL,
-               NULL,
-               'RTH',      -- status
-               '1',              -- hold
-               @b_success OUTPUT,
-               @nErrNo OUTPUT,
-               @cErrMsg OUTPUT,
-               ''   -- remark
-         END
          FETCH NEXT FROM @curRD INTO @cReceiptLineNumber
       END
    END
 END  
 
-UPDATE PI SET
-   UCCNo = ''
-FROM dbo.PackInfo PI WITH (ROWLOCK)
-INNER JOIN PackDetail PD ON PI.PickSlipNo = PD.PickSlipNo AND PI.CartonNo = PD.CartonNo
-INNER JOIN PACKHEADER PH ON PD.PickSlipNo = PH.PickSlipNo
-INNER JOIN dbo.ORDERS ORM ON PH.StorerKey = ORM.StorerKey AND PH.OrderKey = ORM.OrderKey
-WHERE PH.StorerKey = @cStorerKey
-   AND PI.UCCNo = @cUCC
-   AND ORM.Status = '9'
+EXECUTE ispGenTransmitLog2
+   @c_TableName      = 'WSRTNRFID',
+   @c_Key1           = @cReceiptKey,
+   @c_Key2           = @cUCC,
+   @c_Key3           = @cStorerkey,
+   @c_TransmitBatch  = '',
+   @b_Success        = @b_success   OUTPUT,
+   @n_err            = @nErrNo     OUTPUT,
+   @c_errmsg         = @cErrMsg    OUTPUT
 
 IF @cDebug = '1'  
 BEGIN
@@ -2625,12 +2583,12 @@ BEGIN
 END  
 ELSE  
 BEGIN  
-   COMMIT TRAN rdt_898RcvCfm19 -- Only commit change made in here  
+   COMMIT TRAN rdt_898RcvCfm20 -- Only commit change made in here  
    GOTO Quit  
 END  
   
 RollBackTran:  
-   ROLLBACK TRAN rdt_898RcvCfm19  
+   ROLLBACK TRAN rdt_898RcvCfm20  
 Fail:  
 Quit:  
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
@@ -2643,5 +2601,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_898RcvCfm19] TO NSQL
+GRANT EXECUTE ON [rdt].[rdt_898RcvCfm20] TO NSQL
 GO
