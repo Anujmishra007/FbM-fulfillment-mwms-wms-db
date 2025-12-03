@@ -718,9 +718,11 @@ BEGIN
                         SELECT 
                            Id,
                            Loc,
-                           STRING_AGG(CONCAT(LLI.Sku, '|', LLI.Qty), ',') WITHIN GROUP (ORDER BY LLI.Sku,LLI.Loc) as SkuQtyPattern
+                           STRING_AGG(CONCAT(LLI.Sku, '|', LLI.Qty,'|',ISNULL(LA.LOTTABLE03,'')), ',') WITHIN GROUP (ORDER BY LLI.Sku,LLI.Loc) as SkuQtyPattern
                         FROM LOTXLOCXID lli
                         JOIN TargetID TID ON TID.Sku = LLI.Sku
+                        JOIN dbo.LOTAttribute LA WITH (NOLOCK)
+                           ON LLI.Lot = LA.Lot AND LLI.StorerKey = LA.StorerKey AND LA.SKU = LLI.SKU
                         WHERE LLI.QTY > 0 
                         AND (ID  = @cSuggID OR LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen = 0)
                         GROUP BY Id, Loc
@@ -930,9 +932,11 @@ BEGIN
                            SELECT 
                               Id,
                               Loc,
-                              STRING_AGG(CONCAT(LLI.Sku, '|', LLI.Qty), ',') WITHIN GROUP (ORDER BY LLI.Sku,LLI.Loc) as SkuQtyPattern
+                              STRING_AGG(CONCAT(LLI.Sku, '|', LLI.Qty,'|',ISNULL(LA.LOTTABLE03,'')), ',') WITHIN GROUP (ORDER BY LLI.Sku,LLI.Loc) as SkuQtyPattern
                            FROM LOTXLOCXID lli
                            JOIN TargetID TID ON TID.Sku = LLI.Sku
+                           JOIN dbo.LOTAttribute LA WITH (NOLOCK)
+                              ON LLI.Lot = LA.Lot AND LLI.StorerKey = LA.StorerKey AND LA.SKU = LLI.SKU
                            WHERE LLI.QTY > 0 
                            AND (ID  = @cSuggID OR LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen = 0)
                            GROUP BY Id, Loc
