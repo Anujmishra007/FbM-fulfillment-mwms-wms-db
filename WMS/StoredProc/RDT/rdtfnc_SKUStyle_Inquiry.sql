@@ -10,7 +10,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author     Purposes                                 */
 /* 23-05-2019  1.0  Ung        WMS-9078 Created                         */
-/* 03-12-2025  1.1  NickT      UWP-45094 User new screen id             */
+/* 03-12-2025  1.1  NickT      UWP-45068 User new screen id             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_SKUStyle_Inquiry] (
