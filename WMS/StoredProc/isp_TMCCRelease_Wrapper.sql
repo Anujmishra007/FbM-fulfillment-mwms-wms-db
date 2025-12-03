@@ -24,6 +24,7 @@ GO
 /* 2021-04-14  Wan      1.0   Created                                   */
 /* 2022-02-24  Wan01    1.1   LFWM-3287 - CN NIKECN Release Cycle Count */
 /* 2022-02-24  Wan01    1.1   DevOps Combine Script                     */
+/* 2025-12-03  Michael  1.2   UWP-44616 Fix Gateway Timeout error (ML01)*/
 /************************************************************************/
 CREATE OR ALTER PROC isp_TMCCRelease_Wrapper 
            @c_TaskWIPBatchNo     NVARCHAR(10) = '' 
@@ -53,9 +54,9 @@ BEGIN
            @n_StartTCnt                INT = @@TRANCOUNT
          , @n_Continue                 INT = 1
          
-         , @c_GroupKeySQL              NVARCHAR(2000) = ''
-         , @c_GroupKeyParms            NVARCHAR(2000) = ''
-         , @c_SQL                      NVARCHAR(2000) = ''
+--ML01         , @c_GroupKeySQL              NVARCHAR(2000) = ''
+--ML01         , @c_GroupKeyParms            NVARCHAR(2000) = ''
+         , @c_SQL                      NVARCHAR(MAX)  = ''
          , @c_SQLParms                 NVARCHAR(2000) = ''
          
          , @n_RowID                    BIGINT         = 0     
@@ -334,7 +335,7 @@ BEGIN
          SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Invalid table column setup for task group. (isp_TMCCRelease_Wrapper)'
          GOTO QUIT_SP
       END
-      
+/* ML01-S      
       SET @c_GroupKeySQL = N'SELECT @c_groupkey = ' + @c_GroupKeyTableField + ' FROM ' + @c_TableName + ' WITH (NOLOCK)'
                          + ' WHERE ' + @c_TableName + '.' + @c_TableName + '='
                          +  CASE WHEN @c_TableName = 'LOC' THEN '@c_Loc' 
@@ -344,8 +345,10 @@ BEGIN
                            + ',@c_Storerkey  NVARCHAR(15)' 
                            + ',@c_Sku        NVARCHAR(20)'  
                            + ',@c_Loc        NVARCHAR(10)'                                                                                       
+ML01-E */
    END
-      
+
+/* ML01-S
    SET @c_SQL  = N'SELECT tdw.Storerkey'
                + ',' + CASE WHEN @c_CountType = 'SKU' THEN ' tdw.Sku' ELSE '''''' END 
                + ', tdw.FromLoc' 
@@ -368,6 +371,7 @@ BEGIN
             
    SET @c_SQLParms= N'@c_TaskWIPBatchNo   NVARCHAR(10)'
                   + ',@c_TaskType         NVARCHAR(10)' 
+ML01-E */
    
    IF OBJECT_ID('tempdb..#TMCC_WIP','u') IS NOT NULL
    BEGIN
@@ -379,16 +383,50 @@ BEGIN
    ,  Storerkey   NVARCHAR(15)   NOT NULL DEFAULT('')   
    ,  Sku         NVARCHAR(20)   NOT NULL DEFAULT('')
    ,  Loc         NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  Sourcekey   NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  GenCC       INT            NOT NULL DEFAULT(1)
+--ML01   ,  Sourcekey   NVARCHAR(10)   NOT NULL DEFAULT('')
+--ML01   ,  GenCC       INT            NOT NULL DEFAULT(1)
+   ,  GroupKey    NVARCHAR(10)   NOT NULL DEFAULT('')   --ML01
+   ,  Cnt_Aisle   INT            NOT NULL DEFAULT(0)    --ML01
+   ,  Cnt_CC      INT            NOT NULL DEFAULT(0)    --ML01
    )
  
+ /* ML01-S
    INSERT INTO #TMCC_WIP (Storerkey, Sku, Loc, Sourcekey) 
    EXEC sp_ExecuteSQL  @c_SQL
                      , @c_SQLParms
                      , @c_TaskWIPBatchNo 
                      , @c_TaskType   
-            
+ML01-E */
+
+   --ML01-S
+   SET @c_SQL  = N'SELECT tdw.Storerkey'
+               + ',' + CASE WHEN @c_CountType = 'SKU' THEN ' tdw.Sku' ELSE '''''' END 
+               + ', tdw.FromLoc' 
+               + ',' + CASE WHEN @c_TableName IN ('LOC', 'SKU') THEN 'MAX(' + TRIM(@c_GroupKeyTableField) + ')' ELSE '''''' END
+               + ' FROM dbo.TaskDetail_WIP AS tdw WITH (NOLOCK)'
+
+   IF @c_TableName IN ('LOC', 'SKU')
+   BEGIN
+      SET @c_SQL = @c_SQL
+                 + ' LEFT JOIN ' + @c_TableName + ' WITH (NOLOCK) ON ' + @c_TableName +'.'+ @c_TableName + ' = '
+                 + CASE WHEN @c_TableName = 'LOC' THEN 'tdw.FromLoc' 
+                        WHEN @c_TableName = 'SKU' THEN 'tdw.Sku AND ' + @c_TableName + '.Storerkey = tdw.Storerkey'
+                        ELSE ''
+                   END 
+   END
+
+   SET @c_SQL  = @c_SQL
+               + ' WHERE tdw.TaskWIPBatchNo = ''' + ISNULL(REPLACE(@c_TaskWIPBatchNo,'''',''''''),'') + ''''
+               + ' GROUP BY tdw.Storerkey'
+               +            CASE WHEN @c_CountType = 'SKU' THEN ',tdw.Sku' ELSE '' END 
+               +         ', tdw.FromLoc'                 
+               + ' ORDER BY ' + CASE WHEN @c_CountType = 'SKU' THEN 'tdw.' + @c_CountType + ',' ELSE '' END
+               +            ' tdw.FromLoc'
+
+   INSERT INTO #TMCC_WIP (Storerkey, Sku, Loc, GroupKey) 
+   EXEC (@c_SQL)
+   --ML01-E
+
    SET @n_BatchLastRowID = 0                  
    SELECT TOP 1 @n_BatchLastRowID = tdw.RowID
    FROM dbo.TaskDetail_WIP AS tdw WITH (NOLOCK) 
@@ -405,7 +443,8 @@ BEGIN
       , @n_err       OUTPUT    
       , @c_errmsg    OUTPUT   
    END
-       
+
+/* ML01-S
    SET @n_Cnt_CC = 1  
    SET @n_Cnt_Aisle = 1                
    SET @CUR_RLSE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -504,7 +543,72 @@ BEGIN
    END
    CLOSE @CUR_RLSE
    DEALLOCATE @CUR_RLSE
-   
+ML01-E */
+
+   --ML01-S
+   UPDATE TMP
+   SET Cnt_Aisle = Y.AisleCnt
+   FROM #TMCC_WIP TMP
+   JOIN (
+      SELECT X.RowRef
+           , AisleCnt = SUM(X.Chk) OVER(ORDER BY X.RowRef)
+      FROM (
+         SELECT TMP.RowRef
+              , Chk = CASE WHEN ROW_NUMBER() OVER(PARTITION BY ISNULL(LOC.LocAisle,'') ORDER BY RowRef) = 1 THEN 1 ELSE 0 END
+         FROM #TMCC_WIP TMP
+         LEFT JOIN LOC WITH (NOLOCK) ON TMP.Loc = LOC.Loc
+      ) X
+   ) Y ON TMP.RowRef = Y.RowRef
+
+   IF @c_Counttype = 'LOC'
+   BEGIN
+      UPDATE TMP
+      SET Cnt_CC = Y.CCCnt
+      FROM #TMCC_WIP TMP
+      JOIN (
+         SELECT X.RowRef
+              , CCCnt = SUM(X.Chk) OVER(ORDER BY X.RowRef)
+         FROM (
+            SELECT TMP.RowRef
+                 , Chk = CASE WHEN ROW_NUMBER() OVER(PARTITION BY TMP.Loc ORDER BY RowRef) = 1 THEN 1 ELSE 0 END
+            FROM #TMCC_WIP TMP
+         ) X
+      ) Y ON TMP.RowRef = Y.RowRef
+   END
+   ELSE IF @c_Counttype = 'SKU'
+   BEGIN
+      UPDATE TMP
+      SET Cnt_CC = Y.CCCnt
+      FROM #TMCC_WIP TMP
+      JOIN (
+         SELECT X.RowRef
+              , CCCnt = SUM(X.Chk) OVER(ORDER BY X.RowRef)
+         FROM (
+            SELECT TMP.RowRef
+                 , Chk = CASE WHEN ROW_NUMBER() OVER(PARTITION BY TMP.Storerkey, TMP.Sku ORDER BY RowRef) = 1 THEN 1 ELSE 0 END
+            FROM #TMCC_WIP TMP
+         ) X
+      ) Y ON TMP.RowRef = Y.RowRef
+   END
+
+   IF @n_MaxAisleCount > 0
+   BEGIN
+      DELETE FROM #TMCC_WIP
+      WHERE Cnt_Aisle > @n_MaxAisleCount
+   END
+
+   IF @n_MaxCount > 0
+   BEGIN
+      DELETE FROM #TMCC_WIP
+      WHERE Cnt_CC > @n_MaxCount
+   END
+
+   INSERT INTO TaskDetail_WIP (TaskWIPBatchNo, TaskType, Storerkey, Sku, FromLoc, Sourcekey, SourceType, [priority],PickMethod, ListKey, GroupKey)
+   SELECT @c_TaskWIPBatchNo, @c_TaskType, Storerkey, Sku, Loc, @c_Sourcekey, 'TMCCRLSE', '5', @c_CountType, CONVERT(NVARCHAR(10), @n_MaxCount), Groupkey
+   FROM #TMCC_WIP
+   ORDER BY RowRef
+   --ML01-E
+
    ;WITH tdw ( RowID ) AS ( SELECT tdw.RowID FROM dbo.TaskDetail_WIP AS tdw WITH (NOLOCK) WHERE tdw.TaskWIPBatchNo = @c_TaskWIPBatchNo
                             AND tdw.RowID <= @n_BatchLastRowID )
             

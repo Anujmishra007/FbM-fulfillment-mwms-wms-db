@@ -9,7 +9,7 @@ GO
 /* Copyright: LFL                                                        */
 /* Written by: Wan                                                       */
 /*                                                                       */
-/* Purpose: LFWM-1273 - Stored Procedures for Feature �C Release Cycle    */
+/* Purpose: LFWM-1273 - Stored Procedures for Feature - Release Cycle    */
 /*          Count                                                        */
 /* Called By:                                                            */
 /*                                                                       */
@@ -22,7 +22,8 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 2021-02-09   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
+/* 2025-09-02   SWT01    1.2  Enhanced session management pattern        */
+/* 2025-12-02   Michael  1.3  UWP-44616 Fix Gateway Timeout error (ML01) */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_TaskDetail_WIP_Delete]
    @c_BatchNo              NVARCHAR(10)
@@ -73,6 +74,7 @@ BEGIN
 
    --(mingle01) - START
    BEGIN TRY
+/* ML01-S
       SET @CUR_DEL = CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT RowID
       FROM TASKDETAIL_WIP WITH (NOLOCK)
@@ -101,6 +103,15 @@ BEGIN
       END
       CLOSE @CUR_DEL
       DEALLOCATE @CUR_DEL
+ ML01-E */
+
+      --ML01-S
+      WHILE EXISTS(SELECT TOP 1 1 FROM TASKDETAIL_WIP WITH (NOLOCK) WHERE TaskWIPBatchNo = @c_BatchNo)
+      BEGIN
+         DELETE TOP (10000) TASKDETAIL_WIP WITH(ROWLOCK)
+         WHERE TaskWIPBatchNo = @c_BatchNo
+      END
+      --ML01-E
 
       SELECT @n_LogKey = LogKey
       FROM IDS_GENERALLOG WITH (NOLOCK)
