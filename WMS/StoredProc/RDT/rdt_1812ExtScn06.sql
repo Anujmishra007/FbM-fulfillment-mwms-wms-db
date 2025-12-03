@@ -14,9 +14,10 @@ GO
 /* 2025-06-10 1.1.0   Jackc    FCR-3959 Jump to 1756 equipment screen   */ 
 /* 2025-08-21 1.1.1   Dennis   FCR-3959 Fix Inventory Hold Bug          */
 /* 2025-08-25 1.1.2   Dennis   FCR-3959 New Scn                         */
+/* 2025-11-25 1.1.3   PPA374   Adding reason code to OD and OH notes    */
 /************************************************************************/
 
-CREATE OR ALTER PROC [rdt].[rdt_1812ExtScn06] (  
+CREATE OR ALTER   PROC [RDT].[rdt_1812ExtScn06] (  
    @nMobile          INT,           
    @nFunc            INT,           
    @cLangCode        NVARCHAR( 3),  
@@ -254,6 +255,34 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reason needed
                   GOTO Step_9_Fail
                END
+
+			   IF EXISTS (
+			      SELECT 1 
+				  FROM LOC L WITH(NOLOCK)
+				     INNER JOIN CODELKUP C WITH(NOLOCK)
+				        ON C.LISTNAME = 'JCBBKRCODE'
+						AND C.StorerKey = @cStorerKey
+						AND C.Long = L.LocationCategory
+			      WHERE LOC = @cSuggFromLOC 
+				     AND L.Facility = @cFacility
+			   )
+			   BEGIN
+			      IF @cReasonCode NOT IN (
+				     SELECT Short 
+					 FROM CODELKUP C WITH(NOLOCK)
+					    INNER JOIN LOC L WITH(NOLOCK)
+						   ON L.LocationCategory = C.Long
+					 WHERE C.LISTNAME = 'JCBBKRCODE' 
+					    AND C.StorerKey = @cStorerKey
+						AND L.Facility = @cFacility
+						AND L.Loc = @cSuggFromLOC
+				  )
+				  BEGIN
+			         SET @nErrNo = 218259
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Step_9_Fail
+				  END
+			   END
 
                IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
                   WHERE LLI.StorerKey = @cStorerKey
@@ -655,9 +684,18 @@ BEGIN
                         SET @nAfterScn  = 4024
                         SET @nAfterStep = 5
                      END
-
                   END
                END
+
+			   UPDATE O
+               SET O.CancelReasonCode =
+                     LEFT (CASE 
+                        WHEN O.CancelReasonCode IS NULL OR LTRIM(RTRIM(O.CancelReasonCode)) = '' THEN @cReasonCode
+                        WHEN CHARINDEX(@cReasonCode, O.CancelReasonCode) = 0 THEN O.CancelReasonCode + '; ' + @cReasonCode
+                        ELSE O.CancelReasonCode
+                     END, 60)
+               FROM dbo.ORDERS AS O
+               WHERE O.OrderKey = @cOrderKey
 
                UPDATE OD
                SET OD.Notes =
@@ -738,8 +776,19 @@ BEGIN
                            ROW_NUMBER() OVER (ORDER BY b.Id, b.Loc) as RowNum
                         FROM SkuSummary a
                         INNER JOIN SkuSummary b ON a.SkuQtyPattern = b.SkuQtyPattern
+			            INNER JOIN dbo.LOC L WITH(NOLOCK)
+                           ON b.LOC = L.Loc
+                        INNER JOIN dbo.LOC L2 WITH(NOLOCK)
+                           ON L2.Loc = @cSuggFromLOC
+                           AND L.LocationCategory = L2.LocationCategory
+						INNER JOIN dbo.ID WITH(NOLOCK)
+                           ON b.ID = ID.Id
                         WHERE a.Id <> b.Id
                            AND a.Id = @cSuggID
+						   AND L.Facility = @cFacility
+                           AND L.LocationFlag IN ('','NONE')
+                           AND L.Status = 'OK'
+                           AND ID.Status = 'OK'
                      )
                      INSERT INTO @tOptions (ID,LOC)
                      SELECT 
@@ -756,6 +805,13 @@ BEGIN
                      SELECT TOP 3 LLI.LOC,LLI.ID
                      FROM LOTxLOCxID LLI(NOLOCK)
                      JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
+					 JOIN LOC L WITH(NOLOCK)
+                     ON LLI.LOC = L.Loc
+                     JOIN LOC L2 WITH(NOLOCK)
+                     ON L2.Loc = @cSuggFromLOC
+                     AND L.LocationCategory = L2.LocationCategory
+					 JOIN ID WITH(NOLOCK)
+                     ON LLI.ID = ID.Id
                      WHERE LLI.QTY > 0
                      AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
                      AND LLI.StorerKey = @cStorerKey
@@ -763,6 +819,10 @@ BEGIN
                      AND LLI.QTY = @nQTY_RPL
                      AND LA.Lottable03 = @cOutField01
                      AND LLI.ID <> @cSuggID
+					 AND L.Facility = @cFacility
+                     AND L.LocationFlag IN ('','NONE')
+                     AND L.Status = 'OK'
+                     AND ID.Status = 'OK'
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
                   END
 
@@ -952,8 +1012,19 @@ BEGIN
                               ROW_NUMBER() OVER (ORDER BY b.Id, b.Loc) as RowNum
                            FROM SkuSummary a
                            INNER JOIN SkuSummary b ON a.SkuQtyPattern = b.SkuQtyPattern
+						   INNER JOIN dbo.LOC L WITH(NOLOCK)
+                              ON b.LOC = L.Loc
+                           INNER JOIN dbo.LOC L2 WITH(NOLOCK)
+                              ON L2.Loc = @cSuggFromLOC
+                              AND L.LocationCategory = L2.LocationCategory
+						   INNER JOIN dbo.ID WITH(NOLOCK)
+                              ON b.ID = ID.Id
                            WHERE a.Id <> b.Id
                               AND a.Id = @cSuggID
+							  AND L.Facility = @cFacility
+                              AND L.LocationFlag IN ('','NONE')
+                              AND L.Status = 'OK'
+                              AND ID.Status = 'OK'
                         )
                         INSERT INTO @tOptions (ID,LOC)
                         SELECT 
@@ -966,18 +1037,29 @@ BEGIN
                         SELECT @cOutField01 = Lottable03 FROM LOTAttribute (NOLOCK)
                         WHERE lot = @cSuggLOT AND Storerkey = @cStorerKey AND SKU = @cSuggSKU
 
-                        INSERT INTO @tOptions (LOC,ID)
-                        SELECT TOP 3 LLI.LOC,LLI.ID
-                        FROM LOTxLOCxID LLI(NOLOCK)
-                        JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
-                        WHERE LLI.QTY > 0
-                        AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
-                        AND LLI.StorerKey = @cStorerKey
-                        AND LLI.SKU = @cSuggSKU
-                        AND LLI.QTY = @nQTY_RPL
-                        AND LA.Lottable03 = @cOutField01
-                        AND LLI.ID <> @cSuggID
-                        ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
+                     INSERT INTO @tOptions (LOC,ID)
+                     SELECT TOP 3 LLI.LOC,LLI.ID
+                     FROM LOTxLOCxID LLI(NOLOCK)
+                     JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
+					 JOIN LOC L WITH(NOLOCK)
+                     ON LLI.LOC = L.Loc
+                     JOIN LOC L2 WITH(NOLOCK)
+                     ON L2.Loc = @cSuggFromLOC
+                     AND L.LocationCategory = L2.LocationCategory
+					 JOIN ID WITH(NOLOCK)
+                     ON LLI.ID = ID.Id
+                     WHERE LLI.QTY > 0
+                     AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
+                     AND LLI.StorerKey = @cStorerKey
+                     AND LLI.SKU = @cSuggSKU
+                     AND LLI.QTY = @nQTY_RPL
+                     AND LA.Lottable03 = @cOutField01
+                     AND LLI.ID <> @cSuggID
+                     AND L.Facility = @cFacility
+                     AND L.LocationFlag IN ('','NONE')
+                     AND L.Status = 'OK'
+                     AND ID.Status = 'OK'
+                     ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
                      END
 
                      SELECT
@@ -1592,8 +1674,42 @@ BEGIN
                      SET @cOutField01 = ''
                      GOTO Quit
                END
-                       
+               
+			   IF EXISTS (
+                  SELECT 1
+                  FROM RDT.RDTMOBREC R WITH (NOLOCK)
+                     INNER JOIN CODELKUP C WITH (NOLOCK)
+                        ON C.Short = R.C_String29
+                  WHERE R.Mobile = @nMobile
+                     AND C.ListName = 'JCBPREASON'
+               )
+			   BEGIN
+			      UPDATE TaskDetail 
+				  SET 
+					 Status = '0',
+					 UserKey = ''
+				  WHERE Status = '3'
+				     AND UserKey = @cUserName
+					 AND OrderKey = @cOrderKey
+
+			      UPDATE RDT.RDTMOBREC
+			      SET C_String29 = ''
+			      WHERE Mobile = @nMobile 
+				  SET @nAfterStep = 7
+                  SET @nAfterScn = 4026
+                  SET @cOutField01 = ''
+                  GOTO Quit
+			   END
+				  
                IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE (ListKey = @cListKey AND Status = '5') OR (TaskDetailKey = @cTaskdetailKey AND Status = '3'))
+			      AND NOT EXISTS (
+                     SELECT 1
+                     FROM RDT.RDTMOBREC R WITH (NOLOCK)
+                        INNER JOIN CODELKUP C WITH (NOLOCK)
+                           ON C.Short = R.C_String29
+                     WHERE R.Mobile = @nMobile
+                        AND C.ListName = 'JCBPREASON'
+                   )
                BEGIN
                   SET @nErrNo = 239666
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
@@ -1784,8 +1900,7 @@ Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
-
-END  
+END    
 GO
   
 SET QUOTED_IDENTIFIER OFF 

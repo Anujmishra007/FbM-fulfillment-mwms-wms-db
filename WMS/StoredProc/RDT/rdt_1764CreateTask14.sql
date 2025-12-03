@@ -213,6 +213,10 @@ BEGIN
             @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, @nQty, @cToLOCAreaKey, @cFinalLOC,@nUOMQty,@nSystemQTY,
             @cOrderKey,
             'FP', @cStorerKey, @cSKU, @cLOT, @cNewTaskDetailKey, @nTransitCount+1, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL,@cTaskDetailKey)
+		 
+		 UPDATE dbo.TaskDetail
+		 SET QtyReplen = Qty
+		 WHERE TaskDetailKey = @cNewTaskDetailKey
 
          UPDATE dbo.TASKDETAIL
             SET RefTaskKey = @cNewTaskDetailKey

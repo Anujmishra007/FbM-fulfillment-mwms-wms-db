@@ -72,19 +72,19 @@ BEGIN
       @cNewEquipmentProfileKey            NVARCHAR(10),
       @nMenu                              INT,
 
-      @cExtendedValidateSP                NVARCHAR(20),
-      @cExtendedUpdateSP                  NVARCHAR(20),
+      @cEXTSCNExtendedValidateSP          NVARCHAR(20),
+      @cEXTSCNExtendedUpdateSP            NVARCHAR(20),
       @cSQL                               NVARCHAR(MAX),
       @cSQLParam                          NVARCHAR(MAX),
       @cAreaKey                           NVARCHAR(10),
       @cTaskDetailKey                     NVARCHAR(10)
 
-   SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
-   IF @cExtendedUpdateSP = '0'
-      SET @cExtendedUpdateSP = ''
-   SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
-   IF @cExtendedValidateSP = '0'
-      SET @cExtendedValidateSP = ''
+   SET @cEXTSCNExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'EXTSCNExtendedUpdateSP', @cStorerKey)
+   IF @cEXTSCNExtendedUpdateSP = '0'
+      SET @cEXTSCNExtendedUpdateSP = ''
+   SET @cEXTSCNExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'EXTSCNExtendedValidateSP', @cStorerKey)
+   IF @cEXTSCNExtendedValidateSP = '0'
+      SET @cEXTSCNExtendedValidateSP = ''
 
    SELECT @cAreaKey = Value FROM @tExtScnData WHERE Variable = '@cAreaKey'
    SELECT @cTaskDetailKey = Value FROM @tExtScnData WHERE Variable = '@cTaskDetailKey'
@@ -162,11 +162,11 @@ BEGIN
                END
 
                -- Extended validation
-               IF @cExtendedValidateSP <> ''
+               IF @cEXTSCNExtendedValidateSP <> ''
                BEGIN
-                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cExtendedValidateSP AND type = 'P')
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cEXTSCNExtendedValidateSP AND type = 'P')
                   BEGIN
-                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cEXTSCNExtendedValidateSP) +
                         ' @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @cAreaKey, @cEquipmentProfileKey, @cNewEquipmentProfileKey, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
                      SET @cSQLParam =
                         '@nMobile         INT,        '              +
@@ -201,11 +201,11 @@ BEGIN
                END
 
                -- Extended update
-               IF @cExtendedUpdateSP <> ''
+               IF @cEXTSCNExtendedUpdateSP <> ''
                BEGIN
-                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cExtendedUpdateSP AND type = 'P')
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cEXTSCNExtendedUpdateSP AND type = 'P')
                   BEGIN
-                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cEXTSCNExtendedUpdateSP) +
                         ' @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @cEquipmentProfileKey, @cNewEquipmentProfileKey, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
                      SET @cSQLParam =
                         '@nMobile         INT,        '              +

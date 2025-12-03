@@ -147,8 +147,8 @@ BEGIN
    -- Update Task
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
       Status = '5', -- Picked
-      DropID = @cDropID, 
-      ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END, 
+      DropID = ISNULL(@cDropID,''), 
+      ToID = CASE WHEN PickMethod = 'PP' THEN ISNULL(@cDropID,'') ELSE ToID END, 
       QTY = @nQTY,
       SystemQTY = @nSystemQTY, 
       ReasonKey = @cReasonKey, 

@@ -17,6 +17,7 @@ GO
 /* 2025-07-16  1.0.2  Jackc    FCR-3954. Fix overwriteToLoc is cleared issue.  */  
 /* 2025-07-23  1.0.3  Dennis   FCR-3954. Fix Recalculation issue.              */
 /* 2025-08-21  0.0.0  Jackc    !!!Cutover. User V0 repo for work!!!            */  
+/* 2025-11-11  2.0.0  PPA374   Updating aisle in use logic                     */
 /*******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_PutawayFrom_JCB](
    @nMobile    INT,
@@ -78,6 +79,8 @@ DECLARE
    @cEquipmentProfileKey               NVARCHAR(10),
    @cNewEquipmentProfileKey            NVARCHAR(10),
    @nTranCount          INT,
+   @nWaitSecondsS       INT,
+   @nWaitSecondsL       INT,
 
    @cNewIDAreaKey       NVARCHAR( 10),
    @cNewIDPutawayZone   NVARCHAR( 10),
@@ -145,6 +148,9 @@ DECLARE
       LocAisle                 NVARCHAR(10),
       Userkey                  NVARCHAR(30)
    )
+
+-- Getting waiting time
+SELECT TOP 1 @nWaitSecondsS = Short, @nWaitSecondsL = Long FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBVNAWAIT'
 
 -- Getting Mobile information
 SELECT
@@ -579,7 +585,37 @@ BEGIN
       (
          LocAisle, UserKey
       )
-      SELECT DISTINCT v.LocAisle, Td.UserKey
+   -- TaskDetail aisles
+   SELECT 
+      L.LocAisle,
+      IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) AS UserKey
+   FROM dbo.TaskDetail TD WITH(NOLOCK)
+      CROSS APPLY (VALUES
+         (TD.FromLoc),
+         (TD.ToLoc)
+      ) AS loc(L)
+      LEFT JOIN dbo.LOC L WITH(NOLOCK) ON loc.L = L.Loc AND L.LocationCategory = 'VNA' AND L.Facility = @cFacility
+   WHERE LocAisle IS NOT NULL
+      AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
+      AND TD.Status IN ('0','3')
+      AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @cUserName
+	  AND TD.Storerkey = @cStorerKey
+
+   UNION ALL
+
+   -- RDTMOBREC aisles
+   SELECT 
+      IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) AS LocAisle,
+      R.UserName AS UserKey
+   FROM RDT.RDTMOBREC R WITH(NOLOCK)
+      LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
+      LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.V_String8 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+   WHERE R.StorerKey = @cStorerKey
+      AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
+      AND R.UserName <> @cUserName
+      AND IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) <> ''
+
+      /*SELECT DISTINCT v.LocAisle, Td.UserKey
       FROM TaskDetail TD WITH (NOLOCK)
       LEFT JOIN LOC FromLoc WITH (NOLOCK)
          ON TD.FromLOC = FromLoc.Loc
@@ -596,7 +632,7 @@ BEGIN
       ) v(LocAisle)
       WHERE TD.UserKey <> @cUsername
       AND TD.Status = '3'
-      AND (FromLoc.Loc IS NOT NULL OR ToLoc.Loc IS NOT NULL)
+      AND (FromLoc.Loc IS NOT NULL OR ToLoc.Loc IS NOT NULL)*/
 
       SELECT TOP 1 @cTaskdetailKey = TD.TaskDetailKey,
          @cSuggFromLoc = TD.FromLoc,
@@ -630,6 +666,27 @@ BEGIN
                         WHERE AIU.LocAisle = LOC1.LocAisle
                      ) OR LOC1.LocationCategory <> 'VNA')
       ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
+
+	  IF EXISTS (
+	     SELECT 1 
+		 FROM TaskDetail TD WITH(NOLOCK) 
+		    INNER JOIN LOC L WITH(NOLOCK)
+			   ON L.Loc = TD.ToLoc
+			INNER JOIN @tAisleInUsed A
+			   ON A.LocAisle = L.LocAisle
+		 WHERE AreaKey = @cAreaKey 
+	        AND (TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @cUserName OR TD.UserKeyOverRide = @cUserName)))
+			AND TD.Storerkey = @cStorerKey
+			AND L.Facility = @cFacility
+			AND L.LocationCategory = 'VNA'
+			AND A.Userkey <> @cUserName
+		 )
+		 AND ISNULL(@cTaskdetailKey, '') = ''
+	  BEGIN
+	     SET @nErrNo = 218256
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Aisle in use'
+         GOTO Step_2_Fail
+	  END
 
       IF ISNULL(@cTaskdetailKey, '') = ''
       BEGIN
@@ -2466,4 +2523,5 @@ SET ANSI_NULLS ON
 GO
 
 GRANT EXECUTE ON RDT.rdtfnc_TM_PutawayFrom_JCB TO NSQL
+
 GO

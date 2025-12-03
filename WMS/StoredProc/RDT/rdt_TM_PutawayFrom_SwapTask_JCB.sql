@@ -12,9 +12,10 @@ GO
 /* 2025-04-24  1.0.0  NLT013   FCR-3954. Created                        */
 /* 2025-06-27  1.0.1  Dennis   FCR-3954. Update Dispatch strategy       */
 /* 2025-10-23  1.0.2  Dennis   UWP-428244. Enhancement                  */
+/* 2025-11-11  2.0.0  PPA374   Updating aisle in use logic              */
 /************************************************************************/
 
-CREATE OR ALTER PROC [rdt].[rdt_TM_PutawayFrom_SwapTask_JCB] (
+CREATE OR ALTER PROC [RDT].[rdt_TM_PutawayFrom_SwapTask_JCB] (
    @nMobile           INT,
    @nFunc             INT,
    @cLangCode         NVARCHAR( 3),
@@ -46,6 +47,9 @@ BEGIN
    DECLARE @nNewTransitCount   INT
    DECLARE @cNewPickAndDropLOC NVARCHAR( 10)
 
+   DECLARE @nWaitSecondsS      INT
+   DECLARE @nWaitSecondsL      INT
+
    DECLARE @cFacility         NVARCHAR( 10),
    @cLocAisle                 NVARCHAR(10)
    DECLARE @tAisleInUsed TABLE
@@ -60,6 +64,9 @@ BEGIN
       @cStorerKey = StorerKey
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
+
+   -- Getting waiting time
+   SELECT TOP 1 @nWaitSecondsS = Short, @nWaitSecondsL = Long FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBVNAWAIT'
 
    -- Init var
    SET @nErrNo = 0
@@ -87,7 +94,37 @@ BEGIN
    (
       LocAisle, UserKey
    )
-   SELECT DISTINCT v.LocAisle, Td.UserKey
+   -- TaskDetail aisles
+   SELECT 
+      L.LocAisle,
+      IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) AS UserKey
+   FROM dbo.TaskDetail TD WITH(NOLOCK)
+      CROSS APPLY (VALUES
+         (TD.FromLoc),
+         (TD.ToLoc)
+      ) AS loc(L)
+      LEFT JOIN dbo.LOC L WITH(NOLOCK) ON loc.L = L.Loc AND L.LocationCategory = 'VNA' AND L.Facility = @cFacility
+   WHERE LocAisle IS NOT NULL
+      AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
+      AND TD.Status IN ('0','3')
+      AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @cUserName
+	  AND TD.Storerkey = @cStorerKey
+
+   UNION ALL
+
+   -- RDTMOBREC aisles
+   SELECT 
+      IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) AS LocAisle,
+      R.UserName AS UserKey
+   FROM RDT.RDTMOBREC R WITH(NOLOCK)
+      LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
+      LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.V_String8 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+   WHERE R.StorerKey = @cStorerKey
+      AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
+      AND R.UserName <> @cUserName
+      AND IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) <> ''
+
+   /*SELECT DISTINCT v.LocAisle, Td.UserKey
    FROM TaskDetail TD WITH (NOLOCK)
    LEFT JOIN LOC FromLoc WITH (NOLOCK)
       ON TD.FromLOC = FromLoc.Loc
@@ -104,7 +141,7 @@ BEGIN
    ) v(LocAisle)
    WHERE TD.UserKey <> @cUsername
    AND TD.Status = '3'
-   AND (FromLoc.Loc IS NOT NULL OR ToLoc.Loc IS NOT NULL)
+   AND (FromLoc.Loc IS NOT NULL OR ToLoc.Loc IS NOT NULL)*/
 
    -- Get new task info
    SET @cNewTaskDetailKey = ''
@@ -245,3 +282,4 @@ GO
 
 GRANT EXECUTE ON [rdt].[rdt_TM_PutawayFrom_SwapTask_JCB] TO NSQL
 GO
+

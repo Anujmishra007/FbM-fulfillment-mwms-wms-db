@@ -55,6 +55,16 @@ BEGIN
    -- TM Replen From
    IF @nFunc = 1764
    BEGIN
+      IF @nStep = 6
+      BEGIN
+         IF @cInputKey = 1
+         BEGIN
+            UPDATE RDT.RDTMOBREC
+            SET C_DateTime1 = GETDATE()
+            WHERE Mobile = @nMobile
+         END -- Input 1
+      END -- Step 6
+      
       IF @nStep = 7 -- ExitTM, Next Task Scn
       BEGIN
          IF @cInputKey = 0
