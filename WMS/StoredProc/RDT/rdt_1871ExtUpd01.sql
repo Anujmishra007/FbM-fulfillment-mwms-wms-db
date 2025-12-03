@@ -15,7 +15,7 @@ GO
 /* 2025-07-24   PPA374    1.1   Adding middle loc hold for D type LPN   */
 /* 2025-07-31   PPA374	  1.2   Adding third loc hold for D type LPN    */
 /************************************************************************/
-CREATE OR ALTER   PROCEDURE [RDT].[rdt_1871ExtUpd01]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1871ExtUpd01]
     @nMobile         INT 
    ,@nFunc           INT 
    ,@cLangCode       NVARCHAR( 3) 
@@ -81,6 +81,10 @@ BEGIN
          LEFT JOIN dbo.AREADETAIL AD WITH (NOLOCK)
             ON AD.PutawayZone = LOC.PutawayZone
          WHERE TaskDetailKey = @cTaskdetailKey
+
+		 UPDATE RDT.RDTMOBREC
+         SET C_DateTime1 = GETDATE()
+         WHERE Mobile = @nMobile 
 
          UPDATE dbo.TaskDetail WITH (ROWLOCK)
          SET AreaKey = @cAreaKey
@@ -252,4 +256,6 @@ GO
 
 GRANT EXECUTE ON rdt.rdt_1871ExtUpd01 TO NSQL
 GO
+
+
 

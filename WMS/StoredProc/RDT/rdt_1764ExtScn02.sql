@@ -16,7 +16,7 @@ GO
 /* 2025-08-20 1.1.0    Dennis   FCR-3959 New Feature                        */
 /****************************************************************************/
 
-CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn02] (
+CREATE OR ALTER PROC [RDT].[rdt_1764ExtScn02] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -210,6 +210,34 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reason needed
                   GOTO Step_Reason_Fail
                END
+
+			   IF EXISTS (
+			      SELECT 1 
+				  FROM LOC L WITH(NOLOCK)
+				     INNER JOIN CODELKUP C WITH(NOLOCK)
+				        ON C.LISTNAME = 'JCBBKRCODE'
+						AND C.StorerKey = @cStorerKey
+						AND C.Long = L.LocationCategory
+			      WHERE LOC = @cSuggFromLOC 
+				     AND L.Facility = @cFacility
+			   )
+			   BEGIN
+			      IF @cReasonCode NOT IN (
+				     SELECT Short 
+					 FROM CODELKUP C WITH(NOLOCK)
+					    INNER JOIN LOC L WITH(NOLOCK)
+						   ON L.LocationCategory = C.Long
+					 WHERE C.LISTNAME = 'JCBBKRCODE' 
+					    AND C.StorerKey = @cStorerKey
+						AND L.Facility = @cFacility
+						AND L.Loc = @cSuggFromLOC
+				  )
+				  BEGIN
+			         SET @nErrNo = 218259
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Step_Reason_Fail
+				  END
+			   END
 
                -- Extended validate
                IF @cExtendedValidateSP <> ''

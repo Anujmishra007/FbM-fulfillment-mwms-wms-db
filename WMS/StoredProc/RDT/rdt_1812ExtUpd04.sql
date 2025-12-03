@@ -12,7 +12,7 @@
 /*                                 if the whole pallet (FP) is picked   */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtUpd04]
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_1812ExtUpd04]
    @nMobile         INT,          
    @nFunc           INT,          
    @cLangCode       NVARCHAR( 3), 
@@ -286,6 +286,10 @@ BEGIN
             END --rowcount <> 0
             --V1.0.1 end
 
+            UPDATE RDT.RDTMOBREC
+            SET C_DateTime1 = GETDATE()
+            WHERE Mobile = @nMobile
+
          END --inputkey = 1
       END--St6
       
@@ -367,6 +371,10 @@ BEGIN
                      ON RM.StorerKey = @cStorerKey
                      AND RM.Mobile = @nMobile
                WHERE TD1.StorerKey = @cStorerKey
+
+			   DELETE FROM TaskManagerSkipTasks
+			   WHERE USERID = ''
+
           END
        END   
       END

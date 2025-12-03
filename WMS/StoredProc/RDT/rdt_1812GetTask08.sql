@@ -15,7 +15,7 @@ GO
 /* 2025-06-11  1.0.0  Dennis    FCR-3959. Created                       */    
 /************************************************************************/    
     
-CREATE OR ALTER PROC [rdt].[rdt_1812GetTask08] (    
+CREATE OR ALTER PROC [RDT].[rdt_1812GetTask08] (    
    @nMobile          INT,    
    @nFunc            INT,    
    @cLangCode        NVARCHAR( 3),    
@@ -59,14 +59,21 @@ BEGIN
    DECLARE @cPalletFinalLOC   NVARCHAR( 10)    
    DECLARE @cPalletFinalZone  NVARCHAR( 10)    
    DECLARE @cFinalPAZoneInLOC NVARCHAR( 10),
-   @cTaskDetailKey      NVARCHAR(10)  
+   @cTaskDetailKey      NVARCHAR(10),
+   @cLastLoc            NVARCHAR(10),
+   @cLastSide           NVARCHAR(10),
+   @cLastAisle          NVARCHAR(10),
+   @cLastCategory       NVARCHAR(20)
 
    SELECT @cStorerKey = StorerKey,
-   @cTaskDetailKey  = V_TaskDetailKey
+   @cTaskDetailKey  = V_TaskDetailKey,
+   @cLastLoc = V_LOC
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
    SET @cNewTaskKey = ''
+
+   SELECT TOP 1 @cLastSide = Floor, @cLastAisle = LocAisle, @cLastCategory = LocationCategory FROM LOC WITH(NOLOCK) WHERE LOC = @cLastLoc
 
    SELECT TOP 1 @cNewTaskKey = TaskDetailKey
    FROM dbo.TaskDetail TD WITH (NOLOCK)    
@@ -76,7 +83,11 @@ BEGIN
    AND TD.AreaKey = @cAreaKey
    AND TD.Status = '3'
    AND TaskType IN ('FCP','FCP1')
-   ORDER BY LOC.LogicalLocation,LOC.LOC
+   ORDER BY 
+   IIF(LOC.LocAisle = ISNULL(@cLastAisle,'') AND ISNULL(@cLastCategory,'') = 'VNA',1,99),
+   IIF(LOC.LocAisle = ISNULL(@cLastAisle,'') AND ISNULL(@cLastCategory,'') = 'VNA' AND ISNULL(@cLastSide,'') = LOC.Floor,1,99),
+   LOC.LogicalLocation,
+   LOC.LOC
 
    IF ISNULL(@cNewTaskKey,'') = ''    
    BEGIN    

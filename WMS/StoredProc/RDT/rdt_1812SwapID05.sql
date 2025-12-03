@@ -196,6 +196,17 @@ BEGIN
       IF @nRowCount = 0
          BREAK
 
+      SELECT @cLottable03 = LA.LOTTABLE03  
+      FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+      JOIN dbo.LOC WITH (NOLOCK)
+         ON LLI.Loc = LOC.LOC
+      JOIN dbo.LOTAttribute LA WITH (NOLOCK)
+         ON LLI.Lot = LA.Lot AND LLI.StorerKey = LA.StorerKey AND LA.SKU = LLI.SKU
+      WHERE LLI.StorerKey = @cStorerKey
+         AND ID = @cTaskFromID
+         AND LLI.QTY - LLI.QtyPicked > 0
+         AND LLI.SKU = @cTaskSKU
+
       IF NOT EXISTS (
          SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
          JOIN dbo.LOC WITH (NOLOCK)
