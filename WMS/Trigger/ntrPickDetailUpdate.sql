@@ -1855,7 +1855,7 @@ BEGIN
             SET @c_UnAllocUCCPickCode = ''
          END
          
-         IF @n_Continue IN (1,2)
+         IF @n_Continue IN (1,2) AND ISNULL(@c_UnAllocUCCPickCode, '') NOT IN ('', '0')
          BEGIN
             SET @CUR_PD_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT INSERTED.PickDetailKey 
