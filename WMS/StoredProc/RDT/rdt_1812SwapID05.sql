@@ -631,7 +631,11 @@ BEGIN
    RollBackTran:
       IF @nDebugFlag = 1
          SELECT 'RollbackTran', @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
-      ROLLBACK TRAN
+      IF XACT_STATE() = 1  -- 有活动且有效的事务
+      BEGIN
+         IF @nTranCount = 0
+            ROLLBACK TRAN
+      END
    Quit:
       IF @nDebugFlag = 1
          SELECT 'Quit', @nErrNo AS ErrNo, @cErrMsg AS ErrMsg

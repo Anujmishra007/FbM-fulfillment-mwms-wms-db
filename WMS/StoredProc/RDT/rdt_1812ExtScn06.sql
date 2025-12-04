@@ -1895,7 +1895,8 @@ BEGIN
    --V1.1.0 end
    GOTO QUIT
 RollBackTran:
-   ROLLBACK TRAN rdt_1812ExtScn06 -- Only rollback change made here
+   ROLLBACK TRAN -- Only rollback change made here
+   RETURN
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
