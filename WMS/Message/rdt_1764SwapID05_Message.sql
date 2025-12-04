@@ -47,5 +47,7 @@ execute rdt.rdtAddMsg 238189, 10, '238189UpdLLiFail',           'us_english', 17
 execute rdt.rdtAddMsg 238190, 10, '238190InvalidTaskType',      'us_english', 1764, 0, '238190: Scanned ID has the task not allowed to swap'
 execute rdt.rdtAddMsg 238191, 10, '238191UpdTaskFail',          'us_english', 1764, 0, '238191: Update TaskDetail failed'
 execute rdt.rdtAddMsg 238192, 10, '238192UpdTaskFail',          'us_english', 1764, 0, '238192: Update TaskDetail failed'
+execute rdt.rdtAddMsg 238193, 10, '238193UnlockIDFailed',       'us_english', 1764, 0, '238193: Unlock TaskID failed'
+execute rdt.rdtAddMsg 238194, 10, '238194LockFinalFailed',      'us_english', 1764, 0, '238194: Lock final loc failed'
 
 select * from rdt.rdtmsg (nolock) where Message_ID between 238151 and 238200

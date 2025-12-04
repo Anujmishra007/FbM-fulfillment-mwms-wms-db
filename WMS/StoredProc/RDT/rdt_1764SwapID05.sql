@@ -1,18 +1,18 @@
 
-/*********************************************************************************/
-/* Store procedure: rdt_1764SwapID05                                             */
-/* Copyright      : Maersk WMS                                                   */
-/* Customer       : BRF BRASIL FOODS SA                                          */
-/*                                                                               */
-/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                        */
-/*                                                                               */
-/* Date        Rev      Author      Purposes                                     */
-/* 2025-04-08  1.0.0    Jackc       FCR-3916 Create                              */
-/* 2025-08-06  1.0.1    NickT       UWP-38905 Reallocate pick task               */
-/* 2025-08-13  1.0.2    Jackc       UWP-38905 Improve pkd retriving logic,       */
-/*                                  2.Bypass QtyAllocated when lock rfputaway    */
-/* 2025-11-15  1.0.3    Jackc       UWP-38905 unallocate task id via ID, toLoc   */
-/*********************************************************************************/
+/************************************************************************************/
+/* Store procedure: rdt_1764SwapID05                                                */
+/* Copyright      : Maersk WMS                                                      */
+/* Customer       : BRF BRASIL FOODS SA                                             */
+/*                                                                                  */
+/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                           */
+/*                                                                                  */
+/* Date        Rev      Author      Purposes                                        */
+/* 2025-04-08  1.0.0    Jackc       FCR-3916 Create                                 */
+/* 2025-08-06  1.0.1    NickT       UWP-38905 Reallocate pick task                  */
+/* 2025-08-13  1.0.2    Jackc       UWP-38905 Improve pkd retriving logic,          */
+/*                                  2.Bypass QtyAllocated when lock rfputaway       */
+/* 2025-12-03  1.0.3    Jackc       UWP-38905 unbook loc for both pnd and final loc */
+/************************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764SwapID05
    @nMobile           INT,
@@ -58,6 +58,8 @@ BEGIN
    DECLARE @cTaskSKU                NVARCHAR( 20)
    DECLARE @cTaskLOT                NVARCHAR( 10)
    DECLARE @cTaskLOC                NVARCHAR( 10)
+   DECLARE @cTaskToLOC              NVARCHAR( 10) --V1.03
+   DECLARE @cTaskFinalLOC           NVARCHAR( 10) --V1.03
    DECLARE @cTaskTansitLoc          NVARCHAR( 10)
    DECLARE @cTaskID                 NVARCHAR( 18)
    DECLARE @cIDStatus               NVARCHAR( 10)
@@ -67,7 +69,8 @@ BEGIN
    DECLARE @nCurrRPFRowRef          INT
    DECLARE @cCurrRPFSuggLOC         NVARCHAR( 10)
    DECLARE @nCurrRPFPendingMoveIn   INT
-   DECLARE @nCurrQTYReplen          INT 
+   DECLARE @nCurrQTYReplen          INT
+   DECLARE @nRowRef           INT 
 
 
    DECLARE @cLottableCompare     NVARCHAR( MAX) = ''
@@ -123,15 +126,17 @@ BEGIN
 
    -- Get task info
    SELECT
-      @cStorerKey = TD.StorerKey, 
-      @cTaskType = TD.TaskType, 
-      @cTaskSKU = TD.SKU, 
-      @cTaskLOT = TD.LOT,
-      @cTaskLOC = TD.FromLOC,
-      @cTaskID = TD.FromID,
-      @nTaskQTY = TD.SystemQTY,
+      @cStorerKey          = TD.StorerKey, 
+      @cTaskType           = TD.TaskType, 
+      @cTaskSKU            = TD.SKU, 
+      @cTaskLOT            = TD.LOT,
+      @cTaskLOC            = TD.FromLOC,
+      @cTaskID             = TD.FromID,
+      @nTaskQTY            = TD.SystemQTY,
+      @cTaskToLoc          = TD.ToLOC,
+      @cTaskFinalLoc       = TD.FinalLoc,
       --@cTaskPickDetailKey = PickDetailKey,
-      @cTaskLocHandling = LOC.LocationHandling
+      @cTaskLocHandling    = LOC.LocationHandling
    FROM dbo.TaskDetail TD WITH (NOLOCK)
    INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON TD.FromLoc = LOC.Loc
    WHERE TD.StorerKey = @cStorerKey
@@ -845,11 +850,9 @@ BEGIN
    SELECT 
       @nCurrRPFRowRef  = RowRef, 
       @nCurrRPFPendingMoveIn = QTY, 
-      @cCurrRPFSuggLOC = SuggestedLOC
+      @cCurrRPFSuggLOC = SuggestedLOC --Task Final Loc
    FROM RFPutaway WITH (NOLOCK) 
-   --WHERE TaskDetailKey = @cTaskDetailKey --V1.0.2
-   WHERE FromID = @cTaskID
-      AND FromLoc = @cTaskLoc
+   WHERE TaskDetailKey = @cTaskDetailKey
 
    -- Get other RFPutaway info
    SET @nOtherRPFRowRef = 0
@@ -903,6 +906,7 @@ BEGIN
    4. Re-generate rfputaway data
       4.1 refresh rfputaway for TaskID
       4.2 refresh rfputaway for NewID
+      4.3 rebook newID from source to final
 */
    IF @nDebugFlag = 1
       SELECT 'Start Swap ID logic'
@@ -923,12 +927,12 @@ BEGIN
       SET @nErrNo = 0
       EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK' 
          ,''        --@cLOC      
-         ,@cTaskID  --@cID             --v1.0.2
-         ,@cCurrRPFSuggLOC --@cSuggLOC --V1.0.2
+         ,''        --@cID             
+         ,''        --@cSuggLOC 
          ,''        --@cStorerKey
          ,@nErrNo  OUTPUT
          ,@cErrMsg OUTPUT
-         --,@cTaskDetailKey = @cTaskDetailKey --V1.0.2
+         ,@cTaskDetailKey = @cTaskDetailKey --V1.0.2
       IF @nErrNo <> 0
       BEGIN
          SET @nErrNo = 238179
@@ -956,6 +960,40 @@ BEGIN
          GOTO RollBackTran
       END
    END
+
+   --V1.0.3 check whether to unlock pnd loc start
+   IF @cTaskToLOC <> @cTaskFinalLOC 
+      AND (SELECT LocationCategory FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cTaskToLoc) IN ('PND', 'PND_IN', 'PND_OUT')
+   BEGIN
+      SET @nRowRef = 0
+      SELECT @nRowRef = RowRef 
+      FROM dbo.RFPutaway WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND FromID = @cTaskID
+         AND FromLoc = @cTaskLOC  --fromloc
+         AND SuggestedLOC = @cTaskToLOC
+
+      IF ISNULL(@nRowRef, 0) <> 0 --unbook the PND lock
+      BEGIN
+         -- Unlock SuggestedLOC
+         SET @nErrNo = 0
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK' 
+            ,''        --@cLOC      
+            ,''        --@cID             
+            ,''        --@cSuggLOC 
+            ,''        --@cStorerKey
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,@nRowRef = @nRowRef
+         IF @nErrNo <> 0
+         BEGIN
+            SET @nErrNo = 238193
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Unlock fail
+            GOTO RollBackTran
+         END
+      END
+   END
+   --V1.0.3 check whether to unlock pnd loc start
 
    --1. Handle task data
    IF @nDebugFlag = 1
@@ -1234,7 +1272,7 @@ BEGIN
          EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
             ,@cTaskLOC
             ,@cNewID       
-            ,@cCurrRPFSuggLOC 
+            ,@cCurrRPFSuggLOC --Final loc
             ,@cStorerKey
             ,@nErrNo  OUTPUT
             ,@cErrMsg OUTPUT
@@ -1246,7 +1284,7 @@ BEGIN
          EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
             ,@cTaskLOC
             ,@cNewID       
-            ,@cCurrRPFSuggLOC 
+            ,@cCurrRPFSuggLOC  --Final loc
             ,@cStorerKey
             ,@nErrNo  OUTPUT
             ,@cErrMsg OUTPUT
@@ -1300,6 +1338,47 @@ BEGIN
          GOTO RollBackTran
       END
    END --4.2 otherRPFRowRef <> ''
+
+   --V1.0.3 start
+   IF @nDebugFlag = 1
+         SELECT '4.3 re-generate rfputaway for PND task', 
+                  @cTaskDetailKey AS TaskKey, @cNewID AS NewID, @cNewLOT AS NewLot, @nCurrQTYReplen AS TaskQtyReplen, 
+                  @cTaskPickDetailKey AS TaskPickDetailKey
+   IF @cTaskToLOC <> @cTaskFinalLOC 
+      AND (SELECT LocationCategory FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cTaskToLoc) IN ('PND', 'PND_IN', 'PND_OUT')
+   BEGIN
+      IF @nCurrQTYReplen > 0 --Because switched QtyReplen, so if TaskQtyReplen > 0, then LLI.QtyReplen of NEWID > 0
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
+            ,@cTaskLOC
+            ,@cNewID       
+            ,@cTaskToLOC
+            ,@cStorerKey
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,@cFromLOT = @cNewLOT
+            ,@cTaskDetailKey = @cTaskDetailKey
+            ,@cMoveQtyAlloc = '1' -- V1.0.2 RPF task LLI may have qtyallocted (FCP tasks), bypass QtyAllocted
+            ,@cMoveQTYReplen = '1'
+      ELSE --In the other cases, pass MoveQtyAlloc
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
+            ,@cTaskLOC
+            ,@cNewID       
+            ,@cTaskToLOC 
+            ,@cStorerKey
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,@cFromLOT = @cNewLOT
+            ,@cTaskDetailKey = @cTaskDetailKey
+            ,@cMoveQTYAlloc = '1'
+   END
+
+   IF @nErrNo <> 0
+   BEGIN
+      SET @nErrNo = 238194
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Book loc fail
+      GOTO RollBackTran
+   END
+   --V1.0.3 end
 
    --V1.0.2 remove the below 1.0.1 changes. Replace the original reallocating logic with 1.0.1 logic
   
