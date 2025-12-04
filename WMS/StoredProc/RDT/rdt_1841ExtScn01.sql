@@ -170,6 +170,17 @@ BEGIN
                END
 
                IF EXISTS(SELECT 1 
+                        FROM rdt.rdtPreReceiveSort WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND UDF05 IS NOT NULL
+                           AND UDF05 = @cCartonID)
+               BEGIN
+                  SET @nErrNo  = 252354
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --  Carton ID Already Scanned
+                  GOTO Quit
+               END
+
+               IF EXISTS(SELECT 1 
                         FROM dbo.UCC WITH(NOLOCK) 
                         WHERE StorerKey = @cStorerKey 
                            AND UCCNo = @cCartonID )
