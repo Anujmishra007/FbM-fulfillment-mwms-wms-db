@@ -58,9 +58,6 @@ BEGIN
    -- If @c_Pickdetailkey is provided (from ntrPickDetailUpdate), use PickDetailKey path
    -- If @c_Pickdetailkey is blank (from ntrPickDetailDelete), use #D_PICKDETAIL path
    IF ISNULL(TRIM(@c_Pickdetailkey), '') <> ''
-      AND EXISTS ( SELECT 1
-                   FROM PICKDETAIL (NOLOCK)
-                   WHERE PickDetailKey = @c_Pickdetailkey )
    BEGIN
       UPDATE U 
       SET U.STATUS = '1'
@@ -74,9 +71,15 @@ BEGIN
       AND    EXISTS ( SELECT 1 
                       FROM PICKDETAIL PD (NOLOCK) 
                       WHERE PD.PickDetailKey = @c_Pickdetailkey
-                      AND PD.DropID = U.UCCNo
                       AND PD.Storerkey = @c_Storerkey
+                      AND PD.DropID = U.UCCNo
                       AND PD.Status < '9' )
+      AND NOT EXISTS ( SELECT 1 
+                       FROM PICKDETAIL PD (NOLOCK) 
+                       WHERE PD.Storerkey = @c_Storerkey
+                       AND PD.DropID = U.UCCNo
+                       AND PD.Status < '9'
+                       AND PD.Qty > 0 )   --1 UCC Shares multiple pickdetail - ensure ALL have Qty = 0
    END
    ELSE IF OBJECT_ID('tempdb..#D_PICKDETAIL') IS NOT NULL
    BEGIN   --WL01 E
@@ -107,7 +110,7 @@ BEGIN
             COMMIT TRAN
          END
       END
-      Execute nsp_logerror @n_err, @c_errmsg, 'ispUAUCC01'
+      EXECUTE nsp_logerror @n_err, @c_errmsg, 'ispUAUCC01'
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN
    END
