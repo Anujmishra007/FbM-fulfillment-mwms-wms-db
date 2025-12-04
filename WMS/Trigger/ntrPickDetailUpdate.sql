@@ -1832,7 +1832,9 @@ BEGIN
                                 FROM UCC (NOLOCK)
                                 WHERE UCC.Storerkey = DELETED.Storerkey
                                 AND UCC.UCCNo = DELETED.DropID
-                                AND (UCC.Status > '2' AND UCC.Status < '6') ) )
+                                AND (UCC.Status > '2' AND UCC.Status < '6') 
+                              ) 
+                  )
       BEGIN
          IF ISNULL(@c_UnAllocUCCPickCode, '') NOT IN ('', '0')
          BEGIN
