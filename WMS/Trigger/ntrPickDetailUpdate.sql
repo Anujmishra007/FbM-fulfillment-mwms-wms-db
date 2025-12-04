@@ -1788,7 +1788,7 @@ AND EXISTS ( SELECT 1
            )
 BEGIN
    SET @CUR_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT I.Storerkey
+   SELECT DISTINCT I.Storerkey
    FROM INSERTED I
    JOIN StorerConfig s (NOLOCK) ON I.StorerKey = s.StorerKey
    WHERE s.ConfigKey IN ('UCCTracking', 'UCC', 'UnAllocateResetUCC')
