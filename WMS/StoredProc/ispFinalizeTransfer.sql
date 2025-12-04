@@ -76,6 +76,7 @@ GO
 /* 10-OCT-2025  SSA02     4.1 UWP-42248 -Enhanced session management      */
 /*                             and cleanup.                               */
 /* 10-Oct-2025  Michael   4.2 FCR-8380- Add SerialNoUpdateLotLocID (ML02) */
+/* 04-Dec-2025  USH022-01 4.3 UWP-41775-Update UCC.StorerKey |VAS Transfer*/
 /**************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispFinalizeTransfer]
@@ -2430,6 +2431,7 @@ BEGIN
                          Lot = @cToLOT,
                          Loc = @cToLOC,
                          ID  = @cToID,
+                         StorerKey = @cToStorerKey,                     --USH022-01
                          Status = CASE WHEN @c_RemainHoldOnTransfer = '1' AND Status = 'H' THEN Status   --ML01
                                        WHEN @c_LoseUCC = '1' THEN '6' -- (ChewKP02)
                                   ELSE Status
