@@ -79,7 +79,7 @@ BEGIN
       AND Code = @cSKUGroup
 
 
-   IF @cDelimiter <> '' --yeekung01
+   IF @cShort  <> '' --yeekung01
    BEGIN
       INSERT INTO @tCurTable (Delimiter)
       SELECT ColValue
@@ -110,6 +110,10 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail
                   GOTO Quit
                END
+
+               SELECT TOP 1 @cBarcode = ColValue
+               FROM dbo.fnc_DelimSplit (@cDelimiter, @cBarcode)
+               WHERE ColValue <> ''
             end 
             ELSE
             BEGIN
@@ -130,6 +134,18 @@ BEGIN
       END
       CLOSE @curDelimeter
       DEALLOCATE @curDelimeter
+
+      IF NOT EXISTS(SELECT 1 FROM rdt.rdtReceiveSerialNoLog WITH (NOLOCK) WHERE Mobile = @nMobile AND Func = @nFunc)
+      BEGIN
+         INSERT INTO rdt.rdtReceiveSerialNoLog (Mobile, Func, StorerKey, SKU, SerialNo, QTY)
+         SELECT @nMobile, @nFunc, @cStorerKey, @cSKU, @cBarcode, 1
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 241607
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail
+            GOTO Quit
+         END
+      END
    END
    ELSE IF ISNULL(@cLength,'') <> ''
    BEGIN
@@ -174,20 +190,19 @@ BEGIN
             GOTO Quit
          END
       END
+   END
 
-      IF (SELECT COUNT(1)
-         FROM rdt.rdtReceiveSerialNoLog WITH (NOLOCK)
-         WHERE Mobile = @nMobile
-            AND Func = @nFunc) > 1
-      BEGIN
-         SET @nBulkSNO = 1
-      END
-      ELSE 
-      BEGIN
-         SET @cSerialNo = @cBarcode
-         
-         SET @nBulkSNO = 0
-      END
+   IF (SELECT COUNT(1)
+      FROM rdt.rdtReceiveSerialNoLog WITH (NOLOCK)
+      WHERE Mobile = @nMobile
+         AND Func = @nFunc) > 1
+   BEGIN
+      SET @nBulkSNO = 1
+   END
+   ELSE 
+   BEGIN
+      SET @cSerialNo = @cBarcode
+      SET @nBulkSNO = 0
    END
 
 Quit:
