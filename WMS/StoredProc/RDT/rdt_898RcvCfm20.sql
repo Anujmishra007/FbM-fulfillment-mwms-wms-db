@@ -652,20 +652,11 @@ DECLARE @cSkipLottable01 NVARCHAR( 1)
 DECLARE @cSkipLottable02 NVARCHAR( 1)
 DECLARE @cSkipLottable03 NVARCHAR( 1)
 DECLARE @cSkipLottable04 NVARCHAR( 1)
-DECLARE @cAddRCPTValidtn NVARCHAR( 1)
 
-SET @cSkipLottable01 = 0
-SET @cSkipLottable02 = 0
-SET @cSkipLottable03 = 0
-SET @cSkipLottable04 = 0
-
--- For Fcr-549
-SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddRCPTValidtn', @cStorerKey)
-IF @cAddRCPTValidtn = '1'
-BEGIN
-   SET @cSkipLottable01 = '0'
-END
--- end
+SET @cSkipLottable01 = '0'
+SET @cSkipLottable02 = '0'
+SET @cSkipLottable03 = '0'
+SET @cSkipLottable04 = '0'
 
 IF @cSkipLottable01 = '1' SELECT @cLottable01Required = '0', @cLottable01 = ''
 IF @cSkipLottable02 = '1' SELECT @cLottable02Required = '0', @cLottable02 = ''
@@ -675,8 +666,8 @@ IF @cSkipLottable04 = '1' SELECT @cLottable04Required = '0', @dLottable04 = NULL
 -- Validate lottable
 IF @cLottable01Required = '1' AND @cLottable01 = ''
 BEGIN
-   SET @nErrNo = 60333
-   SET @cErrMsg = rdt.rdtgetmessage( 60333, @cLangCode, 'DSP') --'Need Lottable1'
+   SET @nErrNo = 252252
+   SET @cErrMsg = rdt.rdtgetmessage( @nErrNO, @cLangCode, 'DSP') --'Need Lottable1'
    GOTO Fail
 END
 

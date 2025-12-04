@@ -74,6 +74,7 @@ GO
 /* 2025-10-20 5.6  Jackc   UWP-42561 Decoded UUC not set back to right     */ 
 /*                         parameter                                       */
 /* 2025-10-29 5.7  Dennis  FCR-8472 Decoded SP                             */ 
+/* 2025-10-29 5.8  Dennis  FCR-9273 ExtScn04                               */ 
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -4714,6 +4715,16 @@ BEGIN
                SET @cMax        =''
                SET @cPPK        = ''
                SET @nQTY        = 0
+            END
+         END
+         IF @cExtScnSP = 'rdt_898ExtScn04' AND @nInputKey = 1
+         BEGIN
+            IF @nStep = 6
+            BEGIN
+               SET @cTempLottable01 = @cLottable01
+               SET @cTempLottable02 = @cLottable02
+               SET @cTempLottable03 = @cLottable03
+               SET @dTempLottable04 = @dLottable04
             END
          END
 

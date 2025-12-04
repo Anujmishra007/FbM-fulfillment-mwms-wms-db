@@ -248,13 +248,13 @@ BEGIN
    SELECT @cDocType = DOCTYPE FROM RECEIPT (NOLOCK) WHERE ReceiptKey = @cReceiptKey
    IF @nFunc = 898
    BEGIN
-      IF (@nMOBRECStep = 8 AND @nStep = 9) OR (@nMOBRECStep = 9 AND @nStep = 8)
+      IF (@nMOBRECStep = 4 AND @nStep = 6) OR (@nMOBRECStep = 6 AND @nStep = 4)
       BEGIN
          IF @cDocType <> 'R'
             SELECT @cLottable01 = LOTTABLE01 FROM RECEIPTDETAIL WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey AND SKU = @cSKU
 
          SELECT @cOutField01 = @cLottable01, @cOutField02 = @cLottable02 ,
-         @cOutField03 = @cLottable03 , @cOutField04 = CONVERT(NVARCHAR(16),@dLottable04,120)
+         @cOutField03 = @cLottable03 , @cOutField04 = ''
 
          SET @nAfterStep = 99
          SET @nAfterScn = 1304
@@ -294,38 +294,33 @@ BEGIN
                GOTO Quit
             END
 
-            SET @cOutField06 = CASE WHEN @cLottable01 <> '' THEN @cLottable01 ELSE @cTempLottable01 END
-            SET @cOutField07 = CASE WHEN @cLottable02 <> '' THEN @cLottable02 ELSE @cTempLottable02 END
-            SET @cOutField08 = CASE WHEN @cLottable03 <> '' THEN @cLottable03 ELSE @cTempLottable03 END
-            SET @cOutField09 = CASE WHEN @dLottable04 <> 0  THEN rdt.rdtFormatDate( @dLottable04) ELSE @cTempLottable04 END
-
-            SET @cOutField01 = @cUCC
-            SET @cOutField02 = @cSKU
-            SET @cOutField03 = SUBSTRING( @cDesc,  1, 20)
-            SET @cOutField04 = SUBSTRING( @cDesc, 21, 20)
-            SET @cOutField05 = CASE WHEN IsNULL(@cPPK, '') = '' THEN '0' ELSE  @cPPK END +
-                              '/' +
-                              CASE WHEN IsNULL(@cPQIndicator, '') = '' THEN '0' ELSE @cPQIndicator END
-            SET @cOutField10 = CASE WHEN @nQTY > 0 THEN CAST( @nQTY AS NVARCHAR( 5)) ELSE '' END --qty
+            SET @cOutField01 = '' --ucc
+            SET @cOutField02 = '' --sku
+            SET @cOutField03 = '' --sku desc
+            SET @cOutField04 = '' --sku desc
+            SET @cOutField05 = '' --ppk/du
+            SET @cOutField06 = @cLottable01
+            SET @cOutField07 = @cLottable02
+            SET @cOutField08 = @cLottable03
+            SET @cOutField09 = ''
+            SET @cOutField10 = '' --qty
             SET @cOutField11 = RTRIM(CAST( @cCartonCnt AS NVARCHAR( 4))) + CASE WHEN @cSkipEstUCCOnID = '1' THEN '' ELSE '/' + CAST( @cTotalCarton AS NVARCHAR( 4)) END -- (ChewKP02)
 
-            SET @nAfterStep = 9
-            SET @nAfterScn = 1308
+            SET @nAfterStep = 6
+            SET @nAfterScn = 1305
          END
          IF @nInputKey = 0
          BEGIN
             --go to screen SKU
-            SET @nAfterScn  = 1307
-            SET @nAfterStep = 8
-
-            SET @cSKU = ''
-            SET @nQTY = 0
-
-            --prepare next screen var
-            SET @cOutField01 = @cUCC
-            SET @cOutField02 = @cSku --sku
-            SET @cOutField03 = RTRIM(CAST( @cCartonCnt AS NVARCHAR( 4))) + CASE WHEN @cSkipEstUCCOnID = '1' THEN '' ELSE '/' + CAST( @cTotalCarton AS NVARCHAR( 4)) END --(ChewKP02)
-            SET @cOutField04 = ''
+            SET @nAfterScn  = 1303
+            SET @nAfterStep = 4
+            IF @cSkipEstUCCOnID = '1'
+               SET @cFieldAttr05 = 'O'
+            SET @cOutField01 = @cReceiptKey
+            SET @cOutField02 = @cPOKey
+            SET @cOutField03 = @cLOC
+            SET @cOutField04 = @cTOID
+            SET @cOutField05 = @cTotalCarton
          END
       END
    END
