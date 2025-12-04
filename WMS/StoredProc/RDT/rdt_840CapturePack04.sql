@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'rdt.rdt_840CapturePack04') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_840CapturePack04
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Store procedure: rdt_840CapturePack04                                */
 /* Purpose: Default carton type based on codelkup                       */
@@ -13,10 +10,11 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date        Rev  Author     Purposes                                 */
-/* 2021-02-04  1.0  James      WMS-16306. Created                        */
+/* 2021-02-04  1.0  James      WMS-16306. Created                       */
+/* 2024-12-17  1.1  James      FCR-1625 Add new params (james01)        */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_840CapturePack04 (
+CREATE OR ALTER PROC [RDT].[rdt_840CapturePack04] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -30,19 +28,23 @@ CREATE PROC rdt.rdt_840CapturePack04 (
    @nCartonNo        INT,
    @cCartonType      NVARCHAR( 10) OUTPUT,
    @fCartonWeight    FLOAT         OUTPUT,
-   @cCapturePackInfo NVARCHAR( 10) OUTPUT, 
+   @fCartonCube      FLOAT         OUTPUT, 
+   @fCartonLength    FLOAT         OUTPUT, 
+   @fCartonWidth     FLOAT         OUTPUT, 
+   @fCartonHeight    FLOAT         OUTPUT, 
+   @cCapturePackInfo NVARCHAR( 10) OUTPUT,
    @nErrNo           INT           OUTPUT,
-   @cErrMsg          NVARCHAR( 20) OUTPUT    
+   @cErrMsg          NVARCHAR( 20) OUTPUT
 )
 AS
 
-   SET NOCOUNT ON  
-   SET ANSI_NULLS OFF  
-   SET QUOTED_IDENTIFIER OFF  
-   SET CONCAT_NULL_YIELDS_NULL OFF  
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cCtnType       NVARCHAR( 10)
-   
+
    IF @nStep = 3
    BEGIN
       IF @nInputKey IN (0, 1)
@@ -61,9 +63,5 @@ AS
 
    Quit:
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON rdt.rdt_840CapturePack04 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_840CapturePack04] TO [NSQL]
 GO
