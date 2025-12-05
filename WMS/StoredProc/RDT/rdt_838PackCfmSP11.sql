@@ -186,16 +186,17 @@ BEGIN
    IF @cPackConfirm = 'Y'
    BEGIN
       -- Pack confirm
-      UPDATE PackHeader SET
-         Status = '9'
-      WHERE PickSlipNo = @cPickSlipNo
-         AND Status <> '9'
-      SET @nErrNo = @@ERROR
-      IF @nErrNo <> 0
-      BEGIN
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail
+      BEGIN TRY
+         UPDATE PackHeader WITH(ROWLOCK)
+         SET Status = '9'
+         WHERE PickSlipNo = @cPickSlipNo
+            AND Status <> '9'
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 253051
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Update PackHeader Failed
          GOTO RollBackTran
-      END
+      END CATCH
 
       -- Get storer config
       DECLARE @cAssignPackLabelToOrdCfg NVARCHAR(1)
@@ -208,6 +209,7 @@ BEGIN
          @cAssignPackLabelToOrdCfg OUTPUT,
          @nErrNo                   OUTPUT,
          @cErrMsg                  OUTPUT
+
       IF @nErrNo <> 0
          GOTO RollBackTran
 
@@ -220,6 +222,7 @@ BEGIN
             ,@bSuccess OUTPUT
             ,@nErrNo   OUTPUT
             ,@cErrMsg  OUTPUT
+
          IF @nErrNo <> 0
             GOTO RollBackTran
       END
@@ -236,6 +239,7 @@ BEGIN
          @cDefault_PackInfo OUTPUT,
          @nErrNo            OUTPUT,
          @cErrMsg           OUTPUT
+
       IF @nErrNo <> 0
          GOTO RollBackTran
       
@@ -252,7 +256,7 @@ BEGIN
             DECLARE @nCube          FLOAT
             DECLARE @nQTY           INT
             DECLARE @cCartonType    NVARCHAR( 10)
-          DECLARE @nCartonWeight  FLOAT
+            DECLARE @nCartonWeight  FLOAT
             DECLARE @nCartonCube    FLOAT
             DECLARE @nCartonLength  FLOAT
             DECLARE @nCartonWidth   FLOAT
@@ -268,7 +272,7 @@ BEGIN
                @nCartonWidth  = ISNULL( CartonWidth, 0),
                @nCartonHeight = ISNULL( CartonHeight, 0)
             FROM Storer S WITH (NOLOCK)
-               JOIN Cartonization C WITH (NOLOCK) ON (S.CartonGroup = C.CartonizationGroup)
+            JOIN Cartonization C WITH (NOLOCK) ON (S.CartonGroup = C.CartonizationGroup)
             WHERE S.StorerKey = @cStorerKey
             ORDER BY C.UseSequence
 
@@ -290,7 +294,7 @@ BEGIN
                   @nWeight = SUM( PD.QTY * SKU.STDGrossWGT),
                   @nCube = SUM( PD.QTY * SKU.STDCube)
                FROM PackDetail PD WITH (NOLOCK)
-                  JOIN SKU WITH (NOLOCK) ON (PD.StorerKey = SKU.StorerKey AND PD.SKU = SKU.SKU)
+               JOIN SKU WITH (NOLOCK) ON (PD.StorerKey = SKU.StorerKey AND PD.SKU = SKU.SKU)
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.CartonNo = @nCartonNo
       
@@ -300,38 +304,39 @@ BEGIN
                   SET @nCube = ISNULL(@nCartonCube,0)                --(cc01)
       
                -- Insert PackInfo
-               INSERT INTO PackInfo (PickSlipNo, CartonNo, Weight, Cube, Qty, Cartontype, Length, Width, Height)
-               VALUES (@cPickSlipNo, @nCartonNo, '0', @nCube, @nQTY, @cCartonType, @nCartonLength, @nCartonWidth, @nCartonHeight)
-               IF @nErrNo <> 0
-               BEGIN
-                  SET @nErrNo = 193601
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- INS PKInf Fail
+               BEGIN TRY
+                  INSERT INTO PackInfo (PickSlipNo, CartonNo, Weight, Cube, Qty, Cartontype, Length, Width, Height)
+                  VALUES (@cPickSlipNo, @nCartonNo, '0', @nCube, @nQTY, @cCartonType, @nCartonLength, @nCartonWidth, @nCartonHeight)
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 253052
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Insert PackInfo Failed
                   GOTO RollBackTran
-               END
+               END CATCH
 
                FETCH NEXT FROM @curPD INTO @nCartonNo
             END
          END
       END
 
-   --abs
+      --abs
       IF NOT EXISTS ( SELECT 1
             FROM Packinfo (NOLOCK)
             WHERE PickSlipNo = @cPickslipNo
                AND ISNULL(weight,'') IN (0,'')
             )  AND NOT EXISTS (
-SELECT 1
-FROM (
-    SELECT COUNT(DISTINCT CartonNo) AS CNT1
-    FROM PackDetail WITH (NOLOCK)
-    WHERE PickSlipNo = @cPickSlipNo
-) AS A,
-(
-    SELECT COUNT(DISTINCT CartonNo) AS CNT2
-    FROM PackInfo WITH (NOLOCK)
-    WHERE PickSlipNo = @cPickSlipNo
-) AS B
-WHERE A.CNT1 <> B.CNT2)
+      SELECT 1
+      FROM (
+         SELECT COUNT(DISTINCT CartonNo) AS CNT1
+         FROM PackDetail WITH (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+      ) AS A,
+      (
+         SELECT COUNT(DISTINCT CartonNo) AS CNT2
+         FROM PackInfo WITH (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+      ) AS B
+      WHERE A.CNT1 <> B.CNT2)
       BEGIN
          -- Insert transmitlog2 here (trigger S272)
          SET @bSuccess = 1
