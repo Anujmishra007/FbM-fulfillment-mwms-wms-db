@@ -42,6 +42,7 @@ GO
 /* 2025-09-04                 fix                                        */
 /* 2025-10-10  SSA08    1.9   UWP-42248 -Enhanced session management     */
 /* 2025-10-24  PPA374   1.10  UWP-42949 -Added PP type for the RPF task  */
+/* 2025-12-04  Wan01    1.11  FCR-3958 CR V2.3 (Work with PPA374)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -779,8 +780,12 @@ BEGIN
                                      ELSE 'FP' END
          SET @c_UOM        = '1'
          SET @c_FinalLoc   = ''
-         SET @c_Priority   = '3'
+         SET @c_Priority   = ''                                                     --(Wan01) FCR-3958 CR V2.3
          SET @c_TaskStatus = '0'                                                    --v2.2         
+         
+         
+         SELECT TOP 1 @c_Priority = Priority                                        --(Wan01) FCR-3958 CR V2.3
+         FROM #TMP_ORD  
          
          --SELECT TOP 1 @c_FinalLoc = l.Loc                                         --2025-08-25 - START
          --FROM string_split (@c_Lanes, ',') ss
@@ -920,7 +925,22 @@ BEGIN
       JOIN #TMP_ORD o ON o.Orderkey  = pd.Orderkey
       JOIN LOTATTRIBUTE la (NOLOCK) ON la.lot = pd.lot
       JOIN LOC l (NOLOCK) ON l.loc = pd.Loc
-      WHERE pd.TaskDetailKey = ''                                                   --2025-07-01      
+      OUTER APPLY (   SELECT RecCnt = CASE WHEN pd.ID > '' AND la.Lottable11  = ''       --(Wan01) FCR-3958 CR V2.3  
+                                           THEN 1
+                                           WHEN td.Lot = pd.Lot 
+                                           THEN 1
+                                           ELSE 0
+                                           END
+                      FROM dbo.Taskdetail td (NOLOCK)
+                      WHERE td.CaseID = la.Lottable11
+                      AND   td.TaskType IN ('FCP','FCP1')
+                      AND   td.Status IN ('9','X')
+                      AND   td.Storerkey = pd.Storerkey
+                      AND   td.FromID    = pd.ID
+                  ) tdr
+      WHERE pd.TaskDetailKey = ''                                                   --2025-07-01  
+      AND tdr.RecCnt IN (0,NULL)                                                    --(Wan01) FCR-3958 CR V2.3  
+      AND pd.Status < '5'                                                           --(Wan01) FCR-3958 CR V2.3 
       GROUP BY o.Orderkey
             ,  o.[Priority]      
             ,  o.C_Company
@@ -989,7 +1009,7 @@ BEGIN
                SELECT @c_RefTaskKey =  td.TaskDetailKey 
                FROM TASKDETAIL td (NOLOCK)
                WHERE td.TaskType   = 'RPF'
-               AND   td.Caseid     = ''                                           
+               --AND   td.Caseid     = ''                                           --(Wan01) FCR-3958 CR V2.3                                
                AND   td.Storerkey  = @c_Storerkey
                AND   td.UOM        = '1'
                AND   td.FromLoc    = @c_ReplFromLoc 

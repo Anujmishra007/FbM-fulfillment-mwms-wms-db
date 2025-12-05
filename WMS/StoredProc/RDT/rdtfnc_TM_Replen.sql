@@ -67,6 +67,7 @@ GO
 /*                            Special fix for USA levis, customized logic     */
 /* 2025-11-13 4.9.0 NickT     UWP-44117 Fix issue: Cannot drop pending pallet */
 /* 2025-11-14 4.10.0 NickT    UWP-43847 Fix issue: PickDetail status is not updated*/
+/* 2025-12-04 4.11  Dennis    FCR-3959 ExtScnSp                               */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -1177,6 +1178,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_FromLOC_Fail:
