@@ -179,9 +179,11 @@ DECLARE   @cPickDetailKey NVARCHAR(10)     -- (james02)
 --WL01 S
 DECLARE   @CUR_UCC                  CURSOR
         , @CUR_PD_UCC               CURSOR
-        , @c_Option5                NVARCHAR(MAX) = N''
-        , @c_UnallocNoUpdUCCStatus  NVARCHAR(10)  = N'N'
+        , @n_GetInsertedQty         INT = 0
+        , @n_GetDeletedQty          INT = 0
+        , @c_Option1                NVARCHAR(50)  = N''
         , @c_UnAllocStorerkey       NVARCHAR(15)  = N''
+        , @c_PrevUnAllocStorerkey   NVARCHAR(15)  = N''
         , @c_UnAllocUCCPickCode     NVARCHAR(10)  = N''
         , @c_SQL                    NVARCHAR(MAX) = N''
         , @c_SQLParm                NVARCHAR(MAX) = N''
@@ -1774,69 +1776,56 @@ END
 --NJOW03 -E
 
 --WL01 S
--- If Qty is updated and Pickdetail.DropID is a valid UCC
+-- If Qty is updated
 IF (@n_continue = 1 OR @n_continue = 2) AND UPDATE(QTY)
-AND EXISTS ( SELECT 1 
-             FROM INSERTED
-             JOIN DELETED ON INSERTED.Pickdetailkey = DELETED.Pickdetailkey
-             WHERE INSERTED.Status < '9'
-             AND EXISTS ( SELECT 1
-                          FROM UCC (NOLOCK)
-                          WHERE UCC.Storerkey = INSERTED.Storerkey
-                          AND UCC.UCCNo = INSERTED.DropID
-                          AND UCC.Status < '6' ) 
-           )
 BEGIN
+   --Pickdetail.DropID is a valid UCC and Storerconfig is turned on
    SET @CUR_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT DISTINCT I.Storerkey
+   SELECT DISTINCT I.Storerkey, I.Pickdetailkey, I.Qty, D.Qty, I.DropID
    FROM INSERTED I
-   JOIN StorerConfig s (NOLOCK) ON I.StorerKey = s.StorerKey
-   WHERE s.ConfigKey IN ('UCCTracking', 'UCC', 'UnAllocateResetUCC')
-   AND   s.SValue = '1'
-   AND   I.Status < '9'
+   JOIN DELETED D ON I.Pickdetailkey = D.Pickdetailkey
+   WHERE I.Status < '9'
+   AND (I.DropID <> '' AND I.DropID IS NOT NULL)
+   AND EXISTS ( SELECT 1
+                FROM UCC (NOLOCK)
+                WHERE UCC.Storerkey = I.Storerkey
+                AND UCC.UCCNo = I.DropID
+                AND UCC.Status < '6' )
+   AND EXISTS ( SELECT 1
+                FROM StorerConfig S (NOLOCK)
+                WHERE S.ConfigKey IN ('UCCTracking', 'UCC', 'UnAllocateResetUCC')
+                AND   S.SValue = '1'
+                AND   I.StorerKey = S.StorerKey )
 
    OPEN @CUR_UCC
 
-   FETCH NEXT FROM @CUR_UCC INTO @c_UnAllocStorerkey
+   FETCH NEXT FROM @CUR_UCC INTO @c_UnAllocStorerkey, @c_Pickdetailkey, @n_GetInsertedQty, @n_GetDeletedQty, @c_UCCNo
 
    WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
    BEGIN
-      SELECT @b_success = 0
-      EXEC dbo.nspGetRight @c_Facility = '' -- nvarchar(5)
-                         , @c_StorerKey = @c_UnAllocStorerkey -- nvarchar(15)
-                         , @c_sku = NULL -- nvarchar(20)
-                         , @c_ConfigKey = N'UnAllocUCCPickCode' -- nvarchar(30)
-                         , @b_Success = @b_Success OUTPUT -- int
-                         , @c_authority = @c_UnAllocUCCPickCode OUTPUT -- nvarchar(30)
-                         , @n_err = @n_err OUTPUT -- int
-                         , @c_errmsg = @c_errmsg OUTPUT -- nvarchar(250)
-                         , @c_Option5 = @c_Option5 OUTPUT -- nvarchar(4000)
-      
-      SELECT @c_UnallocNoUpdUCCStatus = dbo.fnc_GetParamValueFromString('@c_UnallocNoUpdUCCStatus', @c_Option5, @c_UnallocNoUpdUCCStatus)
-      
-      IF ISNULL(@c_UnallocNoUpdUCCStatus, '') = ''
-         SET @c_UnallocNoUpdUCCStatus = 'N'
+      IF ISNULL(@c_PrevUnAllocStorerkey, '') <> ISNULL(@c_UnAllocStorerkey, '')
+      BEGIN
+         SET @b_success = 0
+         SET @c_UnAllocUCCPickCode = ''
+         SET @c_Option1 = ''
+         EXEC dbo.nspGetRight @c_Facility = '' -- nvarchar(5)
+                            , @c_StorerKey = @c_UnAllocStorerkey -- nvarchar(15)
+                            , @c_sku = NULL -- nvarchar(20)
+                            , @c_ConfigKey = N'UnAllocUCCPickCode' -- nvarchar(30)
+                            , @b_Success = @b_Success OUTPUT -- int
+                            , @c_authority = @c_UnAllocUCCPickCode OUTPUT -- nvarchar(30)
+                            , @n_err = @n_err OUTPUT -- int
+                            , @c_errmsg = @c_errmsg OUTPUT -- nvarchar(250)
+                            , @c_Option1 = @c_Option1 OUTPUT -- nvarchar(50)
+      END
 
       -- When Qty is updated from > 0 to 0
       -- Pickdetail.DropID is UCC, UCC status > '2' and < '6'
       -- Pickdetail.Status < '9'
-      IF @n_Continue IN (1,2) AND @c_UnallocNoUpdUCCStatus = 'N'
-      AND EXISTS ( SELECT 1 
-                   FROM INSERTED
-                   JOIN DELETED ON INSERTED.Pickdetailkey = DELETED.Pickdetailkey
-                   WHERE INSERTED.Qty = 0 
-                   AND DELETED.Qty > INSERTED.Qty
-                   AND INSERTED.Status < '9'
-                   AND INSERTED.Storerkey = @c_UnAllocStorerkey
-                   AND EXISTS ( SELECT 1
-                                FROM UCC (NOLOCK)
-                                WHERE UCC.Storerkey = DELETED.Storerkey
-                                AND UCC.UCCNo = DELETED.DropID
-                                AND (UCC.Status > '2' AND UCC.Status < '6') 
-                              ) 
-                  )
+      IF @n_Continue IN (1,2) AND @c_Option1 = 'UpdZeroQtyToUnalloc'
+      AND ISNULL(@c_UnAllocUCCPickCode, '') NOT IN ('', '0')
       BEGIN
-         IF ISNULL(@c_UnAllocUCCPickCode, '') NOT IN ('', '0')
+         IF @n_Continue IN (1,2) AND (@n_GetInsertedQty = 0 AND @n_GetDeletedQty > @n_GetInsertedQty)
          BEGIN
             IF NOT EXISTS ( SELECT 1 
                             FROM sys.objects o 
@@ -1860,125 +1849,58 @@ BEGIN
             
             IF @n_Continue IN (1,2) AND ISNULL(@c_UnAllocUCCPickCode, '') NOT IN ('', '0')
             BEGIN
-               SET @CUR_PD_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-               SELECT INSERTED.PickDetailKey 
-               FROM INSERTED
-               JOIN DELETED ON INSERTED.Pickdetailkey = DELETED.Pickdetailkey
-               WHERE INSERTED.Storerkey = @c_UnAllocStorerkey
-               AND INSERTED.Qty = 0 
-               AND DELETED.Qty > INSERTED.Qty
-               AND EXISTS ( SELECT 1
-                            FROM UCC (NOLOCK)
-                            WHERE UCC.Storerkey = DELETED.Storerkey
-                            AND UCC.UCCNo = DELETED.DropID
-                            AND (UCC.Status > '2' AND UCC.Status < '6') )
-            
-               OPEN @CUR_PD_UCC
-            
-               FETCH NEXT FROM @CUR_PD_UCC INTO @c_Pickdetailkey
-            
-               WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
-               BEGIN
-                  SET @c_SQL = ''
-                  SET @c_SQL = N'EXECUTE ' + @c_UnallocUCCPickCode   
-                             + N'  @c_Storerkey       = @c_UnAllocStorerkey '    
-                             + N', @b_Success         = @b_Success         OUTPUT '    
-                             + N', @n_Err             = @n_Err             OUTPUT '  
-                             + N', @c_ErrMsg          = @c_ErrMsg          OUTPUT '
-                             + N', @c_Pickdetailkey   = @c_Pickdetailkey '
+               SET @c_SQL = ''
+               SET @c_SQL = N'EXECUTE ' + @c_UnallocUCCPickCode   
+                          + N'  @c_Storerkey       = @c_UnAllocStorerkey '    
+                          + N', @b_Success         = @b_Success         OUTPUT '    
+                          + N', @n_Err             = @n_Err             OUTPUT '  
+                          + N', @c_ErrMsg          = @c_ErrMsg          OUTPUT '
+                          + N', @c_Pickdetailkey   = @c_Pickdetailkey '
                
-                  SET @c_SQLParm = '' 
-                  SET @c_SQLParm = N'  @c_UnAllocStorerkey   NVARCHAR(15)'
-                                 + N', @b_Success            INT OUTPUT'
-                                 + N', @n_Err                INT OUTPUT'
-                                 + N', @c_ErrMsg             NVARCHAR(250) OUTPUT'
-                                 + N', @c_Pickdetailkey      NVARCHAR(10) '
+               SET @c_SQLParm = '' 
+               SET @c_SQLParm = N'  @c_UnAllocStorerkey   NVARCHAR(15)'
+                              + N', @b_Success            INT OUTPUT'
+                              + N', @n_Err                INT OUTPUT'
+                              + N', @c_ErrMsg             NVARCHAR(250) OUTPUT'
+                              + N', @c_Pickdetailkey      NVARCHAR(10) '
                
-                  EXEC sp_ExecuteSQL  @c_SQL
-                                    , @c_SQLParm 
-                                    , @c_UnAllocStorerkey 
-                                    , @b_Success   OUTPUT
-                                    , @n_Err       OUTPUT
-                                    , @c_ErrMsg    OUTPUT
-                                    , @c_Pickdetailkey 
+               EXEC sp_ExecuteSQL  @c_SQL
+                                 , @c_SQLParm 
+                                 , @c_UnAllocStorerkey 
+                                 , @b_Success   OUTPUT
+                                 , @n_Err       OUTPUT
+                                 , @c_ErrMsg    OUTPUT
+                                 , @c_Pickdetailkey 
                
-                  IF @@ERROR <> 0 OR @b_Success <> 1  
-                  BEGIN  
-                     SET @n_Continue= 3    
-                     SET @n_Err     = 61626    
-                     SET @c_ErrMsg  = 'NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to EXEC ' + @c_UnallocUCCPickCode +   
-                                       CASE WHEN ISNULL(@c_ErrMsg, '') <> '' THEN ' - ' + @c_ErrMsg ELSE '' END + ' (ntrPickDetailUpdate)'
-                  END
-            
-                  FETCH NEXT FROM @CUR_PD_UCC INTO @c_Pickdetailkey
+               IF @@ERROR <> 0 OR @b_Success <> 1  
+               BEGIN  
+                  SET @n_Continue= 3    
+                  SET @n_Err     = 61626    
+                  SET @c_ErrMsg  = 'NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Failed to EXEC ' + @c_UnallocUCCPickCode +   
+                                    CASE WHEN ISNULL(@c_ErrMsg, '') <> '' THEN ' - ' + @c_ErrMsg ELSE '' END + ' (ntrPickDetailUpdate)'
                END
-               CLOSE @CUR_PD_UCC
-               DEALLOCATE @CUR_PD_UCC
             END
          END
-         
-         -- Call Standard Unallocate UCC If No customize Unallocate Pick Code being Setup
-         IF @n_Continue IN (1,2)
-         BEGIN
-            UPDATE U WITH (ROWLOCK)
-            SET Status = '1'
-              , PickDetailKey = ''
-              , Orderkey = ''
-              , OrderLineNumber = ''
-              , WaveKey = ''
-            FROM DELETED D
-            JOIN INSERTED I ON D.PickDetailKey = I.PickDetailKey
-            JOIN UCC U ON D.PickDetailKey = U.PickDetailKey
-            LEFT JOIN StorerConfig s2 (NOLOCK) ON D.Storerkey = s2.StorerKey AND s2.ConfigKey = 'UnAllocUCCPickCode'
-            WHERE I.Qty = 0 
-            AND   D.Qty > I.Qty
-            AND   I.Status < '9'
-            AND   U.Status > '2' AND U.Status < '6'
-            AND   (RTRIM(s2.SValue) = '' OR s2.SValue IS NULL)
-            AND   U.Storerkey = @c_UnAllocStorerkey
-         
-            SELECT @n_err = @@ERROR
-                  ,@n_cnt = @@ROWCOUNT  
-            IF @n_err <> 0
-            BEGIN
-                SELECT @n_continue = 3  
-                SELECT @c_errmsg = CONVERT(CHAR(250) ,@n_err)  
-                SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
-                       ': Update on UCC Failed. (ntrPickDetailUpdate)' + ' ( ' + 
-                       ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
-                       + ' ) '
-            END
-         END
-      END
 
-      -- Prompt error if attempt to update qty > 0 from 0 
-      -- where Pickdetail.DropID exists and UCC status < '3'
-      IF @n_Continue IN (1,2) AND @c_UnallocNoUpdUCCStatus = 'N'
-      BEGIN
-         SET @c_UCCNo = ''
-         SELECT TOP 1 @c_UCCNo = INSERTED.DropID
-         FROM INSERTED
-         JOIN DELETED ON INSERTED.Pickdetailkey = DELETED.Pickdetailkey
-         WHERE INSERTED.Qty > 0 
-         AND DELETED.Qty = 0
-         AND INSERTED.Status < '9'
-         AND INSERTED.Storerkey = @c_UnAllocStorerkey
+         -- Prompt error if attempt to update qty > 0 from 0 
+         -- where Pickdetail.DropID exists and UCC status < '3'
+         IF @n_Continue IN (1,2) AND (@n_GetInsertedQty > 0 AND @n_GetDeletedQty = 0)
          AND EXISTS ( SELECT 1
                       FROM UCC (NOLOCK)
-                      WHERE UCC.Storerkey = DELETED.Storerkey
-                      AND UCC.UCCNo = DELETED.DropID
+                      WHERE UCC.Storerkey = @c_UnAllocStorerkey
+                      AND UCC.UCCNo = @c_UCCNo
                       AND UCC.Status < '3' )
-
-         IF ISNULL(@c_UCCNo, '') <> ''
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 61627
             SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err) 
-                          + ': Not allow to update Qty > 0 for UCC# ' + TRIM(@c_UCCNo) +'. UCC status = 1. (ntrPickDetailUpdate)'
+                          + ': Not allow to update Qty > 0 for UCC# ' + TRIM(@c_UCCNo) +'. UCC status < 3. (ntrPickDetailUpdate)'
          END
       END
 
-      FETCH NEXT FROM @CUR_UCC INTO @c_UnAllocStorerkey
+      SET @c_PrevUnAllocStorerkey = @c_UnAllocStorerkey
+
+      FETCH NEXT FROM @CUR_UCC INTO @c_UnAllocStorerkey, @c_Pickdetailkey, @n_GetInsertedQty, @n_GetDeletedQty, @c_UCCNo
    END
    CLOSE @CUR_UCC
    DEALLOCATE @CUR_UCC
