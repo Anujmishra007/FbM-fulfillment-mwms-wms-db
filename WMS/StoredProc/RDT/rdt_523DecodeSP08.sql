@@ -43,12 +43,12 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cUCCSKU  NVARCHAR (20)
-
+   SET @cBarcodeUCC = replace(TRIM(@cBarcodeUCC),' ','')
    IF @nFunc = 523
    BEGIN
       IF @nStep = 1
       BEGIN
-         IF LEN(@cBarcodeUCC) = 40
+         IF LEN(@cBarcodeUCC) IN (40,44)
          BEGIN
             SELECT 
             @cUCC = CASE 
@@ -91,11 +91,12 @@ BEGIN
                END
                GOTO QUIT
             END
-            ELSE 
-            
-            SELECT @cSKU = SKU FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND ALTSKU = @cBarcodeUCC
-            IF @@ROWCOUNT = 0
-               SET @cSKU = @cBarcodeUCC
+            ELSE
+            BEGIN 
+               SELECT @cSKU = SKU FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND ALTSKU = @cBarcodeUCC
+               IF @@ROWCOUNT = 0
+                  SET @cSKU = @cBarcodeUCC
+            END
          END
       END
    END

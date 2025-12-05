@@ -34,12 +34,12 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cUCCSKU  NVARCHAR (20)
-
+   SET @cBarcodeUCC = replace(TRIM(@cBarcodeUCC),' ','')
    IF @nFunc = 521
    BEGIN
       IF @nStep = 1
       BEGIN
-         IF LEN(@cBarcodeUCC) = 40
+         IF LEN(@cBarcodeUCC) IN (40,44)
          BEGIN
             SELECT 
             @cUCC = CASE 
