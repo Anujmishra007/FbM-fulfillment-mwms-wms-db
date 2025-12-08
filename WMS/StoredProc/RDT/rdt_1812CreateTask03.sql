@@ -14,6 +14,7 @@ GO
 /* 2025-06-26 1.0.1  Jackc      FCR-3959 Fill in srckey when create task*/
 /*                               add update pickdetail logic            */
 /* 2025-08-08 1.0.2  Dennis     FCR-3959 Prevent generatingDuplicateTask*/
+/* 2025-12-03 1.0.3  PPA374     Adding SKU and LOT to next step task    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812CreateTask03] (
@@ -118,6 +119,8 @@ BEGIN
       @cPriority       = Priority, 
       @cSourcePriority = SourcePriority, 
       @cSourceType     = 'rdt_1812CreateTask03'
+      @cSKU            = SKU,
+	  @cLOT            = LOT
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE ListKey = @cListKey
    AND UserKey = @cUserName

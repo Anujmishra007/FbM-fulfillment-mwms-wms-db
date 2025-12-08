@@ -12,7 +12,8 @@ GO
 /* Modifications log:                                                   */    
 /*                                                                      */    
 /* Date        Rev    Author    Purposes                                */    
-/* 2025-06-11  1.0.0  Dennis    FCR-3959. Created                       */    
+/* 2025-06-11  1.0.0  Dennis    FCR-3959. Created                       */
+/* 2025-12-03  1.0.1  PPA374    Added same side VNA pick logic          */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1812GetTask08] (    
@@ -78,9 +79,10 @@ BEGIN
    SELECT TOP 1 @cNewTaskKey = TaskDetailKey
    FROM dbo.TaskDetail TD WITH (NOLOCK)    
    JOIN dbo.LOC WITH(NOLOCK) ON LOC.LOC = TD.FromLOC
-   WHERE ListKey <> @cListKey  
+   WHERE TD.ListKey <> @cListKey  
    AND TD.UserKey = @cUserName  
    AND TD.AreaKey = @cAreaKey
+   AND TD.Storerkey = @cStorerKey
    AND TD.Status = '3'
    AND TaskType IN ('FCP','FCP1')
    ORDER BY 
