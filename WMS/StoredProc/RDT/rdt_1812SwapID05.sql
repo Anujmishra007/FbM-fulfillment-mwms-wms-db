@@ -137,8 +137,6 @@ BEGIN
 
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN
-   SAVE TRAN rdt_1812SwapID05
 
    --SWAP Tasks
    IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE FromID = @cNewID AND Status = '0' AND TASKTYPE IN ('FCP','FCP1') AND PickMethod = 'FP' )
@@ -626,21 +624,13 @@ BEGIN
    END CATCH
 
    CommitTran:
-      COMMIT TRAN rdt_1812SwapID05
       GOTO Quit
    RollBackTran:
       IF @nDebugFlag = 1
          SELECT 'RollbackTran', @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
-      IF XACT_STATE() = 1  -- 有活动且有效的事务
-      BEGIN
-         IF @nTranCount = 0
-            ROLLBACK TRAN
-      END
    Quit:
       IF @nDebugFlag = 1
          SELECT 'Quit', @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
-      WHILE @@TRANCOUNT > @nTranCount
-         COMMIT TRAN
 END
 GO
 

@@ -905,6 +905,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_DropID_Fail:
