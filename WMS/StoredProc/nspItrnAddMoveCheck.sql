@@ -78,6 +78,8 @@ GO
 /* 05-Nov-2025  SSA03     2.2 UWP-43625- updated sequence of update       */
 /*                            channelInv table to avoid deadlock          */
 /* 05-Nov-2025  SSA04     FCR-8415 - update PalletType in pallet table    */
+/* 08-Dec-2025  VNI01     UWP-44614 - Add validation for Multiple         */
+/*                            LOTs and No SKU provided                    */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -894,6 +896,29 @@ BEGIN
                END
             END
             /* End if SKU Was Passed... */
+
+            /* Validation to check for Multiple LOTs */                                              --VNI01(start)
+            IF (ISNULL(RTRIM(@c_LOT),'') = '' OR @c_LOT = 'NOLOT')
+            BEGIN
+                SELECT @c_Work_lot = LOT FROM LOTxLOCxID (NOLOCK)
+                WHERE ID = @c_fromid
+                AND LOC = @c_fromloc
+                AND QTY > 0
+                GROUP BY LOT
+                IF @@ROWCOUNT = 1
+                BEGIN
+                    SELECT @c_lot = @c_Work_lot
+                END
+                ELSE
+                BEGIN
+                    SELECT @n_continue = 3 , @n_err = 62018
+                    SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Cannot find unique FROM row:' + CHAR(13)
+                                    + ', Loc = ' + ISNULL(RTRIM(@c_FromLoc),'')
+                                    + ', Id = ' + ISNULL(RTRIM(@c_FromID),'')
+                                    + ' - Too many LOT''s found'
+                END
+            END                                                                                       --VNI01(end)
+
             IF @n_continue = 1 or @n_continue = 2
             BEGIN
                IF @n_cnt > 1
