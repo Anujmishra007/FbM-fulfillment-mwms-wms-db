@@ -11,7 +11,7 @@ GO
 /* 2025-12-05  1.0  Dennis    FCR-8023  Created                         */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_1770ConfirmSP03] (
+CREATE OR ALTER PROC [rdt].[rdt_1770ConfirmSP03] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),

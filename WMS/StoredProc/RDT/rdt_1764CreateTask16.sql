@@ -105,6 +105,11 @@ BEGIN
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE ListKey = @cListKey
       AND TransitCount = 0
+      AND Status = '9'
+      AND (
+         (PickMethod = 'PP' AND Qty <> 0 AND ISNULL(ReasonKey,'') = '') --Skip full short PP task
+         OR (PickMethod = 'FP')
+      )
 
    -- Not generate next task if: 
    -- 1) Already reach final location or 
