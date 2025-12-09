@@ -211,33 +211,33 @@ BEGIN
                   GOTO Step_Reason_Fail
                END
 
-			   IF EXISTS (
-			      SELECT 1 
-				  FROM LOC L WITH(NOLOCK)
-				     INNER JOIN CODELKUP C WITH(NOLOCK)
-				        ON C.LISTNAME = 'JCBBKRCODE'
-						AND C.StorerKey = @cStorerKey
-						AND C.Long = L.LocationCategory
-			      WHERE LOC = @cSuggFromLOC 
-				     AND L.Facility = @cFacility
-			   )
-			   BEGIN
-			      IF @cReasonCode NOT IN (
-				     SELECT Short 
-					 FROM CODELKUP C WITH(NOLOCK)
-					    INNER JOIN LOC L WITH(NOLOCK)
-						   ON L.LocationCategory = C.Long
-					 WHERE C.LISTNAME = 'JCBBKRCODE' 
-					    AND C.StorerKey = @cStorerKey
-						AND L.Facility = @cFacility
-						AND L.Loc = @cSuggFromLOC
-				  )
-				  BEGIN
-			         SET @nErrNo = 218259
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                     GOTO Step_Reason_Fail
-				  END
-			   END
+               IF EXISTS (
+                  SELECT 1 
+               FROM LOC L WITH(NOLOCK)
+                  INNER JOIN CODELKUP C WITH(NOLOCK)
+                     ON C.LISTNAME = 'JCBBKRCODE'
+                     AND C.StorerKey = @cStorerKey
+                     AND C.Long = L.LocationCategory
+                  WHERE LOC = @cSuggFromLOC 
+                  AND L.Facility = @cFacility
+               )
+               BEGIN
+                  IF @cReasonCode NOT IN (
+                  SELECT Short 
+                  FROM CODELKUP C WITH(NOLOCK)
+                     INNER JOIN LOC L WITH(NOLOCK)
+                        ON L.LocationCategory = C.Long
+                  WHERE C.LISTNAME = 'JCBBKRCODE' 
+                     AND C.StorerKey = @cStorerKey
+                     AND L.Facility = @cFacility
+                     AND L.Loc = @cSuggFromLOC
+               )
+               BEGIN
+                     SET @nErrNo = 218259
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                        GOTO Step_Reason_Fail
+               END
+               END
 
                -- Extended validate
                IF @cExtendedValidateSP <> ''
@@ -669,6 +669,19 @@ BEGIN
                GOTO Quit
             END
          END
+      END
+      IF @nMOBRECStep = 2 AND @nInputKey = 0
+      BEGIN
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
+         SET @cOutField03 = ''
+         SET @cOutfield04 = ''
+         SET @cOutField05 = ''
+         SET @cOutField09 = ''
+
+         SET @nAfterStep = 99
+         SET @nAfterScn = @nScn_ReasonCode
+         GOTO QUIT
       END
    END
    GOTO Quit

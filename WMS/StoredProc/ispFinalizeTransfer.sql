@@ -72,7 +72,6 @@ GO
 /* 25-Apr-2025  NJOW07    3.8 FCR-3051 if turn on TRFAllocHoldChannel skip*/
 /*                            checking the channel hold qty               */
 /* 04-JUL-2025  SSA01     3.9 FCR-3982- Added PalletType                  */
-/* 29-Sep-2025  MICHAEL   4.0 FCR-7829-RemainHoldOnTransfer for UCC (ML01)*/
 /* 10-OCT-2025  SSA02     4.1 UWP-42248 -Enhanced session management      */
 /*                             and cleanup.                               */
 /* 10-Oct-2025  Michael   4.2 FCR-8380- Add SerialNoUpdateLotLocID (ML02) */
@@ -2432,8 +2431,7 @@ BEGIN
                          Loc = @cToLOC,
                          ID  = @cToID,
                          StorerKey = @cToStorerKey,                     --USH022-01
-                         Status = CASE WHEN @c_RemainHoldOnTransfer = '1' AND Status = 'H' THEN Status   --ML01
-                                       WHEN @c_LoseUCC = '1' THEN '6' -- (ChewKP02)
+                         Status = CASE WHEN @c_LoseUCC = '1' THEN '6' -- (ChewKP02)
                                   ELSE Status
                                   END
                      WHERE UCCNo = @cFromUCC
