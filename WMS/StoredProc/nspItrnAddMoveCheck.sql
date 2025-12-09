@@ -898,7 +898,7 @@ BEGIN
             /* End if SKU Was Passed... */
 
             /* Validation to check for Multiple LOTs */                                              --VNI01(start)
-            IF (@n_continue = 1 or @n_continue = 2) AND (ISNULL(RTRIM(@c_LOT),'') = ''
+            IF ((@n_continue = 1 or @n_continue = 2) AND (ISNULL(RTRIM(@c_LOT),'') = ''))
             BEGIN
                 SELECT @c_Work_lot = LOT FROM LOTxLOCxID (NOLOCK)
                 WHERE ID = @c_fromid
