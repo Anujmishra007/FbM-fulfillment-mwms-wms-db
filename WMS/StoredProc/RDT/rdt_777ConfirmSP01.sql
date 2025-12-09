@@ -780,6 +780,7 @@ BEGIN
       END
    END
 
+   -- Handle PickDetail
    IF @nMPOCFlag <> 1
    BEGIN
       WHILE @nQTY > 0
@@ -856,6 +857,7 @@ BEGIN
       SET RefNo = @cLabelNo,
          CartonType = ''
       WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
    END
    ELSE
    BEGIN
