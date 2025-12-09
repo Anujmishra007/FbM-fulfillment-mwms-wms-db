@@ -75,9 +75,14 @@ BEGIN
       @cSourceType     = 'rdt_1764CreateTask16'
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE ListKey = @cListKey
+      AND Status = '9' -- only handle tasks completed in close pallet
+      AND (
+         (PickMethod = 'PP' AND Qty <> 0 AND ISNULL(ReasonKey,'') = '') --Skip full short PP task
+         OR (PickMethod = 'FP')
+      )
    ORDER BY 
-      TransitCount DESC, -- Get initial task
-      CASE WHEN Status = '9' THEN 1 ELSE 2 END -- RefTask that fetch to perform together, still Status=3
+      TransitCount DESC -- Get initial task
+      --CASE WHEN Status = '9' THEN 1 ELSE 2 END -- RefTask that fetch to perform together, still Status=3
 
    -- Task not completed/SKIP/CANCEL
    IF @cStatus <> '9'
