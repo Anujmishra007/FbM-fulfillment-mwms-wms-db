@@ -73,7 +73,7 @@ BEGIN
    SELECT @c_CDLUUDF02 = UDF02
    FROM Codelkup (NOLOCK)
    WHERE StorerKey = @c_StorerKey
-     AND ListName  = 'RCPTGRP'
+     AND ListName  = 'RECEIPTGRP'
 	 AND Code      = @c_ReceiptGroup
 
    IF ISNULL(@c_CDLUUDF02, '') <> 'UCC'
