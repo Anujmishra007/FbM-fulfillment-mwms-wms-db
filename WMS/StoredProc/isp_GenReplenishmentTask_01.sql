@@ -40,22 +40,17 @@ CREATE OR ALTER PROC [dbo].[isp_GenReplenishmentTask_01]
    , @c_Zone12     NVARCHAR(10)
    , @c_ReplenFlag NVARCHAR(10) = 'N' -- N = Normal
    , @c_Storerkey  NVARCHAR(15)
-   , @c_ReplenType NVARCHAR(10) = 'T' -- T=TaskManager, R=Replenishment
+   , @c_ReplenType NVARCHAR(10) = 'R' -- R=Replenishment, T=TaskManager
 AS
 BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   DECLARE @n_continue INT
-   /* continuation flag
-   1=Continue
-   2=failed but continue processsing
-   3=failed do not continue processing
-   4=successful but skip furthur processing */
-   DECLARE @n_starttcnt INT
-   SELECT  @n_starttcnt = @@TRANCOUNT
 
-   DECLARE @b_debug                  INT
+   DECLARE @n_starttcnt INT = @@TRANCOUNT
+
+   DECLARE @b_debug                  INT = 0
+         , @n_continue               INT = 1
          , @c_Packkey                NVARCHAR(10)
          , @c_UOM                    NVARCHAR(10)
          , @n_Pallet                 INT
@@ -75,7 +70,6 @@ BEGIN
          , @n_Cnt                    INT
          , @n_QtyAvailable           INT
          , @c_priority               NVARCHAR(5)
-         , @c_ReplenQtyFlag          NVARCHAR(1)
          , @c_ReplenishmentGroup     NVARCHAR(10) = ''
          , @c_ReplExclProdNearExpiry NVARCHAR(10)
          , @n_NearExpiryDay          INT
@@ -126,18 +120,13 @@ BEGIN
          , @c_GroupKey               NVARCHAR(10) = ''
          , @c_TaskGrouping           NVARCHAR(100)= ''
          , @c_TaskGrouping_Prev      NVARCHAR(100)= ''
-         , @c_TaskDetailKey          NVARCHAR(10) = ''
-         , @n_PendingTaskQty          INT          = 0
+         , @n_PendingTaskQty         INT          = 0
 
    DECLARE @b_success INT,
            @n_err INT,
            @c_errmsg NVARCHAR(255)
 
    SET @c_Facility = @c_Zone01
-   SET @c_ReplenQtyFlag = '0'
-
-   SELECT @n_continue = 1,
-          @b_debug = 0
 
    IF ISNUMERIC(@c_Zone12) = 1 AND @c_Zone12 <> ''
    BEGIN
@@ -192,20 +181,6 @@ BEGIN
       LOT        NVARCHAR(10) NULL DEFAULT ('')
     , SortColumn NVARCHAR(60) NULL DEFAULT ('')
    )
-
-   IF @c_ReplenType = 'R'
-   BEGIN
-      EXECUTE nspg_GetKey
-              @keyname       = 'REPLENISHGROUP'
-            , @fieldlength   = 10
-            , @keystring     = @c_ReplenishmentGroup    OUTPUT
-            , @b_success     = @b_success   OUTPUT
-            , @n_err         = @n_err       OUTPUT
-            , @c_errmsg      = @c_errmsg    OUTPUT
-
-      IF NOT @b_success = 1
-         SELECT @n_continue = 3
-   END
 
    IF @n_continue NOT IN (1,2)
       GOTO EXIT_SP
@@ -291,27 +266,9 @@ BEGIN
                    +', @c_B2CChannelReplen NVARCHAR(10)'
                    +', @c_TaskPriority     NVARCHAR(10)'
 
-   EXEC sp_ExecuteSQL @c_SQLStatement
-                    , @c_SQLParms
-                    , @c_Zone01
-                    , @c_Zone02
-                    , @c_Zone03
-                    , @c_Zone04
-                    , @c_Zone05
-                    , @c_Zone06
-                    , @c_Zone07
-                    , @c_Zone08
-                    , @c_Zone09
-                    , @c_Zone10
-                    , @c_Zone11
-                    , @c_Zone12
-                    , @c_ReplenFlag
-                    , @c_Storerkey
-                    , @c_Facility
-                    , @c_ReplenType
-                    , @c_DelPendingTask
-                    , @c_B2CChannelReplen
-                    , @c_TaskPriority
+   EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms
+      , @c_Zone01, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
+      , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask, @c_B2CChannelReplen, @c_TaskPriority
 
    OPEN CUR_ReplenSkuLoc
    SET @c_PrevStorer = ''
@@ -330,8 +287,6 @@ BEGIN
          SET @c_PrevStorer = @c_CurrentStorer
       END
 
-      SET @c_ReplenQtyFlag = '0'
-
       SET @n_ReplenQty = @n_QtyLocationLimit - ( @n_Qty - @n_QtyPicked ) - ISNULL(@n_PendingTaskQty,0)
 
       SET @n_QtyAvailable = ( @n_Qty - @n_QtyPicked )
@@ -344,7 +299,6 @@ BEGIN
               , [Qty Replen]           = @n_ReplenQty
               , [Qty Available]        = @n_QtyAvailable
               , [Qty Location Minimum] = @n_QtyLocationMinimum
-              , [Replen Qty Flag ]     = @c_ReplenQtyFlag
               , [Location Limit]       = @n_QtyLocationLimit
               , [Case Qty]             = @n_CaseCnt
               , [Pallet Qty]           = @n_Pallet
@@ -427,47 +381,9 @@ BEGIN
             EXEC(@c_SQL)
          END
 
-         SET @c_SQLParms = N'@c_Zone01     NVARCHAR(10)'
-                         +', @c_Zone02     NVARCHAR(10)'
-                         +', @c_Zone03     NVARCHAR(10)'
-                         +', @c_Zone04     NVARCHAR(10)'
-                         +', @c_Zone05     NVARCHAR(10)'
-                         +', @c_Zone06     NVARCHAR(10)'
-                         +', @c_Zone07     NVARCHAR(10)'
-                         +', @c_Zone08     NVARCHAR(10)'
-                         +', @c_Zone09     NVARCHAR(10)'
-                         +', @c_Zone10     NVARCHAR(10)'
-                         +', @c_Zone11     NVARCHAR(10)'
-                         +', @c_Zone12     NVARCHAR(10)'
-                         +', @c_ReplenFlag NVARCHAR(10)'
-                         +', @c_Storerkey  NVARCHAR(15)'
-                         +', @c_Facility   NVARCHAR(10)'
-                         +', @c_ReplenType NVARCHAR(5)'
-                         +', @c_DelPendingTask   NVARCHAR(10)'
-                         +', @c_B2CChannelReplen NVARCHAR(10)'
-                         +', @c_TaskPriority     NVARCHAR(10)'
-
-         EXEC sp_ExecuteSQL @c_SQLStatement
-                          , @c_SQLParms
-                          , @c_Zone01
-                          , @c_Zone02
-                          , @c_Zone03
-                          , @c_Zone04
-                          , @c_Zone05
-                          , @c_Zone06
-                          , @c_Zone07
-                          , @c_Zone08
-                          , @c_Zone09
-                          , @c_Zone10
-                          , @c_Zone11
-                          , @c_Zone12
-                          , @c_ReplenFlag
-                          , @c_Storerkey
-                          , @c_Facility
-                          , @c_ReplenType
-                          , @c_DelPendingTask
-                          , @c_B2CChannelReplen
-                          , @c_TaskPriority
+         EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms
+            , @c_Zone01, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
+            , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask, @c_B2CChannelReplen, @c_TaskPriority
       END
       ELSE IF LEFT(@c_PickCode,5) = 'nspRP' AND
          EXISTS(SELECT TOP 1 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_PickCode) AND type = 'P')
@@ -592,47 +508,9 @@ BEGIN
             EXEC(@c_SQL)
          END
 
-         SET @c_SQLParms = N'@c_Zone01     NVARCHAR(10)'
-                         +', @c_Zone02     NVARCHAR(10)'
-                         +', @c_Zone03     NVARCHAR(10)'
-                         +', @c_Zone04     NVARCHAR(10)'
-                         +', @c_Zone05     NVARCHAR(10)'
-                         +', @c_Zone06     NVARCHAR(10)'
-                         +', @c_Zone07     NVARCHAR(10)'
-                         +', @c_Zone08     NVARCHAR(10)'
-                         +', @c_Zone09     NVARCHAR(10)'
-                         +', @c_Zone10     NVARCHAR(10)'
-                         +', @c_Zone11     NVARCHAR(10)'
-                         +', @c_Zone12     NVARCHAR(10)'
-                         +', @c_ReplenFlag NVARCHAR(10)'
-                         +', @c_Storerkey  NVARCHAR(15)'
-                         +', @c_Facility   NVARCHAR(10)'
-                         +', @c_ReplenType NVARCHAR(5)'
-                         +', @c_DelPendingTask   NVARCHAR(10)'
-                         +', @c_B2CChannelReplen NVARCHAR(10)'
-                         +', @c_TaskPriority     NVARCHAR(10)'
-
-         EXEC sp_ExecuteSQL @c_SQLStatement
-                          , @c_SQLParms
-                          , @c_Zone01
-                          , @c_Zone02
-                          , @c_Zone03
-                          , @c_Zone04
-                          , @c_Zone05
-                          , @c_Zone06
-                          , @c_Zone07
-                          , @c_Zone08
-                          , @c_Zone09
-                          , @c_Zone10
-                          , @c_Zone11
-                          , @c_Zone12
-                          , @c_ReplenFlag
-                          , @c_Storerkey
-                          , @c_Facility
-                          , @c_ReplenType
-                          , @c_DelPendingTask
-                          , @c_B2CChannelReplen
-                          , @c_TaskPriority
+         EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms
+            , @c_Zone01, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
+            , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask, @c_B2CChannelReplen, @c_TaskPriority
 
          OPEN CUR_LOTxLOCxID_REPLEN
 
@@ -860,7 +738,9 @@ BEGIN
         + ' LEFT JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON RPL.Lot=LA.Lot'
         + ' LEFT JOIN dbo.SKU SKU WITH(NOLOCK) ON RPL.StorerKey=SKU.Storerkey AND RPL.Sku=SKU.Sku'
 
-      EXEC(@c_SQLStatement)
+      EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms
+         , @c_Zone01, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
+         , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask, @c_B2CChannelReplen, @c_TaskPriority
    END
 
    IF @b_debug = 1
@@ -903,14 +783,16 @@ BEGIN
       EXEC(@c_SQL)
    END
 
-   EXEC(@c_SQLStatement)
+   EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms
+      , @c_Zone01, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
+      , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask, @c_B2CChannelReplen, @c_TaskPriority
 
    OPEN CUR1
 
    SET @c_TaskGrouping_Prev = ''
    SET @c_GroupKey = ''
 
-   WHILE 1=1
+   WHILE @n_continue IN (1,2)
    BEGIN
       FETCH NEXT FROM CUR1 INTO @c_FromLoc, @c_FromId, @c_CurrentLoc,
             @c_CurrentSKU, @n_FromQty, @c_CurrentStorer, @c_FromLot, @c_PackKey,
@@ -919,6 +801,46 @@ BEGIN
 
       IF @@FETCH_STATUS <> 0
          BREAK
+
+      --ML01-S
+      IF ISNULL(@c_TaskGrouping,'') <> '' AND ISNULL(@c_TaskGrouping,'') <> ISNULL(@c_TaskGrouping_Prev,'')
+         OR (@c_ReplenType = 'R' AND ISNULL(@c_GroupKey,'') = '')
+      BEGIN
+         EXECUTE nspg_GetKey
+                 @keyname       = 'REPLENISHGROUP'
+               , @fieldlength   = 10
+               , @keystring     = @c_ReplenishmentGroup OUTPUT
+               , @b_success     = @b_success   OUTPUT
+               , @n_err         = @n_err       OUTPUT
+               , @c_errmsg      = @c_errmsg    OUTPUT
+
+         IF NOT @b_success = 1
+         BEGIN
+            SET @n_continue = 3
+            BREAK
+         END
+
+         SET @c_GroupKey = @c_ReplenishmentGroup
+         SET @c_TaskGrouping_Prev = @c_TaskGrouping
+      END
+
+      IF ISNULL(@c_TransitLOC,'') <> ''
+      BEGIN
+         SET @c_ToLOC    = @c_TransitLOC
+         SET @c_FinalLOC = @c_CurrentLoc
+         SET @c_CurrentLogicalLocation = @c_ToLOC
+
+         SELECT @c_CurrentLogicalLocation = LogicalLocation
+           FROM LOC(NOLOCK)
+          WHERE Loc = @c_ToLOC
+      END
+      ELSE
+      BEGIN
+         SET @c_ToLOC    = @c_CurrentLoc
+         SET @c_FinalLOC = ''
+      END
+      --ML01-E
+
 
       IF @c_ReplenType = 'R'
       BEGIN
@@ -944,8 +866,9 @@ BEGIN
                   , PackKey
                   , Confirmed
                   , RefNo
+                  , OriginalFromLoc   --ML01
                   )
-            VALUES( @c_ReplenishmentGroup
+            VALUES( @c_GroupKey
                   , @c_ReplenishmentKey
                   , @c_CurrentStorer
                   , @c_CurrentSku
@@ -958,6 +881,7 @@ BEGIN
                   , @c_PackKey
                   , 'N'
                   , @c_UCCNo
+                  , @c_TransitLOC   --ML01
                   )
 
             SELECT @n_err = @@ERROR
@@ -973,52 +897,10 @@ BEGIN
       END
       ELSE IF @c_ReplenType = 'T'
       BEGIN
-         --ML01-S
-         SET @c_TaskDetailKey = ''
-
-         IF ISNULL(@c_TaskGrouping,'') <> '' AND ISNULL(@c_TaskGrouping,'') <> ISNULL(@c_TaskGrouping_Prev,'')
-         BEGIN
-            EXECUTE nspg_getkey
-                 'TaskDetailKey'
-               , 10
-               , @c_TaskDetailKey OUTPUT
-               , @b_success OUTPUT
-               , @n_err OUTPUT
-               , @c_errmsg OUTPUT
-
-            IF @b_success <> 1
-            BEGIN
-               SELECT @n_continue = 3
-               BREAK
-            END
-
-            SET @c_GroupKey = @c_TaskDetailKey
-            SET @c_TaskGrouping_Prev = @c_TaskGrouping
-         END
-
-         SET @c_UOM = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN '2' ELSE '6' END
-
-         IF ISNULL(@c_TransitLOC,'') <> ''
-         BEGIN
-            SET @c_ToLOC    = @c_TransitLOC
-            SET @c_FinalLOC = @c_CurrentLoc
-            SET @c_CurrentLogicalLocation = @c_ToLOC
-
-            SELECT @c_CurrentLogicalLocation = LogicalLocation
-              FROM LOC(NOLOCK)
-             WHERE Loc = @c_ToLOC
-         END
-         ELSE
-         BEGIN
-            SET @c_ToLOC    = @c_CurrentLoc
-            SET @c_FinalLOC = ''
-         END
-         --ML01-E
-
+         SET @c_UOM = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN '2' ELSE '6' END   --ML01
 
          EXEC isp_InsertTaskDetail
-              @c_TaskDetailKey         = @c_TaskDetailKey OUTPUT
-            , @c_TaskType              = 'RPF'
+              @c_TaskType              = 'RPF'
             , @c_Storerkey             = @c_CurrentStorer
             , @c_Sku                   = @c_CurrentSku
             , @c_Lot                   = @c_FromLot
@@ -1049,6 +931,9 @@ BEGIN
             , @b_Success               = @b_Success OUTPUT
             , @n_Err                   = @n_err OUTPUT
             , @c_ErrMsg                = @c_errmsg OUTPUT
+
+         IF @b_Success <> 1 
+            SELECT @n_continue = 3
       END
    END -- While CUR1
 
@@ -1083,5 +968,5 @@ EXIT_SP:
    END
 END --SP end
 GO
-GRANT EXECUTE ON  [dbo].[isp_GenReplenishment] TO [NSQL]
+GRANT EXECUTE ON  [dbo].[isp_GenReplenishmentTask_01] TO [NSQL]
 GO
