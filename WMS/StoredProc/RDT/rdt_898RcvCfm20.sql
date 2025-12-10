@@ -2555,17 +2555,20 @@ BEGIN
          FETCH NEXT FROM @curRD INTO @cReceiptLineNumber
       END
    END
-END  
+END
 
-EXECUTE ispGenTransmitLog2
-   @c_TableName      = 'WSRTNRFID',
-   @c_Key1           = @cReceiptKey,
-   @c_Key2           = @cUCC,
-   @c_Key3           = @cStorerkey,
-   @c_TransmitBatch  = '',
-   @b_Success        = @b_success   OUTPUT,
-   @n_err            = @nErrNo     OUTPUT,
-   @c_errmsg         = @cErrMsg    OUTPUT
+IF @cDocType = 'R'
+BEGIN
+   EXECUTE ispGenTransmitLog2
+      @c_TableName      = 'WSRTNRFID',
+      @c_Key1           = @cReceiptKey,
+      @c_Key2           = @cUCC,
+      @c_Key3           = @cStorerkey,
+      @c_TransmitBatch  = '',
+      @b_Success        = @b_success   OUTPUT,
+      @n_err            = @nErrNo     OUTPUT,
+      @c_errmsg         = @cErrMsg    OUTPUT
+END
 
 IF @cDebug = '1'  
 BEGIN
