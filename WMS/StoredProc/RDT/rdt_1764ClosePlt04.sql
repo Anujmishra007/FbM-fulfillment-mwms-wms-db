@@ -611,13 +611,12 @@ BEGIN
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
          Status = '9', -- Closed
          -- UserPosition = @cUserPosition,
-         Message03 = 'MoveCompleted',
+         Message03 = IIF(ReasonKey = '', 'MoveCompleted', Message03),
          EndTime = GETDATE(),
          EditDate = GETDATE(),
          EditWho  = @cUserName,
          Trafficcop = NULL
       WHERE TaskDetailKey = @cTaskDetailKey
-         AND ReasonKey = ''
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 78504
