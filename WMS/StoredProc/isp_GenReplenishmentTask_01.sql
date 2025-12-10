@@ -123,7 +123,7 @@ BEGIN
          , @c_TransitLOC             NVARCHAR(10) = ''
          , @c_ToLOC                  NVARCHAR(10) = ''
          , @c_FinalLOC               NVARCHAR(10) = ''
-         , @c_ListKey                NVARCHAR(10) = ''
+         , @c_GroupKey               NVARCHAR(10) = ''
          , @c_TaskGrouping           NVARCHAR(100)= ''
          , @c_TaskGrouping_Prev      NVARCHAR(100)= ''
          , @c_TaskDetailKey          NVARCHAR(10) = ''
@@ -152,7 +152,7 @@ BEGIN
         , @c_TransitLOC_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'TransitLOC'        THEN Notes END)),'')  --ML01
         , @c_TaskGrouping_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskGrouping'      THEN Notes END)),'')  --ML01
         , @c_PendingTaskQty_Exp = ISNULL(TRIM(MAX(CASE WHEN Code = 'PendingTaskQty'    THEN Notes END)),'')  --ML01
-        , @c_DelPendingTask     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' THEN Short END)),'')
+        , @c_DelPendingTask     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' THEN Short END)),'1')
         , @c_B2CChannelReplen   = ISNULL(TRIM(MAX(CASE WHEN Code = 'B2CChannelReplen'  THEN Short END)),'')
         , @c_TaskPriority       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Short END)),'')
      FROM dbo.CODELKUP WITH(NOLOCK)
@@ -908,7 +908,7 @@ BEGIN
    OPEN CUR1
 
    SET @c_TaskGrouping_Prev = ''
-   SET @c_ListKey = ''
+   SET @c_GroupKey = ''
 
    WHILE 1=1
    BEGIN
@@ -992,7 +992,7 @@ BEGIN
                BREAK
             END
 
-            SET @c_ListKey = @c_TaskDetailKey
+            SET @c_GroupKey = @c_TaskDetailKey
             SET @c_TaskGrouping_Prev = @c_TaskGrouping
          END
 
@@ -1038,7 +1038,7 @@ BEGIN
             , @c_SourcePriority        = @c_TaskPriority
             , @c_SourceType            = 'isp_GenReplenishmentTask_01'
             , @c_OrderKey              = ''
-            , @c_ListKey               = @c_ListKey    --ML01
+            , @c_GroupKey              = @c_GroupKey   --ML01
             , @c_Loadkey               = ''
             , @c_AreaKey               = '?F'  -- ?F=Get from location areakey
             , @c_FinalLOC              = @c_FinalLOC   --ML01
