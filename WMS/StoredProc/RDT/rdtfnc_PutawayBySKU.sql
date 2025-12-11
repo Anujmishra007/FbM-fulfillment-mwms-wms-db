@@ -533,7 +533,7 @@ BEGIN
          IF @@ROWCOUNT = 0
          BEGIN
             SET @nErrNo = 73853
-            SET @cErrMsg = @cUCC
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid UCC
             EXEC rdt.rdtSetFocusField @nMobile, 2 -- UCC
             SET @cOutField02 = ''
             GOTO Step_1_Fail
