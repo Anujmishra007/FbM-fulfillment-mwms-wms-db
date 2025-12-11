@@ -557,6 +557,9 @@ BEGIN
    --Handle the pysical tables based on re-allocaton result
    --Unallocate and delete the original pick detail
 
+   UPDATE RDT.RDTMOBREC SET C_STRING30 = '1812SWAPID'
+   WHERE Mobile = @nMobile
+
    BEGIN TRY
       UPDATE PD WITH (ROWLOCK)
       SET PD.Status = '0',
