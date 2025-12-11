@@ -1,6 +1,4 @@
-IF (objectProperty(object_id('rdt.rdtfnc_PalletConsolidation'), 'IsProcedure') is not null)
-	DROP PROCEDURE [RDT].[rdtfnc_PalletConsolidation] 
-GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,9 +16,10 @@ GO
 /*                            Extended Update (ChewKP01)                      */
 /* 2016-09-30 1.2  Ung        Performance tuning                              */
 /* 2018-10-11 1.3  Gan        Performance tuning                              */
+/* 2025-12-11 1.4  NickT      FCR-8808 Add @nInutKey for ExtendedUpdateSP     */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PalletConsolidation] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_PalletConsolidation] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 NVARCHAR max
@@ -543,12 +542,13 @@ BEGIN
                SET @cToteNo = ''
                
                SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFacility, @cPalletID, @cToPalletID, @cToteNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cPalletID, @cToPalletID, @cToteNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
                SET @cSQLParam =
                   '@nMobile        INT, ' +
                   '@nFunc          INT, ' +
                   '@cLangCode      NVARCHAR( 3),  ' +
                   '@nStep          INT, ' +
+                  '@nInputKey      INT, ' +
                   '@cStorerKey     NVARCHAR( 15), ' +
                   '@cFacility      NVARCHAR(  5), ' +
                   '@cPalletID      NVARCHAR( 20), ' +
@@ -558,7 +558,7 @@ BEGIN
                   '@cErrMsg        NVARCHAR( 20) OUTPUT'
    
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFacility, @cPalletID, @cToPalletID, @cToteNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cPalletID, @cToPalletID, @cToteNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
    
                IF @nErrNo <> 0
                BEGIN
@@ -774,12 +774,13 @@ BEGIN
                
                
                SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFacility, @cPalletID, @cToPalletID, @cToteNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cPalletID, @cToPalletID, @cToteNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
                SET @cSQLParam =
                   '@nMobile        INT, ' +
                   '@nFunc          INT, ' +
                   '@cLangCode      NVARCHAR( 3),  ' +
                   '@nStep          INT, ' +
+                  '@nInputKey      INT, ' +
                   '@cStorerKey     NVARCHAR( 15), ' +
                   '@cFacility      NVARCHAR(  5), ' +
                   '@cPalletID      NVARCHAR( 20), ' +
@@ -789,7 +790,7 @@ BEGIN
                   '@cErrMsg        NVARCHAR( 20) OUTPUT'
    
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFacility, @cPalletID, @cToPalletID, @cToteNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cPalletID, @cToPalletID, @cToteNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
    
                IF @nErrNo <> 0
                BEGIN
