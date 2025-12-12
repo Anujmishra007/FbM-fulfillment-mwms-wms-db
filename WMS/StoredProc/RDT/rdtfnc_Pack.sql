@@ -2385,7 +2385,7 @@ BEGIN
          SET @cOutField12 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
          SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
          SET @cOutField14 = '' -- PQTY
-         SET @cMobBarcode = '' --clear v_barcode
+         --SET @cMobBarcode = '' --clear v_barcode
 
          -- Convert to prefer UOM QTY
          IF @cPUOM = '6' OR -- When preferred UOM = master unit
