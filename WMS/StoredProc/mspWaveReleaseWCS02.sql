@@ -3,7 +3,8 @@ GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
-﻿/*************************************************************************/  
+
+/*************************************************************************/  
 /* Stored Procedure: mspWaveReleaseWCS02                                 */
 /* Creation Date: 2025-12-02                                             */
 /* Copyright: Maersk                                                     */  
@@ -154,23 +155,23 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
       DEALLOCATE Cur_CountOrder  
    END      
    
-   --Check if WCS already sent
-   IF @n_continue = 1 OR @n_continue = 2    
-   BEGIN
-      SET @c_TableName = 'WSWAVELOG'
-            SET @c_Key1 = @c_Wavekey
-            SET @c_Key2 = ''
-            SET @c_Key3 = @c_Storerkey
+   ----Check if WCS already sent
+   --IF @n_continue = 1 OR @n_continue = 2    
+   --BEGIN
+   --   SET @c_TableName = 'WSWAVELOG'
+   --         SET @c_Key1 = @c_Wavekey
+   --         SET @c_Key2 = ''
+   --         SET @c_Key3 = @c_Storerkey
 
-      IF EXISTS ( SELECT 1 FROM TransmitLog2 (NOLOCK) WHERE TableName = @c_TableName
-                  AND Key1 = @c_Key1 AND Key2 = @c_Key2 AND Key3 = @c_Key3)
-      BEGIN
-         SET @n_continue = 3
-         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-         SET @n_err = 90025
-         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave already released to WCS. (mspWaveReleaseWCS02) '
-      END
-   END
+   --   IF EXISTS ( SELECT 1 FROM TransmitLog2 (NOLOCK) WHERE TableName = @c_TableName
+   --               AND Key1 = @c_Key1 AND Key2 = @c_Key2 AND Key3 = @c_Key3)
+   --   BEGIN
+   --      SET @n_continue = 3
+   --      SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+   --      SET @n_err = 90025
+   --      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave already released to WCS. (mspWaveReleaseWCS02) '
+   --   END
+   --END
 
    --Create Temporary Tables    
    IF @n_continue = 1 OR @n_continue = 2    
@@ -462,5 +463,3 @@ EXIT_SP:
       RETURN  
    END
 END --sp end
-
-
