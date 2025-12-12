@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+
+SET QUOTED_IDENTIFIER OF
+GO
 ﻿/*************************************************************************/  
 /* Stored Procedure: mspWaveReleaseWCS02                                 */
 /* Creation Date: 2025-12-02                                             */
@@ -457,3 +462,4 @@ EXIT_SP:
       RETURN  
    END
 END --sp end
+
