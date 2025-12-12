@@ -58,7 +58,6 @@ BEGIN
                   INNER JOIN dbo.PalletDetail PD WITH (NOLOCK) ON PD.PalletKey = PL.PalletKey 
                   WHERE PL.PalletKey = @cFromPalletID 
                      AND PL.Status = '9'
-                     AND ISNULL(PD.UserDefine04,'') <> ''
                   )
       BEGIN
          SET @nErrNo = 253102
@@ -93,7 +92,6 @@ BEGIN
                   INNER JOIN dbo.PalletDetail PD WITH (NOLOCK) ON PD.PalletKey = PL.PalletKey 
                   WHERE PL.PalletKey = @cToPalletID 
                      AND PL.Status = '9'
-                     AND ISNULL(PD.UserDefine04,'') <> ''
                   )
       BEGIN
          SET @nErrNo = 253104
@@ -139,30 +137,30 @@ BEGIN
          GOTO QUIT
       END
    END
-   ELSE IF Step = 3
+   ELSE IF @nStep = 3
    BEGIN
-      IF NOT EXISTS ( SELECT  1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cToteNo ) 
+      IF NOT EXISTS ( SELECT  1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cDropID ) 
       BEGIN 
             SET @nErrNo = 253108
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidTote
             GOTO QUIT
       END
          
-      IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cToteNo AND Status = '5')
+      IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cDropID AND Status = '5')
       BEGIN
             SET @nErrNo = 253109
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote is scaned to truck
             GOTO QUIT
       END
       
-      IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cToteNo AND Status = '9' AND UserDefine04 <> '' )
+      IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cDropID AND Status = '9' )
       BEGIN
             SET @nErrNo = 253110
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote is shipped
             GOTO QUIT
       END
       
-      IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cToteNo AND Status = '3' ) 
+      IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cDropID AND Status = '3' ) 
       BEGIN
             SET @nErrNo = 253111
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet is not closed
