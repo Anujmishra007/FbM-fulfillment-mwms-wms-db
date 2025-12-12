@@ -137,7 +137,7 @@ BEGIN
          GOTO QUIT
       END
    END
-   ELSE IF Step = 3
+   ELSE IF @nStep = 3
    BEGIN
       IF NOT EXISTS ( SELECT  1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cDropID ) 
       BEGIN 
