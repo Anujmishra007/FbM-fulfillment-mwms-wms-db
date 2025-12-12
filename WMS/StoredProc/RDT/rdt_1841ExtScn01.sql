@@ -170,10 +170,16 @@ BEGIN
                END
 
                IF LEN(TRIM(@cCartonID)) <> 9
-               IF @cCartonID = ''
                BEGIN
                   SET @nErrNo  = 252355
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  -- Carton ID must be 9 characters
+                  GOTO Quit
+               END
+
+               IF TRY_CAST(@cCartonID AS INT) IS NULL
+               BEGIN
+                  SET @nErrNo  = 252356
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  -- Carton ID must be a number
                   GOTO Quit
                END
 
