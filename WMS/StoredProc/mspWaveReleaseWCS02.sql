@@ -1,7 +1,7 @@
 SET ANSI_NULLS OFF
 GO
 
-SET QUOTED_IDENTIFIER OF
+SET QUOTED_IDENTIFIER OFF
 GO
 ﻿/*************************************************************************/  
 /* Stored Procedure: mspWaveReleaseWCS02                                 */
@@ -462,4 +462,5 @@ EXIT_SP:
       RETURN  
    END
 END --sp end
+
 
