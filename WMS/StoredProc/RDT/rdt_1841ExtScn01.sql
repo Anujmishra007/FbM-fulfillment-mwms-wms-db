@@ -169,6 +169,14 @@ BEGIN
                   GOTO Quit
                END
 
+               IF LEN(TRIM(@cCartonID)) <> 9
+               IF @cCartonID = ''
+               BEGIN
+                  SET @nErrNo  = 252355
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  -- Carton ID must be 9 characters
+                  GOTO Quit
+               END
+
                IF EXISTS(SELECT 1 
                         FROM rdt.rdtPreReceiveSort WITH (NOLOCK)
                         WHERE StorerKey = @cStorerKey
