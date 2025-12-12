@@ -176,6 +176,13 @@ BEGIN
                   GOTO Quit
                END
 
+               IF TRY_CAST(@cCartonID AS INT) IS NULL
+               BEGIN
+                  SET @nErrNo  = 252356
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  -- Carton ID must be a number
+                  GOTO Quit
+               END
+
                IF EXISTS(SELECT 1 
                         FROM rdt.rdtPreReceiveSort WITH (NOLOCK)
                         WHERE StorerKey = @cStorerKey
