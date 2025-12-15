@@ -251,8 +251,10 @@ BEGIN
       IF (@nMOBRECStep = 4 AND @nStep = 6) OR (@nMOBRECStep = 6 AND @nStep = 4)
       BEGIN
          IF @cDocType <> 'R'
-            SELECT @cLottable01 = LOTTABLE01 FROM RECEIPTDETAIL WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey AND SKU = @cSKU
-
+         BEGIN
+            SELECT TOP 1 @cLottable01 = LOTTABLE01 FROM RECEIPTDETAIL WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
+            SET @cFieldAttr01 = 'O'
+         END
          SELECT @cOutField01 = @cLottable01, @cOutField02 = @cLottable02 ,
          @cOutField03 = @cLottable03 , @cOutField04 = ''
 
@@ -264,7 +266,7 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            SET @cLottable01 = @cInField01
+            SET @cLottable01 = CASE WHEN @cFieldAttr01 = 'O' THEN @cOutField01 ELSE @cInField01 END
             SET @cLottable02 = @cInField02
             SET @cLottable03 = @cInField03
 
@@ -306,11 +308,14 @@ BEGIN
             SET @cOutField10 = '' --qty
             SET @cOutField11 = RTRIM(CAST( @cCartonCnt AS NVARCHAR( 4))) + CASE WHEN @cSkipEstUCCOnID = '1' THEN '' ELSE '/' + CAST( @cTotalCarton AS NVARCHAR( 4)) END -- (ChewKP02)
 
+            SET @cFieldAttr01 = ''
+
             SET @nAfterStep = 6
             SET @nAfterScn = 1305
          END
          IF @nInputKey = 0
          BEGIN
+            SET @cFieldAttr01 = ''
             --go to screen SKU
             SET @nAfterScn  = 1303
             SET @nAfterStep = 4
