@@ -2587,8 +2587,7 @@ BEGIN TRY
    UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET  
                ExternReceiptKey = @cExternReceiptKey,
                --ExternLineNo = @cNewExternLineNo,
-               UserDefine01 = CASE WHEN @cDocType = 'R' THEN @cUCC ELSE RD.UserDefine01 END,
-               UserDefine02 = @cUCC
+               UserDefine01 = CASE WHEN @cDocType = 'R' THEN @cUCC ELSE RD.UserDefine01 END
          FROM dbo.ReceiptDetail RD  
                INNER JOIN @tRD T ON (T.ReceiptLineNumber = RD.ReceiptLineNumber)  
          WHERE RD.ReceiptKey = @cReceiptKey  
