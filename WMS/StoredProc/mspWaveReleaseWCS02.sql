@@ -62,6 +62,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
           --, @c_DevicePosition    NVARCHAR(10)              
           , @n_CubicCapacity     Float        
           , @b_OrderAssigned     INT = 0           
+          , @c_OrderNotAssigned  NVARCHAR(500) = ''  
                     
    SELECT @n_starttcnt = @@TRANCOUNT , @n_continue = 1, @b_success = 0, @n_err = 0, @c_errmsg = ''
    SELECT @n_debug = 0
@@ -286,7 +287,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
       WHILE @@FETCH_STATUS = 0   
       BEGIN  
          SET @b_OrderAssigned = 0  
-
+         
          IF(@c_PreviousLoadKey <> @c_LoadKey)
          BEGIN            
             SET @c_PreviousLoadKey = @c_LoadKey
@@ -323,18 +324,15 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
 
                SET @b_OrderAssigned = 1
                BREAK
-            END        
+            END             
             FETCH NEXT FROM CUR_AssignToLoc INTO @n_Rowref, @n_CubicCapacity
          END  
          CLOSE CUR_AssignToLoc   
          DEALLOCATE CUR_AssignToLoc  
         
-         IF @b_OrderAssigned = 0
+         IF @b_OrderAssigned = 0         
          BEGIN
-            SELECT @n_continue = 3      
-            SELECT @n_err = 90031      
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Missing PTW assignment (mspWaveReleaseWCS02)'      
-            BREAK
+            SET @c_OrderNotAssigned = @c_OrderNotAssigned + @c_OrderKey + ',' 
          END        
 
          FETCH NEXT FROM CUR_ORDERS INTO @c_LoadKey, @c_OrderKey, @n_CBMperOrder  
@@ -342,6 +340,14 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
       CLOSE CUR_ORDERS   
       DEALLOCATE CUR_ORDERS  
 
+   END
+
+   IF @c_OrderNotAssigned <> ''         
+   BEGIN
+      SET @c_OrderNotAssigned = LEFT(@c_OrderNotAssigned, LEN(@c_OrderNotAssigned)-1)
+      SELECT @n_continue = 3      
+      SELECT @n_err = 90031      
+      SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+'Order ' + @c_OrderNotAssigned + ' not fit in PTW. It must be removed from wave (mspWaveReleaseWCS02)'               
    END
 
    IF @n_continue = 1 OR @n_continue = 2 
