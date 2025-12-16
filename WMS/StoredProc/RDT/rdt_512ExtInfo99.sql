@@ -92,7 +92,7 @@ BEGIN
 		    SET @cExtendedInfo = 'LOC MOVE: ' + @cSuggLOC       
     END
   END
-END
+END --sp
 
 GO
 SET QUOTED_IDENTIFIER OFF
