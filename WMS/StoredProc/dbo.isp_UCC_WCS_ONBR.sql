@@ -210,5 +210,5 @@ BEGIN
    END CATCH
 END
 GO
-GRANT EXECUTE ON [dbo].[isp_PackUCCCheck_Wrapper] TO nSQL 
+GRANT EXECUTE ON [dbo].[isp_UCC_WCS_ONBR] TO nSQL 
 GO
