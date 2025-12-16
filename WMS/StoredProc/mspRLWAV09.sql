@@ -704,7 +704,10 @@ BEGIN
             END
             ELSE IF @c_UOM = '2' AND @c_UCCNo = ''
             BEGIN
-               SET @n_Volume = @n_CubeUOM1 * (@n_Qty / @n_Casecnt)  
+               IF @n_Casecnt > 0 
+               BEGIN
+                  SET @n_Volume = @n_CubeUOM1 * (@n_Qty / @n_Casecnt) 
+               END
             END
             ELSE IF @c_UOM = '6'
             BEGIN
@@ -742,13 +745,19 @@ BEGIN
                IF @n_TTLVolume > @n_MaxSkuVol AND @c_UCCNo = ''  
                BEGIN
                   --Check if need how many groups
-                  SET @n_NoOfGroup = CEILING(@n_TTLVolume / @n_MaxSkuVol)
+                  IF @n_MaxSkuVol > 0 
+                  BEGIN
+                     SET @n_NoOfGroup = CEILING(@n_TTLVolume / @n_MaxSkuVol)
+                  END
  
-                  SET @n_MaxQtyPerGroup = FLOOR(CASE WHEN @c_UOM = '2' and @c_UCCNo = ''
-                                                     THEN (@n_MaxSkuVol / @n_CubeUOM1) * @n_Casecnt
-                                                     ELSE  @n_MaxSkuVol / @n_CubeUOM3
-                                                     END
-                                               )
+                  IF (@c_UOM = '2' AND @n_CubeUOM1 > 0) OR (@c_UOM > '2' AND @n_CubeUOM3 > 0)
+                  BEGIN
+                     SET @n_MaxQtyPerGroup = FLOOR(CASE WHEN @c_UOM = '2' and @c_UCCNo = ''
+                                                        THEN (@n_MaxSkuVol / @n_CubeUOM1) * @n_Casecnt
+                                                        ELSE  @n_MaxSkuVol / @n_CubeUOM3
+                                                        END
+                                                  )
+                  END
                END
             END
                  
@@ -894,7 +903,7 @@ BEGIN
        
          SET @c_Orderkey_P= @c_Orderkey
          SET @c_Areakey_P = @c_Areakey
-         SET @c_ToLoc     = @c_ToLoc
+         SET @c_ToLoc_P   = @c_ToLoc
  
          FETCH NEXT FROM @cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_FromID
                                      ,  @n_Qty, @c_UOM, @n_UOMQty, @c_UCCNo
