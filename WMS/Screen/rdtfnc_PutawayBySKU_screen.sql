@@ -25,7 +25,7 @@ EXECUTE rdt.rdtAddScn 2881, 'ENG',
    ,@cLine06 = '%10d03'
    ,@cLine07 = 'SKU/UPC/LPN:'
    ,@cLine08 = '%20d04'
-   ,@cLine09 = '%100i05'   --wms23078
+   ,@cLine09 = '%200iV_Barcode'   --FCR-8112, wms23078
    ,@cLine10 = '%20d06'
    ,@cLine11 = '%20d07'
    ,@cLine12 = 'QTY: %10d08'
@@ -86,6 +86,7 @@ EXECUTE rdt.rdtAddScn 2884, 'ENG'
    ,@cAutoDisappear = '1'
    ,@nFunc = 523
 
+-- 2885 = Confirm LOC screen
 DELETE rdt.RDTScn WHERE Scn = 2885 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2885, 'ENG', 
    @cLine01 = '',
@@ -98,3 +99,17 @@ EXECUTE rdt.rdtAddScn 2885, 'ENG',
    @cLine08 = 'OPTION: %01i01',
    @cLine14 = '%e',     
    @nFunc   = 523
+   
+-- 2887 = Final ID screen
+DELETE rdt.RDTScn WHERE Scn = 2887 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 2887, 'ENG' 
+   ,@cLine01 = ''
+   ,@cLine02 = 'FINAL LOC:'
+   ,@cLine03 = '%10d01'
+   ,@cLine04 = ''
+   ,@cLine05 = 'FINAL ID:'
+   ,@cLine06 = '%18i02'
+   ,@cLine07 = ''
+   ,@cLine14 = '%e'    
+   ,@cWebGroup = '{"1":["2","3"],"2":["5","6"]}'
+   ,@nFunc   = 523

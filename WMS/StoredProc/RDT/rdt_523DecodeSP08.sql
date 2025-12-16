@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2025-10-27  Deenis    1.0   FCR-8674 Created                               */
+/* 2025-10-16  Ung       1.1   FCR-8112 Add serial no                         */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_523DecodeSP08] (
    @nMobile           INT,           
@@ -28,6 +29,7 @@ CREATE OR ALTER PROC [RDT].[rdt_523DecodeSP08] (
    @cLOC              NVARCHAR( 10)  OUTPUT, 
    @cSKU              NVARCHAR( 20)  OUTPUT, 
    @nQTY              INT            OUTPUT, 
+   @cSerialNo         NVARCHAR( 30)  OUTPUT, 
    @cLottable01       NVARCHAR( 18)  OUTPUT, 
    @cLottable02       NVARCHAR( 18)  OUTPUT, 
    @cLottable03       NVARCHAR( 18)  OUTPUT, 

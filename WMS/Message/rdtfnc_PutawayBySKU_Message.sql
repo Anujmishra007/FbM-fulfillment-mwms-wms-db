@@ -23,7 +23,7 @@ execute rdt.rdtAddMsg 73869, 10, '73869^Invalid QTY   ', 'us_english', 523
 execute rdt.rdtAddMsg 73870, 10, '73870^QTY needed    ', 'us_english', 523
 execute rdt.rdtAddMsg 73871, 10, '73871^QTY NOT MATCH ', 'us_english', 523
 execute rdt.rdtAddMsg 73872, 10, '73872^QTYPWY NotEnuf', 'us_english', 523
-execute rdt.rdtAddMsg 73873, 10, '73873^ID with UCC   ', 'us_english', 523
+--execute rdt.rdtAddMsg 73873, 10, '73873^ID with UCC   ', 'us_english', 523
 execute rdt.rdtAddMsg 73874, 10, '73874^NoSuitableLOC ', 'us_english', 523
 execute rdt.rdtAddMsg 73875, 10, '73875^NoSuggestedLOC', 'us_english', 523
 execute rdt.rdtAddMsg 73876, 10, '73876^Different SKU ', 'us_english', 523
@@ -35,6 +35,9 @@ execute rdt.rdtAddMsg 73880, 10, '73880^LOC Not Match ', 'us_english', 523
 --execute rdt.rdtAddMsg 73882, 10, '73882^No Fac Prefix ', 'us_english', 523
 execute rdt.rdtAddMsg 73883, 10, '73883^Option req    ', 'us_english', 523
 execute rdt.rdtAddMsg 73884, 10, '73884^Invalid Option', 'us_english', 523
-execute rdt.rdtAddMsg 73885, 10, '73885^No Fac Prefix ', 'us_english', 523
-execute rdt.rdtAddMsg 73886, 10, '73886^AldyHvPickLoc ', 'us_english', 523
-execute rdt.rdtAddMsg 73887, 10, '73887^INVALID TOLOC ', 'us_english', 523
+--execute rdt.rdtAddMsg 73885, 10, '73885^No Fac Prefix ', 'us_english', 523
+--execute rdt.rdtAddMsg 73886, 10, '73886^AldyHvPickLoc ', 'us_english', 523
+--execute rdt.rdtAddMsg 73887, 10, '73887^INVALID TOLOC ', 'us_english', 523
+execute rdt.rdtAddMsg 73888, 10, '73888^INVALID FORMAT', 'us_english', 523
+execute rdt.rdtAddMsg 73889, 10, '73888^INVALID FORMAT', 'us_english', 523
+

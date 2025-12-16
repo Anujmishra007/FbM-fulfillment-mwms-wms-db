@@ -4,42 +4,39 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_523DecodeSP03                                   */
+/* Store procedure: rdt_523DecodeSP06                                   */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
-/* Purpose: decode Serialno to SKU                                      */
+/* Purpose: Scan dummy SKU, get actual SKU (at L09)                     */
 /*                                                                      */
 /* Modifications log:                                                   */
 /* Date        Rev  Author      Purposes                                */
-/* 2023-07-26  1.0  yeekung     WMS-23078 Created                       */ 
-/* 2023-10-09  1.1  ivanyi  bug fix INC2178187(ivan01)                  */   
-/* 2024-10-24  1.2  ShaoAn      Extended parameter definition           */
-/* 2025-02-25  1.3  Ung         WMS-25502 Add ID param output           */ 
-/* 2025-10-16  1.4  Ung         FCR-8112 Add serial no                  */
+/* 2024-12-18  1.0  Ung         WMS-25502 Created                       */ 
+/* 2025-10-16  1.1  Ung         FCR-8112 Add serial no                  */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP03
+CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP06
    @nMobile           INT,           
    @nFunc             INT,           
    @cLangCode         NVARCHAR( 3),  
    @nStep             INT,           
    @nInputKey         INT,           
    @cFacility         NVARCHAR( 5),  
-   @cStorerKey        NVARCHAR( 15), 
-   @cBarcode          NVARCHAR( 60), 
+   @cStorerKey        NVARCHAR( 15),
+   @cBarcode          NVARCHAR( 60),
    @cBarcodeUCC       NVARCHAR( 60), 
    @cID               NVARCHAR( 18)  OUTPUT, 
    @cUCC              NVARCHAR( 20)  OUTPUT, 
    @cLOC              NVARCHAR( 10)  OUTPUT, 
    @cSKU              NVARCHAR( 20)  OUTPUT, 
-   @nQTY              INT            OUTPUT,  
+   @nQTY              INT            OUTPUT, 
    @cSerialNo         NVARCHAR( 30)  OUTPUT, 
    @cLottable01       NVARCHAR( 18)  OUTPUT, 
    @cLottable02       NVARCHAR( 18)  OUTPUT, 
    @cLottable03       NVARCHAR( 18)  OUTPUT, 
    @dLottable04       DATETIME       OUTPUT, 
    @nErrNo            INT            OUTPUT, 
-   @cErrMsg           NVARCHAR( 20)  OUTPUT    
+   @cErrMsg           NVARCHAR( 20)  OUTPUT       
 AS
 BEGIN
    SET NOCOUNT ON
@@ -53,36 +50,38 @@ BEGIN
    
    SET @nErrNo = 0
             
-   IF @nStep = 2 -- SKU
+   IF @nFunc = 523 -- Putaway by SKU
    BEGIN
-      IF @nInputKey = 1 -- ENTER
+      IF @nStep = 1 -- ID, UCC
       BEGIN
-
-         IF LEN(@cBarcode) >20
+         IF @nInputKey = 1 -- ENTER
          BEGIN
-            --HTTP://TY.DOTERRA.CN/F0101DDGDQJDFDEFZ
-            SET @cTempBarcode = @cBarcode
-            --SET @nPosition = PATINDEX('%A%CN%', @cTempBarcode)
-            --SET @cTempBarcode = RIGHT( @cTempBarcode, @nPosition)
-
-            -- (james01)
-            SET @cTempBarcode = REPLACE( @cBarcode, 'http://ty.doterra.cn/', '')
-
-            SELECT TOP 1 @cSKU = SKU
-            FROM dbo.SerialNo WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-            AND   SerialNo = @cTempBarcode
-            ORDER BY 1
+            IF LEN( @cBarcode) = 20
+               SET @cID = SUBSTRING( @cBarcode, 3, 18)
          END
-         ELSE--ivan01  	
-         BEGIN  
-            SET @cSKU=@cBarcode  
-         END  
-
+      END
+      
+      IF @nStep = 2 -- SKU
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            -- Get actual SKU
+            SET @cBarcode = LEFT( @cBarcode, 10)
+   
+            -- Get dummy SKU
+            SELECT @cSKU = LLI.SKU
+            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+               JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)
+            WHERE LLI.LOC = @cLOC
+               AND LLI.ID = @cID
+               AND LA.Lottable09 = @cBarcode
+               
+            -- Not dummy, but other normal SKU
+            IF @@ROWCOUNT = 0
+               SET @cSKU = @cBarcode
+         END
       END
    END
-
-Quit:
 END
 GO
 
@@ -90,7 +89,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON 
 GO
-GRANT EXECUTE ON rdt.rdt_523DecodeSP03 TO NSQL 
+GRANT EXECUTE ON rdt.rdt_523DecodeSP06 TO NSQL 
 GO   
 
 
