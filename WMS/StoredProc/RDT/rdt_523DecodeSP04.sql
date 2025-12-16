@@ -15,6 +15,7 @@ GO
 /* 2024-10-24  ShaoAn    1.0.1 Extended parameter definition                  */
 /* 2025-07-31  Jackc     1.1.0 FCR-2961 Support new types of labels           */
 /* 2025-11-10  Cuize     1.2   FCR-8407 Swedish label58                       */
+/* 2025-10-16  Ung       1.3   FCR-8112 Add serial no                         */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_523DecodeSP04] (
    @nMobile           INT,           
@@ -31,6 +32,7 @@ CREATE OR ALTER PROC [RDT].[rdt_523DecodeSP04] (
    @cLOC              NVARCHAR( 10)  OUTPUT, 
    @cSKU              NVARCHAR( 20)  OUTPUT, 
    @nQTY              INT            OUTPUT, 
+   @cSerialNo         NVARCHAR( 30)  OUTPUT,
    @cLottable01       NVARCHAR( 18)  OUTPUT, 
    @cLottable02       NVARCHAR( 18)  OUTPUT, 
    @cLottable03       NVARCHAR( 18)  OUTPUT, 
