@@ -40,7 +40,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_600ExtVal99](
    @dLottable13  DATETIME,      
    @dLottable14  DATETIME,      
    @dLottable15  DATETIME,      
-   @nQTY         INT,           
+   @nQTY         INT,            
    @cReasonCode  NVARCHAR( 10), 
    @cSuggToLOC   NVARCHAR( 10), 
    @cFinalLOC    NVARCHAR( 10), 
