@@ -590,7 +590,7 @@ BEGIN
    IF @cSuggSKU IS NULL
    BEGIN
 
-      SET @nErrNo = 180051
+      SET @nErrNo = 245752
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No more task
       SET @nErrNo = -1 -- No more task
    END
