@@ -132,7 +132,39 @@ BEGIN
 
    
 Quit:
+   IF @nDebugFlag = 1 AND @nErrNo <> 0
+   BEGIN
+      INSERT INTO dbo.TraceInfo
+      (
+         TraceName,
+         TimeIn,
+         Step1,
+         Step2,
+         Col1,
+         Col2,
+         Col3,
+         Col4,
+         Col5
+      )
+      VALUES
+      (
+         'rdt_556DecodeSP02',
+         GETDATE(),
+         CAST(@nMobile AS NVARCHAR(10)),
+         @cStorerKey,
+         CAST(@nErrNo AS NVARCHAR(10)),
+         @cBarcode,
+         '',
+         '',
+         ''
+      )
+   END
+
    IF @nDebugFlag = 1
       SELECT 'Quit', @nErrNo AS ErrNo, @cSKU AS SKU, @dLottable13 AS LOT13, @dLottable04 AS LOT4,
                @cLottable02 AS LOT2
 END
+GO
+
+GRANT EXECUTE ON rdt.rdt_556DecodeSP02 TO NSQL
+GO
