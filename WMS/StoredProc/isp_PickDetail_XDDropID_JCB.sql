@@ -26,9 +26,11 @@ GO
 /* Date        Author   Rev   Purposes                                  */
 /* 2025-08-22  TPT001   1.0   Creation                                  */
 /* 2025-09-30  PPA374   1.1   Adding FromID filter for housekeeping     */
+/* 2025-12-11  PPA374   1.2   Adding message to Statusmsg when          */
+/*                               cancelling the task                    */
 /************************************************************************/
 
-CREATE OR ALTER PROC [dbo].[isp_PickDetail_XDDropID_JCB] (
+CREATE ALTER PROC [dbo].[isp_PickDetail_XDDropID_JCB] (
      @b_Success         INT           OUTPUT
    , @n_Err             INT           OUTPUT
    , @c_ErrMsg          NVARCHAR(250) OUTPUT
@@ -314,7 +316,7 @@ BEGIN
 
    --Cancel tasks that can no longer be fulfilled
    UPDATE TD WITH(ROWLOCK)
-   SET TD.Status = 'X'
+   SET TD.Status = 'X', TD.StatusMsg = 'FromID is in multi loc or not in the source loc'
    FROM dbo.TaskDetail TD
       LEFT JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
          ON TD.FromID = LLI.Id 
@@ -487,4 +489,3 @@ BEGIN
       CLOSE CUR_PICK_LINES
       DEALLOCATE CUR_PICK_LINES
 END
-
