@@ -39,7 +39,64 @@ BEGIN
 
    IF @nFunc = 1720
    BEGIN
-      IF @nStep = 3
+      IF @nStep = 2
+      BEGIN
+         BEGIN TRAN
+
+         DECLARE CUR_PD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+
+         SELECT PalletLineNumber
+         FROM dbo.PalletDetail WITH (NOLOCK)  
+         WHERE PalletKey = @cFromPalletID
+         ORDER BY PalletLineNumber
+
+         OPEN CUR_PD
+
+         FETCH NEXT FROM CUR_PD INTO @cPalletLineNumber
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            
+            SET @cNewPalletLineNumber = ''
+
+            SELECT
+               @cNewPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS VARCHAR( 5)), 5)
+            FROM dbo.PalletDetail WITH (NOLOCK)
+            WHERE PalletKey = @cToPalletID
+            
+            BEGIN TRY
+               UPDATE dbo.PalletDetail WITH(ROWLOCK)
+               SET 
+                  PalletKey = @cToPalletID,
+                  PalletLineNumber = @cNewPalletLineNumber 
+               WHERE PalletKey = @cFromPalletID 
+                     AND PalletLineNumber = @cPalletLineNumber
+            END TRY
+            BEGIN CATCH
+               ROLLBACK TRAN
+               SET @nErrNo = 253453
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update Pallet Detail Failed
+               GOTO Quit
+            END CATCH
+            
+            FETCH NEXT FROM CUR_PD INTO @cPalletLineNumber
+         END
+         CLOSE CUR_PD
+         DEALLOCATE CUR_PD
+         
+         BEGIN TRY
+            DELETE FROM dbo.Pallet
+            WHERE PalletKey = @cFromPalletID
+         END TRY
+         BEGIN CATCH
+            ROLLBACK TRAN
+            SET @nErrNo = 253454
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Delete Pallet Failed
+            GOTO Quit
+         END CATCH
+
+         COMMIT TRAN
+      END
+      ELSE IF @nStep = 3
       BEGIN
          BEGIN TRAN
 
