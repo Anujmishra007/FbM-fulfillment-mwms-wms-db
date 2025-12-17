@@ -1,10 +1,4 @@
-USE [GLOWMS]
-GO
-/****** Object:  StoredProcedure [dbo].[isp_PPA_WCS_ONBR]    Script Date: 12/15/2025 11:22:10 AM ******/
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
+
 
 /***************************************************************************/
 /* Store procedure: dbo.isp_PPA_WCS_ONBR                                   */
@@ -18,7 +12,7 @@ GO
 /* 2025-08-29 1.0  elb02   Created                                         */
 /***************************************************************************/
 
-ALTER PROC  [dbo].[isp_PPA_WCS_ONBR] (
+CREATE OR ALTER PROC  [dbo].[isp_PPA_WCS_ONBR] (
     @c_WaveKey            NVARCHAR(20), 
     @c_OrderKey           NVARCHAR(10),
 	@c_OrderLineNumber    NVARCHAR(5),
@@ -176,3 +170,13 @@ BEGIN
     END  
 
 END
+
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXEC ON dbo.isp_PPA_WCS_ONBR TO NSQL
+GO
