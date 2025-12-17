@@ -79,10 +79,10 @@ BEGIN
          BEGIN
             -- Check if it is a QR code (contains &)
             -- Decode: extract SKU only (keep errors for bad format / parse)
-			select 'DecodeSP02', @cBarcode
+			
             IF CHARINDEX('&', @cBarcode) > 0
             BEGIN
-			    select LEN(@cBarcode),LEN(REPLACE(@cBarcode, '&',''))
+			
                 -- Expect exactly 4 ampersands for the QR format
                 IF (LEN(@cBarcode) - LEN(REPLACE(@cBarcode, '&',''))) <> 4
                 BEGIN
@@ -103,7 +103,7 @@ BEGIN
                    SET @cSKU = '' 
                    GOTO Quit
                 END CATCH
-				--select * from @tDecodeList
+		
                 -- Only read SKU (index 1) and attach to output
                 SELECT @cTempSKU = Item FROM @tDecodeList WHERE ItemIndex = 1;
  
@@ -128,11 +128,7 @@ BEGIN
       END
    END
 
--- Fail:
---    BEGIN
---       SET @nErrNo = 253901 -- Error InvFormat
---       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
---    END
+
 
    
 Quit:
