@@ -30,7 +30,7 @@ GO
 /*                               cancelling the task                    */
 /************************************************************************/
 
-CREATE ALTER PROC [dbo].[isp_PickDetail_XDDropID_JCB] (
+CREATE OR ALTER PROC [dbo].[isp_PickDetail_XDDropID_JCB] (
      @b_Success         INT           OUTPUT
    , @n_Err             INT           OUTPUT
    , @c_ErrMsg          NVARCHAR(250) OUTPUT
@@ -489,3 +489,4 @@ BEGIN
       CLOSE CUR_PICK_LINES
       DEALLOCATE CUR_PICK_LINES
 END
+
