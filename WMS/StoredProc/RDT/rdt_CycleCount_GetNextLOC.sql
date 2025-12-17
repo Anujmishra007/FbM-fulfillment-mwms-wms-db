@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_CycleCount_GetNextLOC]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [RDT].[rdt_CycleCount_GetNextLOC]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -41,9 +37,10 @@ GO
 /* 20-Apr-2017 1.8  James    Remove ANSI_WARNINGS (james03)             */
 /* 02-Nov-2018 1.9  James    WMS6809 Add custom fetch task (james04)    */
 /* 21-Mar-2024 2.0  NLT013   UWP-17125 Correct the sorting sequence     */
+/* 17-Dec-2025 2.1  NLT013   UWP-45560 Bug fix: cannot find next Loc    */
 /************************************************************************/    
     
-CREATE PROC [RDT].[rdt_CycleCount_GetNextLOC] (    
+CREATE OR ALTER PROC [RDT].[rdt_CycleCount_GetNextLOC] (    
    @cCCRefNo            NVARCHAR( 10),    
    @cCCSheetNo          NVARCHAR( 10),    
    -- (MaryVong01)    
@@ -169,7 +166,7 @@ BEGIN
         AND LOC.Facility = @cFacility  
          -- Added just in case CCDetail having same loc for diff id    
          -- Commented - always go back to the Uncounted Location (not allow skip any location)    
-        AND LOC.CCLogicalLOC > @cCurrSuggestLogiLOC  --Shong 03-Mar-2012  
+        AND LOC.CCLogicalLOC >= @cCurrSuggestLogiLOC  --Shong 03-Mar-2012  
         AND 1 =  CASE     
                     WHEN @nCCCountNo = 1 AND Counted_Cnt1 = 1 THEN 0    
                     WHEN @nCCCountNo = 2 AND Counted_Cnt2 = 1 THEN 0    
