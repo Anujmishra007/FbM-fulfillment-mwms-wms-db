@@ -86,7 +86,7 @@ BEGIN
       INNER JOIN dbo.LOC L WITH(NOLOCK)
          ON SL.Loc = L.Loc
 	    AND L.Facility = @cFacility
-      LEFT JOIN TaskDetailAgg TA
+      LEFT JOIN dbo.TaskDetailAgg TA WITH(NOLOCK)
          ON SL.Loc = TA.FinalLoc
         AND SL.Sku = TA.Sku
         AND SL.StorerKey = TA.StorerKey
@@ -103,7 +103,7 @@ BEGIN
    -- Build candidates with a stable row order (change ORDER BY to change priority)
    WITH CodeLkupFiltered AS (
       SELECT Short, Long, UDF01, StorerKey, ListName, UDF02, UDF03
-      FROM CodeLkup WITH(NOLOCK)
+      FROM dbo.CODELKUP WITH(NOLOCK)
       WHERE ListName = 'JCBREPLENL'
    )
    SELECT 
@@ -117,8 +117,8 @@ BEGIN
       LA.Lottable11 AS CaseID,
       ROW_NUMBER() OVER (PARTITION BY RR.SKU, RR.ToLoc ORDER BY LA.Lot, LLI.Lot, LLI.Qty DESC, LLI.ID) AS rn
    INTO #AvailRaw
-   FROM LOTxLOCxID LLI WITH(NOLOCK)
-      INNER JOIN LOC L WITH(NOLOCK) ON LLI.Loc = L.Loc
+   FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+      INNER JOIN dbo.LOC L WITH(NOLOCK) ON LLI.Loc = L.Loc
       INNER JOIN CodeLkupFiltered C WITH(NOLOCK)
          ON L.LocationType = C.Short
         AND L.LocationCategory = C.Long
@@ -126,12 +126,12 @@ BEGIN
         AND LLI.StorerKey = C.StorerKey
       INNER JOIN #REPLENREQ RR WITH(NOLOCK)
          ON LLI.Sku = RR.SKU
-      INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK)
+      INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK)
          ON LLI.Lot = LA.Lot
         AND LLI.StorerKey = LA.StorerKey
       OUTER APPLY (
          SELECT COUNT(DISTINCT LLI2.SKU) AS SKUCount
-         FROM LOTxLOCxID LLI2 WITH(NOLOCK)
+         FROM dbo.LOTxLOCxID LLI2 WITH(NOLOCK)
          WHERE LLI2.ID = LLI.ID
             AND LLI2.StorerKey = LLI.StorerKey
       ) AS SKUCount
