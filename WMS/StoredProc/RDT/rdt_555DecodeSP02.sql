@@ -58,7 +58,9 @@ BEGIN
       ,@cTempLottable04    NVARCHAR(100)
       ,@cTempLottable13    NVARCHAR(100)
       ,@nRowCount    INT
-
+   
+   SELECT TOP 1 @cBarcode = I_Field03 FROM [RDT].[RDTMOBREC] WITH (NOLOCK) WHERE Func = @nFunc AND Mobile = @nMobile
+   
     DECLARE @tDecodeList TABLE
    (
       ItemIndex   INT NOT NULL,
@@ -85,7 +87,7 @@ BEGIN
                 BEGIN TRY
                    INSERT INTO @tDecodeList
                    SELECT [key]+1 AS ItemIndex, value AS Item
-                   FROM OPENJSON('["' + REPLACE(@cBarcode, '&', '","') + '"]');
+                   FROM OPENJSON('["' + REPLACE(@cBarcode, '&', '","') + '"]')
                 END TRY
                 BEGIN CATCH
                    SET @nErrNo = 253852 -- Error DecodeFailure
