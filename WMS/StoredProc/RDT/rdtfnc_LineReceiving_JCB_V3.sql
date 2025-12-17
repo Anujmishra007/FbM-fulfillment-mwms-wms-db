@@ -964,18 +964,19 @@ BEGIN
          --SELECT @cOutField03 =  CASE WHEN CHARINDEX(',', BUSR6) > 0 THEN LEFT(BUSR6, CHARINDEX(',', BUSR6) - 1) ELSE BUSR6 END FROM dbo.sku WITH (NOLOCK) WHERE sku = @cSKU;
          --SELECT @cOutField03 =  CASE WHEN CHARINDEX(',', LONG) > 0 THEN LEFT(LONG, CHARINDEX(',', LONG) - 1) ELSE LONG END FROM dbo.codelkup WITH (NOLOCK) where LISTNAME='JCBXD_LANE' and short = @cSKU;
          --SELECT TOP 1 @cOutField03 = ToLoc FROM dbo.RECEIPTDETAIL WITH (NOLOCK) WHERE receiptkey = @cReceiptKey AND sku = @cSKU;
-         SELECT @cOutField03 = ISNULL(
-    (
-        SELECT TOP 1 loc + LocCheckDigit
-        FROM LOC WITH (NOLOCK)
-        WHERE LOC IN (
-            SELECT TOP 1 ToLoc
-            FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-            WHERE receiptkey = @cReceiptKey AND sku = @cSKU order by adddate desc
-        )
-    ), 
-    ''
-);
+         SELECT @cOutField03 = ISNULL
+		 (
+            (
+               --SELECT TOP 1 loc + LocCheckDigit
+               --FROM LOC WITH (NOLOCK)
+               --WHERE LOC IN (
+                  SELECT TOP 1 ToLoc
+                  FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+                  WHERE receiptkey = @cReceiptKey 
+				     AND sku = @cSKU order by adddate desc
+               --)
+            ), ''
+         )
          SET @nScn = @nScn_LOC     --CHANGED 09:24 2025/04/10
          SET @nStep = @nStep_LOC   --CHANGED 09:24 2025/04/10
          --Go to dynamic lottable screen
@@ -1536,19 +1537,20 @@ BEGIN
       SET @cOutField02 = '' 
 	  --SELECT @cOutField03 =  CASE WHEN CHARINDEX(',', BUSR6) > 0 THEN LEFT(BUSR6, CHARINDEX(',', BUSR6) - 1) ELSE BUSR6 END FROM dbo.sku WITH (NOLOCK) WHERE sku = @cSKU;
       --SELECT @cOutField03 =  CASE WHEN CHARINDEX(',', LONG) > 0 THEN LEFT(LONG, CHARINDEX(',', LONG) - 1) ELSE LONG END FROM dbo.codelkup WITH (NOLOCK) where LISTNAME='JCBXD_LANE' and short = @cSKU;
-       --SELECT TOP 1 @cOutField03 = ToLoc FROM dbo.RECEIPTDETAIL WITH (NOLOCK) WHERE receiptkey = @cReceiptKey AND sku = @cSKU;
-       SELECT @cOutField03 = ISNULL(
-    (
-        SELECT TOP 1 loc+LocCheckDigit
-        FROM LOC WITH (NOLOCK)
-        WHERE LOC IN (
-            SELECT TOP 1 ToLoc
-            FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-            WHERE receiptkey = @cReceiptKey AND sku = @cSKU order by adddate desc
-        )
-    ), 
-    ''
-);
+      --SELECT TOP 1 @cOutField03 = ToLoc FROM dbo.RECEIPTDETAIL WITH (NOLOCK) WHERE receiptkey = @cReceiptKey AND sku = @cSKU;
+      SELECT @cOutField03 = ISNULL
+		 (
+            (
+               --SELECT TOP 1 loc + LocCheckDigit
+               --FROM LOC WITH (NOLOCK)
+               --WHERE LOC IN (
+                  SELECT TOP 1 ToLoc
+                  FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+                  WHERE receiptkey = @cReceiptKey 
+				     AND sku = @cSKU order by adddate desc
+               --)
+            ), ''
+         )
       -- Go TO_LOC screen
       SET @nScn = @nScn_LOC
       SET @nStep = @nStep_LOC
@@ -2708,7 +2710,6 @@ BEGIN
       I_Field13 = '',  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
       I_Field14 = '',  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
       I_Field15 = '',  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
-
    WHERE Mobile = @nMobile
 END
 
