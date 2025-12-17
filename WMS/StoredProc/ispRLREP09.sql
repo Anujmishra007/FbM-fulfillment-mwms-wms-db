@@ -70,8 +70,15 @@ BEGIN
          , @c_ReplJoin_Exp           NVARCHAR(MAX)= ''
          , @c_TransitLOC_Exp         NVARCHAR(MAX)= ''
          , @c_TaskGrouping_Exp       NVARCHAR(MAX)= ''
-         , @c_Priority_Exp           NVARCHAR(MAX) = ''
+         , @c_TaskPriority_Exp       NVARCHAR(MAX)= ''
+         , @c_TaskType_Exp           NVARCHAR(MAX)= ''
+         , @c_PickMethod_Exp         NVARCHAR(MAX)= ''
+         , @c_TaskType_Val           NVARCHAR(10) = ''
+         , @c_PickMethod_Val         NVARCHAR(10) = ''
+         , @c_TaskPriority           NVARCHAR(10) = ''
          , @c_DelPendingTask         NVARCHAR(10) = ''
+         , @c_TaskType               NVARCHAR(10) = ''
+         , @c_PickMethod             NVARCHAR(10) = ''
 
    CREATE TABLE #TEMP_REPLENISHMENT
    (
@@ -94,7 +101,12 @@ BEGIN
         , @c_ReplJoin_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN'          THEN Notes END)),'')
         , @c_TransitLOC_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'TransitLOC'        THEN Notes END)),'')
         , @c_TaskGrouping_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskGrouping'      THEN Notes END)),'')
-        , @c_Priority_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Notes END)),'')
+        , @c_TaskType_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Notes END)),'')
+        , @c_TaskPriority_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Notes END)),'')
+        , @c_PickMethod_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Notes END)),'')
+        , @c_TaskType_Val       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Short END)),'')
+        , @c_PickMethod_Val     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Short END)),'')
+        , @c_TaskPriority       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Short END)),'')
         , @c_DelPendingTask     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' THEN Short END)),'')
      FROM dbo.CODELKUP WITH(NOLOCK)
     WHERE ListName = 'REPLENCFG'
@@ -130,7 +142,7 @@ BEGIN
      +       ', RPL.ID'
      +       ', RPL.ToLoc'
      +       ', RPL.RefNo'
-     +       ', Priority='   + CASE WHEN ISNULL(@c_Priority_Exp    ,'')<>'' THEN @c_Priority_Exp     ELSE 'RPL.Priority' END
+     +       ', RPL.Priority'
      +       ', TransitLOC=' + CASE WHEN ISNULL(@c_TransitLOC_Exp  ,'')<>'' THEN @c_TransitLOC_Exp   ELSE 'ISNULL(PA.InLoc,'''')' END
      +   ' FROM dbo.REPLENISHMENT RPL WITH(NOLOCK)'
      +   ' JOIN dbo.LOC LOC WITH(NOLOCK) ON RPL.ToLoc=LOC.Loc'
@@ -184,9 +196,25 @@ BEGIN
      +       ', RPL.ToLoc'
      +       ', TOLOC.LogicalLocation'
      +       ', RPL.UCCNo'
-     +       ', RPL.Priority'
      +       ', RPL.TransitLOC'
      +       ', TaskGrouping=' + CASE WHEN ISNULL(@c_TaskGrouping_Exp,'')<>'' THEN @c_TaskGrouping_Exp ELSE '''''' END
+
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', Priority='     + CASE WHEN ISNULL(@c_TaskPriority_Exp,'')<>'' THEN @c_TaskPriority_Exp
+                                      WHEN ISNULL(@c_TaskPriority    ,'')<>'' THEN '''' + REPLACE(@c_TaskPriority,'''','''''') + ''''
+                                      ELSE 'RPL.Priority' END
+
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', TaskType='     + CASE WHEN ISNULL(@c_TaskType_Exp    ,'')<>'' THEN @c_TaskType_Exp
+                                      WHEN ISNULL(@c_TaskType_Val    ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_TaskType_Val),'''','''''') + ''''
+                                      ELSE '''RPF'''
+                                 END
+
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', PickMethod='   + CASE WHEN ISNULL(@c_PickMethod_Exp  ,'')<>'' THEN @c_PickMethod_Exp
+                                      WHEN ISNULL(@c_PickMethod_Val  ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_PickMethod_Val),'''','''''') + ''''
+                                      ELSE '''PP'''
+                                 END
 
    SET @c_SQLStatement = @c_SQLStatement
      + ' FROM #TEMP_REPLENISHMENT RPL'
@@ -209,7 +237,7 @@ BEGIN
    BEGIN
       FETCH NEXT FROM CUR_REPLEN
       INTO @c_Replenishmentkey, @c_Storer, @c_Sku, @c_Lot, @n_Qty, @c_FromLOC, @c_FromLogicalLoc, @c_ID, @c_ToLOC, @c_ToLogicalLoc
-         , @c_UCCNo, @c_Priority, @c_TransitLOC, @c_TaskGrouping
+         , @c_UCCNo, @c_TransitLOC, @c_TaskGrouping, @c_Priority, @c_TaskType, @c_PickMethod
 
       IF @@FETCH_STATUS <> 0
          BREAK
@@ -252,7 +280,7 @@ BEGIN
       SET @c_UOM = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN '2' ELSE '6' END
 
       EXEC isp_InsertTaskDetail
-         @c_TaskType              = 'RPF'
+           @c_TaskType              = @c_TaskType
          , @c_Storerkey             = @c_Storerkey
          , @c_Sku                   = @c_Sku
          , @c_Lot                   = @c_Lot
@@ -267,7 +295,7 @@ BEGIN
          , @c_ToID                  = @c_ID
          , @c_CaseID                = @c_UCCNo
          , @c_DropID                = @c_UCCNo
-         , @c_PickMethod            = 'PP'
+         , @c_PickMethod            = @c_PickMethod
          , @c_Priority              = @c_Priority
          , @c_SourcePriority        = @c_Priority
          , @c_SourceType            = 'ispRLREP09'
