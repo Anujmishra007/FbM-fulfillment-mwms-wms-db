@@ -14,6 +14,7 @@ GO
 /*                                                                         */
 /* Date        Rev  Author    Purposes                                     */
 /* 2025-10-20. 1.0  Dennis    FCR-3959 Created                             */
+/* 2025-12-10  1.1  PPA374    Considering case replenishment               */
 /***************************************************************************/
 
 
@@ -112,7 +113,7 @@ BEGIN
    -- Loop tasks
    DECLARE @curRPTask CURSOR
    SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-      SELECT TaskDetailKey, PickMethod, StorerKey, FromLOC, FromID, ToLOC, ToID, SKU, LOT, QTY, SystemQTY, WaveKey
+      SELECT TaskDetailKey, PickMethod, StorerKey, FromLOC, FromID, ToLOC, IIF(PickMethod = 'PP', CaseID, ToID)ToID, SKU, LOT, QTY, SystemQTY, WaveKey --PPA374 12/10/2025
       FROM dbo.TaskDetail WITH (NOLOCK)
       WHERE ListKey = @cListKey
          AND UserKey = @cUserName
