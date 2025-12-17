@@ -118,7 +118,7 @@ BEGIN
       @nTransitCount   = TransitCount, 
       @cPriority       = Priority, 
       @cSourcePriority = SourcePriority, 
-      @cSourceType     = 'rdt_1812CreateTask03'
+      @cSourceType     = 'rdt_1812CreateTask03',
       @cSKU            = SKU,
 	  @cLOT            = LOT
    FROM dbo.TaskDetail WITH (NOLOCK)
