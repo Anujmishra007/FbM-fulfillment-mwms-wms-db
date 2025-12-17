@@ -20,7 +20,7 @@ GO
 /* 15-Dec-2025  1.1  PPA374      Adding check against case in tasks     */
 /************************************************************************/
 
-ALTER     PROCEDURE [RDT].[rdt_629ExtValJCB]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_629ExtValJCB]
 (
    @nMobile        INT,
    @nFunc          INT,
@@ -175,3 +175,7 @@ IF @nStep ='1'
 QUIT:
    RETURN;
 END
+
+GO
+GRANT EXECUTE ON rdt.rdt_629ExtValJCB TO NSQL
+GO
