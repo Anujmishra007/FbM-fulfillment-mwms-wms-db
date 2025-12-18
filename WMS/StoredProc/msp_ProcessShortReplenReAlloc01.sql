@@ -25,7 +25,7 @@ GO
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortReplenReAlloc01] (    
-       @c_Wavekey          NVARCHAR(10)
+       @c_Wavekey          NVARCHAR(10)   = ''
      , @c_SKU              NVARCHAR(20)
      , @c_UCCNo            NVARCHAR(20)
      , @c_Taskdetailkey    NVARCHAR(10)   = ''
@@ -86,36 +86,17 @@ BEGIN
       END
    END
 
-   -- Initialize Data
-   IF (@n_Continue = 1 OR @n_Continue = 2)
-   BEGIN
-      SELECT @c_StorerKey  = OH.StorerKey
-           , @c_Facility   = OH.Facility
-      FROM WAVE W WITH (NOLOCK)
-      JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.WaveKey = W.WaveKey
-      JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
-      WHERE W.WaveKey = @c_Wavekey
-
-      -- @n_DynReplen
-      -- 1 - Dynamic Replen
-      -- 0 - Normal Min-Max Replen
-      SELECT @n_DynReplen = IIF(ISNULL(TD.WaveKey, '') = '', 0, 1)
-      FROM TASKDETAIL TD (NOLOCK)
-      WHERE TD.TaskDetailKey = @c_Taskdetailkey
-
-      SET @n_DynReplen = ISNULL(@n_DynReplen, 0)
-   END
-
    -- Validation
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
       IF NOT EXISTS ( SELECT 1
                       FROM TASKDETAIL (NOLOCK)
-                      WHERE TaskDetailKey = @c_Taskdetailkey )
+                      WHERE TaskDetailKey = @c_Taskdetailkey
+                      AND TaskType = 'RPF' )
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 68800
-         SET @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Taskdetailkey#: ' + TRIM(@c_Taskdetailkey) + ' No Record Found (msp_ProcessShortReplenReAlloc01)'
+         SET @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Taskdetailkey#: ' + TRIM(@c_Taskdetailkey) + ' is not a valid RPF task. (msp_ProcessShortReplenReAlloc01)'
                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
       END
 
@@ -134,6 +115,23 @@ BEGIN
          SET @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': UCCNo is required! (msp_ProcessShortReplenReAlloc01)'
                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
       END
+   END
+
+   -- Initialize Data
+   IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
+      -- @n_DynReplen
+      -- 1 - Dynamic Replen
+      -- 0 - Normal Min-Max Replen
+      SELECT @n_DynReplen = IIF(ISNULL(TD.WaveKey, '') = '', 0, 1)
+           , @c_StorerKey = TD.Storerkey
+           , @c_Facility = L.Facility
+      FROM TASKDETAIL TD (NOLOCK)
+      JOIN LOC L (NOLOCK) ON TD.FromLoc = L.Loc
+      WHERE TD.TaskDetailKey = @c_Taskdetailkey
+      AND TD.TaskType = 'RPF'
+
+      SET @n_DynReplen = ISNULL(@n_DynReplen, 0)
    END
 
    -- Prepare temp data
@@ -169,11 +167,11 @@ BEGIN
    BEGIN
       -- Dynamic Replen - @n_DynReplen = 1
       IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_DynReplen = 1
-      AND EXISTS ( SELECT 1
-                   FROM #TMP_PICK )
       BEGIN
          -- Update all FCP tasks to X
          IF (@n_Continue = 1 OR @n_Continue = 2)
+         AND EXISTS ( SELECT 1
+                      FROM #TMP_PICK )
          BEGIN
             BEGIN TRY
                UPDATE TD WITH (ROWLOCK)
@@ -292,29 +290,32 @@ BEGIN
             DEALLOCATE @CUR_ALLOC
          END
       END
-      ELSE   -- Normal Min-Max Replen - @n_DynReplen = 0
+      ELSE IF @n_DynReplen <> 1   -- Normal Min-Max Replen - @n_DynReplen <> 1
       BEGIN
-         BEGIN TRY
-            EXEC dbo.isp_GenReplenishmentTask_01 @c_Zone01 = @c_Facility -- nvarchar(10)
-                                               , @c_Zone02 = N'ALL' -- nvarchar(10)
-                                               , @c_Zone03 = N'' -- nvarchar(10)
-                                               , @c_Zone04 = N'' -- nvarchar(10)
-                                               , @c_Zone05 = N'' -- nvarchar(10)
-                                               , @c_Zone06 = N'' -- nvarchar(10)
-                                               , @c_Zone07 = N'' -- nvarchar(10)
-                                               , @c_Zone08 = N'' -- nvarchar(10)
-                                               , @c_Zone09 = N'' -- nvarchar(10)
-                                               , @c_Zone10 = N'' -- nvarchar(10)
-                                               , @c_Zone11 = N'' -- nvarchar(10)
-                                               , @c_Zone12 = N'' -- nvarchar(10)
-                                               , @c_ReplenFlag = 'N' -- nvarchar(10)
-                                               , @c_StorerKey = @c_Storerkey -- nvarchar(15)
-                                               , @c_ReplenType = N'T' -- nvarchar(10)
-         END TRY
-         BEGIN CATCH
-            SET @n_Continue = 3
-            SET @c_ErrMsg = ERROR_MESSAGE()
-         END CATCH
+         IF ISNULL(@c_Storerkey, '') <> '' AND ISNULL(@c_Facility, '') <> ''
+         BEGIN
+            BEGIN TRY
+               EXEC dbo.isp_GenReplenishmentTask_01 @c_Zone01 = @c_Facility -- nvarchar(10)
+                                                  , @c_Zone02 = N'ALL' -- nvarchar(10)
+                                                  , @c_Zone03 = N'' -- nvarchar(10)
+                                                  , @c_Zone04 = N'' -- nvarchar(10)
+                                                  , @c_Zone05 = N'' -- nvarchar(10)
+                                                  , @c_Zone06 = N'' -- nvarchar(10)
+                                                  , @c_Zone07 = N'' -- nvarchar(10)
+                                                  , @c_Zone08 = N'' -- nvarchar(10)
+                                                  , @c_Zone09 = N'' -- nvarchar(10)
+                                                  , @c_Zone10 = N'' -- nvarchar(10)
+                                                  , @c_Zone11 = N'' -- nvarchar(10)
+                                                  , @c_Zone12 = N'' -- nvarchar(10)
+                                                  , @c_ReplenFlag = 'N' -- nvarchar(10)
+                                                  , @c_StorerKey = @c_Storerkey -- nvarchar(15)
+                                                  , @c_ReplenType = N'T' -- nvarchar(10)
+            END TRY
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @c_ErrMsg = ERROR_MESSAGE()
+            END CATCH
+         END
       END
    END
 
