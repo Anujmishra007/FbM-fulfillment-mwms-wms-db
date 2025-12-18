@@ -173,16 +173,19 @@ BEGIN
                    FROM #TMP_PICK )
       BEGIN
          -- Update all FCP tasks to X
-         BEGIN TRY
-            UPDATE TD WITH (ROWLOCK)
-            SET TD.[Status] = 'X'
-            FROM TASKDETAIL TD
-            JOIN #TMP_TASK_FCP TF ON TD.Taskdetailkey = TF.TaskDetailKey
-         END TRY
-         BEGIN CATCH
-            SET @n_Continue = 3
-            SET @c_ErrMsg = ERROR_MESSAGE()
-         END CATCH
+         IF (@n_Continue = 1 OR @n_Continue = 2)
+         BEGIN
+            BEGIN TRY
+               UPDATE TD WITH (ROWLOCK)
+               SET TD.[Status] = 'X'
+               FROM TASKDETAIL TD
+               JOIN #TMP_TASK_FCP TF ON TD.Taskdetailkey = TF.TaskDetailKey
+            END TRY
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @c_ErrMsg = ERROR_MESSAGE()
+            END CATCH
+         END
 
          -- Get Storerconfig setup
          IF (@n_Continue = 1 OR @n_Continue = 2)
