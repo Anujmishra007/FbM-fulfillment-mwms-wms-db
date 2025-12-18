@@ -52,6 +52,7 @@ BEGIN
       WHERE OrderKey = @c_Orderkey
          AND Status NOT IN ('9','X')
 		 AND Storerkey = 'JCB'
+		 AND ISNULL(StatusMsg,'') <> 'Swapping'
 		 AND NOT EXISTS (
 		    SELECT 1 FROM dbo.PICKDETAIL PD WITH(NOLOCK) 
 			WHERE OrderKey = @c_Orderkey 
