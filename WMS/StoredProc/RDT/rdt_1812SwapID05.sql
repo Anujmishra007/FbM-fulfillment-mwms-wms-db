@@ -564,8 +564,8 @@ BEGIN
    BEGIN TRY
 
       UPDATE ORDERDETAIL               --PPA374 16/12/2025
-	  SET UserDefine02 = OriginalQty
-	  WHERE orderkey = @cOrderKeyToUpd
+         SET UserDefine02 = OriginalQty
+      WHERE orderkey = @cOrderKeyToUpd
 
       UPDATE PD WITH (ROWLOCK)
       SET PD.Status = '0',
@@ -578,8 +578,12 @@ BEGIN
          AND TaskDetailKey = @cTaskDetailKey
 
       UPDATE ORDERDETAIL               --PPA374 16/12/2025
-	  SET  OriginalQty = UserDefine02, OpenQty = UserDefine02
-	  WHERE orderkey = @cOrderKeyToUpd
+         SET  OriginalQty = UserDefine02, OpenQty = UserDefine02
+      WHERE orderkey = @cOrderKeyToUpd
+
+	  UPDATE TaskDetail
+	  SET StatusMsg = 'Swapping'
+	  WHERE TaskDetailKey = @cTaskDetailKey
 
    END TRY
    BEGIN CATCH
@@ -613,6 +617,11 @@ BEGIN
                   LOT, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup,
                   PickMethod, WaveKey, PickSlipNo, '0', GETDATE(), SUSER_SNAME(), @cPKDNotes, @cTaskDetailKey 
          FROM @tAllocation
+
+	  UPDATE TaskDetail
+	  SET StatusMsg = ''
+	  WHERE TaskDetailKey = @cTaskDetailKey
+
    END TRY
    BEGIN CATCH
       SET @nErrNo = 239918
