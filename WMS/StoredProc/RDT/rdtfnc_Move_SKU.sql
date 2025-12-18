@@ -98,8 +98,11 @@ GO
 /* 2023-03-12 6.6  YeeKung  WMS-24222 Skip PPK Check (yeekung05)        */
 /* 2023-08-10 6.7  Ung      WMS-23729 Add PieceScan                     */
 /* 2024-03-26 6.8  Dennis   UWP-14536 Check Digit                       */
-/* 2025-07-28 6.9  NickT    !!!Cutover. Use V2 verion in V0 Repo for    */ 
+/* 2024-05-03 6.9  Ung      WMS-25417 Add DispStyleColorSize            */
+/* 2024-10-03 7.0  Ung      WMS-26207 FlowThruQtyScn with all avail QTY */
+/* 2025-07-28 7.1  NickT    !!!Cutover. Use V2 verion in V0 Repo for    */ 
 /*                            development!!!                            */
+/* 2025-10-29 7.2  Ung      FCR-8307 Add serial no                      */ 
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU] (
@@ -111,6 +114,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU] (
 SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
+SET CONCAT_NULL_YIELDS_NULL OFF
 
 -- Misc variable
 DECLARE
@@ -151,6 +155,7 @@ DECLARE
    @nMQTY       INT,      -- Remining QTY to move, in master UOM
    @nPUOM_Div   INT,
    @nPieceScanQTY INT,
+   @nScanSNO    INT, 
 
    @cToLOC        NVARCHAR( 10),
    @cToID         NVARCHAR( 18),
@@ -194,11 +199,13 @@ DECLARE
    @nFlowThruQtyScn        INT,           -- (james19)
    @cSkipChkPPKQTY         NVARCHAR( 20), -- (yeekung05)
    @cPieceScan             NVARCHAR( 1),
+   @cDispStyleColorSize    NVARCHAR( 1), 
    @cExtendedScreenSP      NVARCHAR( 20),
    @nAction                INT,
    @nAfterScn              INT,
    @nAfterStep             INT,
    @cLocNeedCheck          NVARCHAR( 20),
+   @cSerialNoUpdateLotLocID   NVARCHAR( 1),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -288,6 +295,7 @@ SELECT
    @cGoBackFromLocScn   = V_String20,
    @cLabelNo            = V_String21, -- (ChewKP02)
    @cPieceScan          = V_String22,
+   @cDispStyleColorSize = V_String23,
    @cSuggestIDSP        = V_String24,
    @cDecodeSP           = V_String25,
    @cDefaultToID        = V_String26,
@@ -295,6 +303,8 @@ SELECT
    @cConfirmSP          = V_String28,
    @cDefaultQTY         = V_String29,
    @cGoBackSKUScn       = V_String30,  --(cc01)
+   @cSerialNoUpdateLotLocID = V_String31,
+   
    @cPrePackIndicator   = V_String41,
    @cLOCLookupSP        = V_String42, --(yeekung01)
    @cDefaultSuggToLoc   = V_String43, --(james18)
@@ -310,6 +320,7 @@ SELECT
    @nFlowThruToIDScn    = V_Integer8, --(james18)
    @nFlowThruQtyScn     = V_Integer9, --(james19)
    @nPieceScanQTY       = V_Integer10,
+   @nScanSNO            = V_Integer11, 
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -409,6 +420,7 @@ BEGIN
       SET @cSuggestIDSP = ''
 
    SET @cDefaultSuggToLoc = rdt.rdtGetConfig( @nFunc, 'DefaultSuggToLoc', @cStorerKey)
+   SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)
    SET @nFlowThruQtyScn = rdt.rdtGetConfig( @nFunc, 'FlowThruQtyScn', @cStorerKey)
    SET @nFlowThruToIDScn = rdt.rdtGetConfig( @nFunc, 'FlowThruToIDScn', @cStorerKey)
    SET @cGoBackFromLocScn = rdt.rdtGetConfig( @nFunc, 'MoveBySKUGoBackFromLocScn', @cStorerKey)
@@ -418,6 +430,9 @@ BEGIN
    SET @cPieceScan = rdt.RDTGetConfig( @nFunc, 'PieceScan', @cStorerKey)
    SET @cSerialNoCapture = rdt.rdtGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
    SET @cSkipIDScnIFLocLoseID = rdt.RDTGetConfig( @nFunc, 'SkipIDScnIFLocLoseID', @cStorerKey)
+
+   -- SCE storer config
+   SET @cSerialNoUpdateLotLocID = dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'SerialNoUpdateLotLocID')
 
     -- EventLog
     EXEC RDT.rdt_STD_EventLog
@@ -485,7 +500,7 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( 60551, @cLangCode, 'DSP') --'LOC needed'
          GOTO Step_1_Fail
       END
-      
+
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '513ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
       IF @cExtendedScreenSP <> ''
@@ -521,16 +536,17 @@ BEGIN
             SET @cFromLOC = @cLocNeedCheck
          END
       END
-  -- add from loc prefix (yeekung01)
-  IF @cLOCLookupSP = 1
-  BEGIN
-   EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
-   @cFromLOC    OUTPUT,
-   @nErrNo     OUTPUT,
-   @cErrMsg    OUTPUT
-   IF @nErrNo <> 0
-    GOTO Step_1_Fail
-  END
+      
+      -- add from loc prefix (yeekung01)
+      IF @cLOCLookupSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cFromLOC   OUTPUT,
+            @nErrNo     OUTPUT,
+            @cErrMsg    OUTPUT
+         IF @nErrNo <> 0
+          GOTO Step_1_Fail
+      END
 
       SET @cFromLocLoseID = ''
 
@@ -1142,7 +1158,13 @@ BEGIN
       Skip_ValidateSKU:
       -- Get SKU info
       SELECT
-         @cSKUDescr = S.DescR,
+         @cSKUDescr = 
+            CASE WHEN @cDispStyleColorSize = '0'
+                 THEN ISNULL( S.Descr, '')
+                 ELSE CAST( S.Style AS NCHAR(20)) +
+                      CAST( S.Color AS NCHAR(10)) +
+                      CAST( S.Size  AS NCHAR(10))
+            END, 
          @cPrePackIndicator = PrePackIndicator,
          @nPackQtyIndicator = ISNULL( PackQtyIndicator, 0),
          @cMUOM_Desc = Pack.PackUOM3,
@@ -1252,6 +1274,10 @@ BEGIN
             GOTO Quit
          END
       END
+
+      -- Flow thru QTY screen, and take all QTY (only when there is no decoded QTY and no default QTY)
+      IF @nFlowThruQtyScn = 1 AND @nQTY = 0 AND @cDefaultQTY = ''
+         SET @nQTY = @nQTY_Avail
 
       -- Convert to prefer UOM QTY
       IF @cPUOM = '6' OR -- When preferred UOM = master unit
@@ -1555,7 +1581,9 @@ BEGIN
             ,@cErrMsg OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
-
+         
+         SET @nScanSNO = 0
+         
          EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDescr, @nQTY, 'CHECK', 'MOVE', '',
             @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
             @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
@@ -1572,8 +1600,9 @@ BEGIN
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
- @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
-            @nErrNo     OUTPUT,  @cErrMsg     OUTPUT
+            @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
+            @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  
+            @nScan    = @nScanSNO
 
          IF @nErrNo <> 0
             GOTO Quit
@@ -1602,7 +1631,7 @@ BEGIN
          END
       END
 
-      -- Ssuggest ID
+      -- Suggest ID
       IF @cSuggestIDSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSuggestIDSP AND type = 'P')
@@ -2420,6 +2449,11 @@ BEGIN
       END
       ELSE
       BEGIN
+         -- Decide bulk serial no
+         DECLARE @nBulkSNO INT = 0
+         IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtMoveSerialNoLog WITH (NOLOCK) WHERE Mobile = @nMobile)
+            SET @nBulkSNO = 1
+         
          IF @nMultiStorer = 0
          BEGIN
             EXECUTE rdt.rdt_Move
@@ -2436,7 +2470,8 @@ BEGIN
                @cToID        = @cToID,       -- NULL means not changing ID. Blank consider a valid ID
                @cSKU         = @cSKU,
                @nQTY         = @nQTY,
-               @nFunc        = @nFunc
+               @nFunc        = @nFunc, 
+               @nBulkSNO     = @nBulkSNO
 
             --INC0897289
             IF @nErrNo <> 0
@@ -2462,7 +2497,8 @@ BEGIN
                @cToID        = @cToID,       -- NULL means not changing ID. Blank consider a valid ID
                @cSKU         = @cSKU,
                @nQTY         = @nQTY,
-               @nFunc        = @nFunc
+               @nFunc        = @nFunc, 
+               @nBulkSNO     = @nBulkSNO
 
             --INC0897289
             IF @nErrNo <> 0
@@ -2470,30 +2506,35 @@ BEGIN
          END
 
          -- Move serial no
-         IF @cSerialNoCapture = '1'
+         IF @cSerialNoCapture = '1' 
          BEGIN
-            EXEC rdt.rdt_Move_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'MOVE'
-               ,@cSKU
-               ,'' -- @cSerialNo
-               ,0  -- @nSerialQTY
-               ,@cToLOC
-               ,@cToID
-               ,@nErrNo  OUTPUT
-               ,@cErrMsg OUTPUT
-            IF @nErrNo <> 0
-               GOTO Quit
+            -- Serial no without LOT, LOC, ID is handled here
+            -- serial no with    LOT, LOC, ID is handle inside rdt_Move
+            IF @cSerialNoUpdateLotLocID <> '1' 
+            BEGIN
+               EXEC rdt.rdt_Move_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'MOVE'
+                  ,@cSKU
+                  ,'' -- @cSerialNo
+                  ,0  -- @nSerialQTY
+                  ,@cToLOC
+                  ,@cToID
+                  ,@nErrNo  OUTPUT
+                  ,@cErrMsg OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
 
-            -- Clear log
-            EXEC rdt.rdt_Move_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CLEARLOG'
-               ,@cSKU
-               ,'' -- @cSerialNo
-               ,0  -- @nSerialQTY
-               ,'' -- @cToLOC
-               ,'' -- @cToID
-               ,@nErrNo  OUTPUT
-               ,@cErrMsg OUTPUT
-            IF @nErrNo <> 0
-               GOTO Quit
+               -- Clear log
+               EXEC rdt.rdt_Move_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CLEARLOG'
+                  ,@cSKU
+                  ,'' -- @cSerialNo
+                  ,0  -- @nSerialQTY
+                  ,'' -- @cToLOC
+                  ,'' -- @cToID
+                  ,@nErrNo  OUTPUT
+                  ,@cErrMsg OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
          END
       END
 
@@ -3170,6 +3211,8 @@ Step_9:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
+      DECLARE @nBeforeScanSNO INT = @nScanSNO
+      
       -- Update SKU setting
       EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDescr, @nQTY, 'UPDATE', 'MOVE', '',
          @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
@@ -3188,9 +3231,45 @@ BEGIN
          @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,
          @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
          @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
-         @nErrNo     OUTPUT,  @cErrMsg     OUTPUT
+         @nErrNo     OUTPUT,  @cErrMsg     OUTPUT, 
+         @nScan = @nScanSNO OUTPUT
       IF @nErrNo <> 0
          GOTO Quit
+
+      IF @cSerialNoUpdateLotLocID = '1'
+      BEGIN
+         -- Validate serial no
+         EXEC RDT.rdtIsValidSerialNo @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT,
+            @cSerialNo,
+            @cStorerKey,
+            @cStatus = '1', -- 1=Received
+            @cChkSKU = @cSKU,
+            @cChkLOC = @cFromLOC,
+            @cChkID  = @cFromID
+         IF @nErrNo <> 0
+            GOTO Step_9_fail
+            
+         -- Get serial no LOT
+         DECLARE @cLOT NVARCHAR( 10)
+         SELECT @cLOT = LOT
+         FROM dbo.SerialNo WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND SerialNo = @cSerialNo
+            AND SKU = @cSKU
+
+         -- Check LOT in LOC, ID
+         IF NOT EXISTS( SELECT TOP 1 1
+            FROM dbo.LOTxLOCxID (NOLOCK)
+            WHERE LOT = @cLOT
+               AND LOC = @cFromLOC
+               AND ID = @cFromID
+               AND QTY - QTYAllocated - QTYPicked - (CASE WHEN QtyReplen < 0 THEN 0 ELSE QtyReplen END) > 0)
+         BEGIN
+            SET @nErrNo = 60572
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOT not avail
+            GOTO Step_9_fail
+         END  
+      END
 
       -- Insert log
       EXEC rdt.rdt_Move_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'INSERTLOG'
@@ -3202,7 +3281,7 @@ BEGIN
          ,@nErrNo  OUTPUT
          ,@cErrMsg OUTPUT
       IF @nErrNo <> 0
-         GOTO Quit
+         GOTO Step_9_fail
 
       IF @nMoreSNO = 1
          GOTO Quit
@@ -3391,7 +3470,7 @@ BEGIN
          SET @cFieldAttr08 = 'O'
       END
       ELSE
-BEGIN
+      BEGIN
          SET @cOutField06 = @cPUOM_Desc
          SET @cOutField07 = CAST( @nPQTY_Avail AS NVARCHAR( 7))
          SET @cOutField08 = CAST( @nPQTY AS NVARCHAR( 7))
@@ -3405,6 +3484,36 @@ BEGIN
       SET @nScn = 1033
       SET @nStep = @nStep - 5
    END
+   GOTO Quit
+   
+   Step_9_fail:
+   BEGIN
+      -- Restore scan counter
+      EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDescr, @nQTY, 'CHECK', 'MOVE', '',
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
+         @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
+         @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  
+         @nScan = @nBeforeScanSNO  OUTPUT
+
+      SET @nScanSNO = @nBeforeScanSNO  
+
+      GOTO Quit
+   END
+   
 END
 GOTO Quit
 
@@ -3566,6 +3675,7 @@ BEGIN
       V_String20 = @cGoBackFromLocScn,
       V_String21 = @cLabelNo, -- (ChewKP02)
       V_String22 = @cPieceScan,
+      V_String23 = @cDispStyleColorSize,
       V_String24 = @cSuggestIDSP,
       V_String25 = @cDecodeSP,
       V_String26 = @cDefaultToID,
@@ -3573,6 +3683,7 @@ BEGIN
       V_String28 = @cConfirmSP,
       V_String29 = @cDefaultQTY,
       V_String30 = @cGoBackSKUScn, --(cc01)
+      V_String31 = @cSerialNoUpdateLotLocID,
       V_String41 = @cPrePackIndicator,
       V_String42 = @cLOCLookupSP,   --(yeekung01)
       V_String43 = @cDefaultSuggToLoc,
@@ -3588,6 +3699,7 @@ BEGIN
       V_Integer8 = @nFlowThruToIDScn,
       V_Integer9 = @nFlowThruQtyScn, --(james19)
       V_Integer10 = @nPieceScanQTY,
+      V_Integer11 = @nScanSNO, 
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
