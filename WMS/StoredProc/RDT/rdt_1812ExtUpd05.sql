@@ -76,6 +76,7 @@ BEGIN
                @nThreadPerAcct            INT,
                @nThreadPerStream          INT,
                @nMilisecondDelay          INT,
+               @nQueueID                  INT,
                @cIP                       NVARCHAR(20),
                @cPORT                     NVARCHAR(5),
                @cIniFilePath              NVARCHAR(200),
@@ -115,7 +116,7 @@ BEGIN
             IF @nDebugFlag = 1
                SELECT 'Task Info', @cLastTaskDetailKey AS Task, @cReasonKey AS ReasonKey, @cTaskStatus AS Status
 
-            IF @cTaskStatus = '5' AND @cReasonKey = 'SHORT'
+            IF @cTaskStatus = '5' AND @cReasonKey <> ''
             BEGIN
                IF EXISTS (SELECT 1 
                            FROM dbo.PickDetail WITH (NOLOCK)
@@ -214,6 +215,7 @@ BEGIN
                            , @bSuccess            = @bSuccess     OUTPUT 
                            , @nErr                = @nErrNo       OUTPUT 
                            , @cErrMsg             = @cErrMsg      OUTPUT
+                           , @nQueueID            = @nQueueID     OUTPUT
                      END TRY
                      BEGIN CATCH
                         SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
@@ -223,6 +225,16 @@ BEGIN
                         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
                         GOTO Quit 
                      END CATCH
+
+                     IF @nErrNo <> 0
+                     BEGIN
+                        SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+                        SET @cErrMsg3 = 'Retrun err: ' + CAST(@nErrNo AS NVARCHAR(10))
+                        SET @cErrMsg1 = '253659-GenQcmdTaskFail'
+                        SET @cErrMsg2 = 'Trigger reallocation fail '
+                        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+                        GOTO Quit 
+                     END
                   END -- submit Qcmd
                   ELSE
                   BEGIN
@@ -232,6 +244,10 @@ BEGIN
                      EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
                      GOTO Quit 
                   END
+
+                  IF @nDebugFlag = 1
+                     SELECT 'Submit Qcmd task successfully', @nQueueID AS QueueID
+
                END
                ELSE
                BEGIN
