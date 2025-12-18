@@ -140,13 +140,13 @@ BEGIN
 		 SELECT TOP 1 @cCASEMAX = MAX(Lottable11) FROM
          (SELECT Lottable11 FROM LOTATTRIBUTE WITH(NOLOCK)
          WHERE StorerKey = 'JCB'
-         AND Lottable11 LIKE 'C_________'
+         AND Lottable11 LIKE 'C[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
 
          UNION ALL
 
          SELECT Lottable11 FROM RECEIPTDETAIL WITH(NOLOCK)
          WHERE StorerKey = 'JCB'
-         AND ToId LIKE 'C_________')T1
+         AND ToId LIKE 'C[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]')T1
 
          SELECT TOP 1 @cLottable11 = CASE WHEN @cPalletType <> 'M' THEN ''
          WHEN MAX(CaseLPN) IS NULL OR MAX(CaseLPN) = 'C999999999' THEN 'C000000001' 
@@ -211,7 +211,7 @@ BEGIN
       END
    END
 END -- End Procedure
-
+		  
 GO
 GRANT EXECUTE ON [RDT].[rdt_684GetRecInfoJCB] TO [NSQL]
 GO

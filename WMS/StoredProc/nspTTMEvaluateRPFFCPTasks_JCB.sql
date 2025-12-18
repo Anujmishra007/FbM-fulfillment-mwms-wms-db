@@ -20,9 +20,10 @@ GO
 /* 2025-07-03  1.0.2  Jackc    FCR-5727 Get task order by task priority                         */
 /* 2025-09-01  1.0.3  Dennis   FCR-3959 if toloc(ML or Kit) onhold then look for other lanes    */
 /* 2025-11-11  2.0.0  PPA374   Updating aisle in use logic                                      */
+/* 2025-12-16  2.0.1  PPA374   Adding fix to avoid blocking replen tasks without orderkey       */
 /************************************************************************************************/
 
-CREATE OR ALTER   PROC [dbo].[nspTTMEvaluateRPFFCPTasks_JCB]
+CREATE OR ALTER PROC [dbo].[nspTTMEvaluateRPFFCPTasks_JCB]
     @c_sendDelimiter    NVARCHAR(1)
    ,@c_UserID           NVARCHAR(18)
    ,@c_StrategyKey      NVARCHAR(10)
@@ -612,6 +613,8 @@ BEGIN
                   AND TD2.AreaKey = TD.AreaKey
                   AND TD2.TaskType IN ('RPF','RPF1','RP1')
                   AND TD2.Status = 'S'
+				  AND TD.TaskType IN ('FCP','FCP1')
+				  AND TD2.OrderKey <> ''
          )
 		 AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle

@@ -8,8 +8,9 @@
 /* Date        Rev     Author      Purposes                             */
 /* 2025-06-11  1.0.0   Jackc       FCR-3959 Created                     */
 /* 2025-10-10  1.0.1   Dennis      FCR-3959                             */
+/* 2025-12-16  1.0.2   PPA374      Added workaround for swap ID         */
 /************************************************************************/
-CREATE OR ALTER PROCEDURE rdt.rdt_1812SwapID05
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1812SwapID05]
    @nMobile           INT,
    @nFunc             INT,
    @cLangCode         NVARCHAR( 3),
@@ -54,6 +55,7 @@ BEGIN
    DECLARE @nQTY              INT
    DECLARE @cUserName         NVARCHAR(18)
    DECLARE @cLottable03       NVARCHAR(60)
+   DECLARE @cOrderKeyToUpd    NVARCHAR(20)
 
    SELECT @cLottable03 = O_Field01
    FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -557,10 +559,14 @@ BEGIN
    --Handle the pysical tables based on re-allocaton result
    --Unallocate and delete the original pick detail
 
-   UPDATE RDT.RDTMOBREC SET C_STRING30 = '1812SWAPID'
-   WHERE Mobile = @nMobile
+   SELECT TOP 1 @cOrderKeyToUpd = OrderKey FROM TaskDetail TD WITH(NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
 
    BEGIN TRY
+
+      UPDATE ORDERDETAIL               --PPA374 16/12/2025
+	  SET UserDefine02 = OriginalQty
+	  WHERE orderkey = @cOrderKeyToUpd
+
       UPDATE PD WITH (ROWLOCK)
       SET PD.Status = '0',
             PD.Qty = 0,
@@ -570,6 +576,11 @@ BEGIN
       FROM dbo.PickDetail PD WITH (ROWLOCK)
       WHERE StorerKey = @cStorerKey
          AND TaskDetailKey = @cTaskDetailKey
+
+      UPDATE ORDERDETAIL               --PPA374 16/12/2025
+	  SET  OriginalQty = UserDefine02, OpenQty = UserDefine02
+	  WHERE orderkey = @cOrderKeyToUpd
+
    END TRY
    BEGIN CATCH
       SET @nErrNo = 239916
