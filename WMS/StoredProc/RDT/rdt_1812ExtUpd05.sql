@@ -9,7 +9,7 @@
 /* 2025-12-12   Jackc   1.0   FCR-8481 Created                          */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_1812ExtUpd05
+CREATE OR ALTER PROCEDURE rdt.rdt_1812ExtUpd05
    @nMobile         INT,          
    @nFunc           INT,          
    @cLangCode       NVARCHAR( 3), 
