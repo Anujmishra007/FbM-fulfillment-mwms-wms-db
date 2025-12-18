@@ -137,7 +137,7 @@ BEGIN
    END
 
    -- Prepare temp data
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_DynReplen = 1
    BEGIN
       SELECT @c_FinalLoc = TD.FinalLOC
            , @c_FinalID = TD.FinalID
@@ -164,15 +164,15 @@ BEGIN
                    FROM #TMP_TASK_FCP TF
                    WHERE TF.Taskdetailkey = PD.TaskDetailKey )
    END
-   
-   -- If found pickdetailkey then only proceed
+
    IF (@n_Continue = 1 OR @n_Continue = 2)
-   AND EXISTS ( SELECT 1
-                FROM #TMP_PICK )
    BEGIN
-      -- Update all FCP tasks to X
-      IF (@n_Continue = 1 OR @n_Continue = 2)
+      -- Dynamic Replen - @n_DynReplen = 1
+      IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_DynReplen = 1
+      AND EXISTS ( SELECT 1
+                   FROM #TMP_PICK )
       BEGIN
+         -- Update all FCP tasks to X
          BEGIN TRY
             UPDATE TD WITH (ROWLOCK)
             SET TD.[Status] = 'X'
@@ -183,11 +183,7 @@ BEGIN
             SET @n_Continue = 3
             SET @c_ErrMsg = ERROR_MESSAGE()
          END CATCH
-      END
 
-      -- Dynamic Replen - @n_DynReplen = 1
-      IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_DynReplen = 1
-      BEGIN
          -- Get Storerconfig setup
          IF (@n_Continue = 1 OR @n_Continue = 2)
          BEGIN
