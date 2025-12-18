@@ -170,6 +170,21 @@ BEGIN
    AND EXISTS ( SELECT 1
                 FROM #TMP_PICK )
    BEGIN
+      -- Update all FCP tasks to X
+      IF (@n_Continue = 1 OR @n_Continue = 2)
+      BEGIN
+         BEGIN TRY
+            UPDATE TD WITH (ROWLOCK)
+            SET TD.[Status] = 'X'
+            FROM TASKDETAIL TD
+            JOIN #TMP_TASK_FCP TF ON TD.Taskdetailkey = TF.TaskDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @c_ErrMsg = ERROR_MESSAGE()
+         END CATCH
+      END
+
       -- Dynamic Replen - @n_DynReplen = 1
       IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_DynReplen = 1
       BEGIN
@@ -296,23 +311,6 @@ BEGIN
                                                , @c_ReplenFlag = 'N' -- nvarchar(10)
                                                , @c_StorerKey = @c_Storerkey -- nvarchar(15)
                                                , @c_ReplenType = N'T' -- nvarchar(10)
-         END TRY
-         BEGIN CATCH
-            SET @n_Continue = 3
-            SET @c_ErrMsg = ERROR_MESSAGE()
-         END CATCH
-      END
-
-      -- Update all FCP tasks to X
-      IF (@n_Continue = 1 OR @n_Continue = 2)
-      AND EXISTS ( SELECT 1
-                   FROM #TMP_TASK_FCP )
-      BEGIN
-         BEGIN TRY
-            UPDATE TD WITH (ROWLOCK)
-            SET TD.[Status] = 'X'
-            FROM TASKDETAIL TD
-            JOIN #TMP_TASK_FCP TF ON TD.Taskdetailkey = TF.TaskDetailKey
          END TRY
          BEGIN CATCH
             SET @n_Continue = 3
