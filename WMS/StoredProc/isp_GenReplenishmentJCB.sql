@@ -86,7 +86,7 @@ BEGIN
       INNER JOIN dbo.LOC L WITH(NOLOCK)
          ON SL.Loc = L.Loc
 	    AND L.Facility = @cFacility
-      LEFT JOIN dbo.TaskDetailAgg TA WITH(NOLOCK)
+      LEFT JOIN TaskDetailAgg TA
          ON SL.Loc = TA.FinalLoc
         AND SL.Sku = TA.Sku
         AND SL.StorerKey = TA.StorerKey
