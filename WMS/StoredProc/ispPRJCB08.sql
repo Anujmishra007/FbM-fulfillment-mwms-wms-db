@@ -30,7 +30,7 @@ GO
 /* 2025-02-05  SKE140   1.3   UWP-29250 Updated condtion to exclude the */
 /*                              JCB-ALLOC                               */
 /* 2025-05-29  Wan01    1.4   FCR-4962 - JCB - Kitting Allocation       */
-/* 2025-06-17           1.4   FCR V1.12                                 */
+/* 2025-12-19           1.4   FCR V1.12, FCR v1.31                      */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB08] (
      @c_OrderKey        NVARCHAR(10)
@@ -83,6 +83,7 @@ BEGIN
           ,@c_SQL                   NVARCHAR(MAX)  = ''
           ,@c_SQLParm               NVARCHAR(MAX)  = ''
           ,@c_Conditions            NVARCHAR(MAX)  = ''
+          ,@c_Cond                  NVARCHAR(MAX)  = ''                             --(Wan01) 2025-12-31
           ,@n_OpenQty               INT            = 0
           ,@n_PickQty               INT            = 0
           ,@n_QtyAvai               INT            = 0
@@ -126,16 +127,26 @@ BEGIN
                      + ' AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  
                          AND CODE = @c_Type AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)'
 
-   SELECT @c_Type = cl.UDF01                                                     --(Wan01)- START
+   SELECT @c_Type = cl.UDF01                                                        --(Wan01)- START
    FROM CODELKUP cl (NOLOCK)
    WHERE cl.ListName = 'ispPRJCB08'
    AND   cl.Code = 'OrderType'
 
-   IF @c_Type = '' SET @c_Type = '2'                                             --(Wan01) - END
+   IF @c_Type = '' SET @c_Type = '2'                                                --(Wan01) - END
+
+   SELECT @c_Cond = cl.Notes                                                        --(Wan01) 2025-12-31 - START
+   FROM CODELKUP cl (NOLOCK)
+   WHERE cl.ListName = 'JCB_AL'
+   AND   cl.Code = 'Condition'
+   AND   cl.Code2= @c_Type
+
+   IF @c_Cond IN ('', NULL) SET @c_Cond = ' AND LOC.LocationFlag = ''None'''    
+
+   SET @c_Conditions = @c_Conditions + ' '+ @c_Cond                                 --(Wan01) - END
                                              
    IF ISNULL(@c_Orderkey,'') <> ''
    BEGIN
-      --SET @n_Continue = 4                                                      --(Wan01)
+      --SET @n_Continue = 4                                                         --(Wan01)
       SET @CUR_ORDER_LINES = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT OD.StorerKey, OD.Sku
                      ,Openqty = SUM(OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked))
@@ -381,6 +392,7 @@ BEGIN
            SELECT @c_OrderKey as orderkey, @c_OrderLineNumber as orderlinenumber, @c_SKU as sku, @n_OpenQty as openqty, @c_PickLoc AS PickLoc
         END
 
+        -- Query Table alias 1) cannot be changes 2) same as other pickcode as filter condition is configurable
         SET @c_SQL = N'SET @CUR_INV = CURSOR FAST_FORWARD READ_ONLY FOR
            SELECT LLI.Lot, LLI.Loc, LLI.ID,
                  --(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen - ISNULL(REPLEN.ReplenQty,0))
@@ -401,7 +413,7 @@ BEGIN
                           AND PD.ToLoc = LLI.Loc
                           AND PD.CaseID = LLI.Id
                           AND PD.Status = ''0'') AS REPLEN
-           WHERE LOC.LocationFlag = ''NONE''
+           WHERE LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'')                    --(Wan01)
            AND LOC.Status = ''OK''
            AND LOT.Status = ''OK''
            AND ID.Status = ''OK''
