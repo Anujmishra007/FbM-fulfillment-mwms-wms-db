@@ -63,16 +63,19 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
           , @n_CubicCapacity     Float        
           , @b_OrderAssigned     INT = 0           
           , @c_OrderNotAssigned  NVARCHAR(500) = ''  
-                    
+          , @c_WaveStatus        NVARCHAR(10) = ''
+  
    SELECT @n_starttcnt = @@TRANCOUNT , @n_continue = 1, @b_success = 0, @n_err = 0, @c_errmsg = ''
    SELECT @n_debug = 0
 
    SELECT TOP 1
                @c_Facility  = O.Facility
             ,  @c_Storerkey = O.StorerKey
-   FROM dbo.WAVEDETAIL WD(NOLOCK)
+            ,  @c_WaveStatus = W.Status
+   FROM dbo.WAVE W (NOLOCK)
+   JOIN dbo.WAVEDETAIL WD (NOLOCK) ON WD.WaveKey = W.WaveKey
    JOIN dbo.ORDERS O (NOLOCK) ON O.OrderKey = WD.OrderKey
-   WHERE WD.WaveKey = @c_Wavekey
+   WHERE W.WaveKey = @c_Wavekey
 
    --Get MaxLoadKey and MaxOrderKey
    SELECT @n_MaxLoadPerWave = Option1, @n_MaxOrderPerLoad = Option2
@@ -80,7 +83,14 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
    WHERE StorerKey = @c_Storerkey  
    AND ConfigKey = 'MaxLoadnOrderKey' 
    AND SValue = '1'
-   
+
+   IF @c_WaveStatus <> 2     
+   BEGIN      
+      SELECT @n_continue = 3      
+      SELECT @n_err = 90019      
+      SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave Status must be 2-Fully Allocated (mspWaveReleaseWCS02)'      
+   END
+  
    IF @n_MaxLoadPerWave = 0     
    BEGIN      
       SELECT @n_continue = 3      
@@ -469,3 +479,6 @@ EXIT_SP:
       RETURN  
    END
 END --sp end
+GO
+GRANT EXECUTE ON [dbo].[mspWaveReleaseWCS02] TO [NSQL]
+GO
