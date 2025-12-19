@@ -9,7 +9,7 @@ GO
 /* Copyright: MAERSK                                                    */
 /* Written by: JihHaur                                                  */
 /*                                                                      */
-/* Purpose: FCR-6567 ZAFBAT - Reallocation SP                           */
+/* Purpose: FCR-9567 ZAFBAT - Reallocation SP                           */
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
@@ -338,7 +338,7 @@ BEGIN
    IF EXISTS (SELECT 1
       FROM WAVEDETAIL WD 
       JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.OrderKey = WD.OrderKey
-      WHERE W.WaveKey = @c_Wavekey
+      WHERE WD.WaveKey = @c_Wavekey
             AND ISNULL(PD.PickSlipNo,'') = '' 
             AND PD.Storerkey = @c_StorerKey
             AND PD.Sku = @c_SKU
@@ -504,4 +504,5 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [dbo].[msp_ProcessShortPickReAlloc04] TO [NSQL]
+
 GO
