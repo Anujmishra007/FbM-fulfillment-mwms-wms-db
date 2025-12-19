@@ -1,4 +1,4 @@
-﻿SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -81,7 +81,7 @@ BEGIN
                     )      
       BEGIN  
          SELECT @n_Continue = 3  
-         SELECT @n_Err = 65670  
+         SELECT @n_Err = 95670  
          SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': UCC#: ' + TRIM(@c_UCCNo) + ' No Record Found (msp_ProcessShortPickReAlloc04)'  
                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '     
       END  
@@ -177,7 +177,7 @@ BEGIN
       IF @c_PickSlipNo = ''
       BEGIN
          SET @n_Continue = 3
-         SELECT @n_Err = 65671
+         SELECT @n_Err = 95671
          SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': PickSlipNo: ' + TRIM(@c_PickSlipNo) + ' No PickSlipNo Found (msp_ProcessShortPickReAlloc04)'
                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) ' 
       END
@@ -263,7 +263,7 @@ BEGIN
                       FROM #TMP_SHORTED )    
       BEGIN
          SELECT @n_Continue = 3
-         SELECT @n_Err = 65672
+         SELECT @n_Err = 95672
          SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': UCCNo: ' + TRIM(@c_UCCNo) + ' No Record Found (msp_ProcessShortPickReAlloc04)'
                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
       END
@@ -375,6 +375,23 @@ BEGIN
       UPDATE PICKDETAIL SET Qty = QtyMoved, QtyMoved = 0
       WHERE PickDetailKey IN (SELECT PickDetailKey FROM #TMP_SHORTED) 
                AND Status = '4'
+
+      --Rollback UCC Status to 1    
+      BEGIN TRY  
+         UPDATE UCC WITH (ROWLOCK)  
+         SET UCC.[Status] = '1'  
+            , UCC.PickdetailKey = ''  
+            , UCC.OrderKey = ''  
+            , UCC.OrderLineNumber = ''  
+            , UCC.WaveKey = ''  
+         WHERE UCC.Storerkey = @c_Storerkey  
+         AND UCC.SKU = @c_SKU  
+         AND UCC.UCCNo = @c_UCCNo  
+      END TRY  
+      BEGIN CATCH  
+         SET @n_Continue = 3  
+         SET @c_ErrMsg = ERROR_MESSAGE()  
+      END CATCH   
    END   
 
    --Wave Release
@@ -504,5 +521,4 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [dbo].[msp_ProcessShortPickReAlloc04] TO [NSQL]
-
 GO
