@@ -32,14 +32,29 @@ SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 
 DECLARE
-   @cAllowConsolidatePalletStatus5 NVARCHAR(5)
+   @cAllowConsolidatePalletStatus5  NVARCHAR(5),
+   @cOption                         NVARCHAR(5),
+   @cAllowMergePartial              NVARCHAR(5)
 
    SET @cAllowConsolidatePalletStatus5 = rdt.RDTGetConfig( @nFunc, 'AllowConsolidatePalletStatus5', @cStorerKey)
+   SET @cAllowMergePartial = rdt.RDTGetConfig( @nFunc, 'AllowMergePartial', @cStorerKey)
 
 IF @nFunc = 1720
 BEGIN
    IF @nStep = 1
    BEGIN
+      SELECT @cOption = I_Field02
+      FROM RDT.RDTMOBREC (NOLOCK)
+      WHERE Mobile = @nMobile
+
+      IF @cAllowMergePartial <> '1' AND ISNULL(RTRIM(@cOption),'') = '9'
+      BEGIN
+         SET @nErrNo = 253112
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Not allow merge partial
+         EXEC rdt.rdtSetFocusField @nMobile, 2
+         GOTO QUIT
+      END
+
       IF @cAllowConsolidatePalletStatus5 = '0'
       BEGIN
          IF EXISTS (SELECT 1 

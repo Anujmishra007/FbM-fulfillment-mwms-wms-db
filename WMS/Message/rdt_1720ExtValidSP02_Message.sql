@@ -13,5 +13,6 @@ EXECUTE rdt.rdtAddMsg '253108', 10, '253108InvalidTote',          'us_english', 
 EXECUTE rdt.rdtAddMsg '253109', 10, '253109ToteScanToTruck',      'us_english', 1720, 0, '253109 Tote is scaned to truck'
 EXECUTE rdt.rdtAddMsg '253110', 10, '253110ToteShipped',          'us_english', 1720, 0, '253110 Tote is shipped'
 EXECUTE rdt.rdtAddMsg '253111', 10, '253111PalletNotClose',       'us_english', 1720, 0, '253111 Pallet is not closed'
+EXECUTE rdt.rdtAddMsg '253112', 10, '253112NotMergePartial',      'us_english', 1720, 0, '253112 Not allow merge partial'
 
 SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 253101 AND 253150
