@@ -1329,6 +1329,7 @@ BEGIN
          SET @cOutField02 = '0/0'
          SET @cOutField03 = ''  -- SKU
          SET @cOutField04 = ''  -- SKU
+         SET @cMobBarcode = '' -- New SKU input V7.9
          SET @cOutField05 = ''  -- Desc 1
          SET @cOutField06 = ''  -- Desc 2
          SET @cOutField07 = '0' -- Packed
@@ -1423,6 +1424,7 @@ BEGIN
          SET @cOutField01 = RTRIM( @cCustomNo)
          SET @cOutField02 = CAST( CAST( @cLabelLine AS INT) AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
          SET @cOutField03 = '' -- SKU
+         SET @cMobBarcode = '' -- New SKU input V7.9
          SET @cOutField04 = @cSKU
          SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
          SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
@@ -1468,6 +1470,7 @@ BEGIN
          -- Prepare next screen var
          SET @cOutField01 = RTRIM( @cCustomNo)
          SET @cOutField02 = '' -- Option
+         SET @cMobBarcode = '' -- clear existing values
 
          SET @nEnter = 0 --(JHU151)  
 
@@ -1486,6 +1489,7 @@ BEGIN
 
          -- Prepare next screen var
          SET @cOutField01 = '' -- UCC
+         SET @cMobBarcode = '' -- New UCC input V7.9
          SET @cOutField02 = '' -- Scan
          SET @cOutField03 = CAST( @nTotalUCC AS NVARCHAR( 5))
 
