@@ -105,6 +105,7 @@ GO
 /* 2025-08-18   0.0 Jackc       !!!Cutover. Use V0 repo for work!!!                             */
 /* 2025-11-11   7.9 Jackc       FCR-8675 Extend SKU, UCC barcode length                         */
 /* 2025-11-12   8.0 NickT       UWP-43907 Merge code from V0                                    */
+/* 2025-12-08   8.1 Dennis      FCR-8931 AddExtScnSP on Step 8                                  */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -3190,7 +3191,7 @@ BEGIN
                GOTO Step_4
             END
 
-            GOTO Quit
+            GOTO Step_99
          END
 
          -- Print label
@@ -5491,7 +5492,7 @@ BEGIN
          SET @nScn = @nScn - 4
          SET @nStep = @nStep - 4
 
-         GOTO Quit
+         GOTO STEP_99
       END
 
       -- Print label
@@ -6466,9 +6467,11 @@ BEGIN
          ('@cJumpType',       @cJumpType)
 
          DECLARE  @nPreSCn       INT,
+                  @nPreStep      INT,
                   @nPreInputKey  INT
 
          SET @nPreSCn = @nScn
+         SET @nPreStep = @nStep
          SET @nPreInputKey = @nInputKey
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
@@ -6593,7 +6596,25 @@ BEGIN
 
             RETURN
          END
-
+         ELSE IF @cExtendedScreenSP = 'rdt_838ExtScn06'
+         BEGIN
+            IF @nPreStep = 99 AND @nPreScn = 4053 AND @nScn = 6708
+            BEGIN
+               SET @cCartonType = @cUDF01
+               SET @fCube = CAST (@cUDF02 AS FLOAT )
+               SET @cRefNo = @cUDF03
+               SET @cLength = @cUDF04
+            END
+            IF @nStep = 5
+            BEGIN
+               IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '5') -- Print label screen
+               BEGIN
+                  SET @cInField01 = @cDefaultPrintLabelOption --Option
+                  SET @nInputKey = 1 -- ENTER
+                  GOTO Step_5
+               END
+            END
+         END
          GOTO Quit
       END
    END -- Ext scn sp <> ''
