@@ -54,6 +54,8 @@ GO
 /* 2023-12-06  WLChooi  2.2   WMS-24329 - Allow calling PreGenRptDataSP */
 /*                            with custom parameter (WL05)              */
 /* 2023-12-19  Wan      2.3   UWP-12373-MWMS Deploy MasterSP to V2      */
+/* 2024-12-19  WLChooi  2.4   LFWM-5019 Support printing LogiReport via */
+/*                            Cloud Print from SCE (WL06)               */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Print_Report]
            @c_ModuleID           NVARCHAR(30)
@@ -88,7 +90,7 @@ CREATE OR ALTER PROC [WM].[lsp_WM_Print_Report]
          , @b_Success            INT            OUTPUT
          , @n_Err                INT            OUTPUT
          , @c_ErrMsg             NVARCHAR(255)  OUTPUT
-         , @c_PrintSource        NVARCHAR(10)   = 'WMReport' --Wan01  1: Report, 2: JReport 
+         , @c_PrintSource        NVARCHAR(10)   = 'WMReport' --Wan01  1: Report, 2: JReport, 3: JReportBE 
          , @b_SCEPreView         INT            = 0          --(Wan03) -- 1:If call from Preview Button and not JREport
          , @c_JobIDs             NVARCHAR(50)   = '' OUTPUT  --(Wan03) -- May return multiple jobs ID.JobID seperate by '|'
          , @c_AutoPrint          NVARCHAR(1)    = 'N'        --(Wan07)
@@ -490,7 +492,9 @@ BEGIN
       SELECT  RowID          = WMRD.RowID
              ,ReportLineNo   = WMRD.ReportLineNo
              ,PrintGroup     = ISNULL(RTRIM(WMRD.PrintGroup),'')
-             ,PrintType      = ISNULL(RTRIM(WMRD.PrintType),'')
+             ,PrintType      = IIF(ISNULL(RTRIM(CL.Code2),'') <> ''     --WL06
+                                 , ISNULL(RTRIM(CL.Code2),'')           --WL06
+                                 , ISNULL(RTRIM(WMRD.PrintType),''))    --WL06
              ,ReportTemplate = ISNULL(RTRIM(WMRD.ReportTemplate),'')
              ,CriteriaMatching01 = ISNULL(RTRIM(WMRD.CriteriaMatching01),'')
              ,CriteriaMatching02 = ISNULL(RTRIM(WMRD.CriteriaMatching02),'')
@@ -1136,7 +1140,7 @@ BEGIN
          --(Wan05) - END
          --(Wan01) - START
          --PRINT_START:   --WL01
-         IF @c_PrintType IN ( 'JReport', 'LogiReport')   --Wan02
+         IF @c_PrintType IN ( 'JReport', 'LogiReport', 'LogiReportBE')   --Wan02   --WL06
          BEGIN
             SET @c_ReturnURL = ''                                                   --(Wan08) - START
             --EXEC WM.lsp_WM_Get_WebReport_URL
@@ -1175,6 +1179,7 @@ BEGIN
             ,  @b_Success        = @b_Success   OUTPUT  
             ,  @n_err            = @n_err       OUTPUT                                                                                                             
             ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT
+            ,  @c_PrintSource    = @c_PrintSource   --WL06
             
             IF @b_Success = 0 AND @b_PrintNextOnFail = 0                            --(Wan08)
             BEGIN
