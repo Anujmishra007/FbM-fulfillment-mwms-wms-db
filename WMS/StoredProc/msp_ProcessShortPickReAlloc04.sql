@@ -24,7 +24,7 @@ GO
 /* 17-Dec-2025 JihHaur  1.0   Initial Version                           */  
 /************************************************************************/  
   
-CREATE   PROC [dbo].[msp_ProcessShortPickReAlloc04] (      
+CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc04] (      
        @c_Wavekey          NVARCHAR(10)  
      , @c_SKU              NVARCHAR(20)  
      , @c_UCCNo            NVARCHAR(20)  
@@ -519,3 +519,7 @@ BEGIN
       RETURN  
    END  
 END  
+GO
+GRANT EXECUTE ON [dbo].[msp_ProcessShortPickReAlloc04] TO [NSQL]
+GO
+
