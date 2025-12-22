@@ -151,7 +151,7 @@ BEGIN
       AND TD.TaskType = 'FCP'
       AND TD.FromLoc = @c_FinalLoc
       AND TD.FromID = @c_FinalID
-      AND TD.[Status] BETWEEN '0' AND '8'
+      AND TD.[Status] NOT IN ('9', 'X')
       
       INSERT INTO #TMP_PICK (Pickdetailkey, Wavekey)
       SELECT DISTINCT PD.Pickdetailkey, PD.Wavekey
