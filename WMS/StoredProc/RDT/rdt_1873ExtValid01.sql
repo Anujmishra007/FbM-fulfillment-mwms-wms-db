@@ -54,145 +54,156 @@ BEGIN
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   IF @nInputKey = 1
+   IF @nFunc = 1873
    BEGIN
-      IF @nStep = 1
-      BEGIN     
-         IF (SELECT COUNT (DISTINCT SKU)
-               FROM dbo.KITDetail WITH (NOLOCK)
-               WHERE ID = @cFromID
-                  AND Type = 'T'
-                  AND Status <> '9') > 1
-         BEGIN
-            SET @nErrNo = 252951
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Single SKU pallet allowed'
-            GOTO Quit
-         END
-
-         GOTO Quit  
-      END--st1
-
-      IF @nStep = 2
+      IF @nInputKey = 1
       BEGIN
-         INSERT INTO @tValidPAZone
-            SELECT 'CS_STAGE'
-            UNION ALL
-            SELECT 'CS_MEZ_01'
-            UNION ALL
-            SELECT 'DMG'
-            UNION ALL
-            SELECT 'CS_MEZ_02'
-            UNION ALL
-            SELECT 'QUARANTINE'
-            UNION ALL
-            SELECT 'SH_C'
-            UNION ALL
-            SELECT 'QC'
-
-         SELECT 
-            @cLocPAZone       = ISNULL(PutawayZone,''),
-            @fLocWgtCapacity  = ISNULL(WeightCapacity,0),
-            @cLocAisle        = ISNULL(LocAisle,''),
-            @cLocBay          = ISNULL(LocBay,''),
-            @nLocLevel        = ISNULL(LocLevel,'')
-         FROM dbo.Loc WITH (NOLOCK)
-         WHERE Loc = @cToLOC
-
-         --one pallet one sku
-         SELECT 
-            @cbusr3 = MAX(SKU.busr3),
-            @fPalletWgt = SUM(KTD.ExpectedQty * ISNULL(SKU.STDGROSSWGT, 0)),
-            @cIDPltType = MAX(ISNULL(KTD.PalletType,''))
-         FROM dbo.KITDetail KTD WITH (NOLOCK)
-         JOIN dbo.SKU WITH (NOLOCK)
-            ON KTD.StorerKey = SKU.Storerkey
-            AND KTD.SKU = SKU.SKU
-         WHERE KTD.StorerKey = @cStorerKey
-            AND KTD.ID = @cFromID
-            AND KTD.Type = 'T'
-            AND KTD.Status <> '9'
-
-         IF NOT EXISTS (SELECT 1 
-                        FROM dbo.KITDETAIL WITH (NOLOCK)
-                        WHERE StorerKey = @cStorerKey
-                           AND ID = @cFromID
-                           AND Type = 'T'
-                           AND Status <> '9')
-         BEGIN
-            SET @nErrNo = 252955
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'ID not found'
-            GOTO Quit
-         END
-         
-         IF NOT EXISTS (SELECT 1 FROM @tValidPAZone WHERE PAZone = @cLocPAZone)
-         BEGIN
-            IF @cbusr3 NOT IN ('OG', 'STD', 'ALG')
+         IF @nStep = 1
+         BEGIN     
+            IF (SELECT COUNT (DISTINCT SKU)
+                  FROM dbo.KITDetail WITH (NOLOCK)
+                  WHERE ID = @cFromID
+                     AND Type = 'T'
+                     AND Status <> '9') > 1
             BEGIN
-               SET @nErrNo = 252952
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'SKU.busr3 not valid'
+               SET @nErrNo = 252951
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Single SKU pallet allowed'
                GOTO Quit
             END
-            ELSE
+
+            GOTO Quit  
+         END--st1
+
+         IF @nStep = 2
+         BEGIN
+            INSERT INTO @tValidPAZone
+               SELECT 'CS_STAGE'
+               UNION ALL
+               SELECT 'CS_MEZ_01'
+               UNION ALL
+               SELECT 'DMG'
+               UNION ALL
+               SELECT 'CS_MEZ_02'
+               UNION ALL
+               SELECT 'QUARANTINE'
+               UNION ALL
+               SELECT 'SH_C'
+               UNION ALL
+               SELECT 'QC'
+
+            SELECT 
+               @cLocPAZone       = ISNULL(PutawayZone,''),
+               @fLocWgtCapacity  = ISNULL(WeightCapacity,0),
+               @cLocAisle        = ISNULL(LocAisle,''),
+               @cLocBay          = ISNULL(LocBay,''),
+               @nLocLevel        = ISNULL(LocLevel,-1)
+            FROM dbo.Loc WITH (NOLOCK)
+            WHERE Loc = @cToLOC
+
+            --one pallet one sku
+            SELECT 
+               @cbusr3 = MAX(SKU.busr3),
+               @fPalletWgt = SUM(KTD.ExpectedQty * ISNULL(SKU.STDGROSSWGT, 0)),
+               @cIDPltType = MAX(ISNULL(KTD.PalletType,''))
+            FROM dbo.KITDetail KTD WITH (NOLOCK)
+            JOIN dbo.SKU WITH (NOLOCK)
+               ON KTD.StorerKey = SKU.Storerkey
+               AND KTD.SKU = SKU.SKU
+            WHERE KTD.StorerKey = @cStorerKey
+               AND KTD.ID = @cFromID
+               AND KTD.Type = 'T'
+               AND KTD.Status <> '9'
+
+            IF NOT EXISTS (SELECT 1 
+                           FROM dbo.KITDETAIL WITH (NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                              AND ID = @cFromID
+                              AND Type = 'T'
+                              AND Status <> '9')
             BEGIN
-               IF RIGHT(@cLocPAZone, LEN(@cbusr3)) <> @cbusr3
+               SET @nErrNo = 252955
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'ID not found'
+               GOTO Quit
+            END
+            
+            IF NOT EXISTS (SELECT 1 FROM @tValidPAZone WHERE PAZone = @cLocPAZone)
+            BEGIN
+               IF @cbusr3 = 'OG' AND RIGHT(@cLocPAZone, 3) <> 'ORG'
                BEGIN
                   SET @nErrNo = 252953
                   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Invalid PutawayZone'
                   GOTO Quit
                END
+               ELSE IF @cbusr3 = 'NOG' AND RIGHT(@cLocPAZone, 3) <> 'STD'
+               BEGIN
+                  SET @nErrNo = 252953
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Invalid PutawayZone'
+                  GOTO Quit
+               END
+               ELSE IF @cbusr3 = 'ALG' AND RIGHT(@cLocPAZone, 3) <> 'ALG'
+               BEGIN
+                  SET @nErrNo = 252953
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Invalid PutawayZone'
+                  GOTO Quit
+               END
+               ELSE IF @cbusr3 NOT IN ('OG', 'NOG', 'ALG')
+               BEGIN
+                  SET @nErrNo = 252952
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'SKU.busr3 not valid'
+                  GOTO Quit
+               END
             END
-         END
-         
-         SELECT 
-            @fLocWgt = SUM(KTD.ExpectedQty * ISNULL(SKU.STDGROSSWGT, 0))
-         FROM dbo.KITDetail KTD WITH (NOLOCK)
-         JOIN dbo.SKU WITH (NOLOCK)
-            ON KTD.StorerKey = SKU.Storerkey
-            AND KTD.SKU = SKU.SKU
-         WHERE KTD.Loc = @cToLOC
-         AND KTD.Type = 'T'
-         AND KTD.Status <> '9'
-
-         IF @fPalletWgt + @fLocWgt > @fLocWgtCapacity AND @fLocWgtCapacity > 0
-         BEGIN
-            SET @nErrNo = 252954
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Exceed Wgt capacity'
-            GOTO Quit
-         END
-
-         IF @cIDPltType = ''
-         BEGIN
-            SET @nErrNo = 252956
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Pallet type empty '
-            GOTO Quit
-         END
-
-         SELECT @cLocPltType = ISNULL(PalletType, '')
-         FROM dbo.KITDetail KTD WITH (NOLOCK)
-         JOIN dbo.LOC WITH (NOLOCK)
-            ON KTD.Loc = LOC.Loc
-         WHERE KTD.Type = 'T'
+            
+            SELECT 
+               @fLocWgt = SUM(KTD.ExpectedQty * ISNULL(SKU.STDGROSSWGT, 0))
+            FROM dbo.KITDetail KTD WITH (NOLOCK)
+            JOIN dbo.SKU WITH (NOLOCK)
+               ON KTD.StorerKey = SKU.Storerkey
+               AND KTD.SKU = SKU.SKU
+            WHERE KTD.Loc = @cToLOC
+            AND KTD.Type = 'T'
             AND KTD.Status <> '9'
-            AND LOC.PutawayZone = @cLocPAZone
-            AND LOC.LocAisle = @cLocAisle  
-            AND LOC.LocBay = @cLocBay
-            AND LOC.LocLevel = @nLocLevel
 
-         IF @@ROWCOUNT > 0
-         BEGIN
-            IF @cIDPltType <> @cLocPltType
+            IF @fPalletWgt + @fLocWgt > @fLocWgtCapacity AND @fLocWgtCapacity > 0
             BEGIN
-               SET @nErrNo = 252957
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Inconsistent pallet type '
+               SET @nErrNo = 252954
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Exceed Wgt capacity'
                GOTO Quit
             END
-         END
 
-     
-      END -- st2
-   END--inputkey=1
+            IF @cIDPltType = ''
+            BEGIN
+               SET @nErrNo = 252956
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Pallet type empty '
+               GOTO Quit
+            END
 
-   QUIT:
+            SELECT TOP 1 @cLocPltType = ISNULL(PalletType, '')
+            FROM dbo.KITDetail KTD WITH (NOLOCK)
+            JOIN dbo.LOC WITH (NOLOCK)
+               ON KTD.Loc = LOC.Loc
+            WHERE KTD.Type = 'T'
+               AND KTD.Status <> '9'
+               AND LOC.PutawayZone = @cLocPAZone
+               AND LOC.LocAisle = @cLocAisle  
+               AND LOC.LocBay = @cLocBay
+               AND LOC.LocLevel = @nLocLevel
+            ORDER BY PalletType
+
+            IF @cLocPltType IS NOT NULL AND @cLocPltType <> ''
+            BEGIN
+               IF @cIDPltType <> @cLocPltType
+               BEGIN
+                  SET @nErrNo = 252957
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Inconsistent pallet type '
+                  GOTO Quit
+               END
+            END
+         END -- st2
+      END--inputkey=1
+   END--1873
+
+   Quit:
 END
 GO
 
