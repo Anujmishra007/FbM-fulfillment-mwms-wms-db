@@ -270,12 +270,6 @@ BEGIN
             SET @cLottable02 = @cInField02
             SET @cLottable03 = @cInField03
 
-            IF ISNULL(@cLottable01 ,'') = '' AND @cDocType = 'R'
-            BEGIN
-               SET @nErrNo = 252252
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  
-               GOTO Quit
-            END
             IF ISNULL(@cLottable02 ,'') = ''
             BEGIN
                SET @nErrNo = 252253
@@ -285,13 +279,6 @@ BEGIN
             IF NOT EXISTS (SELECT 1 FROM CodeLkUp (NOLOCK) WHERE LISTNAME = 'HostWHCode' AND StorerKey = @cStorerKey AND CODE = @cLottable02 )
             BEGIN
                SET @nErrNo = 252254
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  
-               GOTO Quit
-            END
-            IF NOT EXISTS (SELECT 1 FROM CodeLkUp (NOLOCK) WHERE LISTNAME = 'LOT01LIST' AND StorerKey = @cStorerKey AND CODE = @cLottable01 )
-            AND @cDocType = 'R'
-            BEGIN
-               SET @nErrNo = 252255
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  
                GOTO Quit
             END
