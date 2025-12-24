@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 25-Nov-2025 WLChooi  1.0   Initial Version                           */
+/* 24-Dec-2025 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -787,8 +787,8 @@ BEGIN
       SELECT DISTINCT P.OrderKey, P.Storerkey, P.SKU, 0
       FROM #PickDetail_WIP P
       WHERE P.WaveKey = @c_Wavekey
-      --AND P.UOM IN ('2','6')
-      AND P.UOM IN ('2')
+      AND P.UOM IN ('2','6')
+      --AND P.UOM IN ('2')
       AND (P.TaskDetailKey = '' OR P.TaskDetailKey IS NULL)
       AND P.[Status] = '0'
       AND P.Storerkey  = @c_StorerKey
@@ -869,8 +869,8 @@ BEGIN
                              AND OD.Sku = P.Sku
          JOIN LOC L (NOLOCK) ON L.Loc = P.Loc
          WHERE P.WaveKey = @c_Wavekey
-         --AND P.UOM IN ('2','6')
-         AND P.UOM IN ('2')
+         AND P.UOM IN ('2','6')
+         --AND P.UOM IN ('2')
          AND (P.TaskDetailKey = '' OR P.TaskDetailKey IS NULL)
          AND P.[Status] = '0'
          AND (P.DropID <> '' AND P.DropID IS NOT NULL)
