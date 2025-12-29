@@ -22,6 +22,7 @@ GO
 /* 17-Aug-2022 1.5  YeeKung  WMS-20075 Fix fromID (yeekung03)           */
 /* 17-Apr-2023 1.6  Ung      WMS-22217 Add ConfirmSP                    */
 /* 22-Aug-2025 2.0  Cuize    FCR-7251 Add CheckDigit                    */
+/* 15-Dec-2025 3.0  BHA212   FCR-9582 Add DecodedSP                     */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable_V7] (
@@ -56,9 +57,13 @@ DECLARE
    @cStorerKey  NVARCHAR( 15),
    @cFacility   NVARCHAR( 5),
 
+   @cDecodeSP     NVARCHAR( 20), -- Decode SP configuration
+   @cBarcode      NVARCHAR( 60), -- Barcode input for decoding
+   @nQty          INT,           -- Quantity from decode
+
    @cFromLOC          NVARCHAR( 10),
    @cFromID           NVARCHAR( 18),
-   @cSKU              NVARCHAR( 20),
+   @cSKU              NVARCHAR( 60),
    @cSKUDescr         NVARCHAR( 60),
    @cLottableCode     NVARCHAR( 30),
    @nMorePage         INT,
@@ -202,7 +207,7 @@ SELECT
    @cMultiSKUBarcode    = V_String20, -- (yeekung01)
    @cPrevOutField15     = V_String21,
    @cLOCCheckDigitSP    = C_String1,
-
+   @cDecodeSP           = V_String26,
 
    @nFromStep           = V_FromStep,  --(yeekung01)
    @nFromScn            = V_FromScn,   --(yeekung01)
@@ -290,6 +295,10 @@ BEGIN
    FROM RDT.rdtMobRec M (NOLOCK)
       INNER JOIN RDT.rdtUser U (NOLOCK) ON (M.UserName = U.UserName)
    WHERE M.Mobile = @nMobile
+
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
 
    SET @cMoveAllSKUWithinSameLottable = rdt.RDTGetConfig( @nFunc, 'MoveAllSKUWithinSameLottable', @cStorerKey)
 
@@ -621,6 +630,66 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cSKU = @cInField03
+      DECLARE @cDecodedSKU NVARCHAR(20)
+ 
+      -- Decode barcode/QR code for SKU
+      IF @cDecodeSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cBarcode = @cSKU
+            --SELECT TOP 1 @cBarcode = I_Field03 FROM [RDT].[RDTMOBREC] WITH (NOLOCK) WHERE Func = @nFunc AND Mobile = @nMobile
+           
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, ' +
+               ' @cID            OUTPUT, @cSKU           OUTPUT, @nQTY           OUTPUT,   ' +
+               ' @cLottable01    OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT, ' +
+               ' @cLottable06    OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT, ' +
+               ' @cLottable11    OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT, ' +
+               ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+           
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cBarcode       NVARCHAR( 60), ' +
+               ' @cID            NVARCHAR( 18)  OUTPUT, ' +
+               ' @cSKU           NVARCHAR( 20)  OUTPUT, ' +
+               ' @nQTY           INT            OUTPUT, ' +
+               ' @cLottable01    NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable02    NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable03    NVARCHAR( 18)  OUTPUT, ' +
+               ' @dLottable04    DATETIME       OUTPUT, ' +
+               ' @dLottable05    DATETIME       OUTPUT, ' +
+               ' @cLottable06    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable07    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable08    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable09    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable10    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable11    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable12    NVARCHAR( 30)  OUTPUT, ' +
+               ' @dLottable13    DATETIME       OUTPUT, ' +
+               ' @dLottable14    DATETIME       OUTPUT, ' +
+               ' @dLottable15    DATETIME       OUTPUT, ' +
+               ' @nErrNo         INT            OUTPUT, ' +
+               ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
+ 
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cBarcode,
+               @cID           OUTPUT, @cDecodedSKU    OUTPUT, @nQTY           OUTPUT,
+               @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
+               @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
+               @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
+               @nErrNo        OUTPUT, @cErrMsg        OUTPUT
+            IF ISNULL(@cDecodedSKU, '') <> ''
+               SET @cSKU = @cDecodedSKU
+            IF ISNULL(@nErrNo, 0) <> 0
+               GOTO Step_SKU_Fail
+         END
+      END
 
       -- Validate blank
       IF @cSKU = '' OR @cSKU IS NULL
@@ -2056,7 +2125,7 @@ BEGIN
       V_String20 = @cMultiSKUBarcode, -- (yeekung01)
       V_String21 = @cPrevOutField15, --(yeekung03)
       C_String1  = @cLOCCheckDigitSP, -- (Cuize)
-
+      V_String26 = @cDecodeSP,
 
       V_FromStep = @nFromStep, --(yeekung01)
       V_FromScn  = @nFromScn,  --(yeekung01)
