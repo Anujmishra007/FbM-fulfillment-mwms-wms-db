@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_838DecodeSP16                                   */
+/* Store procedure: rdt_838DecodeSP17                                   */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: QR decode for the SKU in the function 838                   */
@@ -15,7 +15,7 @@ GO
 /* 2025-12-26  1.0.0  NYE018      FCR-9571 Created                      */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_838DecodeSP16](
+CREATE OR ALTER PROCEDURE [RDT].[rdt_838DecodeSP17](
    @nMobile             INT,
    @nFunc               INT,
    @cLangCode           NVARCHAR( 3),
@@ -122,5 +122,5 @@ GO
 SET ANSI_NULLS ON 
 GO
 
-GRANT EXECUTE ON  [RDT].[rdt_838DecodeSP16] TO [NSQL]
+GRANT EXECUTE ON  [RDT].[rdt_838DecodeSP17] TO [NSQL]
 GO

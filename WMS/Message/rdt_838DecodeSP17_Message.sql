@@ -1,4 +1,4 @@
---rdt_838DecodeSP16  (NYE018)
+--rdt_838DecodeSP17  (NYE018)
 --254751 - 254800
 
 execute rdt.rdtdropmsg 254751   , 254800	
