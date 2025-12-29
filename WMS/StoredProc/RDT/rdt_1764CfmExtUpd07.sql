@@ -61,6 +61,9 @@ BEGIN
    DECLARE @cSKU           NVARCHAR(30)
    DECLARE @cWavekey       NVARCHAR(10)
    DECLARE @cUCCNo         NVARCHAR(20)
+   DECLARE @cRCCycleCount  NVARCHAR(10)
+   DECLARE @cRCLocHoldKey  NVARCHAR(10)
+   DECLARE @cRPFOnlyFlag   NVARCHAR(1) = '0'
 
    DECLARE 
       @cAPP_DB_Name              NVARCHAR(20),
@@ -132,10 +135,14 @@ BEGIN
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskdetailKey
 
+   SELECT
+      @cRCLocHoldKey = LOCHoldKey,
+      @cRCCycleCount = DoCycleCount   
+   FROM TASKMANAGERREASON WITH (NOLOCK)      
+   WHERE TaskManagerReasonKey = @cReasonCode
+
    --upd task Message01
-   IF (SELECT DoCycleCount   -- (ChewKP03)
-         FROM TASKMANAGERREASON WITH (NOLOCK)      
-         WHERE TaskManagerReasonKey = @cReasonCode) = '1'
+   IF ISNULL(@cRCCycleCount,'') = '1'
    BEGIN
       BEGIN TRY
          UPDATE dbo.TaskDetail WITH (ROWLOCK)
@@ -151,6 +158,38 @@ BEGIN
       END CATCH
    END
 
+   --Hold from Loc
+   IF ISNULL(@cRCLocHoldKey, '') <> '' AND NOT EXISTS (SELECT 1 FROM INVENTORYHOLD WITH (NOLOCK) WHERE Loc = @cFromLOC AND Hold = '1')
+   BEGIN
+      BEGIN TRY
+         EXECUTE nspInventoryHold        
+            ''          --lot
+            , @cFromLOC --loc        
+            , ''        --ID
+            , @cRCLocHoldKey -- status      
+            , '1'        
+            , @bSuccess OUTPUT        
+            , @nErrNo OUTPUT        
+            , @cErrMsg OUTPUT
+
+            IF @bSuccess <> 1 OR @nErrNo <> 0
+            BEGIN
+               SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+               SET @cErrMsg1 = '254165-HoldInvFail'
+               SET @cErrMsg2 = CAST(@nErrNo AS NVARCHAR(6)) +'-'+ @cErrMSG
+               SET @cErrMsg3 = 'Hold Inventory via Web'
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+            END
+      END TRY
+      BEGIN CATCH
+         SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+         SET @cErrMsg1 = '254164-HoldInvFail'
+         SET @cErrMsg2 = ERROR_MESSAGE()
+         SET @cErrMsg3 = 'Hold Inventory via Web'
+         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+      END CATCH
+   END
+
    -- FP, does not close pallet or short
    IF @cPickMethod = 'FP'
       RETURN
@@ -163,7 +202,7 @@ BEGIN
    INSERT INTO @tPickTaskList (TaskDetailKey)
       SELECT TD1.TaskDetailKey 
       FROM dbo.TaskDetail TD1 WITH (NOLOCK)
-      JOIN dbo.TaskDetail TD2 (NOLOCK)
+      JOIN dbo.TaskDetail TD2 WITH (NOLOCK)
          ON TD1.Storerkey = TD2.Storerkey
          AND (
             (ISNULL(TD2.FinalLOC, '') <> '' AND TD2.FinalLOC = TD1.FromLoc)
@@ -183,6 +222,8 @@ BEGIN
 
    IF NOT EXISTS (SELECT 1 FROM @tPickTaskList)
    BEGIN
+      SET @cRPFOnlyFlag = '1'
+
       IF @nDebugFlag = 1
          SELECT 'No Picking task'
 
@@ -190,155 +231,179 @@ BEGIN
          INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
             Col1, Col2, Col3, Col4, Col5)
          VALUES ('1764CfmUpd07', GETDATE(), @CUsername, CAST(@nmobile AS NVARCHAR(10)),
-            @cTaskDetailKey, '', '', '', 'NoPickTask')
-
-      GOTO Reset_QtyReplen
+            @cTaskDetailKey, @cRPFOnlyFlag, '', '', 'NoPickTask')
    END -- No Pick task
-
-   --Get related pickdetail
-   INSERT INTO @tPickDetailList (PickDetailKey)
-      SELECT PickDetailKey
-      FROM dbo.PickDetail PKD WITH (NOLOCK)
-      JOIN @tPickTaskList PTL
-         ON PKD.TaskDetailKey = PTL.TaskDetailKey
-      WHERE PKD.Status = '0'
-
-   IF @nDebugFlag = 1
-   BEGIN
-      SELECT 'RPF related pkd'
-      SELECT * FROM @tPickDetailList
-   END
-
-   IF NOT EXISTS (SELECT 1 FROM @tPickDetailList)
-   BEGIN
-      IF @nDebugFlag = 1
-         SELECT 'No Picking detail'
-
-      IF @nDebugFlag = 2
-      BEGIN
-         INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
-            Col1, Col2, Col3, Col4, Col5)
-         VALUES ('1764CfmUpd07', GETDATE(), @CUsername, CAST(@nmobile AS NVARCHAR(10)),
-            @cTaskDetailKey, '', '', '', 'NoPickDetl')
-      END
-
-      GOTO Reset_QtyReplen
-   END -- No Pick task
-
-   -- Mark PickDetail as short, update taskdetail qty
-   IF @nQTY = 0
-   BEGIN
-      IF @nDebugFlag = 1
-         SELECT 'Short PKD'
-
-      IF @nDebugFlag = 2
-      BEGIN
-         INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
-            Col1, Col2, Col3, Col4, Col5)
-         SELECT
-            '1764CfmUpd07',
-            GETDATE(),
-            @CUsername,
-            CAST(@nMobile AS NVARCHAR(10)),
-            @cTaskDetailKey,
-            PKD.PickDetailKey,
-            CAST(PKD.Qty AS NVARCHAR(10)),
-            '',
-            'ShortPickDetlQty'
-         FROM dbo.PickDetail PKD
-         JOIN @tPickDetailList PTL
-            ON PKD.PickDetailKey = PTL.PickDetailKey
-      END
-
-      BEGIN TRY
-         UPDATE PKD WITH (ROWLOCK)
-         SET
-            PKD.Qty = 0, 
-            PKD.Status = '4'
-         FROM dbo.PickDetail PKD
-         JOIN @tPickDetailList PTL
-            ON PKD.PickDetailKey = PTL.PickDetailKey
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 254152
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKD Fail
-         GOTO RollBackTran
-      END CATCH
-
-      --No need to handle task, reallo will do
-
-      --Handle QtyExpected
-      IF ISNULL(@cFinalLoc, '') <> ''
-         SET @cPickFromLoc = @cFinalLoc
-      ELSE
-         SET @cPickFromLoc = @cToLOC
-
-      SELECT @cLoseID = LoseID FROM dbo.Loc WITH (NOLOCK) WHERE Loc = @cPickFromLoc
-
-      SELECT @nQtyExpected = QtyExpected
-      FROM dbo.LOTxLOCxID WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND LOC = @cPickFromLoc
-         AND LOT = @cLot
-         AND ID = CASE WHEN @cLoseID = '1' THEN '' ELSE @cTaskToID END
-
-      IF @nDebugFlag = 1
-         SELECT 'Handle LLI QtyExpected', @nQtyExpected AS QtyExpected, @nShortQTY AS ShortQty, 
-            @cPickFromLoc AS cPickFromLoc, @cLot AS Lot, @cLoseID AS LoseIDFlag, @cTaskToID AS TaskToID
-
-      IF ISNULL(@nQtyExpected,0) > 0
-      BEGIN
-         IF @nQtyExpected <= @nShortQTY
-         BEGIN
-            BEGIN TRY
-               UPDATE LOTxLOCxID WITH (ROWLOCK)
-               SET
-                  QtyExpected = 0
-               WHERE StorerKey = @cStorerKey
-                  AND LOC = @cPickFromLoc
-                  AND LOT = @cLot
-                  AND ID = CASE WHEN @cLoseID = '1' THEN '' ELSE @cTaskToID END
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 254153
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKD Fail
-               GOTO RollBackTran
-            END CATCH
-         END --QtyExpected <= Qtyshort
-         ELSE
-         BEGIN
-            BEGIN TRY
-               UPDATE LOTxLOCxID WITH (ROWLOCK)
-               SET
-                  QtyExpected = @nQtyExpected - @nShortQTY
-               WHERE StorerKey = @cStorerKey
-                  AND LOC = @cPickFromLoc
-                  AND LOT = @cLot
-                  AND ID = CASE WHEN @cLoseID = '1' THEN '' ELSE @cTaskToID END
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 254154
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKD Fail
-               GOTO RollBackTran
-            END CATCH
-         END
-      END --QtyExpected > 0
-   END -- full short
    ELSE
    BEGIN
-      IF @nDebugFlag = 1
-         SELECT 'Not support partial short reallo'
+      SET @cRPFOnlyFlag = '0'
 
-      IF @nDebugFlag = 2
+      --Get related pickdetail
+      INSERT INTO @tPickDetailList (PickDetailKey)
+         SELECT PickDetailKey
+         FROM dbo.PickDetail PKD WITH (NOLOCK)
+         JOIN @tPickTaskList PTL
+            ON PKD.TaskDetailKey = PTL.TaskDetailKey
+         WHERE PKD.Status = '0'
+
+      IF @nDebugFlag = 1
       BEGIN
-         INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
-            Col1, Col2, Col3, Col4, Col5)
-         VALUES ('1764CfmUpd07', GETDATE(), @CUsername, CAST(@nmobile AS NVARCHAR(10)),
-            @cTaskDetailKey, '', '', '', 'PartialShort')
+         SELECT 'RPF related pkd'
+         SELECT * FROM @tPickDetailList
       END
 
-      GOTO Reset_QtyReplen
-   END --partial short
+      IF NOT EXISTS (SELECT 1 FROM @tPickDetailList)
+      BEGIN
+         SET @cRPFOnlyFlag = '1'
+
+         IF @nDebugFlag = 1
+            SELECT 'No Picking detail'
+
+         IF @nDebugFlag = 2
+         BEGIN
+            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
+               Col1, Col2, Col3, Col4, Col5)
+            VALUES ('1764CfmUpd07', GETDATE(), @CUsername, CAST(@nmobile AS NVARCHAR(10)),
+               @cTaskDetailKey, @cRPFOnlyFlag, '', '', 'NoPickDetl')
+         END
+      END -- PickDetail not found
+   END -- has picking task
+
+   IF @cRPFOnlyFlag <> '1'
+   BEGIN
+      -- Mark PickDetail as short, update Qty qty
+      IF @nQTY = 0
+      BEGIN
+         IF @nDebugFlag = 1
+            SELECT 'Short PKD'
+
+         IF @nDebugFlag = 2
+         BEGIN
+            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
+               Col1, Col2, Col3, Col4, Col5)
+            SELECT
+               '1764CfmUpd07',
+               GETDATE(),
+               @CUsername,
+               CAST(@nMobile AS NVARCHAR(10)),
+               @cTaskDetailKey,
+               PKD.PickDetailKey,
+               CAST(PKD.Qty AS NVARCHAR(10)),
+               '',
+               'ShortPickDetlQty'
+            FROM dbo.PickDetail PKD
+            JOIN @tPickDetailList PTL
+               ON PKD.PickDetailKey = PTL.PickDetailKey
+         END
+
+         BEGIN TRY
+            UPDATE PKD WITH (ROWLOCK)
+            SET
+               PKD.Qty = 0, 
+               PKD.Status = '4'
+            FROM dbo.PickDetail PKD
+            JOIN @tPickDetailList PTL
+               ON PKD.PickDetailKey = PTL.PickDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 254152
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKD Fail
+            GOTO RollBackTran
+         END CATCH
+
+         --No need to handle task, reallo will do
+
+         --Handle QtyExpected
+         IF ISNULL(@cFinalLoc, '') <> ''
+            SET @cPickFromLoc = @cFinalLoc
+         ELSE
+            SET @cPickFromLoc = @cToLOC
+
+         SELECT @cLoseID = LoseID FROM dbo.Loc WITH (NOLOCK) WHERE Loc = @cPickFromLoc
+
+         SELECT @nQtyExpected = QtyExpected
+         FROM dbo.LOTxLOCxID WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND LOC = @cPickFromLoc
+            AND LOT = @cLot
+            AND ID = CASE WHEN @cLoseID = '1' THEN '' ELSE @cTaskToID END
+
+         IF @nDebugFlag = 1
+            SELECT 'Handle LLI QtyExpected', @nQtyExpected AS QtyExpected, @nShortQTY AS ShortQty, 
+               @cPickFromLoc AS cPickFromLoc, @cLot AS Lot, @cLoseID AS LoseIDFlag, @cTaskToID AS TaskToID
+
+         IF ISNULL(@nQtyExpected,0) > 0
+         BEGIN
+            IF @nQtyExpected <= @nShortQTY
+            BEGIN
+               BEGIN TRY
+                  UPDATE LOTxLOCxID WITH (ROWLOCK)
+                  SET
+                     QtyExpected = 0
+                  WHERE StorerKey = @cStorerKey
+                     AND LOC = @cPickFromLoc
+                     AND LOT = @cLot
+                     AND ID = CASE WHEN @cLoseID = '1' THEN '' ELSE @cTaskToID END
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 254153
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKD Fail
+                  GOTO RollBackTran
+               END CATCH
+            END --QtyExpected <= Qtyshort
+            ELSE
+            BEGIN
+               BEGIN TRY
+                  UPDATE LOTxLOCxID WITH (ROWLOCK)
+                  SET
+                     QtyExpected = @nQtyExpected - @nShortQTY
+                  WHERE StorerKey = @cStorerKey
+                     AND LOC = @cPickFromLoc
+                     AND LOT = @cLot
+                     AND ID = CASE WHEN @cLoseID = '1' THEN '' ELSE @cTaskToID END
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 254154
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKD Fail
+                  GOTO RollBackTran
+               END CATCH
+            END
+         END --QtyExpected > 0
+      END -- full short
+      ELSE
+      BEGIN
+         IF @nDebugFlag = 1
+            SELECT 'Not support partial short reallo'
+
+         IF @nDebugFlag = 2
+         BEGIN
+            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
+               Col1, Col2, Col3, Col4, Col5)
+            VALUES ('1764CfmUpd07', GETDATE(), @CUsername, CAST(@nmobile AS NVARCHAR(10)),
+               @cTaskDetailKey, CAST (@nQty AS NVARCHAR(4)), '', '', 'PartialShort')
+         END
+
+         SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+         SET @cErrMsg1 = '254166-NotSupportPartialShort'
+         SET @cErrMsg2 = 'Reallo is not triggered'
+         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+
+         BEGIN TRY
+         UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
+               QTYReplen = CASE WHEN (QTYReplen - @nQty) > 0 THEN (QTYReplen - @nQTY) ELSE 0 END
+         WHERE LOT = @cLOT
+            AND LOC = @cFromLOC
+            AND ID = @cTaskFromID
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 254167
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD LLI Fail
+            GOTO RollBackTran
+         END CATCH
+
+         GOTO Quit
+      END --partial short
+   END
+
 
    --Call reallocation logic
    IF @cReasonCode <> ''
@@ -370,7 +435,7 @@ BEGIN
          GOTO Reset_QtyReplen 
       END
 
-      IF ISNULL(@cWaveKey, '') = ''
+      IF ISNULL(@cWaveKey, '') = '' AND @cRPFOnlyFlag <> '1' --wavekey is required when FCP exists
       BEGIN
          SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
          SET @cErrMsg1 = '254157-WaveKeyEmpty'
@@ -408,7 +473,7 @@ BEGIN
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = LTRIM(RTRIM(@cExecStatements)) AND type = 'P')
       BEGIN
          SET @cExecStatements = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements)
-                        + ' @c_Wavekey = ''' + @cWaveKey + ''''
+                        + ' @c_Wavekey = ''' + ISNULL(@cWaveKey,'') + ''''
                         + ', @c_SKU = ''' + @cSKU + ''''
                         + ', @c_UCCNo = ''' + @cUCCNo + ''''
                         + ', @c_TaskDetailKey = ''' + @cTaskDetailKey + ''''
@@ -485,7 +550,7 @@ BEGIN
 
       BEGIN TRY
          UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
-               QTYReplen = @nQty
+               QTYReplen = CASE WHEN (QTYReplen - @nQTY_RPL) > 0 THEN (QTYReplen - @nQTY_RPL) ELSE 0 END -- Due to reallo, decrease RPF Qty
          WHERE LOT = @cLOT
             AND LOC = @cFromLOC
             AND ID = @cTaskFromID

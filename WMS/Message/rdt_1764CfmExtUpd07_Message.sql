@@ -16,6 +16,11 @@ execute rdt.rdtAddMsg 254159, 10, '254159 GenQcmdFail',         'us_english', 17
 execute rdt.rdtAddMsg 254160, 10, '254160 GenQcmdFail',         'us_english', 1764, 0, '254160 Failed to submit Qcmd task'
 execute rdt.rdtAddMsg 254161, 10, '254161 InvalidSPName',       'us_english', 1764, 0, '254160 Invalid SP Name'
 execute rdt.rdtAddMsg 254162, 10, '254162 UpdLLIFail',          'us_english', 1764, 0, '254162 Update QtyReplen Fail'
-execute rdt.rdtAddMsg 254163, 10, '254163 UpdTaskFail',          'us_english', 1764, 0, '254163 Update Task Fail'
+execute rdt.rdtAddMsg 254163, 10, '254163 UpdTaskFail',         'us_english', 1764, 0, '254163 Update Task Fail'
+execute rdt.rdtAddMsg 254164, 10, '254164 HoldInvFail',         'us_english', 1764, 0, '254164 Hold Inventory Fail'
+execute rdt.rdtAddMsg 254165, 10, '254165 HoldInvFail',         'us_english', 1764, 0, '254165 Hold Inventory Fail'
+execute rdt.rdtAddMsg 254166, 10, '254166 PartialShort',        'us_english', 1764, 0, '254166 Not allow to partial short'
+execute rdt.rdtAddMsg 254167, 10, '254167 UpdLLIFail',          'us_english', 1764, 0, '254167 Update QtyReplen Fail'
+
 
 select * from rdt.rdtmsg (nolock) where message_id between 254151 and 254200
