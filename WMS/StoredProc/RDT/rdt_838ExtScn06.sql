@@ -329,7 +329,7 @@ BEGIN
          END
          ELSE IF @cMUOM = '6'
          BEGIN
-            SELECT @cOutField09 = '1' 
+            SELECT @cOutField09 = '2' 
          END
       END
       IF @nCurrentStep = 8
@@ -375,7 +375,7 @@ BEGIN
             END
             ELSE IF @cMUOM = '6'
             BEGIN
-               SELECT @cOutField09 = '1' 
+               SELECT @cOutField09 = '2' 
             END
          END
       END
