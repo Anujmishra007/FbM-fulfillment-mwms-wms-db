@@ -150,6 +150,10 @@ BEGIN
       (
          Taskdetailkey NVARCHAR(10) PRIMARY KEY
       )
+
+      CREATE TABLE #T_PICKDETAIL_CURRENT (
+            Pickdetailkey NVARCHAR(18) PRIMARY KEY
+      )
    END
 
    IF @b_debug = 0 AND @n_Continue IN (1,2)
@@ -234,6 +238,17 @@ BEGIN
                      WHERE WD.WaveKey = @c_Wavekey
                      AND WD.OrderKey = PD.OrderKey )
       GROUP BY PD.OrderKey
+
+      INSERT INTO #T_PICKDETAIL_CURRENT (Pickdetailkey)
+      SELECT PD.Pickdetailkey
+      FROM PICKDETAIL PD WITH (NOLOCK)
+      WHERE PD.Storerkey = @c_StorerKey
+      AND   PD.Sku = @c_SKU
+      AND   PD.[Status] < '4'
+      AND   EXISTS ( SELECT 1 
+                     FROM #T_ShortOrders T
+                     WHERE T.OrderKey = PD.OrderKey )
+      GROUP BY PD.Pickdetailkey
 
       IF ISNULL(@c_Taskdetailkey, '') <> ''
       BEGIN
@@ -447,6 +462,10 @@ BEGIN
          AND PD.WaveKey = @c_Wavekey
          AND PD.Storerkey  = @c_StorerKey
          AND PD.SKU = @c_SKU
+         -- To exclude those allocated line before reallocation
+         AND NOT EXISTS ( SELECT 1
+                          FROM #T_PICKDETAIL_CURRENT T
+                          WHERE T.Pickdetailkey = PD.PickDetailKey )
          GROUP BY PD.OrderKey
          HAVING SUM(PD.Qty) < SUM(PD.QtyMoved)   --Only check Not/Partial allocated after reallocation
       ), ShortPick AS (
