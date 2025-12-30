@@ -39,131 +39,89 @@ CREATE OR ALTER PROC [RDT].[rdt_523DecodeSP09] (
 AS
 BEGIN
    SET NOCOUNT ON
-   SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-
-   DECLARE @nDebugFlag  INT = 1
-   DECLARE @cTempSKU            NVARCHAR( 20)
-   DECLARE @tDecodeList TABLE (ItemIndex INT NOT NULL, Item NVARCHAR (100))
-   DECLARE @cBarcodeClean NVARCHAR(60) = TRIM(@cBarcode)
-   DECLARE @cUCCSKU  NVARCHAR (20)
-   DECLARE @bValidateSKU BIT = 0
+ 
+   DECLARE @nDebugFlag  INT = 0
+ 
+   DECLARE
+      @cTempSKU            NVARCHAR( 20)
+      -- ,@cTempLottable01    NVARCHAR( 18)
+      -- ,@cTempLottable02    NVARCHAR( 18)
+      -- ,@cTempLottable03    NVARCHAR(100)
+      -- ,@cTempLottable04    NVARCHAR(100)
+      ,@nRowCount    INT
+ 
+    DECLARE @tDecodeList TABLE
+   (
+      ItemIndex   INT NOT NULL,
+      Item        NVARCHAR (100)      
+   )
+ 
    SET @nErrNo = 0
-   SET @cBarcodeUCC = replace(TRIM(@cBarcodeUCC),' ','')
-   IF @nFunc = 523
+ 
+   IF @nFunc = 523 -- SKU Inquiry
    BEGIN
-      IF @nStep = 1
-      BEGIN
-         IF LEN(@cBarcodeUCC) IN (40,44)
-         BEGIN
-            SELECT 
-            @cUCC = CASE 
-               WHEN CHARINDEX('(240)', @cBarcodeUCC) > 0 THEN
-                     SUBSTRING(
-                        @cBarcodeUCC,
-                        CHARINDEX('(240)', @cBarcodeUCC) + 5,
-                        LEN(@cBarcodeUCC)
-                     )
-               ELSE NULL
-            END
-         END
-         ELSE IF LEN(@cBarcodeUCC) = 34
-         BEGIN
-            SELECT 
-               @cUCC = RIGHT(@cBarcodeUCC, 20)
-         END
-         ELSE IF LEN(@cBarcodeUCC) = 67
-         BEGIN
-            SELECT 
-               @cUCC = SUBSTRING(@cBarcodeUCC, 19, 19)
-         END
-
-      END
-      IF @nStep = 2 -- Sku
+      IF @nStep = 2 -- LOC/SKU
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            IF LEN(@cBarcodeClean) > 0
+            -- Check if it is a QR code (contains &)
+            -- Decode: extract SKU only (keep errors for bad format / parse)
+			
+            IF CHARINDEX('&', @cBarcode) > 0
             BEGIN
-               IF CHARINDEX('&', @cBarcodeClean) > 0
-               BEGIN
-                  IF (LEN(@cBarcodeClean) - LEN(REPLACE(@cBarcodeClean, '&',''))) <> 4
-                  BEGIN
-                     SET @nErrNo = 254851
-                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                     SET @cSKU = ''
-                     GOTO Quit
-                  END
-
-                  BEGIN TRY
-                     INSERT INTO @tDecodeList
-                     SELECT [key]+1 AS ItemIndex, value AS Item
-                     FROM OPENJSON('["' + REPLACE(@cBarcodeClean, '&', '","') + '"]')
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 254852
-                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                     SET @cSKU = ''
-                     GOTO Quit
-                  END CATCH
-
-                  SELECT @cTempSKU = Item FROM @tDecodeList WHERE ItemIndex = 1;
-                  SET @cSKU = @cTempSKU
-               END
-               ELSE
-               BEGIN
-                  SET @cSKU = @cBarcodeClean
-               END
-
-               SET @bValidateSKU = 1
-               GOTO Step2End
-            END
-
-            IF LEN(@cBarcodeUCC) = 17
-            BEGIN
-               SELECT @cSKU = 
-               CASE 
-                  WHEN CHARINDEX('(21)', @cBarcodeUCC) > 0 AND CHARINDEX('(241)', @cBarcodeUCC) > CHARINDEX('(21)', @cBarcodeUCC) THEN
-                        SUBSTRING(
-                           @cBarcodeUCC,
-                           CHARINDEX('(21)', @cBarcodeUCC) + 4,
-                           CHARINDEX('(241)', @cBarcodeUCC) - CHARINDEX('(21)', @cBarcodeUCC) - 4
-                        )
-                  ELSE NULL
-               END
+			
+                -- Expect exactly 4 ampersands for the QR format
+                IF (LEN(@cBarcode) - LEN(REPLACE(@cBarcode, '&',''))) <> 4
+                BEGIN
+                   SET @nErrNo = 254851 -- Error InvFormat
+                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                   SET @cSKU = '' 
+                   GOTO Quit
+                END
+ 
+                BEGIN TRY
+                   INSERT INTO @tDecodeList
+                   SELECT [key]+1 AS ItemIndex, value AS Item
+                   FROM OPENJSON('["' + REPLACE(@cBarcode, '&', '","') + '"]');
+                END TRY
+                BEGIN CATCH
+                   SET @nErrNo = 254852 -- Error DecodeFailure
+                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                   SET @cSKU = '' 
+                   GOTO Quit
+                END CATCH
+		
+                -- Only read SKU (index 1) and attach to output
+                SELECT @cTempSKU = Item FROM @tDecodeList WHERE ItemIndex = 1;
+ 
+                SET @cSKU = @cTempSKU;
             END
             ELSE
-            BEGIN 
-               SELECT @cSKU = SKU FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND ALTSKU = @cBarcodeUCC
-               IF @@ROWCOUNT = 0
-                  SET @cSKU = @cBarcodeUCC
+            BEGIN
+                -- Barcode (no '&'): treat entire barcode as SKU
+                SET @cSKU = @cBarcode;
             END
-
-            SET @bValidateSKU = 1
-            Step2End:
-            ;
+ 
+ 
+            -- SKU Validation (Common for both QR and Barcode)
+            IF NOT EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+            BEGIN
+               SET @nErrNo = 254855 -- Error InvalidSKU
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               SET @cSKU = '' 
+               GOTO Quit
+            END
          END
       END
    END
 
-   IF @bValidateSKU = 1
-   BEGIN
-      IF ISNULL(@cSKU, '') = ''
-      BEGIN
-         SET @nErrNo = 254855
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-         SET @cSKU = ''
-      END
 
-      IF NOT EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
-      BEGIN
-         SET @nErrNo = 254855
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-         SET @cSKU = '' 
-      END
-   END
-   Quit:
+
+   
+Quit:
    IF @nDebugFlag = 1 AND @nErrNo <> 0
    BEGIN
       INSERT INTO dbo.TraceInfo
@@ -193,15 +151,9 @@ BEGIN
    END
 
    IF @nDebugFlag = 1
-      SELECT 'Quit', @nErrNo AS ErrNo, @cSKU AS SKU, @dLottable04 AS LOT4
+      SELECT 'Quit', @nErrNo AS ErrNo, @cSKU AS SKU
 END
-
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
 GO
 
 GRANT EXECUTE ON rdt.rdt_523DecodeSP09 TO NSQL
 GO
-

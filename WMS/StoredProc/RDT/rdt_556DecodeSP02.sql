@@ -53,7 +53,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
  
-   DECLARE @nDebugFlag  INT = 1
+   DECLARE @nDebugFlag  INT = 0
  
    DECLARE
       @cTempSKU            NVARCHAR( 20)
