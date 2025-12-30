@@ -353,6 +353,13 @@ BEGIN
       BEGIN
          IF @nStep = 4
          BEGIN
+            SELECT @cOutField02 = SUM(PD.QTY * SKU.GROSSWGT)
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU)
+            WHERE PickSlipNo = @cPickSlipNo
+               AND CartonNo  = @nCartonNo
+            GROUP BY PD.PickSlipNo, PD.CartonNo
+
             SET @nAfterStep = 99
             GOTO QUIT
          END
