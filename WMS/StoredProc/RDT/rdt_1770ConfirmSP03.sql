@@ -63,11 +63,34 @@ BEGIN
    DECLARE @cOrderLineNum  NVARCHAR( 10)
    DECLARE @cWaveKey       NVARCHAR( 10)
    DECLARE @cPickConfirmStatus NVARCHAR( 1)
+   DECLARE @nDebugFlag     INT = 0
+   DECLARE 
+      @cAPP_DB_Name              NVARCHAR(20),
+      @cDataStream               VARCHAR(10),
+      @nThreadPerAcct            INT,
+      @nThreadPerStream          INT,
+      @nMilisecondDelay          INT,
+      @cIP                       NVARCHAR(20),
+      @cPORT                     NVARCHAR(5),
+      @cIniFilePath              NVARCHAR(200),
+      @cCmdType                  NVARCHAR(10),
+      @c_TransmitlogKey          NVARCHAR(10),
+      @cExecStatements           NVARCHAR(MAX),
+      @cExecArguments            NVARCHAR(MAX),
+      @cErrMsg1                  NVARCHAR(60),
+      @cErrMsg2                  NVARCHAR(60),
+      @cErrMsg3                  NVARCHAR(60)
+
+   DECLARE @cTaskStatus          NVARCHAR(10)
+   DECLARE @cTaskFromLoc         NVARCHAR(10)
+   DECLARE @cTaskSKU             NVARCHAR(20)
+   DECLARE @cTaskWaveKey         NVARCHAR(10)
 
    -- Init var
    SET @nQTY_Move = 0
    SET @nErrNo = 0
    SET @cErrMsg = ''
+   SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
 
    -- Get task info
    SELECT
@@ -194,24 +217,117 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdPickDtlFail
                   GOTO RollBackTran
                END
+               
+               IF @nQTY = 0
+               BEGIN
+                  IF @nDebugFlag = 1
+                     SELECT 'Enter', @cTaskDetailKey AS LastTaskDetailKey
 
-               SELECT @cOrderKey = ORDERKEY,@cOrderLineNum = OrderLineNumber,@cSku = SKU,@cWaveKey = WAVEKEY
-               FROM PICKDETAIL PD (NOLOCK)
-               WHERE PickDetailKey = @cPickDetailKey
-               --Deallocate
-               EXEC WM.lsp_Unallocation_Wrapper
-                  @cStorerkey,        --Storerkey
-                  @cPickDetailKey,    --Pickdetailkey
-                  @cOrderKey,         --Orderkey
-                  @cOrderLineNum,     --OrderLineNumber
-                  '',               --Loadkey
-                  @cWaveKey,    --Wavekey
-                  @cSku,        --SKU
-                  @bSuccess,                --Success
-                  @nErrno,                --Err
-                  @cErrMsg OUTPUT,--ErrMsg
-                  @cUserName,     --UserName – User logged in the RDT
-                  'UAPICKLINE'     --UnAllocateFrom --ORDER = Shipment Order Screen (Pickdetaileky)   
+                  SELECT 
+                     @cTaskFromLoc  = LOC,
+                     @cTaskSKU      = SKU,
+                     @cTaskWaveKey  = WaveKey
+                  FROM dbo.PICKDETAIL WITH (NOLOCK)
+                  WHERE PICKDETAILKEY = @cPickDetailKey
+
+                  IF @@ROWCOUNT <= 0
+                  BEGIN
+                     SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+                     SET @cErrMsg1 = '180002-NoPickdetailFound'
+                     GOTO RollBackTran 
+                  END
+
+                  BEGIN
+                     IF ISNULL(@cTaskFromLoc, '') = ''
+                     BEGIN
+                        SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+                        SET @cErrMsg1 = '180003-FromLocEmpty'
+                        SET @cErrMsg2 = 'Trigger reallocation fail '
+                        GOTO RollBackTran 
+                     END
+
+                     IF ISNULL(@cTaskWaveKey, '') = ''
+                     BEGIN
+                        SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+                        SET @cErrMsg1 = '180005-WaveKeyEmpty'
+                        SET @cErrMsg2 = 'Trigger reallocation fail '
+                        GOTO RollBackTran 
+                     END
+
+                     SELECT 
+                        @cAPP_DB_Name         = APP_DB_Name,
+                        @cDataStream          = DataStream,
+                        @nThreadPerAcct       = ThreadPerAcct,
+                        @nThreadPerStream     = ThreadPerStream,
+                        @nMilisecondDelay     = MilisecondDelay,
+                        @cIP                  = IP,
+                        @cPORT                = PORT,
+                        @cIniFilePath         = IniFilePath,
+                        @cCmdType             = CmdType,
+                        @cTaskType            = TaskType,
+                        @cExecStatements      = StoredProcName
+                     FROM dbo.QCmd_TransmitlogConfig WITH (NOLOCK)
+                     WHERE TableName = '1770ShortPickReallo'
+                        AND App_Name = 'WMS'
+                        AND StorerKey =  @cStorerKey
+
+                     IF @@ROWCOUNT <= 0
+                     BEGIN
+                        SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+                        SET @cErrMsg1 = '180006-NoQcmdConfig'
+                        SET @cErrMsg2 = 'Trigger reallocation fail '
+                        GOTO RollBackTran 
+                     END
+
+                     IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = LTRIM(RTRIM(@cExecStatements)) AND type = 'P')
+                     BEGIN
+                        SET @cExecStatements = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements)
+                                    + ' @c_Wavekey = ''' + @cTaskWaveKey + ''''
+                                    + ', @c_SKU = ''' + @cTaskSKU + ''''
+                                    + ', @c_Loc = ''' + @cTaskFromLoc + ''''
+                                    + ', @c_TaskDetailKey = ''' + @cTaskDetailKey + ''''
+
+                        IF @nDebugFlag = 1
+                           SELECT 'Start to submit Qcmd', @cExecStatements
+
+                        -- Submit task to QCommander
+                        BEGIN TRY
+                           EXEC isp_QCmd_SubmitTaskToQCommander
+                              @cTaskType           = 'O'        -- 'T' - TransmitlogKey, 'D' - Data Stream, 'O' - Other
+                              , @cStorerKey          = @cStorerKey
+                              , @cDataStream         = @cDataStream
+                              , @cCmdType            = @cCmdType 
+                              , @cCommand            = @cExecStatements
+                              , @cTransmitlogKey     = '' 
+                              , @nThreadPerAcct      = @nThreadPerAcct 
+                              , @nThreadPerStream    = @nThreadPerStream 
+                              , @nMilisecondDelay    = @nMilisecondDelay  
+                              , @nSeq                = 1
+                              , @cIP                 = @cIP
+                              , @cPORT               = @cPORT
+                              , @cIniFilePath        = @cIniFilePath
+                              , @cAPPDBName          = @cAPP_DB_Name
+                              , @bSuccess            = @bSuccess     OUTPUT 
+                              , @nErr                = @nErrNo       OUTPUT 
+                              , @cErrMsg             = @cErrMsg      OUTPUT
+                        END TRY
+                        BEGIN CATCH
+                           SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+                           SET @cErrMsg3 = ERROR_MESSAGE()
+                           SET @cErrMsg1 = '180007-QcmdFail'
+                           SET @cErrMsg2 = 'Trigger reallocation fail '
+                           GOTO RollBackTran 
+                        END CATCH
+                     END -- submit Qcmd
+                     ELSE
+                     BEGIN
+                        SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
+                        SET @cErrMsg1 = '180008-InvalidSPName'
+                        SET @cErrMsg2 = 'Trigger reallocation fail '
+                        GOTO RollBackTran 
+                     END
+                  END -- reallo
+               END
             END
             ELSE
             BEGIN -- Have balance, need to split
@@ -495,37 +611,17 @@ BEGIN
       @cErrMsg OUTPUT
    IF @nErrNo <> 0
       GOTO RollBackTran
-   
-   IF @nQTY = 0
-   BEGIN
-      EXEC WM.lsp_WaveAllocation
-         @cWaveKey,                 --WaveKey
-         '',                        --Loadkey
-         '',                        --AllocateType
-         '',                        --allocatemode
-         @bSuccess,                 --Success
-         @nErrno,                   --err
-         @cErrMsg,                --ErrMsg
-         @cUserName,               --UserName
-         0                          --Capture Warnings/Questions/Errors/Meassage into WMS_ERROR_LIST Table
-      
-      EXEC WM.lsp_WaveReleaseTask
-         @cWaveKey,        --WaveKey
-         '',               --Loadkey
-         '',               --MBolkey
-         @bSuccess,        --Success
-         @nErrno,          --err
-         @cErrMsg,         --ErrMsg
-         1,                --WarningNo
-         'Y',              --ProceedWithWarning
-         @cUserName        --UserName
-   END
 
    COMMIT TRAN rdt_1770ConfirmSP03 -- Only commit change made here
    GOTO Quit
 
 RollBackTran:
    ROLLBACK TRAN rdt_1770ConfirmSP03 -- Only rollback change made here
+   IF ISNULL(@cErrMsg1,'') <> ''
+   BEGIN
+      EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+      SET @nErrNo = 9999
+   END
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
