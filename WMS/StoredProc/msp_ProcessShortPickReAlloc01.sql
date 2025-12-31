@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 24-Dec-2025 WLChooi  1.0   Initial Version                           */
+/* 31-Dec-2025 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -699,9 +699,17 @@ BEGIN
       WITH AllPick AS (
          SELECT OrderKey = PD.OrderKey
               , ReAllocStatus = CASE WHEN SUM(PD.Qty) = 0 THEN '0' ELSE '1' END
-              , QtyInDiff = ABS(SUM(PD.QtyMoved) - SUM(PD.Qty))
+              , QtyInDiff = ABS(MAX(PW.QtyMoved) - SUM(PD.Qty))
          FROM #PickDetail_WIP PD (NOLOCK)
          JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
+         CROSS APPLY ( SELECT QtyMoved = SUM(P.QtyMoved)
+                       FROM #PickDetail_WIP P
+                       WHERE P.OrderKey = PD.OrderKey
+                       AND P.WaveKey = PD.WaveKey
+                       AND P.Storerkey = PD.Storerkey
+                       AND P.SKU = PD.Sku
+                       AND P.[Status] = '4'
+                       AND P.DropID = @c_UCCNo ) AS PW
          WHERE PD.[Status] <= '4'
          AND PD.WaveKey = @c_Wavekey
          AND PD.Storerkey  = @c_StorerKey
@@ -711,7 +719,7 @@ BEGIN
                           FROM #T_PICKDETAIL_CURRENT T
                           WHERE T.Pickdetailkey = PD.PickDetailKey )
          GROUP BY PD.OrderKey
-         HAVING SUM(PD.Qty) < SUM(PD.QtyMoved)   --Only check Not/Partial allocated after reallocation
+         HAVING SUM(PD.Qty) < MAX(PW.QtyMoved)   --Only check Not/Partial allocated after reallocation
       ), ShortPick AS (
          SELECT Orderkey = PD.Orderkey
               , Pickdetailkey = PD.PickDetailKey
