@@ -529,6 +529,7 @@ BEGIN
                   UPDATE dbo.TaskDetail WITH (ROWLOCK)
                   SET 
                      ReasonKey = IIF( ReasonKey = 'BADUCC', ReasonKey, @cDefaultSkipReason),
+                     Status = '9',
                      EditDate = GETDATE(),
                      EditWho  = SUSER_SNAME(),
                      TrafficCop = NULL

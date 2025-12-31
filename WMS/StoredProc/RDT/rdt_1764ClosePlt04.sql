@@ -23,6 +23,7 @@ GO
 /* 2025-11-10  1.4.0    Cuize     UWP-43757 Performance Issue Fix              */
 /* 2025-11-20  1.5.0    NLT013    UWP-44502 Do not send WSCTOTALLOCLOG for SHORT*/
 /* 2025-12-09  1.6.0    NLT013    UWP-45319 No need to update Message03 if short*/
+/* 2025-12-31  1.7.0    NLT013    FCR-7928 Trigger WSSOAlloUpd for real short  */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
@@ -807,6 +808,10 @@ BEGIN
    END
 
    -- Generate TransmitLog for WSCTOTALLOCLOG if needed
+   DECLARE @cMessage02        NVARCHAR(50) = ''
+   DECLARE @cTryQty           NVARCHAR(5) = ''
+   DECLARE @cRealloNumberofRetry      NVARCHAR(5) = ''
+
    SET @cTaskDetailKey = @cCurrentTaskDetailKey
    SELECT
       @cSKU = SKU,
@@ -814,11 +819,19 @@ BEGIN
       @cCaseID = CaseID,
       @cTaskStatus = Status,
       @nQty = Qty,
-      @cReasonKey = ReasonKey
+      @cReasonKey = ReasonKey,
+      @cMessage02 = Message02
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND TaskdetailKey = @cTaskDetailKey
       AND TaskType = 'RPF'
+
+   SET @cRealloNumberofRetry = rdt.RDTGetConfig( @nFunc, 'RealloNumberofRetry', @cStorerKey)
+   IF @cRealloNumberofRetry = '0'
+      SET @cRealloNumberofRetry = '99'
+   
+   IF LEFT(@cMessage02, 4) = 'SKIP' AND LEN(@cMessage02) > 4
+      SET @cTryQty = RIGHT(@cMessage02, LEN(@cMessage02) - 4)
 
    IF @cTaskStatus IN ( '5', '9' ) -- RPF task is completed
    BEGIN
@@ -870,51 +883,57 @@ BEGIN
       END
       ELSE
       BEGIN
-         DECLARE @curPKD            CURSOR
-         DECLARE @cPickDetailKey    NVARCHAR(10)
-         DECLARE @nQTY_PD           INT
-
-         SET @curPKD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT PD.PickDetailKey, PD.QTY, PD.OrderKey
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-            WHERE PD.TaskDetailKey = @cTaskDetailKey
-               AND PD.Status = '4'
-            Order by PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
-      
-         OPEN @curPKD
-         FETCH NEXT FROM @curPKD INTO @cPickDetailKey, @nQTY_PD, @cOrderKey
-         WHILE @@FETCH_STATUS = 0
+         -- 1. Tried qty reached to config value, then generate TransmitLog for each PickDetail
+         -- 2. Tried qty not reached, but no UCC is available for re-allocation, then also generate TransmitLog for each PickDetail
+         IF @cReasonKey = 'SHORT' AND 
+            (@cRealloNumberofRetry = @cTryQty OR ( TRY_CAST(@cTryQty AS INT) IS NOT NULL AND @cTryQty < @cRealloNumberofRetry AND @cMessage02 = '') )
          BEGIN
-            IF NOT EXISTS(SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK)
-                        WHERE TableName = 'WSSOAlloUpd'
-                           AND Key1 = @cOrderKey
-                           AND Key2 = @cPickDetailKey
-                           AND Key3 = @cStorerkey)
-            BEGIN
-               EXEC ispGenTransmitLog2
-                  @c_TableName        = 'WSSOAlloUpd'
-                  ,@c_Key1             = @cOrderKey
-                  ,@c_Key2             = @cPickDetailKey
-                  ,@c_Key3             = @cStorerkey
-                  ,@c_TransmitBatch    = ''
-                  ,@b_Success          = @bSuccess   OUTPUT
-                  ,@n_err              = @nErrNo     OUTPUT
-                  ,@c_errmsg           = @cErrMsg    OUTPUT
+            DECLARE @curPKD            CURSOR
+            DECLARE @cPickDetailKey    NVARCHAR(10)
+            DECLARE @nQTY_PD           INT
 
-               IF @bSuccess <> 1
-               BEGIN
-                  SET @nErrNo = 248404
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Generate transmitlog2 failed 
-                  CLOSE @curPKD
-                  DEALLOCATE @curPKD
-                  GOTO RollBackTran
-               END
-            END
-
+            SET @curPKD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT PD.PickDetailKey, PD.QTY, PD.OrderKey
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+               WHERE PD.TaskDetailKey = @cTaskDetailKey
+                  AND PD.Status = '4'
+               Order by PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
+         
+            OPEN @curPKD
             FETCH NEXT FROM @curPKD INTO @cPickDetailKey, @nQTY_PD, @cOrderKey
-         END -- cursor end
-         CLOSE @curPKD
-         DEALLOCATE @curPKD
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+               IF NOT EXISTS(SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK)
+                           WHERE TableName = 'WSSOAlloUpd'
+                              AND Key1 = @cOrderKey
+                              AND Key2 = @cPickDetailKey
+                              AND Key3 = @cStorerkey)
+               BEGIN
+                  EXEC ispGenTransmitLog2
+                     @c_TableName        = 'WSSOAlloUpd'
+                     ,@c_Key1             = @cOrderKey
+                     ,@c_Key2             = @cPickDetailKey
+                     ,@c_Key3             = @cStorerkey
+                     ,@c_TransmitBatch    = ''
+                     ,@b_Success          = @bSuccess   OUTPUT
+                     ,@n_err              = @nErrNo     OUTPUT
+                     ,@c_errmsg           = @cErrMsg    OUTPUT
+
+                  IF @bSuccess <> 1
+                  BEGIN
+                     SET @nErrNo = 248404
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Generate transmitlog2 failed 
+                     CLOSE @curPKD
+                     DEALLOCATE @curPKD
+                     GOTO RollBackTran
+                  END
+               END
+
+               FETCH NEXT FROM @curPKD INTO @cPickDetailKey, @nQTY_PD, @cOrderKey
+            END -- cursor end
+            CLOSE @curPKD
+            DEALLOCATE @curPKD
+         END
       END
    END
 
