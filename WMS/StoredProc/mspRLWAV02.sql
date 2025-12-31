@@ -43,7 +43,7 @@ GO
 /* 2025-10-10  SSA08    1.9   UWP-42248 -Enhanced session management     */
 /* 2025-10-24  PPA374   1.10  UWP-42949 -Added PP type for the RPF task  */
 /* 2025-12-04  Wan01    1.11  FCR-3958 CR V2.3 (Work with PPA374)        */
-/* 2025-12-05  Wan01          UWP-45254                                  */  
+/* 2025-12-31  Wan01          UWP-45254, CR V2.3 fixed                   */  
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -927,19 +927,38 @@ BEGIN
       JOIN LOTATTRIBUTE la (NOLOCK) ON la.lot = pd.lot
       JOIN LOC l (NOLOCK) ON l.loc = pd.Loc
       OUTER APPLY (   SELECT TOP 1                                                     --2025-12-05
-                            RecCnt = CASE WHEN pd.ID > '' AND la.Lottable11  = ''      --(Wan01) FCR-3958 CR V2.3  
-                                          THEN 1
-                                          WHEN td.Lot = pd.Lot 
-                                          THEN 1
-                                          ELSE 0
-                                          END
+                      RecCnt = CASE WHEN pd.ID > '' AND la.Lottable11  = ''            --2025-12-18 (Wan01) FCR-3958 CR V2.3  
+                                    AND  o.KitOrder = 0
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11 > '' 
+                                    AND  o.KitOrder = 0
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11  = ''            
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot = ''
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11 > '' 
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot = ''
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11  = ''      
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot > '' AND td.Lot = pd.Lot
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11 > '' 
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot > '' AND td.Lot = pd.Lot
+                                    THEN 1
+                                    ELSE 0
+                                    END
                       FROM dbo.Taskdetail td (NOLOCK)
                       WHERE td.CaseID = la.Lottable11
                       AND   td.TaskType IN ('FCP','FCP1')
-                      AND   td.Status IN ('9','X')
+                      AND   td.Status <> 'X'                                        --2025-12-18
                       AND   td.Storerkey = pd.Storerkey
                       AND   td.FromID    = pd.ID
-                      ORDER BY 1 DESC                                                  --2025-12-05
+                      AND   td.FromID    > ''
+                      ORDER BY 1 DESC                                               --2025-12-05
                   ) tdr
       WHERE pd.TaskDetailKey = ''                                                   --2025-07-01  
       AND tdr.RecCnt IN (0,NULL)                                                    --(Wan01) FCR-3958 CR V2.3  
