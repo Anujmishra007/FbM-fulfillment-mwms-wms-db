@@ -60,33 +60,36 @@ BEGIN
 
    IF @nFunc = 600 -- Normal receiving
    BEGIN
-      IF @nStep = 1
+   IF @nInputKey = 1
       BEGIN
-          SELECT @n_cnt = count(1)
-            FROM receiptdetail with(nolock)
-           WHERE storerkey = @cStorerKey
-             AND receiptkey = @cReceiptKey 
-             AND (len(lottable02) <> 4 OR RDT.rdtIsInteger(lottable02) = 0)
-             IF @n_cnt > 0
-             BEGIN
-                     SET @nErrNo = 254951
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DOT should only 4 digits
-                     GOTO Fail
-             END
+      IF @nStep = 1
+         BEGIN
+            SELECT @n_cnt = count(1)
+               FROM receiptdetail with(nolock)
+            WHERE storerkey = @cStorerKey
+               AND receiptkey = @cReceiptKey 
+               AND (len(lottable02) <> 4 OR RDT.rdtIsInteger(lottable02) = 0)
+               IF @n_cnt > 0
+               BEGIN
+                        SET @nErrNo = 254951
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DOT should only 4 digits
+                        GOTO Fail
+               END
 
 
-          SELECT @n_cnt = COUNT(1)
-            FROM RECEIPTDETAIL rpdl WITH(NOLOCK)
-           INNER JOIN STORER s WITH(NOLOCK) ON rpdl.storerkey = s.storerkey
-           WHERE rpdl.ReceiptKey = @cReceiptKey
-             AND rpdl.StorerKey  = @cStorerKey
-             AND CAST(SUBSTRING(rpdl.Lottable02,3,2)+SUBSTRING(rpdl.Lottable02,1,2) AS INT) > CAST(RIGHT(STR(DATEPART(YEAR, GETDATE())),2) + REPLACE(STR(DATEPART(WEEK, GETDATE())),' ','') AS INT)
-           IF @n_cnt > 0
-           BEGIN
-                SET @nErrNo = 254953
-                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DOT should not more than today 
-                GOTO Fail
-           END
+            SELECT @n_cnt = COUNT(1)
+               FROM RECEIPTDETAIL rpdl WITH(NOLOCK)
+            INNER JOIN STORER s WITH(NOLOCK) ON rpdl.storerkey = s.storerkey
+            WHERE rpdl.ReceiptKey = @cReceiptKey
+               AND rpdl.StorerKey  = @cStorerKey
+               AND CAST(SUBSTRING(rpdl.Lottable02,3,2)+SUBSTRING(rpdl.Lottable02,1,2) AS INT) > CAST(RIGHT(STR(DATEPART(YEAR, GETDATE())),2) + REPLACE(STR(DATEPART(WEEK, GETDATE())),' ','') AS INT)
+            IF @n_cnt > 0
+            BEGIN
+                  SET @nErrNo = 254953
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DOT should not more than today 
+                  GOTO Fail
+            END
+         END
       END
    END
 
