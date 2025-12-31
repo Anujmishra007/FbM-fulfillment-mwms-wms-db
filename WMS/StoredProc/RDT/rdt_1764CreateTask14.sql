@@ -15,6 +15,7 @@ GO
 /*                                                                            */
 /* Date       Rev    Author     Purposes                                      */
 /* 2025-06-11 1.0.0  Dennis     FCR-3959 Created                              */
+/* 2025-12-10 1.0.1  PPA374     Considering case replenishment                */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764CreateTask14] (
@@ -124,7 +125,7 @@ BEGIN
    -- Get initial task info
    INSERT INTO @tTask (TaskDetailKey, Status, StorerKey, SKU, LOT, UOM, UOMQty, QTY, ToLOC, LogicalToLOC, ToID, CaseID, FinalLoc, FinalID, 
                         TransitCount, PickMethod, RefTaskKey, WaveKey, Priority, SourcePriority, SystemQTY,OrderKey,LoadKey, SourceKey,TaskType)
-      SELECT TaskDetailKey, Status, StorerKey, SKU, LOT, UOM, UOMQty, Qty, ToLOC, LogicalToLoc, ToID, Caseid, FinalLOC, FinalID, 
+      SELECT TaskDetailKey, Status, StorerKey, SKU, LOT, UOM, UOMQty, Qty, ToLOC, LogicalToLoc, IIF(PickMethod = 'PP', CaseID, ToID)ToID, Caseid, FinalLOC, FinalID,  --PPA374 12/10/2025
                TransitCount, PickMethod, RefTaskKey, WaveKey, Priority, SourcePriority, SystemQty,OrderKey,LoadKey,SourceKey,TaskType
       FROM dbo.TaskDetail WITH (NOLOCK)
       WHERE ListKey = @cListKey

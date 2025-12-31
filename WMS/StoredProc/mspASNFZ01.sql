@@ -44,6 +44,7 @@ GO
 /* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
 /* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */
 /* 2025-09-04  JH04     2.1   Fix for duplicate OrderKey Issue             */ 
+/* 2025-12-10  JH05     2.2   UWP-44219 Fix issue if externreceiptkey empty*/
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)  
@@ -341,7 +342,8 @@ BEGIN
              FROM  ORDERS OH WITH (NOLOCK)                    
              JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (OH.StorerKey = RD.StorerKey AND RD.ExternReceiptkey = OH.ExternOrderKey)     
                            WHERE OH.Storerkey = @c_Storerkey                    
-                           AND OH.ExternOrderKey = @c_ExternReceiptkey  
+                           AND OH.ExternOrderKey = @c_ExternReceiptkey
+                           AND ISNULL(OH.ExternOrderKey,'') <> ''  /*JH05*/ 
                            AND OH.Consigneekey = @c_Consigneekey  
                            AND OH.DeliveryDate = @c_DeliveryDate                  
                            AND OH.Door = @c_Door      /*JH01*/  

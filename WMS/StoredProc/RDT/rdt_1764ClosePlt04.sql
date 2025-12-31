@@ -22,7 +22,8 @@ GO
 /* 2025-11-04  1.3.0    NLT013    UWP-43847 Mark Pickdetail as 3, print ZPL    */
 /* 2025-11-10  1.4.0    Cuize     UWP-43757 Performance Issue Fix              */
 /* 2025-11-20  1.5.0    NLT013    UWP-44502 Do not send WSCTOTALLOCLOG for SHORT*/
-/* 2025-12-31  1.6.0    NLT013    FCR-7928 Trigger WSSOAlloUpd for real short  */
+/* 2025-12-09  1.6.0    NLT013    UWP-45319 No need to update Message03 if short*/
+/* 2025-12-31  1.7.0    NLT013    FCR-7928 Trigger WSSOAlloUpd for real short  */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
@@ -97,6 +98,7 @@ BEGIN
       AND Status = '5'
       AND TaskType = 'RPF'
       AND StorerKey = @cStorerKey
+      AND ReasonKey = ''
 
    IF EXISTS (SELECT 1 FROM @tTaskDetail)
    BEGIN
@@ -610,7 +612,7 @@ BEGIN
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
          Status = '9', -- Closed
          -- UserPosition = @cUserPosition,
-         Message03 = 'MoveCompleted',
+         Message03 = IIF(ReasonKey = '', 'MoveCompleted', Message03),
          EndTime = GETDATE(),
          EditDate = GETDATE(),
          EditWho  = @cUserName,

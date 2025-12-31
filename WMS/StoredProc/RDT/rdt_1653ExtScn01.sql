@@ -30,6 +30,7 @@ GO
 /* 2025-08-14 1.8.0  Dennis   UWP-38609 Fix Bug                             */
 /* 2025-10-28 1.9.0  NLT013   UWP-42913 Performance tuning                  */
 /* 2025-10-29 1.10.0 NLT013   FCR-6801 MBOLKey is not mandatory             */
+/* 2025-12-18 1.11.0 NickT    UWP-45620 Performance tuning                  */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -195,8 +196,11 @@ BEGIN
             BEGIN
                SET @cFieldAttr05 = 'O'
                BEGIN TRY
+                  IF OBJECT_ID('tempdb..#TempTable1653_1') IS NOT NULL
+                     DROP TABLE #TempTable1653_1
+
                   SET @cSQLString =
-                  'WITH FilteredPalletDetail AS (
+                  '
                      SELECT DISTINCT
                         UserDefine01,
                         UserDefine02,
@@ -204,26 +208,29 @@ BEGIN
                         UserDefine04,
                         UserDefine05,
                         CaseID
+                     INTO #TempTable1653_1
                      FROM
                         dbo.PalletDetail PD2 WITH (NOLOCK)
                      WHERE
                         PD2.palletkey = @cPalletKey
                         AND PD2.StorerKey = @cStorerKey
-                  )
+                  
                   SELECT DISTINCT
                      @cCaseID = PD.caseid
                   FROM dbo.PickDetail PD WITH (NOLOCK)
                   INNER JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
                   INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PI.RefNo IS NOT NULL AND PD.CaseID = PI.RefNo AND PI.CartonStatus = ''PACKED''
+                  LEFT JOIN #TempTable1653_1 FPD1 ON FPD1.CaseID = PD.CaseID
                   WHERE
                      PD.StorerKey = @cStorerKey
                      AND PD.Status = ''5''
-                     AND NOT EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD WHERE FPD.CaseID = PD.CaseID AND EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD2 WHERE FPD2.UserDefine01 = FPD.UserDefine01))'
-                     +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine01,'''') = O.' + @cCODELKUPUdf01 + ') ', '')
-                     +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine02,'''') = O.' + @cCODELKUPUdf02 + ') ', '')
-                     +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine03,'''') = O.' + @cCODELKUPUdf03 + ') ', '')
-                     +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine04,'''') = O.' + @cCODELKUPUdf04 + ') ', '')
-                     +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine05,'''') = O.' + @cCODELKUPUdf05 + ') ', '')
+                     AND FPD1.CaseID IS NULL '
+                     + IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS(SELECT 1 FROM #TempTable1653_1 FPD WHERE FPD.UserDefine01 IS NOT NULL AND O.'  + @cCODELKUPUdf01 + ' IS NOT NULL AND FPD.UserDefine01 = O.' + @cCODELKUPUdf01 + ')', '')
+                     + IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS(SELECT 1 FROM #TempTable1653_1 FPD WHERE FPD.UserDefine02 IS NOT NULL AND O.'  + @cCODELKUPUdf02 + ' IS NOT NULL AND FPD.UserDefine02 = O.' + @cCODELKUPUdf02 + ')', '')
+                     + IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS(SELECT 1 FROM #TempTable1653_1 FPD WHERE FPD.UserDefine03 IS NOT NULL AND O.'  + @cCODELKUPUdf03 + ' IS NOT NULL AND FPD.UserDefine03 = O.' + @cCODELKUPUdf03 + ')', '')
+                     + IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS(SELECT 1 FROM #TempTable1653_1 FPD WHERE FPD.UserDefine04 IS NOT NULL AND O.'  + @cCODELKUPUdf04 + ' IS NOT NULL AND FPD.UserDefine04 = O.' + @cCODELKUPUdf04 + ')', '')
+                     + IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS(SELECT 1 FROM #TempTable1653_1 FPD WHERE FPD.UserDefine05 IS NOT NULL AND O.'  + @cCODELKUPUdf05 + ' IS NOT NULL AND FPD.UserDefine05 = O.' + @cCODELKUPUdf05 + ')', '')
+                  + ' DROP TABLE #TempTable1653_1'
 
                   SET @cSQLParam =  '@cStorerKey NVARCHAR( 15), @cPalletKey NVARCHAR(20), @cCaseID NVARCHAR(20) OUTPUT'
                   EXEC sp_executesql @cSQLString, @cSQLParam, 
@@ -259,45 +266,54 @@ BEGIN
                BEGIN TRY
                   IF @cMBOLKey IS NOT NULL AND TRIM(@cMBOLKey) <> ''
                   BEGIN
+                     IF OBJECT_ID('tempdb..#FilteredOrders') IS NOT NULL
+                     DROP TABLE #FilteredOrders
+
+                     IF OBJECT_ID('tempdb..#FilteredPalletDetail') IS NOT NULL
+                        DROP TABLE #FilteredPalletDetail
+
                      SET @cSQLString =
-                        'WITH FilteredOrders AS (
+                        '
                            SELECT DISTINCT '
-                           +IIF(@cCODELKUPUdf01 <> '',   'O2.'+@cCODELKUPUdf01+', ','')
-                           +IIF(@cCODELKUPUdf02 <> '',   'O2.'+@cCODELKUPUdf02+', ','')
-                           +IIF(@cCODELKUPUdf03 <> '',   'O2.'+@cCODELKUPUdf03+', ','')
-                           +IIF(@cCODELKUPUdf04 <> '',   'O2.'+@cCODELKUPUdf04+', ','')
-                           +IIF(@cCODELKUPUdf05 <> '',   'O2.'+@cCODELKUPUdf05+', ','')
-                           +' O2.ORDERKEY 
+                           + IIF(@cCODELKUPUdf01 <> '',   'O2.'+@cCODELKUPUdf01+', ','')
+                           + IIF(@cCODELKUPUdf02 <> '',   'O2.'+@cCODELKUPUdf02+', ','')
+                           + IIF(@cCODELKUPUdf03 <> '',   'O2.'+@cCODELKUPUdf03+', ','')
+                           + IIF(@cCODELKUPUdf04 <> '',   'O2.'+@cCODELKUPUdf04+', ','')
+                           + IIF(@cCODELKUPUdf05 <> '',   'O2.'+@cCODELKUPUdf05+', ','')
+                           +' O2.ORDERKEY
+                           INTO #FilteredOrders
                            FROM dbo.Orders O2 WITH (NOLOCK)
                            INNER JOIN dbo.PickDetail PD2 WITH (NOLOCK) ON PD2.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD2.StorerKey
                            WHERE
                               PD2.CaseID = @cTrackNo
                               AND O2.StorerKey = @cStorerKey
-                        ),
-                        FilteredPalletDetail AS (
+                        
                            SELECT DISTINCT
-                              PD2.StorerKey,
                               PD2.CaseID,
                               PD2.UserDefine01
+                           INTO #FilteredPalletDetail
                            FROM dbo.PalletDetail PD2 WITH (NOLOCK)
-                           INNER JOIN dbo.Orders O2 WITH (NOLOCK) ON O2.MBOLKey IS NOT NULL AND O2.MBOLKey <> '''' AND O2.MBOLKey = PD2.UserDefine01 AND O2.StorerKey = PD2.StorerKey
-                           WHERE PD2.StorerKey = @cStorerKey AND PD2.UserDefine01 IS NOT NULL AND PD2.UserDefine01 <> ''''
-                           AND EXISTS(SELECT 1 FROM dbo.PickDetail PD3 WITH (NOLOCK) WHERE PD3.StorerKey = @cStorerKey AND PD3.CaseID = @cTrackNo AND PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey)
-                        )
+                           INNER JOIN dbo.Orders O2 WITH (NOLOCK) ON O2.MBOLKey IS NOT NULL AND O2.MBOLKey IS NOT NULL AND O2.MBOLKey = PD2.UserDefine01 AND O2.StorerKey = PD2.StorerKey
+                           INNER JOIN dbo.PickDetail PD3 WITH (NOLOCK) ON PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey AND PD3.CaseID = @cTrackNo
+                           WHERE PD2.StorerKey = @cStorerKey
+                        
                         SELECT DISTINCT
                            @cCaseID = PD.caseid
                         FROM dbo.PickDetail PD WITH (NOLOCK)
                         INNER JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
                         INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PI.RefNo IS NOT NULL AND PD.CaseID = PI.RefNo AND PI.CartonStatus = ''PACKED''
+                        LEFT JOIN #FilteredPalletDetail FPD ON FPD.CaseID = PD.CaseID
                         WHERE
                            PD.StorerKey = @cStorerKey
                            AND PD.Status = ''5''
-                           AND NOT EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD WHERE FPD.CaseID = PD.CaseID AND FPD.StorerKey  = PD.StorerKey ) '
-                           +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf01 + ' IS NULL AND O.' + @cCODELKUPUdf01 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf01 + ' IS NOT NULL AND O.' + @cCODELKUPUdf01 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf01 + ' = O.' + @cCODELKUPUdf01 + '))', '')
-                           +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf02 + ' IS NULL AND O.' + @cCODELKUPUdf02 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf02 + ' IS NOT NULL AND O.' + @cCODELKUPUdf02 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf02 + ' = O.' + @cCODELKUPUdf02 + '))', '')
-                           +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf03 + ' IS NULL AND O.' + @cCODELKUPUdf03 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf03 + ' IS NOT NULL AND O.' + @cCODELKUPUdf03 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf03 + ' = O.' + @cCODELKUPUdf03 + '))', '')
-                           +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf04 + ' IS NULL AND O.' + @cCODELKUPUdf04 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf04 + ' IS NOT NULL AND O.' + @cCODELKUPUdf04 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf04 + ' = O.' + @cCODELKUPUdf04 + '))', '')
-                           +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf05 + ' IS NULL AND O.' + @cCODELKUPUdf05 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf05 + ' IS NOT NULL AND O.' + @cCODELKUPUdf05 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf05 + ' = O.' + @cCODELKUPUdf05 + '))', '')
+                           AND FPD.CaseID IS NULL '
+                           + IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS ( SELECT 1 FROM #FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf01 + ' IS NOT NULL AND O.' + @cCODELKUPUdf01 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf01 + ' = O.' + @cCODELKUPUdf01 + '))', '')
+                           + IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS ( SELECT 1 FROM #FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf02 + ' IS NOT NULL AND O.' + @cCODELKUPUdf02 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf02 + ' = O.' + @cCODELKUPUdf02 + '))', '')
+                           + IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS ( SELECT 1 FROM #FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf03 + ' IS NOT NULL AND O.' + @cCODELKUPUdf03 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf03 + ' = O.' + @cCODELKUPUdf03 + '))', '')
+                           + IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS ( SELECT 1 FROM #FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf04 + ' IS NOT NULL AND O.' + @cCODELKUPUdf04 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf04 + ' = O.' + @cCODELKUPUdf04 + '))', '')
+                           + IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS ( SELECT 1 FROM #FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf05 + ' IS NOT NULL AND O.' + @cCODELKUPUdf05 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf05 + ' = O.' + @cCODELKUPUdf05 + '))', '')
+                        + ' DROP TABLE #FilteredOrders
+                        DROP TABLE #FilteredPalletDetail '
                   END
                   ELSE
                   BEGIN

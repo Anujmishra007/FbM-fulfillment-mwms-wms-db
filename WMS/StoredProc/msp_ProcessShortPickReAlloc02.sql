@@ -165,7 +165,7 @@ BEGIN
 
       IF @n_Continue IN (1, 2)
       BEGIN
-         --RDT update QtyMoved = Qty, Qty = 0, Status = '4'
+         --RDT update Status = '4'， QtyMoved, Qty no change
          INSERT INTO #TMP_SHORTED (Pickdetailkey)
          SELECT PD.Pickdetailkey
          FROM #PICKDETAIL_WIP PD WITH (NOLOCK)
@@ -173,17 +173,25 @@ BEGIN
          AND PD.Storerkey = @c_StorerKey
          AND PD.Sku = @c_SKU
          AND PD.Loc = @c_Loc
-         AND PD.QtyMoved > 0
-         AND PD.Qty = 0
+         --AND PD.QtyMoved > 0
+         --AND PD.Qty = 0
          AND PD.[Status] = '4'
 
-         INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
-         SELECT TD.Taskdetailkey
-         FROM TASKDETAIL TD WITH (NOLOCK)
-         WHERE TD.Wavekey = @c_Wavekey
-         AND TD.Storerkey = @c_StorerKey
-         AND TD.Sku = @c_SKU
-         AND TD.TaskType IN ('RPF', 'FCP')
+         IF ISNULL(@c_Taskdetailkey, '') <> ''
+         BEGIN
+            INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
+            SELECT @c_Taskdetailkey
+         END
+         ELSE
+         BEGIN
+            INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
+            SELECT TD.Taskdetailkey
+            FROM TASKDETAIL TD WITH (NOLOCK)
+            WHERE TD.Wavekey = @c_Wavekey
+            AND TD.Storerkey = @c_StorerKey
+            AND TD.Sku = @c_SKU
+            AND TD.TaskType IN ('RPF', 'FCP')
+         END
       END
    END
 

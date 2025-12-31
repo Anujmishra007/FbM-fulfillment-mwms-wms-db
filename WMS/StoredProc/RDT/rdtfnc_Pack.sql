@@ -105,6 +105,7 @@ GO
 /* 2025-08-18   0.0 Jackc       !!!Cutover. Use V0 repo for work!!!                             */
 /* 2025-11-11   7.9 Jackc       FCR-8675 Extend SKU, UCC barcode length                         */
 /* 2025-11-12   8.0 NickT       UWP-43907 Merge code from V0                                    */
+/* 2025-12-08   8.1 Dennis      FCR-8931 AddExtScnSP on Step 8                                  */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -1329,6 +1330,7 @@ BEGIN
          SET @cOutField02 = '0/0'
          SET @cOutField03 = ''  -- SKU
          SET @cOutField04 = ''  -- SKU
+         SET @cMobBarcode = '' -- New SKU input V7.9
          SET @cOutField05 = ''  -- Desc 1
          SET @cOutField06 = ''  -- Desc 2
          SET @cOutField07 = '0' -- Packed
@@ -1423,6 +1425,7 @@ BEGIN
          SET @cOutField01 = RTRIM( @cCustomNo)
          SET @cOutField02 = CAST( CAST( @cLabelLine AS INT) AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
          SET @cOutField03 = '' -- SKU
+         SET @cMobBarcode = '' -- New SKU input V7.9
          SET @cOutField04 = @cSKU
          SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
          SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
@@ -1468,6 +1471,7 @@ BEGIN
          -- Prepare next screen var
          SET @cOutField01 = RTRIM( @cCustomNo)
          SET @cOutField02 = '' -- Option
+         SET @cMobBarcode = '' -- clear existing values
 
          SET @nEnter = 0 --(JHU151)  
 
@@ -1486,6 +1490,7 @@ BEGIN
 
          -- Prepare next screen var
          SET @cOutField01 = '' -- UCC
+         SET @cMobBarcode = '' -- New UCC input V7.9
          SET @cOutField02 = '' -- Scan
          SET @cOutField03 = CAST( @nTotalUCC AS NVARCHAR( 5))
 
@@ -2385,7 +2390,7 @@ BEGIN
          SET @cOutField12 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
          SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
          SET @cOutField14 = '' -- PQTY
-         SET @cMobBarcode = '' --clear v_barcode
+         --SET @cMobBarcode = '' --fcr8765 hotfix, donot clear barcode value. It is used when input sku only
 
          -- Convert to prefer UOM QTY
          IF @cPUOM = '6' OR -- When preferred UOM = master unit
@@ -3186,7 +3191,7 @@ BEGIN
                GOTO Step_4
             END
 
-            GOTO Quit
+            GOTO Step_99
          END
 
          -- Print label
@@ -5487,7 +5492,7 @@ BEGIN
          SET @nScn = @nScn - 4
          SET @nStep = @nStep - 4
 
-         GOTO Quit
+         GOTO STEP_99
       END
 
       -- Print label
@@ -6462,9 +6467,11 @@ BEGIN
          ('@cJumpType',       @cJumpType)
 
          DECLARE  @nPreSCn       INT,
+                  @nPreStep      INT,
                   @nPreInputKey  INT
 
          SET @nPreSCn = @nScn
+         SET @nPreStep = @nStep
          SET @nPreInputKey = @nInputKey
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
@@ -6589,7 +6596,25 @@ BEGIN
 
             RETURN
          END
-
+         ELSE IF @cExtendedScreenSP = 'rdt_838ExtScn06'
+         BEGIN
+            IF @nPreStep = 99 AND @nPreScn = 4053 AND @nScn = 6708
+            BEGIN
+               SET @cCartonType = @cUDF01
+               SET @fCube = CAST (@cUDF02 AS FLOAT )
+               SET @cRefNo = @cUDF03
+               SET @cLength = @cUDF04
+            END
+            IF @nStep = 5
+            BEGIN
+               IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '5') -- Print label screen
+               BEGIN
+                  SET @cInField01 = @cDefaultPrintLabelOption --Option
+                  SET @nInputKey = 1 -- ENTER
+                  GOTO Step_5
+               END
+            END
+         END
          GOTO Quit
       END
    END -- Ext scn sp <> ''

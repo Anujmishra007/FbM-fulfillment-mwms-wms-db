@@ -48,6 +48,7 @@ GO
 /*                              expand QTY to support 6 digitals                */
 /* 2025-08-25 3.5.0  Dennis     FCR-3959 Extended Screen                         */
 /* 2025-11-24 3.6.0  NickT      UWP-44566 Reset QTY when get new task or on ToLoc*/
+/* 2025-12-18 3.7.0  NickT      UWP-45705 Fix issue: MQty is 1 while short pick  */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -1830,7 +1831,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @cSKU <> '' AND @cDisableQTYField = '1' -- QTY field disabled
+         IF @cSKUValidated <> '99' AND @cSKU <> '' AND @cDisableQTYField = '1' -- QTY field disabled
             SET @nMQTY = @nMQTY + 1
       END
       SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 6)) END -- PQTY

@@ -1,17 +1,18 @@
 
-/************************************************************************/
-/* Store procedure: rdt_1764CreateTask16                                */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Purpose: Cajamar                                                     */
-/*                                                                      */
-/* Called from:                                                         */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date        Rev  Author    Purposes                                  */
-/* 2025/11/27  1.0  Jackc     FCR-8535 Created                          */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_1764CreateTask16                                   */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Purpose: Cajamar                                                        */
+/*                                                                         */
+/* Called from:                                                            */
+/*                                                                         */
+/* Modifications log:                                                      */
+/*                                                                         */
+/* Date        Rev    Author    Purposes                                   */
+/* 2025/11/27  1.0.0  Jackc     FCR-8535 Created                           */
+/* 2025/12/18  1.0.1  Jackc     FCR-8535 Skip create task if all full short*/
+/****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764CreateTask16] (
    @nMobile        INT,
@@ -27,6 +28,8 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @nDebugFlag  INT = 0
 
    DECLARE @nTranCount  INT
    DECLARE @nSuccess    INT
@@ -110,6 +113,9 @@ BEGIN
          (PickMethod = 'PP' AND Qty <> 0 AND ISNULL(ReasonKey,'') = '') --Skip full short PP task
          OR (PickMethod = 'FP')
       )
+
+   IF NOT EXISTS (SELECT 1 FROM @tTask) --1.0.1
+      RETURN
 
    -- Not generate next task if: 
    -- 1) Already reach final location or 
@@ -263,20 +269,21 @@ BEGIN
       END
    END
    ELSE
-   BEGIN 
-      -- Insert transit task
-      INSERT INTO TaskDetail (
-         TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, 
-         PickMethod, Storerkey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, Priority, SourcePriority, TrafficCop)
-      VALUES (
-         @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey, 
-         'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cPriority, @cSourcePriority, NULL)
-      IF @@ERROR <> 0
-      BEGIN
+   BEGIN
+      BEGIN TRY 
+         -- Insert transit task
+         INSERT INTO TaskDetail (
+            TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, 
+            PickMethod, Storerkey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, Priority, SourcePriority, TrafficCop)
+         VALUES (
+            @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey, 
+            'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cPriority, @cSourcePriority, NULL)
+      END TRY
+      BEGIN CATCH
          SET @nErrNo = 252305
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
          GOTO RollBackTran
-      END
+      END CATCH
    END
 
    COMMIT TRAN rdt_1764CreateTask16 -- Only commit change made here

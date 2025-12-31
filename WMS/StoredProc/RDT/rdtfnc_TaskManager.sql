@@ -885,6 +885,7 @@ BEGIN
             IF @nInputKey = 0
             BEGIN
                SET @nFunc = 1756
+               SET @cFromloc = ''
             END
          END
       END
@@ -1087,6 +1088,7 @@ BEGIN
                   SET @cRefKey04 = ''
                   SET @cRefKey05 = ''
                   SET @cTTMTasktype = ''
+                  SET @cFromloc = ''
                END
             END
          END

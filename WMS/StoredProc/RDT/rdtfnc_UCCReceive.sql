@@ -1087,7 +1087,7 @@ BEGIN
                        ' @dLottable14     DATETIME       OUTPUT,  ' +
                        ' @dLottable15     DATETIME       OUTPUT,  ' +
                        ' @nErrNo          INT            OUTPUT,  ' +
-                       ' @cErrMsg         NVARCHAR( 20)  OUTPUT   '
+                       ' @cErrMsg         NVARCHAR( 1024)  OUTPUT   '
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
@@ -1945,7 +1945,7 @@ BEGIN
                     ' @dLottable14     DATETIME       OUTPUT,  ' +
                     ' @dLottable15     DATETIME       OUTPUT,  ' +
                     ' @nErrNo          INT            OUTPUT,  ' +
-                    ' @cErrMsg         NVARCHAR( 20)  OUTPUT   '
+                    ' @cErrMsg         NVARCHAR( 1024)  OUTPUT   '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,

@@ -20,6 +20,8 @@ GO
 /* 29-Jul-2016 1.3  Ung       SOS324184 Fix split task QTY <> SystemQTY */
 /* 07-Sep-2016 1.4  Ung       SOS372531 Add GroupKey                    */
 /* 17-Jun-2025 1.5  Dennis    FCR-3959 Customize Confirm                */
+/* 09-Nov-2025 1.6  NickT     UWP-43838 Skip completed task             */
+/* 11-Nov-2025 1.7  NickT     UWP-43955 Fix Exception for USA Levis     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_Replen_Confirm] (
@@ -116,13 +118,19 @@ BEGIN
       @nSystemQTY = SystemQTY, 
       @cLOT = LOT, 
       @cPickMethod = PickMethod, 
-      @cStatus = Status
+      @cStatus = Status,
+      @cReasonKey = ReasonKey
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskDetailKey
 
    -- Check task already confirm/SKIP/CANCEL
    IF @cStatus IN ('5', '0', 'X')
       RETURN
+
+   IF @cReasonKey = '' AND @cStatus = '9'
+   BEGIN
+      RETURN
+   END
 
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_TM_Replen_Confirm -- For rollback or commit only our own transaction

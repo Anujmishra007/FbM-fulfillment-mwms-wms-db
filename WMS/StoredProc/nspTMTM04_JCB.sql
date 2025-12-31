@@ -14,8 +14,9 @@ GO
 /* 2025-06-09   1.0.0 NickT     FCR-5727 Create                                 */
 /* 2025-10-10   1.1   SSA01     UWP-42248 -Enhanced session management          */
 /* 2025-11-26   2.0   PPA374    Updated "Aisle in use logic"                    */ 
+/* 2025-12-11   2.1   PPA374    Added new error for the MHE not for To Loc      */
 /********************************************************************************/
-CREATE OR ALTER    PROC    [RDT].[nspTMTM04_JCB]
+CREATE OR ALTER PROC    [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
    ,@c_ptcid            NVARCHAR(5)
    ,@c_userid           NVARCHAR(18)
@@ -2461,17 +2462,24 @@ END
 	       IF @n_err = 63060
 		      AND EXISTS (
                  SELECT 1
-                 FROM dbo.TaskDetail TD WITH(NOLOCK)
+                 FROM dbo.TaskDetail TD WITH (NOLOCK)
                     CROSS APPLY (VALUES (TD.FromLoc), (TD.ToLoc)) AS X(Loc)
-                    INNER JOIN dbo.LOC L WITH(NOLOCK)
+                    INNER JOIN dbo.LOC L WITH (NOLOCK)
                        ON L.Loc = X.Loc
                        AND L.Facility = @cFacility
+                    LEFT JOIN dbo.LOC L2 WITH(NOLOCK)
+                       ON L2.Loc = TD.FromLoc
+                       AND L2.LocationCategory = 'PND_OUT'
                  WHERE TD.AreaKey = @c_AreaKey01
-			        AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                    AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                     AND TD.StorerKey = @cStorerKey
+                    AND L2.Loc IS NULL              
                     AND (
                        TD.Status = '0'
-                       OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                       OR (
+					      TD.Status = '3'
+                          AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+					   )
                     )
                     AND L.LocAisle IN (SELECT LocAisle FROM #Aisle_InUsed)
 	          )
@@ -2653,6 +2661,40 @@ END
 		    GOTO QuitErrorCheck
          END
 
+		 -- MHE not suitable for the target location
+		 IF @n_err = 63060
+		    AND EXISTS (
+               SELECT 1
+               FROM dbo.AreaDetail AD WITH (NOLOCK)
+                  INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
+                     ON PAZEED.PutawayZone = AD.PutawayZone
+                  INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
+                     AND RM.UserName = @c_userid
+                  INNER JOIN dbo.AreaDetail AD2 WITH (NOLOCK)
+                     ON AD2.AreaKey = AD.AreaKey
+                  INNER JOIN dbo.LOC L WITH (NOLOCK)
+                     ON L.PutawayZone = AD2.PutawayZone
+                  INNER JOIN dbo.TaskDetail TD WITH (NOLOCK)
+                     ON TD.ToLoc = L.Loc
+                     AND TD.AreaKey = @c_AreaKey01
+                     AND TD.StorerKey = @cStorerKey
+                     AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                     AND (
+                        TD.Status = '0'
+                        OR (
+						   TD.Status = '3'
+                           AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+                     )
+			)
+         BEGIN
+	        SELECT @n_continue = 3
+            SELECT @n_err = 218261
+            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') --'218261^MHE not for ToLoc' --PPA374 11/12/2025
+		    GOTO QuitErrorCheck
+		 END
+
 	     --Any other task not captured above
 	     IF @n_err = 63060
 	        AND EXISTS (
@@ -2687,7 +2729,7 @@ END
 
 	  QuitErrorCheck:
 	  --Update tasks for errors:
-	  IF @n_err IN ('218257','218245','218255','218258','218252','218253','218254')
+	  IF @n_err IN ('218257','218245','218255','218258','218252','218253','218254','218261')
 	  BEGIN
 
 	  	  	UPDATE TaskDetail
@@ -2703,27 +2745,62 @@ END
                   )
 		    )
 
+			UPDATE TaskDetail
+			SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for To Loc' --PPA374 11/12/2025
+			WHERE TaskDetailKey IN (
+			   SELECT TD.TaskDetailKey
+               FROM dbo.AreaDetail AD WITH (NOLOCK)
+                  INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
+                     ON PAZEED.PutawayZone = AD.PutawayZone
+                  INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
+                     AND RM.UserName = @c_userid
+                  INNER JOIN dbo.AreaDetail AD2 WITH (NOLOCK)
+                     ON AD2.AreaKey = AD.AreaKey
+                  INNER JOIN dbo.LOC L WITH (NOLOCK)
+                     ON L.PutawayZone = AD2.PutawayZone
+                  INNER JOIN dbo.TaskDetail TD WITH (NOLOCK)
+                     ON TD.ToLoc = L.Loc
+                     AND TD.AreaKey = @c_AreaKey01
+                     AND TD.StorerKey = @cStorerKey
+                     AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                     AND (
+                        TD.Status = '0'
+                        OR (
+						   TD.Status = '3'
+                           AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+                     )
+			)
+
 	        UPDATE TD
-              SET TD.StatusMsg = 'Aisle in use by ' + T1.UserKey
-              FROM dbo.TaskDetail TD
-                 INNER JOIN (
-                    SELECT DISTINCT TD.TaskDetailKey, AIU.UserKey
-                    FROM dbo.TaskDetail TD WITH (NOLOCK)
-                       CROSS APPLY (VALUES (TD.FromLoc), (TD.ToLoc)) AS X(Loc)
-                       INNER JOIN dbo.LOC L WITH (NOLOCK)
-                          ON L.Loc = X.Loc
-                          AND L.Facility = @cFacility
-                       INNER JOIN #Aisle_InUsed AIU
-                          ON AIU.LocAIsle = L.LocAisle
-                    WHERE TD.AreaKey = @c_AreaKey01
-                       AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
-                       AND TD.StorerKey = @cStorerKey
-                       AND (
-                          TD.Status = '0'
-                          OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
-                       )
-                 ) AS T1
-                    ON TD.TaskDetailKey = T1.TaskDetailKey
+	        SET TD.StatusMsg = 'Aisle in use by ' + T1.UserKey
+	        FROM dbo.TaskDetail TD
+	           INNER JOIN (
+	              SELECT DISTINCT TD.TaskDetailKey, AIU.UserKey
+	              FROM dbo.TaskDetail TD WITH (NOLOCK)
+	                 CROSS APPLY (VALUES (TD.FromLoc), (TD.ToLoc)) AS X(Loc)
+	                 INNER JOIN dbo.LOC L WITH (NOLOCK)
+	                    ON L.Loc = X.Loc
+	                    AND L.Facility = @cFacility
+	                 INNER JOIN #Aisle_InUsed AIU
+	                    ON AIU.LocAIsle = L.LocAisle
+	                 LEFT JOIN dbo.LOC L2 WITH (NOLOCK)
+	                    ON L2.Loc = TD.FromLoc
+	                    AND L2.LocationCategory = 'PND_OUT'
+	              WHERE TD.AreaKey = @c_AreaKey01
+	                 AND L2.Loc IS NULL
+	                 AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+	                 AND TD.StorerKey = @cStorerKey
+	                 AND (
+	                    TD.Status = '0'
+	                    OR (
+						   TD.Status = '3'
+	                       AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+	           )
+	        ) AS T1
+	        ON TD.TaskDetailKey = T1.TaskDetailKey
 
 			UPDATE TaskDetail
 		    SET StatusMsg = 'Over weight for ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid)

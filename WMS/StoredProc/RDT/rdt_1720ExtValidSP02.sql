@@ -32,14 +32,29 @@ SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 
 DECLARE
-   @cAllowConsolidatePalletStatus5 NVARCHAR(5)
+   @cAllowConsolidatePalletStatus5  NVARCHAR(5),
+   @cOption                         NVARCHAR(5),
+   @cAllowMergePartial              NVARCHAR(5)
 
    SET @cAllowConsolidatePalletStatus5 = rdt.RDTGetConfig( @nFunc, 'AllowConsolidatePalletStatus5', @cStorerKey)
+   SET @cAllowMergePartial = rdt.RDTGetConfig( @nFunc, 'AllowMergePartial', @cStorerKey)
 
 IF @nFunc = 1720
 BEGIN
    IF @nStep = 1
    BEGIN
+      SELECT @cOption = I_Field02
+      FROM RDT.RDTMOBREC (NOLOCK)
+      WHERE Mobile = @nMobile
+
+      IF @cAllowMergePartial <> '1' AND ISNULL(RTRIM(@cOption),'') = '9'
+      BEGIN
+         SET @nErrNo = 253112
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Not allow merge partial
+         EXEC rdt.rdtSetFocusField @nMobile, 2
+         GOTO QUIT
+      END
+
       IF @cAllowConsolidatePalletStatus5 = '0'
       BEGIN
          IF EXISTS (SELECT 1 
@@ -58,7 +73,6 @@ BEGIN
                   INNER JOIN dbo.PalletDetail PD WITH (NOLOCK) ON PD.PalletKey = PL.PalletKey 
                   WHERE PL.PalletKey = @cFromPalletID 
                      AND PL.Status = '9'
-                     AND ISNULL(PD.UserDefine04,'') <> ''
                   )
       BEGIN
          SET @nErrNo = 253102
@@ -69,6 +83,13 @@ BEGIN
    END
    ELSE IF @nStep = 2
    BEGIN
+      IF @cFromPalletID = @cToPalletID
+      BEGIN
+         SET @nErrNo = 253107
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- To Pallet cannot be the same as From Pallet
+         GOTO QUIT
+      END
+
       IF @cAllowConsolidatePalletStatus5 = '0'
       BEGIN
          IF EXISTS (SELECT 1 
@@ -86,7 +107,6 @@ BEGIN
                   INNER JOIN dbo.PalletDetail PD WITH (NOLOCK) ON PD.PalletKey = PL.PalletKey 
                   WHERE PL.PalletKey = @cToPalletID 
                      AND PL.Status = '9'
-                     AND ISNULL(PD.UserDefine04,'') <> ''
                   )
       BEGIN
          SET @nErrNo = 253104
@@ -130,6 +150,36 @@ BEGIN
          SET @nErrNo = 253106
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different Ship-to
          GOTO QUIT
+      END
+   END
+   ELSE IF @nStep = 3
+   BEGIN
+      IF NOT EXISTS ( SELECT  1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cDropID ) 
+      BEGIN 
+            SET @nErrNo = 253108
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidTote
+            GOTO QUIT
+      END
+         
+      IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cDropID AND Status = '5')
+      BEGIN
+            SET @nErrNo = 253109
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote is scaned to truck
+            GOTO QUIT
+      END
+      
+      IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cDropID AND Status = '9' )
+      BEGIN
+            SET @nErrNo = 253110
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote is shipped
+            GOTO QUIT
+      END
+      
+      IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE CaseID = @cDropID AND Status = '3' ) 
+      BEGIN
+            SET @nErrNo = 253111
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet is not closed
+            GOTO QUIT
       END
    END
 END

@@ -1,0 +1,9 @@
+--rdt_1836ExtUpd07
+--FCR-8535
+--253301 - 253350
+
+EXEC rdt.rdtdropmsg 253301 , 253350	
+
+EXECUTE rdt.rdtAddMsg 253301, 10, '253301^UpdUCCFail', 'us_english', 1836, 0, '253301 Update UCC failed'
+
+SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 253301 AND 253350
