@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
-/* 05-Dec-2025  WLChooi  1.0  Initial Version                           */
+/* 31-Dec-2025  WLChooi  1.0  Initial Version                           */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspWAVPK01]  
         @c_Wavekey NVARCHAR(10)
@@ -1509,7 +1509,7 @@ BEGIN
                AND PD.CartonNo = @n_CartonNo 
                                         
                -- CartonNo and LabelLineNo will be inserted by trigger  
-               INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno, DropId)  
+               INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, ExpQty, AddWho, AddDate, EditWho, EditDate, Refno, DropId)  
                VALUES (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_StorerKey, @c_SKU,
                        @n_PackQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @c_UCCNo, '')  
                  
