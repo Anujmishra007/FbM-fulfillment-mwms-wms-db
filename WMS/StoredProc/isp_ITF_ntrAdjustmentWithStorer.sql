@@ -170,7 +170,7 @@ BEGIN
                   BEGIN
                     SET @tranflag = '0'
                   END
-                  UPDATE [DBO].[TRANSMITLOG2] SET transmitflag = @tranflag WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key3 = @c_Storerkey
+                  UPDATE [DBO].[TRANSMITLOG2] WITH (ROWLOCK) SET transmitflag = @tranflag WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key3 = @c_Storerkey
 
                   IF @b_success <> 1
                   BEGIN
