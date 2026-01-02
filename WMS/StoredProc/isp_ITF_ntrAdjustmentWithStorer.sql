@@ -172,7 +172,7 @@ BEGIN
 
                   --Below Lines are to set TransmitLog2.TransmitFlag to '0' during individual detail item update to re-trigger data if transmitFlag Not in ('0', '1')
                   DECLARE @tranflag  VARCHAR(1) = (SELECT transmitFlag FROM [DBO].[TRANSMITLOG2] WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key2 = @c_Storerkey)
-                  IF @tranflag >= '5' OR @tranflag in ('5', '9')
+                  IF @tranflag >= '5'
                   BEGIN
                     SET @tranflag = '0'
                   END
