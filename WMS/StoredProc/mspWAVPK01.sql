@@ -111,34 +111,6 @@ BEGIN
          , @c_VASFlag                  NVARCHAR(10) = 'N'
          , @c_Consigneekey             NVARCHAR(15) = ''
          , @c_CaseID                   NVARCHAR(20) = ''
-         --, @n_NoOfCarton               INT          = 0
-         --, @n_Qty_PD                   INT          = 0
-         --, @n_Qty_WO                   INT          = 0
-         --, @n_PendingMoveIn            INT          = 0       
-         --, @n_ToteSize                 FLOAT        = 0.00  
-         --, @n_TotalCube                FLOAT        = 0.00  
-         --, @c_Automation               NVARCHAR(10) = ''
-         --, @c_LocType_PND              NVARCHAR(10) = ''
-         --, @c_LocFac_PND               NVARCHAR(5)  = ''
-         --, @c_OrderLineNumber          NVARCHAR(5)  = ''
-         --, @c_Sku_Last                 NVARCHAR(20) = ''
-         --, @c_Loc                      NVARCHAR(10) = ''
-         --, @c_Loc_Last                 NVARCHAR(10) = ''
-         --, @c_DropID                   NVARCHAR(20) = ''
-         --, @c_UOM                      NVARCHAR(10) = ''
-         --, @c_PickMethod               NVARCHAR(10) = ''
-         --, @c_FromLocType              NVARCHAR(10) = ''
-         --, @c_FromLogicalLoc           NVARCHAR(10) = ''
-         --, @c_FromPAZone               NVARCHAR(10) = ''
-         --, @c_FromPAZone_Last          NVARCHAR(10) = ''
-         --, @c_ToLocType                NVARCHAR(10) = ''
-         --, @c_ToLocCategory            NVARCHAR(10) = ''
-         --, @c_ToPAZone                 NVARCHAR(10) = ''
-         --, @c_TaskType                 NVARCHAR(10) = ''
-         --, @c_TaskStatus               NVARCHAR(10) = ''
-         --, @c_FinalLoc                 NVARCHAR(10) = ''
-         --, @c_PickMethod_TD            NVARCHAR(10) = ''
-         --, @c_RefTaskkey               NVARCHAR(10) = ''
   
    SELECT @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 1, @n_err = 0, @c_errmsg = '', @c_SourceType = 'mspWAVPK01'  
       
@@ -453,7 +425,7 @@ BEGIN
              , PD.Sku
 
       ;WITH ORD_AGG AS (
-         SELECT O.Orderkey, O.Storerkey, O.SKU, TotalQtyPacked = SUM(PD.Qty), TotalCubePacked = SUM(PD.Qty * O.StdCube)
+         SELECT O.Orderkey, O.Storerkey, O.SKU, TotalQtyPacked = SUM(PD.ExpQty), TotalCubePacked = SUM(PD.ExpQty * O.StdCube)
          FROM #ORDERSKU O
          JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = O.Orderkey
          JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
