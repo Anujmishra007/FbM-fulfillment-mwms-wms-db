@@ -34,6 +34,8 @@ GO
 /* 2011-06-24   KHLim01   1.0   add UPDATE(TrafficCop) to allow bypass  */  
 /* 2015-09-11   MCTang    1.1   ADD INVHCHGLOG (MC01)                   */ 
 /* 2025-08-08   Michael   1.2   FCR-6025-Add InventoryHold TLOG2 (ML01) */
+/* 2025-09-25   Michael   1.3   FCR-7829 Inventory UCC-level HOLD (ML02)*/
+/* 2026-01-02   Michael   1.4   FCR-9858 Gen TLog2 For ALL (ML03)       */
 /************************************************************************/  
 CREATE OR ALTER TRIGGER [dbo].[ntrInventoryHoldUpdate]  
 ON  [dbo].[INVENTORYHOLD]  
@@ -69,6 +71,9 @@ DECLARE @b_Success     int       -- Populated by calls to stored procedures - wa
       , @c_InsStatus          NVARCHAR(10)    --ML01
       , @c_Hold               NVARCHAR(1)    --ML01
       , @c_authority          NVARCHAR(30)   --ML01
+      , @c_UCCNo              NVARCHAR(20)   --ML02
+      , @c_Option5            NVARCHAR(MAX)  --ML03
+      , @c_GenTLog2ForALL     NVARCHAR(60)   --ML03
   
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT, @b_debug = 0  
   
@@ -121,11 +126,13 @@ BEGIN
                     AND   INSERTED.InventoryHoldKey = @c_InventoryHoldKey)  
          BEGIN
             SELECT @c_StorerKey = '', @c_Lot = '', @c_Loc = '', @c_ID = '', @c_Hold = '', @c_InsStatus = ''
+                 , @c_UCCNo = ''   --ML02
 
             SELECT @c_StorerKey = ISNULL(INSERTED.Storerkey, '')
                  , @c_Lot = ISNULL(INSERTED.LOT, '')
                  , @c_Loc = ISNULL(INSERTED.LOC, '')
                  , @c_ID = ISNULL(INSERTED.ID, '')
+                 , @c_UCCNo = ISNULL(INSERTED.UCCNo, '')   --ML02
                  , @c_Hold = ISNULL(INSERTED.Hold,'')
                  , @c_InsStatus = ISNULL(INSERTED.Status,'')
             FROM   INSERTED
@@ -150,24 +157,32 @@ BEGIN
                WHERE LOC = @c_Loc
             END
 
-            IF @c_StorerKey <> '' AND (dbo.fnc_RTrim(@c_Loc) <> '' OR dbo.fnc_RTrim(@c_Lot) <> '' OR  dbo.fnc_RTrim(@c_ID) <> '')
+            EXECUTE nspGetRight
+                 NULL          -- Facility
+               , @c_StorerKey  -- Storer
+               , NULL          -- Sku
+               , 'INVENTORY HOLD - INTERFACE2'   -- ConfigKey
+               , @b_success    OUTPUT
+               , @c_authority  OUTPUT
+               , @n_err        OUTPUT
+               , @c_errmsg     OUTPUT
+               , @c_Option5 = @c_Option5 OUTPUT   --ML03
+
+            IF @b_success <> 1
             BEGIN
-               EXECUTE nspGetRight
-                    NULL          -- Facility
-                  , @c_StorerKey  -- Storer
-                  , NULL          -- Sku
-                  , 'INVENTORY HOLD - INTERFACE2'   -- ConfigKey
-                  , @b_success    OUTPUT
-                  , @c_authority  OUTPUT
-                  , @n_err        OUTPUT
-                  , @c_errmsg     OUTPUT
-               IF @b_success <> 1
-               BEGIN
-                  SELECT @n_continue = 3
-                  SELECT @n_err = 70002
-                  SELECT @c_errmsg = 'ntrInventoryHoldUpdate: ' + dbo.fnc_RTrim(@c_errmsg)
-               END
-               ELSE IF @c_authority = '1'
+               SELECT @n_continue = 3
+               SELECT @n_err = 70002
+               SELECT @c_errmsg = 'ntrInventoryHoldUpdate: ' + dbo.fnc_RTrim(@c_errmsg)
+               BREAK
+            END
+      
+            SELECT @c_GenTLog2ForALL = dbo.fnc_GetParamValueFromString('@c_GenTLog2ForALL', @c_Option5, '')   --ML03
+
+            IF @c_authority = '1'
+            BEGIN
+               IF @c_StorerKey <> '' AND (dbo.fnc_RTrim(@c_Loc) <> '' OR dbo.fnc_RTrim(@c_Lot) <> '' OR  dbo.fnc_RTrim(@c_ID) <> '')
+                  OR (@c_StorerKey <> '' AND dbo.fnc_RTrim(@c_UCCNo) <> '')   --ML02
+                  OR @c_GenTLog2ForALL = 'Y'         --ML03
                BEGIN
                   EXECUTE nspg_getkey
                        'TransmitlogKey2'
