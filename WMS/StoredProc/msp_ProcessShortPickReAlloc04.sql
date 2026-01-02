@@ -372,8 +372,11 @@ BEGIN
    END  
    ELSE  
    BEGIN  
-      UPDATE PICKDETAIL SET Qty = QtyMoved, QtyMoved = 0, TrafficCop = NULL  
-      WHERE PickDetailKey IN (SELECT PickDetailKey FROM #TMP_SHORTED)   
+      UPDATE PICKDETAIL SET Qty = QtyMoved,   
+                       QtyMoved = 0,         
+                          Notes = Notes + ' No new Loc found after reallocation (msp_ProcessShortPickReAlloc04)',   
+                     TrafficCop = NULL    
+      WHERE PickDetailKey IN (SELECT PickDetailKey FROM #TMP_SHORTED)     
                AND Status = '4'  
   
       ----Rollback UCC Status to 1      
@@ -522,4 +525,3 @@ END
 GO
 GRANT EXECUTE ON [dbo].[msp_ProcessShortPickReAlloc04] TO [NSQL]
 GO
-
