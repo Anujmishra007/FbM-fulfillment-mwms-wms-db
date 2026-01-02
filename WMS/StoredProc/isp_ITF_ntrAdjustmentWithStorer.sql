@@ -137,6 +137,7 @@ BEGIN
           FROM  ITFTriggerConfig WITH (NOLOCK)
           WHERE StorerKey   = @c_StorerKey
           AND   SourceTable = @c_SourceTable
+          AND   TargetTable = 'TRANSMITLOG2'
           AND   sValue      = '1'
 
             SET @b_Success = 0
