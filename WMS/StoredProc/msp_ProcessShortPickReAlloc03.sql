@@ -818,6 +818,9 @@ BEGIN
 
    IF OBJECT_ID('tempdb..#T_Packdetail ','u') IS NOT NULL 
       DROP TABLE #T_Packdetail
+
+   IF OBJECT_ID('tempdb..#TMP_SHORTED ','u') IS NOT NULL 
+      DROP TABLE #TMP_SHORTED
       
    IF (XACT_STATE()) = -1 
    BEGIN
