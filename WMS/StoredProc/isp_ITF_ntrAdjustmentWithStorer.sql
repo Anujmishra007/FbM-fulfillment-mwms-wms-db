@@ -125,27 +125,20 @@ BEGIN
                   AND   SourceTable = @c_SourceTable
                   AND   sValue      = '1' )
       BEGIN
-          DECLARE Cur_ITFTriggerConfig CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-          SELECT DISTINCT  ConfigKey
-                          , Facility
-                          , Tablename
-                          , RecordType
-                          , RecordStatus
-                          , sValue
-                          , TargetTable
-                          , StoredProc
-                          , UpdatedColumns
+          SELECT DISTINCT  @c_ConfigKey = ConfigKey
+                          , @c_ConfigFacility = Facility
+                          , @c_Tablename = Tablename
+                          , @c_RecordType = RecordType
+                          , @c_RecordStatus = RecordStatus
+                          , @c_sValue = sValue
+                          , @c_TargetTable = TargetTable
+                          , @c_StoredProc = StoredProc
+                          , @c_UpdatedColumns = UpdatedColumns
           FROM  ITFTriggerConfig WITH (NOLOCK)
           WHERE StorerKey   = @c_StorerKey
           AND   SourceTable = @c_SourceTable
           AND   sValue      = '1'
 
-          OPEN Cur_ITFTriggerConfig
-          FETCH NEXT FROM Cur_ITFTriggerConfig INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus
-              , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
-
-          WHILE @@FETCH_STATUS <> -1
-          BEGIN
             SET @b_Success = 0
             --FOR CUSTOM SP'S WITH ADJ KEY
             IF ISNULL(RTRIM(@c_StoredProc),'') <> ''
@@ -189,15 +182,9 @@ BEGIN
                   END
                END
             END
-            GET_NEXT_Record:
-            FETCH NEXT FROM Cur_ITFTriggerConfig INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus
-                                                            , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
-          END
-          CLOSE Cur_ITFTriggerConfig
-          DEALLOCATE Cur_ITFTriggerConfig
       END
    END
-
+   /* Main Program (End) */
 /* Std - Error Handling (Start) */
 QUIT:
     WHILE @@TRANCOUNT < @n_StartTCnt
