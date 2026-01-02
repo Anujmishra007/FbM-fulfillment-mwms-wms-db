@@ -169,8 +169,14 @@ BEGIN
                               , @b_success OUTPUT
                               , @n_Err OUTPUT
                               , @c_ErrMsg OUTPUT
-                  --Below Line is to set TransmitLog2.TransmitFlag to '0' during individual detail item update to re-trigger data
-                  UPDATE [DBO].[TRANSMITLOG2] SET transmitflag = '0' WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key2 = @c_Storerkey
+
+                  --Below Lines are to set TransmitLog2.TransmitFlag to '0' during individual detail item update to re-trigger data if transmitFlag Not in ('0', '1')
+                  DECLARE @tranflag  VARCHAR(1) = (SELECT transmitFlag FROM [DBO].[TRANSMITLOG2] WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key2 = @c_Storerkey)
+                  IF @tranflag >= '5' OR @tranflag in ('5', '9')
+                  BEGIN
+                    SET @tranflag = '0'
+                  END
+                  UPDATE [DBO].[TRANSMITLOG2] SET transmitflag = @tranflag WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key2 = @c_Storerkey
 
                   IF @b_success <> 1
                   BEGIN
