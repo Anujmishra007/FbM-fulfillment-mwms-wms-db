@@ -840,17 +840,26 @@ BEGIN
                '1'   -- OptimizeCop
             FROM dbo.PickDetail WITH (NOLOCK)
             WHERE PickDetailKey = @cPickDetailKey
+
+            UPDATE dbo.PickDetail WITH(ROWLOCK)
+            SET CaseID = @cLabelNo,
+               Qty = @nQTY,
+               EditDate = GETDATE(),
+               EditWho = SUSER_NAME(),
+               TrafficCop = NULL
+            WHERE PickDetailKey = @cPickDetailKey
          END
+         ELSE
+         BEGIN
+            UPDATE dbo.PickDetail WITH(ROWLOCK)
+            SET CaseID = @cLabelNo,
+               EditDate = GETDATE(),
+               EditWho = SUSER_NAME(),
+               TrafficCop = NULL
+            WHERE PickDetailKey = @cPickDetailKey
 
-         UPDATE dbo.PickDetail WITH(ROWLOCK)
-         SET CaseID = @cLabelNo,
-            Qty = @nQTY,
-            EditDate = GETDATE(),
-            EditWho = SUSER_NAME(),
-            TrafficCop = NULL
-         WHERE PickDetailKey = @cPickDetailKey
-
-         SET @nQTY = @nQTY - @nPickQTY
+            SET @nQTY = @nQTY - @nPickQTY
+         END
       END
 
       UPDATE dbo.PackInfo WITH(ROWLOCK)
