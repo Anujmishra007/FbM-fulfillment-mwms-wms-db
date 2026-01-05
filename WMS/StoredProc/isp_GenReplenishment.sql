@@ -167,6 +167,17 @@ BEGIN
    	     SET @c_Zone03 = ''
    END
 
+    --ASC199 Start
+
+   declare @cUCCStorerConfig nvarchar(20)
+			      SELECT @cUCCStorerConfig = SValue
+				FROM dbo.StorerConfig (NOLOCK)
+				WHERE StorerKey = @c_storerkey
+      AND ConfigKey = 'ReplnMaxqtyCheck'
+
+	-- ASC199 END
+
+
    CREATE TABLE #REPLENISHMENT
    (
       StorerKey    NVARCHAR(15),
@@ -930,6 +941,13 @@ BEGIN
                       END
                       --ML01-S
                       ELSE IF @c_ReplenFlag = 'FP+UCC'
+                      --ASC199 start
+                       if @cUCCStorerConfig='1' 
+					         BEGIN
+					         SET @n_FullPackQty = CASE WHEN ISNULL(@c_UCCNo,'')<>'' and @n_OnHandQty<=@n_QtyLocationLimit THEN @n_OnHandQty ELSE 0 END
+					         END
+					         ELSE 
+                     --ASC199 END
                       BEGIN
                          SET @n_FullPackQty = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN @n_OnHandQty ELSE 0 END
                       END
