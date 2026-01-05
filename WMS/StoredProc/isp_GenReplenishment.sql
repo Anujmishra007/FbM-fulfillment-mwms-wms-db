@@ -946,7 +946,7 @@ BEGIN
 					         BEGIN
 					         SET @n_FullPackQty = CASE WHEN ISNULL(@c_UCCNo,'')<>'' and @n_OnHandQty<=@n_QtyLocationLimit THEN @n_OnHandQty ELSE 0 END
 					         END
-					         ELSE 
+					        ELSE 
                      --ASC199 END
                       BEGIN
                          SET @n_FullPackQty = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN @n_OnHandQty ELSE 0 END
