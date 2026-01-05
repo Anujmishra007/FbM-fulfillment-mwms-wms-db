@@ -24,9 +24,9 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_PalletReceive_Confirm] (
    @cFacility      NVARCHAR(  5),
    @cReceiptKey    NVARCHAR( 10),
    @cToID          NVARCHAR( 18),
+   @cToLOC         NVARCHAR( 10),
    @nErrNo         INT           OUTPUT,
-   @cErrMsg        NVARCHAR( 1024) OUTPUT,
-   @cToLOC         NVARCHAR( 10) = NULL
+   @cErrMsg        NVARCHAR( 1024) OUTPUT
 ) AS
 
    SET NOCOUNT ON
