@@ -123,7 +123,7 @@ BEGIN
          IF rdt.RDTGetConfig( @nFunc, 'DefaultUCCtoLabelNo', @cStorerkey) = '1'
             SET @cLabelNo = @cUCCNo
       END
-      
+
       IF @cLabelNo = ''
       BEGIN
          SET @cGenLabelNo_SP = rdt.RDTGetConfig( @nFunc, 'GenLabelNo_SP', @cStorerkey)
@@ -209,20 +209,44 @@ BEGIN
    
    IF @cNewLine = 'Y'
    BEGIN
-      -- Insert PackDetail
-      INSERT INTO dbo.PackDetail
-         (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, 
-         DropID, RefNo, RefNo2, UPC,
-         AddWho, AddDate, EditWho, EditDate)
-      VALUES
-         (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY, 
-         @cDropID, @cRefNo, @cRefNo2, @cUPC,
-         'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
-      IF @@ERROR <> 0
+      IF @cUCCNo <> '' AND EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) 
+         WHERE PickSlipNo = @cPickSlipNo AND RefNo = @cUCCNo AND SKU = @cSKU)
       BEGIN
-         SET @nErrNo = 100404
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPackDtlFail
-         GOTO RollBackTran
+         -- Update Packdetail
+         UPDATE dbo.PackDetail WITH (ROWLOCK) SET
+            SKU = @cSKU, 
+            QTY = QTY + @nQTY, 
+            DropID =  DropID ,
+            EditWho = 'rdt.' + SUSER_SNAME(), 
+            EditDate = GETDATE(), 
+            ArchiveCop = NULL
+         WHERE PickSlipNo = @cPickSlipNo
+            AND RefNo = @cUCCNo 
+            AND SKU = @cSKU
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 100405
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
+            GOTO RollBackTran
+         END
+      END
+      ELSE 
+      BEGIN
+         -- Insert PackDetail
+         INSERT INTO dbo.PackDetail
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, 
+            DropID, RefNo, RefNo2, UPC,
+            AddWho, AddDate, EditWho, EditDate)
+         VALUES
+            (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY, 
+            @cDropID, @cRefNo, @cRefNo2, @cUPC,
+            'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 100404
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPackDtlFail
+            GOTO RollBackTran
+         END
       END
    END
    ELSE
