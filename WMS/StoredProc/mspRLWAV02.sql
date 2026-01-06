@@ -43,7 +43,7 @@ GO
 /* 2025-10-10  SSA08    1.9   UWP-42248 -Enhanced session management     */
 /* 2025-10-24  PPA374   1.10  UWP-42949 -Added PP type for the RPF task  */
 /* 2025-12-04  Wan01    1.11  FCR-3958 CR V2.3 (Work with PPA374)        */
-/* 2025-12-31  Wan01          UWP-45254, CR V2.3 fixed                   */  
+/* 2026-01-06  Wan01          UWP-45254, CR V2.3 fixed                   */  
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -268,7 +268,7 @@ BEGIN
                         WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC),'')             --2025-07-03
             , AutoRL = CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             , FCP    = CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
-            , RPF    = 'Y'                                                          --2026-01-06  
+            , RPF    = CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END  
             , PRGRP  = ISNULL(cl2.Code,'')                                          --v2.1            
       FROM WAVE w (NOLOCK) 
       JOIN WAVEDETAIL wd (NOLOCK) ON wd.Wavekey  = w.Wavekey
@@ -323,6 +323,7 @@ BEGIN
             ,  ISNULL(o.C_Company,'')
             ,  CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             ,  CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
+            ,  CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END             
             ,  ISNULL(cl2.Code,'')                                                  --v2.1    
 
       SET @c_InValid = ''
