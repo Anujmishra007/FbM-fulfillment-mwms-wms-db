@@ -49,7 +49,7 @@ GO
 /* 2025-08-25 3.5.0  Dennis     FCR-3959 Extended Screen                         */
 /* 2025-11-24 3.6.0  NickT      UWP-44566 Reset QTY when get new task or on ToLoc*/
 /* 2025-12-18 3.7.0  NickT      UWP-45705 Fix issue: MQty is 1 while short pick  */
-/* 2026-01-05 3.8.0  PPA374     Adding missing extended update to step 4         */
+/* 2026-01-05 3.8.0  PPA374     UWP-46338 Adding  extended update to step 4      */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -1866,32 +1866,6 @@ BEGIN
          END
       END
 
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 4, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
-
-            SET @cOutField10 = @cExtendedInfo1
-         END
-      END
-
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -1919,7 +1893,33 @@ BEGIN
             IF @nErrNo <> 0
                GOTO Quit
          END
-	  END
+      END
+
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            SET @cExtendedInfo1 = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+               '@nErrNo          INT           OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+               '@nAfterStep      INT '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 4, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+            SET @cOutField10 = @cExtendedInfo1
+         END
+      END
       
       -- SKU scanned, remain in current screen
       IF @cLabelNo <> ''
