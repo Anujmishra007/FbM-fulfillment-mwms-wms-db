@@ -13,3 +13,4 @@ execute API.TouchPadAddMsg 1001459, 10, 'Paper Printer setup not done. Please se
 execute API.TouchPadAddMsg 1001460, 10, 'No records found in WMReport. Function : isp_rePrint',    'us_english'
 execute API.TouchPadAddMsg 1001461, 10, 'No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null. Function : isp_rePrint',    'us_english'
 execute API.TouchPadAddMsg 1001462, 10, 'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_rePrint',    'us_english'
+execute API.TouchPadAddMsg 1001463, 10, 'No Session context found. Function : isp_rePrint',    'us_english'

@@ -22,3 +22,4 @@ execute API.TouchPadAddMsg 1000718, 10, 'Unable to update UCC. Function : isp_Re
 execute API.TouchPadAddMsg 1000719, 10, 'Unable to delete PackInfo. Function : isp_ResetCarton',    'us_english'
 execute API.TouchPadAddMsg 1000720, 10, 'Unable to delete PackDetail. Function : isp_ResetCarton',    'us_english'
 execute API.TouchPadAddMsg 1000721, 10, 'Update packheader Fail. Function : isp_ResetCarton',    'us_english'
+execute API.TouchPadAddMsg 1000722, 10, 'No Session context found. Function : isp_ResetCarton',    'us_english'

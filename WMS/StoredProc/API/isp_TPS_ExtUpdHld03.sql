@@ -61,8 +61,7 @@ DECLARE
    @cADCode          NVARCHAR(60),    
    @nQty             INT,  
    @bsuccess         INT,    
-   @nTranCount       INT,
-   @cPickDetailKey   NVARCHAR(18)
+   @nTranCount       INT
 
 DECLARE @cOtherUnit2    INT
        
@@ -168,27 +167,10 @@ BEGIN
                @cDropID = RTRIM(PD.DropID)
       FROM dbo.Packheader PH WITH (NOLOCK)    
          JOIN dbo.packdetail PD(nolock) ON PH.PickSlipNo=PD.PickSlipNo  
-      WHERE PD.StorerKey = @cStorerKey        
-         AND (@cOrderKey = '' OR PH.OrderKey = @cOrderKey)
-         AND (@cLoadKey = '' OR PH.LoadKey = @cLoadKey)
+      WHERE PH.StorerKey = @cStorerKey        
+         AND PH.PickSlipNo = @cpickslipNo
          AND PD.SKU = @cSKU   
-         AND Cartonno = @nCartonNo
-
-      SELECT @cPickDetailKey = PD.PickDetailKey
-      FROM dbo.PickDetail PD WITH (NOLOCK)
-         JOIN Orders O WITH (NOLOCK) 
-         ON PD.Orderkey = O.Orderkey AND PD.Storerkey = O.Storerkey
-      WHERE PD.StorerKey = @cStorerKey
-         AND (@cOrderKey = '' OR O.OrderKey = @cOrderKey)
-         AND (@cLoadKey = '' OR O.LoadKey = @cLoadKey)
-         AND (@cDropID = '' OR PD.DropID = @cDropID)
-         AND PD.SKU = @cSKU
-         AND NOT EXISTS (  SELECT 1
-                           FROM PackSerialNo PSN (NOLOCK)
-                           WHERE PSN.PickDetailKey = PD.PickDetailKey
-                           GROUP BY PSN.PickDetailKey
-                           HAVING SUM(PSN.Qty) = PD.Qty
-                           )
+         AND PD.Cartonno = @nCartonNo
 
       SET @cSerialNoKey = ''
 
@@ -217,7 +199,7 @@ BEGIN
          END  
 
          INSERT INTO PackSerialNo(pickslipno,cartonno,labelno,labelline,storerkey,sku,serialno,qty, PickDetailKey,AddWho,AddDate,EditWho,EditDate)    
-         values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, ISNULL(@cPickDetailKey,''),@cUserName,GETDATE(),@cUserName,GETDATE())    
+         values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, '',@cUserName,GETDATE(),@cUserName,GETDATE())    
     
          IF @@ERROR <> 0       
          BEGIN    
@@ -280,7 +262,7 @@ BEGIN
          END  
 
          INSERT INTO PackSerialNo(pickslipno,cartonno,labelno,labelline,storerkey,sku,serialno,qty, PickDetailKey,AddWho,AddDate,EditWho,EditDate)    
-         values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, ISNULL(@cPickDetailKey,''),@cUserName,GETDATE(),@cUserName,GETDATE())    
+         values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, '',@cUserName,GETDATE(),@cUserName,GETDATE())    
     
          IF @@ERROR <> 0       
          BEGIN    

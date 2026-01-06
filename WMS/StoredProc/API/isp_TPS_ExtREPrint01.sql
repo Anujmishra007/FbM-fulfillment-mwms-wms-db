@@ -48,16 +48,12 @@ AS
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @tUCCLabel AS VariableTable
-   DECLARE @tCtnLabel AS VariableTable
-   DECLARE @tPackList AS VariableTable
    DECLARE @cConsignee     NVARCHAR(15)
    DECLARE @cLabelPrinter  NVARCHAR ( 30)
    DECLARE @cPaperPrinter  NVARCHAR ( 30)
    DECLARE @cTCPPrinter    NVARCHAR ( 30)
    DECLARE @cPrinter       NVARCHAR ( 20)
    DECLARE @cProcesstype   NVARCHAR ( 20)
-   DECLARE @nJobID         NVARCHAR ( 20)
    DECLARE @nRC            INT
    DECLARE @cSQL           NVARCHAR ( MAX)
    DECLARE @cSQLParam      NVARCHAR ( MAX)
@@ -287,7 +283,7 @@ AS
             , @c_ErrMsg       = @c_ErrMsg          OUTPUT
             , @c_PrintSource  = @c_PrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs       = @nJobID         OUTPUT    
+            , @c_JobIDs       = @cLabelJobID         OUTPUT    
             , @c_AutoPrint    = 'N'     
 
             --To avoid the label print in sequence
@@ -295,8 +291,6 @@ AS
             --    but UCC print out first, 
             WAITFOR DELAY '00:00:02'
 
-
-            SET @cLabelJobID = @nJobID
 
             FETCH NEXT FROM @cCurLabel INTO @cReportType
          END
@@ -490,12 +484,9 @@ AS
             , @c_ErrMsg       = @c_ErrMsg          OUTPUT
             , @c_PrintSource  = @c_PrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs       = @nJobID         OUTPUT    
+            , @c_JobIDs       = @cPackingJobID         OUTPUT    
             , @c_AutoPrint    = 'N'   
-                  
-            SET @cPackingJobID = @nJobID  
 
-            DELETE @tUCCLabel
 
             FETCH NEXT FROM @cCurPaper INTO @cReportType
 

@@ -63,8 +63,7 @@ DECLARE
    @cADCode          NVARCHAR(60),    
    @nQty             INT,  
    @bsuccess         INT,    
-   @nTranCount       INT,
-   @cPickDetailKey   NVARCHAR(18)
+   @nTranCount       INT
 
 DECLARE @cOtherUnit2    INT
        
@@ -166,7 +165,6 @@ BEGIN
       END
 
       SELECT @cOrderLineNumber = PD.OrderLineNumber
-           , @cPickDetailKey = ISNULL(PD.PickDetailKey,'')
       FROM dbo.PickDetail PD WITH (NOLOCK)
          JOIN Orders O WITH (NOLOCK) 
          ON PD.Orderkey = O.Orderkey AND PD.Storerkey = O.Storerkey
@@ -179,8 +177,8 @@ BEGIN
       FROM dbo.Packheader PH (NOLOCK)    
          JOIN dbo.packdetail PD (NOLOCK) 
          ON PH.PickSlipNo=PD.PickSlipNo
-      WHERE PD.StorerKey = @cStorerKey
-         AND PH.OrderKey = @cOrderKey
+      WHERE PH.StorerKey = @cStorerKey
+         AND PH.PickSlipNo = @cpickslipNo
          AND PD.SKU = @cSKU
          AND PD.CartonNo = @nCartonNo
 
@@ -235,7 +233,7 @@ BEGIN
          END  
 
          INSERT INTO PackSerialNo(pickslipno,cartonno,labelno,labelline,storerkey,sku,serialno,qty, PickDetailKey,AddWho,AddDate,EditWho,EditDate)    
-         values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, @cPickDetailKey,@cUserName,GETDATE(),@cUserName,GETDATE())    
+         values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, '',@cUserName,GETDATE(),@cUserName,GETDATE())    
     
          IF @@ERROR <> 0       
          BEGIN    

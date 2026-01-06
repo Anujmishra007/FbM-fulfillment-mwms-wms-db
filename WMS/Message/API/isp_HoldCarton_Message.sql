@@ -25,3 +25,4 @@ execute API.TouchPadAddMsg 1001371, 10, 'No value found in table(WMReport); colu
 execute API.TouchPadAddMsg 1001372, 10, 'Label Printer setup not done. Please setup the Label Printer. Function : isp_HoldCarton',    'us_english'
 execute API.TouchPadAddMsg 1001373, 10, 'Label Printer setup not done. Please setup the Label Printer. Function : isp_HoldCarton',    'us_english'
 execute API.TouchPadAddMsg 1001374, 10, 'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_HoldCarton',    'us_english'
+execute API.TouchPadAddMsg 1001375, 10, 'No Session context found. Function : isp_HoldCarton',    'us_english'

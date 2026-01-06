@@ -102,7 +102,6 @@ DECLARE @cPaperPrinter  NVARCHAR ( 30)
 DECLARE @cTCPPrinter    NVARCHAR ( 30)  
 DECLARE @cPrinter       NVARCHAR ( 20)  
 DECLARE @cProcesstype   NVARCHAR ( 20)  
-DECLARE @nJobID         NVARCHAR ( 20)  
 DECLARE @cSQL           NVARCHAR ( MAX)  
 DECLARE @cSQLParam      NVARCHAR ( MAX)  
 DECLARE @cNewPaperPrinter NVARCHAR(20)  
@@ -241,10 +240,18 @@ BEGIN
          SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'') <> ''THEN @cSQL +',@cParams2 = ' + @cFieldName2  ELSE  @cSQL END   
          SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'') <> ''THEN @cSQL +',@cParams3 = '  + @cFieldName3  ELSE  @cSQL END  
          SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'') <> ''THEN @cSQL +',@cParams4 = '  + @cFieldName4  ELSE  @cSQL END  
+   
    SET @cSQL = @cSQL +' FROM PackDetail (NOLOCK) '
      + ' WHERE Storerkey = @cstorerkey '
      + ' AND Pickslipno = @cPickslipno '
-     + ' AND CartonNo = @nCartonno '  
+
+   -- this will treat as last carton print therefore can used as print all label if printpacklist is equal to Y
+   IF @cPrintPackList <> 'Y'  
+   BEGIN
+      SET @cSQL = @cSQL
+                + ' AND CartonNo = @nCartonno '  
+   END
+   
 
    SET @groupByFields = ''
 
@@ -335,10 +342,8 @@ BEGIN
    , @c_ErrMsg       = @c_ErrMsg          OUTPUT  
    , @c_PrintSource  = @c_PrintSource          
    , @b_SCEPreView   = 0           
-   , @c_JobIDs       = @nJobID         OUTPUT      
+   , @c_JobIDs       = @cLabelJobID         OUTPUT      
    , @c_AutoPrint    = 'N'       
-
-   SET @cLabelJobID = @nJobID  
 
    FETCH NEXT FROM @cCurLabel INTO @cReportType  
 END  
@@ -364,10 +369,10 @@ OPEN @cCurOrderList
 FETCH NEXT FROM @cCurOrderList INTO @cCurOrderkey  
 WHILE @@FETCH_STATUS = 0  
 BEGIN 
-   --Skip Print Packing List if all Pick Detail Status havent update to 5
+   --Skip Print Packing List if all Pick Detail Status still below 5
    IF EXISTS(SELECT 1 FROM PICKDETAIL (NOLOCK) 
    WHERE OrderKey = @cCurOrderkey 
-   AND Status <> '5')
+   AND Status < '5')
    BEGIN
       --SET @b_Success = 0
       --SET @n_Err = 1002909  
@@ -556,8 +561,6 @@ BEGIN
       , @b_SCEPreView   = 0           
       , @c_JobIDs       = @cPackingJobID         OUTPUT      
       , @c_AutoPrint    = 'N'     
-                  
-      SET @cPackingJobID = @nJobID   
 
       FETCH NEXT FROM @cCurPaper INTO @cReportType  
 
