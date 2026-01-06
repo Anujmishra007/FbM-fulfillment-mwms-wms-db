@@ -268,7 +268,7 @@ BEGIN
                         WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC),'')             --2025-07-03
             , AutoRL = CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             , FCP    = CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
-            , RPF    = CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END
+            , RPF    = 'Y'                                                          --2026-01-06  
             , PRGRP  = ISNULL(cl2.Code,'')                                          --v2.1            
       FROM WAVE w (NOLOCK) 
       JOIN WAVEDETAIL wd (NOLOCK) ON wd.Wavekey  = w.Wavekey
@@ -323,7 +323,6 @@ BEGIN
             ,  ISNULL(o.C_Company,'')
             ,  CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             ,  CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
-            ,  CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END
             ,  ISNULL(cl2.Code,'')                                                  --v2.1    
 
       SET @c_InValid = ''
@@ -1010,10 +1009,19 @@ BEGIN
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'
                                    +' AND PICKDETAIL.Loc = @c_FromLoc'
                                    +' AND PICKDETAIL.ID  = @c_FromID'
+                                   +' AND PICKDETAIL.UOM  = @c_UOM'                 --2026-01-06                                     
          SET @c_LocationGroup = ISNULL(@c_LocationGroup,'')                         --2025-09-25
 
          IF @c_UOM = '7'
          BEGIN
+            SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'          --2026-01-06
+                                      +' AND PICKDETAIL.Loc = @c_FromLoc'  
+                                      +' AND PICKDETAIL.ID  = @c_FromID'  
+                                      +' AND ((PICKDETAIL.ToLoc = ''' + @c_ReplFromLoc + ''''  
+                                      +' AND   PICKDETAIL.CaseID= ''' + @c_ReplFromID  + ''''  
+                                      +' AND   PICKDETAIL.UOM   = ''7'')' 
+                                      +' OR   (PICKDETAIL.UOM   = ''6''))'    
+                                                  
             IF EXISTS ( SELECT 1
                         FROM #PickDetail_WIP pd
                         JOIN LOTxLOCxID lli (NOLOCK) ON  lli.lot = pd.Lot
