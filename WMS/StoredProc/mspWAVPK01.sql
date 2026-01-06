@@ -263,7 +263,7 @@ BEGIN
            @c_Loadkey               = ''  
           ,@c_Wavekey               = @c_Wavekey  
           ,@c_WIP_RefNo             = @c_SourceType  
-          ,@c_PickCondition_SQL     = 'AND PICKDETAIL.Status = ''0'' '  
+          ,@c_PickCondition_SQL     = 'AND PICKDETAIL.Status <= ''3'' '  
           ,@c_Action                = 'I'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records  
           ,@c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization  
           ,@b_Success               = @b_Success OUTPUT  
@@ -408,7 +408,7 @@ BEGIN
       JOIN dbo.SKU (NOLOCK) ON PD.Storerkey = SKU.StorerKey AND PD.Sku = SKU.Sku
       JOIN dbo.PACK (NOLOCK) ON SKU.PACKKey = PACK.PackKey
       WHERE PD.WaveKey = @c_Wavekey
-      AND PD.[Status] = '0'
+      AND PD.[Status] <= '3'
       AND PD.WIP_Refno = @c_SourceType
       GROUP BY PD.OrderKey
              , PD.Storerkey
@@ -475,7 +475,7 @@ BEGIN
       JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = PW.Orderkey
       JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
       WHERE PW.WaveKey = @c_Wavekey
-      AND PW.[Status] = '0'
+      AND PW.[Status] <= '3'
       AND PW.WIP_Refno = @c_SourceType
       
       IF @c_VASFlag = 'Y'
@@ -1523,7 +1523,7 @@ BEGIN
       JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = PW.Orderkey
       JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
       WHERE PW.WaveKey = @c_Wavekey
-      AND PW.[Status] = '0'
+      AND PW.[Status] <= '3'
       AND PW.WIP_Refno = @c_SourceType
 
       DECLARE CUR_LABELUPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
