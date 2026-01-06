@@ -313,11 +313,7 @@ BEGIN
          SET @cPickSlipNo = @cInField01
          SET @cFromDropID = @cInField02
 
-         SELECT @cOrderKey = ORDERKEY
-         FROM PickHeader (NOLOCK)
-         WHERE PickHeaderKey = @cPickSlipNo
-
-         SELECT TOP 1 @cMUOM = Uom
+         SELECT TOP 1 @cMUOM = Uom,@cOrderKey = Orderkey
          FROM PickDetail (NOLOCK)
          WHERE DropID = @cFromDropID
          AND StorerKey = @cStorerKey
