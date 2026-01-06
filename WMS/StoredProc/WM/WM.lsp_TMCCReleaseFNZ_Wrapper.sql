@@ -9,7 +9,7 @@ GO
 /* Copyright: LFL                                                        */
 /* Written by: Wan                                                       */
 /*                                                                       */
-/* Purpose: LFWM-1273 - Stored Procedures for Feature �C Release Cycle    */
+/* Purpose: LFWM-1273 - Stored Procedures for Feature - Release Cycle    */
 /*          Count                                                        */
 /* Called By:                                                            */
 /*                                                                       */
@@ -22,7 +22,8 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
+/* 2025-09-02   SWT01    1.1  Enhanced session management pattern        */
+/* 2026-01-05   Michael  1.2  UWP-44616 Performance Improvement (ML01)   */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_TMCCReleaseFNZ_Wrapper]
    @c_BatchNo              NVARCHAR(10)
@@ -43,32 +44,33 @@ BEGIN
          , @n_RowId                 BIGINT = 0
          , @c_CCKey                 NVARCHAR(10) = ''
          , @c_TaskDetailKey         NVARCHAR(10) = ''
+         , @n_NoOfTask              INT = 0   --ML01
 
-         , @CUR_INSTASK             CURSOR
+--ML01         , @CUR_INSTASK             CURSOR
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
    -- Start enhanced session management (SWT01)
-	 SET @n_Err = 0
-	 DECLARE @b_ExecuteAs        BIT = 0
-	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
-	 BEGIN
-	    EXEC [WM].[lsp_SetUser] 
-	         @c_UserName = @c_UserName  OUTPUT
-	      ,  @n_Err      = @n_Err       OUTPUT
-	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+    SET @n_Err = 0
+    DECLARE @b_ExecuteAs        BIT = 0
+    IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''
+    BEGIN
+       EXEC [WM].[lsp_SetUser]
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-	    IF @n_Err <> 0
-	    BEGIN
-	       GOTO EXIT_SP
-	    END
+       IF @n_Err <> 0
+       BEGIN
+          GOTO EXIT_SP
+       END
 
-	    IF @b_ExecuteAs = 1
-	       EXECUTE AS LOGIN = @c_UserName
-	 END                                    
-	 -- End enhanced session management (SWT01)
+       IF @b_ExecuteAs = 1
+          EXECUTE AS LOGIN = @c_UserName
+    END
+    -- End enhanced session management (SWT01)
 
    --(mingle01) - START
    BEGIN TRY
@@ -97,6 +99,16 @@ BEGIN
          GOTO EXIT_SP
       END
 
+      --ML01-S
+      SELECT @n_NoOfTask = COUNT(1)
+      FROM TASKDETAIL_WIP WITH (NOLOCK)
+      WHERE TaskWIPBatchNo = @c_BatchNo
+
+      IF ISNULL(@n_NoOfTask,0) <= 0
+         GOTO EXIT_SP
+      --ML01-E
+
+/* ML01-S
       SET @CUR_INSTASK = CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT RowID
       FROM TASKDETAIL_WIP WITH (NOLOCK)
@@ -109,6 +121,9 @@ BEGIN
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
+ML01-E */
+
+
          SET @b_success = 1
          BEGIN TRY
             EXECUTE nspg_getkey
@@ -118,6 +133,7 @@ BEGIN
             , @b_success         OUTPUT
             , @n_err             OUTPUT
             , @c_errmsg          OUTPUT
+            , @n_batch         = @n_NoOfTask   --ML01
          END TRY
 
          BEGIN CATCH
@@ -135,6 +151,7 @@ BEGIN
          END
 
          BEGIN TRY
+            -- Bulk insert with Trafficcop
             INSERT INTO TASKDETAIL
             (    TaskDetailkey
                , TaskType
@@ -185,10 +202,16 @@ BEGIN
                , Groupkey
                , PendingMoveIn
                , QtyReplen
+               , AddWho       --ML01
+               , AddDate      --ML01
+               , EditWho      --ML01
+               , EditDate     --ML01
+               , TrafficCop   --ML01
             )
 
             SELECT
-                 @c_TaskDetailKey
+--ML01                 @c_TaskDetailKey
+                 FORMAT(ISNULL(TRY_PARSE(ISNULL(@c_TaskDetailKey,'') AS INT),1) + ROW_NUMBER() OVER(ORDER BY WIP.RowID) - 1,'0000000000')   --ML01
                , WIP.TaskType
                , WIP.Storerkey
                , WIP.Sku
@@ -197,10 +220,12 @@ BEGIN
                , WIP.UOMQty
                , WIP.Qty
                , WIP.FromLoc
-               , WIP.LogicalFromLoc
+--ML01               , WIP.LogicalFromLoc
+               , LogicalFromLoc = CASE WHEN ISNULL(WIP.LogicalFromLoc,'')='' THEN ISNULL(NULLIF(FRLOC.LogicalLocation,''),WIP.FromLoc) ELSE WIP.LogicalFromLoc END   --ML01
                , WIP.FromID
                , WIP.ToLoc
-               , WIP.LogicalToLoc
+--ML01               , WIP.LogicalToLoc
+               , LogicalToLoc   = CASE WHEN ISNULL(WIP.LogicalToLoc,'')='' THEN ISNULL(NULLIF(TOLOC.LogicalLocation,''),WIP.ToLoc) ELSE WIP.LogicalToLoc END   --ML01
                , WIP.ToID
                , WIP.Caseid
                , WIP.PickMethod
@@ -237,8 +262,17 @@ BEGIN
                , WIP.Groupkey
                , WIP.PendingMoveIn
                , WIP.QtyReplen
+               , dbo.fnc_GetUserName()   --ML01
+               , dbo.fnc_GetDate()       --ML01
+               , dbo.fnc_GetUserName()   --ML01
+               , dbo.fnc_GetDate()       --ML01
+               , '9'                     --ML01
             FROM TASKDETAIL_WIP WIP WITH (NOLOCK)
-            WHERE WIP.RowID = @n_RowID
+--ML01            WHERE WIP.RowID = @n_RowID
+            LEFT JOIN LOC FRLOC WITH (NOLOCK) ON  (WIP.FROMLOC=FRLOC.LOC)   --ML01
+            LEFT JOIN LOC TOLOC WITH (NOLOCK) ON  (WIP.TOLOC  =TOLOC.LOC)   --ML01
+            WHERE WIP.TaskWIPBatchNo = @c_BatchNo                           --ML01
+            ORDER BY WIP.RowID                                              --ML01
          END TRY
 
          BEGIN CATCH
@@ -251,10 +285,58 @@ BEGIN
             GOTO EXIT_SP
          END CATCH
 
+/* ML01-S
          FETCH NEXT FROM @CUR_INSTASK INTO @n_RowID
       END
       CLOSE @CUR_INSTASK
       DEALLOCATE @CUR_INSTASK
+ML01-E */
+
+      --ML01-S
+      IF EXISTS(SELECT TOP 1 1 FROM TASKDETAIL_WIP WIP WITH (NOLOCK)
+         JOIN storerconfig s WITH (NOLOCK) ON  WIP.storerkey = s.storerkey
+         JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+         WHERE TaskWIPBatchNo = @c_BatchNo
+           AND s.configkey = 'TaskDetailTrigger_SP')
+      BEGIN
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+
+         SELECT *
+         INTO #INSERTED
+         FROM TASKDETAIL (NOLOCK)
+         WHERE TaskDetailKey >= @c_TaskDetailKey
+           AND TaskDetailKey <= FORMAT(ISNULL(TRY_PARSE(ISNULL(@c_TaskDetailKey,'') AS INT),1) + @n_NoOfTask - 1,'0000000000')
+           AND Sourcekey = @c_CCKey
+
+         SELECT *
+         INTO #DELETED
+         FROM TASKDETAIL (NOLOCK)
+         WHERE 1=2
+
+         EXECUTE dbo.isp_TaskDetailTrigger_Wrapper
+                   'INSERT'  --@c_Action
+                 , @b_Success  OUTPUT
+                 , @n_Err      OUTPUT
+                 , @c_ErrMsg   OUTPUT
+
+         IF @b_success <> 1
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 554706
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Calling isp_TaskDetailTrigger_Wrapper Fail. (lsp_TMCCReleaseFNZ_Wrapper)'
+                           + '( ' + @c_errmsg + ' )'
+            GOTO EXIT_SP
+         END
+
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+      --ML01-E
 
       BEGIN TRY
          INSERT INTO IDS_GeneralLog (udf01, udf02, udf03, udf04, udf05)
@@ -338,5 +420,5 @@ BEGIN
    EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_TMCCReleaseFNZ_Wrapper] TO nSQL 
+GRANT EXECUTE ON  [WM].[lsp_TMCCReleaseFNZ_Wrapper] TO [NSQL]
 GO
