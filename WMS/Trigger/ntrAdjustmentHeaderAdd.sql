@@ -69,6 +69,8 @@ GO
 /* 28-Sep-2016  Leong     1.5  Skip trigger if ArchiveCop = '9'.            */
 /* 27-Jul-2017  TLTING    1.6  Remove SETROWCOUNT                           */
 /* 09-Oct-2025  SPC040    1.7  Replace SUSER_SNAME with fnc_GetUserName     */
+/* 31-Dec-2025  VNI056    1.8    FCR-9732 Add Interface Trigger pts. for    */
+/*                                   custom trigger config                  */
 /****************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
@@ -730,6 +732,37 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
       END -- IF valid record
    END -- IF @n_continue = 1
    -- Added By Vicky on 09-Aug-2005 (Generic) - End
+
+   --VNI056(START) [Ver 1.8]
+   --INTERFACE TRIGGER POINTS START
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      DECLARE Cur_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT INS.AdjustmentKey, INS.StorerKey FROM INSERTED INS
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = INS.StorerKey
+      WHERE  ITC.SourceTable = 'ADJUSTMENT'
+      AND    ITC.sValue      = '1'
+
+      OPEN Cur_TriggerPoints
+      FETCH NEXT FROM Cur_TriggerPoints INTO @c_AdjustmentKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrAdjustmentWithStorer
+                @c_TriggerName    = 'ntrAdjustmentHeaderAdd'
+              , @c_SourceTable    = 'ADJUSTMENT'
+              , @c_Storerkey      = @c_Storerkey
+              , @c_AdjustmentKey  = @c_AdjustmentKey
+              , @b_Success        = @b_Success   OUTPUT
+              , @n_err            = @n_err       OUTPUT
+              , @c_errmsg         = @c_errmsg    OUTPUT
+         FETCH NEXT FROM Cur_TriggerPoints INTO @c_AdjustmentKey, @c_Storerkey
+      END
+      CLOSE Cur_TriggerPoints
+      DEALLOCATE Cur_TriggerPoints
+   END
+   --INTERFACE TRIGGER POINTS END
+   --VNI056(END) [Ver 1.8]
 
    IF @n_continue=1 or @n_continue=2
    BEGIN
