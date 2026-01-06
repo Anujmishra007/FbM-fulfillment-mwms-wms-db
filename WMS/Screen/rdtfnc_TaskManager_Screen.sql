@@ -46,6 +46,18 @@ EXECUTE rdt.rdtAddScn 2107, 'ENG',
    ,@cLine14 = '%e'   
    
 
-   
-   
-   
+-- 6529  = MEH Screen
+-- FCR-5727
+DELETE rdt.RDTScn WHERE Scn = 6529 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6529, 'ENG',
+    @cLine01 = 'TASK MANAGER'
+   ,@cLine02 = ''
+   ,@cLine03 = 'Current MHE:'
+   ,@cLine04 = '%10d01'
+   ,@cLine05 = ''
+   ,@cLine06 = 'Provide New MHE:'
+   ,@cLine07 = '%10i02'
+   ,@cLine13 = '%20d15' 
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4"],"3":["6","7"]}'
+

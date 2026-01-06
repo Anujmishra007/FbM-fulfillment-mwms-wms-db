@@ -61,7 +61,9 @@ CREATE TABLE [dbo].[ADJUSTMENTDETAIL]
 [Lottable15] [datetime] NULL,
 [Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_AdjustmentDetail_Channel] DEFAULT (''),
 [Channel_ID] [bigint] NULL CONSTRAINT [DF_AdjustmentDetail_Channel_ID] DEFAULT ((0)),
-[SerialNo] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_AdjustmentDetail_Serial_No] DEFAULT ('')
+[SerialNo] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_AdjustmentDetail_Serial_No] DEFAULT (''),
+[PalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_AdjustmentDetail_PalletType] DEFAULT ('')
+
 ) ON [PRIMARY]
 
 GRANT SELECT ON  [dbo].[ADJUSTMENTDETAIL] TO [JReportRole]
@@ -189,6 +191,8 @@ EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine09', 
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine10', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine10'
 
 EXEC sp_addextendedproperty N'MS_Description', 'adjustment detail SerialNo', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'SerialNo'
+
+EXEC sp_addextendedproperty N'MS_Description', 'adjustment detail Pallet Type' , 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN',N'PalletType'
 END
 ELSE 
 BEGIN
@@ -199,4 +203,14 @@ IF NOT EXISTS (SELECT 1
 					ALTER TABLE ADJUSTMENTDETAIL ADD SerialNo [nvarchar] (50) NOT NULL CONSTRAINT [DF_AdjustmentDetail_Serial_No] DEFAULT ('');
 					EXEC sp_addextendedproperty N'MS_Description', 'adjustment detail SerialNo', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'SerialNo'
 				END
+ IF NOT EXISTS (SELECT *
+                       FROM sys.columns
+                       WHERE Name = 'PalletType'
+                         AND Object_ID = Object_ID('ADJUSTMENTDETAIL'))
+            BEGIN
+                ALTER TABLE ADJUSTMENTDETAIL
+                    ADD PalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_AdjustmentDetail_PalletType] DEFAULT ('');
+                EXEC sp_addextendedproperty N'MS_Description', 'adjustment detail Pallet Type', 'SCHEMA', N'dbo', 'TABLE',
+                     N'ADJUSTMENTDETAIL', 'COLUMN', N'PalletType'
+            END
 END

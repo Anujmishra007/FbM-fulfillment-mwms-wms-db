@@ -30,6 +30,7 @@ GO
 /* 28-03-2022  NJOW05   1.6   DEVOPS combine script                         */
 /* 14-11-2023  NJOW06   1.7   WMS-24191 B2C taskdetail enhancements and     */
 /*                            remove B2B ECOM_Single_flag='S' filtering     */
+/* 10-10-2025  SSA01    1.8   UWP-42248 -Enhanced session management        */
 /****************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV24]      
@@ -289,10 +290,10 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV24]
           [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
           [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
           [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),    --(SSA01)
+          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),         --(SSA01)
+          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),    --(SSA01)
+          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),        --(SSA01)
           [TrafficCop] [nvarchar](1) NULL,
           [ArchiveCop] [nvarchar](1) NULL,
           [OptimizeCop] [nvarchar](1) NULL,
@@ -1590,8 +1591,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV24]
           --SET STATUS = '1' -- Released        --(Wan01) 
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               --(Wan01)  
+           ,  EditWho = dbo.fnc_GetUserName()          --(Wan01) (SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)              --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

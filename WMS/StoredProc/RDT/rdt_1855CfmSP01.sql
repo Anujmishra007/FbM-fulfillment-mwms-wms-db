@@ -16,6 +16,14 @@ GO
 /* 2025-03-13   1.0.1  NLT013   UWP-31257 RPF taks is not mandatory for ASTCPK*/
 /* 2025-03-13   1.0.2  NLT013   UWP-31257 Missing BEGIN END                   */
 /* 2025-03-13   1.0.3  NLT013   UWP-31758 TaskDetail.Qty is 0 when partial pick*/
+/* 2025-04-09   1.1.0  Dennis   FCR-3925  Generate Task for Short Pick        */
+/* 2025-04-23   1.1.1  JACKC    FCR-3925  Fix some issues                     */
+/* 2025-04-23   1.1.2  Dennis   FCR-3925  Fix some issues                     */
+/* 2025-04-28   1.1.3  Jackc    FCR-3925  PickDetail missing dropid value     */
+/* 2025-04-28   1.1.4  Dennis   FCR-3925  Udpate TD,PD CaseID                 */
+/* 2025-04-29   1.1.5  JackC    FCR-3925  Clear groupkey value when generating*/ 
+/*                               1st short task                               */
+/* 2025-11-10   1.1.6  Dennis   UWP-43759 Enhancement                         */ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1855CfmSP01 (  
@@ -41,7 +49,9 @@ BEGIN
    SET ANSI_NULLS OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
   
-   DECLARE @nTranCount  INT  
+   DECLARE @nTranCount  INT 
+
+   DECLARE @nDebugFlag   INT = 0 
    
    DECLARE @cOrderKey      NVARCHAR( 10)  
    DECLARE @cLoadKey       NVARCHAR( 10)  
@@ -64,7 +74,25 @@ BEGIN
    DECLARE @cPickZone      NVARCHAR( 10)
    DECLARE @nRowCount      INT
    DECLARE @nPickedQty		INT
-   
+   DECLARE @cNewTaskDetailKey NVARCHAR( 10)
+   DECLARE @cShortTaskDetailKey NVARCHAR( 10) --V1.1.1
+   DECLARE @nSuccess       INT
+   DECLARE @cReasonCode    NVARCHAR( 10)
+   DECLARE @cNewPickDetailKey NVARCHAR( 10)  
+   DECLARE @nTransitCount  INT
+   DECLARE @nFullShortFlag INT = 1  
+   DECLARE @nLoopIndex INT = -1   
+   DECLARE @cOriginDropId  NVARCHAR( 20)
+   DECLARE @cTempCaseID    NVARCHAR( 20)=''
+   DECLARE @tTempTasks TABLE (
+      RowIndex         INT       NOT NULL IDENTITY (1, 1),
+      TaskDetaiLKey    NVARCHAR( 10) NULL,
+      SKU              NVARCHAR( 20) NULL,
+      CaseID           NVARCHAR( 20) NULL,
+      FromLoc          NVARCHAR( 20) NULL,
+      DROPID           NVARCHAR( 20) NULL,
+      OrderKey         NVARCHAR( 10) NULL
+      )
    SELECT 
       @cUserName        = UserName,
       @cPickZone        = V_String24
@@ -74,13 +102,15 @@ BEGIN
    SELECT 
       @cSKU = SKU, 
       @cCaseID = CaseID,
-      @cFromLoc = FromLoc
+      @cFromLoc = FromLoc,
+      @cReasonCode = ReasonKey,
+      @nTransitCount = TransitCount
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskDetailKey
          
    INSERT INTO TRACEINFO (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5) VALUES ('1855', GETDATE(), @cUserName, @cSKU, @cCaseID, @cLOC, @cTaskDetailKey)
    SET @cOrderKey = ''  
-   SET @cLoadKey = ''  
+   SET @cLoadKey = ''
    SET @cZone = ''  
      
    -- Get storer config  
@@ -97,7 +127,9 @@ BEGIN
    SAVE TRAN rdt_1855CfmSP01 -- For rollback or commit only our own transaction  
 
    IF @cPickZone = 'PICK'
-      SET @curCfmTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+   BEGIN
+      DELETE FROM @tTempTasks
+      INSERT INTO @tTempTasks (TaskDetailKey, SKU, CaseID, FromLoc, DropID, OrderKey)
       SELECT TD.TaskDetailKey, TD.Sku, TD.Caseid, TD.FromLoc, TD.DropID, PD.OrderKey
       FROM dbo.TaskDetail TD WITH (NOLOCK)
       JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.TaskDetailKey = PD.TaskDetailKey)
@@ -113,7 +145,8 @@ BEGIN
       AND   PD.[Status] < @cPickConfirmStatus
       AND   PD.QTY > 0 
       AND   PD.Status <> '4'
-      ORDER BY 1
+      ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
+   END
    ELSE
    BEGIN
       SELECT @nRowCount = COUNT(1)
@@ -134,7 +167,8 @@ BEGIN
 
       IF @nRowCount > 0
       BEGIN
-         SET @curCfmTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+         DELETE FROM @tTempTasks
+         INSERT INTO @tTempTasks (TaskDetailKey, SKU, CaseID, FromLoc, DropID, OrderKey)
          SELECT TD.TaskDetailKey, TD.Sku, TD.Caseid, TD.FromLoc, TD.DropID, PD.OrderKey
          FROM dbo.TaskDetail TD WITH (NOLOCK)
          JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.TaskDetailKey = PD.TaskDetailKey)
@@ -150,11 +184,12 @@ BEGIN
             AND PD.[Status] < @cPickConfirmStatus
             AND PD.QTY > 0 
             AND PD.Status <> '4'
-         ORDER BY 1
+         ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
       END
       ELSE
       BEGIN
-         SET @curCfmTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+         DELETE FROM @tTempTasks
+         INSERT INTO @tTempTasks (TaskDetailKey, SKU, CaseID, FromLoc, DropID, OrderKey)
          SELECT TD.TaskDetailKey, TD.Sku, TD.Caseid, TD.FromLoc, TD.DropID, PD.OrderKey
          FROM dbo.TaskDetail TD WITH (NOLOCK)
          JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)
@@ -170,14 +205,35 @@ BEGIN
             AND PD.[Status] < @cPickConfirmStatus
             AND PD.QTY > 0 
             AND PD.Status <> '4'
-         ORDER BY 1
+         ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
       END
    END
 
-   OPEN @curCfmTask
-   FETCH NEXT FROM @curCfmTask INTO @cTaskDetailKey, @cSKU, @cCaseID, @cLOC, @cDropID, @cOrderKey
-   WHILE @@FETCH_STATUS = 0  
+   IF @nDebugFlag = 1
    BEGIN
+      SELECT 'TempTask List'
+      SELECT * FROM @tTempTasks
+   END
+
+   SET @nLoopIndex = -1
+   WHILE(1=1)
+   BEGIN
+      SELECT TOP 1
+         @nLoopIndex = RowIndex,
+         @cTaskDetailKey = TaskDetaiLKey,
+         @cSKU = SKU,
+         @cCaseID = CaseID,
+         @cLOC = FromLoc,
+         @cDropID = DropID,
+         @cOrderKey = OrderKey
+      FROM @tTempTasks
+      WHERE RowIndex > @nLoopIndex
+      ORDER BY RowIndex
+      SELECT @nRowCount = @@ROWCOUNT
+
+      IF @nRowCount = 0
+         BREAK
+
       IF ISNULL( @cOrderKey, '') = ''
       BEGIN  
          SET @nErrNo = 234701  
@@ -327,9 +383,17 @@ BEGIN
       FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD  
       WHILE @@FETCH_STATUS = 0  
       BEGIN
+         IF @nDebugFlag = 1
+            SELECT 'Loop PickDetail, Current PickDetai: ', @cPickDetailKey AS PickDetailKey, @nQty_PD AS QtyPD
+
+         SELECT @cOriginDropId = DropID FROM DBO.PickDetail (NOLOCK) WHERE PickDetailKey = @cPickDetailKey
          -- Exact match  
          IF @nQTY_PD = @nQTY_Bal  
-         BEGIN  
+         BEGIN
+            IF @nDebugFlag = 1
+               SELECT 'Qty_PD = QTY_Bal' 
+
+            SET @nFullShortFlag = 0
             -- Confirm PickDetail  
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
                Status = @cPickConfirmStatus, 
@@ -349,7 +413,11 @@ BEGIN
   
          -- PickDetail have less  
          ELSE IF @nQTY_PD < @nQTY_Bal  
-         BEGIN  
+         BEGIN
+            IF @nDebugFlag = 1
+               SELECT 'Qty_PD < QTY_Bal' 
+
+            SET @nFullShortFlag = 0
             -- Confirm PickDetail  
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
                Status = @cPickConfirmStatus,
@@ -369,72 +437,479 @@ BEGIN
   
          -- PickDetail have more  
          ELSE IF @nQTY_PD > @nQTY_Bal  
-         BEGIN  
+         BEGIN
+            IF @nDebugFlag = 1
+               SELECT 'Qty_PD > QTY_Bal'
+
             -- Don't need to split  
             IF @nQTY_Bal = 0  
-            BEGIN  
+            BEGIN
+               IF @nDebugFlag = 1
+                  SELECT 'Qty_PD > QTY_Bal, QTY_Bal = 0'  
                -- Short pick  
                IF @cType = 'SHORT' -- Don't need to split  
                BEGIN  
-                  -- Confirm PickDetail  
-                  UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
-                     Status = '4',  
-                     EditDate = GETDATE(),  
-                     EditWho  = SUSER_SNAME(),  
-                     TrafficCop = NULL  
-                  WHERE PickDetailKey = @cPickDetailKey  
-                  IF @@ERROR <> 0  
-                  BEGIN  
-                     SET @nErrNo = 234705  
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                     GOTO RollBackTran  
-                  END  
+                  IF @cReasonCode <> 'SKIP' AND @nTransitCount = 0 --first time short pick
+                  BEGIN
+                     IF @nDebugFlag = 1
+                        SELECT '1st time Short Pick'
 
-                  SET @nPickedQty = 0
-
-                  SELECT @nPickedQty = SUM(Qty)
-                  FROM dbo.PICKDETAIL WITH(NOLOCK)
-                  WHERE TaskDetailKey = @cTaskDetailKey
-                     AND Status = @cPickConfirmStatus
-
-                  IF @@ROWCOUNT = 0
-                  BEGIN 
-                     IF @cPickZone <> 'PICK'
+                     IF @nFullShortFlag = 1 --Full Short Pick
                      BEGIN
-                        SELECT @nPickedQty = SUM(PD.Qty)
-                        FROM dbo.PickDetail PD WITH (NOLOCK) 
-                        INNER JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID )
-                        INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
-                        WHERE PD.OrderKey = @cOrderKey 
-                           AND PD.LOC = @cLOC 
-                           AND PD.SKU = @cSKU 
-                           AND PD.CaseID = @cCaseID
-                           AND PD.QTY > 0 
-                           AND PD.Status = @cPickConfirmStatus 
-                           AND TD.TaskDetailKey = @cTaskDetailKey
+                        IF @nDebugFlag = 1
+                           SELECT 'Full Short Pick'
+
+                        IF NOT EXISTS (SELECT 1 
+                                    FROM dbo.TaskDetail WITH (NOLOCK) 
+                                    WHERE TaskDetailKey = @cTaskDetailKey AND Status = 'X' AND ReasonKey='SKIP')
+                        BEGIN
+                           IF @nDebugFlag = 1
+                              SELECT 'Mark the task as SKIP'
+
+                           UPDATE dbo.TaskDetail SET
+                              Status = 'X',
+                              ReasonKey = 'SKIP',
+                              CaseID = @cOriginDropId,
+                              --Groupkey = '', --revert v1.1.5
+                              --DeviceID = '', --revert v1.1.5
+                              --DropID = '', --V1.1.5 Keep dropid for 1st full short. Otherwise it cannot skip the confirm tote scn
+                              TransitCount = 1,
+                              EditDate = GETDATE(),  
+                              EditWho  = SUSER_SNAME(),
+                              TrafficCop = NULL
+                           WHERE TaskDetailKey = @cTaskDetailKey
+                           IF @@ERROR <> 0  
+                           BEGIN  
+                              SET @nErrNo = 234713  
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                              GOTO RollBackTran
+                           END
+                        END
                      END
+                     ELSE --Partial Short Pick
+                     BEGIN
+                        IF @nDebugFlag = 1
+                              SELECT 'Partial Short Pick'
+                        SET @nSuccess = 1
+                        --v1.1.4
+                        IF @cTempCaseID = ''
+                        BEGIN
+                           EXECUTE dbo.nspg_Getkey
+                           @KeyName     = 'LVSDropID'
+                           ,@fieldlength = 9
+                           ,@keystring   = @cTempCaseID     OUTPUT
+                           ,@b_Success   = @nSuccess        OUTPUT
+                           ,@n_err       = @nErrNo          OUTPUT
+                           ,@c_errmsg    = @cErrmsg         OUTPUT
+
+                           IF @nSuccess = 0
+                           BEGIN
+                              GOTO RollBackTran
+                           END
+                           ELSE
+                           BEGIN
+                              SET @cTempCaseID = 'T' + @cTempCaseID 
+                           END
+                        END
+                        IF @nDebugFlag = 1
+                              SELECT 'TempCaseID: ', @cTempCaseID
+
+                        IF NOT EXISTS (
+                           SELECT 1 FROM DBO.TASKDETAIL WITH (NOLOCK) 
+                           WHERE SourceKey = @cTaskDetailKey
+                           AND TaskType = 'ASTCPK'
+                           AND TransitCount > 0
+                        )
+                        BEGIN
+                           IF @nDebugFlag = 1
+                              SELECT 'Partial Short Pick, Create new picking task'
+
+                           --Generate new TaskDetailKey for partial short pick
+                           EXECUTE dbo.nspg_getkey
+                              'TASKDETAILKEY'
+                              , 10
+                              , @cNewTaskDetailKey OUTPUT
+                              , @nSuccess          OUTPUT
+                              , @nErrNo            OUTPUT
+                              , @cErrMsg           OUTPUT
+                           IF @nSuccess <> 1
+                           BEGIN
+                              SET @nErrNo = 167751
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
+                              GOTO Fail
+                           END
+
+                           INSERT INTO TaskDetail (
+                              TaskDetailKey, TaskType, Status, UserKey, PickMethod, TransitCount, AreaKey, SourceType, FromLOC, FromID, ToLOC, ToID, 
+                              StorerKey, SKU, LOT, UOM,UOMQty, QTY, ListKey, SourceKey, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop, FinalLoc,ReasonKey
+                              ,DeviceID,DropID,CaseID)
+                           SELECT
+                              @cNewTaskDetailKey, TaskType, 
+                              'X', --STATUS
+                              '', PickMethod, 1, AreaKey, SourceType, FROMLOC, FROMID, TOLOC, ToID, 
+                              StorerKey, SKU, LOT,UOM, @nQTY_PD - @nQTY_Bal, @nQTY_PD - @nQTY_Bal, ListKey, TaskDetailKey, WaveKey, LoadKey, Priority, SourcePriority, NULL, FinalLoc,
+                              --'SKIP' --REASON CODE
+                              ''--V1.1.1 TaskDetailAdd trigger not allow to inser task with reasonkey
+                              ,'', '',''
+                           FROM TaskDetail WITH (NOLOCK)
+                           WHERE TaskDetailKey = @cTaskDetailKey
+
+                           --v1.1.1/1..1.3
+                           BEGIN TRY
+                              UPDATE dbo.TaskDetail WITH (ROWLOCK) 
+                                 SET 
+                                    ReasonKey = 'SKIP', --v1.1.1
+                                    DropID = '', --v1.1.3
+                                    CaseID = @cTempCaseID, --v1.1.4
+                                    EditDate = GETDATE(), 
+                                    EditWho  = SUSER_SNAME()
+                              WHERE TaskDetailKey = @cNewTaskDetailKey 
+                           END TRY
+                           BEGIN CATCH
+                              SET @nErrNo = 234717
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Task Fail
+                              GOTO RollBackTran
+                           END CATCH
+
+                           --V1.1.3
+                           BEGIN TRY
+                              UPDATE dbo.PickDetail WITH (ROWLOCK)
+                                 SET 
+                                    TaskDetailKey = @cNewTaskDetailKey,
+                                    CASEID = @cTempCaseID,--V1.1.4
+                                    DropID = @cTempCaseID,--V1.1.5
+                                    EditDate = GETDATE(), 
+                                    EditWho  = SUSER_SNAME(),
+                                    TrafficCop = NULL
+                              WHERE PickDetailKey = @cPickDetailKey
+                           END TRY
+                           BEGIN CATCH
+                              SET @nErrNo = 234718
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                              GOTO RollBackTran
+                           END CATCH
+
+                        END
+                        ELSE
+                        BEGIN
+                           IF @nDebugFlag = 1
+                              SELECT 'Partial Short Pick, Update existing picking task'
+
+                           --v1.1.1 start
+                           SELECT TOP 1 @cShortTaskDetailKey = TaskDetailKey 
+                           FROM dbo.TASKDETAIL WITH (NOLOCK) 
+                           WHERE SourceKey = @cTaskDetailKey
+                              AND TaskType = 'ASTCPK'
+                              AND TransitCount > 0
+                              ORDER BY TaskDetailKey DESC
+                           --v1.1.1 end
+
+                           UPDATE dbo.TaskDetail WITH (ROWLOCK)
+                           SET
+                              QTY = QTY + @nQTY_PD - @nQTY_Bal,
+                              UOMQty = UOMQty + @nQTY_PD - @nQTY_Bal, -- v1.1.1
+                              EditDate = GETDATE(),  
+                              EditWho  = SUSER_SNAME(),
+                              TrafficCop = NULL
+                           WHERE TaskDetailKey = @cShortTaskDetailKey
+
+                           --v1.1.1 start
+                           -- update the pickdetail to the new task detail
+                           BEGIN TRY
+                              UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                                 TaskDetailKey = @cShortTaskDetailKey,
+                                 CASEID = @cTempCaseID, --V1.1.4
+                                 DropID = @cTempCaseID --V1.1.5
+                              WHERE PickDetailKey = @cPickDetailKey
+                           END TRY
+                           BEGIN CATCH
+                              SET @nErrNo = 234720
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                              GOTO RollBackTran
+                           END CATCH
+                           --V1.1.1 end
+                        END
+                        SET @nPickedQty = 0
+
+                        SELECT @nPickedQty = SUM(Qty)
+                        FROM dbo.PICKDETAIL WITH(NOLOCK)
+                        WHERE TaskDetailKey = @cTaskDetailKey
+                           AND Status = @cPickConfirmStatus
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN 
+                           IF @cPickZone <> 'PICK'
+                           BEGIN
+                              SELECT @nPickedQty = SUM(PD.Qty)
+                              FROM dbo.PickDetail PD WITH (NOLOCK) 
+                              INNER JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID )
+                              INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+                              WHERE PD.OrderKey = @cOrderKey 
+                                 AND PD.LOC = @cLOC 
+                                 AND PD.SKU = @cSKU 
+                                 AND PD.CaseID = @cCaseID
+                                 AND PD.QTY > 0 
+                                 AND PD.Status = @cPickConfirmStatus 
+                                 AND TD.TaskDetailKey = @cTaskDetailKey
+                           END
+                        END
+                        
+                        UPDATE dbo.TaskDetail SET
+                           SystemQty = Qty, 
+                           --Qty = @nQTY_Bal,  
+                           Qty = ISNULL(@nPickedQty, 0),
+                           EditDate = GETDATE(),  
+                           EditWho  = SUSER_SNAME()
+                        WHERE TaskDetailKey = @cTaskDetailKey
+                        IF @@ERROR <> 0  
+                        BEGIN  
+                           SET @nErrNo = 234706  
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                           GOTO RollBackTran  
+                        END
+                     END                  
                   END
-                  
-                  UPDATE dbo.TaskDetail SET
-                     SystemQty = Qty, 
-                     --Qty = @nQTY_Bal,  
-                     Qty = ISNULL(@nPickedQty, 0),
-                     EditDate = GETDATE(),  
-                     EditWho  = SUSER_SNAME()
-                  WHERE TaskDetailKey = @cTaskDetailKey
-                  IF @@ERROR <> 0  
-                  BEGIN  
-                     SET @nErrNo = 234706  
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                     GOTO RollBackTran  
-                  END  
+                  ELSE IF @nTransitCount = 1 --Second time short pick
+                  BEGIN
+                     IF @nDebugFlag = 1
+                        SELECT '2nd time Short Pick'
+                     IF @nFullShortFlag = 1 --Full Short Pick
+                     BEGIN
+                        IF @nDebugFlag = 1
+                           SELECT 'Full Short Pick'
+
+                        IF NOT EXISTS (SELECT 1 
+                                    FROM dbo.TaskDetail WITH (NOLOCK) 
+                                    WHERE TaskDetailKey = @cTaskDetailKey AND Status = '9') 
+                        --V1.1.1 only handle task when 1st time
+                        BEGIN
+                           IF @nDebugFlag = 1
+                              SELECT 'Mark the task as SHORT, and close the task'
+
+                           BEGIN TRY
+                              UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
+                                 ReasonKey = 'SHORT'
+                              WHERE TaskDetailKey = @cTaskDetailKey
+                           END TRY
+                           BEGIN CATCH
+                              SET @nErrNo = 234715
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Task Fail
+                              GOTO RollBackTran
+                           END CATCH
+
+                           UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
+                              Status = '9',
+                              ReasonKey = 'SHORT',
+                              DropID = @cOriginDropId,
+                              EditDate = GETDATE(),  
+                              EditWho  = SUSER_SNAME(),
+                              TrafficCop = NULL
+                           WHERE TaskDetailKey = @cTaskDetailKey
+                           IF @@ERROR <> 0
+                           BEGIN  
+                              SET @nErrNo = 234713  
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Task Fail  
+                              GOTO RollBackTran
+                           END
+                        END
+
+                        --V1.1.1 set the pickdetail status to 4
+                        BEGIN TRY
+                           UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                              STATUS = '4',
+                              TaskDetailKey = @cTaskDetailKey,
+                              EditDate = GETDATE(), 
+                              EditWho  = SUSER_SNAME(),
+                              TrafficCop = NULL
+                           WHERE PickDetailKey = @cPickDetailKey
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 234716
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                           GOTO RollBackTran
+                        END CATCH
+
+                     END
+                     ELSE --Partial Short Pick
+                     BEGIN
+                        IF @nDebugFlag = 1
+                           SELECT 'Partial Short Pick'
+
+                        IF NOT EXISTS (
+                           SELECT 1 FROM DBO.TASKDETAIL WITH (NOLOCK) 
+                           WHERE SourceKey = @cTaskDetailKey
+                           AND TaskType = 'ASTCPK'
+                           AND TransitCount > 0
+                        )
+                        BEGIN
+                           IF @nDebugFlag = 1
+                              SELECT 'Partial Short Pick, Create new picking task for short'
+
+                           SET @nSuccess = 1
+                           EXECUTE dbo.nspg_getkey
+                              'TASKDETAILKEY'
+                              , 10
+                              , @cNewTaskDetailKey OUTPUT
+                              , @nSuccess          OUTPUT
+                              , @nErrNo            OUTPUT
+                              , @cErrMsg           OUTPUT
+                           IF @nSuccess <> 1
+                           BEGIN
+                              SET @nErrNo = 167751
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
+                              GOTO Fail
+                           END
+
+                           INSERT INTO TaskDetail (
+                              TaskDetailKey, TaskType, Status, UserKey, PickMethod, TransitCount, AreaKey, SourceType, FromLOC, FromID, ToLOC, ToID, 
+                              StorerKey, SKU, LOT, UOM,UOMQty, QTY, ListKey, SourceKey, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop, FinalLoc,ReasonKey
+                              ,DeviceID,DropID,CaseID)
+                           SELECT
+                              @cNewTaskDetailKey, TaskType, 
+                              '0', --STATUS
+                              '', PickMethod, 1, AreaKey, SourceType, FROMLOC, FROMID, TOLOC, ToID, 
+                              StorerKey, SKU, LOT, UOM,@nQTY_PD - @nQTY_Bal, @nQTY_PD - @nQTY_Bal, ListKey, TaskDetailKey, WaveKey, LoadKey, Priority, SourcePriority, NULL, FinalLoc,
+                              '' --REASON CODE
+                              ,'', @cOriginDropId,''
+                           FROM TaskDetail WITH (NOLOCK)
+                           WHERE TaskDetailKey = @cTaskDetailKey 
+
+                           UPDATE dbo.TaskDetail SET
+                              ReasonKey = 'SHORT'
+                           WHERE TaskDetailKey = @cNewTaskDetailKey
+
+                           UPDATE dbo.TaskDetail SET
+                              Status = '9',
+                              ReasonKey = 'SHORT',
+                              EditDate = GETDATE(),  
+                              EditWho  = SUSER_SNAME(),
+                              TrafficCop = NULL
+                           WHERE TaskDetailKey = @cNewTaskDetailKey
+                           IF @@ERROR <> 0  
+                           BEGIN
+                              SET @nErrNo = 234713  
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                              GOTO RollBackTran
+                           END
+
+                           BEGIN TRY
+                              UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                                 STATUS = '4',
+                                 TaskDetailKey = @cNewTaskDetailKey,
+                                 EditDate = GETDATE(), 
+                                 EditWho  = SUSER_SNAME(),
+                                 TrafficCop = NULL
+                              WHERE PickDetailKey = @cPickDetailKey
+                           END TRY
+                           BEGIN CATCH
+                              SET @nErrNo = 234719
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                              GOTO RollBackTran
+                           END CATCH
+                        END
+                        ELSE
+                        BEGIN
+                           IF @nDebugFlag = 1
+                              SELECT 'Partial Short Pick, Update existing picking task for short'
+
+                           --v1.1.1 start
+                           SELECT TOP 1 @cShortTaskDetailKey = TaskDetailKey 
+                           FROM dbo.TASKDETAIL WITH (NOLOCK) 
+                           WHERE SourceKey = @cTaskDetailKey
+                              AND TaskType = 'ASTCPK'
+                              AND TransitCount > 0
+                              ORDER BY TaskDetailKey DESC
+                           --v1.1.1 end
+
+                           UPDATE dbo.TaskDetail WITH (ROWLOCK)
+                           SET
+                              QTY = QTY + @nQTY_PD - @nQTY_Bal,
+                              UOMQty = UOMQty + @nQTY_PD - @nQTY_Bal, -- v1.1.1
+                              EditDate = GETDATE(),  
+                              EditWho  = SUSER_SNAME(),
+                              TrafficCop = NULL
+                           WHERE TaskDetailKey = @cShortTaskDetailKey
+
+                           SET @cNewTaskDetailKey = @cShortTaskDetailKey
+                        END
+                        -- Update PickDetail with new TaskDetailKey
+                        UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                           STATUS = '4',
+                           TaskDetailKey = @cNewTaskDetailKey,
+                           EditDate = GETDATE(), 
+                           EditWho  = SUSER_SNAME(),
+                           TrafficCop = NULL
+                        WHERE PickDetailKey = @cPickDetailKey
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @nErrNo = 234712
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                           GOTO RollBackTran
+                        END
+
+                        SET @nPickedQty = 0
+                        SELECT @nPickedQty = SUM(Qty)
+                        FROM dbo.PICKDETAIL WITH(NOLOCK)
+                        WHERE TaskDetailKey = @cTaskDetailKey
+                           AND Status = @cPickConfirmStatus
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN 
+                           IF @cPickZone <> 'PICK'
+                           BEGIN
+                              SELECT @nPickedQty = SUM(PD.Qty)
+                              FROM dbo.PickDetail PD WITH (NOLOCK) 
+                              INNER JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID )
+                              INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+                              WHERE PD.OrderKey = @cOrderKey 
+                                 AND PD.LOC = @cLOC 
+                                 AND PD.SKU = @cSKU 
+                                 AND PD.CaseID = @cCaseID
+                                 AND PD.QTY > 0 
+                                 AND PD.Status = @cPickConfirmStatus 
+                                 AND TD.TaskDetailKey = @cTaskDetailKey
+                           END
+                        END
+
+                        UPDATE dbo.TaskDetail SET
+                           SystemQty = Qty, 
+                           Qty = ISNULL(@nPickedQty, 0),
+                           EditDate = GETDATE(),  
+                           EditWho  = SUSER_SNAME()
+                        WHERE TaskDetailKey = @cTaskDetailKey
+                        IF @@ERROR <> 0  
+                        BEGIN  
+                           SET @nErrNo = 234713  
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                           GOTO RollBackTran  
+                        END
+                     END
+                  END 
+
+                  IF @nTransitCount > 0 --Second time short pick
+                  BEGIN
+                     EXEC ispGenTransmitLog2
+                        @c_TableName        = 'WSSOAlloUpd'
+                        ,@c_Key1             = @cOrderKey
+                        ,@c_Key2             = @cPickDetailKey
+                        ,@c_Key3             = @cStorerkey
+                        ,@c_TransmitBatch    = ''
+                        ,@b_Success          = @bSuccess   OUTPUT
+                        ,@n_err              = @nErrNo     OUTPUT
+                        ,@c_errmsg           = @cErrMsg    OUTPUT
+
+                     IF @bSuccess <> 1      
+                        GOTO RollBackTran
+                  END
                END  
-            END  
+            END  --Qty_bal=0
             ELSE  
-            BEGIN -- Have balance, need to split  
-  
+            BEGIN -- Have balance, need to split
+               IF @nDebugFlag = 1
+                  SELECT 'Qty_PD > QTY_Bal, QTY_Bal > 0'
+                 
+               SET @nFullShortFlag = 0
                -- Get new PickDetailkey  
-               DECLARE @cNewPickDetailKey NVARCHAR( 10)  
                EXECUTE dbo.nspg_GetKey  
                   'PICKDETAILKEY',  
                   10 ,  
@@ -528,18 +1003,228 @@ BEGIN
                -- Short pick
                IF @cType = 'SHORT'
                BEGIN
-                  -- Confirm PickDetail
-                  UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-                     Status = '4',
-                     EditDate = GETDATE(), 
-                     EditWho  = SUSER_SNAME(),
-                     TrafficCop = NULL
-                  WHERE PickDetailKey = @cNewPickDetailKey
-                  IF @@ERROR <> 0
+                  IF @cReasonCode <> 'SKIP' AND @nTransitCount = 0 --First time short pick
                   BEGIN
-                     SET @nErrNo = 234712
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
-                     GOTO RollBackTran
+                     IF @nDebugFlag = 1
+                        SELECT '1st time Short Pick'
+
+                     IF NOT EXISTS (
+                        SELECT 1 FROM DBO.TASKDETAIL WITH (NOLOCK) 
+                        WHERE SourceKey = @cTaskDetailKey
+                        AND TaskType = 'ASTCPK'
+                        AND TransitCount > 0
+                     )
+                     BEGIN
+                        IF @nDebugFlag = 1
+                           SELECT '1st time Short Pick, Create new picking task'
+
+                        SET @nSuccess = 1
+                        --v1.1.4
+                        IF @cTempCaseID = ''
+                        BEGIN
+                           EXECUTE dbo.nspg_Getkey
+                           @KeyName     = 'LVSDropID'
+                           ,@fieldlength = 9
+                           ,@keystring   = @cTempCaseID     OUTPUT
+                           ,@b_Success   = @nSuccess        OUTPUT
+                           ,@n_err       = @nErrNo          OUTPUT
+                           ,@c_errmsg    = @cErrmsg         OUTPUT
+
+                           IF @nSuccess = 0
+                           BEGIN
+                              GOTO RollBackTran
+                           END
+                           ELSE
+                           BEGIN
+                              SET @cTempCaseID = 'T' + @cTempCaseID 
+                           END
+                        END
+
+                        EXECUTE dbo.nspg_getkey
+                           'TASKDETAILKEY'
+                           , 10
+                           , @cNewTaskDetailKey OUTPUT
+                           , @nSuccess          OUTPUT
+                           , @nErrNo            OUTPUT
+                           , @cErrMsg           OUTPUT
+                        IF @nSuccess <> 1
+                        BEGIN
+                           SET @nErrNo = 167751
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
+                           GOTO Fail
+                        END
+
+                        INSERT INTO dbo.TaskDetail (
+                           TaskDetailKey, TaskType, Status, UserKey, PickMethod, TransitCount, AreaKey, SourceType, FromLOC, FromID, ToLOC, ToID, 
+                           StorerKey, SKU, LOT, UOM,UOMQty, QTY, ListKey, SourceKey, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop, FinalLoc,ReasonKey
+                           ,DeviceID,DropID,CaseID)
+                        SELECT
+                           @cNewTaskDetailKey, TaskType, 
+                           'X', --STATUS
+                           '', PickMethod, 1, AreaKey, SourceType, FROMLOC, FROMID, TOLOC, ToID, 
+                           StorerKey, SKU, LOT, UOM,@nQTY_PD - @nQTY_Bal, @nQTY_PD - @nQTY_Bal, ListKey, TaskDetailKey, WaveKey, LoadKey, Priority, SourcePriority, NULL, FinalLoc,
+                           --'SKIP' --REASON CODE
+                           '' --v1.1.1 TaskDetailAdd trigger not allow insert task with reasonkey
+                           ,'', @cOriginDropId,''
+                        FROM dbo.TaskDetail WITH (NOLOCK)
+                        WHERE TaskDetailKey = @cTaskDetailKey
+
+                        --v1.1.1/v1.1.3
+                        UPDATE dbo.TaskDetail WITH (ROWLOCK) 
+                           SET ReasonKey = 'SKIP', --v1.1.1
+                              DropID = '', --v1.1.3
+                              CaseID = @cTempCaseID --v1.1.4
+                        WHERE TaskDetailKey = @cNewTaskDetailKey 
+                     END
+                     ELSE
+                     BEGIN
+                        IF @nDebugFlag = 1
+                           SELECT '1st time Short Pick, Update existing picking task'
+
+                        --v1.1.1 start
+                        SELECT TOP 1 @cShortTaskDetailKey = TaskDetailKey 
+                        FROM dbo.TASKDETAIL WITH (NOLOCK) 
+                        WHERE SourceKey = @cTaskDetailKey
+                           AND TaskType = 'ASTCPK'
+                           AND TransitCount > 0
+                           ORDER BY TaskDetailKey DESC
+                        --v1.1.1 end
+
+                        UPDATE dbo.TaskDetail WITH (ROWLOCK)
+                        SET
+                           QTY = QTY + @nQTY_PD - @nQTY_Bal,
+                           UOMQty = UOMQty + @nQTY_PD - @nQTY_Bal, -- v1.1.1
+                           EditDate = GETDATE(),  
+                           EditWho  = SUSER_SNAME(),
+                           TrafficCop = NULL
+                        WHERE TaskDetailKey = @cShortTaskDetailKey
+
+                        --v1.1.2 start
+                        SET @cNewTaskDetailKey = @cShortTaskDetailKey
+                        --V1.1.2 end
+                     END
+                     -- Confirm PickDetail
+                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                        UOMQty = Qty, --V1.1.1 
+                        TaskDetailKey = @cNewTaskDetailKey,
+                        --DropID = '', --v1.1.3
+                        CaseID = @cTempCaseID, --v1.1.4
+                        DropID = @cTempCaseID, --v1.1.5
+                        EditDate = GETDATE(), 
+                        EditWho  = SUSER_SNAME(),
+                        TrafficCop = NULL
+                     WHERE PickDetailKey = @cNewPickDetailKey
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 234712
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                        GOTO RollBackTran
+                     END                    
+                  END
+                  ELSE IF @nTransitCount = 1 --Second time short pick
+                  BEGIN
+                     IF @nDebugFlag = 1
+                        SELECT '2nd time Short Pick'
+
+                     --Partial Short pick
+                     IF NOT EXISTS (
+                        SELECT 1 FROM DBO.TASKDETAIL WITH (NOLOCK) 
+                        WHERE SourceKey = @cTaskDetailKey
+                        AND TaskType = 'ASTCPK'
+                        AND TransitCount > 0
+                     )
+                     BEGIN
+                        IF @nDebugFlag = 1
+                           SELECT '2nd time Short Pick, Create new picking task for short'
+
+                        SET @nSuccess = 1
+                        EXECUTE dbo.nspg_getkey
+                           'TASKDETAILKEY'
+                           , 10
+                           , @cNewTaskDetailKey OUTPUT
+                           , @nSuccess          OUTPUT
+                           , @nErrNo            OUTPUT
+                           , @cErrMsg           OUTPUT
+                        IF @nSuccess <> 1
+                        BEGIN
+                           SET @nErrNo = 167751
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
+                           GOTO Fail
+                        END
+
+                        INSERT INTO TaskDetail (
+                           TaskDetailKey, TaskType, Status, UserKey, PickMethod, TransitCount, AreaKey, SourceType, FromLOC, FromID, ToLOC, ToID, 
+                           StorerKey, SKU, LOT, UOM,UOMQty, QTY, ListKey, SourceKey, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop, FinalLoc,ReasonKey
+                           ,DeviceID,DropID,CaseID)
+                        SELECT
+                           @cNewTaskDetailKey, TaskType, 
+                           '0', --STATUS
+                           '', PickMethod, 1, AreaKey, SourceType, FROMLOC, FROMID, TOLOC, ToID, 
+                           StorerKey, SKU, LOT, UOM,@nQTY_PD - @nQTY_Bal, @nQTY_PD - @nQTY_Bal, ListKey, TaskDetailKey, WaveKey, LoadKey, Priority, SourcePriority, NULL, FinalLoc,
+                           '' --REASON CODE
+                           ,'', @cOriginDropId,''
+                        FROM TaskDetail WITH (NOLOCK)
+                        WHERE TaskDetailKey = @cTaskDetailKey 
+
+                        UPDATE dbo.TaskDetail SET
+                           ReasonKey = 'SHORT'
+                        WHERE TaskDetailKey = @cNewTaskDetailKey
+
+                        UPDATE dbo.TaskDetail SET
+                           Status = '9',
+                           ReasonKey = 'SHORT',
+                           EditDate = GETDATE(),  
+                           EditWho  = SUSER_SNAME(),
+                           TrafficCop = NULL
+                        WHERE TaskDetailKey = @cNewTaskDetailKey
+                        IF @@ERROR <> 0  
+                        BEGIN
+                           SET @nErrNo = 234713  
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                           GOTO RollBackTran
+                        END
+                     END
+                     ELSE
+                     BEGIN
+                        IF @nDebugFlag = 1
+                           SELECT '2nd time Short Pick, Update existing picking task for short'
+
+                        --v1.1.1 start
+                        SELECT TOP 1 @cShortTaskDetailKey = TaskDetailKey 
+                        FROM dbo.TASKDETAIL WITH (NOLOCK) 
+                        WHERE SourceKey = @cTaskDetailKey
+                           AND TaskType = 'ASTCPK'
+                           AND TransitCount > 0
+                           ORDER BY TaskDetailKey DESC
+                        --v1.1.1 end
+
+                        UPDATE dbo.TaskDetail WITH (ROWLOCK)
+                        SET
+                           QTY = QTY + @nQTY_PD - @nQTY_Bal,
+                           UOMQty = UOMQty + @nQTY_PD - @nQTY_Bal, -- v1.1.1
+                           EditDate = GETDATE(),  
+                           EditWho  = SUSER_SNAME(),
+                           TrafficCop = NULL
+                        WHERE TaskDetailKey = @cShortTaskDetailKey
+
+                        --v1.1.2 start
+                        SET @cNewTaskDetailKey = @cShortTaskDetailKey
+                        --V1.1.2 end
+                     END
+                     -- Update PickDetail with new TaskDetailKey
+                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                        Status = '4',
+                        TaskDetailKey = @cNewTaskDetailKey,
+                        EditDate = GETDATE(), 
+                        EditWho  = SUSER_SNAME(),
+                        TrafficCop = NULL
+                     WHERE PickDetailKey = @cNewPickDetailKey
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 234712
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                        GOTO RollBackTran
+                     END
                   END
 
                   SET @nPickedQty = 0
@@ -581,14 +1266,40 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
                      GOTO RollBackTran  
                   END  
+
+                  IF @cReasonCode = 'SKIP' OR @nTransitCount > 0 --Second time short pick
+                  BEGIN
+                     EXEC ispGenTransmitLog2
+                        @c_TableName        = 'WSSOAlloUpd'
+                        ,@c_Key1             = @cOrderKey
+                        ,@c_Key2             = @cNewPickDetailKey
+                        ,@c_Key3             = @cStorerkey
+                        ,@c_TransmitBatch    = ''
+                        ,@b_Success          = @bSuccess   OUTPUT
+                        ,@n_err              = @nErrNo     OUTPUT
+                        ,@c_errmsg           = @cErrMsg    OUTPUT
+
+                     IF @bSuccess <> 1      
+                        GOTO RollBackTran
+                  END
+
                END
   
                SET @nQTY_Bal = 0 -- Reduce balance  
             END  
-         END  
+         END
+
+         IF @nDebugFlag = 1
+         BEGIN
+            SELECT 'Handled PickDetail', @cPickDetailKey
+            SELECT 'Pickdetail'
+            SELECT * FROM dbo.PickDetail WITH (NOLOCK) WHERE PickDetailKey IN (@cPickDetailKey, @cNewPickDetailKey)
+            SELECT 'TaskDetail'
+            SELECT * FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey IN (@cTaskDetailKey, @cNewTaskDetailKey)
+         END 
 
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD  
-      END  
+      END --loop pickdetail
       CLOSE @curPD
       DEALLOCATE @curPD
       
@@ -605,9 +1316,7 @@ BEGIN
          @cTaskDetailKey= @cTaskDetailKey,
          @cRefNo1       = @cType,  
          @cPickSlipNo   = @cPickSlipNo
-
-      FETCH NEXT FROM @curCfmTask INTO @cTaskDetailKey, @cSKU, @cCaseID, @cLOC, @cDropID, @cOrderKey
-   END
+   END --loop temptask
    
    DECLARE @curUpdTask CURSOR
    SET @curUpdTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
@@ -626,6 +1335,9 @@ BEGIN
    FETCH NEXT FROM @curUpdTask INTO @cTaskKey
    WHILE @@FETCH_STATUS = 0
    BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'Update TaskDetail from 3 to 5', @cTaskKey
+
       UPDATE dbo.TaskDetail SET 
          [Status] = '5',
          EditDate = GETDATE(),
@@ -640,9 +1352,18 @@ BEGIN
 
       FETCH NEXT FROM @curUpdTask INTO @cTaskKey
    END
-   
+
+   IF @nDebugFlag = 1
+   BEGIN
+      SELECT 'Finish confirm logic'
+      SELECT 'Finished'
+      SELECT * FROM TaskDetail (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey OR SourceKey  = @cTaskDetailKey AND TaskType = 'ASTCPK'
+      SELECT * FROM PICKDETAIL (NOLOCK) WHERE TaskDetailKey IN (
+      SELECT TaskDetailKey FROM TaskDetail (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey or SourceKey  = @cTaskDetailKey and TaskType = 'ASTCPK')
+   END
+
   
-   GOTO Quit  
+GOTO Quit  
   
 RollBackTran:  
    ROLLBACK TRAN rdt_1855CfmSP01 -- Only rollback change made here  

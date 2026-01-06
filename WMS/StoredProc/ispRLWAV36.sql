@@ -24,6 +24,7 @@ GO
 /* 17-FEB-2021 CSCHONG  1.0  WMS-16019 revised field logic (CS01)           */
 /* 18-JUL-2022 CSCHONG  1.1  Devops Scripts Combine & WMS-20186 (CS02)      */
 /* 06-Oct-2022 WLChooi  1.2  WMS-20942 - 1 ID 1 Replen Record (WL01)        */
+/* 10-Oct-2025 SSA01    1.3   UWP-42248 -Enhanced session management        */
 /****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV36]
@@ -163,10 +164,10 @@ BEGIN
        , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
        , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
        , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (getdate())    --(SSA01)
+       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())       --(SSA01)
+       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (getdate())    --(SSA01)
+       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())       --(SSA01)
        , [TrafficCop]           [NVARCHAR](1)    NULL
        , [ArchiveCop]           [NVARCHAR](1)    NULL
        , [OptimizeCop]          [NVARCHAR](1)    NULL
@@ -790,8 +791,8 @@ BEGIN
       UPDATE WAVE
       SET TMReleaseFlag = 'Y'
         , TrafficCop = NULL
-        , EditWho = SUSER_SNAME()
-        , EditDate = GETDATE()
+        , EditWho = dbo.fnc_GetUserName()          --(SSA01)
+        , EditDate = dbo.fnc_GetDate()    --(SSA01)
       WHERE WaveKey = @c_wavekey
 
       SELECT @n_err = @@ERROR

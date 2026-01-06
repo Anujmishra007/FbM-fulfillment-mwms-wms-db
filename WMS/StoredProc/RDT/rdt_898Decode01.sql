@@ -1,21 +1,19 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_898Decode01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_898Decode01]
-GO
-
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_898Decode01                                          */
+/* Store procedure: rdt_898Decode01                                           */
 /* Copyright: Maersk                                                          */
 /*                                                                            */
 /* Purpose: Decode PMI GS1 ID/UCC Label                                       */
 /*                                                                            */
-/* Date        Author    Ver.  Purposes                                       */
-/* 08-10-2024  CYU027
-   1.0   Created                                        */
+/* Date        Author    Ver.    Purposes                                     */
+/* 08-10-2024  Cuize    1.0     FCR-759 Created                               */
+/* 2025-07-30  Jackc    1.1.0   FCR-2961 Support new types of UCC barcode     */
+/* 2025-11-10  Cuize    1.2     FCR-8407 Swedish label58                      */
+/* 2025-12-22  Dennis   1.3     FCR-2307 Decode                               */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_898Decode01] (
    @nMobile             INT,
@@ -63,8 +61,13 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cLocalUCC AS NVARCHAR(20)
-   DECLARE @cID AS NVARCHAR(18)
+   DECLARE @cLocalUCC   NVARCHAR(20)
+   DECLARE @cID         NVARCHAR(18)
+   DECLARE @cSKU        NVARCHAR(20)
+   DECLARE @cBatch AS NVARCHAR(2)
+   DECLARE @cReceiptLineNumber AS NVARCHAR(10)
+   DECLARE @cTempUCC AS NVARCHAR(MAX)
+   SET @cTempUCC = @cUCC
 
    IF @nFunc = 898 -- UCC receiving
    BEGIN
@@ -96,17 +99,114 @@ BEGIN
          BEGIN
             IF @cUCC <> ''
             BEGIN
-               IF LEN( LTRIM(RTRIM( @cUCC))) <> 40
+               SET @cUCC = LTRIM(RTRIM( @cUCC))
+
+               IF LEN(@cUCC) = 49 --Fertin label
+               BEGIN
+                  SET @cLocalUCC = SUBSTRING(@cUCC, 19, 17)
+                  SET @cSKU = SUBSTRING(@cUCC, 39, 11)
+
+                  SET @cSKU = SUBSTRING(@cUCC, 39, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 226805
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 226806
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END--len 49
+               ELSE IF LEN(@cUCC) = 57 --Swedish label 57
+               BEGIN
+                  SET @cLocalUCC = SUBSTRING(@cUCC, 19, 17)
+                  SET @cUserDefine09 = RIGHT(@cUCC, 6)
+                  SET @cSKU = SUBSTRING(@cUCC, 39, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 226803
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 226804
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END-- len57
+               ELSE IF LEN(@cUCC) = 58 --Swedish label 58
+               BEGIN
+                  SET @cLocalUCC = SUBSTRING(@cUCC, 19, 18)
+                  SET @cUserDefine09 = RIGHT(@cUCC, 6)
+                  SET @cSKU = SUBSTRING(@cUCC, 40, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 226807
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 226808
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END-- len57
+               ELSE IF LEN(@cUCC) = 40
+               BEGIN
+                  --V1.0.0 logic
+                  SET @cLocalUCC = SUBSTRING( @cUCC, 21, 40)
+                  SET @cUserDefine09 = SUBSTRING( @cUCC,1 ,20)
+               END --len 40
+               ELSE
                BEGIN
                   SET @nErrNo = 226802
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                   GOTO Quit
                END
 
-               SET @cLocalUCC = SUBSTRING( @cUCC, 21, 40)
-               SET @cUserDefine09 = SUBSTRING( @cUCC,1 ,20)
-               SET @cUCC = @cLocalUCC
+               SET @cUCC = @cLocalUCC --return decode value
 
+               IF EXISTS (SELECT 1 FROM dbo.Receipt (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND PROCESSTYPE='E')
+               BEGIN
+                  IF SUBSTRING( @cTempUCC, 3, 1) = '0'
+                     SET @cSKU = SUBSTRING( @cTempUCC, 4, 13)
+                  ELSE
+                     SET @cSKU = SUBSTRING( @cTempUCC, 3, 14)
+                  SET @cBatch = SUBSTRING( @cTempUCC, 31, 2)
+
+                  SELECT TOP 1 @cReceiptLineNumber = ReceiptLineNumber
+                  FROM dbo.RECEIPTDETAIL (NOLOCK)
+                  WHERE ReceiptKey = @cReceiptKey
+                  AND SKU = @cSKU
+                  AND LOTTABLE02 = @cBatch
+                  AND QTYExpected > 0 AND QTYExpected > QtyReceived
+                  AND LEFT(UserDefine05, 2) = 'CS'
+                  ORDER BY ReceiptLineNumber
+
+                  IF ISNULL(@cReceiptLineNumber,'')=''
+                  BEGIN
+                     SET @nErrNo = 226810
+                     SET @cErrMsg = rdt.rdtgetmessageLong( @nErrNo, @cLangCode, 'DSP')--No Receipt Line For Scanned UCC
+                     GOTO Quit
+                  END
+
+                  UPDATE dbo.UCC WITH (ROWLOCK)
+                  SET ReceiptKey = @cReceiptKey
+                  ,ReceiptLineNumber = @cReceiptLineNumber
+                  WHERE UCCNo = @cUCC
+                  AND StorerKey = @cStorerKey
+               END
                GOTO Quit
             END
          END
@@ -119,5 +219,14 @@ BEGIN
      V_String38 = @cUserDefine08,
      V_String39 = @cUserDefine09
    WHERE Mobile = @nMobile
-
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON rdt.rdt_898Decode01 TO NSQL
+GO
+

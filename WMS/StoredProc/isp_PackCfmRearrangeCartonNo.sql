@@ -22,7 +22,9 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */
+/* 10-OCT-2025  SSA01    1.5   UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/  
 
 CREATE PROCEDURE [dbo].[isp_PackCfmRearrangeCartonNo]  
@@ -80,8 +82,8 @@ BEGIN
          	UPDATE PACKDETAIL WITH (ROWLOCK)
          	SET CartonNo   = @c_GetActualCartonNo, 
          	    ArchiveCop = NULL,
-         	    EditDate   = GETDATE(),
-         	    EditWho    = SUSER_SNAME()
+         	    EditDate   = dbo.fnc_GetDate(),   --(SSA01)
+         	    EditWho    = dbo.fnc_GetUserName()      --(SSA01)
          	WHERE PickSlipNo = @c_GetPickslipno AND CartonNo = @c_GetCartonNo
          	
          	SELECT @n_err = @@ERROR
@@ -100,8 +102,8 @@ BEGIN
          	   UPDATE PACKINFO WITH (ROWLOCK)
          	   SET CartonNo   = @c_GetActualCartonNo, 
          	       TrafficCop = NULL,
-         	       EditDate   = GETDATE(),
-         	       EditWho    = SUSER_SNAME()
+         	       EditDate   = dbo.fnc_GetDate(),   --(SSA01)
+         	       EditWho    = dbo.fnc_GetUserName()     --(SSA01)
          	   WHERE PickSlipNo = @c_GetPickslipno AND CartonNo = @c_GetCartonNo
          	
          	   IF @n_err <> 0  

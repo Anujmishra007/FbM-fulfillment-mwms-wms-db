@@ -80,6 +80,7 @@ GO
 /*                            (yeekung02)                                     */
 /* 2023-05-10 5.1  WinSern    JSM-142212 add 'Order By RowRef' (ws01)         */
 /* 2024-04-17 5.2  Ung        UWP-18071 Add ByPassTolerance RDT supersede WMS */
+/* 2025-09-08 5.3  Dennis     UWP-40726Add 4 fields to DuplicateFromMatchValue*/
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive_V7] (  
@@ -141,6 +142,7 @@ DECLARE @cUOM       NVARCHAR( 10)
 DECLARE @cSQL       NVARCHAR(MAX)  
 DECLARE @cSQLParam  NVARCHAR(MAX)  
 DECLARE @cCustomSQL NVARCHAR(MAX)  
+
   
   
 /*-------------------------------------------------------------------------------  
@@ -286,7 +288,7 @@ DECLARE @cChkStatus    NVARCHAR( 10)
 DECLARE @cChkASNStatus NVARCHAR( 10)  
 DECLARE @cChkLOC       NVARCHAR( 10)  
 DECLARE @cUCCPOkey     NVARCHAR( 10)-- (Vicky02)  
-  
+
 -- Validate StorerKey  
 IF @cStorerKey = ''  
 BEGIN  
@@ -953,6 +955,10 @@ DECLARE @cExternReceiptKey           NVARCHAR( 100), --(yeekung02)
         @cUserDefine09               NVARCHAR( 30),  
         @cUserDefine10 NVARCHAR( 30),  
         @cPoLineNo                   NVARCHAR(  5),  
+        @cNotes                      NVARCHAR(  500),
+        @cNotes2                     NVARCHAR(  500),  
+        @fGrossWeight                FLOAT,
+        @fCube                       FLOAT,
         @cOrgPOKey                   NVARCHAR( 10)  
   
 -- ReceiptDetail candidate  
@@ -2331,7 +2337,7 @@ BEGIN
                   @cExternPoKey         = ExternPoKey        ,  
                   @cPOKey               = POKey              ,  
                   @cUserDefine01        = UserDefine01       ,  
-         @cUserDefine02        = UserDefine02       ,  
+                  @cUserDefine02        = UserDefine02       ,  
                   @cUserDefine03        = UserDefine03       ,  
                   @cUserDefine04        = UserDefine04       ,  
                   @cUserDefine05        = UserDefine05       ,  
@@ -2343,6 +2349,10 @@ BEGIN
                   @cPoLineNo            = POLineNumber       ,  
                   @cUOM                 = UOM                ,  
                   @cChannel             = Channel            , -- (ChewKP04)   
+                  @cNotes               = Notes              ,
+                  @cNotes2              = Notes2             ,
+                  @fGrossWeight         = GrossWgt           ,
+                  @fCube                = Cube               ,
                   @cLottable01          = CASE WHEN @cDupLottable01 = '1' THEN Lottable01 ELSE @cLottable01 END,   
                   @cLottable02          = CASE WHEN @cDupLottable02 = '1' THEN Lottable02 ELSE @cLottable02 END,   
                   @cLottable03          = CASE WHEN @cDupLottable03 = '1' THEN Lottable03 ELSE @cLottable03 END,   
@@ -2390,6 +2400,10 @@ BEGIN
          SET @cUserDefine10 = ''  
          SET @cPoLineNo = ''  
          SET @cChannel  = ''  
+         SET @cNotes = ''
+         SET @cNotes2 =''
+         SET @fGrossWeight = 0
+         SET @fCube = 0
       END  
   
       IF ISNULL(@cReceiptLineNumber_Borrowed,'') <> ''  
@@ -2585,6 +2599,7 @@ BEGIN
          ExternReceiptKey, ExternLineNo, AltSku, VesselKey, -- Added By Vicky  
          VoyageKey, XdockKey, ContainerKey, UnitPrice, ExtendedPrice, FreeGoodQtyExpected,  
          FreeGoodQtyReceived, ExportStatus, LoadKey, ExternPoKey,  
+         Notes,Notes2,GrossWgt,Cube,  -- Added By Dennis 2025-09-08
          UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05,  
          UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, POLineNumber, SubReasonCode, DuplicateFrom, Channel)  
       SELECT  
@@ -2596,6 +2611,7 @@ BEGIN
          ISNULL(@cExternReceiptKey,''), ISNULL(@cExternLineNo, ''), ISNULL(@cAltSku, ''), ISNULL(@cVesselKey,''), -- Added By Vicky  
          ISNULL(@cVoyageKey, ''), ISNULL(@cXdockKey, ''), ISNULL(@cContainerKey, ''), ISNULL(@nUnitPrice, 0), ISNULL(@nExtendedPrice, 0), ISNULL(@nFreeGoodQtyExpected, 0),  
          ISNULL(@nFreeGoodQtyReceived, 0), ISNULL(@cExportStatus, '0'), @cLoadKey, @cExternPoKey,  
+         ISNULL(@cNotes, ''), ISNULL(@cNotes2, ''), ISNULL(@fGrossWeight, 0), ISNULL(@fCube, 0),  -- Added By Dennis 2025-09-08
          ISNULL(@cUserDefine01, ''), ISNULL(@cUserDefine02, ''), ISNULL(@cUserDefine03, ''), ISNULL(@cUserDefine04, ''), ISNULL(@cUserDefine05, ''),  
          @dtUserDefine06, @dtUserDefine07, ISNULL(@cUserDefine08, ''), ISNULL(@cUserDefine09, ''), ISNULL(@cUserDefine10, ''),  
          ISNULL(@cPoLineNo, ''), CASE WHEN @cSubreasonCode IS NULL THEN SubreasonCode ELSE @cSubreasonCode END, @cReceiptLineNo_Borrowed , @cChannel  

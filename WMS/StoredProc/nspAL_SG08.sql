@@ -1,10 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspAL_SG08]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspAL_SG08]
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
-GO
+
 
 /************************************************************************/
 /* Stored Procedure: nspAL_SG08                                         */
@@ -16,57 +14,58 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
+/* Date         Author   Ver. Purposes                                  */
+/* 25-Jun-2025  WLChooi  1.1  UWP-36187-Support Multi Facilities(WL01)  */
 /************************************************************************/
-CREATE  PROC    nspAL_SG08
+CREATE OR ALTER PROC    [dbo].[nspAL_SG08]
    @c_lot NVARCHAR(10) ,
    @c_uom NVARCHAR(10) ,
    @c_HostWHCode NVARCHAR(10),
    @c_Facility NVARCHAR(5),
    @n_uombase int ,
-   @n_qtylefttofulfill int,  
+   @n_qtylefttofulfill int,
    @c_OtherParms NVARCHAR(200) = ''
 AS
 BEGIN
    SET NOCOUNT ON
-   
+
    DECLARE @c_LoosePltFirst NVARCHAR(1)
-   
+
    SET @c_LoosePltFirst = 'N'
-   
+
    IF EXISTS(SELECT 1 FROM ORDERS(NOLOCK) WHERE Orderkey = LEFT(@c_OtherParms, 10) AND Consigneekey NOT IN('PMS','PMS1'))
-   BEGIN 
+   BEGIN
       SET @c_LoosePltFirst = 'Y'
-   END        
-   
+   END
+
    DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY
    FOR SELECT LOTxLOCxID.LOC,LOTxLOCxID.ID,
    QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), '1'
-   FROM LOTxLOCxID (NOLOCK) 
+   FROM LOTxLOCxID (NOLOCK)
    JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
-   JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID) 
+   JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
    JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
    JOIN SKU (NOLOCK) ON (LOTxLOCxID.Storerkey = SKU.Storerkey AND LOTxLOCxID.Sku = SKU.Sku)
    JOIN PACK (NOLOCK) ON (SKU.Packkey = PACK.Packkey)
+   CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   --WL01
    WHERE LOTxLOCxID.Lot = @c_lot
    AND LOC.Locationflag = 'NONE'
    AND LOC.Status <> 'HOLD'
-   AND LOC.Facility = @c_Facility
+   --AND LOC.Facility = @c_Facility   --WL01
    AND ID.STATUS <> 'HOLD'
-   AND LOT.STATUS <> 'HOLD' 
-   AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) > 0 
-   ORDER BY CASE WHEN PACK.Casecnt > 0 AND @c_LoosePltFirst = 'Y' THEN CASE WHEN (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) % CAST(PACK.Casecnt AS INT) > 0 THEN 1 ELSE 2 END ELSE 3 END, 
-         CASE WHEN PACK.Casecnt > 0 AND @c_LoosePltFirst = 'N' THEN CASE WHEN (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) % CAST(PACK.Casecnt AS INT) = 0 THEN 1 ELSE 2 END ELSE 3 END,   
-         QTYAVAILABLE, LOC.LogicalLocation, LOC.LOC
+   AND LOT.STATUS <> 'HOLD'
+   AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) > 0
+   ORDER BY F.FacSort, CASE WHEN PACK.Casecnt > 0 AND @c_LoosePltFirst = 'Y' THEN CASE WHEN (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) % CAST(PACK.Casecnt AS INT) > 0 THEN 1 ELSE 2 END ELSE 3 END,   --WL01
+            CASE WHEN PACK.Casecnt > 0 AND @c_LoosePltFirst = 'N' THEN CASE WHEN (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) % CAST(PACK.Casecnt AS INT) = 0 THEN 1 ELSE 2 END ELSE 3 END,
+            QTYAVAILABLE, LOC.LogicalLocation, LOC.LOC
 END
-GO 
-
-GRANT EXECUTE ON nspAL_SG08 TO NSQL 
+GO
+GRANT EXECUTE ON  [dbo].[nspAL_SG08] TO [NSQL]
 GO

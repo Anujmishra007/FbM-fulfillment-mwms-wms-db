@@ -31,8 +31,9 @@ GO
 /* Data Modifications:                                                                                         */                          
 /*                                                                                                             */                          
 /* Updates:                                                                                                    */                          
-/* Date   Author  Ver. Purposes                                                                                */                   
-/* 09-Oct-2020  JoshYan 1.0  Split original order Orders.UserDefine04 map to split orders Orders.UserDefine04  */                                   
+/* Date         Author  Ver  Purposes                                                                          */
+/* 09-Oct-2020  JoshYan 1.0  Split original order Orders.UserDefine04 map to split orders Orders.UserDefine04  */
+/* 10-OCT-2025  SSA01   1.5  UWP-42248 -Enhanced session management and cleanup.                               */
 /* ------------------------------------------------------------------------------------------------------------*/          
 CREATE PROCEDURE [dbo].[isp_UpdateSplitOrders_UDF04]        
 (         
@@ -152,8 +153,8 @@ BEGIN
              ,UserDefine04 = @c_SplitTrackingNo        
              ,[Issued] = 'Y'        
              ,TrafficCop = NULL                        
-             ,EditDate = GETDATE()                        
-             ,EditWho = SUSER_SNAME()                                         
+             ,EditDate = dbo.fnc_GetDate()    --(SSA01)
+             ,EditWho = dbo.fnc_GetUserName()         --(SSA01)
          WHERE Orderkey =  @c_SplitOrderKey        
          AND Storerkey = @c_StorerKey      
      
@@ -168,8 +169,8 @@ BEGIN
             SET [Issued] = 'Y'  
                ,[SOStatus] = 'HOLD'  
                ,TrafficCop = NULL                        
-               ,EditDate = GETDATE()                        
-               ,EditWho = SUSER_SNAME()                                         
+               ,EditDate = dbo.fnc_GetDate()    --(SSA01)
+               ,EditWho = dbo.fnc_GetUserName()            --(SSA01)
               WHERE Orderkey =  @c_OriginalOrderKey        
               AND Storerkey = @c_StorerKey     
        

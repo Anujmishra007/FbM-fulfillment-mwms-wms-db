@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 16-Mar-2023  WLChooi  1.0  DevOps Combine Script                     */
+/* 10-Oct-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispWAVPK18]
    @c_Wavekey NVARCHAR(10)
@@ -344,8 +345,8 @@ BEGIN
 
                INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty, AddWho, AddDate
                                      , EditWho, EditDate, RefNo)
-               VALUES (@c_PickslipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_Storerkey, @c_Sku, @n_Qty, SUSER_SNAME()
-                     , GETDATE(), SUSER_SNAME(), GETDATE(), @c_RefNo)
+               VALUES (@c_PickslipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_Storerkey, @c_Sku, @n_Qty, dbo.fnc_GetUserName()
+                     , dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), @c_RefNo)          --(SSA01)
 
                SET @n_Err = @@ERROR
 

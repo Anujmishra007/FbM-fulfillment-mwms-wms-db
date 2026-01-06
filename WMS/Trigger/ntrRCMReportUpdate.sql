@@ -1,3 +1,7 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************************/  
 /* Trigger: ntrRCMReportUpdate                                                      */  
 /* Creation Date: 04.May.2006                                                       */  
@@ -24,6 +28,7 @@
 /* 28-Oct-2013  TLTING        1.2   Review Editdate column update                   */  
 /* 04-Mar-2022  TLTING   		1.3   WMS-19029 prevent bulk update or delete      	*/ 
 /* 2022-04-12   kelvinongcy	1.4   amend way for control user run batch (kocy01)	*/  
+/* 06-Oct-2025  AK01          1.5   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************************/  
   
 CREATE OR ALTER TRIGGER [dbo].[ntrRCMReportUpdate]   
@@ -53,8 +58,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)  
    BEGIN  
       UPDATE dbo.RCMReport WITH (ROWLOCK) 
-      SET EditDate = GETDATE(),  
-          EditWho = SUSER_SNAME()  
+      SET EditDate = dbo.fnc_GetDate(),  
+          EditWho = dbo.fnc_GetUserName()  
       FROM  RCMReport,INSERTED  
       WHERE RCMReport.ComputerName = INSERTED.ComputerName  
       AND   RCMReport.StorerKey = INSERTED.StorerKey  
@@ -73,7 +78,7 @@ BEGIN
    --IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
    --    AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
    IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
-        AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
+        AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = dbo.fnc_GetUserName())
    BEGIN        
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=90208   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
@@ -114,4 +119,6 @@ GO
 
  ALTER TABLE [dbo].[RCMReport] ENABLE TRIGGER [ntrRCMReportUpdate]
 GO
+
+
 

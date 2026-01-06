@@ -29,6 +29,8 @@ GO
 /* 2021-02-26  Wan02    1.1   WMS-16295 - [CN] ANF - RCM Upload HoldUnHold*/
 /*                            Detail and Show HoldUnHold Qty in Channel */
 /*                            Hold Module                               */
+/* 2025-10-10   SSA01   1.2  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC isp_ChannelInvHoldWrapper
            @c_HoldType           NVARCHAR(10) 
@@ -693,8 +695,8 @@ BEGIN
 
       UPDATE CHANNELINV 
       SET QtyOnHold= QtyOnHold + @n_Qty
-         ,EditDate = GETDATE()
-         ,EditWho  = SUSER_NAME()
+         ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+         ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
       WHERE Channel_ID = @n_Channel_ID
       AND QtyOnHold + @n_Qty >= 0
 
@@ -754,8 +756,8 @@ BEGIN
            
       UPDATE CHANNELITRAN
          SET CustomerRef = CONVERT(NVARCHAR(10),@n_ChannelTran_ID_Ref) + ' ' + CustomerRef
-            ,EditWho = SUSER_SNAME()
-            ,EditDate= GETDATE()
+            ,EditWho = dbo.fnc_GetUserName()          --(SSA01)
+            ,EditDate= dbo.fnc_GetDate()   --(SSA01)
             ,TrafficCop = NULL
       WHERE ChannelTran_ID = @n_ChannelTran_ID
          

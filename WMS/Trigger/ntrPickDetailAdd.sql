@@ -1,8 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPickDetailAdd]')
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPickDetailAdd]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: When records Added                                        */
 /*                                                                      */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 4.0                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -54,8 +49,14 @@ GO
 /*                            turn off                                  */
 /* 28-Sep-2021  SYChua        Fix: Added CLOSE and DEALLOCATE statement */
 /*                            for cursor: CUR_CHANNEL_MGMT  (SY01)      */
+/* 29-Oct-2024  TLTING02      WMS-26555 - allow MultiFacility for Orders*/
+/* 12-Aug-2025  WLChooi 4.0   FCR-5700 Trigger ITF By Wave (WL01)       */
+/* 06-OCT-2025  AK01    4.1   UWP-42143 Data Audit                      */
+/* 06-Nov-2025  SWT01   4.5   Change Update Table Sequance to align with*/
+/*                            with other Inventory update seq with      */
+/*                            1. SKUxLOC 2.LotxLocxID 3.Lot 4.ChanneInv */
 /************************************************************************/
-CREATE  TRIGGER [dbo].[ntrPickDetailAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailAdd]
 ON  [dbo].[PICKDETAIL]
 FOR INSERT
 AS
@@ -82,13 +83,15 @@ DECLARE
    , @c_PrevOrderKey    NVARCHAR(10) --NJOW03
    , @c_OrderLineNumber NVARCHAR(5)
    , @n_InsertedRows    INT = 0
-
+   , @c_WaveKey         NVARCHAR(10)   --WL01
+   , @CUR_TriggerPoints CURSOR         --WL01
 
 SELECT @n_InsertedRows = COUNT(*)
 FROM   INSERTED
 
 SELECT @n_Continue = 1, @n_starttcnt = @@TRANCOUNT
 DECLARE @c_AllowOverAllocations NVARCHAR(1) -- Flag to see if overallocations are allowed.
+DECLARE @c_MultiFacilityShipment NVARCHAR(1) = ''
 /* #INCLUDE <TRPDA1.SQL> */
 DECLARE @b_debug INT
 SELECT @b_debug = 0
@@ -108,7 +111,7 @@ END
 -- End 30th Apr 2003
 
 
-IF (SELECT COUNT(*) FROM INSERTED WHERE OptimizeCop is not NULL ) > 0
+IF (SELECT COUNT(*) FROM INSERTED WHERE OptimizeCop IS NOT NULL ) > 0
 BEGIN
    -- SHONG03 Bug Fixing
    UPDATE PICKDETAIL
@@ -121,7 +124,7 @@ BEGIN
    BEGIN
       SELECT @n_Continue = 3
       SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63110   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+      SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Insert Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
    END
    ELSE
    BEGIN
@@ -236,17 +239,47 @@ BEGIN
          BEGIN
             SELECT @n_Continue = 3, @c_errmsg = 'ntrPickDetailAdd' + ISNULL(RTrim(@c_errmsg),'')
          END
+         
+         -- TLTING02
+         SELECT @b_success = 0
+         EXECUTE nspGetRight '', -- facility
+                             @c_Storerkey,    -- StorerKey
+                             NULL,   -- Sku
+                             'MultiFacilityShipment', -- Configkey
+                             @b_success    OUTPUT,
+                             @c_MultiFacilityShipment OUTPUT,
+                             @n_err        OUTPUT,
+                             @c_errmsg     OUTPUT
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_Continue = 3, @c_errmsg = 'ntrPickDetailAdd' + ISNULL(RTrim(@c_errmsg),'')
+         END
+                  
 
          SET @c_PrevStorerKey = @c_StorerKey
          SET @c_PrevFacility  = @c_Facility
 
-         IF NOT EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey = @c_OrderKey AND
-                       Facility = @c_Facility)
+				 -- TLTING02
+         IF @c_MultiFacilityShipment = '1'
          BEGIN
-            SELECT @n_Continue = 3
-            SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT Match with Order Facility (ntrPickDetailAdd)'
-         END
+         		IF NOT EXISTS ( SELECT 1 FROM CODELKUP (NOLOCK) WHERE Storerkey = @c_Storerkey AND Code = @c_facility AND LISTNAME = 'MultiFclt' )		
+	         BEGIN
+	            SELECT @n_Continue = 3
+	            SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+	            SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT ALLOW with approved Facility (ntrPickDetailAdd)'
+	         END
+	       END
+	       ELSE
+	       BEGIN
+	         IF NOT EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey = @c_OrderKey AND
+	                       Facility = @c_Facility)
+	         BEGIN
+	            SELECT @n_Continue = 3
+	            SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+	            SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT Match with Order Facility (ntrPickDetailAdd)'
+	         END	       	
+	       END
+         -- END TLTING02      
 
          --NJOW03
          SELECT @c_UpdPickslipToPickDet = ''
@@ -437,8 +470,8 @@ BEGIN
 
          UPDATE PreAllocatePickDetail
          SET QTY = QTY - @n_sQtyToReduce,
-             Editdate = GETDATE(),
-             Editwho = SUSER_SNAME()
+             Editdate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+             Editwho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
          WHERE PreAllocatePickDetailKey = @c_sPreAllocatePickDetailKey
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -454,6 +487,210 @@ BEGIN
             BREAK
          END
       END
+   END
+END
+
+
+
+-- Updating SKUxLOC Table
+IF (@n_Continue = 1 OR @n_Continue = 2)
+BEGIN
+   IF @b_debug = 1
+   BEGIN
+      SELECT 'Update Data In SKUxLOC'
+   END
+
+   IF @n_InsertedRows = 1
+   BEGIN
+      UPDATE SKUxLOC
+      SET  QtyAllocated = (SKUxLOC.QtyAllocated + INSERTED.Qty),
+           QtyExpected  = CASE WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
+                                    INSERTED.Qty > (SKUxLOC.Qty )
+                               THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
+                                      INSERTED.Qty ) - (SKUxLOC.Qty)
+                               ELSE 0
+                          END,
+            EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+            EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
+      FROM SKUxLOC
+      JOIN INSERTED ON INSERTED.StorerKey = SKUxLOC.StorerKey
+                   AND INSERTED.SKU = SKUxLOC.SKU
+                   AND INSERTED.LOC = SKUxLOC.LOC
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+   END
+   ELSE
+   BEGIN
+      DECLARE  @tSKUxLOC Table   (
+         StorerKey    NVARCHAR(15) NOT NULL,
+         SKU          NVARCHAR(20) NOT NULL,
+         LOC          NVARCHAR(10) NOT NULL,
+         QtyAllocated int DEFAULT (0)
+         PRIMARY KEY CLUSTERED (StorerKey, SKU, LOC)
+         )
+
+      INSERT INTO @tSKUxLOC ( StorerKey, SKU, LOC, QtyAllocated )
+      SELECT StorerKey, SKU, LOC,
+             SUM (Qty) AS QtyAllocated
+      FROM INSERTED
+      GROUP BY StorerKey, SKU, LOC
+
+      UPDATE SKUxLOC
+      SET  QtyAllocated = (SKUxLOC.QtyAllocated + tSL.QtyAllocated),
+           QtyExpected  = CASE WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
+                                    tSL.QtyAllocated > (SKUxLOC.Qty )
+                               THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
+                                      tSL.QtyAllocated ) - (SKUxLOC.Qty)
+                               ELSE 0
+                          END,
+            EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+            EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
+      FROM SKUxLOC
+      JOIN @tSKUxLOC tSL ON tSL.StorerKey = SKUxLOC.StorerKey
+                        AND tSL.SKU = SKUxLOC.SKU
+                        AND tSL.LOC = SKUxLOC.LOC
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+   END
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_Continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63121   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+   END
+END
+
+-- Updating LOTxLOCxID Table
+IF (@n_Continue = 1 OR @n_Continue = 2)
+BEGIN
+   IF @b_debug = 1
+   BEGIN
+      SELECT 'Update Data In LOTxLOCxID'
+   END
+
+   IF @n_InsertedRows = 1
+   BEGIN
+      UPDATE LOTxLOCxID
+      SET  QtyAllocated = (LOTxLOCxID.QtyAllocated + INSERTED.Qty),
+           QtyExpected  = CASE WHEN (SL.LocationType NOT IN ('CASE','PICK') AND
+                                     LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK')) THEN 0
+                               WHEN (( LOTxLOCxID.QtyAllocated + INSERTED.Qty) +
+                                       LOTxLOCxID.QtyPicked ) > LOTxLOCxID.Qty
+                               THEN (( LOTxLOCxID.QtyAllocated +  INSERTED.Qty) +
+                                       LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty )
+                               ELSE 0
+                          END,
+            EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+            EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
+      FROM LOTxLOCxID
+      JOIN INSERTED ON INSERTED.LOT = LOTxLOCxID.LOT AND
+                       INSERTED.LOC = LOTxLOCxID.LOC AND
+                       INSERTED.ID = LOTxLOCxID.ID
+      JOIN SKUxLOC SL WITH (NOLOCK) ON SL.StorerKey = LOTxLOCxID.StorerKey
+                     AND SL.SKU = LOTxLOCxID.SKU
+                     AND SL.LOC = LOTxLOCxID.LOC
+      JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+   END
+   ELSE
+   BEGIN
+
+      DECLARE @tLOTxLOCxID TABLE   (
+         LOT          NVARCHAR(10) NOT NULL,
+         LOC          NVARCHAR(10) NOT NULL,
+         ID           NVARCHAR(18) NOT NULL,
+         QtyAllocated int DEFAULT (0)
+         PRIMARY KEY CLUSTERED (LOT, LOC, ID)
+         )
+
+      INSERT INTO @tLOTxLOCxID  ( LOT, LOC, ID, QtyAllocated )
+      SELECT LOT, LOC, ID,
+             SUM (Qty) AS QtyAllocated
+      FROM INSERTED
+      GROUP BY LOT, LOC, ID
+
+      UPDATE LOTxLOCxID
+      SET  QtyAllocated = (LOTxLOCxID.QtyAllocated + tLLI.QtyAllocated),
+           QtyExpected  = CASE WHEN (SL.LocationType NOT IN ('CASE','PICK') AND
+                                     LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK')) THEN 0
+                               WHEN (( LOTxLOCxID.QtyAllocated + tLLI.QtyAllocated) +
+                                       LOTxLOCxID.QtyPicked ) > LOTxLOCxID.Qty
+                               THEN (( LOTxLOCxID.QtyAllocated +  tLLI.QtyAllocated) +
+                                       LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty )
+                               ELSE 0
+                          END,
+            EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+            EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
+      FROM LOTxLOCxID
+      JOIN @tLOTxLOCxID tLLI ON tLLI.LOT = LOTxLOCxID.LOT AND
+                                tLLI.LOC = LOTxLOCxID.LOC AND
+                                tLLI.ID = LOTxLOCxID.ID
+      JOIN SKUxLOC SL WITH (NOLOCK) ON SL.StorerKey = LOTxLOCxID.StorerKey
+                     AND SL.SKU = LOTxLOCxID.SKU
+                     AND SL.LOC = LOTxLOCxID.LOC
+      JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+   END
+
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_Continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63122   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+   END
+END
+
+-- Updating LOT Table
+IF @n_Continue = 1 OR @n_Continue = 2
+BEGIN
+   IF @b_debug = 1
+   BEGIN
+      SELECT 'Update Data In LOT'
+   END
+
+   IF @n_InsertedRows = 1
+   BEGIN
+      UPDATE LOT
+      SET  QtyAllocated = (LOT.QtyAllocated + INSERTED.Qty),
+           EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+           EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME()    AK01
+           TrafficCop = NULL
+      FROM LOT
+      JOIN INSERTED ON INSERTED.LOT = LOT.LOT
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+   END
+   ELSE
+   BEGIN
+      DECLARE  @tLOT TABLE   (
+         LOT          NVARCHAR(10) NOT NULL,
+         QtyAllocated INT
+         PRIMARY KEY CLUSTERED (LOT)
+       )
+
+      INSERT INTO @tLOT  ( LOT, QtyAllocated )
+      SELECT LOT,
+             SUM (Qty) AS QtyAllocated
+      FROM INSERTED
+      GROUP BY LOT
+
+      UPDATE LOT
+      SET  QtyAllocated = (LOT.QtyAllocated + tL.QtyAllocated),
+           EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01   --tlting
+           EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME()    AK01
+           TrafficCop = NULL
+      FROM LOT
+      JOIN @tLOT tL ON tL.LOT = LOT.LOT
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+   END
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_Continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63120   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
    END
 END
 
@@ -535,14 +772,14 @@ BEGIN
             BEGIN
                UPDATE ChannelInv
                   SET QtyAllocated = QtyAllocated + @n_cQty,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+                      EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
                WHERE Channel_ID = @n_Channel_ID
 
                UPDATE PICKDETAIL
                   SET Channel_ID = @n_Channel_ID,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+                      EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
                WHERE PickDetailKey = @c_cPickDetailKey
             END
          END
@@ -554,204 +791,6 @@ BEGIN
    END
 END
 
-IF @n_Continue = 1 OR @n_Continue = 2
-BEGIN
-   IF @b_debug = 1
-   BEGIN
-      SELECT 'Update Data In LOT'
-   END
-
-   IF @n_InsertedRows = 1
-   BEGIN
-      UPDATE LOT
-      SET  QtyAllocated = (LOT.QtyAllocated + INSERTED.Qty),
-           EditDate = GETDATE(),
-           EditWho = SUSER_SNAME(),
-           TrafficCop = NULL
-      FROM LOT
-      JOIN INSERTED ON INSERTED.LOT = LOT.LOT
-
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   END
-   ELSE
-   BEGIN
-      DECLARE  @tLOT TABLE   (
-         LOT          NVARCHAR(10) NOT NULL,
-         QtyAllocated INT
-         PRIMARY KEY CLUSTERED (LOT)
-       )
-
-      INSERT INTO @tLOT  ( LOT, QtyAllocated )
-      SELECT LOT,
-             SUM (Qty) AS QtyAllocated
-      FROM INSERTED
-      GROUP BY LOT
-
-      UPDATE LOT
-      SET  QtyAllocated = (LOT.QtyAllocated + tL.QtyAllocated),
-           EditDate = GETDATE(),   --tlting
-           EditWho = SUSER_SNAME(),
-           TrafficCop = NULL
-      FROM LOT
-      JOIN @tLOT tL ON tL.LOT = LOT.LOT
-
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   END
-   IF @n_err <> 0
-   BEGIN
-      SELECT @n_Continue = 3
-      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63120   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
-   END
-END
-
-IF (@n_Continue = 1 OR @n_Continue = 2)
-BEGIN
-   IF @b_debug = 1
-   BEGIN
-      SELECT 'Update Data In LOTxLOCxID'
-   END
-
-   IF @n_InsertedRows = 1
-   BEGIN
-      UPDATE LOTxLOCxID
-      SET  QtyAllocated = (LOTxLOCxID.QtyAllocated + INSERTED.Qty),
-           QtyExpected  = CASE WHEN (SL.LocationType NOT IN ('CASE','PICK') AND
-                                     LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK')) THEN 0
-                               WHEN (( LOTxLOCxID.QtyAllocated + INSERTED.Qty) +
-                                       LOTxLOCxID.QtyPicked ) > LOTxLOCxID.Qty
-                               THEN (( LOTxLOCxID.QtyAllocated +  INSERTED.Qty) +
-                                       LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty )
-                               ELSE 0
-                          END,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
-      FROM LOTxLOCxID
-      JOIN INSERTED ON INSERTED.LOT = LOTxLOCxID.LOT AND
-                       INSERTED.LOC = LOTxLOCxID.LOC AND
-                       INSERTED.ID = LOTxLOCxID.ID
-      JOIN SKUxLOC SL WITH (NOLOCK) ON SL.StorerKey = LOTxLOCxID.StorerKey
-                     AND SL.SKU = LOTxLOCxID.SKU
-                     AND SL.LOC = LOTxLOCxID.LOC
-      JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC
-
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   END
-   ELSE
-   BEGIN
-
-      DECLARE @tLOTxLOCxID TABLE   (
-         LOT          NVARCHAR(10) NOT NULL,
-         LOC          NVARCHAR(10) NOT NULL,
-         ID           NVARCHAR(18) NOT NULL,
-         QtyAllocated int DEFAULT (0)
-         PRIMARY KEY CLUSTERED (LOT, LOC, ID)
-         )
-
-      INSERT INTO @tLOTxLOCxID  ( LOT, LOC, ID, QtyAllocated )
-      SELECT LOT, LOC, ID,
-             SUM (Qty) AS QtyAllocated
-      FROM INSERTED
-      GROUP BY LOT, LOC, ID
-
-      UPDATE LOTxLOCxID
-      SET  QtyAllocated = (LOTxLOCxID.QtyAllocated + tLLI.QtyAllocated),
-           QtyExpected  = CASE WHEN (SL.LocationType NOT IN ('CASE','PICK') AND
-                                     LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK')) THEN 0
-                               WHEN (( LOTxLOCxID.QtyAllocated + tLLI.QtyAllocated) +
-                                       LOTxLOCxID.QtyPicked ) > LOTxLOCxID.Qty
-                               THEN (( LOTxLOCxID.QtyAllocated +  tLLI.QtyAllocated) +
-                                       LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty )
-                               ELSE 0
-                          END,
-            EditDate = GETDATE(),
-  EditWho = SUSER_SNAME()
-      FROM LOTxLOCxID
-      JOIN @tLOTxLOCxID tLLI ON tLLI.LOT = LOTxLOCxID.LOT AND
-                                tLLI.LOC = LOTxLOCxID.LOC AND
-                                tLLI.ID = LOTxLOCxID.ID
-      JOIN SKUxLOC SL WITH (NOLOCK) ON SL.StorerKey = LOTxLOCxID.StorerKey
-                     AND SL.SKU = LOTxLOCxID.SKU
-                     AND SL.LOC = LOTxLOCxID.LOC
-      JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC
-
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   END
-
-   IF @n_err <> 0
-   BEGIN
-      SELECT @n_Continue = 3
-      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63122   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
-   END
-END
-
-IF (@n_Continue = 1 OR @n_Continue = 2)
-BEGIN
-   IF @b_debug = 1
-   BEGIN
-      SELECT 'Update Data In SKUxLOC'
-   END
-
-   IF @n_InsertedRows = 1
-   BEGIN
-      UPDATE SKUxLOC
-      SET  QtyAllocated = (SKUxLOC.QtyAllocated + INSERTED.Qty),
-           QtyExpected  = CASE WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
-                                    INSERTED.Qty > (SKUxLOC.Qty )
-                               THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
-                                      INSERTED.Qty ) - (SKUxLOC.Qty)
-                               ELSE 0
-                          END,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
-      FROM SKUxLOC
-      JOIN INSERTED ON INSERTED.StorerKey = SKUxLOC.StorerKey
-                   AND INSERTED.SKU = SKUxLOC.SKU
-                   AND INSERTED.LOC = SKUxLOC.LOC
-
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   END
-   ELSE
-   BEGIN
-      DECLARE  @tSKUxLOC Table   (
-         StorerKey    NVARCHAR(15) NOT NULL,
-         SKU          NVARCHAR(20) NOT NULL,
-         LOC          NVARCHAR(10) NOT NULL,
-         QtyAllocated int DEFAULT (0)
-         PRIMARY KEY CLUSTERED (StorerKey, SKU, LOC)
-         )
-
-      INSERT INTO @tSKUxLOC ( StorerKey, SKU, LOC, QtyAllocated )
-      SELECT StorerKey, SKU, LOC,
-             SUM (Qty) AS QtyAllocated
-      FROM INSERTED
-      GROUP BY StorerKey, SKU, LOC
-
-      UPDATE SKUxLOC
-      SET  QtyAllocated = (SKUxLOC.QtyAllocated + tSL.QtyAllocated),
-           QtyExpected  = CASE WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
-                                    tSL.QtyAllocated > (SKUxLOC.Qty )
-                               THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
-                                      tSL.QtyAllocated ) - (SKUxLOC.Qty)
-                               ELSE 0
-                          END,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
-      FROM SKUxLOC
-      JOIN @tSKUxLOC tSL ON tSL.StorerKey = SKUxLOC.StorerKey
-                        AND tSL.SKU = SKUxLOC.SKU
-                        AND tSL.LOC = SKUxLOC.LOC
-
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   END
-   IF @n_err <> 0
-   BEGIN
-      SELECT @n_Continue = 3
-      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63121   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
-   END
-END
 
 IF @n_Continue = 1 OR @n_Continue = 2
 BEGIN
@@ -775,8 +814,8 @@ BEGIN
       -- SHONG02
       UPDATE OrderDetail
       SET OrderDetail.QtyAllocated = OrderDetail.QtyAllocated + @n_Qty,
-          OrderDetail.Editdate = GETDATE(),
-          OrderDetail.Editwho = SUSER_SNAME()
+          OrderDetail.Editdate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+          OrderDetail.Editwho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
       WHERE OrderDetail.OrderKey = @c_OrderKey
       AND OrderDetail.OrderLineNumber = @c_OrderLineNumber
 
@@ -874,6 +913,104 @@ BEGIN
 
 END -- IF EXISTS(StorerConfig - 'WAVEUPDLOG')
 -- MC01-E
+
+--WL01 S
+   --Custom process - If allocated - trigger ITF by Wavekey
+   --Copy from ntrWaveHeaderAdd
+   --Only check for condition below
+   --If Wave.Status = 1 (Partially allocated) and user unallocate again, Wave.status will not change and remain status = 1
+   --Therefore need to include the logic in ntrPickDetailDelete trigger
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (Start)   */
+   /********************************************************/
+   IF (@n_continue = 1 OR @n_continue = 2) 
+   BEGIN
+      SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT WD.WaveKey, OH.StorerKey
+      FROM   INSERTED INS
+      JOIN   WAVEDETAIL WD WITH (NOLOCK)        ON INS.OrderKey = WD.OrderKey
+      JOIN   Orders OH WITH (NOLOCK)            ON WD.OrderKey = OH.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = OH.StorerKey
+      WHERE  ITC.SourceTable = 'PickDetail'
+      AND    ITC.sValue      = '1'
+
+      OPEN @CUR_TriggerPoints
+      FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Wave
+                  @c_TriggerName    = 'ntrPickDetailAdd'
+                , @c_SourceTable    = 'PickDetail'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_WaveKey        = @c_WaveKey
+                , @b_ColumnsUpdated = NULL
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE @CUR_TriggerPoints
+      DEALLOCATE @CUR_TriggerPoints
+
+      SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT WD.WaveKey, OH.StorerKey
+      FROM   INSERTED INS
+      JOIN   WAVEDETAIL WD WITH (NOLOCK)        ON INS.OrderKey = WD.OrderKey
+      JOIN   Orders OH WITH (NOLOCK)            ON WD.OrderKey   = OH.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = 'ALL'
+      JOIN   StorerConfig STC WITH (NOLOCK)     ON OH.StorerKey = STC.StorerKey 
+                                               AND STC.ConfigKey = ITC.ConfigKey 
+                                               AND STC.SValue = '1'
+      WHERE  ITC.SourceTable = 'PickDetail'
+      AND    ITC.sValue      = '1'
+
+      OPEN @CUR_TriggerPoints
+      FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Wave
+                  @c_TriggerName    = 'ntrPickDetailAdd'
+                , @c_SourceTable    = 'PickDetail'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_WaveKey        = @c_WaveKey
+                , @b_ColumnsUpdated = NULL
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE @CUR_TriggerPoints
+      DEALLOCATE @CUR_TriggerPoints
+   END -- IF @n_continue = 1 OR @n_continue = 2
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (End)     */
+   /********************************************************/
+   --WL01 E
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PICKDETAIL
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM PICKDETAIL
+      JOIN INSERTED ON PICKDETAIL.PickDetailKey = INSERTED.PickDetailKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63128  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PICKDETAIL. (ntrPICKDETAILAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
 SET NOCOUNT OFF
 /* #INCLUDE <TRPDA2.SQL> */

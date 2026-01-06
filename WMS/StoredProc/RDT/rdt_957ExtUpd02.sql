@@ -18,6 +18,7 @@ GO
 /* 2024-09-09   PXL009    1.1    FCR-770 Tote closure                         */
 /* 2024-10-24   PXL009    1.1.1  FCR-770 UOM = 7 requested to be added        */
 /*                                  when inserting the value WSTOTECFMlb.     */
+/* 2025-03-26   NLT013    1.2.0  FCR-2704 Re-allocation if short happens      */
 /******************************************************************************/
 
 CREATE OR ALTER     PROCEDURE [RDT].[rdt_957ExtUpd02]
@@ -89,11 +90,15 @@ BEGIN
       @b_Success         INT,
       @n_err             INT,
       @cPickDetailKey    NVARCHAR(50) = '',
-      @c_errmsg          NVARCHAR(250)
+      @c_errmsg          NVARCHAR(250),
+      @nCurrentScn       INT
          
    SET @nErrNo          = 0
    SET @cErrMSG         = ''
    
+   SELECT @nCurrentScn = Scn
+   FROM rdt.RDTMOBREC WITH(NOLOCK)
+   WHERE Mobile = @nMobile
    
    IF @nFunc = 957
    BEGIN
@@ -306,13 +311,13 @@ BEGIN
          END
       END
 
-      IF @nStep = 5
+      IF @nStep = 5 OR (@nStep = 99 AND @nCurrentScn = 6523)
       BEGIN
          -- Short pick
          IF @nInputKey = 1
          BEGIN                     
             -- Short
-            IF @cOption = '1'
+            IF @cOption IN ('1', '9')
             BEGIN
                SELECT 
                   @cReasonCode = Code2,
@@ -377,7 +382,7 @@ BEGIN
                               AND (
                                     (@nFunc = 839  AND PD.status = '4')
                                     OR 
-                                    (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                    (@nFunc = 957 AND PD.status = '4')
                                     )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
@@ -398,7 +403,7 @@ BEGIN
                               AND (
                                     (@nFunc = 839  AND PD.status = '4')
                                     OR 
-                                    (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                    (@nFunc = 957 AND PD.status = '4')
                                     )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
@@ -421,7 +426,7 @@ BEGIN
                               AND (
                                  (@nFunc = 839  AND PD.status = '4')
                                  OR 
-                                 (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                 (@nFunc = 957 AND PD.status = '4')
                                  )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
@@ -442,7 +447,7 @@ BEGIN
                               AND (
                                  (@nFunc = 839  AND PD.status = '4')
                                  OR 
-                                 (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                 (@nFunc = 957 AND PD.status = '4')
                                  )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey

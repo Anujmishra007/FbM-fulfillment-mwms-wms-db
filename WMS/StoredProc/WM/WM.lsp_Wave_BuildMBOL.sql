@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Wave_BuildMBOL]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Wave_BuildMBOL]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -32,8 +27,9 @@ GO
 /*                            if @c_UserName <> SUSER_SNAME()           */
 /* 2021-08--5  Wan02    1.3   Fixed Linkage issue                       */
 /* 2022-09-20  SPChin   1.4   JSM-96335 - Extend ExternOrderkey Length  */
+/* 2025-09-02  SWT01    1.5   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_Wave_BuildMBOL]                                                                                                                       
+CREATE OR ALTER PROC [WM].[lsp_Wave_BuildMBOL]                                                                                                                    
       @c_Wavekey        NVARCHAR(10)  
    ,  @c_Facility       NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey      NVARCHAR(15)                                                                                                                            
@@ -146,23 +142,26 @@ AS
    SET @b_Success = 1
    SET @n_Err     = 0
  
-    -- SWT02 - (Wan01) - Move up
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN              
-      SET @n_Err = 0 
+   -- Start enhanced session management (SWT01)
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+   BEGIN
       EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-              
-      --(Wan01)           
-      IF @n_Err <> 0       
-      BEGIN                
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+      
+      IF @n_Err <> 0
+      BEGIN
          GOTO EXIT_SP
       END
       
-      EXECUTE AS LOGIN = @c_UserName      
-   END
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+	 -- End enhanced session management (SWT01)
 
    IF @n_Err <> 0 
    BEGIN
@@ -820,7 +819,8 @@ EXIT_SP:
       BEGIN TRAN                                                                                                                                               
    END
 
-   REVERT                                                                                                                                                            
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)       
    IF @b_debug = 2                                                                                                                                              
    BEGIN                                                                                                                                                       
       PRINT 'SP-lsp_Wave_BuildMBOL DEBUG-STOP...'                                               

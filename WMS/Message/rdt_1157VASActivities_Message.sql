@@ -23,3 +23,8 @@ execute rdt.rdtAddMsg 211719, 10, '211719 Invalid Code',                        
 execute rdt.rdtAddMsg 211720, 10, '211720 Need Order Key',                                'us_english', 1157
 execute rdt.rdtAddMsg 211721, 10, '211721 Invalid Pallet Storer',                         'us_english', 1157
 execute rdt.rdtAddMsg 211722, 10, '211722 Please Scan DROP ID',                           'us_english', 1157
+execute rdt.rdtAddMsg 211723, 10, '211723 NeedVASProfile',                                'us_english', 1157
+execute rdt.rdtAddMsg 211724, 10, '211724 VAS Profile Not Maintained',                    'us_english', 1157,0,'211724 VAS Profile Not Maintained'
+execute rdt.rdtAddMsg 211725, 10, '211725 Invalid Option',                                'us_english', 1157
+execute rdt.rdtAddMsg 211726, 10, '211726 NeedOptionAndVasCode',                          'us_english', 1157
+

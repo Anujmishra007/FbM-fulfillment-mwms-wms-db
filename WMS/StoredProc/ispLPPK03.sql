@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 24-Mar-2014  TLTING   1.1  SQL2012 Bug                               */
+/* 10-OCT-2025  SSA01    1.2  UWP-42248 -Enhanced session management    */
+/*                            and cleanup.                              */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispLPPK03]   
@@ -770,7 +772,7 @@ BEGIN
               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno2)    
            VALUES     
               (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cComponentSKU,   
-               @nPackQty * @nComponentQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @cCartonType)
+               @nPackQty * @nComponentQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), @cCartonType)                 --(SSA01)
         END    
         IF @@ERROR <> 0
         BEGIN
@@ -802,7 +804,7 @@ BEGIN
            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno2)    
         VALUES     
            (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cSKU,   
-            @nPackQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @cCartonType)
+            @nPackQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate() , @cCartonType)            --(SSA01)
      END
      
      IF @@ERROR <> 0

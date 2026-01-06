@@ -18,6 +18,7 @@ GO
 /* Date         Author  Rev   Purposes                                        */
 /* 26-05-2017   Ung     1.0   WMS-1919 Created                                */
 /* 13-06-2017   Wan01   1.0   WMS-1816 - CN_DYSON_Exceed_ECOM PACKING         */
+/* 10-10-2025   SSA01   1.1   UWP-42248 -Enhanced session management          */
 /******************************************************************************/
 CREATE PROC [dbo].[ispUpdatePackSerialNoSP01]
      @c_Storerkey  NVARCHAR(15)
@@ -106,8 +107,8 @@ BEGIN
       BEGIN
          UPDATE PickDetail SET 
             CaseID = '',
-            EditDate = GETDATE(), 
-            EditWho = SUSER_SNAME(), 
+            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+            EditWho = dbo.fnc_GetUserName(),            --(SSA01)
             TrafficCop = NULL
          WHERE PickDetailKey = @cPickDetailKey
          SET @n_err = @@ERROR
@@ -209,8 +210,8 @@ BEGIN
             BEGIN
                UPDATE PickDetail WITH (ROWLOCK) SET 
                   CaseID = @cLabelNo,
-                  EditDate = GETDATE(), 
-                  EditWho = SUSER_SNAME(), 
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName(),          --(SSA01)
                   TrafficCop = NULL
                WHERE PickDetailKey = @cPickDetailKey
        SET @n_err = @@ERROR
@@ -293,8 +294,8 @@ BEGIN
             -- Stamp PackSerialNo.PickDetailKey
             UPDATE PackSerialNo SET
                PickDetailKey = @cPickDetailKey, 
-               EditDate = GETDATE(), 
-               EditWho = SUSER_SNAME(), 
+               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+               EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                TrafficCop = NULL
             WHERE PackSerialNoKey = @nPackSerialNoKey
             SET @n_err = @@ERROR

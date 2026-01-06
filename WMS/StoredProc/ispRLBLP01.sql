@@ -25,7 +25,8 @@ GO
 /* 15/05/2019   NJOW02   1.1  WMS-9070 Replenish addition carton if the  */
 /*                            location no more available qty after pick  */
 /* 25/08/2021   WLChooi  1.2  WMS-17812 - Set Priority to 4 for UA(WL01) */ 
-/* 15/07/2022   NJOW03   1.3  fix to filter facility for replenishment   */ 
+/* 15/07/2022   NJOW03   1.3  fix to filter facility for replenishment   */
+/* 10/10/2025   SSA01    1.4  UWP-42248 -Enhanced session management     */
 /*************************************************************************/  
   
 CREATE OR ALTER PROC ispRLBLP01  
@@ -155,10 +156,10 @@ BEGIN
          [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
          [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
          [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),   --(SSA01)
+         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),             --(SSA01)
+         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),   --(SSA01)
+         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),            --(SSA01)
          [TrafficCop] [nvarchar](1) NULL,
          [ArchiveCop] [nvarchar](1) NULL,
          [OptimizeCop] [nvarchar](1) NULL,

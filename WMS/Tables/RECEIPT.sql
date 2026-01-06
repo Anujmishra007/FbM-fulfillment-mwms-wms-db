@@ -1,3 +1,5 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[RECEIPT]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[RECEIPT]
 (
 [ReceiptKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -7,7 +9,7 @@ CREATE TABLE [dbo].[RECEIPT]
 [ReceiptDate] [datetime] NULL CONSTRAINT [DF_RECEIPT_ReceiptDate] DEFAULT (getdate()),
 [POKey] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RECEIPT_PoKey] DEFAULT (' '),
 [CarrierKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CarrierName] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CarrierName] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [CarrierAddress1] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [CarrierAddress2] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [CarrierCity] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
@@ -133,298 +135,326 @@ CREATE TABLE [dbo].[RECEIPT]
 [SellerFax1] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RECEIPT_SellerFax1] DEFAULT (''),
 [SellerFax2] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RECEIPT_SellerFax2] DEFAULT (''),
 [HoldChannel] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RECEIPT_HoldChannel] DEFAULT ('0'),
-[TrackingNo] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RECEIPT_TrackingNo] DEFAULT ('')
+[TrackingNo] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RECEIPT_TrackingNo] DEFAULT (''),
+[TotalExpectedQty] [int] NULL CONSTRAINT [DF_RECEIPT_TotalExpectedQty] DEFAULT ((0)),
+[TotalReceivedQty] [int] NULL CONSTRAINT [DF_RECEIPT_TotalReceivedQty] DEFAULT ((0))
 ) ON [PRIMARY]
-GO
-GRANT SELECT ON  [dbo].[RECEIPT] TO [JReportRole]
-GO
-GRANT DELETE ON  [dbo].[RECEIPT] TO [NSQL]
-GO
-GRANT INSERT ON  [dbo].[RECEIPT] TO [NSQL]
-GO
-GRANT SELECT ON  [dbo].[RECEIPT] TO [NSQL]
-GO
-GRANT UPDATE ON  [dbo].[RECEIPT] TO [NSQL]
-GO
 
 ALTER TABLE [dbo].[RECEIPT] WITH NOCHECK ADD CONSTRAINT [CK_RECEIPT_Status] CHECK ((rtrim([Status]) like '[0-9]'))
-GO
+
 ALTER TABLE [dbo].[RECEIPT] ADD CONSTRAINT [PKRECEIPT] PRIMARY KEY CLUSTERED ([ReceiptKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [IX_RECEIPT_ExternReceiptKey] ON [dbo].[RECEIPT] ([StorerKey], [ExternReceiptKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [IX_Receipt_TrackingNo] ON [dbo].[RECEIPT] ([TrackingNo]) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [IDX_RECEIPT_WarehouseReference] ON [dbo].[RECEIPT] ([WarehouseReference], [StorerKey]) ON [PRIMARY]
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The Advance Shipment Notice (ASN) is the receipt document. Information such as carrier and receipt date are tracked on the ASN. It is is also used to record the stock returns.', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', NULL, NULL
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'AddDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'AddWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Appointment number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Appointment_No'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Update to ''9'' for archiving purpose', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ArchiveCop'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Reason code for return', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ASNReason'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'External ASN status such as ''Open'', ''Closed'', ''Cancelled'', ''Export'' etc. LISTNAME=''ASNSTATUS''', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ASNStatus'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total number of containers for the ASN (or per receipt)', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'BilledContainerQty'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Transporter address1', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CarrierAddress1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Transporter address2', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CarrierAddress2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Transporter city', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CarrierCity'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Transporter that delivers the goods', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CarrierKey'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Transporter that delivers the ods', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CarrierKey'
+
 EXEC sp_addextendedproperty N'MS_Description', 'Transporter name', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CarrierName'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Transporter reference number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CarrierReference'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Transporter state', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CarrierState'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Transporter zip code', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CarrierZip'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Vehicle reference number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ContainerKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total number of containers for the ASN (or per receipt)', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ContainerQty'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Container types that will be used to deliver the goods', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ContainerType'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Container types that will be used to deliver the ods', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ContainerType'
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 1', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 10', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 2', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 3', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT3'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 4', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT4'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 5', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT5'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 6', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT6'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 7', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT7'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 8', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT8'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton count 9', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNCNT9'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 1', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 10', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 2', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 3', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY3'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 4', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY4'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 5', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY5'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 6', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY6'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 7', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY7'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 8', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY8'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton quantity 9', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNQTY9'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 1', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 10', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 2', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 3', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE3'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 4', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE4'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 5', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE5'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 6', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE6'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 7', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE7'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 8', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE8'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Carton type 9', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CTNTYPE9'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Records the maximum cubic size for a Commodity the carton can hold.', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Cube'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Cubic unit', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'CubeUnit'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'EDI ACK Time', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Cust_EDIAckTime'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Customer GIS Control Number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Cust_GIS_ControlNo'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Customer ISA Control Number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Cust_ISA_ControlNo'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Country where the transported goods will be delivered', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'DestinationCountry'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Country where the transported ods will be delivered', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'DestinationCountry'
+
 EXEC sp_addextendedproperty N'MS_Description', 'ASN document type', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'DOCTYPE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'EditDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'EditWho'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Date of goods being delivered', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'EffectiveDate'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Date of ods being delivered', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'EffectiveDate'
+
 EXEC sp_addextendedproperty N'MS_Description', 'External ASN or receipt key from host system', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ExternReceiptKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Warehouse in which the goods will be returned', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Facility'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Warehouse in which the ods will be returned', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Facility'
+
 EXEC sp_addextendedproperty N'MS_Description', 'Final date', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'FinalizeDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Exceed GIS Control Number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'GIS_ControlNo'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'GIS Process Time', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'GIS_ProcessTime'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Hold Channel', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'HoldChannel'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Standard international terms of delivery', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'IncoTerms'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'This is used for returns - the previous', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'LoadKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Master Bill of Lading.', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'MBOLKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Number of master carton', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'NoOfMasterCtn'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Number of pallet', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'NoOfPallet'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Number of total unit', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'NoOfTTLUnit'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Notes - or any information for the delivery', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Notes'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Open Quantity', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'OpenQty'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Country from which the transported goods will be shipped', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'OriginCountry'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Country from which the transported ods will be shipped', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'OriginCountry'
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 1', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 10', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 2', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 3', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE3'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 4', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE4'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 5', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE5'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 6', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE6'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 7', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE7'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 8', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE8'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack type 9', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PACKTYPE9'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Place where the goods will be delivered to', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PlaceofDelivery'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Place where the goods will be discharged from the vehicle', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PlaceOfDischarge'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Place where the ods will be delivered to', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PlaceofDelivery'
+
+EXEC sp_addextendedproperty N'MS_Description', 'Place where the ods will be discharged from the vehicle', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PlaceOfDischarge'
+
 EXEC sp_addextendedproperty N'MS_Description', 'Place where the PO was issued', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PlaceofIssue'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Place where the goods will be loaded onto the vehicle', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PlaceOfLoading'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Place where the ods will be loaded onto the vehicle', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PlaceOfLoading'
+
 EXEC sp_addextendedproperty N'MS_Description', 'Exceed PO number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'POKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Receipt Sub-Type', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'PROCESSTYPE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of which the receipt is done', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ReceiptDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Bonded reference number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ReceiptGroup'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'A unique number to identify a specific Receipt/Trade Return/CrossDock record', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'ReceiptKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Type of receipt from host system', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'RECType'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'A flag to indicate whether integration to TMS is required. If yes, a file will be generated', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'RoutingTool'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller address 01', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerAddress1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller address 02', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerAddress2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller address 03', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerAddress3'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller address 04', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerAddress4'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller city', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerCity'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller company', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerCompany'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller contact information 01', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerContact1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller contact information 02', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerContact2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller country', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerCountry'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller email address 01', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerEmail1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller email address 02', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerEmail2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller fax number 01', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerFax1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller fax number 02', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerFax2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller name', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerName'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller telephone number 01', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerPhone1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller telephone number 02', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerPhone2'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Seller state
-', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerState'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Seller state', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerState'
+
 EXEC sp_addextendedproperty N'MS_Description', 'Seller ZIP code', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerZip'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Supplier DO# or other reference number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Signatory'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'ASN status e.g. ''Not Fully Received'' and ''Received''. LISTNAME=''RECSTATUS''', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Status'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'StorerKey', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'StorerKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Delivery type', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'TermsNote'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Return Ecom Courier Tracking Number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'TrackingNo'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'TrafficCop'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Supplier invoice number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'ASN Header Reason (ASNHDRSN)', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'userdefine03', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'userdefine04', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'userdefine05', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'userdefine06', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'userdefine07', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'userdefine08', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'userdefine09', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'userdefine10', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'UserDefine10'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Loading date of the goods', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'VehicleDate'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Loading date of the ods', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'VehicleDate'
+
 EXEC sp_addextendedproperty N'MS_Description', 'Vehicle or carrier details or reference number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'VehicleNumber'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Buyer''s (customer''s) reference number', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'WarehouseReference'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Weight', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'Weight'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Weight unit', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'WeightUnit'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Used to indicated whether the ASN will be of crossdock nature', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'xDockFlag'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'Total expected quantity', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'TotalExpectedQty'
+
+EXEC sp_addextendedproperty N'MS_Description', 'Total received quantity', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'TotalReceivedQty'
+
+END
+ELSE
+   BEGIN
+
+     IF NOT EXISTS (SELECT 1
+               FROM sys.columns
+               WHERE Name = 'TotalExpectedQty'
+                 AND Object_ID = Object_ID('RECEIPT'))
+       BEGIN
+           ALTER TABLE RECEIPT
+           ADD TotalExpectedQty int NULL
+           EXEC sp_addextendedproperty N'MS_Description', 'Total expected quantity', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'TotalExpectedQty'
+       END
+      IF NOT EXISTS (SELECT 1
+                        FROM sys.columns
+                        WHERE Name = 'TotalReceivedQty'
+                           AND Object_ID = Object_ID('RECEIPT'))
+            BEGIN
+                  ALTER TABLE RECEIPT
+                  ADD TotalReceivedQty int NULL
+                  EXEC sp_addextendedproperty N'MS_Description', 'Total received quantity', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'TotalReceivedQty'
+            END
+
+
+-- ALTER COLUMN 
+
+	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='CarrierName' AND object_id = OBJECT_ID ('[dbo].[RECEIPT]') AND max_length <> 90)
+	BEGIN
+	
+		ALTER TABLE [dbo].[RECEIPT]
+		ALTER COLUMN [CarrierName] [nvarchar](45) NULL; 
+
+	END
+   END

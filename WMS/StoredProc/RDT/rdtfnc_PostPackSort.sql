@@ -22,6 +22,7 @@ GO
 /* 2022-01-13   1.4  James    WMS-17386 Modify message screen. Set field11 */
 /*                            as default output ExtendedInfo (james03)     */
 /* 2022-01-13   1.5  James    WMS-18506 Add ExtUpdSP to close plt (james04)*/
+/* 2025-11-20   1.6  Dennis   UWP-44482 Fix Bugs                           */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPackSort](
@@ -986,16 +987,10 @@ BEGIN
                IF @nErrNo <> 0 
                   GOTO RollBackTran_ClosePallet
             END
-
-            GOTO ClosePalletnCommit
-   
-            RollBackTran_ClosePallet:  
-                  ROLLBACK TRAN Step_ClosePallet  
-
-            ClosePalletnCommit:  
-               WHILE @@TRANCOUNT > @nTranCount  
-                  COMMIT TRAN Step_ClosePallet
          END
+
+         WHILE @@TRANCOUNT > @nTranCount  
+         COMMIT TRAN Step_ClosePallet
       END
 
       -- Prepare next screen var
@@ -1023,6 +1018,8 @@ BEGIN
    END
    GOTO Quit
 
+   RollBackTran_ClosePallet:  
+      ROLLBACK TRAN Step_ClosePallet  
    Step_ClosePallet_Fail:
    BEGIN
       SET @cOutField01 = ''

@@ -13,6 +13,7 @@ GO
 /* Date         Ver. Author    Purposes                                    */
 /* 26-Sep-2023  1.0  YZH230    Created base on rdtGetMenu ver 2.3          */
 /* 03-Nov-2023  1.1  JLC042    Remove Menu Header                          */
+/* 03-Apr-2025  1.2.0 NLT013   UWP-32244 Extend Menu number                */
 /***************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtGetMenuHttp (
@@ -104,10 +105,10 @@ AS
       END
 
       -- Menu is setup (can be blank, not setup)
-      IF @nMsgID > 0
+      IF @nMsgID > 0 OR @nMsgID < -100
       BEGIN
          -- Determine is a menu or function
-         IF @nMsgID BETWEEN 5 AND 499
+         IF @nMsgID BETWEEN 5 AND 499 OR @nMsgID < -100
             SET @cMsgType = 'MNU'
          ELSE
             SET @cMsgType = 'FNC'

@@ -274,7 +274,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Putaway_PendingMoveIn] (
             IF @@ERROR <> 0  
             BEGIN  
                SET @nErrNo = 78103  
- SET @cErrMsg = '78103 UPD LLI FAIL'  
+               SET @cErrMsg = '78103 UPD LLI FAIL'  
                GOTO RollbackTran  
             END  
          END  

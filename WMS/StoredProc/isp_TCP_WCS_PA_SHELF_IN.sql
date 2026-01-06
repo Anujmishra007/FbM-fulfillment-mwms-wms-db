@@ -47,6 +47,8 @@ GO
 /* 15-10-2012   Shong     2.0   Update WCS_ResidualMoveLog For Last     */
 /*                              Carton                                  */ 
 /* 05-10-2013   Shong     2.1   Change Declare Cursor to LOCAL          */
+/* 10-10-2025   SSA01     2.2   UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/  
   
 CREATE PROCEDURE [dbo].[isp_TCP_WCS_PA_SHELF_IN]  
@@ -1067,7 +1069,7 @@ BEGIN
                         WHERE PickDetailKey = @c_PickDetailKey  
   
                         INSERT INTO dbo.RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey, EditWho) -- SOS# 255550  
-                        VALUES (@c_PickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_LoadKey, 'TCP05a.' + sUser_sName())  
+                        VALUES (@c_PickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_LoadKey, 'TCP05a.' + dbo.fnc_GetUserName())    --(SSA01)
   
                         SET @n_Err = @@ERROR  
                         IF @n_Err <> 0  
@@ -1131,8 +1133,8 @@ BEGIN
    UPDATE dbo.TCPSocket_INLog WITH (ROWLOCK)  
    SET STATUS   = @c_Status  
      , ErrMsg   = @c_ErrMsg  
-     , Editdate = GETDATE()  
-     , EditWho  = SUSER_SNAME()  
+     , Editdate = dbo.fnc_GetDate()    --(SSA01)
+     , EditWho  = dbo.fnc_GetUserName()     --(SSA01)
    WHERE SerialNo = @n_SerialNo  
   
    WHILE @@TRANCOUNT > @n_StartTCnt -- Commit until the level we started  

@@ -22,6 +22,8 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 13-Jul-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 10-Oct-2025  SSA01   1.1  UWP-42248 -Enhanced session management        */
+/*                             and cleanup.                                */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[isp_BackendPTSReleaseToITFByLoad]  
 (     @c_Storerkey   NVARCHAR(15)  = ''  
@@ -117,8 +119,8 @@ BEGIN
          UPDATE LOADPLAN WITH (ROWLOCK)
          SET Load_Userdef1 = 'PTS-SENT'
            , TrafficCop =  NULL
-           , EditDate = GETDATE()
-           , EditWho = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()   --(SSA01)
+           , EditWho = dbo.fnc_GetUserName()       --(SSA01)
          WHERE LoadKey = @c_Loadkey
 
          SELECT @n_err = @@ERROR  

@@ -61,6 +61,7 @@ GO
 /*                            (ChewKP05)                                */
 /* 12-Sep-2012  ChewKP  3.1   SOS#255241 Allow multiple picker pick on  */
 /*                            same zone (ChewKP06)                      */
+/* 10-Oct-2025  SSA01   3.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/  
 CREATE PROC    [dbo].[nspTTMPK03]  
                @c_UserID           NVARCHAR(18)  
@@ -230,8 +231,8 @@ BEGIN
         SET    STATUS = '0'  
               ,USERKEY = ''  
               ,REASONKEY = ''  
-              ,EditDate = GetDate()     -- (SHONG08)      
-              ,EditWho  = sUSER_sNAME()   
+              ,EditDate = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+              ,EditWho  = dbo.fnc_GetUserName()           --(SSA01)
               ,TrafficCop = NULL                      
         WHERE  USERKEY = @c_UserID  
                AND STATUS = '3' -- (Vicky02)  
@@ -694,8 +695,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID  
                       ,[ReasonKey] = ''
-                      ,[EditDate] = GetDate()     -- (SHONG08)    
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL        
                 WHERE  Storerkey = @c_StorerKey  
                   AND Sku = @c_sku  
@@ -726,8 +727,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID
                       ,[ReasonKey] = ''  
-                      ,[EditDate] = GetDate()     -- (SHONG08)    
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)    -- (SHONG08)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL        
                 WHERE  Storerkey = @c_StorerKey  
                    AND TaskType = 'PK'  
@@ -744,8 +745,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID
                       ,[ReasonKey] = ''  
-                      ,[EditDate] = GetDate()     -- (SHONG08)    
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL        
                 WHERE  Storerkey = @c_StorerKey  
                   AND TaskType = 'PK'  
@@ -762,8 +763,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID
                       ,[ReasonKey] = ''  
-                      ,[EditDate] = GetDate()     -- (SHONG08)    
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL        
                 WHERE  Storerkey = @c_StorerKey  
                        AND TaskType = 'PK'  
@@ -797,8 +798,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID
                       ,[ReasonKey] = ''
-                      ,[EditDate] = GetDate()     -- (SHONG08)    
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)    -- (SHONG08)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL          
                 FROM   TaskDetail   
                 JOIN   LOC WITH (NOLOCK) ON LOC.LOC = TASKDETAIL.FromLoc  
@@ -823,8 +824,8 @@ BEGIN
                  SET    STATUS = '3'  
                        ,[UserKey] = @c_UserID
                        ,[ReasonKey] = ''  
-                       ,[EditDate] = GetDate()     -- (SHONG08)    
-                       ,[EditWho]  = sUSER_sNAME() 
+                       ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                       ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                        ,[TrafficCop] = NULL        
                  FROM   TaskDetail   
                  JOIN   LOC WITH (NOLOCK) ON LOC.LOC = TASKDETAIL.FromLoc  
@@ -850,8 +851,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID
                       ,[ReasonKey] = ''  
-                      ,[EditDate] = GetDate()     -- (SHONG08)    
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)    -- (SHONG08)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL        
                  FROM   TaskDetail   
                  JOIN   LOC WITH (NOLOCK) ON LOC.LOC = TASKDETAIL.FromLoc  
@@ -893,8 +894,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID
                       ,[ReasonKey] = ''
-                      ,[EditDate] = GetDate()     -- (SHONG08)    
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)    -- (SHONG08)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL        
                 WHERE  Storerkey = @c_StorerKey  
                        AND TaskType = 'PK'  
@@ -910,8 +911,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID
                       ,[ReasonKey] = ''  
-                      ,[EditDate] = GetDate()     -- (SHONG08)    
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL
                 WHERE  Storerkey = @c_StorerKey  
                        AND TaskType = 'PK'  
@@ -927,8 +928,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID
                       ,[ReasonKey] = ''  
-                      ,[EditDate] = GetDate()     -- (SHONG08)    
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL 
                 WHERE  Storerkey = @c_StorerKey  
                        AND TaskType = 'PK'  
@@ -1004,8 +1005,8 @@ BEGIN
                        SET    STATUS = '3'  
                              ,[UserKey] = @c_UserID
                              ,[ReasonKey] = ''
-                             ,[EditDate] = GetDate()     -- (SHONG08)    
-                             ,[EditWho]  = sUSER_sNAME() 
+                             ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                             ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                              ,[TrafficCop] = NULL  
                        WHERE  Storerkey = @c_StorerKey  
                               AND TaskType = 'PK'  
@@ -1041,8 +1042,8 @@ BEGIN
                        BEGIN   
                           UPDATE TaskDetail   
                              SET DropID = @c_DropID 
-                                ,[EditDate] = GetDate()     -- (SHONG08)    
-                                ,[EditWho]  = sUSER_sNAME() 
+                                ,[EditDate] = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                                ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                                 ,[TrafficCop] = NULL    
                           WHERE Status = '3'  
                           AND [UserKey] = @c_UserID   

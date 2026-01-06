@@ -1,4 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrCCUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrCCUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 drop trigger [dbo].[ntrCCUpdate]
 GO
 
@@ -9,6 +9,7 @@ GO
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
 /* 15-Dec-2018  TLTING01  1.1 Missing nolock & dynamic SQL cache        */
+/* 09-Oct-2025  SPC040    1.2  Replace SUSER_SNAME with fnc_GetUserName */
 
 
 
@@ -251,8 +252,8 @@ END
             BEGIN
                UPDATE SKU with (ROWLOCK)
                SET LASTCYCLECOUNT = GETDATE(),
-                  EditDate = GETDATE(),      --tlting
-                  EditWho = SUSER_SNAME()
+                  EditDate = dbo.fnc_GetDate(),      --tlting
+                  EditWho = dbo.fnc_GetUserName()
                WHERE STORERKEY = @c_requestedstorerkey
                AND   SKU = @c_requestedsku
                AND   CYCLECOUNTFREQUENCY IS NOT NULL
@@ -273,8 +274,8 @@ END
    IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate) 
    BEGIN
       UPDATE CC with (ROWLOCK)
-      SET  EditDate = GETDATE(),
-      EditWho = SUSER_SNAME()
+      SET  EditDate = dbo.fnc_GetDate(),
+      EditWho = dbo.fnc_GetUserName()
       FROM CC, INSERTED
       WHERE CC.CCKey= INSERTED.CCKey
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT

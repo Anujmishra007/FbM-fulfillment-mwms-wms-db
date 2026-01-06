@@ -42,6 +42,7 @@ GO
 /* 2018-10-01 1.23 TungGH   Performance                                 */    
 /* 2021-06-09 1.24 YeeKung  WMS-17216 Add LOCLookUP (yeekung01)         */    
 /* 2022-06-22 1.25 James    WMS-20022 Add update sp (james02)           */
+/* 2025-12-23 1.26 SSR259   FCR-9646 Add error checking after decode    */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_SKUInquiry] (  
@@ -332,7 +333,11 @@ BEGIN
             SET @cInquiry_LOC = @cLOC  
          END  
       END   -- End for DecodeSP  
-  
+
+      -- Check error from decode (SSR259)
+      IF @nErrNo <> 0   
+         GOTO Step_1_Fail 
+
       -- By SKU  
       IF @cInquiry_SKU <> '' AND @cInquiry_SKU IS NOT NULL  
       BEGIN  

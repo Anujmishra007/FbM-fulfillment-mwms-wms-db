@@ -12,7 +12,7 @@ GO
 /*                                                                      */      
 /* Called By:                                                           */      
 /*                                                                      */      
-/* PVCS Version: 1.6                                                    */      
+/* PVCS Version: 2.0                                                    */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -31,6 +31,12 @@ GO
 /*                            shelflife by consignee                    */   
 /* 15-Dec-2021  NJOW05  1.7   WMS-18573 Lottable07 filtring condition   */
 /* 15-Dec-2021  NJOW05  1.7   DEVOPS combine script                     */
+/* 08-MAR-2024  NJOW06  1.8   WMS-24370 Prestige lottable03 filter from */
+/*                            orders.userdefine04 by codelkup setup     */
+/* 23-APR-2025  NJOW07  1.9   WMS-26521 lottable03 with ok status is not*/
+/*                            allow allocate from hold loc.             */
+/* 25-Jun-2025  WLChooi 2.0   UWP-36187-Support Multi Facilities(WL01)  */
+/* 10-Jul-2025  MICHAEL 2.1   FCR-6166 Alloc by DMG-BOX for Tester(ML01)*/
 /************************************************************************/      
 
 -- PGD TH Preallocation Strategy 
@@ -41,8 +47,8 @@ CREATE OR ALTER PROC nspPRFEFO2
     @c_Lottable01 NVARCHAR(18) ,  
     @c_Lottable02 NVARCHAR(18) ,  
     @c_Lottable03 NVARCHAR(18) ,  
-    @d_Lottable04 datetime ,  
-    @d_Lottable05 datetime ,
+    @d_Lottable04 DATETIME ,  
+    @d_Lottable05 DATETIME ,
     @c_lottable06 NVARCHAR(30) ,  --(Wan01)  
     @c_lottable07 NVARCHAR(30) ,  --(Wan01)  
     @c_lottable08 NVARCHAR(30) ,  --(Wan01)
@@ -55,16 +61,16 @@ CREATE OR ALTER PROC nspPRFEFO2
     @d_lottable15 DATETIME ,      --(Wan01)  
     @c_UOM NVARCHAR(10) ,
     @c_Facility NVARCHAR(10)  ,
-    @n_UOMBase int ,  
-    @n_QtyLeftToFulfill int   -- new column
+    @n_UOMBase INT ,  
+    @n_QtyLeftToFulfill INT   -- new column
    ,@c_OtherParms NVARCHAR(200)=''--(Wan01) 
 AS  
 
-DECLARE @b_debug int,  
+DECLARE @b_debug INT,  
         @c_Manual NVARCHAR(1),
         @c_LimitString NVARCHAR(4000),  --(Wan01) 
-        @n_ShelfLife int,
-        @c_SQL NVARCHAR(max)
+        @n_ShelfLife INT,
+        @c_SQL NVARCHAR(MAX)
    
 DECLARE @c_Lottable04Label NVARCHAR(20),
         @c_SortOrder       NVARCHAR(255),
@@ -73,7 +79,9 @@ DECLARE @c_Lottable04Label NVARCHAR(20),
         @c_Strategykey     NVARCHAR(10), --NJOW01
         @n_SkuGroupShelfLife INT, --NJOW04
         @n_SkuGroupShelfLife2 INT, --NJOW04        
-        @c_SortMode           NVARCHAR(10) = '' --NJOW05
+        @c_SortMode           NVARCHAR(10) = '', --NJOW05
+        @c_lottable03CLK   NVARCHAR(18)='', --NJOW06
+        @c_ALLOBYSHSL      NVARCHAR(1) = 'N' --NJOW07
 
 DECLARE @c_SQLParms        NVARCHAR(4000) = ''  --(Wan02) 
 
@@ -81,15 +89,28 @@ SELECT @c_Orderkey = LEFT(@c_OtherParms,10) --NJOW01
 
 SELECT @b_debug=0, @c_Manual = 'N'  
 
-If @d_Lottable04 = '1900-01-01'
-Begin
-    SELECT @d_Lottable04 = null
-End
+--ML01-S
+DECLARE @c_DmgBoxTester    NVARCHAR(10) = 'N'
 
-If @d_Lottable05 = '1900-01-01'
-Begin
-   SELECT @d_Lottable05 = null
-End
+IF EXISTS ( SELECT TOP 1 1
+   FROM CODELKUP WITH (NOLOCK)
+   WHERE ListName = 'PRESTALLOC'
+   AND Code = '*DMGBOX-TESTER'
+   AND Storerkey = @c_StorerKey )
+BEGIN
+   SET @c_DmgBoxTester = 'Y'
+END
+--ML01-E
+
+IF @d_Lottable04 = '1900-01-01'
+BEGIN
+    SELECT @d_Lottable04 = NULL
+END
+
+IF @d_Lottable05 = '1900-01-01'
+BEGIN
+   SELECT @d_Lottable05 = NULL
+END
 
 --(Wan01) - START
 IF @d_lottable13 = '1900-01-01'
@@ -105,7 +126,7 @@ END
 IF @d_lottable15 = '1900-01-01'
 BEGIN
    SET @d_lottable15 = NULL
-End
+END
 --(Wan01) - END
 
 IF @b_debug = 1  
@@ -163,7 +184,7 @@ BEGIN
    LEFT OUTER JOIN (SELECT p.Lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty)
                     FROM   PreallocatePickdetail p (NOLOCK), ORDERS (NOLOCK)
                     WHERE  p.Orderkey = ORDERS.Orderkey
-                    GROUP BY p.Lot, ORDERS.Facility) As P ON LOTxLOCxID.Lot = P.Lot AND LOC.Facility = P.Facility
+                    GROUP BY p.Lot, ORDERS.Facility) AS P ON LOTxLOCxID.Lot = P.Lot AND LOC.Facility = P.Facility
    WHERE LOC.Facility = @c_Facility
    AND   LOT.LOT = @c_LOT  
    GROUP BY LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable05
@@ -175,7 +196,7 @@ BEGIN
    BEGIN     	
       SELECT @c_LimitString = ''  
 
-      SELECT @n_ShelfLife = CASE WHEN ISNUMERIC(SUSR2) = 1 Then CAST(SUSR2 as int) 
+      SELECT @n_ShelfLife = CASE WHEN ISNUMERIC(SUSR2) = 1 THEN CAST(SUSR2 AS INT) 
                                 ELSE 0
                                 END, 
             @c_Lottable04Label = Lottable04Label,
@@ -194,7 +215,28 @@ BEGIN
          SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND Lottable03= @c_Lottable03" --(Wan02)     
       ELSE IF @c_Storerkey = 'PRESTIGE'  --NJOW03
       BEGIN
-         SET @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + ' AND Lottable03 = ''OK'' '              
+         --NJOW06 S
+         SELECT TOP 1 @c_lottable03CLK = CASE WHEN CL1.Code IS NOT NULL THEN                                                 
+                                           O.Userdefine04 ELSE @c_lottable03 END         
+         FROM ORDERS O (NOLOCK)       
+         OUTER APPLY (SELECT TOP 1 CL.Code FROM CODELKUP CL (NOLOCK) WHERE O.Storerkey = CL.Storerkey AND CL.Listname IN('MDMALLOC','PRESTALLOC') AND CL.Code = 'ALLOBYLTBL' AND O.Userdefine04 = CL.Code2 AND ISNULL(O.Userdefine04,'') <> '') CL1
+         WHERE O.Orderkey = @c_Orderkey     
+         
+         IF ISNULL(@c_lottable03CLK,'') <> '' 
+         BEGIN
+         	  SET @c_Lottable03 = @c_lottable03CLK 
+            SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND Lottable03= @c_Lottable03"               	            
+         END --NJOW06 E
+         ELSE
+         BEGIN      	
+            SET @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + ' AND Lottable03 = ''OK'' '              
+         END
+         
+         --NJOW07
+         SELECT TOP 1 @c_ALLOBYSHSL = CASE WHEN CL1.Code IS NOT NULL THEN 'Y' ELSE 'N' END
+         FROM ORDERS O (NOLOCK)       
+         OUTER APPLY (SELECT TOP 1 CL.Code FROM CODELKUP CL (NOLOCK) WHERE O.Storerkey = CL.Storerkey AND CL.Listname = 'PRESTALLOC' AND CL.Code = 'ALLOBYSHSL' AND O.Userdefine03 = CL.Code2 AND ISNULL(O.Userdefine03,'') <> '') CL1
+         WHERE O.Orderkey = @c_Orderkey              
       END
 
       IF @d_Lottable04 IS NOT NULL AND @d_Lottable04 <> '1900-01-01'
@@ -271,7 +313,8 @@ BEGIN
       
       --NJOW01
       SELECT TOP 1 @n_ConMinShelfLife = S.MinShelflife,
-    	             @n_SkuGroupShelfLife = CASE WHEN ISNUMERIC(CL3.Short) = 1 THEN CAST(CL3.Short AS INT)  --NJOW05
+    	             @n_SkuGroupShelfLife = CASE WHEN @c_DmgBoxTester='Y' AND CL.Code2='TESTER' AND ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT)  --ML01
+                                               WHEN ISNUMERIC(CL3.Short) = 1 THEN CAST(CL3.Short AS INT)  --NJOW05
     	                                         WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END, --NJOW04
     	             @n_SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 THEN CAST(CL2.Short AS INT) ELSE 0 END, --NJOW04
     	             @c_SortMode = ISNULL(CL.Long,'') --NJOW05
@@ -291,30 +334,43 @@ BEGIN
       ELSE
          SELECT @c_SortOrder = " ORDER BY LOTATTRIBUTE.Lottable04, LOT.Lot"            
 
-      IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_SkuGroupShelfLife,0) > 0
+      IF ISNULL(@c_lottable03CLK,'') = ''  --NJOW06 skip check shelflife if orders.userdefine04 is set
+         AND @c_ALLOBYSHSL = 'N'  --NJOW07
       BEGIN
-         SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_SkuGroupShelfLife " --NJOW04               	
+         IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_SkuGroupShelfLife,0) > 0
+         BEGIN
+            SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_SkuGroupShelfLife " --NJOW04               	
+         END
+         ELSE IF  @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_SkuGroupShelfLife2,0) > 0
+         BEGIN
+            SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_SkuGroupShelfLife2 " --NJOW04               	
+         END      
+         ELSE IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_ConMinShelfLife,0) > 0
+         BEGIN
+         	 --NJOW01
+            --SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + " AND Lottable04 > N'"  + CONVERT( NVARCHAR(8), DateAdd(day, @n_ConMinShelfLife, GETDATE()), 112) + "'"      	       	      	 
+            SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_ConMinShelfLife " --NJOW02  --(Wan02)
+         END
+         ELSE IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_ShelfLife,0) > 0  --NJOW02      
+         BEGIN
+            SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_ShelfLife "  --NJOW02       --(Wan02)     
+         END
+         ELSE IF dbo.fnc_RTrim(@c_Lottable04Label) IS NOT NULL AND dbo.fnc_RTrim(@c_Lottable04Label) <> '' 
+         BEGIN
+            -- Min Shelf Life Checking
+            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + " AND Lottable04 > CONVERT( NVARCHAR(8), DateAdd(day, @n_ShelfLife, GETDATE()), 112)"   --(Wan02)
+         END 
       END
-      ELSE IF  @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_SkuGroupShelfLife2,0) > 0
+      --ML01-S
+      ELSE IF @c_DmgBoxTester = 'Y'
       BEGIN
-         SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_SkuGroupShelfLife2 " --NJOW04               	
-      END      
-      ELSE IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_ConMinShelfLife,0) > 0
-      BEGIN
-      	 --NJOW01
-         --SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + " AND Lottable04 > N'"  + CONVERT( NVARCHAR(8), DateAdd(day, @n_ConMinShelfLife, GETDATE()), 112) + "'"      	       	      	 
-         SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_ConMinShelfLife " --NJOW02  --(Wan02)
+         IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_SkuGroupShelfLife,0) > 0
+         BEGIN
+            SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_SkuGroupShelfLife "
+         END
       END
-      ELSE IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_ShelfLife,0) > 0  --NJOW02      
-      BEGIN
-         SET @c_LimitString = dbo.fnc_RTrim(@c_LimitString) +  " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_ShelfLife "  --NJOW02       --(Wan02)     
-      END
-      ELSE IF dbo.fnc_RTrim(@c_Lottable04Label) IS NOT NULL AND dbo.fnc_RTrim(@c_Lottable04Label) <> '' 
-      BEGIN
-         -- Min Shelf Life Checking
-         SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + " AND Lottable04 > CONVERT( NVARCHAR(8), DateAdd(day, @n_ShelfLife, GETDATE()), 112)"   --(Wan02)
-     END 
-
+      --ML01-E
+      
       IF @b_debug = 1
       BEGIN
         SELECT 'c_LimitString', @c_LimitString
@@ -327,6 +383,7 @@ BEGIN
          " INNER JOIN LOTxLOCxID (NOLOCK) ON LOT.LOT = LOTxLOCxID.LOT " + 
          " INNER JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC " + 
          " INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT " +
+         " JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility " +   --WL01
          " LEFT OUTER JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID " +
          " LEFT OUTER JOIN (SELECT p.Lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) " +
          "             FROM   PreallocatePickdetail p (NOLOCK), ORDERS (NOLOCK) " + 
@@ -336,8 +393,12 @@ BEGIN
          "             AND    p.Qty > 0 " + 
          "             GROUP BY p.Lot, ORDERS.Facility) As P ON LOTxLOCxID.Lot = P.Lot AND LOC.Facility = P.Facility " +
          " WHERE LOTxLOCxID.STORERKEY = @c_StorerKey AND LOTxLOCxID.SKU = @c_SKU " +   --(Wan02)                  
-         " AND LOT.STATUS = 'OK' AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK'  And LOC.LocationFlag = 'NONE' " +  
-         " AND LOC.FACILITY = @c_Facility"  +                                          --(Wan02)      
+         " AND LOT.STATUS = 'OK' AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK'  " +
+         CASE WHEN ISNULL(@c_lottable03CLK,'') <> '' AND @c_ALLOBYSHSL = 'N' THEN " " --NJOW07
+              WHEN @c_ALLOBYSHSL = 'Y' THEN --NJOW07
+                 " AND NOT (LOTATTRIBUTE.Lottable03 = 'OK' AND LOC.LocationFlag <> 'NONE' AND LOTATTRIBUTE.Lottable07 <> 'PPM')"  --NJOW07
+              ELSE " AND LOC.LocationFlag = 'NONE' " END +  --NJOW06
+         --" AND LOC.FACILITY = @c_Facility"  +                                        --(Wan02)   --WL01      
          " AND LOTATTRIBUTE.STORERKEY = @c_StorerKey AND LOTATTRIBUTE.SKU = @c_SKU " + --(Wan02)   
          dbo.fnc_RTrim(@c_LimitString) + " " +   
          " GROUP BY LOT.LOT , LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable05 " + 

@@ -27,8 +27,8 @@ GO
 /* 30-Sep-2019  NJOW01   1.0  WMS-9276 Change find DPP loc logic               */
 /* 23-Oct-2019  NJOW02   1.1  Fix filter stock include locationflag='NONE'     */
 /* 11-Nov-2019  Wan01    1.2  Fixed Inventory                                  */  
-/* 01-Nov-2021  Shong    1.3  Insert Channel_ID into Pickdetail Table (SWT01)  */  
-/*                                                                             */  
+/* 01-Nov-2021  Shong    1.3  Insert Channel_ID into Pickdetail Table (SWT01)  */
+/* 10-OCT-2025  SSA01    1.4  UWP-42248-Enhanced session management and cleanup*/
 /*******************************************************************************/
 CREATE PROCEDURE [dbo].[ispGenEOrderReplen01]  
    @c_LoadKeyList NVARCHAR(1000),  
@@ -506,8 +506,8 @@ BEGIN
                       DropID = @c_UCCNo,   
                       Qty = @n_UCCQty, 
                       TrafficCop = NULL,
-                      EditDate = GETDATE(), 
-                      EditWho = SUSER_SNAME(),
+                      EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                      EditWho = dbo.fnc_GetUserName(),          --(SSA01)
                       ReplenishZone='SplitFrUCC'
                   WHERE PickDetailKey = @c_PickDetailKey
 
@@ -578,8 +578,8 @@ BEGIN
                UPDATE PickDetail WITH (ROWLOCK)
                SET UOM = '6', 
                    TrafficCop = NULL,
-                   EditDate = GETDATE(), 
-                   EditWho = SUSER_SNAME(),
+                   EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                   EditWho = dbo.fnc_GetUserName(),       --(SSA01)
                    ReplenishZone='ChgUOM2to6'
                WHERE PickDetailKey = @c_PickDetailKey
                
@@ -858,8 +858,8 @@ BEGIN
                   UPDATE PICKDETAIL WITH (ROWLOCK)
                      SET UOM = '2', 
                          TrafficCop = NULL,
-                         EditWho = SUSER_SNAME(),
-                         EditDate = GETDATE(),
+                         EditWho = dbo.fnc_GetUserName(),     --(SSA01)
+                         EditDate = dbo.fnc_GetDate(),    --(SSA01)
                          ReplenishZone = 'FullCtn'  
                   WHERE PickDetailKey = @c_PickDetailKey  
                   IF @@ERROR <> 0 
@@ -951,8 +951,8 @@ BEGIN
                             ID = '', -- Loose ID 
                             --UOM = CASE WHEN @c_LotAvailableQty < @n_PickQty THEN '7' ELSE '6' END, -- SWT02
                             UOM = '7', -- will swap pick later due to new sorting 
-                            EditDate = GETDATE(), 
-                            EditWho = SUSER_SNAME(), 
+                            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                            EditWho = dbo.fnc_GetUserName(),       --(SSA01)
                             ToLoc = LOC, -- Backup Original Loc
                             ReplenishZone = 'ChgPick',
                             DoReplenish ='N' --will swap pick later due to new sorting 
@@ -1076,7 +1076,7 @@ BEGIN
          BEGIN      	      	 
          	  --update to Y not to replen
             UPDATE PickDetail WITH (ROWLOCK) 
-               SET DoReplenish = 'Y', TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME(), ReplenishZone = 'DoReplen'
+               SET DoReplenish = 'Y', TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), ReplenishZone = 'DoReplen'     --(SSA01)
             WHERE PickDetailKey = @c_PickDetailKey 
             IF @@ERROR <> 0 
             BEGIN
@@ -1261,7 +1261,7 @@ BEGIN
                   IF @c_FromLOT = @c_LOT AND @c_FromLOC = @c_LOC AND @c_FromID = @c_ID 
                   BEGIN
                      UPDATE PickDetail WITH (ROWLOCK) 
-                        SET UOM = '6', DoReplenish = 'Y', TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME(), ReplenishZone = 'QtyAvlbl'   --change to uom 6 (no replen)
+                        SET UOM = '6', DoReplenish = 'Y', TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), ReplenishZone = 'QtyAvlbl'   --change to uom 6 (no replen) (SSA01)
                      WHERE PickDetailKey = @c_PickDetailKey 
                   END
                   ELSE   
@@ -1271,8 +1271,8 @@ BEGIN
                             LOT = @c_FromLOT,
                             LOC = @c_FromLOC,
                             ID = @c_FromID, --@c_ID
-                            EditDate = GETDATE(), 
-                            EditWho = SUSER_SNAME(),
+                            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                            EditWho = dbo.fnc_GetUserName(),        --(SSA01)
                             ReplenishZone = 'SwapLot', 
                             CartonType = LOT                       
                             --ToLoc = LOT 
@@ -1327,8 +1327,8 @@ BEGIN
                            LOC = @c_FromLOC,
                            ID = @c_FromID, --@c_ID 
                            Qty = @n_QtyAvaliable, 
-                           EditDate = GETDATE(), 
-                           EditWho = SUSER_SNAME(),
+                           EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                           EditWho = dbo.fnc_GetUserName(),       --(SSA01)
                            ReplenishZone='SwapLot2',
                            CartonType = LOT                        
                            --ToLoc = LOT 
@@ -1491,7 +1491,7 @@ BEGIN
                      END 
                               
                      UPDATE PickDetail WITH (ROWLOCK)
-                        SET Qty = @n_QtyAllocPick, TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME(), ReplenishZone='SplitPD2_B'
+                        SET Qty = @n_QtyAllocPick, TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), ReplenishZone='SplitPD2_B'       --(SSA01)
                      WHERE PickDetailKey = @c_SwapPickDetailKey
                      IF @@ERROR <> 0 
                      BEGIN
@@ -1571,7 +1571,7 @@ BEGIN
                      END 
                               
                      UPDATE PickDetail WITH (ROWLOCK)
-                        SET Qty = @n_SwapQty, TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME(),ReplenishZone='SplitPD3_B'
+                        SET Qty = @n_SwapQty, TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(),ReplenishZone='SplitPD3_B'        --(SSA01)
                      WHERE PickDetailKey = @c_PickDetailKey
                      IF @@ERROR <> 0 
                      BEGIN
@@ -1595,7 +1595,7 @@ BEGIN
                         END
                                        
                         UPDATE PICKDETAIL WITH (ROWLOCK) 
-                           SET UOM = '7', TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME(), ReplenishZone='ExchUOM6'
+                           SET UOM = '7', TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), ReplenishZone='ExchUOM6'         --(SSA01)
                         WHERE PickDetailKey = @c_SwapPickDetailKey
                         IF @@ERROR <> 0 
                         BEGIN
@@ -1606,7 +1606,7 @@ BEGIN
                         END 
                            
                         UPDATE PICKDETAIL WITH (ROWLOCK) 
-                           SET UOM = '6', DoReplenish = 'Y', TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME(), ReplenishZone='ExchUOM7'
+                           SET UOM = '6', DoReplenish = 'Y', TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), ReplenishZone='ExchUOM7'      --(SSA01)
                         WHERE PickDetailKey = @c_PickDetailKey             
                         IF @@ERROR <> 0 
                         BEGIN
@@ -1631,8 +1631,8 @@ BEGIN
                                LOC = @c_LOC, 
                                ID  = @c_ID,  
                                TrafficCop = NULL, 
-                               EditDate = GETDATE(), 
-                               EditWho = SUSER_SNAME(),
+                               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                               EditWho = dbo.fnc_GetUserName(),       --(SSA01)
                                ReplenishZone='SwapLot3',
                                CartonType = LOT                       
                                --ToLoc = LOT 
@@ -1652,8 +1652,8 @@ BEGIN
                                  ID  = @c_FromID,                     
                                  DoReplenish = 'Y', 
                                  TrafficCop = NULL, 
-                                 EditDate = GETDATE(), 
-                                 EditWho = SUSER_SNAME(),
+                                 EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                                 EditWho = dbo.fnc_GetUserName(),       --(SSA01)
                                  ReplenishZone='SwapLot4',
                                  CartonType = LOT                        
                                 --ToLoc = LOT 
@@ -2315,7 +2315,7 @@ BEGIN
          WHILE @@FETCH_STATUS = 0 
          BEGIN
             UPDATE PICKDETAIL WITH (ROWLOCK)
-               SET DoReplenish = 'Y', EditDate = GETDATE(), TrafficCop = NULL  
+               SET DoReplenish = 'Y', EditDate = dbo.fnc_GetDate(), TrafficCop = NULL
             WHERE PickDetailKey = @c_PickDetailKey
             IF @@ERROR <> 0 
             BEGIN
@@ -2366,8 +2366,8 @@ BEGIN
       BEGIN
          UPDATE PackTask WITH (ROWLOCK) 
             SET ReplenishmentGroup = @c_ReplenishmentGroup, 
-                EditWho = SUSER_SNAME(),
-                EditDate = GETDATE()
+                EditWho = dbo.fnc_GetUserName(),      --(SSA01)
+                EditDate = dbo.fnc_GetDate()    --(SSA01)
          WHERE RowRef = @n_RowRef 
          IF @@ERROR <> 0 
          BEGIN

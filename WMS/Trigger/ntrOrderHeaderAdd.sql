@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrOrderHeaderAdd]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrOrderHeaderAdd]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -110,9 +107,10 @@ GO
 /* 29-Sep-2018  TLTING     2.9  remove update row lock                         */
 /* 10-May-2020  SWT03      3.0  Restructure the loop and logic                 */ 
 /* 16-Dec-2020  TLTING05   3.1  WMS-15510 tracking DSTORSSOSTATUS              */ 
+/* 06-OCT-2025  AK01       3.2  UWP-42143 Data Audit                           */
 /*******************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrOrderHeaderAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrOrderHeaderAdd]
 ON  [dbo].[ORDERS]
 FOR INSERT
 AS
@@ -575,6 +573,26 @@ BEGIN
       -- END -- SOS360858
    END         
 
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE ORDERS
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM ORDERS
+      JOIN INSERTED ON ORDERS.OrderKey = INSERTED.OrderKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62316  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table ORDERS. (ntrORDERSAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
                        
    /********************************************************/
    /* Interface Trigger Points Calling Process - (End)     */

@@ -1,7 +1,8 @@
-SET ANSI_NULLS OFF
+USET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /*****************************************************************************/
 /* Store procedure: rdt_TM_CycleCount_InsertCCDetail                         */
 /* Copyright      : IDS                                                      */
@@ -16,6 +17,9 @@ GO
 /* 2013-10-25 1.1  James    Buf fix (james01)                                */
 /* 2023-10-20 1.2  James    WMS-23249 Add default value for AdjType and      */
 /*                          AdjReasonCode (james02)                          */
+/* 2025-11-12 1.3  James    FCR-7347 Add Refno into CCDetail if count task   */
+/*                          by sku (james03)                                 */
+/* 2025-12-16 1.4  James    temp bug fix (james04)                           */
 /*****************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_TM_CycleCount_InsertCCDetail] (
       @nMobile          INT
@@ -69,7 +73,8 @@ BEGIN
       @c_CCSheetNoKeyName  NVARCHAR(30),
       @c_AdjType           NVARCHAR(10),
       @c_AdjReasonCode     NVARCHAR(3),
-      @n_Func              INT
+      @n_Func              INT,
+      @c_TMCCSKUAddRefNo   NVARCHAR( 1)
 
    SET @nTranCount         = @@TRANCOUNT
    BEGIN TRAN
@@ -97,6 +102,10 @@ BEGIN
       SET @c_AdjType = rdt.RDTGetConfig( @n_Func, 'TMCC_AdjType', @c_StorerKey)
       IF @c_AdjType IN ('0', '')
          SET @c_AdjType = ''
+
+      SET @c_TMCCSKUAddRefNo = rdt.RDTGetConfig( @n_Func, 'TMCCSKUAddRefNo', @c_StorerKey)
+      IF @c_TMCCSKUAddRefNo IN ('0', '')
+         SET @c_TMCCSKUAddRefNo = ''
 
       IF NOT EXISTS ( SELECT 1 FROM dbo.stocktakesheetparameters WITH (NOLOCK)
                       WHERE StockTakeKey = @c_SourceKey )
@@ -131,11 +140,23 @@ BEGIN
             EXEC ispRDTGenCountSheetByUCC @c_SourceKey , @c_Loc , '', @c_TaskDetailKey
          ELSE
             EXEC ispRDTGenCountSheet @c_SourceKey , @c_Loc , '', @c_TaskDetailKey
+
       END
 
       IF @c_PickMethod = 'SKU'
       BEGIN
-         EXEC ispRDTGenCountSheet @c_SourceKey , @c_Loc , @c_SKU, @c_TaskDetailKey
+         IF @c_TMCCSKUAddRefNo = '1'
+         BEGIN
+            --(james04)
+            -- Retrieve sku
+            SELECT @c_SKU = SKU
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE TaskDetailKey = @c_TaskDetailKey
+
+            EXEC ispRDTGenCountSheetByUCC @c_SourceKey , @c_Loc , @c_SKU, @c_TaskDetailKey
+         END
+         ELSE
+            EXEC ispRDTGenCountSheet @c_SourceKey , @c_Loc , @c_SKU, @c_TaskDetailKey
       END
    END
    GOTO QUIT
@@ -149,6 +170,7 @@ BEGIN
 
 END -- Procedure
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON

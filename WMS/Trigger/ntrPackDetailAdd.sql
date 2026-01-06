@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[ntrPackDetailAdd]') AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrPackDetailAdd]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -76,9 +73,12 @@ GO
 /* 2021-DEC-29 Wan05    3.1   JSM-41421 Gen 1 PackDetailLabel Rec with   */
 /*                                          same Carton                  */ 
 /* 2022-FEB-09 Wan04    3.2   Enhancement if reduce 1 carton Multi label#*/
+/* 2025-OCT-06 AK01     3.3   UWP-42143 Data Audit                       */
+/* 2025-Nov-19 SSA01    3.4   UWP-44363 - prevent default packing for    */
+/*                            auto packing                               */
 /*************************************************************************/        
         
-CREATE TRIGGER [dbo].[ntrPackDetailAdd]        
+CREATE OR ALTER TRIGGER [dbo].[ntrPackDetailAdd]        
 ON  [dbo].[PackDetail]        
 FOR INSERT        
 AS        
@@ -111,7 +111,8 @@ DECLARE @nMax_CartonNo              INT -- (Vicky01)
        ,@c_PackCartonGID            NVARCHAR(10) = ''  --WL01      
        ,@c_Pickslipno               NVARCHAR(10) --NJOW06      
        ,@n_CartonNo                 INT --NJOW06      
-       ,@c_PackinfoGenTrackingNo_SP NVARCHAR(30) --NJOW06     
+       ,@c_PackinfoGenTrackingNo_SP NVARCHAR(30) --NJOW06
+       ,@c_TMSAutoPacking           NVARCHAR(30) = ''  --(SSA01)
                                                      
       , @c_AdvancePackGenCartonNo   NVARCHAR(10) = ''    --(Wan01)    
 
@@ -158,7 +159,9 @@ END
          JOIN PACKHEADER (NOLOCK) ON INSERTED.PickSlipNo = PACKHEADER.PickSlipNo       
          JOIN LOADPLANDETAIL (NOLOCK) ON LOADPLANDETAIL.LOADKEY = PACKHEADER.LOADKEY      
          JOIN ORDERS (NOLOCK) ON ORDERS.ORDERKEY = LOADPLANDETAIL.ORDERKEY      
-      END      
+      END
+
+      SET @c_TMSAutoPacking = (SELECT TOP 1 RefNo FROM INSERTED) --(SSA01)
       
       EXEC nspGetRight         
          @c_Facility          -- facility        
@@ -501,13 +504,13 @@ END
             AND   PACKDETAIL.CartonNo = 0        
          END        
       END        
-      -- (Vicky01) - End        
+      -- (Vicky01) - End
       ELSE IF Exists (SELECT 1         
                   FROM INSERTED With (NOLOCK)         
                       LEFT OUTER JOIN PackDetail with (NOLOCK) ON PackDetail.PickSlipNo = INSERTED.PickSlipNo        
                       WHERE ( ( PackDetail.LabelNo = INSERTED.LabelNo AND PackDetail.CartonNo <> INSERTED.CartonNo) OR         
                               ( PackDetail.LabelNo <> INSERTED.LabelNo AND PackDetail.CartonNo = INSERTED.CartonNo) )         
-                             AND INSERTED.LabelNo <> '')   -- (Shong01)        
+                             AND INSERTED.LabelNo <> '')  AND  ISNULL(@c_TMSAutoPacking,'') <> 'TMSAutoPacking' -- (Shong01)(SSA01)
       BEGIN        
          SELECT @n_continue = 3        
          SELECT @n_err=83053        
@@ -632,7 +635,8 @@ END
       --IF EXISTS (SELECT 1       
       --           FROM INSERTED       
       --           JOIN STORERCONFIG SC (NOLOCK) ON INSERTED.Storerkey = SC.Storerkey AND SC.Configkey = 'PackCartonGID' AND SC.Svalue = '1')        
-      IF (@c_PackCartonGID = '1')      
+
+      IF (@c_PackCartonGID = '1')  AND ISNULL(@c_TMSAutoPacking,'') <> 'TMSAutoPacking'  --(SSA01)
       BEGIN      
          DECLARE @dt_TimeIn DATETIME, @dt_TimeOut DATETIME      
          SET @dt_TimeIn = GETDATE()      
@@ -712,14 +716,38 @@ END
       END--Packcartongid       
       --(WL01 END)      
    END      
-         
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PackDetail
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(),
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(),
+			ArchiveCop = NULL 
+      FROM PackDetail
+      JOIN INSERTED ON PackDetail.PickSlipNo = INSERTED.PickSlipNo
+      AND PackDetail.CartonNo = INSERTED.CartonNo
+      AND PackDetail.LabelNo = INSERTED.LabelNo
+      AND PackDetail.LabelLine = INSERTED.LabelLine
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=83054  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PackDetail. (ntrPackDetailAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+
 /* #INCLUDE <TRCCA2.SQL> */        
    IF @n_continue=3  -- Error Occured - Process And Return        
    BEGIN      
       DECLARE @n_IsRDT INT        
       EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT        
            
-      IF @n_IsRDT = 1        
+      IF @n_IsRDT = 1
       BEGIN        
          -- RDT cannot handle rollback (blank XML will generate). So we are not going to issue a rollback here        
          -- Instead we commit and raise an error back to parent, let the parent decide        

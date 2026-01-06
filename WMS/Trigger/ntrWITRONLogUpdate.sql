@@ -3,9 +3,6 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'ntrWITRONLogUpdate' AND type = 'TR')
-   DROP TRIGGER ntrWITRONLogUpdate
-GO
 
 /************************************************************************/
 /* Trigger: ntrWITRONLogUpdate                                          */
@@ -31,9 +28,10 @@ GO
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
 /* DD-MMM-YYYY                                                          */
+/* 06-Oct-2025  AK01      1.0   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER ntrWITRONLogUpdate
+CREATE OR ALTER TRIGGER ntrWITRONLogUpdate
 ON  WITRONLOG
 FOR UPDATE
 AS
@@ -71,8 +69,8 @@ BEGIN
    IF @n_continue = 1 OR @n_continue = 2 
 	BEGIN 	
 	 	UPDATE WITRONLOG WITH (ROWLOCK) 
-    	   SET EditDate = GETDATE(),
-     	       EditWho = SUSER_SNAME(),
+    	   SET EditDate = dbo.fnc_GetDate(),
+     	       EditWho = dbo.fnc_GetUserName(),
      	       Trafficcop = NULL
         FROM WITRONLOG, INSERTED
        WHERE WITRONLOG.WITRONLOGKey = INSERTED.WITRONLOGKey
@@ -124,4 +122,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON 
 GO
+
 

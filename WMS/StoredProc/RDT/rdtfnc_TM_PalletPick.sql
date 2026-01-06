@@ -30,6 +30,7 @@ GO
 /* 2024-05-30 2.2 NLT03       UWP-20091 Exception happens while shor pick     */
 /* 2024-07-08 2.3 JHU151      FCR-330 SSCC code generator                     */
 /* 2024-10-12 2.4 Dennis      FCR-775 For VLT (DE01)                          */
+/* 2025-08-12 0.0 Jackc       !!!Cutover. Use V2 version in V0 repo for wrok!!!*/
 /******************************************************************************/    
     
 CREATE PROC [RDT].[rdtfnc_TM_PalletPick](    

@@ -1,0 +1,3105 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+/********************************************************************************/
+/* Stored Procedure: nspTMTM04_JCB                                              */
+/* Copyright: Maersk                                                            */
+/* Customer : JCB                                                               */
+/*                                                                              */
+/*                                                                              */
+/* Modifications:                                                               */
+/* Date         Ver.  Author    Purposes                                        */
+/* 2025-06-09   1.0.0 NickT     FCR-5727 Create                                 */
+/* 2025-10-10   1.1   SSA01     UWP-42248 -Enhanced session management          */
+/* 2025-11-26   2.0   PPA374    Updated "Aisle in use logic"                    */ 
+/* 2025-12-11   2.1   PPA374    Added new error for the MHE not for To Loc      */
+/********************************************************************************/
+CREATE OR ALTER PROC    [RDT].[nspTMTM04_JCB]
+   @c_sendDelimiter    NVARCHAR(1)
+   ,@c_ptcid            NVARCHAR(5)
+   ,@c_userid           NVARCHAR(18)
+   ,@c_taskId           NVARCHAR(10)
+   ,@c_databasename     NVARCHAR(30)
+   ,@c_appflag          NVARCHAR(5)
+   ,@c_recordType       NVARCHAR(2)
+   ,@c_server           NVARCHAR(30)
+   ,@c_ttm              NVARCHAR(5)
+   ,@c_AreaKey01        NVARCHAR(10)    OUTPUT
+   ,@c_AreaKey02        NVARCHAR(10)
+   ,@c_AreaKey03        NVARCHAR(10)
+   ,@c_AreaKey04        NVARCHAR(10)
+   ,@c_AreaKey05        NVARCHAR(10)
+   ,@c_LastLOC          NVARCHAR(10)
+   ,@c_LastTaskType     NVARCHAR(10)
+   ,@c_outstring        NVARCHAR(255)  OUTPUT
+   ,@b_Success          INT        OUTPUT
+   ,@n_err              INT        OUTPUT
+   ,@c_errmsg           NVARCHAR(250)  OUTPUT
+   ,@c_TaskDetailKey    NVARCHAR(20)   OUTPUT
+   ,@c_TTMTaskType      NVARCHAR(20)   OUTPUT
+   ,@c_RefKey01         NVARCHAR(20)   OUTPUT
+   ,@c_RefKey02         NVARCHAR(20)   OUTPUT
+   ,@c_RefKey03         NVARCHAR(20)   OUTPUT
+   ,@c_RefKey04         NVARCHAR(20)   OUTPUT
+   ,@c_RefKey05         NVARCHAR(20)   OUTPUT
+   ,@n_Mobile           INT = 0
+   ,@n_Func             INT = 0
+   ,@c_StorerKey        NVARCHAR( 15) = ''
+
+AS
+BEGIN
+    SET NOCOUNT ON
+    SET ANSI_NULLS OFF
+    SET QUOTED_IDENTIFIER OFF
+    SET CONCAT_NULL_YIELDS_NULL OFF
+
+    DECLARE @b_debug INT
+    SELECT @b_debug = 0
+
+    IF @c_ptcid = '1'
+    BEGIN
+       SET @b_debug = 1
+    END
+    
+   DECLARE @cSQL           NVARCHAR(MAX)
+   DECLARE @cSQLParam      NVARCHAR(MAX)
+   DECLARE @cCustomSP      NVARCHAR(20)
+   -- Get storer configure
+   SET @cCustomSP = rdt.RDTGetConfig( @n_Func , 'CustomTMTM', @c_StorerKey)
+   IF @cCustomSP = '0'
+      SET @cCustomSP = ''
+
+   /***********************************************************************************************
+                                             Standard
+   ***********************************************************************************************/
+    DECLARE @n_continue       INT
+           ,@n_starttcnt      INT -- Holds the current transaction count
+           ,@n_cnt            INT -- Holds @@ROWCOUNT after certain operations
+           ,@n_err2           INT -- For Additional Error Detection
+
+    DECLARE @c_retrec         NVARCHAR(2) -- Return Record '01' = Success, '09' = Failure
+
+    DECLARE @n_cqty           INT
+           ,@n_returnrecs     INT
+           ,@c_LastAisle      NVARCHAR(10)
+
+    DECLARE @c_MinPriority    NVARCHAR(10)
+           ,@c_OtherPriority  NVARCHAR(10)
+           ,@c_OtherTaskType  NVARCHAR(10)
+           ,@c_NextTaskType   NVARCHAR(10)
+           ,@c_DefaultAreaKey NVARCHAR(10)
+           ,@c_UserName       NVARCHAR(18)
+
+
+    SELECT @n_starttcnt = @@TRANCOUNT
+          ,@n_continue = 1
+          ,@b_success = 0
+          ,@n_err = 0
+          ,@c_errmsg = ''
+          ,@n_err2 = 0
+
+    SELECT @c_retrec = '01'
+    SELECT @n_returnrecs = 1
+
+    DECLARE @c_Strategykey               NVARCHAR(10)
+           ,@c_ttmStrategykey            NVARCHAR(10)
+           ,@c_InterLeaveTasks           NVARCHAR(10)
+
+    DECLARE @c_CurrentLineNumber         NVARCHAR(5)
+            --@c_TTMTaskType       NVARCHAR(10),
+           ,@c_ttmpickcode        NVARCHAR(10)
+           ,@c_ttmoverride               NVARCHAR(10)
+
+    DECLARE @c_TaskTypeoverride          NVARCHAR(10)
+           ,@n_TablePasses               INT
+           ,@c_MaxTTMStrategyLineNumber  NVARCHAR(5)
+
+    SELECT @c_CurrentLineNumber = SPACE(5)
+          ,@c_TaskTypeoverride = ''
+          ,@n_TablePasses = 0
+
+    DECLARE @c_la   NVARCHAR(10)
+           ,@nCnt   INT
+           ,@nCnt1  INT
+           ,@nCnt2  INT
+
+    DECLARE @c_ContinueTask   NVARCHAR( 1)
+
+    -- (james06)
+    SET @c_ContinueTask = rdt.RDTGetConfig( @n_Func, 'ContinueALLTaskWithinAisle', @c_StorerKey)
+
+    SET @nCnt = 0
+    SET @nCnt1 = 0
+    SET @nCnt2 = 0
+
+
+    -- (Vicky01) - Start
+    DECLARE @c_fromloc  NVARCHAR(10)
+           ,@c_toid     NVARCHAR(18) -- (Vicky02)
+
+    SET @c_fromloc = ''
+    SET @c_RefKey01 = ''
+    SET @c_RefKey02 = ''
+    SET @c_RefKey03 = ''
+    SET @c_RefKey04 = ''
+    SET @c_RefKey05 = ''
+    SET @c_TaskDetailKey = ''
+    SET @c_toid = '' -- (Vicky02)
+                     -- (Vicky01) - End
+
+    /* #INCLUDE <SPTMTM01_1.SQL> */
+    IF @n_continue=1 OR @n_continue=2
+    BEGIN
+        SELECT @c_taskid = CONVERT(NVARCHAR(18) ,CONVERT(INT ,(RAND()*2147483647)))
+    END
+
+    IF @n_continue=1 OR @n_continue=2
+    BEGIN
+        SELECT @n_continue = @n_continue -- Dummy line so that BEGIN/END statement doesnt bomb in SQL SERVER.
+    END
+
+    IF @n_continue=1 OR @n_continue=2
+    BEGIN
+        IF ISNULL(RTRIM(@c_AreaKey02) ,'')<>''
+        BEGIN
+            SELECT @c_TaskTypeoverride = 'PK'
+        END
+    END
+
+    IF @n_continue=1 OR @n_continue=2
+    BEGIN
+        IF SUBSTRING(@c_LastTaskType ,1 ,1)='T'
+        BEGIN
+            -- RF pass TPK and after this statement @c_LastTaskType = 'PK'
+            SELECT @c_LastTaskType = SUBSTRING(@c_LastTaskType ,2 ,2)
+        END
+    END
+
+
+    IF @n_continue=1 OR @n_continue=2
+    BEGIN
+        SELECT @c_Strategykey = TaskManagerUser.Strategykey
+        FROM   TaskManagerUser WITH (NOLOCK)
+        WHERE  TaskManagerUser.UserKey = @c_userid
+
+        IF ISNULL(RTRIM(@c_Strategykey) ,'')=''
+           OR NOT EXISTS (
+                  SELECT 1
+                  FROM   Strategy WITH (NOLOCK)
+                  WHERE  Strategykey = @c_Strategykey
+              )
+        BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 63056 --78601
+            SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
+                   ': Bad Strategy Key (nspTMTM01)'
+        END
+
+
+        IF @n_continue=1 OR @n_continue=2
+        BEGIN
+            SELECT @c_ttmStrategykey = ttmStrategykey
+            FROM   Strategy WITH (NOLOCK)
+            WHERE  Strategykey = @c_Strategykey
+
+            IF ISNULL(RTRIM(@c_ttmStrategykey) ,'')=''
+               OR NOT EXISTS (
+                      SELECT 1
+                      FROM   TTMStrategy WITH (NOLOCK)
+                      WHERE  TTMStrategykey = @c_ttmStrategykey
+                  )
+               OR NOT EXISTS (
+                      SELECT 1
+                      FROM   TTMStrategyDetail WITH (NOLOCK)
+                      WHERE  TTMStrategykey = @c_ttmStrategykey
+                  )
+            BEGIN
+                SELECT @n_continue = 3
+                SELECT @n_err = 63057--78602
+                SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
+                       ': Bad TTMStrategy Key (nspTMTM01)'
+            END
+        END
+
+        IF @n_continue=1 OR @n_continue=2
+        BEGIN
+            SELECT @c_InterLeaveTasks = interleavetasks
+            FROM   TTMStrategy WITH (NOLOCK)
+            WHERE  TTMStrategykey = @c_ttmStrategykey
+
+            IF ISNULL(RTRIM(@c_InterLeaveTasks) ,'')=''
+            BEGIN
+                SELECT @c_InterLeaveTasks = '0'
+            END
+        END
+    END
+
+    -- Shong02
+    IF @n_continue=1 OR @n_continue=2
+    BEGIN
+         -- Added By SHONG on 8-Jun-2012
+         -- FCR-5727 For JCB, no need to reset status as '0' if task type IN ('RPF', 'RP1', 'FCP', 'FCP1'))
+        IF EXISTS(SELECT 1 FROM TASKDETAIL WITH (NOLOCK) WHERE  UserKey = @c_userid
+                  AND STATUS = '3'
+                  AND TaskType NOT IN ('RPF', 'RP1', 'FCP', 'FCP1'))
+        BEGIN
+
+           UPDATE TASKDETAIL WITH (ROWLOCK)
+           SET    STATUS = '0'
+                 ,UserKey = ''
+                 ,Reasonkey = ''
+                 ,EditDate = GetDate()     -- (SHONG08)
+                 ,EditWho  = dbo.fnc_GetUserName()        --(SSA01)
+                 ,TrafficCop = NULL
+                 ,DropId = '' -- SOS# 248996
+           WHERE  UserKey = @c_userid
+                  AND STATUS = '3'
+                  AND TaskType NOT IN ('RPF', 'RP1', 'FCP', 'FCP1')
+
+           SELECT @n_err = @@ERROR
+                 ,@n_cnt = @@ROWCOUNT
+
+           IF @n_err<>0
+           BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 63058
+               SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
+                      ': Update TASKDETAIL Failed. (nspTMTM01)'+' ( '+
+                      ' SQLSvr MESSAGE='
+                     +ISNULL(RTRIM(@c_errmsg) ,'')+' ) '
+           END
+           ELSE
+           BEGIN
+              -- Added by SHONG on 26th Oct 2013, Release locking 1st
+               WHILE @@TRANCOUNT > 0
+                  COMMIT TRAN
+
+               WHILE @@TRANCOUNT < @n_starttcnt
+                  BEGIN TRAN
+           END
+        END
+    END
+
+    DECLARE @t_ProcessTaskType TABLE (TaskType NVARCHAR(10), NoOfTry INT)
+
+    DECLARE @nWaitSecondsS INT
+	DECLARE @nWaitSecondsL INT
+	DECLARE @cStorerKey    NVARCHAR(20)
+	DECLARE @cFacility     NVARCHAR(20)
+
+	SELECT TOP 1 @nWaitSecondsS = Short, @nWaitSecondsL = Long FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBVNAWAIT'
+
+	SELECT TOP 1 @cStorerKey = StorerKey, @cFacility = Facility FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid
+
+    -- (james01)
+    IF @n_continue=1 OR @n_continue=2
+    BEGIN
+        Create TABLE #Aisle_InUsed ( Rowref INT identity(1,1) Primary Key,
+               LocAIsle NVARCHAR(10) ,UserKey NVARCHAR(18))
+        /*IF EXISTS (
+               SELECT 1
+               FROM   TaskManagerUser TMU WITH (NOLOCK)
+                      INNER JOIN EquipmentProfile EP WITH (NOLOCK)
+                           ON  (TMU.EquipmentProfileKey=EP.EquipmentProfileKey)
+               WHERE  TMU.Userkey = @c_userid
+                      AND TMU.EquipmentProfileKey = 'VNA'
+           )*/
+        BEGIN
+            INSERT INTO #Aisle_InUsed
+              (
+                LocAisle, UserKey
+              )
+			-- TaskDetail aisles
+            SELECT 
+               L.LocAisle,
+               IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) AS UserKey
+            FROM dbo.TaskDetail TD WITH(NOLOCK)
+               CROSS APPLY (VALUES
+                  (TD.FromLoc),
+                  (TD.ToLoc)
+               ) AS loc(L)
+               LEFT JOIN dbo.LOC L WITH(NOLOCK) ON loc.L = L.Loc AND L.LocationCategory = 'VNA' AND L.Facility = @cFacility
+            WHERE LocAisle IS NOT NULL
+               AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
+               AND TD.Status IN ('0','3')
+               AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @c_UserID
+	           AND TD.Storerkey = @cStorerKey
+
+            UNION ALL
+
+            -- RDTMOBREC aisles
+            SELECT 
+               IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) AS LocAisle,
+               R.UserName AS UserKey
+            FROM RDT.RDTMOBREC R WITH(NOLOCK)
+               LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
+               LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.V_String8 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+            WHERE R.StorerKey = @cStorerKey
+               AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
+               AND R.UserName <> @c_UserID
+               AND IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) <> ''
+
+            /*SELECT L.LocAisle
+                  ,TD.UserKey
+            FROM   TaskDetail TD WITH (NOLOCK)
+            JOIN LOC L WITH (NOLOCK) ON  (TD.FromLOC=L.Loc)
+            JOIN TaskManagerUser TMU WITH (NOLOCK) ON  (TD.UserKey=TMU.UserKey)
+            JOIN EquipmentProfile EP WITH (NOLOCK) ON  (TMU.EquipmentProfileKey=EP.EquipmentProfileKey)
+            WHERE  TMU.EquipmentProfileKey = 'VNA'
+             AND TD.UserKey<>@c_userid
+             AND TD.Status = '3'
+            ORDER BY L.LocAisle*/
+        END
+    END
+
+    IF @b_debug=1
+    BEGIN
+        SELECT 'Strategykey = ',@c_Strategykey,'TTMStrategyKey = ',@c_TTMStrategyKey
+    END
+
+    IF @n_continue=1 OR @n_continue=2
+    BEGIN
+        IF (@c_InterLeaveTasks='1' AND ISNULL(RTRIM(@c_LastTaskType) ,'')<>'') OR ( @c_ContinueTask = '1')
+        BEGIN
+            BEGIN
+                SELECT @c_CurrentLineNumber = TTMStrategyLineNumber
+                FROM   TTMStrategyDetail WITH (NOLOCK)
+                WHERE  TTMStrategyKEY = @c_ttmStrategykey
+                       AND TaskType = @c_LastTaskType
+
+                SELECT @c_MaxTTMStrategyLineNumber = MAX(TTMStrategyLineNumber)
+                FROM   TTMStrategyDetail WITH (NOLOCK)
+                WHERE  TTMStrategyKEY = @c_ttmStrategykey
+
+                IF @c_CurrentLineNumber=@c_MaxTTMStrategyLineNumber
+                BEGIN
+                    SELECT @c_CurrentLineNumber = ''
+                END
+            END
+
+            IF @b_debug=1
+            BEGIN
+                SELECT 'Interleaving Starts At:'
+                      ,CONVERT(NVARCHAR(30) ,GETDATE() ,109)
+                      ,' Line Number='
+                      ,@c_CurrentLineNumber
+                      ,'Task Type='
+                      ,@c_TTMTaskType
+                      ,'Pick Code = '
+                      ,@c_ttmpickcode
+                      ,'Override='
+                      ,@c_ttmoverride
+                      ,'Last TaskType ='
+                      ,@c_LastTaskType
+
+            END
+        END -- IF @c_InterLeaveTasks='1' AND ISNULL(RTRIM(@c_LastTaskType) ,'')<>''
+
+
+        WHILE (1=1)
+        BEGIN
+            SET @nCnt = 0
+            SET @nCnt1 = 0
+            SET @nCnt2 = 0
+
+            IF @c_InterLeaveTasks='1'
+            BEGIN
+                IF @n_TablePasses=0 AND @c_CurrentLineNumber=@c_MaxTTMStrategyLineNumber
+                BEGIN
+                    SELECT @c_CurrentLineNumber = ''
+                          ,@n_TablePasses = 1
+                END
+            END
+
+            SET @n_continue = 1
+            SET ROWCOUNT 1
+
+
+            IF @c_InterLeaveTasks='1' --AND ISNULL(RTRIM(@c_LastLOC),'') <> ''
+            BEGIN
+                SET @c_LastLOC = ''
+                IF @b_debug=1
+                BEGIN
+                    SELECT 'LastLoc',@c_LastLOC,'Last TaskType =',@c_LastTaskType
+                END
+                
+                ---- Start TITAN Logic Here
+                IF ISNULL(RTRIM(@c_LastLOC) ,'')<>''
+                BEGIN
+                    -- Get Last Aisle he is working now
+                    -- (Vicky03) - Start
+                    SELECT @c_LastAisle = ISNULL(LOCAisle ,'')
+                    FROM   LOC WITH (NOLOCK)
+                    WHERE  LOC.Loc = @c_LastLOC
+                    -- (Vicky03) - End
+
+                    IF @b_debug=1
+                    BEGIN
+                        SELECT @c_LastAisle '@c_LastAisle',
+                               @c_userid '@c_userid',
+                               @c_AreaKey01 '@c_AreaKey01',
+                               @c_LastTaskType '@c_LastTaskType'
+
+                    END
+
+                    IF @c_LastTaskType<>'NMV' -- (Vicky04)
+                    BEGIN
+                        -- Get the 1st Priority
+                        SELECT TOP 1
+                               @c_MinPriority = td.Priority
+                              ,@c_NextTaskType = td.TaskType
+                              ,@nCnt1 = 1
+                        FROM   TaskDetail td WITH (NOLOCK)
+                        JOIN LOC l WITH (NOLOCK) ON  l.LOC = td.FromLoc
+                        JOIN PutawayZone pz WITH (NOLOCK) ON  pz.PutawayZone = L.PutawayZone
+                        JOIN AreaDetail ad WITH (NOLOCK) ON  ad.PutawayZone = pz.PutawayZone
+                        JOIN TaskManagerUserDetail tmud WITH (NOLOCK)
+                              ON  tmud.AreaKey = ad.AreaKey
+                                  AND tmud.Permission = '1'
+                                  AND tmud.PermissionType = td.TaskType
+                                  AND tmud.UserKey = @c_userid
+                        WHERE  l.LocAisle = @c_LastAisle
+                        AND ad.AreaKey = CASE
+                                            WHEN ISNULL(RTRIM(@c_AreaKey01) ,'') =''
+                                            THEN ad.AreaKey
+                                            ELSE @c_AreaKey01
+                                          END
+                        AND td.status = '0' -- (james01)
+                        AND td.userkey = '' -- (ChewKP02)
+                        AND td.TaskType<>'NMV' -- (Vicky04)
+                        ORDER BY
+                               td.Priority
+                              ,L.LocAisle
+                              ,CASE
+                                    WHEN td.TaskType=@c_LastTaskType THEN '2'
+                                    ELSE '1'
+                               END
+
+                        -- (Vicky03) - Start
+                        IF @nCnt1=0
+                        BEGIN
+                            SELECT TOP 1
+                                   @c_MinPriority = td.Priority
+                                  ,@c_NextTaskType = td.TaskType
+                                  ,@nCnt1 = 1
+                            FROM   TaskDetail td WITH (NOLOCK)
+                                   JOIN LOC l WITH (NOLOCK)
+                                        ON  l.LOC = td.ToLoc
+                                   JOIN PutawayZone pz WITH (NOLOCK)
+                                        ON  pz.PutawayZone = L.PutawayZone
+                                   JOIN AreaDetail ad WITH (NOLOCK)
+                                        ON  ad.PutawayZone = pz.PutawayZone
+                                   JOIN TaskManagerUserDetail tmud WITH (NOLOCK)
+                                        ON  tmud.AreaKey = ad.AreaKey
+                                            AND tmud.Permission = '1'
+                                            AND tmud.PermissionType = td.TaskType
+                                           AND tmud.UserKey = @c_userid
+                            WHERE  l.LocAisle = @c_LastAisle
+                                   AND ad.AreaKey = CASE
+                                                           WHEN ISNULL(RTRIM(@c_AreaKey01) ,'')
+                                                               ='' THEN ad.AreaKey
+                                                           ELSE @c_AreaKey01
+                                                      END
+                                   AND td.status = '0' -- (james01)
+                                   AND td.userkey = '' -- (ChewKP02)
+                                   AND td.TaskType<>'NMV' -- (Vicky04)
+                            ORDER BY
+                                   td.Priority
+                                  ,L.LocAisle
+                                  ,CASE
+                                        WHEN td.TaskType=@c_LastTaskType THEN
+                                             '2'
+                                        ELSE '1'
+                                   END
+                        END-- (Vicky03) - End
+                    END-- (Vicky04) - Start
+                    ELSE
+                    IF @c_LastTaskType='NMV'
+                    BEGIN
+                        SELECT TOP 1
+                               @c_MinPriority = td.Priority
+                              ,@c_NextTaskType = td.TaskType
+                              ,@nCnt1 = 1
+                        FROM   TaskDetail td WITH (NOLOCK)
+                               JOIN LOC l WITH (NOLOCK)
+                                    ON  l.LOC = td.FromLoc
+                               JOIN AreaDetail ad WITH (NOLOCK)
+                                    ON  (ad.AreaKey=td.AreaKey)
+                               JOIN TaskManagerUserDetail tmud WITH (NOLOCK)
+                                    ON  tmud.AreaKey = ad.AreaKey
+                                        AND tmud.Permission = '1'
+                                        AND tmud.PermissionType = td.TaskType
+                               WHERE  l.LocAisle = @c_LastAisle
+                               AND ad.AreaKey = CASE
+                                                       WHEN ISNULL(RTRIM(@c_AreaKey01) ,'')
+                                                           ='' THEN ad.AreaKey
+                                                       ELSE @c_AreaKey01
+                                                  END
+                               --                      AND   td.status NOT IN ('3','S','R','9')  -- (james01)
+                               AND td.status = '0' -- (james01)
+                               AND td.userkey = '' -- (ChewKP02)
+                               AND tmud.UserKey = @c_userid
+                               AND td.TaskType = 'NMV'
+                        ORDER BY
+                               td.Priority
+                              ,L.LocAisle
+                              ,CASE
+                                    WHEN td.TaskType=@c_LastTaskType THEN '2'
+                                    ELSE '1'
+                               END
+                    END
+                    -- (Vicky04) - End
+
+                    IF ISNULL(RTRIM(@c_MinPriority) ,'')=''
+                    BEGIN
+                        SET @c_MinPriority = '9'
+                    END
+
+                    IF ISNULL(RTRIM(@c_NextTaskType) ,'')=''
+                    BEGIN
+                        SET @c_NextTaskType = ''
+                    END
+
+                    IF ISNULL(RTRIM(@c_LastAisle) ,'')=''
+                    BEGIN
+                        SET @c_LastAisle = ''
+                    END
+
+                    IF ISNULL((@nCnt1) ,0)=0
+                    BEGIN
+                        SELECT @nCnt1 = 0
+                    END
+
+                    IF @b_debug=1
+                    BEGIN
+                            SELECT '@c_MinPriority'
+                              ,@c_MinPriority
+                              ,'@c_NextTaskType'
+                              ,@c_NextTaskType
+                              ,'Last TaskType ='
+                              ,@c_LastTaskType
+                    END
+
+                   IF @c_LastTaskType<>'NMV' -- (Vicky04)
+                   BEGIN
+                        SELECT TOP 1
+                               @c_OtherPriority = td.Priority
+                              ,@c_OtherTaskType = td.TaskType
+                              ,@c_la = L.LocAisle
+                              ,@nCnt = 1
+                        FROM   TaskDetail td WITH (NOLOCK)
+                               JOIN LOC L WITH (NOLOCK)
+                                    ON  L.LOC = td.FromLoc
+                               JOIN PutawayZone pz WITH (NOLOCK)
+                                    ON  pz.PutawayZone = L.PutawayZone
+                               JOIN AreaDetail ad WITH (NOLOCK)
+                                    ON  ad.PutawayZone = pz.PutawayZone
+                               JOIN TaskManagerUserDetail tmud WITH (NOLOCK)
+                                    ON  tmud.AreaKey = ad.AreaKey
+                                        AND tmud.Permission = '1'
+                                        AND tmud.PermissionType = td.TaskType
+                        WHERE  ad.AreaKey = CASE
+                                                   WHEN ISNULL(RTRIM(@c_AreaKey01) ,'')
+                                                       ='' THEN ad.AreaKey
+                                                   ELSE @c_AreaKey01
+                                              END
+                               AND td.status = '0'
+                               AND td.userkey = '' -- (ChewKP02)
+                               AND L.LocAisle<>@c_LastAisle
+                               AND tmud.UserKey = @c_userid
+                               AND td.TaskType<>'NMV'
+                               AND NOT EXISTS (
+                                       SELECT 1
+                                       FROM   #Aisle_InUsed AIU -- (james01)
+                                       WHERE  AIU.LocAisle = L.LocAisle
+                                   )
+                        ORDER BY
+                               td.Priority
+                              ,L.LocAisle
+                              ,CASE
+                                    WHEN td.TaskType=@c_LastTaskType THEN '2'
+                                    ELSE '1'
+                               END
+
+                        -- (Vicky03) - Start
+                        IF @nCnt=0
+                        BEGIN
+                            SELECT TOP 1
+                                   @c_OtherPriority = td.Priority
+                                  ,@c_OtherTaskType = td.TaskType
+                                  ,@c_la = L.LocAisle
+                                  ,@nCnt = 1
+                            FROM   TaskDetail td WITH (NOLOCK)
+                                   JOIN LOC L WITH (NOLOCK)
+                                        ON  L.LOC = td.ToLoc
+                                   JOIN PutawayZone pz WITH (NOLOCK)
+                                        ON  pz.PutawayZone = L.PutawayZone
+                                   JOIN AreaDetail ad WITH (NOLOCK)
+                                        ON  ad.PutawayZone = pz.PutawayZone
+                                   JOIN TaskManagerUserDetail tmud WITH (NOLOCK)
+                                        ON  tmud.AreaKey = ad.AreaKey
+                                            AND tmud.Permission = '1'
+                                            AND tmud.PermissionType = td.TaskType
+                            WHERE  ad.AreaKey = CASE
+                                                       WHEN ISNULL(RTRIM(@c_AreaKey01) ,'')
+                                                        ='' THEN ad.AreaKey
+                                                       ELSE @c_AreaKey01
+                                                  END
+                                   AND td.status = '0'
+                                   AND td.userkey = '' -- (ChewKP02)
+                                   AND L.LocAisle<>@c_LastAisle
+                                   AND tmud.UserKey = @c_userid
+                                   AND td.TaskType<>'NMV'
+                                   AND -- (Vicky04)
+                                       NOT EXISTS (
+                                           SELECT 1
+                                       FROM   #Aisle_InUsed AIU -- (james01)
+                                           WHERE  AIU.LocAisle = L.LocAisle
+                                       )
+                            ORDER BY
+                                   td.Priority
+                                  ,L.LocAisle
+                                  ,CASE
+                                        WHEN td.TaskType=@c_LastTaskType THEN
+                                             '2'
+                                        ELSE '1'
+                                   END
+                        END-- (Vicky03) - End
+                    END-- (Vicky04) - Start
+                    ELSE
+                    IF @c_LastTaskType='NMV'
+                    BEGIN
+                        SELECT TOP 1
+                               @c_OtherPriority = td.Priority
+                              ,@c_OtherTaskType = td.TaskType
+                              ,@c_la = L.LocAisle
+                              ,@nCnt = 1
+                        FROM   TaskDetail td WITH (NOLOCK)
+                               JOIN LOC L WITH (NOLOCK)
+                                    ON  L.LOC = td.FromLoc
+                               JOIN AreaDetail ad WITH (NOLOCK)
+                                    ON  (ad.AreaKey=td.AreaKey)
+                               JOIN TaskManagerUserDetail tmud WITH (NOLOCK)
+                                    ON  tmud.AreaKey = ad.AreaKey
+                                        AND tmud.Permission = '1'
+                                        AND tmud.PermissionType = td.TaskType
+                        WHERE  ad.AreaKey = CASE
+                                                   WHEN ISNULL(RTRIM(@c_AreaKey01) ,'')
+                                                       ='' THEN ad.AreaKey
+                                                   ELSE @c_AreaKey01
+                                              END
+                               AND td.status = '0'
+                               AND td.userkey = '' -- (ChewKP02)
+                               AND L.LocAisle<>@c_LastAisle
+                               AND tmud.UserKey = @c_userid
+                               AND td.TaskType = 'NMV'
+                        ORDER BY
+                               td.Priority
+                              ,L.LocAisle
+                              ,CASE
+                                    WHEN td.TaskType=@c_LastTaskType THEN '2'
+                                    ELSE '1'
+                               END
+                 END
+                    -- (Vicky04) - End
+
+                 IF @b_debug = 1
+                 BEGIN
+                    SELECT @c_OtherPriority '@c_OtherPriority',
+                           @c_OtherTaskType '@c_OtherTaskType',
+                           @nCnt '@nCnt',
+                           @c_LastAisle '@c_LastAisle'
+
+                 END
+
+                    IF ISNULL(RTRIM(@c_OtherPriority) ,'')=''
+                    BEGIN
+                        SET @c_OtherPriority = '9'
+                    END
+
+                    IF ISNULL(RTRIM(@c_OtherTaskType) ,'')=''
+                    BEGIN
+                        SET @c_OtherTaskType = ''
+                    END
+
+                    IF ISNULL(RTRIM(@c_LastAisle) ,'')=''
+                    BEGIN
+                        SET @c_LastAisle = ''
+                    END
+
+                    IF ISNULL((@nCnt) ,0)=0
+                    BEGIN
+                        SELECT @nCnt = 0
+                    END
+
+
+                    IF @nCnt=0 AND @nCnt1=0
+                    BEGIN
+                        SET ROWCOUNT 0
+                        BREAK
+                    END
+
+                    ---- End TITAN Logic Here
+                    IF @nCnt>0
+                    BEGIN
+                        IF (@c_OtherPriority<@c_MinPriority)
+                           OR (@nCnt1=0 AND @nCnt>0)
+                        BEGIN
+                           SET @c_NextTaskType = @c_OtherTaskType
+
+                           IF @b_debug=1
+                           BEGIN
+                              SELECT '@c_NextTaskType',@c_NextTaskType
+                           END
+                        END
+
+                        SELECT @c_CurrentLineNumber = TTMStrategyLineNumber
+                              ,@c_TTMTaskType = TaskType
+                              ,@c_ttmpickcode = TTMPickCode
+                              ,@c_ttmoverride = TTMOverride
+                              ,@nCnt2 = 1
+                        FROM   TTMStrategyDetail WITH (NOLOCK)
+                        WHERE  TTMStrategykey = @c_TTMStrategyKey
+                               AND TaskType = @c_NextTaskType
+
+                        --IF @@ROWCOUNT=0
+                        IF @nCnt2=0
+                        BEGIN
+                            SET ROWCOUNT 0
+                            BREAK
+                        END
+                    END-- rowcount
+                    ELSE
+                    BEGIN
+                        SELECT TOP 1
+                               @c_CurrentLineNumber = TTMStrategyLineNumber
+                              ,@c_TTMTaskType = TaskType
+                              ,@c_ttmpickcode = TTMPickCode
+                              ,@c_ttmoverride = TTMOverride
+                              ,@nCnt2 = 1
+                        FROM   TTMStrategyDetail WITH (NOLOCK)
+                        WHERE  TTMStrategykey = @c_TTMStrategyKey
+                        AND   TTMStrategyLineNumber > @c_CurrentLineNumber
+                        ORDER BY TTMStrategyLineNumber
+                        /*AND   EXISTS(SELECT 1
+                                     FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                     WHERE  USERKEY = @c_userid
+                                     AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                     AND PERMISSION = '1')
+                        ORDER BY CASE WHEN TTMStrategyLineNumber = @c_CurrentLineNumber THEN 9
+                                      WHEN TTMStrategyLineNumber < @c_CurrentLineNumber THEN 8
+                                      ELSE 1
+                                 END,
+                                 TTMStrategyLineNumber*/
+
+                        IF @nCnt2=0
+                        BEGIN
+                            SET ROWCOUNT 0
+                            BREAK
+                        END
+                    END
+                END-- last loc <> ''
+                ELSE
+                BEGIN
+                    SELECT TOP 1
+                           @c_CurrentLineNumber = TTMStrategyLineNumber
+                          ,@c_TTMTaskType = TaskType
+                          ,@c_ttmpickcode = TTMPickCode
+                          ,@c_ttmoverride = TTMOverride
+                          ,@nCnt2 = 1
+                    FROM   TTMStrategyDetail WITH (NOLOCK)
+                    WHERE  TTMStrategykey = @c_TTMStrategyKey
+                    AND    TTMStrategyLineNumber>@c_CurrentLineNumber
+                    /*AND   EXISTS(SELECT 1
+                                 FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                 WHERE  USERKEY = @c_userid
+                                 AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                 AND PERMISSION = '1')*/
+                    ORDER BY TTMStrategyLineNumber
+                    /*ORDER BY CASE WHEN TTMStrategyLineNumber = @c_CurrentLineNumber THEN 9
+                                  WHEN TTMStrategyLineNumber < @c_CurrentLineNumber THEN 8
+                                  ELSE 1
+                             END,
+                             TTMStrategyLineNumber*/
+
+                    IF @nCnt2=0
+                    BEGIN
+                        SET ROWCOUNT 0
+                        BREAK
+                    END
+                END
+
+               /*INSERT INTO TRACEINFO (TraceName, TimeIn, Step1, Step2, Step3,
+                           Step4, Step5, Col1, Col2, Col3, Col4, Col5)
+               VALUES('nspTMTM01-InterLeave', GETDATE(), @c_LastTaskType, @c_LastLOC, @c_LastAisle,
+                     @c_NextTaskType,  @c_TTMTaskType,  @c_CurrentLineNumber,  @c_ttmpickcode,
+                     @c_ttmoverride, SUSER_SNAME(), @c_AreaKey01)*/
+
+
+            END-- interleave = 1
+            ELSE
+            BEGIN
+               -- (james06)
+               IF @c_ContinueTask = 1 AND ISNULL( @c_LastTaskType, '') <> ''
+               BEGIN
+                  SELECT TOP 1
+                         @c_CurrentLineNumber = TTMStrategyLineNumber
+                        ,@c_TTMTaskType = TaskType
+                        ,@c_ttmpickcode = TTMPickCode
+                        ,@c_ttmoverride = TTMOverride
+                        ,@nCnt2 = 1
+                  FROM   TTMStrategyDetail WITH (NOLOCK)
+                  WHERE  TTMStrategykey = @c_TTMStrategyKey
+                  AND    TaskType = @c_LastTaskType
+                  AND    EXISTS(SELECT 1
+                                FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                WHERE  USERKEY = @c_userid
+                                AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                AND PERMISSION = '1')
+                  ORDER BY TTMStrategyLineNumber
+
+                  IF @nCnt2=0
+                  BEGIN
+                     SELECT TOP 1
+                            @c_CurrentLineNumber = TTMStrategyLineNumber
+                           ,@c_TTMTaskType = TaskType
+                           ,@c_ttmpickcode = TTMPickCode
+                           ,@c_ttmoverride = TTMOverride
+                           ,@nCnt2 = 1
+                     FROM   TTMStrategyDetail WITH (NOLOCK)
+                     WHERE  TTMStrategykey = @c_TTMStrategyKey
+                     AND    TTMStrategyLineNumber>@c_CurrentLineNumber
+                     AND    EXISTS(SELECT 1
+                                   FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                   WHERE  USERKEY = @c_userid
+                                   AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                   AND PERMISSION = '1')
+                     ORDER BY TTMStrategyLineNumber
+
+                     IF @nCnt2=0
+                     BEGIN
+                        SET ROWCOUNT 0
+                        BREAK
+                     END
+                  END
+                  
+               END
+               ELSE
+               BEGIN
+                  SELECT TOP 1
+                         @c_CurrentLineNumber = TTMStrategyLineNumber
+                        ,@c_TTMTaskType = TaskType
+                        ,@c_ttmpickcode = TTMPickCode
+                        ,@c_ttmoverride = TTMOverride
+                        ,@nCnt2 = 1
+                  FROM   TTMStrategyDetail WITH (NOLOCK)
+                  WHERE  TTMStrategykey = @c_TTMStrategyKey
+                  AND    TTMStrategyLineNumber>@c_CurrentLineNumber
+                  AND    EXISTS(SELECT 1
+                                FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                WHERE  USERKEY = @c_userid
+                                AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                AND PERMISSION = '1')
+                  ORDER BY TTMStrategyLineNumber
+
+                  IF @nCnt2=0
+                  BEGIN
+                     SET ROWCOUNT 0
+                     BREAK
+                  END
+               END
+            END
+            --DROP TABLE #Aisle_InUsed
+
+            -- SHONG05
+            -- For Vocollect Logic, not able to do interleaving now...
+            IF @c_LastTaskType IN ('VNPK','VRPL')
+            BEGIN
+               SELECT @c_CurrentLineNumber = TTMStrategyLineNumber
+                      ,@c_TTMTaskType = TaskType
+                      ,@c_TTMPickCode = TTMPickCode
+                      ,@c_TTMOverride = TTMOverride
+                      ,@nCnt2 = 1
+                FROM   TTMStrategyDetail WITH (NOLOCK)
+                WHERE  TTMStrategyKey = @c_TTMStrategyKey
+                   AND TaskType = @c_LastTaskType
+                ORDER BY TTMStrategyLineNumber
+            END
+
+            SET ROWCOUNT 0
+
+
+            IF @b_debug=1
+            BEGIN
+                SELECT 'VV Start At:'
+                      ,CONVERT(NVARCHAR(30) ,GETDATE() ,109)
+                      ,' Line Number='
+                      ,@c_CurrentLineNumber
+                      ,'Task Type='
+                      ,@c_TTMTaskType
+                      ,'Pick Code = '
+                      ,@c_ttmpickcode
+                      ,'Override='
+                      ,@c_ttmoverride
+            END
+
+            IF NOT EXISTS(SELECT 1 FROM @t_ProcessTaskType WHERE TaskType = @c_TTMTaskType)
+            BEGIN
+               INSERT INTO @t_ProcessTaskType VALUES (@c_TTMTaskType, 1)
+            END
+            ELSE
+            BEGIN
+               UPDATE @t_ProcessTaskType
+               SET NoOfTry = NoOfTry + 1
+               WHERE TaskType = @c_TTMTaskType
+            END
+
+            IF @c_TTMTaskType='GM'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='GM')
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'GM'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TGM'
+                EXECUTE nspTTMEvaluateGMTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_taskDetailkey=@c_taskDetailkey OUTPUT -- (KHLim01)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType='MV'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='MV')
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'MV'
+            AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TMV'
+                EXECUTE nspTTMEvaluateMVTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+
+                SELECT @n_err = @@ERROR
+                      ,@n_cnt = @@ROWCOUNT -- Note: Need this here to trap error message for use later!
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+
+            IF @c_TTMTaskType='PA'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='PA')
+               AND OBJECT_ID('nspTTMEvaluatePATasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'PA'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TPA'
+                EXECUTE nspTTMEvaluatePATasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Vicky01)
+                , @c_fromloc=@c_fromloc OUTPUT -- (Vicky01)
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT -- (Vicky01)
+                 --, @c_CaseID=@c_CaseID OUTPUT -- (ChewKP02)
+                 --, @c_ToteID=@c_ToteID  -- (ChewKP02)
+
+                SET @c_RefKey01 = @c_fromloc -- (Vicky01)
+                --SET @c_RefKey03 = @c_CaseID -- (ChewKP02)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                    IF @n_err = 63061
+                       BREAK;
+                END
+            END
+
+            --(ung02)
+            IF @c_TTMTaskType IN ('PAF', 'PA1')
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride IN ('PAF', 'PA1'))
+               AND OBJECT_ID('nspTTMEvaluatePAFTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE IN ('PAF', 'PA1')
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TPA'
+                EXECUTE nspTTMEvaluatePAFTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid
+                , @c_fromloc=@c_fromloc OUTPUT
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT
+
+                SET @c_RefKey01 = @c_fromloc
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            --(ung01)
+            IF @c_TTMTaskType='PAT'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='PAT')
+               AND OBJECT_ID('nspTTMEvaluatePATTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'PAT'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TPA'
+                EXECUTE nspTTMEvaluatePATTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid
+                , @c_fromloc=@c_fromloc OUTPUT
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT
+
+                SET @c_RefKey01 = @c_fromloc
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType='XD'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='XD')
+               AND OBJECT_ID('nspTTMEvaluateXDTasks') IS NOT NULL
+               AND EXISTS (
+                     SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'XD'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TXD'
+                EXECUTE nspTTMEvaluateXDTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType='CO'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='CO')
+               AND OBJECT_ID('nspTTMEvaluateCOTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'CO'
+                    AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TCO'
+                EXECUTE nspTTMEvaluateCOTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType='RP'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='RP')
+               AND OBJECT_ID('nspTTMEvaluateRPTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'RP'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TRP'
+                EXECUTE nspTTMEvaluateRPTasks
+                @c_senddelimiter=@c_senddelimiter
+                --, @c_ptcid=@c_ptcid         (ChewKP04)
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (ChewKP04)
+                , @c_fromloc=@c_fromloc OUTPUT -- (ChewKP04)
+                , @c_taskDetailkey=@c_taskDetailkey OUTPUT -- (ChewKP04)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType='PK'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='PK')
+               AND OBJECT_ID('nspTTMEvaluatePKTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'PK'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+               SELECT @b_success = 0
+               SELECT @c_appflag = 'TPK'
+               EXECUTE nspTTMEvaluatePKTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Shong01)
+                , @c_fromloc=@c_fromloc OUTPUT -- (Shong01)
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT -- (Shong01)
+
+                SET @c_RefKey01 = @c_fromloc -- (Vicky01)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType='CC'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='CC')
+               AND OBJECT_ID('nspTTMEvaluateCCTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'CC'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TCC'
+                EXECUTE nspTTMEvaluateCCTasks
+                  @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid = @c_ptcid                         -- (ChewKP03)
+                , @c_FromLoc = @c_FromLoc          OUTPUT     -- (ChewKP03)
+                , @c_TaskDetailKey = @c_TaskDetailKey    OUTPUT     -- (ChewKP03)
+
+                SET @c_RefKey01 =  @c_FromLoc -- (ChewKP03)
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+               END
+            END
+
+            -- (ChewKP03)
+            IF @c_TTMTaskType='CCSV'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='CCSV')
+               AND OBJECT_ID('nspTTMEvaluateCCTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'CCSV'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+               SELECT @b_success = 0
+               SELECT @c_appflag = 'TCCSV'
+               EXECUTE nspTTMEvaluateCCTasks
+                       @c_senddelimiter=@c_senddelimiter
+                     , @c_userid=@c_userid
+                     , @c_Strategykey=@c_Strategykey
+                     , @c_ttmStrategykey=@c_ttmStrategykey
+                     , @c_ttmpickcode=@c_ttmpickcode
+                     , @c_ttmoverride=@c_ttmoverride
+                     , @c_AreaKey01=@c_AreaKey01
+                     , @c_AreaKey02=@c_AreaKey02
+                     , @c_AreaKey03=@c_AreaKey03
+                     , @c_AreaKey04=@c_AreaKey04
+                     , @c_AreaKey05=@c_AreaKey05
+                     , @c_LastLOC=@c_LastLOC
+                     , @c_outstring=@c_outstring OUTPUT
+                     , @b_Success=@b_success OUTPUT
+                     , @n_err=@n_err OUTPUT
+                     , @c_errmsg=@c_errmsg OUTPUT
+                     , @c_ptcid = @c_ptcid
+                     , @c_FromLoc = @c_FromLoc             OUTPUT
+                     , @c_TaskDetailKey = @c_TaskDetailKey OUTPUT
+
+               SET @c_RefKey01 =  @c_FromLoc
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+               END
+            END
+
+            -- (ChewKP03)
+            IF @c_TTMTaskType='CCSUP'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='CCSUP')
+               AND OBJECT_ID('nspTTMEvaluateCCTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'CCSUP'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+               SELECT @b_success = 0
+               SELECT @c_appflag = 'TCCSUP'
+               EXECUTE nspTTMEvaluateCCTasks
+                       @c_senddelimiter=@c_senddelimiter
+                     , @c_userid=@c_userid
+                     , @c_Strategykey=@c_Strategykey
+                     , @c_ttmStrategykey=@c_ttmStrategykey
+                     , @c_ttmpickcode=@c_ttmpickcode
+                     , @c_ttmoverride=@c_ttmoverride
+                     , @c_AreaKey01=@c_AreaKey01
+                     , @c_AreaKey02=@c_AreaKey02
+                     , @c_AreaKey03=@c_AreaKey03
+                     , @c_AreaKey04=@c_AreaKey04
+                     , @c_AreaKey05=@c_AreaKey05
+                     , @c_LastLOC=@c_LastLOC
+                     , @c_outstring=@c_outstring OUTPUT
+                     , @b_Success=@b_success OUTPUT
+                     , @n_err=@n_err OUTPUT
+                     , @c_errmsg=@c_errmsg OUTPUT
+                     , @c_ptcid = @c_ptcid
+                     , @c_FromLoc = @c_FromLoc             OUTPUT
+                     , @c_TaskDetailKey = @c_TaskDetailKey OUTPUT
+
+               SET @c_RefKey01 =  @c_FromLoc
+
+               IF @b_success<>1
+               BEGIN
+                  SELECT @n_continue = 3
+               END
+            END
+
+            IF @c_TTMTaskType='QC'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='QC')
+               AND OBJECT_ID('nspTTMEvaluateQCTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'QC'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TQC'
+                EXECUTE nspTTMEvaluateQCTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            -- (Vicky02) - Start - TaskType = NMV
+            IF @c_TTMTaskType='NMV'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='NMV')
+               AND OBJECT_ID('nspTTMEvaluateNMVTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'NMV'
+                   AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'NMV'
+                EXECUTE nspTTMEvaluateNMVTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid
+                , @c_fromloc=@c_fromloc OUTPUT
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT
+                , @c_toid=@c_toid OUTPUT
+
+                SET @c_RefKey01 = @c_toid
+                SET @c_RefKey02 = @c_fromloc
+
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+            -- (Vicky02) - End
+
+            -- (ChewKP01) - Start - TaskType = OPK
+            IF @c_TTMTaskType='OPK'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='OPK')
+               AND OBJECT_ID('nspTTMEvaluateOPKTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'OPK'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'OPK'
+                EXECUTE nspTTMEvaluateOPKTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Shong01)
+                , @c_fromloc=@c_fromloc OUTPUT -- (Shong01)
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT -- (Shong01)
+
+                SET @c_RefKey01 = @c_fromloc -- (Vicky01)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+            -- (ChewKP01) - End
+
+            -- (Shong03) - Start - TaskType = DPK
+            IF @c_TTMTaskType='DPK'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='DPK')
+               AND OBJECT_ID('nspTTMEvaluateDPKTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'DPK'
+                              AND PERMISSION = '1'
+                   )
+             BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'DPK'
+                EXECUTE nspTTMEvaluateDPKTasks
+                  @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid
+                , @c_fromloc=@c_fromloc OUTPUT
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT
+
+                SET @c_RefKey01 = @c_fromloc
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+            -- (Shong03) - End
+
+            -- (KC01) - Start - TaskType = DRP
+            IF @c_TTMTaskType='DRP'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='DRP')
+               AND OBJECT_ID('nspTTMEvaluateDRPTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'DRP'
+                            AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'DRP'
+                EXECUTE nspTTMEvaluateDRPTasks
+                  @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid
+                , @c_fromloc=@c_fromloc OUTPUT
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT
+
+                SET @c_RefKey01 = @c_fromloc
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+            -- (KC01) - End
+
+            -- Store PPA Pick
+            -- (SHONG04)
+            IF @c_TTMTaskType='SPK'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='SPK')
+               AND OBJECT_ID('nspTTMEvaluateSPKTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'SPK'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+               SELECT @b_success = 0
+               SELECT @c_appflag = 'SPK'
+               EXECUTE nspTTMEvaluateSPKTasks
+                  @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Shong01)
+                , @c_fromloc=@c_fromloc OUTPUT -- (Shong01)
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT -- (Shong01)
+
+                SET @c_RefKey01 = @c_fromloc -- (Vicky01)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType IN ('RPF', 'RP1')
+               AND @c_TaskTypeoverride IN ('', 'RPF', 'RP1')
+               AND OBJECT_ID('nspTTMEvaluateRPFFCPTasks_JCB') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE IN ('RPF', 'RP1')
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TRP'
+                EXECUTE nspTTMEvaluateRPFFCPTasks_JCB
+                  @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (ChewKP04)
+                , @c_fromloc=@c_fromloc OUTPUT -- (ChewKP04)
+                , @c_taskDetailkey=@c_taskDetailkey OUTPUT -- (ChewKP04)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType IN ('FPK', 'FPK1')
+               AND @c_TaskTypeoverride IN ('', 'FPK', 'FPK1')
+               AND OBJECT_ID('nspTTMEvaluateFPKTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE IN ('FPK', 'FPK1')
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TFPK'
+                EXECUTE nspTTMEvaluateFPKTasks
+                  @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (ChewKP04)
+                , @c_fromloc=@c_fromloc OUTPUT -- (ChewKP04)
+                , @c_taskDetailkey=@c_taskDetailkey OUTPUT -- (ChewKP04)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType IN ('FCP', 'FCP1')
+               AND @c_TaskTypeoverride IN ('', 'FCP', 'FCP1')
+               AND OBJECT_ID('nspTTMEvaluateRPFFCPTasks_JCB') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE IN ('FCP', 'FCP1')
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TFPK'
+                EXECUTE nspTTMEvaluateRPFFCPTasks_JCB
+                  @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (ChewKP04)
+                , @c_fromloc=@c_fromloc OUTPUT -- (ChewKP04)
+                , @c_taskDetailkey=@c_taskDetailkey OUTPUT -- (ChewKP04)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+            
+              -- Shong05
+            IF @c_TTMTaskType='VNPK'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='VNPK')
+               AND OBJECT_ID('nspTTMEvaluateVNPKTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'VNPK'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+               SELECT @b_success = 0
+               SELECT @c_appflag = 'VNPK'
+               EXECUTE nspTTMEvaluateVNPKTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_TTMStrategyKey=@c_TTMStrategyKey
+                , @c_TTMPickCode=@c_TTMPickCode
+                , @c_TTMOverride=@c_TTMOverride
+                , @c_areakey01=@c_areakey01
+                , @c_areakey02=@c_areakey02
+                , @c_areakey03=@c_areakey03
+                , @c_areakey04=@c_areakey04
+                , @c_areakey05=@c_areakey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Shong01)
+                , @c_fromloc=@c_fromloc OUTPUT -- (Shong01)
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT -- (Shong01)
+
+                SET @c_RefKey01 = @c_fromloc -- (Vicky01)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END -- IF @c_TTMTaskType='VNPK'
+
+
+            IF @c_TTMTaskType='VRPL'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='VRPL')
+               AND OBJECT_ID('nspTTMEvaluateVRPLTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'VRPL'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+               SELECT @b_success = 0
+               SELECT @c_appflag = 'VRPL'
+               EXECUTE nspTTMEvaluateVRPLTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_TTMStrategyKey=@c_TTMStrategyKey
+                , @c_TTMPickCode=@c_TTMPickCode
+                , @c_TTMOverride=@c_TTMOverride
+                , @c_areakey01=@c_areakey01
+                , @c_areakey02=@c_areakey02
+                , @c_areakey03=@c_areakey03
+                , @c_areakey04=@c_areakey04
+                , @c_areakey05=@c_areakey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Shong01)
+                , @c_fromloc=@c_fromloc OUTPUT -- (Shong01)
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT -- (Shong01)
+
+                SET @c_RefKey01 = @c_fromloc -- (Vicky01)
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            -- (ChewKP05)
+            IF @c_TTMTaskType='RPT'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='RPT')
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'RPT'
+            AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'RPT'
+                EXECUTE nspTTMEvaluateRTTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_areakey01=@c_areakey01
+                , @c_areakey02=@c_areakey02
+                , @c_areakey03=@c_areakey03
+                , @c_areakey04=@c_areakey04
+                , @c_areakey05=@c_areakey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Vicky01)
+                , @c_taskDetailkey=@c_taskDetailkey OUTPUT -- (ChewKP03)  
+                , @c_fromloc=@c_fromloc OUTPUT -- (ChewKP03)  
+  
+  
+                SET @c_RefKey01 = @c_fromloc -- (ChewKP03)  
+  
+  
+  
+                SELECT @n_err = @@ERROR  
+                      ,@n_cnt = @@ROWCOUNT -- Note: Need this here to trap error message for use later!  
+                IF @b_success<>1  
+                BEGIN  
+                    SELECT @n_continue = 3  
+                END  
+            END
+
+            IF @c_TTMTaskType IN ('MVF', 'MV1')
+               AND @c_TaskTypeoverride IN ('', 'MVF', 'MV1')
+               AND OBJECT_ID('nspTTMEvaluateMVFTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE IN ('MVF', 'MV1')
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TMV'
+                EXECUTE nspTTMEvaluateMVFTasks
+                  @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (ChewKP04)
+                , @c_fromloc=@c_fromloc OUTPUT -- (ChewKP04)
+                , @c_taskDetailkey=@c_taskDetailkey OUTPUT -- (ChewKP04)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            IF @c_TTMTaskType IN ('NMF', 'NM1')
+               AND @c_TaskTypeoverride IN ('', 'NMF', 'NM1')
+               AND OBJECT_ID('nspTTMEvaluateMVFTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE IN ('NMF', 'NM1')
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+                SELECT @b_success = 0
+                SELECT @c_appflag = 'TNMF'
+                EXECUTE nspTTMEvaluateNMFTasks
+                  @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (ChewKP04)
+                , @c_fromloc=@c_fromloc OUTPUT -- (ChewKP04)
+                , @c_taskDetailkey=@c_taskDetailkey OUTPUT -- (ChewKP04)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            -- (james03)
+            IF @c_TTMTaskType='PPK'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='PPK')
+               AND OBJECT_ID('nspTTMEvaluatePPKTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'PPK'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+               SELECT @b_success = 0
+               SELECT @c_appflag = 'TPPK'
+               EXECUTE nspTTMEvaluatePKTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Shong01)
+                , @c_fromloc=@c_fromloc OUTPUT -- (Shong01)
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT -- (Shong01)
+
+                SET @c_RefKey01 = @c_fromloc -- (Vicky01)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+
+            -- (james05)
+            IF @c_TTMTaskType='CPK'
+               AND (@c_TaskTypeoverride='' OR @c_TaskTypeoverride='CPK')
+               AND OBJECT_ID('nspTTMEvaluateCPKTasks') IS NOT NULL
+               AND EXISTS (
+                       SELECT 1
+                       FROM   TaskManagerUserDetail WITH (NOLOCK)
+                       WHERE  USERKEY = @c_userid
+                              AND PERMISSIONTYPE = 'CPK'
+                              AND PERMISSION = '1'
+                   )
+            BEGIN
+               SELECT @b_success = 0
+               SELECT @c_appflag = 'TCPK'
+               EXECUTE nspTTMEvaluateCPKTasks
+                @c_senddelimiter=@c_senddelimiter
+                , @c_userid=@c_userid
+                , @c_Strategykey=@c_Strategykey
+                , @c_ttmStrategykey=@c_ttmStrategykey
+                , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmoverride=@c_ttmoverride
+                , @c_AreaKey01=@c_AreaKey01
+                , @c_AreaKey02=@c_AreaKey02
+                , @c_AreaKey03=@c_AreaKey03
+                , @c_AreaKey04=@c_AreaKey04
+                , @c_AreaKey05=@c_AreaKey05
+                , @c_LastLOC=@c_LastLOC
+                , @c_outstring=@c_outstring OUTPUT
+                , @b_Success=@b_success OUTPUT
+                , @n_err=@n_err OUTPUT
+                , @c_errmsg=@c_errmsg OUTPUT
+                , @c_ptcid=@c_ptcid -- (Shong01)
+                , @c_fromloc=@c_fromloc OUTPUT -- (Shong01)
+                , @c_TaskDetailKey=@c_TaskDetailKey OUTPUT -- (Shong01)
+
+                SET @c_RefKey01 = @c_fromloc -- (Vicky01)
+
+                IF @b_success<>1
+                BEGIN
+                    SELECT @n_continue = 3
+                END
+            END
+            
+            -- (KC01) - End
+            --
+            IF @n_continue=1 OR @n_continue=2
+            BEGIN
+                IF ISNULL(RTRIM(@c_TaskDetailKey) ,'')<>''
+                BEGIN
+                    BREAK
+                END
+                ELSE
+                BEGIN
+                   IF EXISTS(SELECT 1 FROM TaskDetail td WITH (NOLOCK)
+                               WHERE td.status = '0'
+                               AND td.userkey = ''
+                               AND EXISTS (SELECT 1 FROM @t_ProcessTaskType t
+                                               WHERE  t.TaskType = td.TaskType
+                                               AND   t.NoOfTry > 3))
+                   BEGIN
+                      BREAK
+                   END
+               END
+            END
+
+        END -- While
+
+        SET ROWCOUNT 0
+    END -- @n_continue = 1 or @n_continue = 2
+
+    IF @n_continue=1
+       OR @n_continue=2
+    BEGIN
+       IF EXISTS(
+               SELECT 1
+               FROM   TASKDETAIL WITH (NOLOCK)
+               WHERE  TaskDetailKey = @c_TaskDetailKey
+                      AND Userkey<>@c_userid
+                      AND STATUS = '3'
+           )
+       BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 63059--78603
+            SELECT @c_errmsg = CONVERT(NVARCHAR(5) ,@n_err)+' Task Taken!' -- (james02)
+       END
+   ELSE
+   BEGIN
+      -- Added By Shong on 9th Jul 2010
+      -- Return Correct Task Type
+      SELECT @c_TTMTaskType = Tasktype
+      FROM   TASKDETAIL WITH (NOLOCK)
+      WHERE  TaskDetailKey = @c_TaskDetailKey
+
+   END
+END
+
+    IF @n_continue=1
+       OR @n_continue=2
+    BEGIN
+        IF ISNULL(RTRIM(@c_TaskDetailKey) ,'')=''--ISNULL(RTRIM(@c_outstring), '') = ''
+        BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 63060--78603
+            SELECT @c_errmsg = CONVERT(NVARCHAR(5) ,@n_err)+' No Task!'
+        END
+
+		IF @n_err = 63060
+		BEGIN
+		   -- First Priority Error (over max pallet)
+		   IF EXISTS (
+              SELECT 1
+              FROM dbo.TaskDetail TD WITH (NOLOCK)
+                 INNER JOIN dbo.LOC L WITH (NOLOCK)
+                    ON TD.ToLoc = L.Loc
+                 LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                    ON TD.ToLoc = LLI.Loc
+                    AND LLI.StorerKey = @cStorerKey
+                    AND LLI.Qty > 0
+                 LEFT JOIN #Aisle_InUsed AI1
+                    ON L.LocAisle = AI1.LocAisle
+                    AND L.Facility = @cFacility
+                    AND L.LocationCategory = 'VNA'
+                 LEFT JOIN dbo.LOC LF WITH (NOLOCK)
+                    ON TD.FromLoc = LF.Loc
+                    AND LF.Facility = @cFacility
+                    AND LF.LocationCategory = 'VNA'
+                 LEFT JOIN #Aisle_InUsed AI2
+                    ON LF.LocAisle = AI2.LocAisle
+              WHERE TD.AreaKey = @c_AreaKey01
+		         AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                 AND L.Facility = @cFacility
+                 AND TD.StorerKey = @cStorerKey
+                 AND (
+			        TD.Status = '0'
+                    OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+			     )
+                 AND AI1.LocAisle IS NULL   
+                 AND AI2.LocAisle IS NULL   
+              GROUP BY L.MaxPallet, L.Loc
+              HAVING IIF(L.MaxPallet = 0, 99999999, L.MaxPallet) <= COUNT(DISTINCT LLI.ID)
+           )
+           AND @n_err = 63060
+           BEGIN
+		      /*UPDATE TaskDetail 
+		      SET StatusMsg = 'OverMaxPallet'
+		      WHERE TaskDetailKey IN (
+		         SELECT TD.TaskDetailKey
+                 FROM dbo.TaskDetail TD WITH (NOLOCK)
+                    INNER JOIN dbo.LOC L WITH (NOLOCK)
+                       ON TD.ToLoc = L.Loc
+                    LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                       ON TD.ToLoc = LLI.Loc
+                       AND LLI.StorerKey = @cStorerKey
+                       AND LLI.Qty > 0
+                 WHERE TD.AreaKey = @c_AreaKey01
+		            AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                    AND L.Facility = @cFacility
+                    AND TD.StorerKey = @cStorerKey
+                    AND (
+			           TD.Status = '0'
+                       OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+					) 
+                 GROUP BY L.MaxPallet, L.Loc, TD.TaskDetailKey
+                 HAVING IIF(L.MaxPallet = 0, 99999999, L.MaxPallet) <= COUNT(DISTINCT LLI.ID)
+		      )*/
+
+              SELECT @n_continue = 3
+              SELECT @n_err = 218254 --218254^OverMaxPallet 
+              SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' OverMaxPallet'  
+		      GOTO QuitErrorCheck
+           END
+
+		   --Second Priority Error (loc on hold)
+		   IF @n_err = '63060'
+              AND EXISTS (
+                 SELECT 1
+                 FROM TaskDetail TD WITH (NOLOCK)
+                    INNER JOIN LOC L WITH (NOLOCK)
+                       ON TD.ToLoc = L.Loc
+                    INNER JOIN LOC L1 WITH (NOLOCK)
+                       ON TD.FromLoc = L1.LOC
+					INNER JOIN LOC L2
+					   ON TD.FinalLOC = L2.LOC
+                    LEFT JOIN #Aisle_InUsed AI1
+                       ON L.LocAisle = AI1.LocAisle
+                       AND L.Facility = @cFacility
+                       AND L.LocationCategory = 'VNA'
+                    LEFT JOIN dbo.LOC LF WITH (NOLOCK)
+                       ON TD.FromLoc = LF.Loc
+                       AND LF.Facility = @cFacility
+                       AND LF.LocationCategory = 'VNA'
+                    LEFT JOIN #Aisle_InUsed AI2
+                       ON LF.LocAisle = AI2.LocAisle
+                 WHERE TD.AreaKey = @c_AreaKey01
+			        AND L.Facility = @cFacility
+				    AND L1.Facility = @cFacility
+					AND L2.Facility = @cFacility
+			        AND TD.Storerkey = @cStorerKey
+                    AND TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                    AND (
+                       TD.Status = '0'
+                       OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                    )
+                    AND (
+				       L.Status <> 'OK' 
+					   OR L.LocationFlag NOT IN ('', 'NONE') 
+					   OR L1.Status <> 'OK' 
+					   OR L1.LocationFlag NOT IN ('', 'NONE')
+					   OR L2.Status <> 'OK' 
+					   OR L2.LocationFlag NOT IN ('', 'NONE')
+				    )
+					AND AI1.LocAisle IS NULL   
+                    AND AI2.LocAisle IS NULL   
+           )
+           BEGIN
+              /*UPDATE TD
+              SET TD.StatusMsg =
+                 CASE 
+                    WHEN 
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
+                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       THEN 'Both loc on hold or flag'
+
+                    WHEN 
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
+                       THEN 'Toloc on hold or flag'
+
+                    WHEN 
+                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       THEN 'Fromloc on hold or flag' 
+                 END
+              FROM TaskDetail TD
+              INNER JOIN LOC L WITH (NOLOCK)
+                 ON TD.ToLoc = L.Loc
+                 AND L.Facility = @cFacility
+              INNER JOIN LOC L1 WITH (NOLOCK)
+                 ON TD.FromLoc = L1.Loc
+                 AND L1.Facility = @cFacility
+              WHERE TD.AreaKey = @c_AreaKey01
+                AND TD.Storerkey = @cStorerKey
+                AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                AND (
+                       TD.Status = '0'
+                    OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                    )
+                AND (
+                       L.Status <> 'OK'
+                    OR L.LocationFlag NOT IN ('', 'NONE')
+                    OR L1.Status <> 'OK'
+                    OR L1.LocationFlag NOT IN ('', 'NONE')
+                    )*/
+
+              SELECT @n_continue = 3
+              SELECT @n_err = 218253 --Loc on hold or flag
+              SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' Loc on hold or flag'
+			  GOTO QuitErrorCheck
+           END
+
+		   -- Third Priority Task (order on hold)
+           IF @n_err = 63060
+              AND EXISTS (
+                 SELECT 1
+                 FROM dbo.TaskDetail AS TD1 WITH (NOLOCK)
+                    INNER JOIN dbo.TaskDetail AS TD2 WITH (NOLOCK)
+                       ON  TD1.OrderKey = TD2.OrderKey
+                       AND TD1.AreaKey = TD2.AreaKey
+                       AND TD2.Status IN ('S','H')
+                       AND TD1.Storerkey = TD2.Storerkey
+					INNER JOIN LOC L WITH(NOLOCK)
+					   ON TD1.ToLoc = L.Loc
+                    LEFT JOIN #Aisle_InUsed AI1
+                       ON L.LocAisle = AI1.LocAisle
+                       AND L.Facility = @cFacility
+                       AND L.LocationCategory = 'VNA'
+                    LEFT JOIN dbo.LOC LF WITH (NOLOCK)
+                       ON TD1.FromLoc = LF.Loc
+                       AND LF.Facility = @cFacility
+                       AND LF.LocationCategory = 'VNA'
+                    LEFT JOIN #Aisle_InUsed AI2
+                       ON LF.LocAisle = AI2.LocAisle
+                 WHERE TD1.AreaKey = @c_AreaKey01
+				    AND L.Facility = @cFacility
+                    AND TD1.TaskType IN ('FCP', 'FCP1')
+                    AND TD1.PickMethod = 'PP'
+                    AND TD1.Status = '0'
+				    AND TD1.Storerkey = @cStorerKey
+					AND AI1.LocAisle IS NULL   
+                    AND AI2.LocAisle IS NULL  
+              )
+           BEGIN
+		      /*UPDATE TaskDetail
+		      SET StatusMsg = 'Order on hold' 
+		      WHERE TaskDetailKey IN (
+                 SELECT X.TaskDetailKey
+                 FROM dbo.TaskDetail AS TD1 WITH (NOLOCK)
+                    INNER JOIN dbo.TaskDetail AS TD2 WITH (NOLOCK)
+                       ON  TD1.OrderKey = TD2.OrderKey
+                       AND TD1.AreaKey = TD2.AreaKey
+                       AND TD2.Status = 'S'
+                       AND TD1.Storerkey = TD2.Storerkey
+                    CROSS APPLY (
+                       VALUES (TD1.TaskDetailKey),
+                              (TD2.TaskDetailKey)
+                    ) AS X(TaskDetailKey)
+                 WHERE TD1.AreaKey = @c_AreaKey01
+                    AND TD1.TaskType IN ('FCP', 'FCP1')
+                    AND TD1.PickMethod = 'PP'
+                    AND TD1.Status = '0'
+                    AND TD1.Storerkey = @cStorerKey
+		      )*/
+              SELECT @n_continue = 3
+              SELECT @n_err = 218252 --Order on hold
+              SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' Order on hold'
+		      GOTO QuitErrorCheck
+           END
+        
+		   -- Fourth Priority Task (no pickdetails)
+		   IF @n_err = 63060
+           AND EXISTS (
+              SELECT 1 
+		      FROM dbo.TaskDetail AS TD WITH (NOLOCK)
+		         LEFT JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
+			        ON TD.TaskDetailKey = PD.TaskDetailKey
+				    AND TD.StorerKey = PD.StorerKey
+				 INNER JOIN LOC L WITH(NOLOCK)
+				    ON TD.ToLoc = L.Loc
+                 LEFT JOIN #Aisle_InUsed AI1
+                    ON L.LocAisle = AI1.LocAisle
+                    AND L.Facility = @cFacility
+                    AND L.LocationCategory = 'VNA'
+                 LEFT JOIN dbo.LOC LF WITH (NOLOCK)
+                    ON TD.FromLoc = LF.Loc
+                    AND LF.Facility = @cFacility
+                    AND LF.LocationCategory = 'VNA'
+                 LEFT JOIN #Aisle_InUsed AI2
+                    ON LF.LocAisle = AI2.LocAisle
+		      WHERE TD.AreaKey = @c_AreaKey01
+                 AND TD.TaskType IN ('FCP', 'FCP1')
+			     AND (
+                    TD.Status = '0'
+                    OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                 )
+			     AND TD.StorerKey = @cStorerKey
+			     AND PD.TaskDetailKey IS NULL
+			     AND AI1.LocAisle IS NULL   
+                 AND AI2.LocAisle IS NULL 
+		   )
+		   BEGIN
+		      /*UPDATE TaskDetail
+		      SET StatusMsg = 'No Pick Detail'
+		      WHERE TaskDetailKey IN (
+		         SELECT TD.TaskDetailKey
+		         FROM dbo.TaskDetail AS TD WITH (NOLOCK)
+		            LEFT JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
+			           ON TD.TaskDetailKey = PD.TaskDetailKey
+				       AND TD.StorerKey = PD.StorerKey
+		         WHERE TD.AreaKey = @c_AreaKey01
+                    AND TD.TaskType IN ('FCP', 'FCP1')
+			        AND (
+                       TD.Status = '0'
+                       OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                    )
+			        AND TD.StorerKey = @cStorerKey
+			        AND PD.TaskDetailKey IS NULL
+		      )*/
+
+              SELECT @n_continue = 3
+              SELECT @n_err = 218258
+              SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- '218258^No PickDetail'
+		      GOTO QuitErrorCheck
+		   END
+
+		   -- Aisle in use
+	       IF @n_err = 63060
+		      AND EXISTS (
+                 SELECT 1
+                 FROM dbo.TaskDetail TD WITH (NOLOCK)
+                    CROSS APPLY (VALUES (TD.FromLoc), (TD.ToLoc)) AS X(Loc)
+                    INNER JOIN dbo.LOC L WITH (NOLOCK)
+                       ON L.Loc = X.Loc
+                       AND L.Facility = @cFacility
+                    LEFT JOIN dbo.LOC L2 WITH(NOLOCK)
+                       ON L2.Loc = TD.FromLoc
+                       AND L2.LocationCategory = 'PND_OUT'
+                 WHERE TD.AreaKey = @c_AreaKey01
+                    AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                    AND TD.StorerKey = @cStorerKey
+                    AND L2.Loc IS NULL              
+                    AND (
+                       TD.Status = '0'
+                       OR (
+					      TD.Status = '3'
+                          AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+					   )
+                    )
+                    AND L.LocAisle IN (SELECT LocAisle FROM #Aisle_InUsed)
+	          )
+	       BEGIN
+              /*UPDATE TD
+              SET TD.StatusMsg = 'Aisle in use by ' + T1.UserKey
+              FROM dbo.TaskDetail TD
+                 INNER JOIN (
+                    SELECT DISTINCT TD.TaskDetailKey, AIU.UserKey
+                    FROM dbo.TaskDetail TD WITH (NOLOCK)
+                       CROSS APPLY (VALUES (TD.FromLoc), (TD.ToLoc)) AS X(Loc)
+                       INNER JOIN dbo.LOC L WITH (NOLOCK)
+                          ON L.Loc = X.Loc
+                          AND L.Facility = @cFacility
+                       INNER JOIN #Aisle_InUsed AIU
+                          ON AIU.LocAIsle = L.LocAisle
+                    WHERE TD.AreaKey = @c_AreaKey01
+                       AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                       AND TD.StorerKey = @cStorerKey
+                       AND (
+                          TD.Status = '0'
+                          OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                       )
+                 ) AS T1
+                    ON TD.TaskDetailKey = T1.TaskDetailKey*/
+
+              SELECT @n_continue = 3
+              SELECT @n_err = 218255
+              SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Aisle in use'
+		      GOTO QuitErrorCheck
+	       END
+
+		   -- Overwriting an error with MHE weight issue
+           IF (
+              /*EXISTS (
+                 SELECT 1
+                 FROM dbo.PALLET AS P WITH (NOLOCK)
+                    INNER JOIN dbo.TaskDetail AS TD WITH (NOLOCK)
+                       ON P.PalletKey = TD.FromID
+                    INNER JOIN RDT.RDTMOBREC AS RM WITH (NOLOCK)
+                       ON RM.UserName = @c_userid
+                    INNER JOIN EquipmentProfile AS EP WITH (NOLOCK)
+                       ON RM.C_String30 = EP.EquipmentProfileKey
+                 WHERE TD.StorerKey = RM.StorerKey
+                    AND (
+                       TD.Status = '0'
+                       OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                    )
+				    AND TD.FromID <> ''
+                    AND P.StorerKey = RM.StorerKey
+                    AND TD.AreaKey = @c_AreaKey01
+                    AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                    AND P.GrossWgt >= EP.MaximumWeight
+              )
+              OR */
+			     EXISTS (
+                 SELECT 1
+                 FROM dbo.LOTxLOCxID AS LLI WITH (NOLOCK)
+                    INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
+                       ON RMR.UserName = @c_userid
+                       AND LLI.StorerKey = RMR.StorerKey
+                    INNER JOIN dbo.TaskDetail AS TD WITH (NOLOCK)
+                       ON LLI.ID = TD.FromID
+                       AND TD.StorerKey = RMR.StorerKey
+                    INNER JOIN dbo.SKU AS S WITH (NOLOCK)
+                       ON S.SKU = LLI.SKU
+                    INNER JOIN dbo.EquipmentProfile AS EP WITH (NOLOCK)
+                       ON RMR.C_String30 = EP.EquipmentProfileKey
+                 WHERE TD.StorerKey = RMR.StorerKey
+                    AND (
+                       TD.Status = '0'
+                       OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                    )
+                    AND TD.AreaKey = @c_AreaKey01
+                    AND LLI.Qty > 0
+				    AND TD.FromID <> ''
+                    AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                 GROUP BY FromID, EP.MaximumWeight, TD.TaskDetailKey
+                 HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
+              )
+		      OR EXISTS (
+		         SELECT 1
+                 FROM TaskDetail TD WITH (NOLOCK)
+                    INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
+                       ON RMR.UserName = @c_userid
+                       AND TD.StorerKey = RMR.StorerKey
+                    INNER JOIN dbo.SKU AS S WITH (NOLOCK)
+                       ON S.SKU = TD.SKU
+                    INNER JOIN dbo.EquipmentProfile AS EP WITH (NOLOCK)
+                       ON RMR.C_String30 = EP.EquipmentProfileKey
+                 WHERE TD.StorerKey = RMR.StorerKey
+                    AND TD.AreaKey = @c_AreaKey01
+                    AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                    AND (
+                       TD.Status = '0'
+                       OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                    )
+                    AND TD.FromID = ''
+                 GROUP BY TD.FromID, EP.MaximumWeight, TD.TaskDetailKey
+                 HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
+		      )
+         )
+            AND @n_err = 63060
+         BEGIN
+	        /*UPDATE TaskDetail
+		    SET StatusMsg = 'Over weight for ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid)
+		    WHERE TaskDetailKey IN
+		    (
+		       /*SELECT TaskDetailKey
+               FROM dbo.PALLET AS P WITH (NOLOCK)
+                  INNER JOIN dbo.TaskDetail AS TD WITH (NOLOCK)
+                     ON P.PalletKey = TD.FromID
+                  INNER JOIN RDT.RDTMOBREC AS RM WITH (NOLOCK)
+                     ON RM.UserName = @c_userid
+                  INNER JOIN EquipmentProfile AS EP WITH (NOLOCK)
+                     ON RM.C_String30 = EP.EquipmentProfileKey
+               WHERE TD.StorerKey = RM.StorerKey
+                  AND (
+                     TD.Status = '0'
+                     OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                  )
+				  AND TD.FromID <> ''
+                  AND P.StorerKey = RM.StorerKey
+                  AND TD.AreaKey = @c_AreaKey01
+                  AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                  AND P.GrossWgt >= EP.MaximumWeight
+
+               UNION ALL*/
+              
+			   SELECT TaskDetailKey
+               FROM dbo.LOTxLOCxID AS LLI WITH (NOLOCK)
+                  INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
+                     ON RMR.UserName = @c_userid
+                     AND LLI.StorerKey = RMR.StorerKey
+                  INNER JOIN dbo.TaskDetail AS TD WITH (NOLOCK)
+                     ON LLI.ID = TD.FromID
+                     AND TD.StorerKey = RMR.StorerKey
+                  INNER JOIN dbo.SKU AS S WITH (NOLOCK)
+                     ON S.SKU = LLI.SKU
+                  INNER JOIN dbo.EquipmentProfile AS EP WITH (NOLOCK)
+                     ON RMR.C_String30 = EP.EquipmentProfileKey
+               WHERE TD.StorerKey = RMR.StorerKey
+                  AND (
+                     TD.Status = '0'
+                     OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                  )
+                  AND TD.AreaKey = @c_AreaKey01
+                  AND LLI.Qty > 0
+                  AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+               GROUP BY TD.FromID, EP.MaximumWeight, TD.TaskDetailKey
+               HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
+           
+		       UNION ALL
+
+		       SELECT TaskDetailKey
+               FROM TaskDetail TD WITH (NOLOCK)
+                  INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
+                     ON RMR.UserName = @c_userid
+                     AND TD.StorerKey = RMR.StorerKey
+                  INNER JOIN dbo.SKU AS S WITH (NOLOCK)
+                     ON S.SKU = TD.SKU
+                  INNER JOIN dbo.EquipmentProfile AS EP WITH (NOLOCK)
+                     ON RMR.C_String30 = EP.EquipmentProfileKey
+               WHERE TD.StorerKey = RMR.StorerKey
+                  AND TD.AreaKey = @c_AreaKey01
+                  AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                  AND (
+                     TD.Status = '0'
+                     OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                  )
+                  AND TD.FromID = ''
+               GROUP BY TD.FromID, EP.MaximumWeight, TD.TaskDetailKey
+               HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
+            )*/
+
+            SELECT @n_continue = 3
+            SELECT @n_err = 218245
+            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Tasks big for MHE'
+		    GOTO QuitErrorCheck
+         END
+
+		 -- MHE not suitable for the target location
+		 IF @n_err = 63060
+		    AND EXISTS (
+               SELECT 1
+               FROM dbo.AreaDetail AD WITH (NOLOCK)
+                  INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
+                     ON PAZEED.PutawayZone = AD.PutawayZone
+                  INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
+                     AND RM.UserName = @c_userid
+                  INNER JOIN dbo.AreaDetail AD2 WITH (NOLOCK)
+                     ON AD2.AreaKey = AD.AreaKey
+                  INNER JOIN dbo.LOC L WITH (NOLOCK)
+                     ON L.PutawayZone = AD2.PutawayZone
+                  INNER JOIN dbo.TaskDetail TD WITH (NOLOCK)
+                     ON TD.ToLoc = L.Loc
+                     AND TD.AreaKey = @c_AreaKey01
+                     AND TD.StorerKey = @cStorerKey
+                     AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                     AND (
+                        TD.Status = '0'
+                        OR (
+						   TD.Status = '3'
+                           AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+                     )
+			)
+         BEGIN
+	        SELECT @n_continue = 3
+            SELECT @n_err = 218261
+            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') --'218261^MHE not for ToLoc' --PPA374 11/12/2025
+		    GOTO QuitErrorCheck
+		 END
+
+	     --Any other task not captured above
+	     IF @n_err = 63060
+	        AND EXISTS (
+		       SELECT 1 
+			   FROM TaskDetail TD WITH(NOLOCK) 
+			   WHERE TD.AreaKey = @c_AreaKey01
+			      AND TD.StorerKey = @cStorerKey
+			      AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                  AND (
+                     TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                  )
+            )
+         BEGIN
+	        /*UPDATE TaskDetail
+		    SET StatusMsg = 'Check task for issue'
+		    WHERE TaskDetailKey IN (
+		       SELECT TaskDetailKey
+			   FROM TaskDetail TD WITH(NOLOCK) 
+			   WHERE TD.AreaKey = @c_AreaKey01
+			      AND TD.StorerKey = @cStorerKey
+			      AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                  AND (
+                     TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                  )
+		    )*/
+	        SELECT @n_continue = 3
+            SELECT @n_err = 218257
+            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- '218257^Other task issue'
+		    GOTO QuitErrorCheck
+	     END
+	  END
+
+	  QuitErrorCheck:
+	  --Update tasks for errors:
+	  IF @n_err IN ('218257','218245','218255','218258','218252','218253','218254','218261')
+	  BEGIN
+
+	  	  	UPDATE TaskDetail
+		    SET StatusMsg = 'Check task for issue'
+		    WHERE TaskDetailKey IN (
+		       SELECT TaskDetailKey
+			   FROM TaskDetail TD WITH(NOLOCK) 
+			   WHERE TD.AreaKey = @c_AreaKey01
+			      AND TD.StorerKey = @cStorerKey
+			      AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                  AND (
+                     TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                  )
+		    )
+
+			UPDATE TaskDetail
+			SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for To Loc' --PPA374 11/12/2025
+			WHERE TaskDetailKey IN (
+			   SELECT TD.TaskDetailKey
+               FROM dbo.AreaDetail AD WITH (NOLOCK)
+                  INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
+                     ON PAZEED.PutawayZone = AD.PutawayZone
+                  INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
+                     AND RM.UserName = @c_userid
+                  INNER JOIN dbo.AreaDetail AD2 WITH (NOLOCK)
+                     ON AD2.AreaKey = AD.AreaKey
+                  INNER JOIN dbo.LOC L WITH (NOLOCK)
+                     ON L.PutawayZone = AD2.PutawayZone
+                  INNER JOIN dbo.TaskDetail TD WITH (NOLOCK)
+                     ON TD.ToLoc = L.Loc
+                     AND TD.AreaKey = @c_AreaKey01
+                     AND TD.StorerKey = @cStorerKey
+                     AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                     AND (
+                        TD.Status = '0'
+                        OR (
+						   TD.Status = '3'
+                           AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+                     )
+			)
+
+	        UPDATE TD
+	        SET TD.StatusMsg = 'Aisle in use by ' + T1.UserKey
+	        FROM dbo.TaskDetail TD
+	           INNER JOIN (
+	              SELECT DISTINCT TD.TaskDetailKey, AIU.UserKey
+	              FROM dbo.TaskDetail TD WITH (NOLOCK)
+	                 CROSS APPLY (VALUES (TD.FromLoc), (TD.ToLoc)) AS X(Loc)
+	                 INNER JOIN dbo.LOC L WITH (NOLOCK)
+	                    ON L.Loc = X.Loc
+	                    AND L.Facility = @cFacility
+	                 INNER JOIN #Aisle_InUsed AIU
+	                    ON AIU.LocAIsle = L.LocAisle
+	                 LEFT JOIN dbo.LOC L2 WITH (NOLOCK)
+	                    ON L2.Loc = TD.FromLoc
+	                    AND L2.LocationCategory = 'PND_OUT'
+	              WHERE TD.AreaKey = @c_AreaKey01
+	                 AND L2.Loc IS NULL
+	                 AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+	                 AND TD.StorerKey = @cStorerKey
+	                 AND (
+	                    TD.Status = '0'
+	                    OR (
+						   TD.Status = '3'
+	                       AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+	           )
+	        ) AS T1
+	        ON TD.TaskDetailKey = T1.TaskDetailKey
+
+			UPDATE TaskDetail
+		    SET StatusMsg = 'Over weight for ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid)
+		    WHERE TaskDetailKey IN
+		    (			   SELECT TaskDetailKey
+               FROM dbo.LOTxLOCxID AS LLI WITH (NOLOCK)
+                  INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
+                     ON RMR.UserName = @c_userid
+                     AND LLI.StorerKey = RMR.StorerKey
+                  INNER JOIN dbo.TaskDetail AS TD WITH (NOLOCK)
+                     ON LLI.ID = TD.FromID
+                     AND TD.StorerKey = RMR.StorerKey
+                  INNER JOIN dbo.SKU AS S WITH (NOLOCK)
+                     ON S.SKU = LLI.SKU
+                  INNER JOIN dbo.EquipmentProfile AS EP WITH (NOLOCK)
+                     ON RMR.C_String30 = EP.EquipmentProfileKey
+               WHERE TD.StorerKey = RMR.StorerKey
+                  AND (
+                     TD.Status = '0'
+                     OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                  )
+                  AND TD.AreaKey = @c_AreaKey01
+                  AND LLI.Qty > 0
+                  AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+               GROUP BY TD.FromID, EP.MaximumWeight, TD.TaskDetailKey
+               HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
+           
+		       UNION ALL
+
+		       SELECT TaskDetailKey
+               FROM TaskDetail TD WITH (NOLOCK)
+                  INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
+                     ON RMR.UserName = @c_userid
+                     AND TD.StorerKey = RMR.StorerKey
+                  INNER JOIN dbo.SKU AS S WITH (NOLOCK)
+                     ON S.SKU = TD.SKU
+                  INNER JOIN dbo.EquipmentProfile AS EP WITH (NOLOCK)
+                     ON RMR.C_String30 = EP.EquipmentProfileKey
+               WHERE TD.StorerKey = RMR.StorerKey
+                  AND TD.AreaKey = @c_AreaKey01
+                  AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                  AND (
+                     TD.Status = '0'
+                     OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                  )
+                  AND TD.FromID = ''
+               GROUP BY TD.FromID, EP.MaximumWeight, TD.TaskDetailKey
+               HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
+            )
+
+			UPDATE TaskDetail
+		      SET StatusMsg = 'No Pick Detail'
+		      WHERE TaskDetailKey IN (
+		         SELECT TD.TaskDetailKey
+		         FROM dbo.TaskDetail AS TD WITH (NOLOCK)
+		            LEFT JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
+			           ON TD.TaskDetailKey = PD.TaskDetailKey
+				       AND TD.StorerKey = PD.StorerKey
+		         WHERE TD.AreaKey = @c_AreaKey01
+                    AND TD.TaskType IN ('FCP', 'FCP1')
+			        AND (
+                       TD.Status = '0'
+                       OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                    )
+			        AND TD.StorerKey = @cStorerKey
+			        AND PD.TaskDetailKey IS NULL
+		      )
+
+			  UPDATE TaskDetail
+		      SET StatusMsg = 'Order on hold' 
+		      WHERE TaskDetailKey IN (
+                 SELECT X.TaskDetailKey
+                 FROM dbo.TaskDetail AS TD1 WITH (NOLOCK)
+                    INNER JOIN dbo.TaskDetail AS TD2 WITH (NOLOCK)
+                       ON  TD1.OrderKey = TD2.OrderKey
+                       AND TD1.AreaKey = TD2.AreaKey
+                       AND TD2.Status = 'S'
+                       AND TD1.Storerkey = TD2.Storerkey
+                    CROSS APPLY (
+                       VALUES (TD1.TaskDetailKey),
+                              (TD2.TaskDetailKey)
+                    ) AS X(TaskDetailKey)
+                 WHERE TD1.AreaKey = @c_AreaKey01
+                    AND TD1.TaskType IN ('FCP', 'FCP1')
+                    AND TD1.PickMethod = 'PP'
+                    AND TD1.Status = '0'
+                    AND TD1.Storerkey = @cStorerKey
+		      )
+
+			  UPDATE TD
+              SET TD.StatusMsg =
+                 CASE 
+                    WHEN 
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
+                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       THEN 'Both loc on hold or flag'
+
+                    WHEN 
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
+                       THEN 'Toloc on hold or flag'
+
+                    WHEN 
+                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       THEN 'Fromloc on hold or flag' 
+
+					WHEN 
+					   (L2.Status <> 'OK' OR L2.LocationFlag NOT IN ('', 'NONE'))
+                       THEN 'FinalLoc on hold or flag'
+                 END
+              FROM TaskDetail TD
+              INNER JOIN LOC L WITH (NOLOCK)
+                 ON TD.ToLoc = L.Loc
+                 AND L.Facility = @cFacility
+              INNER JOIN LOC L1 WITH (NOLOCK)
+                 ON TD.FromLoc = L1.Loc
+                 AND L1.Facility = @cFacility
+			  INNER JOIN LOC L2 WITH(NOLOCK)
+			     ON TD.FinalLOC = L2.Loc
+                 AND L2.Facility = @cFacility
+              WHERE TD.AreaKey = @c_AreaKey01
+                AND TD.Storerkey = @cStorerKey
+                AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                AND (
+                       TD.Status = '0'
+                    OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+                    )
+                AND (
+                       L.Status <> 'OK'
+                    OR L.LocationFlag NOT IN ('', 'NONE')
+                    OR L1.Status <> 'OK'
+                    OR L1.LocationFlag NOT IN ('', 'NONE')
+					OR L2.Status <> 'OK'
+                    OR L2.LocationFlag NOT IN ('', 'NONE')
+                    )
+
+			UPDATE TaskDetail 
+		      SET StatusMsg = 'OverMaxPallet'
+		      WHERE TaskDetailKey IN (
+		         SELECT TD.TaskDetailKey
+                 FROM dbo.TaskDetail TD WITH (NOLOCK)
+                    INNER JOIN dbo.LOC L WITH (NOLOCK)
+                       ON TD.ToLoc = L.Loc
+                    LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                       ON TD.ToLoc = LLI.Loc
+                       AND LLI.StorerKey = @cStorerKey
+                       AND LLI.Qty > 0
+                 WHERE TD.AreaKey = @c_AreaKey01
+		            AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                    AND L.Facility = @cFacility
+                    AND TD.StorerKey = @cStorerKey
+                    AND (
+			           TD.Status = '0'
+                       OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
+					) 
+                 GROUP BY L.MaxPallet, L.Loc, TD.TaskDetailKey
+                 HAVING IIF(L.MaxPallet = 0, 99999999, L.MaxPallet) <= COUNT(DISTINCT LLI.ID)
+		      )
+
+	  END
+
+	  --Check if MHE is for the area
+        IF (
+            SELECT COUNT(DISTINCT AD.PutawayZone) - COUNT(RM.C_String30) 
+            FROM dbo.AreaDetail AD WITH(NOLOCK)
+            INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
+                ON PAZEED.PutawayZone = AD.PutawayZone
+            LEFT JOIN RDT.RDTMOBREC RM WITH(NOLOCK)
+                    ON RM.C_String30 = PAZEED.EquipmentProfileKey
+                AND RM.UserName = @c_userid
+            WHERE AreaKey = @c_AreaKey01
+        ) = 0
+        BEGIN
+            SELECT @n_continue = 3
+                SELECT @n_err = 218244
+                SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'MHE not for Area'
+        END
+    END
+
+   -- (james04)
+   IF @c_ptcid = 'RDT'
+   BEGIN
+      -- Try get default areakey from user setup. if not setup then get from rdt config   
+      SELECT @c_DefaultAreaKey = AreaKey
+      FROM rdt.RDTUser WITH (NOLOCK)
+      WHERE UserName = @c_userid
+
+      IF ISNULL( @c_DefaultAreaKey, '') = ''
+      BEGIN
+         SET @c_DefaultAreaKey = rdt.RDTGetConfig( @n_Func, 'DefaultAreaKey', @c_StorerKey)
+         IF @c_DefaultAreaKey NOT IN ('', '0')
+            SET @c_AreaKey01 = @c_DefaultAreaKey
+      END
+      ELSE
+         SET @c_AreaKey01 = @c_DefaultAreaKey
+    END
+      
+    IF @n_continue=3
+    BEGIN
+        IF @c_retrec='01'
+        BEGIN
+            SELECT @c_retrec = '09'
+                  ,@c_appflag = 'TM'
+        END
+    END
+    ELSE
+    BEGIN
+        SELECT @c_retrec = '01'
+    END
+
+    SELECT @c_outstring = @c_ptcid+@c_senddelimiter
+          +RTRIM(@c_userid)+@c_senddelimiter
+          +RTRIM(@c_taskid)+@c_senddelimiter
+          +RTRIM(@c_databasename)+@c_senddelimiter
+          +RTRIM(@c_appflag)+@c_senddelimiter
+          +RTRIM(@c_retrec)+@c_senddelimiter
+          +RTRIM(@c_server)+@c_senddelimiter
+          +RTRIM(@c_errmsg)+@c_senddelimiter
+          +RTRIM(@c_outstring)
+
+    IF @c_ptcid<>'RDT'
+    BEGIN
+        SELECT RTRIM(@c_outstring)
+    END
+
+    IF @b_debug=1
+    BEGIN
+        SELECT 'End At:'
+      ,CONVERT(NVARCHAR(30) ,GETDATE() ,109)
+    END
+
+    /* #INCLUDE <SPTMTM01_2.SQL> */
+    IF @n_continue=3 -- Error Occured - Process And Return
+    BEGIN
+        SELECT @b_success = 0
+        DECLARE @n_IsRDT INT
+        EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT
+
+        IF @n_IsRDT=1
+        BEGIN
+            -- RDT cannot handle rollback (blank XML will generate). So we are not going to issue a rollback here
+            -- Instead we commit and raise an error back to parent, let the parent decide
+
+            -- Commit until the level we begin with
+            WHILE @@TRANCOUNT>@n_starttcnt
+                  COMMIT TRAN
+
+            -- Convert to RDT message
+            DECLARE @cLangCode NVARCHAR(3)
+            SELECT @cLangCode = Lang_Code FROM rdt.rdtMobRec WITH (NOLOCK) WHERE UserName = SUSER_SNAME()
+            SET @c_ErrMsg = rdt.rdtgetmessage( @n_err, @cLangCode, 'DSP')
+
+            -- Raise error with severity = 10, instead of the default severity 16.
+            -- RDT cannot handle error with severity > 10, which stop the processing after executed this trigger
+            IF @n_err = 63061
+            BEGIN
+                SET @c_ErrMsg = CONCAT_WS('-',  @c_TTMTaskType, @c_ErrMsg)
+                RETURN
+            END
+            ELSE 
+                RAISERROR (@n_err ,10 ,1) WITH SETERROR
+
+            -- The RAISERROR has to be last line, to ensure @@ERROR is not getting overwritten
+        END
+        ELSE
+        BEGIN
+            IF @@TRANCOUNT=1
+               AND @@TRANCOUNT>@n_starttcnt
+            BEGIN
+                ROLLBACK TRAN
+            END
+            ELSE
+            BEGIN
+                WHILE @@TRANCOUNT>@n_starttcnt
+         BEGIN
+                    COMMIT TRAN
+                END
+            END
+            EXECUTE nsp_logerror @n_err, @c_errmsg, 'nspTMTM01'
+            RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+            RETURN
+        END
+    END
+    ELSE
+    BEGIN
+        SELECT @b_success = 1
+        WHILE @@TRANCOUNT>@n_starttcnt
+        BEGIN
+            COMMIT TRAN
+        END
+        RETURN
+    END
+END -- End Proc
+
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON RDT.nspTMTM04_JCB to nSQL
+GO

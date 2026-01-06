@@ -23,7 +23,9 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2021-07-29  Wan      1.0   Created.                                  */
-/* 2021-09-22  Wan      1.0   DevOps Script Combine                      */
+/* 2021-09-22  Wan      1.0   DevOps Script Combine                     */
+/* 2025-10-06  SSA01    1.1   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_IQC_PopulateTradeReturn_Wrapper]                                                                                                                     
       @c_QC_Key               NVARCHAR(10)         
@@ -42,6 +44,7 @@ BEGIN
 
    DECLARE  @n_StartTCnt               INT = @@TRANCOUNT  
          ,  @n_Continue                INT = 1
+         ,  @b_ExecuteAs               BIT = 0   --(SSA01)
 
          ,  @n_QCLineno                INT            = 0
          
@@ -78,21 +81,24 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
                
-   IF SUSER_SNAME() <> @c_UserName       
+   -- (SSA01) Enhanced session management - Start
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END  
                     
-      EXECUTE AS LOGIN = @c_UserName     
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
-   
+   -- (SSA01) Enhanced session management - End
    BEGIN TRY 
    
       SET @n_ErrGroupKey = 0
@@ -266,8 +272,8 @@ BEGIN
       
       UPDATE iq WITH (ROWLOCK)
          SET iq.TradeReturnKey = @c_Receiptkey
-            ,iq.EditWho = SUSER_SNAME()
-            ,iq.EditDate= GETDATE()
+            ,iq.EditWho = dbo.fnc_GetUserName()   --(SSA01)
+            ,iq.EditDate= dbo.fnc_GetDate()    --(SSA01)
       FROM dbo.InventoryQC AS iq
       WHERE iq.QC_Key = @c_QC_Key
       
@@ -411,7 +417,9 @@ EXIT_SP:
       BEGIN TRAN
    END  
          
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SSA01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END
 GO
 

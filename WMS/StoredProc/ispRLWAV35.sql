@@ -5,7 +5,7 @@ GO
 
 /****************************************************************************/      
 /* Stored Procedure: ispRLWAV35                                             */      
-/* Creation Date: 08-SEP-2020                                               */      
+/* Creation Date: 08-SEP-2020                                               */
 /* Copyright: LFL                                                           */      
 /* Written by:                                                              */      
 /*                                                                          */      
@@ -20,7 +20,8 @@ GO
 /* Data Modifications:                                                      */      
 /*                                                                          */      
 /* Updates:                                                                 */      
-/* Date        Author   Ver  Purposes                                       */      
+/* Date        Author   Ver  Purposes                                       */
+/* 10-10-2025  SSA01    1.0   UWP-42248 -Enhanced session management        */
 /****************************************************************************/       
     
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV35]          
@@ -139,10 +140,10 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV35]
           [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),    
           [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),    
           [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),    
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),    
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),    
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),    
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),    
+          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),        --(SSA01)
+          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),        --(SSA01)
+          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),       --(SSA01)
+          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),       --(SSA01)
           [TrafficCop] [nvarchar](1) NULL,    
           [ArchiveCop] [nvarchar](1) NULL,    
           [OptimizeCop] [nvarchar](1) NULL,    
@@ -650,8 +651,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV35]
       UPDATE WAVE       
           SET TMReleaseFlag = 'Y'    
            ,  TrafficCop = NULL      
-           ,  EditWho = SUSER_SNAME()     
-           ,  EditDate= GETDATE()         
+           ,  EditWho = dbo.fnc_GetUserName()            --(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
        WHERE WAVEKEY = @c_wavekey        
                   
        SELECT @n_err = @@ERROR      

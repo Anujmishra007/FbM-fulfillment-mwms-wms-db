@@ -23,6 +23,8 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 10-05-2023   TLTING   1.0  Initial Version                           */
 /* 26-05-2023   TLTING01 1.1  add Orders status filtering               */
+/* 10-10-2025   SSA01    1.2  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE OR ALTER  PROC [dbo].[isp_PreprocessCancelOrder_Dyson]   
@@ -97,7 +99,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       --set status is 9, generate transmitlog2 record, tablename is WSCANCCSRM,key1=orderkey  
          BEGIN TRY  
             UPDATE Orders  
-            SET SOstatus = 'PENDCANC', editdate = getdate(), editwho = SUSER_SNAME()  
+            SET SOstatus = 'PENDCANC', editdate = dbo.fnc_GetDate(), editwho = dbo.fnc_GetUserName()     --(SSA01)
             WHERE Orders.Orderkey = @c_Orderkey  
   
           END TRY  
@@ -253,7 +255,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
          
        BEGIN TRY    
        Update  WorkOrder   
-       SET status = '9', EditDate = getdate() , EditWho = SUSER_SNAME()  
+       SET status = '9', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()     --(SSA01)
        WHERE WorkOrderKey = @c_WorkOrderKey  
           END TRY  
           BEGIN CATCH  

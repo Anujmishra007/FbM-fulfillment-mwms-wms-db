@@ -12,7 +12,8 @@ GO
 /* 2024-11-25 1.0    ShaoAn      FCR-1103 Changes in UCC Receive to process      */  
 /*                               for returns                                     */
 /* 2024-12-30 1.0.1  JCH507      FCR-1103 Rctp line not split when partial qty   */
-/*                                 received by a UCC                             */                                
+/*                                 received by a UCC                             */    
+/* 2025-11-24 1.0.2  Dennis      FCR-8723 Extern Info                            */                            
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898RcvCfm14] (
@@ -2577,7 +2578,18 @@ BEGIN
 END  
 
 BEGIN TRY
+   DECLARE @cNewExternLineNo NVARCHAR(20)
+
+   SET @cNewExternLineNo = ''
+   SELECT TOP 1 @cNewExternLineNo =
+      RIGHT( '00000' + CAST( CAST( IsNULL( MAX( ExternLineNo), 0) AS INT) + 1 AS NVARCHAR( 5)), 5),
+      @cExternReceiptKey = MAX( ExternReceiptKey)
+   FROM dbo.ReceiptDetail (NOLOCK)
+   WHERE ReceiptKey = @cReceiptKey
+
    UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET  
+               ExternReceiptKey = @cExternReceiptKey,
+               ExternLineNo = @cNewExternLineNo,
                UserDefine01 = CASE WHEN @cDocType = 'R' THEN @cUCC ELSE RD.UserDefine01 END,
                UserDefine02 = @cUCC
          FROM dbo.ReceiptDetail RD  
@@ -2594,6 +2606,7 @@ END CATCH
 --v1.0.1 start
 -- Split the ucc receipt line if the beforeReceivedQty < QTYExpected
 DECLARE @cReciptLineToSplit NVARCHAR(5),
+         @cNewExternLineNo NVARCHAR(20),
          @nNewRcptLineQty INT
 
 SELECT TOP 1 
@@ -2641,6 +2654,12 @@ BEGIN
    FROM dbo.ReceiptDetail (NOLOCK)
    WHERE ReceiptKey = @cReceiptKey
 
+   SET @cNewExternLineNo = ''
+   SELECT @cNewExternLineNo =
+      RIGHT( '00000' + CAST( CAST( IsNULL( MAX( ExternLineNo), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+   FROM dbo.ReceiptDetail (NOLOCK)
+   WHERE ReceiptKey = @cReceiptKey
+
    IF @cDebug = '1'
       SELECT 'NewReceiptLine', @cNewReceiptLineNumber
 
@@ -2659,7 +2678,7 @@ BEGIN
          @cReceiptKey, @cNewReceiptLineNumber, POKey, StorerKey, SKU, @nNewRcptLineQty, 0,  
          '', ToLOC, Lottable01, Lottable02, Lottable03, Lottable04, --@dLottable05,
          '0', GETDATE(), UOM, PackKey, ConditionCode, GETDATE(), TariffKey, 'N', 'N',
-         ExternReceiptKey, ExternLineNo, AltSku, VesselKey,
+         ExternReceiptKey, @cNewExternLineNo, AltSku, VesselKey,
          VoyageKey, XdockKey, ContainerKey, UnitPrice, ExtendedPrice, FreeGoodQtyExpected,
          FreeGoodQtyReceived, ExportStatus, LoadKey, ExternPoKey,
          '', '', UserDefine03, UserDefine04, UserDefine05,

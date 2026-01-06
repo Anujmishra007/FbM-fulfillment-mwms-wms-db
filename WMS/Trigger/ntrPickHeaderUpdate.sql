@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPickHeaderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPickHeaderUpdate]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -28,9 +25,10 @@ GO
 /* 24-May-2012  TLTING01   1.2   DM integrity - add update editdate B4     */
 /*                               TrafficCop check                          */  
 /* 28-Oct-2013  TLTING     1.3   Review Editdate column update             */
+/* 06-Oct-2025  AK01       1.4   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /***************************************************************************/ 
 
-CREATE TRIGGER ntrPickHeaderUpdate
+CREATE OR ALTER TRIGGER ntrPickHeaderUpdate
  ON  PickHeader
  FOR UPDATE
  AS
@@ -63,7 +61,7 @@ CREATE TRIGGER ntrPickHeaderUpdate
  
  IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
  BEGIN
- UPDATE PickHeader SET EditDate=GETDATE(), EditWho=SUSER_SNAME()
+ UPDATE PickHeader SET EditDate=dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName()
  FROM PickHeader,inserted
  WHERE PickHeader.PickHeaderKey=inserted.PickHeaderKey
  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -116,4 +114,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

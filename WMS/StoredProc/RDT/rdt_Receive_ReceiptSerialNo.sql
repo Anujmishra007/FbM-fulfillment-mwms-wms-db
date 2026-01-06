@@ -14,6 +14,7 @@ GO
 /* 2025-02-11 1.3.0 NLT013     UWP-30047 Cannot receive the SerialNo if it is */
 /*                             received with other ASN                        */
 /* 2025-02-18 1.3.1 NLT013     UWP-30047 Add Configuration DisallowDuplicateSN*/
+/* 2025-07-22 1.3.2 Ung        UWP-37921 Add SerialNoUniqueAtStorerLevel      */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive_ReceiptSerialNo] (
@@ -44,9 +45,11 @@ BEGIN
    DECLARE @nChkSerialQTY        INT
    DECLARE @nChkSerialQTYExp     INT
    DECLARE @cDisallowDuplicateSN    NVARCHAR(1)
+   DECLARE @cSerialNoUniqueAtStorerLevel NVARCHAR(30)
 
    -- UWP-30047 Reject the serial no if it was received with other ASN
    SET @cDisallowDuplicateSN = rdt.RDTGetConfig( @nFunc, 'DisallowDuplicateSN', @cStorerKey)
+   SET @cSerialNoUniqueAtStorerLevel = dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'SerialNoUniqueAtStorerLevel')
 
    IF (@cDisallowDuplicateSN = '1')
    BEGIN
@@ -69,15 +72,27 @@ BEGIN
    END
    
    -- Get serial no info
-   SELECT 
-      @nReceiptSerialNoKey = ReceiptSerialNoKey, 
-      @nChkSerialQTYExp = QTYExpected, 
-      @cChkSerialSKU = SKU, 
-      @nChkSerialQTY = QTY
-   FROM ReceiptSerialNo WITH (NOLOCK)
-   WHERE ReceiptKey = @cReceiptKey
-      AND StorerKey = @cStorerKey
-      AND SerialNo = @cSerialNo
+   IF @cSerialNoUniqueAtStorerLevel = '1'
+      SELECT 
+         @nReceiptSerialNoKey = ReceiptSerialNoKey, 
+         @nChkSerialQTYExp = QTYExpected, 
+         @cChkSerialSKU = SKU, 
+         @nChkSerialQTY = QTY
+      FROM ReceiptSerialNo WITH (NOLOCK)
+      WHERE ReceiptKey = @cReceiptKey
+         AND StorerKey = @cStorerKey
+         AND SerialNo = @cSerialNo
+   ELSE
+      SELECT 
+         @nReceiptSerialNoKey = ReceiptSerialNoKey, 
+         @nChkSerialQTYExp = QTYExpected, 
+         @cChkSerialSKU = SKU, 
+         @nChkSerialQTY = QTY
+      FROM ReceiptSerialNo WITH (NOLOCK)
+      WHERE ReceiptKey = @cReceiptKey
+         AND StorerKey = @cStorerKey
+         AND SKU = @cSKU
+         AND SerialNo = @cSerialNo
    
    SET @nRowCount = @@ROWCOUNT
    SET @nTranCount = @@TRANCOUNT

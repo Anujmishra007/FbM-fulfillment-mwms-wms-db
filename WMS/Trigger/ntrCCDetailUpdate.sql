@@ -1,4 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrCCDetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrCCDetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
    drop trigger [dbo].[ntrCCDetailUpdate]
 GO
 
@@ -42,6 +42,7 @@ GO
 /*                        TrafficCop for status < '9'                   */ 
 /* 28-Oct-2013  TLTING    Review Editdate column update                 */
 /* 21-Apr-2017  Ung       Fix recompile                                 */
+/* 09-Oct-2025  SPC040    Replace SUSER_SNAME with fnc_GetUserName      */
 /************************************************************************/  
   
 CREATE TRIGGER ntrCCDetailUpdate ON dbo.CCDetail   
@@ -77,7 +78,7 @@ BEGIN
        AND NOT UPDATE(EditDate)
  BEGIN
  	 UPDATE CCDETAIL with (ROWLOCK)
- 	 SET EditDate = GETDATE(), EditWho = Suser_Sname(),
+ 	 SET EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(),
         TrafficCop = NULL
 	 FROM CCDETAIL ,	INSERTED, DELETED 
  	 WHERE CCDETAIL.CCDETAILKEY = INSERTED.CCDETAILKEY
@@ -171,8 +172,8 @@ BEGIN
             BEGIN  
                UPDATE SKU with (RowLock)  
                SET LastCycleCount = GETDATE(),
-                  EditDate = GETDATE(),   --tlting
-                  EditWho = SUSER_SNAME()  
+                  EditDate = dbo.fnc_GetDate(),   --tlting
+                  EditWho = dbo.fnc_GetUserName()  
                WHERE SKU.Storerkey = @c_Storerkey  
                  AND SKU.Sku = @c_sku  
   

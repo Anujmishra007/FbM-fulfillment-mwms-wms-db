@@ -26,6 +26,9 @@ GO
 /* 2022-06-16  Wan02    1.2   LFWM-3512 - PROD & UAT - HK  11376 & 1158  */
 /*                            SCE InventoryQC issue                      */
 /* 2022-06-16  Wan02    1.2   DevOps Combine Script                      */
+/* 2022-06-11  SSA01    1.3   Added PalletType Validation                */
+/* 2025-10-06  SSA01    1.4   UWP-42142 -Enhanced session management     */
+/*                             and cleanup.                              */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeIQC_Wrapper]
       @c_QC_Key NVARCHAR(10)
@@ -44,25 +47,30 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
        
-   SET @n_Err = 0 
+   SET @n_Err = 0
+   -- Start enhanced session management (SSA02)
+   DECLARE @b_ExecuteAs        BIT = 0
    IF SUSER_SNAME() <> @c_UserName        --(Wan01) - START
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
     
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
                 
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    --(Wan01) - END
+      IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END
+	 -- End enhanced session management (SSA02)
+	 --(Wan01) - END
 
    BEGIN TRY
       DECLARE @n_err2                  int 
             , @n_continue              int   
             , @n_StartTCnt             INT = @@TRANCOUNT                                 
             , @c_StorerKey             NVARCHAR(15) 
-            , @c_Facility              NVARCHAR(5) 
+            , @c_Facility              NVARCHAR(5)
             , @c_FinalizeFlag          NVARCHAR(1)
             , @c_OriginalQCLineNo      NVARCHAR(5)
 
@@ -77,7 +85,9 @@ BEGIN
             , @c_FromLot               NVARCHAR(10)   = ''        --(Wan02) 
             , @c_FromLoc               NVARCHAR(10)   = ''        --(Wan02) 
             , @c_FromID                NVARCHAR(18)   = ''        --(Wan02)
-            
+            , @c_ToFacility            NVARCHAR(5)
+            , @c_InvalidQCLineNo       NVARCHAR(5)
+
       --(Wan02) - START                                                          
       IF OBJECT_ID('tempdb..#TMP_QCD','u') IS NOT NULL
       BEGIN
@@ -111,7 +121,8 @@ BEGIN
          
          SELECT @c_FinalizeFlag = IQC.FinalizeFlag, 
                @c_StorerKey = IQC.StorerKey, 
-               @c_Facility  = IQC.From_Facility
+               @c_Facility  = IQC.From_Facility,
+               @c_ToFacility = IQC.To_Facility
             , @c_IQCStatus = RTRIM(IQCD.Status)
          FROM InventoryQC AS IQC WITH(NOLOCK)
          JOIN InventoryQCDetail IQCD WITH (NOLOCK) ON IQCD.QC_Key = IQC.QC_Key and IQCD.QCLineNo = @c_QCLineNo
@@ -127,7 +138,8 @@ BEGIN
          SET @c_IQCStatus = ''
          SELECT @c_FinalizeFlag = IQC.FinalizeFlag, 
                   @c_StorerKey = IQC.StorerKey, 
-                  @c_Facility  = IQC.From_Facility  
+                  @c_Facility  = IQC.From_Facility,
+                  @c_ToFacility = IQC.To_Facility
          FROM InventoryQC AS IQC WITH(NOLOCK)
          WHERE IQC.QC_Key = @c_QC_Key          
       END
@@ -305,7 +317,45 @@ BEGIN
                @c_errmsg      = @c_errmsg 
 
          GOTO EXIT_SP 
-      END                  
+      END
+      
+      --(SSA01) - START
+      IF @n_continue IN(1,2)
+      BEGIN
+          SELECT TOP 1 @c_InvalidQCLineNo = iqc.QCLineNo
+            FROM InventoryQCDetail(NOLOCK) iqc
+            WHERE iqc.ToPalletType IS NOT NULL
+            AND iqc.ToPalletType != ''
+            AND iqc.QC_Key = @c_QC_Key
+            AND NOT EXISTS (
+              SELECT 1
+              FROM PalletTypeMaster(NOLOCK) ptm
+              WHERE ptm.PalletType = iqc.ToPalletType
+              AND ptm.StorerKey = iqc.StorerKey
+              AND ptm.Facility = @c_ToFacility
+              )
+           IF @c_InvalidQCLineNo IS NOT NULL AND @c_InvalidQCLineNo <> ''
+            BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551707
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+'LineNo : '+@c_InvalidQCLineNo+' : To Pallet Type Not Found In Pallet Type Master Data (lsp_FinalizeIQC_Wrapper)'
+
+            EXEC [WM].[lsp_WriteError_List]
+                  @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
+                  @c_TableName   = @c_TableName,
+                  @c_SourceType  = @c_SourceType,
+                  @c_Refkey1     = @c_QC_Key,
+                  @c_Refkey2     = @c_InvalidQCLineNo,
+                  @c_Refkey3     = '',
+                  @n_err2        = @n_err,
+                  @c_errmsg2     = @c_errmsg,
+                  @b_Success     = @b_Success OUTPUT,
+                  @n_err         = @n_err OUTPUT,
+                  @c_errmsg      = @c_errmsg OUTPUT
+              GOTO EXIT_SP
+            END
+          END
+      --(SSA01) - END
   
       IF @n_continue = 1
       BEGIN
@@ -375,8 +425,14 @@ BEGIN
    BEGIN 
       BEGIN TRAN
    END
+ --(SSA02) - START
+  IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
 
-   REVERT  
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA02) - END
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizeIQC_Wrapper] TO nSQL 

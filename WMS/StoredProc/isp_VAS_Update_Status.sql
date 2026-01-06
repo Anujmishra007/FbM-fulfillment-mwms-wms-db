@@ -15,7 +15,9 @@ GO
 /* GitLab Version: 1.0                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
+/* Date         Author   Ver     Purposes                               */
+/* 10-OCT-2025  SSA01    1.5   UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC [dbo].[isp_VAS_Update_Status]
    @n_Test_VASDemandKey  BIGINT = 0,
@@ -198,8 +200,8 @@ BEGIN
              [Status] =CASE WHEN  @c_ComponentReady='Y' AND @c_PMReady='Y' AND @c_PiReady='Y' AND @c_BOMReady='Y'
                             THEN 'OPEN' ELSE [Status]
                        END,
-             EditDate = GETDATE(),
-             EditWho = SUSER_SNAME()
+             EditDate = dbo.fnc_GetDate(),    --(SSA01)
+             EditWho = dbo.fnc_GetUserName()      --(SSA01)
       WHERE VASDemandKey = @n_VASDemandKey
 
       FETCH FROM CUR_VAS_DEMAND INTO @n_VASDemandKey, @c_StorerKey, @c_RepackCode, @n_DemandQty

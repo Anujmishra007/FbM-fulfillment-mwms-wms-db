@@ -42,6 +42,7 @@ GO
 /* 16-Jul-2019  NJOW03  1.3   WMS-8356 support replen by UCC. Update to */
 /*                            status 6 for confirm replen.              */
 /* 21-Dec-2020  WWANG01 1.4   Update MoveRefKey for ECOM replenishment  */
+/* 10-Oct-2025  SSA01   1.5   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC  [dbo].[nsp_ConfirmReplenishment]
                @c_Facility         NVARCHAR(10)
@@ -504,8 +505,8 @@ BEGIN
          	
             UPDATE UCC WITH (ROWLOCK)
             SET Status = '6'
-               ,EditWho  = SUSER_SNAME()
-               ,EditDate = GETDATE()
+               ,EditWho  = dbo.fnc_GetUserName()           --(SSA01)
+               ,EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE UCC_RowRef = @n_UCC_RowRef
 
             IF @@ERROR <> 0 

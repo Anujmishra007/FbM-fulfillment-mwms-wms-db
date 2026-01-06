@@ -414,8 +414,22 @@ SELECT 'UnAllocateExtendedValidation' as ValidateType,
        '' AS CfgValSourceCol,
        'isp_UnAllocate_ExtendedValidation' AS ValidationSP,
        '' AS IsConso
-
-
+UNION ALL --FCR-6862
+SELECT 'PackMgmtInputValidation' as ValidateType,
+       'Pack Management Input Validation' AS ValidationDesc,
+       'PackDetail' AS ValidateTable,
+       'Storer' AS ValidateBy,
+       'PACKDETAIL.Storerkey' AS CfgValSourceCol,
+       'isp_Wrapup_Validation' AS ValidationSP,
+       '' AS IsConso
+UNION ALL --FCR-7196
+SELECT 'TaskDetInputValidation' as ValidateType,
+       'Task Detail Input Validation' AS ValidationDesc,
+       'TaskDetail' AS ValidateTable,
+       'Storer' AS ValidateBy,
+       'TaskDetail.Storerkey' AS CfgValSourceCol,
+       'isp_Wrapup_Validation' AS ValidationSP,
+       '' AS IsConso
 GO
 GRANT DELETE ON  [dbo].[V_Extended_Validation] TO [NSQL]
 GO

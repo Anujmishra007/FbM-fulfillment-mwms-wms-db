@@ -7,26 +7,27 @@ SET ANSI_NULLS OFF
 GO
 
 
-/************************************************************************/
-/* Store procedure: rdt_ReceiveReserval_UCCQtyAdjustment                */
-/* Copyright      : IDS                                                 */
-/*                                                                      */
-/* Purposes:                                                            */
-/* 1) Update UCC QTY and RECEIPTDETAIL QTY                              */
-/*                                                                      */
-/* Called from: 3                                                       */
-/*    1. From PowerBuilder                                              */
-/*    2. From scheduler                                                 */
-/*    3. From others stored procedures or triggers                      */
-/*    4. From interface program. DX, DTS                                */
-/*                                                                      */
-/* Exceed version: 5.4                                                  */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date        Rev  Author      Purposes                                */
-/* 2022-09-22  1.0  James       WMS-20734 Add itrn adjustment (james01) */
-/************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_ReceiveReserval_UCCQtyAdjustment                         */
+/* Copyright      : IDS                                                          */
+/*                                                                               */
+/* Purposes:                                                                     */
+/* 1) Update UCC QTY and RECEIPTDETAIL QTY                                       */
+/*                                                                               */
+/* Called from: 3                                                                */
+/*    1. From PowerBuilder                                                       */
+/*    2. From scheduler                                                          */
+/*    3. From others stored procedures or triggers                               */
+/*    4. From interface program. DX, DTS                                         */
+/*                                                                               */
+/* Exceed version: 5.4                                                           */
+/*                                                                               */
+/* Modifications log:                                                            */
+/*                                                                               */
+/* Date        Rev  Author      Purposes                                         */
+/* 2022-09-22  1.0  James       WMS-20734 Add itrn adjustment (james01)          */
+/* 2025-10-17  1.1  JackC       FCR-8271 Update rpd when IsFinalized <>1 (jack01)*/
+/*********************************************************************************/
 
 CREATE PROC rdt.rdt_ReceiveReserval_UCCQtyAdjustment (
    @nMobile                INT,
@@ -608,26 +609,28 @@ BEGIN
                SET @nErrNo = 191860
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No Stock Found
                GOTO RollBackTran
-            END
-               
-            UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET
+            END  
+         END -- IsFinalized = 'Y'
+
+         --(jackc01)
+         UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET
                BeforeReceivedQty = 0,
                QtyReceived = 0,
                QtyAdjusted = 0,
                FinalizeFlag = 'N',
                ToId = '',   -- Prepare for the next receiving for the same line but with a different ID.
                Trafficcop = NULL
-            WHERE ReceiptKey = @cReceiptKey
-            AND   ReceiptLineNumber = @cReceiptLineNumber
+         WHERE ReceiptKey = @cReceiptKey
+         AND   ReceiptLineNumber = @cReceiptLineNumber
 
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 191854
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Rev Rcvdt fail
-               GOTO RollBackTran
-            END
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 191854
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Rev Rcvdt fail
+            GOTO RollBackTran
          END
-         
+         --(jackc01)
+
          UPDATE dbo.UCC SET 
             STATUS = '0',
             Lot = '',
@@ -707,7 +710,7 @@ BEGIN
    Quit:
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
-   END
+END
 
 
 GO

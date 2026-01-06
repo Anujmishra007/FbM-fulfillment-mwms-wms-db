@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrRDSOrderHeaderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrRDSOrderHeaderUpdate]
-GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -35,9 +33,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 06-Oct-2025  AK01   1.0    UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrRDSOrderHeaderUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrRDSOrderHeaderUpdate]
 ON [dbo].[rdsOrders]
 FOR UPDATE
 AS 
@@ -68,8 +67,8 @@ BEGIN
 	IF @n_continue = 1 or @n_continue=2
 	BEGIN
 		UPDATE rdsOrders
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL	
 		FROM rdsOrders, INSERTED (NOLOCK)
 		WHERE rdsOrders.rdsOrderNo     = INSERTED.rdsOrderNo
@@ -107,3 +106,4 @@ BEGIN
 	END
 END
 GO
+

@@ -24,6 +24,8 @@ GO
 /*                                Replenishment cursor and  removed      */
 /*                                extrnorderkey and consigneeekey as     */
 /*                                we need only loadkey level validation  */
+/* 16-Jun-2025    AYD01     1.2   UWP-35347: Added support for UOM 6     */
+/* 10-Oct-2025    SSA02     1.3  UWP-42248 -Enhanced session management  */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
   @c_Wavekey      NVARCHAR(10)
@@ -163,10 +165,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
       ,  [PickMethod]      [nvarchar](1)  NOT NULL DEFAULT (' ')
       ,  [WaveKey]         [nvarchar](10) NOT NULL DEFAULT (' ')
       ,  [EffectiveDate]   [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())
-      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())
+      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())             --(SSA02)
+      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())         --(SSA02)
+      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())             --(SSA02)
+      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())         --(SSA02)
       ,  [TrafficCop]      [nvarchar](1)  NULL
       ,  [ArchiveCop]      [nvarchar](1)  NULL
       ,  [OptimizeCop]     [nvarchar](1)  NULL
@@ -319,7 +321,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
       LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.orderkey = p.orderkey
       WHERE p.WaveKey = @c_Wavekey
       AND   p.[Status] = '0'
-      AND   p.UOM IN ('1','2','3')
+      AND   p.UOM IN ('1','2','3','6')    --AYD01
       GROUP BY p.Orderkey
             ,  ISNULL(lpd.Loadkey,'')
             ,  p.Storerkey
@@ -350,6 +352,25 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
             SET @c_TaskType   = 'FPK'
             SET @c_PickMethod = 'FP'
          END
+
+         IF @c_UOM = '6'                                                            --AYD01 START
+         BEGIN
+            IF EXISTS ( SELECT 1 
+                        FROM LOTxLOCxID lli (NOLOCK)
+                        JOIN SKUxLOC sl (NOLOCK) ON sl.Storerkey = lli.Storerkey
+                                                AND sl.Sku = lli.Sku
+                                                AND sl.Loc = lli.Loc
+                                                AND sl.LocationType NOT IN ('CASE','PICK')
+                        WHERE lli.Storerkey = @c_Storerkey
+                        AND lli.Loc = @c_FromLoc
+                        AND lli.ID  = @c_FromID
+                        HAVING SUM(lli.Qty-lli.QtyReplen) = @n_Qty
+                        )
+            BEGIN
+               SET @c_TaskType   = 'FPK'
+               SET @c_PickMethod = 'FP'
+            END
+         END                                                                        --AYD01 END
 
          IF EXISTS ( SELECT 1 FROM TaskDetail td (NOLOCK)
                         WHERE td.WaveKey = @c_Wavekey

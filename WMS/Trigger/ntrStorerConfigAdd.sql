@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrStorerConfigAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrStorerConfigAdd]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -30,8 +27,9 @@ GO
 /* 26-Nov-2021  Wan01   1.0   WMS-18410 - [RG] Logitech Tote ID Packing */
 /*                            Change Request                            */
 /* 26-Nov-2021  Wan01   1.0   DevOps Conbine Script                     */
+/* 06-OCT-2025  AK01    1.1   UWP-42143 Data Audit                      */
 /************************************************************************/  
-CREATE TRIGGER ntrStorerConfigAdd ON STORERCONFIG 
+CREATE OR ALTER TRIGGER ntrStorerConfigAdd ON STORERCONFIG 
 FOR INSERT
 AS
 BEGIN
@@ -83,6 +81,28 @@ BEGIN
          SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Disallow to change ''AdvancePackGenCartonNo'' setting. Pack Not confirm found. (ntrStorerConfigAdd).'
       END
    END
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE StorerConfig
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(),
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate()
+      FROM StorerConfig
+      JOIN INSERTED ON StorerConfig.StorerKey = INSERTED.StorerKey
+      AND StorerConfig.ConfigKey = INSERTED.ConfigKey
+      AND StorerConfig.Facility = INSERTED.Facility
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62502  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table StorerConfig. (ntrStorerConfigAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
    /* #INCLUDE <TRRDA2.SQL> */    
    IF @n_continue=3  -- Error Occured - Process And Return    

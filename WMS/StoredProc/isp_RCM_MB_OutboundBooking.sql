@@ -34,6 +34,8 @@ GO
 /* 28-APR-2022  LZG       1.1   JSM-64372 - Filter by facility (ZG01)   */
 /* 29-MAR-2023  NJOW01    1.2   WMS-22023 Update TMS_Shipment and       */
 /*                              bookingvehicle when create new booking  */
+/* 10-OCT-2025  SSA01     1.3   UWP-42248 -Enhanced session management  */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE  PROCEDURE isp_RCM_MB_OutboundBooking
@@ -189,8 +191,8 @@ BEGIN
          	             DriverName = @c_DriverName,
          	             CarrierKey = @c_ServiceProvider,
          	             Userdefine10 = 'UPDATED',
-         	             EditWho = SUSER_SNAME(), --NJOW01
-         	             EditDate = GETDATE(), --NJOW01         	             
+         	             EditWho = dbo.fnc_GetUserName(), --NJOW01 (SSA01)
+         	             EditDate = dbo.fnc_GetDate(),    --(SSA01) --NJOW01
          	             Userdefine01 = @c_MBOLKey  --NJOW01         	                      	             
          	         WHERE BookingNo = @n_FindBookingNo
 
@@ -210,8 +212,8 @@ BEGIN
          	             DriverName = @c_DriverName,
          	             CarrierKey = @c_ServiceProvider,
          	             TrafficCop = NULL,
-         	             EditWho = SUSER_SNAME(),
-         	             EditDate = GETDATE()         	             
+         	             EditWho = dbo.fnc_GetUserName(),      --(SSA01)
+         	             EditDate = dbo.fnc_GetDate()    --(SSA01)
          	         WHERE BookingNo = @n_FindBookingNo
 
                    SET @n_err = @@ERROR

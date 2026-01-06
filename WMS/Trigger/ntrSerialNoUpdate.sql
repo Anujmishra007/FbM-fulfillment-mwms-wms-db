@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrSerialNoUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrSerialNoUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -39,9 +37,10 @@ GO
 /* 19-SEP-2-17  Wan01   1.1   WMS-2931 - CN_DYSON_EXCEED_Serialno_CR    */
 /* 18-Nov-2017  Leong   1.2   Revise error message. (L01).              */
 /* 20-Nov-2017  Wan02   1.2   Fixed to filter by sku                    */
+/* 06-Oct-2025  AK01    1.3   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /*************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrSerialNoUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrSerialNoUpdate]
 ON  [dbo].[SerialNo] FOR UPDATE
 AS
 BEGIN
@@ -73,8 +72,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE SerialNo
-      SET EditDate = GETDATE(),
-         EditWho = SUSER_SNAME()
+      SET EditDate = dbo.fnc_GetDate(),
+         EditWho = dbo.fnc_GetUserName()
       FROM SerialNo (NOLOCK), INSERTED (NOLOCK)
       WHERE SerialNo.SerialNoKey = INSERTED.SerialNoKey
 

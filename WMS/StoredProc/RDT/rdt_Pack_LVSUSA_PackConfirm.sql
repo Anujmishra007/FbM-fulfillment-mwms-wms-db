@@ -4,15 +4,16 @@ GO
 SET ANSI_NULLS OFF
 GO
   
-/************************************************************************/  
-/* Store procedure: rdt_Pack_LVSUSA_PackConfirm                         */  
-/* Copyright      : Maersk                                              */  
-/*                                                                      */
-/* Purpose: New PackConfirm logic for LVSUSA                            */
-/*                                                                      */  
-/* Date       Rev  Author      Purposes                                 */  
-/* 2024-10-20 1.0  JCH507      FCR-946 Created                          */  
-/************************************************************************/  
+/***************************************************************************/  
+/* Store procedure: rdt_Pack_LVSUSA_PackConfirm                            */  
+/* Copyright      : Maersk                                                 */  
+/*                                                                         */
+/* Purpose: New PackConfirm logic for LVSUSA                               */
+/*                                                                         */  
+/* Date       Rev    Author      Purposes                                  */  
+/* 2024-10-20 1.0.0  JCH507      FCR-946 Created                           */ 
+/* 2025-02-17 1.0.1  JCH507      UWP-30328 Set PackConfirm flag by mistake */   
+/***************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_Pack_LVSUSA_PackConfirm (  
     @nMobile         INT  
@@ -171,7 +172,7 @@ BEGIN
    END
 
    -- Storer config  
-   SET @cPickStatus = rdt.rdtGetConfig( @nFunc, 'PickStatus', @cStorerKey) 
+   --SET @cPickStatus = rdt.rdtGetConfig( @nFunc, 'PickStatus', @cStorerKey) --v1.0.1
 
    -- Go through each orderkey in the carton
    SET @nCounter = 1
@@ -202,12 +203,13 @@ BEGIN
       FROM PackDetail PD WITH (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
 
-      IF EXISTS( SELECT TOP 1 1  
+      IF EXISTS ( SELECT TOP 1 1  
          FROM dbo.PickDetail PD WITH (NOLOCK)  
          WHERE PD.OrderKey = @cOrderKey  
             AND PD.Status < '5'  
             AND PD.QTY > 0  
-            AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
+            --AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  -- v1.0.1
+            AND (PD.Status = '4' OR PD.Status = '0')) --V1.0.1
          SET @cPackConfirm = 'N'  
       ELSE  
          SET @cPackConfirm = 'Y'

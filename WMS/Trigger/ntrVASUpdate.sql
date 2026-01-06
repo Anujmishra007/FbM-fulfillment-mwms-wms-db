@@ -1,6 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrVASUpdate' AND type = 'TR')
-DROP TRIGGER ntrVASUpdate
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -37,9 +35,10 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Purposes                                      */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
+/* 06-Oct-2025  AK01       UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
 
-CREATE TRIGGER [ntrVASUpdate]
+CREATE OR ALTER TRIGGER [ntrVASUpdate]
 ON  [dbo].[VAS] FOR UPDATE
 AS
 BEGIN
@@ -71,8 +70,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE VAS
-		SET EditDate = GETDATE() 
-		   ,EditWho = SUSER_SNAME()
+		SET EditDate = dbo.fnc_GetDate() 
+		   ,EditWho = dbo.fnc_GetUserName()
 		FROM VAS WITH (NOLOCK)
       JOIN INSERTED (NOLOCK) ON (INSERTED.VasKey = VAS.VasKey)
 
@@ -121,6 +120,7 @@ BEGIN
 		 RETURN
 	 END
 END
+
 
 
 

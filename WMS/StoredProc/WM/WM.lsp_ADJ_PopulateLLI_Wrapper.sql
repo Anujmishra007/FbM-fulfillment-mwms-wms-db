@@ -23,6 +23,10 @@ GO
 /* 2023-07-05  Wan      1.0   Created & DevOps Combine Script           */
 /* 2024-08-03  Wan01    1.1   LFWM-4397 - RG [GIT] Serial Number Solution*/
 /*                            - Adjustment by Serial Number             */
+/* 2024-06-13  SSA01    1.2   FCR-3982 - Added Pallettype to Adjustment */
+/* 2025-10-06  SSA02    1.3   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                             */
+/* 2025-10-21  Michael  1.4   FCR-8377- Add SerialNoUpdateLotLocID(ML01)*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ADJ_PopulateLLI_Wrapper]                                                                                                                     
    @c_AdjustmentKey        NVARCHAR(10)         
@@ -82,6 +86,7 @@ BEGIN
          ,  @c_FinalizeAdjustment         NVARCHAR(10)   = ''  
          ,  @c_AdjStatusControl           NVARCHAR(10)   = ''
          ,  @c_ASNFizUpdLotToSerialNo     NVARCHAR(10)   = ''                       --(Wan01)
+         ,  @c_SerialNoUpdateLotLocID     NVARCHAR(10)   = ''      --ML01
          
          ,  @c_TableName                  NVARCHAR(50)   = 'AdjustmentDetail'
          ,  @c_SourceType                 NVARCHAR(50)   = 'lsp_ADJ_PopulateLLI_Wrapper' 
@@ -90,6 +95,7 @@ BEGIN
          ,  @c_Refkey3                    NVARCHAR(20)   = ''
          ,  @c_WriteType                  NVARCHAR(50)   = ''
          ,  @n_LogWarningNo               INT            = 0
+         ,  @c_PalletType                 NVARCHAR(10)   = ''                      --(SSA01)
          
          ,  @CUR_LLI                      CURSOR
          ,  @CUR_ERRLIST                  CURSOR   
@@ -113,18 +119,22 @@ BEGIN
    
    SET @n_ErrGroupKey = 0
                
-   SET @n_Err = 0 
+   SET @n_Err = 0
+   -- (SSA02) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT
     
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
                 
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    
+     IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SSA02) - END
 
    BEGIN TRY 
       SELECT @c_Facility = a.Facility
@@ -136,6 +146,14 @@ BEGIN
       SELECT @c_AdjStatusControl = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_Facility, @c_Storerkey,'','AdjStatusControl') AS fsgr
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                            --(Wan01)
       FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr  --(Wan01)
+
+      --ML01-S
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
+      FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+
+      IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
+         SET @c_ASNFizUpdLotToSerialNo = '1'
+      --ML01-E
 
       IF @c_FinalizeAdjustment IN (0,'') AND @c_AdjStatusControl IN (0,'')
       BEGIN
@@ -174,6 +192,7 @@ BEGIN
          ,  Lot         NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  Loc         NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  ID          NVARCHAR(18)   NOT NULL DEFAULT('')
+         ,  PalletType  NVARCHAR(10)    NOT NULL DEFAULT('')       --(SSA01)
          )
       
       SET @c_SelectSQL = 'SELECT LotxLocxID.Lot, LotxLocxID.Loc, LotxLocxID.ID'
@@ -192,6 +211,11 @@ BEGIN
       
       INSERT INTO #tLLI ( Lot, Loc, ID ) 
       EXEC sp_ExecuteSQL @c_SearchSQL
+
+      UPDATE #tLLI                                                                  --(SSA01)
+      SET Pallettype = ID.Pallettype
+      FROM #tLLI
+      JOIN ID (NOLOCK) ON ID.ID = #tLLI.ID
 
       IF OBJECT_ID('tempdb..#tSN', 'U') IS NOT NULL                                 --(Wan01) - START
       BEGIN 
@@ -236,7 +260,8 @@ BEGIN
             ,l.Lottable14
             ,l.Lottable15
             ,s.SerialNoCapture                                                      --(Wan01)
-      FROM #tLLI AS tl (NOLOCK) 
+            ,tl.PalletType                                                       --(SSA01)
+      FROM #tLLI AS tl (NOLOCK)
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Lot = tl.Lot 
                                             AND ltlci.Loc = tl.Loc 
                                             AND ltlci.Id = tl.ID
@@ -270,6 +295,7 @@ BEGIN
                                     ,@dt_Lottable14  
                                     ,@dt_Lottable15 
                                     ,@c_SerialNoCapture                             --(Wan01)
+                                    ,@c_PalletType                                  --(SSA01)
       WHILE @@FETCH_STATUS <> -1 
       BEGIN
          IF @c_ChannelInventoryMgmt = '1'
@@ -424,6 +450,7 @@ BEGIN
                 ,   Channel 
                 ,   Channel_ID
                 ,   SerialNo                                                        --(Wan01)
+                ,   PalletType                                                      --(SSA01)
                 )
             VALUES 
                 (   @c_AdjustmentKey
@@ -477,6 +504,7 @@ BEGIN
                 ,   @c_Channel                  --Channel  
                 ,   0                           --Channel_ID 
                 ,   @c_SerialNo                                                     --(Wan01)
+                ,   @c_PalletType                                                   --(SSA01)
                 )
          END                                                                        --(Wan01) - END
 
@@ -504,6 +532,7 @@ BEGIN
                                      ,  @dt_Lottable14  
                                      ,  @dt_Lottable15
                                      ,  @c_SerialNoCapture                          --(Wan01)
+                                     ,  @c_PalletType                               --(SSA01)
       END
       CLOSE @CUR_LLI
       DEALLOCATE @CUR_LLI
@@ -617,8 +646,10 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN
    END  
-         
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SSA02)
+      REVERT
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA02)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_ADJ_PopulateLLI_Wrapper] TO nSQL 

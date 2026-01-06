@@ -3,10 +3,7 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrTMSLogUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrTMSLogUpdate]
-GO
+
 
 /************************************************************************/
 /* Trigger: ntrTMSLogUpdate                                             */
@@ -33,9 +30,10 @@ GO
 /* Date         Author     Purposes                                     */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
 /*                                                                      */
+/* 06-Oct-2025  AK01       UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
 
-CREATE TRIGGER ntrTMSLogUpdate
+CREATE OR ALTER TRIGGER ntrTMSLogUpdate
 ON  TMSLog
 FOR UPDATE
 AS
@@ -73,8 +71,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
 	BEGIN 	
 	 	UPDATE TMSLog 
-    	   SET EditDate = GETDATE(),
-     	       EditWho = SUSER_SNAME(),
+    	   SET EditDate = dbo.fnc_GetDate(),
+     	       EditWho = dbo.fnc_GetUserName(),
      	       Trafficcop = NULL
         FROM TMSLog, INSERTED
        WHERE TMSLog.TMSLogKey = INSERTED.TMSLogKey
@@ -96,4 +94,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

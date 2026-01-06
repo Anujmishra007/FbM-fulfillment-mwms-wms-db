@@ -26,6 +26,7 @@ GO
 /*                            to construct SourceType                   */
 /* 2022-09-02  Wan03    1.3   WMS-20686 - TH-NIKE - customize Wave      */
 /*                            Release V2022                             */
+/* 2025-10-10  SSA01    1.4  UWP-42248 -Enhanced session management     */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV52_RPF]  
    @c_Wavekey     NVARCHAR(10)    
@@ -1268,8 +1269,8 @@ BEGIN
                ,Wavekey       = @c_Wavekey_PD--@c_Wavekey   --(Wan10)  
                ,PickSlipNo    = @c_PickSlipNo  
                ,TrafficCop    = NULL  
-               ,EditWho = SUSER_SNAME()  
-               ,EditDate= GETDATE()  
+               ,EditWho = dbo.fnc_GetUserName()        --(SSA01)
+               ,EditDate= dbo.fnc_GetDate()    --(SSA01)
             WHERE PickDetailkey = @c_PickDetailKey  
   
             SET @n_err = @@ERROR  

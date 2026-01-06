@@ -29,6 +29,7 @@ GO
 /* 30-04-2021  WLChooi  1.5   WMS-16849 - Fix UOM 2 Stamp Taskdetailkey  */
 /*                            to Pickdetail table (WL04)                 */
 /* 31-May-2023 WLChooi  1.6   WMS-22701 - Add new logic (WL05)           */
+/* 10-Oct-2025  SSA01   1.7   UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV11]      
   @c_wavekey      NVARCHAR(10)  
@@ -851,7 +852,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV11]
                  TaskDetailKey = @c_TaskDetailKey,
                  PickslipNo = @c_Pickslipno,
                  WaveKey = @c_Wavekey,
-                 EditDate = GETDATE(),                             
+                 EditDate = dbo.fnc_GetDate(),    --(SSA01)
                  TrafficCop = NULL
              WHERE PickDetailKey = @c_PickDetailKey  
              
@@ -962,8 +963,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV11]
           --SET STATUS = '1' -- Released        --(Wan01) 
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               --(Wan01)
+           ,  EditWho = dbo.fnc_GetUserName()           --(Wan01)(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)             --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

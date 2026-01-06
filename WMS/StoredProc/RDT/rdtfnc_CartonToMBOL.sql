@@ -21,6 +21,7 @@ GO
 /*                            Add RefNo                                    */
 /*                            Add TrackCartonType                          */
 /* 2024-10-25   1.2  PXL009   FCR-759 ID and UCC Length Issue              */
+/* 2025-06-17   0.0  JackC   !!!Cutover. Use V0 repo for work!!!           */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_CartonToMBOL] (

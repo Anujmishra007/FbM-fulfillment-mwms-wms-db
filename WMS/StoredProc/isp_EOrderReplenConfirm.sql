@@ -30,6 +30,8 @@ GO
 /* 21-Jan-2020  WWANG01 1.3   Cater Replenish include Allocation qty    */
 /* 25-Oct-2022  SYCHUA  1.4   JSM-104400 Bug Fix to include Channel_ID  */
 /*                            when INSERT INTO PICKDETAIL (SY01)        */
+/* 10-OCT-2025 SSA01    1.5   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_EOrderReplenConfirm] (
    @c_ReplenishmentGroup   NVARCHAR(10)
@@ -359,7 +361,7 @@ BEGIN
          WHERE  PickDetailKey = @c_PickDetailKey
 
          UPDATE PickDetail WITH (ROWLOCK)
-         SET Qty = @n_ReplenQty, TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME()
+         SET Qty = @n_ReplenQty, TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()    --(SSA01)
          WHERE PickDetailKey = @c_PickDetailKey
 
          SET @n_QtyAlloc =  @n_ReplenQty
@@ -485,7 +487,7 @@ BEGIN
                   WHERE  PickDetailKey = @c_SwapPickDetailKey
 
                   UPDATE PickDetail WITH (ROWLOCK)
-                  SET Qty = @n_SwapLotQty, TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                  SET Qty = @n_SwapLotQty, TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()   --(SSA01)
                   WHERE PickDetailKey = @c_SwapPickDetailKey
 
                   SET @n_NewQtyAlloc =  @n_SwapLotQty
@@ -494,7 +496,7 @@ BEGIN
 
 
                UPDATE PICKDETAIL WITH (ROWLOCK)
-               SET ID = @c_PickID, LOT=@c_PickLOT, CartonType = @c_LOT, CartonGroup = 'ReplenSwap', EditDate = GETDATE(), EditWho = SUSER_SNAME()
+               SET ID = @c_PickID, LOT=@c_PickLOT, CartonType = @c_LOT, CartonGroup = 'ReplenSwap', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()      --(SSA01)
                WHERE PickDetailKey = @c_SwapPickDetailKey
 
 
@@ -526,8 +528,8 @@ BEGIN
          SET    ID = @c_ToID,
                 LOT = @c_LOT,
                 CartonType = @c_PickLot,
-                EditDate = GETDATE(),
-                EditWho = SUSER_SNAME()
+                EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                EditWho = dbo.fnc_GetUserName()       --(SSA01)
           WHERE PickDetailKey = @c_PickDetailKey
 
         END
@@ -538,8 +540,8 @@ BEGIN
       UPDATE PICKDETAIL WITH (ROWLOCK)
       SET    CartonGroup = 'ReplenSwap',
              TrafficCop = NULL,
-             EditDate = GETDATE(),
-             EditWho = SUSER_SNAME()
+             EditDate = dbo.fnc_GetDate(),   --(SSA01)
+             EditWho = dbo.fnc_GetUserName()     --(SSA01)
       WHERE PickDetailKey = @c_PickDetailKey
 
       SET @n_ReplenQty = @n_ReplenQty - @n_QtyAlloc
@@ -767,7 +769,7 @@ BEGIN
                   WHERE  PickDetailKey = @c_PickDetailKey
 
                   UPDATE PickDetail WITH (ROWLOCK)
-                     SET Qty = @n_RemainReplenQty, TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                     SET Qty = @n_RemainReplenQty, TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()    --(SSA01)
                   WHERE PickDetailKey = @c_PickDetailKey
 
                   SET @n_QtyAlloc =  @n_RemainReplenQty
@@ -788,13 +790,13 @@ BEGIN
             IF @n_QtyAvaliableLOT >= @n_QtyAlloc AND (@c_PickID <> @c_ToID OR  @c_PickLOT <> @c_LOT)
             BEGIN
                UPDATE PICKDETAIL WITH (ROWLOCK)
-                   SET UOM = '6', ID = @c_ToID, LOT=@c_LOT, EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                   SET UOM = '6', ID = @c_ToID, LOT=@c_LOT, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()    --(SSA01)
                WHERE PickDetailKey = @c_PickDetailKey
             END
             ELSE
             BEGIN
                UPDATE PICKDETAIL WITH (ROWLOCK)
-                   SET UOM = '6', TrafficCop = NULL, EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                   SET UOM = '6', TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()     --(SSA01)
                WHERE PickDetailKey = @c_PickDetailKey
             END
 

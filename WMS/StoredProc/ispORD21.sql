@@ -24,6 +24,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 25-May-2023  WLChooi  1.0  DevOps Combine Script                     */
 /* 27-Jul-2023  WLChooi  1.1  WMS-22697 - Logic change (WL01)           */
+/* 10-Oct-2025  SSA01    1.2  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispORD21]
    @c_Action    NVARCHAR(10)
@@ -242,8 +243,8 @@ BEGIN
            , C_VAT            = CASE WHEN ISNULL(@c_VAT,'') <> '' THEN @c_VAT ELSE C_VAT END
            , TrafficCop       = NULL
            , ArchiveCop       = NULL
-           , EditDate         = GETDATE()
-           , EditWho          = SUSER_SNAME()
+           , EditDate         = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho          = dbo.fnc_GetUserName()             --(SSA01)
          WHERE OrderKey = @c_Orderkey
 
          IF @@ERROR <> 0

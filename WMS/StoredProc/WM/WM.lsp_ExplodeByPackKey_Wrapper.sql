@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ExplodeByPackKey_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -30,8 +25,19 @@ GO
 /* 09-Feb-2021 Wan02    1.2   LFWM-2467 - UAT - TW  Duplicated Moveable */
 /*                            Unit populated when Explode by Packkey in */
 /*                            ASNReceipt Module                         */
+/* 19-Mar-2024 Wan03    1.3   LFWM-4787SCE| PROD| SG| ASN Explode By    */
+/*                            Packkey -The Loose Pallet ReceptDetail    */
+/*                            Line Should be Assigned the smallest      */
+/*                            Movable Unit                              */
+/* 21-May-2025 AYD01    1.4   UWP-30411: add new storerconfig           */
+/*                            ASNExplodeByPackkeySP and using Svalue    */
+/*                            to call sub-script and get a customized ID*/
+/* 05-Jun-2025 AYD02    1.5   Fix: Increase length of @c_ToID to 25     */
+/* 2025-05-26  SWT01    1.6   Setting Session Context for user name     */
+/* 10-Oct-2025 AK01     1.7   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
-CREATE PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
     @c_ReceiptKey NVARCHAR(10) 
    ,@c_ReceiptLineNumber NVARCHAR(5)=''  
    ,@b_Success INT=1 OUTPUT 
@@ -46,17 +52,27 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName        --(Wan01) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-    
+   
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
+
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-                
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    --(Wan01) - END
+
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT01) - END
     
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
       DECLARE @c_StorerKey                  NVARCHAR(15) = ''
@@ -80,7 +96,10 @@ BEGIN
                ,@n_InsertQtyExpected          INT = 0 
                ,@c_GenID                      NVARCHAR(10) =''
                ,@C_GEN_ID_DURING_EXPLODE_PACK NVARCHAR(10) = ''
-               ,@c_ToID                       NVARCHAR(10) = ''
+               ,@c_ToID                       NVARCHAR(25) = ''   --AYD02
+               ,@cSQL                         NVARCHAR(MAX)       --AYD01
+               ,@cSQLParam                    NVARCHAR(MAX)       --AYD01
+               ,@c_GenIdSP                    NVARCHAR(30) = ''   --AYD01
     
       SET @b_Success = 1
       SET @c_ErrMsg =''
@@ -238,14 +257,22 @@ BEGIN
             END
             ELSE
             BEGIN
-               SET @n_RemainQty = 0               
-               SET @n_InsertQtyExpected = @n_RemainingQtyExpected
-               SET @n_InsertBeforeReceivedQty = @n_RemainQtyReceived
+               SET @n_RemainQty = 0 
+               --(Wan03) - START  -- Update original line with remainingqty
+               IF @n_RemainingQtyExpected > 0                                       
+                  SET @n_InsertQtyExpected = @n_PalletCnt
+               ELSE
+                  SET @n_InsertQtyExpected = @n_RemainingQtyExpected
+
+               IF @n_RemainQtyReceived > 0
+                  SET @n_InsertBeforeReceivedQty = @n_PalletCnt
+               ELSE                                                                  
+                  SET @n_InsertBeforeReceivedQty = @n_RemainQtyReceived 
+               --(Wan03) - END   
             END
-          
             SET @n_RemainingQtyExpected = @n_RemainingQtyExpected - @n_InsertQtyExpected  
-            SET @n_RemainQtyReceived = @n_RemainQtyReceived - @n_InsertBeforeReceivedQty                                              
-              
+            SET @n_RemainQtyReceived = @n_RemainQtyReceived - @n_InsertBeforeReceivedQty  
+            
             INSERT INTO RECEIPTDETAIL
             (
             ReceiptKey,          ReceiptLineNumber,           ExternReceiptKey,
@@ -302,12 +329,12 @@ BEGIN
             FROM RECEIPTDETAIL AS r WITH(NOLOCK)
             WHERE r.ReceiptKey = @c_ReceiptKey 
             AND   r.ReceiptLineNumber = @c_ReceiptLineNumber 
-          
-         -- Update Original Line
+
+       -- Update Original Line
             UPDATE RECEIPTDETAIL 
             SET QtyExpected = QtyExpected - @n_InsertQtyExpected, 
                   BeforeReceivedQty = BeforeReceivedQty - @n_InsertBeforeReceivedQty, 
-                  EditDate = GETDATE(), 
+                  EditDate = dbo.fnc_GetDate(), 
                   EditWho = @c_UserName 
             WHERE ReceiptKey = @c_ReceiptKey
             AND   ReceiptLineNumber = @c_ReceiptLineNumber        
@@ -488,6 +515,18 @@ BEGIN
        
          IF @c_GEN_ID_DURING_EXPLODE_PACK = '1'
          BEGIN
+            --AYD01 START
+            SELECT @c_GenIdSP = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ASNExplodeByPackkeySP') 
+            IF @c_GenIdSP <> '0' AND NOT EXISTS(SELECT 1 FROM dbo.SYSOBJECTS WHERE NAME = RTRIM(@c_GenIdSP) AND [TYPE] = 'P') 
+            BEGIN                                                                                                                                                                                                                                  
+               SELECT @c_ErrMsg = CONVERT(CHAR(250), @n_Err),                                                                                                                                                                                     
+                      @n_Err = 31012 -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                                                                                                                        
+               SELECT @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) +                                                                                                                                                                             
+                         ': Stored Proc name invalid ('+RTRIM(ISNULL(@c_GenIdSP,'')) + ') (lsp_ExplodeByPackKey_Wrapper)'                                                                                  
+               GOTO EXIT_SP                                                                                                                                                                                                                       
+            END   
+            --AYD01 END
+                     	
             DECLARE CUR_RECEIPTDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                SELECT RD.ReceiptLineNumber
                FROM   RECEIPTDETAIL RD WITH (NOLOCK) 
@@ -495,6 +534,7 @@ BEGIN
                WHERE  RD.ReceiptKey = @c_ReceiptKey
                AND    RD.FinalizeFlag <> 'Y'
                AND    ISNULL(RD.ToID,'') = ''
+               ORDER  BY RD.ReceiptLineNumber                                       --(Wan03)
      
             OPEN CUR_RECEIPTDETAIL
           
@@ -502,18 +542,51 @@ BEGIN
           
             WHILE @@FETCH_STATUS = 0
             BEGIN
-            
-               EXEC dbo.nspg_GetKey               
-                  @KeyName = 'ID'    
-               ,@fieldlength = 10
-               ,@keystring = @c_ToID OUTPUT    
-               ,@b_Success = @b_Success OUTPUT    
-               ,@n_err     = @n_err OUTPUT    
-               ,@c_errmsg  = @c_errmsg OUTPUT                     
+							 --AYD01 START
+               IF @c_GenIdSP <> '0'
+               BEGIN    
+                  SET @cSQL = N'EXEC dbo.' + RTRIM(@c_GenIdSP)   
+                            + ' @c_StorerKey = @c_StorerKey,          '      
+                            + ' @c_IDKey     = @c_IDKey        OUTPUT,'   
+                            + ' @b_Success   = @b_Success      OUTPUT,'  
+                            + ' @n_ErrNo     = @n_ErrNo        OUTPUT,'      
+                            + ' @c_ErrMsg    = @c_ErrMsg       OUTPUT'     
+
+                  SET @cSQLParam = N'@c_StorerKey  NVARCHAR(15),'
+                                 + ' @c_IDKey      NVARCHAR(20)    OUTPUT,'
+                                 + ' @b_Success    INT             OUTPUT,'
+                                 + ' @n_ErrNo      INT             OUTPUT,'
+                                 + ' @c_ErrMsg     NVARCHAR(250)   OUTPUT'    
+                                      
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
+                        @c_StorerKey, 
+                        @c_ToID        OUTPUT, 
+                        @b_Success     OUTPUT,
+                        @n_Err         OUTPUT, 
+                        @c_ErrMsg      OUTPUT  
+
+                  IF @n_Err <> 0  
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @c_ErrMsg = 'Error in Execute SQL: ' + @c_GenIdSP + ' (lsp_ExplodeByPackKey_Wrapper).'
+                     GOTO EXIT_SP
+                  END  
+               END   
+               --AYD01 END
+               ELSE
+               BEGIN
+                  EXEC dbo.nspg_GetKey               
+                     @KeyName = 'ID'    
+                  ,@fieldlength = 10
+                  ,@keystring = @c_ToID OUTPUT    
+                  ,@b_Success = @b_Success OUTPUT    
+                  ,@n_err     = @n_err OUTPUT    
+                  ,@c_errmsg  = @c_errmsg OUTPUT                     
+               END                
 
                UPDATE RECEIPTDETAIL 
                   SET ToId = @c_ToID ,
-                     EditDate = GETDATE(), 
+                     EditDate = dbo.fnc_GetDate(), 
                      EditWho = @c_UserName 
                WHERE ReceiptKey = @c_ReceiptKey
                AND   ReceiptLineNumber = @c_ReceiptLineNumber        
@@ -533,8 +606,12 @@ BEGIN
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch  
                           
     EXIT_SP: 
-    REVERT
+    IF @b_ExecuteAs = 1              -- (SWT01)
+       REVERT                        
+
+    EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_ExplodeByPackKey_Wrapper] TO nSQL 
 GO
+

@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrWorkOrderDetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-	DROP TRIGGER [dbo].[ntrWorkOrderDetailUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -35,9 +33,10 @@ GO
 /*                         TrafficCop                                   */ 
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
 /*                                                                      */
+/* 06-Oct-2025  AK01       UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrWorkOrderDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrWorkOrderDetailUpdate]
 ON  [dbo].[WorkOrderDetail]
 FOR UPDATE
 AS
@@ -80,8 +79,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
 	BEGIN 	
 	 	UPDATE WORKORDERDETAIL WITH (ROWLOCK) 
-    	   SET EditDate = GETDATE(), 
-             EditWho = SUser_SName() 
+    	   SET EditDate = dbo.fnc_GetDate(), 
+             EditWho = dbo.fnc_GetUserName() 
         FROM WORKORDERDETAIL  
         JOIN INSERTED ON (WORKORDERDETAIL.WorkOrderKey = INSERTED.WorkOrderKey 
                       AND WORKORDERDETAIL.WorkOrderLineNumber = INSERTED.WorkOrderLineNumber) 
@@ -135,3 +134,4 @@ END
 
 
 GO
+
