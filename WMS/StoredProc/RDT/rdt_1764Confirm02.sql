@@ -4,28 +4,22 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_TM_Replen_Confirm                               */
-/* Copyright      : IDS                                                 */
+/* Store procedure: rdt_1764Confirm02                                   */
+/* Copyright      : Maersk                                              */
+/* Customer       : USA Levis                                           */
 /*                                                                      */
 /* Purpose: Confirm replenish                                           */
 /*    1. Split task                                                     */
 /*    2. Update TaskDetail to 5-Picked                                  */
+/* Created base on rdt_TM_Replen_Confirm                                */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
-/* 21-Oct-2011 1.0  Ung       Created                                   */
-/* 24-Feb-2014 1.1  Ung       Fix split transit task                    */
-/* 24-May-2014 1.2  Ung       Fix split task, ListKey not reset         */
-/* 29-Jul-2016 1.3  Ung       SOS324184 Fix split task QTY <> SystemQTY */
-/* 07-Sep-2016 1.4  Ung       SOS372531 Add GroupKey                    */
-/* 17-Jun-2025 1.5  Dennis    FCR-3959 Customize Confirm                */
-/* 09-Nov-2025 1.6  NickT     UWP-43838 Skip completed task             */
-/* 11-Nov-2025 1.7  NickT     UWP-43955 Fix Exception for USA Levis     */
-/* 07-Jan-2026 1.8  NickT     FCR-7928 Add ConfirmSP                    */
+/* 2026-01-07  1.0  NickT     FCR-7928 Created                          */
 /************************************************************************/
 
-CREATE OR ALTER PROC [rdt].[rdt_TM_Replen_Confirm] (
+CREATE OR ALTER PROC [rdt].[rdt_1764Confirm02] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -38,7 +32,8 @@ CREATE OR ALTER PROC [rdt].[rdt_TM_Replen_Confirm] (
    @cReasonKey     NVARCHAR( 10), 
    @cListKey       NVARCHAR( 10), 
    @nErrNo         INT          OUTPUT,
-   @cErrMsg        NVARCHAR( 20) OUTPUT
+   @cErrMsg        NVARCHAR( 20) OUTPUT,
+   @nDebug         INT = 0
 ) AS
 BEGIN
    SET NOCOUNT ON
@@ -66,45 +61,6 @@ BEGIN
    SET @cErrMsg = ''
    SET @cNewTaskDetailKey = ''
 
-   -- Get storer config
-   SET @cConfirmSP = rdt.rdtGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
-   IF @cConfirmSP = '0'
-      SET @cConfirmSP = ''
-
-   /***********************************************************************************************
-                                          Custom confirm
-   ***********************************************************************************************/
-   IF @cConfirmSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cConfirmSP AND type = 'P')
-      BEGIN
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +
-            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY, @cReasonKey, @cListKey, ' +
-            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
-         SET @cSQLParam =
-            ' @nMobile        INT,           ' +
-            ' @nFunc          INT,           ' +
-            ' @cLangCode      NVARCHAR( 3),  ' +
-            ' @cUserName      NVARCHAR( 18), ' +
-            ' @cFacility      NVARCHAR( 5),  ' +
-            ' @cStorerKey     NVARCHAR( 15), ' +
-            ' @cTaskDetailKey NVARCHAR( 10), ' +
-            ' @cDropID        NVARCHAR( 20), ' +
-            ' @nQTY           INT,           ' +
-            ' @cReasonKey     NVARCHAR( 10), ' +
-            ' @cListKey       NVARCHAR( 10), ' +
-            ' @nErrNo         INT           OUTPUT, ' +
-            ' @cErrMsg        NVARCHAR( 20) OUTPUT, ' +
-            ' @nDebug         INT = 0               '
-
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY, @cReasonKey, @cListKey,
-            @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-         GOTO Quit
-      END
-   END
-
    -- Get task info
    SET @nSystemQTY = 0
    SELECT 
@@ -121,19 +77,21 @@ BEGIN
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskDetailKey
 
-   -- Check task already confirm/SKIP/CANCEL
+   -- Check task already confirm/SKIP/
    IF @cStatus IN ('5', '0', 'X')
       RETURN
+
+   -- Return if the task is done
+   IF @cReasonKey = '' AND @cStatus = '9'
+   BEGIN
+      RETURN
+   END
 
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
-
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_TM_Replen_Confirm -- For rollback or commit only our own transaction
-
---if suser_sname() = 'wmsgt'
---select @nQTY '@nQTY', @nTaskQTY '@nTaskQTY', @cReasonKey '@cReasonKey', @cPickMethod '@cPickMethod'
+   SAVE TRAN rdt_1764Confirm02 -- For rollback or commit only our own transaction
 
    -- Split task (PP, close pallet with balance)
    IF @nQTY < @nTaskQTY AND   -- not full replen
@@ -199,6 +157,8 @@ BEGIN
       EditWho  = @cUserName, 
       Trafficcop = NULL
    WHERE TaskDetailKey = @cTaskDetailKey
+      AND Status NOT IN ('5', '9')
+
    IF @@ERROR <> 0
    BEGIN
       SET @nErrNo = 74253
@@ -236,11 +196,11 @@ BEGIN
       END
    END
    
-   COMMIT TRAN rdt_TM_Replen_Confirm -- Only commit change made here
+   COMMIT TRAN rdt_1764Confirm02 -- Only commit change made here
    GOTO Quit
 
 RollBackTran:
-   ROLLBACK TRAN rdt_TM_Replen_Confirm -- Only rollback change made here
+   ROLLBACK TRAN rdt_1764Confirm02 -- Only rollback change made here
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
@@ -253,5 +213,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_TM_Replen_Confirm] TO NSQL
+GRANT EXECUTE ON [rdt].[rdt_1764Confirm02] TO NSQL
 GO
