@@ -24,6 +24,7 @@ GO
 /* 2025-11-20  1.5.0    NLT013    UWP-44502 Do not send WSCTOTALLOCLOG for SHORT*/
 /* 2025-12-09  1.6.0    NLT013    UWP-45319 No need to update Message03 if short*/
 /* 2025-12-31  1.7.0    NLT013    FCR-7928 Trigger WSSOAlloUpd for real short  */
+/* 2026-01-07  1.8.0    NLT013    UWP-46553 Update Task failed if last task is short*/
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
@@ -642,13 +643,11 @@ BEGIN
       @bSuccess                  INT
 
    SELECT
-      @cToID = TD.ToID,
-      @cLocationType = LOC.LocationType,
-      @cLocationCategory = LOC.LocationCategory,
-      @cToLoc = TD.ToLoc
-   FROM dbo.TaskDetail TD WITH(NOLOCK)
-   INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
-   WHERE TD.TaskDetailKey = @cTaskDetailKey
+      @cLocationType = LocationType,
+      @cLocationCategory = LocationCategory,
+      @cToLoc = Loc
+   FROM dbo.LOC WITH(NOLOCK)
+   WHERE LOC = IIF(@cScannedToLoc <> '', @cScannedToLoc, @cToLoc)
 
    IF @cLocationType = 'PND'
    BEGIN
