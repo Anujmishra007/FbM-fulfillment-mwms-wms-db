@@ -21,13 +21,13 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 27-Nov-2025 WLChooi  1.0   Initial Version                           */
+/* 07-Jan-2025 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc03] (    
        @c_Wavekey          NVARCHAR(10)
      , @c_SKU              NVARCHAR(20)
-     , @c_UCCNo            NVARCHAR(20)
+     , @c_Loc              NVARCHAR(20)
      , @c_Taskdetailkey    NVARCHAR(10)   = ''
      , @b_Success          INT            = 0   OUTPUT
      , @n_Err              INT            = 0   OUTPUT
@@ -59,6 +59,7 @@ BEGIN
          , @c_TableName                NVARCHAR(30) = ''
          , @n_ByUCC                    INT = 1   -- @n_ByUCC = 1 - UCC   @n_ByUCC = 0 - LOC
          , @CUR_UNALLOC                CURSOR
+         , @c_UCCNo                    NVARCHAR(20) = ''
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -171,6 +172,20 @@ BEGIN
       END
    END
    
+   --Pre-validation
+   IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
+      IF NOT EXISTS ( SELECT 1
+                      FROM TASKDETAIL WITH (NOLOCK)
+                      WHERE Taskdetailkey = @c_Taskdetailkey )
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 64503
+         SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Invalid Taskdetailkey# ' + @c_Taskdetailkey + ' (msp_ProcessShortPickReAlloc03)'
+                          + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
+      END
+   END
+
    --Initialize Data
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
@@ -181,16 +196,21 @@ BEGIN
       JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
       WHERE W.WaveKey = @c_Wavekey
 
+      SELECT @c_UCCNo = ISNULL(TD.CaseID, '')
+      FROM TASKDETAIL TD WITH (NOLOCK)
+      WHERE TD.Taskdetailkey = @c_Taskdetailkey
+
       IF EXISTS ( SELECT 1
-                  FROM LOC (NOLOCK)
-                  WHERE LOC = @c_UCCNo
-                  AND Facility = @c_Facility )
+                  FROM UCC (NOLOCK)
+                  WHERE UCCNo = @c_UCCNo
+                  AND Storerkey = @c_Storerkey
+                  AND SKU = @c_SKU )
       BEGIN
-         SET @n_ByUCC = 0
+         SET @n_ByUCC = 1
       END
       ELSE
       BEGIN
-         SET @n_ByUCC = 1
+         SET @n_ByUCC = 0
       END
    END
 
@@ -250,7 +270,7 @@ BEGIN
          FROM dbo.PICKDETAIL PD WITH (NOLOCK)
          WHERE PD.Storerkey = @c_StorerKey
          AND PD.Sku = @c_SKU
-         AND PD.Loc = @c_UCCNo
+         AND PD.Loc = @c_Loc
          AND PD.[Status] = '4'
          AND EXISTS ( SELECT 1 
                       FROM WAVEDETAIL WD (NOLOCK)
@@ -262,7 +282,7 @@ BEGIN
          BEGIN
             SELECT @n_Continue = 3
             SELECT @n_Err = 64504
-            SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Loc#: ' + TRIM(@c_UCCNo) + ' No Record Found (msp_ProcessShortPickReAlloc03)'
+            SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Loc#: ' + TRIM(@c_Loc) + ' No Record Found (msp_ProcessShortPickReAlloc03)'
                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
          END
       END
@@ -293,7 +313,7 @@ BEGIN
          FROM PICKDETAIL PD WITH (NOLOCK)
          WHERE PD.Storerkey = @c_StorerKey    
          AND   PD.Sku = @c_SKU    
-         AND   PD.Loc = @c_UCCNo    
+         AND   PD.Loc = @c_Loc    
          AND   PD.[Status] = '4'
          AND   EXISTS ( SELECT 1 
                         FROM WAVEDETAIL WD (NOLOCK)
@@ -317,16 +337,6 @@ BEGIN
       BEGIN
          INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
          SELECT @c_Taskdetailkey
-      END
-      ELSE
-      BEGIN
-         INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
-         SELECT TD.Taskdetailkey
-         FROM TASKDETAIL TD WITH (NOLOCK)
-         WHERE TD.Wavekey = @c_Wavekey
-         AND TD.Storerkey = @c_StorerKey
-         AND TD.Sku = @c_SKU
-         AND TD.TaskType IN ('RPF', 'FCP')
       END
    END
 
@@ -434,7 +444,7 @@ BEGIN
          JOIN #T_ShortOrders T ON SP.OrderKey = T.OrderKey
          WHERE SP.WaveKey = @c_Wavekey
          AND SP.[Status] = '4'
-         AND SP.Loc = @c_UCCNo
+         AND SP.Loc = @c_Loc
          AND SP.Storerkey  = @c_StorerKey
          AND SP.SKU = @c_SKU
          AND (SP.CaseID IS NOT NULL AND SP.CaseID <> '')
@@ -519,7 +529,7 @@ BEGIN
             JOIN #T_ShortOrders T ON SP.OrderKey = T.OrderKey
             WHERE SP.WaveKey = @c_Wavekey
             AND SP.[Status] = '4'
-            AND SP.Loc = @c_UCCNo
+            AND SP.Loc = @c_Loc
             AND SP.Storerkey  = @c_StorerKey
             AND SP.SKU = @c_SKU
             AND (SP.CaseID IS NOT NULL AND SP.CaseID <> '')
@@ -601,7 +611,7 @@ BEGIN
          WITH AllPick AS (
             SELECT OrderKey = PD.OrderKey
                  , ReAllocStatus = CASE WHEN SUM(PD.Qty) = 0 THEN '0' ELSE '1' END
-                 , QtyInDiff = ABS(SUM(PW.QtyMoved) - SUM(PD.Qty))
+                 , QtyInDiff = ABS(MAX(PW.QtyMoved) - SUM(PD.Qty))
             FROM #PickDetail_WIP PD (NOLOCK)
             JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
             CROSS APPLY ( SELECT QtyMoved = SUM(P.QtyMoved)
@@ -621,7 +631,7 @@ BEGIN
                              FROM #T_PICKDETAIL_CURRENT T
                              WHERE T.Pickdetailkey = PD.PickDetailKey )
             GROUP BY PD.OrderKey
-            HAVING SUM(PD.Qty) < SUM(PW.QtyMoved)   --Only check Not/Partial allocated after reallocation
+            HAVING SUM(PD.Qty) < MAX(PW.QtyMoved)   --Only check Not/Partial allocated after reallocation
          ), ShortPick AS (
             SELECT Orderkey = PD.Orderkey
                  , Pickdetailkey = PD.PickDetailKey
@@ -647,7 +657,7 @@ BEGIN
          WITH AllPick AS (
             SELECT OrderKey = PD.OrderKey
                  , ReAllocStatus = CASE WHEN SUM(PD.Qty) = 0 THEN '0' ELSE '1' END
-                 , QtyInDiff = ABS(SUM(PW.QtyMoved) - SUM(PD.Qty))
+                 , QtyInDiff = ABS(MAX(PW.QtyMoved) - SUM(PD.Qty))
             FROM #PickDetail_WIP PD (NOLOCK)
             JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
             CROSS APPLY ( SELECT QtyMoved = SUM(P.QtyMoved)
@@ -657,7 +667,7 @@ BEGIN
                           AND P.Storerkey = PD.Storerkey
                           AND P.SKU = PD.Sku
                           AND P.[Status] = '4'
-                          AND P.Loc = @c_UCCNo ) AS PW
+                          AND P.Loc = @c_Loc ) AS PW
             WHERE PD.[Status] <= '4'
             AND PD.WaveKey = @c_Wavekey
             AND PD.Storerkey  = @c_StorerKey
@@ -667,7 +677,7 @@ BEGIN
                              FROM #T_PICKDETAIL_CURRENT T
                              WHERE T.Pickdetailkey = PD.PickDetailKey )
             GROUP BY PD.OrderKey
-            HAVING SUM(PD.Qty) < SUM(PW.QtyMoved)   --Only check Not/Partial allocated after reallocation
+            HAVING SUM(PD.Qty) < MAX(PW.QtyMoved)   --Only check Not/Partial allocated after reallocation
          ), ShortPick AS (
             SELECT Orderkey = PD.Orderkey
                  , Pickdetailkey = PD.PickDetailKey
@@ -675,7 +685,7 @@ BEGIN
             JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
             WHERE PD.[Status] IN ('4')
             AND PD.WaveKey = @c_Wavekey
-            AND PD.Loc = @c_UCCNo
+            AND PD.Loc = @c_Loc
             AND PD.Storerkey  = @c_StorerKey
             AND PD.SKU = @c_SKU
             GROUP BY PD.PickDetailKey, PD.OrderKey
