@@ -76,6 +76,7 @@ BEGIN
                    FROM dbo.PICKDETAIL PD (NOLOCK)
                    WHERE PD.Storerkey = @cStorerKey
                      AND PD.DropID = @cDropID
+                     AND PD.PickSlipNo <> @cPickSlipNo
                      AND PD.Status <> '9'
                      AND NOT EXISTS(SELECT 1 FROM dbo.PackHeader PH WITH(NOLOCK) WHERE Pickheaderkey = @cPickSlipNo AND PD.Orderkey = PH.Orderkey)
                   )
