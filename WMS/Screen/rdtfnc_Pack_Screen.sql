@@ -36,7 +36,7 @@ EXECUTE rdt.rdtAddScn 4651, 'ENG'
 DELETE rdt.RDTScn WHERE Scn = 4652 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4652, 'ENG'
    ,@cLine01 = 'CARTON NO: %03d01'
-   ,@cLine02 = ''
+   ,@cLine02 = '%20d03'
    ,@cLine03 = 'SKU/UPC:       %05d02'
    ,@cLine04 = '%2000iV_Barcode' --FCR-8675
    ,@cLine05 = '%20d04'

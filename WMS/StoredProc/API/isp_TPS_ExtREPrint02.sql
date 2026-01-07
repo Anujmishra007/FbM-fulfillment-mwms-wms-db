@@ -46,16 +46,12 @@ AS
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @tUCCLabel AS VariableTable
-   DECLARE @tCtnLabel AS VariableTable
-   DECLARE @tPackList AS VariableTable
    DECLARE @cConsignee     NVARCHAR(15)
    DECLARE @cLabelPrinter  NVARCHAR ( 30)
    DECLARE @cPaperPrinter  NVARCHAR ( 30)
    DECLARE @cTCPPrinter    NVARCHAR ( 30)
    DECLARE @cPrinter       NVARCHAR ( 20)
    DECLARE @cProcesstype   NVARCHAR ( 20)
-   DECLARE @nJobID         INT
    DECLARE @nRC            INT
    DECLARE @cSQL           NVARCHAR ( MAX)
    DECLARE @cSQLParam      NVARCHAR ( MAX)
@@ -204,8 +200,6 @@ AS
                   , @c_JobIDs      = @cLabelJobID         OUTPUT    
                   , @c_AutoPrint  = 'N'     
 
-                  SET @cLabelJobID = @nJobID
-
 
                   FETCH NEXT FROM CursorCodeLkup INTO @cTemplate, @cCodeTwo
 
@@ -303,8 +297,6 @@ AS
                   , @c_JobIDs      = @cLabelJobID         OUTPUT    
                   , @c_AutoPrint  = 'N'     
 
-                  SET @cLabelJobID = @nJobID
-
                FETCH NEXT FROM CursorCodeLkup INTO @cTemplate, @cCodeTwo
 
             END
@@ -357,8 +349,6 @@ AS
             , @c_JobIDs      = @cLabelJobID         OUTPUT    
             , @c_AutoPrint  = 'N'     
 
-            SET @cLabelJobID = @nJobID
-
              SELECT   @c_ReportID = WMR.reportid,
                   @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END
             FROM WMReport WMR (NOLOCK)
@@ -388,8 +378,6 @@ AS
             , @b_SCEPreView   = 0         
             , @c_JobIDs      = @cLabelJobID         OUTPUT    
             , @c_AutoPrint  = 'N'     
-
-            SET @cLabelJobID = @nJobID
 
          END
 
@@ -575,14 +563,12 @@ AS
             , @c_ErrMsg    = @c_ErrMsg          OUTPUT
             , @c_PrintSource  = @c_PrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs      = @nJobID         OUTPUT    
+            , @c_JobIDs      = @cLabelJobID         OUTPUT    
             , @c_AutoPrint  = 'N' 
             
             --To avoid the label print in sequence
             --EG: Labelno should print out first by use tcp method and UCC is bartender method
             --    but UCC print out first, 
-
-            SET @cLabelJobID = @nJobID
 
             FETCH NEXT FROM @cCurLabel INTO @cReportType
 
@@ -771,10 +757,8 @@ AS
             , @c_ErrMsg       = @c_ErrMsg          OUTPUT
             , @c_PrintSource  = @c_PrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs       = @nJobID         OUTPUT    
+            , @c_JobIDs       = @cPackingJobID         OUTPUT    
             , @c_AutoPrint    = 'N'   
-                     
-            SET @cPackingJobID = @nJobID 
 
             FETCH NEXT FROM @cCurPaper INTO @cReportType
          END

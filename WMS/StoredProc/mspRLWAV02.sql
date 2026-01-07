@@ -43,7 +43,7 @@ GO
 /* 2025-10-10  SSA08    1.9   UWP-42248 -Enhanced session management     */
 /* 2025-10-24  PPA374   1.10  UWP-42949 -Added PP type for the RPF task  */
 /* 2025-12-04  Wan01    1.11  FCR-3958 CR V2.3 (Work with PPA374)        */
-/* 2025-12-05  Wan01          UWP-45254                                  */  
+/* 2026-01-06  Wan01          UWP-45254, CR V2.3 fixed                   */  
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -268,7 +268,7 @@ BEGIN
                         WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC),'')             --2025-07-03
             , AutoRL = CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             , FCP    = CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
-            , RPF    = CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END
+            , RPF    = CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END  
             , PRGRP  = ISNULL(cl2.Code,'')                                          --v2.1            
       FROM WAVE w (NOLOCK) 
       JOIN WAVEDETAIL wd (NOLOCK) ON wd.Wavekey  = w.Wavekey
@@ -323,7 +323,7 @@ BEGIN
             ,  ISNULL(o.C_Company,'')
             ,  CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             ,  CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
-            ,  CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END
+            ,  CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END             
             ,  ISNULL(cl2.Code,'')                                                  --v2.1    
 
       SET @c_InValid = ''
@@ -927,19 +927,38 @@ BEGIN
       JOIN LOTATTRIBUTE la (NOLOCK) ON la.lot = pd.lot
       JOIN LOC l (NOLOCK) ON l.loc = pd.Loc
       OUTER APPLY (   SELECT TOP 1                                                     --2025-12-05
-                            RecCnt = CASE WHEN pd.ID > '' AND la.Lottable11  = ''      --(Wan01) FCR-3958 CR V2.3  
-                                          THEN 1
-                                          WHEN td.Lot = pd.Lot 
-                                          THEN 1
-                                          ELSE 0
-                                          END
+                      RecCnt = CASE WHEN pd.ID > '' AND la.Lottable11  = ''            --2025-12-18 (Wan01) FCR-3958 CR V2.3  
+                                    AND  o.KitOrder = 0
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11 > '' 
+                                    AND  o.KitOrder = 0
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11  = ''            
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot = ''
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11 > '' 
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot = ''
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11  = ''      
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot > '' AND td.Lot = pd.Lot
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11 > '' 
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot > '' AND td.Lot = pd.Lot
+                                    THEN 1
+                                    ELSE 0
+                                    END
                       FROM dbo.Taskdetail td (NOLOCK)
                       WHERE td.CaseID = la.Lottable11
                       AND   td.TaskType IN ('FCP','FCP1')
-                      AND   td.Status IN ('9','X')
+                      AND   td.Status <> 'X'                                        --2025-12-18
                       AND   td.Storerkey = pd.Storerkey
                       AND   td.FromID    = pd.ID
-                      ORDER BY 1 DESC                                                  --2025-12-05
+                      AND   td.FromID    > ''
+                      ORDER BY 1 DESC                                               --2025-12-05
                   ) tdr
       WHERE pd.TaskDetailKey = ''                                                   --2025-07-01  
       AND tdr.RecCnt IN (0,NULL)                                                    --(Wan01) FCR-3958 CR V2.3  
@@ -991,10 +1010,19 @@ BEGIN
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'
                                    +' AND PICKDETAIL.Loc = @c_FromLoc'
                                    +' AND PICKDETAIL.ID  = @c_FromID'
+                                   +' AND PICKDETAIL.UOM  = @c_UOM'                 --2026-01-06                                     
          SET @c_LocationGroup = ISNULL(@c_LocationGroup,'')                         --2025-09-25
 
          IF @c_UOM = '7'
          BEGIN
+            SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'          --2026-01-06
+                                      +' AND PICKDETAIL.Loc = @c_FromLoc'  
+                                      +' AND PICKDETAIL.ID  = @c_FromID'  
+                                      +' AND ((PICKDETAIL.ToLoc = ''' + @c_ReplFromLoc + ''''  
+                                      +' AND   PICKDETAIL.CaseID= ''' + @c_ReplFromID  + ''''  
+                                      +' AND   PICKDETAIL.UOM   = ''7'')' 
+                                      +' OR   (PICKDETAIL.UOM   = ''6''))'    
+                                                  
             IF EXISTS ( SELECT 1
                         FROM #PickDetail_WIP pd
                         JOIN LOTxLOCxID lli (NOLOCK) ON  lli.lot = pd.Lot

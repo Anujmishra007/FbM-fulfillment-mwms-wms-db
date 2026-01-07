@@ -14,6 +14,7 @@ GO
 /* 2025-02-14 1.0.0  JCH507   FCR-2597. Created                         */
 /* 2025-03-07 1.0.1  CYU027   FCR-2597                                  */
 /* 2025-04-17 1.0.2  CYU027   FCR-2936                                 */
+/* 2025-12-08 1.0.3  JCH507   FCR-7405                                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_511ExtUpd13] (
@@ -44,6 +45,7 @@ BEGIN
    DECLARE @cTaskFromLogiLoc     NVARCHAR( 10)
    DECLARE @cTaskToLogiLoc       NVARCHAR( 10)
    DECLARE @cKitkey              NVARCHAR( 10)
+   DECLARE @cKitExternStatus     NVARCHAR( 30)
 
    IF @nFunc = 511 -- Move by ID
    BEGIN
@@ -66,6 +68,7 @@ BEGIN
             END
 
             SELECT TOP 1
+               @cKitExternStatus = KIT.externStatus,
                @cKitkey = KIT.KITKey,
                @cKITUsrDef4 = ISNULL(KIT.USRDEF4, '')
             FROM KIT WITH (NOLOCK)
@@ -88,6 +91,13 @@ BEGIN
             BEGIN
                SET @nErrNo = 233352
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No production line  
+               GOTO Quit
+            END
+
+            IF @cKitExternStatus = '7'
+            BEGIN
+               SET @nErrNo = 233356
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- KIT on hold  
                GOTO Quit
             END
 

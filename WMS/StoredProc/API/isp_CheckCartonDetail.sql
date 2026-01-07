@@ -44,7 +44,7 @@ DECLARE
    @cScanNoType   NVARCHAR( 30),
    @cPickSlipNo   NVARCHAR( 30),
    @cDropID       NVARCHAR( 30),    
-   @cCartonNo     NVARCHAR( 3),
+   @cCartonNo     NVARCHAR( 5),
      
    @cOrderKey     NVARCHAR( 10),  
    @cOrderKeyCheck   NVARCHAR( 10),
@@ -78,14 +78,21 @@ DECLARE
    @cPSN                INT,
    @cLBarcode           INT,
    @c_SKUImageURL       NVARCHAR(MAX)
-      
- SET @EcomSingle = '0' 
- SET @CalOrderSKU = 'N'
- SET @cPSN = 0
- SET @cLBarcode = 0
+ 
+DECLARE @cShrtPckSts NVARCHAR(1)
+DECLARE @cPickStsFilter1 NVARCHAR(1)
+DECLARE @cPickStsLT1 NVARCHAR(1)
+DECLARE @cPickStsEQ2 NVARCHAR(1)
+DECLARE @nTtlQtyPack INT  
+DECLARE @nPackedQty INT  
+
+SET @EcomSingle = '0' 
+SET @CalOrderSKU = 'N'
+SET @cPSN = 0
+SET @cLBarcode = 0
 
 --LEFT Panel: SKU + Image
-DECLARE @packSKUDetail TABLE (         
+DECLARE @packSKUDetail TABLE (      
     SKU              NVARCHAR( 30),  
     Descr            NVARCHAR( 150),
     RetailSKU        NVARCHAR( 30),
@@ -116,6 +123,17 @@ DECLARE @barcodeObj TABLE (
    AntiDiversionCode NVARCHAR(250),
    SKU   NVARCHAR(20)
 )
+
+DECLARE @tempPickDetail TABLE  (    
+   SKU              NVARCHAR( 30),    
+   QtyToPack        INT,    
+   OrderKey         NVARCHAR( 30),    
+   PickslipNo       NVARCHAR( 30),    
+   LoadKey          NVARCHAR( 30),--externalOrderKey    
+   PickDetailStatus NVARCHAR ( 3)--,  
+--  UCCNo            NVARCHAR( 20)--(yeekung02)  
+)    
+
 --DECLARE @pickSKUDetail TABLE (  
 CREATE TABLE #pickSKUDetail ( 
     SKU              NVARCHAR( 30),  
@@ -125,8 +143,54 @@ CREATE TABLE #pickSKUDetail (
     LoadKey          NVARCHAR( 30),--externalOrderKey
     PickDetailStatus NVARCHAR ( 3)
 )
+--DECLARE @pickSKUDetail TABLE (    
+CREATE TABLE #PackTable (    
+   SKU              NVARCHAR( 30),    
+   QtyToPack        INT,    
+   PickslipNo       NVARCHAR( 30)   
+--  UCCNo            NVARCHAR( 20)--(yeekung02)  
+)  
 
-  
+EXEC nspGetRight    
+   @c_Facility   = @cFacility   
+,  @c_StorerKey  = @cStorerKey   
+,  @c_sku        = ''    
+,  @c_ConfigKey  = 'TPS-ShowShortPickQty'    
+,  @b_Success    = @b_Success    OUTPUT    
+,  @c_authority  = @cShrtPckSts  OUTPUT    
+,  @n_err        = @n_Err        OUTPUT    
+,  @c_errmsg     = @c_ErrMsg     OUTPUT  
+
+EXEC nspGetRight    
+   @c_Facility   = @cFacility   
+,  @c_StorerKey  = @cStorerKey   
+,  @c_sku        = ''    
+,  @c_ConfigKey  = 'TPS-PickStatusFilter1'    
+,  @b_Success    = @b_Success    OUTPUT    
+,  @c_authority  = @cPickStsFilter1  OUTPUT    
+,  @n_err        = @n_Err        OUTPUT    
+,  @c_errmsg     = @c_ErrMsg     OUTPUT 
+
+EXEC nspGetRight    
+   @c_Facility   = @cFacility   
+,  @c_StorerKey  = @cStorerKey   
+,  @c_sku        = ''    
+,  @c_ConfigKey  = 'TPS-PickStatusLT1'    
+,  @b_Success    = @b_Success    OUTPUT    
+,  @c_authority  = @cPickStsLT1  OUTPUT    
+,  @n_err        = @n_Err        OUTPUT    
+,  @c_errmsg     = @c_ErrMsg     OUTPUT
+
+EXEC nspGetRight    
+   @c_Facility   = @cFacility   
+,  @c_StorerKey  = @cStorerKey   
+,  @c_sku        = ''    
+,  @c_ConfigKey  = 'TPS-PickStatusEQ2'    
+,  @b_Success    = @b_Success    OUTPUT    
+,  @c_authority  = @cPickStsEQ2  OUTPUT    
+,  @n_err        = @n_Err        OUTPUT    
+,  @c_errmsg     = @c_ErrMsg     OUTPUT 
+
 --Decode Json Format
 SELECT @cStorerKey = StorerKey, @cFacility = Facility,  @nFunc=Func,@cScanNo=ScanNo, @cType = cType, @cUserName = UserName, @cLangCode = LangCode, @cCartonNo = CartonNo, @cOrderKeyCheck = OrderKey
 FROM OPENJSON(@json)  
@@ -138,7 +202,7 @@ WITH (
       cType       NVARCHAR( 30),
       UserName NVARCHAR( 30),
       LangCode    NVARCHAR( 3),
-      CartonNo    NVARCHAR( 3),
+      CartonNo    NVARCHAR( 5),
       OrderKey    NVARCHAR( 10)
 )  
 --SELECT @cStorerKey AS StorerKey, @cFacility AS Facility,@nFunc AS Func, @cScanNo AS ScanNo, @cType AS TYPE, @cUserName AS userName, @cLangCode AS LangCode, @cOrderKeyCheck as OrderKey
@@ -194,7 +258,7 @@ WITH (
 --SELECT @cScanNoType as ScanNoType, @cpickslipNo as PickslipNo, @cDropID as DropID,  @cOrderKey as OrderKey, @cLoadKey as LoadKey, @cZone as Zone, @EcomSingle as EcomSingle
 --, @cDynamicRightName1 as DynamicRightName1, @cDynamicRightValue1 as DynamicRightValue1
 
-INSERT INTO #pickSKUDetail
+INSERT INTO @tempPickDetail
 SELECT *
 FROM OPENJSON(@pickSkuDetailJson)
 WITH (
@@ -212,6 +276,72 @@ BEGIN
    SELECT @cPickSlipNo = pickslipNo FROM #pickSKUDetail WHERE orderKey = @cOrderKeyCheck
    
 END
+
+INSERT INTO #PackTable  
+SELECT PD.SKU,SUM(PD.QTY) AS QtyToPack,@cPickSlipNo   
+FROM packdetail PD WITH (NOLOCK)  
+WHERE PD.pickslipno=@cPickSlipNo  
+GROUP BY PD.SKU 
+
+IF ISNULL(@cShrtPckSts,'') = ''  --if show ShortPick Config not configured, then delete to filter out the shortpick records
+BEGIN
+   DELETE FROM @tempPickDetail WHERE PickDetailStatus = '4'
+END
+
+--Get Total pick and packed Qty for the pickslip.
+SELECT @nTtlQtyPack = SUM(QtyToPack)  FROM @tempPickDetail
+
+SELECT @nPackedQty = SUM(ISNULL(QtyToPack,0)) FROM #PackTable 
+
+-- if Total Qty to Pack versus PackedQty is not same, means the current pickslip still havent pack finish then proceed to delete the unwanted status for user to continue pack. 
+-- Otherwise, show all the status and for user to re visit to print label or paper.
+IF @nTtlQtyPack <> @nPackedQty
+BEGIN
+   -- if PickstatusFilter got value and (PickStatusLE1 or PickStatusEQ2) enabled, then delete the records that is bigger than PickstatusFilter
+   IF ISNULL(@cPickStsFilter1,'') <> '' 
+   AND ISNUMERIC(@cPickStsFilter1) = 1 
+   AND LEN(@cPickStsFilter1) = 1 
+   AND @cPickStsFilter1 COLLATE Latin1_General_BIN LIKE '[0-9]' 
+   AND (ISNULL(@cPickStsLT1,'') = '1'  OR ISNULL(@cPickStsEQ2,'') = '1' )
+   BEGIN
+      IF ISNULL(@cPickStsLT1,'') = '1' 
+      BEGIN
+         DELETE FROM @tempPickDetail WHERE PickDetailStatus > @cPickStsFilter1
+      --SET @cSQLStatus = ' AND pick.pickDetailStatus <= ''' + @cPickStsFilter1 +''''
+      END
+      ELSE IF ISNULL(@cPickStsEQ2,'') = '1' 
+      BEGIN
+         DELETE FROM @tempPickDetail WHERE PickDetailStatus <> @cPickStsFilter1
+         --SET @cSQLStatus = ' AND pick.pickDetailStatus = ''' + @cPickStsFilter1 +''''
+      END
+   END
+
+   IF NOT EXISTS (SELECT 1 FROM @tempPickDetail)
+   BEGIN
+      SET @b_Success = 0    
+      SET @n_Err = 1000959    
+      SET @c_ErrMsg = 'With PickStatusFilter1(' + @cPickStsFilter1 + ') ' +
+                        CASE WHEN ISNULL(@cPickStsLT1,'') = '1'  
+                              THEN 'AND PickStatusLT1 enabled, '
+                           WHEN ISNULL(@cPickStsEQ2,'') = '1' 
+                              THEN 'AND PickStatusEQ2 enabled, '
+                           ELSE '' END +
+                        API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Result No PickDetail found. Function : isp_CheckCartonDetail'    
+      GOTO EXIT_SP
+   END
+END
+
+INSERT INTO #pickSKUDetail    
+SELECT SKU             
+   ,  SUM(QtyToPack)
+   ,  OrderKey        
+   ,  PickslipNo      
+   ,  LoadKey         
+   ,  ''
+FROM @tempPickDetail
+GROUP BY SKU,OrderKey,PickslipNo,LoadKey
+
+DELETE FROM @tempPickDetail;
 
  --check storerConfig to skip cartonize
  DECLARE @skipCartonize NVARCHAR( 1)
@@ -464,12 +594,12 @@ DECLARE @cSQLUCCSelect NVARCHAR ( MAX)
 --                           group by UPC FOR JSON AUTO),' +'''[]'')'  + 'AS UPC'
 
                            
-SET @cSQLUCCSelect = ',ISNULL((SELECT UCCNO
-                           FROM packDetail PDL(nolock)
-                              JOIN UCC UCC (NOLOCK) ON UCC.UCCNO = PDL.UPC
-                           WHERE PDL.PickSlipNo = PD.pickslipNo
-                           and PDL.cartonno = PD.CartonNo AND PDL.UPC IS NOT NULL 
-                           AND PDL.UPC <> ''''),'''')'  + 'AS UCC'
+SET @cSQLUCCSelect = ',ISNULL((SELECT PI.UCCNO
+                           FROM PackInfo PI(nolock)
+                              JOIN UCC UCC (NOLOCK) ON UCC.UCCNO = PI.UCCNo
+                           WHERE PI.PickSlipNo = PD.pickslipNo
+                           and PI.cartonno = PD.CartonNo AND PI.UCCNo IS NOT NULL 
+                           AND PI.UCCNo <> ''''),'''')'  + 'AS UCC'
 
 
 IF EXISTS (   SELECT 1 
@@ -553,7 +683,7 @@ DECLARE @cSQLFrom       NVARCHAR( MAX)
 IF @EcomSingle = '1'  
 BEGIN  
  SET @cSQLMainSelect = '  
-   SELECT   
+   SELECT
    sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,(pick.QtyToPack-isnull((SUM(PD.qty)),0)) AS QtyToPack, SUM(PD.qty) AS PackedQty,'''' AS Img,SKU.EcomCartonType,  
    ' + ISNULL(@cInputWeight,'0') + ' AS InputWeight, '+ ISNULL(@cInputCube,'0') + ' AS InputCube'  
 
@@ -572,7 +702,7 @@ END
 ELSE  
 BEGIN  
  SET @cSQLMainSelect = '    
-   SELECT    
+   SELECT
    sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,(pick.QtyToPack-isnull((SUM(PD.qty)),0)) AS QtyToPack, SUM(PD.qty) AS PackedQty,'''' AS Img,SKU.EcomCartonType,    
    ' + ISNULL(@cInputWeight,'0') + ' AS InputWeight, '+ ISNULL(@cInputCube,'0') + ' AS InputCube'    
      
@@ -587,11 +717,7 @@ BEGIN
    GROUP BY sku.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,sku.WEIGHT,sku.[CUBE],    
    SKU.EcomCartonType,sku.StdGrossWgt,sku.StdCube,pick.QtyToPack  ,PD.pickslipNo, PD.CartonNo
    '
-END  
-  
-
-
-
+END
   
 SET @cSQLCobine = @cSQLMainSelect+@cSQLDymWgtSelect+@cSQLDynamicSelect
 --+@cSQLUPCSelect 
@@ -693,7 +819,8 @@ SET @b_Success = 1
 --FOR JSON AUTO, INCLUDE_NULL_VALUES)
 
 SET @jResult = 
-   (SELECT p.*
+   (SELECT  MIN(PD.LabelLine) AS LabelLine
+            , p.*
    ,ISNULL((SELECT lottablevalue as Lottable,  SUM(qty) as PackedQty
 									FROM PackDetail (nolock)
 									WHERE PickSlipNo = @cPickSlipNo
@@ -711,6 +838,32 @@ SET @jResult =
                            group by UPC FOR JSON PATH),'[]') AS UPC
    ,  ISNULL((SELECT barcodeVal, AntiDiversionCode FROM @barcodeObj WHERE SKU = P.SKU FOR JSON PATH),'[]') AS barcodeObj
    FROM @packSKUDetail p
+   LEFT JOIN PackDetail PD (nolock)
+   ON PD.SKU = P.SKU 
+   AND PD.PickSlipNo = @cPickSlipNo
+   AND PD.cartonno = @cCartonNo
+   GROUP BY 
+    p.SKU             
+    ,p.Descr           
+    ,p.RetailSKU       
+    ,p.ManufacturerSKU 
+    ,p.AltSKU          
+    ,p.QtyToPack       
+    ,p.PackedQty       
+    ,p.Img             
+    ,p.Ecom_CartonType 
+    ,p.InputWeight     
+    ,p.InputCube       
+    ,p.[WEIGHT]          
+    ,p.[CUBE]           
+    ,p.Ecom_Weight     
+    ,p.Ecom_Cube       
+    ,p.DynamicColName1 
+    ,p.DynamicColName2 
+    ,p.DynamicColValue1
+    ,p.DynamicColValue2          
+    ,p.UCC             
+   ORDER BY MIN(PD.LabelLine) ASC
    FOR JSON AUTO, INCLUDE_NULL_VALUES ) 
    
 --FROM #pickSKUDetail PSKU  WITH (NOLOCK) 

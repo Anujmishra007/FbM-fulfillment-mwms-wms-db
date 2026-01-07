@@ -1254,9 +1254,9 @@ BEGIN
          OR
          -- Exact match lottables
          (Lottable01 = @cLottable01 AND
-          Lottable02 = @cLottable02 AND
-          Lottable03 = @cLottable03 AND
-          IsNULL( Lottable04, 0) = IsNULL( @dLottable04, 0))
+          Lottable02 = CASE WHEN @cDocType <> 'R' THEN Lottable02 ELSE @cLottable02 END AND
+          Lottable03 = CASE WHEN @cDocType <> 'R' THEN Lottable03 ELSE @cLottable03 END AND
+          IsNULL( Lottable04, 0) = IsNULL( CASE WHEN @cDocType <> 'R' THEN Lottable04 ELSE @dLottable04 END, 0))
       )
       AND QtyExpected >= @nQTY_Bal -- (CYU027)
       -- AND ReceiptLineNumber > @cReceiptLineNumber
@@ -2555,17 +2555,20 @@ BEGIN
          FETCH NEXT FROM @curRD INTO @cReceiptLineNumber
       END
    END
-END  
+END
 
-EXECUTE ispGenTransmitLog2
-   @c_TableName      = 'WSRTNRFID',
-   @c_Key1           = @cReceiptKey,
-   @c_Key2           = @cUCC,
-   @c_Key3           = @cStorerkey,
-   @c_TransmitBatch  = '',
-   @b_Success        = @b_success   OUTPUT,
-   @n_err            = @nErrNo     OUTPUT,
-   @c_errmsg         = @cErrMsg    OUTPUT
+IF @cDocType = 'R'
+BEGIN
+   EXECUTE ispGenTransmitLog2
+      @c_TableName      = 'WSRTNRFID',
+      @c_Key1           = @cReceiptKey,
+      @c_Key2           = @cUCC,
+      @c_Key3           = @cStorerkey,
+      @c_TransmitBatch  = '',
+      @b_Success        = @b_success   OUTPUT,
+      @n_err            = @nErrNo     OUTPUT,
+      @c_errmsg         = @cErrMsg    OUTPUT
+END
 
 IF @cDebug = '1'  
 BEGIN

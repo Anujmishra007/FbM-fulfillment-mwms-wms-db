@@ -62,8 +62,7 @@ DECLARE
    @nSNQty             INT, 
    @nTranCount       INT,  
    @cUCCNo           NVARCHAR(30),  
-   @cCurOrderkey     NVARCHAR(20),
-   @cPickDetailKey   NVARCHAR(18)
+   @cCurOrderkey     NVARCHAR(20)
          
 DECLARE @CloseCtnList TABLE (     
    UCC             NVARCHAR( 30),  
@@ -136,61 +135,69 @@ BEGIN
          AND SKU = @cSKU 
          AND Storerkey = @cStorerKey  
   
-      SET @curAD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
-      SELECT serialnokey,SUM(qty) 
-      FROM serialno (NOLOCK)      
-      WHERE SKU = @cSKU  
-         AND Userdefine01 = @cUCCNo  
+      IF EXISTS (SELECT 1 FROM serialno (NOLOCK) 
+         WHERE SKU = @cSKU  
+         AND Userdefine01 = @cUCCNo 
          AND Storerkey = @cStorerKey  
          AND Status in ('0','1') 
-      GROUP BY serialnokey
-      ORDER BY serialnokey  
+         )
+      BEGIN
+         SET @curAD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
+         SELECT serialnokey,SUM(qty) 
+         FROM serialno (NOLOCK)      
+         WHERE SKU = @cSKU  
+            AND Userdefine01 = @cUCCNo  
+            AND Storerkey = @cStorerKey  
+            AND Status in ('0','1') 
+         GROUP BY serialnokey
+         ORDER BY serialnokey  
   
-      OPEN @curAD      
-      FETCH NEXT FROM @curAD INTO @cSerialNoKey, @nSNQTY    
-      WHILE @@FETCH_STATUS <> -1      
-      BEGIN    
+         OPEN @curAD      
+         FETCH NEXT FROM @curAD INTO @cSerialNoKey, @nSNQTY    
+         WHILE @@FETCH_STATUS <> -1      
+         BEGIN    
   
-         SELECT @cLblLineNumber = PD.LabelLine,  
-                @cLabelNo = labelno  
-         FROM dbo.Packheader PH WITH (NOLOCK)    JOIN  
-         dbo.packdetail PD(nolock) ON PH.PickSlipNo=PD.PickSlipNo  
-         WHERE PD.StorerKey = @cStorerKey        
-            AND PH.OrderKey = @cOrderKey        
-            AND PD.SKU = @cSKU   
-            AND Cartonno = @nCartonNo 
+            SELECT @cLblLineNumber = PD.LabelLine,  
+                   @cLabelNo = PD.LabelNo  
+            FROM dbo.Packheader PH WITH (NOLOCK)    JOIN  
+            dbo.packdetail PD(nolock) ON PH.PickSlipNo=PD.PickSlipNo  
+            WHERE PH.StorerKey = @cStorerKey        
+               AND PH.PickSlipNo = @cpickslipno        
+               AND PD.SKU = @cSKU   
+               AND PD.Cartonno = @nCartonNo 
               
-         SELECT @cSerialNo = SerialNo
-         FROM dbo.SerialNo WITH (NOLOCK) 
-         WHERE  SerialNokey = @cSerialNokey
+            SELECT @cSerialNo = SerialNo
+            FROM dbo.SerialNo WITH (NOLOCK) 
+            WHERE  SerialNokey = @cSerialNokey
   
-         INSERT INTO PACKSERIALNO (Pickslipno, cartonno,LabelNo,labelline,storerkey,sku,serialno,qty,AddWho,AddDate,EditWho,EditDate)  
-         VALUES(@cpickslipno,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@cSKU,@cSerialNo,1,@cUserName,GETDATE(),@cUserName,GETDATE())  
+            INSERT INTO PACKSERIALNO (Pickslipno, cartonno,LabelNo,labelline,storerkey,sku,serialno,qty,AddWho,AddDate,EditWho,EditDate)  
+            VALUES(@cpickslipno,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@cSKU,@cSerialNo,1,@cUserName,GETDATE(),@cUserName,GETDATE())  
                                                
-         UPDATE SerialNo WITH (ROWLOCK) SET      
-            trafficcop=null,  
-            status='1',
-            EditDate = GETDATE(),  
-            EditWho = @cUserName   
-         WHERE SerialNokey = @cSerialNokey  
+            UPDATE SerialNo WITH (ROWLOCK) SET      
+               trafficcop=null,  
+               status='1',
+               EditDate = GETDATE(),  
+               EditWho = @cUserName   
+            WHERE SerialNokey = @cSerialNokey  
   
-         SET @nQTY = @nQTY - @nSNQTY  
+            SET @nQTY = @nQTY - @nSNQTY  
 
-         IF @nQTY = 0   
-            BREAK;  
+            IF @nQTY = 0   
+               BREAK;  
   
-         FETCH NEXT FROM @curAD INTO @cSerialNoKey, @nSNQTY 
-      END  
-      CLOSE @curAD;
-      DEALLOCATE @curAD;
+            FETCH NEXT FROM @curAD INTO @cSerialNoKey, @nSNQTY 
+         END  
+         CLOSE @curAD;
+         DEALLOCATE @curAD;
 
-      IF @nQTY<>0  
-      BEGIN        
-         SET @b_Success = 0;
-         SET @n_Err = 1002851        
-         SET @c_ErrMsg =API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') -- 'Quantity Not Match. Function : isp_TPS_ExtUpd09'        
-         GOTO RollBackTran        
-      END     
+         IF @nQTY<>0  
+         BEGIN        
+            SET @b_Success = 0;
+            SET @n_Err = 1002851        
+            SET @c_ErrMsg =API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') -- 'Quantity Not Match. Function : isp_TPS_ExtUpd09'        
+            GOTO RollBackTran        
+         END  
+      END
    END  
    ELSE  
    BEGIN  
@@ -201,11 +208,13 @@ BEGIN
       IF ISNULL( @cCurOrderkey,'') <>''  
          SET @cOrderkey = @cCurOrderkey  
 
+      SET @cOrderKey = ISNULL(@cOrderKey,'')
+      SET @cLoadKey = ISNULL(@cLoadKey,'')
       IF @cOrderKey = '' AND @cLoadKey = ''     
       BEGIN
          SET @b_Success = 0;
          SET @n_Err = 1002858        
-         SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'No OrderKey found, failed to proceed. Function : isp_TPS_ExtUpd09'        
+         SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'OrderKey and LoadKey Not Found, failed to proceed. Function : isp_TPS_ExtUpd09'        
          GOTO RollBackTran       
       END   
       
@@ -247,31 +256,14 @@ BEGIN
          END
          
          SELECT   @cLblLineNumber = PD.LabelLine,  
-                  @cLabelNo = labelno,
-                  @cDropID = RTRIM(PD.DropID)
+                  @cLabelNo = PD.LabelNo,
+                  @cDropID = CASE WHEN ISNULL(PD.DropID,'') = '' THEN RTRIM(ISNULL(@cDropID,'')) ELSE  RTRIM(ISNULL(PD.DropID,'')) END 
          FROM dbo.Packheader PH WITH (NOLOCK)    
             JOIN dbo.packdetail PD(nolock) ON PH.PickSlipNo=PD.PickSlipNo  
          WHERE PD.StorerKey = @cStorerKey        
-            AND (@cOrderKey = '' OR PH.OrderKey = @cOrderKey)
-            AND (@cLoadKey = '' OR PH.LoadKey = @cLoadKey)
+            AND PH.PickSlipNo = @cpickslipNo
             AND PD.SKU = @cSKU   
-            AND Cartonno = @nCartonNo
-
-         SELECT @cPickDetailKey = PD.PickDetailKey
-         FROM dbo.PickDetail PD WITH (NOLOCK)
-            JOIN Orders O WITH (NOLOCK) 
-            ON PD.Orderkey = O.Orderkey AND PD.Storerkey = O.Storerkey
-         WHERE PD.StorerKey = @cStorerKey
-            AND (@cOrderKey = '' OR O.OrderKey = @cOrderKey)
-            AND (@cLoadKey = '' OR O.LoadKey = @cLoadKey)
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND PD.SKU = @cSKU
-            AND NOT EXISTS (  SELECT 1
-                              FROM PackSerialNo PSN (NOLOCK)
-                              WHERE PSN.PickDetailKey = PD.PickDetailKey
-                              GROUP BY PSN.PickDetailKey
-                              HAVING SUM(PSN.Qty) = PD.Qty
-                              )
+            AND PD.Cartonno = @nCartonNo
 
          SET @cSerialNoKey = ''
          SELECT  @cSerialNoKey = SerialNoKey
@@ -298,7 +290,7 @@ BEGIN
             END  
 
             INSERT INTO PackSerialNo(pickslipno,cartonno,labelno,labelline,storerkey,sku,serialno,qty, PickDetailKey,AddWho,AddDate,EditWho,EditDate)    
-            values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, ISNULL(@cPickDetailKey,''),@cUserName,GETDATE(),@cUserName,GETDATE())  
+            values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, '',@cUserName,GETDATE(),@cUserName,GETDATE())  
       
             IF @@ERROR <> 0         
             BEGIN         
@@ -359,7 +351,7 @@ BEGIN
             END  
 
             INSERT INTO PackSerialNo(pickslipno,cartonno,labelno,labelline,storerkey,sku,serialno,qty, PickDetailKey,AddWho,AddDate,EditWho,EditDate)    
-            values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, ISNULL(@cPickDetailKey,''),@cUserName,GETDATE(),@cUserName,GETDATE())     
+            values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, '',@cUserName,GETDATE(),@cUserName,GETDATE())     
       
             IF @@ERROR <> 0         
             BEGIN         

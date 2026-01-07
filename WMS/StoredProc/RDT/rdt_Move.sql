@@ -105,7 +105,7 @@ CREATE OR ALTER  PROCEDURE [RDT].[rdt_Move] (
    @cChannel    NVARCHAR( 20) = '',
    @nChannel_ID BIGINT = 0,
    @cWaveKey    NVARCHAR( 10) = '', 
-   @cSerialNo   NVARCHAR( 30) = '',   -- For move by SKU, with SerialNoUpdateLotLocID
+   @cSerialNo   NVARCHAR( 30) = '',   -- For move with SerialNoUpdateLotLocID
    @nSerialQTY  INT = 0,              -- Same as above
    @nBulkSNO    INT = 0,              -- Same as above. Use rdt.rdtMoveSerialNoLog table
    @nBulkSNOQTY INT = 0               -- Same as above
@@ -1814,9 +1814,11 @@ BEGIN
       BEGIN
          DECLARE @cMove_SerialNo       NVARCHAR( 30)
          DECLARE @nMove_SerialQTY      INT
+         DECLARE @cMove_UCCNo          NVARCHAR( 20)
          DECLARE @cSerialNoKey         NVARCHAR( 10)
          DECLARE @nMoveSerialNoLogKey  BIGINT
-         
+         DECLARE @cSerialNo_ToID       NVARCHAR( 18)
+
          SET @nBal_SNQTY = @nQTY_Move 
          
          -- Move by LOC or ID
@@ -1825,7 +1827,7 @@ BEGIN
          BEGIN
             SET @cSQL = 
                ' SET @curSNO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' + 
-                  ' SELECT SerialNoKey, SerialNo, QTY, 0 AS MoveSerialNoLogKey ' + 
+                  ' SELECT SerialNoKey, SerialNo, QTY, UCCNo, 0 AS MoveSerialNoLogKey ' + 
                   ' FROM dbo.SerialNo WITH (NOLOCK) ' + 
                   ' WHERE StorerKey = @cStorerKey ' + 
                      ' AND LOT = @cLOT ' + 
@@ -1839,7 +1841,7 @@ BEGIN
          BEGIN
             SET @cSQL = 
                ' SET @curSNO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' + 
-                  ' SELECT SerialNoKey, SerialNo, QTY, 0 AS MoveSerialNoLogKey ' + 
+                  ' SELECT SerialNoKey, SerialNo, QTY, UCCNo, 0 AS MoveSerialNoLogKey ' + 
                   ' FROM dbo.SerialNo WITH (NOLOCK) ' + 
                   ' WHERE StorerKey = @cStorerKey ' + 
                      ' AND LOT = @cLOT ' + 
@@ -1859,7 +1861,7 @@ BEGIN
                -- Get affected serial no
                SET @cSQL = 
                   ' SET @curSNO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' + 
-                     ' SELECT SN.SerialNoKey, SN.SerialNo, SN.QTY, MVLog.MoveSerialNoLogKey ' + 
+                     ' SELECT SN.SerialNoKey, SN.SerialNo, SN.QTY, SN.UCCNo, MVLog.MoveSerialNoLogKey ' + 
                      ' FROM rdt.rdtMoveSerialNoLog MVLog WITH (NOLOCK) ' + 
                         ' JOIN dbo.SerialNo SN WITH (NOLOCK) ON (MVLog.SerialNo = SN.SerialNo AND MVLog.StorerKey = SN.StorerKey AND MVLog.SKU = SN.SKU) ' + 
                      ' WHERE MVLog.Mobile = @nMobile ' + 
@@ -1877,7 +1879,7 @@ BEGIN
             BEGIN
                SET @cSQL = 
                   ' SET @curSNO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' + 
-                     ' SELECT SerialNoKey, SerialNo, QTY, 0 AS MoveSerialNoLogKey' + 
+                     ' SELECT SerialNoKey, SerialNo, QTY, UCCNo, 0 AS MoveSerialNoLogKey' + 
                      ' FROM dbo.SerialNo WITH (NOLOCK) ' + 
                      ' WHERE StorerKey = @cStorerKey ' + 
                         ' AND LOT = @cLOT ' + 
@@ -1912,14 +1914,9 @@ BEGIN
             @cSerialNo
 
          -- Loop serial no
-         FETCH NEXT FROM @curSNO INTO @cSerialNoKey, @cMove_SerialNo, @nMove_SerialQTY, @nMoveSerialNoLogKey
+         FETCH NEXT FROM @curSNO INTO @cSerialNoKey, @cMove_SerialNo, @nMove_SerialQTY, @cMove_UCCNo, @nMoveSerialNoLogKey
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            DECLARE @cSerialNo_ToID NVARCHAR( 18)
-            DECLARE @tSerialNo_ToID VARIABLETABLE
-            
-            DELETE @tSerialNo_ToID 
-
             -- Update serial no
             UPDATE dbo.SerialNo SET
                LOC = @cToLOC,
@@ -1929,11 +1926,10 @@ BEGIN
                      WHEN @cToID IS NULL THEN ID -- ID not change
                      ELSE @cToID
                   END, 
-               UCCNo = IIF( @cLoseUCC = '1', '', @cUCC), 
+               UCCNo = IIF( @cLoseUCC = '1', '', UCCNo), 
                EditWho = SUSER_SNAME(),
                EditDate = GETDATE(),
                TrafficCop = NULL
-            OUTPUT inserted.ID INTO @tSerialNo_ToID (value)
             WHERE SerialNoKey = @cSerialNoKey
             IF @@ERROR <> 0
             BEGIN
@@ -1943,7 +1939,7 @@ BEGIN
             END
             
             -- Get To ID
-            SELECT @cSerialNo_ToID = value FROM @tSerialNo_ToID
+            SELECT @cSerialNo_ToID = ID FROM dbo.SerialNo WITH (NOLOCK) WHERE SerialNoKey = @cSerialNoKey
             
             -- Remove log
             IF @nMoveSerialNoLogKey > 0
@@ -1955,7 +1951,7 @@ BEGIN
                LOT, LOC, ID, Channel, Channel_ID, UCCNo, FromLoc, FromID)
             VALUES (
                @cItrnKey, 'MV', @cStorerKey, @cLLI_SKU, @nMove_SerialQTY, @cMove_SerialNo, '', @cSourceType, 
-               @cLOT, @cToLOC, @cSerialNo_ToID, @cChannel, @nChannel_ID, ISNULL( @cUCC, ''), @cLOC, @cID)
+               @cLOT, @cToLOC, @cSerialNo_ToID, @cChannel, @nChannel_ID, ISNULL( @cMove_UCCNo, ''), @cLOC, @cID)
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 60903
@@ -1966,7 +1962,7 @@ BEGIN
             -- Reduce balance
             SET @nBal_SNQTY = @nBal_SNQTY - @nMove_SerialQTY
             
-            FETCH NEXT FROM @curSNO INTO @cSerialNoKey, @cMove_SerialNo, @nMove_SerialQTY, @nMoveSerialNoLogKey
+            FETCH NEXT FROM @curSNO INTO @cSerialNoKey, @cMove_SerialNo, @nMove_SerialQTY, @cMove_UCCNo, @nMoveSerialNoLogKey
          END
          
          -- Validate not fully moved

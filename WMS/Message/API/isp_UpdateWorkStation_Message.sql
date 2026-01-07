@@ -10,3 +10,4 @@ execute API.TouchPadAddMsg 1000404, 10, 'The selected workstation already been i
 execute API.TouchPadAddMsg 1000405, 10, 'Invalid setup. This device has been assigned to a workstation. Function : isp_UpdateWorkstation','us_english'
 execute API.TouchPadAddMsg 1000406, 10, 'Fail to update into Workstation. Function : isp_UpdateWorkstation','us_english'
 execute API.TouchPadAddMsg 1000407, 10, 'Invalid Workstation. Please use other Workstation. Function : isp_UpdateWorkstation','us_english'
+execute API.TouchPadAddMsg 1000408, 10, 'No Session context found. Function : isp_UpdateWorkstation',    'us_english'

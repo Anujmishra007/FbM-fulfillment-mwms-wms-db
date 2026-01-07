@@ -144,7 +144,7 @@ AS
             END
 
             INSERT INTO @pickSKUDetail
-            SELECT PD.SKU,SUM(PD.QTY) AS QtyToPick,PD.OrderKey,@cPickslipNo,@cLoadKey,PD.Status--,CASE WHEN ISNULL(UCC.UCCNo,'')='' THEN '' ELSE UCC.UCCNo END--,PD.Status
+            SELECT PD.SKU,SUM(PD.QTY) AS QtyToPick,PD.OrderKey,IIF(ISNULL(RTRIM(PD.PickSlipNo),'') = '', @cPickslipNo, RTRIM(PD.PickSlipNo)),@cLoadKey,PD.Status--,CASE WHEN ISNULL(UCC.UCCNo,'')='' THEN '' ELSE UCC.UCCNo END--,PD.Status
             FROM pickDetail PD WITH (NOLOCK)
             LEFT JOIN orders O WITH (NOLOCK) ON (PD.orderKey = O.OrderKey) --(cc02)
             --LEFT JOIN UCC UCC WITH (NOLOCK) ON (PD.SKU=UCC.SKU AND PD.storerkey=UCC.storerkey AND PD.Lot=UCC.lot AND PD.LOC=UCC.LOC)
@@ -152,7 +152,7 @@ AS
                AND PD.Status <= '9'--Gh01
               -- AND PD.Status NOT IN  ('4')
                AND O.SOStatus NOT IN (SELECT code FROM @tSostatusList)  --(cc02)
-            GROUP BY PD.SKU,PD.OrderKey,PD.Status--,UCC.UCCNo--,PD.Status (yeekung)
+            GROUP BY PD.SKU,PD.OrderKey, PD.PickSlipNo, PD.Status--,UCC.UCCNo--,PD.Status (yeekung)
 
             SET @cDynamicRightName1 = 'OrderKey'
             SET @cDynamicRightValue1 = @cOrderKey
@@ -639,7 +639,7 @@ AS
             --SELECT * FROM @pickSKUDetail
             --SELECT @cPickSlipNo AS pickslipNo
 
-            IF (SELECT COUNT(DISTINCT pickslipNo)  FROM @pickSKUDetail WHERE pickDetailStatus < 5 )>1
+            IF (SELECT COUNT(DISTINCT pickslipNo)  FROM @pickSKUDetail WHERE PickslipNo = @cPickslipNo AND pickDetailStatus < 5 )>1
             BEGIN
                SET @b_Success = 0
                SET @n_Err = 1001113
@@ -660,7 +660,7 @@ AS
       END
    END
 
-   IF NOT EXISTS (SELECT TOP 1 1 FROM @pickSKUDetail where PickDetailStatus <>'4')
+   IF NOT EXISTS (SELECT TOP 1 1 FROM @pickSKUDetail where PickslipNo = @cPickslipNo AND PickDetailStatus <>'4')
    BEGIN
       SET @b_Success = 0
       SET @n_Err = 1001114
@@ -668,7 +668,7 @@ AS
       GOTO EXIT_SP
    END
 
-   IF NOT EXISTS (SELECT 1 FROM @pickSKUDetail)
+   IF NOT EXISTS (SELECT 1 FROM @pickSKUDetail where PickslipNo = @cPickslipNo)
    BEGIN
       SET @b_Success = 0
       SET @n_Err = 1001106
@@ -682,6 +682,7 @@ AS
    SET @jResult = (SELECT @cScanNoType AS ScanNoType, @cPickSlipNo AS PickslipNo, @cDropID AS DropID, @cOrderKey AS OrderKey, @cLoadKey AS LoadKey, @cZone AS Zone, @EcomSingle AS EcomSingle
    , @cDynamicRightName1 AS DynamicRightName1, @cDynamicRightValue1 AS DynamicRightValue1,
    (SELECT * FROM @pickSKUDetail
+   WHERE PickslipNo = @cPickslipNo
    FOR JSON PATH , INCLUDE_NULL_VALUES) AS PickSkuDetail
    FOR JSON PATH , INCLUDE_NULL_VALUES)
    

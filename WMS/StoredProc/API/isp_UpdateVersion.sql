@@ -54,19 +54,19 @@ WITH (
 --SELECT @nFunc AS Func, @cLangCode AS LangCode,@cWorkstation as Workstation
 
 --convert login
-SET @n_Err = 0
-EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+--SET @n_Err = 0
+--EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-EXECUTE AS LOGIN = @cUserName
+--EXECUTE AS LOGIN = @cUserName
 
-IF @n_Err <> 0
-BEGIN
-   --INSERT INTO @errMsg(nErrNo,cErrMsg)
-   SET @b_Success = 0
-   SET @n_Err = @n_Err
-   SET @c_ErrMsg = @c_ErrMsg
-   GOTO EXIT_SP
-END
+--IF @n_Err <> 0
+--BEGIN
+--   --INSERT INTO @errMsg(nErrNo,cErrMsg)
+--   SET @b_Success = 0
+--   SET @n_Err = @n_Err
+--   SET @c_ErrMsg = @c_ErrMsg
+--   GOTO EXIT_SP
+--END
 
 
 ----SELECT @cUserName AS username

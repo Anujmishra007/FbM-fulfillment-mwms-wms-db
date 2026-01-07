@@ -60,7 +60,20 @@ BEGIN
 
    SET @b_Success = 1
 
-   -- Get SKU count        
+   IF EXISTS ( SELECT 1 
+               FROM UCC (NOLOCK)
+               WHERE UCCNo = @cBarcode
+               AND [Status] = '6'
+   )     
+   BEGIN
+      SET @n_Err = 1000102
+      SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Duplicate UCC Scan Detected. Current UCCNo already been in used.'
+
+      SET @jResult = (SELECT '' AS SKU
+      FOR JSON PATH,INCLUDE_NULL_VALUES )    
+      SET @b_Success = 0
+      GOTO QUIT
+   END
 
    IF EXISTS (SELECT 1  from UPC (nolock) 
                where UPC=@cBarcode

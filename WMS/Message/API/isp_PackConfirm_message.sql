@@ -39,3 +39,5 @@ execute API.TouchPadAddMsg 1000032, 10, 'No records found in WMReport. Function 
 execute API.TouchPadAddMsg 1000033, 10, 'No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null. Function : isp_PackConfirm',    'us_english'
 execute API.TouchPadAddMsg 1000034, 10, 'No records found in WMReport. Function : isp_PackConfirm',    'us_english'
 execute API.TouchPadAddMsg 1000035, 10, 'No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null. Function : isp_PackConfirm',    'us_english'
+execute API.TouchPadAddMsg 1000036, 10, 'No Session context found. Function : isp_PackConfirm',    'us_english'
+execute API.TouchPadAddMsg 1000037, 10, 'Invalid Post Extended Update SP Name Function : isp_PackConfirm',    'us_english'

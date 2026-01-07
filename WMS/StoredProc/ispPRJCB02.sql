@@ -32,6 +32,7 @@ GO
 /* 2024-11-18  SSA02    1.2   Updated picklocation(SL.LocationType = 'CASE') */
 /* 2025-05-19  Wan01    1.3   FCR-4962 - JCB - Kitting Allocation       */
 /*                            - Adding OD.Lottable03 <> '' filtering    */
+/* 2025-12-19                 - FCR v1.31                               */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB02] (
      @c_OrderKey        NVARCHAR(10)
@@ -85,10 +86,11 @@ BEGIN
           ,@c_SQL                    NVARCHAR(MAX) = ''
           ,@c_SQLParm                NVARCHAR(MAX) = ''
           ,@c_Conditions             NVARCHAR(MAX) = ''
+          ,@c_Cond                  NVARCHAR(MAX)  = ''                             --(Wan01) 2025-12-31
           ,@n_OpenQty                INT = 0
-            ,@n_PickQty                INT = 0
-            ,@n_QtyAvai                INT = 0
-            ,@n_ExtraQty               INT = 0
+          ,@n_PickQty                INT = 0
+          ,@n_QtyAvai                INT = 0
+          ,@n_ExtraQty               INT = 0
           ,@n_CaseCnt                INT = 0
           ,@n_CaseReq                INT = 0
           ,@n_CaseAvai               INT = 0
@@ -100,6 +102,16 @@ BEGIN
     --Added PA.Zonecategory (SSA01), (SSA02)
    SET @c_Conditions = ' AND LOC.LocationType = ''PICK'' AND PA.ZoneCategory  = ''EMG'' AND SL.LocationType IN ( ''CASE'') '
    SET @c_Type = '1'
+
+   SELECT @c_Cond = cl.Notes                                                        --(Wan01) 2025-12-31 - START
+   FROM CODELKUP cl (NOLOCK)
+   WHERE cl.ListName = 'JCB_AL'
+   AND   cl.Code = 'Condition'
+   AND   cl.Code2= @c_Type
+
+   IF @c_Cond IN ('', NULL) SET @c_Cond = ' AND LOC.LocationFlag = ''None'''        
+      
+   SET @c_Conditions = @c_Conditions + ' ' + @c_Cond                               --(Wan01) - END
                                              
    IF @n_continue IN(1,2)
    BEGIN
@@ -246,6 +258,7 @@ BEGIN
             END                                                                                                                
           END              
            --Joined  PUTAWAYZONE (SSA01)
+         -- Query Table alias 1) cannot be changes 2) same as other pickcode as filter condition is configurable      
          SET @c_SQL = ' DECLARE CUR_INV CURSOR FAST_FORWARD READ_ONLY FOR      
             SELECT LLI.Lot, LLI.Loc, LLI.ID, 
                   (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen - ISNULL(REPLEN.ReplenQty,0))
@@ -265,7 +278,7 @@ BEGIN
                          AND PD.ToLoc = LLI.Loc
                          AND PD.CaseID = LLI.Id
                          AND PD.Status = ''0'') AS REPLEN            
-            WHERE LOC.LocationFlag = ''NONE''
+            WHERE LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'')                    --(Wan01)
             AND LOC.Status = ''OK''
             AND LOT.Status = ''OK''
             AND ID.Status = ''OK''

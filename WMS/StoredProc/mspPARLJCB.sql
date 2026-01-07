@@ -28,6 +28,7 @@ GO
 /* 2025-08-22  PPA374   1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
 /* 2025-10-23  PPA374   1.1   Updating logic to calculate BULK loc fill */
 /*                               level for specific SKUs differently    */
+/* 2025-12-17  PPA374   1.2   Updating area retrieving logic            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[mspPARLJCB]
@@ -736,15 +737,21 @@ BEGIN
       AND ToId = @cLPNToRelease
 	  AND StorerKey = @cStorerKey
 
-   -- Retrieving area and zone
-   SELECT 
-      @cPutawayZone = L.PutawayZone, 
+   -- Retrieving to zone --PPA374 17/12/2025
+   SELECT TOP 1
+      @cPutawayZone = L.PutawayZone
+   FROM dbo.LOC L WITH(NOLOCK)
+   WHERE L.Facility = @cFacility
+      AND L.LOC = @cToLoc
+
+   -- Retrieving from area --PPA374 17/12/2025
+   SELECT TOP 1
 	  @cAreakey = AD.AreaKey 
    FROM dbo.LOC L WITH(NOLOCK)
       INNER JOIN dbo.AreaDetail AD WITH(NOLOCK)
 	  ON L.PutawayZone = AD.PutawayZone
    WHERE L.Facility = @cFacility
-      AND L.LOC = @cToLoc
+      AND L.LOC = @cPalLoc
 
    -- Get next task detail key
    EXECUTE nspg_GetKey
@@ -907,4 +914,3 @@ BEGIN
 QUIT_SP:
 
 END
-

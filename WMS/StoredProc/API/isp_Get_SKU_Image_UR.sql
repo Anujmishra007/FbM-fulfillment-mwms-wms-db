@@ -146,24 +146,19 @@ BEGIN
          --SET @c_SKUFolder = @c_SkuImageServer + @c_Storerkey + '\' + @c_ImagePrefix + @c_FolderSeqNo  + '\'
          SET @c_SKUFolder = @c_SkuImageServer + @c_Storerkey + '\' + @c_ImageFolder  + '\'  
         
-        EXEC master..xp_dirtree @c_SKUFolder, 1, 1    --folder, depth 0=all(default) 1..x, 0=not list file(default) 1=list file   
+        INSERT INTO #DirTree (ImageFile, Depth, FileFlag)
+         EXEC master..xp_dirtree @c_SKUFolder, 1, 1    --folder, depth 0=all(default) 1..x, 0=not list file(default) 1=list file  
 
-        IF @@ROWCOUNT <> 0
-        BEGIN
-            INSERT INTO #DirTree (ImageFile, Depth, FileFlag)  
-            EXEC master..xp_dirtree @c_SKUFolder, 1, 1    --folder, depth 0=all(default) 1..x, 0=not list file(default) 1=list file  
+         IF @@ROWCOUNT <> 0
+         BEGIN
+            SET @n_ID = SCOPE_IDENTITY()  
 
-            IF @@ROWCOUNT <> 0
-            BEGIN
-               SET @n_ID = SCOPE_IDENTITY()  
-
-               UPDATE #DirTree   
-               SET ImagePath = @c_SKUFolder   
-               WHERE ID <= @n_ID    
-                   AND ImagePath IS NULL        
-               --SET @n_SubFolder_SeqNo = @n_SubFolder_SeqNo - 1  
-            END
-        END
+            UPDATE #DirTree   
+            SET ImagePath = @c_SKUFolder   
+            WHERE ID <= @n_ID    
+                  AND ImagePath IS NULL        
+            --SET @n_SubFolder_SeqNo = @n_SubFolder_SeqNo - 1  
+         END
       END   
       --(Wan02) 2020-11-24 - END
 

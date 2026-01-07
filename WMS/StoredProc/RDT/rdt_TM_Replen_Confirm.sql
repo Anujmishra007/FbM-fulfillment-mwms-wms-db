@@ -116,7 +116,8 @@ BEGIN
       @nSystemQTY = SystemQTY, 
       @cLOT = LOT, 
       @cPickMethod = PickMethod, 
-      @cStatus = Status
+      @cStatus = Status,
+      @cReasonKey = ReasonKey
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskDetailKey
 
@@ -127,6 +128,7 @@ BEGIN
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
+
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_TM_Replen_Confirm -- For rollback or commit only our own transaction
 

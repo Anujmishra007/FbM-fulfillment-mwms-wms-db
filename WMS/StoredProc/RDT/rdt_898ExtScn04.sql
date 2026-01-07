@@ -251,10 +251,15 @@ BEGIN
       IF (@nMOBRECStep = 4 AND @nStep = 6) OR (@nMOBRECStep = 6 AND @nStep = 4)
       BEGIN
          IF @cDocType <> 'R'
-            SELECT @cLottable01 = LOTTABLE01 FROM RECEIPTDETAIL WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey AND SKU = @cSKU
-
+         BEGIN
+            SELECT TOP 1 @cLottable01 = LOTTABLE01 FROM RECEIPTDETAIL WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
+         END
          SELECT @cOutField01 = @cLottable01, @cOutField02 = @cLottable02 ,
          @cOutField03 = @cLottable03 , @cOutField04 = ''
+
+         SET @cFieldAttr01 = 'O'
+         SET @cFieldAttr03 = 'O'
+         SET @cFieldAttr04 = 'O'
 
          SET @nAfterStep = 99
          SET @nAfterScn = 1304
@@ -264,16 +269,10 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            SET @cLottable01 = @cInField01
+            SET @cLottable01 = CASE WHEN @cFieldAttr01 = 'O' THEN @cOutField01 ELSE @cInField01 END
             SET @cLottable02 = @cInField02
-            SET @cLottable03 = @cInField03
+            --SET @cLottable03 = @cInField03
 
-            IF ISNULL(@cLottable01 ,'') = '' AND @cDocType = 'R'
-            BEGIN
-               SET @nErrNo = 252252
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  
-               GOTO Quit
-            END
             IF ISNULL(@cLottable02 ,'') = ''
             BEGIN
                SET @nErrNo = 252253
@@ -283,13 +282,6 @@ BEGIN
             IF NOT EXISTS (SELECT 1 FROM CodeLkUp (NOLOCK) WHERE LISTNAME = 'HostWHCode' AND StorerKey = @cStorerKey AND CODE = @cLottable02 )
             BEGIN
                SET @nErrNo = 252254
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  
-               GOTO Quit
-            END
-            IF NOT EXISTS (SELECT 1 FROM CodeLkUp (NOLOCK) WHERE LISTNAME = 'LOT01LIST' AND StorerKey = @cStorerKey AND CODE = @cLottable01 )
-            AND @cDocType = 'R'
-            BEGIN
-               SET @nErrNo = 252255
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  
                GOTO Quit
             END
@@ -306,11 +298,18 @@ BEGIN
             SET @cOutField10 = '' --qty
             SET @cOutField11 = RTRIM(CAST( @cCartonCnt AS NVARCHAR( 4))) + CASE WHEN @cSkipEstUCCOnID = '1' THEN '' ELSE '/' + CAST( @cTotalCarton AS NVARCHAR( 4)) END -- (ChewKP02)
 
+            SET @cFieldAttr01 = ''
+            SET @cFieldAttr04 = ''
+            SET @cFieldAttr03 = ''
+
             SET @nAfterStep = 6
             SET @nAfterScn = 1305
          END
          IF @nInputKey = 0
          BEGIN
+            SET @cFieldAttr01 = ''
+            SET @cFieldAttr04 = ''
+            SET @cFieldAttr03 = ''
             --go to screen SKU
             SET @nAfterScn  = 1303
             SET @nAfterStep = 4

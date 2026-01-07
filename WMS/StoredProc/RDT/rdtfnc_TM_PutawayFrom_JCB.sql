@@ -18,6 +18,8 @@ GO
 /* 2025-07-23  1.0.3  Dennis   FCR-3954. Fix Recalculation issue.              */
 /* 2025-08-21  0.0.0  Jackc    !!!Cutover. User V0 repo for work!!!            */  
 /* 2025-11-11  2.0.0  PPA374   Updating aisle in use logic                     */
+/* 2025-12-08  2.0.1  PPA374   Fixing bugs with to loc hold / flag not checked */
+/*                                and aisle in use not checked in step 5       */
 /*******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_PutawayFrom_JCB](
    @nMobile    INT,
@@ -400,7 +402,7 @@ BEGIN
                '@cEquipmentProfileKey NVARCHAR( 10),  '     +
                '@cNewEquipmentProfileKey NVARCHAR( 10),  '  +
                '@cTaskdetailKey  NVARCHAR( 10),  '          +
-               '@cReasonCode     NVARCHAR(10) '             +
+               '@cReasonCode     NVARCHAR(10), '            +
                '@nErrNo          INT OUTPUT, '              +
                '@cErrMsg         NVARCHAR( 20) OUTPUT'
    
@@ -555,7 +557,7 @@ BEGIN
                '@cEquipmentProfileKey NVARCHAR( 10),  '     +
                '@cNewEquipmentProfileKey NVARCHAR( 10),  '  +
                '@cTaskdetailKey  NVARCHAR( 10),  '          +
-               '@cReasonCode     NVARCHAR(10) '             +
+               '@cReasonCode     NVARCHAR(10), '            +
                '@nErrNo          INT OUTPUT, '              +
                '@cErrMsg         NVARCHAR( 20) OUTPUT'
    
@@ -654,6 +656,7 @@ BEGIN
          AND TD.UserKeyOverRide IN (@cUserName, '')
          AND AD.AreaKey = @cAreakey
          AND LOC1.Status = 'OK'
+		 AND LOC1.LocationFlag IN ('','NONE')
          AND PL.GrossWgt <= @fMaximumWeight
          AND LLI.Qty - LLI.QtyPicked > 0
          AND NOT EXISTS(SELECT 1 
@@ -977,7 +980,7 @@ BEGIN
                '@cEquipmentProfileKey NVARCHAR( 10),  '     +
                '@cNewEquipmentProfileKey NVARCHAR( 10),  '  +
                '@cTaskdetailKey  NVARCHAR( 10),  '          +
-               '@cReasonCode     NVARCHAR(10) '             +
+               '@cReasonCode     NVARCHAR(10), '            +
                '@nErrNo          INT OUTPUT, '              +
                '@cErrMsg         NVARCHAR( 20) OUTPUT'
    
@@ -1420,7 +1423,7 @@ BEGIN
                '@cEquipmentProfileKey NVARCHAR( 10),  '     +
                '@cNewEquipmentProfileKey NVARCHAR( 10),  '  +
                '@cTaskdetailKey  NVARCHAR( 10),  '          +
-               '@cReasonCode     NVARCHAR(10) '             +
+               '@cReasonCode     NVARCHAR(10), '            +
                '@nErrNo          INT OUTPUT, '              +
                '@cErrMsg         NVARCHAR( 20) OUTPUT'
    
@@ -1649,6 +1652,41 @@ BEGIN
       SET @cNextTaskDetailKey = ''
       SET @cLocAisle = ''
 
+      DELETE FROM @tAisleInUsed
+      INSERT INTO @tAisleInUsed
+      (
+         LocAisle, UserKey
+      )
+      -- TaskDetail aisles
+      SELECT 
+         L.LocAisle,
+         IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) AS UserKey
+      FROM dbo.TaskDetail TD WITH(NOLOCK)
+         CROSS APPLY (VALUES
+            (TD.FromLoc),
+            (TD.ToLoc)
+         ) AS loc(L)
+         LEFT JOIN dbo.LOC L WITH(NOLOCK) ON loc.L = L.Loc AND L.LocationCategory = 'VNA' AND L.Facility = @cFacility
+      WHERE LocAisle IS NOT NULL
+         AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
+         AND TD.Status IN ('0','3')
+         AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @cUserName
+	     AND TD.Storerkey = @cStorerKey
+
+      UNION ALL
+
+      -- RDTMOBREC aisles
+      SELECT 
+         IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) AS LocAisle,
+         R.UserName AS UserKey
+      FROM RDT.RDTMOBREC R WITH(NOLOCK)
+         LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
+         LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.V_String8 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+      WHERE R.StorerKey = @cStorerKey
+         AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
+         AND R.UserName <> @cUserName
+         AND IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) <> ''
+
       -- Get Next Task
       SELECT @cLocCategory = LocationCategory,
          @cLocAisle = LocAisle
@@ -1678,6 +1716,8 @@ BEGIN
             AND LOC.Facility = @cFacility
             AND LOC.LocationCategory IN  ('PND_IN', 'PND', 'PNDIN')
             AND TD.TaskType IN ('PAF', 'PA1')
+            AND LOC1.Status = 'OK'
+		    AND LOC1.LocationFlag IN ('','NONE')
             AND ((TD.Status = '0' AND TD.UserKey = '') OR (TD.Status = '3' AND TD.UserKey = @cUserName))
             AND TD.UserKeyOverRide IN (@cUserName, '')
             AND AD.AreaKey = @cAreaKey
@@ -1690,6 +1730,10 @@ BEGIN
                            FROM dbo.TaskManagerSkipTasks TST WITH(NOLOCK)
                            WHERE TST.TaskDetailKey = TD.TaskDetailKey
                               AND TST.TaskType = TD.TaskType)
+			AND (NOT EXISTS(SELECT 1 
+                        FROM @tAisleInUsed AIU
+                        WHERE AIU.LocAisle = LOC1.LocAisle
+                     ) OR LOC1.LocationCategory <> 'VNA')
          ORDER BY IIF(LOC.LocAisle = @cLocAisle, 1, 2), LOC.LocAisle, IIF(TD.UserKeyOverRide = @cUserName, 1, 2), LOC.LogicalLocation, LOC.Loc
       END
 
@@ -1717,6 +1761,8 @@ BEGIN
             AND TD.UserKeyOverRide IN (@cUserName, '')
             AND AD.AreaKey = @cAreakey
             AND PL.GrossWgt <= @fMaximumWeight
+			AND LOC1.Status = 'OK'
+		    AND LOC1.LocationFlag IN ('','NONE')
             AND NOT EXISTS(SELECT 1 
                            FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
                            WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
@@ -1725,6 +1771,10 @@ BEGIN
                            FROM dbo.TaskManagerSkipTasks TST WITH(NOLOCK)
                            WHERE TST.TaskDetailKey = TD.TaskDetailKey
                               AND TST.TaskType = TD.TaskType)
+			AND (NOT EXISTS(SELECT 1 
+                        FROM @tAisleInUsed AIU
+                        WHERE AIU.LocAisle = LOC1.LocAisle
+                     ) OR LOC1.LocationCategory <> 'VNA')
          ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
       END
 
@@ -1763,6 +1813,30 @@ BEGIN
          SET @cOutField06 = ''
          SET @cOutField07 = ''
          SET @cOutField08 = ''
+
+	     IF @cErrMsg = 'No More Task'
+	     BEGIN
+	        IF EXISTS(
+			   SELECT 1 
+			   FROM dbo.TaskDetail TD WITH(NOLOCK) 
+			   WHERE AreaKey = @cAreaKey 
+			      AND TD.Storerkey = @cStorerKey 
+				  AND Status = '0' 
+				  AND EXISTS(
+				     SELECT 1 
+					 FROM dbo.LOC L WITH(NOLOCK) 
+					 WHERE TD.ToLoc = L.Loc 
+					    AND L.Facility = @cFacility 
+						AND L.LocationCategory = 'VNA' 
+						AND L.LocAisle IN (
+						   SELECT LocAisle FROM @tAisleInUsed
+						)
+				  )
+			)
+	        BEGIN
+		       SET @cErrMsg = 'Aisle in use'
+		    END
+	     END
 
          SET @nScn = @nScn - 3            --Area Screen
          SET @nStep = @nStep - 3          --Step 2
@@ -1854,7 +1928,7 @@ BEGIN
                '@cEquipmentProfileKey NVARCHAR( 10),  '     +
                '@cNewEquipmentProfileKey NVARCHAR( 10),  '  +
                '@cTaskdetailKey  NVARCHAR( 10),  '          +
-               '@cReasonCode     NVARCHAR(10) '             +
+               '@cReasonCode     NVARCHAR(10), '            +
                '@nErrNo          INT OUTPUT, '              +
                '@cErrMsg         NVARCHAR( 20) OUTPUT'
    
@@ -2525,3 +2599,4 @@ GO
 GRANT EXECUTE ON RDT.rdtfnc_TM_PutawayFrom_JCB TO NSQL
 
 GO
+

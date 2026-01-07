@@ -176,7 +176,17 @@ BEGIN
       DynamicColValue2 NVARCHAR( 150)
       --,Status           NVARCHAR( 5)
    )    
-   
+    
+   DECLARE @tempPickDetail TABLE  (    
+      SKU              NVARCHAR( 30),    
+      QtyToPack        INT,    
+      OrderKey         NVARCHAR( 30),    
+      PickslipNo       NVARCHAR( 30),    
+      LoadKey          NVARCHAR( 30),--externalOrderKey    
+      PickDetailStatus NVARCHAR ( 3)--,  
+   --  UCCNo            NVARCHAR( 20)--(yeekung02)  
+   )    
+
    --DECLARE @pickSKUDetail TABLE (    
    CREATE TABLE #pickSKUDetail (    
       SKU              NVARCHAR( 30),    
@@ -293,7 +303,7 @@ BEGIN
    --, @cDynamicRightName1 as DynamicRightName1, @cDynamicRightValue1 as DynamicRightValue1    
    
 
-   INSERT INTO #pickSKUDetail    
+   INSERT INTO @tempPickDetail    
    SELECT *    
    FROM OPENJSON(@pickSkuDetailJson)    
    WITH (    
@@ -314,32 +324,64 @@ BEGIN
 
    IF ISNULL(@cShrtPckSts,'') = ''  --if show ShortPick Config not configured, then delete to filter out the shortpick records
    BEGIN
-      DELETE FROM #pickSKUDetail WHERE PickDetailStatus = '4'
+      DELETE FROM @tempPickDetail WHERE PickDetailStatus = '4'
    END
 
    --Get Total pick and packed Qty for the pickslip.
-   SELECT @nTtlQtyPack = SUM(QtyToPack)  FROM #pickSKUDetail
+   SELECT @nTtlQtyPack = SUM(QtyToPack)  FROM @tempPickDetail
 
-   SELECT @nPackedQty = SUM(QtyToPack) FROM #PackTable 
+   SELECT @nPackedQty = SUM(ISNULL(QtyToPack,0)) FROM #PackTable 
 
-   -- if PickstatusFilter got value and (PickStatusLE1 or PickStatusEQ2) enabled, then delete the records that is bigger than PickstatusFilter
-   IF ISNULL(@cPickStsFilter1,'') <> '' 
-   AND ISNUMERIC(@cPickStsFilter1) = 1 
-   AND LEN(@cPickStsFilter1) = 1 
-   AND @cPickStsFilter1 COLLATE Latin1_General_BIN LIKE '[0-9]' 
-   AND (ISNULL(@cPickStsLT1,'') = '1'  OR ISNULL(@cPickStsEQ2,'') = '1' )
+   -- if Total Qty to Pack versus PackedQty is not same, means the current pickslip still havent pack finish then proceed to delete the unwanted status for user to continue pack. 
+   -- Otherwise, show all the status and for user to re visit to print label or paper.
+   IF @nTtlQtyPack <> @nPackedQty
    BEGIN
-      IF ISNULL(@cPickStsLT1,'') = '1' 
+      -- if PickstatusFilter got value and (PickStatusLE1 or PickStatusEQ2) enabled, then delete the records that is bigger than PickstatusFilter
+      IF ISNULL(@cPickStsFilter1,'') <> '' 
+      AND ISNUMERIC(@cPickStsFilter1) = 1 
+      AND LEN(@cPickStsFilter1) = 1 
+      AND @cPickStsFilter1 COLLATE Latin1_General_BIN LIKE '[0-9]' 
+      AND (ISNULL(@cPickStsLT1,'') = '1'  OR ISNULL(@cPickStsEQ2,'') = '1' )
       BEGIN
-       DELETE FROM #pickSKUDetail WHERE PickDetailStatus > @cPickStsFilter1
-      --SET @cSQLStatus = ' AND pick.pickDetailStatus <= ''' + @cPickStsFilter1 +''''
+         IF ISNULL(@cPickStsLT1,'') = '1' 
+         BEGIN
+          DELETE FROM @tempPickDetail WHERE PickDetailStatus > @cPickStsFilter1
+         --SET @cSQLStatus = ' AND pick.pickDetailStatus <= ''' + @cPickStsFilter1 +''''
+         END
+         ELSE IF ISNULL(@cPickStsEQ2,'') = '1' 
+         BEGIN
+            DELETE FROM @tempPickDetail WHERE PickDetailStatus <> @cPickStsFilter1
+            --SET @cSQLStatus = ' AND pick.pickDetailStatus = ''' + @cPickStsFilter1 +''''
+         END
       END
-      ELSE IF ISNULL(@cPickStsEQ2,'') = '1' 
+
+      IF NOT EXISTS (SELECT 1 FROM @tempPickDetail)
       BEGIN
-         DELETE FROM #pickSKUDetail WHERE PickDetailStatus <> @cPickStsFilter1
-         --SET @cSQLStatus = ' AND pick.pickDetailStatus = ''' + @cPickStsFilter1 +''''
+         SET @b_Success = 0    
+         SET @n_Err = 1000864    
+         SET @c_ErrMsg = 'With PickStatusFilter1(' + @cPickStsFilter1 + ') ' +
+                           CASE WHEN ISNULL(@cPickStsLT1,'') = '1'  
+                                 THEN 'AND PickStatusLT1 enabled, '
+                              WHEN ISNULL(@cPickStsEQ2,'') = '1' 
+                                 THEN 'AND PickStatusEQ2 enabled, '
+                              ELSE '' END +
+                           API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Result No PickDetail found. Function : isp_GetToPackDetail'    
+         GOTO EXIT_SP
       END
    END
+   
+
+   INSERT INTO #pickSKUDetail    
+   SELECT SKU             
+      ,  SUM(QtyToPack)
+      ,  OrderKey        
+      ,  PickslipNo      
+      ,  LoadKey         
+      ,  ''
+   FROM @tempPickDetail
+   GROUP BY SKU,OrderKey,PickslipNo,LoadKey
+
+   DELETE FROM @tempPickDetail;
 
    --SELECT * FROM #pickSKUDetail    
    --check storerConfig to skip cartonize    
@@ -1001,6 +1043,7 @@ BEGIN
    --LEFT JOIN dbo.packDetail PD WITH (NOLOCK) on (pick.pickslipNo = PD.pickslipNo and PD.storerKey = PD.storerKey)    
 
    
+   --PRINT @cSQLCobine
    INSERT INTO @packSKUDetail    
    EXEC sp_executesql @cSQLCobine    
       ,N'@cSkipSKUADScn NVARCHAR(1)'    
@@ -1449,6 +1492,7 @@ BEGIN
                ) AS Lottable
       , @cStatus AS [status]  
    FROM @packSKUDetail p
+   ORDER BY p.QtyToPack DESC
    FOR JSON AUTO, INCLUDE_NULL_VALUES) AS Details    
    ,@nTtlQtyPack AS TTLQTYPack  
    ,@nPackedQty AS PackedQTY  

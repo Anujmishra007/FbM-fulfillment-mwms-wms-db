@@ -111,7 +111,6 @@ DECLARE @cPaperPrinter  NVARCHAR ( 30)
 DECLARE @cTCPPrinter    NVARCHAR ( 30)
 DECLARE @cPrinter       NVARCHAR ( 20)
 DECLARE @cProcesstype   NVARCHAR ( 20)
-DECLARE @nJobID         NVARCHAR ( 20)
 DECLARE @nRC            INT
 DECLARE @cSQL           NVARCHAR ( MAX)
 DECLARE @cSQLParam      NVARCHAR ( MAX)
@@ -350,7 +349,7 @@ BEGIN
          , @c_ErrMsg    = @c_ErrMsg          OUTPUT
          , @c_PrintSource  = @c_PrintSource        
          , @b_SCEPreView   = 0         
-         , @c_JobIDs      = @nJobID         OUTPUT    
+         , @c_JobIDs      = @cLabelJobID         OUTPUT    
          , @c_AutoPrint  = 'N' 
          
          --To avoid the label print in sequence
@@ -358,9 +357,6 @@ BEGIN
          --    but UCC print out first, 
 
          WAITFOR DELAY '00:00:02'
-
-
-         SET @cLabelJobID = @nJobID
 
          FETCH NEXT FROM @cCurLabel INTO @cReportType
 
@@ -552,10 +548,8 @@ BEGIN
             , @c_ErrMsg       = @c_ErrMsg          OUTPUT
             , @c_PrintSource  = @c_PrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs       = @nJobID         OUTPUT    
+            , @c_JobIDs       = @cPackingJobID         OUTPUT    
             , @c_AutoPrint    = 'N'   
-                     
-            SET @cPackingJobID = @nJobID 
 
             FETCH NEXT FROM @cCurPaper INTO @cReportType
 
@@ -747,10 +741,8 @@ BEGIN
                , @c_ErrMsg       = @c_ErrMsg          OUTPUT
                , @c_PrintSource  = @c_PrintSource        
                , @b_SCEPreView   = 0         
-               , @c_JobIDs       = @nJobID         OUTPUT    
+               , @c_JobIDs       = @cPackingJobID         OUTPUT    
                , @c_AutoPrint    = 'N'   
-                        
-               SET @cPackingJobID = @nJobID 
 
                FETCH NEXT FROM @cCurPaper INTO @cReportType
 
