@@ -332,17 +332,23 @@ BEGIN
       BEGIN
          IF @nStep = 4
          BEGIN
-            -- Print label
-            IF EXISTS( SELECT 1
-               FROM rdt.rdtReport WITH (NOLOCK)
-               WHERE ReportType = 'SHIPCLABEL'
-                  AND StorerKey = @cStorerKey
-                  AND (Function_ID = @nFunc OR Function_ID = 0))
-            BEGIN
-               SET @nAfterScn = 4654
-               SET @nAfterStep = 5
-               GOTO QUIT
-            END
+            SELECT @cOutField02 = SUM(PD.QTY * SKU.GROSSWGT)
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU)
+            WHERE PickSlipNo = @cPickSlipNo
+               AND CartonNo  = @nCartonNo
+            GROUP BY PD.PickSlipNo, PD.CartonNo
+
+            SELECT
+               @cOutField05 = rdt.rdtFormatFloat( [Length]),
+               @cOutField06 = rdt.rdtFormatFloat( [Width]),
+               @cOutField07 = rdt.rdtFormatFloat( [Height])
+            FROM dbo.PackInfo WITH (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+               AND CartonNo  = @nCartonNo
+
+            SET @nAfterStep = 99
+            GOTO QUIT
          END
       END
       IF @nCurrentStep = 3

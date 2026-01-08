@@ -356,7 +356,7 @@ BEGIN
                ' AND PD.StorerKey = @cStorerKey ' + 
                ' AND PD.SKU = @cSKU ' + 
                ' AND PD.Status IN (' + @cPickStatus + ') ' + 
-               CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
+               --CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam = 
             ' @cOrderKey   NVARCHAR( 10), ' + 

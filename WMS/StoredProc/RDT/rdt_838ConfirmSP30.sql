@@ -209,19 +209,19 @@ BEGIN
    
    IF @cNewLine = 'Y'
    BEGIN
-      IF @cUCCNo <> '' AND EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) 
+      IF @cUCCNo <> '' AND EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo AND RefNo = @cUCCNo AND SKU = @cSKU)
       BEGIN
          -- Update Packdetail
          UPDATE dbo.PackDetail WITH (ROWLOCK) SET
-            SKU = @cSKU, 
-            QTY = QTY + @nQTY, 
+            SKU = @cSKU,
+            QTY = QTY + @nQTY,
             DropID =  DropID ,
-            EditWho = 'rdt.' + SUSER_SNAME(), 
-            EditDate = GETDATE(), 
+            EditWho = 'rdt.' + SUSER_SNAME(),
+            EditDate = GETDATE(),
             ArchiveCop = NULL
          WHERE PickSlipNo = @cPickSlipNo
-            AND RefNo = @cUCCNo 
+            AND RefNo = @cUCCNo
             AND SKU = @cSKU
          IF @@ERROR <> 0
          BEGIN
@@ -229,16 +229,18 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
             GOTO RollBackTran
          END
+         SELECT @nCartonNo = CartonNo,@cLabelNo = LabelNo FROM dbo.PackDetail WITH (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo AND RefNo = @cUCCNo AND SKU = @cSKU
       END
-      ELSE 
+      ELSE
       BEGIN
          -- Insert PackDetail
          INSERT INTO dbo.PackDetail
-            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, 
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY,
             DropID, RefNo, RefNo2, UPC,
             AddWho, AddDate, EditWho, EditDate)
          VALUES
-            (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY, 
+            (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY,
             @cDropID, @cRefNo, @cRefNo2, @cUPC,
             'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
          IF @@ERROR <> 0
