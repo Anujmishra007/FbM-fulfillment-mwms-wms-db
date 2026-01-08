@@ -11,6 +11,7 @@ GO
 /*                                                                            */  
 /* Date        Rev     Author   Purposes                                      */  
 /* 2025-10-28  1.0.0   Dennis   FCR-8472 Created                              */  
+/* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields    */  
 /******************************************************************************/  
   
 CREATE OR ALTER PROC  [RDT].[rdt_898ExtScn03] (
@@ -277,6 +278,53 @@ BEGIN
                GOTO Quit
             END
             SELECT @dLottable04 = DateADD(DAY,ISNULL(ShelfLife,0),@cLottable03) FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+
+            -- Extended validate SP
+            IF @cExtendedValidateSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+               BEGIN
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                     '  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
+                     ' ,@cUCC, @cSKU, @nQTY, @cParam1 OUTPUT, @cParam2 OUTPUT, @cParam3 OUTPUT, @cParam4 OUTPUT, @cParam5 OUTPUT, @cOption ' +
+                     ' ,@nErrNo   OUTPUT ' +
+                     ' ,@cErrMsg  OUTPUT '
+                  SET @cSQLParam = +
+                     '  @nMobile     INT       ' +
+                     ' ,@nFunc       INT       ' +
+                     ' ,@cLangCode   NVARCHAR(  3) ' +
+                     ' ,@nStep       INT       ' +
+                     ' ,@nInputKey   INT       ' +
+                     ' ,@cReceiptKey NVARCHAR( 10) ' +
+                     ' ,@cPOKey      NVARCHAR( 10) ' +
+                     ' ,@cLOC        NVARCHAR( 10) ' +
+                     ' ,@cToID       NVARCHAR( 18) ' +
+                     ' ,@cLottable01 NVARCHAR( 18) ' +
+                     ' ,@cLottable02 NVARCHAR( 18) ' +
+                     ' ,@cLottable03 NVARCHAR( 18) ' +
+                     ' ,@dLottable04 DATETIME      ' +
+                     ' ,@cUCC        NVARCHAR( 20) ' +
+                     ' ,@cSKU        NVARCHAR( 20) ' +
+                     ' ,@nQTY        INT           ' +
+                     ' ,@cParam1     NVARCHAR( 20) OUTPUT ' +
+                     ' ,@cParam2     NVARCHAR( 20) OUTPUT ' +
+                     ' ,@cParam3     NVARCHAR( 20) OUTPUT ' +
+                     ' ,@cParam4     NVARCHAR( 20) OUTPUT ' +
+                     ' ,@cParam5     NVARCHAR( 20) OUTPUT ' +
+                     ' ,@cOption     NVARCHAR( 1)  ' +
+                     ' ,@nErrNo      INT       OUTPUT ' +
+                     ' ,@cErrMsg     NVARCHAR( 20) OUTPUT '
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04
+                     ,@cUCC, @cSKU, @nQTY, @cParam1 OUTPUT, @cParam2 OUTPUT, @cParam3 OUTPUT, @cParam4 OUTPUT, @cParam5 OUTPUT, @cOption
+                     ,@nErrNo   OUTPUT
+                     ,@cErrMsg  OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO Quit
+               END
+            END
+
 
             SET @cOutField06 = CASE WHEN @cLottable01 <> '' THEN @cLottable01 ELSE @cTempLottable01 END
             SET @cOutField07 = CASE WHEN @cLottable02 <> '' THEN @cLottable02 ELSE @cTempLottable02 END
