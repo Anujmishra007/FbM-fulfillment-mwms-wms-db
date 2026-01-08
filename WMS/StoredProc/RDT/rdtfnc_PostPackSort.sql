@@ -23,6 +23,7 @@ GO
 /*                            as default output ExtendedInfo (james03)     */
 /* 2022-01-13   1.5  James    WMS-18506 Add ExtUpdSP to close plt (james04)*/
 /* 2025-11-20   1.6  Dennis   UWP-44482 Fix Bugs                           */
+/* 2026-01-07   1.7  NYE018   FCR-9508 added the extended screen and print */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPackSort](
@@ -82,6 +83,12 @@ DECLARE
    @nRowCount           INT,
    @cCheckOrderMustPickComplete  NVARCHAR( 1),
    
+   -- NEW VARIABLES FOR EXTENDED SCREEN - (NYE018 - FCR-9508)
+   @cExtScnSP           NVARCHAR( 20),
+   @tExtScnData         VariableTable,
+   @nAction             INT,
+   -- END NEW VARIABLES - (NYE018 - FCR-9508)
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1),
@@ -98,6 +105,35 @@ DECLARE
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),  @cFieldAttr14 NVARCHAR( 1),
    @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),  @cFieldAttr15 NVARCHAR( 1)
 
+   -- Variables for Extended Screen Entry - (NYE018 - FCR-9508)
+   DECLARE 
+   @cLottable01 NVARCHAR( 18),
+   @cLottable02 NVARCHAR( 18),
+   @cLottable03 NVARCHAR( 18),
+   @dLottable04 DATETIME,
+   @dLottable05 DATETIME,
+   @cLottable06 NVARCHAR( 30),
+   @cLottable07 NVARCHAR( 30),
+   @cLottable08 NVARCHAR( 30),
+   @cLottable09 NVARCHAR( 30),
+   @cLottable10 NVARCHAR( 30),
+   @cLottable11 NVARCHAR( 30),
+   @cLottable12 NVARCHAR( 30),
+   @dLottable13 DATETIME,
+   @dLottable14 DATETIME,
+   @dLottable15 DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
+   --end of declaration of extended screen variables - (NYE018 - FCR-9508)
 -- Getting Mobile information
 SELECT
    @nFunc            = Func,
@@ -124,6 +160,7 @@ SELECT
    @cPickDetailCartonID = V_String6,
    @cPickConfirmStatus  = V_String7,
    @cCheckOrderMustPickComplete = V_String8,
+   @cExtScnSP           = V_String9, -- (NYE018 - FCR-9508)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -144,18 +181,23 @@ SELECT
 FROM rdt.rdtMobRec WITH (NOLOCK)
 WHERE Mobile = @nMobile
 
+-- Initialize Action
+SET @nAction = 0
+
 -- Screen constant
 DECLARE
    @nStep_FromCarton    INT,  @nScn_FromCarton     INT,
    @nStep_ToPallet      INT,  @nScn_ToPallet       INT,
    @nStep_ClosePallet   INT,  @nScn_ClosePallet    INT,
-   @nStep_Message       INT,  @nScn_Message        INT
+   @nStep_Message       INT,  @nScn_Message        INT,
+   @nStep_ExtendedScreen  INT
 
 SELECT
    @nStep_FromCarton  = 1,  @nScn_FromCarton   = 5590,
    @nStep_ToPallet    = 2,  @nScn_ToPallet     = 5591,
    @nStep_ClosePallet = 3,  @nScn_ClosePallet  = 5592,
-   @nStep_Message     = 4,  @nScn_Message      = 5593
+   @nStep_Message     = 4,  @nScn_Message      = 5593,
+   @nStep_ExtendedScreen = 99
 
 IF @nFunc = 1837
 BEGIN
@@ -165,7 +207,7 @@ BEGIN
    IF @nStep = 2  GOTO Step_ToPallet      -- Scn = 5591. Scan To Pallet ID
    IF @nStep = 3  GOTO Step_ClosePallet   -- Scn = 5592. Close Pallet
    IF @nStep = 4  GOTO Step_Message       -- Scn = 5593. DisplayMsg 
-
+   IF @nStep = 99 GOTO Step_ExtendedScreen -- Extended Screen Entry - (NYE018 - FCR-9508)
 END
 
 RETURN -- Do nothing if incorrect step
@@ -175,6 +217,12 @@ Step_Start. Func = 1837
 ********************************************************************************/
 Step_Start:
 BEGIN
+
+   -- START CHANGE: Load ExtScnSP Config - (NYE018 - FCR-9508)
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtScnSP = '0' SET @cExtScnSP = ''
+   -- END CHANGE - (NYE018 - FCR-9508)
+
    -- Get storer config
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'  
@@ -908,6 +956,15 @@ Step_ClosePallet:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
+
+      -- START CHANGE: Redirect to Extended Screen (Step 99) if configured - (NYE018 - FCR-9508)
+      IF @cExtScnSP <> ''
+      BEGIN
+         SET @nStep = 99
+         GOTO Step_ExtendedScreen
+      END
+      -- END CHANGE - (NYE018 - FCR-9508)
+
       -- Screen mapping
       SET @cOption = @cInField01
 
@@ -1092,6 +1149,75 @@ END
 GOTO Quit
 
 /********************************************************************************
+Step_ExtendedScreen (Step 99)
+********************************************************************************/
+Step_ExtendedScreen:
+BEGIN
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         -- Clear output fields to prevent ghost data
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
+         SET @cOutField03 = ''
+         SET @cOutField04 = ''
+
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+         ('@cOption',   @cInField01),
+         ('@cCartonID', @cCartonID),
+         ('@cPalletID', @cPalletID),
+         ('@cPPS_LOC',  @cPPS_Loc),
+         ('@cPrinter',  @cLabelPrinter),
+         ('@cPaperPrinter',  @cPaperPrinter),
+         ('@cFacility', @cFacility),
+         ('@cUserName', @cUserName),
+         ('@cLoadKey',  @cLoadKey),
+         ('@cPickDetailCartonID', @cPickDetailCartonID)
+
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+         @cExtScnSP, 
+         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nAction, 
+         @nScn     OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT, 
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Quit
+            
+      END
+   END
+   GOTO Quit
+END
+
+/********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
 Quit:
@@ -1114,6 +1240,7 @@ BEGIN
       V_String6  = @cPickDetailCartonID,
       V_String7  = @cPickConfirmStatus,
       V_String8 = @cCheckOrderMustPickComplete,
+      V_String9 = @cExtScnSP, -- - (NYE018 - FCR-9508)
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
