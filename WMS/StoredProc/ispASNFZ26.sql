@@ -70,7 +70,7 @@ BEGIN
    FROM RECEIPT R (NOLOCK)
    WHERE R.ReceiptKey = @c_Receiptkey
 
-   SELECT @c_CDLUUDF02 = UDF02
+   SELECT @c_CDLUUDF02 = UDF01
    FROM Codelkup (NOLOCK)
    WHERE StorerKey = @c_StorerKey
      AND ListName  = 'RECEIPTGRP'
