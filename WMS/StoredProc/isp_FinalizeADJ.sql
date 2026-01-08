@@ -410,7 +410,7 @@ BEGIN
                ,Lottable13
                ,Lottable14
                ,Lottable15
-               ,SerialNo                                                            --(Wan04)
+               ,ISNULL(SerialNo,'')                                                            --(Wan04)
          FROM   ADJUSTMENTDETAIL WITH (NOLOCK)
          WHERE  Adjustmentkey = @c_ADJKey
                   AND FinalizedFlag IN ('N' ,'S' ,'A')
