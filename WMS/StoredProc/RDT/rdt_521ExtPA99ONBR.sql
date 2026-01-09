@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: Copy rdt_521ExtPA99ONBR                                 */
+/* Store procedure: rdt_521ExtPA99ONBR                                 */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: Customized PA logic for Onbr                                */
@@ -26,11 +26,11 @@ CREATE OR ALTER PROC [RDT].[rdt_521ExtPA99ONBR] (
    @cUCCNo           NVARCHAR( 100),
    @cSKU             NVARCHAR( 20),
    @nQty             INT,          
-   @cSuggestedLOC    NVARCHAR( 10)      OUTPUT,  
-   @cPickAndDropLoc  NVARCHAR( 10)      OUTPUT,  
-   @nPABookingKey    INT                OUTPUT ,  
-   @nErrNo           INT                OUTPUT, 
-   @cErrMsg          NVARCHAR( 20) = ''     OUTPUT  
+   @cSuggestedLOC    NVARCHAR( 10)         OUTPUT,  
+   @cPickAndDropLoc  NVARCHAR( 10)  null   OUTPUT,  
+   @nPABookingKey    INT                   OUTPUT,  
+   @nErrNo           INT                   OUTPUT, 
+   @cErrMsg          NVARCHAR( 20) =''     OUTPUT  
 ) AS
 BEGIN
    SET NOCOUNT ON
@@ -83,6 +83,8 @@ BEGIN
 			@cPndM4             NVARCHAR(10),
 			@cPndRk             NVARCHAR(10)
 	
+
+	SET @cSuggestedLOC = ''
 
 -- Get putaway strategy  
 	SELECT @cPAStrategyKey  = ISNULL(Short,''),
@@ -173,8 +175,7 @@ BEGIN
 	END
 	-- End get configs
 
-	SET @cSuggestedLOC = ''
-	SET @cPickAndDropLoc = ''
+
 
 	--Validate if exists any SKU with cube = 0
 	IF ISNULL(@cUCCNo,'') = ''
@@ -378,7 +379,7 @@ BEGIN
 				 AND UU.StorerKey = @cStorerKey
 				 --AND LL.PutawayZone = @cPAzoneRack
 				 AND (LL.Status = 'HOLD'
-				 OR LL.LocationFlag = 'HOLD')
+				 AND LL.LocationFlag = 'HOLD')
 				 AND LL.LOC IN (@cBuffRk, @cPndRk)
 				 AND LL.LocationCategory = @cPAzoneRack
 		   )
@@ -407,7 +408,7 @@ BEGIN
 					JOIN dbo.LOC as LCM WITH (NOLOCK)
 					  ON BPM.LOC = LCM.LOC 
 					 AND (LCM.Status <> 'HOLD' 
-					 OR LCM.LocationFlag <> 'HOLD')
+					 AND LCM.LocationFlag <> 'HOLD')
 					WHERE LCM.PutawayZone IN (
 						  SELECT CODE FROM DBO.CODELKUP WITH (NOLOCK) 
 						  WHERE LISTNAME = 'ONBRAZONES' AND SHORT = 1
@@ -521,8 +522,60 @@ BEGIN
 			 WHERE LOC = @cLOC
 
 			IF @cPAzoneRack = @cOriginZone
+			-- Validate if ToLoc allow mix SKU
 			BEGIN
 				WITH Loc_Filtered_Rack AS (
+				SELECT 
+					UCC.LOC,
+					COUNT(UCCNO) AS QtyUcc,
+					LOC.LogicalLocation,
+					LOC.MaxCarton,
+					LOC.CommingleSku,
+					COUNT(DISTINCT UCC.SKU) AS QtySKU,
+					CASE 
+						WHEN COUNT(DISTINCT UCC.SKU) = 1 THEN MIN(UCC.SKU) 
+						ELSE '' 
+					END AS SKU
+				FROM dbo.UCC WITH (NOLOCK)
+				JOIN dbo.LOC WITH (NOLOCK)
+					ON LOC.LOC = UCC.LOC
+				   AND LOC.FACILITY = @cFacility
+				   AND LOC.PutawayZone = @cOriginZone
+				   AND LOC.HOSTWHCODE = @cLottable02
+				   AND LOC.LOC NOT IN (@cPAzonePNDRack, @cBuffRk)
+				   AND LOC.Status <> 'HOLD' 
+				   AND LOC.LOCATIONFLAG <> 'HOLD'
+				WHERE STORERKEY = @cStorerKey
+				  AND UCC.STATUS <= '3'
+				GROUP BY 
+					UCC.LOC,
+					LOC.LogicalLocation,
+					LOC.MaxCarton,
+					LOC.CommingleSku
+			)
+			SELECT TOP 1
+				   @cSuggestedLOC    = LOC,
+				   @cLogicalLocation = LogicalLocation,
+				   @cSku             = CASE 
+											WHEN CommingleSku = 0 THEN SKU 
+											ELSE @cSku 
+									   END
+			FROM Loc_Filtered_Rack
+			WHERE
+				-- Capacidade sempre obrigatória
+				QtyUcc + 1 <= MaxCarton
+			AND
+			(
+				-- Não multi-SKU
+				(CommingleSku = 0 AND QtySKU = 1 AND SKU = @cSKU)
+
+				OR
+
+				-- Multi-SKU permitido
+				(CommingleSku = 1)
+			)
+			ORDER BY LogicalLocation
+			/*	WITH Loc_Filtered_Rack AS (
 					SELECT UCC.LOC,
 					 COUNT(UCCNO) AS QtyUcc,
 					 LOC.LogicalLocation,
@@ -564,7 +617,7 @@ BEGIN
 					  )
 					 ORDER BY LogicalLocation
 				   END
-
+            */
 			IF @cSuggestedLOC = ''
 				BEGIN
 					SET @nErrNo = 253564
@@ -656,13 +709,13 @@ BEGIN
 	END
 	ELSE
 	BEGIN
-		IF @cFinalLocPAZoneS = 'ONBR_MEZ01'
+		IF @cFinalLocPAZoneS = 'ONBR_M1'
 			SET @cLocBuffer = @cBuffM1
-		ELSE IF @cFinalLocPAZoneS = 'ONBR_MEZ02'
+		ELSE IF @cFinalLocPAZoneS = 'ONBR_M2'
 			SET @cLocBuffer = @cBuffM2
-		ELSE IF @cFinalLocPAZoneS = 'ONBR_MEZ03'
+		ELSE IF @cFinalLocPAZoneS = 'ONBR_M3'
 			SET @cLocBuffer = @cBuffM3
-		ELSE IF @cFinalLocPAZoneS = 'ONBR_MEZ04'
+		ELSE IF @cFinalLocPAZoneS = 'ONBR_M4'
 			SET @cLocBuffer = @cBuffM4
 	END
 
@@ -837,6 +890,11 @@ BEGIN
 		END
 END --END 523
 Quit:
+IF ISNULL(@nErrNo, 0) <> 0 AND @nFunc = 523
+BEGIN
+    ;THROW @nErrNo, @cErrMsg, 1; --ErrNo > 5000
+END
+RETURN
 END --END SP
 GO
 
