@@ -485,14 +485,14 @@ BEGIN
       -- Update or Delete Packinfo based on qty comparison
       -- Delete Packinfo where qty match
       -- Delete only, trigger will update the qty accordingly
-      DELETE PIF
-      FROM PACKINFO PIF
-      JOIN PACKDETAIL PD (NOLOCK) ON PIF.PickSlipNo = PD.PickSlipNo AND PIF.CartonNo = PD.CartonNo
-      JOIN #T_Packdetail T_Pack ON PIF.PickSlipNo = T_Pack.PickSlipNo AND PIF.CartonNo = T_Pack.CartonNo
-      JOIN #T_CaseID T_CaseID ON PD.LabelNo = T_CaseID.CaseID 
-                              AND PD.StorerKey = T_CaseID.Storerkey 
-                              AND PD.SKU = T_CaseID.SKU
-      WHERE PD.Qty = T_CaseID.Qty
+      --DELETE PIF
+      --FROM PACKINFO PIF
+      --JOIN PACKDETAIL PD (NOLOCK) ON PIF.PickSlipNo = PD.PickSlipNo AND PIF.CartonNo = PD.CartonNo
+      --JOIN #T_Packdetail T_Pack ON PIF.PickSlipNo = T_Pack.PickSlipNo AND PIF.CartonNo = T_Pack.CartonNo
+      --JOIN #T_CaseID T_CaseID ON PD.LabelNo = T_CaseID.CaseID 
+      --                        AND PD.StorerKey = T_CaseID.Storerkey 
+      --                        AND PD.SKU = T_CaseID.SKU
+      --WHERE PD.ExpQty = T_CaseID.Qty
 
       IF @b_debug = 0 AND @n_Continue IN (1,2) 
       BEGIN
