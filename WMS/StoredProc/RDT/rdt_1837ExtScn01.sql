@@ -94,7 +94,6 @@ BEGIN
    SET @nAfterScn = 0
    SET @nAfterStep = 0
 
-   -- Initialize variables from rdtMobRec (Matching logic in rdtfnc_PostPackSort)
    SELECT 
       @nOrignStep     = Step,
       @nOrignScn      = Scn,
@@ -112,31 +111,22 @@ BEGIN
    IF @nDebugFlag = 1
       SELECT 'Executing rdt_1837ExtScn01', @cCartonID, @cPalletID, @cPPS_Loc
 
+
    IF @nFunc = 1837
    BEGIN
-      -- Handle Step 99 (Extended Screen Delegation)
-      IF @nStep = 99
-      BEGIN
-         
-         -- 1. Initialization: Arriving from Standard Screen 5592 (Close Pallet)
-         -- The Main SP redirect logic sets @nStep=99, but @nScn remains 5592.
-         IF @nScn = 5592 
-         BEGIN
-            -- Set up target screen 6776
-            SET @nAfterScn = 6776
-            SET @nAfterStep = 99
-            
-            -- Initialize Output Fields if necessary
-            SET @cOutField01 = '' -- Clear option input
-            
-            GOTO Quit
-         END
-    --   END
-    --   -- We are in Step 3 (Close Pallet)
-    --   IF @nOrignStep = 3 
-    --   BEGIN
 
-         IF @nScn = 6776  -- Close Pallet Extended Screen
+        IF @nScn = 5592
+            BEGIN
+                -- Set up target screen 6776
+                SET @nAfterScn = 6776
+                SET @nAfterStep = 99
+
+                SET @cOutField01 = '' -- Clear option input
+                
+                GOTO Quit
+            END
+
+        IF @nScn = 6776  -- Close Pallet Extended Screen
          /********************************************************************************
          Scn = 6776. 
          Close Pallet Option?
@@ -146,167 +136,194 @@ BEGIN
             Option (field01)
          ********************************************************************************/
          BEGIN
-
-            IF @nInputKey = 1 -- ENTER
+            IF @nStep = 99 -- 99 start
             BEGIN
+                IF @nInputKey = 1 -- ENTER
+                BEGIN
 
-               -- Screen mapping (Standard Input Field)
-               SET @cOption = @cInField01
+                -- Screen mapping (Standard Input Field)
+                SET @cOption = @cInField01
 
-               -- Validate blank
-               IF @cOption = ''
-               BEGIN
-                  SET @nErrNo = 255901 -- Option Required
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                  GOTO Scn_6776_Fail
-               END
+                INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)
+                VALUES ('1837Ext_Input', GETDATE(), 'Opt:' + ISNULL(@cOption,'NULL'), 'Pal:' + ISNULL(@cPalletID,'NULL'), 'Scn:' + CAST(@nScn AS VARCHAR), 'Trn:' + CAST(@@TRANCOUNT AS VARCHAR), '')
 
-               -- Validate option
-               IF @cOption NOT IN ('1', '2', '3')
-               BEGIN
-                  SET @nErrNo = 255902 -- Invalid Option
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                  GOTO Scn_6776_Fail
-               END
+                -- Validate blank
+                IF @cOption = ''
+                BEGIN
+                    SET @nErrNo = 255901
+                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Option Required
+                    GOTO Scn_6776_Fail
+                END
 
-               -- NO (Option 2) - Return to previous screen
-               IF @cOption = '2' 
-               BEGIN
-                  SET @nAfterScn = 5590
-                  SET @nAfterStep = 1
-                  SET @nErrNo = 0
-                  SET @cErrMsg = ''
-                  GOTO Quit
-               END
+                -- Validate option
+                IF @cOption NOT IN ('1', '2', '3')
+                BEGIN
+                    SET @nErrNo = 255902
+                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')-- Invalid Option
+                    GOTO Scn_6776_Fail
+                END
 
-               -- YES (1) or YES + PRINT (3)
-               IF @cOption IN ('1', '3')
-               BEGIN
-                  SET @nTranCount = @@TRANCOUNT
-                  BEGIN TRAN
-                  SAVE TRAN rdt_1837ExtScn01_6776
+                -- NO (Option 2) - Return to previous screen
+                IF @cOption = '2' 
+                BEGIN
+                    SET @nAfterScn = 5590
+                    SET @nAfterStep = 1
+                    SET @nErrNo = 0
+                    SET @cErrMsg = ''
+                    GOTO Quit
+                END
 
-                  -- 1. Close Pallet (Call existing SP)
-                  EXEC rdt.rdt_PostPackSort_ClosePallet
-                     @nMobile             = @nMobile,    
-                     @nFunc               = @nFunc,    
-                     @cLangCode           = @cLangCode,    
-                     @cStorerKey          = @cStorerKey,    
-                     @cFacility           = @cFacility,     
-                     @cCartonID           = @cCartonID, 
-                     @cPalletID           = @cPalletID, 
-                     @cLoadKey            = @cLoadKey, 
-                     @cLoc                = @cPPS_Loc, 
-                     @cOption             = @cOption, 
-                     @cPickDetailCartonID = @cPickDetailCartonID,    
-                     @tClosePallet        = @tClosePallet,    
-                     @nErrNo              = @nErrNo            OUTPUT,    
-                     @cErrMsg             = @cErrMsg           OUTPUT    
+                -- YES (1) or YES + PRINT (3)
+                IF @cOption IN ('1', '3')
+                BEGIN
+                    SET @nTranCount = @@TRANCOUNT
+                    BEGIN TRAN
+                    SAVE TRAN rdt_1837ExtScn01_6776
 
-                  IF @nErrNo <> 0 
-                  BEGIN
-                     ROLLBACK TRAN rdt_1837ExtScn01_6776
-                     GOTO Scn_6776_Fail
-                  END
+                    -- DEBUG TRACE: Inside Logic Block
+                    INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5) 
+                    VALUES ('1837Ext_StartTrn', GETDATE(), 'Opt:' + @cOption, 'Fac:' + @cFacility, 'Cart:' + @cCartonID, 'Trn:' + CAST(@@TRANCOUNT AS VARCHAR), '')
 
-                  -- 2. Auto Complete ASTMV Task
-                  SET @cAutoCompASTMV = rdt.rdtGetConfig(@nFunc, 'AutoCompASTMV', @cStorerKey)
-                  
-                  IF @cAutoCompASTMV = '1'
-                  BEGIN
-                     -- Find the ASTMV task created by ClosePallet logic
-                     SELECT TOP 1 @cTaskDetailKey = TaskDetailKey, @cToLoc = ToLoc
-                     FROM TASKDETAIL (NOLOCK)
-                     WHERE TaskType = 'ASTMV' 
-                     AND FromID = @cPalletID 
-                     AND StorerKey = @cStorerKey
-                     AND Status = '0'
-                     ORDER BY AddDate DESC
+                    -- 1. Close Pallet (Call existing SP)
+                    EXEC rdt.rdt_PostPackSort_ClosePallet
+                        @nMobile             = @nMobile,    
+                        @nFunc               = @nFunc,    
+                        @cLangCode           = @cLangCode,    
+                        @cStorerKey          = @cStorerKey,    
+                        @cFacility           = @cFacility,     
+                        @cCartonID           = @cCartonID, 
+                        @cPalletID           = @cPalletID, 
+                        @cLoadKey            = @cLoadKey, 
+                        @cLoc                = @cPPS_Loc, 
+                        @cOption             = @cOption, 
+                        @cPickDetailCartonID = @cPickDetailCartonID,    
+                        @tClosePallet        = @tClosePallet,    
+                        @nErrNo              = @nErrNo            OUTPUT,    
+                        @cErrMsg             = @cErrMsg           OUTPUT    
 
-                     IF @cTaskDetailKey IS NOT NULL
-                     BEGIN
-                         -- Perform Move
-                         EXEC rdt.rdt_Move
-                            @nMobile     = @nMobile,
-                            @cLangCode   = @cLangCode, 
-                            @nErrNo      = @nErrNo  OUTPUT,
-                            @cErrMsg     = @cErrMsg OUTPUT,
-                            @cSourceType = 'rdt_1837ExtScn01', 
-                            @cStorerKey  = @cStorerKey,
-                            @cFacility   = @cFacility, 
-                            @cFromLOC    = @cPPS_Loc, 
-                            @cToLOC      = @cToLoc, 
-                            @cFromID     = @cPalletID, 
-                            @cToID       = NULL,
-                            @nFunc       = @nFunc 
+                        -- DEBUG TRACE: After ClosePallet SP
+                    INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)
+                    VALUES ('1837Ext_PostSP', GETDATE(), 'Err:' + CAST(@nErrNo AS VARCHAR), LEFT(@cErrMsg, 45), 'Pal:' + @cPalletID, '', '')
 
-                         IF @nErrNo <> 0
-                         BEGIN
-                            ROLLBACK TRAN rdt_1837ExtScn01_6776
-                            GOTO Scn_6776_Fail
-                         END
+                    IF @nErrNo <> 0 
+                    BEGIN
+                        ROLLBACK TRAN rdt_1837ExtScn01_6776
+                        GOTO Scn_6776_Fail
+                    END
 
-                         -- Close task
-                         UPDATE TASKDETAIL SET 
-                            Status = '9',
-                            EditDate = GETDATE(),
-                            EditWho = SUSER_SNAME()
-                         WHERE TaskDetailKey = @cTaskDetailKey
-                     END
-                  END
+                    -- 2. Auto Complete ASTMV Task
+                    SET @cAutoCompASTMV = rdt.rdtGetConfig(@nFunc, 'AutoCompASTMV', @cStorerKey)
+                    
+                    IF @cAutoCompASTMV = '1'
+                    BEGIN
+                        -- Find the ASTMV task created by ClosePallet logic
+                        SELECT TOP 1 @cTaskDetailKey = TaskDetailKey, @cToLoc = ToLoc
+                        FROM TASKDETAIL (NOLOCK)
+                        WHERE TaskType = 'ASTMV' 
+                        AND FromID = @cPalletID 
+                        AND StorerKey = @cStorerKey
+                        AND Status = '0'
+                        ORDER BY AddDate DESC
 
-                  -- 3. Print Labels (Option 3)
-                  IF @cOption = '3'
-                  BEGIN
-                      -- Print Pallet Label
-                      DELETE @tPrintLabelParam
-                      INSERT INTO @tPrintLabelParam (Variable, Value) VALUES ('@PalletID', @cPalletID)
-                         
-                      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
-                        'PPS_PALLET',   -- Configure this ReportType in WMS
-                        @tPrintLabelParam,
-                        'rdtfnc_PostPackSort',   
-                        @nErrNo  OUTPUT,  
-                        @cErrMsg  OUTPUT 
+                        -- DEBUG TRACE: Found Task?
+                        INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)
+                        VALUES ('1837Ext_Task', GETDATE(), 'Task:' + ISNULL(@cTaskDetailKey,'NONE'), 'To:' + ISNULL(@cToLoc,''), '', '', '')
 
-                      -- Print Carton Labels
-                      DELETE @tPrintLabelParam
-                      INSERT INTO @tPrintLabelParam (Variable, Value) VALUES ('@PalletID', @cPalletID)
-                         
-                      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
-                        'PPS_CARTON',   -- Configure this ReportType in WMS
-                        @tPrintLabelParam,
-                        'rdtfnc_PostPackSort',   
-                        @nErrNo  OUTPUT,  
-                        @cErrMsg  OUTPUT 
-                      
-                      -- Suppress print errors to avoid rollback of Pallet Close
-                      SET @nErrNo = 0 
-                      SET @cErrMsg = ''
-                  END
-                  
-                  COMMIT TRAN rdt_1837ExtScn01_6776 -- Only commit change made here
 
-                  -- Loop back to start (Scan Carton)
-                  SET @nAfterScn = 5590
-                  SET @nAfterStep = 1
-                  SET @nErrNo = 0
-                  SET @cErrMsg = ''
-                  
-               END -- Option 1 or 3
-               
-               GOTO Quit
-               
-               Scn_6776_Fail:
-               BEGIN
-                  -- Reset this screen var
-                  -- SET @cOutField01 = '' --Option
-                  GOTO Quit
-               END
+                        IF @cTaskDetailKey IS NOT NULL
+                        BEGIN
+                            -- Perform Move
+                            EXEC rdt.rdt_Move
+                                @nMobile     = @nMobile,
+                                @cLangCode   = @cLangCode, 
+                                @nErrNo      = @nErrNo  OUTPUT,
+                                @cErrMsg     = @cErrMsg OUTPUT,
+                                @cSourceType = 'rdt_1837ExtScn01', 
+                                @cStorerKey  = @cStorerKey,
+                                @cFacility   = @cFacility, 
+                                @cFromLOC    = @cPPS_Loc, 
+                                @cToLOC      = @cToLoc, 
+                                @cFromID     = @cPalletID, 
+                                @cToID       = NULL,
+                                @nFunc       = @nFunc 
 
-            END -- Enter
+                            -- DEBUG TRACE: Found Task?
+                        INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)
+                        VALUES ('1837Ext_Task', GETDATE(), 'Task:' + ISNULL(@cTaskDetailKey,'NONE'), 'To:' + ISNULL(@cToLoc,''), '', '', '')
+
+                            IF @nErrNo <> 0
+                            BEGIN
+                                ROLLBACK TRAN rdt_1837ExtScn01_6776
+                                GOTO Scn_6776_Fail
+                            END
+
+                            -- Close task
+                            UPDATE TASKDETAIL WITH (ROWLOCK) SET 
+                                Status = '9',
+                                EditDate = GETDATE(),
+                                EditWho = SUSER_SNAME()
+                            WHERE TaskDetailKey = @cTaskDetailKey
+                        END
+                    END
+
+                    -- 3. Print Labels (Option 3)
+                    IF @cOption = '3'
+                    BEGIN
+                        -- DEBUG TRACE: Printing
+                        INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)
+                        VALUES ('1837Ext_Print', GETDATE(), 'Printer:' + @cLabelPrinter, 'Pal:' + @cPalletID, '', '', '')
+
+                        -- Print Pallet Label
+                        DELETE @tPrintLabelParam
+                        INSERT INTO @tPrintLabelParam (Variable, Value) VALUES ('@PalletID', @cPalletID)
+                            
+                        EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 3, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
+                            'PPS_PALLET',   -- Configure this ReportType in WMS
+                            @tPrintLabelParam,
+                            'rdtfnc_PostPackSort',   
+                            @nErrNo  OUTPUT,  
+                            @cErrMsg  OUTPUT 
+
+                        -- Print Carton Labels
+                        DELETE @tPrintLabelParam
+                        INSERT INTO @tPrintLabelParam (Variable, Value) VALUES ('@PalletID', @cPalletID)
+                            
+                        EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 3, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
+                            'PPS_CARTON',   -- Configure this ReportType in WMS
+                            @tPrintLabelParam,
+                            'rdtfnc_PostPackSort',   
+                            @nErrNo  OUTPUT,  
+                            @cErrMsg  OUTPUT 
+                        
+                        SET @nErrNo = 0 
+                        SET @cErrMsg = ''
+                    END
+
+                    -- DEBUG TRACE: Pre-Commit
+                    INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)
+                    VALUES ('1837Ext_Commit', GETDATE(), 'Committing...', 'Trn:' + CAST(@@TRANCOUNT AS VARCHAR), '', '', '')
+
+                    
+                    COMMIT TRAN rdt_1837ExtScn01_6776 -- Only commit change made here
+
+                    -- Loop back to start (Scan Carton)
+                    SET @nAfterScn = 5590
+                    SET @nAfterStep = 1
+                    SET @nErrNo = 0
+                    SET @cErrMsg = ''
+                    
+                END -- Option 1 or 3
+                
+                GOTO Quit
+                
+                Scn_6776_Fail:
+                BEGIN
+                    GOTO Quit
+                END
+
+                END -- Enter
+            END -- end step 99
          END -- Scn = 6776 
-      END -- OrignStep = 3
    END -- nFunc = 1837
 
    GOTO Quit
@@ -318,13 +335,9 @@ Quit:
       SELECT @nErrNo AS ErrNo, @cErrMsg AS ErrMsg, @nAfterScn AS AfterScn, @nAfterStep AS AfterStep
    END
    
-   -- If UDF variables needed to satisfy ExtScnEntry output expectations (optional, based on 830 pattern)
-   /*
-   SET @cUDF01 = ...
-   */
-
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
+    
 
 END
 GO

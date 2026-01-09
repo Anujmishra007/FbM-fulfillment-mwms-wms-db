@@ -613,6 +613,11 @@ BEGIN
          SET @nScn = @nScn_ClosePallet
          SET @nStep = @nStep_ClosePallet
 
+         IF @cExtScnSP <> ''
+         BEGIN
+            GOTO Step_ExtendedScreen
+         END
+
          GOTO Quit
       END
 
@@ -956,15 +961,6 @@ Step_ClosePallet:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
-
-      -- START CHANGE: Redirect to Extended Screen (Step 99) if configured - (NYE018 - FCR-9508)
-      IF @cExtScnSP <> ''
-      BEGIN
-         SET @nStep = 99
-         GOTO Step_ExtendedScreen
-      END
-      -- END CHANGE - (NYE018 - FCR-9508)
-
       -- Screen mapping
       SET @cOption = @cInField01
 
