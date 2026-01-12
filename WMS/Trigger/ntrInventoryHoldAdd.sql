@@ -30,7 +30,6 @@ GO
 /* 09-Jul-2025  PPA01         FCR-6025- Added lot and Id level checks   */
 /* 08-Aug-2025  Michael       FCR-6025- Handle Hold&Release(TLOG2)(ML01)*/
 /* 25-Sep-2025  Michael       FCR-7829 Inventory UCC-level HOLD (ML02)  */
-/* 02-Jan-2026  Michael       FCR-9858 Gen TLog2 For ALL (ML03)         */
 /************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrInventoryHoldAdd]
 ON  [dbo].[INVENTORYHOLD]
@@ -70,8 +69,6 @@ BEGIN
          @c_BatchNo          NVARCHAR(18),
          @c_Status           NVARCHAR(10)    -- (SSA02)
        , @c_UCCNo            NVARCHAR(20)    --ML02
-       , @c_Option5          NVARCHAR(MAX)   --ML03
-       , @c_GenTLog2ForALL   NVARCHAR(60)    --ML03
 
    /* IDSV5 - Leo */
    Declare @c_primarykey NVARCHAR(10), @b_interface NVARCHAR(1), @c_transmitlogkey NVARCHAR(10), @c_authority NVARCHAR(1)
@@ -184,7 +181,6 @@ BEGIN
          @c_authority  output,
          @n_err        output,
          @c_errmsg     output
-       , @c_Option5 = @c_Option5 OUTPUT   --ML03
 
       IF @b_success <> 1
       BEGIN
@@ -201,14 +197,11 @@ BEGIN
             SELECT @b_interface = '0'
       END
       
-      SELECT @c_GenTLog2ForALL = dbo.fnc_GetParamValueFromString('@c_GenTLog2ForALL', @c_Option5, '')   --ML03
-
       IF @b_interface = '1'
       BEGIN
 --ML01         IF (@c_hold = '1'  and (dbo.fnc_RTrim(@c_loc) <> '' OR dbo.fnc_RTrim(@c_LOT) <> '' OR  dbo.fnc_RTrim(@c_ID) <> '') ) --PPA01
          IF (dbo.fnc_RTrim(@c_loc) <> '' OR dbo.fnc_RTrim(@c_LOT) <> '' OR  dbo.fnc_RTrim(@c_ID) <> '')   --ML01
             OR dbo.fnc_RTrim(@c_UCCNo) <> ''   --ML02
-            OR @c_GenTLog2ForALL = 'Y'         --ML03
          BEGIN
             EXECUTE nspg_getkey
                'TransmitlogKey2'

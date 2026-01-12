@@ -35,7 +35,6 @@ GO
 /* 2015-09-11   MCTang    1.1   ADD INVHCHGLOG (MC01)                   */ 
 /* 2025-08-08   Michael   1.2   FCR-6025-Add InventoryHold TLOG2 (ML01) */
 /* 2025-09-25   Michael   1.3   FCR-7829 Inventory UCC-level HOLD (ML02)*/
-/* 2026-01-02   Michael   1.4   FCR-9858 Gen TLog2 For ALL (ML03)       */
 /************************************************************************/  
 CREATE OR ALTER TRIGGER [dbo].[ntrInventoryHoldUpdate]  
 ON  [dbo].[INVENTORYHOLD]  
@@ -72,8 +71,6 @@ DECLARE @b_Success     int       -- Populated by calls to stored procedures - wa
       , @c_Hold               NVARCHAR(1)    --ML01
       , @c_authority          NVARCHAR(30)   --ML01
       , @c_UCCNo              NVARCHAR(20)   --ML02
-      , @c_Option5            NVARCHAR(MAX)  --ML03
-      , @c_GenTLog2ForALL     NVARCHAR(60)   --ML03
   
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT, @b_debug = 0  
   
@@ -166,7 +163,6 @@ BEGIN
                , @c_authority  OUTPUT
                , @n_err        OUTPUT
                , @c_errmsg     OUTPUT
-               , @c_Option5 = @c_Option5 OUTPUT   --ML03
 
             IF @b_success <> 1
             BEGIN
@@ -176,13 +172,10 @@ BEGIN
                BREAK
             END
       
-            SELECT @c_GenTLog2ForALL = dbo.fnc_GetParamValueFromString('@c_GenTLog2ForALL', @c_Option5, '')   --ML03
-
             IF @c_authority = '1'
             BEGIN
                IF @c_StorerKey <> '' AND (dbo.fnc_RTrim(@c_Loc) <> '' OR dbo.fnc_RTrim(@c_Lot) <> '' OR  dbo.fnc_RTrim(@c_ID) <> '')
                   OR (@c_StorerKey <> '' AND dbo.fnc_RTrim(@c_UCCNo) <> '')   --ML02
-                  OR @c_GenTLog2ForALL = 'Y'         --ML03
                BEGIN
                   EXECUTE nspg_getkey
                        'TransmitlogKey2'
