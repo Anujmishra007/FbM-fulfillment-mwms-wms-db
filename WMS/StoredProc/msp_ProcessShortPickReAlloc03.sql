@@ -333,11 +333,14 @@ BEGIN
                      WHERE T.OrderKey = PD.OrderKey )
       GROUP BY PD.Pickdetailkey
 
-      IF ISNULL(@c_Taskdetailkey, '') <> ''
-      BEGIN
-         INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
-         SELECT @c_Taskdetailkey
-      END
+      -- Get current taskdetail for the SKU
+      INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
+      SELECT TD.Taskdetailkey
+      FROM TASKDETAIL TD WITH (NOLOCK)
+      WHERE TD.Wavekey = @c_Wavekey
+      AND TD.Storerkey = @c_StorerKey
+      AND TD.Sku = @c_SKU
+      AND TD.TaskType IN ('RPF', 'FCP')
    END
 
    --Unallocate
