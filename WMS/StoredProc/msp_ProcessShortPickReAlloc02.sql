@@ -177,21 +177,14 @@ BEGIN
          --AND PD.Qty = 0
          AND PD.[Status] = '4'
 
-         IF ISNULL(@c_Taskdetailkey, '') <> ''
-         BEGIN
-            INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
-            SELECT @c_Taskdetailkey
-         END
-         ELSE
-         BEGIN
-            INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
-            SELECT TD.Taskdetailkey
-            FROM TASKDETAIL TD WITH (NOLOCK)
-            WHERE TD.Wavekey = @c_Wavekey
-            AND TD.Storerkey = @c_StorerKey
-            AND TD.Sku = @c_SKU
-            AND TD.TaskType IN ('RPF', 'FCP')
-         END
+         -- Get current taskdetail for the SKU
+         INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
+         SELECT TD.Taskdetailkey
+         FROM TASKDETAIL TD WITH (NOLOCK)
+         WHERE TD.Wavekey = @c_Wavekey
+         AND TD.Storerkey = @c_StorerKey
+         AND TD.Sku = @c_SKU
+         AND TD.TaskType IN ('RPF', 'FCP')
       END
    END
 
