@@ -267,7 +267,7 @@ BEGIN
                             DECLARE @cCurrentCartonID NVARCHAR(50)
                             
                             -- Cursor to fetch all unique cartons on this pallet
-                            DECLARE cCartonCursor CURSOR LOCAL FAST_FORWARD FOR 
+                            DECLARE CartonCursor CURSOR LOCAL FAST_FORWARD FOR 
                             SELECT DISTINCT PD.DropID
                             FROM PickDetail PD WITH (NOLOCK)
                             WHERE PD.StorerKey = @cStorerKey
@@ -275,8 +275,8 @@ BEGIN
                             AND   PD.QTY > 0
                             AND   PD.ID = @cPalletID
 
-                            OPEN cCartonCursor
-                            FETCH NEXT FROM cCartonCursor INTO @cCurrentCartonID
+                            OPEN CartonCursor
+                            FETCH NEXT FROM CartonCursor INTO @cCurrentCartonID
 
                             WHILE @@FETCH_STATUS = 0
                             BEGIN
@@ -293,11 +293,11 @@ BEGIN
                                         @cErrMsg  OUTPUT 
                                 END
 
-                                FETCH NEXT FROM cCartonCursor INTO @cCurrentCartonID
+                                FETCH NEXT FROM CartonCursor INTO @cCurrentCartonID
                             END
 
-                            CLOSE cCartonCursor
-                            DEALLOCATE cCartonCursor
+                            CLOSE CartonCursor
+                            DEALLOCATE CartonCursor
                             SET @nErrNo = 0 
                             SET @cErrMsg = ''
                         END
