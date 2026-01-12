@@ -12,6 +12,7 @@ GO
 /* Date        Rev     Author      Purposes                             */
 /* 2025-06-09  1.0.0   JACKC       FCR-3959                             */
 /* 2025-10-20  1.0.1   Dennis      FCR-3959                             */ 
+/* 2025-10-20  1.0.2   SOMA        Added ID Zero Weight validation      */ 
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtVal05]
@@ -45,7 +46,8 @@ BEGIN
             @nToLocMaxPallet     INT,
             @cFacility           NVARCHAR(20),
             @cOrderKey           NVARCHAR(20),
-            @cCompany            NVARCHAR(20)
+            @cCompany            NVARCHAR(20),
+            @fIDWeight           INT; 
 
    --GET task info
    
@@ -66,6 +68,32 @@ BEGIN
 
    IF @nFunc = 1812 -- PickSKU
    BEGIN
+      --Step 3 FromID validation--
+      IF @nStep = 3 --FromID
+      BEGIN
+         IF @nDebugFlag = 1
+            SELECT 'St3, FromID scn';
+
+         IF @nInputKey = 1
+         BEGIN
+            SELECT @fIDWeight = ISNULL(SUM(LLI.Qty * ISNULL(S.STDGROSSWGT,0)),0)
+            FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+            INNER JOIN dbo.SKU S WITH(NOLOCK)
+               ON S.Sku = LLI.SKU
+              AND LLI.StorerKey = S.StorerKey
+            WHERE LLI.StorerKey = @cStorerKey
+              AND LLI.ID = @cDropID
+              AND LLI.Qty > 0;
+
+            IF ISNULL(@fIDWeight,0) = 0
+            BEGIN
+               SET @nErrNo = 218248
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Over weight limit' 
+               GOTO Quit;
+            END
+         END
+      END
+      --Step 3  validation END--
       IF @nStep = 4 --SKU/Qty
       BEGIN
          IF @nDebugFlag = 1

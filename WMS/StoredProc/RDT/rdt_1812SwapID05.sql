@@ -581,9 +581,9 @@ BEGIN
          SET  OriginalQty = UserDefine02, OpenQty = UserDefine02
       WHERE orderkey = @cOrderKeyToUpd
 
-	  UPDATE TaskDetail
-	  SET StatusMsg = 'Swapping'
-	  WHERE TaskDetailKey = @cTaskDetailKey
+      UPDATE TaskDetail
+      SET StatusMsg = 'Swapping'
+      WHERE TaskDetailKey = @cTaskDetailKey
 
    END TRY
    BEGIN CATCH
@@ -618,9 +618,9 @@ BEGIN
                   PickMethod, WaveKey, PickSlipNo, '0', GETDATE(), SUSER_SNAME(), @cPKDNotes, @cTaskDetailKey 
          FROM @tAllocation
 
-	  UPDATE TaskDetail
-	  SET StatusMsg = ''
-	  WHERE TaskDetailKey = @cTaskDetailKey
+      UPDATE TaskDetail
+      SET StatusMsg = ''
+      WHERE TaskDetailKey = @cTaskDetailKey
 
    END TRY
    BEGIN CATCH
