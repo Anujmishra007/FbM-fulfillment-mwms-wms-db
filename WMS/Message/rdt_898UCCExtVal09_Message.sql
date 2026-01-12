@@ -14,5 +14,6 @@ execute rdt.rdtAddMsg 215309, 10, '215309^UCC need FAI,Cannot receive ID', 'us_e
 execute rdt.rdtAddMsg 215310, 10, '215310^Upd UCC Err', 'us_english', 898
 execute rdt.rdtAddMsg 215311, 10, '215311^Upd SKU Err', 'us_english', 898
 execute rdt.rdtAddMsg 215312, 10, '215312^UCC Not Exist', 'us_english', 898
+execute rdt.rdtAddMsg 215313, 10, '215313^PalletClosed',   'us_english', 898, 0, '215313 Pallet Closed' 
 
 select * from rdt.rdtmsg (nolock) where message_id between 215301 AND 215350
