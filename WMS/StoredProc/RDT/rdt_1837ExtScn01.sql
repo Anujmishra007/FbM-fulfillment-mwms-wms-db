@@ -254,26 +254,50 @@ BEGIN
                         BEGIN
                             -- Print Pallet Label
                             DELETE @tPrintLabelParam
-                            INSERT INTO @tPrintLabelParam (Variable, Value) VALUES ('@PalletID', @cPalletID)
+                            INSERT INTO @tPrintLabelParam (Variable, Value) VALUES ('@c_ID', @cPalletID)
                                 
                             EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 3, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
-                                'PPS_PALLET',   
+                                'VIVOPLTLBL',   
                                 @tPrintLabelParam,
                                 'rdt_1837ExtScn01',   
                                 @nErrNo  OUTPUT,  
                                 @cErrMsg  OUTPUT 
 
-                            -- Print Carton Labels
-                            DELETE @tPrintLabelParam
-                            INSERT INTO @tPrintLabelParam (Variable, Value) VALUES ('@PalletID', @cPalletID)
-                                
-                            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 3, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
-                                'PPS_CARTON',   
-                                @tPrintLabelParam,
-                                'rdt_1837ExtScn01',   
-                                @nErrNo  OUTPUT,  
-                                @cErrMsg  OUTPUT 
+                            -- Print Carton Labels (Loop through DropID/CaseID)
+                            DECLARE @cCurrentCartonID NVARCHAR(50)
                             
+                            -- Cursor to fetch all unique cartons on this pallet
+                            DECLARE CartonCursor CURSOR LOCAL FAST_FORWARD FOR 
+                            SELECT DISTINCT PD.DropID
+                            FROM PickDetail PD WITH (NOLOCK)
+                            WHERE PD.StorerKey = @cStorerKey
+                            AND   PD.Status = '5'
+                            AND   PD.QTY > 0
+                            AND   PD.ID = @cPalletID
+
+                            OPEN CartonCursor
+                            FETCH NEXT FROM CartonCursor INTO @cCurrentCartonID
+
+                            WHILE @@FETCH_STATUS = 0
+                            BEGIN
+                                IF @cCurrentCartonID IS NOT NULL AND @cCurrentCartonID <> ''
+                                BEGIN
+                                    DELETE @tPrintLabelParam
+                                    INSERT INTO @tPrintLabelParam (Variable, Value) VALUES ('@c_ID', @cCurrentCartonID)
+                                    
+                                    EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 3, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
+                                        'VIVOPLTLBL',   
+                                        @tPrintLabelParam,
+                                        'rdt_1837ExtScn01',   
+                                        @nErrNo  OUTPUT,  
+                                        @cErrMsg  OUTPUT 
+                                END
+
+                                FETCH NEXT FROM CartonCursor INTO @cCurrentCartonID
+                            END
+
+                            CLOSE CartonCursor
+                            DEALLOCATE CartonCursor
                             SET @nErrNo = 0 
                             SET @cErrMsg = ''
                         END
