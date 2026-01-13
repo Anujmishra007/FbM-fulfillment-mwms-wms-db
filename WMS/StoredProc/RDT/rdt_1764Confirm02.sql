@@ -158,6 +158,13 @@ BEGIN
          EditWho  = @cUserName, 
          Trafficcop = NULL
       WHERE TaskDetailKey = @cTaskDetailKey
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 74253
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
+         GOTO RollBackTran
+      END
    END
 
    IF @cStatus NOT IN ('5', '9')
@@ -174,15 +181,15 @@ BEGIN
          EditWho  = @cUserName, 
          Trafficcop = NULL
       WHERE TaskDetailKey = @cTaskDetailKey
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 74253
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
+         GOTO RollBackTran
+      END
    END
 
-   IF @@ERROR <> 0
-   BEGIN
-      SET @nErrNo = 74253
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
-      GOTO RollBackTran
-   END
-   
    -- Get Confirm Extended config
    DECLARE @cConfirmExtUpdSP NVARCHAR(20)
    SET @cConfirmExtUpdSP = rdt.rdtGetConfig( @nFunc, 'ConfirmExtUpdSP', @cStorerKey)
