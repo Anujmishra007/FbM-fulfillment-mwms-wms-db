@@ -1,7 +1,9 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[BTB_FTA]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[BTB_FTA]
 (
 [BTB_FTAKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[FormNo] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_BTB_FTA_FormNo] DEFAULT (''),
+[FormNo] [nvarchar] (80) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_BTB_FTA_FormNo] DEFAULT (''),
 [FormType] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_BTB_FTA_FormType] DEFAULT (''),
 [CustomerCode] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_BTB_FTA_CustomerCode] DEFAULT (''),
 [HSCode] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_BTB_FTA_HSCode] DEFAULT (''),
@@ -37,19 +39,35 @@ CREATE TABLE [dbo].[BTB_FTA]
 [BTBShipItem] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_BTB_FTA_BTBShipItem] DEFAULT (''),
 [CustomLotNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_BTB_FTA_CustomLotNo] DEFAULT ('')
 ) ON [PRIMARY]
-GO
+
 
 ALTER TABLE [dbo].[BTB_FTA] ADD CONSTRAINT [PK__BTB_FTA__4AEB7F3AE998DB66] PRIMARY KEY CLUSTERED ([BTB_FTAKey]) ON [PRIMARY]
-GO
+
 CREATE UNIQUE NONCLUSTERED INDEX [BTB_FTA_IDX_BTB_FTA] ON [dbo].[BTB_FTA] ([FormType], [HSCode], [Storerkey], [Sku], [BTBShipItem], [COO], [FormNo], [CustomLotNo]) ON [PRIMARY]
-GO
+
 GRANT DELETE ON  [dbo].[BTB_FTA] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[BTB_FTA] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[BTB_FTA] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[BTB_FTA] TO [NSQL]
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Custom Lot #', 'SCHEMA', N'dbo', 'TABLE', N'BTB_FTA', 'COLUMN', N'CustomLotNo'
-GO
+
+END
+
+ELSE 
+BEGIN
+
+--ALTER COLUMN 
+	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='FormNo' AND Object_ID = Object_ID('[dbo].[BTB_FTA]') AND max_length <>160)
+	BEGIN
+
+	ALTER TABLE [dbo].[BTB_FTA]
+	ALTER COLUMN [FormNo] [nvarchar] (80) NOT NULL;
+
+	END
+
+
+END

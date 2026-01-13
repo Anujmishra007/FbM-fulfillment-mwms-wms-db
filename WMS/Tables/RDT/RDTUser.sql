@@ -26,6 +26,7 @@ BEGIN
    [OPSPosition] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtuser_OPSPosition] DEFAULT (''),
    [AllowResumeSession] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTUser_AllowResumeSession] DEFAULT (''),
    [SCEPrinterGroup] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTUser_SCEPrinterGroup] DEFAULT (''),
+   [ScreenFormat] [nvarchar](40) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTUser_ScreenFormat]  DEFAULT (''),
    [SoundLevel] NVARCHAR(10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTUser_SoundLevel] DEFAULT(''),
    [VibrationLevel] NVARCHAR(10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTUser_VibrationLevel]  DEFAULT (''),
    [FirstDayOfWeek] [tinyint] NULL CONSTRAINT [CK_RDTUser_FirstDayOfWeek] CHECK  (([FirstDayOfWeek]=(1) OR [FirstDayOfWeek]=(7) OR [FirstDayOfWeek]=NULL)),
@@ -109,4 +110,14 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns
             WHERE object_id = OBJECT_ID('RDT.RDTUser') AND name = 'DisableResumePrompt')
 BEGIN
    ALTER TABLE RDT.RDTUser ADD DisableResumePrompt NVARCHAR(1) NULL
+END
+
+
+
+--ALTER COLUMN
+IF EXISTS( SELECT 1 
+				FROM SYS.columns WHERE NAME ='ScreenFormat' AND Object_ID = OBJECT_ID('RDT.RDTUser') AND  max_length <> 80)
+BEGIN
+   ALTER TABLE RDT.RDTUser 
+   ALTER COLUMN  [ScreenFormat] [nvarchar](40) NOT NULL;
 END
