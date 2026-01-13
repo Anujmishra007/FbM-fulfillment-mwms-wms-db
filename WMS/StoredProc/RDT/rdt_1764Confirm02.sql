@@ -145,19 +145,36 @@ BEGIN
    END
    
    -- Update Task
-   UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
-      Status = '5', -- Picked
-      DropID = @cDropID, 
-      ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END, 
-      QTY = @nQTY,
-      SystemQTY = @nSystemQTY, 
-      ReasonKey = @cReasonKey, 
-      EndTime = GETDATE(),
-      EditDate = GETDATE(),
-      EditWho  = @cUserName, 
-      Trafficcop = NULL
-   WHERE TaskDetailKey = @cTaskDetailKey
-      AND Status NOT IN ('5', '9')
+   IF @cStatus = '9' AND @cReasonKey <> ''
+   BEGIN
+      UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
+         DropID = @cDropID, 
+         ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END, 
+         QTY = @nQTY,
+         SystemQTY = @nSystemQTY, 
+         ReasonKey = @cReasonKey, 
+         EndTime = GETDATE(),
+         EditDate = GETDATE(),
+         EditWho  = @cUserName, 
+         Trafficcop = NULL
+      WHERE TaskDetailKey = @cTaskDetailKey
+   END
+
+   IF @cStatus NOT IN ('5', '9')
+   BEGIN
+      UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
+         Status = '5', -- Picked
+         DropID = @cDropID, 
+         ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END, 
+         QTY = @nQTY,
+         SystemQTY = @nSystemQTY, 
+         ReasonKey = @cReasonKey, 
+         EndTime = GETDATE(),
+         EditDate = GETDATE(),
+         EditWho  = @cUserName, 
+         Trafficcop = NULL
+      WHERE TaskDetailKey = @cTaskDetailKey
+   END
 
    IF @@ERROR <> 0
    BEGIN
