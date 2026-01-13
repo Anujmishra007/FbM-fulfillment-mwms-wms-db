@@ -674,6 +674,8 @@ BEGIN
          AND TD.ListKey = @cListKey
          AND PD.Status = '0'
          AND TD.Status = '9'
+         AND TD.Qty > 0
+         AND PD.Qty > 0
          AND TD.TaskType = 'RPF'
          AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE'
          AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
