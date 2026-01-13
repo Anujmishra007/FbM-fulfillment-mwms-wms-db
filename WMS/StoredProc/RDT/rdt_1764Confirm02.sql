@@ -145,27 +145,51 @@ BEGIN
    END
    
    -- Update Task
-   UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
-      Status = '5', -- Picked
-      DropID = @cDropID, 
-      ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END, 
-      QTY = @nQTY,
-      SystemQTY = @nSystemQTY, 
-      ReasonKey = @cReasonKey, 
-      EndTime = GETDATE(),
-      EditDate = GETDATE(),
-      EditWho  = @cUserName, 
-      Trafficcop = NULL
-   WHERE TaskDetailKey = @cTaskDetailKey
-      AND Status NOT IN ('5', '9')
-
-   IF @@ERROR <> 0
+   IF @cStatus = '9' AND @cReasonKey <> ''
    BEGIN
-      SET @nErrNo = 74253
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
-      GOTO RollBackTran
+      UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
+         DropID = @cDropID, 
+         ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END, 
+         QTY = @nQTY,
+         SystemQTY = @nSystemQTY, 
+         ReasonKey = @cReasonKey, 
+         EndTime = GETDATE(),
+         EditDate = GETDATE(),
+         EditWho  = @cUserName, 
+         Trafficcop = NULL
+      WHERE TaskDetailKey = @cTaskDetailKey
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 74253
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
+         GOTO RollBackTran
+      END
    END
-   
+
+   IF @cStatus NOT IN ('5', '9')
+   BEGIN
+      UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
+         Status = '5', -- Picked
+         DropID = @cDropID, 
+         ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END, 
+         QTY = @nQTY,
+         SystemQTY = @nSystemQTY, 
+         ReasonKey = @cReasonKey, 
+         EndTime = GETDATE(),
+         EditDate = GETDATE(),
+         EditWho  = @cUserName, 
+         Trafficcop = NULL
+      WHERE TaskDetailKey = @cTaskDetailKey
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 74253
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
+         GOTO RollBackTran
+      END
+   END
+
    -- Get Confirm Extended config
    DECLARE @cConfirmExtUpdSP NVARCHAR(20)
    SET @cConfirmExtUpdSP = rdt.rdtGetConfig( @nFunc, 'ConfirmExtUpdSP', @cStorerKey)
