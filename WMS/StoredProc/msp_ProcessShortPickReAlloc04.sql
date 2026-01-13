@@ -21,7 +21,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
-/* 17-Dec-2025 JihHaur  1.0   Initial Version                           */  
+/* 17-Dec-2025 JihHaur  1.0   Initial Version                           */
+/* 13-Jan-2026 JihHaur  1.1   Hotfix for FCR V1.3   (JH02)              */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc04] (      
@@ -53,7 +54,8 @@ BEGIN
          , @c_SourceType               NVARCHAR(30) = ''  
          , @c_PickDetailKey            NVARCHAR(18) = ''           
          , @CUR_UNALLOC                CURSOR  
-         , @c_PickSlipNo               NVARCHAR(10) = ''      
+         , @c_PickSlipNo               NVARCHAR(10) = ''   
+         , @c_Loc                      NVARCHAR(10) = ''  --JH02
   
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @b_Success = 0  
@@ -67,6 +69,7 @@ BEGIN
       CREATE TABLE #TMP_SHORTED  
       (  
          Pickdetailkey NVARCHAR(18) PRIMARY KEY  
+       , Loc           NVARCHAR(10)       --JH02
       )  
   
       --CREATE TABLE #TMP_TASK_CURRENT  
@@ -205,8 +208,8 @@ BEGIN
       IF @n_Continue IN (1, 2)  
       BEGIN  
          --RDT update Status = '4'， QtyMoved, Qty no change  
-         INSERT INTO #TMP_SHORTED (Pickdetailkey)  
-         SELECT PD.Pickdetailkey  
+         INSERT INTO #TMP_SHORTED (Pickdetailkey, Loc)   --JH02
+         SELECT PD.Pickdetailkey, PD.Loc                 --JH02  
          FROM #PICKDETAIL_WIP PD WITH (NOLOCK)  
          WHERE PD.Wavekey = @c_Wavekey  
          AND PD.Storerkey = @c_StorerKey  
@@ -269,7 +272,7 @@ BEGIN
       END  
    END  
   
-   --Unallocate  
+   --Update Pickdetail to Status 4
    IF (@n_Continue = 1 OR @n_Continue = 2)  
    BEGIN  
       IF @b_debug = 0  
@@ -278,13 +281,13 @@ BEGIN
       END  
   
       SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-      SELECT T.Pickdetailkey  
+      SELECT T.Pickdetailkey, T.Loc  
       FROM #TMP_SHORTED T  
       ORDER BY T.Pickdetailkey  
   
       OPEN @CUR_UNALLOC  
   
-      FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey  
+      FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey, @c_Loc  --(JH02)
   
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)  
       BEGIN  
@@ -300,8 +303,19 @@ BEGIN
             SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Error update Pickdetail for ' + @c_PickDetailKey + ' (msp_ProcessShortPickReAlloc04)'  
                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '     
          END CATCH  
-  
-         FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey  
+         --JH02 Start
+         BEGIN TRY              
+            UPDATE Loc SET Status = 'HOLD' 
+            WHERE Loc = @c_Loc
+         END TRY  
+         BEGIN CATCH  
+            SET @n_Continue = 3  
+            SET @c_ErrMsg = ERROR_MESSAGE()  
+            SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Error hold this Loc: ' + @c_Loc + ' (msp_ProcessShortPickReAlloc04)'  
+                          + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '     
+         END CATCH 
+         --JH02 End
+         FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey, @c_Loc--(JH02)  
       END  
       CLOSE @CUR_UNALLOC  
       DEALLOCATE @CUR_UNALLOC  
@@ -396,7 +410,25 @@ BEGIN
       --   SET @c_ErrMsg = ERROR_MESSAGE()    
       --END CATCH     
    END     
-  
+   --JH02 Start
+  --Rollback UCC Status to 1 
+      BEGIN TRY    
+         UPDATE UCC WITH (ROWLOCK)    
+         SET UCC.[Status] = '1'    
+            , UCC.PickdetailKey = ''    
+            , UCC.OrderKey = ''    
+            , UCC.OrderLineNumber = ''    
+            , UCC.WaveKey = ''    
+         WHERE UCC.Storerkey = @c_Storerkey    
+         AND UCC.SKU = @c_SKU    
+         AND UCC.UCCNo = @c_UCCNo    
+      END TRY    
+      BEGIN CATCH    
+         SET @n_Continue = 3    
+         SET @c_ErrMsg = ERROR_MESSAGE()    
+      END CATCH   
+   --JH02 End
+
    --Wave Release  
    --IF (@n_Continue = 1 OR @n_Continue = 2)  
    --BEGIN  
