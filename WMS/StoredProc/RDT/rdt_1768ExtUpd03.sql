@@ -119,7 +119,7 @@ BEGIN
                   
                   IF @nErrNo <> 0 OR @bSuccess <> 1
                   BEGIN
-                     SET @cErrMsg1 = CAST(nErrNo AS NVARCHAR(6)) + '-' + @cErrMSG
+                     SET @cErrMsg1 = CAST(@nErrNo AS NVARCHAR(6)) + '-' + @cErrMSG
                      SET @cErrMsg2 = 'Unhold Loc Failure, retry via Web'
                      SET @cErrMsg3 = ''
                      SET @nErrNo = 0
