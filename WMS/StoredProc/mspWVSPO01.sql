@@ -225,7 +225,7 @@ BEGIN
 		    END		    		    
         
         UPDATE ORDERS WITH (ROWLOCK)
-        SET OrderGroup = @c_orderkey,
+        SET OrderGroup = 'Sales Order',
             TrafficCop = NULL,
             openqty = (SELECT SUM(OD.Openqty) FROM ORDERDETAIL OD (NOLOCK) WHERE OD.Orderkey = @c_neworderkey)
         WHERE Orderkey = @c_neworderkey
