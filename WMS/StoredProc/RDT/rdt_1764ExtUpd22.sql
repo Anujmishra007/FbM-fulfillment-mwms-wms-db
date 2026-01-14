@@ -12,6 +12,7 @@ GO
 /*                                                                         */
 /* Date         Author   Ver.    Purposes                                  */
 /* 2025-06-16   Dennis   1.0.0   FCR-3959 Created                          */
+/* 2026-01-05   PPA374   2.0.0   Adding RDT.c_String28 update at step 2    */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd22]
@@ -55,6 +56,20 @@ BEGIN
    -- TM Replen From
    IF @nFunc = 1764
    BEGIN
+      IF @nStep = 2
+	  BEGIN
+	     IF @cInputKey = 1
+		 BEGIN
+	        UPDATE RDT.RDTMOBREC
+			SET C_String28 = V_LOC
+			WHERE Mobile = @nMobile
+			
+			UPDATE RDT.RDTMOBREC
+            SET C_DateTime1 = GETDATE()
+            WHERE Mobile = @nMobile
+		 END
+	  END
+
       IF @nStep = 6
       BEGIN
          IF @cInputKey = 1
