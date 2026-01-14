@@ -56,10 +56,10 @@ jobs:
             MODULE_MATCH=$(find unified-repo -type d -iname "$MODULE_NAME" -not -path '*/.*' | head -n 1)
 
             if [ ! -z "$FILE_MATCH" ]; then
-              echo "::error file=$file::❌ FAILED: '$FILENAME' is already in the Unified repo."
+              echo "::error file=$file:: FAILED: '$FILENAME' is already in the Unified repo."
               FOUND_ISSUE=true
             elif [ ! -z "$MODULE_MATCH" ]; then
-              echo "::warning file=$file::⚠️ WARNING: Module '$MODULE_NAME' is already unified."
+              echo "::warning file=$file:WARNING: Module '$MODULE_NAME' is already unified."
               # If you want to strictly block V2 from adding to unified modules, uncomment below:
               FOUND_ISSUE=true 
             fi
