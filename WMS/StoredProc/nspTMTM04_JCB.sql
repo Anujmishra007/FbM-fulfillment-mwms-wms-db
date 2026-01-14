@@ -2196,7 +2196,7 @@ END
 
 		IF @n_err = 63060
 		BEGIN
-		   -- First Priority Error (over max pallet)
+		   -- Over max pallet
 		   IF EXISTS (
               SELECT 1
               FROM dbo.TaskDetail TD WITH (NOLOCK)
@@ -2260,7 +2260,7 @@ END
 		      GOTO QuitErrorCheck
            END
 
-		   --Second Priority Error (loc on hold)
+		   --Loc on hold
 		   IF @n_err = '63060'
               AND EXISTS (
                  SELECT 1
@@ -2346,7 +2346,7 @@ END
 			  GOTO QuitErrorCheck
            END
 
-		   -- Third Priority Task (order on hold)
+		   -- Order on hold
            IF @n_err = 63060
               AND EXISTS (
                  SELECT 1
@@ -2404,7 +2404,7 @@ END
 		      GOTO QuitErrorCheck
            END
 
-		   -- Third Priority Task (Order in progress)
+		   -- Order in progress
            IF @n_err = 63060
               AND EXISTS (
                  SELECT 1
@@ -2443,7 +2443,7 @@ END
 		      GOTO QuitErrorCheck
            END
         
-		   -- Fourth Priority Task (no pickdetails)
+		   -- No pick details
 		   IF @n_err = 63060
            AND EXISTS (
               SELECT 1 
