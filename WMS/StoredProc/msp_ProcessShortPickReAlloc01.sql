@@ -822,7 +822,7 @@ BEGIN
          CLOSE @CUR_SHORT
          DEALLOCATE @CUR_SHORT
 
-         GOTO QUIT_SP
+         GOTO UPD_PD
       END
    END
    
@@ -1364,6 +1364,7 @@ BEGIN
       END
    END
 
+   UPD_PD:
    --Update pickdetail_WIP work in progress staging table back to pickdetail 
    IF (@n_Continue = 1 or @n_Continue = 2)
    BEGIN
