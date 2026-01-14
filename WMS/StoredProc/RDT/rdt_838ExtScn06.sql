@@ -198,6 +198,8 @@ BEGIN
       @cPackByFromDropID   NVARCHAR( 1),
       @cDefaultCursor      NVARCHAR( 2), --(v7.5)
       @nScan               INT
+   DECLARE @nWeight FLOAT
+   DECLARE @nCartonWeight FLOAT
 
    SELECT 
       @nCurrentStep = Step,
@@ -507,7 +509,6 @@ BEGIN
                ELSE IF @cDefaultWeight IN ('2', '3')
                BEGIN
                   -- Weight (SKU only)
-                  DECLARE @nWeight FLOAT
                   SELECT @nWeight = ISNULL( SUM( SKU.STDGrossWGT * PD.QTY), 0)
                   FROM dbo.PackDetail PD WITH (NOLOCK)
                      JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU)
@@ -518,7 +519,6 @@ BEGIN
                   IF @cDefaultWeight = '3'
                   BEGIN
                      -- Get carton type info
-                     DECLARE @nCartonWeight FLOAT
                      SELECT @nCartonWeight = CartonWeight
                      FROM Cartonization C WITH (NOLOCK)
                         JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
@@ -993,8 +993,34 @@ BEGIN
                WHERE S.StorerKey = @cStorerKey
                   AND C.CartonType = @cCartonType
                
+               IF @cDefaultWeight IN ('2', '3')
+               BEGIN
+                  -- Weight (SKU only)
+                  SELECT @nWeight = ISNULL( SUM( SKU.STDGrossWGT * PD.QTY), 0)
+                  FROM dbo.PackDetail PD WITH (NOLOCK)
+                     JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU)
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                     AND PD.CartonNo = @nCartonNo
+
+                  -- Weight (SKU + carton)
+                  IF @cDefaultWeight = '3'
+                  BEGIN
+                     -- Get carton type info
+                     SELECT @nCartonWeight = CartonWeight
+                     FROM Cartonization C WITH (NOLOCK)
+                        JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
+                     WHERE S.StorerKey = @cStorerKey
+                        AND C.CartonType = @cCartonType
+
+                     SET @nWeight = @nWeight + @nCartonWeight
+                  END
+                  SET @cWeight = rdt.rdtFormatFloat( @nWeight)
+                  SET @fWeight = CAST( @cWeight AS FLOAT)
+               END
+               
                UPDATE dbo.PackInfo SET
                   CartonType = @cCartonType,
+                  Weight = @fWeight,
                   Length = @cLength,  
                   Width = @cWidth,     
                   Height = @cHeight
