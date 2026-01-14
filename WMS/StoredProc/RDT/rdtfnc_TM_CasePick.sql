@@ -53,7 +53,7 @@ GO
 /* 2026-01-12 3.8.1  PPA374     Adding Extended Validate in step                 */
 /*********************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
+CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
