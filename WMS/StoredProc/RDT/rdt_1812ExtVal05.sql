@@ -47,7 +47,7 @@ BEGIN
             @cFacility           NVARCHAR(20),
             @cOrderKey           NVARCHAR(20),
             @cCompany            NVARCHAR(20),
-            @fIDWeight           INT; 
+            @cVID                NVARCHAR(20); 
 
    --GET task info
    
@@ -63,7 +63,7 @@ BEGIN
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskDetailKey
    
-   SELECT TOP 1 @cFacility = Facility FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
+   SELECT TOP 1 @cFacility = Facility, @cVID = V_ID FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
    SELECT TOP 1 @cCompany = C_Company FROM dbo.ORDERS WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey
 
    IF @nFunc = 1812 -- PickSKU
@@ -76,24 +76,28 @@ BEGIN
 
          IF @nInputKey = 1
          BEGIN
-            SELECT @fIDWeight = ISNULL(SUM(LLI.Qty * ISNULL(S.STDGROSSWGT,0)),0)
-            FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
-            INNER JOIN dbo.SKU S WITH(NOLOCK)
-               ON S.Sku = LLI.SKU
-              AND LLI.StorerKey = S.StorerKey
-            WHERE LLI.StorerKey = @cStorerKey
-              AND LLI.ID = @cDropID
-              AND LLI.Qty > 0;
+            IF EXISTS(
+		    SELECT 1 
+			FROM SKU S WITH(NOLOCK) 
+			   INNER JOIN LOTxLOCxID LLI WITH(NOLOCK) 
+			      ON LLI.SKU = S.SKU 
+				  AND LLI.StorerKey = S.StorerKey
+			WHERE ISNULL(STDGROSSWGT,0) = 0 
+			   AND LLI.Qty > 0 
+			   AND LLI.StorerKey = @cStorerKey
+			   AND LLI.ID = @cVID
+			   AND ID <> ''
+			)
 
-            IF ISNULL(@fIDWeight,0) = 0
             BEGIN
-               SET @nErrNo = 218248
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Over weight limit' 
+               SET @nErrNo = 218264
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- '218264^ID got 0 weight SKU' 
                GOTO Quit;
             END
          END
       END
       --Step 3  validation END--
+
       IF @nStep = 4 --SKU/Qty
       BEGIN
          IF @nDebugFlag = 1
