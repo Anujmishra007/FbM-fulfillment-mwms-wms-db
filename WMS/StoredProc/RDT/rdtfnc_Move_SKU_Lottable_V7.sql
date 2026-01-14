@@ -23,6 +23,7 @@ GO
 /* 17-Apr-2023 1.6  Ung      WMS-22217 Add ConfirmSP                    */
 /* 22-Aug-2025 2.0  Cuize    FCR-7251 Add CheckDigit                    */
 /* 15-Dec-2025 3.0  BHA212   FCR-9582 Add DecodedSP                     */
+/* 13-Jan-2026 4.0  PPA374   Adding ExtVal to step 7                    */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable_V7] (
@@ -569,6 +570,62 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid ID'
             GOTO Step_FromID_Fail
          END
+      END
+
+      IF @cExtendedValidateSP <> ''  
+      BEGIN  
+         SET @nErrNo = 0  
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +       
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +   
+            ' @cFromLOC, @cFromID, @cSKU, @nQty, @cToID, @cToLOC, @cLottableCode, ' +   
+            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +  
+            ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +  
+            ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +   
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+  
+         SET @cSQLParam =      
+            '@nMobile         INT,           ' +  
+            '@nFunc           INT,           ' +  
+            '@cLangCode       NVARCHAR( 3),  ' +  
+            '@nStep           INT,           ' +  
+            '@nInputKey       INT,           ' +  
+            '@cFacility       NVARCHAR( 5),  ' +  
+            '@cStorerkey      NVARCHAR( 15), ' +  
+            '@cFromLOC        NVARCHAR( 10), ' +  
+            '@cFromID         NVARCHAR( 18), ' +  
+            '@cSKU            NVARCHAR( 20), ' +  
+            '@nQty            INT, '           +  
+            '@cToID           NVARCHAR( 18), ' +  
+            '@cToLoc          NVARCHAR( 10), ' +  
+            '@cLottableCode   NVARCHAR( 30), ' +  
+            '@cLottable01     NVARCHAR( 18), ' +   
+            '@cLottable02     NVARCHAR( 18), ' +   
+            '@cLottable03     NVARCHAR( 18), ' +   
+            '@dLottable04     DATETIME,      ' +   
+            '@dLottable05     DATETIME,      ' +   
+            '@cLottable06     NVARCHAR( 30), ' +   
+            '@cLottable07     NVARCHAR( 30), ' +   
+            '@cLottable08     NVARCHAR( 30), ' +   
+            '@cLottable09     NVARCHAR( 30), ' +   
+            '@cLottable10     NVARCHAR( 30), ' +   
+            '@cLottable11     NVARCHAR( 30), ' +   
+            '@cLottable12     NVARCHAR( 30), ' +   
+            '@dLottable13     DATETIME,      ' +   
+            '@dLottable14     DATETIME,      ' +   
+            '@dLottable15     DATETIME,      ' +   
+            '@nErrNo          INT           OUTPUT,  ' +  
+            '@cErrMsg         NVARCHAR( 20) OUTPUT   '   
+                 
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,       
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey,   
+            @cFromLOC, @cFromID, @cSKU, @nMQTY_Move, @cToID, @cToLOC, @cLottableCode,   
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,   
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,   
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,   
+            @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+         IF @nErrNo <> 0  
+            GOTO Step_FromLOC_Fail  
       END
 
       -- Prep next screen var
@@ -1827,6 +1884,62 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Diff facility'
             GOTO Step_ToLOC_Fail
          END
+
+      IF @cExtendedValidateSP <> ''  
+      BEGIN  
+         SET @nErrNo = 0  
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +       
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +   
+            ' @cFromLOC, @cFromID, @cSKU, @nQty, @cToID, @cToLOC, @cLottableCode, ' +   
+            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +  
+            ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +  
+            ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +   
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+  
+         SET @cSQLParam =      
+            '@nMobile         INT,           ' +  
+            '@nFunc           INT,           ' +  
+            '@cLangCode       NVARCHAR( 3),  ' +  
+            '@nStep           INT,           ' +  
+            '@nInputKey       INT,           ' +  
+            '@cFacility       NVARCHAR( 5),  ' +  
+            '@cStorerkey      NVARCHAR( 15), ' +  
+            '@cFromLOC        NVARCHAR( 10), ' +  
+            '@cFromID         NVARCHAR( 18), ' +  
+            '@cSKU            NVARCHAR( 20), ' +  
+            '@nQty            INT, '           +  
+            '@cToID           NVARCHAR( 18), ' +  
+            '@cToLoc          NVARCHAR( 10), ' +  
+            '@cLottableCode   NVARCHAR( 30), ' +  
+            '@cLottable01     NVARCHAR( 18), ' +   
+            '@cLottable02     NVARCHAR( 18), ' +   
+            '@cLottable03     NVARCHAR( 18), ' +   
+            '@dLottable04     DATETIME,      ' +   
+            '@dLottable05     DATETIME,      ' +   
+            '@cLottable06     NVARCHAR( 30), ' +   
+            '@cLottable07     NVARCHAR( 30), ' +   
+            '@cLottable08     NVARCHAR( 30), ' +   
+            '@cLottable09     NVARCHAR( 30), ' +   
+            '@cLottable10     NVARCHAR( 30), ' +   
+            '@cLottable11     NVARCHAR( 30), ' +   
+            '@cLottable12     NVARCHAR( 30), ' +   
+            '@dLottable13     DATETIME,      ' +   
+            '@dLottable14     DATETIME,      ' +   
+            '@dLottable15     DATETIME,      ' +   
+            '@nErrNo          INT           OUTPUT,  ' +  
+            '@cErrMsg         NVARCHAR( 20) OUTPUT   '   
+                 
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,       
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey,   
+            @cFromLOC, @cFromID, @cSKU, @nMQTY_Move, @cToID, @cToLOC, @cLottableCode,   
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,   
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,   
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,   
+            @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+         IF @nErrNo <> 0  
+            GOTO Step_ToLOC_Fail  
+      END
 
       -- Confirm
       EXEC rdt.rdt_Move_SKU_Lottable_Confirm_V7
