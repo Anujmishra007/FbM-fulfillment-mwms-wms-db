@@ -21,7 +21,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */
-/* 27-Oct-2025 WLChooi  1.0   Initial version                            */
+/* 14-Jan-2026 WLChooi  1.0   Initial version                            */
 /*************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV08]
@@ -83,7 +83,7 @@ BEGIN
                   FROM TASKDETAIL TD (NOLOCK)
                   WHERE TD.Wavekey = @c_Wavekey
                   AND TD.Sourcetype = @c_SourceType
-                  AND TD.Tasktype = 'FPK' )
+                  AND TD.Tasktype = 'RPF' )
       BEGIN
          SELECT @n_Continue = 3
          SELECT @n_Err = 83000
@@ -218,7 +218,7 @@ BEGIN
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
-         SET @c_TaskType = 'FPK'
+         SET @c_TaskType = 'RPF'
          SET @c_PickMethod = 'FP'
          SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM '
          SET @c_Priority = '5'
