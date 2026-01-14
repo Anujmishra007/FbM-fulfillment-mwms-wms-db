@@ -20,6 +20,7 @@ GO
 /* 2025-11-11  2.0.0  PPA374   Updating aisle in use logic                     */
 /* 2025-12-08  2.0.1  PPA374   Fixing bugs with to loc hold / flag not checked */
 /*                                and aisle in use not checked in step 5       */
+/* 2026-01-05  2.0.2  PPA374   Changing aisle in use to C_String28             */
 /*******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_PutawayFrom_JCB](
    @nMobile    INT,
@@ -185,6 +186,7 @@ SELECT
    @cOverwriteToLOC     = V_String6, 
    @cDefaultFromLOC     = V_String7, 
    @cToLoc              = V_String8,
+   @cToLoc              = C_String28,
    @cExtScnSP           = V_String10,
    @cEquipmentProfileKey= V_String11,
 
@@ -611,7 +613,7 @@ BEGIN
       R.UserName AS UserKey
    FROM RDT.RDTMOBREC R WITH(NOLOCK)
       LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
-      LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.V_String8 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+      LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.C_String28 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
    WHERE R.StorerKey = @cStorerKey
       AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
       AND R.UserName <> @cUserName
@@ -1681,7 +1683,7 @@ BEGIN
          R.UserName AS UserKey
       FROM RDT.RDTMOBREC R WITH(NOLOCK)
          LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
-         LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.V_String8 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+         LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.C_String28 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
       WHERE R.StorerKey = @cStorerKey
          AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
          AND R.UserName <> @cUserName
@@ -2557,6 +2559,7 @@ BEGIN
       V_String6      = @cOverwriteToLOC, 
       V_String7      = @cDefaultFromLOC, 
       V_String8      = @cToLoc,
+	  C_String28     = @cToLoc,
       V_String10     = @cExtScnSP,
       V_String11     = @cEquipmentProfileKey,
       
@@ -2599,4 +2602,5 @@ GO
 GRANT EXECUTE ON RDT.rdtfnc_TM_PutawayFrom_JCB TO NSQL
 
 GO
+
 
