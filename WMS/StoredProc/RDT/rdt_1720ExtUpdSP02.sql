@@ -11,6 +11,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2025-12-11  1.0  NickT    FCR-8808 Created                           */
+/* 2026-01-14  1.1  NickT    UWP-46879 Move by pickdetail               */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1720ExtUpdSP02] (
@@ -50,13 +51,30 @@ BEGIN
       BEGIN
          BEGIN TRAN
 
+         SELECT TOP 1 @cToLoc = LLI.Loc 
+         FROM dbo.LOTxLOCxID LLI  WITH (NOLOCK) 
+         INNER JOIN dbo.Loc Loc WITH (NOLOCK) ON Loc.Loc = LLI.Loc
+         WHERE LLI.StorerKey = @cStorerKey
+            AND LLI.ID = @cToPalletID
+            AND LLI.Qty > 0
+
+         IF ISNULL(@cToLoc,'')  = ''
+         BEGIN 
+            ROLLBACK TRAN
+
+            SET @nErrNo = 253455
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid To Pallet
+
+            GOTO Quit
+         END
+
          DECLARE CUR_PalletConso CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT PD.PickDetailKey
                ,PD.ID
                ,PD.SKU
                ,PD.QTy
                ,PD.Loc
-               ,PD.DropID
+               ,PD.CaseID
          FROM dbo.Pickdetail PD WITH (NOLOCK) 
          WHERE PD.StorerKey = @cStorerKey
          AND PD.Status <= '5'
@@ -67,26 +85,6 @@ BEGIN
          FETCH NEXT FROM CUR_PalletConso INTO  @cPickDetailKey, @cFromID, @cSKU, @nQty, @cFromLoc, @cDropID
          WHILE (@@FETCH_STATUS <> -1)
          BEGIN
-            SELECT TOP 1 @cToLoc = LLI.Loc 
-            FROM dbo.LOTxLOCxID LLI  WITH (NOLOCK) 
-            INNER JOIN dbo.Loc Loc WITH (NOLOCK) ON Loc.Loc = LLI.Loc
-            WHERE LLI.StorerKey = @cStorerKey
-               AND LLI.ID = @cToPalletID
-               AND LLI.Qty > 0
-
-            IF ISNULL(@cToLoc,'')  = ''
-            BEGIN 
-               ROLLBACK TRAN
-
-               SET @nErrNo = 253455
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid To Pallet
-
-               CLOSE CUR_PalletConso
-               DEALLOCATE CUR_PalletConso 
-
-               GOTO Quit
-            END
-
             -- ID not same , need to move PickDetail ID as well.
             EXECUTE rdt.rdt_Move
                @nMobile     = @nMobile,
@@ -117,7 +115,7 @@ BEGIN
             END
 
             SET @nInvMoved = 1
-            FETCH NEXT FROM CUR_PalletConso INTO  @cPickDetailKey, @cFromID, @cSKU, @nQty, @cFromLoc
+            FETCH NEXT FROM CUR_PalletConso INTO  @cPickDetailKey, @cFromID, @cSKU, @nQty, @cFromLoc, @cDropID
          END
          CLOSE CUR_PalletConso
          DEALLOCATE CUR_PalletConso 
@@ -174,6 +172,10 @@ BEGIN
                IF @nErrNo <> 0 
                BEGIN
                   ROLLBACK TRAN
+
+                  CLOSE CUR_PD
+                  DEALLOCATE CUR_PD 
+
                   GOTO Quit
                END
             END
@@ -182,12 +184,17 @@ BEGIN
                UPDATE dbo.PalletDetail WITH(ROWLOCK)
                SET 
                   PalletKey = @cToPalletID,
-                  PalletLineNumber = @cNewPalletLineNumber 
+                  PalletLineNumber = @cNewPalletLineNumber,
+                  Loc = @cToLoc
                WHERE PalletKey = @cFromPalletID 
                      AND PalletLineNumber = @cPalletLineNumber
             END TRY
             BEGIN CATCH
                ROLLBACK TRAN
+
+               CLOSE CUR_PD
+               DEALLOCATE CUR_PD 
+
                SET @nErrNo = 253453
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update Pallet Detail Failed
                GOTO Quit
@@ -215,6 +222,21 @@ BEGIN
       BEGIN
          BEGIN TRAN
 
+         SELECT TOP 1 @cToLoc = LLI.Loc
+         FROM dbo.LOTxLOCxID LLI  WITH (NOLOCK)
+         INNER JOIN dbo.Loc Loc WITH (NOLOCK) ON Loc.Loc = LLI.Loc
+         WHERE LLI.StorerKey = @cStorerKey
+            AND LLI.ID = @cToPalletID
+            AND LLI.Qty > 0
+
+         IF ISNULL(@cToLoc,'')  = ''
+         BEGIN
+            ROLLBACK TRAN
+            SET @nErrNo = 253456
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid To Pallet
+            GOTO Quit
+         END
+
          DECLARE CUR_PalletConso CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT PD.PickDetailKey
                ,PD.ID
@@ -232,21 +254,6 @@ BEGIN
          FETCH NEXT FROM CUR_PalletConso INTO  @cPickDetailKey, @cFromID, @cSKU, @nQty, @cFromLoc
          WHILE (@@FETCH_STATUS <> -1)
          BEGIN
-            SELECT TOP 1 @cToLoc = LLI.Loc
-            FROM dbo.LOTxLOCxID LLI  WITH (NOLOCK)
-            INNER JOIN dbo.Loc Loc WITH (NOLOCK) ON Loc.Loc = LLI.Loc
-            WHERE LLI.StorerKey = @cStorerKey
-               AND LLI.ID = @cToPalletID
-               AND LLI.Qty > 0
-
-            IF ISNULL(@cToLoc,'')  = ''
-            BEGIN
-               ROLLBACK TRAN
-               SET @nErrNo = 253456
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid To Pallet
-               GOTO Quit
-            END
-            
             -- ID not same , need to move PickDetail ID as well.
             EXECUTE rdt.rdt_Move
                @nMobile     = @nMobile,
@@ -269,6 +276,10 @@ BEGIN
             IF @nErrNo <> 0 
             BEGIN
                ROLLBACK TRAN
+
+               CLOSE CUR_PalletConso
+               DEALLOCATE CUR_PalletConso 
+
                GOTO Quit
             END
 
@@ -332,6 +343,10 @@ BEGIN
                IF @nErrNo <> 0 
                BEGIN
                   ROLLBACK TRAN
+
+                  CLOSE CUR_PD
+                  DEALLOCATE CUR_PD 
+
                   GOTO Quit
                END
             END
@@ -340,13 +355,18 @@ BEGIN
                UPDATE dbo.PalletDetail WITH(ROWLOCK)
                SET 
                   PalletKey = @cToPalletID,
-                  PalletLineNumber = @cNewPalletLineNumber 
+                  PalletLineNumber = @cNewPalletLineNumber,
+                  Loc = @cToLoc
                WHERE PalletKey = @cFromPalletID
                   AND PalletLineNumber = @cPalletLineNumber
                   AND CaseID = @cDropID
             END TRY
             BEGIN CATCH
                ROLLBACK TRAN
+
+               CLOSE CUR_PD
+               DEALLOCATE CUR_PD 
+
                SET @nErrNo = 253451
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPalletDetFail
                GOTO Quit
