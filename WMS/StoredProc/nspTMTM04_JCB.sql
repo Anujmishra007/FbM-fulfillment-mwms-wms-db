@@ -18,7 +18,7 @@ GO
 /* 2026-01-05   2.2   PPA374    Changing aisle in use to C_String28             */
 /* 2026-01-09   2.3   PPA374    Adding Permission and In Progress errors        */
 /********************************************************************************/
-ALTER   PROC    [RDT].[nspTMTM04_JCB]
+CREATE OR ALTER PROC    [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
    ,@c_ptcid            NVARCHAR(5)
    ,@c_userid           NVARCHAR(18)
