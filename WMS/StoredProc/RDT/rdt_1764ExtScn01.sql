@@ -138,18 +138,18 @@ BEGIN
 
    SET @cUDF01  = ''
 
-   DECLARE @tPickDetail TABLE
-   (
-      RowIndex INT IDENTITY(1,1),
-      PickDetailKey NVARCHAR(18) PRIMARY KEY
-   )
+      DECLARE @tPickDetail TABLE
+      (
+         RowIndex INT IDENTITY(1,1),
+         PickDetailKey NVARCHAR(18) PRIMARY KEY
+      )
 
-   DECLARE @tTaskDetail TABLE
-   (
-      RowIndex INT IDENTITY(1,1),
-      TaskDetailKey NVARCHAR(10) PRIMARY KEY
-   )
-
+      DECLARE @tTaskDetail TABLE
+      (
+         RowIndex INT IDENTITY(1,1),
+         TaskDetailKey NVARCHAR(10) PRIMARY KEY
+      )
+ 
    SELECT 
       @nCurrentStep        = Step,
       @nCurrentScn         = Scn,
@@ -461,7 +461,7 @@ BEGIN
                SET 
                   ReasonKey = '',
                   Message01 = '',
-                  Message02 = '',
+                  --Message02 = '',
                   Message03 = '',
                   EditDate = GETDATE(),
                   EditWho  = SUSER_SNAME(),
