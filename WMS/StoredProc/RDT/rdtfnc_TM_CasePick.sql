@@ -50,9 +50,10 @@ GO
 /* 2025-11-24 3.6.0  NickT      UWP-44566 Reset QTY when get new task or on ToLoc*/
 /* 2025-12-18 3.7.0  NickT      UWP-45705 Fix issue: MQty is 1 while short pick  */
 /* 2026-01-05 3.8.0  PPA374     UWP-46338 Adding  extended update to step 4      */
+/* 2026-01-12 3.8.1  PPA374     Adding Extended update to step 3                 */
 /*********************************************************************************/
 
-CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
+ALTER    PROC [RDT].[rdtfnc_TM_CasePick](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -1182,6 +1183,34 @@ BEGIN
             SET @nErrNo = 51360
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTYALC/QTYRPL
             GOTO Step_3_Fail
+         END
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@cDropID         NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
          END
       END
 
