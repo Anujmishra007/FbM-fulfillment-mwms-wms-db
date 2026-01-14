@@ -13,7 +13,7 @@ GO
 /* 22/09/2025   2.1   PPA374   Check that order type and location are correct        */
 /*************************************************************************************/
 
-ALTER   PROC [RDT].[rdt_839ExtValJCB] (
+CREATE OR ALTER PROC [RDT].[rdt_839ExtValJCB] (
    @nMobile      INT,            
    @nFunc        INT,            
    @cLangCode    NVARCHAR( 3),   
@@ -132,12 +132,14 @@ BEGIN
 	     )
 		 BEGIN
 		    SET @nErrNo = 218238
-			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+		    EXEC rdt.rdtSetFocusField @nMobile, 2
+			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --218238^Zone is not allowed
 			GOTO QUIT
 		 END
 
 		 IF @cDropID = ''
 		 BEGIN
+		    EXEC rdt.rdtSetFocusField @nMobile, 3
 		    SET @nErrNo = 218242
 			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'DropID cant be blank'
 			GOTO QUIT
