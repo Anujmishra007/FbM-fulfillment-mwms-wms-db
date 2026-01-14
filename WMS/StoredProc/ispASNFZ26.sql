@@ -128,7 +128,7 @@ BEGIN
          
             FETCH NEXT FROM CUR_Serial_REC INTO @c_Serialno, @c_SKU, @n_ChildQTY
          
-            IF @@FETCH_STATUS <> -1
+            WHILE @@FETCH_STATUS <> -1
             BEGIN
 
                IF NOT EXISTS(SELECT 1 FROM SerialNo (nolock) where StorerKey = @c_StorerKey AND SKU = @c_SKU AND SerialNo = @c_Serialno)
