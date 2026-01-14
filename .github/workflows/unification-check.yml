@@ -1,0 +1,71 @@
+name: Check SP Unification (V2 to Unified)
+
+on:
+  pull_request:
+    branches:
+      - dev  # Triggers when a PR is created to merge into 'dev'
+
+jobs:
+  check-duplicates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout V2 Repo
+        uses: actions/checkout@v4
+        with:
+          path: v2-repo
+          # Fetch all history so we can compare branches
+          fetch-depth: 0 
+
+      - name: Checkout Unified Repo
+        uses: actions/checkout@v4
+        with:
+          repository: Maersk-Global/mcl-mwms-wms-db
+          token: ${{ secrets.G_TOKEN }}
+          path: unified-repo
+
+      - name: Get Changed SQL Files
+        id: get-files
+        run: |
+          cd v2-repo
+          # Compare the current PR branch against the target 'dev' branch
+          # Using origin/dev to ensure we compare against the server version
+          FILES=$(git diff --name-only origin/dev...HEAD | grep '\.sql$' || true)
+          echo "sql_files=$FILES" >> $GITHUB_OUTPUT
+
+      - name: Search for duplicates
+        run: |
+          PR_FILES="${{ steps.get-files.outputs.sql_files }}"
+          FOUND_ISSUE=false
+          
+          if [ -z "$PR_FILES" ]; then
+            echo "No SQL files found in this PR to check."
+            exit 0
+          fi
+
+          for file in $PR_FILES; do
+            FILENAME=$(basename "$file")
+            # Extract folder name for Module Check
+            MODULE_NAME=$(basename $(dirname "$file") | tr '[:upper:]' '[:lower:]')
+            
+            echo "Analyzing $FILENAME in module [$MODULE_NAME]..."
+
+            # 1. Search for exact File match in Unified Repo
+            FILE_MATCH=$(find unified-repo -name "$FILENAME" -not -path '*/.*' | head -n 1)
+
+            # 2. Search for Module folder match in Unified Repo
+            MODULE_MATCH=$(find unified-repo -type d -iname "$MODULE_NAME" -not -path '*/.*' | head -n 1)
+
+            if [ ! -z "$FILE_MATCH" ]; then
+              echo "::error file=$file::❌ FAILED: '$FILENAME' is already in the Unified repo."
+              FOUND_ISSUE=true
+            elif [ ! -z "$MODULE_MATCH" ]; then
+              echo "::warning file=$file::⚠️ WARNING: Module '$MODULE_NAME' is already unified."
+              # If you want to strictly block V2 from adding to unified modules, uncomment below:
+              FOUND_ISSUE=true 
+            fi
+          done
+
+          if [ "$FOUND_ISSUE" = "true" ]; then
+            echo "Error: Unification check failed. Please remove duplicates."
+            exit 1
+          fi
