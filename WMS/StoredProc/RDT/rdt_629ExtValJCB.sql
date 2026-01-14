@@ -1,6 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/  
@@ -56,7 +56,10 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_629ExtValJCB]
 )  
 AS  
 BEGIN  
-   SET NOCOUNT ON;  
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
   
    -- Local variables  
    DECLARE  
