@@ -17,7 +17,7 @@ GO
 /* 2025-11-25 1.1.3   PPA374   Adding reason code to OD and OH notes    */
 /************************************************************************/
 
-CREATE OR ALTER   PROC [RDT].[rdt_1812ExtScn06] (  
+CREATE OR ALTER PROC [RDT].[rdt_1812ExtScn06] (  
    @nMobile          INT,           
    @nFunc            INT,           
    @cLangCode        NVARCHAR( 3),  
@@ -84,7 +84,10 @@ BEGIN
    @cOption          NVARCHAR(1),
    @tExtData         VariableTable,
    @cTaskDetailPUOM  NVARCHAR(20),
-   @cReasonCode      NVARCHAR(10)
+   @cReasonCode      NVARCHAR(10),
+
+   @TypeOrder INT,
+   @cPickMethodAUX  NVARCHAR( 10);
 
    -- Screen constant  
    DECLARE @nScn_ToLane    INT = 6520  
@@ -882,29 +885,46 @@ BEGIN
                      END
                      SET @cOutField01 = @cUDF01
                      SET @cFieldAttr01 = 'O'
-                     --Print Label
-
-                     IF @cPalletLabel <> ''
+                     --Print Label					   			         
+			         SET @TypeOrder = 99	                    
+					 -- GET TYPE ORDER
+			         SELECT @TypeOrder = o.[Type]
+                     FROM ORDERS o
+                     WHERE o.OrderKey = @cOrderKey
+                       AND o.StorerKey = @cStorerKey
+					  --
+					 SET @cPickMethodAUX =''
+					  --
+				  SELECT @cPickMethodAUX = td.pickmethod
+					FROM taskdetail td WITH(NOLOCK)
+				   WHERE td.taskdetailkey = @cTaskdetailKey
+					/*
+					-- Insert trace
+					INSERT INTO [dbo].[TraceInfo]
+				   ([TraceName],
+				   [TimeIn],[TimeOut],[TotalTime],[Step1],[Step2],[Step3],[Step4] ,[Step5],[Col1],[Col2],[Col3],[Col4],[Col5])
+					Select N'rdt_1812ExtScn06_99'
+				   ,NULL,NULL,NULL,@TypeOrder,@cPickMethodAUX,@cPalletLabel,@cUDF01,@cTaskdetailKey,NULL,NULL,NULL,NULL,NULL 
+				   */
+					 IF @cPalletLabel <> '' AND @TypeOrder = 0 AND @cPickMethodAUX = 'PP'
                      BEGIN
                         -- Common params
                         INSERT INTO @tPalletLabel (Variable, Value) VALUES
                         ( '@cStorerKey', @cStorerKey),
-                        ( '@cDropID', @cUDF01)
-
-                        -- Print label
+                        ( '@cDropID', @cUDF01)                        
+						-- Print label
                         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPrinter, @cPrinter_Paper,
                            @cPalletLabel, -- Report type
                            @tPalletLabel, -- Report params
                            'rdt_1812ExtScn06',
                            @nErrNo  OUTPUT,
                            @cErrMsg OUTPUT
-
+						   --
                         IF @nErrNo <> 0
                            GOTO Quit
                      END
                   END
                END
-
                -- Go to FromLOC screen
                IF @nFromStep = 2
                BEGIN
@@ -915,7 +935,6 @@ BEGIN
                   SET @cOutField04 = '' -- FromLOC
                   SET @cOutField10 = '' -- ExtendedInfo
                END
-
                -- Go to short pick screen
                IF @nFromStep = 8
                BEGIN
@@ -923,11 +942,9 @@ BEGIN
                   SET @cOption = ''
                   SET @cOutField01 = '' -- Option
                END
-
                -- Back to prev screen
                SET @nAfterScn = @nFromScn
                SET @nAfterStep = @nFromStep
-
                -- Extended info
                IF @cExtendedInfoSP <> ''
                BEGIN
@@ -1812,7 +1829,60 @@ BEGIN
             GOTO QUIT
          END
       END
-      IF (@nMOBRECScn <> 4020 AND @nScn = 4020) OR @nAfterScn = 4020 -- DROPID SCREEN
+      
+	  
+	  IF @nMOBRECStep = 4
+      BEGIN
+         IF @nInputKey = 1 
+         BEGIN
+		    /*
+		    -- Insert test
+            INSERT INTO [dbo].[TraceInfo]
+			   ([TraceName],
+			   [TimeIn],[TimeOut],[TotalTime],[Step1],[Step2],[Step3],[Step4] ,[Step5],[Col1],[Col2],[Col3],[Col4],[Col5])
+		       Select N'rdt_1812ExtScn06_Step_4'
+			   ,NULL,NULL,NULL,@nMobile,@nFunc,@nStep,@nInputKey,@cTaskdetailKey,@cDropID,@nAfterStep,NULL,NULL,NULL 
+			 */
+          DECLARE @nStepAux INT
+			  SET @nStepAux = @nStep
+			  SET @nStep = @nMOBRECStep
+
+              -- Extended update
+              IF @cExtendedUpdateSP <> ''
+              BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+                  BEGIN
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep '
+                     SET @cSQLParam =
+                        '@nMobile         INT,           ' +
+                        '@nFunc           INT,           ' +
+                        '@cLangCode       NVARCHAR( 3),  ' +
+                        '@nStep           INT,           ' +											
+                        '@nInputKey       INT,           ' +
+                        '@cTaskdetailKey  NVARCHAR( 10), ' +
+                        '@cDropID         NVARCHAR( 20), ' +
+                        '@nQTY            INT,           ' +
+                        '@cToLOC          NVARCHAR( 10), ' +
+                        '@nErrNo          INT OUTPUT,    ' +
+                        '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                        '@nAfterStep      INT            '
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+					SET @nStep = @nStepAux
+
+                     IF @nErrNo <> 0
+                        GOTO Quit
+                  END
+               END               
+         END
+      END
+	  
+
+	  
+	  IF (@nMOBRECScn <> 4020 AND @nScn = 4020) OR @nAfterScn = 4020 -- DROPID SCREEN
       BEGIN
          SET @cOutField01 = ''
          -- Auto gen Drop ID
@@ -1833,27 +1903,47 @@ BEGIN
             END
             SET @cOutField01 = @cUDF01
             SET @cFieldAttr01 = 'O' -- DropID
+            --
+			
+			SET @TypeOrder = 99			
             
-            IF @cPalletLabel <> ''
+			-- GET TYPE ORDER
+			SELECT @TypeOrder = o.[Type]
+              FROM ORDERS o
+             WHERE o.OrderKey = @cOrderKey
+               AND o.StorerKey = @cStorerKey
+            
+			   SET @cPickMethodAUX =''
+
+			SELECT @cPickMethodAUX = td.pickmethod
+	          FROM taskdetail td WITH(NOLOCK)
+	         WHERE td.taskdetailkey = @cTaskdetailKey
+			/*
+			-- Insert test
+			INSERT INTO [dbo].[TraceInfo]
+			([TraceName],
+			[TimeIn],[TimeOut],[TotalTime],[Step1],[Step2],[Step3],[Step4] ,[Step5],[Col1],[Col2],[Col3],[Col4],[Col5])
+			Select N'rdt_1812ExtScn06_4020'
+			,NULL,NULL,NULL,@TypeOrder,@cPickMethodAUX,@cPalletLabel,@cUDF01,@cTaskdetailKey,NULL,NULL,NULL,NULL,NULL 
+			*/
+			--
+            IF @cPalletLabel <> '' AND @TypeOrder = 0 AND @cPickMethodAUX = 'PP' 
             BEGIN
                -- Common params
                INSERT INTO @tPalletLabel (Variable, Value) VALUES
                ( '@cStorerKey', @cStorerKey),
-               ( '@cDropID', @cUDF01)
-
-               -- Print label
+               ( '@cDropID', @cUDF01)          
+			   -- Print label
                EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPrinter, @cPrinter_Paper,
                   @cPalletLabel, -- Report type
                   @tPalletLabel, -- Report params
                   'rdt_1812ExtScn06',
                   @nErrNo  OUTPUT,
-                  @cErrMsg OUTPUT
-
+                  @cErrMsg OUTPUT				
                IF @nErrNo <> 0
                   GOTO Quit
             END
-
-
+             --
             SET @nAfterStep = 99
             SET @nAfterScn = 4020
          END
