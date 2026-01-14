@@ -111,6 +111,19 @@ BEGIN
 
                   SET @cCCSheetNo = @cTaskDetailKey
 
+                  IF NOT EXISTS(SELECT 1 FROM dbo.StockTakeSheetParameters WITH(NOLOCK) WHERE StockTakeKey = @cCCKey)
+                  BEGIN
+                     BEGIN TRY
+                        INSERT INTO dbo.StockTakeSheetParameters (StockTakeKey, Facility, StorerKey, ExcludeQtyPicked, AdjReasonCode, AdjType)
+                        VALUES (@cCCKey, @cFacility, @cStorerKey, 'Y', '', '' )
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 256251
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert StockTakeSheetParameters Failed
+                        GOTO Quit
+                     END CATCH
+                  END
+
                   IF NOT EXISTS(SELECT 1 FROM dbo.CCDETAIL WITH(NOLOCK) WHERE cckey = @cCCKey AND ccsheetno = @cCCSheetNo)
                   BEGIN
 
@@ -135,7 +148,7 @@ BEGIN
                               @cLottable12, @dLottable13, @dLottable14, @dLottable15, 0, '')
                      END TRY
                      BEGIN CATCH
-                        SET @nErrNo = 256251
+                        SET @nErrNo = 256252
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert CCDetail Failed
                         GOTO Quit
                      END CATCH
