@@ -64,7 +64,14 @@ BEGIN
 
    IF @nFunc = 1871
    BEGIN
-      IF @nStep = 4 -- To loc
+      IF @nStep = 2
+	  BEGIN
+		 UPDATE RDT.RDTMOBREC
+         SET C_DateTime1 = GETDATE()
+         WHERE Mobile = @nMobile 
+	  END
+	  
+	  IF @nStep = 4 -- To loc
       BEGIN
          -- Get task info
          SELECT 
@@ -245,7 +252,6 @@ GOTO Quit
 Quit:
 
 END
-
     
 GO
 
@@ -256,6 +262,7 @@ GO
 
 GRANT EXECUTE ON rdt.rdt_1871ExtUpd01 TO NSQL
 GO
+
 
 
 
