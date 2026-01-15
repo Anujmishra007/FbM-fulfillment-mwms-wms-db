@@ -105,7 +105,7 @@ BEGIN
          WHERE TaskDetailKey = @cTaskdetailKey
 
          SELECT @c_PickSlipNo = PickHeaderKey
-         FROM PICKHEADER WITH (NOLOCK)
+         FROM dbo.PICKHEADER WITH (NOLOCK)
          WHERE OrderKey = @cOrderKey
 
          IF ISNULL(@c_PickSlipNo,'' )= ''
@@ -144,12 +144,12 @@ BEGIN
                ,  '0'
                ,  '0'
                ,  @c_PickSlipNo
-            FROM ORDERS WITH (NOLOCK)
+            FROM dbo.ORDERS WITH (NOLOCK)
             WHERE Orderkey = @cOrderKey
          END
 
          IF NOT EXISTS (   SELECT 1
-                           FROM PICKINGINFO WITH (NOLOCK)
+                           FROM dbo.PICKINGINFO WITH (NOLOCK)
                            WHERE PickSlipNo = @c_PickSlipNo
                         )
          BEGIN
@@ -194,8 +194,8 @@ BEGIN
 			  CASE 
 				WHEN EXISTS (
 				  SELECT 1
-				  FROM taskdetail td WITH (NOLOCK)
-				  JOIN orders o WITH (NOLOCK)
+				  FROM dbo.TaskDetail td WITH (NOLOCK)
+				  INNER JOIN dbo.ORDERS o WITH (NOLOCK)
 					ON td.OrderKey  = o.OrderKey
 				   AND td.Storerkey = o.StorerKey
 				  WHERE td.TaskDetailKey = @cTaskdetailKey
@@ -336,8 +336,8 @@ BEGIN
 			  CASE 
 				WHEN EXISTS (
 				  SELECT 1
-				  FROM taskdetail td WITH (NOLOCK)
-				  JOIN orders o WITH (NOLOCK)
+				  FROM dbo.TaskDetail td WITH (NOLOCK)
+				  INNER JOIN dbo.ORDERS o WITH (NOLOCK)
 					ON td.OrderKey  = o.OrderKey
 				   AND td.Storerkey = o.StorerKey
 				  WHERE td.TaskDetailKey = @cTaskdetailKey
@@ -357,7 +357,7 @@ BEGIN
 						-- Get MonoSku or MultiSku pallet		   
 						SELECT @b_totalSkuInCase = COUNT(DISTINCT(lli.Sku)) 
 						  FROM dbo.LOTxLOCxID lli WITH (NOLOCK)
-						  JOIN LOTATTRIBUTE la WITH (NOLOCK)
+						  INNER JOIN dbo.LOTATTRIBUTE la WITH (NOLOCK)
 						    ON la.Lot = lli.Lot
 						 WHERE lli.storerkey = 'JCB'
 						   AND lli.qty > 0						  
@@ -474,7 +474,8 @@ BEGIN
                FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
                WHERE LOC = @cToLOC
 
-               SELECT @nToLocMaxPallet = MaxPallet FROM dbo.LOC WITH (NOLOCK)
+               SELECT @nToLocMaxPallet = MaxPallet 
+			   FROM dbo.LOC WITH (NOLOCK)
                WHERE LOC =@cToLOC
 
                IF @nToLocIDCount >= @nToLocMaxPallet
@@ -550,10 +551,10 @@ BEGIN
                @cFromLoc = TD.FromLoc,
                @cFromLocRoom = LOC.LocationRoom
             FROM dbo.TaskDetail TD WITH (NOLOCK)
-            JOIN dbo.Pallet PL WITH (NOLOCK)
+            INNER JOIN dbo.Pallet PL WITH (NOLOCK)
                ON TD.StorerKey = PL.StorerKey
                AND TD.FromID = PL.PalletKey
-            JOIN dbo.LOC WITH (NOLOCK)
+            INNER JOIN dbo.LOC WITH (NOLOCK)
                ON TD.FromLoc = LOC.LOC
             WHERE TD.TaskDetailKey = @cTaskdetailKey
                AND TD.PickMethod = 'FP' --Full pallet
@@ -568,7 +569,7 @@ BEGIN
                   IF EXISTS (
                      SELECT 1 
                      FROM dbo.InventoryHold IH WITH (NOLOCK)
-                     JOIN dbo.LOC WITH(NOLOCK)
+                     INNER JOIN dbo.LOC WITH(NOLOCK)
                         ON IH.LOC = LOC.LOC
                      WHERE LOC.LocationRoom = @cFromLocRoom
                         AND IH.Hold = 1
@@ -582,7 +583,7 @@ BEGIN
                         UPDATE IH WITH (ROWLOCK)
                         SET Hold = '0'
                         FROM dbo.InventoryHold IH
-                        JOIN dbo.LOC WITH(NOLOCK)
+                        INNER JOIN dbo.LOC WITH(NOLOCK)
                            ON IH.LOC = LOC.LOC
                         WHERE LOC.LocationRoom = @cFromLocRoom
                            AND IH.Hold = 1
@@ -609,8 +610,8 @@ BEGIN
 			   CASE 
 			   WHEN EXISTS (
 						  SELECT 1
-							FROM taskdetail td WITH (NOLOCK)
-							JOIN orders o
+							FROM dbo.TaskDetail td WITH (NOLOCK)
+							INNER JOIN dbo.ORDERS o WITH(NOLOCK)
 							  ON td.OrderKey  = o.OrderKey
 							 AND td.Storerkey = o.StorerKey
 						   WHERE td.TaskDetailKey = @cTaskdetailKey
@@ -690,8 +691,8 @@ BEGIN
 		    CASE 
 		    WHEN EXISTS (
 				  SELECT 1
-				  FROM taskdetail td WITH (NOLOCK)
-				  JOIN orders o
+				  FROM dbo.TaskDetail td WITH (NOLOCK)
+				  INNER JOIN dbo.ORDERS o WITH(NOLOCK)
 					ON td.OrderKey  = o.OrderKey
 				   AND td.Storerkey = o.StorerKey
 				  WHERE td.TaskDetailKey = @cTaskdetailKey
@@ -803,8 +804,8 @@ BEGIN
                   TD1.FromId,
                   TD1.ToId,
                   @dDateTimeNow
-               FROM TaskDetail TD1 WITH (NOLOCK)
-                  INNER JOIN TaskDetail TD2 WITH (NOLOCK)
+               FROM dbo.TaskDetail TD1 WITH (NOLOCK)
+                  INNER JOIN dbo.TaskDetail TD2 WITH (NOLOCK)
                      ON TD2.TaskDetailKey = @cTaskdetailKey
                      AND TD2.StorerKey = @cStorerKey
                      AND TD1.OrderKey = TD2.OrderKey
@@ -822,8 +823,8 @@ BEGIN
 			 DECLARE @ReasonCode varchar(20) 
 			 -- 
 			 SELECT @ReasonCode = R.C_String29
-			   FROM RDT.RDTMOBREC R                  
-              WHERE Mobile = @nMobile
+			 FROM RDT.RDTMOBREC R                 
+             WHERE Mobile = @nMobile
              --
 			 IF @ReasonCode NOT IN ('EXIT','SKIP') 
 			 BEGIN				 
@@ -835,8 +836,8 @@ BEGIN
 				   CASE 
 				   WHEN EXISTS (
 							  SELECT 1
-								FROM taskdetail td WITH (NOLOCK)
-								JOIN orders o WITH (NOLOCK)
+								FROM dbo.TaskDetail td WITH (NOLOCK)
+								INNER JOIN dbo.ORDERS o WITH (NOLOCK)
 								  ON td.OrderKey  = o.OrderKey
 								 AND td.Storerkey = o.StorerKey
 							   WHERE td.TaskDetailKey = @cTaskdetailKey
@@ -908,8 +909,8 @@ BEGIN
 				  CASE 
 					WHEN EXISTS (
 					  SELECT 1
-					  FROM taskdetail td WITH (NOLOCK)
-					  JOIN orders o WITH (NOLOCK)
+					  FROM dbo.TaskDetail td WITH (NOLOCK)
+					  INNER JOIN dbo.ORDERS o WITH (NOLOCK)
 						ON td.OrderKey  = o.OrderKey
 					   AND td.Storerkey = o.StorerKey
 					  WHERE td.TaskDetailKey = @cTaskdetailKey
@@ -925,15 +926,15 @@ BEGIN
 					CASE 
 					WHEN EXISTS (			  
 						Select 1
-						  from TaskDetail td  WITH (NOLOCK)
-						  join loc loc WITH (NOLOCK)
-							on td.FromLoc = loc.Loc
-						  join CODELKUP ck
-							on ck.Long = loc.LocationCategory
-						 where td.TaskDetailKey = @cTaskdetailKey
-						   and ck.listname = 'JCBBKFRMLC'
-						   and td.Storerkey = 'JCB'
-						   and ck.Long <> 'PND_OUT'
+						  FROM dbo.TaskDetail td  WITH (NOLOCK)
+						  INNER JOIN dbo.LOC loc WITH (NOLOCK)
+							ON td.FromLoc = loc.Loc
+						  INNER JOIN dbo.CODELKUP ck WITH(NOLOCK)
+							ON ck.Long = loc.LocationCategory
+						 WHERE td.TaskDetailKey = @cTaskdetailKey
+						   AND ck.listname = 'JCBBKFRMLC'
+						   AND td.Storerkey = 'JCB'
+						   AND ck.Long <> 'PND_OUT'
 					  )
 					THEN 1
 					ELSE 0
