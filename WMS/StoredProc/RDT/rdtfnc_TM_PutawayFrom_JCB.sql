@@ -217,7 +217,7 @@ SELECT
    @cFieldAttr13 =  FieldAttr13,    @cFieldAttr14   = FieldAttr14,
    @cFieldAttr15 =  FieldAttr15
 
-FROM   RDTMOBREC (NOLOCK)
+FROM   rdt.RDTMOBREC WITH(NOLOCK)
 WHERE  Mobile = @nMobile
    
 -- Redirect to respective screen
@@ -674,7 +674,7 @@ BEGIN
 
 	  IF EXISTS (
 	     SELECT 1 
-		 FROM TaskDetail TD WITH(NOLOCK) 
+		 FROM dbo.TaskDetail TD WITH(NOLOCK) 
 		    INNER JOIN LOC L WITH(NOLOCK)
 			   ON L.Loc = TD.ToLoc
 			INNER JOIN @tAisleInUsed A
@@ -772,7 +772,7 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
 
-	  IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+	  IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
       BEGIN
 	     UPDATE dbo.TaskDetail WITH (ROWLOCK)
          SET Status = '0',
@@ -904,8 +904,8 @@ BEGIN
          INNER JOIN dbo.AreaDetail AD WITH(NOLOCK)
             ON LOC.PutawayZone = AD.PutawayZone
          WHERE TD.TaskType IN ('PAF', 'PA1')
-            AND (TD.Status = '3' OR (TD.Status = '0' AND @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')))
-            AND (TD.UserKey = @cUserName OR (TD.UserKey = '' AND @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')))
+            AND (TD.Status = '3' OR (TD.Status = '0' AND @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')))
+            AND (TD.UserKey = @cUserName OR (TD.UserKey = '' AND @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')))
             AND TD.UserKeyOverRide IN (@cUserName, '')
             AND Loc.Facility = @cFacility
             AND TD.TaskDetailKey = @cTaskdetailKey
@@ -1224,7 +1224,7 @@ BEGIN
 
    Step_3_Fail:
    BEGIN
-   	  IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+   	  IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
       BEGIN
 	     UPDATE dbo.TaskDetail WITH (ROWLOCK)
          SET Status = '0',
@@ -1603,7 +1603,7 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-      IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+      IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
       BEGIN
 	     UPDATE dbo.TaskDetail WITH (ROWLOCK)
          SET Status = '0',
@@ -1846,7 +1846,7 @@ BEGIN
       END
       ELSE 
       BEGIN
-	     IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+	     IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
          BEGIN
 	        UPDATE dbo.TaskDetail WITH (ROWLOCK)
             SET Status = '0',
@@ -1993,7 +1993,7 @@ BEGIN
 
          -- Get task info
          DECLARE @cTaskType NVARCHAR(10)
-         SELECT @cTaskType = TaskType FROM TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
+         SELECT @cTaskType = TaskType FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
 
          -- Update TaskDetail.Status
          IF @cTaskStatus <> ''
@@ -2184,7 +2184,7 @@ BEGIN
                         SELECT TOP 1 @cNewToLoc = LOC.Loc
                         FROM dbo.LOC WITH(NOLOCK)
                         INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
-                        LEFT JOIN dbo.PALLET P ON P.StorerKey = @cStorerKey AND P.PalletKey = @cSuggID
+                        LEFT JOIN dbo.PALLET P WITH(NOLOCK) ON P.StorerKey = @cStorerKey AND P.PalletKey = @cSuggID
                         LEFT JOIN @tEmptyLocBeam EB ON LOC.LocationRoom = EB.LocationRoom
                         WHERE Facility = @cFacility
                            AND LOC.Loc <> @cSuggToLoc
@@ -2331,7 +2331,7 @@ BEGIN
             -- Back to ID screen
             IF @nFromStep = 3
             BEGIN
-		       IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+		       IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
                BEGIN
 	              UPDATE dbo.TaskDetail WITH (ROWLOCK)
                   SET Status = '0',
@@ -2473,7 +2473,7 @@ BEGIN
       -- Go to ID screen
       IF @nFromStep = 3
       BEGIN
-	     IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+	     IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
          BEGIN
 	        UPDATE dbo.TaskDetail WITH (ROWLOCK)
             SET Status = '0',
@@ -2602,6 +2602,7 @@ GO
 GRANT EXECUTE ON RDT.rdtfnc_TM_PutawayFrom_JCB TO NSQL
 
 GO
+
 
 
 
