@@ -317,6 +317,9 @@ execute rdt.rdtAddMsg 218258, 10, '218258^No PickDetail', 'us_english', 1812, 0,
 execute rdt.rdtAddMsg 218259, 10, 'Bad reason for bulk', 'us_english', 1812, 0, '218259^Bad reason for bulk'
 execute rdt.rdtAddMsg 218260, 10, 'ID got loc on hold', 'us_english', 1812, 0, '218260^Scanned ID got loc on hold'
 execute rdt.rdtAddMsg 218261, 10, 'MHE not for ToLoc', 'us_english', 1812, 0, '218261^MHE not for ToLoc'
+execute rdt.rdtAddMsg 218262, 10, 'Order in progress', 'us_english', 1812, 0, '218262^Order in progress'
+execute rdt.rdtAddMsg 218263, 10, '218263^NoPermissions', 'us_english', 1812, 0, '218263^NoPermissions'
+execute rdt.rdtAddMsg 218264, 10, 'ID got 0 weight SKU', 'us_english', 1812, 0, '218264^ID got 0 weight SKU'
 execute rdt.rdtAddMsg 218354, 10, '218354 Mix COD', 'us_english', 573, 0, ''
 execute rdt.rdtAddMsg 218355, 10, '218355 Mix SKU', 'us_english', 573, 0, ''
 execute rdt.rdtAddMsg 218356, 10, '218356 ID already in STORAGE', 'us_english', 573, 0, ''
@@ -344,6 +347,7 @@ execute rdt.rdtAddMsg 218381, 10, '218381 Missing COD on Lottable03', 'us_englis
 execute rdt.rdtAddMsg 218382, 10, '218382 No SO in lottable10', 'us_english', 573, 0, ''
   
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
+
 
 
 
