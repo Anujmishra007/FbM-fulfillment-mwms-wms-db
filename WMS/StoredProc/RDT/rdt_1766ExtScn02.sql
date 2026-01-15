@@ -91,58 +91,67 @@ BEGIN
 
    IF @nCurrentFunc = 1766 -- TM Cycle Count 
    BEGIN
-      IF @nCurrentStep = 3 --Loc, ID screen
+      IF @nCurrentStep = 4 -- Empty Location?
       BEGIN
          IF @nInputKey = 1 -- Enter
          BEGIN
-            IF (@nFunc = 1767 AND @nScn = 2930 AND @nStep = 1) -- Jump to step 1 of 1767 UCC
-               OR (@nFunc = 1768 AND @nScn = 2940 AND @nStep = 1) -- Jump to step 1 of 1767 SKU
+            IF @cOptions IN ('1') -- YES
             BEGIN
-               IF @cOptions IN ('1', '2') -- Count UCC/SKU
+               IF EXISTS(SELECT 1 FROM dbo.TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND TaskType = 'CC' AND Status = '9')
+                  AND NOT EXISTS(SELECT 1
+                              FROM dbo.LOTXLOCXID WITH(NOLOCK)
+                              WHERE Loc = @cLoc
+                                 AND Qty > 0
+                                 AND Qty - QtyPicked > 0)
                BEGIN
-                  IF EXISTS(SELECT 1 FROM dbo.TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND TaskType = 'CC' AND Status <> '9')
-                   AND NOT EXISTS(SELECT 1
-                                 FROM dbo.LOTXLOCXID WITH(NOLOCK)
-                                 WHERE Loc = @cLoc
-                                    AND Qty > 0
-                                    AND Qty - QtyPicked > 0)
+                  DECLARE 
+                     @cCCSheetNo          NVARCHAR( 10),
+                     @cCCDetailKey        NVARCHAR( 10),
+                     @bSuccess            INT
+
+                  SET @cCCSheetNo = @cTaskDetailKey
+
+                  IF NOT EXISTS(SELECT 1 FROM dbo.StockTakeSheetParameters WITH(NOLOCK) WHERE StockTakeKey = @cCCKey)
                   BEGIN
-                     DECLARE 
-                        @cCCSheetNo          NVARCHAR( 10),
-                        @cCCDetailKey        NVARCHAR( 10),
-                        @bSuccess            INT
+                     BEGIN TRY
+                        INSERT INTO dbo.StockTakeSheetParameters (StockTakeKey, Facility, StorerKey, ExcludeQtyPicked, AdjReasonCode, AdjType)
+                        VALUES (@cCCKey, @cFacility, @cStorerKey, 'Y', '', '' )
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 256251
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert StockTakeSheetParameters Failed
+                        GOTO Quit
+                     END CATCH
+                  END
 
-                     SET @cCCSheetNo = @cTaskDetailKey
+                  IF NOT EXISTS(SELECT 1 FROM dbo.CCDETAIL WITH(NOLOCK) WHERE cckey = @cCCKey AND ccsheetno = @cCCSheetNo)
+                  BEGIN
 
-                     IF NOT EXISTS(SELECT 1 FROM dbo.CCDETAIL WITH(NOLOCK) WHERE cckey = @cCCKey AND ccsheetno = @cCCSheetNo)
-                     BEGIN
-   
-                        EXECUTE nspg_getkey
-                           'CCDetailKey'
-                           , 10
-                           , @cCCDetailKey OUTPUT
-                           , @bSuccess OUTPUT
-                           , @nErrNo OUTPUT
-                           , @cErrMsg OUTPUT
+                     EXECUTE nspg_getkey
+                        'CCDetailKey'
+                        , 10
+                        , @cCCDetailKey OUTPUT
+                        , @bSuccess OUTPUT
+                        , @nErrNo OUTPUT
+                        , @cErrMsg OUTPUT
 
-                        IF @nErrNo <> 0
-                           GOTO Quit
+                     IF @nErrNo <> 0
+                        GOTO Quit
 
-                        BEGIN TRY
-                           INSERT dbo.CCDETAIL (cckey, ccdetailkey, StorerKey, sku, lot, loc, id, qty, ccsheetno, Lottable01,
-                              Lottable02, Lottable03, Lottable04, Lottable05,Lottable06, Lottable07, Lottable08, Lottable09,
-                              Lottable10, Lottable11, Lottable12, Lottable13,Lottable14, Lottable15,SystemQty, RefNo)
-                           VALUES (@cCCKey, @cCCDetailKey, @cStorerKey, '', '', @cLoc, '', 0, @cCCSheetNo,
-                                 @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
-                                 @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, @cLottable11,
-                                 @cLottable12, @dLottable13, @dLottable14, @dLottable15, 0, '')
-                        END TRY
-                        BEGIN CATCH
-                           SET @nErrNo = 256251
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert CCDetail Failed
-                           GOTO Quit
-                        END CATCH
-                     END
+                     BEGIN TRY
+                        INSERT dbo.CCDETAIL (cckey, ccdetailkey, StorerKey, sku, lot, loc, id, qty, ccsheetno, Lottable01,
+                           Lottable02, Lottable03, Lottable04, Lottable05,Lottable06, Lottable07, Lottable08, Lottable09,
+                           Lottable10, Lottable11, Lottable12, Lottable13,Lottable14, Lottable15,SystemQty, RefNo)
+                        VALUES (@cCCKey, @cCCDetailKey, @cStorerKey, '', '', @cLoc, '', 0, @cCCSheetNo,
+                              @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+                              @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, @cLottable11,
+                              @cLottable12, @dLottable13, @dLottable14, @dLottable15, 0, '')
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 256252
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert CCDetail Failed
+                        GOTO Quit
+                     END CATCH
                   END
                END
             END
