@@ -1,4 +1,8 @@
-
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+	
 /************************************************************************/
 /* Store procedure: [rdt_1812ExtUpd04]                                  */
 /*                                                                      */
@@ -10,9 +14,12 @@
 /* 2025-06-09  JCH507   1.0.0    FCR-3959 CREATED                       */
 /* 2025-07-07  JCH507   1.0.1    FCR-3959 V1.6. Unhold loc in same bin  */
 /*                                 if the whole pallet (FP) is picked   */
+/* 2025-12-09  AGM046   2.0.0    Adding label printing to step 3        */
+/* 2025-12-11  AGM046   2.0.1    Adding label printing to steps 99/6/4  */
+/* 2026-01-05  PPA374   2.0.2    Adding RDT.c_String28 update at step 2 */
 /************************************************************************/
 
-CREATE OR ALTER   PROCEDURE [RDT].[rdt_1812ExtUpd04]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtUpd04]
    @nMobile         INT,          
    @nFunc           INT,          
    @cLangCode       NVARCHAR( 3), 
@@ -53,7 +60,20 @@ BEGIN
             @cFromLocRoom     NVARCHAR(30),
             @nRowCount        INT,
             --V1.0.2 end
-            @dDateTimeNow      DATETIME
+            @dDateTimeNow     DATETIME,
+			@isKittingOrder      INT,
+			@isKittingOrder_PP   INT,
+			@isKittingOrder_FP   INT,
+			@isStandardOrder     INT,
+			--
+			@cLabelPrinter    NVARCHAR(10),
+			@cPaperPrinter    NVARCHAR(10),	
+			@cFacility        NVARCHAR(5),
+			@cLabelType       NVARCHAR(10),
+			--
+			@c_pickingType   NVARCHAR(5), 	
+			@cID NVARCHAR(20),
+			@ToLoc NVARCHAR(20)
 
    SELECT   @nScn = Scn,
             @nFromStep = V_FromStep,
@@ -67,10 +87,18 @@ BEGIN
       SELECT 'Executing rdt_1812ExtUpd04'
    
    IF @nFunc = 1812 -- PickSKU
-   BEGIN
-      IF @nStep = 2
+   BEGIN      
+	  IF @nStep = 2
       BEGIN
          DECLARE @c_PickSlipNo NVARCHAR(10) = '',@b_success INT = 0
+
+		 UPDATE RDT.RDTMOBREC
+		 SET C_String28 = V_LOC
+		 WHERE Mobile = @nMobile
+
+		 UPDATE RDT.RDTMOBREC
+         SET C_DateTime1 = GETDATE()
+         WHERE Mobile = @nMobile
 
          SELECT @cOrderKey = OrderKey
          FROM dbo.TaskDetail WITH (NOLOCK)
@@ -140,8 +168,292 @@ BEGIN
                --,  NULL               -- Fixed for Order status update to '3'
                )
          END
-      END
-      IF @nStep = 6 --ToLoc
+      END	  
+	  	  	  
+	  --
+	  IF @nStep = 3 --FROMID
+	  BEGIN	
+	     --
+	     IF @nInputKey = 1
+         BEGIN
+		    --
+			SET @isStandardOrder = 0 			
+			-- Picking labels 
+			SET @c_pickingType = ''	
+			SET @cID = ''
+			SET @ToLoc = ''
+			-- Get if full pallet
+			SELECT 
+			   @c_pickingType = td.PickMethod, 		
+			   @cID = td.FromID,
+			   @ToLoc = td.toloc
+	        FROM dbo.TASKDETAIL td WITH (NOLOCK)
+	        WHERE td.taskdetailkey = @cTaskdetailKey
+           -- Get If standard Order            	   			     		   
+			  SELECT @isStandardOrder =
+			  CASE 
+				WHEN EXISTS (
+				  SELECT 1
+				  FROM taskdetail td WITH (NOLOCK)
+				  JOIN orders o WITH (NOLOCK)
+					ON td.OrderKey  = o.OrderKey
+				   AND td.Storerkey = o.StorerKey
+				  WHERE td.TaskDetailKey = @cTaskdetailKey
+					AND o.Facility = 'EMG03'
+					AND o.[Type] IN ('0','1')
+				)
+				THEN 1
+				ELSE 0
+			  END 
+					--								
+					IF @c_pickingType = 'FP' --AND @ToLoc like 'ESM%'	
+					AND @isStandardOrder = 1
+					BEGIN	
+						--
+						SET  @cLabelPrinter  = ''
+						SET  @cPaperPrinter  = ''	
+						SET  @cFacility      = ''
+						SET  @cLabelType     = '' 
+						--
+						DECLARE @b_totalSkuInPallet INT = 0,
+						        @tMonoMultiLbl AS VariableTable						                    			        												
+						-- Full Pallet to Stage Outbound (Not Kitting)
+						-- Get MonoSku or MultiSku pallet		   
+						SELECT @b_totalSkuInPallet = COUNT(DISTINCT(lli.Sku)) 
+						  FROM dbo.LOTxLOCxID lli WITH (NOLOCK)
+						 WHERE lli.storerkey = 'JCB'
+						   AND lli.qty > 0
+						   --AND lli.loc LIKE 'ESM%'
+						   AND lli.Id = @cID
+						 GROUP BY lli.Id
+						 
+						 -- Get printers parameters
+						 SELECT @cFacility = Facility,
+								@cLabelPrinter = Printer, 
+								@cPaperPrinter = Printer_Paper
+						   FROM rdt.rdtMobRec WITH (NOLOCK)
+						  WHERE Mobile = @nMobile 						
+						 -- Common params (To check)
+						 INSERT INTO @tMonoMultiLbl (Variable, Value) VALUES
+							   ( '@cStorerKey',     @cStorerKey),
+							   ( '@cFacility',      @cFacility),
+							   ( '@cDropID',        @cID),
+							   ( '@cTaskdetailKey', @cTaskdetailKey)				   																	 
+						 --						 
+						IF @b_totalSkuInPallet = 1				
+							BEGIN
+							   --PRINT 'MONO SKU'
+							   SET @cLabelType = 'PickMonSku'				   				 				  
+							   EXEC RDT.rdt_Print 
+								  @nMobile, 
+								  @nFunc, 
+								  @cLangCode, 
+								  @nStep, 
+								  @nInputKey, 
+								  @cFacility, 
+								  @cStorerKey, 
+								  @cLabelPrinter, 
+								  @cPaperPrinter,
+								  @cLabelType,
+								  @tMonoMultiLbl, -- Report params
+								  'rdt_1812ExtUpd04',
+								  @nErrNo  OUTPUT,
+								  @cErrMsg OUTPUT
+							   IF @nErrNo <> 0
+								  GOTO Quit	
+							END				 
+						ELSE IF @b_totalSkuInPallet > 1
+							BEGIN
+							   --PRINT 'MULTI SKU'
+							   --First Print Out				
+							   SET @cLabelType = 'PkMltSkuHd'
+							   EXEC RDT.rdt_Print 
+								  @nMobile, 
+								  @nFunc, 
+								  @cLangCode, 
+								  @nStep, 
+								  @nInputKey, 
+								  @cFacility, 
+								  @cStorerKey, 
+								  @cLabelPrinter, 
+								  @cPaperPrinter,
+								  @cLabelType,
+								  @tMonoMultiLbl, -- Report params
+								  'rdt_1812ExtUpd04',
+								  @nErrNo  OUTPUT,
+								  @cErrMsg OUTPUT
+							   IF @nErrNo <> 0
+								  GOTO Quit
+							   --Second Print Out
+							   SET @cLabelType = 'PkMltSkuLt'				   
+							   EXEC RDT.rdt_Print 
+								  @nMobile, 
+								  @nFunc, 
+								  @cLangCode, 
+								  @nStep, 
+								  @nInputKey, 
+								  @cFacility, 
+								  @cStorerKey, 
+								  @cLabelPrinter, 
+								  @cPaperPrinter,
+								  @cLabelType,
+								  @tMonoMultiLbl, -- Report params
+								  'rdt_1812ExtUpd04',
+								  @nErrNo  OUTPUT,
+								  @cErrMsg OUTPUT
+							   IF @nErrNo <> 0
+								  GOTO Quit					  
+							END							
+							ELSE 
+							BEGIN 													
+								SET @nErrNo = 260003 -- 260003^SkuInPallet<0
+								SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+								GOTO Quit
+							END								
+					END -- END If Full Pallet Picking
+          END --INPUTKEY = 0
+	  END -- END Step 3
+	  
+	  --
+	  IF @nStep = 4 
+	  BEGIN	      
+	     --
+		 IF @nInputKey = 1
+         BEGIN		     
+			 -- Initialize variables
+			   SET @isStandardOrder = 0 						 
+			   SET @c_pickingType = ''	
+			   SET @cID = ''
+			   SET @ToLoc = ''						  			 			 			
+			  -- Get Info from taskdetail 
+			SELECT @c_pickingType = td.PickMethod, 		
+			       @cID = td.Caseid,
+			       @ToLoc = td.toloc
+	          FROM dbo.TASKDETAIL td WITH (NOLOCK)
+	         WHERE td.taskdetailkey = @cTaskdetailKey
+             -- Get If standard Order            	   			     		   
+			 SELECT @isStandardOrder =
+			  CASE 
+				WHEN EXISTS (
+				  SELECT 1
+				  FROM taskdetail td WITH (NOLOCK)
+				  JOIN orders o WITH (NOLOCK)
+					ON td.OrderKey  = o.OrderKey
+				   AND td.Storerkey = o.StorerKey
+				  WHERE td.TaskDetailKey = @cTaskdetailKey
+					AND o.Facility = 'EMG03'
+					AND o.[Type] IN ('0','1')
+					AND TaskType = 'FCP'
+				)
+				THEN 1
+				ELSE 0	
+			 END 			 
+			  	 --		  
+			     IF @c_pickingType = 'PP' AND @isStandardOrder = 1 AND @cID is not null AND @cID <>''
+				 BEGIN	
+					   DECLARE @b_totalSkuInCase INT = 0,
+						       @tMonoCaseLbl AS VariableTable						
+						-- Full Pallet to Stage Outbound (Not Kitting)
+						-- Get MonoSku or MultiSku pallet		   
+						SELECT @b_totalSkuInCase = COUNT(DISTINCT(lli.Sku)) 
+						  FROM dbo.LOTxLOCxID lli WITH (NOLOCK)
+						  JOIN LOTATTRIBUTE la WITH (NOLOCK)
+						    ON la.Lot = lli.Lot
+						 WHERE lli.storerkey = 'JCB'
+						   AND lli.qty > 0						  
+						   AND la.Lottable11 = @cID
+						 GROUP BY lli.Id
+											 
+						-- Get printers parameters
+						SELECT @cFacility = Facility,
+							   @cLabelPrinter = Printer, 
+							   @cPaperPrinter = Printer_Paper
+						  FROM rdt.rdtMobRec WITH (NOLOCK)
+						 WHERE Mobile = @nMobile 
+
+						 -- Common params (To check)
+						 INSERT INTO @tMonoCaseLbl (Variable, Value) VALUES
+							   ( '@cStorerKey',     @cStorerKey),
+							   ( '@cFacility',      @cFacility),
+							   ( '@cDropID',        @cID),
+							   ( '@cTaskdetailKey', @cTaskdetailKey)				   																	 
+						    --												 
+						    IF @b_totalSkuInCase = 1				
+							BEGIN
+							   --PRINT 'MONO SKU'
+							   SET @cLabelType = 'PickMonSku'				   				 				  
+							   EXEC RDT.rdt_Print 
+								  @nMobile, 
+								  @nFunc, 
+								  @cLangCode, 
+								  @nStep, 
+								  @nInputKey, 
+								  @cFacility, 
+								  @cStorerKey, 
+								  @cLabelPrinter, 
+								  @cPaperPrinter,
+								  @cLabelType,
+								  @tMonoCaseLbl, -- Report params
+								  'rdt_1812ExtUpd04',
+								  @nErrNo  OUTPUT,
+								  @cErrMsg OUTPUT
+							   IF @nErrNo <> 0
+								  GOTO Quit	
+							END													
+						    ELSE IF @b_totalSkuInCase > 1
+							BEGIN
+							   --PRINT 'MULTI SKU'
+							   --First Print Out				
+							   SET @cLabelType = 'PkMltSkuHd'
+							   EXEC RDT.rdt_Print 
+								  @nMobile, 
+								  @nFunc, 
+								  @cLangCode, 
+								  @nStep, 
+								  @nInputKey, 
+								  @cFacility, 
+								  @cStorerKey, 
+								  @cLabelPrinter, 
+								  @cPaperPrinter,
+								  @cLabelType,
+								  @tMonoCaseLbl, 
+								  'rdt_1812ExtUpd04',
+								  @nErrNo  OUTPUT,
+								  @cErrMsg OUTPUT
+							   IF @nErrNo <> 0
+								  GOTO Quit
+							   --Second Print Out
+							   SET @cLabelType = 'PkMltSkuLt'				   
+							   EXEC RDT.rdt_Print 
+								  @nMobile, 
+								  @nFunc, 
+								  @cLangCode, 
+								  @nStep, 
+								  @nInputKey, 
+								  @cFacility, 
+								  @cStorerKey, 
+								  @cLabelPrinter, 
+								  @cPaperPrinter,
+								  @cLabelType,
+								  @tMonoCaseLbl, 
+								  'rdt_1812ExtUpd04',
+								  @nErrNo  OUTPUT,
+								  @cErrMsg OUTPUT
+							   IF @nErrNo <> 0
+								  GOTO Quit					  
+							END							
+							ELSE 
+							BEGIN 
+							   SET @nErrNo = 260004  --'260004^SkuInCase<0'
+							   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+							  GOTO Quit
+							END								  
+			     END 
+         END --INPUTKEY = 1			      			
+	  END -- END STEP 4  
+
+	  --	  
+	  IF @nStep = 6 --ToLoc
       BEGIN
          IF @nInputKey = 1
          BEGIN
@@ -290,7 +602,136 @@ BEGIN
             SET C_DateTime1 = GETDATE()
             WHERE Mobile = @nMobile
 
-         END --inputkey = 1
+            -- Print Label Head ('T4 Full pallet pick')		 
+		    SET @isKittingOrder_FP = 0			 		     			 				     						  		  
+		    --
+		    SELECT @isKittingOrder_FP =
+			   CASE 
+			   WHEN EXISTS (
+						  SELECT 1
+							FROM taskdetail td WITH (NOLOCK)
+							JOIN orders o
+							  ON td.OrderKey  = o.OrderKey
+							 AND td.Storerkey = o.StorerKey
+						   WHERE td.TaskDetailKey = @cTaskdetailKey
+							 AND o.Facility = 'EMG03'
+							 AND o.[Type] IN ('6')
+							 AND td.pickmethod = 'FP'
+							 AND td.TaskType = 'FCP'
+							 )							 
+				THEN 1
+				ELSE 0
+		        END
+		     --		   		   
+		     IF @isKittingOrder_FP = 1 
+			 BEGIN	
+		             SET  @cLabelPrinter  = ''
+				     SET  @cPaperPrinter  = ''	
+			         SET  @cFacility      = ''
+				     SET  @cLabelType     = ''
+                     SET  @cID            = ''
+                   -- Get ID (ToId or DropID)			
+		          SELECT @cID = COALESCE(td.ToID, td.DropID)		  
+		            FROM dbo.TASKDETAIL td WITH (NOLOCK)
+		           WHERE td.taskdetailkey = @cTaskdetailKey				   				    
+				 --Execute code to PRINT	
+				 DECLARE @tKittingLblHead AS VariableTable                   						                   
+				  -- Get printers parameters
+				  SELECT @cFacility = Facility,
+					     @cLabelPrinter = Printer, 
+					     @cPaperPrinter = Printer_Paper							
+				    FROM rdt.rdtMobRec WITH (NOLOCK)
+			       WHERE Mobile = @nMobile 						                    					 
+				  -- Common params (To check)
+				  INSERT INTO @tKittingLblHead  (Variable, Value) VALUES
+						                        ('@cStorerKey',     @cStorerKey),
+						                        ('@cDropID',        @cID),
+                                                ('@cTaskdetailKey', @cTaskdetailKey)                                         
+						   -- PRINT KITTING LABEL HEADER						   			
+						  SET @cLabelType = 'KitGenLbHd'
+						 EXEC RDT.rdt_Print 
+							  @nMobile, 
+							  @nFunc, 
+							  @cLangCode, 
+							  @nStep, 
+							  @nInputKey, 
+							  @cFacility, 
+							  @cStorerKey, 
+							  @cLabelPrinter, 
+							  @cPaperPrinter,
+							  @cLabelType,
+							  @tKittingLblHead, 
+							  'rdt_1812ExtUpd04',
+							  @nErrNo  OUTPUT,
+							  @cErrMsg OUTPUT
+						   IF @nErrNo <> 0
+							  GOTO Quit                           						 							  			  							  
+             END
+		              
+			 --  Print KITING Labes with SKUs List 
+			 -- 'T4 Full pallet pick','CABS Tote Label', 'T4 Partial Pick Pallet','LANDPOWER Pallet Label'	            		 
+		     SET @isKittingOrder = 0				  
+		     SET @cID = ''
+			 SET @cLabelPrinter  = ''
+			 SET @cPaperPrinter  = ''			
+		      -- Get ID (ToId or DropID)		 		
+		  SELECT @cID = COALESCE(NULLIF(td.ToID, ''), NULLIF(td.DropID, ''))
+            FROM dbo.TASKDETAIL td WITH (NOLOCK)
+           WHERE td.taskdetailkey = @cTaskdetailKey
+              -- Get printers parameters
+		  SELECT @cFacility = Facility,
+			     @cLabelPrinter = Printer, 
+			     @cPaperPrinter = Printer_Paper
+			     --@cID = V_String3 (Dropid)
+		    FROM rdt.rdtMobRec WITH (NOLOCK)
+		   WHERE Mobile = @nMobile 
+		     --	 
+		  SELECT @isKittingOrder =
+		    CASE 
+		    WHEN EXISTS (
+				  SELECT 1
+				  FROM taskdetail td WITH (NOLOCK)
+				  JOIN orders o
+					ON td.OrderKey  = o.OrderKey
+				   AND td.Storerkey = o.StorerKey
+				  WHERE td.TaskDetailKey = @cTaskdetailKey
+					AND o.Facility = 'EMG03'
+					AND o.[Type] IN ('2','6','8')
+					AND td.TaskType IN ('FCP') -- to avoid from PDND
+		   )
+		   THEN 1
+		   ELSE 0
+		   END 			 
+		      --		   		   
+		      IF @isKittingOrder = 1 AND @cID <> '' AND @cID IS NOT NULL
+			  BEGIN				      			       				    
+					--Execute code to PRINT	
+				    DECLARE @tKittingLblList AS VariableTable									                                																 
+					-- Common params (To check)
+					INSERT INTO @tKittingLblList  (Variable, Value) VALUES
+						                          ('@cStorerKey', @cStorerKey),
+						                          ('@cDropID',    @cID)						   				           
+					-- PRINT KITTING LABEL HEADER						   				
+					SET @cLabelType = 'KitGenLbLt'
+					EXEC RDT.rdt_Print 
+						@nMobile, 
+						@nFunc, 
+						@cLangCode, 
+						@nStep, 
+						@nInputKey, 
+						@cFacility, 
+						@cStorerKey, 
+						@cLabelPrinter, 
+						@cPaperPrinter,
+						@cLabelType,
+						@tKittingLblList, 
+						'rdt_1812ExtUpd04',
+						@nErrNo  OUTPUT,
+						@cErrMsg OUTPUT
+					IF @nErrNo <> 0
+						GOTO Quit
+               END		 
+		 END --inputkey = 1
       END--St6
       
       IF @nStep = 7 -- ExitTM, Next Task Scn
@@ -329,8 +770,10 @@ BEGIN
                END CATCH
             END --Unlock Tasks
          END--inputkey = 0
+
       END --ST7
-     IF @nStep = 99
+     	 
+	 IF @nStep = 99
       BEGIN
          IF @nInputKey = 1
          BEGIN
@@ -374,12 +817,234 @@ BEGIN
 
 			   DELETE FROM TaskManagerSkipTasks
 			   WHERE USERID = ''
-
-          END
-       END   
-      END
+            END
+			 
+			 DECLARE @ReasonCode varchar(20) 
+			 -- 
+			 SELECT @ReasonCode = R.C_String29
+			   FROM RDT.RDTMOBREC R                  
+              WHERE Mobile = @nMobile
+             --
+			 IF @ReasonCode NOT IN ('EXIT','SKIP') 
+			 BEGIN				 
+				 SET @isKittingOrder_PP = 0			 	
+				 SET @cID = ''			 				     						   
+				 -- Get if it is Kittinng Order ('CABS Tote Label','T4 Partial Pick Pallet','LANDPOWER Pallet Label')
+				 -- PRINT HEADER LABEL			 
+				 SELECT @isKittingOrder_PP =
+				   CASE 
+				   WHEN EXISTS (
+							  SELECT 1
+								FROM taskdetail td WITH (NOLOCK)
+								JOIN orders o WITH (NOLOCK)
+								  ON td.OrderKey  = o.OrderKey
+								 AND td.Storerkey = o.StorerKey
+							   WHERE td.TaskDetailKey = @cTaskdetailKey
+								 AND o.Facility = 'EMG03'
+								 AND o.[Type] IN ('2','6','8')
+								 AND NOT (o.[Type] IN ('6') AND td.pickmethod = 'FP')
+								 )
+					THEN 1
+					ELSE 0
+				 END
+				 --		   		   
+				 IF @isKittingOrder_PP = 1  
+				 BEGIN	
+					   --
+					       SET @cLabelPrinter  = ''
+					       SET @cPaperPrinter  = ''	
+					       SET @cFacility      = ''
+					       SET @cLabelType     = ''
+					       SET @cID            = ''				   				    
+					   --Execute code to PRINT	
+					   DECLARE @tKittingLblHeadPP AS VariableTable									                                
+					   -- Get printers parameters
+					    SELECT @cFacility = Facility,
+							   @cLabelPrinter = Printer, 
+							   @cPaperPrinter = Printer_Paper,
+							   @cID = O_Field01
+						  FROM rdt.rdtMobRec WITH (NOLOCK)
+						 WHERE Mobile = @nMobile 											 			
+					  -- Common params (To check)
+					    INSERT INTO @tKittingLblHeadPP (Variable, Value) VALUES
+													   ( '@cStorerKey',     @cStorerKey),
+													   ( '@cDropID',        @cID),
+													   ( '@cTaskdetailKey', @cTaskdetailKey)				   
+							-- PRINT KITTING LABEL HEADER								
+						   SET @cLabelType = 'KitGenLbHd'
+						  EXEC RDT.rdt_Print 
+							   @nMobile, 
+							   @nFunc, 
+							   @cLangCode, 
+							   @nStep, 
+							   @nInputKey, 
+							   @cFacility, 
+							   @cStorerKey, 
+							   @cLabelPrinter, 
+							   @cPaperPrinter,
+							   @cLabelType,
+							   @tKittingLblHeadPP, 
+							  'rdt_1812ExtUpd04',
+							   @nErrNo  OUTPUT,
+							   @cErrMsg OUTPUT
+							IF @nErrNo <> 0
+						  GOTO Quit	
+				 END -- END Kitting Orders
+	             -------------------------			     
+				 -- BULK LOCATIONS FLOW --
+				 -------------------------
+			     SET @isStandardOrder = 0 							
+				 SET @c_pickingType = ''	
+				 SET @cID = ''
+				 SET @ToLoc = ''
+				 -- 
+				 SELECT @c_pickingType = td.PickMethod, 		
+			            @cID = td.FromID,
+			            @ToLoc = td.toloc
+	               FROM dbo.TASKDETAIL td WITH (NOLOCK)
+	              WHERE td.taskdetailkey = @cTaskdetailKey
+			    -- Get If it is standard Order            	   			     		   
+				SELECT @isStandardOrder =
+				  CASE 
+					WHEN EXISTS (
+					  SELECT 1
+					  FROM taskdetail td WITH (NOLOCK)
+					  JOIN orders o WITH (NOLOCK)
+						ON td.OrderKey  = o.OrderKey
+					   AND td.Storerkey = o.StorerKey
+					  WHERE td.TaskDetailKey = @cTaskdetailKey
+						AND o.Facility = 'EMG03'
+						AND o.[Type] IN ('0','1')
+					)
+					THEN 1
+					ELSE 0
+				END 
+			    -- Get it Pallet come from Bulk Location
+			    DECLARE @isBulkLocation INT = 0
+				SELECT @isBulkLocation =
+					CASE 
+					WHEN EXISTS (			  
+						Select 1
+						  from TaskDetail td  WITH (NOLOCK)
+						  join loc loc WITH (NOLOCK)
+							on td.FromLoc = loc.Loc
+						  join CODELKUP ck
+							on ck.Long = loc.LocationCategory
+						 where td.TaskDetailKey = @cTaskdetailKey
+						   and ck.listname = 'JCBBKFRMLC'
+						   and td.Storerkey = 'JCB'
+						   and ck.Long <> 'PND_OUT'
+					  )
+					THEN 1
+					ELSE 0
+				 END  
+				 --								
+				 IF @c_pickingType = 'FP' AND @isBulkLocation = 1 AND @isStandardOrder = 1
+				 BEGIN	
+						--
+						SET  @cLabelPrinter  = ''
+						SET  @cPaperPrinter  = ''	
+						SET  @cFacility      = ''
+						SET  @cLabelType     = '' 
+						--
+						DECLARE @b_totalSkuInPallet_BLK INT = 0,
+						        @tMonoMultiLbl_blk AS VariableTable						                    			        											
+						-- Get MonoSku or MultiSku pallet		   
+						SELECT @b_totalSkuInPallet_BLK = COUNT(DISTINCT(lli.Sku)) 
+						  FROM dbo.LOTxLOCxID lli WITH (NOLOCK)
+						 WHERE lli.storerkey = 'JCB'
+						   AND lli.qty > 0
+						   AND lli.Id = @cID
+						 GROUP BY lli.Id								 										 							
+						 -- Get printers parameters
+						SELECT @cFacility = Facility,
+							   @cLabelPrinter = Printer, 
+							   @cPaperPrinter = Printer_Paper
+						  FROM rdt.rdtMobRec WITH (NOLOCK)
+						 WHERE Mobile = @nMobile 						
+						 -- Common params (To check)
+						 INSERT INTO @tMonoMultiLbl_blk (Variable, Value) VALUES
+													   ( '@cStorerKey',     @cStorerKey),
+													   ( '@cFacility',      @cFacility),
+													   ( '@cDropID',        @cID),
+													   ( '@cTaskdetailKey', @cTaskdetailKey)				   																	 
+						    --						 
+						    IF @b_totalSkuInPallet_BLK = 1				
+							BEGIN
+							   --PRINT 'MONO SKU'
+							   SET @cLabelType = 'PickMonSku'				   				 				  
+							   EXEC RDT.rdt_Print 
+								  @nMobile, 
+								  @nFunc, 
+								  @cLangCode, 
+								  @nStep, 
+								  @nInputKey, 
+								  @cFacility, 
+								  @cStorerKey, 
+								  @cLabelPrinter, 
+								  @cPaperPrinter,
+								  @cLabelType,
+								  @tMonoMultiLbl_blk, -- Report params
+								  'rdt_1812ExtUpd04',
+								  @nErrNo  OUTPUT,
+								  @cErrMsg OUTPUT
+							   IF @nErrNo <> 0
+								  GOTO Quit	
+							 END				 
+						     ELSE IF @b_totalSkuInPallet_BLK > 1
+							 BEGIN
+							   --PRINT 'MULTI SKU'
+							   --First Print Out				
+							   SET @cLabelType = 'PkMltSkuHd'
+							   EXEC RDT.rdt_Print 
+								  @nMobile, 
+								  @nFunc, 
+								  @cLangCode, 
+								  @nStep, 
+								  @nInputKey, 
+								  @cFacility, 
+								  @cStorerKey, 
+								  @cLabelPrinter, 
+								  @cPaperPrinter,
+								  @cLabelType,
+								  @tMonoMultiLbl_blk, 
+								  'rdt_1812ExtUpd04',
+								  @nErrNo  OUTPUT,
+								  @cErrMsg OUTPUT
+							   IF @nErrNo <> 0
+								  GOTO Quit
+							   --Second Print Out
+							   SET @cLabelType = 'PkMltSkuLt'				   
+							   EXEC RDT.rdt_Print 
+								  @nMobile, 
+								  @nFunc, 
+								  @cLangCode, 
+								  @nStep, 
+								  @nInputKey, 
+								  @cFacility, 
+								  @cStorerKey, 
+								  @cLabelPrinter, 
+								  @cPaperPrinter,
+								  @cLabelType,
+								  @tMonoMultiLbl_blk, 
+								  'rdt_1812ExtUpd04',
+								  @nErrNo  OUTPUT,
+								  @cErrMsg OUTPUT
+							   IF @nErrNo <> 0
+								  GOTO Quit					  
+							END							
+							ELSE 
+							BEGIN 														
+							   SET @nErrNo = 260005  --260005^SkuInBulk<0
+							   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+							  GOTO Quit
+							END							
+			     END -- END If Full Pallet Picking
+			 END --IF @ReasonCode	
+         END  --@nInputKey = 1  
+      END --@nStep = 99
    END --1812
-
+   --
    Quit:
 END-- sp
 

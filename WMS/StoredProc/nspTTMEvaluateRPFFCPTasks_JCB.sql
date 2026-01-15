@@ -21,6 +21,7 @@ GO
 /* 2025-09-01  1.0.3  Dennis   FCR-3959 if toloc(ML or Kit) onhold then look for other lanes    */
 /* 2025-11-11  2.0.0  PPA374   Updating aisle in use logic                                      */
 /* 2025-12-16  2.0.1  PPA374   Adding fix to avoid blocking replen tasks without orderkey       */
+/* 2026-01-05  2.0.2  PPA374   Changing aisle in use to C_String28                              */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspTTMEvaluateRPFFCPTasks_JCB]
@@ -243,7 +244,7 @@ BEGIN
       R.UserName AS UserKey
    FROM RDT.RDTMOBREC R WITH(NOLOCK)
       LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
-      LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.V_String8 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+      LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.C_String28 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
    WHERE R.StorerKey = @cStorerKey
       AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
       AND R.UserName <> @c_UserID
@@ -400,7 +401,7 @@ BEGIN
 			      OR (LOC2.Status <> 'OK' OR LOC2.LocationFlag NOT IN ('','NONE'))
 			      OR (TD2.Status = '3' AND TD2.UserKey <> @c_UserID)
 				  OR TD2.Qty * ISNULL(S.STDGROSSWGT,0) > @fMaximumWeight
-				  OR PD1.TaskDetailKey IS NULL --PPA 20/11/2025 fixing to not provide orders with pickdetail is missing
+				  OR (PD1.TaskDetailKey IS NULL AND TD2.Status IN ('0','3') AND TD2.AreaKey = @c_AreaKey01) --PPA 20/11/2025 fixing to not provide orders with pickdetail is missing
 			   )
                AND TD2.TaskType IN ('FCP', 'FCP1')
                AND TD2.PickMethod = 'PP'

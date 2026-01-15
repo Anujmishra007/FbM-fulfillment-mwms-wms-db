@@ -13,6 +13,7 @@ GO
 /* 2025-06-27  1.0.1  Dennis   FCR-3954. Update Dispatch strategy       */
 /* 2025-10-23  1.0.2  Dennis   UWP-428244. Enhancement                  */
 /* 2025-11-11  2.0.0  PPA374   Updating aisle in use logic              */
+/* 2026-01-05  2.0.1  PPA374   Changing aisle in use to C_String28      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_TM_PutawayFrom_SwapTask_JCB] (
@@ -118,7 +119,7 @@ BEGIN
       R.UserName AS UserKey
    FROM RDT.RDTMOBREC R WITH(NOLOCK)
       LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
-      LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.V_String8 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+      LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.C_String28 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
    WHERE R.StorerKey = @cStorerKey
       AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
       AND R.UserName <> @cUserName
@@ -282,4 +283,5 @@ GO
 
 GRANT EXECUTE ON [rdt].[rdt_TM_PutawayFrom_SwapTask_JCB] TO NSQL
 GO
+
 
