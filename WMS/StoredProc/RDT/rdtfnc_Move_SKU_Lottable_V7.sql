@@ -23,7 +23,7 @@ GO
 /* 17-Apr-2023 1.6  Ung      WMS-22217 Add ConfirmSP                    */
 /* 22-Aug-2025 2.0  Cuize    FCR-7251 Add CheckDigit                    */
 /* 15-Dec-2025 3.0  BHA212   FCR-9582 Add DecodedSP                     */
-/* 13-Jan-2026 4.0  PPA374   Adding ExtVal to steps 2 and 7             */
+/* 13-Jan-2026 4.0  PPA374   UWP-47065 Adding ExtVal to steps 2 and 7   */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable_V7] (

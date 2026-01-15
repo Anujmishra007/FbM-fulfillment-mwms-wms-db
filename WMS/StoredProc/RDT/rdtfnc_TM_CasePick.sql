@@ -50,7 +50,7 @@ GO
 /* 2025-11-24 3.6.0  NickT      UWP-44566 Reset QTY when get new task or on ToLoc*/
 /* 2025-12-18 3.7.0  NickT      UWP-45705 Fix issue: MQty is 1 while short pick  */
 /* 2026-01-05 3.8.0  PPA374     UWP-46338 Adding  extended update to step 4      */
-/* 2026-01-12 3.8.1  PPA374     Adding Extended Validate in step 3               */
+/* 2026-01-12 3.8.1  PPA374     UWP-47065 Adding Extended Validate in step 3     */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
