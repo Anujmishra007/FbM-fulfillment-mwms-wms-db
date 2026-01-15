@@ -458,7 +458,7 @@ BEGIN
                UPDATE P
                SET P.TaskManagerReasonKey = 'SHORT'
                  , P.TrafficCop = NULL
-               FROM PICKDETAIL P (NOLOCK)
+               FROM PICKDETAIL P
                WHERE P.PickDetailKey = @c_PickDetailKey
             END TRY
             BEGIN CATCH
@@ -804,7 +804,7 @@ BEGIN
                UPDATE P
                SET P.TaskManagerReasonKey = 'SHORT'
                  , P.TrafficCop = NULL
-               FROM PICKDETAIL P (NOLOCK)
+               FROM PICKDETAIL P
                WHERE P.PickDetailKey = @c_PickDetailKey
             END TRY
             BEGIN CATCH
