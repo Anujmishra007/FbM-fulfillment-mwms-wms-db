@@ -3,19 +3,21 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_869ConfirmSP01                                  */
-/* Copyright      : Maersk                                              */
-/* Customer       : USA Levis                                           */
-/*                                                                      */
-/* Purpose: Print GS1 label                                             */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev    Author   Purposes                                  */
-/* 2025-08-27 1.0.0  NickT    FCR-6730 Created                          */
-/* 2025-11-07 1.1.0  JackC    UWP-43820 Performance tuning              */
-/************************************************************************/
+/***************************************************************************************/
+/* Store procedure: rdt_869ConfirmSP01                                                 */
+/* Copyright      : Maersk                                                             */
+/* Customer       : USA Levis                                                          */
+/*                                                                                     */
+/* Purpose: Print GS1 label                                                            */
+/*                                                                                     */
+/* Modifications log:                                                                  */
+/*                                                                                     */
+/* Date       Rev    Author   Purposes                                                 */
+/* 2025-08-27 1.0.0  NickT    FCR-6730 Created                                         */
+/* 2025-11-07 1.1.0  JackC    UWP-43820 Commit tran per update to                      */
+/*                            improve deadlock                                         */
+/* 2026-01-15 1.2.0  NickT    FCR-7928 Only trigger WSSOAlloUpd for real short PKD     */
+/***************************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_869ConfirmSP01 (
    @nMobile    INT,
@@ -258,7 +260,8 @@ BEGIN
          GOTO RollBackTranPick
       END CATCH
 
-      IF NOT EXISTS (SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK) 
+      IF EXISTS(SELECT 1 FROM dbo.PickDetail WITH(NOLOCK) WHERE PickDetailKey = @cPickDetailKey AND ISNULL(TaskManagerReasonKey, '') = 'SHORT')
+         AND NOT EXISTS (SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK) 
                      WHERE key1 = @cLoopOrderKey
                         AND Key2 = @cPickDetailKey
                         AND Key3 = @cStorerkey
@@ -324,13 +327,13 @@ BEGIN
       SET @cErrMsg1 = CAST(@nErrNo AS VARCHAR(10))
       SET @cErrMsg2 = @cErrMsg
       SET @cErrMsg3 = 'PickDtlKey: ' + @cPickDetailKey
-            EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
-                           @nErrNo = @nErrNo,
-                           @cErrMsg = @cErrMsg,
-                           @cLine01 = @cErrMsg1,
-                           @cLine02 = @cErrMsg2,
-                           @cLine03 = @cErrMsg3,
-                           @nDisplayMsg = 0
+      EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                     @nErrNo = @nErrNo,
+                     @cErrMsg = @cErrMsg,
+                     @cLine01 = @cErrMsg1,
+                     @cLine02 = @cErrMsg2,
+                     @cLine03 = @cErrMsg3,
+                     @nDisplayMsg = 0
       GOTO Quit
 
    Quit:
