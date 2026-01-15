@@ -9,7 +9,7 @@ GO
 /*                                                                         */
 /*                                                                         */
 /* Date            Author     Purposes                                     */
-/* 08/01/2026      PPA374     Unloads DropID                        	     */
+/* 08/01/2026      PPA374     Unloads DropID                        	   */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_727InquiryJCB1] (
    @nMobile      INT,  
@@ -324,7 +324,7 @@ BEGIN
                      END
 
 				     -- MBOL
-				     IF NOT EXISTS( SELECT 1 FROM dbo.MBOL WHERE MBOLKey = @cMBOLKeyNew)
+				     IF NOT EXISTS( SELECT 1 FROM dbo.MBOL WITH(NOLOCK) WHERE MBOLKey = @cMBOLKeyNew)
                      BEGIN
                         INSERT INTO dbo.MBOL (MBOLKey, ExternMBOLKey, Facility, Status) 
                         VALUES (@cMBOLKeyNew, @cParam2, @cFacility, '0')
@@ -340,7 +340,7 @@ BEGIN
                      END
 
 				     -- MBOLDetail
-	                 IF NOT EXISTS( SELECT 1 FROM dbo.MBOLDetail WHERE MBOLKey = @cMBOLKeyNew AND OrderKey = @cChildOrderKey)
+	                 IF NOT EXISTS( SELECT 1 FROM dbo.MBOLDetail WITH(NOLOCK) WHERE MBOLKey = @cMBOLKeyNew AND OrderKey = @cChildOrderKey)
                      BEGIN
                         IF ISNULL(@cMBOLLine,'') = ''
                         BEGIN
