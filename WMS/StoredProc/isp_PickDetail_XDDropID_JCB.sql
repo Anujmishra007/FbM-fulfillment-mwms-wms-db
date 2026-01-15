@@ -436,8 +436,8 @@ BEGIN
       SELECT 
 	     O.OrderKey,
 		 PD.PickDetailKey
-      FROM dbo.Orders O 
-	     INNER JOIN dbo.ORDERDETAIL OD 
+      FROM dbo.Orders O WITH(NOLOCK)
+	     INNER JOIN dbo.ORDERDETAIL OD WITH(NOLOCK)
 		 ON O.OrderKey=OD.OrderKey 
 		 INNER JOIN dbo.PICKDETAIL PD 
 		 ON OD.OrderLineNumber=PD.OrderLineNumber 
