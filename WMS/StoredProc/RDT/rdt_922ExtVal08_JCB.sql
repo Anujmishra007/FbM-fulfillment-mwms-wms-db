@@ -15,7 +15,7 @@ GO
 /* 2026-01-16 2.0  TPT001     Adding validation for the booking logic   */
 /************************************************************************/
 
-CREATE OR ALTER  PROC [RDT].[rdt_922ExtVal08_JCB] (
+CREATE OR ALTER PROC [RDT].[rdt_922ExtVal08_JCB] (
    @nMobile     INT,
    @nFunc       INT,
    @cLangCode   NVARCHAR( 3),
@@ -426,4 +426,5 @@ GO
 GRANT EXECUTE ON rdt.rdt_922ExtVal08_JCB TO NSQL
 
 GO
+
 
