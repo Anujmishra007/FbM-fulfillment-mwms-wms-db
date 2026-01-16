@@ -822,7 +822,7 @@ BEGIN
 			 DECLARE @ReasonCode varchar(20) 
 			 -- 
 			 SELECT @ReasonCode = R.C_String29
-			   FROM RDT.RDTMOBREC R                  
+			   FROM RDT.RDTMOBREC R WITH(NOLOCK)                 
               WHERE Mobile = @nMobile
              --
 			 IF @ReasonCode NOT IN ('EXIT','SKIP') 

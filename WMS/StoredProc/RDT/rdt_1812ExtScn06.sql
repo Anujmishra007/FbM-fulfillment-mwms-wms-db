@@ -750,7 +750,7 @@ BEGIN
                   BEGIN -- Multi Sku
                      WITH TargetID AS (
                         SELECT SKU, SUM(Qty) AS QTY
-                        FROM LOTXLOCXID 
+                        FROM LOTXLOCXID WITH(NOLOCK)
                         WHERE Id = @cSuggID
                            AND Qty > 0 
                         GROUP BY SKU
@@ -760,7 +760,7 @@ BEGIN
                            Id,
                            Loc,
                            STRING_AGG(CONCAT(LLI.Sku, '|', LLI.Qty,'|',ISNULL(LA.LOTTABLE03,'')), ',') WITHIN GROUP (ORDER BY LLI.Sku,LLI.Loc) as SkuQtyPattern
-                        FROM LOTXLOCXID lli
+                        FROM LOTXLOCXID lli WITH(NOLOCK)
                         JOIN TargetID TID ON TID.Sku = LLI.Sku
                         JOIN dbo.LOTAttribute LA WITH (NOLOCK)
                            ON LLI.Lot = LA.Lot AND LLI.StorerKey = LA.StorerKey AND LA.SKU = LLI.SKU
@@ -784,7 +784,7 @@ BEGIN
                         INNER JOIN dbo.LOC L2 WITH(NOLOCK)
                            ON L2.Loc = @cSuggFromLOC
                            AND L.LocationCategory = L2.LocationCategory
-						INNER JOIN dbo.ID WITH(NOLOCK)
+						   INNER JOIN dbo.ID WITH(NOLOCK)
                            ON b.ID = ID.Id
                         WHERE a.Id <> b.Id
                            AND a.Id = @cSuggID
@@ -889,7 +889,7 @@ BEGIN
 			         SET @TypeOrder = 99	                    
 					 -- GET TYPE ORDER
 			         SELECT @TypeOrder = o.[Type]
-                     FROM ORDERS o
+                     FROM ORDERS o WITH(NOLOCK)
                      WHERE o.OrderKey = @cOrderKey
                        AND o.StorerKey = @cStorerKey
 					  --
@@ -1000,7 +1000,7 @@ BEGIN
                      BEGIN -- Multi Sku
                         WITH TargetID AS (
                            SELECT SKU, SUM(Qty) AS QTY
-                           FROM LOTXLOCXID 
+                           FROM LOTXLOCXID WITH(NOLOCK)
                            WHERE Id = @cSuggID
                               AND Qty > 0 
                            GROUP BY SKU
@@ -1010,7 +1010,7 @@ BEGIN
                               Id,
                               Loc,
                               STRING_AGG(CONCAT(LLI.Sku, '|', LLI.Qty,'|',ISNULL(LA.LOTTABLE03,'')), ',') WITHIN GROUP (ORDER BY LLI.Sku,LLI.Loc) as SkuQtyPattern
-                           FROM LOTXLOCXID lli
+                           FROM LOTXLOCXID lli WITH(NOLOCK)
                            JOIN TargetID TID ON TID.Sku = LLI.Sku
                            JOIN dbo.LOTAttribute LA WITH (NOLOCK)
                               ON LLI.Lot = LA.Lot AND LLI.StorerKey = LA.StorerKey AND LA.SKU = LLI.SKU
@@ -1909,7 +1909,7 @@ BEGIN
             
 			-- GET TYPE ORDER
 			SELECT @TypeOrder = o.[Type]
-              FROM ORDERS o
+              FROM ORDERS o WITH(NOLOCK)
              WHERE o.OrderKey = @cOrderKey
                AND o.StorerKey = @cStorerKey
             
