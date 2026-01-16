@@ -168,6 +168,16 @@ BEGIN
          IF @nDebugFlag = 1
             SELECT '605ExtScn06, Esc from St3'
 
+         --clear new toID from mobrec
+         BEGIN TRY
+            UPDATE rdt.RDTMOBREC WITH (ROWLOCK)
+            SET C_string1 = ''
+            WHERE Mobile = @nMobile
+         END TRY
+         BEGIN CATCH
+            SELECT 'Continue'
+         END CATCH
+
          SET @cOutField01 = ''
          SET @cToID = ''
          SET @nAfterScn = 6772
@@ -239,17 +249,15 @@ BEGIN
                   GOTO Scn_6772_Fail
                END
 
-               --refresh ASN toID
+               --Save new toID to mobrec
                BEGIN TRY
-                  UPDATE dbo.ReceiptDetail WITH (ROWLOCK)
-                  SET toID = @cToID
-                  WHERE StorerKey = @cStorerKey
-                     AND ReceiptKey = @cActReceiptKey
-                     AND ToID = @cID
+                  UPDATE rdt.RDTMOBREC WITH (ROWLOCK)
+                  SET C_string1 = @cToID
+                  WHERE Mobile = @nMobile
                END TRY
                BEGIN CATCH
                   SET @nErrNo = 255154
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd rcptdtl fail
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd MOBREC fail
                   GOTO Scn_6772_Fail
                END CATCH
 
@@ -283,9 +291,6 @@ BEGIN
                -- Go to SKU QTY screen
                SET @nAfterScn = 4252
                SET @nAfterStep = 3
-
-               --Export value
-               SET  @cUDF01 = @cToID
 
                GOTO Quit
 

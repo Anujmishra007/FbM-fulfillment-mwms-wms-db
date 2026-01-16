@@ -945,7 +945,7 @@ BEGIN
            AND Qty > 0
 
          SET @nTempMaxPallet = 0
-         SELECT @nTempMaxPallet = COUNT(1) FROM TaskDetail TD
+         SELECT @nTempMaxPallet = COUNT(1) FROM TaskDetail TD (NOLOCK)
          JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc AND LOC.Facility = @cFacility
          WHERE TD.Status = '3' AND TD.TaskType IN ('FCP','FCP1')
          AND LOC.LOC = @cToLOC
@@ -1298,7 +1298,7 @@ BEGIN
                  AND Qty - QtyPicked > 0
 
                SET @nTempMaxPallet = 0
-               SELECT @nTempMaxPallet = COUNT(1) FROM TaskDetail TD
+               SELECT @nTempMaxPallet = COUNT(1) FROM TaskDetail TD (NOLOCK)
                JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc AND LOC.Facility = @cFacility
                WHERE TD.Status = '3' AND TD.TaskType IN ('FCP','FCP1')
                AND LOC.LOC = @cToLOC

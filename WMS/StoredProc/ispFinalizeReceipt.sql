@@ -2211,7 +2211,7 @@ BEGIN
       JOIN ReceiptDetail RD (NOLOCK) ON RD.ReceiptKey = R.ReceiptKey
       JOIN SKU SKU (NOLOCK) ON (RD.STORERKEY = SKU.STORERKEY AND RD.SKU = SKU.SKU)
       JOIN STORERCONFIG SC (NOLOCK) ON RD.Storerkey = SC.Storerkey AND SC.Configkey = 'MarkForKCBInspection'
-                                    AND SC.Svalue = '1'
+                                    AND SC.Svalue = '1' AND (ISNULL(SC.Facility,'') = '' OR SC.Facility = R.Facility)
       JOIN CODELKUP CL (NOLOCK) ON (CL.CODE = 'KCB BLOCK' AND CL.ListName = 'INVHOLD' AND CL.Storerkey = RD.StorerKey
        AND (ISNULL(CL.CODE2,'') = '' OR CL.CODE2 = R.Facility))
       WHERE RD.ReceiptKey = @c_ReceiptKey
