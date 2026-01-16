@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 13-Nov-2025 WLChooi  1.0   Initial Version                           */
+/* 16-Jan-2026 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[mspALUPDORDLN01]
@@ -61,7 +61,9 @@ BEGIN
    IF @n_Continue IN ( 1, 2 )
    BEGIN
       CREATE TABLE #TMP_PD (   Storerkey  NVARCHAR(15)
-                             , SKU        NVARCHAR(20) 
+                             , SKU        NVARCHAR(20)
+                             , DropID     NVARCHAR(20) NULL
+                             , Qty        INT 
                            )
       CREATE NONCLUSTERED INDEX IDX_TMP_PD_Storerkey_SKU ON #TMP_PD (Storerkey, SKU)
 
@@ -71,15 +73,24 @@ BEGIN
          FROM WAVEDETAIL (NOLOCK)
          WHERE Wavekey = @c_Wavekey
       )
-      INSERT INTO #TMP_PD (Storerkey, SKU)
-      SELECT DISTINCT PD.Storerkey, PD.SKU
-      FROM PICKDETAIL PD (NOLOCK)
-      JOIN WV ON WV.Orderkey = PD.OrderKey
-      JOIN #OPORDERLINES ORD ON ORD.OrderKey = WV.OrderKey
-      WHERE PD.[Status] = '4'
-        AND PD.Storerkey = ORD.Storerkey
-        AND PD.SKU = ORD.SKU
-        AND PD.QtyMoved > 0   --Not to impact normal allocation
+      , RankedPD AS
+      (
+         SELECT PD.Storerkey, PD.SKU, PD.DropID, PD.QtyMoved
+              , ROW_NUMBER() OVER (PARTITION BY PD.Storerkey, PD.SKU 
+                                   ORDER BY PD.PickDetailKey DESC) AS RN
+         FROM PICKDETAIL PD (NOLOCK)
+         JOIN WV ON WV.Orderkey = PD.OrderKey
+         JOIN #OPORDERLINES ORD ON ORD.OrderKey = WV.OrderKey
+         WHERE PD.[Status] = '4'
+           AND PD.Storerkey = ORD.Storerkey
+           AND PD.SKU = ORD.SKU
+           AND PD.QtyMoved > 0   --Not to impact normal allocation
+           AND ISNULL(PD.TaskManagerReasonKey, '') <> 'SHORT'   --Exclude those PD line with SHORT
+      )
+      INSERT INTO #TMP_PD (Storerkey, SKU, DropID, Qty)
+      SELECT Storerkey, SKU, DropID, QtyMoved
+      FROM RankedPD
+      WHERE RN = 1
    END
 
    IF @n_Continue IN ( 1, 2 )
@@ -94,6 +105,13 @@ BEGIN
                             FROM #TMP_PD TMP
                             WHERE TMP.Storerkey = #OPORDERLINES.Storerkey
                               AND TMP.SKU = #OPORDERLINES.SKU )
+
+         --Update #OPORDERLINES.Qty = Latest Pickdetail.QtyMoved
+         UPDATE O
+         SET O.Qty = TMP.Qty
+         FROM #OPORDERLINES O
+         JOIN #TMP_PD TMP ON TMP.Storerkey = O.Storerkey
+                         AND TMP.SKU = O.SKU
       END
    END
 
