@@ -23,9 +23,10 @@ GO
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */
-/* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */  
+/* Updates:                                                             */
+/* Date         Author        Ver  Purposes                             */
+/* 2021-02-08   mingle01      1.1  Add Big Outer Begin try/Catch        */
+/* 2026-01-16   Preetham01    1.2  Add Validation to check invHoldKey   */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_InventoryHold_STD]
       @c_StorerKey         NVARCHAR(15)
@@ -66,6 +67,17 @@ BEGIN
    --(mingle01) - START
    BEGIN TRY         
       SET @c_InventoryHoldKey = @c_RefKey1
+                                                --(Preetham01) - START
+      IF NOT EXISTS(SELECT 1
+                    FROM INVENTORYHOLD WITH (NOLOCK)
+                    WHERE InventoryHoldKey = @c_InventoryHoldKey
+                   )
+      BEGIN
+        SET @n_Continue = 3
+        SET @c_ErrMsg = 'Inventory Hold Key Does Not Exist'
+        GOTO EXIT_SP
+      END
+                                                --(Preetham01) - END
    END TRY
    
    BEGIN CATCH
