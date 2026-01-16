@@ -26,7 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Ver  Purposes                             */
 /* 2021-02-08   mingle01      1.1  Add Big Outer Begin try/Catch        */
-/* 2026-01-16   Preetham01    1.2  Add Validation to check invHoldKey   */
+/* 2026-01-16   Preetham01    1.2  UWP-22682                            */
 /************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_InventoryHold_STD]
       @c_StorerKey         NVARCHAR(15)
