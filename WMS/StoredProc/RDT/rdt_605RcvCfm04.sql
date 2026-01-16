@@ -36,55 +36,52 @@ BEGIN
 
    DECLARE @nDebugFlag   INT = 0
 
-   DECLARE @cSKU         NVARCHAR( 20)
-   DECLARE @cUOM         NVARCHAR( 10)
-   DECLARE @nQTY         INT           -- In mast
-   DECLARE @cLottable01  NVARCHAR( 18)
-   DECLARE @cLottable02  NVARCHAR( 18)
-   DECLARE @cLottable03  NVARCHAR( 18)
-   DECLARE @dLottable04  DATETIME
-   DECLARE @dLottable05  DATETIME
-   DECLARE @cLottable06  NVARCHAR( 30)
-   DECLARE @cLottable07  NVARCHAR( 30)
-   DECLARE @cLottable08  NVARCHAR( 30)
-   DECLARE @cLottable09  NVARCHAR( 30)
-   DECLARE @cLottable10  NVARCHAR( 30)
-   DECLARE @cLottable11  NVARCHAR( 30)
-   DECLARE @cLottable12  NVARCHAR( 30)
-   DECLARE @dLottable13  DATETIME
-   DECLARE @dLottable14  DATETIME
-   DECLARE @dLottable15  DATETIME
-   DECLARE @cReceiptLineNumber   NVARCHAR(5)
+   DECLARE @cSKU                    NVARCHAR( 20)
+   DECLARE @cUOM                    NVARCHAR( 10)
+   DECLARE @nQTY                    INT           -- In mast
+   DECLARE @cLottable01             NVARCHAR( 18)
+   DECLARE @cLottable02             NVARCHAR( 18)
+   DECLARE @cLottable03             NVARCHAR( 18)
+   DECLARE @dLottable04             DATETIME
+   DECLARE @dLottable05             DATETIME
+   DECLARE @cLottable06             NVARCHAR( 30)
+   DECLARE @cLottable07             NVARCHAR( 30)
+   DECLARE @cLottable08             NVARCHAR( 30)
+   DECLARE @cLottable09             NVARCHAR( 30)
+   DECLARE @cLottable10             NVARCHAR( 30)
+   DECLARE @cLottable11             NVARCHAR( 30)
+   DECLARE @cLottable12             NVARCHAR( 30)
+   DECLARE @dLottable13             DATETIME
+   DECLARE @dLottable14             DATETIME
+   DECLARE @dLottable15             DATETIME
+   DECLARE @cReceiptLineNumber      NVARCHAR(5)
    DECLARE @cReceiptLineNumberOutput NVARCHAR( 5)
-   DECLARE @cExternReceiptKey NVARCHAR(20)
-   DECLARE @cDefaultToLoc  NVARCHAR( 10)
-   DECLARE @nRowCount      INT
-   DECLARE @nBulkSNO       INT = 0  
-   DECLARE @nBulkSNOQTY    INT = 0
+   DECLARE @cExternReceiptKey       NVARCHAR(20)
+   DECLARE @cDefaultToLoc           NVARCHAR( 10)
+   DECLARE @cConditionCode          NVARCHAR( 10)
+   DECLARE @cNewToID                NVARCHAR( 18)
+   DECLARE @nRowCount               INT
+   DECLARE @nBulkSNO                INT = 0  
+   DECLARE @nBulkSNOQTY             INT = 0
 
    SET @cDefaultToLoc = rdt.RDTGetConfig( @nFunc, 'DefaultToLoc', @cStorerKey)
    IF @cDefaultToLoc = '0'
       SET @cDefaultToLoc = ''
 
+   SET @cConditionCode = rdt.RDTGetConfig( @nFunc, 'DefaultConditionCode', @cStorerKey)
+   IF @cConditionCode = '0'
+      SET @cConditionCode = 'OK'
+
+   SELECT @cNewToID = C_String1
+   FROM rdt.RDTMOBREC WITH (NOLOCK)
+   WHERE Mobile = @nMobile
+
    IF @nDebugFlag = 1
-      SELECT 'Executing 605RcvCfm04', @cReceiptKey AS ASN, @cToID AS ID
+      SELECT 'Executing 605RcvCfm04', @cReceiptKey AS ASN, @cToID AS ID, @cNewToID AS NewToID
 
-   IF NOT EXISTS (SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
-                  WHERE ReceiptKey = @cReceiptKey
-                        AND ToID = @cToID
-                        AND BeforeReceivedQTY = 0)
+   IF ISNULL(@cNewToID, '') = ''
    BEGIN
-      SET @nErrNo = 255353
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-      GOTO Quit
-   END
-
-   IF EXISTS (SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
-                  WHERE ReceiptKey = @cReceiptKey
-                        AND ToID = @cToID
-                        AND FinalizeFlag = 'Y')
-   BEGIN
-      SET @nErrNo = 255354
+      SET @nErrNo = 255356
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
       GOTO Quit
    END
@@ -98,6 +95,44 @@ BEGIN
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_605RcvCfm04 -- For rollback or commit only our own transaction
 
+   IF @cToID <> @cNewToID
+   BEGIN
+      --refresh ASN toID
+      BEGIN TRY
+         UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET
+            toID = @cNewToID,
+            Lottable05 = GETDATE()
+         WHERE StorerKey = @cStorerKey
+            AND ReceiptKey = @cReceiptKey
+            AND ToID = @cToID
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 255357
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd rcptdtl fail
+         GOTO Quit
+      END CATCH
+   END
+
+   IF NOT EXISTS (SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
+                  WHERE ReceiptKey = @cReceiptKey
+                        AND ToID = @cNewToID
+                        AND BeforeReceivedQTY = 0)
+   BEGIN
+      SET @nErrNo = 255353
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+      GOTO Quit
+   END
+
+   IF EXISTS (SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
+                  WHERE ReceiptKey = @cReceiptKey
+                        AND ToID = @cNewToID
+                        AND FinalizeFlag = 'Y')
+   BEGIN
+      SET @nErrNo = 255354
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+      GOTO Quit
+   END
+
    DECLARE @curReceipt CURSOR
    SET @curReceipt = CURSOR FOR
       SELECT
@@ -107,7 +142,7 @@ BEGIN
          Lottable11, Lottable12, Lottable13, Lottable14, Lottable15
       FROM dbo.ReceiptDetail WITH (NOLOCK)
       WHERE ReceiptKey = @cReceiptKey
-         AND ToID = @cToID
+         AND ToID = @cNewToID
          AND BeforeReceivedQTY = 0
       ORDER BY ReceiptLineNumber
    OPEN @curReceipt
@@ -190,7 +225,7 @@ BEGIN
       @cReceiptKey   = @cReceiptKey,
       @cPOKey        = 'NOPO',
       @cToLOC        = @cToLOC,
-      @cToID         = @cToID,
+      @cToID         = @cNewToID,
       @cSKUCode      = @cSKU,
       @cSKUUOM       = @cUOM,
       @nSKUQTY       = @nQTY,
@@ -214,7 +249,7 @@ BEGIN
       @dLottable14   = @dLottable14,
       @dLottable15   = @dLottable15,
       @nNOPOFlag     = 1,
-      @cConditionCode = 'OK',
+      @cConditionCode = @cConditionCode,
       @cSubreasonCode = '',
       @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT,
       @nBulkSNO       = @nBulkSNO,     

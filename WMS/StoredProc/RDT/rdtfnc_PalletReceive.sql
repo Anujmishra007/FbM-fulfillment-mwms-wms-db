@@ -179,6 +179,7 @@ SELECT
    @cDefaultcursor      = V_String25,
    @cExtendedScreenSP   = V_String26,
    @cToLOC              = V_String27,
+   --C_String1  --Used by ExtScn
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -1203,14 +1204,6 @@ BEGIN
             END
          END
 
-         IF @cExtendedScreenSP = ('rdt_605ExtScn06')
-         BEGIN
-            IF @nPreScn = 6772 AND @nInputKey = 1
-               SET @cID = @cUDF01
-         END
-
-         IF @nErrNo <> 0
-            GOTO Step_99_Fail
       END
    END
 
@@ -1271,6 +1264,7 @@ BEGIN
       V_String25   = @cDefaultcursor, --(yeekung01)
       V_String26   = @cExtendedScreenSP,
       V_String27   = @cToLOC,
+      --C_String1  --Used by ExtScn
 
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
