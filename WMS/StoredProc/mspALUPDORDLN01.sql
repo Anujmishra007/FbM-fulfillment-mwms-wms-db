@@ -85,7 +85,7 @@ BEGIN
            AND PD.Storerkey = ORD.Storerkey
            AND PD.SKU = ORD.SKU
            AND PD.QtyMoved > 0   --Not to impact normal allocation
-           AND ISNULL(PD.TaskManagerReasonKey, '') <> 'SHORT'   --Exclude those PD line with SHORT
+           AND PD.TaskManagerReasonKey = 'ALLOC'   --Exclude those PD line with SHORT
       )
       INSERT INTO #TMP_PD (Storerkey, SKU, DropID, Qty)
       SELECT Storerkey, SKU, DropID, QtyMoved
