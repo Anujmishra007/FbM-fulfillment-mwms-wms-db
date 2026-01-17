@@ -108,7 +108,7 @@ BEGIN
 
          --Update #OPORDERLINES.Qty = Latest Pickdetail.QtyMoved
          UPDATE O
-         SET O.Qty = TMP.Qty
+         SET O.Qty = IIF(O.Qty <= TMP.Qty, O.Qty, TMP.Qty)
          FROM #OPORDERLINES O
          JOIN #TMP_PD TMP ON TMP.Storerkey = O.Storerkey
                          AND TMP.SKU = O.SKU

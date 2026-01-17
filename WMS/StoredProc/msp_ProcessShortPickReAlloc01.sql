@@ -358,6 +358,7 @@ BEGIN
          WHERE UCC.Storerkey = @c_Storerkey
          AND UCC.SKU = @c_SKU
          AND UCC.UCCNo = @c_UCCNo
+         AND UCC.[Status] = '3'
       END TRY
       BEGIN CATCH
          SET @n_Continue = 3
@@ -425,7 +426,7 @@ BEGIN
                       WHERE UCC.Storerkey = @c_StorerKey
                       AND UCC.SKU = @c_SKU
                       AND UCC.[Status] = '1'
-                      AND UCC.qty >= @n_QtyLeftToFulFill )
+                      HAVING SUM(UCC.qty) >= @n_QtyLeftToFulFill )
       BEGIN
          -- Trigger ITF
          SET @CUR_SHORT = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
