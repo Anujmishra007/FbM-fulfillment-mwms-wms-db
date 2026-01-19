@@ -116,6 +116,8 @@ BEGIN
          ,  @c_ToPalletType               NVARCHAR(10)   = ''           --(SSA01)
          ,  @c_SerialNoUpdateLotLocID     NVARCHAR(10)   = ''   --ML01
          ,  @n_Temp                       INT                   --ML01
+         ,  @c_FromUCCNo                  NVARCHAR(20)   = ''   --ML01
+         ,  @c_ToUCCNo                    NVARCHAR(20)   = ''   --ML01
          
          ,  @CUR_LLI                      CURSOR
          ,  @CUR_ERRLIST                  CURSOR   
@@ -178,7 +180,8 @@ BEGIN
       FROM dbo.fnc_SelectGetRight (@c_ToFacility, @c_ToStorerkey,'','ChannelInventoryMgmt') AS fsgr
 
       SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                                     --ML01
-      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML01
+      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID') AS fsgr  --ML01
+      
  
       IF @c_ChannelInventoryMgmt_From = '1'
       BEGIN
@@ -270,6 +273,7 @@ BEGIN
             ,l.Lottable15
             ,sn.SerialNo
             ,i.PalletType                     --(SSA01)
+            ,ISNULL(RTRIM(UCC.UCCNo),'')      --ML01
       FROM #tSN AS ts 
       JOIN dbo.SerialNo AS sn (NOLOCK) ON sn.SerialNoKey = ts.SerialNoKey
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Storerkey = sn.Storerkey
@@ -282,6 +286,20 @@ BEGIN
       JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = l.StorerKey AND s.Sku = l.Sku
       JOIN dbo.PACK AS p (NOLOCK) ON p.PackKey= s.PACKKey
       JOIN dbo.ID As i (NOLOCK) ON i.id = ltlci.ID
+      --ML01-S
+      OUTER APPLY (
+         SELECT TOP 1 UCCNo
+         FROM UCC WITH(NOLOCK)
+         WHERE UCC.Storerkey = sn.Storerkey
+           AND UCC.UCCNo = sn.UCCNo
+           AND sn.UCCNo <> ''
+           AND UCC.Status = '1'
+           AND UCC.Sku = sn.Sku
+           AND UCC.Lot = sn.Lot
+           AND UCC.ID = sn.ID
+           AND ((sn.ID<>'' AND ISNULL(sn.Loc,'')='') OR UCC.Loc = sn.Loc)
+      ) UCC
+      --ML01-E
       WHERE ltlci.Qty - ltlci.Qtyallocated - ltlci.QtyPicked >= sn.qty
       AND s.SerialNoCapture IN ('1','2', '3')
       AND sn.[Status] = '1'
@@ -314,6 +332,7 @@ BEGIN
                                     ,@dt_FromLottable15
                                     ,@c_FromSerialNo
                                     ,@c_FromPallettype                  --(SSA01)
+                                    ,@c_FromUCCNo   --ML01
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
@@ -341,6 +360,7 @@ BEGIN
          SET @dt_ToLottable15 = @dt_FromLottable15
          SET @c_ToSerialNo    = @c_FromSerialNo
          SET @c_ToPallettype  = @c_FromPallettype
+         SET @c_ToUCCNo       = @c_FromUCCNo   --ML01
          
          IF @c_ChannelInventoryMgmt_From = '1'
          BEGIN
@@ -418,6 +438,8 @@ BEGIN
                ,  ToSerialNo
                ,  FromPalletType
                ,  ToPalletType
+               ,  UserDefine01   --ML01
+               ,  UserDefine02   --ML01
                )
          VALUES(  @c_TransferKey
                ,  @c_TransferLineNumber
@@ -473,6 +495,8 @@ BEGIN
                ,  @c_ToSerialNo
                ,  @c_FromPalletType                  --(SSA01)
                ,  @c_ToPalletType                    --(SSA01)
+               ,  @c_FromUCCNo   --ML01
+               ,  @c_ToUCCNo     --ML01
                )
  
          IF @@ERROR <> 0
@@ -514,6 +538,7 @@ BEGIN
                                        ,@dt_FromLottable15
                                        ,@c_FromSerialNo
                                        ,@c_FromPallettype
+                                       ,@c_FromUCCNo   --ML01
       END
       CLOSE @CUR_LLI
       DEALLOCATE @CUR_LLI

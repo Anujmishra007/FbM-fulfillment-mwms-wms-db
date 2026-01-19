@@ -349,6 +349,8 @@ BEGIN
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = ''       --(Wan11)
          , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML02
          , @c_SerialNo_Loc             NVARCHAR(10) = ''   --ML02
+         , @n_FromUCC_RowRef           INT          = 0    --ML02
+         , @n_ToUCC_RowRef             INT          = 0    --ML02
 
 
    --1 XXXXXXX--
@@ -2422,6 +2424,7 @@ BEGIN
                BEGIN
                   IF @cFromUCC <> '' AND @cFromUCC IS NOT NULL       --(Wan09) 
                   BEGIN                                              --(Wan09) 
+/* ML02-S
                      UPDATE UCC
                      SET Sku = @cToSKU,
                          Qty = @nToQty,
@@ -2449,6 +2452,106 @@ BEGIN
                         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
                         GOTO Quit_Proc
                      END
+ML02-E  */
+--ML02-S
+                     -- From UCC
+                     SET @n_FromUCC_RowRef = 0
+                     SELECT @n_FromUCC_RowRef = UCC_RowRef
+                       FROM UCC WITH(NOLOCK)
+                      WHERE UCCNo = @cFromUCC
+                        AND StorerKey = @cFromStorerKey
+                        AND Sku = @cFromSKU
+                        AND Lot = @cFromLOT
+                        AND Loc = @cFromLOC
+                        AND ID  = @cFromID
+
+                     IF @n_FromUCC_RowRef > 0
+                     BEGIN
+                        UPDATE UCC WITH(ROWLOCK)
+                        SET Qty = Qty - @nFromQty
+                          , SourceKey = @c_Transferkey
+                          , SourceType = 'TF'
+                          , Status = CASE WHEN @c_LoseUCC = '1' THEN '6'
+                                          WHEN Qty - @nFromQty = 0 THEN '6'
+                                          ELSE Status
+                                     END
+                        WHERE UCC_RowRef = @n_FromUCC_RowRef
+
+                        SELECT @n_err = @@ERROR
+                        IF @n_err <> 0
+                        BEGIN
+                           SELECT @nContinue = 3
+                           SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80059
+                           SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                           GOTO Quit_Proc
+                        END
+                     END
+
+                     -- To UCC
+                     IF @c_LoseUCC <> '1' AND ISNULL(@cToUCC,'') <> ''
+                     BEGIN
+                        SET @n_ToUCC_RowRef   = 0
+                        SELECT @n_ToUCC_RowRef = UCC_RowRef
+                        FROM UCC WITH(NOLOCK)
+                        WHERE UCCNo = @cToUCC
+                          AND StorerKey = @cToStorerKey
+                          AND Sku = @cToSKU
+                          AND Lot = @cToLOT
+                          AND Loc = @cToLOC
+                          AND ID  = @cToID
+
+                        SET @cExternKey = ISNULL(@cExternKey,'')
+
+                        IF @n_ToUCC_RowRef > 0
+                        BEGIN
+                           UPDATE UCC WITH(ROWLOCK)
+                           SET Qty = CASE WHEN Status='1' THEN Qty ELSE 0 END + @nToQty
+                             , SourceKey = @c_Transferkey
+                             , SourceType = 'TT'
+                             , Status = CASE WHEN @c_LoseUCC = '1' THEN '6'
+                                             ELSE Status
+                                        END
+                           WHERE UCC_RowRef = @n_ToUCC_RowRef
+
+                           SELECT @n_err = @@ERROR
+                           IF @n_err <> 0
+                           BEGIN
+                              SELECT @nContinue = 3
+                              SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80060
+                              SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                              GOTO Quit_Proc
+                           END
+                        END
+                        ELSE
+                        BEGIN
+                           INSERT UCC (UccNo, ExternKey, StorerKey, Sku, Lot, Loc, Id, Qty, Status, SourceKey, SourceType)
+                               VALUES (@cToUCC, @cExternKey, @cToStorerKey, @cToSKU, @cToLOT, @cToLOC, @cToID, @nToQty, @cUCCStatus, @c_Transferkey, 'TT')
+                           SELECT @n_err = @@ERROR
+                           IF @n_err <> 0
+                           BEGIN
+                              SELECT @nContinue = 3
+                              SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80061
+                              SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Into UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                              GOTO Quit_Proc
+                           END
+                        END
+                     END
+                     IF EXISTS(SELECT TOP 1 1 FROM UCC WITH(NOLOCK)
+                        WHERE UCC_RowRef = @n_FromUCC_RowRef AND Qty = 0)
+                     BEGIN
+                        DELETE UCC WITH(ROWLOCK)
+                        WHERE UCC_RowRef = @n_FromUCC_RowRef AND Qty = 0
+
+                        SELECT @n_err = @@ERROR
+                        IF @n_err <> 0
+                        BEGIN
+                           SELECT @nContinue = 3
+                           SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80062
+                           SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Delete UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                           GOTO Quit_Proc
+                        END
+                     END
+--ML02-E
                   END                                                --(Wan09) 
                END -- IF @cFromUCC = @cToUCC
                ELSE
