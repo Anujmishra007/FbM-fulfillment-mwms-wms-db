@@ -804,7 +804,7 @@ BEGIN
                         WHILE @@FETCH_STATUS = 0
                         BEGIN
                         	INSERT INTO RDT.rdtScanToTruck (MBOLKey, LoadKey, CartonType, RefNo, URNNo, Status, AddWho, AddDate, EditWho, EditDate, TrafficCop, ArchiveCop, Door, OrderKey)
-							SELECT MBOLKey, LoadKey, CartonType, RefNo, URNNo, Status, AddWho, AddDate, EditWho, EditDate, TrafficCop, ArchiveCop, Door, @cUpdOrderkey1 FROM RDT.rdtScanToTruck WHERE MBOLKey=@cMBOLKey AND OrderKey=@cUpdOrderkey
+							SELECT MBOLKey, LoadKey, CartonType, RefNo, URNNo, Status, AddWho, AddDate, EditWho, EditDate, TrafficCop, ArchiveCop, Door, @cUpdOrderkey1 FROM RDT.rdtScanToTruck WITH(NOLOCK) WHERE MBOLKey=@cMBOLKey AND OrderKey=@cUpdOrderkey
                         
                         FETCH NEXT FROM @curOrderIns INTO @cUpdOrderkey1
                         END
@@ -851,8 +851,8 @@ BEGIN
                   BEGIN
                   DECLARE @c_ExtMBOLKey NVARCHAR(18) =''
                   DECLARE @n_ShipExists INT =0
-                  SELECT @c_ExtMBOLKEY=ExternMbolKey FROM dbo.MBOL WHERE MbolKey=@cMBOLKey
-                  SELECT @n_ShipExists=1 FROM dbo.TMS_Shipment WHERE BookingNo=@n_Booking AND ShipmentGID=@c_ExtMBOLKEY
+                  SELECT @c_ExtMBOLKEY=ExternMbolKey FROM dbo.MBOL WITH(NOLOCK) WHERE MbolKey=@cMBOLKey
+                  SELECT @n_ShipExists=1 FROM dbo.TMS_Shipment WITH(NOLOCK) WHERE BookingNo=@n_Booking AND ShipmentGID=@c_ExtMBOLKEY
                   IF @n_ShipExists<>1 AND @n_Booking=@cRefNo -- if Shipment exists and Booking is numeric
                   BEGIN
                   	INSERT INTO dbo.TMS_Shipment (ShipmentGID, VehicleLPN, EquipmentID, DriveName, ShipmentPlannedStartDate, ShipmentPlannedEndDate, Route, ServiceProviderID, ShipmentVolume, ShipmentWeight, ShipmentCartonCount, ShipmentPalletCount, OTMShipmentStatus, Addwho, AddDate, Editwho, EditDate, BookingNo, Banner, SubBanner, Wave, ShipmentGroupProfile, ShipmentGroup, AppointmentID, Principal, ArchiveCop)
@@ -894,3 +894,4 @@ GO
 GRANT EXECUTE ON rdt.rdt_922ExtUpd06_JCB TO NSQL
 
 GO
+

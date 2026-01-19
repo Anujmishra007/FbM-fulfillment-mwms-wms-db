@@ -320,7 +320,7 @@ BEGIN
       QtyReplen,
       DeviceID
    FROM #Results R
-   WHERE NOT EXISTS (SELECT 1 FROM dbo.TaskDetail TD WITH(NOLOCK) WHERE TD.Storerkey = R.Storerkey AND TD.FromID = R.FromID AND Status NOT IN ('9','X'));
+   WHERE NOT EXISTS (SELECT 1 FROM dbo.TaskDetail TD WITH(NOLOCK) WHERE TD.Storerkey = R.Storerkey AND TD.FromID = R.FromID AND ((TD.Lot = R.Lot) OR (TD.Lot = '')) AND Status NOT IN ('9','X'));
 
    -- Step 9: update REPLENISHMENT table to mark lines as processed
    UPDATE RP

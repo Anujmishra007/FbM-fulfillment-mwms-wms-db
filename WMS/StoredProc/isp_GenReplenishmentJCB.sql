@@ -80,7 +80,7 @@ BEGIN
    SELECT DISTINCT
       SL.SKU,
       SL.Loc,
-      SL.QtyLocationLimit - ISNULL(SL.Qty,0) - ISNULL(TA.Qty, 0) - SUM(ISNULL(R.Qty,0))OVER(PARTITION BY R.SKU, R.ToLoc) AS TargetQty,
+      SL.QtyLocationLimit - ISNULL(SL.Qty,0) - IIF(ISNULL(TA.Qty, 0) > SL.QtyExpected, ISNULL(TA.Qty, 0), SL.QtyExpected) - SUM(ISNULL(R.Qty,0))OVER(PARTITION BY R.SKU, R.ToLoc) AS TargetQty,
 	  L.ColorCode
    FROM dbo.SKUxLOC SL WITH(NOLOCK)
       INNER JOIN dbo.LOC L WITH(NOLOCK)
