@@ -89,6 +89,11 @@ BEGIN
    GOTO NewGetKey
 END
 
+IF @KeyName IN ('VIRTUALDROPID')
+BEGIN
+   GOTO NewGetKey
+END
+
 IF @KeyName IN ('PTRACEHEADKEY', 'PTRACEDETAILKEY')
    UPDATE nCountertrace WITH (ROWLOCK) SET KeyCount = KeyCount WHERE KeyName = @KeyName
 
@@ -938,6 +943,22 @@ BEGIN
          END
       END
    END   -- IDKEY
+
+   IF @KeyName = 'VIRTUALDROPID'
+   BEGIN
+      EXECUTE isp_GetVirtualDropIDKey
+             @fieldlength
+           , @keystring OUTPUT
+           , @b_Success OUTPUT
+           , @n_err     OUTPUT
+           , @c_errmsg  OUTPUT
+      IF @n_err <> 0
+      BEGIN
+          SELECT @n_continue = 3
+          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Generate '+@KeyName+' Failed. (nspg_GetKey)' + ' ( ' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ' ) '
+      END
+   END
+
 END
 
 QUIT_Process:
