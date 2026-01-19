@@ -49,6 +49,8 @@ BEGIN
     DECLARE @TargetPickDetailKey NVARCHAR(10) -- For cursor
     DECLARE @nTotalLines INT
     DECLARE @nShortLines INT
+    DECLARE @ExistingCount INT
+    DECLARE @SeqNum INT
 
     SET @nErrNo = 0
     SET @cErrMsg = ''
@@ -101,6 +103,15 @@ BEGIN
 
                  IF @bSuccess = 1
                  BEGIN
+                    -- Read existing value from nCounter
+                    SELECT @ExistingCount = keycount
+                    FROM nCounter WITH (NOLOCK)
+                    WHERE KeyName = 'VIRTUALDROPID';
+
+                    -- Build QC-VIRTUALxxx from counter (mod 1000)
+                    SET @SeqNum = CAST(@ExistingCount % 1000 AS INT);
+                    SET @NewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@SeqNum AS NVARCHAR(10)), 3);
+
                      UPDATE PickDetail WITH (ROWLOCK)
                      SET DropID = @NewDropID 
                      WHERE PickDetailKey = @PickDetailKey
@@ -165,6 +176,15 @@ BEGIN
 
                     IF @bSuccess = 1
                     BEGIN
+                        -- Read existing value from nCounter
+                        SELECT @ExistingCount = keycount
+                        FROM nCounter WITH (NOLOCK)
+                        WHERE KeyName = 'VIRTUALDROPID';
+
+                        -- Build QC-VIRTUALxxx from counter (mod 1000)
+                        SET @SeqNum = CAST(@ExistingCount % 1000 AS INT);
+                        SET @NewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@SeqNum AS NVARCHAR(10)), 3);
+
                         -- Update ALL PickDetails for this order using CURSOR
                         DECLARE curPickDetails CURSOR LOCAL FAST_FORWARD FOR
                             SELECT PickDetailKey
