@@ -91,6 +91,7 @@ BEGIN
          ,  @c_PalletType                 NVARCHAR(10)   = ''            --(SSA01)
          ,  @c_SerialNoUpdateLotLocID     NVARCHAR(10)   = ''   --ML01
          ,  @n_Temp                       INT                   --ML01
+         ,  @c_UCCNo                      NVARCHAR(20)   = ''   --ML01
          
          ,  @CUR_LLI                      CURSOR
          ,  @CUR_ERRLIST                  CURSOR   
@@ -254,6 +255,7 @@ BEGIN
             ,l.Lottable15
             ,sn.SerialNo
             ,i.PalletType                            --(SSA01)
+            ,ISNULL(RTRIM(UCC.UCCNo),'')      --ML01
       FROM #tSN AS ts 
       JOIN dbo.SerialNo AS sn (NOLOCK) ON sn.SerialNoKey = ts.SerialNoKey
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Storerkey = sn.Storerkey
@@ -266,6 +268,20 @@ BEGIN
       JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = l.StorerKey AND s.Sku = l.Sku
       JOIN dbo.PACK AS p (NOLOCK) ON p.PackKey= s.PACKKey
       JOIN dbo.ID As i (NOLOCK) ON i.id = ltlci.ID
+      --ML01-S
+      OUTER APPLY (
+         SELECT TOP 1 UCCNo
+         FROM UCC WITH(NOLOCK)
+         WHERE UCC.Storerkey = sn.Storerkey
+           AND UCC.UCCNo = sn.UCCNo
+           AND sn.UCCNo <> ''
+           AND UCC.Status = '1'
+           AND UCC.Sku = sn.Sku
+           AND UCC.Lot = sn.Lot
+           AND UCC.ID = sn.ID
+           AND ((sn.ID<>'' AND ISNULL(sn.Loc,'')='') OR UCC.Loc = sn.Loc)
+      ) UCC
+      --ML01-E
       WHERE ltlci.Qty - ltlci.Qtyallocated - ltlci.QtyPicked >= sn.qty
       AND s.SerialNoCapture IN ('1','2','3')
       AND sn.[Status] = '1'
@@ -298,6 +314,7 @@ BEGIN
                                     ,@dt_Lottable15
                                     ,@c_SerialNo
                                     ,@c_PalletType                       --(SSA01)
+                                    ,@c_UCCNo                            --ML01
       WHILE @@FETCH_STATUS <> -1 
       BEGIN
          IF @c_ChannelInventoryMgmt = '1'
@@ -420,7 +437,8 @@ BEGIN
              ,   @dt_Lottable13
              ,   @dt_Lottable14
              ,   @dt_Lottable15
-             ,   ''                          --UCCNo  
+--ML01             ,   ''                          --UCCNo
+             ,   @c_UCCNo   --ML01
              ,   @c_Channel                  --Channel  
              ,   0                           --Channel_ID  
              ,   @c_SerialNo
@@ -452,6 +470,7 @@ BEGIN
                                      ,  @dt_Lottable15 
                                      ,  @c_SerialNo
                                      ,  @c_PalletType              --(SSA01)
+                                     ,  @c_UCCNo                   --ML01
       END
       CLOSE @CUR_LLI
       DEALLOCATE @CUR_LLI
