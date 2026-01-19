@@ -203,7 +203,7 @@ BEGIN
       --ML01-S
       SET @n_Temp = CHARINDEX(' WHERE ', @c_SearchSQL, 1)
       IF @n_Temp > 0 AND @c_SearchSQL NOT LIKE '%SerialNo.Loc%'
-         SET @c_SearchSQL = STUFF(@c_SearchSQL, @n_Temp + 7, 0, '(LOTxLOCxID.ID <> '''' OR LOTxLOCxID.Loc = SerialNo.Loc) AND ')
+         SET @c_SearchSQL = STUFF(@c_SearchSQL, @n_Temp + 7, 0, '((LOTxLOCxID.ID <> '''' AND ISNULL(SerialNo.Loc,'''')='''') OR LOTxLOCxID.Loc = SerialNo.Loc) AND ')
       --ML01-E
 
       IF @c_SearchSQL = ''
@@ -260,7 +260,7 @@ BEGIN
                                             AND ltlci.Sku = sn.Sku
 --ML01                                            AND ltlci.ID  = sn.ID AND sn.ID <> ''
                                             AND ltlci.ID  = sn.ID                        --ML01
-                                            AND (ltlci.ID <> '' OR ltlci.Loc = sn.Loc)   --ML01
+                                            AND ((ltlci.ID <> '' AND ISNULL(sn.Loc,'')='') OR ltlci.Loc = sn.Loc)   --ML01
                                             AND ltlci.Lot = ts.Lot 
       JOIN dbo.LOTATTRIBUTE AS l (NOLOCK) ON l.Lot = ltlci.Lot                                    
       JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = l.StorerKey AND s.Sku = l.Sku
