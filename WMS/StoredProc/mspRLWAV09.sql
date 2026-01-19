@@ -410,7 +410,7 @@ BEGIN
          AND   ID.[Status]  = 'OK'
          AND   LOC.[Status] = 'OK'
          AND   LOC.LocationFlag NOT IN ('DAMAGE','HOLD')
-         AND   LOC.LocationType = 'OTHER'
+         AND   LOC.LocationType = 'BULK'                    
          AND   LOC.Facility = @c_Facility
          --AND   LOC.LocLevel > 0
          AND   EXISTS ( SELECT 1
