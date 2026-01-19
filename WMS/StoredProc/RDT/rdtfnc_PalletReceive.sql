@@ -1237,6 +1237,7 @@ BEGIN
       V_ReceiptKey = @cReceiptKey,
       V_ID         = @cID,
       V_SKU        = @cSKU,
+      V_SKUDescr   = @cDescr,
 
       V_String1    = @cMUOM_Desc,
       V_String2    = @cPUOM_Desc,
