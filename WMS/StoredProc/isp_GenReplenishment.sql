@@ -42,6 +42,8 @@ GO
 /* 01-Apr-2019  WLCHOOI    2.1   WMS-8349 - Full Pallet from Zone02        */
 /*                                          to Zone03 (WL01)               */
 /* 02-Sep-2025  MICHAEL    2.2   FCR-7044 - Add ReplenFlag FP+UCC (ML01)   */
+/* 20-Jan-2026  PREETHAM   2.3   UWP-46878 - Correct FromQty For 'N'       */
+/*                                               replen strategy (VNI01)   */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_GenReplenishment]
@@ -1028,7 +1030,12 @@ BEGIN
                             ELSE
                             BEGIN
                                IF FLOOR(@n_OnHandQty / @n_CaseCnt) > 0
-			   							            SELECT  @n_FromQty = @n_OnHandQty
+                               BEGIN                                                 --(VNI01)
+                                    IF @n_OnHandQty < @n_RemainingQty
+                                        SELECT  @n_FromQty =  FLOOR(@n_OnHandQty / @n_CaseCnt) * @n_CaseCnt
+                                    ELSE
+                                        SELECT  @n_FromQty = CEILING(@n_RemainingQty / (@n_CaseCnt * 1.00) ) * @n_CaseCnt
+                               END                                                   --(VNI01)
                                ELSE
                                   SELECT  @n_FromQty = 0
                             END
@@ -1045,7 +1052,7 @@ BEGIN
 			   					          END
 			   					          ELSE
 			   					          BEGIN
-			   					          	 SET @n_FromQty = @n_FullPackQty
+			   					          	 SET @n_FromQty = CASE WHEN @n_FullPackQty >= @n_RemainingQty THEN @n_RemainingQty ELSE @n_FullPackQty END  --(VNI01)
 			   					          END
                          ELSE
                          BEGIN
