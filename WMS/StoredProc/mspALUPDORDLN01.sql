@@ -85,7 +85,7 @@ BEGIN
            AND PD.Storerkey = ORD.Storerkey
            AND PD.SKU = ORD.SKU
            AND PD.QtyMoved > 0   --Not to impact normal allocation
-           AND ISNULL(PD.TaskManagerReasonKey, '') <> 'SHORT'   --Exclude those PD line with SHORT
+           AND PD.TaskManagerReasonKey = 'ALLOC'   --Exclude those PD line with SHORT
       )
       INSERT INTO #TMP_PD (Storerkey, SKU, DropID, Qty)
       SELECT Storerkey, SKU, DropID, QtyMoved
@@ -108,7 +108,7 @@ BEGIN
 
          --Update #OPORDERLINES.Qty = Latest Pickdetail.QtyMoved
          UPDATE O
-         SET O.Qty = TMP.Qty
+         SET O.Qty = IIF(O.Qty <= TMP.Qty, O.Qty, TMP.Qty)
          FROM #OPORDERLINES O
          JOIN #TMP_PD TMP ON TMP.Storerkey = O.Storerkey
                          AND TMP.SKU = O.SKU

@@ -358,6 +358,7 @@ BEGIN
          WHERE UCC.Storerkey = @c_Storerkey
          AND UCC.SKU = @c_SKU
          AND UCC.UCCNo = @c_UCCNo
+         AND UCC.[Status] = '3'
       END TRY
       BEGIN CATCH
          SET @n_Continue = 3
@@ -425,7 +426,7 @@ BEGIN
                       WHERE UCC.Storerkey = @c_StorerKey
                       AND UCC.SKU = @c_SKU
                       AND UCC.[Status] = '1'
-                      AND UCC.qty >= @n_QtyLeftToFulFill )
+                      HAVING SUM(UCC.qty) >= @n_QtyLeftToFulFill )
       BEGIN
          -- Trigger ITF
          SET @CUR_SHORT = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -478,6 +479,13 @@ BEGIN
    --Reallocate
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @c_StrategykeyParm <> ''
    BEGIN
+      -- Update to ALLOC to indicate shorted line
+      UPDATE P
+      SET P.TaskManagerReasonKey = IIF(P.TaskManagerReasonKey = 'SHORT', P.TaskManagerReasonKey, 'ALLOC')
+        , P.TrafficCop = NULL
+      FROM PICKDETAIL P
+      JOIN #T_ShortPick T ON T.Pickdetailkey = P.PickDetailKey
+
       BEGIN TRY
          EXEC dbo.ispWaveProcessing @c_WaveKey = @c_Wavekey -- nvarchar(10)
                                   , @b_Success = @b_Success OUTPUT -- int
@@ -490,6 +498,13 @@ BEGIN
          SET @n_Continue = 3
          SET @c_ErrMsg = ERROR_MESSAGE()
       END CATCH
+
+      -- Revert
+      UPDATE P
+      SET P.TaskManagerReasonKey = IIF(P.TaskManagerReasonKey = 'SHORT', P.TaskManagerReasonKey, '')
+        , P.TrafficCop = NULL
+      FROM PICKDETAIL P
+      JOIN #T_ShortPick T ON T.Pickdetailkey = P.PickDetailKey
    END
 
    IF (@n_Continue = 1 OR @n_Continue = 2)
