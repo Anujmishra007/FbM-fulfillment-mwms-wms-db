@@ -169,8 +169,8 @@ BEGIN
 
                   END
 
-		          INSERT INTO SerialNo (SerialNoKey, Orderkey, OrderLineNumber, StorerKey, SKU, SerialNo, status, QTY, Loc, ID, Lot)
-                  SELECT @c_SerialNoKey, '', '', @c_StorerKey, SKU, SerialNo, '1', @n_ChildQTY, @c_LOC, @c_ID, @c_LOT
+		          INSERT INTO SerialNo (SerialNoKey, Orderkey, OrderLineNumber, StorerKey, SKU, SerialNo, status, QTY, Loc, ID, Lot, UCCNo)
+                  SELECT @c_SerialNoKey, '', '', @c_StorerKey, SKU, SerialNo, '1', @n_ChildQTY, @c_LOC, @c_ID, @c_LOT, @c_ParentUCC
 		            FROM MasterSerialno WITH (NOLOCK)
 			       WHERE SerialNo = @c_Serialno
 
