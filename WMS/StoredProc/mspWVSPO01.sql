@@ -139,7 +139,7 @@ BEGIN
          	      BillToKey, B_contact1, B_Contact2, B_Company, B_Address1, B_Address2, B_Address3,
          	      B_Address4, B_City, B_State, B_Zip, B_Country, B_ISOCntryCode, B_Phone1, B_Phone2,
          	      B_Fax1, B_Fax2, B_Vat, IncoTerm,	PmtTerm, OpenQty, DischargePlace, DeliveryPlace,
-         	      IntermodalVehicle, CountryOfOrigin,	CountryDestination, UpdateSource, [Type], 'Sales Order',
+         	      IntermodalVehicle, CountryOfOrigin,	CountryDestination, UpdateSource, [Type], 'Sales Orders',
          	      Door, [Route], [Stop], Notes, EffectiveDate,  ContainerType,	ContainerQty, 
          	      BilledContainerQty, InvoiceNo, 
                 InvoiceAmount, Salesman, GrossWeight, Capacity, Rdd, Notes2, SequenceNo,
@@ -225,7 +225,7 @@ BEGIN
 		    END		    		    
         
         UPDATE ORDERS WITH (ROWLOCK)
-        SET OrderGroup = 'Sales Order',
+        SET OrderGroup = 'Sales Orders',
             TrafficCop = NULL,
             openqty = (SELECT SUM(OD.Openqty) FROM ORDERDETAIL OD (NOLOCK) WHERE OD.Orderkey = @c_neworderkey)
         WHERE Orderkey = @c_neworderkey

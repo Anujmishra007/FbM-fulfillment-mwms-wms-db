@@ -22,7 +22,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
 /* 22-Oct-2025  WLChooi 1.0   Initial Version                            */
-/* 10-Nov-2025  WLChooi 1.1   FCR-8818 Enhance MPOC Logic (WL01)         */
+/* 20-Jan-2026  WLChooi 1.1   FCR-8818 Enhance MPOC Logic (WL01)         */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_BuildPreWave01]
    @c_BuildParmKey         NVARCHAR(10)
@@ -426,7 +426,7 @@ BEGIN
             FROM #T_MPOCDEP CL1
             WHERE CL1.Code = @c_OIFNotes
             AND CL1.Code2 = @n_MPOCFlag
-
+            
             IF ISNULL(@c_MasterShipID, '') <> ''
             BEGIN
                UPDATE #T_ORDERS
@@ -600,12 +600,48 @@ BEGIN
       BEGIN
          --WL01 S
          ;WITH MPOC_VC AS ( SELECT T1.Orderkey
-                                 , CartonNumber = DENSE_RANK() OVER ( ORDER BY T1.Consigneekey, T1.BillTo, T1.MarkFor, T1.MasterShipID ASC )
+                                 , CartonNumber = DENSE_RANK() OVER ( ORDER BY T1.BillTo, T1.Consigneekey, T1.MarkFor, T1.MasterShipID ASC )
                             FROM #T_ORDERS T1 )
          UPDATE T4
          SET T4.CartonNumber = 'M' + REPLICATE('0', 9 - LEN(CAST(C.CartonNumber AS NVARCHAR))) + CAST(C.CartonNumber AS NVARCHAR)
          FROM #T_ORDERDET T4
          JOIN MPOC_VC C ON C.Orderkey = T4.Orderkey
+
+         --WL01 S
+         --For MPOC, do not group by orderkey
+         ;WITH CTE_CartonSummary AS (
+            SELECT TD.CartonNumber
+                 , TotalQty = SUM(TD.Qty)
+                 , IsPutwallEligible = IIF(SUM(TD.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 1, 0)
+                 , IsChuteEligible = IIF(SUM(TD.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 0, 1)
+                 , MinOrderkey = MIN(T.Orderkey)
+            FROM #T_ORDERDET TD
+            INNER JOIN #T_ORDERS T ON T.Orderkey = TD.Orderkey
+            WHERE T.MPOC = 'Y' AND T.VAS <> 'Y'
+            GROUP BY TD.CartonNumber
+         ), CTE_UsageCalculation AS (
+            SELECT CartonNumber
+                 , VCCount = 1
+                 , PutwallUsage = CASE WHEN SUM(IsPutwallEligible) > @n_NoOfPutwall 
+                                       THEN @n_NoOfPutwall
+                                       ELSE SUM(IsPutwallEligible) 
+                                   END
+                 , ChuteUsage = SUM(IsChuteEligible)
+                              + CASE WHEN SUM(IsPutwallEligible) > @n_NoOfPutwall 
+                                     THEN SUM(IsPutwallEligible) - @n_NoOfPutwall
+                                     ELSE 0 
+                                END
+                 , MinOrderkey = MAX(MinOrderkey)
+            FROM CTE_CartonSummary
+            GROUP BY CartonNumber
+         )
+         UPDATE T
+         SET T.VCCount = C.VCCount
+           , T.PutwallUsage = C.PutwallUsage
+           , T.ChuteUsage = C.ChuteUsage
+         FROM #T_ORDERS T
+         JOIN CTE_UsageCalculation C ON C.MinOrderkey = T.Orderkey
+         WHERE T.MPOC = 'Y' AND T.VAS <> 'Y'
          --WL01 E
       END
 
@@ -633,23 +669,6 @@ BEGIN
       JOIN #T_ORDERS T ON T.Orderkey = T6.Orderkey AND T.VAS = 'Y'   --WL01
       
       --Calculate Putwall & Chute Usage
-      --WL01 S
-      --For MPOC, do not group by orderkey, only goes to Chute
-      --1 unique Carton Number = 1 VC -> all goes to 1 Chute
-      ;WITH CTE4 AS (
-         SELECT T8.Orderkey
-              , T8.CartonNumber
-              , RNo = ROW_NUMBER() OVER (PARTITION BY T8.CartonNumber ORDER BY T8.Orderkey)
-         FROM #T_ORDERDET T8
-      )
-      UPDATE T
-      SET VCCount = 1
-        , PutwallUsage = 0
-        , ChuteUsage = 1
-      FROM #T_ORDERS T
-      JOIN CTE4 R ON T.Orderkey = R.Orderkey AND R.RNo = 1 
-      AND T.MPOC = 'Y' AND T.VAS <> 'Y'
-
       --If Putwall fully utilized the rest will goes to Chute and it is by group level
       ;WITH CTE2 AS (
          SELECT T7.OrderKey
@@ -659,7 +678,7 @@ BEGIN
               , Chute   = IIF(SUM(T7.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 0, 1)
          FROM #T_ORDERDET T7
          JOIN #T_ORDERS T ON T.Orderkey = T7.Orderkey
-         WHERE (T.MPOC = 'Y' AND T.VAS = 'Y') OR (T.MPOC <> 'Y')
+         WHERE ((T.MPOC = 'Y' AND T.VAS = 'Y') OR (T.MPOC <> 'Y'))
          GROUP BY T7.OrderKey
                 , T7.CartonNumber
       ), CTE3 AS (
@@ -681,6 +700,7 @@ BEGIN
         , T8.ChuteUsage = CTE3.ChuteUsage
       FROM #T_ORDERS T8
       JOIN CTE3 ON CTE3.Orderkey = T8.Orderkey
+      WHERE ((T8.MPOC = 'Y' AND T8.VAS = 'Y') OR (T8.MPOC <> 'Y'))
       --WL01 E
       --Calculate Carton for S02, S06, J05 - END
 
@@ -702,8 +722,9 @@ BEGIN
       FROM #T_ORDERS T WITH (NOLOCK)
       JOIN  (SELECT toh.Orderkey 
                   , RNo = ROW_NUMBER() OVER 
-                           (ORDER BY toh.VCCountCS DESC, toh.Consigneekey, toh.BuyerPO, OOO.RowID, toh.Orderkey)
+                           (ORDER BY CASE WHEN @n_MPOCReqFlag = 1 THEN td.CartonNumber END, toh.VCCountCS DESC, toh.Consigneekey, toh.BuyerPO, OOO.RowID, toh.Orderkey)   --WL01
              FROM #T_ORDERS toh WITH (NOLOCK)
+             JOIN #T_ORDERDET td WITH (NOLOCK) ON td.Orderkey = toh.Orderkey   --WL01
              JOIN #ORDER_OPTIMIZATION_OUTPUT OOO WITH (NOLOCK) ON OOO.Orderkey = toh.Orderkey
                   ) o ON o.Orderkey = t.Orderkey
    END
@@ -748,14 +769,49 @@ BEGIN
             FROM CTE
             ORDER BY CTE.DRank, CTE.CartonNumber
             
-            --Check if can fulfill existing PreWaveNo
-            SELECT @c_PreWaveNo = PreWaveNo
-            FROM #T_ORDERS WITH (NOLOCK)
-            WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
-            GROUP BY PreWaveNo
-            HAVING SUM(PutwallUsage) + @n_PutwallCount <= @n_NoOfPutwall
-            AND SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
-         
+            --WL01 S
+            IF @n_PutwallCount > 0
+            BEGIN
+               --Check if can fulfill existing PreWaveNo by Putwall + Chute Usage first
+               SELECT @c_PreWaveNo = PreWaveNo
+               FROM #T_ORDERS WITH (NOLOCK)
+               WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
+               GROUP BY PreWaveNo
+               HAVING SUM(PutwallUsage) + @n_PutwallCount <= @n_NoOfPutwall
+               AND SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
+
+               IF ISNULL(@c_PreWaveNo, '') = ''
+               BEGIN
+                  --Check if can fulfill existing PreWaveNo by overflowing putwall -> chutes
+                  SELECT @c_PreWaveNo = PreWaveNo
+                  FROM #T_ORDERS WITH (NOLOCK)
+                  WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
+                  GROUP BY PreWaveNo
+                  HAVING SUM(ChuteUsage) + @n_PutwallCount <= @n_NoOfChute
+
+                  IF ISNULL(@c_PreWaveNo, '') <> ''
+                  BEGIN
+                     UPDATE T
+                     SET ChuteUsage = PutwallUsage + ChuteUsage
+                       , PutwallUsage = 0
+                     FROM #T_ORDERS T
+                     JOIN #T_ORDERDET TD ON TD.Orderkey = T.Orderkey
+                     WHERE TD.CartonNumber = @c_CartonNumber
+                     AND (T.MPOC = 'Y' AND T.VAS <> 'Y')
+                  END
+               END
+            END
+            ELSE
+            BEGIN
+               --Check if can fulfill existing PreWaveNo by ChuteUsage
+               SELECT @c_PreWaveNo = PreWaveNo
+               FROM #T_ORDERS WITH (NOLOCK)
+               WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
+               GROUP BY PreWaveNo
+               HAVING SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
+            END
+            --WL01 E
+
             --If existing group cannot fulfill, create a new group (Wave)
             IF ISNULL(@c_PreWaveNo, '') = ''
             BEGIN
@@ -821,12 +877,55 @@ BEGIN
             ORDER BY CTE.DRank, CTE.Orderkey
             
             --Check if can fulfill existing PreWaveNo
-            SELECT @c_PreWaveNo = PreWaveNo
-            FROM #T_ORDERS WITH (NOLOCK)
-            WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
-            GROUP BY PreWaveNo
-            HAVING SUM(PutwallUsage) + @n_PutwallCount <= @n_NoOfPutwall
-            AND SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
+            --SELECT @c_PreWaveNo = PreWaveNo
+            --FROM #T_ORDERS WITH (NOLOCK)
+            --WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
+            --GROUP BY PreWaveNo
+            --HAVING SUM(PutwallUsage) + @n_PutwallCount <= @n_NoOfPutwall
+            --AND SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
+
+            --WL01 S
+            IF @n_PutwallCount > 0
+            BEGIN
+               --Check if can fulfill existing PreWaveNo by Putwall + Chute Usage first
+               SELECT @c_PreWaveNo = PreWaveNo
+               FROM #T_ORDERS WITH (NOLOCK)
+               WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
+               GROUP BY PreWaveNo
+               HAVING SUM(PutwallUsage) + @n_PutwallCount <= @n_NoOfPutwall
+               AND SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
+
+               IF ISNULL(@c_PreWaveNo, '') = ''
+               BEGIN
+                  --Check if can fulfill existing PreWaveNo by overflowing putwall -> chutes
+                  SELECT @c_PreWaveNo = PreWaveNo
+                  FROM #T_ORDERS WITH (NOLOCK)
+                  WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
+                  GROUP BY PreWaveNo
+                  HAVING SUM(ChuteUsage) + @n_PutwallCount <= @n_NoOfChute
+
+                  IF ISNULL(@c_PreWaveNo, '') <> ''
+                  BEGIN
+                     --Move putwall usage to chutes for this order
+                     UPDATE T
+                     SET ChuteUsage = PutwallUsage + ChuteUsage
+                       , PutwallUsage = 0
+                     FROM #T_ORDERS T
+                     WHERE T.Orderkey = @c_Orderkey
+                       AND ((T.MPOC = 'Y' AND T.VAS = 'Y') OR (T.MPOC <> 'Y'))
+                  END
+               END
+            END
+            ELSE
+            BEGIN
+               --Check if can fulfill existing PreWaveNo by ChuteUsage
+               SELECT @c_PreWaveNo = PreWaveNo
+               FROM #T_ORDERS WITH (NOLOCK)
+               WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
+               GROUP BY PreWaveNo
+               HAVING SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
+            END
+            --WL01 E
             
             --If existing group cannot fulfill, create a new group (Wave)
             IF ISNULL(@c_PreWaveNo, '') = ''
@@ -948,6 +1047,7 @@ BEGIN
                                , '')
            --WL01 E
       FROM #T_ORDERDET
+      ORDER BY CASE WHEN @n_MPOCReqFlag = 1 THEN CartonNumber END, Orderkey, OrderLineNumber   --WL01
 
       --WL01 S
       IF EXISTS ( SELECT 1 FROM #T_ORDERS WHERE MPOC = 'Y' AND VAS <> 'Y' )
@@ -963,18 +1063,19 @@ BEGIN
               , T2.PreWaveNo
               , T2.VCCountCS
               , ChuteUsage = SUM(T2.ChuteUsage)
-              , PutwallUsage = 0
+              , PutwallUsage = SUM(T2.PutwallUsage)
               , MinRNo = MIN(T2.RNo)
               , T2.MPOCFlag
               , VAS = MAX(T2.VAS)
-              , OrderkeyList = STRING_AGG(CAST(T1.Orderkey AS NVARCHAR(MAX)), ';')
+              , OrderkeyList = STRING_AGG(CAST(T1.Orderkey AS NVARCHAR(MAX)), ';') WITHIN GROUP (ORDER BY T1.Orderkey ASC)
               , T2.Consigneekey
               , T2.BillTo
               , T2.MarkFor
               , T2.MasterShipID
+              , SumQty = SUM(T3.Qty)
          FROM #T_PREWAVE T1
          JOIN #T_ORDERS T2 ON T2.Orderkey = T1.Orderkey
-         CROSS APPLY ( SELECT TOP 1 T.CartonNumber
+         CROSS APPLY ( SELECT TOP 1 T.CartonNumber, T.Qty
                        FROM #T_ORDERDET T
                        WHERE T.Orderkey = T2.Orderkey ) T3
          WHERE T2.MPOC = 'Y' AND T2.VAS <> 'Y'
