@@ -30,7 +30,9 @@ jobs:
           # Compare the current PR branch against the target 'dev' branch
           # Using origin/dev to ensure we compare against the server version
           FILES=$(git diff --name-only origin/dev...HEAD | grep '\.sql$' || true)
-          echo "sql_files=$FILES" >> $GITHUB_OUTPUT
+          echo "sql_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Search for duplicates
         run: |
@@ -57,15 +59,18 @@ jobs:
 
             if [ ! -z "$FILE_MATCH" ]; then
               echo "::error file=$file:: FAILED: '$FILENAME' is already in the Unified repo."
+              echo "The system has detected that the SP has already been migrated to the Unified Repository. While the PR is not blocked, developers should verify if the new logic should be deployed directly to the Unified Repo."
               FOUND_ISSUE=true
             elif [ ! -z "$MODULE_MATCH" ]; then
               echo "::warning file=$file:WARNING: Module '$MODULE_NAME' is already unified."
+              echo "The system has detected that the SP has already been migrated to the Unified Repository. While the PR is not blocked, developers should verify if the new logic should be deployed directly to the Unified Repo."
               # If you want to strictly block V2 from adding to unified modules, uncomment below:
               FOUND_ISSUE=true 
             fi
           done
 
           if [ "$FOUND_ISSUE" = "true" ]; then
-            echo "Error: Unification check failed. Please remove duplicates."
+            echo "Error: ⚠️  WARNING: Unification check found potential duplicates."
+            echo "You are allowed to merge, but please verify if these files belong in the Unified Repo."
             exit 1
           fi
