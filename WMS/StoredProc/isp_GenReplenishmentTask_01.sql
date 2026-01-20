@@ -23,6 +23,7 @@ GO
 /* Date         Author     Ver   Purposes                                  */
 /* 2025-10-24   Michael    1.0   DevOps Combine Script                     */
 /* 2025-12-08   Michael    1.1   FCR-8536 ONBR-Replen per PND (ML01)       */
+/* 2026-01-20   Michael    1.2   FCR-9971 UK-Columbia-Replenishment (ML02) */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_GenReplenishmentTask_01]
@@ -77,24 +78,31 @@ BEGIN
          , @c_SQL                    NVARCHAR(MAX)= ''
          , @c_SQLStatement           NVARCHAR(MAX)= ''
          , @c_SQLParms               NVARCHAR(MAX)= ''
+         , @c_SQLParms2              NVARCHAR(MAX)= ''   --ML02
          , @c_SQLCondition           NVARCHAR(MAX)= ''
          , @c_ReplCond_Exp           NVARCHAR(MAX)= ''
          , @c_ReplJoin_Exp           NVARCHAR(MAX)= ''
+         , @c_Sorting_Exp            NVARCHAR(MAX)= ''   --ML02
          , @c_PendingTaskQty_Exp     NVARCHAR(MAX)= ''
-         , @c_LotSortColumn_Exp      NVARCHAR(MAX)= ''
          , @c_ReplCond_LOT_Exp       NVARCHAR(MAX)= ''
+         , @c_ReplJoin_LOT_Exp       NVARCHAR(MAX)= ''   --ML02
+         , @c_LotSortColumn_Exp      NVARCHAR(MAX)= ''
          , @c_ReplCond_LLI_Exp       NVARCHAR(MAX)= ''
+         , @c_ReplJoin_LLI_Exp       NVARCHAR(MAX)= ''   --ML02
          , @c_Sorting_LLI_Exp        NVARCHAR(MAX)= ''
          , @c_TransitLOC_Exp         NVARCHAR(MAX)= ''
          , @c_TaskGrouping_Exp       NVARCHAR(MAX)= ''
          , @c_TaskPriority_Exp       NVARCHAR(MAX)= ''
          , @c_TaskType_Exp           NVARCHAR(MAX)= ''
          , @c_PickMethod_Exp         NVARCHAR(MAX)= ''
+         , @c_ReplenQty_Exp          NVARCHAR(MAX)= ''   --ML02
          , @c_TaskType_Val           NVARCHAR(10) = ''
          , @c_PickMethod_Val         NVARCHAR(10) = ''
          , @c_DelPendingTask         NVARCHAR(10) = ''
          , @c_B2CChannelReplen       NVARCHAR(10) = ''
          , @c_TaskPriority           NVARCHAR(10) = ''
+         , @c_NoUCC                  NVARCHAR(10) = ''   --ML02
+         , @n_LocTolerance           FLOAT        = 1    --ML02
          , @n_PendingMoveIn          INT
          , @n_ChannelInvQty          INT
          , @n_Temp                   INT
@@ -119,7 +127,6 @@ BEGIN
          , @c_ReplenishmentKey       NVARCHAR(10) = ''
          , @n_limitrecs              INT          = 0
          , @n_LotSKUQTY              INT          = 0
-         , @c_PrevStorer             NVARCHAR(15) = ''
          , @c_TransitLOC             NVARCHAR(10) = ''
          , @c_ToLOC                  NVARCHAR(10) = ''
          , @c_FinalLOC               NVARCHAR(10) = ''
@@ -129,6 +136,7 @@ BEGIN
          , @n_PendingTaskQty         INT          = 0
          , @c_TaskType               NVARCHAR(10) = ''
          , @c_PickMethod             NVARCHAR(10) = ''
+         , @c_CommingleSku           NVARCHAR(1)  = ''   --ML02
 
    DECLARE @b_success INT,
            @n_err INT,
@@ -142,22 +150,28 @@ BEGIN
    END
 
    SELECT @c_ReplCond_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'Condition'         THEN Notes END)),'')
-        , @c_LotSortColumn_Exp  = ISNULL(TRIM(MAX(CASE WHEN Code = 'LotSortColumn'     THEN Notes END)),'')
-        , @c_ReplCond_LOT_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'Condition_LOT'     THEN Notes END)),'')   --ML01
-        , @c_ReplCond_LLI_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'Condition_LLI'     THEN Notes END)),'')
-        , @c_Sorting_LLI_Exp    = ISNULL(TRIM(MAX(CASE WHEN Code = 'Sorting_LLI'       THEN Notes END)),'')
         , @c_ReplJoin_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN'          THEN Notes END)),'')   --ML01
+        , @c_Sorting_Exp        = ISNULL(TRIM(MAX(CASE WHEN Code = 'Sorting'           THEN Notes END)),'')   --ML02
+        , @c_PendingTaskQty_Exp = ISNULL(TRIM(MAX(CASE WHEN Code = 'PendingTaskQty'    THEN Notes END)),'')   --ML01
+        , @c_ReplCond_LOT_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'Condition_LOT'     THEN Notes END)),'')   --ML01
+        , @c_ReplJoin_LOT_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN_LOT'      THEN Notes END)),'')   --ML02
+        , @c_LotSortColumn_Exp  = ISNULL(TRIM(MAX(CASE WHEN Code = 'LotSortColumn'     THEN Notes END)),'')
+        , @c_ReplCond_LLI_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'Condition_LLI'     THEN Notes END)),'')
+        , @c_ReplJoin_LLI_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN_LLI'      THEN Notes END)),'')   --ML02
+        , @c_Sorting_LLI_Exp    = ISNULL(TRIM(MAX(CASE WHEN Code = 'Sorting_LLI'       THEN Notes END)),'')
         , @c_TransitLOC_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'TransitLOC'        THEN Notes END)),'')   --ML01
         , @c_TaskGrouping_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskGrouping'      THEN Notes END)),'')   --ML01
-        , @c_PendingTaskQty_Exp = ISNULL(TRIM(MAX(CASE WHEN Code = 'PendingTaskQty'    THEN Notes END)),'')   --ML01
         , @c_TaskType_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Notes END)),'')   --ML01
         , @c_TaskPriority_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Notes END)),'')   --ML01
         , @c_PickMethod_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Notes END)),'')   --ML01
-        , @c_TaskType_Val       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Short END)),'')   --ML01
-        , @c_PickMethod_Val     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Short END)),'')   --ML01
-        , @c_TaskPriority       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Short END)),'')
-        , @c_DelPendingTask     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' THEN Short END)),'1')
-        , @c_B2CChannelReplen   = ISNULL(TRIM(MAX(CASE WHEN Code = 'B2CChannelReplen'  THEN Short END)),'')
+        , @c_ReplenQty_Exp      = ISNULL(TRIM(MAX(CASE WHEN Code = 'ReplenQty'         THEN Notes END)),'')   --ML02
+        , @c_TaskType_Val       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Long  END)),'')   --ML01
+        , @c_PickMethod_Val     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Long  END)),'')   --ML01
+        , @c_TaskPriority       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Long  END)),'')
+        , @c_DelPendingTask     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' THEN Long  END)),'1')
+        , @c_B2CChannelReplen   = ISNULL(TRIM(MAX(CASE WHEN Code = 'B2CChannelReplen'  THEN Long  END)),'')
+        , @c_NoUCC              = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoUCC'             THEN Long  END)),'')   --ML02
+        , @n_LocTolerance       = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='LocTolerance' THEN Long END),'') AS FLOAT), 1)   --ML02
      FROM dbo.CODELKUP WITH(NOLOCK)
     WHERE ListName = 'REPLENCFG'
       AND Code2 = 'isp_GenReplenishmentTask_01'
@@ -175,6 +189,8 @@ BEGIN
    IF ISNULL(@c_TaskPriority,'') = ''
       SET @c_TaskPriority = '999999999'
 
+   IF ISNULL(@n_LocTolerance,0) = 0   --ML02
+      SET @n_LocTolerance = 1         --ML02
 
    CREATE TABLE #TEMP_REPLENISHMENT
    (
@@ -235,6 +251,7 @@ BEGIN
      +       ', SKUxLOC.LocationType'
      +       ', SC2.Authority'
      +       ', PendingTaskQty=ISNULL(' + CASE WHEN ISNULL(@c_PendingTaskQty_Exp,'') <> '' THEN @c_PendingTaskQty_Exp ELSE '0' END + ',0)'   --ML01
+     +       ', LOC.CommingleSku'   --ML02
      +   ' FROM dbo.SKUxLOC WITH(NOLOCK)'
      +   ' JOIN dbo.LOC     WITH(NOLOCK) ON SKUxLOC.Loc = LOC.Loc'
      +   ' JOIN dbo.SKU     WITH(NOLOCK) ON SKU.StorerKey = SKUxLOC.StorerKey AND SKU.SKU = SKUxLOC.SKU'
@@ -255,7 +272,13 @@ BEGIN
       SET @c_SQLStatement = @c_SQLStatement
         +    ' AND (' + @c_ReplCond_Exp + ')'
 
-   SET @c_SQLStatement = @c_SQLStatement
+   --ML02-S
+   IF ISNULL(@c_Sorting_Exp,'') <> ''
+      SET @c_SQLStatement = @c_SQLStatement
+        +  ' ORDER BY ' + @c_Sorting_Exp
+   ELSE
+   --ML02-E
+      SET @c_SQLStatement = @c_SQLStatement
         +  ' ORDER BY SKUxLOC.Storerkey, SKUxLOC.ReplenishmentPriority, SKUxLOC.Loc'
 
    IF @b_debug = 1
@@ -293,25 +316,68 @@ BEGIN
       , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask, @c_B2CChannelReplen, @c_TaskPriority
 
    OPEN CUR_ReplenSkuLoc
-   SET @c_PrevStorer = ''
 
    WHILE 1=1
    BEGIN
-      FETCH NEXT FROM CUR_ReplenSkuLoc INTO @c_CurrentPriority, @c_CurrentStorer, @c_CurrentSKU, @c_CurrentLoc, @n_Qty,
-                                            @n_QtyPicked, @n_QtyAllocated, @n_QtyLocationLimit, @n_QtyLocationMinimum,
-                                            @n_CaseCnt, @n_Pallet, @c_PickCode, @c_LocationType, @c_ReplExclProdNearExpiry,
-                                            @n_PendingTaskQty   --ML01
+      FETCH NEXT FROM CUR_ReplenSkuLoc INTO @c_CurrentPriority, @c_CurrentStorer, @c_CurrentSKU, @c_CurrentLoc, @n_Qty
+                                          , @n_QtyPicked, @n_QtyAllocated, @n_QtyLocationLimit, @n_QtyLocationMinimum
+                                          , @n_CaseCnt, @n_Pallet, @c_PickCode, @c_LocationType, @c_ReplExclProdNearExpiry
+                                          , @n_PendingTaskQty   --ML01
+                                          , @c_CommingleSku     --ML02
+
       IF @@FETCH_STATUS <> 0
          BREAK
 
-      IF @c_CurrentStorer <> @c_PrevStorer
+      --ML02-S
+      IF ISNULL(@c_CommingleSku,'') = '0' AND
+         EXISTS(SELECT TOP 1 1 FROM LOTxLOCxID WITH (NOLOCK) WHERE Loc = @c_CurrentLoc AND Qty - QtyPicked > 0 AND Sku <> @c_CurrentSku)
       BEGIN
-         SET @c_PrevStorer = @c_CurrentStorer
+         CONTINUE
       END
+      --ML02-E
 
-      SET @n_ReplenQty = @n_QtyLocationLimit - ( @n_Qty - @n_QtyPicked ) - ISNULL(@n_PendingTaskQty,0)
+      SET @n_ReplenQty = @n_QtyLocationLimit * @n_LocTolerance - ( @n_Qty - @n_QtyPicked ) - ISNULL(@n_PendingTaskQty,0)   --ML02
 
       SET @n_QtyAvailable = ( @n_Qty - @n_QtyPicked )
+
+      --ML02-S
+      IF ISNULL(@c_ReplenQty_Exp,'') <> ''
+      BEGIN
+          SET @c_SQLStatement = N'SET @n_ReplenQty = (' + @c_ReplenQty_Exp + ')'
+          SET @c_SQLParms2 = @c_SQLParms
+            + ',@c_CurrentPriority NVARCHAR(5)'
+            + ',@c_CurrentStorer NVARCHAR(15)'
+            + ',@c_CurrentSKU NVARCHAR(20)'
+            + ',@c_CurrentLOC NVARCHAR(10)'
+            + ',@n_Qty INT'
+            + ',@n_QtyPicked INT'
+            + ',@n_QtyAllocated INT'
+            + ',@n_QtyLocationLimit INT'
+            + ',@n_QtyLocationMinimum INT'
+            + ',@n_CaseCnt INT'
+            + ',@n_Pallet INT'
+            + ',@c_PickCode NVARCHAR(10)'
+            + ',@c_LocationType NVARCHAR(10)'
+            + ',@c_ReplExclProdNearExpiry NVARCHAR(10)'
+            + ',@n_PendingTaskQty INT'
+            + ',@c_TaskType_Val NVARCHAR(10)'
+            + ',@c_PickMethod_Val NVARCHAR(10)'
+            + ',@c_DelPendingTask NVARCHAR(10)'
+            + ',@c_B2CChannelReplen NVARCHAR(10)'
+            + ',@c_TaskPriority NVARCHAR(10)'
+            + ',@c_NoUCC NVARCHAR(10)'
+            + ',@n_LocTolerance FLOAT'
+            + ',@n_ReplenQty INT OUTPUT'
+
+          EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms2
+             , @c_Zone01, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
+             , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask, @c_B2CChannelReplen, @c_TaskPriority
+             , @c_CurrentPriority, @c_CurrentStorer, @c_CurrentSKU, @c_CurrentLOC, @n_Qty, @n_QtyPicked, @n_QtyAllocated, @n_QtyLocationLimit, @n_QtyLocationMinimum, @n_CaseCnt
+             , @n_Pallet, @c_PickCode, @c_LocationType, @c_ReplExclProdNearExpiry, @n_PendingTaskQty, @c_TaskType_Val, @c_PickMethod_Val, @c_DelPendingTask, @c_B2CChannelReplen, @c_TaskPriority
+             , @c_NoUCC, @n_LocTolerance
+             , @n_ReplenQty OUTPUT
+      END
+      --ML02-E
 
       IF @b_debug = 1
       BEGIN
@@ -372,6 +438,7 @@ BEGIN
 
       IF ISNULL(@c_LotSortColumn_Exp,'')='' AND
          ISNULL(@c_ReplCond_LOT_Exp ,'')='' AND
+         ISNULL(@c_ReplJoin_LOT_Exp ,'')='' AND   --ML02
          LEFT(@c_PickCode,5) = 'nspRP'      AND
          EXISTS(SELECT TOP 1 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_PickCode) AND type = 'P')
       BEGIN
@@ -388,7 +455,7 @@ BEGIN
          SET @c_SQLStatement = N'INSERT INTO #TEMP_LOT_SORT (LOT, SortColumn)'
            +' SELECT LLI.LOT'
            +      ', SortColumn = MIN('
-           +            CASE WHEN ISNULL(@c_LotSortColumn_Exp,'')<>'' THEN ISNULL(@c_LotSortColumn_Exp,'') 
+           +            CASE WHEN ISNULL(@c_LotSortColumn_Exp,'')<>'' THEN ISNULL(@c_LotSortColumn_Exp,'')
                              ELSE 'ISNULL(CONVERT(NVARCHAR(8),LA.LOTTABLE04,112),''00000000'') + ISNULL(CONVERT(NVARCHAR(8),LA.LOTTABLE05,112),''00000000'')'
                         END + ')'
            +  ' FROM dbo.LOTxLOCxID   LLI WITH(NOLOCK)'
@@ -398,6 +465,11 @@ BEGIN
            +  ' JOIN dbo.LOTATTRIBUTE LA  WITH(NOLOCK) ON LLI.LOT=LA.LOT'
            +  ' JOIN dbo.SKU          SKU WITH(NOLOCK) ON LLI.StorerKey=SKU.StorerKey AND LLI.SKU=SKU.SKU'
            +  ' JOIN dbo.SKUxLOC      SL  WITH(NOLOCK) ON LLI.StorerKey=SL.StorerKey AND LLI.SKU=SL.SKU AND LLI.LOC=SL.LOC'
+
+         IF ISNULL(@c_ReplJoin_LOT_Exp,'') <> ''                                --ML02
+            SET @c_SQLStatement = @c_SQLStatement + ' ' + @c_ReplJoin_LOT_Exp   --ML02
+
+         SET @c_SQLStatement = @c_SQLStatement
            + ' WHERE LLI.StorerKey = ''' + ISNULL(REPLACE(@c_CurrentStorer,'''',''''''),'') + ''''
            +   ' AND LLI.SKU = '''       + ISNULL(REPLACE(@c_CurrentSKU   ,'''',''''''),'') + ''''
            +   ' AND LOC.Facility = '''  + ISNULL(REPLACE(@c_Facility     ,'''',''''''),'') + ''''
@@ -491,7 +563,12 @@ BEGIN
            +  ' JOIN dbo.SKUxLOC      SL  WITH(NOLOCK) ON LLI.StorerKey=SL.StorerKey AND LLI.SKU=SL.SKU AND LLI.LOC=SL.LOC'
            +  ' LEFT JOIN dbo.UCC     UCC WITH(NOLOCK) ON LLI.Storerkey=UCC.Storerkey AND LLI.Sku=UCC.Sku AND LLI.Lot=UCC.Lot AND LLI.Loc=UCC.Loc AND LLI.ID=UCC.ID'
            +                                      ' AND UCC.Status=''1'' AND LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED>=UCC.Qty AND UCC.Qty>0'
-           +                                      CASE WHEN @c_LocationType='PICK' THEN '' ELSE ' AND 1=2' END
+           +                                      CASE WHEN @c_LocationType='PICK' AND ISNULL(@c_NoUCC,'')<>'1' THEN '' ELSE ' AND 1=2' END   --ML02
+
+         IF ISNULL(@c_ReplJoin_LLI_Exp,'') <> ''                                --ML02
+            SET @c_SQLStatement = @c_SQLStatement + ' ' + @c_ReplJoin_LLI_Exp   --ML02
+
+         SET @c_SQLStatement = @c_SQLStatement
            + ' WHERE LLI.LOT='''      + ISNULL(REPLACE(@c_FromLot ,'''',''''''),'') + ''''
            +   ' AND LOC.Facility=''' + ISNULL(REPLACE(@c_Facility,'''',''''''),'') + ''''
            +   ' AND LOC.LocationFlag NOT IN (''DAMAGE'', ''HOLD'')'
@@ -936,7 +1013,7 @@ BEGIN
       ELSE IF @c_ReplenType = 'T'
       BEGIN
          SET @c_UOM = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN '2' ELSE '6' END   --ML01
-         
+
          EXEC isp_InsertTaskDetail
               @c_TaskType              = @c_TaskType    --ML01
             , @c_Storerkey             = @c_CurrentStorer
@@ -970,7 +1047,7 @@ BEGIN
             , @n_Err                   = @n_err OUTPUT
             , @c_ErrMsg                = @c_errmsg OUTPUT
 
-         IF @b_Success <> 1 
+         IF @b_Success <> 1
             SELECT @n_continue = 3
       END
    END -- While CUR1
