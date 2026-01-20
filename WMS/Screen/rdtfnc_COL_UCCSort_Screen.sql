@@ -2,7 +2,7 @@
     --1874
 */
 
-IF NOT EXISTS( SELECT 1 FROM rdt.rdtmsg WITH (NOLOCK) WHERE Message_ID = 1873 AND Message_Type = 'FNC' AND Lang_Code = 'ENG')
+IF NOT EXISTS( SELECT 1 FROM rdt.rdtmsg WITH (NOLOCK) WHERE Message_ID = 1874 AND Message_Type = 'FNC' AND Lang_Code = 'ENG')
    INSERT INTO rdt.rdtMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, EventType) 
    VALUES (1874, 'ENG', 'FNC', 'COL - UCC Carton Sort', 'rdtfnc_COL_UCCSort', 0)
 GO
