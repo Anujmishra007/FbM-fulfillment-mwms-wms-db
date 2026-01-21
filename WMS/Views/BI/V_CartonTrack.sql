@@ -8,5 +8,6 @@ AS
 SELECT *
 FROM dbo.CartonTrack WITH (NOLOCK)
 GO
+
 GRANT SELECT ON  [BI].[V_CartonTrack] TO [JReportRole]
 GO
