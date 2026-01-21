@@ -200,10 +200,10 @@ BEGIN
             GOTO Step_1_Fail
          END
 
-         IF LEN(@cTrolleyID) <> 10
+         IF LEN(@cTrolleyID) > 10
          BEGIN
             SET @nErrNo = 254402
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Trolley ID must be 10 characters
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Trolley ID must be <= 10 characters
             GOTO Step_1_Fail
          END
 
@@ -365,7 +365,7 @@ BEGIN
    GOTO Quit
 
    /********************************************************************************
-   Step 1. Scn = 6752 Carton/UCC Screen
+   Step 3. Scn = 6752 Carton/UCC Screen
       Trolley ID: (field01, Output)
       Position  : (field02, Output)
       Carton/UCC: (field03, Input)
@@ -479,6 +479,11 @@ BEGIN
 
          SET @nPosition = @nPositionOccupied + 1
 
+         SELECT @nTranCount = @@TRANCOUNT
+         
+         BEGIN TRAN  -- Begin our own transaction
+         SAVE TRAN rdtfnc_BuildUCCTrolley_Step3 -- For rollback or commit only our own transaction
+
          BEGIN TRY
             INSERT INTO rdt.rdtTrolleyLog (TrolleyNo, Position, UCCNo, LOC, ID, Status, TaskDetailKey)
             VALUES (@cTrolleyID, CAST(@nPosition AS NVARCHAR(10)), @cUCC, '', '', '0', @cTaskDetailKey)
@@ -486,8 +491,36 @@ BEGIN
          BEGIN CATCH
             SET @nErrNo = 254417
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert trolley log failed
+
+            ROLLBACK TRAN rdtfnc_BuildUCCTrolley_Step3
+            WHILE @@TRANCOUNT > @nTranCount
+               COMMIT TRAN
+
             GOTO Step_3_Fail
          END CATCH
+
+         BEGIN TRY
+            UPDATE dbo.TaskDetail WITH(ROWLOCK)
+            SET DeviceID = @cTrolleyID,
+               Message01 = CAST(@nPosition AS NVARCHAR(10)),
+               EditDate = GETDATE(),
+               EditWho = @cUserName
+            WHERE TaskDetailKey = @cTaskDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 254420
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update Pickdetail failed
+
+            ROLLBACK TRAN rdtfnc_BuildUCCTrolley_Step3
+            WHILE @@TRANCOUNT > @nTranCount
+               COMMIT TRAN
+
+            GOTO Step_3_Fail
+         END CATCH
+
+         COMMIT TRAN rdtfnc_BuildUCCTrolley_Step3
+         WHILE @@TRANCOUNT > @nTranCount
+            COMMIT TRAN
 
          IF @nPosition < @nMaxPosition
             SET @nPosition = @nPosition + 1
@@ -508,6 +541,8 @@ BEGIN
          SET @nStep = @nStep - 2
          SET @cOutField01 = ''
       END
+
+      GOTO Quit
 
       Step_3_Fail:
       BEGIN
