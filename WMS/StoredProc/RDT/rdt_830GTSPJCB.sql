@@ -11,6 +11,7 @@ GO
 /*                                                                          */    
 /* Date        Rev  Author      Purposes                                    */    
 /* 07/08/2025  1.0  PPA374      Get to LOC step and set qty as per one line */ 
+/* 21/01/2026  1.1  PPA374      Considering split pickdetail sum            */
 /****************************************************************************/    
     
 CREATE OR ALTER PROCEDURE [RDT].[rdt_830GTSPJCB]    
@@ -547,14 +548,32 @@ CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
 	        AND Status = '0'
       END
    
-      SELECT TOP 1 @nTaskQTY = Qty
+      /*SELECT TOP 1 @nTaskQTY = Qty
       FROM PICKDETAIL PD WITH(NOLOCK)
       WHERE PD.Storerkey = @cStorerKey
          AND Status = '0'
 	     AND LOC = @cLOC
 	     AND PD.SKU = @cSKU
 	     AND PD.OrderKey = @cOrderKey
-      ORDER BY PD.PickDetailKey, PD.Lot
+      ORDER BY PD.PickDetailKey, PD.Lot*/
+
+      SELECT TOP 1 --21/01/2026 PPA374
+	     @nTaskQTY = QtySUM 
+	  FROM (
+	     SELECT 
+		    SUM(Qty)OVER(PARTITION BY PD.OrderKey, PD.Loc, PD.SKU, PD.Lot, PD.ID, PD.Status)QtySUM, 
+	        ROW_NUMBER()OVER(PARTITION BY PD.OrderKey, PD.Loc, PD.SKU, PD.Lot, PD.ID, PD.Status ORDER BY PD.PickDetailKey, PD.Lot)RowID, 
+			PickDetailKey, 
+			PD.Lot
+         FROM PICKDETAIL PD WITH(NOLOCK)
+         WHERE PD.Storerkey = @cStorerKey
+            AND PD.Status = '0'
+	        AND PD.LOC = @cLOC
+	        AND PD.SKU = @cSKU
+	        AND PD.OrderKey = @cOrderKey
+	  )T1
+	  WHERE RowID = 1
+	  ORDER BY PickDetailKey, Lot
    END
 
    IF @nStep = 5
