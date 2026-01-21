@@ -156,6 +156,12 @@ BEGIN
       CREATE TABLE #T_PICKDETAIL_CURRENT (
          Pickdetailkey NVARCHAR(18) PRIMARY KEY
       )
+
+      CREATE TABLE #T_ShortPick (    
+            Pickdetailkey     NVARCHAR(18) PRIMARY KEY
+          , Orderkey          NVARCHAR(10)
+          , Qty               INT
+      )
    END
 
    IF @b_debug = 0 AND @n_Continue IN (1,2)
@@ -253,8 +259,8 @@ BEGIN
    --Get Orderkeys that have UCC being shorted
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      INSERT INTO #T_ShortOrders (OrderKey)
-      SELECT PD.OrderKey
+      INSERT INTO #T_ShortPick (Pickdetailkey, Orderkey, Qty)
+      SELECT PD.PickDetailKey, PD.OrderKey, PD.QtyMoved
       FROM PICKDETAIL PD WITH (NOLOCK)
       WHERE PD.Storerkey = @c_StorerKey    
       AND   PD.Sku = @c_SKU    
@@ -264,7 +270,11 @@ BEGIN
                      FROM WAVEDETAIL WD (NOLOCK)
                      WHERE WD.WaveKey = @c_Wavekey
                      AND WD.OrderKey = PD.OrderKey )
-      GROUP BY PD.OrderKey
+      GROUP BY PD.PickDetailKey, PD.OrderKey, PD.QtyMoved
+
+      INSERT INTO #T_ShortOrders (OrderKey)
+      SELECT DISTINCT T.Orderkey
+      FROM #T_ShortPick T
 
       INSERT INTO #T_PICKDETAIL_CURRENT (Pickdetailkey)
       SELECT PD.Pickdetailkey
@@ -297,6 +307,7 @@ BEGIN
          WHERE UCC.Storerkey = @c_Storerkey
          AND UCC.SKU = @c_SKU
          AND UCC.UCCNo = @c_UCCNo
+         AND UCC.[Status] = '3'
       END TRY
       BEGIN CATCH
          SET @n_Continue = 3
@@ -353,6 +364,13 @@ BEGIN
    --Reallocate
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @c_StrategykeyParm <> ''
    BEGIN
+      -- Update to ALLOC to indicate shorted line
+      UPDATE P
+      SET P.TaskManagerReasonKey = IIF(P.TaskManagerReasonKey = 'SHORT', P.TaskManagerReasonKey, 'ALLOC')
+        , P.TrafficCop = NULL
+      FROM PICKDETAIL P
+      JOIN #T_ShortPick T ON T.Pickdetailkey = P.PickDetailKey
+
       BEGIN TRY
          EXEC dbo.ispWaveProcessing @c_WaveKey = @c_Wavekey -- nvarchar(10)
                                   , @b_Success = @b_Success OUTPUT -- int
@@ -365,6 +383,13 @@ BEGIN
          SET @n_Continue = 3
          SET @c_ErrMsg = ERROR_MESSAGE()
       END CATCH
+
+      -- Revert
+      UPDATE P
+      SET P.TaskManagerReasonKey = IIF(P.TaskManagerReasonKey = 'SHORT', P.TaskManagerReasonKey, '')
+        , P.TrafficCop = NULL
+      FROM PICKDETAIL P
+      JOIN #T_ShortPick T ON T.Pickdetailkey = P.PickDetailKey
    END
 
    IF (@n_Continue = 1 OR @n_Continue = 2)
