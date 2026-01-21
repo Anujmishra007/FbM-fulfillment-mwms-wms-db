@@ -1,6 +1,4 @@
-USE [GBRWMS]
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_1871ExtValJCB]    Script Date: 1/21/2026 9:22:06 PM ******/
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
