@@ -359,24 +359,6 @@ BEGIN
          
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)  
       BEGIN
-         IF EXISTS (SELECT 1                                                         
-                    FROM dbo.LOTxLOCxID l1 (NOLOCK) 
-                    WHERE l1.Storerkey = @c_Storerkey
-                    AND   l1.loc = @c_ToLoc
-                    AND   l1.Sku <> @c_Sku
-                    AND   (l1.QtyAllocated + (l1.QtyPicked-l1.Qty) > 0 
-                    OR     l1.PendingMoveIn > 0
-                          )
-                    )
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_Err = 83040
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
-                         +': Different Sku found in DPP location: ' + @c_ToLoc
-                         +'. (mspRLWAV09)' 
-            GOTO QUIT_SP
-         END    
-
          SELECT TOP 1 @c_ToLoc = l.Loc
          FROM LOC l (NOLOCK)
          WHERE l.Facility = @c_Facility
