@@ -61,6 +61,7 @@ DECLARE
    @cSKUDescr     NVARCHAR( 60),
    @cPUOM         NVARCHAR( 1), -- Prefer UOM
    @cLOCCheckDigitSP    NVARCHAR( 20),
+   @cLocConfirm         NVARCHAR( 5),
    @cCheckDigitLOC      NVARCHAR( 20),
    @cFromLOC            NVARCHAR( 10),
    @cFromID             NVARCHAR( 18),
@@ -144,6 +145,8 @@ SELECT
    @cDecodeSP           = V_String11,
    @cLOCLookupSP        = V_String12, --(yeekung01)
    @cSuggestLocSP       = V_String14, --(CYU027)
+   @cLocConfirm         = V_String15, --(CYU027)
+
    @cMax                = V_Max,
    @nTotalRec           = V_Integer1,
    @nCurrentRec         = V_Integer2,
@@ -209,6 +212,7 @@ BEGIN
    IF @cSuggestLocSP = '0'
        SET @cSuggestLocSP = ''
    SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+   SET @cLocConfirm = rdt.rdtGetConfig(@nFunc, 'LocConfirmation', @cStorerKey)
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -438,6 +442,19 @@ BEGIN
       -- Screen mapping
       SET @cTempLocationType = @cInField02
 
+      IF @cLocConfirm <> '1' AND ISNULL(@cTempLocationType,'') = ''
+      BEGIN
+         -- Prepare prev screen var
+         SET @cMax = ''
+         SET @cUCC = ''
+         SET @cOutField01 = ''
+
+         -- Go back to prev screen
+         SET @nScn  = @nScn - 1
+         SET @nStep = @nStep - 1
+         GOTO QUIT
+      END
+
       -- Validate blank
       IF @cTempLocationType <> @cOutField01
       BEGIN
@@ -504,6 +521,7 @@ BEGIN
       V_String11  = @cDecodeSP,
       V_String12  = @cLOCLookupSP, 
       V_String14  = @cSuggestLocSP,
+      V_String15  = @cLocConfirm,
       V_Max       = @cMax,
 
       V_Integer1  = @nTotalRec,
