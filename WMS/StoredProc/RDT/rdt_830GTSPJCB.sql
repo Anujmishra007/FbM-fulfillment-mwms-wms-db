@@ -535,7 +535,7 @@ CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
       AND SKU.SKU = @cSKU    
    
    SELECT @cDropID = V_CaseID
-   FROM RDT.RDTMOBREC 
+   FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
    
    IF @nStep = 2
