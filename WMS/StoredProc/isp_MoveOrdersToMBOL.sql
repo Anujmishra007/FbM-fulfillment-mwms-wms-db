@@ -82,8 +82,8 @@ BEGIN
          , @c_StorerKey       NVARCHAR(15) -- SOS# 256603
          , @c_ToStorerKey     NVARCHAR(15) -- SOS# 256603
          , @c_DisAllowMultiStorer  NVARCHAR(30) -- SOS# 256603
-         , @c_B_Company            NVARCHAR(200)  --UGAM-01 -- ORDERS.B_Company = @B_Company
-         , @c_WaveKey              NVARCHAR(1)    --UGAM-01 -- ORDERS.UserDefine09 = @c_WaveKey
+         , @c_B_Company            NVARCHAR(MAX)  --UGAM-01 -- ORDERS.B_Company = @B_Company
+         , @c_WaveKey              NVARCHAR(10)    --UGAM-01 -- ORDERS.UserDefine09 = @c_WaveKey
          , @c_ShipRefConfigKey     NVARCHAR(1)    --UGAM-01 -- STORERCONFIG Key
 
 
