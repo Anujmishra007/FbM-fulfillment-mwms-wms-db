@@ -11,6 +11,7 @@ GO
 /*                                                                         */
 /* Date         Author   Ver.    Purposes                                  */
 /* 2025-10-28   JackC    1.0.0   FCR-8648 Created                          */
+/* 2026-01-21   JackC    1.0.1   FCR-8648 v1.6 Set PKD.ID to PKD.DropID    */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd24]
@@ -42,6 +43,7 @@ BEGIN
    DECLARE @cTaskType      NVARCHAR(10)
    DECLARE @cListKey       NVARCHAR(10)
    DECLARE @cPickDetailKey NVARCHAR(10)
+   DECLARE @cPKDID         NVARCHAR(18)
    DECLARE @nRowCount      INT
    DECLARE @nLoopIndex     INT
    DECLARE @cErrMsg1       NVARCHAR(125)
@@ -54,7 +56,8 @@ BEGIN
    DECLARE @tPKD TABLE
    (
       id            INT IDENTITY(1,1),
-      PickDetailKey NVARCHAR(10) 
+      PickDetailKey NVARCHAR(10),
+      PKDID         NVARCHAR(18) --V1.0.1       
    )
 
    SELECT @cFacilily = Facility,
@@ -74,8 +77,8 @@ BEGIN
             BEGIN TRAN
             SAVE TRAN rdt_1764ExtUpd24
 
-            INSERT INTO @tPKD (PickDetailKey)
-            SELECT PickDetailKey
+            INSERT INTO @tPKD (PickDetailKey, PKDID)
+            SELECT PickDetailKey, ID
             FROM dbo.PickDetail WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
             AND TaskDetailKey = @cTaskDetailKey
@@ -86,7 +89,8 @@ BEGIN
             BEGIN
                SELECT TOP 1
                   @cPickDetailKey = PickDetailKey,
-                  @nLoopIndex = id
+                  @cPKDID         = PKDID,
+                  @nLoopIndex     = id
                FROM @tPKD
                WHERE id > @nLoopIndex
                ORDER BY id
@@ -98,7 +102,8 @@ BEGIN
                
                BEGIN TRY
                   UPDATE dbo.PickDetail WITH (ROWLOCK)
-                  SET Status = '5'
+                  SET Status = '5',
+                      DropID = @cPKDID
                   WHERE PickDetailKey = @cPickDetailKey
                END TRY
                BEGIN CATCH
