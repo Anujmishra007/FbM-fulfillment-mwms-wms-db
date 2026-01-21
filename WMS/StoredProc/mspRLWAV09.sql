@@ -318,7 +318,7 @@ BEGIN
       SET @cur_WaveReplto = CURSOR FAST_FORWARD READ_ONLY FOR 
       SELECT PD.Storerkey, PD.Sku, PD.Loc
          , PD.Lot                                    
-         , QtyNeed = SUM(pd.Qty)-(lli.Qty-lli.QtyPicked)-lli.PendingMoveIn-ISNULL(tdp.QtyAllocated,0)
+         , QtyNeed = SUM(pd.Qty)-(lli.Qty-lli.QtyPicked)-lli.PendingMoveIn+ISNULL(tdp.QtyAllocated,0) --2026-01-21
          , FinalLocPAZone = l.PutawayZone
          , FinalLocLoseID = l.LoseId
       FROM #PICKDETAIL_WIP PD (NOLOCK)
