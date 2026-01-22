@@ -111,7 +111,7 @@ CREATE   PROCEDURE [dbo].[mspWaveReleaseWCS02]
                   FROM WAVEDETAIL (NOLOCK)      
                   JOIN ORDERS (NOLOCK) ON WAVEDETAIL.Orderkey = ORDERS.Orderkey              
                   WHERE WAVEDETAIL.Wavekey = @c_WaveKey      
-                  AND (ISNULL(ORDERS.Type,'') <> 'ON-B2C' OR ISNULL(ORDERS.Ecom_SINGLE_Flag,'') <> 'M'))   /*JH01*/
+                  AND ISNULL(ORDERS.Type,'') <> 'ON-B2C' AND ISNULL(ORDERS.Ecom_SINGLE_Flag,'') <> 'M')   /*JH01*/
       BEGIN   
          SELECT @n_continue = 3        
          SELECT @n_err = 90022        
@@ -481,3 +481,4 @@ END --sp end
 GO
 GRANT EXECUTE ON [dbo].[mspWaveReleaseWCS02] TO [NSQL]
 GO
+
