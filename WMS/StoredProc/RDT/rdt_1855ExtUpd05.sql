@@ -87,9 +87,9 @@ BEGIN
         -- CASE 1: B2C Single (S)
         IF @EcomSingleFlag = 'S'
         BEGIN
-             -- Verify Status is 4 (Short/Cancelled) before updating
+             -- Verify Status is 4 (Short) before updating
              IF EXISTS (SELECT 1 FROM PickDetail WITH(NOLOCK) 
-                        WHERE PickDetailKey = @PickDetailKey AND Status = '4')
+                        WHERE TaskDetailKey = @cTaskDetailKey AND @OrderKey = OrderKey AND Status = '4')
              BEGIN
                 BEGIN TRANSACTION
 
@@ -106,15 +106,15 @@ BEGIN
                     -- Read existing value from nCounter
                     SELECT @ExistingCount = keycount
                     FROM nCounter WITH (NOLOCK)
-                    WHERE KeyName = 'VIRTUALDROPID';
+                    WHERE KeyName = 'VIRTUALDROPID'
 
-                    -- Build QC-VIRTUALxxx from counter (mod 1000)
-                    SET @SeqNum = CAST(@ExistingCount % 1000 AS INT);
-                    SET @NewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@SeqNum AS NVARCHAR(10)), 3);
+                    -- Build QC-VIRTUALxxx from counter (1..999 cycling)
+                    SET @SeqNum = CAST(((@ExistingCount - 1) % 999) + 1 AS INT)
+                    SET @NewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@SeqNum AS NVARCHAR(10)), 3)
 
                      UPDATE PickDetail WITH (ROWLOCK)
                      SET DropID = @NewDropID 
-                     WHERE PickDetailKey = @PickDetailKey
+                     WHERE TaskDetailKey = @cTaskDetailKey AND @OrderKey = OrderKey AND Status = '4'
 
                      IF @@ERROR <> 0
                      BEGIN
@@ -179,40 +179,23 @@ BEGIN
                         -- Read existing value from nCounter
                         SELECT @ExistingCount = keycount
                         FROM nCounter WITH (NOLOCK)
-                        WHERE KeyName = 'VIRTUALDROPID';
+                        WHERE KeyName = 'VIRTUALDROPID'
 
-                        -- Build QC-VIRTUALxxx from counter (mod 1000)
-                        SET @SeqNum = CAST(@ExistingCount % 1000 AS INT);
-                        SET @NewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@SeqNum AS NVARCHAR(10)), 3);
+                        -- Build QC-VIRTUALxxx from counter (1..999 cycling)
+                        SET @SeqNum = CAST(((@ExistingCount - 1) % 999) + 1 AS INT)
+                        SET @NewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@SeqNum AS NVARCHAR(10)), 3)
 
-                        -- Update ALL PickDetails for this order using CURSOR
-                        DECLARE curPickDetails CURSOR LOCAL FAST_FORWARD FOR
-                            SELECT PickDetailKey
-                            FROM PickDetail WITH(NOLOCK)
-                            WHERE OrderKey = @OrderKey AND StorerKey = @cStorerKey AND Status = '4'
-
-                        OPEN curPickDetails
-                        FETCH NEXT FROM curPickDetails INTO @TargetPickDetailKey
-
-                        WHILE @@FETCH_STATUS = 0
-                        BEGIN
-                            UPDATE PickDetail WITH (ROWLOCK)
+                        -- Update ALL PickDetails for this order
+                        UPDATE PickDetail WITH (ROWLOCK)
                             SET DropID = @NewDropID
-                            WHERE PickDetailKey = @TargetPickDetailKey
-
-                            IF @@ERROR <> 0
+                            WHERE OrderKey = @OrderKey AND StorerKey = @cStorerKey AND Status = '4'
+                        
+                        IF @@ERROR <> 0
                             BEGIN
                                 ROLLBACK TRANSACTION
-                                CLOSE curPickDetails
-                                DEALLOCATE curPickDetails
                                 GOTO Quit
                             END
 
-                            FETCH NEXT FROM curPickDetails INTO @TargetPickDetailKey
-                        END
-
-                        CLOSE curPickDetails
-                        DEALLOCATE curPickDetails
                         COMMIT TRANSACTION
                     END
                     ELSE
