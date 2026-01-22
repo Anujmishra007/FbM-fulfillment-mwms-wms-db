@@ -159,11 +159,12 @@ BEGIN
 			      BEGIN
 
 	                 SELECT TOP 1 @c_LOC = RD.ToLoc
-		                  , @c_ID = RD.ToID
+		                   , @c_ID = RD.ToID
 				      	   , @c_LOT = RD.ToLOT
                        FROM RECEIPT R (NOLOCK)
                        JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
                        WHERE R.ReceiptKey = @c_Receiptkey
+					   AND RD.SKU = @c_SKU
                        AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') <> '' THEN @c_ReceiptLineNumber ELSE RD.ReceiptLineNumber END
                      ORDER BY DateReceived DESC
 
@@ -209,6 +210,34 @@ BEGIN
             END
             CLOSE CUR_Serial_REC
             DEALLOCATE CUR_Serial_REC
+
+            --remove ParentSerialNo from SerialNo table
+            DELETE FROM SerialNo
+			WHERE StorerKey = @c_StorerKey
+              AND SerialNo  = @c_ParentUCC
+
+            SELECT @n_err = @@ERROR    
+            IF @@Error <> 0  
+            BEGIN  
+               SET @n_continue = 3  
+               SET @n_Err =  68011   
+               SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5), @n_err) + ': Failed to Delete SerialNo (ispASNFZ26)'  
+               GOTO QUIT_SP  
+            END
+
+            --remove ParentSerialNo from SerialNo table
+            DELETE FROM ITRNSERIALNO
+			WHERE StorerKey = @c_StorerKey
+              AND SerialNo  = @c_ParentUCC
+
+            SELECT @n_err = @@ERROR    
+            IF @@Error <> 0  
+            BEGIN  
+               SET @n_continue = 3  
+               SET @n_Err =  68011   
+               SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5), @n_err) + ': Failed to Delete ITRNSERIALNO (ispASNFZ26)'  
+               GOTO QUIT_SP  
+            END
 
             FETCH NEXT FROM CUR_REC INTO @c_ReceiptLineNumber2, @c_ParentUCC, @n_QTYReceived
          END
