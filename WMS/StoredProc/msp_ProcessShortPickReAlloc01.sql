@@ -592,10 +592,10 @@ BEGIN
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
       SET @CUR_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT PD.OrderKey, PD.DropID, Qty = SUM(PD.Qty), PH.PickSlipNo
+      SELECT PD.OrderKey, PD.DropID, Qty = SUM(PD.Qty), PH.PickHeaderKey
       FROM #PickDetail_WIP PD
       JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
-      JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = T.OrderKey
+      LEFT JOIN PICKHEADER PH (NOLOCK) ON PH.OrderKey = T.OrderKey
       WHERE PD.[Status] NOT IN ('4', '9')
       AND PD.WaveKey = @c_Wavekey
       AND PD.UOM = '2'
@@ -603,7 +603,7 @@ BEGIN
       AND PD.SKU = @c_SKU
       AND (PD.CaseID IS NULL OR PD.CaseID = '')
       AND (PD.DropID IS NOT NULL AND PD.DropID <> '')
-      GROUP BY PD.OrderKey, PD.DropID, PH.PickSlipNo
+      GROUP BY PD.OrderKey, PD.DropID, PH.PickHeaderKey
       ORDER BY PD.DropID
 
       OPEN @CUR_UCC
@@ -618,155 +618,200 @@ BEGIN
          SET @c_LabelLine = N''
          SET @n_TotCartonWeight = 0.00
 
-         SELECT @c_Consigneekey = O.Consigneekey
-              , @c_OrderType = O.[Type]
-         FROM ORDERS O WITH (NOLOCK)
-         WHERE O.Orderkey = @c_Orderkey
-
-         IF EXISTS ( SELECT 1
-                      FROM CODELKUP CL WITH (NOLOCK)
-                      WHERE CL.ListName = 'GS1xLabel'
-                      AND CL.Code = @c_Consigneekey
-                    )
+         -- Generate Pickslip & Pickheader if not exists
+         IF ISNULL(@c_Pickslipno, '') = ''
          BEGIN
-            IF EXISTS ( SELECT 1
-                        FROM CODELKUP CL WITH (NOLOCK)
-                        WHERE CL.ListName = 'LVSSTO'
-                        AND CL.Storerkey = @c_Storerkey
-                        AND CL.Code = @c_Consigneekey
-                        AND CL.Short = @c_OrderType
-                      )
-            BEGIN
-               SET @c_LabelNo = @c_UCCNo
-            END
-         END
-         
-         SET @n_CartonNo = 0
-         SELECT @n_CartonNo = MAX(CartonNo)
-         FROM PACKDETAIL (NOLOCK)
-         WHERE Pickslipno = @c_Pickslipno
+            EXEC dbo.isp_CreatePickSlip
+                   @c_Orderkey = @c_Orderkey
+                  ,@c_PickslipType = ''      
+                  ,@c_ConsolidateByLoad  = 'N'
+                  ,@c_Refkeylookup       = 'N'    
+                  ,@c_LinkPickSlipToPick = 'Y'    
+                  ,@c_AutoScanIn         = 'N'    
+                  ,@b_Success            = @b_Success OUTPUT
+                  ,@n_Err                = @n_Err     OUTPUT
+                  ,@c_ErrMsg             = @c_ErrMsg  OUTPUT
+            
+            IF @b_Success <> 1
+               SET @n_Continue = 3
 
-         SET @n_CartonNo = ISNULL(@n_CartonNo, 0) + 1
-
-         IF ISNULL(@c_LabelNo, '') = ''
-         BEGIN
-            EXEC dbo.isp_GenUCCLabelNo_Std
-                  @cPickslipNo = @c_Pickslipno,
-                  @nCartonNo   = @n_CartonNo,
-                  @cLabelNo    = @c_LabelNo  OUTPUT,
-                  @b_success   = @b_Success  OUTPUT,
-                  @n_err       = @n_Err      OUTPUT,
-                  @c_errmsg    = @c_Errmsg   OUTPUT  
+            SELECT @c_Pickslipno = PH.PickHeaderKey
+            FROM PICKHEADER PH (NOLOCK)
+            WHERE PH.Orderkey = @c_Orderkey
          END
 
-         SELECT @c_LabelLine = RIGHT('00000' + CAST(CAST(ISNULL(MAX(PD.LabelLine), 0) AS INT) + 1 AS NVARCHAR(5)), 5)
-         FROM PACKDETAIL PD (NOLOCK)
-         WHERE PD.Pickslipno = @c_Pickslipno
-         AND PD.CartonNo = @n_CartonNo
-
-         -- Insert Packdetail
-         INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, DropId)
-         VALUES (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_StorerKey, @c_SKU, @n_PackQty, @c_UCCNo, '')
-
-         -- Delete existing Packinfo
-         DELETE FROM PACKINFO
-         WHERE Pickslipno = @c_PickslipNo
-         AND CartonNo = @n_CartonNo
-
-         SELECT @n_TotCartonWeight = @n_PackQty * ISNULL(SKU.STDNETWGT, 0)
-         FROM SKU (NOLOCK)
-         WHERE Storerkey = @c_StorerKey
-         AND SKU = @c_SKU
-         
-         -- Insert Packinfo
-         INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Qty, Weight, Cube, Length, Width, Height, RefNo)
-         SELECT @c_PickslipNo, @n_CartonNo, '9999', @n_PackQty
-              , CASE WHEN @c_DefaultPackInfoFlag = '1' THEN 0 ELSE @n_TotCartonWeight END
-              , 0, 0, 0, 0, @c_LabelNo
-         
-         --Update Labelno to Pickdetail.Caseid
-         SET @CUR_PICKDET_UPDATE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT PD.PickDetailKey, PD.Qty
-            FROM #PICKDETAIL_WIP PD (NOLOCK) 
-            WHERE PD.OrderKey = @c_Orderkey
-            AND PD.Storerkey = @c_Storerkey
-            AND PD.Sku = @c_Sku
-            AND (PD.CaseID IS NULL OR PD.CaseID = '')
-            AND PD.UOM = '2'
-            AND PD.[Status] NOT IN ('4', '9')
-            ORDER BY CASE WHEN PD.DropID = @c_UCCNo THEN 1 ELSE 2 END, PD.PickDetailKey
-         
-         OPEN @CUR_PICKDET_UPDATE
-         
-         FETCH NEXT FROM @CUR_PICKDET_UPDATE INTO @c_PickDetailKey, @n_PickdetQty
-         
-         WHILE @@FETCH_STATUS <> -1 AND @n_packqty > 0
+         IF @n_Continue IN (1, 2) AND ISNULL(@c_Pickslipno, '') <> ''
          BEGIN
-            IF @n_PickdetQty <= @n_packqty
+            -- Create packheader
+            IF NOT EXISTS (SELECT 1 FROM dbo.PackHeader (NOLOCK) WHERE Pickslipno = @c_Pickslipno)
             BEGIN
-               UPDATE #PICKDETAIL_WIP WITH (ROWLOCK)
-               SET CaseId = @c_labelno,
-                   UOMQty = CASE WHEN UOM = '6' THEN Qty ELSE UOMQty END
-               WHERE PickDetailKey = @c_PickDetailKey
-         
-              SELECT @n_packqty = @n_packqty - @n_PickdetQty
-            END
-            ELSE
-            BEGIN  -- pickqty > packqty
-               SELECT @n_splitqty = @n_PickdetQty - @n_packqty
-               
-               EXECUTE dbo.nspg_GetKey
-               'PICKDETAILKEY',
-               10,
-               @c_NewPickdetailkey OUTPUT,
-               @b_Success OUTPUT,
-               @n_Err OUTPUT,
-               @c_Errmsg OUTPUT
-               
-               IF NOT @b_Success = 1
+               INSERT INTO dbo.PackHeader (Route, OrderKey, OrderRefNo, Loadkey, Consigneekey, StorerKey, PickSlipNo )
+               SELECT TOP 1 O.Route, O.Orderkey, '', O.LoadKey, '',O.Storerkey, @c_PickSlipNo
+               FROM dbo.PICKHEADER PH (NOLOCK)
+               JOIN dbo.ORDERS O (NOLOCK) ON (PH.Orderkey = O.Orderkey)
+               WHERE PH.PickHeaderKey = @c_PickSlipNo
+
+               SET @n_Err = @@ERROR
+
+               IF @n_Err <> 0
                BEGIN
                   SELECT @n_continue = 3
+                  SELECT @c_Errmsg = CONVERT(NVARCHAR(250),@n_Err), @n_Err = 82018
+                  SELECT @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(10),@n_Err) + ': Error Insert Packheader Table (msp_ProcessShortPickReAlloc01)' 
+                                   + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_Errmsg) + ' ) '
                END
-         
-               INSERT #PICKDETAIL_WIP
-                      (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,
-                       Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,
-                       DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,
-                       ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,
-                       WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, Taskdetailkey, TaskManagerReasonkey, Notes, WIP_Refno, Channel_ID)
-               SELECT @c_newpickdetailkey, '', PD.PickHeaderKey, PD.OrderKey, PD.OrderLineNumber, PD.Lot,
-                      PD.Storerkey, PD.Sku, PD.AltSku, PD.UOM, 
-                      CASE WHEN PD.UOM = '6' THEN @n_splitqty 
-                           WHEN PD.UOM = '2' AND CaseCnt > 0 AND @n_splitqty % CAST(IIF(CaseCnt > 0, CaseCnt, 1) AS INT) = 0 THEN FLOOR(@n_splitqty / CaseCnt) 
-                      ELSE PD.UOMQty END , 
-                      @n_splitqty, PD.QtyMoved, PD.Status,
-                      PD.DropID, PD.Loc, PD.ID, PD.PackKey, PD.UpdateSource, PD.CartonGroup, PD.CartonType,
-                      PD.ToLoc, PD.DoReplenish, PD.ReplenishZone, PD.DoCartonize, PD.PickMethod,
-                      PD.WaveKey, PD.EffectiveDate, '9', PD.ShipFlag, PD.PickSlipNo, PD.TaskDetailKey, PD.TaskManagerReasonKey, PD.Notes, PD.WIP_Refno, PD.Channel_ID
-               FROM #PickDetail_WIP PD (NOLOCK)
-               JOIN dbo.SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
-               JOIN dbo.PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
-               WHERE PD.PickDetailKey = @c_PickDetailKey
-                  
-               UPDATE #PICKDETAIL_WIP 
-               SET CaseID = @c_labelno,
-                   Qty = @n_packqty,
-                   UOMQty = 
-                   CASE WHEN UOM = '6' THEN @n_packqty 
-                        WHEN UOM = '2' AND CaseCnt > 0 AND @n_packqty % CAST(IIF(CaseCnt > 0, CaseCnt, 1) AS INT) = 0 THEN FLOOR(@n_packqty / CaseCnt) 
-                   ELSE UOMQty END 
-                   --UOMQTY = CASE UOM WHEN '6' THEN @n_packqty ELSE UOMQty END
-               FROM #PICKDETAIL_WIP 
-               JOIN dbo.SKU (NOLOCK) ON #PICKDETAIL_WIP .Storerkey = SKU.Storerkey AND #PICKDETAIL_WIP .Sku = SKU.Sku
-               JOIN dbo.PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
-               WHERE PickDetailKey = @c_PickDetailKey
-         
-               SELECT @n_packqty = 0
             END
+            
+            SELECT @c_Consigneekey = O.Consigneekey
+                 , @c_OrderType = O.[Type]
+            FROM ORDERS O WITH (NOLOCK)
+            WHERE O.Orderkey = @c_Orderkey
+   
+            IF EXISTS ( SELECT 1
+                         FROM CODELKUP CL WITH (NOLOCK)
+                         WHERE CL.ListName = 'GS1xLabel'
+                         AND CL.Code = @c_Consigneekey
+                       )
+            BEGIN
+               IF EXISTS ( SELECT 1
+                           FROM CODELKUP CL WITH (NOLOCK)
+                           WHERE CL.ListName = 'LVSSTO'
+                           AND CL.Storerkey = @c_Storerkey
+                           AND CL.Code = @c_Consigneekey
+                           AND CL.Short = @c_OrderType
+                         )
+               BEGIN
+                  SET @c_LabelNo = @c_UCCNo
+               END
+            END
+            
+            SET @n_CartonNo = 0
+            SELECT @n_CartonNo = MAX(CartonNo)
+            FROM PACKDETAIL (NOLOCK)
+            WHERE Pickslipno = @c_Pickslipno
+   
+            SET @n_CartonNo = ISNULL(@n_CartonNo, 0) + 1
+   
+            IF ISNULL(@c_LabelNo, '') = ''
+            BEGIN
+               EXEC dbo.isp_GenUCCLabelNo_Std
+                     @cPickslipNo = @c_Pickslipno,
+                     @nCartonNo   = @n_CartonNo,
+                     @cLabelNo    = @c_LabelNo  OUTPUT,
+                     @b_success   = @b_Success  OUTPUT,
+                     @n_err       = @n_Err      OUTPUT,
+                     @c_errmsg    = @c_Errmsg   OUTPUT  
+            END
+   
+            SELECT @c_LabelLine = RIGHT('00000' + CAST(CAST(ISNULL(MAX(PD.LabelLine), 0) AS INT) + 1 AS NVARCHAR(5)), 5)
+            FROM PACKDETAIL PD (NOLOCK)
+            WHERE PD.Pickslipno = @c_Pickslipno
+            AND PD.CartonNo = @n_CartonNo
+   
+            -- Insert Packdetail
+            INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, DropId)
+            VALUES (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_StorerKey, @c_SKU, @n_PackQty, @c_UCCNo, '')
+   
+            -- Delete existing Packinfo
+            DELETE FROM PACKINFO
+            WHERE Pickslipno = @c_PickslipNo
+            AND CartonNo = @n_CartonNo
+   
+            SELECT @n_TotCartonWeight = @n_PackQty * ISNULL(SKU.STDNETWGT, 0)
+            FROM SKU (NOLOCK)
+            WHERE Storerkey = @c_StorerKey
+            AND SKU = @c_SKU
+            
+            -- Insert Packinfo
+            INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Qty, Weight, Cube, Length, Width, Height, RefNo)
+            SELECT @c_PickslipNo, @n_CartonNo, '9999', @n_PackQty
+                 , CASE WHEN @c_DefaultPackInfoFlag = '1' THEN 0 ELSE @n_TotCartonWeight END
+                 , 0, 0, 0, 0, @c_LabelNo
+            
+            --Update Labelno to Pickdetail.Caseid
+            SET @CUR_PICKDET_UPDATE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT PD.PickDetailKey, PD.Qty
+               FROM #PICKDETAIL_WIP PD (NOLOCK) 
+               WHERE PD.OrderKey = @c_Orderkey
+               AND PD.Storerkey = @c_Storerkey
+               AND PD.Sku = @c_Sku
+               AND (PD.CaseID IS NULL OR PD.CaseID = '')
+               AND PD.UOM = '2'
+               AND PD.[Status] NOT IN ('4', '9')
+               ORDER BY CASE WHEN PD.DropID = @c_UCCNo THEN 1 ELSE 2 END, PD.PickDetailKey
+            
+            OPEN @CUR_PICKDET_UPDATE
+            
             FETCH NEXT FROM @CUR_PICKDET_UPDATE INTO @c_PickDetailKey, @n_PickdetQty
+            
+            WHILE @@FETCH_STATUS <> -1 AND @n_packqty > 0
+            BEGIN
+               IF @n_PickdetQty <= @n_packqty
+               BEGIN
+                  UPDATE #PICKDETAIL_WIP WITH (ROWLOCK)
+                  SET CaseId = @c_labelno,
+                      UOMQty = CASE WHEN UOM = '6' THEN Qty ELSE UOMQty END
+                  WHERE PickDetailKey = @c_PickDetailKey
+            
+                 SELECT @n_packqty = @n_packqty - @n_PickdetQty
+               END
+               ELSE
+               BEGIN  -- pickqty > packqty
+                  SELECT @n_splitqty = @n_PickdetQty - @n_packqty
+                  
+                  EXECUTE dbo.nspg_GetKey
+                  'PICKDETAILKEY',
+                  10,
+                  @c_NewPickdetailkey OUTPUT,
+                  @b_Success OUTPUT,
+                  @n_Err OUTPUT,
+                  @c_Errmsg OUTPUT
+                  
+                  IF NOT @b_Success = 1
+                  BEGIN
+                     SELECT @n_continue = 3
+                  END
+            
+                  INSERT #PICKDETAIL_WIP
+                         (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,
+                          Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,
+                          DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,
+                          ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,
+                          WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, Taskdetailkey, TaskManagerReasonkey, Notes, WIP_Refno, Channel_ID)
+                  SELECT @c_newpickdetailkey, '', PD.PickHeaderKey, PD.OrderKey, PD.OrderLineNumber, PD.Lot,
+                         PD.Storerkey, PD.Sku, PD.AltSku, PD.UOM, 
+                         CASE WHEN PD.UOM = '6' THEN @n_splitqty 
+                              WHEN PD.UOM = '2' AND CaseCnt > 0 AND @n_splitqty % CAST(IIF(CaseCnt > 0, CaseCnt, 1) AS INT) = 0 THEN FLOOR(@n_splitqty / CaseCnt) 
+                         ELSE PD.UOMQty END , 
+                         @n_splitqty, PD.QtyMoved, PD.Status,
+                         PD.DropID, PD.Loc, PD.ID, PD.PackKey, PD.UpdateSource, PD.CartonGroup, PD.CartonType,
+                         PD.ToLoc, PD.DoReplenish, PD.ReplenishZone, PD.DoCartonize, PD.PickMethod,
+                         PD.WaveKey, PD.EffectiveDate, '9', PD.ShipFlag, PD.PickSlipNo, PD.TaskDetailKey, PD.TaskManagerReasonKey, PD.Notes, PD.WIP_Refno, PD.Channel_ID
+                  FROM #PickDetail_WIP PD (NOLOCK)
+                  JOIN dbo.SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
+                  JOIN dbo.PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+                  WHERE PD.PickDetailKey = @c_PickDetailKey
+                     
+                  UPDATE #PICKDETAIL_WIP 
+                  SET CaseID = @c_labelno,
+                      Qty = @n_packqty,
+                      UOMQty = 
+                      CASE WHEN UOM = '6' THEN @n_packqty 
+                           WHEN UOM = '2' AND CaseCnt > 0 AND @n_packqty % CAST(IIF(CaseCnt > 0, CaseCnt, 1) AS INT) = 0 THEN FLOOR(@n_packqty / CaseCnt) 
+                      ELSE UOMQty END 
+                      --UOMQTY = CASE UOM WHEN '6' THEN @n_packqty ELSE UOMQty END
+                  FROM #PICKDETAIL_WIP 
+                  JOIN dbo.SKU (NOLOCK) ON #PICKDETAIL_WIP .Storerkey = SKU.Storerkey AND #PICKDETAIL_WIP .Sku = SKU.Sku
+                  JOIN dbo.PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+                  WHERE PickDetailKey = @c_PickDetailKey
+            
+                  SELECT @n_packqty = 0
+               END
+               FETCH NEXT FROM @CUR_PICKDET_UPDATE INTO @c_PickDetailKey, @n_PickdetQty
+            END
+            CLOSE @CUR_PICKDET_UPDATE
+            DEALLOCATE @CUR_PICKDET_UPDATE
          END
-         CLOSE @CUR_PICKDET_UPDATE
-         DEALLOCATE @CUR_PICKDET_UPDATE
 
          FETCH NEXT FROM @CUR_UCC INTO @c_Orderkey, @c_UCCNo, @n_PackQty, @c_Pickslipno
       END
