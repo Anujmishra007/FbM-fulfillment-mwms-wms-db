@@ -167,21 +167,21 @@ BEGIN
 		 pd.SKU		  
       ORDER BY FORMAT(MIN(pd.EditDate),'dd-MM-yyyy hh:mm tt');  
 			  
-			-- Get Satge Outbounds
-			  SELECT @To_loc = STRING_AGG(Short, ', ') WITHIN GROUP (ORDER BY Short) 
-			  FROM (		
-			SELECT DISTINCT ck.Short 
-			  FROM dbo.pickdetail pd WITH (NOLOCK)
-			 INNER JOIN dbo.orders orm WITH (NOLOCK)
-				ON pd.OrderKey = orm.OrderKey
+      -- Get Satge Outbounds
+	  SELECT @To_loc = STRING_AGG(Short, ', ') WITHIN GROUP (ORDER BY Short) 
+	  FROM (		
+	     SELECT DISTINCT ck.Short 
+	     FROM dbo.pickdetail pd WITH (NOLOCK)
+		    INNER JOIN dbo.orders orm WITH (NOLOCK)
+			   ON pd.OrderKey = orm.OrderKey
 			   AND pd.Storerkey = orm.StorerKey
-			 INNER JOIN codelkup ck WITH (NOLOCK) 
-				ON orm.storerkey = ck.storerkey
+			INNER JOIN codelkup ck WITH (NOLOCK) 
+			   ON orm.storerkey = ck.storerkey
 			   AND orm.c_company = ck.long	   
-			 WHERE ck.listname LIKE 'jcb%ml'
+			WHERE ck.listname LIKE 'jcb%ml'
 			   AND (pd.dropID = @c_DropID or pd.ID = @c_DropID)
 			   AND pd.Storerkey = @c_StorerKey		
-			 ) x;
+      ) x;
    END			
 						 
    -- Output table declaration: BarTender expects many generic columns
