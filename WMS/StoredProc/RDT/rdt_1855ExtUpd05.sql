@@ -88,7 +88,7 @@ BEGIN
                     BEGIN
                         -- Verify Status is 4 (Short) before updating
                         IF EXISTS (SELECT 1 FROM dbo.PickDetail WITH(NOLOCK) 
-                                    WHERE TaskDetailKey = @cTaskDetailKey AND @cOrderKey = OrderKey AND Status = '4')
+                                    WHERE TaskDetailKey = @cTaskDetailKey AND OrderKey = @cOrderKey AND StorerKey = @cStorerKey AND Status = '4')
                         BEGIN
                             SET @nTranCount = @@TRANCOUNT
                             BEGIN TRAN  -- Begin our own transaction
@@ -116,7 +116,7 @@ BEGIN
                                 BEGIN TRY
                                     UPDATE dbo.PickDetail WITH (ROWLOCK)
                                     SET DropID = @cNewDropID 
-                                    WHERE TaskDetailKey = @cTaskDetailKey AND @cOrderKey = OrderKey AND Status = '4'
+                                    WHERE TaskDetailKey = @cTaskDetailKey AND  OrderKey = @cOrderKey AND StorerKey = @cStorerKey AND Status = '4'
                                 END TRY
                                 BEGIN CATCH
                                     GOTO RollBackTran
