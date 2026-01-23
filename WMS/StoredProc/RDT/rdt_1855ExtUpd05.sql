@@ -124,8 +124,7 @@ BEGIN
 
                                 IF @@ERROR <> 0
                                 BEGIN
-                                    ROLLBACK TRANSACTION
-                                    GOTO Quit
+                                    GOTO RollBackTran
                                 END
 
                                 COMMIT TRAN rdt_1855ExtUpd05
