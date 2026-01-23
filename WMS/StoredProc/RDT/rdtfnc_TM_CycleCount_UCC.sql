@@ -25,6 +25,7 @@ GO
 /* 2025-07-18 1.10.0 NickT    UWP-37598 Update TaskDetail.EndTime when CC done*/
 /* 2025-08-12 0.0.0  Jackc    !!!Cutover. Use V0 repo for work!!!             */
 /* 2025-08-29 1.11.0 NickT    UWP-40373 Add ExtendedValidateSP                */
+/* 2026-01-15 1.12.0 James    FCR-7347 Add ExtScn in Step 2 (james06)         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_UCC] (
@@ -479,6 +480,11 @@ BEGIN
       SET @cSKUDescr = ''
       SET @cStorerKey = ''
       
+      DECLARE @nLoseID  INT = 1
+
+      IF EXISTS( SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cLoc AND Facility = @cFacility AND LoseId = 0)
+         SET @nLoseID = 0
+
       SELECT   
                @cStorerKey = UCC.StorerKey
              , @cSKU = UCC.SKU
@@ -502,7 +508,7 @@ BEGIN
                                                   ) 
       WHERE CC.CCKey = @cCCKey
       AND UCC.Loc    = @cLoc
-      AND UCC.ID     = @cID
+      AND UCC.ID     = CASE WHEN @nLoseID = 0 THEN UCC.ID ELSE @cID END
       AND UCC.UCCNo  = @cUCC
       AND CC.Status < '9'
       
@@ -533,10 +539,10 @@ BEGIN
       
       IF @cPickMethod = 'SKU' 
       BEGIN
-         IF @cSuggSKU <> @cSKU
+         IF ISNULL( @cSuggSKU, '') <> '' AND  @cSuggSKU <> @cSKU
          BEGIN
                SET @nErrNo = 74471
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid SKU'
+               SET @cErrMsg = @cSuggSKU + '|' + @cSKU--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid SKU'
                GOTO Step_1_Fail
          END
       END
@@ -1127,17 +1133,61 @@ BEGIN
    	   SET @nStep = @nStep - 1  
       END
 	END  -- Inputkey = 1
-
-
-	GOTO Quit
+	GOTO Step_2_ExtScn
 
    STEP_2_FAIL:
    BEGIN
       SET @cOutField01 = ''
-      
    END
    
-
+   Step_2_ExtScn:
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtScnSP = '0'
+   BEGIN
+      SET @cExtScnSP = ''
+   END
+   
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtScnSP,
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+      END
+   END
+   GOTO QUIT
 END 
 GOTO QUIT
 
