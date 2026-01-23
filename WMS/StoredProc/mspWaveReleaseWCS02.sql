@@ -24,7 +24,7 @@ GO
 /*                           click the Release to WCS button only        */  
 /* 2026-01-22   JihHaur 1.1  Change OrderType (JH01)                     */  
 /*************************************************************************/     
-CREATE   PROCEDURE [dbo].[mspWaveReleaseWCS02]  
+CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]  
   @c_Wavekey      NVARCHAR(10)    
  ,@b_Success      int        OUTPUT    
  ,@n_Err          int        OUTPUT    
@@ -481,5 +481,6 @@ END --sp end
 GO
 GRANT EXECUTE ON [dbo].[mspWaveReleaseWCS02] TO [NSQL]
 GO
+
 
 
