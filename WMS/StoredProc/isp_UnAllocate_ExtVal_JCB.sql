@@ -1,6 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /*****************************************************************************/
@@ -21,7 +21,11 @@ CREATE OR ALTER PROC [dbo].[isp_UnAllocate_ExtVal_JCB]
           @c_ErrMsg        NVARCHAR(250) OUTPUT
 AS
 BEGIN
-
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+          
    DECLARE @cTaskDetailKey AS NVARCHAR(20)
 
    SET @b_Success = 1
@@ -47,6 +51,7 @@ BEGIN
         AND PD2.OrderKey = @c_Orderkey
         AND PD.StorerKey = 'JCB'
         AND O.Type = '2'
+		AND PD.DropID <> ''
    )
    BEGIN
       SET @b_Success = 0
