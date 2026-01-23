@@ -333,8 +333,7 @@ BEGIN
       --,  Lottable01        NVARCHAR(18)   NULL   
       ,  TaskDetailKey     NVARCHAR(10)   NULL                          
       ,  OrderGroup        NVARCHAR(20)   NULL
-      ,  Priority          NVARCHAR(10)   NULL
-      ,  Priority          NVARCHAR(10)   NULL
+      ,  Priority          NVARCHAR(10)   NULL     
       )      
       
       ------------------------------------------------------------------------------------  
@@ -2128,3 +2127,4 @@ BEGIN
 END 
 
 GO
+
