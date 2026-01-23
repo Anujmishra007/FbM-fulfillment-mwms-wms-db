@@ -40,176 +40,219 @@ BEGIN
     SET ANSI_NULLS OFF      
     SET CONCAT_NULL_YIELDS_NULL OFF    
 
-    DECLARE @OrderKey NVARCHAR(20)
-    DECLARE @DocType NVARCHAR(20)
-    DECLARE @EcomSingleFlag NVARCHAR(1)
-    DECLARE @NewDropID NVARCHAR(30)
+    DECLARE @cOrderKey NVARCHAR(20)
+    DECLARE @cDocType NVARCHAR(20)
+    DECLARE @cEcomSingleFlag NVARCHAR(1)
+    DECLARE @cNewDropID NVARCHAR(30)
     DECLARE @bSuccess INT
-    DECLARE @PickDetailKey NVARCHAR(10) 
-    DECLARE @TargetPickDetailKey NVARCHAR(10) -- For cursor
+    DECLARE @cPickDetailKey NVARCHAR(10) 
+    DECLARE @cTargetPickDetailKey NVARCHAR(10) -- For cursor
     DECLARE @nTotalLines INT
     DECLARE @nShortLines INT
-    DECLARE @ExistingCount INT
-    DECLARE @SeqNum INT
+    DECLARE @nExistingCount INT
+    DECLARE @nSeqNum INT
+    DECLARE @nTranCount INT
 
     SET @nErrNo = 0
     SET @cErrMsg = ''
 
     -- Cluster Pick (1855) at Short Pick Confirmation (Step 6)
-    IF @nFunc <> 1855 OR @nStep <> 6
+    IF @nFunc = 1855 
     BEGIN
-        GOTO Quit 
-    END
-
-    -- Only proceed if Short Pick Option is selected (Option '1')
-    IF @cOption <> '1'
-    BEGIN
-        GOTO Quit
-    END
-
-    -- Retrieve context
-    SELECT @PickDetailKey = PickDetailKey
-    FROM TaskDetail WITH(NOLOCK)
-    WHERE TaskDetailKey = @cTaskDetailKey
-
-    SELECT @OrderKey = OrderKey
-    FROM PickDetail WITH(NOLOCK)
-    WHERE PickDetailKey = @PickDetailKey
-
-    -- Retrieve Order info
-    SELECT @DocType = DocType, @EcomSingleFlag = ECOM_SINGLE_Flag
-    FROM Orders WITH(NOLOCK)
-    WHERE OrderKey = @OrderKey AND StorerKey = @cStorerKey
-
-    -- Logic only applies to DocType 'E' (B2C)
-    IF @DocType = 'E'
-    BEGIN
-        -- CASE 1: B2C Single (S)
-        IF @EcomSingleFlag = 'S'
-        BEGIN
-             -- Verify Status is 4 (Short) before updating
-             IF EXISTS (SELECT 1 FROM PickDetail WITH(NOLOCK) 
-                        WHERE TaskDetailKey = @cTaskDetailKey AND @OrderKey = OrderKey AND Status = '4')
-             BEGIN
-                BEGIN TRANSACTION
-
-                 EXEC dbo.nspg_GetKey
-                      @KeyName       = 'VIRTUALDROPID',
-                      @fieldlength   = 30,
-                      @keystring     = @NewDropID OUTPUT,
-                      @b_Success     = @bSuccess OUTPUT,
-                      @n_err         = @nErrNo OUTPUT,
-                      @c_errmsg      = @cErrMsg OUTPUT
-
-                 IF @bSuccess = 1
-                 BEGIN
-                    -- Read existing value from nCounter
-                    SELECT @ExistingCount = keycount
-                    FROM nCounter WITH (NOLOCK)
-                    WHERE KeyName = 'VIRTUALDROPID'
-
-                    -- Build QC-VIRTUALxxx from counter (1..999 cycling)
-                    SET @SeqNum = CAST(((@ExistingCount - 1) % 999) + 1 AS INT)
-                    SET @NewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@SeqNum AS NVARCHAR(10)), 3)
-
-                     UPDATE PickDetail WITH (ROWLOCK)
-                     SET DropID = @NewDropID 
-                     WHERE TaskDetailKey = @cTaskDetailKey AND @OrderKey = OrderKey AND Status = '4'
-
-                     IF @@ERROR <> 0
-                     BEGIN
-                         ROLLBACK TRANSACTION
-                         GOTO Quit
-                     END
-
-                     COMMIT TRANSACTION
-                 END
-                 ELSE
-                 BEGIN
-                     ROLLBACK TRANSACTION
-                     GOTO Quit
-                 END
-            END
-        END -- IF 
         
-        -- CASE 2: B2C Multi (M)
-        ELSE IF @EcomSingleFlag = 'M'
+        IF @nStep = 6
         BEGIN
-
-            -- count total lines
-            SELECT @nTotalLines = COUNT(1)
-            FROM PickDetail WITH(NOLOCK)
-            WHERE OrderKey = @OrderKey 
-            AND StorerKey = @cStorerKey
-
-            -- count shorted lines
-            SELECT @nShortLines = COUNT(1)
-            FROM PickDetail WITH(NOLOCK) 
-            WHERE OrderKey = @OrderKey 
-            AND StorerKey = @cStorerKey 
-            AND Status = '4'
-
-            -- check if ANY other PD is Status '5' (Picked), '0' (Open), or '3' (In Process)
-            IF NOT EXISTS (
-                SELECT 1 
-                FROM PickDetail WITH(NOLOCK)
-                WHERE OrderKey = @OrderKey 
-                AND StorerKey = @cStorerKey
-                AND Status IN ('5', '0', '3')
-            )
-
+            -- Only proceed if Short Pick Option is selected (Option '1')
+            IF @cOption = '1'
             BEGIN
-                -- Ensure ALL items are Status '4'
-                -- If there is any item that is NOT '4' (and we already know it's not 5,0,3), we do not proceed.
-                IF @nTotalLines > 0 AND @nTotalLines = @nShortLines
+
+                -- Retrieve context
+                SELECT @cPickDetailKey = PickDetailKey
+                FROM dbo.TaskDetail WITH(NOLOCK)
+                WHERE TaskDetailKey = @cTaskDetailKey
+
+                SELECT @cOrderKey = OrderKey
+                FROM dbo.PickDetail WITH(NOLOCK)
+                WHERE PickDetailKey = @cPickDetailKey
+
+                -- Retrieve Order info
+                SELECT @cDocType = DocType, @cEcomSingleFlag = ECOM_SINGLE_Flag
+                FROM dbo.Orders WITH(NOLOCK)
+                WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
+
+                -- Logic only applies to DocType 'E' (B2C)
+                IF @cDocType = 'E'
                 BEGIN
-                    BEGIN TRANSACTION
-
-                    -- Condition met: All items are shorted. Generate ONE key for the whole order.
-                    EXEC dbo.nspg_GetKey
-                        @KeyName       = 'VIRTUALDROPID',
-                        @fieldlength   = 30,
-                        @keystring     = @NewDropID OUTPUT,
-                        @b_Success     = @bSuccess OUTPUT,
-                        @n_err         = @nErrNo OUTPUT,
-                        @c_errmsg      = @cErrMsg OUTPUT
-
-                    IF @bSuccess = 1
+                    -- CASE 1: B2C Single (S)
+                    IF @cEcomSingleFlag = 'S'
                     BEGIN
-                        -- Read existing value from nCounter
-                        SELECT @ExistingCount = keycount
-                        FROM nCounter WITH (NOLOCK)
-                        WHERE KeyName = 'VIRTUALDROPID'
+                        -- Verify Status is 4 (Short) before updating
+                        IF EXISTS (SELECT 1 FROM dbo.PickDetail WITH(NOLOCK) 
+                                    WHERE TaskDetailKey = @cTaskDetailKey AND @cOrderKey = OrderKey AND Status = '4')
+                        BEGIN
+                            SET @nTranCount = @@TRANCOUNT
+                            BEGIN TRAN  -- Begin our own transaction
+                            SAVE TRAN rdt_1855ExtUpd05
 
-                        -- Build QC-VIRTUALxxx from counter (1..999 cycling)
-                        SET @SeqNum = CAST(((@ExistingCount - 1) % 999) + 1 AS INT)
-                        SET @NewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@SeqNum AS NVARCHAR(10)), 3)
+                            EXEC dbo.nspg_GetKey
+                                @KeyName       = 'VIRTUALDROPID',
+                                @fieldlength   = 30,
+                                @keystring     = @cNewDropID OUTPUT,
+                                @b_Success     = @bSuccess OUTPUT,
+                                @n_err         = @nErrNo OUTPUT,
+                                @c_errmsg      = @cErrMsg OUTPUT
 
-                        -- Update ALL PickDetails for this order
-                        UPDATE PickDetail WITH (ROWLOCK)
-                            SET DropID = @NewDropID
-                            WHERE OrderKey = @OrderKey AND StorerKey = @cStorerKey AND Status = '4'
-                        
-                        IF @@ERROR <> 0
+                            IF @bSuccess = 1
                             BEGIN
-                                ROLLBACK TRANSACTION
-                                GOTO Quit
-                            END
+                                -- Read existing value from nCounter
+                                SELECT @nExistingCount = keycount
+                                FROM dbo.nCounter WITH (NOLOCK)
+                                WHERE KeyName = 'VIRTUALDROPID'
 
-                        COMMIT TRANSACTION
-                    END
-                    ELSE
+                                -- Build QC-VIRTUALxxx from counter (1..999 cycling)
+                                SET @nSeqNum = CAST(((@nExistingCount - 1) % 999) + 1 AS INT)
+                                SET @cNewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@nSeqNum AS NVARCHAR(10)), 3)
+
+                                BEGIN TRY
+                                    UPDATE dbo.PickDetail WITH (ROWLOCK)
+                                    SET DropID = @cNewDropID 
+                                    WHERE TaskDetailKey = @cTaskDetailKey AND @cOrderKey = OrderKey AND Status = '4'
+                                END TRY
+                                BEGIN CATCH
+                                    GOTO RollBackTran
+                                END CATCH
+
+                                IF @@ERROR <> 0
+                                BEGIN
+                                    ROLLBACK TRANSACTION
+                                    GOTO Quit
+                                END
+
+                                COMMIT TRAN rdt_1855ExtUpd05
+
+                                GOTO Commit_Tran
+                            END
+                            ELSE
+                            BEGIN
+                                GOTO RollBackTran
+                            END
+                        END
+                    END -- IF 
+                    
+                    -- CASE 2: B2C Multi (M)
+                    ELSE IF @cEcomSingleFlag = 'M'
                     BEGIN
-                        ROLLBACK TRANSACTION
-                        GOTO Quit
-                    END
-                END
-             END
-        END -- ELSE IF
-    END -- IF @CDoctype = 'E'
+
+                        -- count total lines
+                        SELECT @nTotalLines = COUNT(1)
+                        FROM dbo.PickDetail WITH(NOLOCK)
+                        WHERE OrderKey = @cOrderKey 
+                        AND StorerKey = @cStorerKey
+
+                        -- count shorted lines
+                        SELECT @nShortLines = COUNT(1)
+                        FROM dbo.PickDetail WITH(NOLOCK) 
+                        WHERE OrderKey = @cOrderKey 
+                        AND StorerKey = @cStorerKey 
+                        AND Status = '4'
+
+                        -- check if ANY other PD is Status '5' (Picked), '0' (Open), or '3' (In Process)
+                        IF NOT EXISTS (
+                            SELECT 1 
+                            FROM dbo.PickDetail WITH(NOLOCK)
+                            WHERE OrderKey = @cOrderKey 
+                            AND StorerKey = @cStorerKey
+                            AND Status IN ('5', '0', '3')
+                        )
+
+                        BEGIN
+                            -- Ensure ALL items are Status '4'
+                            -- If there is any item that is NOT '4' (and we already know it's not 5,0,3), we do not proceed.
+                            IF @nTotalLines > 0 AND @nTotalLines = @nShortLines
+                            BEGIN
+                                SET @nTranCount = @@TRANCOUNT
+                                BEGIN TRAN  -- Begin our own transaction
+                                SAVE TRAN rdt_1855ExtUpd05
+
+                                -- Condition met: All items are shorted. Generate ONE key for the whole order.
+                                EXEC dbo.nspg_GetKey
+                                    @KeyName       = 'VIRTUALDROPID',
+                                    @fieldlength   = 30,
+                                    @keystring     = @cNewDropID OUTPUT,
+                                    @b_Success     = @bSuccess OUTPUT,
+                                    @n_err         = @nErrNo OUTPUT,
+                                    @c_errmsg      = @cErrMsg OUTPUT
+
+                                IF @bSuccess = 1
+                                BEGIN
+                                    -- Read existing value from nCounter
+                                    SELECT @nExistingCount = keycount
+                                    FROM dbo.nCounter WITH (NOLOCK)
+                                    WHERE KeyName = 'VIRTUALDROPID'
+
+                                    -- Build QC-VIRTUALxxx from counter (1..999 cycling)
+                                    SET @nSeqNum = CAST(((@nExistingCount - 1) % 999) + 1 AS INT)
+                                    SET @cNewDropID = 'QC-VIRTUAL' + RIGHT('000' + CAST(@nSeqNum AS NVARCHAR(10)), 3)
+
+                                    -- Update ALL PickDetails for this order using CURSOR
+                                    DECLARE curPickDetails CURSOR LOCAL FAST_FORWARD FOR
+                                        SELECT PickDetailKey
+                                        FROM dbo.PickDetail WITH(NOLOCK)
+                                        WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey AND Status = '4'
+
+                                    OPEN curPickDetails
+                                    FETCH NEXT FROM curPickDetails INTO @cTargetPickDetailKey
+
+                                    WHILE @@FETCH_STATUS = 0
+                                    BEGIN
+                                        BEGIN TRY
+                                            UPDATE dbo.PickDetail WITH (ROWLOCK)
+                                            SET DropID = @cNewDropID
+                                            WHERE PickDetailKey = @cTargetPickDetailKey
+                                        END TRY
+                                        BEGIN CATCH
+                                            CLOSE curPickDetails
+                                            DEALLOCATE curPickDetails
+                                            GOTO RollBackTran
+                                        END CATCH
+
+                                        FETCH NEXT FROM curPickDetails INTO @cTargetPickDetailKey
+                                    END
+
+                                    CLOSE curPickDetails
+                                    DEALLOCATE curPickDetails
+
+                                    COMMIT TRAN rdt_1855ExtUpd05
+
+                                    GOTO Commit_Tran
+
+                                END
+                                ELSE
+                                BEGIN
+                                    GOTO RollBackTran
+                                END
+                            END
+                        END
+                    END -- ELSE IF
+                END -- IF @CDoctype = 'E'
+                RollBackTran:
+                    ROLLBACK TRAN rdt_1855ExtUpd05 -- Only rollback change made here    
+                Commit_Tran:
+                    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started    
+                        COMMIT TRAN
+                GOTO Quit 
+            END -- IF @cOption = '1'
+        END -- IF @nStep = 6
+    END -- IF @nFunc = 1855
     Quit:
 
 END
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
 GRANT EXECUTE ON [RDT].[rdt_1855ExtUpd05] TO [NSQL]
 GO
