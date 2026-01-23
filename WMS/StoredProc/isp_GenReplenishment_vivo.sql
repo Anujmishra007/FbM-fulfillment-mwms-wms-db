@@ -374,14 +374,22 @@ BEGIN
          IF @c_ReplenFlag = 'W' OR @c_ReplenFlag = 'WHC' -- Wave Replen for Healthcare TH
          BEGIN
 			     --SET @n_ReplenQty = @n_QtyLocationLimit - @n_QtyLocationMinimum -  @n_Qty - @n_QtyPicked - @n_QtyAllocated
-			     IF @n_Qty - (@n_QtyPicked + @n_QtyAllocated) < 0
+			    /* IF @n_Qty - (@n_QtyPicked + @n_QtyAllocated) < 0
 			     BEGIN
 			        SET @n_ReplenQty = @n_QtyLocationLimit + ( (@n_Qty - (@n_QtyPicked + @n_QtyAllocated)) * -1 )
 			     END
 			     ELSE
 			      BEGIN
 			        SET @n_ReplenQty = @n_QtyLocationLimit - ( (@n_Qty - (@n_QtyPicked + @n_QtyAllocated)) )
-			      END
+			      END */
+               IF @n_Qty - (@n_QtyPicked ) < 0
+			     BEGIN
+			        SET @n_ReplenQty = @n_QtyLocationLimit + ( (@n_Qty - (@n_QtyPicked )) * -1 )
+			     END
+			     ELSE
+			      BEGIN
+			        SET @n_ReplenQty = @n_QtyLocationLimit - ( (@n_Qty - (@n_QtyPicked )) )
+			      END 
 
 			     IF @n_ReplenQty < 0
 			     BEGIN
