@@ -45,6 +45,7 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_RCM_WV_Col_DynamicReplen]
       @b_Success INT          OUTPUT, 
       @n_err     INT          OUTPUT, 
       @c_errmsg  NVARCHAR(250) OUTPUT, 
+	  @c_Code    NVARCHAR(10), 
       @b_debug   INT = 0
 AS 
 BEGIN 
@@ -2125,4 +2126,5 @@ BEGIN
          RETURN    
       END
 END 
+
 GO
