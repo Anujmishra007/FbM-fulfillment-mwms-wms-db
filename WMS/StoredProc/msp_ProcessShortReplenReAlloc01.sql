@@ -171,7 +171,7 @@ BEGIN
       FROM TASKDETAIL TD (NOLOCK)
       WHERE TD.Storerkey = @c_StorerKey
       AND TD.Sku = @c_SKU
-      AND TD.TaskType = 'FCP'
+      AND TD.TaskType IN ('ASTCPK','FCP')
       AND TD.FromLoc = @c_FinalLoc
       AND TD.FromID = @c_FinalID
       AND TD.[Status] IN ('0', 'H')
