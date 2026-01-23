@@ -235,6 +235,9 @@ BEGIN
                         END
                     END -- ELSE IF
                 END -- IF @CDoctype = 'E'
+
+                GOTO Commit_Tran
+                
                 RollBackTran:
                     ROLLBACK TRAN rdt_1855ExtUpd05 -- Only rollback change made here    
                 Commit_Tran:
