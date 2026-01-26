@@ -152,7 +152,8 @@ BEGIN
                      JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey  
                      LEFT JOIN TASKDETAIL TD (NOLOCK) ON  PD.Taskdetailkey = TD.Taskdetailkey 
                                                       AND TD.Sourcetype = @c_SourceType 
-                                                      AND TD.Tasktype IN ('FPK','FCP','FPP')  
+                                                      AND TD.Tasktype IN ('FPK','FCP','FPP') 
+                                                      AND TD.[Status] <> 'X'                                                       
                      WHERE WD.Wavekey = @c_Wavekey                     
                      AND PD.Status = '0'  
                      AND TD.Taskdetailkey IS NULL  
@@ -394,16 +395,6 @@ BEGIN
          AND   LOC.LocationFlag NOT IN ('DAMAGE','HOLD')
          AND   LOC.LocationType = 'BULK'                    
          AND   LOC.Facility = @c_Facility
-         --AND   LOC.LocLevel > 0
-         AND   EXISTS ( SELECT 1
-                        FROM UCC (NOLOCK) 
-                        WHERE UCC.Lot = lli.Lot
-                        AND UCC.Loc = lli.Loc
-                        AND UCC.ID  = lli.ID
-                        AND UCC.[Status] = '1'
-                        AND UCC.Qty > 0
-                        AND UCC.Qty <= lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen
-                      )
          ORDER BY LOC.LogicalLocation
                 , lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen DESC 
 
@@ -435,6 +426,11 @@ BEGIN
 
                IF @@ROWCOUNT = 0
                BEGIN
+                  SET @n_Continue = 3    
+                  SET @n_err   = 83030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                               +': No available UCC for Replenishment. Sku: ' + @c_Sku
+                               + '. (mspRLWAV09)' 
                   BREAK
                END
 
@@ -732,7 +728,7 @@ BEGIN
          IF ISNULL(@c_Toloc,'') = ''  
          BEGIN           
             SET @n_Continue = 3    
-            SET @n_err = 83030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @n_err = 83040  -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid To Loc setup. (mspRLWAV09)' 
          END    
 

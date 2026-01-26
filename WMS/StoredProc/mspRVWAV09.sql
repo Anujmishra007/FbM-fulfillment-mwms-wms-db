@@ -47,6 +47,8 @@ BEGIN
          , @c_Status          NVARCHAR(10)   = '' 
          , @c_SourceType      NVARCHAR(30)   = 'mspRLWAV09'
          , @c_PickDetailKey   NVARCHAR(10)   = ''
+         , @c_UCCNo           NVARCHAR(20)   = ''                                   --2026-01-26
+         , @n_UCC_RowRef      INT            = 0                                    --2026-01-26
 
          , @c_authority       NVARCHAR(10)   = '' 
 
@@ -74,6 +76,7 @@ BEGIN
    ,  [TaskStatus]      NVARCHAR(10)   NOT NULL DEFAULT('')
    ,  [Storerkey]       NVARCHAR(20)   NOT NULL DEFAULT('')
    ,  [Sku]             NVARCHAR(20)   NOT NULL DEFAULT('')
+   ,  [UCCNo]           NVARCHAR(20)   NOT NULL DEFAULT('')
    ,  [RefTaskKey]      NVARCHAR(10)   NOT NULL DEFAULT('')
    ,  [FinalLoc]        NVARCHAR(10)   NOT NULL DEFAULT('')
    ,  [FinalID]         NVARCHAR(10)   NOT NULL DEFAULT('')
@@ -90,7 +93,7 @@ BEGIN
    IF @n_Continue = 1  
    BEGIN
       INSERT INTO #TMP_TASK( TaskDetailKey, TaskType, TaskStatus, Storerkey, Sku 
-                            ,RefTaskKey, FinalLoc, FinalID, [Reverse] 
+                            ,UCCNo, RefTaskKey, FinalLoc, FinalID, [Reverse] 
                            )
       SELECT TD.TaskDetailKey
             ,TaskType
@@ -99,6 +102,7 @@ BEGIN
                               END
             ,TD.Storerkey
             ,TD.Sku
+            ,TD.CaseID
             ,TD.RefTaskKey
             ,TD.FinalLoc
             ,TD.FinalID             
@@ -172,13 +176,14 @@ BEGIN
       SET @CUR_DELTASK = CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT tt.TaskDetailKey
             ,tt.TaskType
+            ,tt.UCCNo
       FROM #TMP_TASK tt
       WHERE tt.[Reverse] = 1
       ORDER BY CASE WHEN tt.TaskType = 'RPF' THEN 1 ELSE 0 END
-
+ 
       OPEN @CUR_DELTASK
 
-      FETCH NEXT FROM @CUR_DELTASK INTO @c_TaskDetailKey, @c_TaskType
+      FETCH NEXT FROM @CUR_DELTASK INTO @c_TaskDetailKey, @c_TaskType, @c_UCCNo
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
       BEGIN
@@ -213,6 +218,31 @@ BEGIN
                SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Delete Taskdetail Table Failed. (mspRVWAV09)' 
             END 
 
+            IF @n_Continue = 1 AND @c_TaskType = 'RPF' AND @c_UCCNo > ''            --2026-01-26
+            BEGIN
+               SET @n_UCC_RowRef = 0
+               SELECT TOP 1
+                     @n_UCC_RowRef = UCC.UCC_RowRef
+               FROM UCC (NOLOCK)
+               WHERE UCC.Storerkey = @c_Storerkey
+               AND UCC.UCCNo = @c_UCCNo
+               AND UCC.[Status] = '3'
+
+               IF @n_UCC_RowRef > 0
+               BEGIN
+                  UPDATE UCC WITH (ROWLOCK)
+                     SET [Status] = '1'
+                  WHERE UCC.UCC_RowRef = @n_UCC_RowRef
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @n_Continue = 3
+                     SET @n_Err = 81050   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Update UCC Table Failed. (mspRVWAV09)'     
+                  END
+               END
+            END
+
             IF @n_Continue = 1 AND @c_TaskType = 'FCP'
             BEGIN
                SET @CUR_DELPICK = CURSOR FAST_FORWARD READ_ONLY FOR
@@ -238,7 +268,7 @@ BEGIN
                   IF @n_Err <> 0   
                   BEGIN  
                      SET @n_Continue = 3    
-                     SET @n_Err = 81050   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                     SET @n_Err = 81060   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
                      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Update Pickdetail Table Failed. (mspRVWAV09)'      
                   END 
                   FETCH NEXT FROM @CUR_DELPICK INTO @c_PickDetailKey
@@ -247,7 +277,7 @@ BEGIN
                DEALLOCATE @CUR_DELPICK
             END
          END
-         FETCH NEXT FROM @CUR_DELTASK INTO @c_TaskDetailKey, @c_TaskType
+         FETCH NEXT FROM @CUR_DELTASK INTO @c_TaskDetailKey, @c_TaskType, @c_UCCNo
       END
       CLOSE @CUR_DELTASK
       DEALLOCATE @CUR_DELTASK
