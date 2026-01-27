@@ -200,6 +200,7 @@ BEGIN
       ,@cDropID             = V_String3
       ,@cPickMethod         = V_String4
       ,@cSuggToloc          = V_String5
+      ,@cReasonCode         = V_String6
       ,@cListKey            = V_String7
       ,@cDisableQTYField   = V_String8
       ,@cSwapTaskSP        = V_String9
@@ -231,6 +232,19 @@ BEGIN
 
    IF @nFunc = 1812 -- TM Case Pick  
    BEGIN
+      IF @nMOBRECStep <> @nStep
+      BEGIN
+         IF @nStep = 1 SET @nScn = 4020   -- Scn = 4020 DropID
+         IF @nStep = 2 SET @nScn = 4021   -- Scn = 4021 FromLOC
+         IF @nStep = 3 SET @nScn = 4022   -- Scn = 4022 FromID
+         IF @nStep = 4 SET @nScn = 4023   -- Scn = 4023 SKU, QTY
+         IF @nStep = 5 SET @nScn = 4024   -- Scn = 4024 Cont next replen task / Close pallet
+         IF @nStep = 6 SET @nScn = 4025  -- Scn = 4025 To LOC
+         IF @nStep = 7 SET @nScn = 4026   -- Scn = 4026 Pallet is close. Next task / Exit
+         IF @nStep = 8 SET @nScn = 4027   -- Scn = 4027 Short pick / Close pallet
+         IF @nStep = 9 SET @nScn = 4100   -- Scn = 2100 Reason code
+      END
+      SET @nAfterScn = @nScn
       IF @nScn = 4020 -- DropID Scan Screen
       BEGIN
          SET @nAfterScn = 6771
@@ -251,7 +265,7 @@ BEGIN
          SET @nAfterScn = 6812
          GOTO QUIT
       END
-      ELSE IF @nMOBRECStep = 5 AND @nScn = 4025 -- To LOC
+      ELSE IF (@nMOBRECStep = 5 OR @nMOBRECStep = 8) AND @nScn = 4025 -- To LOC
       BEGIN
          SET @nAfterStep = 99
          SET @nAfterScn = 6813
