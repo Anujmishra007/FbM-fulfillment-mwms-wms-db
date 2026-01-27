@@ -38,7 +38,7 @@ AS
    DECLARE   @cFloor          NVARCHAR( 20)
    DECLARE   @cSKU            NVARCHAR( 20)
    DECLARE   @cSKUGroup       NVARCHAR( 20)
-   DECLARE   @cFacility		  NVARCHAR( 5)
+   DECLARE   @cFacility    NVARCHAR( 5)
 
    SELECT @cFacility = Facility 
    FROM rdt.rdtMOBREC WITH (NOLOCK) 
@@ -75,7 +75,8 @@ AS
             FROM CODELKUP (NOLOCK)
             WHERE LISTNAME =  'SKUGRP_FLR'
                AND StorerKey = @cStorerKey 
-               AND Short = @cToLocFloor
+               AND Short = @cSKUGroup
+               AND Long = @cToLocFloor
 
             IF ( @cToLocFloor <> @cFloor)
             BEGIN
