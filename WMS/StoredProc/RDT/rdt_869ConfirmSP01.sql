@@ -231,6 +231,13 @@ BEGIN
       IF @nRowCount = 0
          BREAK
 
+      SELECT @nQty = Qty,
+         @cTaskManagerReasonKey = ISNULL(TaskManagerReasonKey, '')
+      FROM dbo.PickDetail WITH(NOLOCK)
+      WHERE PickDetailKey = @cPickDetailKey
+         AND StorerKey = @cStorerkey
+
+
       BEGIN TRAN  --v1.1
       SAVE TRAN rdt_869ConfirmSP01_Pick --v1.1
 
@@ -261,12 +268,6 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickDetail Failed
          GOTO RollBackTranPick
       END CATCH
-
-      SELECT @nQty = Qty,
-         @cTaskManagerReasonKey = ISNULL(TaskManagerReasonKey, '')
-      FROM dbo.PickDetail WITH(NOLOCK)
-      WHERE PickDetailKey = @cPickDetailKey
-         AND StorerKey = @cStorerkey
 
       IF NOT EXISTS (SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK) 
                      WHERE key1 = @cLoopOrderKey
