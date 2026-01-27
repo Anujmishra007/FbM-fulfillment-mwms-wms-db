@@ -383,6 +383,14 @@ BEGIN
          JOIN SKUxLOC sl (NOLOCK) ON  lli.Storerkey = sl.Storerkey 
                                   AND lli.Sku = sl.Sku
                                   AND lli.Loc = sl.Loc
+         OUTER APPLY ( SELECT UCC.UCCNo, UCC.Status                                 --2026-01-27
+                       FROM UCC (NOLOCK) 
+                       WHERE UCC.Lot = lli.Lot
+                       AND UCC.Loc = lli.Loc
+                       AND UCC.ID  = lli.ID
+                       AND UCC.Qty > 0
+                       AND UCC.Qty <= lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen
+                      ) u                                  
          WHERE lli.Storerkey = @c_Storerkey
          AND   lli.Sku = @c_Sku
          AND   lli.Lot = @c_Lot      
@@ -395,7 +403,8 @@ BEGIN
          AND   LOC.LocationFlag NOT IN ('DAMAGE','HOLD')
          AND   LOC.LocationType = 'BULK'                    
          AND   LOC.Facility = @c_Facility
-         ORDER BY LOC.LogicalLocation
+         ORDER BY CASE WHEN u.Status = '1' THEN 1 ELSE 9 END                        --2026-01-27
+                , LOC.LogicalLocation  
                 , lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen DESC 
 
          OPEN @cur_WaveReplfr
