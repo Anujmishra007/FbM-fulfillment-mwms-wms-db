@@ -18,7 +18,9 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
-/* 2025-01-21  SWT01    1.1   Enhanced session management                */
+/* 2025-01-21  SWT01    1.1   Enhanced session management                  */
+/* 2026-01-02  USH022   1.2   UWP-24482 Validation added for valid         */
+/*                            MbolKey                                      */
 /***************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_CBOL_PopulateMBOL_Wrapper]
 	   @n_CBOLKey                 BIGINT
@@ -133,6 +135,28 @@ BEGIN
           @c_SCAC = CB.SCAC 
    FROM CBOL AS CB (NOLOCK)
    WHERE CBOLKey = @n_CBOLKey 
+
+
+    -- MBOL existence validation
+    IF NOT EXISTS (
+        SELECT 1
+        FROM dbo.MBOL WITH (NOLOCK)
+        WHERE MBOLKey = @c_MBolKey
+    )
+    BEGIN
+        SET @n_continue = 3;
+        SET @n_err = 562300;
+        SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                       + ': MBOL Key is not found = ' + ISNULL(@c_MBolKey, '')
+                       + ' (lsp_CBOL_PopulateMBOL_Wrapper)';
+
+        INSERT INTO @t_WMSErrorList
+            (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+        VALUES
+            (@c_TableName, @c_SourceType, CAST(@n_CBOLKey AS VARCHAR(10)), @c_MBolKey, '', 'ERROR', 0, @n_err, @c_ErrMsg);
+
+        GOTO EXIT_SP;
+    END;
 
    IF @c_Status = '9'
    BEGIN
