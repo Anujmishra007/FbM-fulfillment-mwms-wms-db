@@ -21,7 +21,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
 /* 19-Sep-2025 USH022   1.0   Ids Fetching                              */
-/* 27-Jan-2026 Michael  1.1   INC8918014 Performance tuning (ML01)      */
+/* 27-Jan-2026 Michael  1.1   UWP-47770 - INC8918014 Perf. tuning (ML01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE dbo.isp_FetchIDByLocAndLot
