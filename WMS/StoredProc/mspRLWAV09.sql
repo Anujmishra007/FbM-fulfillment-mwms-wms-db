@@ -528,6 +528,7 @@ BEGIN
          CLOSE @cur_WaveReplfr
          DEALLOCATE @cur_WaveReplfr
 
+         SET @c_FinalLocPAZone_P = @c_FinalLocPAZone                                --2026-01-27
          FETCH NEXT FROM @cur_WaveReplto INTO @c_Storerkey, @c_Sku, @c_FinalLoc, @c_Lot 
                                              ,@n_QtyNeed, @c_FinalLocPAZone, @c_FinalLocLoseID                          
       END
