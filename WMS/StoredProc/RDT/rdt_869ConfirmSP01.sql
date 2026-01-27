@@ -37,21 +37,19 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE 
-      @cPickDetailKey            NVARCHAR( 10),
-      @cPickSlipNo               NVARCHAR( 10),
-      @cShipRef                  NVARCHAR( 10),
-      @cLoopOrderKey             NVARCHAR( 10),
-      @cErrMsg1                  NVARCHAR( 125),
-      @cErrMsg2                  NVARCHAR( 125),
-      @cErrMsg3                  NVARCHAR( 125),
-      @nLoopIndex                INT,
-      @nRowCount                 INT,
-      @nTranCount                INT,
-      @bSuccess                  INT,
-      @nRealloTryCounter         INT,
-      @cRealloNumberofRetry      NVARCHAR(5),
-      @cTaskDetailMessage02      NVARCHAR(20),
-      @nRealloNumberofRetry      INT
+      @cPickDetailKey   NVARCHAR( 10),
+      @cPickSlipNo      NVARCHAR( 10),
+      @cShipRef         NVARCHAR( 10),
+      @cLoopOrderKey    NVARCHAR( 10),
+      @cErrMsg1         NVARCHAR( 125),
+      @cErrMsg2         NVARCHAR( 125),
+      @cErrMsg3         NVARCHAR( 125),
+      @nLoopIndex       INT,
+      @nRowCount        INT,
+      @nTranCount       INT,
+      @bSuccess         INT,
+      @nQty             INT,
+      @cTaskManagerReasonKey NVARCHAR( 10)
 
    SELECT @cShipRef = C_String1,
          @cStorerKey = StorerKey
@@ -60,25 +58,17 @@ BEGIN
 
    DECLARE @tShortPickDetail TABLE
    (
-      ID                         INT IDENTITY(1,1) PRIMARY KEY,
-      PickDetailKey              NVARCHAR(10),
-      Message02                  NVARCHAR(20),
-      OrderKey                   NVARCHAR(10)
+      ID                INT IDENTITY(1,1) PRIMARY KEY,
+      PickDetailKey     NVARCHAR(10),
+      OrderKey          NVARCHAR(10)
    )
 
    DECLARE @tPD TABLE
    (
-      OrderKey                   NVARCHAR(10),
-      OrderLineNumber            NVARCHAR(5),
-      PickDetailKey              NVARCHAR(18),
-      Message02                  NVARCHAR(20)
+      OrderKey NVARCHAR(10),
+      OrderLineNumber NVARCHAR(5),
+      PickDetailKey NVARCHAR(18)
    )
-
-   SET @cRealloNumberofRetry = rdt.RDTGetConfig( @nFunc, 'RealloNumberofRetry', @cStorerKey)
-   IF @cRealloNumberofRetry = '0'
-      SET @cRealloNumberofRetry = '99'
-
-   SET @nRealloNumberofRetry = ISNULL(TRY_CAST( @cRealloNumberofRetry AS INT), 99)
 
    SET @nTranCount = @@TRANCOUNT
 
@@ -96,20 +86,18 @@ BEGIN
    --------------------------------------------------------------------------------------------------*/
    IF @cOrderKey <> ''
    BEGIN
-      INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey, Message02)
-      SELECT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey, ISNULL(TD.Message02, '')
-      FROM dbo.PickDetail PD WITH (NOLOCK)
-      LEFT JOIN dbo.TaskDetail TD WITH (NOLOCK) ON (TD.PickDetailKey = PD.PickDetailKey)
-      WHERE PD.OrderKey = @cOrderKey
-         AND PD.Status = '4'
+      INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey)
+      SELECT OrderKey, OrderLineNumber, PickDetailKey
+      FROM dbo.PickDetail WITH (NOLOCK)
+      WHERE OrderKey = @cOrderKey
+         AND Status = '4'
    END
 
    IF @cLoadKey <> ''
    BEGIN
-      INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey, Message02)
-      SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey, ISNULL(TD.Message02, '')
+      INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey)
+      SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
       FROM dbo.PickDetail PD WITH (NOLOCK)
-      LEFT JOIN dbo.TaskDetail TD WITH (NOLOCK) ON (TD.PickDetailKey = PD.PickDetailKey)
       INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
       WHERE OD.LoadKey = @cLoadKey
          AND PD.Status = '4'
@@ -119,10 +107,9 @@ BEGIN
    BEGIN
       IF @cShipRef = ''
       BEGIN
-         INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey, Message02)
-         SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey, ISNULL(TD.Message02, '')
+         INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey)
+         SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
          FROM dbo.PickDetail PD WITH (NOLOCK)
-         LEFT JOIN dbo.TaskDetail TD WITH (NOLOCK) ON (TD.PickDetailKey = PD.PickDetailKey)
          INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
          INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
          WHERE WD.WaveKey = @cWaveKey
@@ -130,10 +117,9 @@ BEGIN
       END
       ELSE
       BEGIN
-         INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey, Message02)
-         SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey, ISNULL(TD.Message02, '')
+         INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey)
+         SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
          FROM dbo.PickDetail PD WITH (NOLOCK)
-         LEFT JOIN dbo.TaskDetail TD WITH (NOLOCK) ON (TD.PickDetailKey = PD.PickDetailKey)
          INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
          INNER JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
          INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON (ORM.OrderKey = OD.OrderKey AND ORM.StorerKey = OD.StorerKey)
@@ -144,8 +130,8 @@ BEGIN
       END
    END
 
-   INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey, Message02)
-   SELECT PickDetailKey, OrderKey, Message02
+   INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
+   SELECT PickDetailKey, OrderKey
    FROM @tPD
    ORDER BY OrderKey, OrderLineNumber, PickDetailKey  
 
@@ -236,7 +222,6 @@ BEGIN
       SELECT TOP 1
          @cPickDetailKey = PickDetailKey,
          @cLoopOrderKey = OrderKey,
-         @cTaskDetailMessage02 = Message02,
          @nLoopIndex = id
       FROM @tShortPickDetail
       WHERE id > @nLoopIndex
@@ -277,18 +262,18 @@ BEGIN
          GOTO RollBackTranPick
       END CATCH
 
-      IF LEN(@cTaskDetailMessage02) > 4 AND LEFT(@cTaskDetailMessage02,4) = 'SKIP'
-         SET @nRealloTryCounter = ISNULL(TRY_CAST( RIGHT(@cTaskDetailMessage02, LEN(@cTaskDetailMessage02) - 4 ) AS INT), 0)
-      ELSE
-         SET @nRealloTryCounter = 0
+      SELECT @nQty = Qty,
+         @cTaskManagerReasonKey = ISNULL(TaskManagerReasonKey, '')
+      FROM dbo.PickDetail WITH(NOLOCK)
+      WHERE PickDetailKey = @cPickDetailKey
+         AND StorerKey = @cStorerkey
 
-      -- Insert Transmitlog2 for WSSOAlloUpd only when it's the first time or the last retry
-      IF (@nRealloTryCounter = 0 OR @nRealloTryCounter = @nRealloNumberofRetry)
-         AND NOT EXISTS (SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK) 
+      IF NOT EXISTS (SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK) 
                      WHERE key1 = @cLoopOrderKey
                         AND Key2 = @cPickDetailKey
                         AND Key3 = @cStorerkey
                         AND TableName = 'WSSOAlloUpd')
+         AND @nQty > 0 AND @cTaskManagerReasonKey <> 'SHORT'
       BEGIN
          BEGIN TRY
             EXECUTE ispGenTransmitLog2
