@@ -188,6 +188,7 @@ BEGIN
       INNER JOIN LOTxLOCxID (NOLOCK) ON LOT.LOT = LOTxLOCxID.LOT  
       INNER JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC  
       INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT      
+      LEFT OUTER JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID
       LEFT OUTER JOIN (SELECT p.Lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty)  
                        FROM   PreallocatePickdetail p (NOLOCK), ORDERS (NOLOCK)  
                        WHERE  p.Orderkey = ORDERS.Orderkey  
