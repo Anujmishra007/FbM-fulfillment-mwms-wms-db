@@ -81,6 +81,7 @@ GO
 /* 2025-09-22   6.2.1   PPA374      Adding ExtUpd to step 2 inputkey 0           */
 /* 2025-09-30   6.3.0   NickT       FCR-6584 Set @cDefaultSKU = '0' in Step0     */
 /* 2025-10-17   6.3.1   NickT       FCR-6584 Fix issue: jump to wrong step       */
+/* 2026-01-04   6.4.0   NickT       FCR-9040 Add ExtScnSP in some steps          */
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -893,6 +894,14 @@ BEGIN
          END
       END
    END
+
+   --Jump point
+   IF @cExtScnSP <> '' 
+      AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_1_Fail:
@@ -1103,11 +1112,12 @@ BEGIN
          ,@cErrMsg          OUTPUT
          ,@cSuggID          OUTPUT  --(yeekung02)
          ,@cSKUSerialNoCapture OUTPUT
-      IF @nErrNo <> 0
-         GOTO Step_2_Fail
 
-      SET @cCurrLOC = ''
-      SET @cCurrSKU = ''
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
+
+         SET @cCurrLOC = ''
+         SET @cCurrSKU = ''
       END
       ELSE
       BEGIN
@@ -1149,7 +1159,7 @@ BEGIN
          SET @nScn = @nScn_ConfirmLOC
          SET @nStep = @nStep_ConfirmLOC
       END
-      ELSE IF @cScanCIDSCN='1'
+      ELSE IF @cScanCIDSCN = '1'
       BEGIN
          -- Prepare next screen var
          SET @cOutField01 = @cSuggLOC
@@ -1465,6 +1475,18 @@ BEGIN
       BEGIN
          INSERT INTO @tExtScnData (Variable, Value) VALUES
             ('@cPickSlipNo',     @cPickSlipNo)
+         SET @nPre_Step = @nStep_PickZone
+         SET @nAction = 0
+      END
+
+      IF @cExtScnSP = 'rdt_839ExtScn06'
+      BEGIN
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cPickSlipNo',     @cPickSlipNo),
+            ('@cSuggLoc',        @cSuggLOC),
+            ('@cSuggID',         @cSuggID),
+            ('@cSuggSKU',        @cSuggSKU),
+            ('@nSuggQty',        CAST(@nSuggQTY AS NVARCHAR(10)) )
          SET @nPre_Step = @nStep_PickZone
          SET @nAction = 0
       END
@@ -5071,7 +5093,7 @@ BEGIN
             -- Go to verify ID screen
             SET @nScn = @nScn_VerifyID
             SET @nStep = @nStep_VerifyID
-            GOTO QUIT
+            GOTO Step_8_ExtScn
          END
          ELSE IF @cConfirmLOC = '1'
          BEGIN
@@ -5083,7 +5105,7 @@ BEGIN
             -- Go to confirm LOC screen
             SET @nScn = @nScn_ConfirmLOC
             SET @nStep = @nStep_ConfirmLOC
-            GOTO QUIT
+            GOTO Step_8_ExtScn
          END
 
          -- Prepare LOC screen var
@@ -5165,6 +5187,7 @@ BEGIN
       SET @nStep = @nStep_SKUQTY
    END
 
+   Step_8_ExtScn:
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
       SET @nPre_Step = ''
@@ -6866,6 +6889,20 @@ BEGIN
 
                EXEC rdt.rdtSetFocusField @nMobile, 3 -- DropID
             END
+         END
+
+         IF @cExtScnSP = 'rdt_839ExtScn06'
+         BEGIN
+            IF @cUDF01 = 'GOTO STEP5'
+            BEGIN
+               GOTO Step_5
+            END
+            ELSE IF @cUDF01 = 'GOTO STEP_5_Short'
+            BEGIN
+               GOTO STEP_5_Short
+            END
+            ELSE IF @cUDF01 = 'No Need Update RDTMOBREC'
+               RETURN
          END
          GOTO Quit
       END
