@@ -27,6 +27,8 @@ GO
 /* 2025-10-06  SSA02    1.3   UWP-42142 -Enhanced session management    */
 /*                             and cleanup.                             */
 /* 2025-10-21  Michael  1.4   FCR-8377- Add SerialNoUpdateLotLocID(ML01)*/
+/* 2026-01-02  USH022   1.5   UWP-23881- Validation added for valid     */
+/*                            adjustmentkey                             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ADJ_PopulateLLI_Wrapper]                                                                                                                     
    @c_AdjustmentKey        NVARCHAR(10)         
@@ -136,7 +138,22 @@ BEGIN
    END
    -- (SSA02) - END
 
-   BEGIN TRY 
+   BEGIN TRY
+        IF NOT EXISTS (
+            SELECT 1
+            FROM dbo.ADJUSTMENT WITH (NOLOCK)
+            WHERE AdjustmentKey = @c_Adjustmentkey
+        )
+        BEGIN
+            SET @n_Continue = 3
+            SET @n_Err      = 561750
+            SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Adjustment Key not found (lsp_ADJ_PopulateLLI_Wrapper)'
+
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_AdjustmentKey, '', '', 'ERROR', 0, @n_Err, @c_Errmsg)
+
+            GOTO EXIT_SP
+        END
       SELECT @c_Facility = a.Facility
             ,@c_Storerkey= a.Storerkey 
       FROM dbo.ADJUSTMENT AS a (NOLOCK)
