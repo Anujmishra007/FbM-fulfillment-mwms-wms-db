@@ -34,6 +34,7 @@ AS
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE   @cPutawayZone    NVARCHAR( 20)
+   DECLARE   @cToLocFloor     NVARCHAR( 20)
    DECLARE   @cFloor          NVARCHAR( 20)
    DECLARE   @cSKU            NVARCHAR( 20)
    DECLARE   @cSKUGroup       NVARCHAR( 20)
@@ -63,17 +64,20 @@ AS
             WHERE sku.SKU = @cSKU
                AND StorerKey = @cStorerKey;
 
+            SELECT @cToLocFloor = Floor 
+            FROM dbo.LOC WITH (NOlOCK)
+            WHERE LOC = @cToLOC
+               AND Facility = @cFacility
+
+
             --Get The Floor
             SELECT @cFloor = Long
             FROM CODELKUP (NOLOCK)
             WHERE LISTNAME =  'SKUGRP_FLR'
                AND StorerKey = @cStorerKey 
-               AND Short = @cSKUGroup
+               AND Short = @cToLocFloor
 
-            IF EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOlOCK)
-                        WHERE LOC = @cToLOC
-                           AND Facility = @cFacility
-                           AND Floor <> @cFloor)
+            IF ( @cToLocFloor <> @cFloor)
             BEGIN
                SET @nErrNo = 250851
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- LOCNotSameFloor
