@@ -1394,6 +1394,24 @@ BEGIN
                   END 
                END 
             END 
+
+            --GVTEPODEPDD  
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)       
+                        WHERE STC.StorerKey = @c_Storerkey     
+                        AND   STC.ConfigKey = 'GVTEPODEPDD'    
+                        AND   STC.SValue    = '1' )    
+            BEGIN  
+               EXEC ispGenGVTLog 'GVTEPODEPDD', @c_OrderKey, '', @c_StorerKey, ''      
+                                 , @b_success   OUTPUT      
+                                 , @n_err       OUTPUT      
+                                 , @c_errmsg    OUTPUT     
+    
+               IF @b_success <> 1    
+               BEGIN    
+                  SET @n_continue = 3    
+                  GOTO QUIT     
+               END    
+            END 
          END
       END
       /********************************************/    
