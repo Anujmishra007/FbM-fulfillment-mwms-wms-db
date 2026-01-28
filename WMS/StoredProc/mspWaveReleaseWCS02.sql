@@ -23,6 +23,7 @@ GO
 /*                           table, no sending WCS. User just want to    */  
 /*                           click the Release to WCS button only        */  
 /* 2026-01-22   JihHaur 1.1  Change OrderType (JH01)                     */  
+/* 2026-01-28   JihHaur 1.2  Hotfix (JH02)                               */ 
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]  
   @c_Wavekey      NVARCHAR(10)    
@@ -210,8 +211,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
         AND DP.Status = 'IDLE'  
         AND DP.DeviceID NOT IN (SELECT DISTINCT DeviceID FROM DeviceProfile (NOLOCK)                 
                                     WHERE StorerKey = @c_Storerkey                                         
-                                      AND L.Facility = @c_Facility  
-                                      AND L.Status = 'OK'  
+                                      --AND L.Facility = @c_Facility  (JH02)
+                                      --AND L.Status = 'OK'          (JH02)
                                       AND DeviceType = 'STATION'  
                                       AND Status IN ('BUSY','OFF'))    
       ORDER BY DP.DeviceID, CubicCapacity DESC        
@@ -481,6 +482,7 @@ END --sp end
 GO
 GRANT EXECUTE ON [dbo].[mspWaveReleaseWCS02] TO [NSQL]
 GO
+
 
 
 
