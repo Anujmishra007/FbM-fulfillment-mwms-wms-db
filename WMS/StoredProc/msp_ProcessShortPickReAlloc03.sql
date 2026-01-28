@@ -1,4 +1,4 @@
-﻿SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 07-Jan-2025 WLChooi  1.0   Initial Version                           */
+/* 28-Jan-2025 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc03] (    
@@ -171,20 +171,6 @@ BEGIN
          COMMIT TRAN
       END
    END
-   
-   --Pre-validation
-   IF (@n_Continue = 1 OR @n_Continue = 2)
-   BEGIN
-      IF NOT EXISTS ( SELECT 1
-                      FROM TASKDETAIL WITH (NOLOCK)
-                      WHERE Taskdetailkey = @c_Taskdetailkey )
-      BEGIN
-         SELECT @n_Continue = 3
-         SELECT @n_Err = 64503
-         SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Invalid Taskdetailkey# ' + @c_Taskdetailkey + ' (msp_ProcessShortPickReAlloc03)'
-                          + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
-      END
-   END
 
    --Initialize Data
    IF (@n_Continue = 1 OR @n_Continue = 2)
@@ -196,21 +182,35 @@ BEGIN
       JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
       WHERE W.WaveKey = @c_Wavekey
 
-      SELECT @c_UCCNo = ISNULL(TD.CaseID, '')
-      FROM TASKDETAIL TD WITH (NOLOCK)
-      WHERE TD.Taskdetailkey = @c_Taskdetailkey
-
-      IF EXISTS ( SELECT 1
-                  FROM UCC (NOLOCK)
-                  WHERE UCCNo = @c_UCCNo
-                  AND Storerkey = @c_Storerkey
-                  AND SKU = @c_SKU )
+      -- If @c_Taskdetailkey is blank, assume UCC based - call from msp_ProcessShortReplenReAlloc01
+      -- Else check if Taskdetail.CaseID exists as UCCNo in UCC table
+      IF ISNULL(@c_Taskdetailkey, '') = ''
       BEGIN
          SET @n_ByUCC = 1
       END
+      ELSE IF EXISTS ( SELECT 1
+                       FROM TASKDETAIL (NOLOCK)
+                       WHERE Taskdetailkey = @c_Taskdetailkey )
+      BEGIN
+         SELECT @c_UCCNo = ISNULL(TD.CaseID, '')
+         FROM TASKDETAIL TD WITH (NOLOCK)
+         WHERE TD.Taskdetailkey = @c_Taskdetailkey
+
+         SET @n_ByUCC = CASE WHEN ISNULL(@c_UCCNo, '') <> ''
+                                  AND EXISTS ( SELECT 1
+                                               FROM UCC (NOLOCK)
+                                               WHERE UCCNo = @c_UCCNo
+                                               AND Storerkey = @c_Storerkey
+                                               AND SKU = @c_SKU )
+                             THEN 1 ELSE 0 END
+      END
       ELSE
       BEGIN
-         SET @n_ByUCC = 0
+         -- Invalid Taskdetailkey
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 64505
+         SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Invalid Taskdetailkey# ' + @c_Taskdetailkey + ' (msp_ProcessShortPickReAlloc03)'
+                          + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
       END
    END
 
