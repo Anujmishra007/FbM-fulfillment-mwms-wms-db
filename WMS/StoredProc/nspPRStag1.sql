@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO   
 /************************************************************************/  
-/* Stored Procedure: nspPRFIFO_Staging                                  */  
+/* Stored Procedure: nspPRStag1                                         */  
 /* Creation Date: 23-Jan-2026                                           */  
 /* Copyright: Maersk                                                    */  
 /* Written by: JihHaur                                                  */  
@@ -23,7 +23,7 @@ GO
 /* 23-Jan-2026  JH01    1.0   Created.                                  */     
 /************************************************************************/  
   
-CREATE OR ALTER PROC [dbo].[nspPRFIFO_Staging]   
+CREATE OR ALTER PROC [dbo].[nspPRStag1]   
     @c_StorerKey NVARCHAR(15) ,    
     @c_SKU NVARCHAR(20) ,    
     @c_LOT NVARCHAR(10) ,    
@@ -91,7 +91,7 @@ End
        
 IF @b_debug = 1    
 BEGIN    
-    SELECT 'nspPRFIFO_Staging : After Lot Lookup .....'    
+    SELECT 'nspPRStag1 : After Lot Lookup .....'    
     SELECT '@c_LOT'=@c_LOT,'@c_Lottable01'=@c_Lottable01, '@c_Lottable02'=@c_Lottable02, '@c_Lottable03'=@c_Lottable03  
     SELECT '@d_Lottable04' = @d_Lottable04, '@d_Lottable05' = @d_Lottable05  
     SELECT '@c_StorerKey' = @c_StorerKey  
@@ -174,7 +174,7 @@ BEGIN
     END
 END
 
-IF @n_continue=1 or @n_continue=2
+IF (@n_continue=1 or @n_continue=2) AND @n_AllocStagingLoc = 1
 BEGIN  
    IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_LOT)) IS NOT NULL AND dbo.fnc_LTrim(dbo.fnc_RTrim(@c_LOT)) <> ''  
    BEGIN         
@@ -334,4 +334,14 @@ BEGIN
   
       IF @b_debug = 1 SELECT @c_SQL            
    END  
+END
+ELSE
+BEGIN
+   DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR      
+      SELECT '',   
+             '',   
+             '',    
+             0
+      FROM  LOT (NOLOCK)  
+      WHERE 1 = 2
 END
