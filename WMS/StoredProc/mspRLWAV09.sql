@@ -317,40 +317,40 @@ BEGIN
    IF @n_Continue = 1 OR @n_Continue = 2  
    BEGIN  
       SET @cur_WaveReplto = CURSOR FAST_FORWARD READ_ONLY FOR 
-      SELECT PD.Storerkey, PD.Sku, PD.Loc
-         , PD.Lot                                    
-         , QtyNeed = SUM(pd.Qty)-(lli.Qty-lli.QtyPicked)-lli.PendingMoveIn+ISNULL(tdp.QtyAllocated,0) --2026-01-21
-         , FinalLocPAZone = l.PutawayZone
-         , FinalLocLoseID = l.LoseId
-      FROM #PICKDETAIL_WIP PD (NOLOCK)
-      JOIN LOTATTRIBUTE la  (NOLOCK) ON pd.Lot = la.Lot
-      JOIN LOTxLOCxID   lli (NOLOCK) ON pd.Lot = lli.Lot 
-                                    AND pd.Loc = lli.loc
-                                    AND pd.ID  = lli.ID
-      JOIN LOC l (NOLOCK)  ON pd.loc = l.loc
-      LEFT OUTER JOIN TASKDETAIL tdr (NOLOCK) ON tdr.TaskType IN ('RPF','RP1')
-                                             AND tdr.Storerkey= pd.Storerkey
-                                             AND tdr.Sku   = pd.Sku
-                                             AND tdr.FinalLoc = pd.Loc
-                                             AND tdr.[Status] NOT IN ('9','X')
-      OUTER APPLY (SELECT QtyAllocated = SUM(td.Qty) 
-                   FROM TASKDETAIL td (NOLOCK) 
-                   WHERE td.TaskType= 'FCP'
-                   AND td.Storerkey = pd.Storerkey
-                   AND td.Sku       = pd.Sku
-                   AND td.fromLoc   = pd.Loc
-                   AND td.UOM       = '6'
-                   AND td.[Status] NOT IN ('9','X')
-                  ) tdp                   
-      WHERE PD.UOM = '6'
-      AND PD.Qty > 0
-      AND PD.[Status] = '0'
-      AND PD.TaskdetailKey = ''
-      AND tdr.Taskdetailkey IS NULL
-      GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                  
+      SELECT PD.Storerkey, PD.Sku, PD.Loc  
+         , PD.Lot                                      
+         , QtyNeed = SUM(pd.Qty)-(lli.Qty-lli.QtyPicked)-lli.PendingMoveIn+ISNULL(tdp.QtyAllocated,0) --2026-01-21  
+         , FinalLocPAZone = l.PutawayZone  
+         , FinalLocLoseID = l.LoseId  
+      FROM #PICKDETAIL_WIP PD (NOLOCK)  
+      JOIN LOTATTRIBUTE la  (NOLOCK) ON pd.Lot = la.Lot  
+      JOIN LOTxLOCxID   lli (NOLOCK) ON pd.Lot = lli.Lot   
+                                    AND pd.Loc = lli.loc  
+                                    AND pd.ID  = lli.ID  
+      JOIN LOC l (NOLOCK)  ON pd.loc = l.loc  
+      LEFT OUTER JOIN TASKDETAIL tdr (NOLOCK) ON tdr.TaskType IN ('RPF','ASTRPT')  
+                                             AND tdr.Storerkey= pd.Storerkey  
+                                             AND tdr.Sku   = pd.Sku  
+                                             AND tdr.FinalLoc = pd.Loc  
+                                             AND tdr.[Status] NOT IN ('9','X')  
+      OUTER APPLY (SELECT QtyAllocated = SUM(td.Qty)   
+                   FROM TASKDETAIL td (NOLOCK)   
+                   WHERE td.TaskType= 'FCP'  
+                   AND td.Storerkey = pd.Storerkey  
+                   AND td.Sku       = pd.Sku  
+                   AND td.fromLoc   = pd.Loc  
+                   AND td.UOM       = '6'  
+                   AND td.[Status] NOT IN ('9','X')  
+                  ) tdp                     
+      WHERE PD.UOM = '6'  
+      AND PD.Qty > 0  
+      AND PD.[Status] = '0'  
+      AND PD.TaskdetailKey = '' 
+      AND tdr.Taskdetailkey IS NULL 
+      GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                    
             ,  lli.Qty,lli.QtyPicked,lli.PendingMoveIn,ISNULL(tdp.QtyAllocated,0)
-            ,  l.PutawayZone, l.LoseId
-      HAVING (lli.Qty-lli.QtyPicked)+lli.PendingMoveIn-ISNULL(tdp.QtyAllocated,0)-SUM(pd.Qty) < 0  
+            ,  l.PutawayZone, l.LoseId  
+      HAVING (lli.Qty-lli.QtyPicked)+lli.PendingMoveIn-ISNULL(tdp.QtyAllocated,0)-SUM(pd.Qty) < 0    
       ORDER BY l.putawayZone, PD.Loc, PD.Lot        
  
       OPEN @cur_WaveReplto    
@@ -383,14 +383,15 @@ BEGIN
          JOIN SKUxLOC sl (NOLOCK) ON  lli.Storerkey = sl.Storerkey 
                                   AND lli.Sku = sl.Sku
                                   AND lli.Loc = sl.Loc
-         OUTER APPLY ( SELECT UCC.UCCNo, UCC.Status                                 --2026-01-27
+         OUTER APPLY ( SELECT TOP 1 UCC.Status                                      --2025-01-27
                        FROM UCC (NOLOCK) 
                        WHERE UCC.Lot = lli.Lot
                        AND UCC.Loc = lli.Loc
                        AND UCC.ID  = lli.ID
+                       AND UCC.[Status] = '1'                                       --2025-01-27
                        AND UCC.Qty > 0
                        AND UCC.Qty <= lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen
-                      ) u                                  
+                      ) u                                   
          WHERE lli.Storerkey = @c_Storerkey
          AND   lli.Sku = @c_Sku
          AND   lli.Lot = @c_Lot      
