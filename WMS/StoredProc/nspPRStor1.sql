@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO   
 /************************************************************************/  
-/* Stored Procedure: nspPRFIFO_Storage                                  */  
+/* Stored Procedure: nspPRStor1                                         */  
 /* Creation Date: 23-Jan-2026                                           */  
 /* Copyright: Maersk                                                    */  
 /* Written by: JihHaur                                                  */  
@@ -23,7 +23,7 @@ GO
 /* 23-Jan-2026  JH01    1.0   Created.                                  */     
 /************************************************************************/  
   
-CREATE OR ALTER PROC [dbo].[nspPRFIFO_Storage]   
+CREATE OR ALTER PROC [dbo].[nspPRStor1]   
     @c_StorerKey NVARCHAR(15) ,    
     @c_SKU NVARCHAR(20) ,    
     @c_LOT NVARCHAR(10) ,    
@@ -91,7 +91,7 @@ End
        
 IF @b_debug = 1    
 BEGIN    
-    SELECT 'nspPRFIFO_Storage : After Lot Lookup .....'    
+    SELECT 'nspPRStor1 : After Lot Lookup .....'    
     SELECT '@c_LOT'=@c_LOT,'@c_Lottable01'=@c_Lottable01, '@c_Lottable02'=@c_Lottable02, '@c_Lottable03'=@c_Lottable03  
     SELECT '@d_Lottable04' = @d_Lottable04, '@d_Lottable05' = @d_Lottable05  
     SELECT '@c_StorerKey' = @c_StorerKey  
@@ -227,8 +227,8 @@ BEGIN
          dbo.fnc_RTrim(@c_LimitString) + " " +     
          " GROUP BY LOT.LOT , LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable04, LOC.LocationType  " +   
          " HAVING (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QtyAllocated) - SUM(LOTxLOCxID.QTYPicked)- MIN(ISNULL(P.QtyPreAllocated, 0))) > 0 " +  
-          " ORDER BY CASE WHEN " + CAST(@n_AllocStagingLoc AS NVARCHAR(1)) + " = 1 AND LOC.LocationType = 'IDZ' THEN 0 ELSE 1 END, " +
-         " LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable04 "   
+          --" ORDER BY CASE WHEN " + CAST(@n_AllocStagingLoc AS NVARCHAR(1)) + " = 1 AND LOC.LocationType = 'IDZ' THEN 0 ELSE 1 END, " +
+         "ORDER BY LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable04 "   
            
          --EXEC (@c_SQL)  
          SET @c_SQLParms= N'@c_facility   NVARCHAR(5)'  
