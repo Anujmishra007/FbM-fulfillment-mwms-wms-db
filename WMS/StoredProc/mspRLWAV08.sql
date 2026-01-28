@@ -21,7 +21,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */
-/* 14-Jan-2026 WLChooi  1.0   Initial version                            */
+/* 28-Jan-2026 WLChooi  1.0   Initial version                            */
 /*************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV08]
@@ -220,7 +220,7 @@ BEGIN
       BEGIN
          SET @c_TaskType = 'RPF'
          SET @c_PickMethod = 'FP'
-         SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM '
+         SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = ''' + @c_UOM + ''''   -- Get the original UOM
          SET @c_Priority = '5'
          SET @c_SourcePriority = '5'
          SET @n_UOMQty = 0
