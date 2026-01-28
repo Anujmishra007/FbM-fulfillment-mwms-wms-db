@@ -54,6 +54,7 @@ GO
 /* 26-Apr-2024  YTKuek    3.0   Add GVTITF HPQ (YT03)                   */
 /* 26-May-2025  YTKuek    3.1   UWP-34181 (YT04)                        */
 /* 29-Jul-2025  YTKuek    3.2   FCR-5838 (YT05)                         */
+/* 16-Dec-2025  YTKuek    3.3   FCR-9751 (YT06)                         */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[isp_ITF_ntrOrderHeader]    
@@ -898,6 +899,25 @@ BEGIN
                         GOTO QUIT   
                      END  
                   END 
+
+                  --(YT06)-S
+                  IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                              WHERE STC.StorerKey = @c_Storerkey   
+                              AND   STC.ConfigKey = 'GVTORD9TPY'
+                              AND   STC.SValue    = '1' )  
+                  BEGIN  
+                     EXEC ispGenGVTLog 'GVTORD9TPY', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                       , @b_success   OUTPUT    
+                                       , @n_err       OUTPUT    
+                                       , @c_errmsg    OUTPUT   
+  
+                     IF @b_success <> 1  
+                     BEGIN  
+                        SET @n_continue = 3  
+                        GOTO QUIT   
+                     END  
+                  END 
+                  --(YT06)-E
                END
 
                IF @c_SOStatus IN ('RC','AV','BN','AK','BC','AA','S1','AW','BK','AH','BT','C6','AM','XX')
