@@ -75,9 +75,9 @@ execute rdt.rdtAddMsg 217971, 10, '217971BadFormat/Len',       'us_english'
 execute rdt.rdtAddMsg 217972, 10, '217972IDinUse',             'us_english'
 execute rdt.rdtAddMsg 217973, 10, 'LPN is in multi locs',                  'us_english', 511, 0, '217973 LPN is in multi locs'
 execute rdt.rdtAddMsg 217974, 10, '974LPN got active PA',                  'us_english', 511, 0, '217974 LPN got active PA'
-execute rdt.rdtAddMsg 217975, 10, '217975Lottable03Mismatch ',             'us_english', 600, 0, '218075 Lottable03 Mismatch'
-execute rdt.rdtAddMsg 217976, 10, '217976LPNUsedDiffPO',                   'us_english', 600, 0, '218076 LPN Used Diff PO'
-execute rdt.rdtAddMsg 217977, 10, '217977OverReceipt',                     'us_english', 600, 0, '218077 Over Receipt'
+execute rdt.rdtAddMsg 217975, 10, '975LPN is for replen',                  'us_english', 511, 0, '217975^LPN is for replen'
+execute rdt.rdtAddMsg 217976, 10, 'Loc not in HUSQ zone',                  'us_english', 511, 0, '217976^Loc not in HUSQ zone'
+execute rdt.rdtAddMsg 217977, 10, 'Over max pallet lim',                   'us_english', 511, 0, '217977^Over max pallet lim'
 execute rdt.rdtAddMsg 217978, 10, 'Loc on hold or flag',                   'us_english', 511, 0, '217978 Loc on hold or flag'
 execute rdt.rdtAddMsg 217979, 10, '7979^Move to out loc',                  'us_english', 511, 0, '217979 7979^Move to out loc'
 execute rdt.rdtAddMsg 217980, 10, 'Sku not set for loc',                   'us_english', 511, 0, '217980 Sku not set for loc'
@@ -103,7 +103,7 @@ execute rdt.rdtAddMsg 217999, 10, '7999^Out of Sequence',                  'us_e
 execute rdt.rdtAddMsg 218000, 10, 'Confirm qty as shown',                  'us_english', 830, 0, '218000 Confirm qty as shown'
 execute rdt.rdtAddMsg 218001, 10, 'Unknown PA LPN type',                   'us_english', 1819, 0, '218001 Unknown PA LPN type'
 execute rdt.rdtAddMsg 218002, 10, 'Unsuitable location',                   'us_english', 1819, 0, '218002 Unsuitable location'
-execute rdt.rdtAddMsg 218003, 10, '218003Multi BU on ID',                  'us_english', 600, 0, '218003 Multi BU on ID'
+execute rdt.rdtAddMsg 218003, 10, '218003Multi BU on ID',                  'us_english', 684, 0, '218003 Multi BU on ID'
 execute rdt.rdtAddMsg 218004, 10, '218004Receive to trolley',              'us_english', 600, 0, '218004 Receive to trolley'
 execute rdt.rdtAddMsg 218005, 10, '218005Receive to INB stage',            'us_english', 600, 0, '218005 Receive to INB stage'
 execute rdt.rdtAddMsg 218006, 10, 'No available PnD loc',                  'us_english', 1819, 0, '218006 No available PnD loc'
@@ -144,8 +144,8 @@ execute rdt.rdtAddMsg 218040, 10, '218040Cannot move to trolley or trolley QC', 
 execute rdt.rdtAddMsg 218041, 10, '218041Cannot move to trolley or trolley QC', 'us_english', 513, 0, '218041 Cannot move to trolley or trolley QC'
 execute rdt.rdtAddMsg 218042, 10, '218042Cannot move from trolley or trolley QC', 'us_english', 511, 0, '218042 Cannot move from trolley or trolley QC'
 execute rdt.rdtAddMsg 218043, 10, '218043Cannot move from trolley or trolley QC', 'us_english', 513, 0, '218043 Cannot move from trolley or trolley QC'
-execute rdt.rdtAddMsg 218044, 10, '218044 LPN exists in inv',              'us_english', 600, 0, '218044 LPN exists in inv'
-execute rdt.rdtAddMsg 218045, 10, '218045 LPN exists in inv',              'us_english', 600, 0, '218045 Multi BU on ID'
+execute rdt.rdtAddMsg 218044, 10, '218044Oversize, please check',              'us_english', 600, 0, '218044 Oversize, please check'
+execute rdt.rdtAddMsg 218045, 10, '218045Overweight, please check',              'us_english', 600, 0, '218045 Overweight, please check'
 execute rdt.rdtAddMsg 218046, 10, '218046Only allow from trolley to trolleyQC', 'us_english', 511, 0, '218046 Only allow to move from trolley to trolleyQC if required'
 execute rdt.rdtAddMsg 218047, 10, 'Not packed pallet ID', 'us_english', 1641, 0, '218047^Not packed pallet ID'
 execute rdt.rdtAddMsg 218048, 10, 'Wrong DROPID format', 'us_english', 1641, 0, '218048^Wrong DROPID format'
@@ -347,6 +347,7 @@ execute rdt.rdtAddMsg 218381, 10, '218381 Missing COD on Lottable03', 'us_englis
 execute rdt.rdtAddMsg 218382, 10, '218382 No SO in lottable10', 'us_english', 573, 0, ''
   
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
+
 
 
 
