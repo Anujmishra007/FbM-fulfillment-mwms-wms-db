@@ -622,8 +622,8 @@ BEGIN
 
                   END TRY
                   BEGIN CATCH
-                     SET @nErrNo = 234856
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickDetail Failed
+                     SET @nErrNo = 234863
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Hold UCC Failed
                      GOTO RollBack_rdt_1764ExtScn01
                   END CATCH
                END
