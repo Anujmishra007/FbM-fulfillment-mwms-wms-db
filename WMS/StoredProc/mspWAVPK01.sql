@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
-/* 31-Dec-2025  WLChooi  1.0  Initial Version                           */
+/* 29-Jan-2026  WLChooi  1.0  Initial Version                           */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspWAVPK01]  
         @c_Wavekey NVARCHAR(10)
@@ -111,6 +111,7 @@ BEGIN
          , @c_VASFlag                  NVARCHAR(10) = 'N'
          , @c_Consigneekey             NVARCHAR(15) = ''
          , @c_CaseID                   NVARCHAR(20) = ''
+         , @c_MezzLevel                NVARCHAR(50) = ''
   
    SELECT @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 1, @n_err = 0, @c_errmsg = '', @c_SourceType = 'mspWAVPK01'  
       
@@ -296,6 +297,8 @@ BEGIN
        , OrderType       NVARCHAR(10)
        , Consigneekey    NVARCHAR(15)
        , IsFullyPacked   NVARCHAR(1) DEFAULT('N')
+       , MezzLevel       NVARCHAR(50) DEFAULT('')
+       , LogicalLocation NVARCHAR(10) DEFAULT('')
       );
       CREATE INDEX IDX_ORDERSKU_ORD ON #ORDERSKU (Orderkey)
       CREATE INDEX IDX_ORDERSKU_ORD_SKU ON #ORDERSKU (Orderkey, Sku) INCLUDE (TotalQty, TotalQtyPacked, StdCube, Storerkey)
@@ -352,6 +355,7 @@ BEGIN
        , Sku        NVARCHAR(20)
        , Qty        INT
        , RowRef     INT
+       , MezzLevel  NVARCHAR(50) DEFAULT('')
       )
       CREATE INDEX IDX_CTNDET ON #CARTONDETAIL (OrderGroup, Orderkey, CartonNo)
       CREATE INDEX IDX_CTNDET_ORD_CTN_SKU ON #CARTONDETAIL (Orderkey, CartonNo, Sku)                                                               
@@ -386,7 +390,7 @@ BEGIN
 
       --Order sku info  
       INSERT INTO #ORDERSKU (Orderkey, Storerkey, Sku, TotalQty, TotalCube, TotalQtyPacked, TotalCubePacked, StdCube
-                           , Length, Width, Height, OrderType, Consigneekey)
+                           , Length, Width, Height, OrderType, Consigneekey, MezzLevel, LogicalLocation)
       SELECT PD.OrderKey
            , PD.Storerkey
            , PD.Sku
@@ -402,6 +406,8 @@ BEGIN
            , SKU.Height
            , OH.[Type]
            , OH.ConsigneeKey
+           , MezzLevel = IIF(@c_DocType = 'N', ISNULL(Loc.PutawayZone, ''), '')
+           , LogicalLocation = IIF(@c_DocType = 'N', ISNULL(MIN(Loc.LogicalLocation), ''), '')
       FROM #PickDetail_WIP PD
       JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey
       JOIN dbo.LOC (NOLOCK) ON PD.Loc = LOC.Loc
@@ -420,6 +426,7 @@ BEGIN
                     ELSE (SKU.Length * SKU.Width * SKU.Height) END
              , OH.[Type]
              , OH.ConsigneeKey
+             , IIF(@c_DocType = 'N', ISNULL(Loc.PutawayZone, ''), '')
       ORDER BY PD.OrderKey
              , TotalCube DESC
              , PD.Sku
@@ -666,8 +673,8 @@ BEGIN
                   VALUES (@c_Orderkey, @n_CartonNo, @c_LabelNo, @c_CartonGroup, 'UCC', @n_CartonMaxCube, @n_CartonMaxWeight, @n_CartonMaxCount, 1
                         , @n_CartonLength, @n_CartonWidth, @n_CartonHeight, @c_UCCNo, '', '', @n_CartonMaxWeight)                                
               
-                  INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID  
-                  VALUES ('', @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, @n_RowID)   
+                  INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, MezzLevel, RowRef)  --refer to ORDERSKU.RowID  
+                  VALUES ('', @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, '', @n_RowID)
                END
                
                UPDATE #ORDERSKU   
@@ -722,6 +729,7 @@ BEGIN
               , O.StdCube
               , SKU.SKUGROUP
               , SKU.itemclass
+              , O.MezzLevel
          FROM #ORDERSKU O
          JOIN dbo.SKU SKU WITH (NOLOCK) ON O.Storerkey = SKU.StorerKey AND O.Sku = SKU.Sku
          WHERE O.Orderkey = @c_Orderkey 
@@ -733,13 +741,17 @@ BEGIN
                 , O.StdCube
                 , SKU.SKUGROUP
                 , SKU.itemclass
-         ORDER BY SKU.SKUGROUP
+                , O.MezzLevel
+                , O.LogicalLocation
+         ORDER BY O.LogicalLocation
+                , SKU.SKUGROUP
                 , SKU.itemclass
                 , O.Sku
            
          OPEN CUR_ORDCTNGROUP  
            
-         FETCH NEXT FROM CUR_ORDCTNGROUP INTO @c_Sku, @n_OrderQty, @n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_StdCube, @c_SkuGroup, @c_ItemClass   
+         FETCH NEXT FROM CUR_ORDCTNGROUP INTO @c_Sku, @n_OrderQty, @n_SKULength, @n_SKUWidth, @n_SKUHeight
+                                            , @n_StdCube, @c_SkuGroup, @c_ItemClass, @c_MezzLevel
            
          SET @n_CartonNo = 0
          SET @n_ActualCartonNo = 0
@@ -798,7 +810,8 @@ BEGIN
                IF NOT EXISTS (SELECT 1 FROM #CARTONDETAIL CTD   
                               JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.StorerKey = CTD.Storerkey AND SKU.Sku = CTD.Sku   
                               WHERE SKU.SKUGROUP = @c_SkuGroup AND SKU.ItemClass = @c_ItemClass  
-                              AND CTD.CartonNo = @n_CartonNo AND CTD.Orderkey = @c_Orderkey )  
+                              AND CTD.CartonNo = @n_CartonNo AND CTD.Orderkey = @c_Orderkey
+                              AND CTD.MezzLevel = @c_MezzLevel)  
                BEGIN  
                    SET @c_NewCarton = 'Y'  
                END  
@@ -1056,7 +1069,8 @@ BEGIN
                         WHERE OS.Orderkey = @c_Orderkey  
                         AND OS.TotalQty - OS.TotalQtyPacked > 0  
                         AND OS.RowID NOT IN(SELECT RowID FROM #ROWTRACK)  
-                        AND OS.Sku = @c_Sku  
+                        AND OS.Sku = @c_Sku
+                        AND OS.MezzLevel = @c_MezzLevel  
                         ORDER BY (OS.TotalCube - OS.TotalCubePacked) DESC, OS.Sku  
                      END  
   
@@ -1071,7 +1085,8 @@ BEGIN
                         AND OS.TotalQty - OS.TotalQtyPacked > 0  
                         AND OS.RowID NOT IN(SELECT RowID FROM #ROWTRACK)  
                         AND @n_CartonRemainCube >= (OS.TotalCube - OS.TotalCubePacked)  
-                        AND OS.Sku = @c_Sku  
+                        AND OS.Sku = @c_Sku
+                        AND OS.MezzLevel = @c_MezzLevel  
                         ORDER BY (OS.TotalCube - OS.TotalCubePacked) DESC, OS.Sku  
                      END    
                      IF @n_RowID = 0  
@@ -1085,7 +1100,8 @@ BEGIN
                        AND OS.TotalQty - OS.TotalQtyPacked > 0  
                        AND OS.RowID NOT IN(SELECT RowID FROM #ROWTRACK)  
                        AND OS.StdCube <= @n_CartonRemainCube  
-                       AND OS.Sku = @c_Sku  
+                       AND OS.Sku = @c_Sku
+                       AND OS.MezzLevel = @c_MezzLevel  
                        ORDER BY (OS.TotalCube - OS.TotalCubePacked), OS.Sku                           
                      END
                  END  
@@ -1099,7 +1115,8 @@ BEGIN
                      FROM #ORDERSKU OS (NOLOCK)  
                      WHERE OS.Orderkey = @c_Orderkey  
                      AND OS.TotalQty - OS.TotalQtyPacked > 0  
-                     AND OS.Sku = @c_Sku  
+                     AND OS.Sku = @c_Sku
+                     AND OS.MezzLevel = @c_MezzLevel  
                      AND OS.RowID NOT IN(SELECT RowID FROM #ROWTRACK)  
                      ORDER BY OS.RowID  
                   END                                                                     
@@ -1196,8 +1213,8 @@ BEGIN
                ELSE  
                BEGIN                                        
                   --Pack to Carton  
-                  INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID  
-                  VALUES ('', @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_QtyCanPack, @n_RowID)   
+                  INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, MezzLevel, RowRef)  --refer to ORDERSKU.RowID  
+                  VALUES ('', @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_QtyCanPack, @c_MezzLevel, @n_RowID)
                   
                   --Update counters  
                   SET @n_OrderCube = @n_OrderCube - (@n_QtyCanPack * @n_StdCube)  
@@ -1213,7 +1230,8 @@ BEGIN
   
             NEXT_CTNORSKU:       
   
-            FETCH NEXT FROM CUR_ORDCTNGROUP INTO @c_Sku, @n_OrderQty, @n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_StdCube, @c_SkuGroup, @c_ItemClass
+            FETCH NEXT FROM CUR_ORDCTNGROUP INTO @c_Sku, @n_OrderQty, @n_SKULength, @n_SKUWidth, @n_SKUHeight
+                                               , @n_StdCube, @c_SkuGroup, @c_ItemClass, @c_MezzLevel
          END  
          CLOSE CUR_ORDCTNGROUP  
          DEALLOCATE CUR_ORDCTNGROUP  
@@ -1527,14 +1545,14 @@ BEGIN
       AND PW.WIP_Refno = @c_SourceType
 
       DECLARE CUR_LABELUPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT CTD.Orderkey, CT.CartonNo, CTD.Storerkey, CTD.Sku, CTD.Qty, CT.LabelNo, CT.UCCNo  
+         SELECT CTD.Orderkey, CT.CartonNo, CTD.Storerkey, CTD.Sku, CTD.Qty, CT.LabelNo, CT.UCCNo, CTD.MezzLevel  
          FROM #CARTON CT  
          JOIN #CARTONDETAIL CTD ON CT.Orderkey = CTD.Orderkey AND CT.CartonNo = CTD.CartonNo  
          WHERE CT.Orderkey > ''
 
       OPEN CUR_LABELUPD  
   
-      FETCH NEXT FROM CUR_LABELUPD INTO @c_Orderkey, @n_CartonNo, @c_Storerkey, @c_Sku, @n_PackQty, @c_LabelNo, @c_UCCNo  
+      FETCH NEXT FROM CUR_LABELUPD INTO @c_Orderkey, @n_CartonNo, @c_Storerkey, @c_Sku, @n_PackQty, @c_LabelNo, @c_UCCNo, @c_MezzLevel  
                    
       WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)   
       BEGIN                       
@@ -1546,7 +1564,8 @@ BEGIN
             JOIN dbo.PACK PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey  
             WHERE PD.OrderKey = @c_Orderkey  
             AND PD.Storerkey = @c_Storerkey  
-            AND PD.Sku = @c_Sku  
+            AND PD.Sku = @c_Sku
+            AND LOC.PutawayZone = IIF(@c_DocType = 'N', @c_MezzLevel, LOC.PutawayZone)  
             AND NOT EXISTS ( SELECT 1
                              FROM #TMP_PACK P
                              WHERE P.OrderKey = PD.OrderKey
@@ -1627,7 +1646,7 @@ BEGIN
          CLOSE CUR_PICKDET_UPDATE  
          DEALLOCATE CUR_PICKDET_UPDATE     
      
-         FETCH NEXT FROM CUR_LABELUPD INTO @c_Orderkey, @n_CartonNo, @c_Storerkey, @c_Sku, @n_PackQty, @c_LabelNo, @c_UCCNo                 
+         FETCH NEXT FROM CUR_LABELUPD INTO @c_Orderkey, @n_CartonNo, @c_Storerkey, @c_Sku, @n_PackQty, @c_LabelNo, @c_UCCNo, @c_MezzLevel                 
       END                 
       CLOSE CUR_LABELUPD  
       DEALLOCATE CUR_LABELUPD       
