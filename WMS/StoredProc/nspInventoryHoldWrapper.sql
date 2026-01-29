@@ -45,6 +45,7 @@ GO
 /* 29-AUG-2025  MICHAEL   1.9   UWP-39358-Handle multi InvHold rec(ML01)*/
 /*                         with new StorerCfg AllowMultiInventoryHoldRec*/
 /* 24-SEP-2025  MICHAEL   1.10  FCR-7829 Inventory UCC-level HOLD (ML02)*/
+/* 26-JAN-2026  MICHAEL   1.11  FCR-10040 Inv Hold by SKUxLOC (ML03)    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspInventoryHoldWrapper]
      @c_lot          NVARCHAR(10)
@@ -98,6 +99,23 @@ BEGIN
           ,@c_ChannelInventoryMgmt    NVARCHAR(10) = '0' -- (SWT01)
           ,@n_InvHld_Cnt              INT   --ML01
           ,@c_AllowMultiInvHoldRec    NVARCHAR(30) --ML01
+
+          --ML03-S
+          ,@c_SL_Hold                 NVARCHAR(30)
+          ,@c_SL_Hold_ID              NVARCHAR(18)
+          ,@c_SL_Hold_ID_Prefix       NVARCHAR(18)
+          ,@c_SL_Hold_Status          NVARCHAR(20)
+          ,@c_SL_Hold_RlsLoseID       NVARCHAR(10)
+          ,@c_SL_Hold_ExclQtyAlloc    NVARCHAR(10)
+          ,@c_SL_Hold_ExclQtyPick     NVARCHAR(10)
+          ,@c_Facility                NVARCHAR(5)
+          ,@c_Temp_Lot                NVARCHAR(10)
+          ,@c_Temp_Loc                NVARCHAR(10)
+          ,@c_Temp_ID                 NVARCHAR(20)
+          ,@c_Temp_Qty                INT
+          ,@c_CurrStatus              NVARCHAR(10)
+          ,@c_CurrRemark              NVARCHAR(260)
+          --ML03-E
 
    --NJOW03
    DECLARE @c_Option1                 NVARCHAR(50)
@@ -977,6 +995,163 @@ BEGIN
       END   -- IF @b_HoldByBatch = 1
       ELSE  -- @b_HoldByBatch = 0
       BEGIN
+         --ML03-S
+         IF OBJECT_ID('tempdb..#TEMP_LOTLOCID') IS NOT NULL
+            DROP TABLE #TEMP_LOTLOCID
+
+         CREATE TABLE #TEMP_LOTLOCID (
+              Lot  NVARCHAR(10)
+            , Loc  NVARCHAR(10)
+            , ID   NVARCHAR(20)
+            , Qty  INT
+         )
+
+         SET @c_Facility = ''
+         SET @c_SL_Hold = ''
+         SET @c_Option5 = ''
+
+         SELECT @c_Facility = Facility
+           FROM LOC WITH(NOLOCK)
+          WHERE Loc = @c_Loc
+
+         SELECT @c_SL_Hold = Authority
+              , @c_Option5 = Option5
+           FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'SKUxLOC_HOLD')
+
+         SELECT @c_SL_Hold_ID_Prefix = 'HSL-'
+              , @c_SL_Hold_Status = 'LOCSKUHOLD'
+              , @c_SL_Hold_RlsLoseID = ''
+              , @c_SL_Hold_ExclQtyAlloc = ''
+              , @c_SL_Hold_ExclQtyPick = ''
+
+         SET @c_SL_Hold_ID_Prefix    = dbo.fnc_GetParamValueFromString('@c_ID_Prefix'    , @c_Option5, @c_SL_Hold_ID_Prefix)
+         SET @c_SL_Hold_Status       = dbo.fnc_GetParamValueFromString('@c_Hold_Status'  , @c_Option5, @c_SL_Hold_Status)
+         SET @c_SL_Hold_RlsLoseID    = dbo.fnc_GetParamValueFromString('@c_ReleaseLoseID', @c_Option5, @c_SL_Hold_RlsLoseID)
+         SET @c_SL_Hold_ExclQtyAlloc = dbo.fnc_GetParamValueFromString('@c_ExclQtyAlloc' , @c_Option5, @c_SL_Hold_ExclQtyAlloc)
+         SET @c_SL_Hold_ExclQtyPick  = dbo.fnc_GetParamValueFromString('@c_ExclQtyPick'  , @c_Option5, @c_SL_Hold_ExclQtyPick)
+
+         IF @c_SL_Hold_RlsLoseID    = '1' SET @c_SL_Hold_RlsLoseID    = 'Y'
+         IF @c_SL_Hold_ExclQtyAlloc = '1' SET @c_SL_Hold_ExclQtyAlloc = 'Y'
+         IF @c_SL_Hold_ExclQtyPick  = '1' SET @c_SL_Hold_ExclQtyPick  = 'Y'
+
+         IF @c_SL_Hold = '1' AND ISNULL(@c_Lot,'')='' AND ISNULL(@c_ID,'')='' AND
+            ISNULL(@c_StorerKey,'')<>'' AND ISNULL(@c_Sku,'')<>'' AND ISNULL(@c_Loc,'')<>''
+         BEGIN
+            SET @c_Temp_ID = ''
+
+            SELECT @c_Temp_ID = ID
+              FROM dbo.LOTxLOCxID WITH(NOLOCK)
+             WHERE Storerkey = @c_StorerKey
+               AND Sku = @c_Sku
+               AND Loc = @c_Loc
+               AND ID <> ''
+               AND LEFT(ID,LEN(@c_SL_Hold_ID_Prefix)) = @c_SL_Hold_ID_Prefix
+               AND Qty > 0
+            
+            IF ISNULL(@c_Temp_ID,'')<>'' AND NOT EXISTS(
+                  SELECT TOP 1 1 
+                  FROM (
+                     SELECT Lot, Loc, ID, Qty
+                       FROM dbo.LOTxLOCxID WITH(NOLOCK)
+                      WHERE ID = @c_Temp_ID
+                        AND ID <> ''
+                        AND Qty > 0
+                  ) X
+                  FULL JOIN (
+                     SELECT Lot, Loc, ID, Qty
+                       FROM dbo.LOTxLOCxID WITH(NOLOCK)
+                      WHERE Storerkey = @c_StorerKey
+                        AND Sku = @c_Sku
+                        AND Loc = @c_Loc
+                        AND Qty > 0
+                  ) Y ON X.Lot = Y.Lot AND X.Loc = Y.Loc AND X.ID = Y.ID
+                  WHERE ISNULL(X.Qty,0) <> ISNULL(Y.Qty,0)
+               )
+            BEGIN
+               SET @c_SL_Hold_ID = @c_Temp_ID
+            END
+            ELSE
+            BEGIN
+               SET @c_SL_Hold_ID = ''
+
+               EXECUTE dbo.nspg_GetKey
+                  'SKUxLOC_HOLD_ID'
+                , 10 
+                , @c_SL_Hold_ID OUTPUT
+                , @b_Success         OUTPUT
+                , @n_Err             OUTPUT
+                , @c_ErrMsg          OUTPUT
+            
+               IF @b_success=0
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @n_Err = 60023
+                  SELECT @c_Errmsg = 'Unable to obtain counter SKUxLOC_HOLD_ID [nspInventoryHoldWrapper]'
+                  GOTO EXIT_SP
+               END
+            
+               SET @c_SL_Hold_ID = ISNULL(TRIM(@c_SL_Hold_ID_Prefix),'') + ISNULL(TRIM(@c_SL_Hold_ID),'')
+
+               TRUNCATE TABLE #TEMP_LOTLOCID
+
+               INSERT INTO #TEMP_LOTLOCID (Lot, Loc, ID, Qty)
+               SELECT Lot, Loc, ID
+                    , Qty = Qty
+                          - CASE WHEN @c_SL_Hold_ExclQtyAlloc = 'Y' THEN QtyAllocated ELSE 0 END
+                          - CASE WHEN @c_SL_Hold_ExclQtyPick  = 'Y' THEN QtyPicked    ELSE 0 END
+                 FROM dbo.LOTxLOCxID WITH(NOLOCK)
+                WHERE Storerkey = @c_StorerKey
+                  AND Sku = @c_Sku
+                  AND Loc = @c_Loc
+                  AND Qty > 0
+                ORDER BY 1,2,3
+            
+               DECLARE CUR_SKUxLOC_Hold CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT Lot, Loc, ID, Qty
+                 FROM #TEMP_LOTLOCID
+                ORDER BY 1,2,3
+            
+               OPEN CUR_SKUxLOC_Hold
+            
+               WHILE @n_continue IN (1,2)
+               BEGIN
+                  FETCH NEXT FROM CUR_SKUxLOC_Hold INTO @c_Temp_Lot, @c_Temp_Loc, @c_Temp_ID, @c_Temp_Qty
+            
+                  IF @@FETCH_STATUS <> 0
+                     BREAK
+
+                  IF @c_Temp_Qty > 0
+                  BEGIN
+                     EXEC isp_MoveQtyToID
+                          @c_Lot        = @c_Temp_Lot
+                        , @c_Loc        = @c_Temp_Loc
+                        , @c_ID         = @c_Temp_ID
+                        , @c_ToID       = @c_SL_Hold_ID
+                        , @n_Qty        = @c_Temp_Qty
+                        , @b_Success    = @b_Success OUTPUT
+                        , @n_Err        = @n_Err     OUTPUT
+                        , @c_ErrMsg     = @c_ErrMsg  OUTPUT
+                        , @c_SourceKey  = ''
+                        , @c_SourceType = 'nspInventoryHoldWrapper'
+
+                     IF @b_Success = 0
+                        SET @n_continue = 3
+                  END
+               END
+               CLOSE CUR_SKUxLOC_Hold
+               DEALLOCATE CUR_SKUxLOC_Hold
+            
+               IF @n_continue = 3
+                  GOTO EXIT_SP
+            END
+            
+            SET @c_ID = @c_SL_Hold_ID
+            SET @c_Remark = 'SKUxLOC Hold: Sku=' + ISNULL(TRIM(@c_Sku),'') +', Loc=' + ISNULL(TRIM(@c_Loc),'') +' '+ @c_Remark
+            SET @c_Sku = ''
+            SET @c_Loc = ''
+         END
+         --ML03-E
+
          IF ISNULL(RTRIM(@c_lot) ,'') <> ''
          BEGIN
             SELECT @c_StorerKey = StorerKey
@@ -1040,7 +1215,7 @@ BEGIN
          SELECT @c_AllowMultiInvHoldRec = dbo.fnc_GetRight('', @c_Storerkey, '', 'AllowMultiInventoryHoldRec')
 
          SELECT @n_InvHld_Cnt = COUNT(1)
-           FROM InventoryHold
+           FROM InventoryHold WITH(NOLOCK)
           WHERE lot = ISNULL(@c_lot ,'')
             AND loc = ISNULL(@c_loc ,'')
             AND id  = ISNULL(@c_id ,'')
@@ -1193,6 +1368,78 @@ BEGIN
                SELECT @c_Errmsg = 'Execute nspInventoryHold Failed. [nspInventoryHoldWrapper]'
                GOTO EXIT_SP
             END
+
+            --ML03-S
+            IF @c_Hold = '0' AND @c_SL_Hold = '1'
+               AND ISNULL(@c_ID,'') <> '' AND ISNULL(@c_Lot,'')='' AND ISNULL(@c_Loc,'')='' 
+               AND @c_SL_Hold_RlsLoseID = 'Y'
+            BEGIN
+               SELECT @c_CurrStatus = ''
+                    , @c_CurrRemark = ''
+                    , @c_InventoryHoldKey = ''
+
+               SELECT TOP 1
+                      @c_CurrStatus = Status
+                    , @c_CurrRemark = Remark
+                    , @c_InventoryHoldKey = InventoryHoldKey
+                 FROM dbo.INVENTORYHOLD WITH(NOLOCK)
+                WHERE Lot = ISNULL(@c_Lot,'')
+                  AND Loc = ISNULL(@c_Loc,'')
+                  AND ID  = ISNULL(@c_ID ,'')
+                  AND Storerkey = ISNULL(@c_Storerkey,'')
+                  AND UCCNo = ISNULL(@c_UCCNo,'')
+                ORDER BY CASE WHEN Status = @c_SL_Hold_Status THEN 1 ELSE 2 END
+                       , CASE WHEN Hold   = @c_Hold           THEN 1 ELSE 2 END
+                       , CASE WHEN Remark LIKE '%SKUxLOC Hold: Sku=%' THEN 1 ELSE 2 END
+                       , InventoryHoldKey
+
+               IF @c_CurrStatus = @c_SL_Hold_Status AND
+                  @c_CurrRemark LIKE '%SKUxLOC Hold: Sku=%'
+               BEGIN
+                  TRUNCATE TABLE #TEMP_LOTLOCID
+
+                  INSERT INTO #TEMP_LOTLOCID (Lot, Loc, ID, Qty)
+                  SELECT Lot, Loc, ID, Qty
+                    FROM dbo.LOTxLOCxID WITH(NOLOCK)
+                   WHERE ID = @c_ID
+                     AND ID <> ''
+                     AND Qty > 0
+                   ORDER BY 1,2,3
+
+                  DECLARE CUR_SKUxLOC_Release CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                  SELECT Lot, Loc, ID, Qty
+                    FROM #TEMP_LOTLOCID
+                   ORDER BY 1,2,3
+
+                  OPEN CUR_SKUxLOC_Release
+
+                  WHILE @n_continue IN (1,2)
+                  BEGIN
+                     FETCH NEXT FROM CUR_SKUxLOC_Release INTO @c_Temp_Lot, @c_Temp_Loc, @c_Temp_ID, @c_Temp_Qty
+
+                     IF @@FETCH_STATUS <> 0
+                        BREAK
+
+                     EXEC isp_MoveQtyToID
+                          @c_Lot        = @c_Temp_Lot
+                        , @c_Loc        = @c_Temp_Loc
+                        , @c_ID         = @c_Temp_ID
+                        , @c_ToID       = ''
+                        , @n_Qty        = @c_Temp_Qty
+                        , @b_Success    = @b_Success OUTPUT
+                        , @n_Err        = @n_Err     OUTPUT
+                        , @c_ErrMsg     = @c_ErrMsg  OUTPUT
+                        , @c_SourceKey  = @c_InventoryHoldKey
+                        , @c_SourceType = 'nspInventoryHoldWrapper'
+
+                     IF @b_Success = 0
+                        SET @n_continue = 3
+                  END
+                  CLOSE CUR_SKUxLOC_Release
+                  DEALLOCATE CUR_SKUxLOC_Release
+               END
+            END
+            --ML03-E
          END
       END -- ELSE [IF @b_HoldByBatch = 0]
    END -- IF @n_continue = 1 OR @n_continue = 2
