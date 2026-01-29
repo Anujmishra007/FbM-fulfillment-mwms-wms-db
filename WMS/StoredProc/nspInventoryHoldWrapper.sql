@@ -1070,6 +1070,14 @@ BEGIN
             BEGIN
                SET @c_SL_Hold_ID = @c_Temp_ID
             END
+            ELSE IF @c_Hold = '0'
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @b_Success = 0
+               SELECT @n_Err = 60024
+               SELECT @c_Errmsg = 'Movable Unit not found for SKUxLOC_HOLD Release. [nspInventoryHoldWrapper]'
+               GOTO EXIT_SP
+            END
             ELSE
             BEGIN
                SET @c_SL_Hold_ID = ''
