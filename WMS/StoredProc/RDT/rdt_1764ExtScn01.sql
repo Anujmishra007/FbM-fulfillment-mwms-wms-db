@@ -4,22 +4,22 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/****************************************************************************/
-/* Store procedure: rdt_1764ExtScn01                                        */
-/* Copyright      : Maersk                                                  */
-/* Customer       : Granite Levis                                           */
-/*                                                                          */
-/*                                                                          */
-/* Date       Rev    Author   Purposes                                      */
-/* 2025-03-11 1.0    NLT013   UWP-31321 Create                              */
-/* 2025-05-21 1.1    NLT013   UWP-34785 Add new Exit Screen                 */
-/* 2025-07-11 1.2.0  NLT013   UWP-37578 Option issue                        */
-/* 2025-10-10 1.3.0  NickT    FCR-7928 Reallocate for short task            */
-/* 2025-10-10 1.3.1  NickT    FCR-7928 Do not clear ListKey                 */
-/* 2025-11-08 1.4.0  NLT013   UWP-43838 Skip InProgress/Completed Task      */
-/* 2025-11-08 1.4.1  NLT013   UWP-43838 Skip InProgress/Completed Task      */
-/* 2025-11-14 1.5.0  NLT013   UWP-43847 Fix issue: PickDetail status is not updated */
-/****************************************************************************/
+/************************************************************************************************/
+/* Store procedure: rdt_1764ExtScn01                                                            */
+/* Copyright      : Maersk                                                                      */
+/* Customer       : Granite Levis                                                               */
+/*                                                                                              */
+/*                                                                                              */
+/* Date       Rev    Author   Purposes                                                          */
+/* 2025-03-11 1.0    NLT013   UWP-31321 Create                                                  */
+/* 2025-05-21 1.1    NLT013   UWP-34785 Add new Exit Screen                                     */
+/* 2025-07-11 1.2.0  NLT013   UWP-37578 Option issue                                            */
+/* 2025-10-10 1.3.0  NickT    FCR-7928 Reallocate for short task                                */
+/* 2025-10-10 1.3.1  NickT    FCR-7928 Do not clear ListKey                                     */
+/* 2025-11-08 1.4.0  NLT013   UWP-43838 Skip InProgress/Completed Task                          */
+/* 2025-11-14 1.5.0  NLT013   UWP-43847 Fix issue: PickDetail status is not updated             */ 
+/* 2025-01-29 1.6.0  NLT013   UWP-47645 Fix issue: QCmd is not proceed in some scenarios        */
+/************************************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn01] (
    @nMobile          INT,
@@ -141,7 +141,7 @@ BEGIN
       DECLARE @tPickDetail TABLE
       (
          RowIndex INT IDENTITY(1,1),
-         PickDetailKey NVARCHAR(18) PRIMARY KEY
+         PickDetailKey NVARCHAR(18)
       )
 
       DECLARE @tTaskDetail TABLE
@@ -655,12 +655,12 @@ BEGIN
                -- Submit task to QCommander
                BEGIN TRY
                   EXEC isp_QCmd_SubmitTaskToQCommander
-                       @cTaskType           = 'D'                  -- 'T' - TransmitlogKey, 'D' - Data Stream 
+                       @cTaskType           = 'O'                  -- -- D=By Datastream, T=Transmitlog, O=Others
                      , @cStorerKey          = @cStorerKey
                      , @cDataStream         = @cDataStream
                      , @cCmdType            = @cCmdType 
                      , @cCommand            = @cExecStatements
-                     , @cTransmitlogKey     = '' 
+                     , @cTransmitlogKey     = @cTaskDetailKey 
                      , @nThreadPerAcct      = @nThreadPerAcct 
                      , @nThreadPerStream    = @nThreadPerStream 
                      , @nMilisecondDelay    = @nMilisecondDelay  
