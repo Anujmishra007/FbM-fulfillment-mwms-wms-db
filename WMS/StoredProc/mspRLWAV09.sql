@@ -85,6 +85,7 @@ BEGIN
          , @c_Areakey_P                NVARCHAR(10)   = '' 
          , @c_ToLoc_P                  NVARCHAR(10)   = '' 
 
+         , @n_QtyAllocated             INT   = 0                                    --2026-01-29
          , @n_Volume                   FLOAT = 0.00  
          , @n_TTLVolume                FLOAT = 0.00           
          , @n_CubeUOM1                 FLOAT = 0.00        
@@ -328,17 +329,13 @@ BEGIN
                                     AND pd.Loc = lli.loc  
                                     AND pd.ID  = lli.ID  
       JOIN LOC l (NOLOCK)  ON pd.loc = l.loc  
-      LEFT OUTER JOIN TASKDETAIL tdr (NOLOCK) ON tdr.TaskType IN ('RPF','ASTRPT')  
-                                             AND tdr.Storerkey= pd.Storerkey  
-                                             AND tdr.Sku   = pd.Sku  
-                                             AND tdr.FinalLoc = pd.Loc  
-                                             AND tdr.[Status] NOT IN ('9','X')  
       OUTER APPLY (SELECT QtyAllocated = SUM(td.Qty)   
                    FROM TASKDETAIL td (NOLOCK)   
                    WHERE td.TaskType= 'FCP'  
                    AND td.Storerkey = pd.Storerkey  
                    AND td.Sku       = pd.Sku  
-                   AND td.fromLoc   = pd.Loc  
+                   AND td.fromLoc   = pd.Loc 
+                   AND td.FromID    = pd.ID                                         --2026-01-29                    
                    AND td.UOM       = '6'  
                    AND td.[Status] NOT IN ('9','X')  
                   ) tdp                     
@@ -346,7 +343,6 @@ BEGIN
       AND PD.Qty > 0  
       AND PD.[Status] = '0'  
       AND PD.TaskdetailKey = '' 
-      AND tdr.Taskdetailkey IS NULL 
       GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                    
             ,  lli.Qty,lli.QtyPicked,lli.PendingMoveIn,ISNULL(tdp.QtyAllocated,0)
             ,  l.PutawayZone, l.LoseId  
@@ -452,7 +448,7 @@ BEGIN
                
                SET @n_QtyToReplen = @n_QtyToReplen - @n_Qty
                SET @n_QtyNeed = @n_QtyNeed - @n_Qty
-               SET @c_ToID    = @c_FromID
+               SET @c_ToID    = ''                                                  --2026-01-28 
                SET @c_FinalID = CASE WHEN @c_FinalLocLoseID = 1 THEN '' ELSE @c_FromID END
                SET @c_Taskdetailkey = '' 
 
@@ -504,6 +500,7 @@ BEGIN
 
                   UPDATE TaskDetail WITH (ROWLOCK)
                   SET GroupKey = @c_GroupKey
+                     ,TrafficCop = NULL                                             --2026-01-28           
                   WHERE TaskDetailkey = @c_Taskdetailkey
                   AND GroupKey = ''
 
@@ -520,13 +517,20 @@ BEGIN
                   VALUES (@n_UCC_RowRef, @c_UCCNo, @c_Storerkey, @c_Sku
                         , @c_Lot, @c_FinalLoc, @c_FinalID, @c_Taskdetailkey)
 
-                  UPDATE UCC WITH (ROWLOCK)
-                     SET [Status] = '3'
-                  WHERE UCC.UCC_RowRef = @n_UCC_RowRef
-
-                  IF @@ERROR <> 0
+                  --2026-01-28 Not to SET to '3' if Custom Trigger Add updated it
+                  IF EXISTS ( SELECT 1 FROM UCC (NOLOCK) 
+                              WHERE UCC.UCC_RowRef = @n_UCC_RowRef
+                              AND   UCC.[Status] = '1'
+                            )
                   BEGIN
-                     SET @n_Continue = 3
+                     UPDATE UCC WITH (ROWLOCK)
+                        SET [Status] = '3'
+                     WHERE UCC.UCC_RowRef = @n_UCC_RowRef
+
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @n_Continue = 3
+                     END
                   END
 
                   SET @n_UCCPerToteID = @n_UCCPerToteID + 1
@@ -754,18 +758,55 @@ BEGIN
             WHERE trp.Storerkey = @c_Storerkey
             AND   trp.Sku       = @c_Sku
             AND   trp.ToLoc     = @c_FromLoc
+            AND   trp.ToID      = @c_FromID                                         --2026-01-29
             
+            IF @n_Cnt = 0                                                           --2026-01-29
+            BEGIN
+               SET @n_QtyAllocated = 0
+               SELECT @n_QtyAllocated = SUM(td.Qty)
+               FROM dbo.TaskDetail td (NOLOCK) 
+               WHERE td.Storerkey = @c_Storerkey
+               AND   td.Sku       = @c_Sku
+               AND   td.TaskType  IN ('FCP')                               
+               AND   td.FromLOC  = @c_FromLoc
+               AND   td.FromID   = @c_FromID   
+               AND   td.UOM      = '6'          
+               AND   td.SourceType= @c_SourceType
+               AND   td.[Status] NOT IN ('X','9') 
+
+               SET @n_QtyAllocated = @n_QtyAllocated + @n_Qty
+               
+               SELECT TOP 1 @n_Cnt = 1
+               FROM  #PICKDETAIL_WIP AS pw
+               CROSS APPLY (SELECT Lot_pw = CASE WHEN @c_Lot = '' THEN pw.Lot ELSE @c_Lot END
+                                  ,Lot    = @c_Lot 
+                           ) p
+               JOIN  dbo.LOTxLOCxID lli (NOLOCK) ON   lli.Lot = p.Lot_pw
+                                                 AND  lli.Loc = pw.Loc
+                                                 AND  lli.ID  = pw.ID
+               WHERE pw.Storerkey = @c_Storerkey
+               AND   pw.Sku       = @c_Sku
+               AND   pw.UOM       = '6'
+               AND   p.Lot        = @c_Lot               
+               AND   pw.LOC       = @c_FromLoc
+               AND   pw.ID        = @c_FromID
+               HAVING SUM(lli.Qty - lli.QtyPicked - @n_QtyAllocated) >= 0
+            END 
+                       
             IF @n_Cnt = 0
             BEGIN
+               -- FCP Reftaskkey = '' as picking from multiple RPF carton (if pickface's max carton limit > 1)
                SELECT TOP 1 @n_Cnt = 1
                FROM dbo.TaskDetail td (NOLOCK) 
                WHERE td.Storerkey = @c_Storerkey
                AND   td.Sku       = @c_Sku
-               AND   td.TaskType  = 'RPF'
-               AND   td.FinalLOC  = @c_FromLoc
+               AND   td.TaskType  IN ('RPF','ASTRPT')                               --2026-01-29
+                AND   td.FinalLOC  = @c_FromLoc
                AND   td.SourceType= @c_SourceType
-               AND   td.[Status] BETWEEN '0' AND '8'
-               ORDER BY td.TaskDetailKey DESC
+               AND   td.[Status] NOT IN ('9','X')                                   --2026-01-29
+               ORDER BY CASE WHEN td.TaskType = 'RPF' THEN 1                        --2026-01-29
+                             ELSE 9 END
+                    ,   td.TaskDetailKey DESC
             END
 
             IF @n_Cnt = 1
@@ -994,7 +1035,8 @@ BEGIN
             ELSE  
             BEGIN  
                UPDATE TASKDETAIL WITH (ROWLOCK)  
-               SET Groupkey = @c_Taskdetailkey  
+               SET Groupkey = @c_Taskdetailkey 
+                  ,Trafficcop = NULL                                                --2026-01-28 
                WHERE TaskDetailKey = @c_Taskdetailkey    
             END  
          END  
