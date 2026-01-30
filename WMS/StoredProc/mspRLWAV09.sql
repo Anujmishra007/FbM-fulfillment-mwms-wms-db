@@ -97,8 +97,8 @@ BEGIN
          , @n_MaxUCCVol                FLOAT = 0.00          
          , @n_DropIDVol                FLOAT = 0.00  
          , @n_PackUOMQty               INT = 0                                      --CR v3.4 
-         , @n_QtyleftToFulFill         INT = 0                                      --CR v3.4            
-         , @n_NoOfGroup                INT = 0
+         , @n_QtyleftToFulFill         INT = 0                                      --CR v3.4 
+         , @n_QtyToTake                INT = 0                                      --CR v3.4
          , @n_MaxQtyPerGroup           INT = 0
          , @n_Casecnt                  INT = 0
          , @c_UCCNo                    NVARCHAR(20) = ''  
@@ -909,6 +909,12 @@ BEGIN
             END                                                                           --CR v3.4 - END
                  
             SET @n_QtyLeftTofulfill = @n_Qty                                              --CR v3.4 - START
+            
+            IF @c_UOM = '2' AND @c_UCCNo > '' 
+            BEGIN
+               SET @n_QtyLeftTofulfill = 1                                                
+            END   
+                     
             WHILE @n_QtyLeftTofulfill > 0 AND @n_Continue IN (1,2)                        --CR v3.4  
             BEGIN
                IF @c_Groupkey = ''
@@ -933,14 +939,20 @@ BEGIN
                   BEGIN
                      IF @n_QtyLeftTofulfill > @n_MaxQtyPerGroup
                      BEGIN
-                        SET @n_Qty = @n_MaxQtyPerGroup
+                        SET @n_QtyToTake = @n_MaxQtyPerGroup
                      END
                      ELSE
                      BEGIN
-                        SET @n_Qty = @n_QtyLeftTofulfill
+                        SET @n_QtyToTake = @n_QtyLeftTofulfill
                      END
                   END
-
+                  
+                  IF @c_UCCNo = ''
+                  BEGIN
+                     SET @n_UOMQty = @n_QtyToTake
+                     SET @n_Qty    = @n_QtyToTake                                              
+                  END
+                  
                   EXEC isp_InsertTaskDetail     
                       @c_TaskType              = @c_TaskType               
                      ,@c_Storerkey             = @c_Storerkey  
@@ -982,10 +994,10 @@ BEGIN
                      SET @n_Continue = 3  
                   END  
 
-                  IF @n_Qty < @n_MaxQtyPerGroup                                    --CR v3.4 - START
+                  IF @n_QtyToTake < @n_MaxQtyPerGroup                                    --CR v3.4 - START
                   BEGIN
-                     SET @n_TTLVolume = @n_Qty * @n_Cube
-                     SET @n_VolumeLeftTofulfill = @n_DropIDVol - @n_TTLVolume
+                     SET @n_TTLVolume = @n_QtyToTake * @n_Cube
+                     SET @n_VolumeLeftTofulfill = @n_VolumeLeftTofulfill - @n_TTLVolume
                   END
                   ELSE 
                   BEGIN
@@ -993,7 +1005,7 @@ BEGIN
                      SET @n_VolumeLeftTofulfill = 0.00
                      SET @c_Groupkey  = ''
                   END
-                  SET @n_QtyLeftTofulfill = @n_QtyLeftTofulfill - @n_Qty              
+                  SET @n_QtyLeftTofulfill = @n_QtyLeftTofulfill - @n_QtyToTake              
                END                                                                  --CR v3.4 - END
             END
          END
