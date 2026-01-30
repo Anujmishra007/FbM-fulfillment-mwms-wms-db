@@ -87,14 +87,17 @@ BEGIN
 
          , @n_QtyAllocated             INT   = 0                                    --2026-01-29
          , @n_Volume                   FLOAT = 0.00  
-         , @n_TTLVolume                FLOAT = 0.00           
+         , @n_TTLVolume                FLOAT = 0.00  
+         , @n_VolumeLeftToFulFill      FLOAT = 0.00                                 --CR v3.4    
+         , @n_Cube                     FLOAT = 0.00                                 --CR v3.4  
+                   
          , @n_CubeUOM1                 FLOAT = 0.00        
          , @n_CubeUOM3                 FLOAT = 0.00 
          , @n_MaxSkuVol                FLOAT = 0.00 
          , @n_MaxUCCVol                FLOAT = 0.00          
          , @n_DropIDVol                FLOAT = 0.00  
-         , @n_QtyToRelease             INT = 0
-         , @n_UOMQtyToRelease          INT = 0
+         , @n_PackUOMQty               INT = 0                                      --CR v3.4 
+         , @n_QtyleftToFulFill         INT = 0                                      --CR v3.4            
          , @n_NoOfGroup                INT = 0
          , @n_MaxQtyPerGroup           INT = 0
          , @n_Casecnt                  INT = 0
@@ -314,6 +317,29 @@ BEGIN
       END   
    END  
 
+ IF @n_Continue = 1 OR @n_Continue = 2  
+   BEGIN  
+      SET @c_Sku = ''
+      SELECT TOP 1 @c_Sku = S.Sku
+      FROM #PICKDETAIL_WIP PD 
+      JOIN SKU s (NOLOCK) ON  s.Storerkey = PD.Storerkey 
+                          AND s.Sku = PD.Sku
+      WHERE PD.UOM = '6'  
+      AND PD.Qty > 0  
+      AND PD.[Status] = '0'  
+      AND PD.TaskdetailKey = ''
+      AND s.StdCube = 0.00
+ 
+      IF @c_Sku > ''
+      BEGIN  
+         SET @n_Continue = 3    
+         SET @n_err = 83025   
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                      +': StdCube is not setup Sku: ' + @c_Sku
+                      +'. (mspRLWAV09)'         
+      END        
+   END
+   
    --Replenishment By UCCNo
    IF @n_Continue = 1 OR @n_Continue = 2  
    BEGIN  
@@ -618,8 +644,10 @@ BEGIN
                         ELSE ', '''' AS LPLDLoc' 
                         END      
           +       ' ,AD.Areakey'   
-          +       ' ,ISNULL(P.CubeUOM1, 0.00)'    
-          +       ' ,ISNULL(P.CubeUOM3, 0.00)'    
+          --+       ' ,ISNULL(P.CubeUOM1, 0.00)'                                    --CR v3.4
+         -- +       ' ,ISNULL(P.CubeUOM3, 0.00)'                                    --CR v3.4
+          +        ' ,CubeUOM1 = S.StdCube*P.CaseCnt'                               --CR v3.4
+          +        ' ,CubeUOM3 = S.StdCube'                                         --CR v3.4
           +       ' ,LOC.LocLevel'   
           +       ' ,P.Casecnt'   
           + ' FROM WAVEDETAIL WD (NOLOCK)'  
@@ -686,8 +714,9 @@ BEGIN
           + CASE WHEN @c_CustomToLoc = '' 
                  THEN ' , ISNULL(LPLD.Loc,'''')' ELSE '' END
           +        ' , AD.Areakey'
-          +        ' , ISNULL(P.CubeUOM1, 0.00)'
-          +        ' , ISNULL(P.CubeUOM3, 0.00)'
+         -- +        ' , ISNULL(P.CubeUOM1, 0.00)'                                  --CR v3.4
+         -- +        ' , ISNULL(P.CubeUOM3, 0.00)'                                  --CR v3.4
+          +        ' , S.StdCube'                                                   --CR v3.4
           +        ' , LOC.LocLevel'
           +        ' , P.Casecnt'
           + ' ORDER BY O.Route'                                                     
@@ -818,6 +847,7 @@ BEGIN
          IF @c_UOM IN ('2', '6')  
          BEGIN
             SET @n_Volume = 0.00
+            SET @n_PackUOMQty= 1.00                                                 --CR v3.4            
             SET @c_TaskType = 'FCP'  
             SET @c_PickMethod = 'PP'
             SET @n_DropIDVol  = @n_MaxSkuVol
@@ -831,28 +861,27 @@ BEGIN
                SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Userdefine09 = @c_Wavekey'
             END
             
-            IF @c_UOM = '2' AND @c_UCCNo > ''
+             IF @c_UOM = '2' AND @c_UCCNo > ''
             BEGIN
-               SET @n_Volume = 1          -- Max 14
-               SET @n_DropIDVol = @n_MaxUCCVol
+               SET @n_Volume     = 1          -- Max 14
+               SET @n_Cube       = 1                                                --CR v3.4
+               SET @n_PackUOMQty = 1.00                                             --CR v3.4
+               SET @n_DropIDVol  = @n_MaxUCCVol
             END
             ELSE IF @c_UOM = '2' AND @c_UCCNo = ''
             BEGIN
                IF @n_Casecnt > 0 
                BEGIN
-                  SET @n_Volume = @n_CubeUOM1 * (@n_Qty / @n_Casecnt) 
+                  SET @n_Volume     = @n_CubeUOM1 * (@n_Qty / @n_Casecnt) 
+                  SET @n_Cube       = @n_CubeUOM1                                   --CR v3.4
+                  SET @n_PackUOMQty = @n_Casecnt                                    --CR v3.4
                END
             END
             ELSE IF @c_UOM = '6'
             BEGIN
-               SET @n_Volume = @n_CubeUOM3 * @n_Qty      --EA
-            END
-
-            SET @n_TTLVolume = ISNULL(@n_TTLVolume, 0.00) + @n_Volume
-
-            IF @c_Groupkey > '' AND @n_TTLVolume > @n_DropIDVol
-            BEGIN
-               SET @c_Groupkey = ''
+               SET @n_Volume     = @n_CubeUOM3 * @n_Qty      --EA
+               SET @n_Cube       = @n_CubeUOM3                                      --CR v3.4
+               SET @n_PackUOMQty = 1.00                                             --CR v3.4
             END
 
             IF @c_Orderkey_P <> @c_Orderkey
@@ -875,36 +904,20 @@ BEGIN
                SET @c_Groupkey = ''
             END
             
-            SET @n_NoOfGroup = 1
-            SET @n_MaxQtyPerGroup = 0
-            IF @c_Groupkey = ''  
+            IF @c_Groupkey > '' AND @n_DropIDVol > 0.00 AND @n_VolumeLeftToFulFill > 0    --CR v3.4 - START
             BEGIN
-               SET @n_TTLVolume = @n_Volume
-
-               IF @n_TTLVolume > @n_DropIDVol AND @c_UCCNo = '' 
+               IF  @n_DropIDVol < @n_VolumeLeftToFulFill + @n_Cube 
                BEGIN
-                  --Check if need how many groups
-                  IF @n_DropIDVol > 0.00 
-                  BEGIN
-                     SET @n_NoOfGroup = CEILING(@n_TTLVolume / @n_DropIDVol)
-                  END
- 
-                  IF (@c_UOM = '2' AND @n_CubeUOM1 > 0) OR (@c_UOM > '2' AND @n_CubeUOM3 > 0)
-                  BEGIN
-                     SET @n_MaxQtyPerGroup = FLOOR(CASE WHEN @c_UOM = '2' and @c_UCCNo = ''
-                                                        THEN (@n_DropIDVol / @n_CubeUOM1) * @n_Casecnt
-                                                        ELSE  @n_DropIDVol / @n_CubeUOM3
-                                                        END
-                                                  )
-                  END
-               END
-            END
+                  SET @c_Groupkey = ''
+               END              
+            END                                                                           --CR v3.4 - END
                  
-            SET @n_QtyToRelease = @n_Qty
-            WHILE @n_NoOfGroup > 0 AND @n_Continue IN (1,2) 
+            SET @n_QtyLeftTofulfill = @n_Qty                                              --CR v3.4 - START
+            WHILE @n_QtyLeftTofulfill > 0 AND @n_Continue IN (1,2)                        --CR v3.4  
             BEGIN
                IF @c_Groupkey = ''
                BEGIN
+                  SET @n_VolumeLeftTofulfill = @n_DropIDVol                               --CR v3.4
                   EXEC dbo.nspg_GetKey @KeyName = @c_KeyName
                                      , @fieldlength = 10
                                      , @keystring = @c_Groupkey   OUTPUT
@@ -919,17 +932,16 @@ BEGIN
                
                IF @n_Continue IN (1,2) 
                BEGIN
+                  SET @n_MaxQtyPerGroup = FLOOR((@n_VolumeLeftTofulfill/@n_Cube)*@n_PackUOMQty)
                   IF @n_MaxQtyPerGroup > 0
                   BEGIN
-                     IF @n_QtyToRelease > @n_MaxQtyPerGroup
+                     IF @n_QtyLeftTofulfill > @n_MaxQtyPerGroup
                      BEGIN
-                        SET @n_QtyToRelease = @n_QtyToRelease - @n_MaxQtyPerGroup
                         SET @n_Qty = @n_MaxQtyPerGroup
                      END
                      ELSE
                      BEGIN
-                        SET @n_Qty = @n_QtyToRelease
-                        SET @n_QtyToRelease = 0
+                        SET @n_Qty = @n_QtyLeftTofulfill
                      END
                   END
 
@@ -972,11 +984,21 @@ BEGIN
                   IF @b_Success <> 1   
                   BEGIN  
                      SET @n_Continue = 3  
-                     SET @n_NoOfGroup = 0
                   END  
 
-                  SET @n_NoOfGroup = @n_NoOfGroup - 1
-               END
+                  IF @n_Qty < @n_MaxQtyPerGroup                                    --CR v3.4 - START
+                  BEGIN
+                     SET @n_TTLVolume = @n_Qty * @n_Cube
+                     SET @n_VolumeLeftTofulfill = @n_DropIDVol - @n_TTLVolume
+                  END
+                  ELSE 
+                  BEGIN
+                     SET @n_TTLVolume = 0.00
+                     SET @n_VolumeLeftTofulfill = 0.00
+                     SET @c_Groupkey  = ''
+                  END
+                  SET @n_QtyLeftTofulfill = @n_QtyLeftTofulfill - @n_Qty              
+               END                                                                  --CR v3.4 - END
             END
          END
 
