@@ -20,4 +20,7 @@ execute rdt.rdtAddMsg 234862, 10, '234862 UpdTaskFail',     'us_english', 1764, 
 --UWP-43838
 execute rdt.rdtAddMsg 234854, 10, '234854 DropIDIsNotClosed',   'us_english', 1764, 0, '234854 DropID is not closed yet'
 
+-- UWP-47931
+execute rdt.rdtAddMsg 234863, 10, '234863 HoldUCCFail',     'us_english', 1764, 0, '234863 Hold UCC Failed'
+
 SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 234851 AND 234900
