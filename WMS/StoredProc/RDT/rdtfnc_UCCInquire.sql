@@ -22,8 +22,7 @@ GO
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCInquire] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
-   @cErrMsg    NVARCHAR( 20) OUTPUT
-)
+   @cErrMsg    NVARCHAR( 1024) OUTPUT )
 AS
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
@@ -56,18 +55,9 @@ DECLARE
    @cPPK           NVARCHAR( 5),
 
    @cDecodeSP           NVARCHAR( 20),
-   @cID                 NVARCHAR( 18),
    @cExtendedUCCInfoSP  NVARCHAR(20),
    @cSQL                NVARCHAR(MAX),
    @cSQLParam           NVARCHAR(MAX),
-   
-   -- FCR-9907: New display fields from GetUCCInfo
-   @cUCCID              NVARCHAR( 18),  -- UCC.ID
-   @cUCCLoc             NVARCHAR( 10),  -- UCC.Location
-   @cSKUSUSR3           NVARCHAR( 20),  -- SKU.SUSR3
-   @cUCCExternKey       NVARCHAR( 20),  -- UCC.ExternKey
-   @cOrderExternKey     NVARCHAR( 20),  -- Orders.ExternOrderKey
-   @cLottable01         NVARCHAR( 20),  -- LotAttribute.Lottable01
    
    @cExtInfo01          NVARCHAR(20),
    @cExtInfo02          NVARCHAR(20),
@@ -100,8 +90,7 @@ DECLARE
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
    @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),
 
-   @cBarcode              NVARCHAR( 200),
-   @cMobBarcode           NVARCHAR( 200) = ''
+   @cBarcode              NVARCHAR( MAX)
 
 -- Getting Mobile information
 SELECT
@@ -211,16 +200,13 @@ Step_1:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
-      -- Get barcode from input field
-      SET @cBarcode = @cInField01
-      SET @cMobBarcode = @cBarcode
 
       IF @cDecodeSP <> ''
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
-               ' @cID OUTPUT, @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               ' @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                ' @nMobile      INT,           ' +
                ' @nFunc        INT,           ' +
@@ -229,15 +215,13 @@ BEGIN
                ' @nInputKey    INT,           ' +
                ' @cFacility    NVARCHAR( 5),  ' +
                ' @cStorerKey   NVARCHAR( 15), ' +
-               ' @cBarcode     NVARCHAR( 200), ' +
-               ' @cID          NVARCHAR( 18)  OUTPUT, ' +
+               ' @cBarcode     NVARCHAR( MAX), ' +
                ' @cUCC         NVARCHAR( 20)  OUTPUT, ' +
                ' @nErrNo       INT            OUTPUT, ' +
-               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
-
+               ' @cErrMsg      NVARCHAR( 1024)  OUTPUT'
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcode,
-               @cID OUTPUT, @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+               @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
          END
 
       -- Check for DecodeSP errors immediately
@@ -480,7 +464,7 @@ BEGIN
 
       V_String1      = @cExtendedUCCInfoSP,
       V_String2      = @cDecodeSP,
-      V_Barcode      = @cMobBarcode,
+      V_Barcode      = @cBarcode,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

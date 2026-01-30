@@ -20,16 +20,14 @@ CREATE OR ALTER PROC [RDT].[rdt_729DecodeSP01] (
     @cFacility   NVARCHAR(5),
     @cStorerKey  NVARCHAR(15),
     @cBarcode    NVARCHAR(200),
-    @cID         NVARCHAR(18)   OUTPUT,   -- added so main proc can consume
     @cUCC        NVARCHAR(20)   OUTPUT,
     @nErrNo      INT            OUTPUT,
-    @cErrMsg     NVARCHAR(20) OUTPUT
+    @cErrMsg     NVARCHAR(1024) OUTPUT
 )
 AS
 BEGIN
     SET NOCOUNT ON
     SET @cUCC  = N''
-    SET @cID   = N''
     SET @nErrNo = 0
     SET @cErrMsg = N''
 
@@ -37,7 +35,7 @@ BEGIN
     IF ISNULL(@cBarcode, N'') = N''
     BEGIN
         SET @nErrNo = 257751 -- 'Barcode/UCC required'
-        SET @cErrMsg = CAST(ISNULL(NULLIF(rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'), N''), N'Err ' + CAST(@nErrNo AS NVARCHAR(10))) AS NVARCHAR(20))
+        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
         GOTO Quit
     END
 
@@ -67,12 +65,12 @@ BEGIN
 
             SET @pos = @next + 1
             SET @i += 1
-            IF @i > 9 BREAK -- we only care up to 9 segments for this format
+            IF @i > 9 BREAK 
         END
     END TRY
     BEGIN CATCH
         SET @nErrNo = 257754 -- 'DECODE FAILURE'
-        SET @cErrMsg = CAST(ISNULL(NULLIF(rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'), N''), N'Err ' + CAST(@nErrNo AS NVARCHAR(10))) AS NVARCHAR(20))
+        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
         GOTO Quit
     END CATCH
 
@@ -89,7 +87,7 @@ BEGIN
         IF LEN(ISNULL(@cUCC, '')) = 0
         BEGIN
             SET @nErrNo = 257752 -- 'INVALID FORMAT'
-            SET @cErrMsg = CAST(ISNULL(NULLIF(rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'), N''), N'Err ' + CAST(@nErrNo AS NVARCHAR(10))) AS NVARCHAR(20))
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
             GOTO Quit
         END
     END
@@ -101,7 +99,7 @@ BEGIN
                     AND UCCNo = @cUCC)
     BEGIN
         SET @nErrNo = 257753 -- 'UCC NOT FOUND'
-        SET @cErrMsg = CAST(ISNULL(NULLIF(rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'), N''), N'Err ' + CAST(@nErrNo AS NVARCHAR(10))) AS NVARCHAR(20))
+        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
         SET @cUCC = N''
         GOTO Quit
     END
@@ -112,49 +110,6 @@ BEGIN
     FROM dbo.UCC WITH (NOLOCK)
     WHERE StorerKey = @cStorerKey
         AND UCCNo = @cUCC
-
-    -- 1. Validate DB Integrity: Does the UCC even have a SKU?
-    IF ISNULL(@cUCCSKU, '') = ''
-    BEGIN
-        SET @nErrNo = 257758 -- 'SKU MISMATCH'
-        -- Message: "UCC has no SKU" logic
-        SET @cErrMsg = CAST(ISNULL(NULLIF(rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'), N''), N'Err ' + CAST(@nErrNo AS NVARCHAR(10))) AS NVARCHAR(20))
-        SET @cUCC = N''
-        GOTO Quit
-    END
-
-    -- 2. Validate Scanned SKU (if available) against DB SKU
-    -- If user scanned a QR code, @s1 holds the SKU. We must verify it matches the UCC's real SKU.
-    IF ISNULL(@s1, '') <> '' 
-    BEGIN
-        IF @s1 <> @cUCCSKU
-        BEGIN
-            SET @nErrNo = 257758 -- 'SKU MISMATCH'
-            -- Message: "Scanned SKU does not match UCC SKU"
-            SET @cErrMsg = CAST(ISNULL(NULLIF(rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'), N''), N'Err ' + CAST(@nErrNo AS NVARCHAR(10))) AS NVARCHAR(20))
-            SET @cUCC = N''
-            GOTO Quit
-        END
-    END
-
-    -- 3. Verify SKU is valid and exists in SKU table master list
-    IF NOT EXISTS (SELECT 1
-                    FROM dbo.SKU WITH (NOLOCK)
-                    WHERE StorerKey = @cStorerKey
-                    AND SKU = @cUCCSKU)
-    BEGIN
-        SET @nErrNo = 257758 -- 'SKU MISMATCH'
-        SET @cErrMsg = CAST(ISNULL(NULLIF(rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'), N''), N'Err ' + CAST(@nErrNo AS NVARCHAR(10))) AS NVARCHAR(20))
-        SET @cUCC = N''
-        GOTO Quit
-    END
-
-    -- Optionally return ID if available
-    SELECT TOP(1)
-            @cID = CAST(ISNULL(ID, 0) AS NVARCHAR(18))
-    FROM dbo.UCC WITH (NOLOCK)
-    WHERE StorerKey = @cStorerKey
-        AND UCCNo     = @cUCC
 
     -- success
     SET @nErrNo = 0

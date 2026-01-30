@@ -71,7 +71,6 @@ BEGIN
         @cExtInfo01 = 'ID:    ' + CAST(U.ID AS NVARCHAR(15)),      -- UCC.ID with prefix
         @cExtInfo02 = 'LOC:  ' + CAST(U.Loc AS NVARCHAR(15)),    -- UCC.LOC with prefix
         @cExtInfo04 = CAST(U.ExternKey AS NVARCHAR(20)), -- UCC.ExternKey
-        -- placeholders for later joins
         @cExtInfo03 = N'',
         @cExtInfo05 = N'',
         @cExtInfo06 = N''
@@ -79,7 +78,7 @@ BEGIN
 
     IF @@ROWCOUNT = 0
     BEGIN
-        SET @nErrNo  = 257753 -- 'UCC NOT FOUND'
+        SET @nErrNo  = 257801 -- 'UCC NOT FOUND'
         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
         GOTO Quit
     END
@@ -109,9 +108,6 @@ BEGIN
         AND U4.UCCNo     = @cUCC
         AND U4.Lot       = LA.Lot
         WHERE LA.StorerKey = @cStorerKey
-
-    -- Reserve EXTINFO07 for future use
-    SET @cExtInfo07 = N''
 
     -- Success
     SET @nErrNo  = 0
