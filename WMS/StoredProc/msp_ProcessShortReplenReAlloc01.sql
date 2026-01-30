@@ -289,7 +289,7 @@ BEGIN
                BEGIN TRY
                   EXEC dbo.msp_ProcessShortPickReAlloc03 @c_Wavekey = @c_GetWavekey -- nvarchar(10)
                                                        , @c_SKU = @c_SKU -- nvarchar(20)
-                                                       , @c_UCCNo = @c_UCCNo -- nvarchar(20)
+                                                       , @c_Loc = @c_UCCNo -- nvarchar(20)
                                                        , @c_Taskdetailkey = N'' -- nvarchar(10)
                                                        , @b_Success = @b_Success OUTPUT -- int
                                                        , @n_Err = @n_Err OUTPUT -- int

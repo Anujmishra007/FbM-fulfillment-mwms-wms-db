@@ -1469,8 +1469,8 @@ BEGIN
    BEGIN
       SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT OH.Orderkey, PD.PickDetailKey, OH.StorerKey
-      FROM   INSERTED INS
-      JOIN   Orders OH WITH (NOLOCK)            ON INS.OrderKey = OH.OrderKey
+      FROM   DELETED DEL
+      JOIN   Orders OH WITH (NOLOCK)            ON DEL.OrderKey = OH.OrderKey
 	  JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = OH.StorerKey
       WHERE  ITC.SourceTable = 'PickDetail'
@@ -1483,7 +1483,7 @@ BEGIN
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Order
-                  @c_TriggerName    = 'ntrPickDetailAdd'
+                  @c_TriggerName    = 'ntrPickDetailDelete'
                 , @c_SourceTable    = 'PickDetail'
                 , @c_Storerkey      = @c_Storerkey
                 , @c_OrderKey       = @c_OrderKey
@@ -1500,8 +1500,8 @@ BEGIN
 
       SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT OH.OrderKey, PD.PickDetailKey, OH.StorerKey
-      FROM   INSERTED INS
-      JOIN   Orders OH WITH (NOLOCK)            ON INS.OrderKey   = OH.OrderKey
+      FROM   DELETED DEL
+      JOIN   Orders OH WITH (NOLOCK)            ON DEL.OrderKey   = OH.OrderKey
       JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = 'ALL'
       JOIN   StorerConfig STC WITH (NOLOCK)     ON OH.StorerKey = STC.StorerKey 
@@ -1517,7 +1517,7 @@ BEGIN
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Order
-                  @c_TriggerName    = 'ntrPickDetailAdd'
+                  @c_TriggerName    = 'ntrPickDetailDelete'
                 , @c_SourceTable    = 'PickDetail'
                 , @c_Storerkey      = @c_Storerkey
                 , @c_OrderKey       = @c_OrderKey

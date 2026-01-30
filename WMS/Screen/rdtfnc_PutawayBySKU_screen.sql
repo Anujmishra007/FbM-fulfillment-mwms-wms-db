@@ -82,6 +82,7 @@ EXECUTE rdt.rdtAddScn 2884, 'ENG'
    ,@cLine04 = ''
    ,@cLine05 = 'Press ENTER to'
    ,@cLine06 = 'putaway next item'
+   ,@cLine13 = '%60d15' --FCR-9756 add extinfo
    ,@cLine14 = '%e'
    ,@cAutoDisappear = '1'
    ,@nFunc = 523
@@ -97,6 +98,7 @@ EXECUTE rdt.rdtAddScn 2885, 'ENG',
    @cLine06 = '2 = NO',
    @cLine07 = '',
    @cLine08 = 'OPTION: %01i01',
+   @cLine13 = '%60d15', --FCR-9756 add extinfo
    @cLine14 = '%e',     
    @nFunc   = 523
    

@@ -43,6 +43,7 @@
 /* 04-MAR-2021 Wan12    2.0   WMS-16390 - [CN] NIKE_O2_Ecompacking_Check   */  
 /*                            _Pickdetail_status_CR                        */  
 /* 05-MAY-2023 Alex     3.0   Clone from EXCEED WMS                        */
+/* 07-Nov-2025 Sean     3.1   Compatible with addwho field without domain/ */
 /***************************************************************************/  
 CREATE OR ALTER PROC [API].[isp_ECOMP_QueryRules]   
             @c_TaskID         NVARCHAR(10)   OUTPUT   --(Wan08)  
@@ -323,7 +324,11 @@ BEGIN
   
          IF @n_Reccnt > 0  
          BEGIN                             
-            IF @c_Option1 = 'userid' AND @c_UserID <> @c_PackUserID AND NOT (@c_EPACKTAKEOVER = '1' AND @c_OptionTO1 = 'USERID' AND CHARINDEX(@c_UserId, @c_OptionTO5) > 0)  --NJOW01  
+            IF @c_Option1 = 'userid' AND @c_UserID <> @c_PackUserID 
+                                     AND (CHARINDEX('\', REPLACE(@c_PackUserID, ' ', '')) > 0
+                                          AND
+                                          REVERSE(LEFT(REVERSE(@c_PackUserID), CHARINDEX('\', REVERSE(@c_PackUserID)) - 1)) = @c_UserID)
+                                     AND NOT (@c_EPACKTAKEOVER = '1' AND @c_OptionTO1 = 'USERID' AND CHARINDEX(@c_UserId, @c_OptionTO5) > 0)  --NJOW01  
                SET @n_Reccnt = 0   
             IF @c_Option1 = 'computer' AND @c_ComputerName <> @c_PackStationName  AND NOT (@c_EPACKTAKEOVER = '1' AND @c_OptionTO1 = 'COMPUTER' AND CHARINDEX(@c_ComputerName, @c_OptionTO5) > 0)  --NJOW01  
                SET @n_Reccnt = 0   

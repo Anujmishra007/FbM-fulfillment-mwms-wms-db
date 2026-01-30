@@ -20,6 +20,7 @@
 /* 03-Jul-2023    Allen    #JIRA PAC-4 Initial                          */
 /* 20-Jul-2023    Alex01   removed hardcoded GiftWrapping SP            */
 /* 10-Oct-2024    Alex02   #JIRA PAC-358 CCTV Integration               */
+/* 29-Sep-2025    Sean01   FCR-8297 CN IKEA Initialize Est Ctn          */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackTask_M](
      @b_Debug            INT            = 0
@@ -67,6 +68,7 @@ BEGIN
          , @c_sc_EPackTakeOver            NVARCHAR(5)    = ''
          , @c_sc_MultiPackMode            NVARCHAR(5)    = ''
          , @c_sc_CtnTypeInput             NVARCHAR(5)    = ''
+         , @c_sc_EPACKInitEstCtn          NVARCHAR(5)    = '' --Sean01
 
          , @c_InProgOrderKey              NVARCHAR(10)   = ''  
 
@@ -283,6 +285,36 @@ BEGIN
    END
    --Get Pending PackHeader/Detail (End)
 
+
+   -- Sean01 Start Get StorerConfig (EPACKInitEstCtn)
+   SET @c_sc_EPACKInitEstCtn = ''
+   SET @n_sc_Success = 0
+   SET @n_sc_err = 0
+   SET @c_sc_errmsg = ''
+   SET @c_sc_ToOption1 = ''
+   SET @c_sc_ToOption5 = ''
+
+   EXEC [dbo].[nspGetRight]
+         @c_Facility      = @c_Facility
+      ,  @c_StorerKey     = @c_StorerKey
+      ,  @c_sku           = ''
+      ,  @c_ConfigKey     = 'EPACKInitEstCtn'
+      ,  @b_Success       = @n_sc_Success       OUTPUT     
+      ,  @c_authority     = @c_sc_EPACKInitEstCtn OUTPUT    
+      ,  @n_err           = @n_sc_err           OUTPUT    
+      ,  @c_errmsg        = @c_sc_errmsg        OUTPUT  
+      ,  @c_Option1       = @c_sc_ToOption1     OUTPUT   
+      ,  @c_Option5       = @c_sc_ToOption5     OUTPUT
+
+   IF @n_sc_Success <> 1   
+   BEGIN   
+      SET @n_Continue = 3 
+      SET @n_ErrNo = 51011
+      SET @c_ErrMsg = CONVERT(CHAR(5),@n_sc_err) + '. Error Executing nspGetRight. '  
+      GOTO QUIT
+   END
+   -- Sean01 End
+
    QUERYRULES:
 
    -- Get Pack Description
@@ -423,6 +455,7 @@ BEGIN
                                     ,@c_OrderMode              As 'OrderMode'
                                     ,@c_InProgOrderKey         As 'LastOrderID'
                                     ,@c_PrePackMsg             As 'PrePackMeassage'
+                                    ,@c_sc_EPACKInitEstCtn     AS 'InitEstCtn'
                                     ,( 
                                        SELECT CartonType, CartonWeight FROM @t_Carton
                                        FOR JSON PATH 
