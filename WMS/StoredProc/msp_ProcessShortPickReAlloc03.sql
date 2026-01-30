@@ -626,21 +626,21 @@ BEGIN
       END
    END
 
-   ----Wave Release - Create task
-   --IF (@n_Continue = 1 OR @n_Continue = 2)           
-   --BEGIN
-   --   BEGIN TRY
-   --      EXEC dbo.isp_ReleaseWave_Wrapper @c_WaveKey = @c_WaveKey -- nvarchar(10)
-   --                                     , @b_Success = @b_Success OUTPUT -- int
-   --                                     , @n_Err = @n_Err OUTPUT -- int
-   --                                     , @c_Errmsg = @c_Errmsg OUTPUT -- nvarchar(255)
-       
-   --   END TRY
-   --   BEGIN CATCH
-   --      SET @n_Continue = 3
-   --      SET @c_ErrMsg = ERROR_MESSAGE()
-   --   END CATCH
-   --END
+   --Wave Release - Create task
+   IF (@n_Continue = 1 OR @n_Continue = 2)           
+   BEGIN
+      BEGIN TRY
+         EXEC dbo.isp_ReleaseWave_Wrapper @c_WaveKey = @c_WaveKey -- nvarchar(10)
+                                        , @b_Success = @b_Success OUTPUT -- int
+                                        , @n_Err = @n_Err OUTPUT -- int
+                                        , @c_Errmsg = @c_Errmsg OUTPUT -- nvarchar(255)
+     
+      END TRY
+      BEGIN CATCH
+         SET @n_Continue = 3
+         SET @c_ErrMsg = ERROR_MESSAGE()
+      END CATCH
+   END
 
    -- Update TaskDetail Message02 field to 'SHORT1' for reallocated tasks
    IF (@n_Continue = 1 OR @n_Continue = 2)
