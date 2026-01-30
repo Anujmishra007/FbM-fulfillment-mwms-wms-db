@@ -17,6 +17,7 @@
 /* Date           Author   Purposes                                     */
 /* 11-OCT-2024    Alex     #JIRA PAC-354 Initial                        */
 /* 28-AUG-2025    Jiawen   #UWP-40141 Update REDO filename              */
+/* 15-OCT-2025    Jiawen   #UWP-42320 Update REPACK, REDO filename      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_GENCCTVFileName] (
@@ -72,6 +73,8 @@ BEGIN
          , @c_TempValue3                  NVARCHAR(400)  = ''
          , @c_TempValue4                  NVARCHAR(400)  = ''
          , @c_TempValue5                  NVARCHAR(400)  = ''
+   
+   DECLARE @c_PackStatus                  NVARCHAR(10)   = ''
 
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
@@ -113,7 +116,7 @@ BEGIN
    BEGIN
       IF @c_TaskBatchNo <> '' AND @c_OrderKey = ''
       BEGIN
-         SET @c_FileName = @c_FuncName + '_' + ISNULL(RTRIM(@c_TaskBatchNo), '') + '_' + @c_CurrentTimeStamp + '.mp4'
+         SET @c_FileName = 'HD_' + ISNULL(RTRIM(@c_TaskBatchNo), '') + '_' + @c_CurrentTimeStamp + '.mp4'
       END
       ELSE IF @c_OrderKey <> ''
       BEGIN
@@ -124,11 +127,11 @@ BEGIN
 
          IF @c_OrderStatus <> 'CANC' AND @c_OrderSOStatus <> 'PENDCANC'
          BEGIN
-            SET @c_FileName = @c_FuncName + '_' + ISNULL(RTRIM(@c_OrderKey), '') + '_' + @c_CurrentTimeStamp + '.mp4'
+            SET @c_FileName = 'HD_' + ISNULL(RTRIM(@c_OrderKey), '') + '_' + @c_CurrentTimeStamp + '.mp4'
          END
          ELSE
          BEGIN
-            SET @c_FileName = 'Cancel_' + ISNULL(RTRIM(@c_OrderKey), '') + '_' + @c_CurrentTimeStamp + '.mp4'
+            SET @c_FileName = 'HD_' + ISNULL(RTRIM(@c_OrderKey), '') + '_' + @c_CurrentTimeStamp + '.mp4'
          END
       END
       ELSE
@@ -219,6 +222,18 @@ BEGIN
                         )
 
       SET @c_FileName = @c_FileName + CASE WHEN @c_FileName <> '' THEN '_' ELSE '' END + @c_CurrentTimeStamp + '.mp4'
+
+      --Add Repack Rule
+      SELECT @c_PackStatus = ISNULL(RTRIM(PackStatus), '')
+      FROM [dbo].[PackHeader] WITH (NOLOCK) 
+      WHERE PickSlipNo = @c_PickSlipNo
+
+      IF @c_PackStatus = 'REPACK'
+      BEGIN
+         SET @c_FileName = 'REPACK_' + @c_FileName
+      END
+      --Add Repack Rule (END)
+
    END
 
    SET @c_ResponseString = ISNULL(( 
