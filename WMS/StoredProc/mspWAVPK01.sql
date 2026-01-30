@@ -469,7 +469,7 @@ BEGIN
         SELECT * FROM #CARTONIZATION
         
       INSERT INTO #TMP_PACK (Orderkey, Storerkey, SKU, LabelNo, UCCNo)
-      SELECT DISTINCT PH.OrderKey, PD.StorerKey, PD.SKU, PD.LabelNo, PD.RefNo
+      SELECT DISTINCT PH.OrderKey, PD.StorerKey, PD.SKU, PD.LabelNo, PD.DropID
       FROM #PickDetail_WIP PW
       JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = PW.Orderkey
       JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
@@ -1523,7 +1523,7 @@ BEGIN
       TRUNCATE TABLE #TMP_PACK
 
       INSERT INTO #TMP_PACK (Orderkey, Storerkey, SKU, LabelNo, UCCNo)
-      SELECT DISTINCT PH.OrderKey, PD.StorerKey, PD.SKU, PD.LabelNo, PD.RefNo
+      SELECT DISTINCT PH.OrderKey, PD.StorerKey, PD.SKU, PD.LabelNo, PD.DropID
       FROM #PickDetail_WIP PW
       JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = PW.Orderkey
       JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
