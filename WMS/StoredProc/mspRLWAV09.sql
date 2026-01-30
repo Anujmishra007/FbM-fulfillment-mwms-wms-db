@@ -317,7 +317,7 @@ BEGIN
       END   
    END  
 
- IF @n_Continue = 1 OR @n_Continue = 2  
+   IF @n_Continue = 1 OR @n_Continue = 2  
    BEGIN  
       SET @c_Sku = ''
       SELECT TOP 1 @c_Sku = S.Sku
@@ -644,8 +644,6 @@ BEGIN
                         ELSE ', '''' AS LPLDLoc' 
                         END      
           +       ' ,AD.Areakey'   
-          --+       ' ,ISNULL(P.CubeUOM1, 0.00)'                                    --CR v3.4
-         -- +       ' ,ISNULL(P.CubeUOM3, 0.00)'                                    --CR v3.4
           +        ' ,CubeUOM1 = S.StdCube*P.CaseCnt'                               --CR v3.4
           +        ' ,CubeUOM3 = S.StdCube'                                         --CR v3.4
           +       ' ,LOC.LocLevel'   
@@ -714,8 +712,6 @@ BEGIN
           + CASE WHEN @c_CustomToLoc = '' 
                  THEN ' , ISNULL(LPLD.Loc,'''')' ELSE '' END
           +        ' , AD.Areakey'
-         -- +        ' , ISNULL(P.CubeUOM1, 0.00)'                                  --CR v3.4
-         -- +        ' , ISNULL(P.CubeUOM3, 0.00)'                                  --CR v3.4
           +        ' , S.StdCube'                                                   --CR v3.4
           +        ' , LOC.LocLevel'
           +        ' , P.Casecnt'
@@ -861,7 +857,7 @@ BEGIN
                SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Userdefine09 = @c_Wavekey'
             END
             
-             IF @c_UOM = '2' AND @c_UCCNo > ''
+            IF @c_UOM = '2' AND @c_UCCNo > ''
             BEGIN
                SET @n_Volume     = 1          -- Max 14
                SET @n_Cube       = 1                                                --CR v3.4
