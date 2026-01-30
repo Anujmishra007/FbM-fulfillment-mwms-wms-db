@@ -2,16 +2,16 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/  
-/* Store procedure: rdt_1642ExtUpd03                                    */  
-/* Purpose: Add RDT.RDTScanToTruck and AUTOSHIP                         */  
-/*                                                                      */  
-/*                                                                      */  
-/* Modifications log:                                                   */  
-/*                                                                      */  
-/* Date       Rev  Author     Purposes                                  */  
-/* 2015-05-08 1.0  PSJ036     Add RDT.RDTScanToTruck and AUTOSHIP       */  
-/************************************************************************/  
+/*****************************************************************************/  
+/* Store procedure: rdt_1642ExtUpd03                                         */  
+/* Purpose: Add RDT.RDTScanToTruck and AUTOSHIP                              */  
+/*                                                                           */  
+/*                                                                           */  
+/* Modifications log:                                                        */  
+/*                                                                           */  
+/* Date       Rev  Author     Purposes                                       */  
+/* 2015-05-08 1.0  PSJ036     UWP-48144 Add RDT.RDTScanToTruck and AUTOSHIP  */  
+/*****************************************************************************/  
   
 CREATE OR ALTER   PROC [RDT].[rdt_1642ExtUpd03] (  
    @nMobile          INT,   
