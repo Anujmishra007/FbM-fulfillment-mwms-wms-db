@@ -49,7 +49,7 @@ BEGIN
 
     IF ISNULL(@cUCC, N'') = N''
     BEGIN
-        SET @nErrNo  = 257751 -- 'UCC REQUIRED'
+        SET @nErrNo  = 257801 -- 'UCC REQUIRED'
         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
         GOTO Quit
     END
