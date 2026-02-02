@@ -29,6 +29,8 @@ GO
 /* 08-Aug-2022  WLChooi  1.5  WMS-20446 - Add Packconfirm logic (WL01)  */
 /* 08-Aug-2022  WLChooi  1.5  DevOps Combine Script                     */
 /* 02-Jun-2023  NJOW03   1.6  WMS-22727 insert packinfo table           */
+/* 10-OCT-2025  SSA01    1.7  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispLPPK05]
@@ -494,7 +496,7 @@ BEGIN
             (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno)    
          VALUES     
             (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cSKU,   
-             @nQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @cOrderKey)
+             @nQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), @cOrderKey)              --(SSA01)
          
          IF @@ERROR <> 0
          BEGIN

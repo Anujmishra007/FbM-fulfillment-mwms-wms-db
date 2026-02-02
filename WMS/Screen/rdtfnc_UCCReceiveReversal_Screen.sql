@@ -28,7 +28,7 @@ EXECUTE rdt.rdtAddScn 1053, 'ENG',
    @cLine03 = 'ID: ',
    @cLine04 = '%18d03',
    @cLine05 = 'UCC: ',
-   @cLine06 = '%20i04',
+   @cLine06 = '%1000iV_Barcode', --FCR-8271
    @cLine14 = '%e'
    
 -- Scn = 1054. Display Record

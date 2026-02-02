@@ -24,7 +24,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date        Author   Ver  Purposes                                   */ 
+/* Date        Author   Ver  Purposes                                   */
+/* 10-Oct-2025  SSA01   1.0   UWP-42248 -Enhanced session management    */
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[ispUPPSO03]  
       @c_OrderKey       NVARCHAR(10) 
@@ -573,8 +574,8 @@ BEGIN
                      UPDATE TASKDETAIL
                         SET Wavekey = @c_ShareWavekey
                           , TrafficCop= NULL
-   	                    , EditDate  = GETDATE() 
-   	                    , EditWho   = SUSER_SNAME() 
+   	                    , EditDate  = dbo.fnc_GetDate()   --(SSA01)
+   	                    , EditWho   = dbo.fnc_GetUserName()             --(SSA01)
                      WHERE TaskdetailKey = @c_TaskDetailKey
 
                      SET @n_Err = @@ERROR
@@ -712,8 +713,8 @@ BEGIN
             UPDATE TASKDETAIL 
                SET Wavekey = @c_Wavekey_Share
                   ,Trafficcop = NULL
-                  ,EditDate = GETDATE()
-                  ,EditWho  = SUSER_SNAME()
+                  ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+                  ,EditWho  = dbo.fnc_GetUserName()           --(SSA01)
             WHERE TaskDetailkey = @c_TaskDetailkey
 
             SET @n_err = @@ERROR

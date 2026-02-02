@@ -24,7 +24,9 @@ GO
 /* Date         Author    Ver.  Purposes                                */        
 /* 12-OCT-2022  CHONGCS   1.0   Devops Scripts Combine                  */       
 /* 03-JAN-2023  CHONGCS   1.1   Fixed cancel route (CS01)               */     
-/* 14-FEB-2023  CHONGCS   1.2   WMS-21702 revised field logic (CS02)    */  
+/* 14-FEB-2023  CHONGCS   1.2   WMS-21702 revised field logic (CS02)    */
+/* 10-OCT-2025  SSA01     1.3   UWP-42248 -Enhanced session management  */
+/*                              xand cleanup.                            */
 /************************************************************************/        
         
 CREATE  OR ALTER  PROCEDURE [dbo].[isp_RCM_WV_Update_OrdersRoute]        
@@ -637,8 +639,8 @@ BEGIN
         --   ,  containerqty = @n_daycase        
             ,  capacity = @n_daycase       --CS02 2023MAR03  
            , TrafficCop   = NULL        
-           , EditDate     = GETDATE()        
-           , EditWho      = SUSER_SNAME()        
+           , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho      = dbo.fnc_GetUserName()      --(SSA01)
          WHERE OrderKey   = @c_orderkey AND storerkey = @c_storerkey        
                
          SELECT @n_err = @@ERROR        
@@ -657,8 +659,8 @@ BEGIN
             UPDATE ORDERS WITH (ROWLOCK)        
             SET userdefine10 = TRC.CancelORD        
               , TrafficCop   = NULL        
-              , EditDate     = GETDATE()        
-              , EditWho      = SUSER_SNAME()        
+              , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho      = dbo.fnc_GetUserName()   --(SSA01)
             FROM ORDERS OH --WITH (NOLOCK)        
             JOIN #TMPWVORDCANC TRC ON TRC.OrderKey=OH.OrderKey AND TRC.Storerkey=OH.StorerKey        
             WHERE TRC.mainroute= @c_mainroute AND TRC.CancelORD='C'         --CS01    
@@ -1241,8 +1243,8 @@ BEGIN
                 --    ,  containerqty = @n_daycase        
                     ,  capacity =@n_daycase    --CS02 2023MAR03  
                     , TrafficCop   = NULL        
-                    , EditDate     = GETDATE()        
-                    , EditWho      = SUSER_SNAME()        
+                    , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+                    , EditWho      = dbo.fnc_GetUserName()      --(SSA01)
          WHERE OrderKey   = @c_orderkey AND storerkey = @c_storerkey        
                
          SELECT @n_err = @@ERROR        
@@ -1261,8 +1263,8 @@ BEGIN
             UPDATE ORDERS WITH (ROWLOCK)        
             SET userdefine10 = TRC.CancelORD        
               , TrafficCop   = NULL        
-              , EditDate     = GETDATE()        
-              , EditWho      = SUSER_SNAME()        
+              , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho      = dbo.fnc_GetUserName()   --(SSA01)
             FROM ORDERS OH --WITH (NOLOCK)        
             JOIN #TMPWVORDCANC TRC ON TRC.OrderKey=OH.OrderKey AND TRC.Storerkey=OH.StorerKey        
             WHERE TRC.mainroute= @c_updateroute AND TRC.CancelORD='C'         --CS01    
@@ -1404,8 +1406,8 @@ BEGIN
             SET Route = @c_PODGetOHroute        
               ,  userdefine07 = CAST(GETDATE() AS DATE)        
               , TrafficCop   = NULL        
-              , EditDate     = GETDATE()        
-              , EditWho      = SUSER_SNAME()        
+              , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho      = dbo.fnc_GetUserName()     --(SSA01)
             WHERE OrderKey   = @c_podorderkey AND storerkey = @c_podstorerkey        
                
             SELECT @n_err = @@ERROR        

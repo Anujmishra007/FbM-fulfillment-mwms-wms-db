@@ -24,6 +24,7 @@ GO
 /* Modifications:                                                                */
 /* Date         Author    Ver  Purposes                                          */
 /* 08-May-2023  WLChooi   1.0  DevOps Combine Script                             */
+/* 06-OCT-2025  AK01      1.1  UWP-42143 Data Audit                              */
 /*********************************************************************************/
   
 CREATE OR ALTER TRIGGER [dbo].[ntrFacilityAdd]  
@@ -56,6 +57,25 @@ BEGIN
       SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": INSERT Failed On Table Facility. Not allow INSERT blank SiteID! (ntrFacilityAdd)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
 
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE FACILITY
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(),
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate()
+      FROM FACILITY
+      JOIN INSERTED ON FACILITY.Facility = INSERTED.Facility
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67411 
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table FACILITY. (ntrFACILITYAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
    IF @n_continue=3  -- Error Occured - Process And Return  
    BEGIN  
       IF @@TRANCOUNT = 1 AND @@TRANCOUNT >= @n_starttcnt  

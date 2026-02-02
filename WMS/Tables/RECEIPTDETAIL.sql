@@ -2,7 +2,7 @@ IF NOT EXISTS (SELECT *
                FROM sys.tables
                WHERE name = 'RECEIPTDETAIL'
                  AND type = 'U')
-    BEGIN
+ BEGIN
         CREATE TABLE [dbo].[RECEIPTDETAIL]
             (
             [ReceiptKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -87,7 +87,10 @@ IF NOT EXISTS (SELECT *
             [Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RECEIPTDETAIL_Channel] DEFAULT (''),
             [Channel_ID] [bigint] NULL CONSTRAINT [DF_RECEIPTDETAIL_Channel_ID] DEFAULT ((0)),
             [RowVer] [timestamp] NOT NULL,
-            [PalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_RECEIPTDETAIL_PalletType] DEFAULT ('')
+            [PalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_RECEIPTDETAIL_PalletType] DEFAULT (''),
+            [Notes] [nvarchar] (500) NULL CONSTRAINT DF_RECEIPTDETAIL_Notes DEFAULT (''),
+            [Notes2] [nvarchar] (500) NULL CONSTRAINT DF_RECEIPTDETAIL_Notes2 DEFAULT (''),
+
             ) ON [PRIMARY]
 
             ALTER TABLE [dbo].[RECEIPTDETAIL] ADD CONSTRAINT [PKReceiptDetail] PRIMARY KEY CLUSTERED ([ReceiptKey], [ReceiptLineNumber]) WITH (FILLFACTOR=90) ON [PRIMARY]
@@ -270,25 +273,33 @@ IF NOT EXISTS (SELECT *
 
             EXEC sp_addextendedproperty N'MS_Description', 'Pallet Type' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'PalletType'
 
-    END
-ELSE
-    BEGIN
-        IF NOT EXISTS (SELECT *
-                       FROM sys.columns
-                       WHERE Name = 'PalletType'
-                         AND Object_ID = Object_ID('RECEIPTDETAIL'))
-            BEGIN
-                ALTER TABLE RECEIPTDETAIL
-                    ADD PalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_RECEIPTDETAIL_PalletType] DEFAULT ('');
-                EXEC sp_addextendedproperty N'MS_Description', 'Pallet Type', 'SCHEMA', N'dbo', 'TABLE',
-                     N'RECEIPTDETAIL', 'COLUMN', N'PalletType'
-            END
-   END
+            EXEC sp_addextendedproperty N'MS_Description', 'Additional information' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'Notes'
 
-GRANT SELECT ON  [dbo].[RECEIPTDETAIL] TO [JReportRole]
-GO
-GRANT DELETE ON  [dbo].[RECEIPTDETAIL] TO [NSQL]
-GO
+            EXEC sp_addextendedproperty N'MS_Description', 'Additional information' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'Notes2'
+
+END
+ELSE
+BEGIN
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'PalletType' AND Object_ID = Object_ID('RECEIPTDETAIL'))
+        BEGIN
+            ALTER TABLE RECEIPTDETAIL ADD PalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_RECEIPTDETAIL_PalletType] DEFAULT ('');
+            EXEC sp_addextendedproperty N'MS_Description', 'Pallet Type', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN', N'PalletType'
+        END
+
+       IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'Notes' AND Object_ID = Object_ID('RECEIPTDETAIL'))
+       BEGIN
+            ALTER TABLE RECEIPTDETAIL ADD Notes NVARCHAR(500) NULL CONSTRAINT [DF_RECEIPTDETAIL_Notes] DEFAULT ('');
+            EXEC sp_addextendedproperty N'MS_Description', 'Additional information' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'Notes'
+       END
+
+       IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'Notes2' AND Object_ID = Object_ID('RECEIPTDETAIL'))
+       BEGIN
+            ALTER TABLE RECEIPTDETAIL ADD Notes2 NVARCHAR(500) NULL CONSTRAINT [DF_RECEIPTDETAIL_Notes2] DEFAULT ('');
+            EXEC sp_addextendedproperty N'MS_Description', 'Additional information' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'Notes2'
+       END
+END
+
+
 GRANT INSERT ON  [dbo].[RECEIPTDETAIL] TO [NSQL]
 GO
 GRANT SELECT ON  [dbo].[RECEIPTDETAIL] TO [NSQL]

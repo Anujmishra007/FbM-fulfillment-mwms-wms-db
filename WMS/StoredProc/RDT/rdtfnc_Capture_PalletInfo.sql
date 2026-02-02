@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtfnc_Capture_PalletInfo]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtfnc_Capture_PalletInfo]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -20,9 +16,10 @@ GO
 /* 07-Mar-2018  1.1  Ung        WMS-3782 Trim L W H W, from weighting machine label    */
 /* 30-May-2019  1.2  YeeKung    WMS9150. Add Stackability Field   (yeekung01)          */
 /* 27-Aug-2024  1.3  JHU151     FCR-720. Capture Pallet Info 825 mod                   */
+/* 18-Sep-2025  1.4  Dennis     FCR-8079.Add Step 99                                   */
 /***************************************************************************************/
 
-CREATE PROC rdt.rdtfnc_Capture_PalletInfo(
+CREATE OR ALTER PROC rdt.rdtfnc_Capture_PalletInfo(
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -209,6 +206,8 @@ BEGIN
    IF @nStep = 1  GOTO Step_1  -- Scn = 5110. L, W, H, W
    IF @nStep = 2  GOTO Step_2  -- Scn = 5111. PalletKey
    IF @nStep = 3  GOTO Step_3  -- Scn = 5112. PalletKey, L, W, H, W
+   IF @nStep = 99 GOTO Step_99 -- Ext Scn
+
 END
 RETURN -- Do nothing if incorrect step
 

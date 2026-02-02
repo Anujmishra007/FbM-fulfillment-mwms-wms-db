@@ -40,7 +40,9 @@ GO
 /* 20-Oct-2018  NJOW01  1.2   Fix FORCEALLOT checking with orderdetail  */
 /*                            lottable                                  */
 /* 13_DEC-2018  Wan01   1.3   Fixed. Force to get next diff lot         */
-/* 15-SEP-2020  Wan02   1.4   Fixed. PICK_CUR exists issue              */  
+/* 15-SEP-2020  Wan02   1.4   Fixed. PICK_CUR exists issue              */
+/* 10-OCT-2025  SSA01   1.5   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC [dbo].[isp_ReplenSwapLot]
    @c_LOT            NVARCHAR(10),
@@ -479,8 +481,8 @@ BEGIN
                   UPDATE PICKDETAIL WITH (ROWLOCK)
                   SET Lot = @c_LOT,
                       ID  = @c_ID,
-                      EditWho = SUSER_SNAME(), 
-                      EditDate = GETDATE()
+                      EditWho = dbo.fnc_GetUserName(),      --(SSA01)
+                      EditDate = dbo.fnc_GetDate()    --(SSA01)
                   WHERE PickDetailKey = @c_PickDetailKey 
 
                   SELECT @n_ErrNo = @@ERROR
@@ -550,8 +552,8 @@ BEGIN
 
                      UPDATE PICKDETAIL WITH (ROWLOCK)
                         SET Qty = Qty - @n_ReplenQty,
-                            EditWho = SUSER_SNAME(), 
-                            EditDate = GETDATE()
+                            EditWho = dbo.fnc_GetUserName(),      --(SSA01)
+                            EditDate = dbo.fnc_GetDate()    --(SSA01)
                      WHERE PickDetailKey = @c_PickDetailKey
 
                      IF @@ERROR = 0
@@ -570,7 +572,7 @@ BEGIN
                                Loc,             @c_ID,        UOMQty,         UOM,
                                CaseID,          PackKey,      CartonGroup,    DoReplenish,
                                replenishzone,   docartonize,  Trafficcop,     PickMethod,
-                               '0',             PickSlipNo,   SUSER_SNAME(),  SUSER_SNAME(),
+                               '0',             PickSlipNo,   dbo.fnc_GetUserName(),  dbo.fnc_GetUserName(),       --(SSA01)
                                @c_ShipFlag,     DropID,       TaskDetailKey,  AltSku,
                                ToLoc,           Notes,        MoveRefKey,     Channel_ID
                         FROM   PICKDETAIL (NOLOCK)

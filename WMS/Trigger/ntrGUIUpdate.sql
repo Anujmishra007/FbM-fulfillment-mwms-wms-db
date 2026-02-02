@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrGUIUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrGUIUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -32,9 +30,10 @@ GO
 /* Date         Author     Purposes                                     */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
 /*                                                                      */
+/* 06-Oct-2025  AK01   1.0 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrGUIUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrGUIUpdate]
 ON  [dbo].[GUI]
 FOR UPDATE
 AS
@@ -70,8 +69,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 )  AND NOT UPDATE(EditDate)
 	BEGIN 	
 	 	UPDATE GUI WITH (ROWLOCK) 
-    	   SET EditDate   = GETDATE(), 
-             EditWho    = SUser_SName() 
+    	   SET EditDate   = dbo.fnc_GetDate(), 
+             EditWho    = dbo.fnc_GetUserName() 
         FROM GUI
         JOIN INSERTED ON (GUI.InvoiceNo      = INSERTED.InvoiceNo
                       AND GUI.StorerKey      = INSERTED.StorerKey
@@ -121,3 +120,4 @@ END
 
 
 GO
+

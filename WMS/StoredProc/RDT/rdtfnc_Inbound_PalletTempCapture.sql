@@ -13,6 +13,11 @@ GO
 /*                                                                            */
 /* Date         Rev    Author   Purposes                                      */
 /* 2024-12-05   1.0.0  NLT013   FCR-1398 Created                              */
+/* 2025-04-01   1.1.0  NLT013   FCR-3256 Add DecodeSP                         */
+/* 2025-04-05   1.1.0  NLT013   UWP-32818 ASN Status refering wrong field     */
+/* 2025-04-15   1.2.0  NLT013   UWP-32818 Temperature capture is not referring*/
+/*                              to ASNStatus                                  */
+/* 2025-06-17   0.0.0  Jackc    !!!Cutover. Use V0 repo for work!!!           */
 /******************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inbound_PalletTempCapture](
@@ -33,28 +38,32 @@ BEGIN
       @nFunc                        INT,
       @nScn                         INT,
       @nStep                        INT,
-      @cLangCode                    NVARCHAR( 3),
+      @cLangCode                    NVARCHAR(3),
       @nInputKey                    INT,
       @nMenu                        INT,
       @bSuccess                     INT,
       @cID                          NVARCHAR(18),
       @cReceiptKey                  NVARCHAR(10),
-      @cStorerKey                   NVARCHAR( 15),
-      @cUserName                    NVARCHAR( 18),
-      @cFacility                    NVARCHAR( 15), 
-      @cTemperature                 NVARCHAR( 7),
+      @cStorerKey                   NVARCHAR(15),
+      @cUserName                    NVARCHAR(18),
+      @cFacility                    NVARCHAR(15), 
+      @cTemperature                 NVARCHAR(7),
       @fTemperature                 DECIMAL(5, 2),
       @cASNStatus                   NVARCHAR(10),
       @cASNSCanctatus               NVARCHAR(10),
       @nRowCount                    INT,
-      @cStorerGroup                 NVARCHAR( 20),
-      @cTempScale                   NVARCHAR( 5),
+      @cStorerGroup                 NVARCHAR(20),
+      @cTempScale                   NVARCHAR(5),
       @cItemClass                   NVARCHAR(10),
       @fLowerTemp                   DECIMAL(5, 2),
       @fHigherTemp                  DECIMAL(5, 2),
       @cScale                       NVARCHAR(5),
       @cUDF04                       NVARCHAR(10),
       @cOption                      NVARCHAR(1),
+      @cDecodeSP                    NVARCHAR(20),
+      @cBarcode                     NVARCHAR(60),
+      @cSQL                         NVARCHAR( MAX),
+      @cSQLParam                    NVARCHAR( MAX),
       
       @nStep_ASN                    INT,
       @nStep_ID                     INT,
@@ -111,6 +120,7 @@ BEGIN
       @cTempScale       = V_String2,
       @fLowerTemp       = TRY_CAST(V_String3 AS DECIMAL(5, 2)),
       @fHigherTemp      = TRY_CAST(V_String4 AS DECIMAL(5, 2)),
+      @cDecodeSP        = V_String5,
 
       @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
       @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -152,6 +162,11 @@ BEGIN
 
    Step_0:
    BEGIN
+      -- Get storer config
+      SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+      IF @cDecodeSP = '0'
+         SET @cDecodeSP = ''
+
       -- Prepare next screen var        
       SET @cOutField01 = ''     
          
@@ -196,8 +211,7 @@ BEGIN
             GOTO Step_1_Fail
          END
 
-         SELECT @cASNStatus   = Status,
-            @cASNSCanctatus   = ASNStatus,
+         SELECT @cASNStatus = ASNStatus,
             @cASNFacility     = ISNULL(Facility, ''),
             @cASNStorerKey    = StorerKey
          FROM dbo.Receipt WITH(NOLOCK)
@@ -237,18 +251,11 @@ BEGIN
             END
          END
 
-         IF @cASNStatus = '9'
+         IF @cASNStatus IN ('9', 'CANC')
          BEGIN
             SET @nErrNo = 230206
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASNClosed
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASN Closed or Cancelled
             EXEC rdt.rdtSetFocusField @nMobile, 1
-            GOTO Step_1_Fail
-         END
-
-         IF @cASNSCanctatus = 'CANC'
-         BEGIN
-            SET @nErrNo = 230207
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASNCancelled
             GOTO Step_1_Fail
          END
 
@@ -307,6 +314,52 @@ BEGIN
             SET @nErrNo = 230208
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IDIsNeeded
             GOTO Step_2_Fail
+         END
+
+         SET @cBarcode = @cInField02
+
+         -- Decode
+         IF @cDecodeSP <> ''
+         BEGIN
+            -- Standard decode
+            IF @cDecodeSP = '1'
+            BEGIN
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
+                  @cType   = 'ID',
+                  @cID     = @cID     OUTPUT, 
+                  @nErrNo  = @nErrNo   OUTPUT, 
+                  @cErrMsg = @cErrMsg  OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_2_Fail
+            END
+            
+            -- Customize decode
+            ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
+                  ' @cUPC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile      INT,           ' +
+                  ' @nFunc        INT,           ' +
+                  ' @cLangCode    NVARCHAR( 3),  ' +
+                  ' @nStep        INT,           ' +
+                  ' @nInputKey    INT,           ' +
+                  ' @cFacility    NVARCHAR( 5),  ' +
+                  ' @cStorerKey   NVARCHAR( 15), ' +
+                  ' @cBarcode     NVARCHAR( 60), ' +
+                  ' @cID          NVARCHAR( 18)  OUTPUT, ' +
+                  ' @nErrNo       INT            OUTPUT, ' +
+                  ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, 
+                  @cID OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_2_Fail
+            END
          END
 
          IF NOT EXISTS(
@@ -611,6 +664,7 @@ BEGIN
          V_String2 = @cTempScale,
          V_String3 = TRY_CAST(@fLowerTemp AS NVARCHAR(7)),
          V_String4 = TRY_CAST(@fHigherTemp AS NVARCHAR(7)),
+         V_String5 = @cDecodeSP,
             
          I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
          I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

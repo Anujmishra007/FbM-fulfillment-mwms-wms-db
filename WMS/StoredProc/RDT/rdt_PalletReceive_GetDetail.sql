@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_PalletReceive_GetDetail]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_PalletReceive_GetDetail]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -9,15 +5,17 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_PalletReceive_GetDetail                               */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Purpose: Receive ASN by pallet ID                                          */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2015-09-04 1.0  Ung        SOS347636 Created                               */
+/* 2025-06-18 1.1  Cuize      FCR-4200 Add Customer SP                        */
+/* 2026-01-06 1.2  Jackc      FCR-9251 Add Fix get next line issue            */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_PalletReceive_GetDetail (
+CREATE OR ALTER PROCEDURE rdt.rdt_PalletReceive_GetDetail (
    @nFunc        INT,
    @nMobile      INT,
    @cLangCode    NVARCHAR(  3),
@@ -53,6 +51,111 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_GetDetail (
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+BEGIN
+   DECLARE @cGetDetailSP  NVARCHAR( 20)
+   DECLARE @cSQL           NVARCHAR( MAX)
+   DECLARE @cSQLParam      NVARCHAR( MAX)
+   DECLARE @nRowCount      INT
+
+
+   -- Get storer config
+   SET @cGetDetailSP = rdt.RDTGetConfig( @nFunc, 'GetDetailSP', @cStorerKey)
+   IF @cGetDetailSP = '0'
+      SET @cGetDetailSP = ''
+
+   /***********************************************************************************************
+                                              Custom Check DetailSP
+   ***********************************************************************************************/
+   -- Check confirm SP blank
+   IF @cGetDetailSP <> ''
+   BEGIN
+      -- Confirm SP
+      SET @cSQL = 'EXEC rdt.' + RTRIM( @cGetDetailSP) +
+           ' @nFunc, @nMobile, @cLangCode, @nScn, @nInputKey, @cFacility, @cStorerKey,'
+         + ' @cReceiptKey,'
+         + ' @cToID,'
+         + ' @cSKU            OUTPUT,'
+         + ' @nQTY            OUTPUT,'
+         + ' @cRDLineNo       OUTPUT,'
+         + ' @cOutField01     OUTPUT,'
+         + ' @cOutField02     OUTPUT,'
+         + ' @cOutField03     OUTPUT,'
+         + ' @cOutField04     OUTPUT,'
+         + ' @cOutField05     OUTPUT,'
+         + ' @cOutField06     OUTPUT,'
+         + ' @cOutField07     OUTPUT,'
+         + ' @cOutField08     OUTPUT,'
+         + ' @cOutField09     OUTPUT,'
+         + ' @cOutField10     OUTPUT,'
+         + ' @cOutField11     OUTPUT,'
+         + ' @cOutField12     OUTPUT,'
+         + ' @cOutField13     OUTPUT,'
+         + ' @cOutField14     OUTPUT,'
+         + ' @cOutField15     OUTPUT,'
+         + ' @nErrNo          OUTPUT,'
+         + ' @cErrMsg         OUTPUT'
+
+      SET @cSQLParam =
+           ' @nFunc        INT,'
+         + ' @nMobile      INT,'
+         + ' @cLangCode    NVARCHAR(  3),'
+         + ' @nScn         INT, '
+         + ' @nInputKey    INT, '
+         + ' @cFacility    NVARCHAR(  5),'
+         + ' @cStorerKey   NVARCHAR( 15),'
+         + ' @cReceiptKey  NVARCHAR( 10),'
+         + ' @cToID        NVARCHAR( 18),'
+         + ' @cSKU         NVARCHAR( 20) OUTPUT, '
+         + ' @nQTY         INT           OUTPUT, '
+         + ' @cRDLineNo    NVARCHAR( 5)  OUTPUT, '
+         + ' @cOutField01  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField02  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField03  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField04  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField05  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField06  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField07  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField08  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField09  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField10  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField11  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField12  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField13  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField14  NVARCHAR( 60) OUTPUT, '
+         + ' @cOutField15  NVARCHAR( 60) OUTPUT, '
+         + ' @nErrNo       INT           OUTPUT,'
+         + ' @cErrMsg      NVARCHAR( 20) OUTPUT'
+
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+           @nFunc, @nMobile, @cLangCode, @nScn, @nInputKey, @cFacility, @cStorerKey,
+           @cReceiptKey,
+           @cToID,
+           @cSKU           OUTPUT,
+           @nQTY           OUTPUT,
+           @cRDLineNo      OUTPUT,
+           @cOutField01    OUTPUT,
+           @cOutField02    OUTPUT,
+           @cOutField03    OUTPUT,
+           @cOutField04    OUTPUT,
+           @cOutField05    OUTPUT,
+           @cOutField06    OUTPUT,
+           @cOutField07    OUTPUT,
+           @cOutField08    OUTPUT,
+           @cOutField09    OUTPUT,
+           @cOutField10    OUTPUT,
+           @cOutField11    OUTPUT,
+           @cOutField12    OUTPUT,
+           @cOutField13    OUTPUT,
+           @cOutField14    OUTPUT,
+           @cOutField15    OUTPUT,
+           @nErrNo         OUTPUT,
+           @cErrMsg        OUTPUT
+      GOTO Quit
+   END
+
+   /***********************************************************************************************
+                                                 Standard Get Detail
+   ***********************************************************************************************/
    
    DECLARE @cInField01 NVARCHAR( 60), @cFieldAttr01 NVARCHAR(1), @cLottable01  NVARCHAR( 18)
    DECLARE @cInField02 NVARCHAR( 60), @cFieldAttr02 NVARCHAR(1), @cLottable02  NVARCHAR( 18)
@@ -75,6 +178,7 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_GetDetail (
 
    -- Get 1st line
    IF @cSKU = ''
+   BEGIN
       SELECT TOP 1 
          @cSKU = SKU, 
          @nQTY = QTYExpected, 
@@ -83,7 +187,10 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_GetDetail (
       WHERE ReceiptKey = @cReceiptKey
          AND ToID = @cToID
          AND BeforeReceivedQTY = 0
-      ORDER BY SKU, ReceiptLineNumber 
+      ORDER BY SKU, ReceiptLineNumber
+      --v1.2
+      SET @nRowCount = @@ROWCOUNT
+   END 
    ELSE
    BEGIN
       -- Get same SKU, next line
@@ -97,10 +204,13 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_GetDetail (
          AND SKU = @cSKU
          AND BeforeReceivedQTY = 0
          AND ReceiptLineNumber > @cRDLineNo
-      ORDER BY ReceiptLineNumber 
+      ORDER BY ReceiptLineNumber
+      --V1.2
+      SET @nRowCount = @@ROWCOUNT 
 
       -- Get next SKU
-      IF @@ROWCOUNT = 0
+      IF @nRowCount = 0
+      BEGIN
          SELECT TOP 1 
             @cSKU = SKU, 
             @nQTY = QTYExpected, 
@@ -110,11 +220,14 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_GetDetail (
             AND ToID = @cToID
             AND SKU > @cSKU
             AND BeforeReceivedQTY = 0
-         ORDER BY SKU, ReceiptLineNumber 
+         ORDER BY SKU, ReceiptLineNumber
+         --V1.2
+         SET @nRowCount = @@ROWCOUNT
+      END 
    END
    
    -- No more record
-   IF @@ROWCOUNT = 0
+   IF @nRowCount = 0 --V1.2
    BEGIN
       SET @nErrNo = -1
       GOTO Quit 
@@ -171,7 +284,7 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_GetDetail (
       @nFunc   -- SourceType
 
 Quit: 
-
+END
 GO
 
 SET QUOTED_IDENTIFIER OFF

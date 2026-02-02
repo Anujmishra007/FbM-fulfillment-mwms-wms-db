@@ -58,6 +58,8 @@ GO
 /*                                            @c_PickSlipNo             */
 /* 10-12-2012   Shong     2.5   SOS# 264161 - Update PickDetail with    */
 /*                                            Sort Sequence             */
+/* 10-10-2025   SSA01    2.6    UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_TCP_WCS_FC_INDUCTION_IN]
@@ -684,7 +686,7 @@ BEGIN
                IF NOT EXISTS (SELECT 1 FROM dbo.RefKeyLookup (NOLOCK) WHERE PickDetailKey = @c_NewPickDetailKey)
                BEGIN
                   INSERT INTO dbo.RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey, EditWho) --SOS# 255550
-                  VALUES (@c_NewPickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_LoadKey, 'TCP04a.' + sUser_sName())
+                  VALUES (@c_NewPickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_LoadKey, 'TCP04a.' + dbo.fnc_GetUserName())     --(SSA01)
 
                   SELECT @n_Err = @@ERROR
 
@@ -1167,8 +1169,8 @@ END
    UPDATE dbo.TCPSocket_INLog WITH (ROWLOCK)
    SET STATUS   = @c_Status
      , ErrMsg   = @c_ErrMsg
-     , Editdate = GETDATE()
-     , EditWho  = SUSER_SNAME()
+     , Editdate = dbo.fnc_GetDate()    --(SSA01)
+     , EditWho  = dbo.fnc_GetUserName()       --(SSA01)
    WHERE SerialNo = @n_SerialNo
 
    WHILE @@TRANCOUNT > @n_StartTCnt -- Commit until the level we started

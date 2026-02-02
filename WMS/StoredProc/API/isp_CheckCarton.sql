@@ -3,15 +3,18 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
   
-/******************************************************************************/
-/* Store procedure: isp_CheckCarton                                           */
-/* Copyright      : LFLogistics                                               */
-/*                                                                            */
-/* Date         Rev  Author     Purposes                                      */
-/* 2020-03-27   1.0  Chermaine  Created                                       */
-/* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)            */
-/* 2023-02-10   1.2  yeekung    TPS-661 Add Packheaderstatus (yeekung01)      */
-/******************************************************************************/
+/*******************************************************************************/
+/* Store procedure: isp_CheckCarton                                            */
+/* Copyright      : LFLogistics                                                */
+/*                                                                             */
+/* Date         Rev  Author     Purposes                                       */
+/* 2020-03-27   1.0  Chermaine  Created                                        */
+/* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)             */
+/* 2023-02-10   1.2  yeekung    TPS-661 Add Packheaderstatus (yeekung01)       */
+/* 2024-02-07   1.3  yeekung    TPS-851 Add Total carton qty (yeekung02)       */
+/* 2025-02-14   1.4  yeekung    TPS-995 Follow Error Message (yeekung03)       */
+/* 2025-04-28   2.1  GhChan     UWP-33185 Changed CartonStatus Condition (Gh01)*/
+/*******************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_CheckCarton] (
    @json       NVARCHAR( MAX),
@@ -76,9 +79,8 @@ WITH (
 IF @cScanNo = ''
 BEGIN
    SET @b_Success = 0
-   SET @n_Err = 175607
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Please scan or enter Packing Document No to proceed. Function : isp_CheckCarton'
-
+   SET @n_Err = 1000901
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Please scan or enter Packing Document No to proceed : isp_CheckCarton'
    GOTO EXIT_SP
 END
 
@@ -147,15 +149,16 @@ SET @b_Success = 1
 
 SET @jResult =(
 SELECT aa.* FROM (
-SELECT PKI.cartonNo,PKI.CartonStatus,PD.Item,PKI.EditWho AS StatusBy,LEFT(CONVERT(VARCHAR,PKI.EditDate,20),16) AS StatusDateTime,PD.LabelNo AS CartonID,PH.OrderKey,PH.Status AS PackStatus
+SELECT PKI.cartonNo,PKI.CartonStatus,PD.Item,PKI.EditWho AS StatusBy,LEFT(CONVERT(VARCHAR,PKI.EditDate,20),16) AS StatusDateTime,PD.LabelNo AS CartonID,PH.OrderKey,PH.Status AS PackStatus,PD.PACKQTY AS PackedQTY --(yeekung02)
 FROM  packInfo PKI WITH (NOLOCK)
-LEFT JOIN (select count(PD2.SKU) AS Item,PD2.cartonNo,PD2.pickslipNo,PD2.LabelNo
+LEFT JOIN (select count(PD2.SKU) AS Item,PD2.cartonNo,PD2.pickslipNo,PD2.LabelNo,SUM(pd2.QTY) AS PACKQTY
            FROM  packDetail PD2 WITH (NOLOCK)
            WHERE PD2.pickslipno IN (SELECT DISTINCT pickslipNo FROM @pickSKUDetail)
            GROUP BY PD2.cartonNo,PD2.pickslipNo,PD2.LabelNo)PD
 LEFT JOIN packHeader PH WITH (NOLOCK) ON (PH.pickslipno = PD.pickslipno)
 ON PD.pickslipNo = PKI.PickSlipNo AND PD.cartonNo = PKI.CartonNo
-WHERE ISNULL(PKI.cartonStatus,'') <> ''
+WHERE 1=1
+--AND ISNULL(PKI.cartonStatus,'') <> ''
 AND PKI.PickSlipNo IN (SELECT DISTINCT pickslipNo FROM @pickSKUDetail)
 ) aa
 FOR JSON AUTO, INCLUDE_NULL_VALUES)

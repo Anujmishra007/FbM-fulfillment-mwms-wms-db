@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /***************************************************************************************/
 /* Trigger: ntrTTMStrategyDetailUpdate                                            		*/
 /* Creation Date:  09-Sept-2008                                                   		*/
@@ -27,6 +32,7 @@
 /* Updates:                                                                       		*/
 /* Date         Author    		Ver   Purposes                                          	*/
 /* 2022-04-12   kelvinongcy	1.1	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/* 2025-10-06   AK01          1.2   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /***************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrTTMStrategyDetailUpdate]
@@ -60,8 +66,8 @@ END
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE TTMStrategyDetail WITH (ROWLOCK)
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL	
 		FROM TTMStrategyDetail , INSERTED
 		WHERE TTMStrategyDetail.TTMStrategyKey = INSERTED.TTMStrategyKey
@@ -78,7 +84,7 @@ END
 	END
 
    IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
-       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = dbo.fnc_GetUserName())
    BEGIN      
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62304   -- Should Be Set To The SQL Err message but I don't know how to do so.
@@ -114,5 +120,7 @@ GO
 
 ALTER TABLE [dbo].[TTMStrategyDetail] ENABLE TRIGGER [ntrTTMStrategyDetailUpdate]
 GO
+
+
 
 

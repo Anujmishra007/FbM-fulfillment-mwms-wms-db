@@ -36,6 +36,8 @@ GO
 /* 2022-06-24   Michael  V1.7 WMS-20060 AddMapField:Cartons,Inners,Pieces*/
 /*                            Add ShowField: HideCaseCnt, HideInnerPack, */
 /*                            HideCartons, HideInners, HidePieces        */
+/* 2025-10-10   SSA01     V1.8 UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                              */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_print_wave_pickslip_03] (
@@ -769,8 +771,8 @@ BEGIN
 
       UPDATE PH WITH(ROWLOCK)
          SET PickType = '1'
-           , EditDate = GETDATE()
-           , EditWho  = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho  = dbo.fnc_GetUserName()    --(SSA01)
            , TrafficCop = NULL
         FROM dbo.PICKHEADER PH
        WHERE PH.PickHeaderkey IN (SELECT DISTINCT PickslipNo FROM #TEMP_PIKDT WHERE PickslipNo<>'')

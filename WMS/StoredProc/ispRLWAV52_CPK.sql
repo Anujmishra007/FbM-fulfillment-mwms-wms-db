@@ -25,6 +25,7 @@ GO
 /* 2022-08-04  Wan01    1.1   Fixed to get correct SourceType           */
 /* 2022-09-06  Wan02    1.2   WMS-20686 - TH-NIKE - customize Wave      */
 /*                            Release V2022                             */
+/* 2025-10-10  SSA01    1.3   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC ispRLWAV52_CPK
    @c_Wavekey     NVARCHAR(10)    
@@ -804,8 +805,8 @@ BEGIN
       UPDATE PICKDETAIL 
          SET TaskDetailkey = @c_TaskDetailKey
             ,Trafficcop = NULL
-            ,EditWho  = SUSER_SNAME()
-            ,EditDate = GETDATE()
+            ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
+            ,EditDate = dbo.fnc_GetDate()    --(SSA01)
       FROM  PICKDETAIL PD WITH (NOLOCK)
       WHERE PD.PickdetailKey = @c_PickDetailKey
 

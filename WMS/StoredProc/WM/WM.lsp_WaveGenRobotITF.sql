@@ -1,98 +1,98 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveGenRobotITF]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveGenRobotITF] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO   
-/************************************************************************/                                                                                  
-/* Store Procedure: lsp_WaveGenRobotITF                                 */                                                                                  
-/* Creation Date: 2019-04-05                                            */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
-/* Written by: Wan                                                      */                                                                                  
-/*                                                                      */                                                                                  
+GO
+
+/************************************************************************/
+/* Store Procedure: lsp_WaveGenRobotITF                                 */
+/* Creation Date: 2019-04-05                                            */
+/* Copyright: LFL                                                       */
+/* Written by: Wan                                                      */
+/*                                                                      */
 /* Purpose: LFWM-1794 - SPs for Wave Control Screens                    */
 /*          - ( Generate Robot ITF)                                     */
-/*                                                                      */                                                                                  
-/* Called By: SCE                                                       */                                                                                  
-/*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
-/*                                                                      */                                                                                  
-/* Version: 8.0                                                         */                                                                                  
-/*                                                                      */                                                                                  
-/* Data Modifications:                                                  */                                                                                  
-/*                                                                      */                                                                                  
-/* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */  
+/*                                                                      */
+/* Called By: SCE                                                       */
+/*          :                                                           */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 8.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver.  Purposes                                  */
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveGenRobotITF]                                                                                                                     
+/* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
+/************************************************************************/
+CREATE OR ALTER PROC [WM].[lsp_WaveGenRobotITF]
       @c_WaveKey              NVARCHAR(10)
-   ,  @c_Loadkey              NVARCHAR(10)  
-   ,  @b_Success              INT = 1           OUTPUT  
-   ,  @n_err                  INT = 0           OUTPUT                                                                                                             
-   ,  @c_ErrMsg               NVARCHAR(255)     OUTPUT   
+   ,  @c_Loadkey              NVARCHAR(10)
+   ,  @b_Success              INT = 1           OUTPUT
+   ,  @n_err                  INT = 0           OUTPUT
+   ,  @c_ErrMsg               NVARCHAR(255)     OUTPUT
    ,  @n_WarningNo            INT          = 0  OUTPUT
-   ,  @c_ProceedWithWarning   CHAR(1)      = 'N'                
-   ,  @c_UserName             NVARCHAR(50) = ''                                                                                                                         
-AS  
-BEGIN                                                                                                                                                        
-   SET NOCOUNT ON                                                                                                                                           
-   SET ANSI_NULLS OFF                                                                                                                                       
-   SET QUOTED_IDENTIFIER OFF                                                                                                                                
-   SET CONCAT_NULL_YIELDS_NULL OFF       
+   ,  @c_ProceedWithWarning   CHAR(1)      = 'N'
+   ,  @c_UserName             NVARCHAR(50) = ''
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  @n_StartTCnt      INT = @@TRANCOUNT  
+   DECLARE  @n_StartTCnt      INT = @@TRANCOUNT
          ,  @n_Continue       INT = 1
 
    SET @b_Success = 1
    SET @n_Err     = 0
-               
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
-   
+
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
+
    --(mingle01) - START
    BEGIN TRY
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
       BEGIN
          SET @n_WarningNo = 1
-         SET @c_ErrMsg = 'Generate Robot Interface By Loadplan ?'  
+         SET @c_ErrMsg = 'Generate Robot Interface By Loadplan ?'
          GOTO EXIT_SP
       END
 
       BEGIN TRY
-         EXEC [dbo].[isp_RobotLoadITF_Wrapper]  
+         EXEC [dbo].[isp_RobotLoadITF_Wrapper]
               @c_Loadkey   = @c_Loadkey
             , @b_Success   = @b_Success      OUTPUT
-            , @n_Err       = @n_Err          OUTPUT 
-            , @c_ErrMsg    = @c_ErrMsg       OUTPUT 
+            , @n_Err       = @n_Err          OUTPUT
+            , @c_ErrMsg    = @c_ErrMsg       OUTPUT
       END TRY
 
       BEGIN CATCH
          SET @n_Err = 556501
          SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_RobotLoadITF_Wrapper. (lsp_WaveGenRobotITF)'   
-                        + '(' + @c_ErrMsg + ')'  
-                        
-         IF (XACT_STATE()) = -1  
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_RobotLoadITF_Wrapper. (lsp_WaveGenRobotITF)'
+                        + '(' + @c_ErrMsg + ')'
+
+         IF (XACT_STATE()) = -1
          BEGIN
             ROLLBACK TRAN
 
@@ -100,23 +100,23 @@ BEGIN
             BEGIN
                BEGIN TRAN
             END
-         END                               
+         END
       END CATCH
-            
+
       IF @b_Success = 0 OR @n_Err <> 0
       BEGIN
          SET @n_Continue = 3
-         GOTO EXIT_SP   
+         GOTO EXIT_SP
       END
    END TRY
-   
+
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
-   --(mingle01) - END 
-   
+   --(mingle01) - END
+
 EXIT_SP:
 
    IF @n_Continue=3  -- Error Occured - Process And Return
@@ -149,9 +149,10 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN
    END
-         
-   REVERT
+
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_WaveGenRobotITF] TO nSQL 
-GO  
+GRANT EXECUTE ON  [WM].[lsp_WaveGenRobotITF] TO [NSQL]
+GO

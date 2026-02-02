@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrDoclkupUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrDoclkupUpdate]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -9,8 +7,9 @@ GO
 
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
+/* 06-Oct-2025 AK01   1.0  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName       */
 
-CREATE TRIGGER ntrDoclkupUpdate      
+CREATE OR ALTER TRIGGER ntrDoclkupUpdate      
  ON  DOCLKUP      
  FOR UPDATE      
  AS      
@@ -37,8 +36,8 @@ CREATE TRIGGER ntrDoclkupUpdate
 IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate) 
  BEGIN      
     UPDATE DOCLKUP with (ROWLOCK)     
-       SET EditDate = GETDATE(),      
-    	     EditWho = SUSER_SNAME()      
+       SET EditDate = dbo.fnc_GetDate(),      
+    	     EditWho = dbo.fnc_GetUserName()      
       FROM DOCLKUP, INSERTED, DELETED   
      WHERE (DOCLKUP.ConsigneeGroup = INSERTED.ConsigneeGroup AND DOCLKUP.SkuGroup = INSERTED.SkuGroup)      
            OR (DOCLKUP.ConsigneeGroup = DELETED.ConsigneeGroup AND DOCLKUP.SkuGroup = DELETED.SkuGroup)       
@@ -79,6 +78,7 @@ IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
     RETURN  
    END           
  END
+
 
 
 

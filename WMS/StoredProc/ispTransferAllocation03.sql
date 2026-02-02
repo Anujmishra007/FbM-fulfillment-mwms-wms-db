@@ -30,6 +30,7 @@ GO
 /* Date         Author  Ver   Purposes                                     */    
 /* 13-Apr-2021  WLChooi 1.0   Created                                      */  
 /* 25-May-2021  WLChooi 1.1   Fix - Not able to allocate fully (WL01)      */
+/* 10-Oct-2025  SSA01   1.2   UWP-42248 -Enhanced session management       */
 /***************************************************************************/    
 CREATE PROC [dbo].[ispTransferAllocation03](    
    @c_FromStorerkey  NVARCHAR(10) = ''            
@@ -512,8 +513,8 @@ BEGIN
          UPDATE TRANSMITLOG3  
          SET   transmitflag  = '1'  
             ,  transmitbatch = '0'  
-            ,  EditDate = GETDATE()  
-            ,  EditWho = SUSER_SNAME()  
+            ,  EditDate = dbo.fnc_GetDate()   --(SSA01)
+            ,  EditWho = dbo.fnc_GetUserName()          --(SSA01)
             ,  TrafficCop = NULL  
          WHERE transmitlogkey = @c_Transmitlogkey  
            
@@ -980,7 +981,7 @@ BEGIN
                      ,UserDefine02   = @c_ToUCCNo    
                      ,FromChannel_ID = @n_FromChannel_ID  
                      ,EditWho        = @c_UserID  
-                     ,EditDate       = GETDATE()  
+                     ,EditDate       = dbo.fnc_GetDate()   --(SSA01)
                   WHERE Transferkey = @c_Transferkey    
                   AND TransferLineNumber = @c_TransferLineNumber   
                
@@ -1415,7 +1416,7 @@ BEGIN
                ,ToQty    = @n_QtyRemaining    
                ,[Status] = @c_TransferStatus_D    
                ,EditWho  = @c_UserID    
-               ,EditDate = GETDATE()    
+               ,EditDate = dbo.fnc_GetDate()   --(SSA01)
                ,Trafficcop = NULL    
             WHERE Transferkey = @c_Transferkey    
             AND TransferLineNumber = @c_TransferLineNumber    
@@ -1510,7 +1511,7 @@ BEGIN
             UPDATE td  
             SET PickMethod = UPDT.PickMethod  
                , EditWho = @c_UserID  
-               , EditDate= GETDATE()  
+               , EditDate= dbo.fnc_GetDate()   --(SSA01)
                , Trafficcop = NULL  
             FROM UPDT  
             JOIN TASKDETAIL td ON UPDT.TaskdetailKey = td.TaskdetailKey  
@@ -1628,7 +1629,7 @@ BEGIN
                   +' SET [Status] = @c_TransferStatus_H'   
                   +    ',OpenQty  = @n_OpenQty'    
                   +    ',EditWho  = @c_UserID '   
-                  +    ',EditDate = GETDATE() '   
+                  +    ',EditDate = dbo.fnc_GetDate()'  --(SSA01)
                   + CASE WHEN @n_OpenQty = 0 THEN '' ELSE ',Trafficcop = NULL' END  
                   +' WHERE Transferkey = @c_Transferkey'   
                       
@@ -1735,8 +1736,8 @@ BEGIN
       UPDATE TRANSMITLOG3 WITH (ROWLOCK)    
       SET Transmitflag = @c_Transmitflag    
          ,TransmitBatch= @c_TransmitBatch   
-         ,EditDate = GETDATE()  
-         ,EditWho = SUSER_SNAME()  
+         ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+         ,EditWho = dbo.fnc_GetUserName()          --(SSA01)
          ,TrafficCop = NULL       
       WHERE Transmitlogkey = @c_Transmitlogkey    
     

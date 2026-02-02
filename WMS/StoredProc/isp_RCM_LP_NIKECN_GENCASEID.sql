@@ -23,6 +23,8 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 11-Feb-2022  WLChooi  1.0  DevOps Combine Script                     */
 /* 11-May-2022  WLChooi  1.1  Bug Fix - Modify Sorting (WL01)           */
+/* 10-Oct-2025  SSA01    1.2  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RCM_LP_NIKECN_GENCASEID] 
@@ -355,8 +357,8 @@ BEGIN
                UPDATE PICKDETAIL WITH (ROWLOCK)  
                SET PICKDETAIL.CaseID = @c_CaseID 
                   ,TrafficCop = NULL  
-                  ,EditWho = SUSER_SNAME()
-                  ,EditDate = GETDATE()
+                  ,EditWho = dbo.fnc_GetUserName()    --(SSA01)
+                  ,EditDate = dbo.fnc_GetDate()    --(SSA01)
                WHERE Pickdetailkey = @c_pickdetailkey  
                SELECT @n_err = @@ERROR  
                IF @n_err <> 0  
@@ -418,8 +420,8 @@ BEGIN
                   ,Qty = @n_packqty  
                   ,UOMQTY = CASE UOM WHEN '6' THEN @n_packqty ELSE UOMQty END   
                   ,TrafficCop = NULL  
-                  ,EditWho = SUSER_SNAME()
-                  ,EditDate = GETDATE()
+                  ,EditWho = dbo.fnc_GetUserName()     --(SSA01)
+                  ,EditDate = dbo.fnc_GetDate()    --(SSA01)
                 WHERE Pickdetailkey = @c_pickdetailkey  
 
                 SELECT @n_err = @@ERROR  

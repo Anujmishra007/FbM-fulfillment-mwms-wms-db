@@ -1,13 +1,33 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrBatchPickUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrBatchPickUpdate]
-GO
+--if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrBatchPickUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+--drop trigger [dbo].[ntrBatchPickUpdate]
+--GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
 
-CREATE  TRIGGER ntrBatchPickUpdate  
+/***************************************************************************/  
+/* Trigger: ntrBatchPickUpdate                                             */  
+/* Creation Date:                                                          */  
+/* Copyright: MAERSK                                                       */  
+/* Written by:                                                             */  
+/*                                                                         */  
+/* Purpose:                                                                */  
+/* Called By: When update records                                          */  
+/*                                                                         */  
+/* PVCS Version: 1.1                                                       */  
+/*                                                                         */  
+/* Version:                                                                */  
+/*                                                                         */  
+/* Data Modifications:                                                     */  
+/*                                                                         */  
+/* Updates:                                                                */  
+/* Date         Author  Ver.  Purposes                                     */  
+/* 06-10-2025   AK01    1.0   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
+/***************************************************************************/ 
+
+CREATE OR ALTER TRIGGER ntrBatchPickUpdate  
  ON  BatchPick  
  FOR UPDATE    
  AS    
@@ -47,8 +67,8 @@ CREATE  TRIGGER ntrBatchPickUpdate
     -- update pickdetails to = '5'  
     UPDATE PICKDETAIL  
     SET STATUS = '5',
-        EditDate = GETDATE(),       --tlting
-        EditWho = SUSER_SNAME()  
+        EditDate = dbo.fnc_GetDate(),       --tlting
+        EditWho = dbo.fnc_GetUserName()  
     FROM PICKDETAIL (NOLOCK), LOADPLANDETAIL (NOLOCK)  
     WHERE PICKDETAIL.Orderkey = LOADPLANDETAIL.Orderkey  
     AND LOADPLANDETAIL.Loadkey = @c_loadkey  
@@ -97,4 +117,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

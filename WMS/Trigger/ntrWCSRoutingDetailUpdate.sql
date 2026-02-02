@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrWCSRoutingDetailUpdate]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrWCSRoutingDetailUpdate]
-GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -34,9 +32,10 @@ GO
 /* Updates:                                                             */
 /* Date       Author       Rev   Purposes                               */
 /*                                                                      */
+/* 06-10-2025 AK01         1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrWCSRoutingDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrWCSRoutingDetailUpdate]
 ON  [dbo].[WCSRoutingDetail] FOR UPDATE
 AS
 BEGIN
@@ -71,8 +70,8 @@ BEGIN
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
       UPDATE WCSRoutingDetail
-      SET EditDate = GETDATE(),
-          EditWho  = SUSER_SNAME(),
+      SET EditDate = dbo.fnc_GetDate(),
+          EditWho  = dbo.fnc_GetUserName(),
           TrafficCop = NULL
       FROM WCSRoutingDetail WD WITH (NOLOCK)
       JOIN INSERTED I ON (WD.WCSKey = I.WCSKey AND WD.RowRef = I.RowRef)

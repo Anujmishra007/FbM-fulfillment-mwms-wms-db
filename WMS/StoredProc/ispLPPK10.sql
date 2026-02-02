@@ -22,6 +22,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 12-APR-2022  NJOW     1.0  DEVOPS Combine script                     */
+/* 10-OCT-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispLPPK10]
@@ -410,7 +412,7 @@ BEGIN
             (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno)
          VALUES
             (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cSKU,
-             @nQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @cOrderKey)
+             @nQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), @cOrderKey)                  --(SSA01)
 
          IF @@ERROR <> 0
          BEGIN

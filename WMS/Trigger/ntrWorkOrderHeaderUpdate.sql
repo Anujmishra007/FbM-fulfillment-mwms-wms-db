@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrWorkOrderHeaderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-	DROP TRIGGER [dbo].[ntrWorkOrderHeaderUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -36,9 +34,11 @@ GO
 /* 30-May-2017  YokeBeen   1.1   Revised and moved the trigger points   */
 /*                               to a Sub-SP - isp_ITF_ntrWorkOrder.    */
 /*                               - (YokeBeen01).                        */
+/* 06-Oct-2025  AK01       1.2   UWP-42143 - Replace SUSER_SNAME with   */
+/*                               fnc_GetUserName                        */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrWorkOrderHeaderUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrWorkOrderHeaderUpdate]
 ON  [dbo].[WorkOrder]
 FOR UPDATE
 AS
@@ -99,8 +99,8 @@ BEGIN
          AND NOT UPDATE(EditDate)
 	BEGIN 	
 	 	UPDATE WORKORDER WITH (ROWLOCK) 
-    	   SET EditDate = GETDATE(), 
-             EditWho  = SUser_SName(),
+    	   SET EditDate = dbo.fnc_GetDate(), 
+             EditWho  = dbo.fnc_GetUserName(),
              TrafficCop = NULL 
         FROM WORKORDER  
         JOIN INSERTED ON (WORKORDER.StorerKey    = INSERTED.StorerKey
@@ -128,8 +128,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
 	BEGIN 	
 	 	UPDATE WORKORDER WITH (ROWLOCK) 
-    	   SET EditDate = GETDATE(), 
-             EditWho  = SUser_SName(),
+    	   SET EditDate = dbo.fnc_GetDate(), 
+             EditWho  = dbo.fnc_GetUserName(),
              TrafficCop = NULL 
         FROM WORKORDER  
         JOIN INSERTED ON (WORKORDER.StorerKey = INSERTED.StorerKey
@@ -227,4 +227,5 @@ BEGIN
    END    	
 END
 GO
+
 

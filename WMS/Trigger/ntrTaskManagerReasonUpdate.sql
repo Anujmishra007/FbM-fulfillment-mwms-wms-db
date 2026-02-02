@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrTaskManagerReasonUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrTaskManagerReasonUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -37,9 +33,10 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
+/* 06-Oct-2025  AK01       UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrTaskManagerReasonUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrTaskManagerReasonUpdate]
 ON [dbo].[TaskManagerReason]
 FOR UPDATE
 AS 
@@ -70,8 +67,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE TaskManagerReason
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL	
 		FROM TaskManagerReason (NOLOCK), INSERTED (NOLOCK)
 		WHERE TaskManagerReason.TaskManagerReasonKey = INSERTED.TaskManagerReasonKey
@@ -109,4 +106,5 @@ BEGIN
 	END
 END
 GO
+
 

@@ -166,6 +166,9 @@ GO
 /* 2024-07-27 10.9 Dennis     Dynamic Lottable                           */
 /* 2024-07-31 11.0 JHU151     FCR-550 Scan SN on sku screen              */
 /* 2024-12-27 12.0 Dennis     UWP-28649 Fix Capture Pallet Type Bug      */
+/* 2025-03-25 12.1 YeeKung    FCR-3145 Add Out for rdt_serialNo Params   */
+/* 2025-07-14 12.2 Cuize      FCR-990 Chang Errno = -2                    */
+/* 2025-07-28 0.0  JackC      !!!Cutover!!! Use V2 version in V0 repo for work */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -311,6 +314,7 @@ DECLARE
    @cLottableCode       NVARCHAR( 30),
    @nMorePage           INT,
    @cMax                NVARCHAR( MAX),
+   @nScan               INT,   --(12.1)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -410,6 +414,7 @@ SELECT
    @nQtyExpected       = V_Integer4,
    @nCheckQTYFormat    = V_Integer5,
    @nNOPOFlag          = V_Integer6,
+   @nScan              = V_Integer7,
 
    @cTempLottable01         = V_String1,
    @cTempLottable02         = V_String2,
@@ -3314,6 +3319,8 @@ BEGIN
          -- Serial No
          IF @cSerialNoCapture IN ('1', '2')  -- 1 = INBOUND & OUTBOUND; 2 = INBOUND ONLY; 3 = OUTBOUND ONLY
          BEGIN
+            SET @nScan = 0
+
             EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cSKU, @cSKUDesc, @nQTY, 'CHECK', 'ASN', @cReceiptKey,
                @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
                @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
@@ -3332,7 +3339,8 @@ BEGIN
                @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
                @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
                @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  @nScn = 0,
-               @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '2'
+               @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '2',
+               @nScan   =  @nScan  OUTPUT
 
             IF @nErrNo <> 0
                GOTO Quit
@@ -3508,6 +3516,8 @@ BEGIN
       -- Serial No
       IF @cSerialNoCapture IN ('1', '2')  -- 1 = INBOUND & OUTBOUND; 2 = INBOUND ONLY; 3 = OUTBOUND ONLY
       BEGIN
+         SET @nScan = 0
+
          EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cSKU, @cSKUDesc, @nQTY, 'CHECK', 'ASN', @cReceiptKey,
             @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
             @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
@@ -3526,7 +3536,8 @@ BEGIN
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
             @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
             @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  @nScn = 0,
-            @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '2'
+            @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '2',
+            @nScan   =  @nScan    OUTPUT
 
          IF @nErrNo <> 0
             GOTO Quit
@@ -4758,6 +4769,8 @@ Step_9:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
+      DECLARE @nBeforeScanSNO INT = @nScan
+
       -- Extended validate (yeekung05)
       IF @cExtendedValidateSP <> ''
       BEGIN
@@ -4792,13 +4805,14 @@ BEGIN
               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, 0,
               @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-         IF @nErrno = -1
+         IF @nErrno = -2  --v12.2 Cuize
          BEGIN
             SET @nScn = 6413
             SET @nStep = 98
             SET @cOutField01 = @cMax
             SET @cOutField02 = ''
-            GOTO Step_9_fail
+            SET @cFieldAttr02 = ''
+            GOTO Quit
          END
 
          IF @nErrNo <> 0 OR ISNULL( @cErrMsg, '') <> ''
@@ -4824,7 +4838,8 @@ BEGIN
          @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
          @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
          @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  @nScn,
-         @nBulkSNO   OUTPUT,  @nBulkSNOQTY OUTPUT,  @cSerialCaptureType = '2'
+         @nBulkSNO   OUTPUT,  @nBulkSNOQTY OUTPUT,  @cSerialCaptureType = '2',
+         @nScan   =  @nScan  OUTPUT
 
       IF @nErrNo = -1
       BEGIN
@@ -5023,6 +5038,8 @@ BEGIN
       -- Go to SKU QTY screen
       SET @nScn = @nFromScn
       SET @nStep = @nStep - 4
+
+      GOTO Step_9_Quit
    END
 
    IF @nInputKey = 0 -- ESC
@@ -5085,9 +5102,39 @@ BEGIN
       -- Go to SKU QTY screen
       SET @nScn = @nFromScn
       SET @nStep = @nStep - 4
+
+      GOTO Step_9_Quit
    END
 
-Step_9_Quit:
+   Step_9_fail:
+   BEGIN
+      EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cSKU, @cSKUDesc, @nQTY, 'CHECK', 'ASN', @cReceiptKey,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
+         @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
+         @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  @nScn = 0,
+         @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '2',
+         @nScan = @nBeforeScanSNO  OUTPUT
+
+      SET @nScan = @nBeforeScanSNO  
+
+      GOTO Quit
+   END
+
+   Step_9_Quit:
    -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
@@ -5136,7 +5183,7 @@ Step_9_Quit:
       END
    END
    GOTO Quit
-Step_9_fail:
+
 
 END
 GOTO Quit
@@ -6348,6 +6395,8 @@ BEGIN
          -- Serial No
          IF @cSerialNoCapture IN ('1', '2')  -- 1 = INBOUND & OUTBOUND; 2 = INBOUND ONLY; 3 = OUTBOUND ONLY
          BEGIN
+            SET @nScan  = 0
+
             EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cSKU, @cSKUDesc, @nQTY, 'CHECK', 'ASN', @cReceiptKey,
                @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
                @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
@@ -6366,7 +6415,8 @@ BEGIN
                @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
                @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
                @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  @nScn = 0,
-               @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '2'
+               @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '2',
+               @nScan  = @nScan  OUTPUT 
 
             IF @nErrNo <> 0
                GOTO Quit
@@ -6515,6 +6565,8 @@ BEGIN
       -- Serial No
       IF @cSerialNoCapture IN ('1', '2')  -- 1 = INBOUND & OUTBOUND; 2 = INBOUND ONLY; 3 = OUTBOUND ONLY
       BEGIN
+         SET @nScan  = 0
+
          EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cSKU, @cSKUDesc, @nQTY, 'CHECK', 'ASN', @cReceiptKey,
             @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
             @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
@@ -6533,7 +6585,8 @@ BEGIN
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
             @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
             @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  @nScn = 0,
-            @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '2'
+            @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '2',
+            @nScan = @nScan OUTPUT
 
          IF @nErrNo <> 0
             GOTO Quit
@@ -6984,13 +7037,13 @@ BEGIN
          BEGIN
             IF @nPreSCn = 6413
             BEGIN
-               SET @cBarcode = @cUDF01
+               SET @cBarcode = ISNULL(@cUDF01,'')
                SET @cPrevBarcode = @cUDF02
                SET @cSKUValidated = @cUDF03
                SET @nBeforeReceivedQty = @cUDF04
                SET @nQtyExpected = @cUDF05
                SET @nToIDQTY = @cUDF06
-               SET @cMax = @cUDF07
+               SET @cMax = ISNULL(@cUDF07,'')
             END
          END
          
@@ -7230,6 +7283,7 @@ BEGIN
       V_Integer4   = @nQtyExpected,
       V_Integer5   = @nCheckQTYFormat,
       V_Integer6   = @nNOPOFlag,
+      V_Integer7   = @nScan,
 
       V_String1    = @cTempLottable01,
       V_String2    = @cTempLottable02,

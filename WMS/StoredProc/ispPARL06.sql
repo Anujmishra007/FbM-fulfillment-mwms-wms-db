@@ -36,6 +36,7 @@ GO
 /* 06-Jul-2022  WLChooi  1.1  WMS-20157 - Add optional param, call by   */
 /*                            isp_UNILEVER_AutoReleasePA (WL01)         */
 /* 06-Jul-2022  WLChooi  1.1  DevOps Combine Script                     */
+/* 10-Oct-2025  SSA01    1.2  UWP-42248 -Enhanced session management    */
 /************************************************************************/  
 
 CREATE OR ALTER PROC [dbo].[ispPARL06]
@@ -243,8 +244,8 @@ BEGIN
             UPDATE RECEIPTDETAIL WITH (ROWLOCK)
             SET PutawayLoc = @c_SuggestLoc
                ,Trafficcop = NULL
-               ,editwho = SUSER_SNAME()
-               ,editdate = GETDATE()
+               ,editwho = dbo.fnc_GetUserName()               --(SSA01)
+               ,editdate = dbo.fnc_GetDate()    --(SSA01)
             WHERE Receiptkey = @c_Receiptkey         
             AND ToID = @c_ToID
             AND ToLoc = @c_ToLoc

@@ -23,7 +23,8 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date        Author   Ver  Purposes                                    */ 
-/* 01-04-2020  Wan01    2.1   Sync Exceed & SCE                          */ 
+/* 01-04-2020  Wan01    2.1   Sync Exceed & SCE                          */
+/* 10-10-2025  SSA01    2.2   UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[ispRLWAV06]      
   @c_wavekey      NVARCHAR(10)  
@@ -362,8 +363,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV06]
           --SET STATUS = '1' -- Released        --(Wan01) 
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               --(Wan01)
+           ,  EditWho = dbo.fnc_GetUserName()           --(Wan01)(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

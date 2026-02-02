@@ -34,6 +34,7 @@ GO
 /* 08-APR-2013  Shong  1.3 Performance Tuning                           */
 /* 25-SEP-2013  NJOW01 1.4 290121-Allow update label no to pickdetail   */
 /*                         drop id                                      */
+/* 10-Oct-2025  SSA01  1.5  UWP-42248 -Enhanced session management      */
 /************************************************************************/  
 CREATE PROC [dbo].[ispPnp_ConfirmPack]  
          @c_PickSlipNo     NVARCHAR(20),  
@@ -99,8 +100,8 @@ IF @n_continue = 1 OR @n_continue = 2
 BEGIN
     UPDATE PACKHEADER WITH (ROWLOCK)
     SET    STATUS = '9',
-           EditDate = GETDATE(),
-           EditWho = sUser_sName()
+           EditDate = dbo.fnc_GetDate(),    --(SSA01)
+           EditWho = dbo.fnc_GetUserName()              --(SSA01)
     WHERE  PickSlipNo = @c_PickSlipNo
     AND    STATUS < '9'
     

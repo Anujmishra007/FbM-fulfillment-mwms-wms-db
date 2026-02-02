@@ -76,5 +76,6 @@ execute rdt.rdtAddMsg '129016', 10, '29016^UpdCCDet Fail',  'us_english'
 execute rdt.rdtAddMsg '129017', 10, '29017^Invalid Format',  'us_english'
 execute rdt.rdtAddMsg '129018', 10, '29018^Invalid Format',  'us_english'
 
-
+-- FCR-2054
+execute rdt.rdtAddMsg '129019', 10, '29019^ID Needed     ',  'us_english'
 

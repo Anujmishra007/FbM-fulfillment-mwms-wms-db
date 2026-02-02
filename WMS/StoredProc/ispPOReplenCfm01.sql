@@ -27,6 +27,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-09-09  Wan01    1.1   Performance Tune                          */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC ispPOReplenCfm01
            @c_ReplenishmentGroup NVARCHAR(10) 
@@ -191,8 +192,8 @@ BEGIN
    BEGIN
       UPDATE UCC WITH (ROWLOCK)
       SET Status = '6'
-         ,EditWho  = SUSER_SNAME()
-         ,EditDate = GETDATE()
+         ,EditWho  = dbo.fnc_GetUserName()             --(SSA01)
+         ,EditDate = dbo.fnc_GetDate()    --(SSA01)
       WHERE UCC_RowRef = @n_UCC_RowRef
 
       IF @@ERROR <> 0

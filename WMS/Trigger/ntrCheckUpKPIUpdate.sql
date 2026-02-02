@@ -1,7 +1,4 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE OBJECT_ID = 
-      OBJECT_ID(N'[dbo].[ntrCheckUpKPIUpdate]') AND type in ('TR') )
-    DROP TRIGGER  [dbo].[ntrCheckUpKPIUpdate]
-GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,9 +14,10 @@ GO
 /* Updates:                                                             */  
 /* Date         Author        Purposes                                  */
 /* 2017-May-04  KHLim       Skip EditWho/Date when update RunDate (KH01)*/
+/* 06-Oct-2025 AK01   1.0  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrCheckUpKPIUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrCheckUpKPIUpdate]  
 ON  [dbo].[CheckUpKPI] FOR UPDATE  
 AS  
 BEGIN  
@@ -53,8 +51,8 @@ BEGIN
  IF @n_continue = 1 or @n_continue=2  
  BEGIN  
   UPDATE CheckUpKPI  
-  SET EditDate = GETDATE(),  
-      EditWho = SUSER_SNAME()  
+  SET EditDate = dbo.fnc_GetDate(),  
+      EditWho = dbo.fnc_GetUserName()  
   FROM CheckUpKPI (NOLOCK), INSERTED (NOLOCK)  
       WHERE CheckUpKPI.KPI = INSERTED.KPI  
   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
@@ -97,3 +95,4 @@ END
   
 
 GO
+

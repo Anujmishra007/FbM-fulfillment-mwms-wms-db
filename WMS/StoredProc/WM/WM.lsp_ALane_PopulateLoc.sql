@@ -1,77 +1,80 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ALane_PopulateLoc]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ALane_PopulateLoc] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO   
-/************************************************************************/                                                                                  
-/* Store Procedure: lsp_ALane_PopulateLoc                               */                                                                                  
-/* Creation Date: 2019-07-29                                            */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
-/* Written by: Wan                                                      */                                                                                  
-/*                                                                      */                                                                                  
+GO
+
+/************************************************************************/
+/* Store Procedure: lsp_ALane_PopulateLoc                               */
+/* Creation Date: 2019-07-29                                            */
+/* Copyright: LFL                                                       */
+/* Written by: Wan                                                      */
+/*                                                                      */
 /* Purpose: LFWM-1857- SP for populate Lane loc for Assign Lane for     */
 /*          - ( Load and MBOL )                                         */
-/*                                                                      */                                                                                  
-/* Called By: SCE                                                       */                                                                                  
-/*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
-/*                                                                      */                                                                                  
-/* Version: 8.0                                                         */                                                                                  
-/*                                                                      */                                                                                  
-/* Data Modifications:                                                  */                                                                                  
-/*                                                                      */                                                                                  
-/* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */ 
+/*                                                                      */
+/* Called By: SCE                                                       */
+/*          :                                                           */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 8.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver.  Purposes                                  */
 /* 2021-02-05  mingle01 1.1  Add Big Outer Begin try/Catch             */
-/*                           Execute Login if @c_UserName<>SUSER_SNAME()*/ 
-/************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_ALane_PopulateLoc] 
-      @c_LocationCategory     NVARCHAR(10)   
-   ,  @c_Loc                  NVARCHAR(10)   
-   ,  @c_Loadkey              NVARCHAR(10)  = ''                                                                                                                   
-   ,  @c_MBOLkey              NVARCHAR(10)  = ''  
-   ,  @c_ExternOrderkey       NVARCHAR(50)  = ''    
-   ,  @c_Consigneekey         NVARCHAR(15)  = ''                             
-   ,  @b_Success              INT = 1                 OUTPUT  
-   ,  @n_err                  INT = 0                 OUTPUT                                                                                                             
-   ,  @c_ErrMsg               NVARCHAR(255)= ''       OUTPUT   
-   ,  @c_UserName             NVARCHAR(128)= ''                                                                                                                         
+/*                           Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-05-26  SWT01    1.1   Setting Session Context for user name     */
+/************************************************************************/
+CREATE OR ALTER PROC [WM].[lsp_ALane_PopulateLoc]
+      @c_LocationCategory     NVARCHAR(10)
+   ,  @c_Loc                  NVARCHAR(10)
+   ,  @c_Loadkey              NVARCHAR(10)  = ''
+   ,  @c_MBOLkey              NVARCHAR(10)  = ''
+   ,  @c_ExternOrderkey       NVARCHAR(50)  = ''
+   ,  @c_Consigneekey         NVARCHAR(15)  = ''
+   ,  @b_Success              INT = 1                 OUTPUT
+   ,  @n_err                  INT = 0                 OUTPUT
+   ,  @c_ErrMsg               NVARCHAR(255)= ''       OUTPUT
+   ,  @c_UserName             NVARCHAR(128)= ''
 
-AS  
-BEGIN                                                                                                                                                        
-   SET NOCOUNT ON                                                                                                                                           
-   SET ANSI_NULLS OFF                                                                                                                                       
-   SET QUOTED_IDENTIFIER OFF                                                                                                                                
-   SET CONCAT_NULL_YIELDS_NULL OFF       
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  @n_StartTCnt         INT = @@TRANCOUNT  
+   DECLARE  @n_StartTCnt         INT = @@TRANCOUNT
          ,  @n_Continue          INT = 1
 
          ,  @c_LP_LaneNumber     NVARCHAR(5) = ''
 
          ,  @CUR_DEL             CURSOR
 
-   SET @n_Err = 0 
+   SET @n_Err = 0
 
    --(mingle01) - START
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
-   BEGIN
+   BEGIN 
+
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
-      END 
+      END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SWT01) - END    
    --(mingle01) - END
 
    --(mingle01) - START
@@ -90,7 +93,7 @@ BEGIN
                        + ': Either Load # or Ship Ref. Unit is Mandatory. (lsp_ALane_PopulateLoc)'
          GOTO EXIT_SP
       END
-  
+
       SET @CUR_DEL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT LP_LaneNumber
          FROM LOADPLANLANEDETAIL WITH (NOLOCK)
@@ -98,15 +101,15 @@ BEGIN
          AND ExternOrderkey = @c_ExternOrderkey
          AND ConsigneeKey = @c_Consigneekey
          AND MBOLKey = @c_MBOLkey
-         AND Loc = '' 
-         ORDER BY LP_LaneNumber 
+         AND Loc = ''
+         ORDER BY LP_LaneNumber
 
-      OPEN @CUR_DEL   
-   
+      OPEN @CUR_DEL
+
       FETCH NEXT FROM @CUR_DEL INTO @c_LP_LaneNumber
 
-      WHILE @@FETCH_STATUS <> -1 
-      BEGIN      
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
          BEGIN TRY
             DELETE LOADPLANLANEDETAIL
             WHERE Loadkey = @c_Loadkey
@@ -120,11 +123,11 @@ BEGIN
             SET @n_Continue = 3
             SET @n_Err = 557102
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Delete Loadplanlanedetail Table Fail'
-                          + '. (lsp_ALane_PopulateLoc)' 
-                    
-            IF (XACT_STATE()) = -1  
+                          + '. (lsp_ALane_PopulateLoc)'
+
+            IF (XACT_STATE()) = -1
             BEGIN
-               IF @@TRANCOUNT > 0 
+               IF @@TRANCOUNT > 0
                BEGIN
                   ROLLBACK TRAN
                END
@@ -133,11 +136,11 @@ BEGIN
                BEGIN
                   BEGIN TRAN
                END
-            END 
-            GOTO EXIT_SP 
+            END
+            GOTO EXIT_SP
          END CATCH
-         
-         FETCH NEXT FROM @CUR_DEL INTO @c_LP_LaneNumber                
+
+         FETCH NEXT FROM @CUR_DEL INTO @c_LP_LaneNumber
       END
       CLOSE @CUR_DEL
       DEALLOCATE @CUR_DEL
@@ -165,7 +168,7 @@ BEGIN
             ,  [Status]
             ,  MBOLKey
             )
-         VALUES 
+         VALUES
             (  @c_Loadkey
             ,  @c_ExternOrderkey
             ,  @c_Consigneekey
@@ -181,11 +184,11 @@ BEGIN
          SET @n_Continue = 3
          SET @n_Err = 557103
          SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Insert Into Loadplanlanedetail Table Fail'
-                       + '. (lsp_ALane_PopulateLoc)' 
-                    
-         IF (XACT_STATE()) = -1  
+                       + '. (lsp_ALane_PopulateLoc)'
+
+         IF (XACT_STATE()) = -1
          BEGIN
-            IF @@TRANCOUNT > 0 
+            IF @@TRANCOUNT > 0
             BEGIN
                ROLLBACK TRAN
             END
@@ -194,8 +197,8 @@ BEGIN
             BEGIN
                BEGIN TRAN
             END
-         END 
-         GOTO EXIT_SP 
+         END
+         GOTO EXIT_SP
       END CATCH
    END TRY
 
@@ -232,8 +235,11 @@ EXIT_SP:
       END
    END
 
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_ALane_PopulateLoc] TO nSQL 
-GO  
+GRANT EXECUTE ON  [WM].[lsp_ALane_PopulateLoc] TO [NSQL]
+GO

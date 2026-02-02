@@ -30,6 +30,7 @@
 /*										of pickdetail status when no ucc# entered */
 /*										- bug fixed ucc.status '5' not update		*/
 /*                                                                      */
+/* 10-Oct-2025  SSA01     UWP-42248 -Enhanced session management        */
 /************************************************************************/
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -165,8 +166,8 @@ BEGIN
    		SET Confirmed = CASE ToLoc
    								WHEN 'PICK' THEN 'Y' ELSE 'S'
    							 END,
-   			 EditDate = GetDate(),
-   			 EditWho = sUser_sName(),
+   			 EditDate = dbo.fnc_GetDate(),    --(SSA01)
+   			 EditWho = dbo.fnc_GetUserName(),              --(SSA01)
    			 Remark = CASE ToLoc
    			 				WHEN 'PICK' THEN 'Success - FCP Replen.' ELSE 'Replen Started.'
 	   					 END,
@@ -192,8 +193,8 @@ BEGIN
    		SET UCC.Status = CASE REPLENISHMENT.ToLoc
    									WHEN 'PICK 'THEN '5' ELSE '6'
    							  END,
-   			 UCC.EditDate = GetDate(),
-   			 UCC.EditWho = sUser_sName() 
+   			 UCC.EditDate = dbo.fnc_GetDate(),   --(SSA01)
+   			 UCC.EditWho = dbo.fnc_GetUserName()         --(SSA01)
    		FROM UCC 
          JOIN REPLENISHMENT (NOLOCK) ON UCC.UCCNo = REPLENISHMENT.RefNo 
    		WHERE ReplenishmentGroup = @c_BatchNo
@@ -280,8 +281,8 @@ BEGIN
    		SET Confirmed = CASE ToLoc
    								WHEN 'PICK' THEN 'Y' ELSE 'S'
    							 END,
-   			 EditDate = GetDate(),
-   			 EditWho = sUser_sName(),
+   			 EditDate = dbo.fnc_GetDate(),    --(SSA01)
+   			 EditWho = dbo.fnc_GetUserName(),            --(SSA01)
    			 Remark = CASE ToLoc
    			 				WHEN 'PICK' THEN 'Success - FCP Replen.' ELSE 'Replen Started.'
    						END,
@@ -306,8 +307,8 @@ BEGIN
    		SET UCC.Status = CASE REPLENISHMENT.ToLoc
    									WHEN 'PICK 'THEN '5' ELSE '6'
    							  END,
-   			 UCC.EditDate = GetDate(),
-   			 UCC.EditWho = sUser_sName() 
+   			 UCC.EditDate = dbo.fnc_GetDate(),    --(SSA01)
+   			 UCC.EditWho = dbo.fnc_GetUserName()               --(SSA01)
    		FROM UCC 
          JOIN REPLENISHMENT (NOLOCK) ON UCC.UCCNo = REPLENISHMENT.RefNo 
    		WHERE ReplenishmentGroup = @c_BatchNo

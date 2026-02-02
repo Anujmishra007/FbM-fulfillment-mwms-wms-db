@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2025-10-10   SSA01   1.0  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC ispASNFZ19
            @c_Receiptkey         NVARCHAR(10)
@@ -92,8 +94,8 @@ select @c_SerialNoKey
 select 'update'
          UPDATE SERIALNO  
          SET [Status] = '1'
-            , EditWho = SUSER_SNAME()
-            , EditDate= GETDATE()
+            , EditWho = dbo.fnc_GetUserName()      --(SSA01)
+            , EditDate= dbo.fnc_GetDate()   --(SSA01)
          WHERE SerialNoKey = @c_SerialNoKey
       
          IF @@ERROR <> 0

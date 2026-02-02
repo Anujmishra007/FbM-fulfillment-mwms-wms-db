@@ -136,3 +136,5 @@ EXECUTE rdt.rdtAddScn 2687, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1764
 
+
+-- Exit

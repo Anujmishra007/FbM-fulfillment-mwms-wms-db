@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLTRF01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLTRF01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,8 +26,14 @@ GO
 /* 11-Apr-2016  Wan04   1.2 Fixed - update full pallet task status to Q */
 /*                          After Finalized                             */
 /* 27-JUL-2016  Barnett 1.4 FBR - 373411 ASRS Picking Priority (BL01)   */
+/* 10-May-2024  NJOW01  1.5 WMS-25475 Skip create task for non-ASRS Plt */
+/* 23-Sep-2024  CSCHONG 1.6 WMS-26305 revised logic (CS01)              */
+/* 23-Dec-2024  Michael 1.7 FCR-1865-SG-Storer Specific Validation(ML01)*/
+/* 13-Jan-2025  TKLIM   1.8 Add Fac Filter for GTMLoop & GTMWS (TK02)   */
+/* 27-May-2025  Michael 1.9 FCR-5101-SG-WG2-WMS_Multi facility -        */
+/*                          Add Ext validation at release transfer(ML02)*/
 /************************************************************************/
-CREATE PROC [dbo].[ispRLTRF01] 
+CREATE OR ALTER PROC [dbo].[ispRLTRF01] 
             @c_TransferKey NVARCHAR(10)
          ,  @b_Success     INT = 0  OUTPUT 
          ,  @n_err         INT = 0  OUTPUT 
@@ -71,8 +72,9 @@ BEGIN
          , @c_PickMethod         NVARCHAR(10)         --(Wan02)
 
          , @b_callout            INT                  --(Wan03)
-		 , @c_Priority           NVARCHAR(10)		  --(BL01)
-                      
+         , @c_Priority           NVARCHAR(10)         --(BL01)
+         , @c_Facility           NVARCHAR(5)          --(TK01)
+
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
    SET @n_err      = 0
@@ -258,6 +260,95 @@ BEGIN
       GOTO QUIT 
    END 
 
+   --ML01-S
+   DECLARE @c_Option5            NVARCHAR(4000)=''
+         , @c_ExtendedValidation NVARCHAR(10)
+         , @c_Code               NVARCHAR(30)
+         , @c_MsgText            NVARCHAR(250)
+         , @c_NotExists          NVARCHAR(250)
+         , @c_ValidateExp        NVARCHAR(MAX)
+         , @c_SQL                NVARCHAR(MAX)
+         , @c_SQLParam           NVARCHAR(MAX)
+
+   SET @c_FromStorerkey = ''
+   SELECT @c_FromStorerkey = FromStorerkey
+   FROM TRANSFER (NOLOCK)
+   WHERE Transferkey = @c_Transferkey
+   
+   SELECT @c_Option5 = SC.Option5
+   FROM dbo.fnc_GetRight2('', @c_FromStorerkey, '', 'ReleaseTransfer_SP') AS SC
+   WHERE Authority='ispRLTRF01'
+
+   SELECT @c_ExtendedValidation = dbo.fnc_GetParamValueFromString ('@c_ExtendedValidation', @c_option5, @c_ExtendedValidation)
+   
+   IF EXISTS(SELECT TOP 1 1 FROM dbo.CodeLkup WITH (NOLOCK)
+--ML02              WHERE Listname = @c_ExtendedValidation AND Storerkey = @c_FromStorerkey)
+              WHERE Listname = @c_ExtendedValidation AND Storerkey IN ('', @c_FromStorerkey) )     --ML02
+   BEGIN
+      IF NOT EXISTS(SELECT TOP 1 1 FROM dbo.CodeLkup WITH (NOLOCK)                                 --ML02
+                 WHERE Listname = @c_ExtendedValidation AND Storerkey = @c_FromStorerkey )         --ML02
+         SET @c_FromStorerkey = ''                                                                 --ML02
+
+      DECLARE C_VALIDATION CURSOR FAST_FORWARD READ_ONLY FOR
+       SELECT Code
+            , MsgText     = ISNULL(RTRIM(Description), '')
+            , NotExists   = ISNULL(RTRIM(Long), '')
+            , ValidateExp = Notes
+         FROM dbo.CodeLkup WITH (NOLOCK)
+        WHERE Listname = @c_ExtendedValidation AND Storerkey = @c_FromStorerkey
+          AND ISNULL(Notes,'')<>''
+        ORDER BY Code
+
+      OPEN C_VALIDATION
+
+      SET @c_SQLParam = '@c_Transferkey NVARCHAR(10),@b_Success INT OUTPUT'
+
+      WHILE 1=1
+      BEGIN
+         FETCH NEXT FROM C_VALIDATION
+          INTO @c_Code, @c_MsgText, @c_NotExists, @c_ValidateExp
+
+         IF @@FETCH_STATUS<>0
+            BREAK
+
+         SET @b_Success = 0
+         SET @n_err  = 0
+
+         SET @c_SQL = CASE WHEN @c_NotExists = 'NOT EXISTS' THEN 'IF NOT EXISTS' ELSE 'IF EXISTS' END
+                   +' (SELECT TOP 1 1 FROM TRANSFER(NOLOCK)'
+                   +' JOIN TRANSFERDETAIL(NOLOCK) ON TRANSFER.Transferkey=TRANSFERDETAIL.Transferkey'
+                   +' WHERE TRANSFER.Transferkey = @c_Transferkey'
+                   +' AND (' + @c_ValidateExp + ')) SET @b_Success=1'
+
+         BEGIN TRY
+            EXEC sp_ExecuteSQL @c_SQL, @c_SQLParam
+                     , @c_Transferkey
+                     , @b_Success      OUTPUT
+         END TRY
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @n_err  = 61065
+            SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Extended Validation Err ' + ISNULL(@c_Code,'') + ' (' + ISNULL(ERROR_MESSAGE(),'') +'). (ispRLTRF01)'
+            BREAK
+         END CATCH
+         
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err  = 61070
+            SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': '+ ISNULL(@c_MsgText,'') + '. (ispRLTRF01)'
+            BREAK
+         END
+      END
+
+      CLOSE C_VALIDATION
+      DEALLOCATE C_VALIDATION
+
+      IF @n_err <> 0
+         GOTO QUIT 
+   END
+   --ML01-E
+
    BEGIN TRAN
    DECLARE CUR_TRFDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
    SELECT ReasonCode= ISNULL(TRANSFER.ReasonCode,'')
@@ -292,6 +383,21 @@ BEGIN
       SET @b_callout  = 1                                               --(Wan03)      
       SET @c_Status = '4'
       SET @n_Qty = 0
+      
+      --NJOW01 S
+      IF EXISTS(SELECT 1 
+                FROM LOTXLOCXID LLI (NOLOCK)
+                JOIN LOC (NOLOCK) ON LLI.Loc = LOC.Loc
+                WHERE LLI.Id = @c_FromID
+                AND LLI.Loc = @c_FromLoc
+                AND LLI.Qty > 0
+                AND LOC.LocationCategory <> 'ASRS'
+                AND LOC.Putawayzone NOT IN('AMBIENT','AIRCOND')
+                AND LLI.Storerkey = @c_FromStorerkey) OR ISNULL(@c_FromID,'') = ''     --(CS01)
+      BEGIN
+         GOTO NEXT_DET
+      END          
+      --NJOW01 E
 
       SELECT @n_Qty = SUM(Qty - QtyAllocated - QtyPicked)
       FROM LOTxLOCxID WITH (NOLOCK)
@@ -455,7 +561,9 @@ BEGIN
       END          
 
       SET @c_LogicalFromLoc = ''
+      SET @c_Facility = ''   --ML02
       SELECT @c_LogicalFromLoc = ISNULL(LogicalLocation,'')  
+            ,@c_Facility = Facility    --(TK01)
       FROM LOC WITH (NOLOCK)
       WHERE ( Loc = @c_Fromloc )
 
@@ -472,11 +580,11 @@ BEGIN
          SELECT @c_ToLoc = Loc  
               , @c_LogicalToLoc = ISNULL(LogicalLocation,'')
          FROM LOC WITH (NOLOCK)
-         WHERE ( LocationCategory = 'ASRSGTM' And LocationGroup = 'GTMLOOP' )
+         WHERE ( LocationCategory = 'ASRSGTM' And LocationGroup = 'GTMLOOP' AND Facility = @c_Facility)     --(TK01)
 
          SELECT @c_FinalLoc = Loc 
          FROM LOC WITH (NOLOCK)
-         WHERE ( LocationCategory = 'ASRSGTMWS' AND LocationGroup = 'GTMWS' )
+         WHERE ( LocationCategory = 'ASRSGTMWS' AND LocationGroup = 'GTMWS' AND Facility = @c_Facility)     --(TK01)
       END
       ELSE IF @c_Status = '5'
       BEGIN 
@@ -494,19 +602,19 @@ BEGIN
       END
       --(Wan02) - END
 
-		--(BL01 BEGIN)
-		SELECT @c_Priority = Short
-		FROM CodeLKup (NOLOCK) WHERE ListName = 'DTPriority' AND Code = @c_TaskType
+    --(BL01 BEGIN)
+    SELECT @c_Priority = Short
+    FROM CodeLKup (NOLOCK) WHERE ListName = 'DTPriority' AND Code = @c_TaskType
 
 
-		IF ISNULL(@c_Priority,'') =''
-		BEGIN
-		SELECT @c_Priority = Short
-		FROM CodeLKup (NOLOCK) WHERE ListName = 'DTPriority' AND Code = 'DEFAULT'
+    IF ISNULL(@c_Priority,'') =''
+    BEGIN
+    SELECT @c_Priority = Short
+    FROM CodeLKup (NOLOCK) WHERE ListName = 'DTPriority' AND Code = 'DEFAULT'
 
-		IF ISNULL(@c_Priority,'') ='' SET @c_Priority = 5
-		END 
-		--(BL01 END)
+    IF ISNULL(@c_Priority,'') ='' SET @c_Priority = 5
+    END 
+    --(BL01 END)
 
       INSERT INTO TASKDETAIL    
          (    
@@ -586,8 +694,8 @@ BEGIN
             ,  @c_MessageType  = @c_MessageType
             ,  @c_PalletID     = @c_FromID
             ,  @c_FromLoc      = @c_FromLoc
-            ,  @c_ToLoc	       = @c_ToLoc
-            ,  @c_Priority	   = @c_Priority  --(BL01)
+            ,  @c_ToLoc        = @c_ToLoc
+            ,  @c_Priority     = @c_Priority  --(BL01)
             ,  @c_TaskDetailKey= @c_Taskdetailkey
             ,  @b_Success      = @b_Success  OUTPUT
             ,  @n_Err          = @n_Err      OUTPUT
@@ -751,3 +859,4 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[ispRLTRF01] TO nSQL 
 GO
+

@@ -40,6 +40,8 @@ GO
 /* 2018-10-23  KCY      Initial - Jira Ticket #WMS-5291                 */
 /* 2018-08-20  KCY      1.0      Add Update TrafficCop (KCY01)          */
 /* 2020-07-14  Alex     Jira Ticket #WMS-13309                          */
+/* 2025-10-10  SSA01    1.1  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                             */
 /************************************************************************/    
 CREATE PROC [dbo].[isp_WSITF_GEEKPLUSRBT_GENERIC_ORDER_INBOUND_POST](
      @b_Debug                 INT
@@ -358,8 +360,8 @@ BEGIN
             , DropId = @c_container_code
             ,[STATUS] = @c_FULLPick
             ,TrafficCop = NULL --KCY01
-            ,EditDate = GETDATE() --KCY01
-            ,EditWho  = SUSER_SNAME() --KCY01
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01) --KCY01
+            ,EditWho  = dbo.fnc_GetUserName() --KCY01 (SSA01)
          WHERE SKU = @c_sku_code
          AND Orderkey = @c_Orderkey
          AND PickDetailKey = @c_PickDetailKey

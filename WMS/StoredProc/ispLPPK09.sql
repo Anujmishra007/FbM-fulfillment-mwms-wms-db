@@ -29,6 +29,8 @@ GO
 /* 2021-11-25  WLChooi  1.1   DevOps Combine Script                     */
 /* 2021-11-25  WLChooi  1.1   WMS-18445 Add Cartonization.CartonWeight  */
 /*                            when calculating Packinfo.Weight (WL01)   */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC ispLPPK09
            @cLoadkey       NVARCHAR(10)
@@ -865,8 +867,8 @@ BEGIN
                SET Notes = 'Originalqty: ' + CONVERT(NVARCHAR(10), Qty)
                   , Qty = @n_Qty
                   ,Trafficcop = NULL
-                  ,EditWho    = SUSER_SNAME()
-                  ,EditDate   = GETDATE()
+                  ,EditWho    = dbo.fnc_GetUserName()             --(SSA01)
+                  ,EditDate   = dbo.fnc_GetDate()    --(SSA01)
             WHERE PickDetailKey = @c_PickDetailkey
 
             SET @n_Err = @@ERROR  

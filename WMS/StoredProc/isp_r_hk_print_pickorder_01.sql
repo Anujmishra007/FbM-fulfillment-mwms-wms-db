@@ -27,6 +27,8 @@ GO
 /* 2021-08-26   Michael  v1.1 Add Showfield Update_PD_PickslipNo         */
 /* 2021-11-30   Michael  V1.2 Fix RptCfg.ShowFields NULL value issue     */
 /* 2022-03-23   Michael  V1.3 Add NULL to Temp Table                     */
+/* 2025-10-10   SSA01    V1.4 UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_print_pickorder_01] (
@@ -139,8 +141,8 @@ BEGIN
 
       UPDATE dbo.PICKHEADER WITH(ROWLOCK)
          SET PickType = '1'
-           , EditDate = GETDATE()
-           , EditWho  = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho  = dbo.fnc_GetUserName()     --(SSA01)
            , TrafficCop = NULL
        WHERE ExternOrderkey = @c_Loadkey
          AND Zone = '8'

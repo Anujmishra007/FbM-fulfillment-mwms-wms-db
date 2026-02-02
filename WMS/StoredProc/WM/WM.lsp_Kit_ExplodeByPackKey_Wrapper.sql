@@ -1,21 +1,21 @@
 /************************************************************************/
-/* Stored Procedure: lsp_Kit_ExplodeByPackKey_Wrapper                   */  
-/* Creation Date: 13-DEC-2024                                           */  
-/* Copyright: MAERSK                                                    */  
+/* Stored Procedure: lsp_Kit_ExplodeByPackKey_Wrapper                   */
+/* Creation Date: 13-DEC-2024                                           */
+/* Copyright: MAERSK                                                    */
 /* Written by: ngahjuneow                                               */
-/*                                                                      */  
-/* Purpose: UWP-32032 , LFWM-4807 Kitting item explode by packkey for KitTo*/
-/*                                                                      */  
-/* Called By: Kitting                                                   */  
-/*                                                                      */  
-/* PVCS Version: 1.2                                                    */  
-/*                                                                      */  
-/* Version: 8.0                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date        Author   Ver   Purposes                                  */  
+/*                                                                      */
+/* Purpose: LFWM-4807 Kitting item explode by packkey                   */
+/*                                                                      */
+/* Called By: Kitting                                                   */
+/*                                                                      */
+/* PVCS Version: 1.1                                                    */
+/*                                                                      */
+/* Version: 1.1
+*/
+/* Updates:                                                              */
+/* Date         Author   Ver.  Purposes                                  */
+/* 15-APR-2025  Ansuman  1.0   UWP-32032 Kitting item explode by Pack Key */
+/* 2025-01-09  SWT01     1.1   Enhanced session management              */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [WM].[lsp_Kit_ExplodeByPackKey_Wrapper]
@@ -32,7 +32,8 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_StartTCnt                  INT  = @@TRANCOUNT
+   DECLARE @b_ExecuteAs                  BIT  = 0 -- (SWT01)
+          ,@n_StartTCnt                  INT  = @@TRANCOUNT
           ,@c_StorerKey                  NVARCHAR(15) = ''
           ,@c_Facility                   NVARCHAR(15) = ''
           ,@c_PackKey                    NVARCHAR(10) = ''
@@ -55,17 +56,21 @@ BEGIN
    SELECT @b_Success = 1, @c_ErrMsg ='', @n_Err = 0
 
    SET @n_Err = 0 
+   
+   -- Enhanced session management (SWT01)
    IF SUSER_SNAME() <> @c_UserName       
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT
     
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
                 
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                   
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- End enhanced session management (SWT01)                                   
    
    BEGIN TRAN
     
@@ -355,6 +360,10 @@ BEGIN
    END CATCH 
                           
    EXIT_SP: 
+
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
     
    IF (XACT_STATE()) = -1
    BEGIN
@@ -384,8 +393,6 @@ BEGIN
    BEGIN
       BEGIN TRAN
    END
-       
-   REVERT
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_Kit_ExplodeByPackKey_Wrapper] TO nSQL 

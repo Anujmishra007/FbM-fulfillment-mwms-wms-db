@@ -12,9 +12,9 @@ GO
 /*                                                                                                 */
 /* Date       Rev  Author     Purposes                                                             */
 /* 2024-10-18 1.0  VJI011     none packing process enhancement for JCB                             */
+/* 2026-01-13 2.0  TPT001     Dock door booking reference                                          */
 /***************************************************************************************************/
-
-Create OR ALTER  PROC [RDT].[rdt_922ExtUpd06_JCB] (
+CREATE OR ALTER PROC [RDT].[rdt_922ExtUpd06_JCB] (
    @nMobile     INT,
    @nFunc       INT,
    @cLangCode   NVARCHAR( 3),
@@ -235,38 +235,38 @@ BEGIN
                         END 
                      END
                   END
-                  ELSE
-                  BEGIN
-                     -- Top up child order
-                     UPDATE dbo.Orders WITH(ROWLOCK) SET
-                        OpenQTY = OpenQTY + @nQty, 
-                        EditDate = GETDATE(),  
-                        EditWho = SUSER_SNAME(), 
-                        TrafficCop = NULL 
-                     WHERE OrderKey = @cChildOrderKey  
-                     IF @@ERROR <> 0  
-                     BEGIN
-                        SET @nErrNo = 212005
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode, 'DSP') --UPD Order Fail
-                        GOTO RollbackTran
-                     END
-                  END
+                  --ELSE
+                  --BEGIN
+                  --   -- Top up child order
+                  --   UPDATE dbo.Orders SET
+                  --      OpenQTY = OpenQTY + @nQty, 
+                  --      EditDate = GETDATE(),  
+                  --      EditWho = SUSER_SNAME(), 
+                  --      TrafficCop = NULL 
+                  --   WHERE OrderKey = @cChildOrderKey  
+                  --   IF @@ERROR <> 0  
+                  --   BEGIN
+                  --      SET @nErrNo = 212005
+                  --      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode, 'DSP') --UPD Order Fail
+                  --      GOTO RollbackTran
+                  --   END
+                  --END
                   
-                  -- Reduce parent order
-                  UPDATE dbo.Orders WITH(ROWLOCK) SET
-                     Status = CASE WHEN OpenQTY - @nQTY = 0 THEN '0' ELSE Status END, 
-                     SOStatus = CASE WHEN OpenQTY - @nQTY = 0 THEN 'CLOSED' ELSE SOStatus END, 
-                     OpenQTY = OpenQTY - @nQty, 
-                     EditDate = GETDATE(),  
-                     EditWho = SUSER_SNAME(), 
-                     TrafficCop = NULL 
-                  WHERE OrderKey = @cParentOrderKey  
-                  IF @@ERROR <> 0  
-                  BEGIN
-                     SET @nErrNo = 212006
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode, 'DSP') --UPD Order Fail
-                     GOTO RollbackTran
-                  END
+                  ---- Reduce parent order
+                  --UPDATE dbo.Orders SET
+                  --   Status = CASE WHEN OpenQTY - @nQTY = 0 THEN '0' ELSE Status END, 
+                  --   SOStatus = CASE WHEN OpenQTY - @nQTY = 0 THEN 'CLOSED' ELSE SOStatus END, 
+                  --   OpenQTY = OpenQTY - @nQty, 
+                  --   EditDate = GETDATE(),  
+                  --   EditWho = SUSER_SNAME(), 
+                  --   TrafficCop = NULL 
+                  --WHERE OrderKey = @cParentOrderKey  
+                  --IF @@ERROR <> 0  
+                  --BEGIN
+                  --   SET @nErrNo = 212006
+                  --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode, 'DSP') --UPD Order Fail
+                  --   GOTO RollbackTran
+                  --END
 
                   -- Top up / create child OrderDetail
                   IF NOT EXISTS( SELECT 1 FROM dbo.OrderDetail WITH (NOLOCK) WHERE OrderKey = @cChildOrderKey AND OrderLineNumber = @cOrderLineNumber)  
@@ -323,13 +323,14 @@ BEGIN
                   END
                   ELSE
                   BEGIN
-                     UPDATE dbo.OrderDetail WITH(ROWLOCK) SET 
+                     UPDATE dbo.OrderDetail SET 
                         OriginalQty  =  OriginalQty + @nQTY,  
                         OpenQty      =  OpenQty + @nQTY,  
                         QtyPicked    =  QtyPicked + @nQtyPicked, 
                         QtyAllocated =  QtyAllocated + @nQtyAllocated,  
                         Status       =  '5',  
-                        EditDate     = GETDATE(),  
+                        EditDate = GETDATE(),  
+                        EditWho = SUSER_SNAME(), 
                         TrafficCop   = NULL  
                      WHERE OrderKey = @cChildOrderKey  
                         AND OrderLineNumber = @cOrderLineNumber  
@@ -340,9 +341,35 @@ BEGIN
                         GOTO RollbackTran
                      END
                   END
+
+              --Reset OpenQty and Status for child order
+              DECLARE @nChildTotalQty INT
+              SELECT @nChildTotalQty = SUM(OpenQty)
+              FROM dbo.OrderDetail WITH(NOLOCK)
+              WHERE OrderKey = @cChildOrderKey  
+                 AND StorerKey = @cStorerKey
+
+               UPDATE dbo.ORDERS WITH(ROWLOCK)
+               SET 
+                  OpenQty      = @nChildTotalQty, 
+                  Status         = '5',
+                  EditDate     = GETDATE(),  
+                  EditWho = SUSER_SNAME(), 
+                  TrafficCop   = NULL  
+               WHERE OrderKey = @cChildOrderKey  
+               AND StorerKey = @cStorerKey
+
+               UPDATE dbo.OrderDetail WITH(ROWLOCK)
+               SET
+                  Status         = '5',
+                  EditDate     = GETDATE(),  
+                  EditWho = SUSER_SNAME(), 
+                  TrafficCop   = NULL  
+               WHERE OrderKey = @cChildOrderKey  
+                  AND StorerKey = @cStorerKey
                   
                   -- Reduce parent OrderDetail
-                  UPDATE dbo.OrderDetail WITH(ROWLOCK) SET
+                  UPDATE dbo.OrderDetail SET
                      OriginalQty  = OriginalQty - @nQTY,  
                      OpenQty      = OpenQty - @nQTY,  
                      QtyPicked    = QtyPicked - @nQtyPicked, 
@@ -378,11 +405,27 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode, 'DSP') --UPD Order Fail
                      GOTO RollbackTran
                   END
+
+              --Reset OpenQty for parent order
+              DECLARE @nParentTotalQty INT
+              SELECT @nParentTotalQty = SUM(OpenQty)
+              FROM dbo.OrderDetail WITH(NOLOCK)
+              WHERE OrderKey = @cParentOrderKey  
+                 AND StorerKey = @cStorerKey
+
+               UPDATE dbo.ORDERS WITH(ROWLOCK)
+               SET 
+                  OpenQty      = @nParentTotalQty, 
+                  EditDate     = GETDATE(),  
+                  EditWho = SUSER_SNAME(), 
+                  TrafficCop   = NULL  
+               WHERE OrderKey = @cParentOrderKey  
+                  AND StorerKey = @cStorerKey
                   
                   -- Change RefKeyLookUp (from parent to child)
                   IF EXISTS( SELECT TOP 1 1 FROM dbo.RefKeyLookUp WITH (NOLOCK) WHERE OrderKey = @cParentOrderKey AND OrderLineNumber = @cOrderLineNumber)
                   BEGIN
-                     UPDATE dbo.RefKeyLookUp WITH(ROWLOCK) SET
+                     UPDATE dbo.RefKeyLookUp SET
                         OrderKey = @cChildOrderKey, 
                         EditDate = GETDATE() 
                      FROM dbo.RefKeyLookUp RKL  
@@ -401,7 +444,7 @@ BEGIN
                   END
                   
                   -- Change PickDetail (from parent to child)
-                  UPDATE dbo.PickDetail WITH(ROWLOCK) SET
+                  UPDATE dbo.PickDetail SET
                      OrderKey = @cChildOrderKey, 
                      EditDate = GETDATE(),  
                      TrafficCop = NULL 
@@ -713,7 +756,11 @@ BEGIN
                END
 
                 --Update Orderkey back to rdtScanToTruck table
-                DECLARE @cUpdOrderkey NVARCHAR(50)
+                DECLARE @cUpdOrderkey NVARCHAR(50),
+						 @cErrMsg1       NVARCHAR( 20),
+        				 @cErrMsg2       NVARCHAR( 20),
+        				 @cErrMsg3       NVARCHAR( 20),
+        				 @cErrMsg4       NVARCHAR( 20);
                 SELECT TOP 1 @cUpdOrderkey = PD.OrderKey
                 FROM dbo.PICKDETAIL PD WITH (NOLOCK)
                 WHERE PD.Storerkey = @cStorerKey AND PD.Status <> '9' AND PD.DropID = @cLabelNo
@@ -725,10 +772,103 @@ BEGIN
                   IF @@ERROR <> 0
                   BEGIN
                     SET @nErrNo = 212020
-                    SET @cErrMsg = 'UPD SCANTT Fail' --UPD PDInf Fail
+                    SET @cErrMsg = 'OKU SCANTT Fail' --UPD PDInf Fail
                     GOTO RollBackTran
                   END
                 END
+                --Insert rest of the Drop/CaseID for CABS Kitting orders
+                DECLARE @nNumOfOrders INT=0
+                SELECT @nNumOfOrders=COUNT(1)
+                FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+                WHERE PD.Storerkey = @cStorerKey AND PD.Status <> '9' AND PD.DropID = @cLabelNo
+                
+                IF @nNumOfOrders>1
+                BEGIN
+                
+                DECLARE @cUpdOrderkey1 NVARCHAR(50)
+                DECLARE @curOrderIns CURSOR
+                       SET @curOrderIns = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                          SELECT DISTINCT O.OrderKey
+                          FROM dbo.Orders O WITH (NOLOCK)
+                             JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
+                             LEFT JOIN RDT.rdtScanToTruck STT WITH (NOLOCK) ON (O.OrderKey=STT.OrderKey AND O.MBOLKey=STT.MBOLKey)
+                          WHERE O.StorerKey = @cStorerKey
+                             AND O.Facility = @cFacility
+                             --AND PD.CaseID = @cLabelNo
+                             AND PD.Status = '5'
+                             AND PD.DROPID = @cLabelNo     --only check dropid for JCB
+                             AND STT.OrderKey IS NULL
+                             AND O.Type='2' --only for CABS orders
+                        OPEN @curOrderIns
+                        FETCH NEXT FROM @curOrderIns INTO @cUpdOrderkey1
+                        WHILE @@FETCH_STATUS = 0
+                        BEGIN
+                        	INSERT INTO RDT.rdtScanToTruck (MBOLKey, LoadKey, CartonType, RefNo, URNNo, Status, AddWho, AddDate, EditWho, EditDate, TrafficCop, ArchiveCop, Door, OrderKey)
+							SELECT MBOLKey, LoadKey, CartonType, RefNo, URNNo, Status, AddWho, AddDate, EditWho, EditDate, TrafficCop, ArchiveCop, Door, @cUpdOrderkey1 FROM RDT.rdtScanToTruck WITH(NOLOCK) WHERE MBOLKey=@cMBOLKey AND OrderKey=@cUpdOrderkey
+                        
+                        FETCH NEXT FROM @curOrderIns INTO @cUpdOrderkey1
+                        END
+                        CLOSE @curOrderIns;
+						DEALLOCATE @curOrderIns;
+                        
+                END        
+                --Update MBOL for outbound booking - REF1 and REF2
+                IF ISNULL(@cDoor,'')<>'' --AND ISNULL(@cRefNo,'')<>''
+                BEGIN 
+                  DECLARE @n_Booking INT =0,
+                  		  @n_Bool INT =0;
+                  SELECT @n_Bool=ISNUMERIC(ISNULL(@cRefNo,''))	
+                  
+                  IF @n_Bool=1 --making sure Booking is NUMERIC 
+                  BEGIN
+                  	SET @n_Booking=@cRefNo
+
+--        					SET @cErrMsg1 = @cRefNo --MBOL CLOSED
+--           SET @cErrMsg2 = @n_Booking --AND MANIFEST
+--            SET @cErrMsg3 = 'PATH 1' --PRINTED            
+--            SET @nErrNo = 0
+--            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+                  END
+                  ELSE
+                  BEGIN
+                  	SET @n_Booking=0
+--                  	        					SET @cErrMsg1 = @cRefNo --MBOL CLOSED
+--            SET @cErrMsg2 = @n_Booking --AND MANIFEST
+--            SET @cErrMsg3 = 'PATH 2' --PRINTED            
+--            SET @nErrNo = 0
+--            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+                  END
+                  UPDATE dbo.MBOL
+                  SET Vessel=@cDoor , BookingReference=@n_Booking
+                  WHERE MbolKey=@cMBOLKey
+                  IF @@ERROR <> 0
+                  BEGIN
+                    SET @nErrNo = 212020
+                    SET @cErrMsg = 'MBL SCANTT Fail' 
+                    GOTO RollBackTran
+                  END
+                  ELSE
+                  BEGIN
+                  DECLARE @c_ExtMBOLKey NVARCHAR(18) =''
+                  DECLARE @n_ShipExists INT =0
+                  SELECT @c_ExtMBOLKEY=ExternMbolKey FROM dbo.MBOL WITH(NOLOCK) WHERE MbolKey=@cMBOLKey
+                  SELECT @n_ShipExists=1 FROM dbo.TMS_Shipment WITH(NOLOCK) WHERE BookingNo=@n_Booking AND ShipmentGID=@c_ExtMBOLKEY
+                  IF @n_ShipExists<>1 AND @n_Booking=@cRefNo -- if Shipment exists and Booking is numeric
+                  BEGIN
+                  	INSERT INTO dbo.TMS_Shipment (ShipmentGID, VehicleLPN, EquipmentID, DriveName, ShipmentPlannedStartDate, ShipmentPlannedEndDate, Route, ServiceProviderID, ShipmentVolume, ShipmentWeight, ShipmentCartonCount, ShipmentPalletCount, OTMShipmentStatus, Addwho, AddDate, Editwho, EditDate, BookingNo, Banner, SubBanner, Wave, ShipmentGroupProfile, ShipmentGroup, AppointmentID, Principal, ArchiveCop)
+					SELECT @c_ExtMBOLKEY, '', ' ', '', getdate(), getdate(), '99', '', 0, 0, 0, 0, '', 'WMConnect', getdate(), 'WMConnect', getdate(), @cRefNo, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+
+					IF @@ERROR <> 0
+                  	BEGIN
+                    	SET @nErrNo = 212020
+                    	SET @cErrMsg = 'BO SCANTT Fail' 
+                    	GOTO RollBackTran
+                  	END
+                  END
+                  END
+                  
+                END
+
                
                COMMIT TRAN rdt_922ExtUpd06_JCB -- Only commit change made here
             END
@@ -752,4 +892,6 @@ SET ANSI_NULLS ON
 GO
 
 GRANT EXECUTE ON rdt.rdt_922ExtUpd06_JCB TO NSQL
+
 GO
+

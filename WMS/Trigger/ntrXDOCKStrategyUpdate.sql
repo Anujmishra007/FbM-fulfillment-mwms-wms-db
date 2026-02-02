@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = object_id(N'[dbo].[ntrXDOCKStrategyUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-DROP TRIGGER [dbo].[ntrXDOCKStrategyUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -35,9 +32,11 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
+/* 06-Oct-2025  AK01     1.1  UWP-42143 - Replace SUSER_SNAME with      */
+/*                             fnc_GetUserName                          */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrXDOCKStrategyUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrXDOCKStrategyUpdate]
 ON [dbo].[XDOCKStrategy] FOR UPDATE
 AS 
 BEGIN
@@ -68,8 +67,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE XDOCKStrategy WITH (ROWLOCK)
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL	
 		FROM XDOCKStrategy , INSERTED WITH (NOLOCK)
 		WHERE XDOCKStrategy.XDockStrategyKey = INSERTED.XDockStrategyKey
@@ -112,5 +111,6 @@ GO
 
 ALTER TABLE [dbo].[XDOCKStrategy] ENABLE TRIGGER [ntrXDOCKStrategyUpdate]
 GO
+
 
 

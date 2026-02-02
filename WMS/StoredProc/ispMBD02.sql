@@ -13,7 +13,7 @@ GO
 /* Copyright: LF Logistics                                              */
 /* Written by: Wan                                                      */
 /*                                                                      */
-/* Purpose: WMS-2577 - GBG bebe ¨C Generate External MBOL Key            */
+/* Purpose: WMS-2577 - GBG bebe ï¿½C Generate External MBOL Key            */
 /*        :                                                             */
 /* Called By: MBOLDetail Add, Update, Delete                            */
 /*          :                                                           */
@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2025-10-10  SSA01    1.1   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC ispMBD02
       @c_Action      NVARCHAR(10)   
@@ -176,8 +178,8 @@ BEGIN
 
       UPDATE MBOL WITH (ROWLOCK)
          SET ExternMBOLKey = @c_ExternMBOLKey
-            ,EditWho = SUSER_SNAME()
-            ,EditDate= GETDATE()
+            ,EditWho = dbo.fnc_GetUserName()       --(SSA01)
+            ,EditDate= dbo.fnc_GetDate()    --(SSA01)
             ,Trafficcop = NULL
       WHERE MBOLKey = @c_MBOLKey
 

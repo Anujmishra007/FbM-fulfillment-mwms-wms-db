@@ -1,7 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrDocStatusTrackAdd]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrDocStatusTrackAdd]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -24,9 +21,10 @@ GO
 /* 28-Jul-2016  MCTang 1.0    Add ITFTriggerConfig for MBOL (MC01)      */
 /* 11-Jul_2017  MCTang 1.1    Enhance Generaic Trigger Interface (MC02) */
 /* 18-May_2020  TLTING 1.2    ANSI NULL                                 */
+/* 06-OCT-2025  AK01   1.1    UWP-42143 Data Audit                       */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrDocStatusTrackAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrDocStatusTrackAdd]
 ON  [dbo].[DocStatusTrack]
 FOR INSERT
 AS
@@ -204,6 +202,27 @@ BEGIN
       --(MC02) - E
    END
 
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE DocStatusTrack
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM DocStatusTrack
+      JOIN INSERTED ON DocStatusTrack.RowRef = INSERTED.RowRef
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69701  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table DocStatusTrack. (ntrDocStatusTrackAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+   
    /* #INCLUDE <TRLU2.SQL> */
 
    IF @n_Continue=3  -- Error Occured - Process And Return

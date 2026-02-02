@@ -374,11 +374,12 @@ BEGIN
       SELECT TOP 1
          @cPickSlipNo = PH.PickheaderKey,
          @cStatus = PH.Status,
-         @cConsigneeKey = PH.ConsigneeKey,
+         @cConsigneeKey = ORD.ConsigneeKey,
          @cRoute = ORD.Route
       FROM dbo.PICKHEADER PH WITH (NOLOCK)
-      INNER JOIN dbo.ORDERS ORD WITH (NOLOCK) ON PH.Storerkey = ORD.StorerKey AND PH.OrderKey = ORD.OrderKey
+      INNER JOIN dbo.ORDERS ORD WITH (NOLOCK) ON ORD.StorerKey = @cStorerKey AND PH.OrderKey = ORD.OrderKey
       WHERE PH.OrderKey = @cOrderKey 
+	    AND ORD.StorerKey = @cStorerKey
 
       -- PackHeader
       IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) 

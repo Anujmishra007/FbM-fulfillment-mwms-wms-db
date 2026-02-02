@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrBTB_ShipmentDetailAdd]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrBTB_ShipmentDetailAdd]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -23,8 +20,9 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-FEB-09 WAN01    1.1   WMS-15957-SG-CBF - BTB Form E Declaration */
+/* 06-OCT-2025 AK01     1.2   UWP-42143 Data Audit                       */
 /************************************************************************/
-CREATE TRIGGER [dbo].[ntrBTB_ShipmentDetailAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrBTB_ShipmentDetailAdd]
 ON  [dbo].[BTB_SHIPMENTDETAIL]
 FOR INSERT
 AS
@@ -180,6 +178,29 @@ BEGIN
    END
    CLOSE CUR_SHPDET
    DEALLOCATE CUR_SHPDET 
+
+      --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE BTB_ShipmentDetail
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM BTB_ShipmentDetail
+      JOIN INSERTED ON BTB_ShipmentDetail.BTB_ShipmentKey = INSERTED.BTB_ShipmentKey
+         AND BTB_ShipmentDetail.BTB_ShipmentListNo = INSERTED.BTB_ShipmentListNo
+         AND BTB_ShipmentDetail.BTB_ShipmentLineNo = INSERTED.BTB_ShipmentLineNo
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=80021 
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table BTB_ShipmentDetail. (ntrBTB_ShipmentDetailAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
 QUIT_TR:
 

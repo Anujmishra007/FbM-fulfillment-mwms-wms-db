@@ -18,6 +18,7 @@ GO
 /* 2017-02-21  1.1  Ung         WMS-1715 Add SkipLOC                             */
 /* 2018-05-21  1.2  James       WMS-5005 Bug fix (james01)                       */
 /* 2020-12-27  1.3  YeeKung     WMS-15995 Add PickZone (yeekung01)               */
+/* 2025-11-21  1.4  JackC       FCR-8295 Improve sugg loc logic via pickzone     */
 /*********************************************************************************/
 
 CREATE PROCEDURE rdt.rdt_PickSKU_SuggestLOC
@@ -129,9 +130,8 @@ BEGIN
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation > @cLogicalLOC
-               AND  LOC.PickZone = @cPickZone
-               OR  (LOC.LogicalLocation = @cLogicalLOC AND LOC.LOC > @cLOC))
+               AND  LOC.PickZone = @cPickZone 
+               AND (LOC.LogicalLocation > @cLogicalLOC OR (LOC.LogicalLocation = @cLogicalLOC AND LOC.LOC > @cLOC))  
             GROUP BY LOC.LogicalLocation, LOC.LOC
             ORDER BY LOC.LogicalLocation, LOC.LOC
          ELSE
@@ -163,9 +163,8 @@ BEGIN
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation > @cLogicalLOC
-               AND LOC.Pickzone=@cPickZone
-               OR  (LOC.LogicalLocation = @cLogicalLOC AND LOC.LOC > @cLOC))
+               AND LOC.Pickzone=@cPickZone 
+               AND (LOC.LogicalLocation > @cLogicalLOC OR (LOC.LogicalLocation = @cLogicalLOC AND LOC.LOC > @cLOC))   
             GROUP BY LOC.LogicalLocation, LOC.LOC
             ORDER BY LOC.LogicalLocation, LOC.LOC   
          ELSE
@@ -197,9 +196,8 @@ BEGIN
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation > @cLogicalLOC
                AND LOC.Pickzone=@cPickZone
-               OR  (LOC.LogicalLocation = @cLogicalLOC AND LOC.LOC > @cLOC))
+               AND (LOC.LogicalLocation > @cLogicalLOC OR (LOC.LogicalLocation = @cLogicalLOC AND LOC.LOC > @cLOC)) 
             GROUP BY LOC.LogicalLocation, LOC.LOC
             ORDER BY LOC.LogicalLocation, LOC.LOC
          ELSE
@@ -230,9 +228,8 @@ BEGIN
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation > @cLogicalLOC
                AND LOC.PickZone=@cPickZone
-               OR  (LOC.LogicalLocation = @cLogicalLOC AND LOC.LOC > @cLOC))
+               AND (LOC.LogicalLocation > @cLogicalLOC OR (LOC.LogicalLocation = @cLogicalLOC AND LOC.LOC > @cLOC)) 
             GROUP BY LOC.LogicalLocation, LOC.LOC
             ORDER BY LOC.LogicalLocation, LOC.LOC
          ELSE

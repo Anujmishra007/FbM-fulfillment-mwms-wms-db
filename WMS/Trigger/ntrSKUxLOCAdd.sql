@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.triggers WHERE object_id = OBJECT_ID(N'[dbo].[ntrSKUxLOCAdd]'))
-   DROP TRIGGER [dbo].[ntrSKUxLOCAdd]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -29,8 +26,9 @@ GO
 /*                        found in LOTxLOCxID (SHONG_20080506)          */
 /* 23-Aug-2016  TLTING    add NOLOCK hint                               */
 /* 30-Mar-2021  NJOW01    WMS-16618 call custom stored proc             */ 
+/* 06-OCT-2025  AK01      UWP-42143 Data Audit                          */
 /************************************************************************/
-CREATE TRIGGER [dbo].[ntrSKUxLOCAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrSKUxLOCAdd]
 ON  [dbo].[SKUxLOC]
 FOR INSERT
 AS
@@ -363,6 +361,30 @@ BEGIN
       DEALLOCATE C_SKUxLOCUpdStrKy
    END -- @n_continue=1 or 2
 -- End -------------------------------------------------------------
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE SKUxLOC
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM SKUxLOC
+      JOIN INSERTED ON SKUxLOC.StorerKey = INSERTED.StorerKey
+      AND SKUxLOC.Sku = INSERTED.Sku
+      AND SKUxLOC.Loc = INSERTED.Loc
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=74908 
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table SKUxLOC. (ntrSKUxLOCAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+
 
 /* #INCLUDE <TRSLU2.SQL> */
 IF @n_continue=3  -- Error Occured - Process And Return

@@ -54,19 +54,19 @@ WITH (
 --SELECT @nFunc AS Func, @cLangCode AS LangCode,@cWorkstation as Workstation
 
 --convert login
-SET @n_Err = 0
-EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+--SET @n_Err = 0
+--EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-EXECUTE AS LOGIN = @cUserName
+--EXECUTE AS LOGIN = @cUserName
 
-IF @n_Err <> 0
-BEGIN
-   --INSERT INTO @errMsg(nErrNo,cErrMsg)
-   SET @b_Success = 0
-   SET @n_Err = @n_Err
-   SET @c_ErrMsg = @c_ErrMsg
-   GOTO EXIT_SP
-END
+--IF @n_Err <> 0
+--BEGIN
+--   --INSERT INTO @errMsg(nErrNo,cErrMsg)
+--   SET @b_Success = 0
+--   SET @n_Err = @n_Err
+--   SET @c_ErrMsg = @c_ErrMsg
+--   GOTO EXIT_SP
+--END
 
 
 ----SELECT @cUserName AS username
@@ -76,8 +76,8 @@ END
 IF @cWorkstation = ''
 BEGIN
    SET @b_Success = 0
-   SET @n_Err = 175637
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Workstation ID. Function : isp_UpdateVersion'
+   SET @n_Err = 1001751
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Workstation ID. Function : isp_UpdateVersion'
 
    GOTO EXIT_SP
 END
@@ -85,8 +85,8 @@ END
 IF @cDeviceID = ''
 BEGIN
    SET @b_Success = 0
-   SET @n_Err = 175638
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Device ID. Function : isp_UpdateVersion'
+   SET @n_Err = 1001752
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Device ID. Function : isp_UpdateVersion'
 
    GOTO EXIT_SP
 END
@@ -95,8 +95,8 @@ BEGIN
 	IF EXISTS (SELECT TOP 1 1 FROM api.AppWorkstation WHERE DeviceID = @cDeviceID AND workstation <> @cWorkstation)
 	BEGIN
 		SET @b_Success = 0
-      SET @n_Err = 175639
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Invalid setup. This device has been assigned to a workstation. Function : isp_UpdateVersion'
+      SET @n_Err = 1001753
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Invalid setup. This device has been assigned to a workstation. Function : isp_UpdateVersion'
 
       GOTO EXIT_SP
 	END
@@ -130,8 +130,8 @@ BEGIN
    IF @@ERROR <> 0
    BEGIN
       SET @b_Success = 0
-      SET @n_Err = 175639
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into Workstation. Function : isp_UpdateVersion'
+      SET @n_Err = 1001754
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into Workstation. Function : isp_UpdateVersion'
 
       GOTO EXIT_SP
    END
@@ -145,7 +145,7 @@ ELSE
 BEGIN
 	SET @b_Success = 0
    SET @n_Err = 175640
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Invalid Workstation. Please use other Workstation. Function : isp_UpdateVersion'
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Invalid Workstation. Please use other Workstation. Function : isp_UpdateVersion'
 
    GOTO EXIT_SP
 END

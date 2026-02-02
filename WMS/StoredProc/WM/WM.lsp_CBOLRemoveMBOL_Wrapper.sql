@@ -18,6 +18,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
+/* 2025-01-21  SWT01    1.1   Enhanced session management                */
 /***************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_CBOLRemoveMBOL_Wrapper] 
 	   @c_MbolKey                 NVARCHAR(10) 
@@ -38,6 +39,7 @@ BEGIN
 
    DECLARE @n_Continue                 INT = 1
          , @n_StartTCnt                INT = @@TRANCOUNT
+         , @b_ExecuteAs                BIT = 0
          , @c_TableName                NVARCHAR(50)   = 'MBOL'
          , @c_SourceType               NVARCHAR(50)   = 'lsp_CBOLRemoveMBOL_Wrapper'
          , @c_Refkey1                  NVARCHAR(20)   = ''                   
@@ -66,17 +68,25 @@ BEGIN
    -- Switching SQL User ID from WMCOnnect to User Login ID
    SET  @n_ErrGroupKey = 0
    SET @n_Err = 0
-   IF SUSER_SNAME() <> @c_UserName      
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-
-      IF @n_Err <> 0
+   
+   -- (SWT01) Enhanced session management - Start
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''
+   BEGIN 
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
+      IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT01) Enhanced session management - End                                   
 
    DECLARE
            @c_Facility                 NVARCHAR(5)=''
@@ -261,7 +271,10 @@ BEGIN
       BEGIN TRAN
    END
    
-   REVERT
+
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_CBOLRemoveMBOL_Wrapper] TO [nSQL]

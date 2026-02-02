@@ -1,40 +1,38 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_TMCCReleaseFNZ_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_TMCCReleaseFNZ_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_TMCCReleaseFNZ_Wrapper                          */  
-/* Creation Date: 19-OCT-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
-/* Purpose: LFWM-1273 - Stored Procedures for Feature ¨C Release Cycle    */
-/*          Count                                                        */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+
+/*************************************************************************/
+/* Stored Procedure: lsp_TMCCReleaseFNZ_Wrapper                          */
+/* Creation Date: 19-OCT-2018                                            */
+/* Copyright: LFL                                                        */
+/* Written by: Wan                                                       */
+/*                                                                       */
+/* Purpose: LFWM-1273 - Stored Procedures for Feature - Release Cycle    */
+/*          Count                                                        */
+/* Called By:                                                            */
+/*                                                                       */
+/*                                                                       */
+/* Version: 1.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date         Author   Ver  Purposes                                   */
 /* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_TMCCReleaseFNZ_Wrapper]
-   @c_BatchNo              NVARCHAR(10)  
-,  @b_Success              INT          = 1   OUTPUT   
+/* 2025-09-02   SWT01    1.1  Enhanced session management pattern        */
+/* 2026-01-05   Michael  1.2  UWP-44616 Performance Improvement (ML01)   */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_TMCCReleaseFNZ_Wrapper]
+   @c_BatchNo              NVARCHAR(10)
+,  @b_Success              INT          = 1   OUTPUT
 ,  @n_Err                  INT          = 0   OUTPUT
 ,  @c_Errmsg               NVARCHAR(255)= ''  OUTPUT
 ,  @c_UserName             NVARCHAR(128)= ''
-AS  
-BEGIN  
+AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
@@ -46,57 +44,71 @@ BEGIN
          , @n_RowId                 BIGINT = 0
          , @c_CCKey                 NVARCHAR(10) = ''
          , @c_TaskDetailKey         NVARCHAR(10) = ''
+         , @n_NoOfTask              INT = 0   --ML01
 
-         , @CUR_INSTASK             CURSOR
+--ML01         , @CUR_INSTASK             CURSOR
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
+   -- Start enhanced session management (SWT01)
+    SET @n_Err = 0
+    DECLARE @b_ExecuteAs        BIT = 0
+    IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''
+    BEGIN
+       EXEC [WM].[lsp_SetUser]
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
-   
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+       IF @n_Err <> 0
+       BEGIN
+          GOTO EXIT_SP
+       END
+
+       IF @b_ExecuteAs = 1
+          EXECUTE AS LOGIN = @c_UserName
+    END
+    -- End enhanced session management (SWT01)
+
    --(mingle01) - START
-   BEGIN TRY   
-      SET @b_success = 1  
-      BEGIN TRY      
-         EXECUTE nspg_getkey        
-         'CCKey'        
-         , 10        
-         , @c_CCKey     OUTPUT        
-         , @b_success   OUTPUT        
-         , @n_err       OUTPUT        
-         , @c_errmsg    OUTPUT        
+   BEGIN TRY
+      SET @b_success = 1
+      BEGIN TRY
+         EXECUTE nspg_getkey
+         'CCKey'
+         , 10
+         , @c_CCKey     OUTPUT
+         , @b_success   OUTPUT
+         , @n_err       OUTPUT
+         , @c_errmsg    OUTPUT
       END TRY
 
       BEGIN CATCH
          SET @n_err = 554701
          SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) 
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err)
                         + ': Error Executing nspg_getkey - CCKey. (lsp_TMCCReleaseFNZ_Wrapper)'
                         + '( ' + @c_errmsg + ' )'
-      END CATCH    
-                         
-      IF @b_success = 0 OR @n_Err <> 0        
-      BEGIN        
-         SET @n_continue = 3      
-         GOTO EXIT_SP
-      END  
+      END CATCH
 
+      IF @b_success = 0 OR @n_Err <> 0
+      BEGIN
+         SET @n_continue = 3
+         GOTO EXIT_SP
+      END
+
+      --ML01-S
+      SELECT @n_NoOfTask = COUNT(1)
+      FROM TASKDETAIL_WIP WITH (NOLOCK)
+      WHERE TaskWIPBatchNo = @c_BatchNo
+
+      IF ISNULL(@n_NoOfTask,0) <= 0
+         GOTO EXIT_SP
+      --ML01-E
+
+/* ML01-S
       SET @CUR_INSTASK = CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT RowID
       FROM TASKDETAIL_WIP WITH (NOLOCK)
@@ -104,141 +116,163 @@ BEGIN
       ORDER BY RowID
 
       OPEN @CUR_INSTASK
-      
+
       FETCH NEXT FROM @CUR_INSTASK INTO @n_RowID
-             
+
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-         SET @b_success = 1  
-         BEGIN TRY      
-            EXECUTE nspg_getkey        
-            'TaskDetailKey'        
-            , 10        
-            , @c_TaskDetailKey   OUTPUT        
-            , @b_success         OUTPUT        
-            , @n_err             OUTPUT        
-            , @c_errmsg          OUTPUT        
+ML01-E */
+
+
+         SET @b_success = 1
+         BEGIN TRY
+            EXECUTE nspg_getkey
+            'TaskDetailKey'
+            , 10
+            , @c_TaskDetailKey   OUTPUT
+            , @b_success         OUTPUT
+            , @n_err             OUTPUT
+            , @c_errmsg          OUTPUT
+            , @n_batch         = @n_NoOfTask   --ML01
          END TRY
 
          BEGIN CATCH
             SET @n_err = 554702
             SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) 
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err)
                            + ': Error Executing nspg_getkey - TaskDetailKey. (lsp_TMCCReleaseFNZ_Wrapper)'
                            + '( ' + @c_errmsg + ' )'
-         END CATCH    
-                      
-         IF @b_success = 0 OR @n_Err <> 0        
-         BEGIN        
-            SET @n_continue = 3      
+         END CATCH
+
+         IF @b_success = 0 OR @n_Err <> 0
+         BEGIN
+            SET @n_continue = 3
             GOTO EXIT_SP
-         END        
+         END
 
          BEGIN TRY
+            -- Bulk insert with Trafficcop
             INSERT INTO TASKDETAIL
             (    TaskDetailkey
-               , TaskType                 
-               , Storerkey             
-               , Sku                   
-               , Lot                   
-               , UOM                   
-               , UOMQty                
-               , Qty                   
-               , FromLoc               
-               , LogicalFromLoc        
-               , FromID                
-               , ToLoc                 
-               , LogicalToLoc          
-               , ToID                  
-               , Caseid                
-               , PickMethod            
-               , [Status]                
-               , StatusMsg             
-               , [Priority]              
-               , SourcePriority        
-               , Holdkey               
-               , UserKey               
-               , UserPosition          
-               , UserKeyOverRide       
-               , StartTime             
-               , EndTime               
-               , SourceType            
-               , SourceKey             
-               , PickDetailKey         
-               , OrderKey              
-               , OrderLineNumber       
-               , ListKey               
-               , WaveKey               
-               , ReasonKey             
-               , Message01             
-               , Message02             
-               , Message03             
-               , SystemQty             
-               , RefTaskKey            
-               , LoadKey               
-               , AreaKey               
-               , DropID                
-               , TransitCount          
-               , TransitLOC            
-               , FinalLOC              
-               , FinalID               
-               , Groupkey              
-               , PendingMoveIn         
-               , QtyReplen          
+               , TaskType
+               , Storerkey
+               , Sku
+               , Lot
+               , UOM
+               , UOMQty
+               , Qty
+               , FromLoc
+               , LogicalFromLoc
+               , FromID
+               , ToLoc
+               , LogicalToLoc
+               , ToID
+               , Caseid
+               , PickMethod
+               , [Status]
+               , StatusMsg
+               , [Priority]
+               , SourcePriority
+               , Holdkey
+               , UserKey
+               , UserPosition
+               , UserKeyOverRide
+               , StartTime
+               , EndTime
+               , SourceType
+               , SourceKey
+               , PickDetailKey
+               , OrderKey
+               , OrderLineNumber
+               , ListKey
+               , WaveKey
+               , ReasonKey
+               , Message01
+               , Message02
+               , Message03
+               , SystemQty
+               , RefTaskKey
+               , LoadKey
+               , AreaKey
+               , DropID
+               , TransitCount
+               , TransitLOC
+               , FinalLOC
+               , FinalID
+               , Groupkey
+               , PendingMoveIn
+               , QtyReplen
+               , AddWho       --ML01
+               , AddDate      --ML01
+               , EditWho      --ML01
+               , EditDate     --ML01
+               , TrafficCop   --ML01
             )
 
-            SELECT 
-                 @c_TaskDetailKey
-               , WIP.TaskType                
-               , WIP.Storerkey               
-               , WIP.Sku                     
-               , WIP.Lot                     
-               , WIP.UOM                     
-               , WIP.UOMQty                  
-               , WIP.Qty                     
-               , WIP.FromLoc                 
-               , WIP.LogicalFromLoc          
-               , WIP.FromID                  
-               , WIP.ToLoc                   
-               , WIP.LogicalToLoc            
-               , WIP.ToID                    
-               , WIP.Caseid                  
-               , WIP.PickMethod              
-               , WIP.[Status]                  
-               , WIP.StatusMsg               
-               , WIP.[Priority]                
-               , WIP.SourcePriority          
-               , WIP.Holdkey                 
-               , WIP.UserKey                 
-               , WIP.UserPosition            
-               , WIP.UserKeyOverRide         
-               , WIP.StartTime               
-               , WIP.EndTime                 
-               , WIP.SourceType              
-               , @c_CCKey               
-               , WIP.PickDetailKey           
-               , WIP.OrderKey                
-               , WIP.OrderLineNumber         
-               , WIP.ListKey                 
-               , WIP.WaveKey                 
-               , WIP.ReasonKey               
-               , WIP.Message01               
-               , WIP.Message02               
-               , WIP.Message03               
-               , WIP.SystemQty               
-               , WIP.RefTaskKey              
-               , WIP.LoadKey                 
-               , WIP.AreaKey                 
-               , WIP.DropID                  
-               , WIP.TransitCount            
-               , WIP.TransitLOC              
-               , WIP.FinalLOC                
-               , WIP.FinalID                 
-               , WIP.Groupkey                
-               , WIP.PendingMoveIn           
-               , WIP.QtyReplen               
+            SELECT
+--ML01                 @c_TaskDetailKey
+                 FORMAT(ISNULL(TRY_PARSE(ISNULL(@c_TaskDetailKey,'') AS INT),1) + ROW_NUMBER() OVER(ORDER BY WIP.RowID) - 1,'0000000000')   --ML01
+               , WIP.TaskType
+               , WIP.Storerkey
+               , WIP.Sku
+               , WIP.Lot
+               , WIP.UOM
+               , WIP.UOMQty
+               , WIP.Qty
+               , WIP.FromLoc
+--ML01               , WIP.LogicalFromLoc
+               , LogicalFromLoc = CASE WHEN ISNULL(WIP.LogicalFromLoc,'')='' THEN ISNULL(NULLIF(FRLOC.LogicalLocation,''),WIP.FromLoc) ELSE WIP.LogicalFromLoc END   --ML01
+               , WIP.FromID
+               , WIP.ToLoc
+--ML01               , WIP.LogicalToLoc
+               , LogicalToLoc   = CASE WHEN ISNULL(WIP.LogicalToLoc,'')='' THEN ISNULL(NULLIF(TOLOC.LogicalLocation,''),WIP.ToLoc) ELSE WIP.LogicalToLoc END   --ML01
+               , WIP.ToID
+               , WIP.Caseid
+               , WIP.PickMethod
+               , WIP.[Status]
+               , WIP.StatusMsg
+               , WIP.[Priority]
+               , WIP.SourcePriority
+               , WIP.Holdkey
+               , WIP.UserKey
+               , WIP.UserPosition
+               , WIP.UserKeyOverRide
+               , WIP.StartTime
+               , WIP.EndTime
+               , WIP.SourceType
+               , @c_CCKey
+               , WIP.PickDetailKey
+               , WIP.OrderKey
+               , WIP.OrderLineNumber
+               , WIP.ListKey
+               , WIP.WaveKey
+               , WIP.ReasonKey
+               , WIP.Message01
+               , WIP.Message02
+               , WIP.Message03
+               , WIP.SystemQty
+               , WIP.RefTaskKey
+               , WIP.LoadKey
+               , WIP.AreaKey
+               , WIP.DropID
+               , WIP.TransitCount
+               , WIP.TransitLOC
+               , WIP.FinalLOC
+               , WIP.FinalID
+               , WIP.Groupkey
+               , WIP.PendingMoveIn
+               , WIP.QtyReplen
+               , dbo.fnc_GetUserName()   --ML01
+               , dbo.fnc_GetDate()       --ML01
+               , dbo.fnc_GetUserName()   --ML01
+               , dbo.fnc_GetDate()       --ML01
+               , '9'                     --ML01
             FROM TASKDETAIL_WIP WIP WITH (NOLOCK)
-            WHERE WIP.RowID = @n_RowID
+--ML01            WHERE WIP.RowID = @n_RowID
+            LEFT JOIN LOC FRLOC WITH (NOLOCK) ON  (WIP.FROMLOC=FRLOC.LOC)   --ML01
+            LEFT JOIN LOC TOLOC WITH (NOLOCK) ON  (WIP.TOLOC  =TOLOC.LOC)   --ML01
+            WHERE WIP.TaskWIPBatchNo = @c_BatchNo                           --ML01
+            ORDER BY WIP.RowID                                              --ML01
          END TRY
 
          BEGIN CATCH
@@ -249,19 +283,67 @@ BEGIN
                            + '( ' + @c_errmsg + ' )'
 
             GOTO EXIT_SP
-         END CATCH  
+         END CATCH
 
-         FETCH NEXT FROM @CUR_INSTASK INTO @n_RowID  
+/* ML01-S
+         FETCH NEXT FROM @CUR_INSTASK INTO @n_RowID
       END
-      CLOSE @CUR_INSTASK 
+      CLOSE @CUR_INSTASK
       DEALLOCATE @CUR_INSTASK
-      
+ML01-E */
+
+      --ML01-S
+      IF EXISTS(SELECT TOP 1 1 FROM TASKDETAIL_WIP WIP WITH (NOLOCK)
+         JOIN storerconfig s WITH (NOLOCK) ON  WIP.storerkey = s.storerkey
+         JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+         WHERE TaskWIPBatchNo = @c_BatchNo
+           AND s.configkey = 'TaskDetailTrigger_SP')
+      BEGIN
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+
+         SELECT *
+         INTO #INSERTED
+         FROM TASKDETAIL (NOLOCK)
+         WHERE TaskDetailKey >= @c_TaskDetailKey
+           AND TaskDetailKey <= FORMAT(ISNULL(TRY_PARSE(ISNULL(@c_TaskDetailKey,'') AS INT),1) + @n_NoOfTask - 1,'0000000000')
+           AND Sourcekey = @c_CCKey
+
+         SELECT *
+         INTO #DELETED
+         FROM TASKDETAIL (NOLOCK)
+         WHERE 1=2
+
+         EXECUTE dbo.isp_TaskDetailTrigger_Wrapper
+                   'INSERT'  --@c_Action
+                 , @b_Success  OUTPUT
+                 , @n_Err      OUTPUT
+                 , @c_ErrMsg   OUTPUT
+
+         IF @b_success <> 1
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 554706
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Calling isp_TaskDetailTrigger_Wrapper Fail. (lsp_TMCCReleaseFNZ_Wrapper)'
+                           + '( ' + @c_errmsg + ' )'
+            GOTO EXIT_SP
+         END
+
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+      --ML01-E
+
       BEGIN TRY
          INSERT INTO IDS_GeneralLog (udf01, udf02, udf03, udf04, udf05)
          SELECT PickMethod = udf03, GroupKeyTableField = udf04, FilterCode = udf05, LogSource = udf01, LoginUser = @c_UserName
          FROM IDS_GENERALLOG WITH (NOLOCK)
          WHERE udf01 = 'SKURELOPTION'
-         AND   udf02 = @c_BatchNo 
+         AND   udf02 = @c_BatchNo
       END TRY
 
       BEGIN CATCH
@@ -272,42 +354,42 @@ BEGIN
                         + '( ' + @c_errmsg + ' )'
 
          GOTO EXIT_SP
-      END CATCH  
+      END CATCH
 
-      SET @b_success = 1  
-      BEGIN TRY      
-         EXEC WM.lsp_TaskDetail_WIP_Delete      
-           @c_BatchNo = @c_BatchNo     
-         , @b_success = @b_success  OUTPUT        
-         , @n_err     = @n_err      OUTPUT        
+      SET @b_success = 1
+      BEGIN TRY
+         EXEC WM.lsp_TaskDetail_WIP_Delete
+           @c_BatchNo = @c_BatchNo
+         , @b_success = @b_success  OUTPUT
+         , @n_err     = @n_err      OUTPUT
          , @c_errmsg  = @c_errmsg   OUTPUT
-         , @c_UserName= @c_UserName             --(Wan)         
+         , @c_UserName= @c_UserName             --(Wan)
       END TRY
 
       BEGIN CATCH
          SET @n_err = 554705
          SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) 
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err)
                         + ': Error Executing lsp_TaskDetail_WIP_Delete. (lsp_TMCCReleaseFNZ_Wrapper)'
                         + '( ' + @c_errmsg + ' )'
-      END CATCH    
-                      
-      IF @b_success = 0 OR @n_Err <> 0        
-      BEGIN        
-         SET @n_continue = 3      
+      END CATCH
+
+      IF @b_success = 0 OR @n_Err <> 0
+      BEGIN
+         SET @n_continue = 3
          GOTO EXIT_SP
-      END 
+      END
    END TRY
-   
+
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
-   --(mingle01) - END    
+   --(mingle01) - END
 
    EXIT_SP:
-   
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -334,10 +416,9 @@ BEGIN
       END
    END
 
-   REVERT      
-END  
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
+END
 GO
-GRANT EXECUTE ON [WM].[lsp_TMCCReleaseFNZ_Wrapper] TO nSQL 
+GRANT EXECUTE ON  [WM].[lsp_TMCCReleaseFNZ_Wrapper] TO [NSQL]
 GO
-
-

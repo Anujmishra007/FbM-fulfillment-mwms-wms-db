@@ -1,4 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrPMTRNAdd' AND type = 'TR')
+﻿IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrPMTRNAdd' AND type = 'TR')
    DROP TRIGGER ntrPMTRNAdd
 GO
 
@@ -27,6 +27,7 @@ GO
 /*                                                                         */
 /* Modifications:                                                          */
 /* Date         Author  Ver   Purposes                                     */
+/* 09-Oct-2025  SPC040  1.0   Replace SUSER_SNAME with fnc_GetUserName     */
 /***************************************************************************/
 CREATE TRIGGER ntrPMTRNAdd ON PMTRN
 FOR INSERT
@@ -86,8 +87,8 @@ BEGIN
       BEGIN
          UPDATE PMINV WITH (ROWLOCK)
          SET Qty = Qty + @n_Qty
-            ,EditWho = SUSER_NAME()
-            ,EditDate = GETDATE()
+            ,EditWho = dbo.fnc_GetUserName()
+            ,EditDate = dbo.fnc_GetDate()
          WHERE Facility= @c_Facility
          AND Storerkey = @c_Storerkey
          AND AccountNo = @c_AccountNo
@@ -145,8 +146,8 @@ BEGIN
          BEGIN
             UPDATE PMINV WITH (ROWLOCK)
             SET Qty = Qty + @n_Qty
-               ,EditWho = SUSER_NAME()
-               ,EditDate = GETDATE()
+               ,EditWho = dbo.fnc_GetUserName()
+               ,EditDate = dbo.fnc_GetDate()
             WHERE Facility= @c_Facility
             AND Storerkey = @c_Storerkey
             AND AccountNo = @c_AccountNo

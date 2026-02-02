@@ -1,0 +1,10 @@
+-- 5112 = Pallet Capture screen
+DELETE rdt.RDTScn WHERE Scn = 4043 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4043, 'ENG'
+   ,@cLine01 = N'PALLETKEY:'
+   ,@cLine02 = N'%30d01'
+   ,@cLine04 = N'LENGTH: %10i02'
+   ,@cLine06 = N'WIDTH:  %10i03'
+   ,@cLine08 = N'HEIGHT: %10i04'
+   ,@cLine10 = N'WEIGHT: %10i05'
+   ,@cLine14 = N'%e'

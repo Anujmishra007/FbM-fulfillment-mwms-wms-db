@@ -78,6 +78,7 @@ GO
 /* 28-Oct-2012  NJOW07   3.9  314930 - Move process flag checking       */
 /*                            to wrapper and move raiseerror to control */
 /*                            by wrapper                                */
+/* 10-Oct-2025  SSA01    4.0  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE PROC [dbo].[nspLPRTSK2]
@@ -890,8 +891,8 @@ BEGIN
        UPDATE ORDERS WITH (ROWLOCK)
           SET ORDERS.Userdefine01 = O.Userdefine01, 
               ORDERS.TrafficCop = NULL,
-              EditWho = SUSER_SNAME(),
-              EditDate = GetDate()
+              EditWho = dbo.fnc_GetUserName(),          --(SSA01)
+              EditDate = dbo.fnc_GetDate()   --(SSA01)
        FROM ORDERS 
        JOIN #Orders O ON ORDERS.Orderkey = O.Orderkey
        WHERE ORDERS.Userdefine01 <> O.Userdefine01 
@@ -1734,10 +1735,10 @@ BEGIN
                   , [LocationType]
                   , [AddWho]
                   , [AlertStatus] )
-      SELECT @c_LoadKey, GETDATE(), SL.StorerKey, SL.SKU, SL.LOC
+      SELECT @c_LoadKey, dbo.fnc_GetDate(), SL.StorerKey, SL.SKU, SL.LOC      --(SSA01)
            , SL.Qty, ISNULL(PA_TASK.Qty, 0), SL.QtyAllocated, SL.QtyPicked
            , SL.QtyLocationLimit, SL.QtyLocationMinimum, SL.LocationType
-           , SUSER_SNAME(), '5'
+           , dbo.fnc_GetUserName() , '5'          --(SSA01)
       FROM   SKUxLOC SL WITH (NOLOCK)
       JOIN   LOC WITH (NOLOCK) ON LOC.Loc = SL.Loc
       JOIN   ( SELECT DISTINCT StorerKey, SKU, FromLoc AS LOC
@@ -1972,8 +1973,8 @@ BEGIN
            ,[QtyAllocated]
            ,[QtyPicked]
            ,[AddWho])
-       SELECT @c_LoadKey, GetDate(), sl.StorerKey, sl.SKU, sl.LOC,
-       sl.Qty, ISNULL(PA_TASK.Qty, 0) AS PATaskQty, sl.QtyAllocated, sl.QtyPicked, sUser_sName()
+       SELECT @c_LoadKey, dbo.fnc_GetDate(), sl.StorerKey, sl.SKU, sl.LOC,         --(SSA01)
+       sl.Qty, ISNULL(PA_TASK.Qty, 0) AS PATaskQty, sl.QtyAllocated, sl.QtyPicked, dbo.fnc_GetUserName()              --(SSA01)
        FROM   SKUxLOC sl WITH (NOLOCK)
        JOIN   LOC WITH (NOLOCK) ON LOC.Loc = sl.Loc
        JOIN   (SELECT DISTINCT StorerKey, SKU, FromLoc AS LOC

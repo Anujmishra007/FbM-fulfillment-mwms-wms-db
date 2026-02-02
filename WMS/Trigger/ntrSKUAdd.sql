@@ -1,6 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrSKUAdd' AND type = 'TR')
-   DROP TRIGGER ntrSKUAdd
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -47,8 +45,9 @@ GO
 /* 11-Nov-2020  WLChooi   1.7   WMS-15671 - SKUTrigger_SP - call custom SP */
 /*                              when INSERT record (WL02)                  */
 /* 18-Aug-2021  NJOW01    1.8  WMS-17763 Update active based on skustatus  */
+/* 06-OCT-2025  AK01      1.9   UWP-42143 Data Audit                       */
 /***************************************************************************/
-CREATE TRIGGER ntrSKUAdd ON SKU 
+CREATE OR ALTER TRIGGER ntrSKUAdd ON SKU 
 FOR INSERT
 AS
 BEGIN
@@ -344,8 +343,8 @@ BEGIN
          	UPDATE SKU WITH (ROWLOCK)
          	   SET OTM_SKUGroup = @c_default_otm_skugroup, 
          	       TrafficCop = NULL, 
-         	       EditDate = GETDATE(),
-         	       EditWho = SUSER_SNAME()  
+         	       EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+         	       EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
          	WHERE StorerKey = @c_StorerKey 
          	AND   Sku = @c_Sku
          END                           
@@ -378,8 +377,8 @@ BEGIN
             UPDATE SKU WITH (ROWLOCK)
             SET LottableCode = @c_DefaultSkuLottableCode, 
                 TrafficCop = NULL, 
-                EditDate = GETDATE(),
-                EditWho = SUSER_SNAME()  
+                EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+                EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
             WHERE StorerKey = @c_StorerKey 
             AND   Sku = @c_Sku
          END
@@ -391,6 +390,28 @@ BEGIN
    	CLOSE CUR_SKU_INSERTED
    	DEALLOCATE CUR_SKU_INSERTED
    END
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE SKU
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM SKU
+      JOIN INSERTED ON SKU.StorerKey = INSERTED.StorerKey
+      AND SKU.Sku = INSERTED.Sku
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63803 
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table SKU. (ntrSKUAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
    /* #INCLUDE <TRRDA2.SQL> */    
    IF @n_continue=3  -- Error Occured - Process And Return    

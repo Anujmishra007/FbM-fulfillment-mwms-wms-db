@@ -104,6 +104,7 @@ BEGIN
 
       IF @cDropID <> '' AND @cDropID IS NOT NULL            --INC1012120
       BEGIN
+
          IF @nPSKU IS NOT NULL
             SELECT @nPSKU = COUNT( DISTINCT PD.SKU)
             FROM dbo.PackDetail PD WITH (NOLOCK)
@@ -162,7 +163,7 @@ BEGIN
             WHERE PD.StorerKey = @cStorer
                AND PD.LabelNo = @cDropID
             GROUP BY PD.StorerKey, PD.SKU
-      END
+         END
 
 
       IF @nCSKU IS NOT NULL
