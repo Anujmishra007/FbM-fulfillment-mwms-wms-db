@@ -120,9 +120,8 @@ BEGIN
 							FROM dbo.PICKDETAIL WITH (NOLOCK)
 							WHERE ID = @cFromID
 					)
-					
 			-- B2C ORDER
-			IF @cDocType = 'E'
+			IF @cDocType = 'E' and @cFromLOC = 'ONESTEIRA'
 			BEGIN
 			IF @cOrderSingleFlag = 'S' AND @cToLOC <> @cB2CSingle
 				BEGIN
@@ -142,39 +141,49 @@ BEGIN
 			ELSE -- B2B ORDER
 
 			BEGIN
-				IF EXISTS( SELECT 1 
-						FROM dbo.ORDERS WITH (NOLOCK) 
-						LEFT JOIN dbo.OrderInfo WITH (NOLOCK) 
-						ON ORDERS.OrderKey = OrderInfo.OrderKey
-						WHERE (isnull(ORDERS.Notes,'') <> '' OR isnull(ORDERS.Notes2,'') <> '' OR isnull(OrderInfo.Notes,'') <> '')
-						AND ORDERS.OrderKey IN (
-							SELECT DISTINCT PD.OrderKey 
-							FROM dbo.PICKDETAIL AS PD WITH (NOLOCK) 
-							WHERE PD.ID = @cFromID))
-					BEGIN
-					IF @cToLOC = @cB2BVas
-						BEGIN
-							GOTO QUIT
-						END
-					ELSE
-						BEGIN
-							SET @nErrNo = 257503
-							SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- 257503:LOC NOT MATCH
-							GOTO QUIT
-						END
-					END
-
-				ELSE
-
-				BEGIN
-				IF @cToLOC <> @cB2BnoVas
-					BEGIN
-						SET @nErrNo = 257503
-						SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- 257503:LOC NOT MATCH
-						GOTO QUIT
-					END
-				END
+				IF @cFromLOC = 'ONESTEIRA'
+				   BEGIN
+				     IF EXISTS( SELECT 1 
+				     		FROM dbo.ORDERS WITH (NOLOCK) 
+				     		LEFT JOIN dbo.OrderInfo WITH (NOLOCK) 
+				     		ON ORDERS.OrderKey = OrderInfo.OrderKey
+				     		WHERE (isnull(ORDERS.Notes,'') <> '' OR isnull(ORDERS.Notes2,'') <> '' OR isnull(OrderInfo.Notes,'') <> '')
+				     		AND ORDERS.OrderKey IN (
+				     			SELECT DISTINCT PD.OrderKey 
+				     			FROM dbo.PICKDETAIL AS PD WITH (NOLOCK) 
+				     			WHERE PD.ID = @cFromID))
+				     	BEGIN
+				     	IF @cToLOC = @cB2BVas
+				     		BEGIN
+				     			GOTO QUIT
+				     		END
+				     	ELSE
+				     		BEGIN
+				     			SET @nErrNo = 257503
+				     			SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- 257503:LOC NOT MATCH
+				     			GOTO QUIT
+				     		END
+				     	END
+				     
+				     ELSE
+				     
+				     BEGIN
+				     IF @cToLOC <> @cB2BnoVas
+				     	BEGIN
+				     		SET @nErrNo = 257503
+				     		SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- 257503:LOC NOT MATCH
+				     		GOTO QUIT
+				     	END
+				     END
+				 END
 			END --END B2B
+
+		    IF @cFromLOC = 'ONVASOUT' and @cToLOC <> @cB2BnoVas
+			BEGIN
+				SET @nErrNo = 100956
+				SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- 100956 LOC NOT MATCH
+				GOTO QUIT
+			END
 	     END -- END VALIDATION
 	  END
    END
