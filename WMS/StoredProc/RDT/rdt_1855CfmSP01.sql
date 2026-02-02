@@ -395,7 +395,7 @@ BEGIN
             @cAllocateStrategyKey = ISNULL(SG.AllocateStrategyKey, '')
          FROM DBO.PickDetail PD WITH(NOLOCK)
          INNER JOIN dbo.SKU WITH(NOLOCK) ON PD.StorerKey = SKU.StorerKey AND PD.SKU = SKU.SKU
-         LEFT JOIN dbo.STRATEGY SG WITH(NOLOCK) ON SKU.StrategyKey = SKU.StrategyKey
+         LEFT JOIN dbo.STRATEGY SG WITH(NOLOCK) ON SKU.StrategyKey = SG.StrategyKey
          WHERE PickDetailKey = @cPickDetailKey
 
          -- Exact match  
@@ -599,7 +599,6 @@ BEGIN
                               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                               GOTO RollBackTran
                            END CATCH
-
                         END
                         ELSE
                         BEGIN
