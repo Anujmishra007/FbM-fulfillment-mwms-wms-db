@@ -232,11 +232,6 @@ BEGIN
          -- Unalloc Pickdetail
          IF (@n_Continue = 1 OR @n_Continue = 2)
          BEGIN
-            IF @b_debug = 0
-            BEGIN
-               BEGIN TRAN
-            END
-      
             SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT T.Pickdetailkey
             FROM #TMP_PICK_SHORT T
@@ -262,14 +257,6 @@ BEGIN
             END
             CLOSE @CUR_UNALLOC
             DEALLOCATE @CUR_UNALLOC
-      
-            IF @b_debug = 0 AND @n_Continue IN (1,2)
-            BEGIN
-               WHILE @@TRANCOUNT > 0
-               BEGIN
-                  COMMIT TRAN
-               END
-            END
          END
       
          -- Call Short Pick Reallocate SP to pre-cartonize and release Wave
@@ -311,6 +298,35 @@ BEGIN
             END
             CLOSE @CUR_ALLOC
             DEALLOCATE @CUR_ALLOC
+
+            -- Unalloc Pickdetail
+            IF (@n_Continue = 1 OR @n_Continue = 2)
+            BEGIN
+               SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT T.Pickdetailkey
+               FROM #TMP_PICK_SHORT T
+               ORDER BY T.Pickdetailkey
+         
+               OPEN @CUR_UNALLOC
+         
+               FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
+         
+               WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+               BEGIN
+                  BEGIN TRY
+                     DELETE PICKDETAIL
+                     WHERE PickDetailKey = @c_PickDetailKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @n_Continue = 3
+                     SET @c_ErrMsg = ERROR_MESSAGE()
+                  END CATCH
+         
+                  FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
+               END
+               CLOSE @CUR_UNALLOC
+               DEALLOCATE @CUR_UNALLOC
+            END
          END
       END
       ELSE IF @n_DynReplen <> 1   -- Normal Min-Max Replen - @n_DynReplen <> 1
