@@ -269,7 +269,10 @@ BEGIN
 
       IF @nMOBRECStep = 6 AND @nMOBRECScn = 1045 AND @nStep = 7 AND @nScn = 1046
       BEGIN
-         IF @nPreAlloQty > 0
+         IF EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND SKU = @cSKU
+                        AND PrePackIndicator = '1')
          BEGIN
             IF @nInputKey = 1
             BEGIN
@@ -519,6 +522,17 @@ BEGIN
                BEGIN
                   SET @nErrNo = 256803
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO Quit
+               END
+
+               IF NOT EXISTS (SELECT 1 FROM dbo.Storer st WITH (NOLOCK)
+                              JOIN dbo.CARTONIZATION cart WITH (NOLOCK)
+                                 ON st.CartonGroup = cart.CartonizationGroup
+                              WHERE Storerkey = @cStorerKey
+                                 AND CartonType = @cCartonType)
+               BEGIN
+                  SET @nErrNo = 256820
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Dropid dtl exists
                   GOTO Quit
                END
 
