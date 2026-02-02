@@ -84,7 +84,7 @@ AS
 							FROM dbo.PICKDETAIL WITH (NOLOCK)
 							WHERE ID = @cFromID )
 			-- B2C ORDER
-			IF @cDocType = 'E'
+			IF @cDocType = 'E' and @cFromLOC = 'ONESTEIRA'
 			BEGIN
 			IF @cOrderSingleFlag = 'S' --AND @cToLOC <> @cB2CSingle
 				BEGIN
@@ -102,24 +102,32 @@ AS
 			ELSE -- B2B ORDER
 
 			BEGIN
-				IF EXISTS( SELECT 1 
-						FROM dbo.ORDERS WITH (NOLOCK) 
-						LEFT JOIN dbo.OrderInfo WITH (NOLOCK) 
-						ON ORDERS.OrderKey = OrderInfo.OrderKey
-						WHERE (isnull(ORDERS.Notes,'') <> '' OR isnull(ORDERS.Notes2,'') <> '' OR isnull(OrderInfo.Notes,'') <> '')
-						AND ORDERS.OrderKey IN (
-							SELECT DISTINCT PD.OrderKey 
-							FROM dbo.PICKDETAIL AS PD WITH (NOLOCK) 
-							WHERE PD.Status < '9' AND PD.ID = @cFromID))
-					BEGIN
-						SET @cExtendedInfo = 'Sugg LOC: ' + @cB2BVas
-						GOTO QUIT
-					END
-					ELSE 
-					BEGIN
-					    SET @cExtendedInfo = 'Sugg LOC: ' + @cB2BnoVas
-					    GOTO QUIT
-					END
+				IF @cFromLOC = 'ONESTEIRA'
+				   BEGIN
+				     IF EXISTS( SELECT 1 
+				     		FROM dbo.ORDERS WITH (NOLOCK) 
+				     		LEFT JOIN dbo.OrderInfo WITH (NOLOCK) 
+				     		ON ORDERS.OrderKey = OrderInfo.OrderKey
+				     		WHERE (isnull(ORDERS.Notes,'') <> '' OR isnull(ORDERS.Notes2,'') <> '' OR isnull(OrderInfo.Notes,'') <> '')
+				     		AND ORDERS.OrderKey IN (
+				     			SELECT DISTINCT PD.OrderKey 
+				     			FROM dbo.PICKDETAIL AS PD WITH (NOLOCK) 
+				     			WHERE PD.Status < '9' AND PD.ID = @cFromID))
+				     	BEGIN
+				     		SET @cExtendedInfo = 'Sugg LOC: ' + @cB2BVas
+				     		GOTO QUIT
+				     	END
+				     	ELSE 
+				     	BEGIN
+				     	    SET @cExtendedInfo = 'Sugg LOC: ' + @cB2BnoVas
+				     	    GOTO QUIT
+				     	END
+				   END
+			END
+			
+			IF @cFromLOC = 'ONVASOUT'
+			   BEGIN
+			     SET @cExtendedInfo = 'Sugg LOC: ' + @cB2BnoVas
 			   END
 			END --END B2B 
 	     END -- END VALIDATION
