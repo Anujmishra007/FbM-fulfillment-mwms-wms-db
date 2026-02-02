@@ -21,6 +21,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_ValidateMBOL_Wrapper]
   @c_MBOLKey   NVARCHAR(10)
@@ -45,20 +46,26 @@ BEGIN
 
    SET @n_Err = 0
 
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser]
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-      IF @n_Err <> 0
-      BEGIN
-         GOTO EXIT_SP
-      END
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
 
    BEGIN TRY
       EXEC dbo.isp_ValidateMBOL
@@ -120,7 +127,8 @@ BEGIN
       END
    END
 
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON  [WM].[lsp_ValidateMBOL_Wrapper] TO [NSQL]

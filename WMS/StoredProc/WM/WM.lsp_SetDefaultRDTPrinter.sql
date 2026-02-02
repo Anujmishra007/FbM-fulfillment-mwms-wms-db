@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_SetDefaultRDTPrinter]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_SetDefaultRDTPrinter]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Store procedure: lsp_SetDefaultRDTPrinter                            */
 /* Copyright      : LFLogistics                                         */
@@ -16,17 +12,18 @@ GO
 /* Date        Author   Ver.  Purposes                                  */
 /*22-Feb-2018  Shong    1.0   Created                                   */
 /*02-Mar-2018  NJOW     1.1   Support domain checking                   */
-/* 2021-02-25  Wan01    1.2   Add Big Outer Try/Catch                   */ 
+/* 2021-02-25  Wan01    1.2   Add Big Outer Try/Catch                   */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2021-03-24  Wan02    1.3   LFWM-2250 - UAT - TW  Too Many Printer to */
 /*                            be selected                               */
+/* 2025-09-02  SWT01    1.4   Enhanced session management pattern       */
 /************************************************************************/
 
-CREATE PROCEDURE [WM].[lsp_SetDefaultRDTPrinter]
-   @c_UserName        NVARCHAR(128), 
+CREATE OR ALTER PROCEDURE [WM].[lsp_SetDefaultRDTPrinter]
+   @c_UserName        NVARCHAR(128),
    @c_LabelPrinter    NVARCHAR(10),
    @c_PaperPrinter    NVARCHAR(10),
-   @n_Err             INT ='' OUTPUT,  
+   @n_Err             INT ='' OUTPUT,
    @c_ErrMsg          NVARCHAR(125) = '' OUTPUT
 ,  @c_SCEPrinterGroup NVARCHAR(20)  = ''     --(Wan02)
 AS
@@ -35,48 +32,59 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
+
    DECLARE @n_Pos INT,
            @c_Domain NVARCHAR(30),
            @c_NoDomainUserName NVARCHAR(128)
-   
+
    --(Wan01) - START
    BEGIN TRY
       SELECT @n_Pos = CHARINDEX('\',@c_UserName)
-   
-      IF @n_Pos > 0 AND @c_UserName NOT LIKE '%_@_%_.__%' 
+
+      IF @n_Pos > 0 AND @c_UserName NOT LIKE '%_@_%_.__%'
       BEGIN
          SELECT @c_Domain = LEFT(@c_UserName, @n_Pos - 1)
          SELECT @c_NoDomainUserName = SUBSTRING(@c_UserName, @n_Pos + 1, LEN(@c_Username))
       END
-      ELSE 
+      ELSE
            SET @c_NoDomainUserName = @c_UserName
-      
+
       IF NOT EXISTS(SELECT 1
                     FROM WM.WMS_USER_CREATION_STATUS WITH (NOLOCK)
                     WHERE USER_NAME = @c_NoDomainUserName
-                    AND ISNULL(LDAP_Domain, '') = CASE WHEN ISNULL(@c_domain, '') <> '' THEN '' ELSE ISNULL(LDAP_Domain, '') END)
+                    AND (
+                          (@c_Domain IS NULL AND LDAP_Domain IS NULL)
+                       OR (LDAP_Domain = ISNULL(@c_Domain, ''))
+                    ) )
       BEGIN
            SET @n_Err = 553101
            SET @c_ErrMsg = 'Invalid User ID'
            GOTO EXIT_SP
-      END   
+      END
 
       --EXECUTE AS LOGIN = @c_UserName
-      
-      IF SUSER_SNAME() <> @c_UserName
+
+      -- Start enhanced session management (SWT01)
+      SET @n_Err = 0
+      DECLARE @b_ExecuteAs        BIT = 0
+      IF SUSER_SNAME() <> @c_UserName        
       BEGIN
-         SET @n_Err = 0 
-         EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-   
-         IF @n_Err <> 0 
+         EXEC [WM].[lsp_SetUser] 
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+         IF @n_Err <> 0
          BEGIN
             GOTO EXIT_SP
          END
-   
-         EXECUTE AS LOGIN = @c_UserName
-      END
-       
+
+         IF @b_ExecuteAs = 1
+            EXECUTE AS LOGIN = @c_UserName
+      END                                    
+      -- End enhanced session management (SWT01)
+
       IF NOT EXISTS(SELECT 1 FROM RDT.RDTUser AS r WITH(NOLOCK)
                     WHERE r.UserName = @c_UserName)
       BEGIN
@@ -85,28 +93,29 @@ BEGIN
                      LastLogin, DefaultPrinter, DefaultPrinter_Paper, [Active]
                   ,  SCEPrinterGroup                                 --(Wan02)
                      )
-         VALUES (    @c_UserName, '', @c_UserName, '', '', 'ENG', 0, '', 
+         VALUES (    @c_UserName, '', @c_UserName, '', '', 'ENG', 0, '',
                      GETDATE(), @c_LabelPrinter, @c_PaperPrinter, '1'
                   ,  @c_SCEPrinterGroup                              --(Wan02)
                  )
-      END 
+      END
       ELSE
       BEGIN
-           UPDATE RDT.RdtUser 
-              SET DefaultPrinter = CASE WHEN ISNULL(@c_LabelPrinter,'') <> '' THEN @c_LabelPrinter ELSE DefaultPrinter END       
+           UPDATE RDT.RdtUser
+              SET DefaultPrinter = CASE WHEN ISNULL(@c_LabelPrinter,'') <> '' THEN @c_LabelPrinter ELSE DefaultPrinter END
                 , DefaultPrinter_Paper = CASE WHEN ISNULL(@c_PaperPrinter,'') <> '' THEN @c_PaperPrinter ELSE DefaultPrinter_Paper END
                 , SCEPrinterGroup = @c_SCEPrinterGroup                                 --(Wan02)
-           WHERE UserName = @c_UserName                   
+           WHERE UserName = @c_UserName
       END
-   END TRY  
+   END TRY
      BEGIN CATCH
       SET @n_Err    = @@ERROR
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
-   END CATCH 
+   END CATCH
    EXIT_SP:
-   REVERT    
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END -- End Procedure
 GO
-GRANT EXECUTE ON [WM].[lsp_SetDefaultRDTPrinter] TO nSQL 
+GRANT EXECUTE ON  [WM].[lsp_SetDefaultRDTPrinter] TO [NSQL]
 GO

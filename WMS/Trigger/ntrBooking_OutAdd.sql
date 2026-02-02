@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrBooking_OutAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrBooking_OutAdd]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -35,9 +32,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author  Ver.  Purposes                                   */
+/* 06-OCT-2025 AK01    1.1   UWP-42143 Data Audit                       */
 /************************************************************************/
 
-CREATE TRIGGER ntrBooking_OutAdd
+CREATE OR ALTER TRIGGER ntrBooking_OutAdd
 ON  Booking_Out
 FOR INSERT
 AS
@@ -80,6 +78,27 @@ BEGIN
              UserDefine10, ArrivedTime, SignInTime, UnloadTime, DepartTime
       FROM INSERTED        
    END
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE Booking_Out
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(),
+            TrafficCop = NULL 
+      FROM Booking_Out
+      JOIN INSERTED ON Booking_Out.BookingNo = INSERTED.BookingNo
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69101  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Booking_Out. (ntrBooking_OutAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
    QUIT_TR: 
    IF @n_continue=3  -- Error Occured - Process And Return

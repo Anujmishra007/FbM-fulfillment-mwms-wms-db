@@ -38,6 +38,7 @@ GO
 /* 03-12-2008   wwang       add Storerkey as parameter                  */
 /* 29-04-2011   Leong       SOS# 213836 - Delete unprocess DRP task.    */
 /* 10-11-2011   TLTING      Performance Tune                            */
+/* 10-10-2025   SSA01       UWP-42248 -Enhanced session management      */
 /************************************************************************/
 
 CREATE PROC  [dbo].[ispUnallocate_DynamicLPAlloc]
@@ -271,8 +272,8 @@ BEGIN
          UPDATE UCC WITH (ROWLOCK) SET
             Status = '1',
             UserDefined01 = '',
-   			EditDate = GETDATE(),
-   			EditWho = sUSER_sNAME()
+   			EditDate = dbo.fnc_GetDate(),    --(SSA01)
+   			EditWho = dbo.fnc_GetUserName()            --(SSA01)
          FROM UCC UCC
 		    WHERE UCC.UCCNo = UCC.UCCNo
          IF @@ERROR <> 0

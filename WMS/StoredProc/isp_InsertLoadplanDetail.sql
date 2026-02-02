@@ -36,6 +36,8 @@ GO
 /*                              when hit trigger error (ZG01)              */
 /* 28-Feb-2022  Leong     1.8   JSM-54294 - SCE bug fix with               */
 /*                              lsp_WaveGenLoadPlan (Wan02)                */
+/* 10-OCT-2025  SSA01     1.9   UWP-42248 -Enhanced session management     */
+/*                               and cleanup.                              */
 /***************************************************************************/
 
 CREATE PROCEDURE isp_InsertLoadplanDetail
@@ -202,7 +204,7 @@ BEGIN -- main
              @nStdGrossWgt,      @nStdCube,
              @cExternOrderKey,   @cCustomerName,
              @nTotOrderLines,    @nNoOfCartons,
-             ISNULL(RTRIM(@cOrderStatus),'0'), '*' + RTRIM(SUSER_SNAME()) )
+             ISNULL(RTRIM(@cOrderStatus),'0'), '*' + RTRIM(dbo.fnc_GetUserName()) )         --(SSA01)
            --@cOrderStatus,      '*' + RTRIM(SUSER_SNAME()) ) -- SOS# 189712
 
          SELECT @n_Err = @@ERROR, @n_Cnt = @@ROWCOUNT
@@ -219,8 +221,8 @@ BEGIN -- main
          SET    Weight = @nStdGrossWgt,
                 Cube   = @nStdCube,
                 CaseCnt = @nNoOfCartons,
-                EditWho = SUSER_SNAME(),
-                EditDate = GETDATE(),
+                EditWho = dbo.fnc_GetUserName(),       --(SSA01)
+                EditDate = dbo.fnc_GetDate(),   --(SSA01)
                 TrafficCop = NULL
          WHERE  Loadkey = @cLoadKey
          AND    Orderkey = @cOrderKey
@@ -258,8 +260,8 @@ BEGIN -- main
             UPDATE OrderDetail
             SET LoadKey = @cLoadKey,
                 TrafficCop = NULL,
-                EditWho = SUSER_SNAME(),
-                EditDate = GETDATE()
+                EditWho = dbo.fnc_GetUserName(),     --(SSA01)
+                EditDate = dbo.fnc_GetDate()   --(SSA01)
             WHERE orderkey = @cOrderKey
             AND Orderlinenumber = @c_OrderLineNo
 
@@ -285,8 +287,8 @@ BEGIN -- main
       UPDATE ORDERS WITH (ROWLOCK)
          SET LoadKey = @cLoadKey,
              TrafficCop = NULL,
-             EditWho = SUSER_SNAME(),
-             EditDate = GETDATE()
+             EditWho = dbo.fnc_GetUserName(),      --(SSA01)
+             EditDate = dbo.fnc_GetDate()   --(SSA01)
        WHERE OrderKey = @cOrderKey
          AND (LoadKey = '' OR LoadKey IS NULL)
 

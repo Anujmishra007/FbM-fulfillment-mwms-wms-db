@@ -31,6 +31,8 @@ GO
 /* 11-02-2015 1.4  ChewKP   Bug Fixes (ChewKP02)                        */
 /* 24-03-2015 1.5  Shong    Performance Tuning                          */
 /* 23-04-2021 1.6  Chermain WMS-16846 Add Channel_ID (cc01)             */
+/* 10-10-2025 1.7  SSA01    UWP-42248 -Enhanced session management      */
+/*                             and cleanup.                             */
 /************************************************************************/    
 CREATE PROC [dbo].[isp_PTL_PTS_Confirm02] (    
      @nPTLKey              INT    
@@ -266,7 +268,7 @@ BEGIN
       WHILE @@FETCH_STATUS <> -1
       BEGIN                      
          UPDATE dbo.PTLTran WITH (ROWLOCK)     
-            SET Status = '9', EditDate = GETDATE(), EditWho = SUSER_SNAME()     
+            SET Status = '9', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()            --(SSA01)
          WHERE PTLKey = @nPTLTranKey
                
          IF @@ERROR <> 0       
@@ -290,7 +292,7 @@ BEGIN
            ,@cErrMsg      OUTPUT      
                                                     
       UPDATE dbo.PTLTran WITH (ROWLOCK)    
-      SET Status = '0', EditDate = GETDATE(), EditWho = SUSER_SNAME()    
+      SET Status = '0', EditDate = GETDATE(), EditWho = dbo.fnc_GetUserName()    --(SSA01)
       WHERE PTLKey = @nPTLKey    
     
       IF @@ERROR <> 0       
@@ -314,7 +316,7 @@ BEGIN
           ,@c_ErrMsg    = @cErrMsg     OUTPUT    
     
       UPDATE dbo.PTLTran WITH (ROWLOCK)     
-      SET LightSequence = LightSequence + 1, EditDate = GETDATE(), EditWho = SUSER_SNAME()     
+      SET LightSequence = LightSequence + 1, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()       --(SSA01)
       WHERE PTLKey = @nPTLKey    
       IF @nErrNo <> 0       
       BEGIN      
@@ -481,8 +483,8 @@ BEGIN
                   -- Confirm PickDetail      
                   UPDATE dbo.PickDetail WITH (ROWLOCK)      
                      SET CaseID = @cCaseID      
-                       , EditDate = GetDate()    
-                       , EditWho  = suser_sname()    
+                       , EditDate = dbo.fnc_GetDate()    --(SSA01)
+                       , EditWho  = dbo.fnc_GetUserName()       --(SSA01)
                        , UOMQty   = @nQty
                        , Trafficcop = NULL    
                   WHERE  PickDetailKey = @cPickDetailKey      
@@ -504,8 +506,8 @@ BEGIN
                   -- Confirm PickDetail      
                   UPDATE dbo.PickDetail WITH (ROWLOCK)      
                   SET    CaseID = @cCaseID     
-                      , EditDate = GetDate()    
-                      , EditWho  = suser_sname()  
+                      , EditDate = dbo.fnc_GetDate()    --(SSA01)
+                      , EditWho  = dbo.fnc_GetUserName()      --(SSA01)
                       , UOMQty   = @nQty  
                       , Trafficcop = NULL    
                   WHERE  PickDetailKey = @cPickDetailKey    
@@ -583,8 +585,8 @@ BEGIN
                      -- Change orginal PickDetail with exact QTY (with TrafficCop)      
                      UPDATE dbo.PickDetail WITH (ROWLOCK)      
                      SET    QTY = @nActualQty    
-                           , EditDate = GetDate()    
-                           , EditWho  = suser_sname()   
+                           , EditDate = dbo.fnc_GetDate()    --(SSA01)
+                           , EditWho  = dbo.fnc_GetUserName()            --(SSA01)
                            , UOMQty   = @nQty 
                            , Trafficcop = NULL     
                      WHERE  PickDetailKey = @cPickDetailKey    
@@ -600,8 +602,8 @@ BEGIN
                      -- Confirm orginal PickDetail with exact QTY      
                      UPDATE dbo.PickDetail WITH (ROWLOCK)      
                      SET    CaseID = @cCaseID    
-                           , EditDate = GetDate()    
-                           , EditWho  = suser_sname() 
+                           , EditDate = dbo.fnc_GetDate()    --(SSA01)
+                           , EditWho  = dbo.fnc_GetUserName()      --(SSA01)
                            , UOMQty   = @nQty  
                            , Trafficcop = NULL    
                      WHERE  PickDetailKey = @cPickDetailKey      
@@ -624,7 +626,7 @@ BEGIN
               
                   UPDATE dbo.PickDetail WITH (ROWLOCK)      
                   SET    Status = '4'    
-                        , EditDate = GetDate()    
+                        , EditDate = dbo.fnc_GetDate()    --(SSA01)
                         , EditWho  = suser_sname()    
                         --, Trafficcop = NULL (ChewKP02)    
                   WHERE  PickDetailKey = @cPickDetailKey    
@@ -647,7 +649,7 @@ BEGIN
                               AND SKU     = @cPTLSKU )    
                   BEGIN                                      
                      UPDATE PACKDETAIL WITH (ROWLOCK)    
-                       SET Qty = Qty + @nPackQty, EditDate = GETDATE(), EditWho = SUSER_SNAME()    
+                       SET Qty = Qty + @nPackQty, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()      --(SSA01)
                      WHERE PickSlipNo = @cPickSlipNo    
                       AND DropID = @cCaseID    
                       AND SKU = @cPTLSKU    
@@ -811,7 +813,7 @@ BEGIN
                           AND SKU     = @cPTLSKU )    
                 BEGIN                                      
                    UPDATE PACKDETAIL WITH (ROWLOCK)    
-                     SET Qty = Qty + @nPDQty, EditDate = GETDATE(), EditWho = SUSER_SNAME()    
+                     SET Qty = Qty + @nPDQty, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()       --(SSA01)
                    WHERE PickSlipNo = @cPickSlipNo    
                      AND DropID = @cLabelNo    
                      AND SKU = @cPTLSKU    
@@ -889,14 +891,14 @@ BEGIN
       
                     
     UPDATE PTLTRAN WITH (ROWLOCK)               
-       SET STATUS  = '9', EditDate = GETDATE(), EditWho = SUSER_SNAME()             
+       SET STATUS  = '9', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()          --(SSA01)
     WHERE PTLKey = @nPTLKey      
       
     IF @@ERROR <> 0   
     BEGIN  
         
       UPDATE PTLTRAN WITH (ROWLOCK)               
-       SET STATUS  = '9', EditDate = GETDATE(), EditWho = SUSER_SNAME()             
+       SET STATUS  = '9', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()           --(SSA01)
       WHERE PTLKey = @nPTLKey      
         
       IF @@ERROR <> 0   
@@ -919,7 +921,7 @@ BEGIN
           ,@cErrMsg      OUTPUT      
                           
     UPDATE dbo.DropID WITH (ROWLOCK)    
-    SET Status = '5', EditDate = GETDATE(), EditWho = SUSER_SNAME()     
+    SET Status = '5', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()       --(SSA01)
     WHERE DropID = @cCaseID    
     IF @@ERROR <> 0    
     BEGIN    
@@ -992,7 +994,7 @@ BEGIN
 
         -- Update PTLTranKey to 9 
         UPDATE dbo.PTLTran
-        SET Status = '9', EditDate = GETDATE(), EditWho = SUSER_SNAME()
+        SET Status = '9', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()         --(SSA01)
         WHERE PTLKey = @nPTLKey
         
         GOTO QUIT
@@ -1313,7 +1315,7 @@ BEGIN
                
                
            UPDATE  PTLTran WITH (ROWLOCK)     
-           SET Status = '9', EditDate = GETDATE(), EditWho = SUSER_SNAME()    
+           SET Status = '9', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()       --(SSA01)
            WHERE PTLKey = @nNewPTLTranKey    
                
            SET @nNewPTLTranKey = 0     
@@ -2015,7 +2017,7 @@ BEGIN
                 
             -- Update LightSequence of HOLD  = 5 --     
             UPDATE PTLTran WITH (ROWLOCK)     
-            SET LightSequence = '5', EditDate = GETDATE(), EditWho = SUSER_SNAME()    
+            SET LightSequence = '5', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()        --(SSA01)
             WHERE PTLKey = @nHoldPTLKey    
                 
          END       
@@ -2093,7 +2095,7 @@ BEGIN
                      
            UPDATE  PTLTran WITH (ROWLOCK)     
            SET LightSequence = LightSequence + 1 , Status = '9', 
-               EditDate = GETDATE(), EditWho = SUSER_SNAME()    
+               EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()     --(SSA01)
            WHERE PTLKey = @nNewPTLTranKey    
            AND Remarks = 'FULL'    
                
@@ -2328,7 +2330,7 @@ BEGIN
                  
              -- Update LightSequence of HOLD  = 5 --     
              UPDATE PTLTran WITH (ROWLOCK)     
-             SET LightSequence = '5', EditDate = GETDATE(), EditWho = SUSER_SNAME()    
+             SET LightSequence = '5', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()       --(SSA01)
              WHERE PTLKey = @nHoldPTLKey    
           END       
           --GOTO QUIT    
@@ -2397,7 +2399,7 @@ BEGIN
                
            UPDATE  PTLTran WITH (ROWLOCK)     
            SET LightSequence = LightSequence + 1 , Status = '9', 
-               EditDate = GETDATE(), EditWho = SUSER_SNAME()    
+               EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()    --(SSA01)
            WHERE PTLKey = @nNewPTLTranKey    
            AND Remarks = 'FULL'    
                

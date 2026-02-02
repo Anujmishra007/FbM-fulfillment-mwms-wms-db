@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:   ue_sku_rule                                             */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -32,16 +32,20 @@ GO
 /*                            to get alternate sku                      */
 /* 23-Mar-2022 NJOW01   1.2   DEVOPS combine script                     */
 /* 25-May-2022 WLChooi  1.3   Fix Errormsg to show orderkey + SKU (WL02)*/
+/* 17-Nov-2022 JihHaur  1.4   JSM110803 @c_GetSku to NVARCHAR(60) (JH01)*/
+/* 15-Jan-2024 WLChooi  1.5   WMS-24470 - Show SKU Other Info (WL03)    */
+/* 15-Jul-2025 Sean     1.6   #FCR-6199 - Packing SKU Decode            */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_Ecom_GetPackSku]
             @c_OrderKey    NVARCHAR(10)
          ,  @c_StorerKey   NVARCHAR(15)
-         ,  @c_Sku         NVARCHAR(60)   OUTPUT
+         ,  @c_Sku         NVARCHAR(500)   OUTPUT --(Sean)
          ,  @b_Success     INT = 0        OUTPUT
          ,  @n_err         INT = 0        OUTPUT
          ,  @c_errmsg      NVARCHAR(250) = '' OUTPUT
          ,  @c_SerialNo    NVARCHAR(60)  = '' OUTPUT  --(Wan01)          
          ,  @c_TaskBatchNo NVARCHAR(10)  = '' --NJOW01
+         ,  @c_SkuOtherInfo NVARCHAR(255) = '' OUTPUT   --WL03
 AS
 BEGIN
    SET NOCOUNT ON
@@ -56,7 +60,11 @@ BEGIN
          , @n_SKUCnt       INT
          , @c_DecodeSPName NVARCHAR(30)
          , @c_OriginalSku  NVARCHAR(60)
-         , @c_GetSku       NVARCHAR(20)  --NJOW01
+         , @c_GetSku       NVARCHAR(60)  --NJOW01  --JH01
+
+   DECLARE @c_EPACKSKUOtherInfo_SP NVARCHAR(30)   --WL03
+         , @c_Facility             NVARCHAR(5)    --WL03
+         , @c_SQL                  NVARCHAR(MAX)  --WL03
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -230,6 +238,49 @@ BEGIN
       GOTO QUIT
    END
    --(Wan01)  - END
+
+   --WL03 S
+   SET @c_Facility = ''
+
+   IF ISNULL(@c_Orderkey,'') <> ''
+   BEGIN
+      SELECT @c_Facility = Facility
+      FROM ORDERS WITH (NOLOCK)
+      WHERE Orderkey = @c_OrderKey
+   END
+
+   EXEC dbo.nspGetRight @c_Facility = @c_Facility
+                      , @c_StorerKey = @c_Storerkey
+                      , @c_sku = N''
+                      , @c_ConfigKey = N'EPACKSKUOtherInfo'
+                      , @b_Success = @b_Success OUTPUT
+                      , @c_authority = @c_EPACKSKUOtherInfo_SP OUTPUT
+                      , @n_err = @n_err OUTPUT
+                      , @c_errmsg = @c_errmsg OUTPUT
+   
+   IF EXISTS ( SELECT 1 FROM sys.objects AS o WHERE NAME = @c_EPACKSKUOtherInfo_SP AND o.[type] = 'P') AND ISNULL(@c_EPACKSKUOtherInfo_SP, '') <> ''
+   BEGIN
+      SET @c_SQL = N'EXEC ' + @c_EPACKSKUOtherInfo_SP + ' @c_OrderKey = @c_OrderKeyP, @c_StorerKey = @c_StorerKeyP, @c_Sku = @c_SkuP, ' + CHAR(13)
+                 + N'@c_SkuOtherInfo = @c_SkuOtherInfoP OUTPUT, @b_Success = @b_SuccessP OUTPUT, @n_Err = @n_ErrP OUTPUT, @c_ErrMsg = @c_ErrMsgP OUTPUT '
+
+      EXEC sp_executesql @c_SQL   
+             ,N'@c_OrderKeyP NVARCHAR(10), @c_StorerKeyP NVARCHAR(15), @c_SkuP NVARCHAR(20),
+                @c_SkuOtherInfoP NVARCHAR(255) OUTPUT, @b_SuccessP INT OUTPUT, @n_ErrP INT OUTPUT, @c_ErrMsgP NVARCHAR(255) OUTPUT '   
+             ,@c_Orderkey
+             ,@c_Storerkey 
+             ,@c_Sku
+             ,@c_SkuOtherInfo OUTPUT       
+             ,@b_Success      OUTPUT  
+             ,@n_Err          OUTPUT  
+             ,@c_ErrMsg       OUTPUT
+   END
+
+   IF @b_Success <> 1
+   BEGIN
+      SET @n_Continue = 3
+      GOTO QUIT
+   END
+   --WL03 E
 QUIT:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

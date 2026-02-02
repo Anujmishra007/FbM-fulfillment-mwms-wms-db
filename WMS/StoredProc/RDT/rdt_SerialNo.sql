@@ -20,7 +20,7 @@ GO
 /* 18-08-2020  1.5  Ung          WMS-14788 Add force 1D barcode screen  */
 /* 24-04-2020  1.6  YeeKung      WMS-12885 Add ExtUpdSerialNo(yeekung01)*/
 /* 29-07-2023  1.7  Ung          WNS-23002 Add Scan param               */
-/* 05-06-2024  1.8  CYU027       FCR-340 add Custom SP                  */
+/* 15-01-2025  1.8  Ung          FCR-1622 Add SerialNoSP                */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_SerialNo]
@@ -56,12 +56,13 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_SerialNo]
    @cSerialNo        NVARCHAR( 60) OUTPUT,  
    @nSerialQTY       INT           OUTPUT,
    @nErrNo           INT           OUTPUT,
-   @cErrMsg          NVARCHAR( 20) OUTPUT, 
+   @cErrMsg          NVARCHAR( 1024) OUTPUT, 
    @nScn             INT = 0, 
    @nBulkSNO         INT = 0       OUTPUT, 
    @nBulkSNOQTY      INT = 0       OUTPUT,
    @cSerialCaptureType  NVARCHAR( 1) = '', 
-   @nScan            INT = 0       OUTPUT
+   @nScan            INT = 0       OUTPUT, 
+   @nUseStandard     INT = 0
 AS
 BEGIN
    SET NOCOUNT ON
@@ -69,96 +70,117 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cSerialNoSP         NVARCHAR(20) = ''
-   DECLARE @cSQL                NVARCHAR( MAX)
-   DECLARE @cSQLParam           NVARCHAR( MAX)
+   DECLARE @cSQL           NVARCHAR(MAX)
+   DECLARE @cSQLParam      NVARCHAR(MAX)
+   DECLARE @cSerialNoSP    NVARCHAR(20) = ''
 
-   SET @cSerialNoSP = rdt.RDTGetConfig( @nFunc, 'SerialNoSP', @cStorerKey)
-   IF @cSerialNoSP = '0'
-      SET @cSerialNoSP = ''
+   -- Get storer configure
+   IF @nUseStandard = 0
+   BEGIN
+      SET @cSerialNoSP = rdt.RDTGetConfig( @nFunc, 'SerialNoSP', @cStorerKey)
+      IF @cSerialNoSP = '0'
+         SET @cSerialNoSP = ''
+   END
 
    /***********************************************************************************************
-                                    Custom Serial Number SP
+                                              Custom serial no
    ***********************************************************************************************/
    -- Custom logic
-   IF @cSerialNoSP <> ''
+   IF @cSerialNoSP <> '' 
    BEGIN
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSerialNoSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cSerialNoSP) +
-                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDesc, @nQTY, @cType, @cDocType, @cDocNo,'+
-                     ' @cInField01 OUTPUT, @cOutField01 OUTPUT, @cFieldAttr01 OUTPUT, @cInField02 OUTPUT, @cOutField02 OUTPUT, @cFieldAttr02 OUTPUT,' +
-                     ' @cInField03 OUTPUT, @cOutField03 OUTPUT, @cFieldAttr03 OUTPUT, @cInField04 OUTPUT, @cOutField04 OUTPUT, @cFieldAttr04 OUTPUT,' +
-                     ' @cInField05 OUTPUT, @cOutField05 OUTPUT, @cFieldAttr05 OUTPUT, @cInField06 OUTPUT, @cOutField06 OUTPUT, @cFieldAttr06 OUTPUT,' +
-                     ' @cInField07 OUTPUT, @cOutField07 OUTPUT, @cFieldAttr07 OUTPUT, @cInField08 OUTPUT, @cOutField08 OUTPUT, @cFieldAttr08 OUTPUT,' +
-                     ' @cInField09 OUTPUT, @cOutField09 OUTPUT, @cFieldAttr09 OUTPUT, @cInField10 OUTPUT, @cOutField10 OUTPUT, @cFieldAttr10 OUTPUT,' +
-                     ' @cInField11 OUTPUT, @cOutField11 OUTPUT, @cFieldAttr11 OUTPUT, @cInField12 OUTPUT, @cOutField12 OUTPUT, @cFieldAttr12 OUTPUT,' +
-                     ' @cInField13 OUTPUT, @cOutField13 OUTPUT, @cFieldAttr13 OUTPUT, @cInField14 OUTPUT, @cOutField14 OUTPUT, @cFieldAttr14 OUTPUT,' +
-                     ' @cInField15 OUTPUT, @cOutField15 OUTPUT, @cFieldAttr15 OUTPUT, @nMoreSNO OUTPUT, @cSerialNo OUTPUT, @nSerialQTY OUTPUT,'+
-                     ' @nErrNo OUTPUT, @cErrMsg OUTPUT, @nScn, @nBulkSNO OUTPUT, @nBulkSNOQTY OUTPUT, @cSerialCaptureType, @nScan  OUTPUT'
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDesc, @nQTY, @cType, @cDocType, @cDocNo, ' +
+            ' @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, ' + 
+            ' @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, ' + 
+            ' @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, ' + 
+            ' @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, ' + 
+            ' @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, ' + 
+            ' @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, ' + 
+            ' @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, ' + 
+            ' @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, ' + 
+            ' @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, ' + 
+            ' @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, ' + 
+            ' @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, ' + 
+            ' @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, ' + 
+            ' @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, ' + 
+            ' @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, ' + 
+            ' @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, ' + 
+            ' @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT, ' + 
+            ' @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  @nScn,                ' +
+            ' @nBulkSNO   OUTPUT,  @nBulkSNOQTY OUTPUT,  @cSerialCaptureType,  ' + 
+            ' @nScan      OUTPUT'
 
          SET @cSQLParam =
-                  ' @nMobile          INT,                   ' +
-                  ' @nFunc            INT,                   ' +
-                  ' @cLangCode        NVARCHAR( 3),          ' +
-                  ' @nStep            INT,                   ' +
-                  ' @nInputKey        INT,                   ' +
-                  ' @cFacility        NVARCHAR( 3),          ' +
-                  ' @cStorerKey       NVARCHAR( 15),         ' +
-                  ' @cSKU             NVARCHAR( 20),         ' +
-                  ' @cSKUDesc         NVARCHAR( 60),         ' +
-                  ' @nQTY             INT,                   ' +
-                  ' @cType            NVARCHAR( 15),         ' +
-                  ' @cDocType         NVARCHAR( 10),         ' +
-                  ' @cDocNo           NVARCHAR( 20),         ' +
-                  ' @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField03       NVARCHAR( 60) OUTPUT,  @cOutField03 NVARCHAR( 60) OUTPUT,  @cFieldAttr03 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField04       NVARCHAR( 60) OUTPUT,  @cOutField04 NVARCHAR( 60) OUTPUT,  @cFieldAttr04 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField05       NVARCHAR( 60) OUTPUT,  @cOutField05 NVARCHAR( 60) OUTPUT,  @cFieldAttr05 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField06       NVARCHAR( 60) OUTPUT,  @cOutField06 NVARCHAR( 60) OUTPUT,  @cFieldAttr06 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField07       NVARCHAR( 60) OUTPUT,  @cOutField07 NVARCHAR( 60) OUTPUT,  @cFieldAttr07 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField08       NVARCHAR( 60) OUTPUT,  @cOutField08 NVARCHAR( 60) OUTPUT,  @cFieldAttr08 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField09       NVARCHAR( 60) OUTPUT,  @cOutField09 NVARCHAR( 60) OUTPUT,  @cFieldAttr09 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField10       NVARCHAR( 60) OUTPUT,  @cOutField10 NVARCHAR( 60) OUTPUT,  @cFieldAttr10 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField11       NVARCHAR( 60) OUTPUT,  @cOutField11 NVARCHAR( 60) OUTPUT,  @cFieldAttr11 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField12       NVARCHAR( 60) OUTPUT,  @cOutField12 NVARCHAR( 60) OUTPUT,  @cFieldAttr12 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT,' +
-                  ' @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT,' +
-                  ' @nMoreSNO         INT           OUTPUT,  ' +
-                  ' @cSerialNo        NVARCHAR( 60) OUTPUT,  ' +
-                  ' @nSerialQTY       INT           OUTPUT,  ' +
-                  ' @nErrNo           INT           OUTPUT,  ' +
-                  ' @cErrMsg          NVARCHAR( 20) OUTPUT,  ' +
-                  ' @nScn             INT                 ,  ' +
-                  ' @nBulkSNO         INT           OUTPUT,  ' +
-                  ' @nBulkSNOQTY      INT           OUTPUT,  ' +
-                  ' @cSerialCaptureType         NVARCHAR( 1),' +
-                  ' @nScan            INT           OUTPUT'
-
+            ' @nMobile          INT,           ' +
+            ' @nFunc            INT,           ' +
+            ' @cLangCode        NVARCHAR( 3),  ' +
+            ' @nStep            INT,           ' +
+            ' @nInputKey        INT,           ' +
+            ' @cFacility        NVARCHAR( 3),  ' +
+            ' @cStorerKey       NVARCHAR( 15), ' +
+            ' @cSKU             NVARCHAR( 20), ' +
+            ' @cSKUDesc         NVARCHAR( 60), ' +
+            ' @nQTY             INT,           ' +
+            ' @cType            NVARCHAR( 15), ' + --CHECK/UPDATE
+            ' @cDocType         NVARCHAR( 10), ' + --ASN/SO/PACK...
+            ' @cDocNo           NVARCHAR( 20), ' + --ReceiptKey/OrderKey/PickSlipNo...
+            ' @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField03       NVARCHAR( 60) OUTPUT,  @cOutField03 NVARCHAR( 60) OUTPUT,  @cFieldAttr03 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField04       NVARCHAR( 60) OUTPUT,  @cOutField04 NVARCHAR( 60) OUTPUT,  @cFieldAttr04 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField05       NVARCHAR( 60) OUTPUT,  @cOutField05 NVARCHAR( 60) OUTPUT,  @cFieldAttr05 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField06       NVARCHAR( 60) OUTPUT,  @cOutField06 NVARCHAR( 60) OUTPUT,  @cFieldAttr06 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField07       NVARCHAR( 60) OUTPUT,  @cOutField07 NVARCHAR( 60) OUTPUT,  @cFieldAttr07 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField08       NVARCHAR( 60) OUTPUT,  @cOutField08 NVARCHAR( 60) OUTPUT,  @cFieldAttr08 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField09       NVARCHAR( 60) OUTPUT,  @cOutField09 NVARCHAR( 60) OUTPUT,  @cFieldAttr09 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField10       NVARCHAR( 60) OUTPUT,  @cOutField10 NVARCHAR( 60) OUTPUT,  @cFieldAttr10 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField11       NVARCHAR( 60) OUTPUT,  @cOutField11 NVARCHAR( 60) OUTPUT,  @cFieldAttr11 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField12       NVARCHAR( 60) OUTPUT,  @cOutField12 NVARCHAR( 60) OUTPUT,  @cFieldAttr12 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT, ' + 
+            ' @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT, ' + 
+            ' @nMoreSNO         INT           OUTPUT,  ' +                                                                        
+            ' @cSerialNo        NVARCHAR( 60) OUTPUT,  ' +                                                                        
+            ' @nSerialQTY       INT           OUTPUT,  ' +
+            ' @nErrNo           INT           OUTPUT,  ' +
+            ' @cErrMsg          NVARCHAR( 1024) OUTPUT,  ' +
+            ' @nScn             INT,                   ' +
+            ' @nBulkSNO         INT           OUTPUT,  ' +
+            ' @nBulkSNOQTY      INT           OUTPUT,  ' +
+            ' @cSerialCaptureType  NVARCHAR( 1),       ' +
+            ' @nScan            INT           OUTPUT   '
+                                                       
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-              @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDesc, @nQTY, @cType, @cDocType, @cDocNo,
-              @cInField01 OUTPUT, @cOutField01 OUTPUT, @cFieldAttr01 OUTPUT, @cInField02 OUTPUT, @cOutField02 OUTPUT, @cFieldAttr02 OUTPUT,
-              @cInField03 OUTPUT, @cOutField03 OUTPUT, @cFieldAttr03 OUTPUT, @cInField04 OUTPUT, @cOutField04 OUTPUT, @cFieldAttr04 OUTPUT,
-              @cInField05 OUTPUT, @cOutField05 OUTPUT, @cFieldAttr05 OUTPUT, @cInField06 OUTPUT, @cOutField06 OUTPUT, @cFieldAttr06 OUTPUT,
-              @cInField07 OUTPUT, @cOutField07 OUTPUT, @cFieldAttr07 OUTPUT, @cInField08 OUTPUT, @cOutField08 OUTPUT, @cFieldAttr08 OUTPUT,
-              @cInField09 OUTPUT, @cOutField09 OUTPUT, @cFieldAttr09 OUTPUT, @cInField10 OUTPUT, @cOutField10 OUTPUT, @cFieldAttr10 OUTPUT,
-              @cInField11 OUTPUT, @cOutField11 OUTPUT, @cFieldAttr11 OUTPUT, @cInField12 OUTPUT, @cOutField12 OUTPUT, @cFieldAttr12 OUTPUT,
-              @cInField13 OUTPUT, @cOutField13 OUTPUT, @cFieldAttr13 OUTPUT, @cInField14 OUTPUT, @cOutField14 OUTPUT, @cFieldAttr14 OUTPUT,
-              @cInField15 OUTPUT, @cOutField15 OUTPUT, @cFieldAttr15 OUTPUT, @nMoreSNO OUTPUT, @cSerialNo OUTPUT, @nSerialQTY OUTPUT,
-              @nErrNo OUTPUT, @cErrMsg OUTPUT, @nScn, @nBulkSNO OUTPUT, @nBulkSNOQTY OUTPUT, @cSerialCaptureType, @nScan  OUTPUT
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDesc, @nQTY, @cType, @cDocType, @cDocNo, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  
+            @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,  
+            @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  @nScn,                
+            @nBulkSNO   OUTPUT,  @nBulkSNOQTY OUTPUT,  @cSerialCaptureType,   
+            @nScan      OUTPUT
 
          GOTO Quit
       END
    END
 
    /***********************************************************************************************
-                                 Standard Serial No
+                                             Standard serial no
    ***********************************************************************************************/
-
-
-
    DECLARE @nRowCount         INT
    DECLARE @cBarcode          NVARCHAR( MAX)
    DECLARE @nTotal            INT

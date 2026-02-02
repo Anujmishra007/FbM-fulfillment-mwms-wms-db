@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrBTB_ShipmentUpdate]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrBTB_ShipmentUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -22,8 +19,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 06-Oct-2025  AK01      1.0 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
-CREATE TRIGGER [dbo].[ntrBTB_ShipmentUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrBTB_ShipmentUpdate]
 ON  [dbo].[BTB_SHIPMENT]
 FOR UPDATE
 AS
@@ -69,8 +67,8 @@ BEGIN
    IF NOT UPDATE(EditDate) 
    BEGIN
       UPDATE BTB_SHIPMENT WITH (ROWLOCK)
-      SET EditWho = SUSER_SNAME()
-         ,EditDate= GETDATE()
+      SET EditWho = dbo.fnc_GetUserName()
+         ,EditDate= dbo.fnc_GetDate()
          ,TrafficCop = NULL
       FROM BTB_SHIPMENT
       JOIN INSERTED ON (BTB_SHIPMENT.BTB_ShipmentKey = INSERTED.BTB_ShipmentKey)
@@ -121,4 +119,5 @@ QUIT_TR:
    END
 END -- procedure
 GO
+
 

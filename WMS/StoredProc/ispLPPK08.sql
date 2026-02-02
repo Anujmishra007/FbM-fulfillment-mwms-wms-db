@@ -25,6 +25,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 17-DEC-2020  NJOW01   1.0  WMS-15907 add full case logic             */
+/* 10-OCT-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROC ispLPPK08   
@@ -401,7 +403,7 @@ BEGIN
             	    
                      INSERT INTO PACKDETAIL(PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)    
                      VALUES     (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,   
-                                 @n_QtyPack, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())            	
+                                 @n_QtyPack, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate())           --(SSA01)
                      
                      SET @nerr = @@ERROR
                      

@@ -1,4 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrInvRptlogUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrInvRptlogUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 drop trigger [dbo].[ntrInvRptlogUpdate]
 GO
 
@@ -8,6 +8,7 @@ SET ANSI_NULLS OFF
 GO
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
 /* 28-Oct-2013  TLTING     1.4   Review Editdate column update          */
+/* 09-Oct-2025  SPC040     1.5  Replace SUSER_SNAME with fnc_GetUserName*/
 
 CREATE TRIGGER ntrInvRptlogUpdate
  ON  INVRPTLOG
@@ -36,8 +37,8 @@ CREATE TRIGGER ntrInvRptlogUpdate
 	BEGIN	
 	 	
 	 	UPDATE INVRPTLOG with (ROWLOCK)
-	    	   SET EditDate = GETDATE(),
-	       	       EditWho = SUSER_SNAME(),
+	    	   SET EditDate = dbo.fnc_GetDate(),
+	       	       EditWho = dbo.fnc_GetUserName(),
 	        	       Trafficcop = NULL
 	           FROM INVRPTLOG, INSERTED
 	          WHERE INVRPTLOG.INVRPTLOGKey = INSERTED.INVRPTLOGKey

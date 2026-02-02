@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
@@ -27,6 +27,8 @@ GO
 /*                            DevOps Combine Script                      */
 /* 21-Jul-2023 NJOW01   1.3   WMS-23149 - allow update consumption by    */
 /*                            matching kitlineno to externlineno         */
+/* 2025-09-02  SWT01    1.4   Enhanced session management pattern       */
+/* 10-Oct-2025 SPC040   1.5   Replace SUSER_SNAME with fnc_GetUserName   */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Kit_Calc_Consumption_BOM]  (
    @c_StorerKey      NVARCHAR(15), 
@@ -53,6 +55,7 @@ BEGIN
 
    DECLARE @n_Continue                   INT = '1'         
          , @n_Count                      INT = 0 
+         , @b_ExecuteAs                  BIT = 0
          , @c_ComponentSku               NVARCHAR(20) = '' 
          , @n_ComponentQty               INT = 0 
          , @n_ParentQty                  INT = 0 
@@ -70,17 +73,21 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
+   
+   -- Enhanced session management (SWT01)
    IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT
    
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName 
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName 
    END                                   --(Wan01) - END
+   -- End enhanced session management (SWT01)
    
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
    
@@ -242,7 +249,7 @@ BEGIN
          --ELSE                                                                                    --(Wan02) - START Move Down
          --BEGIN
          --   UPDATE KITDETAIL WITH (ROWLOCK)
-         --      SET Qty = kbd.Qty, EditDate = GETDATE(), EditWho = SUSER_SNAME() 
+         --      SET Qty = kbd.Qty, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName() 
          --   FROM KITDETAIL 
          --   JOIN #KIT_BOM_DETAIL AS kbd WITH(NOLOCK) ON kbd.KITKey = KITDETAIL.KITKey 
          --         AND kbd.KITLineNumber = KITDETAIL.KITLineNumber 
@@ -259,7 +266,7 @@ BEGIN
       IF EXISTS (SELECT 1 FROM #KIT_BOM_DETAIL)                                                    --(Wan02) - START
       BEGIN
          UPDATE KITDETAIL WITH (ROWLOCK)
-            SET Qty = kbd.Qty, EditDate = GETDATE(), EditWho = SUSER_SNAME() 
+            SET Qty = kbd.Qty, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName() 
          FROM KITDETAIL 
          JOIN #KIT_BOM_DETAIL AS kbd WITH(NOLOCK) ON kbd.KITKey = KITDETAIL.KITKey 
                AND kbd.KITLineNumber = KITDETAIL.KITLineNumber 
@@ -284,7 +291,9 @@ BEGIN
    BEGIN
       SET @b_Success = 1
    END
-   REVERT      
+   
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_Kit_Calc_Consumption_BOM] TO nSQL 

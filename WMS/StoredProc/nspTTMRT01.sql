@@ -25,6 +25,7 @@ GO
 /* Date         Author      Purposes                                    */
 /* 17-12-2012   ChewKP      SOS#224380                                  */
 /* 30-08-2014   Chee        Sort Task by ToLoc.LogicalLocation (Chee01) */
+/* 10-10-2025   SSA01       UWP-42248 -Enhanced session management      */
 /************************************************************************/
 
 CREATE PROC nspTTMRT01
@@ -160,8 +161,8 @@ BEGIN
         SET    STATUS = '0'  
               ,USERKEY = ''  
               ,REASONKEY = ''  
-              ,EditDate = GetDate()     
-              ,EditWho  = sUSER_sNAME()   
+              ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+              ,EditWho  = dbo.fnc_GetUserName()           --(SSA01)
               ,TrafficCop = NULL                      
         WHERE  USERKEY = @c_UserID  
                AND STATUS = '3' -- (Vicky02)  
@@ -432,8 +433,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID  
                       ,[ReasonKey] = ''
-                      ,[EditDate] = GetDate()      
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()    --(SSA01)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL        
                 WHERE  Storerkey = @c_StorerKey  
                   AND TaskType = 'RPT'  

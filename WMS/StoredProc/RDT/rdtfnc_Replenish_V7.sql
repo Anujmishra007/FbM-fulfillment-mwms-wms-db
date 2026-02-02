@@ -18,6 +18,8 @@ GO
 /*                          step to loc (james01)                       */
 /* 2022-08-23 1.2  Ung      WMS-20562 Add UCC                           */
 /* 2024-10-17 1.3  PXL009   FCR-759 ID and UCC Length Issue             */
+/* 2025-05-29 1.4  Dennis   UWP-35252 Bug fix                           */
+/* 2025-09-08 1.5  Jackc    FCR-7545 Add UCCNo to DecodeSP entry        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Replenish_V7] (
@@ -356,9 +358,9 @@ BEGIN
          ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, ' +
-               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, ' +
-               ' @cToLOC      OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cType, @cBarcode, ' +
+               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, @cToLOC      OUTPUT,' +
+               ' @cUCCNo      OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
                ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
                ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
                ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
@@ -371,11 +373,13 @@ BEGIN
                ' @nInputKey    INT,             ' +
                ' @cStorerKey   NVARCHAR( 15),   ' +
                ' @cFacility    NVARCHAR( 5),    ' +
+               ' @cType        NVARCHAR( 10), ' +
                ' @cBarcode     NVARCHAR( 2000), ' +
                ' @cFromID      NVARCHAR( 18)  OUTPUT, ' +
                ' @cFromLOC     NVARCHAR( 10)  OUTPUT, ' +
                ' @cToID        NVARCHAR( 18)  OUTPUT, ' +
                ' @cToLOC       NVARCHAR( 10)  OUTPUT, ' +
+               ' @cUCCNo       NVARCHAR( 20)  OUTPUT, ' +
                ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
                ' @nQty         INT            OUTPUT, ' +
                ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +
@@ -394,12 +398,12 @@ BEGIN
                ' @dLottable14  DATETIME       OUTPUT, ' +
                ' @dLottable15  DATETIME       OUTPUT, ' +
                ' @nErrNo       INT            OUTPUT, ' +
-               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+               ' @cErrMsg      NVARCHAR(1024)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
-               @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT,
-               @cToLOC      OUTPUT, @cSKU         OUTPUT, @nQty        OUTPUT,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 'ID', @cBarcode,
+               @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT, @cToLoc      OUTPUT,
+               @cUCCNo      OUTPUT, @cSKU         OUTPUT, @nQty        OUTPUT,
                @cLottable01 OUTPUT, @cLottable02  OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
                @cLottable06 OUTPUT, @cLottable07  OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
                @cLottable11 OUTPUT, @cLottable12  OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
@@ -953,9 +957,9 @@ BEGIN
          ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, ' +
-               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, ' +
-               ' @cToLOC      OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cType, @cBarcode, ' +
+               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, @cToLOC      OUTPUT,' +
+               ' @cUCCNo      OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
                ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
                ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
                ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
@@ -968,11 +972,13 @@ BEGIN
                ' @nInputKey    INT,             ' +
                ' @cStorerKey   NVARCHAR( 15),   ' +
                ' @cFacility    NVARCHAR( 5),    ' +
+               ' @cType        NVARCHAR( 10), ' +
                ' @cBarcode     NVARCHAR( 2000), ' +
                ' @cFromID      NVARCHAR( 18)  OUTPUT, ' +
                ' @cFromLOC     NVARCHAR( 10)  OUTPUT, ' +
                ' @cToID        NVARCHAR( 18)  OUTPUT, ' +
                ' @cToLOC       NVARCHAR( 10)  OUTPUT, ' +
+               ' @cUCCNo       NVARCHAR( 20)  OUTPUT, ' +
                ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
                ' @nQty         INT            OUTPUT, ' +
                ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +
@@ -991,12 +997,12 @@ BEGIN
                ' @dLottable14  DATETIME       OUTPUT, ' +
                ' @dLottable15  DATETIME       OUTPUT, ' +
                ' @nErrNo       INT            OUTPUT, ' +
-               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+               ' @cErrMsg      NVARCHAR(1024)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
-               @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT,
-               @cToLOC      OUTPUT, @cSKU         OUTPUT, @nQty        OUTPUT,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 'UPC', @cBarcode,
+               @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT, @cToLoc      OUTPUT,
+               @cUCCNo      OUTPUT, @cUPC         OUTPUT, @nQty        OUTPUT,
                @cLottable01 OUTPUT, @cLottable02  OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
                @cLottable06 OUTPUT, @cLottable07  OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
                @cLottable11 OUTPUT, @cLottable12  OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
@@ -1005,7 +1011,6 @@ BEGIN
             IF @nErrNo <> 0
                GOTO Step_2_Fail
                
-            SET @cUPC = @cSKU
          END
       END
 
@@ -1854,6 +1859,7 @@ BEGIN
                ,@cUCCNo
                ,@cToLOC
                ,@cToID
+               ,@cLottableCode
                ,@cLottable01,   @cLottable02,   @cLottable03,   @dLottable04,   @dLottable05
                ,@cLottable06,   @cLottable07,   @cLottable08,   @cLottable09,   @cLottable10
                ,@cLottable11,   @cLottable12,   @dLottable13,   @dLottable14,   @dLottable15
@@ -1871,6 +1877,7 @@ BEGIN
                ,@cUCCNo
                ,@cToLOC
                ,@cToID
+               ,@cLottableCode
                ,@cLottable01,   @cLottable02,   @cLottable03,   @dLottable04,   @dLottable05
                ,@cLottable06,   @cLottable07,   @cLottable08,   @cLottable09,   @cLottable10
                ,@cLottable11,   @cLottable12,   @dLottable13,   @dLottable14,   @dLottable15
@@ -2018,9 +2025,9 @@ BEGIN
          ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, ' +
-               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, ' +
-               ' @cToLOC      OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cType, @cBarcode, ' +
+               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, @cToLOC      OUTPUT,' +
+               ' @cUCCNo      OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
                ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
                ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
                ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
@@ -2033,11 +2040,13 @@ BEGIN
                ' @nInputKey    INT,             ' +
                ' @cStorerKey   NVARCHAR( 15),   ' +
                ' @cFacility    NVARCHAR( 5),    ' +
+               ' @cType        NVARCHAR( 10), ' +
                ' @cBarcode     NVARCHAR( 2000), ' +
                ' @cFromID      NVARCHAR( 18)  OUTPUT, ' +
                ' @cFromLOC     NVARCHAR( 10)  OUTPUT, ' +
                ' @cToID        NVARCHAR( 18)  OUTPUT, ' +
                ' @cToLOC       NVARCHAR( 10)  OUTPUT, ' +
+               ' @cUCCNo       NVARCHAR( 20)  OUTPUT, ' +
                ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
                ' @nQty         INT            OUTPUT, ' +
                ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +
@@ -2056,12 +2065,12 @@ BEGIN
                ' @dLottable14  DATETIME       OUTPUT, ' +
                ' @dLottable15  DATETIME       OUTPUT, ' +
                ' @nErrNo       INT            OUTPUT, ' +
-               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+               ' @cErrMsg      NVARCHAR(1024)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
-               @cUCCNo      OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT,
-               @cToLOC      OUTPUT, @cSKU         OUTPUT, @nQty        OUTPUT,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 'UCCNo', @cBarcode,
+               @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT, @cToLoc      OUTPUT,
+               @cUCCNo      OUTPUT, @cSKU         OUTPUT, @nQty        OUTPUT,
                @cLottable01 OUTPUT, @cLottable02  OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
                @cLottable06 OUTPUT, @cLottable07  OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
                @cLottable11 OUTPUT, @cLottable12  OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,

@@ -26,6 +26,7 @@ GO
 /* Date        Author   Ver   Purposes                                   */  
 /* 31-Jul-2019 NJOW01   1.0   WMS-10032 change task sequence and groupkey*/
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
+/* 10-10-2025  SSA01    1.2   UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV22]      
@@ -145,10 +146,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
           [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
           [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
           [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),    --(SSA01)
+          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),         --(SSA01)
+          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),    --(SSA01)
+          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),         --(SSA01)
           [TrafficCop] [nvarchar](1) NULL,
           [ArchiveCop] [nvarchar](1) NULL,
           [OptimizeCop] [nvarchar](1) NULL,
@@ -505,8 +506,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV22]
           --SET STATUS = '1' -- Released        --(Wan01) 
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               --(Wan01)
+           ,  EditWho = dbo.fnc_GetUserName()           --(Wan01)(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)              --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        
        SELECT @n_err = @@ERROR  

@@ -10,7 +10,9 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-08-14 1.0  Dennis     FCR-540. Created                          */  
-/************************************************************************/  
+/* 2025-04-24 1.1  CYU027     FCR-540. Fix SerialNo Move                */
+/* 2025-07-21 1.2  CYU027     FCR-540. Fix OrderInfo Logic              */
+/************************************************************************/
   
 CREATE OR ALTER PROC  [RDT].[rdt_839ExtScn02] (
    @nMobile          INT,           
@@ -121,10 +123,16 @@ BEGIN
          @cMoveQTYPick        NVARCHAR( 1),
          @cPickConfirmStatus  NVARCHAR( 1),
          @cDropID             NVARCHAR( 20),
+         @cSNFinalID          NVARCHAR( 20),
          @cSourceLoc          NVARCHAR( 10),
          @cSourceID           NVARCHAR( 18),
          @cPickedQty          INT,
-         @nTranCount          INT
+         @nTranCount          INT,
+         @cPickDetailKey      NVARCHAR( 18) = '',
+         @cItrnKey            NVARCHAR(10),
+         @cSerialNo           NVARCHAR( 30),
+         @SerialNoKey         NVARCHAR (10)
+
 
    SELECT @cOption = Value FROM @tExtScnData WHERE Variable = '@cOption'
 
@@ -158,10 +166,13 @@ BEGIN
          BEGIN
             IF @nInputKey = 1
             BEGIN
+               --v1.2 cuize
                SELECT TOP 1 @cToLOC = ISNULL(OI.OrderInfo10, '')
                FROM OrderInfo OI WITH (NOLOCK)
-               INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
-               WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
+               INNER JOIN PICKDETAIL P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
+               WHERE p.StorerKey = @cStorerKey
+                 AND p.DropID = @cDropID
+                 AND P.Status = @cPickConfirmStatus
 
                IF EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
                            WHERE Facility = @cFacility
@@ -182,10 +193,14 @@ BEGIN
             BEGIN
                IF @cOption = '3'
                BEGIN
-                  SELECT @cToLOC = ISNULL(OI.OrderInfo10, '')
+
+                  --v1.2 cuize
+                  SELECT TOP 1 @cToLOC = ISNULL(OI.OrderInfo10, '')
                   FROM OrderInfo OI WITH (NOLOCK)
-                  INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
-                  WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
+                  INNER JOIN PICKDETAIL P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
+                  WHERE p.StorerKey = @cStorerKey
+                    AND p.DropID = @cDropID
+                    AND P.Status = @cPickConfirmStatus
 
                   IF EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
                               WHERE Facility = @cFacility
@@ -241,35 +256,61 @@ BEGIN
                      GOTO Quit
                   END
 
-                  DECLARE @curPKD CURSOR
-                  SET @curPKD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT 
-                        OrderKey, Loc, ID, Qty, Sku
-                     FROM PICKDETAIL PKD WITH(NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                        AND DropID = @cDropID
-                        AND Status = @cPickConfirmStatus
+                  DECLARE @PickDetails TABLE (
+                     RowNum INT IDENTITY(1,1),
+                     Pickdetailkey VARCHAR(18),
+                     OrderKey VARCHAR(10),
+                     Loc VARCHAR(20),
+                     ID VARCHAR(18),
+                     Qty INT,
+                     Sku VARCHAR(30)
+                  );
+
+                  INSERT INTO @PickDetails (Pickdetailkey, OrderKey, Loc, ID, Qty, Sku)
+                  SELECT
+                     Pickdetailkey, OrderKey, Loc, ID, Qty, Sku
+                  FROM PICKDETAIL WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                    AND DropID = @cDropID
+                    AND Status = @cPickConfirmStatus;
 
                   SET @nTranCount = @@TRANCOUNT
-                  IF @nTranCount = 0 
-                     BEGIN TRANSACTION
-                  ELSE
-                     SAVE TRANSACTION rdt_839ExtScn02_01
+
+                  BEGIN TRANSACTION
+                  SAVE TRANSACTION rdt_839ExtScn02_01
+
+                  DECLARE @i INT = 1;
+                  DECLARE @max INT;
 
                   BEGIN TRY
+                     --v1.2 cuize
                      UPDATE OI
                      SET OrderInfo10 = @cToLOC
-                     FROM OrderInfo OI WITH(ROWLOCK)
-                     INNER JOIN PICKHEADER PKH WITH (NOLOCK) ON OI.OrderKey = PKH.OrderKey
-                     WHERE PKH.PickHeaderKey = @cPickSlipNo 
-                        AND PKH.StorerKey = @cStorerKey
+                     FROM OrderInfo OI WITH (NOLOCK)
+                             INNER JOIN PICKDETAIL P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
+                     WHERE p.StorerKey = @cStorerKey
+                       AND p.DropID = @cDropID
+                       AND P.Status = @cPickConfirmStatus
 
-                     OPEN @curPKD
-                     FETCH NEXT FROM @curPKD INTO @cOrderKey, @cSourceLoc, @cSourceID, @cPickedQty, @cSku
-                     WHILE @@FETCH_STATUS = 0
+
+                     SELECT @max = COUNT(*) FROM @PickDetails;
+                     WHILE @i <= @max
                      BEGIN
 
-                        -- Move by SKU
+                        DECLARE @curSN CURSOR
+
+                        SELECT
+                           @cPickDetailKey = Pickdetailkey,
+                           @cOrderKey = OrderKey,
+                           @cSourceLoc = Loc,
+                           @cSourceID = ID,
+                           @cPickedQty = Qty,
+                           @cSku = Sku
+                        FROM @PickDetails
+                        WHERE RowNum = @i;
+
+
+                              -- Move by SKU
                         EXECUTE rdt.rdt_Move
                            @nMobile        = @nMobile,
                            @cLangCode      = @cLangCode,
@@ -287,56 +328,121 @@ BEGIN
                            @nQTY           = @cPickedQty,
                            @nQTYPick       = @cPickedQty,
                            @nFunc          = @nFunc
-                        
+
                         IF @nErrNo <> 0
                         BEGIN
-                           IF @nTranCount = 0
-                           BEGIN
-                              ROLLBACK TRANSACTION
-                           END
-                           ELSE
-                           BEGIN
-                              IF XACT_STATE() <> -1
-                              BEGIN
-                                 ROLLBACK TRANSACTION rdt_839ExtScn02_01
-                              END
-                           END
-                           
                            SET @nErrNo = 221304
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MoveItemFail
-                           GOTO Quit
+                           GOTO RBack
                         END
 
-                     FETCH NEXT FROM @curPKD INTO @cOrderKey, @cSourceLoc, @cSourceID, @cPickedQty, @cSku
-                     END
-                     CLOSE @curPKD
-                     DEALLOCATE @curPKD
+                        IF EXISTS(SELECT 1 FROM dbo.SKU WITH (NOLOCK)
+                                  WHERE SKU = @cSku
+                                    AND StorerKey = @cStorerKey
+                                    AND SerialNoCapture IN ('1','3'))
+                        BEGIN
 
-                     WHILE @@TRANCOUNT > @nTranCount 
-                        COMMIT TRANSACTION
+                           DECLARE @n_Qty_ID INT = 0
+
+                           SELECT @n_Qty_ID = SUM(lli.Qty) FROM LOTxLOCxID lli (NOLOCK)
+                           WHERE lli.Storerkey = @cStorerKey
+                             AND   lli.Loc       = @cSourceLoc
+                             AND   lli.ID        = @cSourceID
+                           GROUP BY lli.Storerkey, lli.Loc, lli.ID
+
+                           --Only partial pallet move
+                           --Full Pallet SN move will be done by itrn trigger
+                           --START SerialNo Move
+                           IF @cPickedQty < @n_Qty_ID
+                           BEGIN
+
+                              DECLARE @nSuccess INT = 1
+                              EXECUTE nspg_getkey
+                                      'ItrnKey'
+                                 , 10
+                                 , @cItrnKey OUTPUT
+                                 , @nSuccess OUTPUT
+                                 , @nErrNo OUTPUT
+                                 , @cErrMsg OUTPUT
+                              IF @nSuccess <> 1
+                              BEGIN
+                                 SET @nErrNo = 221309
+                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
+                                 GOTO RBack
+                              END
+
+                              SET @curSN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                              SELECT SN.SerialNo,SN.SerialNokey FROM SerialNo SN (NOLOCK)
+                              INNER JOIN PickSerialNo PSN ON
+                                 (SN.SerialNo = PSN.SerialNo
+                                    AND SN.SKU = PSN.SKU
+                                    AND SN.Storerkey = PSN.StorerKey
+                                    AND SN.qty = PSN.Qty)
+                                    AND PSN.PickDetailKey = @cPickDetailKey
+
+
+                              OPEN @curSN
+                              FETCH NEXT FROM @curSN INTO @cSerialNo, @SerialNoKey
+                              WHILE @@FETCH_STATUS = 0
+                              BEGIN
+
+                                 SELECT @cSNFinalID = ID FROM PICKDETAIL (NOLOCK)
+                                 WHERE PickDetailKey = @cPickDetailKey
+
+                                 UPDATE dbo.SerialNo WITH (ROWLOCK)
+                                 SET ID = @cSNFinalID, EditDate=GETDATE(), EditWho=SUSER_SNAME()
+                                 WHERE SerialNoKey = @SerialNoKey
+                                 IF @@ERROR <> 0
+                                    BEGIN
+                                       SET @nErrNo = 221311
+                                       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Updat SN ID failed
+                                       GOTO RBack
+                                    END
+
+                                 EXEC dbo.ispITrnSerialNoMove
+                                      @c_ItrnKey      = @cItrnKey
+                                    ,@c_TranType     = 'MV'
+                                    ,@c_StorerKey    = @cStorerKey
+                                    ,@c_SKU          = @cSku
+                                    ,@c_SerialNo     = @cSerialNo
+                                    ,@c_FromID       = @cSourceID
+                                    ,@c_ToID         = @cSNFinalID
+                                    ,@n_QTY          = @cPickedQty
+                                    ,@c_SourceKey    = ''
+                                    ,@c_SourceType   = 'rdt_839ExtScn02'
+                                    ,@b_Success      = @nSuccess OUTPUT
+                                    ,@n_Err          = @nErrNo  OUTPUT
+                                    ,@c_Errmsg       = @cErrMsg OUTPUT
+
+                                 IF @nSuccess <> 1
+                                    BEGIN
+                                       SET @nErrNo = 221310
+                                       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ITrnSerialNoMove
+                                       GOTO RBack
+                                    END
+
+                                 FETCH NEXT FROM @curSN INTO @cSerialNo, @SerialNoKey
+                              END
+                              CLOSE @curSN
+                              DEALLOCATE @curSN
+                           END
+                        END
+
+                        SET @i += 1;
+                     END
+
                   END TRY
                   BEGIN CATCH
-                     IF CURSOR_STATUS('LOCAL','@curPKD') IN (0 , 1)
+
+                     IF CURSOR_STATUS('LOCAL','@curSN') IN (0 , 1)
                      BEGIN
-                        CLOSE @curPKD
-                        DEALLOCATE @curPKD
+                        CLOSE @curSN
+                        DEALLOCATE @curSN
                      END
 
-                     IF @nTranCount = 0
-                     BEGIN
-                        ROLLBACK TRANSACTION
-                     END
-                     ELSE
-                     BEGIN
-                        IF XACT_STATE() <> -1
-                        BEGIN
-                           ROLLBACK TRANSACTION rdt_839ExtScn02_01
-                        END
-                     END
-
-                     SET @nErrNo = 221304
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MoveItemFail
-                     GOTO Quit
+                      SET @nErrNo = 221304
+                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MoveItemFail
+                     GOTO RBack
                   END CATCH
                   GOTO Quit
                END
@@ -352,7 +458,12 @@ BEGIN
    END
    GOTO Quit
 
+RBack:
+   ROLLBACK TRANSACTION rdt_839ExtScn02_01
 Quit:
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+      COMMIT TRAN
+
 END
 
 GO

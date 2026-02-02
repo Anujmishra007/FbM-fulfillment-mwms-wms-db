@@ -36,9 +36,9 @@ EXECUTE rdt.rdtAddScn 4651, 'ENG'
 DELETE rdt.RDTScn WHERE Scn = 4652 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4652, 'ENG'
    ,@cLine01 = 'CARTON NO: %03d01'
-   ,@cLine02 = ''
+   ,@cLine02 = '%20d03'
    ,@cLine03 = 'SKU/UPC:       %05d02'
-   ,@cLine04 = '%60i03'
+   ,@cLine04 = '%2000iV_Barcode' --FCR-8675
    ,@cLine05 = '%20d04'
    ,@cLine06 = '%20d05'
    ,@cLine07 = '%20d06'
@@ -112,7 +112,7 @@ EXECUTE rdt.rdtAddScn 4656, 'ENG'
 DELETE rdt.RDTScn WHERE Scn = 4657 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4657, 'ENG'
    ,@cLine01 = 'UCCNO:'
-   ,@cLine02 = '%20i01'
+   ,@cLine02 = '%2000iV_Barcode' --FCR-8675
    ,@cLine03 = ''
    ,@cLine04 = 'SCAN:  %05d02'
    ,@cLine05 = ''
@@ -209,9 +209,9 @@ EXECUTE rdt.rdtAddScn 6522, 'ENG'
    ,@cWebGroup = '{"1":["3","4"],"2":["5","6"],"3":["7","8"],"4":["9","10"],"5":["11","12"]}'
    ,@nFunc = 838
 
---6523 FCR-2495 Confirm Scn
-DELETE rdt.RDTScn WHERE Scn = 6523 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 6523, 'ENG',
+--6525 FCR-2495 Confirm Scn
+DELETE rdt.RDTScn WHERE Scn = 6525 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6525, 'ENG',
      @cLine01 = 'Packing complete',
      @cLine02 = '',
      @cLine04 = 'Press ENTER or ESC',

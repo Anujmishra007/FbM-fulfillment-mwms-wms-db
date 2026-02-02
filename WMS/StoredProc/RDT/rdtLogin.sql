@@ -45,6 +45,7 @@ GO
 /* 2024-07-26   JACKC   2.9   UWP-19305 Encrypt rdt password            */
 /* 2024-08-15   JACKC   3.0   UWP-15736 Penetration Testing Fix         */
 /* 2025-04-03   Dennis  3.1   FCR-3926 Disable Resume Screen Prompt     */
+/* 2025-11-06   NickT   3.2   UWP-43698 Block deuplicate request        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtLogin] (
@@ -53,7 +54,9 @@ CREATE OR ALTER PROC [RDT].[rdtLogin] (
    @cErrMsg    NVARCHAR(1024) OUTPUT,
    @nFunction  int OUTPUT,
    @cClientIP  NVARCHAR( 15),
-   @cSessionID NVARCHAR(60) = ''
+   @cSessionID NVARCHAR(60) = '',
+   @cTraceID      NVARCHAR(100) = '',
+   @cInMessage    NVARCHAR(1024) = ''
 )
 AS
    SET NOCOUNT ON
@@ -352,6 +355,53 @@ AS
          Func      = @nFunc
          WHERE Mobile = @nMobile
       END
+
+      BEGIN TRY
+         DELETE FROM RDT.RDTMOBTraceID WITH(ROWLOCK) WHERE UserName = @cUsrName
+
+         DECLARE @nNewMobile INT
+
+         SELECT @nNewMobile = Mobile 
+         FROM RDT.RDTMOBREC WITH (NOLOCK)
+         WHERE UserName = @cUsrName
+
+         IF NOT EXISTS(SELECT 1 FROM RDT.RDTMOBTraceID (NOLOCK) WHERE Mobile = @nNewMobile)
+         BEGIN
+            INSERT INTO RDT.RDTMOBTraceID (
+               Mobile,
+               UserName,
+               TraceID,
+               InTime,
+               OutTime,
+               Message,
+               MessageOut
+            ) VALUES (
+               @nNewMobile,
+               @cUsrName,
+               ISNULL( @cTraceID, ''),
+               GETDATE(),
+               GETDATE(),
+               @cInMessage,
+               ''
+            )
+         END
+         ELSE
+         BEGIN
+            UPDATE RDT.RDTMOBTraceID WITH(ROWLOCK)
+            SET UserName = @cUsrName,
+                TraceID = ISNULL( @cTraceID, ''),
+                InTime = GETDATE(),
+                OutTime = GETDATE(),
+                Message = @cInMessage,
+                MessageOut = ''
+            WHERE Mobile = @nNewMobile
+         END
+      END TRY
+      BEGIN CATCH
+         SELECT @nErrNo = @@ERROR  
+         SELECT @cErrMsg = 'Insert into RDTMOBREC Failed! '
+         ROLLBACK
+      END CATCH
    END
    
    IF @@ERROR <> 0

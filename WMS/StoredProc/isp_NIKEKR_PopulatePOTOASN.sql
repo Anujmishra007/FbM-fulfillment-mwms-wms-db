@@ -28,6 +28,8 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 2021-10-01   WLChooi 1.1   DevOps Combine Script                        */
 /* 2021-10-01   WLChooi 1.2   Add Errormsg if Receiptdetail is empty (WL01)*/
+/* 2025-10-10   SSA01   1.3   UWP-42248 -Enhanced session management       */
+/*                             and cleanup.                                */
 /***************************************************************************/  
 CREATE PROCEDURE isp_NIKEKR_PopulatePOTOASN (
       @c_Storerkey     NVARCHAR(15)   = 'NIKEKR'
@@ -355,8 +357,8 @@ BEGIN
          UPDATE RECEIPT
          SET ASNStatus  = '9'
            , TrafficCop = NULL
-           , EditWho    = SUSER_SNAME()
-           , EditDate   = GETDATE()
+           , EditWho    = dbo.fnc_GetUserName()     --(SSA01)
+           , EditDate   = dbo.fnc_GetDate()   --(SSA01)
          WHERE ReceiptKey = @c_NewReceiptKey
          
          SELECT @n_err = @@ERROR
@@ -448,8 +450,8 @@ QUIT_SP:
             UPDATE PO WITH (ROWLOCK)
             SET Notes      = 'FAILED - ' + TRIM(ISNULL(@c_GetReason,'')),
                 TrafficCop = NULL,
-                EditWho    = SUSER_SNAME(),
-                EditDate   = GETDATE()
+                EditWho    = dbo.fnc_GetUserName(),     --(SSA01)
+                EditDate   = dbo.fnc_GetDate()   --(SSA01)
             WHERE POKey = @c_POKey
          END
    
@@ -497,8 +499,8 @@ QUIT_SP:
             UPDATE PO WITH (ROWLOCK)
             SET Notes      = Notes + ' - EMAIL FAILED',
                 TrafficCop = NULL,
-                EditWho    = SUSER_SNAME(),
-                EditDate   = GETDATE()
+                EditWho    = dbo.fnc_GetUserName(),    --(SSA01)
+                EditDate   = dbo.fnc_GetDate()   --(SSA01)
             WHERE POKey = @c_POKey                          
          END  
       END 

@@ -29,6 +29,8 @@ GO
 /* 01-JUN-2017 Wan02    1.2   WMS-1816 - CN_DYSON_Exceed_ECOM PACKING   */
 /* 13-JUL-2017 Wan03    1.3   WMS-2306 - CN-Nike SDC WMS ECOM Packing CR*/
 /* 09-OCT-2020 Wan04    1.4   WMS-14948 - PH_Benby_Ecom_Packing_Filter  */
+/* 10-OCT-2025 SSA01    1.5   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC isp_Ecom_RedoPack 
             @c_PickSlipNo NVARCHAR(10)       
@@ -198,8 +200,8 @@ BEGIN
       BEGIN
          UPDATE ORDERDETAILREF WITH (ROWLOCK)
             SET PackCnt = 0
-               ,EditWho = SUSER_SNAME()
-               ,EditDate = GETDATE()
+               ,EditWho = dbo.fnc_GetUserName()  --(SSA01)
+               ,EditDate = dbo.fnc_GetDate()   --(SSA01)
                ,TrafficCop = NULL
          WHERE RowRef = @n_RowRef
 
@@ -265,8 +267,8 @@ BEGIN
       UPDATE PACKTASKDETAIL WITH (ROWLOCK)
       SET Status     = '0'
          ,PickSlipNo = ''
-         ,EditWho    = SUSER_NAME()
-         ,EditDate   = GETDATE()
+         ,EditWho    = dbo.fnc_GetUserName()  --(SSA01)
+         ,EditDate   = dbo.fnc_GetDate()   --(SSA01)
          ,TrafficCop = NULL
       WHERE RowRef = @n_RowRef 
 

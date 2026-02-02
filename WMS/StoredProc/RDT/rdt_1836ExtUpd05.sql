@@ -8,6 +8,8 @@
 /*                                                                        */
 /* Date         Author    Ver.    Purposes                                */
 /* 2024-12-04   YYS027    1.0.0   FCR-1489 Created                        */  
+/* 2025-05-24   NickT     1.1.0   UWP-34990 Update PickDetail.TaskDetailKey*/
+/*                                to match the ASTCPK task                */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1836ExtUpd05]
@@ -100,9 +102,37 @@ BEGIN
 
             IF ISNULL(@cRefTaskKey,'')<>'' AND @cTaskType = 'ASTRPT'
             BEGIN
-               --Object 1 : task status should be changed from ‘H' to '0’
-               UPDATE dbo.TaskDetail WITH (ROWLOCK) SET [status]='0' 
-                  WHERE StorerKey=@cStorerKey AND  RefTaskKey=@cRefTaskKey AND TaskType ='ASTCPK' AND [status]='H'
+               BEGIN TRY
+                  --Object 1 : task status should be changed from ‘H' to '0’
+                  UPDATE dbo.TaskDetail WITH (ROWLOCK) SET [status]='0' 
+                     WHERE StorerKey=@cStorerKey AND  RefTaskKey=@cRefTaskKey AND TaskType ='ASTCPK' AND [status]='H'
+
+                  -- V1.1.0 BEGIN
+                  -- Update the PickDetail.TaskDetailKey for the ASTCPK, makes it match to the ASTCPK task
+                  UPDATE PD
+                  SET 
+                     PD.TaskDetailKey = TD.TaskDetailKey,
+                     PD.EditWho = SUSER_SNAME(),
+                     PD.EditDate = GETDATE()
+                  FROM dbo.Pickdetail PD WITH (ROWLOCK) 
+                  INNER JOIN dbo.TaskDetail TD WITH (ROWLOCK) 
+                     ON PD.StorerKey = TD.StorerKey
+                     AND PD.CaseID = TD.CaseID
+                     AND PD.Sku = TD.Sku
+                     AND PD.Lot = TD.Lot
+                     AND PD.Loc = TD.FromLoc
+                     AND PD.Qty = TD.Qty
+                  WHERE TD.StorerKey = @cStorerKey 
+                     AND TD.RefTaskKey = @cRefTaskKey 
+                     AND TD.TaskType = 'ASTCPK'
+                     AND TD.[status] = '0' 
+                  --V1.1.0 END
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 239001
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update ASTCPK task failed
+                  GOTO Quit    
+               END CATCH
             END
          END
       END

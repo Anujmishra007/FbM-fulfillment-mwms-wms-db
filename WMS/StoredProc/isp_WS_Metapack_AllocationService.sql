@@ -60,7 +60,8 @@ GO
 /* 11-Oct-2016  NJOW01   2.8      WMS-495 Change line2 mapping from     */
 /*                                c_city to c_state if c_country = 'US' */
 /*                                empty phone change from '.' to '0'    */
-/* 28-Jan-2019  TLTING_ext 2.9  enlarge externorderkey field length      */
+/* 28-Jan-2019  TLTING_ext 2.9  enlarge externorderkey field length     */
+/* 10-OCT-2025   SSA01    3.0   UWP-42248 -Enhanced session management  */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_WS_Metapack_AllocationService](
@@ -1307,8 +1308,8 @@ UpdateDB:
    BEGIN
       UPDATE dbo.PackDetail WITH (ROWLOCK)
       SET RefNo = @cCarrierConsignmentCode, RefNo2 = @cConsignmentCode,  -- (Chee01)
-          Editdate = getdate(),         -- tlting  
-          Editwho  = Suser_Sname()        
+          Editdate = dbo.fnc_GetDate(),   --(SSA01)        -- tlting
+          Editwho  = dbo.fnc_GetUserName()      --(SSA01)
       WHERE PickSlipNo = @cPickSlipNo
         AND CartonNo = @nCartonNo
         AND LabelNo = @cLabelNo
@@ -1325,8 +1326,8 @@ UpdateDB:
       UPDATE dbo.Orders WITH (ROWLOCK)
       SET UserDefine10 = @cCarrierName,
           TrafficCop = NULL,      --tlting  
-          Editdate = getdate(),  
-          Editwho  = Suser_Sname()  
+          Editdate = dbo.fnc_GetDate(),   --(SSA01)
+          Editwho  = dbo.fnc_GetUserName()       --(SSA01)
       WHERE OrderKey = @cOrderKey
 
       IF @@ERROR <> 0  

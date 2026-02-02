@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrDropidUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrDropidUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -29,9 +27,10 @@ GO
 /* 06-Sep-2012  KHLim    1.1  Move up ArchiveCop (KH01)                       */
 /* 28-Oct-2013  TLTING   1.2  Review Editdate column update                   */
 /* 03-Dec-2014  KHLim    1.3  Remove SET ANSI_WARNINGS OFF to avoid recompile */
+/* 06-Oct-2025  AK01     1.4  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /******************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrDropidUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrDropidUpdate]  
 ON  [dbo].[Dropid]   
 FOR UPDATE  
 AS  
@@ -63,8 +62,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate) 
    BEGIN  
       UPDATE Dropid  with (ROWLOCK)
-         SET EditDate = GETDATE(),  
-             EditWho = SUSER_SNAME(),  
+         SET EditDate = dbo.fnc_GetDate(),  
+             EditWho = dbo.fnc_GetUserName(),  
              TrafficCop = NULL  
         FROM Dropid, INSERTED  
        WHERE Dropid.Dropid = INSERTED.Dropid
@@ -113,3 +112,4 @@ BEGIN
       RETURN  
    END  
 END  
+

@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrLoadPlanRetDetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrLoadPlanRetDetailUpdate]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -39,10 +37,11 @@ GO
 /* 25 May2012   TLTING02   1.3   DM integrity - add update editdate B4  */
 /*                               TrafficCop                             */
 /* 28-Oct-2013  TLTING     1.4   Review Editdate column update          */
+/* 06-Oct-2025  AK01       1.5   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
 
-CREATE TRIGGER ntrLoadPlanRetDetailUpdate
+CREATE OR ALTER TRIGGER ntrLoadPlanRetDetailUpdate
  ON  LoadPlanRetDetail
  FOR UPDATE
  AS
@@ -76,8 +75,8 @@ CREATE TRIGGER ntrLoadPlanRetDetailUpdate
  IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)
  BEGIN
     UPDATE LoadPlanRetDetail with (ROWLOCK)
-    SET EditDate = GETDATE(),
-        EditWho = SUSER_SNAME(),
+    SET EditDate = dbo.fnc_GetDate(),
+        EditWho = dbo.fnc_GetUserName(),
         Trafficcop = NULL
     FROM LoadPlanRetDetail, INSERTED
     WHERE LoadPlanRetDetail.LoadKey = INSERTED.LoadKey
@@ -145,8 +144,8 @@ CREATE TRIGGER ntrLoadPlanRetDetailUpdate
       UPDATE LoadPlan
       SET Return_Weight = @n_weight,
           Return_Cube = @n_cube,
-          EditDate = GETDATE(),        --tlting
-          EditWho = SUSER_SNAME()
+          EditDate = dbo.fnc_GetDate(),        --tlting
+          EditWho = dbo.fnc_GetUserName()
       WHERE LoadPlan.LoadKey = @c_insertloadkey
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
       IF @n_err <> 0
@@ -168,8 +167,8 @@ CREATE TRIGGER ntrLoadPlanRetDetailUpdate
        UPDATE Receipt
           SET Receipt.LoadKey = NULL,      
               Trafficcop = NULL,
-              EditDate = GETDATE(),    --tlting
-              EditWho = SUSER_SNAME()
+              EditDate = dbo.fnc_GetDate(),    --tlting
+              EditWho = dbo.fnc_GetUserName()
   FROM Receipt, DELETED
        WHERE Receipt.ReceiptKey = DELETED.ReceiptKey
        SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -184,8 +183,8 @@ CREATE TRIGGER ntrLoadPlanRetDetailUpdate
           UPDATE Receipt
           SET Receipt.LoadKey = INSERTED.LoadKey,
               Trafficcop = NULL,
-              EditDate = GETDATE(), --tlting
-              EditWho = SUSER_SNAME()
+              EditDate = dbo.fnc_GetDate(), --tlting
+              EditWho = dbo.fnc_GetUserName()
           FROM Receipt, INSERTED
           WHERE Receipt.ReceiptKey = INSERTED.ReceiptKey
           SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -209,8 +208,8 @@ CREATE TRIGGER ntrLoadPlanRetDetailUpdate
        UPDATE ReceiptDETAIL
           SET ReceiptDETAIL.LoadKey = NULL,      
               Trafficcop = NULL,
-              EditDate = GETDATE(),       --tlting
-              EditWho = SUSER_SNAME()
+              EditDate = dbo.fnc_GetDate(),       --tlting
+              EditWho = dbo.fnc_GetUserName()
        FROM ReceiptDETAIL, DELETED
        WHERE ReceiptDETAIL.ReceiptKey = DELETED.ReceiptKey
        SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -225,8 +224,8 @@ CREATE TRIGGER ntrLoadPlanRetDetailUpdate
           UPDATE ReceiptDETAIL
           SET ReceiptDETAIL.LoadKey = INSERTED.LoadKey,
               Trafficcop = NULL,
-              EditDate = GETDATE(),       --tlting
-              EditWho = SUSER_SNAME()
+              EditDate = dbo.fnc_GetDate(),       --tlting
+              EditWho = dbo.fnc_GetUserName()
           FROM ReceiptDETAIL, INSERTED
           WHERE ReceiptDETAIL.ReceiptKey = INSERTED.ReceiptKey
           SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -273,4 +272,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

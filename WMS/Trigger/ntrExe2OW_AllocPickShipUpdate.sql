@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrExe2OW_AllocPickShipUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrExe2OW_AllocPickShipUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -28,9 +26,10 @@ GO
 /* Date         Author   Ver  Purposes                                  */  
 /* 28-Oct-2013  TLTING   1.1  Review Editdate column update             */
 /*                                                                      */  
+/* 08-Oct-2025  AK01     1.2  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrExe2OW_AllocPickShipUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrExe2OW_AllocPickShipUpdate]  
 ON  [dbo].[Exe2OW_AllocPickShip]   
 FOR UPDATE  
 AS  
@@ -59,7 +58,7 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2  ) AND NOT UPDATE(EditDate)
    BEGIN  
       UPDATE Exe2OW_AllocPickShip  with (RowLock)
-         SET EditDate = GETDATE()
+         SET EditDate = dbo.fnc_GetDate()
         FROM Exe2OW_AllocPickShip, INSERTED  
        WHERE Exe2OW_AllocPickShip.seq_no = INSERTED.seq_no  
  
@@ -105,3 +104,4 @@ BEGIN
       RETURN  
    END  
 END  
+

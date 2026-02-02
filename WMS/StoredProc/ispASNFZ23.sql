@@ -23,6 +23,8 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 17-Aug-2022  WLChooi 1.1   JSM-88504 - Only copy if DocType = R (WL01)  */
 /* 17-Aug-2022  WLChooi 1.1   DevOps Combine Script                        */
+/* 10-Oct-2025  SSA01   1.2   UWP-42248 -Enhanced session management       */
+/*                             and cleanup.                                */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispASNFZ23]  
 (     @c_Receiptkey  NVARCHAR(10)   
@@ -81,8 +83,8 @@ BEGIN
          UPDATE RECEIPTDETAIL WITH (ROWLOCK)
          SET UserDefine10 = @n_QtyReceived
            , TrafficCop   = NULL
-           , EditWho      = SUSER_SNAME()
-           , EditDate     = GETDATE()
+           , EditWho      = dbo.fnc_GetUserName()        --(SSA01)
+           , EditDate     = dbo.fnc_GetDate()   --(SSA01)
          WHERE ReceiptKey = @c_Receiptkey
          AND ReceiptLineNumber = @c_ReceiptLineNumber
          AND SKU = @c_SKU

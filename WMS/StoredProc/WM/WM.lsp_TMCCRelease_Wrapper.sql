@@ -29,6 +29,7 @@ GO
 /* 2021-12-16  Wan02    1.3   LFWM-3258 - CN NIKECN UAT Release cycle    */
 /*                            count Options Deviation                    */
 /* 2022-02-24  Wan03    1.4   LFWM-3287 - CN NIKECN Release Cycle Count  */
+/* 2025-09-02  SWT01    1.5   Enhanced session management pattern       */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_TMCCRelease_Wrapper]
    @c_CountType            NVARCHAR(10)  
@@ -97,23 +98,26 @@ BEGIN
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
    
    BEGIN TRAN              --(Wan02)
    --(mingle01) - START
@@ -826,7 +830,8 @@ BEGIN
       BEGIN TRAN
    END                                          --(Wan03) - END
    
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)      
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_TMCCRelease_Wrapper] TO nSQL 

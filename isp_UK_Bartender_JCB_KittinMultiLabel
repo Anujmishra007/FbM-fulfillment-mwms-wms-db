@@ -1,0 +1,370 @@
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+/*************************************************************************************/
+/* Store procedure: [isp_UK_Bartender_JCB_KittinMultiLabel]                          */
+/* Copyright: Maersk                                                                 */
+/*                                                                                   */
+/* Date         Rev   Author   Purposes                                              */
+/* 22/09/2025   1.0   SKE140   Kitting Label Bartender                               */
+/*************************************************************************************/
+CREATE OR ALTER  PROCEDURE [dbo].[isp_UK_Bartender_JCB_KittinMultiLabel] (  
+   @c_Sparm01 NVARCHAR(250),                  
+   @c_Sparm02 NVARCHAR(250),                  
+   @c_Sparm03 NVARCHAR(250),                  
+   @c_Sparm04 NVARCHAR(250),                  
+   @c_Sparm05 NVARCHAR(250),                  
+   @c_Sparm06 NVARCHAR(250),                  
+   @c_Sparm07 NVARCHAR(250),                  
+   @c_Sparm08 NVARCHAR(250),                  
+   @c_Sparm09 NVARCHAR(250),                  
+   @c_Sparm10 NVARCHAR(250),                  
+   @b_debug   INT = 0                             
+)
+AS  
+BEGIN
+   SET NOCOUNT ON                     
+   SET ANSI_NULLS OFF                 
+   SET QUOTED_IDENTIFIER OFF          
+   SET CONCAT_NULL_YIELDS_NULL OFF    
+
+   DECLARE
+      @c_sku         NVARCHAR(80),   
+      @c_sdescr      NVARCHAR(80),   
+      @c_ExtOrderkey NVARCHAR(80),   
+      @c_SQL         NVARCHAR(4000)  
+               
+        
+   DECLARE 
+      @d_Trace_StartTime  DATETIME,        
+      @d_Trace_EndTime    DATETIME,        
+      @c_Trace_ModuleName NVARCHAR(20),    
+      @d_Trace_Step1      DATETIME,        
+      @c_Trace_Step1      NVARCHAR(20),    
+      @c_UserName         NVARCHAR(20),    
+	  @n_TotalRecord      INT,             
+      @n_TotalPage        INT,             
+      @n_CurrentPage      INT,             
+      @n_PageSize         INT,             
+      @n_loopno           INT,             
+      @c_ExecStatements   NVARCHAR(4000),  
+      @c_ExecArguments    NVARCHAR(4000)   
+      
+   SET @d_Trace_StartTime = GETDATE()
+   SET @c_Trace_ModuleName = ''
+
+   DECLARE
+	  @c_SKU01      NVARCHAR(80),
+	  @c_SKU02      NVARCHAR(80),
+	  @c_SKU03      NVARCHAR(80),
+	  @c_SKU04      NVARCHAR(80),
+	  @c_SKU05      NVARCHAR(80),
+	  @c_SKU06      NVARCHAR(80),
+	  @c_SKUQTY01   INT,
+	  @c_SKUQTY02   INT,
+	  @c_SKUQTY03   INT,
+	  @c_SKUQTY04   INT,
+	  @c_SKUQTY05   INT,
+	  @c_SKUQTY06   INT,
+	  @c_SKUDESCR01 NVARCHAR(80),
+	  @c_SKUDESCR02 NVARCHAR(80),
+	  @c_SKUDESCR03 NVARCHAR(80),
+	  @c_SKUDESCR04 NVARCHAR(80),
+	  @c_SKUDESCR05 NVARCHAR(80),
+	  @c_SKUDESCR06 NVARCHAR(80)
+
+   DECLARE @n_copy INT
+       
+   SET @n_copy = '1'             
+
+   -- SET RowNo = 0      
+   SET @c_SQL = ''         
+   SET @n_CurrentPage = 1  
+   SET @n_TotalPage = 1    
+   SET @n_PageSize = 6     
+   SET @n_loopno = 1       
+
+   CREATE TABLE [#Result] (                         
+      [ID]    [INT] IDENTITY(1,1) NOT NULL,          
+      [Col01] [NVARCHAR] (80) NULL,                  
+      [Col02] [NVARCHAR] (80) NULL,                  
+      [Col03] [NVARCHAR] (80) NULL,                  
+      [Col04] [NVARCHAR] (80) NULL,                  
+      [Col05] [NVARCHAR] (80) NULL,                  
+      [Col06] [NVARCHAR] (80) NULL,                  
+      [Col07] [NVARCHAR] (80) NULL,                  
+      [Col08] [NVARCHAR] (80) NULL,                  
+      [Col09] [NVARCHAR] (80) NULL,                  
+      [Col10] [NVARCHAR] (80) NULL,                  
+      [Col11] [NVARCHAR] (80) NULL,                  
+      [Col12] [NVARCHAR] (80) NULL,                  
+      [Col13] [NVARCHAR] (80) NULL,                  
+      [Col14] [NVARCHAR] (80) NULL,                  
+      [Col15] [NVARCHAR] (80) NULL,                  
+      [Col16] [NVARCHAR] (80) NULL,                  
+      [Col17] [NVARCHAR] (80) NULL,                  
+      [Col18] [NVARCHAR] (80) NULL,                  
+      [Col19] [NVARCHAR] (80) NULL,                  
+      [Col20] [NVARCHAR] (80) NULL,                  
+      [Col21] [NVARCHAR] (80) NULL,                  
+      [Col22] [NVARCHAR] (80) NULL,                  
+      [Col23] [NVARCHAR] (80) NULL,                  
+      [Col24] [NVARCHAR] (80) NULL,                  
+      [Col25] [NVARCHAR] (80) NULL,                  
+      [Col26] [NVARCHAR] (80) NULL,                  
+      [Col27] [NVARCHAR] (80) NULL,                  
+      [Col28] [NVARCHAR] (80) NULL,                  
+      [Col29] [NVARCHAR] (80) NULL,                  
+      [Col30] [NVARCHAR] (80) NULL,                  
+      [Col31] [NVARCHAR] (80) NULL,                  
+      [Col32] [NVARCHAR] (80) NULL,                  
+      [Col33] [NVARCHAR] (80) NULL,                  
+      [Col34] [NVARCHAR] (80) NULL,                  
+      [Col35] [NVARCHAR] (80) NULL,                  
+      [Col36] [NVARCHAR] (80) NULL,                  
+      [Col37] [NVARCHAR] (80) NULL,                  
+      [Col38] [NVARCHAR] (80) NULL,                  
+      [Col39] [NVARCHAR] (80) NULL,                  
+      [Col40] [NVARCHAR] (80) NULL,                  
+      [Col41] [NVARCHAR] (80) NULL,                  
+      [Col42] [NVARCHAR] (80) NULL,                  
+      [Col43] [NVARCHAR] (80) NULL,                  
+      [Col44] [NVARCHAR] (80) NULL,                  
+      [Col45] [NVARCHAR] (80) NULL,                  
+      [Col46] [NVARCHAR] (80) NULL,                  
+      [Col47] [NVARCHAR] (80) NULL,                  
+      [Col48] [NVARCHAR] (80) NULL,                  
+      [Col49] [NVARCHAR] (80) NULL,                  
+      [Col50] [NVARCHAR] (80) NULL,                  
+      [Col51] [NVARCHAR] (80) NULL,                  
+      [Col52] [NVARCHAR] (80) NULL,                  
+      [Col53] [NVARCHAR] (80) NULL,                  
+      [Col54] [NVARCHAR] (80) NULL,                  
+      [Col55] [NVARCHAR] (80) NULL,                  
+      [Col56] [NVARCHAR] (80) NULL,                  
+      [Col57] [NVARCHAR] (80) NULL,                  
+      [Col58] [NVARCHAR] (80) NULL,                  
+      [Col59] [NVARCHAR] (80) NULL,                  
+      [Col60] [NVARCHAR] (80) NULL                   
+   )
+
+   DECLARE
+      @cStorerKey [NVARCHAR](15), 
+	  @cDropID	  [NVARCHAR](20),
+	  @cOrderKey  [NVARCHAR](10)
+
+   SELECT 
+      @cStorerKey = @c_Sparm01
+   -- ,@cOrderKey = @c_Sparm02
+      ,@cDropID = @c_Sparm02
+ 
+   DECLARE @TEMPDATA TABLE (                       
+      [ID]			 [INT] IDENTITY(1,1) NOT NULL, 
+	  C_Company		 NVARCHAR(45) NULL,
+	  ExternOrderKey NVARCHAR(45) NULL, 
+	  DropID		 NVARCHAR(45) NULL, 
+	  UserDefine01	 NVARCHAR(45) NULL, 
+	  SKU			 NVARCHAR(20) NULL,                                             
+	  Qty			 INT NULL,                     
+	  DESCR			 NVARCHAR(60) NULL             
+   )
+
+   INSERT INTO @TEMPDATA
+
+   SELECT 
+      C_Company, 
+	  ExternOrderKey, 
+	  DropID, 
+	  UserDefine01, 
+	  Sku, 
+	  Qty, 
+	  DESCR 
+   FROM (
+      SELECT DISTINCT 
+	     ORDERS.ConsigneeKey 
+         , ORDERS.C_Company
+         , ORDD.Sku
+		 , SKU.DESCR
+		 , PD.ID
+		 , PD.DropID
+		 , ORDERS.UserDefine01
+		 , sum(PD.Qty)over(partition by pd.sku, pd.dropid)Qty
+		 , STORER.Company
+         , (ORDD.QtyPicked + ORDD.ShippedQty) AS QtyPicked
+		 , ORDD.OrderKey
+		 , ORDD.ExternOrderKey
+   FROM dbo.ORDERS WITH (NOLOCK)
+   INNER JOIN dbo.ORDERDETAIL ORDD WITH (NOLOCK) 
+   ON (ORDERS.OrderKey = ORDD.OrderKey)
+   INNER JOIN dbo.PICKDETAIL PD WITH (NOLOCK) 
+   ON PD.OrderKey = ORDD.OrderKey 
+      AND PD.OrderLineNumber=ORDD.OrderLineNumber
+   INNER JOIN SKU WITH (NOLOCK) 
+   ON SKU.Sku = ORDD.Sku 
+      AND ORDD.StorerKey = SKU.StorerKey
+   INNER JOIN STORER WITH (NOLOCK) 
+   ON SKU.StorerKey = STORER.StorerKey
+   WHERE ORDERS.StorerKey = @cStorerKey
+      --AND ORDERS.orderkey=@cOrderKey
+      AND PD.DropID = @cDropID
+   )T1
+   ORDER BY DropID
+	
+   -- C_Company	ExternOrderKey	DropID	     UserDefine01	Sku   	Qty	DESCR
+   -- JCB AM	VT240910A1	   DP240910A1	 ACB     	123/05827	 20  BASEPLATE
+   --JCB AM	VT240910A1	   DP240910A1	 ACB	    123/05827     20	BASEPLATE
+
+   --Get @n_TotalRecord
+   SELECT 
+      @n_TotalRecord = COUNT(0) 
+   FROM @TEMPDATA  --2
+
+   --Get @n_TotalPage
+   SELECT @n_TotalPage = Ceiling(1.0*@n_TotalRecord/@n_PageSize)  --2
+
+   --SELECT CEILING(1.0*2/6)
+
+   WHILE @n_loopno <= @n_TotalRecord
+   BEGIN
+      --Create a new line with generic fields
+      IF NOT EXISTS (
+	     SELECT 1 
+		 FROM #Result 
+		 WHERE Col05 = @n_CurrentPage
+      )
+      BEGIN
+	     INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05,Col06)
+		 SELECT 
+		    C_Company
+			,ExternOrderKey	 --1-2
+			,DropID
+			,UserDefine01    --3-4
+			,@n_CurrentPage
+			,@n_TotalPage	 --5-6
+		 FROM @TEMPDATA
+		 WHERE ID = @n_loopno
+      END
+
+      --Prepare SKU data, 6 SKUs per label
+      IF @n_loopno % @n_PageSize = 1
+      BEGIN
+         SELECT 
+	        @c_SKU01 = SKU
+		    ,@c_SKUQTY01 = Qty
+		    ,@c_SKUDESCR01 = Descr
+         FROM @TEMPDATA
+	     WHERE ID = @n_loopno
+      END
+
+      IF @n_loopno % @n_PageSize = 2
+      BEGIN
+         SELECT 
+            @c_SKU02 = SKU
+	        ,@c_SKUQTY02 = Qty
+	        ,@c_SKUDESCR02 = Descr
+         FROM @TEMPDATA
+         WHERE ID = @n_loopno
+      END
+
+      IF @n_loopno % @n_PageSize = 3
+      BEGIN
+         SELECT 
+	        @c_SKU03 = SKU
+		    ,@c_SKUQTY03 = Qty
+		    ,@c_SKUDESCR03 = Descr
+         FROM @TEMPDATA
+	     WHERE ID = @n_loopno
+      END
+		
+      IF @n_loopno % @n_PageSize = 4
+      BEGIN
+         SELECT 
+	        @c_SKU04 = SKU
+		    ,@c_SKUQTY04 = Qty
+		    ,@c_SKUDESCR04 = Descr
+         FROM @TEMPDATA
+	     WHERE ID = @n_loopno
+      END
+		
+      IF @n_loopno % @n_PageSize = 5
+      BEGIN
+         SELECT 
+	        @c_SKU05 = SKU
+		    ,@c_SKUQTY05 = Qty
+		    ,@c_SKUDESCR05 = Descr
+         FROM @TEMPDATA
+         WHERE ID = @n_loopno
+      END
+		
+      IF @n_loopno % @n_PageSize = 0
+      BEGIN
+         SELECT 
+	        @c_SKU06 = SKU
+		    ,@c_SKUQTY06 = Qty
+		    ,@c_SKUDESCR06 = Descr
+	     FROM @TEMPDATA
+	     WHERE ID = @n_loopno
+      END
+		
+      --Update SKU data to current row
+      IF @n_loopno % @n_PageSize = 0 
+         OR @n_loopno >= @n_TotalRecord
+      BEGIN
+         UPDATE #Result
+	     SET 
+	        Col10 = @c_SKU01, Col11 = @c_SKUQTY01 ,Col12 = @c_SKUDESCR01,
+            Col13 = @c_SKU02, Col14 = @c_SKUQTY02 ,Col15 = @c_SKUDESCR02,
+		    Col16 = @c_SKU03, Col17 = @c_SKUQTY03 ,Col18 = @c_SKUDESCR03,
+		    Col19 = @c_SKU04, Col20 = @c_SKUQTY04 ,Col21 = @c_SKUDESCR04,
+		    Col22 = @c_SKU05, Col23 = @c_SKUQTY05 ,Col24 = @c_SKUDESCR05,
+		    Col25 = @c_SKU06, Col26 = @c_SKUQTY06 ,Col27 = @c_SKUDESCR06
+         WHERE Col05  = @n_CurrentPage
+
+         SELECT 
+            @c_SKU01 = NULL, @c_SKUQTY01 = NULL,@c_SKUDESCR01 = NULL,
+		    @c_SKU02 = NULL, @c_SKUQTY02 = NULL,@c_SKUDESCR02 = NULL,
+		    @c_SKU03 = NULL, @c_SKUQTY03 = NULL,@c_SKUDESCR03 = NULL,
+		    @c_SKU04 = NULL, @c_SKUQTY04 = NULL,@c_SKUDESCR04 = NULL,
+		    @c_SKU05 = NULL, @c_SKUQTY05 = NULL,@c_SKUDESCR05 = NULL,
+		    @c_SKU06 = NULL, @c_SKUQTY06 = NULL,@c_SKUDESCR06 = NULL
+
+
+         SET @n_CurrentPage = @n_CurrentPage + 1
+      END
+
+      SET @n_loopno = @n_loopno + 1
+   END
+          
+   /*  SKE140 -- NEWLY ADDED 11.11.2024  START*/
+   --CZJ002
+   WHILE @n_copy > 1    
+   BEGIN           
+      INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09               
+         ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22             
+         ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34               
+         ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44               
+         ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54               
+         ,Col55,Col56,Col57,Col58,Col59,Col60)    
+      SELECT Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09              
+         ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22             
+         ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34               
+         ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44               
+         ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54               
+         ,Col55,Col56,Col57,Col58,Col59,Col60    
+      FROM #RESULT    
+      --WHERE ID = 1    
+       
+      SET @n_copy = @n_copy - 1    
+   END  
+
+/*  NEWLY ADDED 11.11.2024  END*/
+
+--SELECT * FROM #Result (NOLOCK)
+                
+EXIT_SP:        
+   SET @d_Trace_EndTime = GETDATE()      
+   SET @c_UserName = SUSER_SNAME()             
+END -- procedure
+GO

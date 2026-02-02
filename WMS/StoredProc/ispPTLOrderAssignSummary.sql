@@ -34,6 +34,7 @@ GO
 /* 04-07-2019   Shong   1.3   Added Error Message                             */ 
 /* 15-10-2019   Wan01   1.4   Add DPBULK                                      */   
 /* 23-09-2019   CSCHONG 1.5   WMS-10493 (CS01)                                */
+/* 10-10-2025   SSA01   1.6  UWP-42248 -Enhanced session management           */
 /******************************************************************************/  
 CREATE PROC [dbo].[ispPTLOrderAssignSummary]    
      @c_WaveKey        NVARCHAR(10)   
@@ -735,8 +736,8 @@ BEGIN
                SET PrintFlag = @c_LastBatch,  
 			       Trackingno = CASE WHEN ISNULL(Trackingno,'') = '' THEN @c_newtrackingno ELSE Trackingno END,          --(CS01) 
                    TrafficCop = NULL,   
-                   EditDate = GETDATE(),   
-                   EditWho = SUSER_SNAME()   
+                   EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                   EditWho = dbo.fnc_GetUserName()        --(SSA01)
             WHERE OrderKey = @c_OrderKey  
               
             SET @n_Counter = @n_Counter + 1  

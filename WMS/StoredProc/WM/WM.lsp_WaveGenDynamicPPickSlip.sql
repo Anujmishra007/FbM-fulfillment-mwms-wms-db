@@ -1,83 +1,83 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveGenDynamicPPickSlip]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveGenDynamicPPickSlip] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO   
-/************************************************************************/                                                                                  
-/* Store Procedure: lsp_WaveGenDynamicPPickSlip                         */                                                                                  
-/* Creation Date: 2019-04-05                                            */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
-/* Written by: Wan                                                      */                                                                                  
-/*                                                                      */                                                                                  
+GO
+
+/************************************************************************/
+/* Store Procedure: lsp_WaveGenDynamicPPickSlip                         */
+/* Creation Date: 2019-04-05                                            */
+/* Copyright: LFL                                                       */
+/* Written by: Wan                                                      */
+/*                                                                      */
 /* Purpose: LFWM-1794 - SPs for Wave Control Screens                    */
 /*          - ( Generate DynamicP PickSLip )                            */
-/*                                                                      */                                                                                  
-/* Called By: SCE                                                       */                                                                                  
-/*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
-/*                                                                      */                                                                                  
-/* Version: 8.0                                                         */                                                                                  
-/*                                                                      */                                                                                  
-/* Data Modifications:                                                  */                                                                                  
-/*                                                                      */                                                                                  
-/* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */  
+/*                                                                      */
+/* Called By: SCE                                                       */
+/*          :                                                           */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 8.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver.  Purposes                                  */
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveGenDynamicPPickSlip]                                                                                                                     
+/* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
+/************************************************************************/
+CREATE OR ALTER PROC [WM].[lsp_WaveGenDynamicPPickSlip]
       @c_WaveKey              NVARCHAR(10)
-   ,  @b_Success              INT = 1           OUTPUT  
-   ,  @n_err                  INT = 0           OUTPUT                                                                                                             
-   ,  @c_ErrMsg               NVARCHAR(255)= '' OUTPUT   
+   ,  @b_Success              INT = 1           OUTPUT
+   ,  @n_err                  INT = 0           OUTPUT
+   ,  @c_ErrMsg               NVARCHAR(255)= '' OUTPUT
    ,  @n_WarningNo            INT          = 0  OUTPUT
-   ,  @c_ProceedWithWarning   CHAR(1)      = 'N'                
-   ,  @c_UserName             NVARCHAR(50) = ''                                                                                                                         
+   ,  @c_ProceedWithWarning   CHAR(1)      = 'N'
+   ,  @c_UserName             NVARCHAR(50) = ''
 
-AS  
-BEGIN                                                                                                                                                        
-   SET NOCOUNT ON                                                                                                                                           
-   SET ANSI_NULLS OFF                                                                                                                                       
-   SET QUOTED_IDENTIFIER OFF                                                                                                                                
-   SET CONCAT_NULL_YIELDS_NULL OFF       
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  @n_StartTCnt                  INT = @@TRANCOUNT  
+   DECLARE  @n_StartTCnt                  INT = @@TRANCOUNT
          ,  @n_Continue                   INT = 1
 
          ,  @c_GenPickSlipSP              NVARCHAR(250) = ''
 
    SET @b_Success = 1
    SET @n_Err     = 0
-               
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
-   
+
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
+
    --(mingle01) - START
    BEGIN TRY
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
       BEGIN
          SET @n_WarningNo = 1
-         SET @c_ErrMsg = 'Do you want to generate Dynamic Pick Slip By Wave ?'   
-         GOTO EXIT_SP  
+         SET @c_ErrMsg = 'Do you want to generate Dynamic Pick Slip By Wave ?'
+         GOTO EXIT_SP
       END
 
       SET @c_GenPickSlipSP = ''
@@ -90,40 +90,40 @@ BEGIN
          SET @n_Continue = 3
          SET @n_Err = 556251
          SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Dynamic Generate PickSlip Stored Procedure is required. (lsp_WaveGenDynamicPPickSlip)'   
-                        + '(' + @c_ErrMsg + ')'         
-      END 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Dynamic Generate PickSlip Stored Procedure is required. (lsp_WaveGenDynamicPPickSlip)'
+                        + '(' + @c_ErrMsg + ')'
+      END
 
       BEGIN TRY
-         EXEC [dbo].[nspDynamicPickCode]  
-              @c_WaveKey      = @c_WaveKey 
-            , @c_SPName       = @c_GenPickSlipSP    
+         EXEC [dbo].[nspDynamicPickCode]
+              @c_WaveKey      = @c_WaveKey
+            , @c_SPName       = @c_GenPickSlipSP
             , @b_Success      = @b_Success      OUTPUT
-            , @n_Err          = @n_Err          OUTPUT 
-            , @c_ErrMsg       = @c_ErrMsg       OUTPUT 
+            , @n_Err          = @n_Err          OUTPUT
+            , @c_ErrMsg       = @c_ErrMsg       OUTPUT
       END TRY
       BEGIN CATCH
          SET @n_Err = 556252
          SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing nspDynamicPickCode. (lsp_WaveGenDynamicPPickSlip)'   
-                        + '(' + @c_ErrMsg + ')'          
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing nspDynamicPickCode. (lsp_WaveGenDynamicPPickSlip)'
+                        + '(' + @c_ErrMsg + ')'
       END CATCH
-            
+
       IF @b_Success = 0 OR @n_Err <> 0
       BEGIN
          SET @n_Continue = 3
-         GOTO EXIT_SP   
+         GOTO EXIT_SP
       END
 
       SET @c_ErrMsg = 'Generate Dynamic Pick Slip Process is done.'
    END TRY
-   
+
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
-   --(mingle01) - END  
+   --(mingle01) - END
 EXIT_SP:
 
    IF @n_Continue=3  -- Error Occured - Process And Return
@@ -151,14 +151,15 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-    
+
    IF @@TRANCOUNT < @n_StartTCnt
    BEGIN
-      BEGIN TRAN 
+      BEGIN TRAN
    END
-         
-   REVERT
+
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_WaveGenDynamicPPickSlip] TO nSQL 
-GO  
+GRANT EXECUTE ON  [WM].[lsp_WaveGenDynamicPPickSlip] TO [NSQL]
+GO

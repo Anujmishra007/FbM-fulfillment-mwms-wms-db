@@ -14,6 +14,7 @@ GO
 /* 18-07-2023  1.2  JihHaur   JSM-162577 Avoid 2 user took same taskdetail(JH01)*/  
 /* 21-05-2019  1.3  Ung       WMS-8537 Fix skip task force close pallet       */
 /* 23-08-2023  1.4  Ung       WMS-23369 Add UserKeyOverRide                   */
+/* 27-05-2024  1.5  Ung       WMS-25346 Add DeviceID                          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764GetTask08] (
@@ -63,10 +64,13 @@ BEGIN
    DECLARE @cPalletFinalZone  NVARCHAR( 10)
    DECLARE @cFinalPKZoneInLOC NVARCHAR( 10)
    DECLARE @cGroupKey      NVARCHAR( 10)
+   DECLARE @cDeviceID      NVARCHAR( 20)
 
    SET @cNewTaskKey = ''
 
-   SELECT @cStorerKey = StorerKey
+   SELECT 
+      @cStorerKey = StorerKey, 
+      @cDeviceID = DeviceID
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -137,6 +141,7 @@ BEGIN
             AND TaskDetail.Status = '0'
             AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
+            AND TaskDetail.DeviceID = CASE WHEN @cDeviceID <> '' AND TaskDetail.DeviceID <> '' THEN @cDeviceID ELSE TaskDetail.DeviceID END
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
             AND PKZone2.PickZone = CASE WHEN @cPalletFinalZone <> '' THEN @cPalletFinalZone ELSE PKZone2.PickZone END
@@ -166,6 +171,7 @@ BEGIN
             AND TaskDetail.Status = '0'
             AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
+            AND TaskDetail.DeviceID = CASE WHEN @cDeviceID <> '' AND TaskDetail.DeviceID <> '' THEN @cDeviceID ELSE TaskDetail.DeviceID END
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
             AND PKZone2.PickZone = CASE WHEN @cPalletFinalZone <> '' THEN @cPalletFinalZone ELSE PKZone2.PickZone END

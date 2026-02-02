@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrIDS_LP_DRIVERUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrIDS_LP_DRIVERUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -26,9 +24,10 @@ GO
 /*                                                                      */  
 /* Modifications:                                                       */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 06-Oct-2025  AK01     1.1  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrIDS_LP_DRIVERUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrIDS_LP_DRIVERUpdate]  
 ON  [dbo].[IDS_LP_DRIVER]   
 FOR UPDATE  
 AS  
@@ -57,8 +56,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2  ) AND NOT UPDATE(EditDate) 
    BEGIN  
       UPDATE IDS_LP_DRIVER  
-         SET EditDate = GETDATE(),  
-             EditWho = SUSER_SNAME()
+         SET EditDate = dbo.fnc_GetDate(),  
+             EditWho = dbo.fnc_GetUserName()
         FROM IDS_LP_DRIVER, INSERTED  
        WHERE IDS_LP_DRIVER.Loadkey = INSERTED.Loadkey
          AND IDS_LP_DRIVER.DriverCode = INSERTED.DriverCode  
@@ -102,3 +101,4 @@ BEGIN
       RETURN  
    END  
 END  
+

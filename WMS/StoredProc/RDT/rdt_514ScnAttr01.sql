@@ -49,14 +49,14 @@ BEGIN
 
       IF @cY = 5 -- FROM LOC
       BEGIN
-         SELECT TOP 1 @cSValueSP = Descr -- colorCode
+         SELECT TOP 1 @cSValueSP = ISNULL(ColorCode,'') -- colorCode
          FROM LOC (NOLOCK ) WHERE LOC = @suggestLoc
          GOTO QUIT
       END
 
       IF @cY = 8 -- SuggestLoc
          BEGIN
-            SELECT TOP 1 @cSValueSP = Descr -- colorCode
+            SELECT TOP 1 @cSValueSP = ISNULL(ColorCode,'') -- colorCode
             FROM LOC (NOLOCK ) WHERE LOC = @suggestLoc
             GOTO QUIT
          END

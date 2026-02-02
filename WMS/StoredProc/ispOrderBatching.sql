@@ -92,7 +92,8 @@ GO
 /* 21-Jul-2022  WLChooi 3.7   WMS-20271 - Remove SKU.BUSR7 filter (WL01)*/
 /* 14-Jul-2022  WLChooi 3.8   WMS-20707 - Extend @c_rptprocess (WL02)   */
 /* 16-Mar-2023  NJOW13  3.9   WMS-21961 Allow configure orders sorting  */
-/* 12-Jun-2023  WinSern 4.0   Add Status<'3'when update pickdetail(ws01)*/     
+/* 12-Jun-2023  WinSern 4.0   Add Status<'3'when update pickdetail(ws01)*/
+/* 10-Oct-2025  SSA01   4.1   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispOrderBatching]
@@ -1301,8 +1302,8 @@ BEGIN
                   , TrafficCop = NULL
                   , PickSlipNo = @c_BatchCode  --NJOW04
                   , [Status]   = CASE WHEN @c_updatepick = 'Y' AND [Status] < '3' THEN '3' ELSE [Status] END  --(Wan03)       --(ws01)
-                  , EditWho    = SUSER_SNAME()
-                  , EditDate   = GETDATE()
+                  , EditWho    = dbo.fnc_GetUserName()            --(SSA01)
+                  , EditDate   = dbo.fnc_GetDate()    --(SSA01)
                     WHERE PICKDETAIL.Pickdetailkey = @c_Pickdetailkey
 
                 SELECT @n_err = @@ERROR
@@ -1337,7 +1338,7 @@ BEGIN
                  UPDATE PACKTASK WITH (ROWLOCK)
                  SET TaskBatchNo = @c_BatchCode,
                      OrderMode = @c_OrderMode,
-                     EditDate   = GETDATE(),
+                     EditDate   = dbo.fnc_GetDate(),    --(SSA01)
                      DevicePosition = '', --NJOW07
                      ReplenishmentGroup = '' --NJOW07
                  WHERE RowRef = @n_RowRef
@@ -1429,8 +1430,8 @@ BEGIN
                , TrafficCop = NULL
                , PickSlipNo = @c_BatchCode  --NJOW04
                , [Status]   = CASE WHEN @c_updatepick = 'Y' AND [Status] < '3' THEN '3' ELSE [Status] END  --(Wan03)    --(ws01)
-               , EditWho    = SUSER_SNAME()
-               , EditDate   = GETDATE()
+               , EditWho    = dbo.fnc_GetUserName()      --(SSA01)
+               , EditDate   = dbo.fnc_GetDate()    --(SSA01)
                WHERE PICKDETAIL.Pickdetailkey = @c_Pickdetailkey
 
              SELECT @n_err = @@ERROR
@@ -1468,7 +1469,7 @@ BEGIN
              UPDATE PACKTASK WITH (ROWLOCK)
              SET TaskBatchNo = @c_BatchCode,
                  OrderMode = @c_OrderMode,
-                 EditDate   = GETDATE(),
+                 EditDate   = dbo.fnc_GetDate(),    --(SSA01)
                  DevicePosition = '', --NJOW07
                  ReplenishmentGroup = '' --NJOW07
              WHERE RowRef = @n_RowRef

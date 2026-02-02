@@ -12,7 +12,7 @@ GO
 /*                                                                       */
 /* Called By: When Udpate Order Header Record                            */
 /*                                                                       */
-/* PVCS Version: 4.11                                                    */
+/* PVCS Version: 4.13                                                    */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
@@ -269,6 +269,10 @@ GO
 /* 06-Sep-2024   PPA371    4.12 Validate if status is cancel             */
 /* 26-Feb-2025  USH022-01 4.12 FCR-2177-To Update UCC.ArchiveCop=9       */
 /*                             When Orders.Status =9                     */
+/* 28-08-2025   Wan08     4.13 [FCR-2532] [JCB] SO Header Status Update  */
+/*                             Partial Shipment-Multi Allocation, Picking*/
+/*                             & Shipment for an Order Status            */ 
+/* 06-Oct-2025  AK01      4.14 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /*************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrOrderHeaderUpdate]
@@ -559,7 +563,7 @@ DECLARE @d_starttime    datetime,
 
 DECLARE @c_NSQLValue NVARCHAR(30)
 
-SET @d_starttime = GETDATE()
+SET @d_starttime = dbo.fnc_GetDate()
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 
 IF UPDATE(ArchiveCop)      --KH01
@@ -576,8 +580,8 @@ BEGIN
       AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE ORDERS
-      SET    EditDate   = GETDATE()
-           , EditWho    = SUSER_SNAME()
+      SET    EditDate   = dbo.fnc_GetDate()
+           , EditWho    = dbo.fnc_GetUserName()
            , TrafficCop = NULL
       FROM  ORDERS,INSERTED
       WHERE ORDERS.OrderKey = INSERTED.OrderKey
@@ -719,8 +723,8 @@ BEGIN
         UPDATE ORDERS
         SET Type       = 'NIF'
            ,Trafficcop = NULL
-           ,EditDate   = GETDATE()
-           ,EditWho    = SUSER_NAME()
+           ,EditDate   = dbo.fnc_GetDate()
+           ,EditWho    = dbo.fnc_GetUserName()
          FROM INSERTED
          JOIN ORDERS ON (ORDERS.Orderkey = INSERTED.Orderkey)
          WHERE INSERTED.Status IN ('3', '5')
@@ -860,8 +864,8 @@ BEGIN
       UPDATE Orders
       Set Userdefine04 = '',
          Trackingno = '',
-         Editdate =getdate(),
-         Editwho = Suser_Sname(),
+         Editdate =dbo.fnc_GetDate(),
+         Editwho = dbo.fnc_GetUserName(),
          TrafficCop = NULL
       FROM Orders
          JOIN #OrdTrackingNO I ON I.OrderKey = Orders.OrderKey
@@ -1867,8 +1871,8 @@ BEGIN
          IF @c_TrafficCopAllowSOStatusUpd = 'Y' --NJOW04
          BEGIN
              UPDATE ORDERS
-             SET Editdate = getdate(),
-                 Editwho = SUSER_SNAME(),
+             SET Editdate = dbo.fnc_GetDate(),
+                 Editwho = dbo.fnc_GetUserName(),
                  SOStatus = CASE WHEN @c_SetSOStatusWhileStatusChange = '1' AND @c_NewSOStatus <> '' THEN
                                       @c_NewSOStatus
                             ELSE SOStatus
@@ -2015,8 +2019,8 @@ BEGIN
                IF(@c_Status='CANC')
                   BEGIN
                      UPDATE ORDERDETAIL
-                     SET EditDate   = GETDATE(),
-                         EditWho    = Suser_sname(),
+                     SET EditDate   = dbo.fnc_GetDate(),
+                         EditWho    = dbo.fnc_GetUserName(),
                          Status     = @c_Status
                      WHERE OrderKey = @c_OrderKey
                   END
@@ -2024,8 +2028,8 @@ BEGIN
                   BEGIN
                      UPDATE ORDERDETAIL
                      SET Trafficcop = NULL,
-                         EditDate   = GETDATE(),
-                         EditWho    = Suser_sname(),
+                         EditDate   = dbo.fnc_GetDate(),
+                         EditWho    = dbo.fnc_GetUserName(),
                          Status     = @c_Status     -- '9'
                      WHERE OrderKey = @c_OrderKey
                   END
@@ -2148,7 +2152,7 @@ BEGIN
                   BEGIN
  UPDATE TMSLOG
                         SET Transmitflag = '0',
-                            EditDate = GETDATE() -- SWT99
+                            EditDate = dbo.fnc_GetDate() -- SWT99
                      WHERE TableName = @c_TableName
  AND Key1 = @c_OrderKey
                         AND Key2 = 'M'
@@ -2171,7 +2175,7 @@ BEGIN
                   BEGIN
                      UPDATE TMSLOG
                         SET Transmitflag = '0',
-                            EditDate = GETDATE() -- SWT99
+                            EditDate = dbo.fnc_GetDate() -- SWT99
                       WHERE TableName = @c_TableName
                         AND Key1 = @c_OrderKey
                         AND Key2 = 'D'
@@ -2679,8 +2683,8 @@ IF @c_authority_SOShpCfmCMS = '1' AND ( @c_CurSOStatus = '9' OR @c_Status = '9')
 
                UPDATE SerialNo
                SET STATUS = '9',
-               EditDate = GETDATE(),
-               EditWho = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),
+               EditWho = dbo.fnc_GetUserName()
                WHERE OrderKey = @c_OrderKey
                AND STATUS <> '9'
 
@@ -2946,8 +2950,8 @@ IF @c_authority_SOShpCfmCMS = '1' AND ( @c_CurSOStatus = '9' OR @c_Status = '9')
          BEGIN
             UPDATE ORDERS
             SET STATUS = @c_Status,
-                Editdate = getdate(),
-                Editwho = sUser_sName(),
+                Editdate = dbo.fnc_GetDate(),
+                Editwho = dbo.fnc_GetUserName(),
                 --GOH01 Start
                 --ORDERS.B_Vat = STORER.CreditLimit,
                 B_Vat = CASE WHEN ISNUMERIC(STORER.CreditLimit) = 1 THEN
@@ -3001,11 +3005,13 @@ IF @c_authority_SOShpCfmCMS = '1' AND ( @c_CurSOStatus = '9' OR @c_Status = '9')
          BEGIN
             -- Modify by ricky (Feb,2005) to prevent the orders status rollback to 1 or 2 when 3
             UPDATE ORDERS
-            SET STATUS = CASE WHEN ORDERS.STATUS = '3' and @c_Status in ('1','2') THEN ORDERS.STATUS
-                                     ELSE @c_status
+            SET STATUS = CASE WHEN ORDERS.STATUS = '3' and @c_Status in ('1','2') AND              --(Wan08)
+                                   ISNULL(scfg1.PartialShipOrderStatus,'0') <> '1'                 --(Wan08)
+                              THEN ORDERS.STATUS
+                              ELSE @c_status
                          END,
-                Editdate = getdate(),
-                Editwho = SUSER_SNAME(),
+                Editdate = dbo.fnc_GetDate(),
+                Editwho = dbo.fnc_GetUserName(),
                 --GOH01 Start
                 --ORDERS.B_Vat = STORER.CreditLimit,
                 B_Vat = CASE WHEN ISNUMERIC(STORER.CreditLimit) = 1 THEN
@@ -3028,6 +3034,10 @@ IF @c_authority_SOShpCfmCMS = '1' AND ( @c_CurSOStatus = '9' OR @c_Status = '9')
                                  -- TLTING10  -- tlting09
             FROM ORDERS
             JOIN STORER WITH (NOLOCK) ON (ORDERS.StorerKey = STORER.StorerKey)
+            OUTER APPLY (SELECT PartialShipOrderStatus= gr.Authority                               --(Wan08)
+                         FROM dbo.fnc_GetRight2(ORDERS.Facility, ORDERS.Storerkey                  --(Wan08)
+                                          ,'', 'PartialShipOrderStatus') gr                        --(Wan08)
+                        ) scfg1
             WHERE OrderKey = @c_OrderKey
 
             SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -3052,8 +3062,8 @@ IF @c_authority_SOShpCfmCMS = '1' AND ( @c_CurSOStatus = '9' OR @c_Status = '9')
                SET STATUS = CASE WHEN STATUS = '3' and @c_Status in ('1','2') THEN STATUS
                                       ELSE @c_status
                             END,
-             Editdate = getdate(),
-             Editwho = SUSER_SNAME(),
+             Editdate = dbo.fnc_GetDate(),
+             Editwho = dbo.fnc_GetUserName(),
              Trafficcop = null
          WHERE Orderkey = @c_OrderKey
 
@@ -3110,8 +3120,8 @@ IF @c_authority_SOShpCfmCMS = '1' AND ( @c_CurSOStatus = '9' OR @c_Status = '9')
        BEGIN -- while detail OrddetCur1
 
           UPDATE ORDERDETAIL
-             SET ExternOrderKey = @c_ExternOrderKey, TrafficCop=NULL, EditWho = sUser_sName(),
-                 EditDate = GetDate()
+             SET ExternOrderKey = @c_ExternOrderKey, TrafficCop=NULL, EditWho = dbo.fnc_GetUserName(),
+                 EditDate = dbo.fnc_GetDate()
           WHERE OrderKey = @c_OrderKey AND ExternOrderKey = @c_PrevExternOrderKey
           AND  OrderLineNumber = @cOrderLineNumber
           SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -3257,8 +3267,8 @@ BEGIN
                --SET Status     = 'X'              --(Wan04)
                SET Status     = @c_Status_PTD      --(Wan04)
                   ,PickSlipNo = @c_PickSlipNo      --(Wan05)
-                  ,EditWho    = SUSER_NAME()
-                  ,EditDate   = GETDATE()
+                  ,EditWho    = dbo.fnc_GetUserName()
+                  ,EditDate   = dbo.fnc_GetDate()
                   ,TrafficCop = NULL
                WHERE RowRef = @n_RowRef
 
@@ -3353,7 +3363,7 @@ BEGIN
                       AND   LoadPlan.Status BETWEEN '0' AND '5' )
             BEGIN
                UPDATE LoadPlan
-                  SET EditDate = GetDate(), EditWho = SUSER_SNAME()
+                  SET EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()
                WHERE Loadkey = @c_Loadkey
                -- AND   LoadPlan.Status BETWEEN '0' AND '5'
                SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -3368,13 +3378,13 @@ BEGIN
             END
 
             --SET @c_TraceName = 'ntrOrderHeaderUpdate-LP'
-            --SET @d_step1 = GETDATE()  -- (tlting01)
+            --SET @d_step1 = dbo.fnc_GetDate()  -- (tlting01)
             --SET @c_Col1 = @c_Loadkey
             --SET @c_Col2 = @c_StorerKey
             --SET @c_Col3 = @c_LP_Cur_Status
             --SET @c_Col4 = @c_LP_New_Status
 
-            --SET @d_endtime = GETDATE()
+            --SET @d_endtime = dbo.fnc_GetDate()
             --INSERT INTO TraceInfo (TraceName, TimeIn, TimeOut, TotalTime,
             --                       Step1, Step2, Step3, Step4, Step5,
             --                       Col1, Col2, Col3, Col4, Col5)
@@ -3415,8 +3425,8 @@ BEGIN
          SET Mboldetail.GrossWeight = INSERTED.GrossWeight,
              Mboldetail.Capacity = INSERTED.Capacity,
              TrafficCop = NULL,
-             EditDate = GETDATE(),        --tlting
-             EditWho = SUSER_SNAME()
+             EditDate = dbo.fnc_GetDate(),        --tlting
+             EditWho = dbo.fnc_GetUserName()
          FROM  MbolDetail
          JOIN  INSERTED ON (MbolDetail.Orderkey = INSERTED.orderkey)
 
@@ -3766,3 +3776,4 @@ BEGIN
 END
 
 GO
+

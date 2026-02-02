@@ -25,6 +25,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */  
 /* 27-Feb-2020  NJOW01   1.0  WMS-12288 trackno support leading zero    */
 /* 06-May-2020  NJOW02   1.1  WMS-13239 update trackno to placeofloading*/
+/* 10-Oct-2025  SSA01    1.2  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE PROC ispREC02   
@@ -143,8 +144,8 @@ BEGIN
 	    	    UPDATE RECEIPT WITH (ROWLOCK)
 	    	    SET PlaceOfLoading = @c_TrackingNo,
 	    	        Trafficcop = NULL,
-	    	        EditWho = SUSER_SNAME(),
-	    	        EditDate = GETDATE()
+	    	        EditWho = dbo.fnc_GetUserName(),           --(SSA01)
+	    	        EditDate = dbo.fnc_GetDate()    --(SSA01)
 	    	    WHERE Receiptkey = @c_Receiptkey
 	    	 END
 	    		    		    	

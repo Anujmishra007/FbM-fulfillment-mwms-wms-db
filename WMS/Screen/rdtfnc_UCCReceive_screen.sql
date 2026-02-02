@@ -63,7 +63,7 @@ EXECUTE rdt.rdtAddScn 1304, 'ENG'
 DELETE rdt.RDTScn WHERE Scn = 1305 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1305, 'ENG'
    ,@cLine01 = 'UCC:            %10d11'
-   ,@cLine02 = '%20i01'
+   ,@cLine02 = '%1000iV_Max' --FCR-2961                
    ,@cLine03 = 'SKU:'
    ,@cLine04 = '%20d02'
    ,@cLine05 = '%20d03'

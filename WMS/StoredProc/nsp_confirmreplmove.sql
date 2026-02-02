@@ -27,7 +27,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Rev Purposes                                   */
 /* 25/08/2006   James    1.8 change select condition from               */
-/*                            from originalqty to openqty               */ 
+/*                            from originalqty to openqty               */
+/* 10/10/2025   SSA01    1.9 UWP-42248 -Enhanced session management     */
 /************************************************************************/
 
 CREATE PROC nsp_confirmreplmove (
@@ -129,8 +130,8 @@ BEGIN -- main
 	BEGIN -- update ucc
 		UPDATE UCC
 		SET loc = @c_toloc,
-			EditDate = getdate(),
-			EditWho = Suser_Sname()
+			EditDate = dbo.fnc_GetDate(),    --(SSA01)
+			EditWho = dbo.fnc_GetUserName()         --(SSA01)
 		WHERE uccno = @c_uccno
 		AND	loc = @c_fromloc
 		AND	sku = @c_sku
@@ -150,8 +151,8 @@ BEGIN -- main
 		UPDATE REPLENISHMENT
 		SET Confirmed = 'Y',
 			ToLoc = @c_toloc,
-			EditDate = getdate(),
-			EditWho = Suser_Sname(),
+			EditDate = dbo.fnc_GetDate(),    --(SSA01)
+			EditWho = dbo.fnc_GetUserName(),          --(SSA01)
 			Remark = 'Success - UCC Replen.',
 			ArchiveCop = NULL
 		WHERE RefNo = @c_uccno

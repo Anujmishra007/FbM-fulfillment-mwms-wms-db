@@ -63,6 +63,7 @@ GO
 /*                            Pass in PreAllocateStrategyKey and        */
 /*                            PreAllocateStrategyLineNumber to pickcode */
 /* 27-SEP-2022  NJOW09  3.2   DEVOPS Combine Script                     */
+/* 21-Feb-2025  WLChooi 3.3   WMS-26556 Support multi facilities (WL01) */
 /************************************************************************/  
 CREATE OR ALTER PROC  [dbo].[ispPreAllocateWaveProcessing]  
                @c_WaveKey      NVARCHAR(10)  
@@ -1204,7 +1205,8 @@ BEGIN
                FROM LOTxLOCxID  LLI WITH (NOLOCK)   
                JOIN LOC         LOC WITH (NOLOCK) ON (LLI.Loc = LOC.LOC)  
                WHERE LLI.Lot =  @c_sLOT    
-               AND   LOC.Facility = @c_facility  
+               --AND   LOC.Facility = @c_facility   --WL01
+               AND   LOC.Facility IN ( SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_sStorerKey, @c_Facility) )   --WL01
                  
                IF @n_FacLotAvailQty < @n_QtyAvailable  
                BEGIN   
