@@ -13,6 +13,7 @@ GO
 /*                                                                        */
 /* Date       Rev    Author     Purposes                                  */
 /* 2026-01-09 1.0.0  JackC      FCR-9547. Created                         */
+/* 2026-02-02 1.0.1  JackC      FCR-9547. Call locxsku hold wrapper       */
 /**************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtUpd03] (
@@ -56,14 +57,19 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @nDebugFlag  INT = 0
+
    DECLARE 
       @cHoldType        NVARCHAR(60),
-      @cLot             NVARCHAR(10),
+      @cTaskLot         NVARCHAR(10),
+      @cTaskSKU         NVARCHAR(20),
+      @cTaskID          NVARCHAR( 18), 
+      @cTaskLoc         NVARCHAR( 10),
       @nRowCount        INT,
       @bSuccess         INT,
-      @cErrMsg1       NVARCHAR( 125),
-      @cErrMsg2       NVARCHAR( 125),
-      @cErrMsg3       NVARCHAR( 125)
+      @cErrMsg1         NVARCHAR( 125),
+      @cErrMsg2         NVARCHAR( 125),
+      @cErrMsg3         NVARCHAR( 125)
 
    IF @nFunc = 1768
    BEGIN
@@ -74,27 +80,34 @@ BEGIN
             IF ISNULL(@cOptions, '') = '2'
             BEGIN
                SELECT
-                  @cHoldType = Message01,
-                  @cLot = Lot,
-                  @cID = FromID,
-                  @cLoc = FromLoc
+                  @cHoldType  = Message01,
+                  @cTaskLot   = Lot,
+                  @cTaskSKU   = SKU,
+                  @cTaskID    = FromID,
+                  @cTaskLoc   = FromLoc
                FROM dbo.TaskDetail WITH (NOLOCK)
                WHERE TaskDetailKey = @cTaskdetailkey
                   AND Status = '9'
 
                SELECT @nRowCount = @@RowCount
 
-               IF EXISTS (SELECT 1 FROM dbo.InventoryHold WITH (NOLOCK) WHERE Loc = @cLoc AND Status = 'PickShort')
+               IF EXISTS (SELECT 1 FROM LotxLocxID LLI WITH (NOLOCK)
+                           JOIN InventoryHold H WITH (NOLOCK)
+                           ON LLI.StorerKey = H.Storerkey
+                              AND LLI.ID = H.Id
+                           WHERE LLI.StorerKey = @cStorerkey
+                              AND LLI.SKU = @cTaskSKU
+                              AND LLI.Loc = @cTaskLoc
+                              AND LLI.ID LIKE 'HSL-%'
+                              AND LLI.Qty > 0
+                              AND H.Hold = '1')
                BEGIN
-                  SET @cLot = ''
-                  SET @cID = ''
-                  
                   EXEC dbo.nspInventoryHoldWrapper
-                     @c_lot = @cLot
-                     ,@c_Loc = @cLoc
-                     ,@c_ID  = @cID
+                     @c_lot = ''
+                     ,@c_Loc = @cTaskLoc
+                     ,@c_ID  = ''
                      ,@c_StorerKey    = @cStorerKey
-                     ,@c_SKU          = ''
+                     ,@c_SKU          = @cTaskSKU
                      ,@c_Lottable01   = ''
                      ,@c_Lottable02   = ''
                      ,@c_Lottable03   = ''
@@ -110,18 +123,29 @@ BEGIN
                      ,@dt_Lottable13  = NULL
                      ,@dt_Lottable14  = NULL
                      ,@dt_Lottable15  = NULL
-                     ,@c_Status = 'CCUNHOLD'
+                     ,@c_Status = 'LOCSKUHOLD'
                      ,@c_Hold = 0
                      ,@b_success = @bSuccess OUTPUT
                      ,@n_Err = @nErrNo OUTPUT
                      ,@c_Errmsg = @cErrMsg OUTPUT
                      ,@c_Remark  = ''
                   
-                  IF @nErrNo <> 0 OR @bSuccess <> 1
+                  IF @nErrNo NOT IN (0, 60024) OR @bSuccess <> 1 --60024 means no inventory to unhold
                   BEGIN
                      SET @cErrMsg1 = CAST(@nErrNo AS NVARCHAR(6)) + '-' + @cErrMSG
                      SET @cErrMsg2 = 'Unhold Loc Failure, retry via Web'
                      SET @cErrMsg3 = ''
+                     SET @nErrNo = 0
+
+                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+                     GOTO Quit
+                  END
+
+                  IF @nErrNo = 60024 AND @nDebugFlag = 1
+                  BEGIN
+                     SET @cErrMsg1 = CAST(@nErrNo AS NVARCHAR(6)) + '-' + @cErrMSG
+                     SET @cErrMsg2 = 'Nothing to unhold'
+                     SET @cErrMsg3 = 'SKU: ' + @cTaskSKU + ', Loc: ' + @cTaskLoc
                      SET @nErrNo = 0
 
                      EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
