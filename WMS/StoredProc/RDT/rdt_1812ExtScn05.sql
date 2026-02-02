@@ -13,6 +13,7 @@ GO
 /* 2024-09-23 1.0  James    WMS-26122 Created                           */  
 /* 2024-11-11 1.1  PXL009   FCR-1125 Merged 1.0 from v0 branch          */
 /*                            the original name is rdt_1812ExtScn01     */
+/* 2025-05-06 1.2 ALT028    Bug fix INC7983894                          */
 /************************************************************************/  
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ExtScn05] (  
@@ -182,7 +183,8 @@ BEGIN
                FROM dbo.PICKDETAIL PD WITH (NOLOCK)
                JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( PD.TaskDetailKey = TD.TaskDetailKey)
                WHERE O.OrderKey = PD.OrderKey
-               AND   TD.DropID = @cDropID)
+               AND   TD.DropID = @cDropID
+               AND   TD.Status<'9')  --ALT028
 
                IF @nShipperCnt > 1
                BEGIN  

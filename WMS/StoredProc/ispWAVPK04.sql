@@ -22,7 +22,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */
+/* 10-Oct-2025  SSA01    1.0   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispWAVPK04]   
@@ -608,7 +609,7 @@ BEGIN
    		       UOMQty = @n_UOMQty, 
    		       PickSlipNo = @c_PickslipNo,
    		       WaveKey = @c_Wavekey,
-   		       EditDate = GETDATE(),   	   		        	       
+   		       EditDate = dbo.fnc_GetDate(),    --(SSA01)
    		       TrafficCop = NULL
    		WHERE PickDetailKey = @c_WIP_PickDetailKey  
    		
@@ -801,7 +802,7 @@ BEGIN
       BEGIN
          UPDATE PickDetail_WIP WITH (ROWLOCK)  
          SET    PickSlipNo = @c_PickSlipNo
-               ,EditDate = GETDATE()   
+               ,EditDate = dbo.fnc_GetDate()    --(SSA01)
                ,TrafficCop = NULL  
          WHERE PickDetailKey = @c_WIP_PickDetailKey      
          AND WIP_RefNo = @c_WIP_Refno
@@ -885,7 +886,7 @@ BEGIN
       (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno)    
    VALUES     
       (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_StorerKey, @c_SKU,   
-       @n_Qty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), '')
+       @n_Qty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), '')         --(SSA01)
        
    SET @n_err = @@ERROR
    IF @n_err <> 0
@@ -1054,7 +1055,7 @@ BEGIN
       	 SET CaseId = @c_labelno,
       	     Qty = @n_packqty,
 		   	     UOMQTY = CASE UOM WHEN '6' THEN @n_packqty ELSE UOMQty END,
-		   	     EditDate = GETDATE(), 
+		   	     EditDate = dbo.fnc_GetDate(),          --(SSA01)
       	     TrafficCop = NULL
       	 WHERE PickDetailKey = @c_PickDetailKey
       	 SELECT @n_err = @@ERROR

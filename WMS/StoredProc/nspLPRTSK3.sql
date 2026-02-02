@@ -85,6 +85,7 @@ GO
 /* 20-Jan-2017  NJOW08   4.3  WMS-962 Dynamic replenishment(DRP) by     */
 /*                            lotable07='general' filtering             */
 /* 28-Mar-2017  James    4.4  WMS1349-Pick By Incoterm (james06)        */
+/* 10-Oct-2025  SSA01    4.5  UWP-42248 -Enhanced session management    */
 /************************************************************************/    
 CREATE PROC [dbo].[nspLPRTSK3]  
    @c_LoadKey     NVARCHAR(10),  
@@ -997,8 +998,8 @@ BEGIN
        UPDATE ORDERS WITH (ROWLOCK)  
           SET ORDERS.Userdefine01 = O.Userdefine01,   
               ORDERS.TrafficCop = NULL,  
-              EditWho = SUSER_SNAME(),  
-              EditDate = GetDate()  
+              EditWho = dbo.fnc_GetUserName(),         --(SSA01)
+              EditDate = dbo.fnc_GetDate()   --(SSA01)
        FROM ORDERS   
        JOIN #Orders O ON ORDERS.Orderkey = O.Orderkey  
        WHERE ORDERS.Userdefine01 <> O.Userdefine01   

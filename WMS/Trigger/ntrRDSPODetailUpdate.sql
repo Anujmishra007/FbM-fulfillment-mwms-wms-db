@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrRDSPODetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrRDSPODetailUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -36,9 +33,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 06-Oct-2025  AK01    1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrRDSPODetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrRDSPODetailUpdate]
 ON [dbo].[rdsPODetail]
 FOR UPDATE
 AS 
@@ -70,8 +68,8 @@ BEGIN
 	IF @n_continue = 1 or @n_continue=2
 	BEGIN
 		UPDATE rdsPODetail
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL	
 		FROM rdsPODetail (NOLOCK), INSERTED (NOLOCK)
 		WHERE rdsPODetail.rdsPONo   = INSERTED.rdsPONo
@@ -110,3 +108,4 @@ BEGIN
 	END
 END
 GO
+

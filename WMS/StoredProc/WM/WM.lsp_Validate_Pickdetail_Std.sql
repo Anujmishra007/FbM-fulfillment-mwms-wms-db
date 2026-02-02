@@ -23,6 +23,7 @@ GO
 /* 2023-03-14   NJOW01   1.2  LFWM-3608 performance tuning for XML Reading*/
 /* 2023-07-11   Wan01    1.3  LFWM-4131 -PROD - CN Pick Management channel*/
 /*                            id bug                                      */
+/* 2025-05-27   JH01     1.4  UWP-23294 - Validation in pick management   */
 /**************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Validate_Pickdetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -191,8 +192,29 @@ BEGIN
          ,  @c_OrderLineNumber   NVARCHAR(5) = ''                                   --(Wan01)
          ,  @c_Sku               NVARCHAR(20)= ''                                   --(Wan01)
          ,  @c_Sku_OD            NVARCHAR(20)= ''                                   --(Wan01)
+         ,  @c_PickDetailKey     NVARCHAR(50)= ''                                   --JH01
+         ,  @c_PickSlipNo        NVARCHAR(20)  = ''
+         ,  @c_Storerkey         NVARCHAR(20)  = ''                                 --JH01
+         ,  @c_Facility          NVARCHAR(20)  = ''                                 --JH01
+         ,  @c_LoadKey           NVARCHAR(20)  = ''                                 --JH01
+         ,  @n_Cnt               INT           = 0                                  --JH01
+         ,  @n_Pickqty           INT           = 0                                  --JH01        
+         ,  @n_Packqty           INT           = 0                                  --JH01
+         ,  @n_Pickqty_change    INT           = 0                                  --JH01             
+         ,  @n_PromptError       INT           = 0                                  --JH01         
+         ,  @c_LabelNo_Pick      NVARCHAR(50)  = ''                                 --JH01
+         ,  @c_LabelNo_Pack      NVARCHAR(50)  = ''                                 --JH01 
+         ,  @c_OPtion1           NVARCHAR(255) = ''                                 --JH01
+         ,  @c_OPtion2           NVARCHAR(255) = ''                                 --JH01
+         ,  @c_OPtion3           NVARCHAR(255) = ''                                 --JH01
+         ,  @c_OPtion4           NVARCHAR(255) = ''                                 --JH01
+         ,  @c_OPtion5           NVARCHAR(255) = ''                                 --JH01        
+         ,  @c_AssignPackLabelToOrdCfg NVARCHAR(30) = ''                            --JH01   
+         ,  @n_PackByOrder       INT           = 0                                  --JH01     
+         ,  @c_SQLParms          NVARCHAR(4000)                                     --JH01
+         ,  @c_CaseID            NVARCHAR(20)  = ''                                 --JH01
+         ,  @c_DropID            NVARCHAR(20)  = ''                                 --JH01
 
-            
       SELECT  
             @c_OrderKey  = PD.OrderKey
          ,  @c_Lot = PD.Lot
@@ -201,8 +223,12 @@ BEGIN
          ,  @n_Qty = PD.Qty 
          ,  @c_OrderLineNumber = PD.OrderLineNumber                                 --(Wan01)
          ,  @c_Sku = PD.Sku                                                         --(Wan01)
-      FROM  #VALDN PD  --NJOW01
-      
+         ,  @c_PickDetailKey = PD.PickDetailKey                                     --JH01
+         ,  @c_Storerkey = PD.StorerKey                                             --JH01
+         ,  @c_CaseID = PD.CaseID                                                   --JH01
+         ,  @c_DropID = PD.DropID                                                   --JH01
+      FROM  #VALDN PD  --NJOW01     
+
       SET @b_Success = 1
       SET @n_Err = 0 
       SET @c_Errmsg = ''
@@ -249,7 +275,6 @@ BEGIN
          END 
       END                                                                           --(Wan01) - END
       
-
       EXEC isp_ValidatePickdetail
             @c_OrderKey          = @c_OrderKey   
          ,  @c_Lot               = @c_Lot        
@@ -266,7 +291,211 @@ BEGIN
       BEGIN
          SET @n_Continue = 3
          GOTO EXIT_SP
-      END          
+      END
+      
+      /*JH01 Start*/ 
+      DECLARE  @c_RefNo            NVARCHAR(20),
+               @c_RefNo2           NVARCHAR(30),
+               @c_UPC              NVARCHAR(30),
+               @c_LottableValue    NVARCHAR(60),
+               @c_PackDetailInfoKey      BIGINT,
+               @c_UserDefine01           NVARCHAR(30),
+               @c_UserDefine02           NVARCHAR(30),
+               @c_UserDefine03           NVARCHAR(30);
+
+      SELECT @n_Pickqty_change = @n_Qty - pd.Qty/*Get quantity want to change compare to current pickdetail qty*/
+      FROM PICKDETAIL pd (NOLOCK) 
+      WHERE pd.PickDetailKey = @c_PickDetailKey      
+
+      IF @n_Pickqty_change < 0 
+      BEGIN
+         SELECT @c_PickSlipNo = ph.PickSlipNo
+         FROM PACKHEADER ph (NOLOCK)
+         WHERE ph.Storerkey = @c_Storerkey
+         AND   ph.Orderkey  = @c_Orderkey
+         AND   ph.Orderkey  > ''      
+
+         IF @c_PickSlipNo = ''
+         BEGIN
+            SELECT TOP 1 @c_LoadKey = LoadKey FROM LoadPlanDetail lpd (NOLOCK)
+            WHERE lpd.OrderKey = @c_Orderkey
+
+            SELECT @c_PickSlipNo = ph.PickSlipNo
+            FROM PACKHEADER ph (NOLOCK)
+            WHERE ph.Storerkey = @c_Storerkey
+            AND   ph.LoadKey   = @c_LoadKey            
+         END
+         ELSE
+         BEGIN
+            SET @n_PackByOrder = 1
+         END
+            
+         IF @c_PickSlipNo > '' /*1. Check SUM(PackSerialNo.Qty)*/
+         BEGIN            
+            SELECT @n_Packqty = SUM(PackSerialNo.Qty)
+            , @n_Cnt = count(1)
+            FROM PackSerialNo (NOLOCK) 
+            WHERE STORERKEY  = @c_Storerkey AND Pickdetailkey = @c_Pickdetailkey
+            AND   PICKSLIPNO = @c_PickslipNo 
+
+            SET @n_Cnt = CASE WHEN @n_Cnt > 0 THEN 1 ELSE 0 END
+
+            IF @n_Cnt = 1 AND @n_Qty < @n_packqty 
+               SET @n_PromptError = 1  
+
+            IF @n_Cnt = 0 AND @n_PromptError = 0  /*2. Check using labelno to link between pickdetail and packdetail*/
+            BEGIN
+               SELECT @c_Facility = O.Facility 
+               FROM ORDERS O (NOLOCK)                      
+               WHERE O.OrderKey = @c_OrderKey
+                   
+               EXECUTE nspGetRight
+               @c_Facility,
+               @c_StorerKey,
+               '',
+               'AssignPackLabelToOrdCfg', -- Configkey
+               @b_success    OUTPUT,
+               @c_AssignPackLabelToOrdCfg  OUTPUT,
+               @n_err        OUTPUT,
+               @c_errmsg     OUTPUT,
+               @c_OPtion1 OUTPUT,
+               @c_OPtion2 OUTPUT,
+               @c_OPtion3 OUTPUT,
+               @c_OPtion4 OUTPUT,
+               @c_OPtion5 OUTPUT
+                                 
+               IF @b_success = 1 AND ISNULL(@c_AssignPackLabelToOrdCfg,'') = '1'
+               BEGIN
+                  SET @c_Option2 = CASE WHEN @c_Option2 = '' THEN 'DROPID' ELSE @c_Option2 END
+                  SET @c_LabelNo_Pick = CASE WHEN @c_OPtion2 = 'DROPID' THEN @c_DropID 
+                                        WHEN @c_OPtion2 = 'CASEID' THEN @c_CaseID 
+                                        WHEN @c_OPtion2 NOT IN ('DROPID','CASEID') AND ISNULL(@c_DropID,'') = '' AND ISNULL(@c_CaseID,'') > '' THEN @c_CaseID
+                                        WHEN @c_OPtion2 NOT IN ('DROPID','CASEID') AND ISNULL(@c_CaseID,'') = '' AND ISNULL(@c_DropID,'') > '' THEN @c_DropID
+                                             ELSE @c_CaseID END          
+
+                 IF @c_OPtion3 <> 'FullLabelNo'  AND Len(@c_LabelNo_Pick) = 18
+                  BEGIN                     
+                     SET @n_Cnt = 0
+                     SELECT Top 1 @c_LabelNo_Pack = LabelNo
+                     ,@n_Cnt = 1
+                     FROM PACKDETAIL (NOLOCK)
+                     WHERE Storerkey= @c_Storerkey 
+                        AND PickSlipNo = @c_PickSlipNo
+                        AND Right(LabelNo,18) = @c_LabelNo_Pick 
+                        AND SKU = @c_Sku
+
+                     IF @n_Cnt = 0                     
+                     BEGIN 
+                        SET @c_LabelNo_Pack = ''
+                     END
+                  END
+                  ELSE
+                  BEGIN
+                     SET @c_LabelNo_Pack = @c_LabelNo_Pick
+                  END
+
+                  IF @c_LabelNo_Pack = '' 
+                     GOTO General_Check
+
+                  SET @c_SQL = N'SELECT @n_pickqty = SUM(Qty)'
+                             --+  ', @n_Cnt = 1'
+                             + 'FROM PICKDETAIL (NOLOCK)'          
+                             + ' WHERE ' + CASE WHEN @c_Option2 = 'DropID' 
+                                                THEN 'DROPID = @c_LabelNo_Pick'
+                                                ELSE 'CASEID = @c_LabelNo_Pick'
+                                                END
+                             + ' AND Storerkey = @c_Storerkey'
+                             + ' AND SKU      = @c_Sku'
+                             + ' AND   Status   <= ''5'''
+                             + ' AND   Status   <> ''4'''
+
+                  SET @c_SQLParms = N'@c_LabelNo_Pick    NVARCHAR(50)'
+                                  + ',@c_Storerkey       NVARCHAR(15)'
+                                  + ',@c_Sku             NVARCHAR(20)'
+                                  + ',@n_pickqty         INT  OUTPUT'
+
+                   EXEC sp_executesql @c_SQL  
+                                    ,@c_SQLParms
+                                    ,@c_LabelNo_Pick
+                                    ,@c_Storerkey
+                                    ,@c_Sku
+                                    ,@n_pickqty    OUTPUT
+                                    --,@n_Cnt
+
+                  SET @n_Cnt = CASE WHEN @@ROWCOUNT > 0 THEN 1 ELSE 0 END
+                  
+                  IF @n_Cnt = 1
+                  BEGIN
+                     SET @n_Cnt = 0
+                     SET @n_pickqty = @n_pickqty + @n_Pickqty_change 
+                     SELECT @n_packqty = SUM(Qty) 
+                     , @n_Cnt = count(1)
+                     FROM PACKDETAIL (NOLOCK)                
+                     WHERE  PickSlipNo = @c_PickSlipNo
+                        AND StorerKey  = @c_Storerkey
+                        AND LabelNo = @c_LabelNo_Pack 
+                        AND SKU = @c_Sku
+
+                     SET @n_Cnt = CASE WHEN @n_Cnt > 0 THEN 1 ELSE 0 END
+
+                     IF @n_Cnt > 0 AND @n_pickqty < @n_packqty 
+                        SET @n_PromptError = 1  
+                  END                  
+               END --IF @b_success = 1 AND ISNULL(@c_AssignPackLabelToOrdCfg,'') = '1'
+            END               /*2. Check using labelno to link between pickdetail and packdetail*/
+            
+            General_Check:  /*3. General Check sum (pickdetail qty) for sku and sum(packdetail.qty) for sku*/
+            IF @n_Cnt = 0 AND @n_PromptError = 0
+            BEGIN      
+               SELECT @n_packqty = SUM(PACKDETAIL.Qty)
+                     ,@n_Cnt = 1
+               FROM PACKDETAIL (NOLOCK) 
+               JOIN PACKHEADER ph (NOLOCK) ON ph.PickSlipNo = PACKDETAIL.PickSlipNo 
+               WHERE ph.PickslipNo = @c_PickSlipNo
+                  AND PACKDETAIL.SKU = @c_Sku
+
+               IF @n_Cnt = 1 
+               BEGIN
+                  IF @n_PackByOrder = 1
+                  BEGIN
+                     SELECT @n_pickqty = SUM(pd.Qty) + @n_Pickqty_change
+                     FROM PICKDETAIL pd (NOLOCK) 
+                     WHERE pd.OrderKey    = @c_OrderKey  
+                        AND   pd.Storerkey= @c_Storerkey
+                        AND   pd.Sku      = @c_Sku
+                        AND   pd.Status   <= '5'
+                        AND   pd.Status   <> '4'
+                  END
+                  ELSE
+                  BEGIN
+                     SELECT @n_pickqty = SUM(pd.Qty) + @n_Pickqty_change                  
+                     FROM PICKDETAIL pd (NOLOCK) 
+                     JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.OrderKey = pd.OrderKey 
+                     WHERE lpd.LoadKey = @c_LoadKey
+                      AND pd.StorerKey = @c_Storerkey
+                     AND pd.SKU = @c_Sku
+                     AND pd.Status   <= '5'
+                     AND pd.Status   <> '4'
+                  END
+               END         
+
+               IF @n_Cnt = 1 AND @n_pickqty < @n_packqty 
+                  SET @n_PromptError = 1
+            END
+
+            --- PROMT ERRROR!
+            IF @n_PromptError = 1
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 561854
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6),@n_Err)  
+               + ' Picked Qty-'+ CAST(@n_pickqty AS VARCHAR) +'  is less than Packed Qty-'+ CAST(@n_packqty AS VARCHAR)+'  (lsp_Validate_Pickdetail_Std)'
+               GOTO EXIT_SP
+            END
+        END     
+    END
+   --JH01 END
+
    END TRY
    
    BEGIN CATCH

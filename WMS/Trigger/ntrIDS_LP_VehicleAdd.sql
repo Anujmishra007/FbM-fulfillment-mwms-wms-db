@@ -1,12 +1,7 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrIDS_LP_VehicleAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrIDS_LP_VehicleAdd]
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
-GO
-
 
 /************************************************************************/
 /* Trigger: ntrIDS_LP_VehicleAdd                                        */
@@ -28,11 +23,11 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 21-OCT-2011 YTWan    1.1   SOS#218979- HK DG loadPlan. - Populate    */
 /*                            vehicle number & vehicle type to loadplan */
-/*                            if configkey 'LPUPDVHCINFO' turn on       */     
+/*                            if configkey 'LPUPDVHCINFO' turn on       */   
 /************************************************************************/
 
 
-CREATE TRIGGER ntrIDS_LP_VehicleAdd
+CREATE OR ALTER TRIGGER ntrIDS_LP_VehicleAdd
 ON  IDS_LP_Vehicle
 FOR INSERT
 AS
@@ -135,6 +130,7 @@ BEGIN
       END
       --(Wan01) - END
    END
+
    /* #INCLUDE <TRMBOHA2.SQL> */
    IF @n_continue=3  -- Error Occured - Process And Return
    BEGIN

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_InventoryHoldASN_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_InventoryHoldASN_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,10 +21,12 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2020-11-30  Wan01    1.1   Add Big Outer Begin Try..End Try to enable */
 /*                            Revert when Raise error                    */
-/* 12/29/2020  SWT01    1.1   Remove Duplicate Execute Login             */
-/* 15-Jan-2021 Wan02    1.3   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2020-12-29  SWT01    1.2   Remove Duplicate Execute Login             */
+/* 2021-01-15  Wan02    1.3   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-10-06  SSA01    1.4   UWP-42142 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_InventoryHoldASN_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_InventoryHoldASN_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)
     , @c_ReceiptLineNumber    NVARCHAR(5) = ''
     , @b_Success              INT=1 OUTPUT
@@ -49,21 +46,27 @@ BEGIN
 
    DECLARE @c_ASNReason       NVARCHAR(10)= ''
      
-   SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan02) - START
+   SET @n_Err = 0
+   -- (SSA01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''       --(Wan02) - START
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
              
-      EXECUTE AS LOGIN = @c_UserName   
-   END                                   --(Wan02) - END
+       IF @b_ExecuteAs = 1
+            EXECUTE AS LOGIN = @c_UserName
+      END
+      -- (SSA01) - END
+      --(Wan02) - END
    
    BEGIN TRY -- (Wan01) - START  
       SET @c_ASNReason = ''
@@ -138,7 +141,14 @@ BEGIN
       END
    END
 
-   REVERT  
+    --(SSA01) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA01) - END
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_InventoryHoldASN_Wrapper] TO nSQL 

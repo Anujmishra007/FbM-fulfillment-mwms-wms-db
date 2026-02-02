@@ -15,6 +15,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 2022-09-07  1.0  James       WMS-20636. Created                      */
+/* 2025-05-15  1.1  Dennis      FCR-3774 Add Validation                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_CheckDropID_09] (
@@ -38,13 +39,28 @@ BEGIN
    DECLARE @cExternOrderKey NVARCHAR( 50)
    DECLARE @cDocType        NVARCHAR( 1)
    DECLARE @nFunc           INT
-   DECLARE @cLangCode       NVARCHAR( 3)
+   DECLARE @cLangCode       NVARCHAR( 3),
+   @cOutField09             NVARCHAR( 60)
    
    SELECT 
       @cExternOrderKey = ExternOrderKey, 
       @cDocType = DocType
    FROM dbo.Orders WITH (NOLOCK)
    WHERE OrderKey = @cOrderKey
+
+   SELECT 
+      @nFunc = Func,
+      @cLangCode = Lang_Code,
+      @cOutField09 = O_Field09
+   FROM RDT.RDTMOBREC WITH (NOLOCK)
+   WHERE UserName = SUSER_SNAME()
+
+   IF ISNULL(@cOutField09,'') <> '' AND @cDropID <> @cOutField09
+   BEGIN
+      SET @nErrNo = 238351
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Drop ID cannot be different
+      GOTO Quit
+   END
 
    IF @cDocType = 'E'
    BEGIN
@@ -53,12 +69,6 @@ BEGIN
    END
    ELSE
    BEGIN
-   	SELECT 
-   	   @nFunc = Func, 
-   	   @cLangCode = Lang_Code
-   	FROM RDT.RDTMOBREC WITH (NOLOCK)
-   	WHERE UserName = SUSER_SNAME()
-   	
       IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'EXTDROPID', @cDropID) = 0
          SET @nValid = 0
    END

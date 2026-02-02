@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspALstd01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspALstd01]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -30,49 +27,43 @@ GO
 /*										error in DX			                        */
 /* 19-Mar-2009  Audrey        SOS131215 : Added in Lot.status <>"HOLD"	*/
 /* 26-Apr-2015  TLTING01 1.1  Add Other Parameter default value         */ 
-/*                                                                      */
+/* 20-Nov-2024  WLChooi  1.2  DevOps Combine Script                     */
+/* 20-Nov-2024  WLChooi  1.2  WMS-26556-Support Multi Facilities(WL01)  */
 /************************************************************************/
 
-CREATE PROC    nspALstd01
+CREATE OR ALTER PROC nspALstd01
 @c_lot NVARCHAR(10) ,
 @c_uom NVARCHAR(10) ,
 @c_HostWHCode NVARCHAR(10),
 @c_Facility NVARCHAR(5),
-@n_uombase int ,
-@n_qtylefttofulfill int,  
+@n_uombase INT ,
+@n_qtylefttofulfill INT,  
 @c_OtherParms NVARCHAR(200) = ''
 AS
 BEGIN
    SET NOCOUNT ON 
-    
-   
 
    DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY
    FOR SELECT LOTxLOCxID.LOC, LOTxLOCxID.ID,
    QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), '1'
-   FROM LOTxLOCxID (NOLOCK), LOC (NOLOCK), ID (NOLOCK), SKUxLOC (NOLOCK),LOT(NOLOCK)
+   FROM LOTxLOCxID (NOLOCK)
+   JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   --WL01
+   JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Loc = SKUxLOC.Loc AND LOTxLOCxID.Sku = SKUxLOC.Sku   --WL01
+   JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID   --WL01
+   JOIN LOT (NOLOCK) ON LOTxLOCxID.Lot = LOT.Lot   --WL01
+   CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   --WL01
    WHERE LOTxLOCxID.Lot = @c_lot
-   AND LOTxLOCxID.Loc = LOC.LOC
-   AND LOTxLOCxID.Loc = SKUxLOC.Loc
-   AND LOTxLOCxID.Sku = SKUxLOC.Sku
-   AND LOTxLOCxID.ID = ID.ID
-   AND LOTXLOCXID.LOT = LOT.LOT -- SOS131215
    AND ID.Status <> "HOLD"
-   AND LOC.Facility = @c_Facility
+   --AND LOC.Facility = @c_Facility   --WL01
+   AND LOC.Facility = F.Facility   --WL01
    AND LOC.Locationflag <> "HOLD"
    AND LOC.Locationflag <> "DAMAGE"
    AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_uombase
    AND LOC.Status <> "HOLD"
    AND LOT.STATUS <> "HOLD"  --SOS131215
    AND SKUxLOC.LocationType NOT IN ("PICK", "CASE")
-   ORDER BY LOTxLOCxID.LOC
+   ORDER BY F.FacSort, LOTxLOCxID.LOC   --WL01
 END
-
 GO
-
-GO
-SET ANSI_NULLS OFF
-GO
-
 GRANT EXECUTE ON nspALstd01 TO nSQL
 GO

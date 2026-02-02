@@ -26,10 +26,11 @@ GO
 /* 01-Oct-2021  NJOW02   1.2  WMS-18189 add pickslipno parameter         */
 /* 01-Oct-2021  NJOW02   1.2  DEVOPS combine script                      */
 /* 29-Mar-2023	NJOW03   1.3  WMS-21989 add cartonno & UCC parameters    */
+/* 14-Jul-2025  Sean     1.4  #FCR-6199 - Packing SKU Decode             */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[isp_SKUDecode_Wrapper]
    @c_Storerkey  NVARCHAR(15),  
-   @c_Sku        NVARCHAR(60),
+   @c_Sku        NVARCHAR(500),    --Sean
    @c_NewSku     NVARCHAR(60) OUTPUT,   
    @b_Success    INT      OUTPUT,
    @n_Err        INT      OUTPUT, 
@@ -129,7 +130,7 @@ BEGIN
       
    EXEC sp_executesql @c_SQL, 
         N'@c_StorerKey NVARCHAR(15), @c_Sku NVARCHAR(60), @c_NewSku NVARCHAR(60) OUTPUT, @c_Code01 NVARCHAR(60) OUTPUT, @c_Code02 NVARCHAR(60) OUTPUT, @c_Code03 NVARCHAR(60) OUTPUT, 
-          @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT, @c_Pickslipno NVARCHAR(10), @n_CartonNo INT, @c_UCCNo NVARCHAR(20)', 
+          @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT, @c_Pickslipno NVARCHAR(10), @n_CartonNo INT, @c_UCCNo NVARCHAR(30)', 
         @c_StorerKey,
         @c_Sku,
         @c_NewSku OUTPUT,

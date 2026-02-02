@@ -23,6 +23,7 @@ GO
 /* 2021-07-15  Wan      1.0   Created.                                  */
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
 /* 2022-12-02  Wan03    1.1   Fixed Blocking                            */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_PTSK]
@@ -148,8 +149,8 @@ BEGIN
       UPDATE p WITH (ROWLOCK)
          SET PickSlipNo = @c_TaskBatchNo
             , Notes = @c_Wavekey + '-' + @c_PickZone + '-' + RIGHT(@c_TaskBatchNo,3) + CASE WHEN @c_PickZone = '' THEN '-4' ELSE '-1' END
-            , EditWho  = SUSER_SNAME()
-            , EditDate = GETDATE()
+            , EditWho  = dbo.fnc_GetUserName()     --(SSA01)
+            , EditDate = dbo.fnc_GetDate()    --(SSA01)
             , Trafficcop = NULL
       FROM PICKDETAIL as p
       --JOIN o ON o.PickDetailKey = p.PickDetailKey

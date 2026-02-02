@@ -66,8 +66,8 @@ BEGIN
       ' @cStorerKey     NVARCHAR( 15), ' +
       ' @cSerialNo      NVARCHAR( 100),' +
       ' @cPickSlipNo    NVARCHAR( 20), ' + 
-      ' @nErrNo         INT,           ' +
-      ' @cErrMsg        NVARCHAR( 20)  ' 
+      ' @nErrNo         INT OUTPUT,     ' +
+      ' @cErrMsg        NVARCHAR( 20)  OUTPUT' 
 
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
          @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,

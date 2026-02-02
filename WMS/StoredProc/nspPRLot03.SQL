@@ -1,10 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRLot03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].nspPRLot03
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Procedure: nspPRLot03                                         */
 /* Creation Date:                                                       */
@@ -15,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -26,10 +24,11 @@ GO
 /* 2007-05-09  Wanyt          Rename Store Procedure Name to nspPRLot03 */
 /* 2007-08-22  ONG01          Lot03 = '' should be filtered             */
 /* 18-AUG-2015 YTWan    1.1   SOS#350432 - Project Merlion - Allocation */
-/*                            Strategy (Wan01)                          */ 
+/*                            Strategy (Wan01)                          */
+/* 25-Jun-2025 WLChooi  1.2   UWP-36187-Support Multi Facilities(WL01)  */
 /************************************************************************/
 
-CREATE PROC nspPRLot03
+CREATE OR ALTER PROC [dbo].[nspPRLot03]
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
 @c_lot NVARCHAR(10) ,
@@ -38,48 +37,48 @@ CREATE PROC nspPRLot03
 @c_lottable03 NVARCHAR(18) ,
 @d_lottable04 datetime ,
 @d_lottable05 datetime ,
-@c_lottable06 NVARCHAR(30) ,  --(Wan01)  
-@c_lottable07 NVARCHAR(30) ,  --(Wan01)  
+@c_lottable06 NVARCHAR(30) ,  --(Wan01)
+@c_lottable07 NVARCHAR(30) ,  --(Wan01)
 @c_lottable08 NVARCHAR(30) ,  --(Wan01)
 @c_lottable09 NVARCHAR(30) ,  --(Wan01)
 @c_lottable10 NVARCHAR(30) ,  --(Wan01)
 @c_lottable11 NVARCHAR(30) ,  --(Wan01)
 @c_lottable12 NVARCHAR(30) ,  --(Wan01)
 @d_lottable13 DATETIME ,      --(Wan01)
-@d_lottable14 DATETIME ,      --(Wan01)   
+@d_lottable14 DATETIME ,      --(Wan01)
 @d_lottable15 DATETIME ,      --(Wan01)
 @c_uom NVARCHAR(10) ,
-@c_facility NVARCHAR(5), 
+@c_facility NVARCHAR(5),
 @n_uombase int ,
 @n_qtylefttofulfill int
 ,@c_OtherParms NVARCHAR(200)=''--(Wan01)
 AS
 BEGIN
-   SET NOCOUNT ON 
-    
-   
+   SET NOCOUNT ON
+
+
    DECLARE @n_StorerMinShelfLife int,
            @c_Condition NVARCHAR(4000),      --(Wan01)
-           @c_SQLStatement NVARCHAR(3999) 
-   
-   IF (dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) IS NOT NULL AND dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) <> '')   
+           @c_SQLStatement NVARCHAR(3999)
+
+   IF (dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) IS NOT NULL AND dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) <> '')
    BEGIN
       /* Get Storer Minimum Shelf Life */
-      
+
       SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
       FROM Sku (nolock), Storer (nolock), Lot (nolock)
       WHERE Lot.Lot = @c_lot
       AND Lot.Sku = Sku.Sku
       AND Sku.Storerkey = Storer.Storerkey
-      AND Sku.Facility = @c_facility  
-      
+      AND Sku.Facility = @c_facility
+
       DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT LOT.STORERKEY,LOT.SKU,LOT.LOT ,
       QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
       FROM LOT (Nolock), Lotattribute (Nolock)
-      WHERE LOT.LOT = @c_lot 
-      AND Lot.Lot = Lotattribute.Lot 
-      AND DateAdd(Day, @n_StorerMinShelfLife, Lotattribute.Lottable04) > GetDate() 
+      WHERE LOT.LOT = @c_lot
+      AND Lot.Lot = Lotattribute.Lot
+      AND DateAdd(Day, @n_StorerMinShelfLife, Lotattribute.Lottable04) > GetDate()
       ORDER BY Lotattribute.Lottable05, Lot.Lot
 
    END
@@ -89,13 +88,13 @@ BEGIN
       SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
       FROM Sku (nolock), Storer (nolock)
       WHERE Sku.Sku = @c_sku
-      AND Sku.Storerkey = @c_storerkey   
+      AND Sku.Storerkey = @c_storerkey
       AND Sku.Storerkey = Storer.Storerkey
-      AND Sku.Facility = @c_facility  
-   
+      AND Sku.Facility = @c_facility
+
       IF @n_StorerMinShelfLife IS NULL
          SELECT @n_StorerMinShelfLife = 0
-   
+
       IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable01)) <> '' AND dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable01)) IS NOT NULL
       BEGIN
          SELECT @c_Condition = " AND LOTTABLE01 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable01)) + "' "
@@ -110,7 +109,7 @@ BEGIN
       BEGIN
          SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND LOTTABLE03 = N'" + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_Lottable03)) + "' "
       END
-      ELSE 
+      ELSE
       BEGIN
          SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND (LOTTABLE03 = '' OR LOTTABLE03 IS NULL )"      -- ONG01
       END
@@ -126,104 +125,127 @@ BEGIN
       --(Wan01) - START
       IF RTRIM(@c_Lottable06) <> '' AND @c_Lottable06 IS NOT NULL
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
-                          + ' AND Lottable06 = N''' + ISNULL(RTRIM(@c_Lottable06),'') + '''' 
-      END   
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
+                          + ' AND Lottable06 = N''' + ISNULL(RTRIM(@c_Lottable06),'') + ''''
+      END
 
       IF RTRIM(@c_Lottable07) <> '' AND @c_Lottable07 IS NOT NULL
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
-                          + ' AND Lottable07 = N''' + ISNULL(RTRIM(@c_Lottable07),'') + '''' 
-      END   
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
+                          + ' AND Lottable07 = N''' + ISNULL(RTRIM(@c_Lottable07),'') + ''''
+      END
 
       IF RTRIM(@c_Lottable08) <> '' AND @c_Lottable08 IS NOT NULL
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
-                          + ' AND Lottable08 = N''' + ISNULL(RTRIM(@c_Lottable08),'') + '''' 
-      END   
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
+                          + ' AND Lottable08 = N''' + ISNULL(RTRIM(@c_Lottable08),'') + ''''
+      END
 
       IF RTRIM(@c_Lottable09) <> '' AND @c_Lottable09 IS NOT NULL
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
-                          + ' AND Lottable09 = N''' + ISNULL(RTRIM(@c_Lottable09),'') + '''' 
-      END   
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
+                          + ' AND Lottable09 = N''' + ISNULL(RTRIM(@c_Lottable09),'') + ''''
+      END
 
       IF RTRIM(@c_Lottable10) <> '' AND @c_Lottable10 IS NOT NULL
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
-                          + ' AND Lottable10 = N''' + ISNULL(RTRIM(@c_Lottable10),'') + '''' 
-      END   
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
+                          + ' AND Lottable10 = N''' + ISNULL(RTRIM(@c_Lottable10),'') + ''''
+      END
 
       IF RTRIM(@c_Lottable11) <> '' AND @c_Lottable11 IS NOT NULL
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
-                          + ' AND Lottable11 = N''' + ISNULL(RTRIM(@c_Lottable11),'') + '''' 
-      END   
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
+                          + ' AND Lottable11 = N''' + ISNULL(RTRIM(@c_Lottable11),'') + ''''
+      END
 
       IF RTRIM(@c_Lottable12) <> '' AND @c_Lottable12 IS NOT NULL
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
-                          + ' AND Lottable12 = N''' + ISNULL(RTRIM(@c_Lottable12),'') + '''' 
-      END  
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
+                          + ' AND Lottable12 = N''' + ISNULL(RTRIM(@c_Lottable12),'') + ''''
+      END
 
       IF CONVERT(char(10), @d_Lottable13, 103) <> '01/01/1900'
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
                           + ' AND Lottable13 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) + ''''
       END
 
       IF CONVERT(char(10), @d_Lottable14, 103) <> '01/01/1900'
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
                           + ' AND Lottable14 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) + ''''
       END
 
       IF CONVERT(char(10), @d_Lottable15, 103) <> '01/01/1900'
       BEGIN
-         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
                           + ' AND Lottable15 = N''' + RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) + ''''
       END
       --(Wan01) - END
-         
-      IF @n_StorerMinShelfLife > 0 
+
+      IF @n_StorerMinShelfLife > 0
       BEGIN
-         SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND DateAdd(Day, " + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ", Lotattribute.Lottable04) > GetDate() " 
-      END 
-   
-  
-     SELECT @c_SQLStatement =  " DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR " +
-            " SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT, " +
-            " QTYAVAILABLE = (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(LOT.QTYPREALLOCATED) )  " +
-            " FROM LOTATTRIBUTE (NOLOCK), LOT (NOLOCK), LOTxLOCxID (NOLOCK), LOC (NOLOCK), ID (NOLOCK)     " + 
-            " WHERE LOT.STORERKEY = N'" + dbo.fnc_RTrim(@c_storerkey) + "' " +
-            " AND LOT.SKU = N'" + dbo.fnc_RTrim(@c_SKU) + "' " +
-            " AND LOT.STATUS = 'OK' " +
-            " AND LOT.LOT = LOTATTRIBUTE.LOT " +
-            " AND LOTXLOCXID.Lot = LOT.LOT " +
-            " AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT " +
-            " AND LOTXLOCXID.LOC = LOC.LOC " +
-            " AND LOTxLOCxID.ID = ID.ID " +
-            " AND ID.STATUS <> 'HOLD' " +  
-            " AND LOC.Status = 'OK' " + 
-            " AND LOC.LocationFlag <> 'HOLD' " +
-            " AND LOC.LocationFlag <> 'DAMAGE' " +
-            " AND LOC.Facility = N'" + dbo.fnc_RTrim(@c_facility) + "' " + 
-            " AND LOTATTRIBUTE.STORERKEY = N'" + dbo.fnc_RTrim(@c_storerkey) + "' " +
-            " AND LOTATTRIBUTE.SKU = N'" + dbo.fnc_RTrim(@c_SKU) + "' " +
-            dbo.fnc_RTrim(@c_Condition)  + 
-            " GROUP By LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 " +
-            " HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(LOT.QTYPREALLOCATED)   > 0  " +
-            " ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05, LOT.Lot " 
+         SELECT @c_Condition = dbo.fnc_RTrim(@c_Condition) + " AND DateAdd(Day, " + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ", Lotattribute.Lottable04) > GetDate() "
+      END
 
-      EXEC(@c_SQLStatement)
+      --WL01 S
+      --SELECT @c_SQLStatement =  " DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR " +
+      --      " SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT, " +
+      --      " QTYAVAILABLE = (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(LOT.QTYPREALLOCATED) )  " +
+      --      " FROM LOTATTRIBUTE (NOLOCK), LOT (NOLOCK), LOTxLOCxID (NOLOCK), LOC (NOLOCK), ID (NOLOCK)     " +
+      --      " WHERE LOT.STORERKEY = N'" + dbo.fnc_RTrim(@c_storerkey) + "' " +
+      --      " AND LOT.SKU = N'" + dbo.fnc_RTrim(@c_SKU) + "' " +
+      --      " AND LOT.STATUS = 'OK' " +
+      --      " AND LOT.LOT = LOTATTRIBUTE.LOT " +
+      --      " AND LOTXLOCXID.Lot = LOT.LOT " +
+      --      " AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT " +
+      --      " AND LOTXLOCXID.LOC = LOC.LOC " +
+      --      " AND LOTxLOCxID.ID = ID.ID " +
+      --      " AND ID.STATUS <> 'HOLD' " +
+      --      " AND LOC.Status = 'OK' " +
+      --      " AND LOC.LocationFlag <> 'HOLD' " +
+      --      " AND LOC.LocationFlag <> 'DAMAGE' " +
+      --      " AND LOC.Facility = N'" + dbo.fnc_RTrim(@c_facility) + "' " +
+      --      " AND LOTATTRIBUTE.STORERKEY = N'" + dbo.fnc_RTrim(@c_storerkey) + "' " +
+      --      " AND LOTATTRIBUTE.SKU = N'" + dbo.fnc_RTrim(@c_SKU) + "' " +
+      --      dbo.fnc_RTrim(@c_Condition)  +
+      --      " GROUP By LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 " +
+      --      " HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(LOT.QTYPREALLOCATED)   > 0  " +
+      --      " ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05, LOT.Lot "
 
+      SELECT @c_SQLStatement = N' DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR ' +
+                             + N' SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT, ' +
+                             + N' QTYAVAILABLE = (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(LOT.QTYPREALLOCATED) )  ' +
+                             + N' FROM LOTATTRIBUTE (NOLOCK) ' +
+                             + N' JOIN LOT (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT '
+                             + N' JOIN LOTxLOCxID (NOLOCK) ON LOTXLOCXID.Lot = LOT.LOT '
+                             + N'                         AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT ' +
+                             + N' JOIN LOC (NOLOCK) ON LOTXLOCXID.LOC = LOC.LOC ' + 
+                             + N' JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID ' +
+                             + N' JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility ' +
+                             + N' WHERE LOT.STORERKEY = @c_Storerkey ' +
+                             + N' AND LOT.SKU = @c_SKU ' +
+                             + N' AND LOT.STATUS = ''OK'' ' +
+                             + N' AND ID.STATUS <> ''HOLD'' ' +
+                             + N' AND LOC.Status = ''OK'' ' +
+                             + N' AND LOC.LocationFlag <> ''HOLD'' ' +
+                             + N' AND LOC.LocationFlag <> ''DAMAGE'' ' +
+                             + N' AND LOTATTRIBUTE.STORERKEY = @c_Storerkey ' +
+                             + N' AND LOTATTRIBUTE.SKU = @c_SKU ' +
+                             + TRIM(@c_Condition)
+                             + N' GROUP By LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 ' +
+                             + N' HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(LOT.QTYPREALLOCATED) > 0 ' +
+                             + N' ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05, LOT.Lot '
+
+      EXEC sp_ExecuteSQL @c_SQLStatement
+         , N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5) '
+         , @c_Storerkey
+         , @c_Sku
+         , @c_Facility
+      --WL01 E
    END
 END
 GO
- 
-GO
-SET ANSI_NULLS OFF 
-GO
-
-GRANT EXECUTE ON nspPRLot03 TO NSQL
+GRANT EXECUTE ON  [dbo].[nspPRLot03] TO [NSQL]
 GO

@@ -17,6 +17,7 @@ GO
 /* 2016-09-13 1.0  James    WMS288 Created                                       */
 /* 2018-10-22 1.1  Gan      Performance tuning                                   */
 /* 2024-04-19 1.2  Dennis   UWP-18504 Condition Code Enhancements                */
+/* 2025-06-23 0.0  JackC    !!!Cutover. Use V0 repo for work!!!                  */
 /*********************************************************************************/
 
 CREATE PROCEDURE [RDT].[rdtfnc_Receipt_2DBarcode] (

@@ -32,6 +32,8 @@ GO
 /* 2023-09-07  Michael  1.3   Extend #TMPALLOC.ID len to 18 (ML01)      */
 /* 2023-10-13  Michael  1.4   WMS-23889 move hardcoded DC Code to       */
 /*                            CodeLkup LULUDCCODE with UDF01=4PL (ML02) */
+/* 2025-10-10  SSA01    1.5   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC dbo.ispLuLuFC6
      @c_WaveKey                     NVARCHAR(10)
@@ -592,8 +594,8 @@ BEGIN
             
          UPDATE UCC
          SET [Status] = '3'
-            , EditDate= GETDATE()
-            , EditWho = SUSER_SNAME()
+            , EditDate= dbo.fnc_GetDate()    --(SSA01)
+            , EditWho = dbo.fnc_GetUserName()          --(SSA01)
             , TrafficCop = NULL
          FROM UCC 
          WHERE UCC_RowRef = @n_UCC_RowRef

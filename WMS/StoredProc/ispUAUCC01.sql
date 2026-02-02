@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ispUAUCC01]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[ispUAUCC01]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -16,7 +13,7 @@ GO
 /* Called By: ntrPickdetaildelete Trigger when StorerConfig             */
 /*            UnAllocUCCPickCode is setup                               */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 6.0                                                         */
 /*                                                                      */
@@ -26,13 +23,15 @@ GO
 /* Date         Author    Ver Purposes                                  */
 /* 06/10/2016   TLTING    1.1 ADD NOLOCK                                */
 /* 07/09/2017   Leong     1.2 IN00459369 - Add StorerKey.               */
+/* 04-Dec-2025  WL01      1.3 UWP-44797 Support update by Pickdetailkey */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispUAUCC01]
+CREATE OR ALTER PROC [dbo].[ispUAUCC01]
 (   @c_Storerkey  NVARCHAR(15)
   , @b_Success    INT           OUTPUT
   , @n_Err        INT           OUTPUT
   , @c_ErrMsg     NVARCHAR(255) OUTPUT
+  , @c_Pickdetailkey NVARCHAR(10) = ''   --WL01
 )
 AS
 BEGIN
@@ -53,19 +52,48 @@ BEGIN
    SET @n_Continue= 1
    SET @n_StartTCount = @@TRANCOUNT
 
-
    BEGIN TRAN
 
-   UPDATE UCC SET STATUS = '1'
-      ,UCC.PickdetailKey = ''
-      ,UCC.OrderKey = ''
-      ,UCC.OrderLineNumber = ''
-      ,UCC.WaveKey = ''
-   FROM UCC U
-   WHERE  U.Storerkey = @c_Storerkey
-   AND    U.Status > '2' AND U.Status < '6'
-   AND    EXISTS (SELECT 1 FROM #D_PICKDETAIL d WHERE d.DropID = U.UCCNo AND d.Storerkey = @c_Storerkey AND d.Status < '9') -- IN00459369
-   AND    NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.DropID = U.UCCNo AND PD.Storerkey = @c_Storerkey AND PD.Status < '9') -- IN00459369
+   --WL01 S
+   -- If @c_Pickdetailkey is provided (from ntrPickDetailUpdate), use PickDetailKey path
+   -- If @c_Pickdetailkey is blank (from ntrPickDetailDelete), use #D_PICKDETAIL path
+   IF ISNULL(TRIM(@c_Pickdetailkey), '') <> ''
+   BEGIN
+      UPDATE U 
+      SET U.STATUS = '1'
+        , U.PickdetailKey = ''
+        , U.OrderKey = ''
+        , U.OrderLineNumber = ''
+        , U.WaveKey = ''
+      FROM UCC U
+      WHERE  U.Storerkey = @c_Storerkey
+      AND    U.Status > '2' AND U.Status < '6'
+      AND    EXISTS ( SELECT 1 
+                      FROM PICKDETAIL PD (NOLOCK) 
+                      WHERE PD.PickDetailKey = @c_Pickdetailkey
+                      AND PD.Storerkey = @c_Storerkey
+                      AND PD.DropID = U.UCCNo
+                      AND PD.Status < '9' )
+      AND NOT EXISTS ( SELECT 1 
+                       FROM PICKDETAIL PD (NOLOCK) 
+                       WHERE PD.Storerkey = @c_Storerkey
+                       AND PD.DropID = U.UCCNo
+                       AND PD.Status < '9'
+                       AND PD.Qty > 0 )   --1 UCC Shares multiple pickdetail - ensure ALL have Qty = 0
+   END
+   ELSE IF OBJECT_ID('tempdb..#D_PICKDETAIL') IS NOT NULL
+   BEGIN   --WL01 E
+      UPDATE UCC SET STATUS = '1'
+         ,UCC.PickdetailKey = ''
+         ,UCC.OrderKey = ''
+         ,UCC.OrderLineNumber = ''
+         ,UCC.WaveKey = ''
+      FROM UCC U
+      WHERE  U.Storerkey = @c_Storerkey
+      AND    U.Status > '2' AND U.Status < '6'
+      AND    EXISTS (SELECT 1 FROM #D_PICKDETAIL d WHERE d.DropID = U.UCCNo AND d.Storerkey = @c_Storerkey AND d.Status < '9') -- IN00459369
+      AND    NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.DropID = U.UCCNo AND PD.Storerkey = @c_Storerkey AND PD.Status < '9') -- IN00459369
+   END   --WL01
 
    IF @n_continue = 3  -- Error Occured - Process And Return
    BEGIN
@@ -82,7 +110,7 @@ BEGIN
             COMMIT TRAN
          END
       END
-      Execute nsp_logerror @n_err, @c_errmsg, 'ispUAUCC01'
+      EXECUTE nsp_logerror @n_err, @c_errmsg, 'ispUAUCC01'
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN
    END

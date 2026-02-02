@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WM_Get_ModuleReport]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WM_Get_ModuleReport]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,8 +26,9 @@ GO
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch             */
 /* 2021-02-15  Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2021-02-25  Wan01    1.2   Fixed. Add Revert                         */
+/* 2025-09-02  SWT01    1.3   Enhanced session management pattern       */
 /************************************************************************/
-CREATE PROC [WM].[lsp_WM_Get_ModuleReport]
+CREATE OR ALTER PROC [WM].[lsp_WM_Get_ModuleReport]
            @c_ModuleID           NVARCHAR(30)
          , @c_Storerkey          NVARCHAR(15)
          , @c_Facility           NVARCHAR(5)
@@ -57,20 +53,27 @@ BEGIN
    SET @n_err      = 0
    SET @c_errmsg   = ''
 
-   SET @n_Err = 0 
-   --(Wan01) - START 
-   IF SUSER_SNAME() <> @c_UserName 
+   -- Start enhanced session management (SWT01)
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] 
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
    
-      IF @n_Err <> 0 
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-      
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(Wan01) - END
+   
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
+
    --(mingle01) - START
    BEGIN TRY
 
@@ -219,7 +222,8 @@ BEGIN
    END CATCH
    --(mingle01) - END 
    EXIT_SP:
-   REVERT 
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01) 
 END -- procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_WM_Get_ModuleReport] TO nSQL 

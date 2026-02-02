@@ -30,6 +30,7 @@ GO
 /* 09-Jul-2021  NJOW01  1.2   WMS-17326 Remove lottable01 if hostwhcode */
 /* 23-Sep-2021  WLChooi 1.3   DevOps Combine Script                     */
 /* 23-Sep-2021  WLChooi 1.4   WMS-18020 - Add Pickzone Mark Logic (WL01)*/
+/* 10-Oct-2025  SSA01   1.5   UWP-42248 -Enhanced session management    */
 /************************************************************************/    
 CREATE PROC [dbo].[ispPOA14]      
      @c_OrderKey    NVARCHAR(10) = ''   
@@ -173,8 +174,8 @@ BEGIN
          UPDATE ORDERS WITH (ROWLOCK)  
          SET M_Address4 = SUBSTRING(@c_Pickzone, 1, 45),  
              Capacity   = @n_LOCScore,
-             EditDate   = GETDATE(),  
-             EditWho    = SUSER_SNAME(),  
+             EditDate   = dbo.fnc_GetDate(),    --(SSA01)
+             EditWho    = dbo.fnc_GetUserName(),               --(SSA01)
              TrafficCop = NULL  
          WHERE Orderkey = @c_Orderkey2  
 
@@ -295,8 +296,8 @@ BEGIN
   
          UPDATE ORDERS WITH (ROWLOCK)  
          SET B_Address4 = SUBSTRING(@c_Putawayzone, 1, 45),  
-             EditDate = GETDATE(),  
-             EditWho = SUSER_SNAME(),  
+             EditDate = dbo.fnc_GetDate(),   --(SSA01)
+             EditWho = dbo.fnc_GetUserName(),              --(SSA01)
              TrafficCop = NULL  
          WHERE Orderkey = @c_Orderkey2  
   

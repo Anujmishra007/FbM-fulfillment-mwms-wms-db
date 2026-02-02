@@ -1,56 +1,53 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveMBOLChildOrder_Reverse]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveMBOLChildOrder_Reverse] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO   
-/************************************************************************/                                                                                  
-/* Store Procedure: lsp_WaveMBOLChildOrder_Reverse                      */                                                                                  
-/* Creation Date: 2019-04-29                                            */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
-/* Written by: Wan                                                      */                                                                                  
-/*                                                                      */                                                                                  
+GO
+
+/************************************************************************/
+/* Store Procedure: lsp_WaveMBOLChildOrder_Reverse                      */
+/* Creation Date: 2019-04-29                                            */
+/* Copyright: LFL                                                       */
+/* Written by: Wan                                                      */
+/*                                                                      */
 /* Purpose: LFWM-1794 - SPs for Wave Control Screens                    */
 /*          - ( MBOL reverse Create Child Order To MBOL )               */
-/*                                                                      */                                                                                  
-/* Called By: SCE                                                       */                                                                                  
-/*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
-/*                                                                      */                                                                                  
-/* Version: 8.0                                                         */                                                                                  
-/*                                                                      */                                                                                  
-/* Data Modifications:                                                  */                                                                                  
-/*                                                                      */                                                                                  
-/* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */  
+/*                                                                      */
+/* Called By: SCE                                                       */
+/*          :                                                           */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 8.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver.  Purposes                                  */
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveMBOLChildOrder_Reverse] 
-      @c_WaveKey              NVARCHAR(10)                                                                                                                    
-   ,  @c_MBOLkey              NVARCHAR(10)   
-   ,  @c_OrderkeyList         NVARCHAR(4000) --Seperator by |          
-   ,  @c_CaseIDList           NVARCHAR(4000) --Seperator by |        
-   ,  @b_Success              INT = 1                 OUTPUT  
-   ,  @n_err                  INT = 0                 OUTPUT                                                                                                             
-   ,  @c_ErrMsg               NVARCHAR(255)= ''       OUTPUT 
+/* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
+/************************************************************************/
+CREATE OR ALTER PROC [WM].[lsp_WaveMBOLChildOrder_Reverse]
+      @c_WaveKey              NVARCHAR(10)
+   ,  @c_MBOLkey              NVARCHAR(10)
+   ,  @c_OrderkeyList         NVARCHAR(4000) --Seperator by |
+   ,  @c_CaseIDList           NVARCHAR(4000) --Seperator by |
+   ,  @b_Success              INT = 1                 OUTPUT
+   ,  @n_err                  INT = 0                 OUTPUT
+   ,  @c_ErrMsg               NVARCHAR(255)= ''       OUTPUT
    ,  @n_WarningNo            INT          = 0        OUTPUT
-   ,  @c_ProceedWithWarning   CHAR(1)      = 'N'                     
-   ,  @c_UserName             NVARCHAR(128)= ''                                                                                                                         
+   ,  @c_ProceedWithWarning   CHAR(1)      = 'N'
+   ,  @c_UserName             NVARCHAR(128)= ''
    ,  @n_ErrGroupKey          INT          = 0        OUTPUT
-AS  
-BEGIN                                                                                                                                                        
-   SET NOCOUNT ON                                                                                                                                           
-   SET ANSI_NULLS OFF                                                                                                                                       
-   SET QUOTED_IDENTIFIER OFF                                                                                                                                
-   SET CONCAT_NULL_YIELDS_NULL OFF       
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  @n_StartTCnt                  INT = @@TRANCOUNT  
+   DECLARE  @n_StartTCnt                  INT = @@TRANCOUNT
          ,  @n_Continue                   INT = 1
-         
+
          ,  @c_TableName                  NVARCHAR(50)   = 'MBOLDETAIL'
          ,  @c_SourceType                 NVARCHAR(50)   = 'lsp_WaveMBOLChildOrder_Reverse'
 
@@ -61,17 +58,17 @@ BEGIN
 
          ,  @CUR_CTN                      CURSOR
 
-   DECLARE @T_ORDERS TABLE   
+   DECLARE @T_ORDERS TABLE
          (  RowRef      INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
          ,  Orderkey    NVARCHAR(10)   NULL
          )
 
-   DECLARE @T_CASEID TABLE   
+   DECLARE @T_CASEID TABLE
          (  RowRef      INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
          ,  CaseID      NVARCHAR(20)   NULL
          )
 
-   DECLARE @T_CASEORDER TABLE   
+   DECLARE @T_CASEORDER TABLE
          (  Orderkey          NVARCHAR(10)   NULL
          ,  Store             NVARCHAR(18)   NULL
          ,  PExternOrderkey   NVARCHAR(30) NULL
@@ -80,25 +77,28 @@ BEGIN
 
    SET @b_Success = 1
    SET @n_Err     = 0
-               
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
-   
+
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
+
    --(mingle01) - START
    BEGIN TRY
       SET @n_ErrGroupKey = 0
@@ -107,34 +107,34 @@ BEGIN
 
       INSERT INTO @T_ORDERS (Orderkey)
       SELECT [VALUE]
-      FROM STRING_SPLIT ( @c_OrderkeyList , '|' )  
+      FROM STRING_SPLIT ( @c_OrderkeyList , '|' )
 
       INSERT INTO @T_CASEID (CaseID)
       SELECT [VALUE]
-      FROM STRING_SPLIT ( @c_CaseIDList , '|' )  
+      FROM STRING_SPLIT ( @c_CaseIDList , '|' )
 
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
       BEGIN
-         INSERT INTO @T_CASEORDER   
+         INSERT INTO @T_CASEORDER
             (  Orderkey
             ,  Store
             ,  PExternOrderkey
             ,  CaseID
             )
-         SELECT DISTINCT 
+         SELECT DISTINCT
                   PD.Orderkey
-               ,  Store = ISNULL(OH.Consigneekey,'')   
-               ,  PExternOrderkey  = ISNULL(OHP.ExternOrderkey,'')              
+               ,  Store = ISNULL(OH.Consigneekey,'')
+               ,  PExternOrderkey  = ISNULL(OHP.ExternOrderkey,'')
                ,  CTN.CaseID
          FROM @T_CASEID CTN
          JOIN PICKDETAIL  PD WITH (NOLOCK) ON  CTN.CaseID = PD.CaseID
          JOIN ORDERS      OH WITH (NOLOCK) ON  OH.Orderkey = PD.Orderkey
          JOIN ORDERDETAIL OD WITH (NOLOCK) ON  OD.Orderkey = PD.Orderkey
-                                           AND OD.OrderLineNumber = PD.OrderLineNumber 
+                                           AND OD.OrderLineNumber = PD.OrderLineNumber
          JOIN ORDERS       OHP WITH (NOLOCK) ON  OHP.Orderkey= OD.UserDefine09
-         JOIN DROPIDDETAIL DPD WITH (NOLOCK) ON  DPD.Childid = PD.CaseID 
-                                             AND DPD.Userdefine01 = OD.Mbolkey 
-         WHERE PD.ShipFlag <> 'Y' 
+         JOIN DROPIDDETAIL DPD WITH (NOLOCK) ON  DPD.Childid = PD.CaseID
+                                             AND DPD.Userdefine01 = OD.Mbolkey
+         WHERE PD.ShipFlag <> 'Y'
          AND   PD.[Status] < '9'
          AND ( OD.UserDefine09 <> '' AND OD.UserDefine09 IS NOT NULL )
          AND ( OD.UserDefine10 <> '' AND OD.UserDefine10 IS NOT NULL )
@@ -142,38 +142,38 @@ BEGIN
          SET @CUR_CTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT T.CaseID
          FROM @T_CASEORDER T
-         WHERE NOT EXISTS (SELECT 1 
+         WHERE NOT EXISTS (SELECT 1
                            FROM @T_ORDERS SO
                            JOIN @T_CASEID CTN ON SO.RowRef = CTN.RowRef
                            WHERE T.Orderkey = SO.Orderkey
                            AND   T.CaseID   = CTN.CaseID
                            )
          OPEN @CUR_CTN
-      
-         FETCH NEXT FROM @CUR_CTN INTO @c_CaseID                                                                              
-                                       
+
+         FETCH NEXT FROM @CUR_CTN INTO @c_CaseID
+
          WHILE @@FETCH_STATUS <> -1
          BEGIN
             SET @n_Err = 556701
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow Partial Child Order selected to reverse'
-                          + '. Carton #: ' + @c_CaseID 
-                          + '. (lsp_WaveMBOLChildOrder_Reverse) |' +  @c_CaseID 
+                          + '. Carton #: ' + @c_CaseID
+                          + '. (lsp_WaveMBOLChildOrder_Reverse) |' +  @c_CaseID
 
-            EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            EXEC [WM].[lsp_WriteError_List]
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                ,  @c_TableName   = @c_TableName
                ,  @c_SourceType  = @c_SourceType
                ,  @c_Refkey1     = @c_WaveKey
                ,  @c_Refkey2     = @c_MBOLkey
                ,  @c_Refkey3     = @c_Orderkey
-               ,  @c_WriteType   = 'ERROR' 
-               ,  @n_err2        = @n_err 
-               ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_WriteType   = 'ERROR'
+               ,  @n_err2        = @n_err
+               ,  @c_errmsg2     = @c_errmsg
+               ,  @b_Success     = @b_Success   OUTPUT
+               ,  @n_err         = @n_err       OUTPUT
                ,  @c_errmsg      = @c_errmsg    OUTPUT
 
-            FETCH NEXT FROM @CUR_CTN INTO @c_CaseID   
+            FETCH NEXT FROM @CUR_CTN INTO @c_CaseID
          END
          CLOSE @CUR_CTN
          DEALLOCATE @CUR_CTN
@@ -195,48 +195,48 @@ BEGIN
             ,  T.Orderkey
 
       OPEN @CUR_CTN
-      
+
       FETCH NEXT FROM @CUR_CTN INTO @c_Orderkey
                                  ,  @c_Store
                                  ,  @c_PExternOrderkey
-                                 ,  @c_CaseID                                                                              
-                                       
+                                 ,  @c_CaseID
+
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          BEGIN TRY
 
-            EXEC [dbo].[isp_ChildOrder_Reverse]  
+            EXEC [dbo].[isp_ChildOrder_Reverse]
                  @c_MBOLkey         = @c_MBOLkey
                , @c_Orderkey        = @c_Orderkey
                , @c_Store           = @c_Store
                , @c_PExternOrderkey = @c_PExternOrderkey
                , @c_CaseID          = @c_CaseID
                , @b_Success         = @b_Success      OUTPUT
-               , @n_Err             = @n_Err          OUTPUT 
-               , @c_ErrMsg          = @c_ErrMsg       OUTPUT 
+               , @n_Err             = @n_Err          OUTPUT
+               , @c_ErrMsg          = @c_ErrMsg       OUTPUT
          END TRY
 
          BEGIN CATCH
             SET @n_Err = 556702
             SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ChildOrder_Reverse. (lsp_WaveMBOLChildOrder_Reverse)'   
-                           + '(' + @c_ErrMsg + ')' 
-                       
-            EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ChildOrder_Reverse. (lsp_WaveMBOLChildOrder_Reverse)'
+                           + '(' + @c_ErrMsg + ')'
+
+            EXEC [WM].[lsp_WriteError_List]
+                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                ,  @c_TableName   = @c_TableName
                ,  @c_SourceType  = @c_SourceType
                ,  @c_Refkey1     = @c_WaveKey
                ,  @c_Refkey2     = @c_MBOLkey
                ,  @c_Refkey3     = @c_Orderkey
-               ,  @c_WriteType   = 'ERROR' 
-               ,  @n_err2        = @n_err 
-               ,  @c_errmsg2     = @c_errmsg 
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
+               ,  @c_WriteType   = 'ERROR'
+               ,  @n_err2        = @n_err
+               ,  @c_errmsg2     = @c_errmsg
+               ,  @b_Success     = @b_Success   OUTPUT
+               ,  @n_err         = @n_err       OUTPUT
                ,  @c_errmsg      = @c_errmsg    OUTPUT
 
-            IF (XACT_STATE()) = -1  
+            IF (XACT_STATE()) = -1
             BEGIN
                ROLLBACK TRAN
 
@@ -244,18 +244,18 @@ BEGIN
                BEGIN
                   BEGIN TRAN
                END
-            END  
+            END
          END CATCH
 
          FETCH NEXT FROM @CUR_CTN INTO @c_Orderkey
                                     ,  @c_Store
                                     ,  @c_PExternOrderkey
-                                    ,  @c_CaseID     
+                                    ,  @c_CaseID
       END
       CLOSE @CUR_CTN
       DEALLOCATE @CUR_CTN
    END TRY
-   
+
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
@@ -294,9 +294,10 @@ EXIT_SP:
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
-   END      
-   REVERT
+   END
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_WaveMBOLChildOrder_Reverse] TO nSQL 
-GO  
+GRANT EXECUTE ON  [WM].[lsp_WaveMBOLChildOrder_Reverse] TO [NSQL]
+GO

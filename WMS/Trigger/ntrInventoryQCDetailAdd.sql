@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrInventoryQCDetailAdd]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrInventoryQCDetailAdd]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -26,9 +23,10 @@ GO
 /* 20-May-2016  Leong      1.2   Include ArchiveCop.                           */
 /* 22-Mar-2018  Wan01      1.5   WMS-4288 - [CN] UA Relocation Phase II -      */
 /*                               Exceed Channel of IQC                         */
+/* 25-JUN-2025  SSA01      1.6   UWP-3982- Added PalletType in inventory       */
 /*******************************************************************************/
 
-CREATE TRIGGER ntrInventoryQCDetailAdd
+CREATE OR ALTER TRIGGER ntrInventoryQCDetailAdd
 ON InventoryQCDetail
 FOR INSERT
 AS
@@ -94,6 +92,7 @@ DECLARE @c_qc_key            NVARCHAR(10),
         /*CS01 END*/
       , @c_Channel            NVARCHAR(20) = '' --(Wan01)
       , @n_Channel_ID         BIGINT = 0        --(Wan01)
+      , @c_PalletType         NVARCHAR(10) = ''  --(SSA01)
 SELECT @c_qc_key = '', @c_qclineno = ''
 
 WHILE @n_continue = 1 OR @n_continue = 2
@@ -113,6 +112,7 @@ BEGIN
           @c_toid             = toid
        ,  @c_Channel          = Channel         --(Wan01)
        ,  @n_Channel_ID       = Channel_ID      --(Wan01)
+       ,  @c_PalletType       = FromPalletType  --(SSA01)
     FROM INSERTED
     WHERE qc_key + qclineno > @c_qc_key + @c_qclineno
     AND   toqty > 0
@@ -248,7 +248,8 @@ BEGIN
             ,  @c_errmsg       = @c_errmsg     OUTPUT                                                                                                                                                                                                                      
             ,  @c_MoveRefKey   = ''                                                                                                                                                                                                                                        
             ,  @c_Channel      = @c_Channel                                                                                                                                                                                                                                
-            ,  @n_Channel_ID   = @n_Channel_ID  OUTPUT                                                                                                                                                                                                                     
+            ,  @n_Channel_ID   = @n_Channel_ID  OUTPUT
+            ,  @c_PalletType   = @c_PalletType   --(SSA01)
 
       IF @b_success <> 1
       BEGIN

@@ -28,7 +28,8 @@ GO
 /* 2021-03-12  Wan      1.0   Created.                                     */      
 /* 2021-08-27  Wan01    1.1   Fixed. Transfer Channel Only. LotxLocxID No  */      
 /*                            changed.                                     */    
-/* 26-Nov-2021 PakYuen 1.2   JSM-35430  change the logic to update  (py01) */      
+/* 26-Nov-2021 PakYuen 1.2   JSM-35430  change the logic to update  (py01) */
+/* 10-Oct-2025  SSA01   1.3  UWP-42248 -Enhanced session management        */
 /***************************************************************************/        
         
 CREATE PROC [dbo].[ispTransferAllocation04](        
@@ -331,8 +332,8 @@ BEGIN
       UPDATE TL3       
       SET Trafficcop = NULL        
          ,Transmitflag = '1'                    
-         ,EditDate = GETDATE()      
-         ,EditWho = SUSER_SNAME()      
+         ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+         ,EditWho = dbo.fnc_GetUserName()             --(SSA01)
       FROM TRANSMITLOG3 TL3          
       WHERE TL3.Transmitlogkey = @c_Transmitlogkey        
         
@@ -1500,7 +1501,7 @@ END
                        +' SET [Status] = @c_Status_TFH'       
                        +    ',OpenQty  = @n_OpenQty'        
                        +    ',EditWho  = @c_UserID '       
-                       +    ',EditDate = GETDATE() '       
+                       +    ',EditDate = dbo.fnc_GetDate()'         --(SSA01)
                        + CASE WHEN @c_Status_Current NOT IN ('9') AND @n_OpenQty = 0    
                               THEN ''     
                               WHEN @c_Status_Current NOT IN ('9') AND @c_Status_TFH = '9'     
@@ -1618,8 +1619,8 @@ END
       UPDATE TRANSMITLOG3        
       SET Transmitflag = @c_Transmitflag        
          ,TransmitBatch= @c_TransmitBatch      
-         ,EditDate = GETDATE()      
-         ,EditWho = SUSER_SNAME()      
+         ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+         ,EditWho = dbo.fnc_GetUserName()               --(SSA01)
          ,TrafficCop = NULL            
       WHERE Transmitlogkey = @c_Transmitlogkey        
         

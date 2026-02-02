@@ -50,7 +50,8 @@ GO
 /* 24-Feb-2017  TLTING       Performance Tune - Editdate,editwho        */
 /* 19-Nov-2018  TLTING       Remove OD Mbolkey link                     */  
 /* 01-Nov-2020  SHONG        Prevent rollback to pickdetail update      */  
-/*                           and Log Short Qty to ErrLog Table          */  
+/*                           and Log Short Qty to ErrLog Table          */
+/* 10-Oct-2025  SSA01        UWP-42248 -Enhanced session management     */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[nsp_BackEndShipped4]
      @cStorerKey NVARCHAR(15),
@@ -114,7 +115,7 @@ BEGIN
          -- Update ShipCounter to show which attempt this was on executing.
          UPDATE MBOL WITH (ROWLOCK)
          SET MBOL.ShipCounter = ISNULL(LTRIM(ShipCounter),0)+1 ,
-         Editdate = GETDATE(),         --(SW01)
+         Editdate = dbo.fnc_GetDate(),    --(SSA01)         --(SW01)
          TrafficCop = NULL
          WHERE MBOLKEY = @cMbolkey
      COMMIT TRAN
@@ -207,8 +208,8 @@ BEGIN
             BEGIN TRY    
               UPDATE PICKDETAIL WITH (ROWLOCK)  
                   SET Status = '9',  
-                     EditWho = SUSER_SNAME(),  
-                     EditDate = GETDATE()  
+                     EditWho = dbo.fnc_GetUserName(),         --(SSA01)
+                     EditDate = dbo.fnc_GetDate()    --(SSA01)
                WHERE pickdetailkey = @c_PickDetailKey  
                AND   Status < '9'   
   
@@ -251,8 +252,8 @@ BEGIN
 
          UPDATE PICKDETAIL WITH (ROWLOCK)
             SET ArchiveCop = '9',
-               EditWho = SUSER_SNAME(),
-               EditDate = GETDATE()
+               EditWho = dbo.fnc_GetUserName(),          --(SSA01)
+               EditDate = dbo.fnc_GetDate()    --(SSA01)
          WHERE pickdetailkey = @c_PickDetailKey
          AND   Qty = 0
          AND   Status < '9'

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_CCGenTagNo_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_CCGenTagNo_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -27,8 +22,10 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-10-06   SSA01    1.2   UWP-42142 -Enhanced session management   */
+/*                             and cleanup.                             */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_CCGenTagNo_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_CCGenTagNo_Wrapper]
    @c_StockTakeKey      NVARCHAR(10)
 ,  @b_Success           INT          = 1   OUTPUT   
 ,  @n_Err               INT          = 0   OUTPUT
@@ -43,6 +40,7 @@ BEGIN
    
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0
 
          , @n_Count           INT = 0
          , @n_EmptyTag        INT = 0
@@ -53,10 +51,12 @@ BEGIN
    SET @n_Err = 0 
 
    --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
+   -- (SSA01) Enhanced session management - Start
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
    
@@ -65,8 +65,10 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SSA01) Enhanced session management - End
    --(mingle01) - END
 
    --(mingle01) - START
@@ -132,7 +134,9 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SSA01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_CCGenTagNo_Wrapper] TO nSQL 

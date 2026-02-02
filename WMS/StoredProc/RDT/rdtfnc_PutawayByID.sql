@@ -27,6 +27,7 @@ GO
 /* 2024-04-18 1.9  Calvin   UWP-18503 Map full input values (CLVN01)    */
 /* 2024-06-11 2.0  NLT013   FCR-267 Unlock locations for all UCC        */
 /* 2024-07-31 2.1  CYU027   FCR-122 Add Reason Code for Override        */
+/* 2025-10-13 2.2  YKC028   FCR-8113 Add RDtformat                      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PutawayByID] (
@@ -367,6 +368,15 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --From ID needed
          GOTO Step_1_Fail
       END
+
+      -- Check barcode format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'ID', @cFromID) = 0
+      BEGIN
+         SET @nErrNo = 52761
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+         GOTO Step_1_Fail
+      END
+
 
       -- Decode
       IF @cDecodeSP <> ''

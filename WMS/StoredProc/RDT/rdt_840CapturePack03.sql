@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'rdt.rdt_840CapturePack03') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_840CapturePack03
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Store procedure: rdt_840CapturePack03                                */
 /* Purpose: Output carton weight and carton type                        */
@@ -15,9 +12,10 @@ GO
 /* Date        Rev  Author     Purposes                                 */
 /* 2020-07-05  1.0  James      WMS-13913. Created                       */
 /* 2023-12-18  1.1  YK         JSM-198278 Fix incorrect weight capture  */
+/* 2024-12-17  1.2  James      FCR-1625 Add new params (james01)        */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_840CapturePack03 (
+CREATE OR ALTER PROC [RDT].[rdt_840CapturePack03] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -31,20 +29,24 @@ CREATE PROC rdt.rdt_840CapturePack03 (
    @nCartonNo        INT,
    @cCartonType      NVARCHAR( 10) OUTPUT,
    @fCartonWeight    FLOAT         OUTPUT,
-   @cCapturePackInfo NVARCHAR( 10) OUTPUT, 
+   @fCartonCube      FLOAT         OUTPUT, 
+   @fCartonLength    FLOAT         OUTPUT, 
+   @fCartonWidth     FLOAT         OUTPUT, 
+   @fCartonHeight    FLOAT         OUTPUT, 
+   @cCapturePackInfo NVARCHAR( 10) OUTPUT,
    @nErrNo           INT           OUTPUT,
-   @cErrMsg          NVARCHAR( 20) OUTPUT 
+   @cErrMsg          NVARCHAR( 20) OUTPUT
 )
 AS
 
-   SET NOCOUNT ON  
-   SET ANSI_NULLS OFF  
-   SET QUOTED_IDENTIFIER OFF  
-   SET CONCAT_NULL_YIELDS_NULL OFF  
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @fSKUWeight     FLOAT
    DECLARE @cCtnType       NVARCHAR( 10)
-   
+
    IF @nStep = 3
    BEGIN
       IF @nInputKey = 1
@@ -59,17 +61,16 @@ AS
          JOIN dbo.Storer ST WITH (NOLOCK) ON CZ.CartonizationGroup = ST.CartonGroup
          WHERE CZ.CartonType = @cCtnType
          AND   ST.StorerKey = @cStorerkey
-         
+
          SELECT @fSKUWeight = ISNULL( SUM( SKU.STDGROSSWGT * PD.Qty), 0)
          FROM dbo.PackDetail PD WITH (NOLOCK)
          JOIN dbo.SKU SKU WITH (NOLOCK) ON PD.SKU = SKU.Sku AND PD.StorerKey = SKU.StorerKey
          WHERE PD.PickSlipNo = @cPickSlipNo
          AND   PD.CartonNo = @nCartonNo
-         
+
          SET @cCartonType = ''
          SET @fCartonWeight = CASE WHEN ISNULL(@fCartonWeight,0)=0 THEN 0 else @fCartonWeight END  + @fSKUWeight  --YK 1.1
 
-         
          SET @cCapturePackInfo = '1'   -- Enable capture pack info screen
       END
    END
@@ -78,9 +79,5 @@ AS
 
    Quit:
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON rdt.rdt_840CapturePack03 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_840CapturePack03] TO [NSQL]
 GO

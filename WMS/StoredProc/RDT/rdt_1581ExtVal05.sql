@@ -102,6 +102,8 @@ BEGIN
          IF @nInputKey = 1
          BEGIN
             DECLARE @cSerialNo           NVARCHAR(50)
+            DECLARE @cOPSPosition        NVARCHAR(60)
+            DECLARE @cUserName           NVARCHAR(128)
 
             SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddSerialValidtn', @cStorerKey)
 
@@ -109,14 +111,20 @@ BEGIN
             BEGIN
                SELECT
                   @cSku = V_SKU,
-                  @cSerialNo = V_MAX
+                  @cSerialNo = V_MAX,
+                  @cUsername = UserName
                FROM   RDTMOBREC (NOLOCK)
                WHERE  Mobile = @nMobile
 
-               IF CHARINDEX(@cSku,@cSerialNo,1) <> 1
-                  OR LEN(@cSerialNo) <= LEN(@cSku)
-               BEGIN               
-                  SET @nErrNo = -1
+               SELECT
+                  @cOPSPosition = ISNULL(OPSPosition,'')
+               FROM RDT.RDTUser (NOLOCK )
+               WHERE Username = @cUsername
+
+               IF (CHARINDEX(@cSku,@cSerialNo,1) <> 1 OR LEN(@cSerialNo) <= LEN(@cSku)) -- SN Invalid
+                  AND (@cOPSPosition <> '1')
+               BEGIN
+                  SET @nErrNo = -2
                   SET @cErrMsg = ''
                   GOTO Quit
                END

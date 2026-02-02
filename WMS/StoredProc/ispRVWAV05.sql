@@ -26,6 +26,7 @@ GO
 /* 12/02/2018  NJOW01   1.0   WMS-4039 Add Asia Ecom strategy            */
 /* 22/01/2020  NJOW02   1.1   WMS-11884 Include skip hop task            */
 /* 01-04-2020  Wan01    1.2   Sync Exceed & SCE                          */
+/* 10-10-2025  SSA01    1.3   UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[ispRVWAV05]      
   @c_wavekey      NVARCHAR(10)  
@@ -144,8 +145,8 @@ CREATE PROCEDURE [dbo].[ispRVWAV05]
           --SET STATUS = '0' -- Normal          --(Wan01)
           SET TMReleaseFlag = 'N'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               --(Wan01) 
+           ,  EditWho = dbo.fnc_GetUserName()          --(Wan01)(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()   --(SSA01)              --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

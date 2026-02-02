@@ -1,0 +1,338 @@
+name: CDT DEPLOY
+
+on:
+  push:
+    branches:
+      - dev
+
+  workflow_dispatch:
+    inputs:
+      WMSDB:
+        description: "Kindly choose a Tag or a branch from the options above and a WMSDB Name from the list below for deployment."
+        required: true
+        type: choice
+        options:
+          - DEVWMS
+          - GBRWMS
+          - INVWMS
+          - IOBWMS
+          - RDTWMS
+  
+
+permissions: write-all
+
+env:
+  DEPLOYMENT_STATUS_PAGE: https://mwmsdb-status.fulfillment.maersk.com/
+  WORKFLOW_RUN_ID: ${{ github.event.repository.name }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  OWNER: ${{ github.repository_owner }}
+  REPO: ${{ github.event.repository.name }}
+  ENV_CODE: cdt
+  WMSDB_NAME: ${{(github.event_name == 'workflow_dispatch' && github.event.inputs.WMSDB) || (github.event_name == 'push' && 'DEVWMS')}}
+  WMSDB_METADATA_REPO: FbM-fulfillment-mwms-wms-db-metadata
+
+jobs:
+  INIT_DEPLOY:
+    runs-on: ubuntu-latest
+    name: ${{(github.event_name == 'workflow_dispatch' && 'Branch Deployment in CDT') || (github.event_name == 'push' && github.ref == 'refs/heads/dev' && 'Create CDT Tag & Deploy DEVWMS')}}
+    outputs:
+      MATRIX_OUTPUT: ${{ env.MATRIX_OUTPUT }}
+    steps:
+      - name: print Inputs
+        run: echo "${{ toJSON(inputs) }}"
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: echo "$GITHUB_CONTEXT"
+      - name: checking CDT deployment conditions
+        if: ${{ github.ref != 'refs/heads/dev' }}
+        shell: pwsh
+        run: |
+          if($env:WMSDB_NAME -ne "DEVWMS")
+           {
+            write-host "This is a Branch deployment"
+           }else{
+            write-output '# ERROR : ${{ github.event.inputs.WMSDB }} Deployment was initiated using a branch(${{ github.ref_name }})' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            write-output '❌ **Error:**  ${{ github.event.inputs.WMSDB }} deployment can only be initiated using a DEV Branch Merge, not directly from any branch. Please choose the appropriate branch for deployment.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            throw " ${{ github.event.inputs.WMSDB }} deployment can only be initiated using a Main Branch Merge and not directly from any branch. Please choose the appropriate branch for deployment."
+           }
+      - name: Workflow dispatch deployment conditions should not run dev
+        if: ${{ github.ref == 'refs/heads/dev' && github.event_name == 'workflow_dispatch' }}
+        shell: pwsh
+        run: |
+          write-output '# ERROR : ${{ github.event.inputs.WMSDB }} Deployment was initiated using a branch(${{ github.ref_name }})' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '❌ **Error:**  ${{ github.event.inputs.WMSDB }} deployment can only be initiated using a PR Branch or a tag, not directly from dev branch. Please choose the appropriate branch or tag for deployment.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          throw " ${{ github.event.inputs.WMSDB }} deployment can only be initiated using a PR Branch or a tag, not directly from dev branch. Please choose the appropriate branch for deployment."
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      - name: run composit action to create wms tags
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        id: create-tag
+        uses: Maersk-Global/fbm-github-actions/create-wms-tag@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse json data for push dev branch
+        if: github.ref == 'refs/heads/dev' || contains(github.ref ,'refs/tags/')
+        env:
+          CREATE_TAG: ${{ (github.event_name == 'push' && steps.create-tag.outputs.CREATE_TAG)  || (github.event_name == 'workflow_dispatch' && github.ref_name) }}
+        shell: pwsh
+        run: |
+          [regex]$pattern = '(?i)^V(?<year>\d{2})\.(?<month>\d{1,2})\.(?<tagnumber>\d{3})'
+          $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=mainClone | jq -r '.content' | base64 -d | ConvertFrom-Json
+          write-host "$($json_metadata | ConvertTo-Json -Depth 10)"
+          if ($env:WMSDB_NAME -in $json_metadata.databases.PSObject.Properties.name){write-host "WMSDB:: $($env:WMSDB_NAME) exists in ${{ env.ENV_CODE }}.json"}else{throw "WMSDB $($env:WMSDB_NAME) does not exist in ${{ env.ENV_CODE }}.json"}
+          $matrixtable = @()
+          $DB_CURRENT_VERSION = $json_metadata.databases.$($env:WMSDB_NAME).Database_Version
+          $DB_DEPLOY_VERSION = $env:CREATE_TAG
+          $DB_SERVER_NAME = $json_metadata.databases.$($env:WMSDB_NAME).Server_name
+          $DATBASE_NAME = $env:WMSDB_NAME
+          write-host "Parsing DB name : $($env:WMSDB_NAME), current version $($DB_CURRENT_VERSION), Deploy version $($DB_DEPLOY_VERSION), Server name $($DB_SERVER_NAME)  "
+          ##### Summary output
+          write-output "## Deployting in WMSDB $($env:WMSDB_NAME)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '| DATBASE_NAME |DB_SERVER_NAME |CURRENT_VERSION |DEPLOY_VERSION |DEPLOYMENT_STATUS |COMMENTS |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '| :-------------: |:-------------: |:-------------: |:-------------: |:-------------: |:------------- |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          #####Summary output
+          ####################### Checking Currrent Version and Deploy Version Format ########################
+          if($DB_CURRENT_VERSION -match $pattern)
+            {
+            $DB_CURRENT_VERSION = $Matches.0
+            $DB_CURRENT_VERSION_YEAR = [int]$Matches.year
+            $DB_CURRENT_VERSION_MONTH = [int]$Matches.month
+            $DB_CURRENT_VERSION_TAGNUMBER = [int]$Matches.tagnumber
+            write-host "Current version: $($DB_CURRENT_VERSION), Year : $($DB_CURRENT_VERSION_YEAR), Month: $($DB_CURRENT_VERSION_MONTH), Tag Number: $($DB_CURRENT_VERSION_TAGNUMBER)" 
+            }else{
+            write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            throw " $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database."
+            }
+            ####################### Checking Deployment Version and Deploy Version Format ########################
+            if($DB_DEPLOY_VERSION -match $pattern)
+            {
+            $DB_DEPLOY_VERSION = $Matches.0
+            $DB_DEPLOY_VERSION_YEAR = [int]$Matches.year
+            $DB_DEPLOY_VERSION_MONTH = [int]$Matches.month
+            $DB_DEPLOY_VERSION_TAGNUMBER = [int]$Matches.tagnumber
+            write-host "Current version: $($DB_DEPLOY_VERSION), Year : $($DB_DEPLOY_VERSION_YEAR), Month: $($DB_DEPLOY_VERSION_MONTH), Tag Number: $($DB_DEPLOY_VERSION_TAGNUMBER)"
+            }else{
+            write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            throw " $($DATBASE_NAME): ⚠️ ERROR : Deployment version is not in the correct format, skipping deployment for this database."
+            }
+          ####################### Deployment version is higher than Current version ########################
+          if($DB_DEPLOY_VERSION -eq $DB_CURRENT_VERSION)
+            {
+            write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            throw " $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION), skipping deployment for this database."
+            }elseif($DB_DEPLOY_VERSION_YEAR -lt $DB_CURRENT_VERSION_YEAR)
+            {
+            write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            throw " $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
+            }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -lt $DB_CURRENT_VERSION_MONTH))
+            {
+            write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            throw " $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
+            }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -eq $DB_CURRENT_VERSION_MONTH) -and ($DB_DEPLOY_VERSION_TAGNUMBER -lt $DB_CURRENT_VERSION_TAGNUMBER))
+            {
+            write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            throw " $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
+            }
+          ####################### Checking for changed files between current and deploy version ########################
+          $changed_files = git diff --name-only $DB_CURRENT_VERSION $DB_DEPLOY_VERSION  -- ':*.sql' | out-string
+          $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
+          $changed_files_string = $changed_files_list -join ","
+          write-output "changed file string $($changed_files_string)"
+          if($changed_files_string -ne '')
+            {
+            $obj = New-Object -TypeName PSObject
+            $obj | Add-Member -MemberType NoteProperty -Name DATBASE_NAME -Value $($DATBASE_NAME)
+            $obj | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($DB_SERVER_NAME)
+            $obj | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($DB_CURRENT_VERSION)
+            $obj | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($DB_DEPLOY_VERSION)
+            $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
+            $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
+            $matrixtable += $obj
+            write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
+            }elseif($changed_files_string -eq '')
+            {
+              write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ there are no *.sql files created/updated between version $($DB_CURRENT_VERSION) to  $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output "MATRIX_OUTPUT=" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+              write-output "MATRIX_OUTPUT="
+              write-output "MATRIX_OUTPUT=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              write-output "MATRIX_OUTPUT="
+            }
+      - name: Parse json data for PR deployment
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/dev' && !contains(github.ref ,'refs/tags/')
+        env:
+          CREATE_TAG: ${{ github.ref_name}}
+        shell: pwsh
+        run: |
+          $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=mainClone | jq -r '.content' | base64 -d | ConvertFrom-Json
+          write-host "$($json_metadata | ConvertTo-Json -Depth 10)"
+          if ($env:WMSDB_NAME -in $json_metadata.databases.PSObject.Properties.name){write-host "WMSDB:: $($env:WMSDB_NAME) exists in ${{ env.ENV_CODE }}.json"}else{throw "WMSDB $($env:WMSDB_NAME) does not exist in ${{ env.ENV_CODE }}.json"}
+          $matrixtable = @()
+          $DB_CURRENT_VERSION = $json_metadata.databases.$($env:WMSDB_NAME).Database_Version
+          $DB_DEPLOY_VERSION = $env:CREATE_TAG
+          $DB_SERVER_NAME = $json_metadata.databases.$($env:WMSDB_NAME).Server_name
+          $DATBASE_NAME = $env:WMSDB_NAME
+          write-host "Parsing DB name : $($env:WMSDB_NAME), current version $($DB_CURRENT_VERSION), Deploy version $($DB_DEPLOY_VERSION), Server name $($DB_SERVER_NAME)  "
+          $changed_files = git diff --name-only ${{ github.ref_name }} $(git merge-base ${{ github.ref_name }} origin/dev) -- ':*.sql' | out-string
+          $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
+          $changed_files_string = $changed_files_list -join ","
+          write-output "changed file string $($changed_files_string)"
+          ##### Summary output
+          write-output "## Deployting in WMSDB $($env:WMSDB_NAME)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '| DATBASE_NAME |DB_SERVER_NAME |CURRENT_VERSION |DEPLOY_BRANCH |DEPLOYMENT_STATUS |COMMENTS |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '| :-------------: |:-------------: |:-------------: |:-------------: |:-------------: |:------------- |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          #####Summary output
+          if($changed_files_string -ne '')
+            {
+            $obj = New-Object -TypeName PSObject
+            $obj | Add-Member -MemberType NoteProperty -Name DATBASE_NAME -Value $($DATBASE_NAME)
+            $obj | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($DB_SERVER_NAME)
+            $obj | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($DB_CURRENT_VERSION)
+            $obj | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($DB_DEPLOY_VERSION)
+            $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
+            $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
+            $matrixtable += $obj
+            write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
+            }elseif($changed_files_string -eq '')
+            {
+              write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ there are no *.sql files created/updated between version $($DB_CURRENT_VERSION) to  $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output "MATRIX_OUTPUT=" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+              write-output "MATRIX_OUTPUT="
+              write-output "MATRIX_OUTPUT=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              write-output "MATRIX_OUTPUT="
+            }
+      - name: print METRIX_OUTPUT
+        shell: pwsh
+        run: |
+          ######### Printing final Summary Output #########
+          write-output "---------------------------- METRIX_OUTPUT ----------------------------"
+          write-output "$($env:MATRIX_OUTPUT)"
+          write-output "---------------------------- ADDING link Summery----------------------------"
+          write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output "#### Once deployed, please check the Deployment version status here :point_right: [click here](${{ env.DEPLOYMENT_STATUS_PAGE }})" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output "#### Note: Once the pipeline has finished running, refresh the page to view the latest status updates and artifact logs." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+
+  DEPLOY:
+    runs-on: cdt-weu-vm-management-agent
+    if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
+    needs: [INIT_DEPLOY]
+    environment:
+      name: cdt
+      url: https://fbm-sre-poc-db-metadata.fbm.maersk.com/
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        data: ${{ fromJson(needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT) }}
+    name: "${{ matrix.data.DATBASE_NAME }}-${{ matrix.data.DB_DEPLOY_VERSION }}"
+    env:
+      DATBASE_NAME: ${{ matrix.data.DATBASE_NAME }}
+      DB_CURRENT_VERSION: ${{ matrix.data.DB_CURRENT_VERSION }}
+      DB_DEPLOY_VERSION: ${{ matrix.data.DB_DEPLOY_VERSION }}
+      DB_SERVER_NAME: ${{ matrix.data.DB_SERVER_NAME }}
+      SQL_SCRIPT_FILES_STRING: ${{ matrix.data.CHANGED_FILES_STRING }}
+      DB_ADMIN_USER_PASSWORD: ${{ secrets.CDT_DB_ADMIN_USER_PASSWORD }}
+    steps:
+      - name: print matrix values for testing test
+        run: |
+          pwd
+          echo "database name : ${{ matrix.data.DATBASE_NAME }}"
+          echo "current version : ${{ matrix.data.DB_CURRENT_VERSION }}"
+          echo "deploy version : ${{ matrix.data.DB_DEPLOY_VERSION }}"
+          echo "server name : ${{ matrix.data.DB_SERVER_NAME }}"
+          echo "changed files : ${{ matrix.data.CHANGED_FILES_STRING }}"
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      - name: Install PowerShell
+        uses: PSModule/install-powershell@v1
+      - name: Install required PowerShell modules
+        shell: pwsh
+        run: |
+          $modules = @('SqlServer', 'PSScriptAnalyzer')
+
+            foreach ($module in $modules) {
+                if (-not (Get-Module -ListAvailable -Name $module)) {
+                    Write-Host "Installing $module..."
+                    Set-PSRepository PSGallery -InstallationPolicy Trusted
+                    Install-Module $module -ErrorAction Stop -Force
+                } else {
+                    Write-Host "$module is already installed. Skipping..."
+                }
+            }
+
+      - name: Copy db-deply script to pwd
+        run: |
+          cp ./.github/scripts/db-deployment.ps1 ./db-deployment.ps1
+      - name: replace token if any
+        uses: cschleiden/replace-tokens@v1.3
+        with:
+          files: '["./db-deployment.ps1"]'
+      - name: Deployment Started Notification
+        uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_CDT_DEV_TEAMS_HOOK }}
+          notification-summary: CDT - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment STARTED &#x1F6A2
+          notification-color: 09ACF3
+      - name: Run the DB script
+        id: run-db-script
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          ./db-deployment.ps1
+      - name: Updating Metadata
+        if: github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/')
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          curl -L -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.FBM_WMS_BRANCH_AUTOMATION_PAT }}" -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/dispatches  -d '{"event_type":"auto-merge-pr","client_payload":{"environment_code": "${{ env.ENV_CODE }}","database": "${{ matrix.data.DATBASE_NAME }}","db_version": "${{ matrix.data.DB_DEPLOY_VERSION }}","requestor": "${{ github.triggering_actor}}","workflow_run_failed": "false"}}'
+          $retry_count = 0
+          do{
+           sleep 5
+           $retry_count = $retry_count + 1
+           $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.FBM_WMS_BRANCH_AUTOMATION_PAT }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=mainClone | jq -r '.content' | base64 -d | ConvertFrom-Json
+           write-output "Attempt : $($retry_count) - $($env:DATBASE_NAME) :: Metadata Version is $($json_metadata.databases.$($env:DATBASE_NAME).Database_Version)"
+          }until($json_metadata.databases.$($env:DATBASE_NAME).Database_Version -eq $($env:DB_DEPLOY_VERSION))
+
+      - name: Upload logs to GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.data.DATBASE_NAME }}-sql-scripts-logs
+          path: ./logs/${{ matrix.data.DATBASE_NAME }}.txt
+      - name: Deployment Started Notification
+        if: steps.run-db-script.outcome == 'success'
+        uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_CDT_DEV_TEAMS_HOOK }}
+          notification-summary: CDT - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment Successful &#x1F6A2
+          notification-color: 09ACF3
+
+      - name: Deployment Started Notification
+        if: steps.run-db-script.outcome == 'failure'
+        uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_CDT_DEV_TEAMS_HOOK }}
+          notification-summary: CDT - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
+          notification-color: 09ACF3

@@ -61,6 +61,7 @@ GO
 /* 2018-10-04 3.4  Gan      Performance tuning                          */
 /* 2024-06-25 3.5  JHU51    FCR-349 add SCN 924 for DEFY                */
 /* 2024-11-18 3.6  CYU027   FCR-1205 Add extPA SP entry for Granite     */
+/* 2025-06-18 0.0  JACKC    !!!Cutover. Use V0 repo for work!!!         */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Putaway] (

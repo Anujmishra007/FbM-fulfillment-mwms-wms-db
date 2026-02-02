@@ -24,6 +24,8 @@ GO
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 26-Feb-2024 Wan02    1.3   UWP-14044 ASN support XDOCK allocation by  */
 /*                            multiple externpokey per ASN               */
+/* 2025-10-06  SSA01    1.4   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                             */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_FlowThruAllocate_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)
@@ -42,6 +44,7 @@ BEGIN
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0     --(SSA01)
 
    DECLARE @c_TableName       NVARCHAR(50)= 'ReceiptDetail'
          , @c_SourceType      NVARCHAR(50)= 'lsp_FlowThruAllocate_Wrapper'
@@ -76,21 +79,26 @@ BEGIN
          , ExternStatus             NVARCHAR(10)   NOT NULL DEFAULT('')
          )                                                                          
      
-   SET @n_Err = 0 
+   SET @n_Err = 0
+   --(SSA01) - START
    IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
              
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                   --(Wan01) - END
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   --(SSA01) - END
+   --(Wan01) - END
    
    BEGIN TRY                             --(Wan01) - START
       SET @n_Continue   = 1
@@ -557,7 +565,14 @@ BEGIN
       END
    END
 
-   REVERT  
+   --(SSA01) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA01) - END
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_FlowThruAllocate_Wrapper] TO nSQL 

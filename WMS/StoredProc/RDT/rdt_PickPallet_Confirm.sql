@@ -15,6 +15,7 @@ GO
 /* 2023-10-24 1.1  Ung      WMS-23891 Add CheckPalletStatus                   */
 /*                          UpdatePickDetailDropID, UpdatePickDetailCaseID    */
 /* 2025-02-26 1.2.0 NLT013  UWP-30204 ToLoc is Missing  while executing ConfirmSP  */
+/* 2025-07-17 1.3.0 NLT013  UWP-37885 Fix:Endless loop happens when update UCC*/
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_PickPallet_Confirm] (
@@ -434,7 +435,7 @@ BEGIN
       DECLARE @cUCCNo NVARCHAR( 20)
       DECLARE @curUCC CURSOR
       SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT UCCNo
+         SELECT DISTINCT UCCNo
          FROM dbo.UCC WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND LOC = @cLOC
@@ -455,6 +456,8 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC fail
             GOTO RollBackTran
          END
+
+         FETCH NEXT FROM @curUCC INTO @cUCCNo
       END
    END
 

@@ -23,6 +23,7 @@ GO
 /* 08-05-2024 1.3   JHU151     FCR-330   No Pack Confirm                                           */
 /* 12-10-2024 1.4.0 LJQ006     FCR-1168  Adjust from WMS-24353, FCR-630                            */
 /* 12-16-2024 1.4.1 JCH507     FCR-1168  Store DropID to UCC.UDF03 instead of UDF01                */
+/* 06-20-2025 1.5.0 JCH507     FCR-4562  Trigger IML when UOM in 2, 7                              */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957Confirm04] (
@@ -1495,11 +1496,12 @@ BEGIN
       DECLARE @cPickUOM NVARCHAR( 1)
       SELECT TOP 1
       @cPickUOM =
-         CASE WHEN UOM = '7' THEN '7' -- Conso carton
-              ELSE '0'
+         CASE  WHEN UOM = '7' THEN '7' -- Conso carton
+               WHEN UOM = '2' THEN '2' -- Full carton --v1.5.0
+               ELSE '0'
          END
       FROM #tTaskPD
-      IF @cPickUOM = '7'
+      IF @cPickUOM IN ('7','2') -- Conso carton or Full carton --v1.5.0
       BEGIN
          DECLARE @cKey NVARCHAR( 20)
          -- SET @cKey =  @cActUCCNo

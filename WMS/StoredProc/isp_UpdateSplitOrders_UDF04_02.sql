@@ -34,6 +34,7 @@ GO
 /* Date         Author  Ver. Purposes                                                                          */
 /* 09-Oct-2020  JoshYan 1.0  Split original order Orders.UserDefine04 map to split orders Orders.UserDefine04  */
 /* 19-Oct-2020  JoshYan 1.1  Update assign tracking# process since Courier API will return 2 tracking# in same col*/
+/* 10-OCT-2025  SSA01   1.2   UWP-42248 -Enhanced session management and cleanup.                              */
 /* ------------------------------------------------------------------------------------------------------------*/
 CREATE PROCEDURE [dbo].[isp_UpdateSplitOrders_UDF04_02] (
 @c_StorerKey NVARCHAR(15),
@@ -183,8 +184,8 @@ BEGIN
                        M_Address2 = @c_OriginalTrackingNo,
                        [Issued] = 'Y',
                        TrafficCop = NULL,
-                       EditDate = GETDATE(),
-                       EditWho = SUSER_SNAME()
+                       EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                       EditWho = dbo.fnc_GetUserName()         --(SSA01)
                  WHERE OrderKey  = @c_SplitOrderKey
                    AND StorerKey = @c_StorerKey;
 
@@ -200,8 +201,8 @@ BEGIN
                        SET TrackingNo = @c_SplitTrackingNo,
                            UserDefine04 = @c_SplitTrackingNo,
                            TrafficCop = NULL,
-                           EditDate = GETDATE(),
-                           EditWho = SUSER_SNAME()
+                           EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                           EditWho = dbo.fnc_GetUserName()        --(SSA01)
                      WHERE OrderKey  = @c_OriginalOrderKey
                        AND StorerKey = @c_StorerKey;
 
@@ -218,8 +219,8 @@ BEGIN
                        SET [Issued] = 'Y',
                            [SOStatus] = 'HOLD',
                            TrafficCop = NULL,
-                           EditDate = GETDATE(),
-                           EditWho = SUSER_SNAME()
+                           EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                           EditWho = dbo.fnc_GetUserName()      --(SSA01)
                      WHERE OrderKey  = @c_OriginalOrderKey
                        AND StorerKey = @c_StorerKey;
 

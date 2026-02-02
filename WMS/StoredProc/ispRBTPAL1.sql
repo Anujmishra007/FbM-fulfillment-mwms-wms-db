@@ -31,6 +31,7 @@ GO
 /*                            to Pick or Robot stag to Robot            */
 /* 18-Aug-2018  SWT01   1.1   Update ID to BLANK when Change from Bulk  */
 /* 26-Feb-2019  NJOW02  1.2   WMS-7506 B2B skip move loc                */
+/* 10-Oct-2025  SSA01   1.3  UWP-42248 -Enhanced session management     */
 /************************************************************************/    
 CREATE PROC [dbo].[ispRBTPAL1 ]      
      @c_OrderKey    NVARCHAR(10)    
@@ -281,7 +282,7 @@ BEGIN
             
             -- SWT01            			               
    			UPDATE PickDetail WITH (ROWLOCK)
-   			   SET LOC = @c_RobotLoc, ID = '', UOM='7', EditDate = GETDATE(), EditWho = SUSER_SNAME(), ToLoc = LOC
+   			   SET LOC = @c_RobotLoc, ID = '', UOM='7', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), ToLoc = LOC          --(SSA01)
    			WHERE PickDetailKey = @c_PickDetailKey 
    			    
 			FETCH FROM CUR_PICKDETAIL_STAGE INTO @c_PickDetailKey, @c_LOT, @c_ID, @c_PDet_SKU 
@@ -556,8 +557,8 @@ BEGIN
          	              Toloc = Loc,
          	              UOM = '6',         	               
          	              Notes = 'Swap from robot',
-         	              EditDate = GETDATE(), 
-         	              EditWho = SUSER_SNAME()         	               
+         	              EditDate = dbo.fnc_GetDate(),    --(SSA01)
+         	              EditWho = dbo.fnc_GetUserName()   --(SSa01)
          	          WHERE Pickdetailkey = @c_PickDetailKey         	       
          	          
          	          SET @c_CreateNewPick = 'Y'       
@@ -616,8 +617,8 @@ BEGIN
          	               Toloc = Loc,
          	               UOM = '6',         	               
          	               Notes = 'Swap from robot',
-         	               EditDate = GETDATE(), 
-         	               EditWho = SUSER_SNAME()         	               
+         	               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+         	               EditWho = dbo.fnc_GetUserName()                --(SSA01)
          	           WHERE Pickdetailkey = @c_PickDetailKey         	                         	
                   END                                                         	
               END   			       
@@ -710,7 +711,7 @@ BEGIN
                
                -- SWT02    			                     
    			   UPDATE PickDetail WITH (ROWLOCK)
-   			      SET LOC = @c_RobotLoc, ID = '', UOM='7', EditDate = GETDATE(), EditWho = SUSER_SNAME(), ToLoc = LOC
+   			      SET LOC = @c_RobotLoc, ID = '', UOM='7', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), ToLoc = LOC        --(SSA01)
    			   WHERE PickDetailKey = @c_PickDetailKey 
    			    
    				FETCH FROM CUR_PICKDETAIL_STAGE INTO @c_PickDetailKey, @c_LOT, @c_ID, @c_PDet_SKU

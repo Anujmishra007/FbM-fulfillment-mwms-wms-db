@@ -24,6 +24,7 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 15-Dec-2022  WLChooi 1.0   DevOps Combine Script                        */
 /* 15-Jun-2023  NJOW01  1.1   WMS-22851 create transmitlog2 after allocate */
+/* 10-Oct-2025  SSA01   1.2  UWP-42248 -Enhanced session management        */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPOALKIT02]
 (
@@ -406,8 +407,8 @@ BEGIN
                SET ExternLineNo = RIGHT('00000' + CAST(@n_SKUGrp AS NVARCHAR),5)
                  , LOTTABLE04 = @dt_Lottable04
                  , TrafficCop = NULL  
-                 , EditWho = SUSER_SNAME()
-                 , EditDate = GETDATE()
+                 , EditWho = dbo.fnc_GetUserName()               --(SSA01)
+                 , EditDate = dbo.fnc_GetDate()    --(SSA01)
                WHERE KITLineNumber = @c_KitLineNumber  
                AND KITKey = @c_Kitkey
                AND Type = 'F'
@@ -471,8 +472,8 @@ BEGIN
                  --, LOTTABLE04 = @dt_Lottable04
                  , ExternLineNo = RIGHT('00000' + CAST(@n_SKUGrp AS NVARCHAR),5)
                  , TrafficCop = NULL  
-                 , EditWho = SUSER_SNAME()
-                 , EditDate = GETDATE()
+                 , EditWho = dbo.fnc_GetUserName()            --(SSA01)
+                 , EditDate = dbo.fnc_GetDate()    --(SSA01)
                 WHERE KITKey = @c_Kitkey
                 AND KITLineNumber = @c_KitLineNumber
                 AND Type = 'F'

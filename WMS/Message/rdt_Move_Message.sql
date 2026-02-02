@@ -1,5 +1,6 @@
 -- rdt_Move
 execute rdt.rdtDropMsg 60501, 60550
+execute rdt.rdtDropMsg 60901, 60950
 
 execute rdt.rdtAddMsg 60501, 10, '60501 Need StorerKey', 'us_english'
 execute rdt.rdtAddMsg 60502, 10, '60502 Need Facility ', 'us_english'
@@ -49,6 +50,11 @@ execute rdt.rdtAddMsg 60545, 10, '60545 QTYReplnNoEnuf', 'us_english'
 execute rdt.rdtAddMsg 60546, 10, '60546 Bad QTYReplen ', 'us_english'
 execute rdt.rdtAddMsg 60547, 10, '60547 QTYRepln>Avail', 'us_english'
 execute rdt.rdtAddMsg 60548, 10, '60548 PDUCCQTY>MVQTY', 'us_english'
+execute rdt.rdtAddMsg 60549, 10, '60549 Over MaxSku   ', 'us_english'
+execute rdt.rdtAddMsg 60550, 10, '60550 Upd SNO fail  ', 'us_english'
 
---WMS-21437
-execute rdt.rdtAddMsg 60549, 10, '60549 Over MaxSKU   ', 'us_english'
+execute rdt.rdtAddMsg 60901, 10, '60901 Need SerialNo ', 'us_english'
+execute rdt.rdtAddMsg 60902, 10, '60902 Either SN/Bulk', 'us_english'
+execute rdt.rdtAddMsg 60903, 10, '60903 Ins ITnSN fail', 'us_english'
+execute rdt.rdtAddMsg 60904, 10, '60904 MoveSNnotTally', 'us_english'
+

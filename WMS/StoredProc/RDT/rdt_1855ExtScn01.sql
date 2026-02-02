@@ -25,8 +25,16 @@ GO
 /* 2025-03-11 1.5.1  NLT013     UWP-31257 RPF taks is not mandatory for ASTCPK     */
 /* 2025-04-04 1.6.1  CYU027     FCR-3927 TOTE and CARTON Input Validation          */
 /* 2025-04-11 1.6.2  DENNIS     UWP-32689 If picked then reject users back out     */
+/* 2025-04-22 1.6.3  CYU027     FCR-4191 Add UserKeyOverRide when picking tasks    */
+/* 2025-03-11 1.6.4  Dennis     FCR-3925  Add Validation for Tote Rel              */
+/* 2025-04-11 1.6.5  Dennis     UWP-31758 Skip Confirm Tote after Short pick       */
+/* 2025-04-25 1.6.6  DENNIS     FCR-4243 Resume tasks                              */
+/* 2025-06-18 1.6.7  DENNIS     UWP-36228 Filter task                              */
+/* 2025-07-16 1.7.0  NickT      UWP-37893 PickDetail.CaseID is not updated as empty string*/
+/* 2025-08-14 1.8.0  Cuize      Goto STEP 99 for Mask SKU                          */
+/* 2025-09-03 1.9.0  NickT      UWP-40527 Improve the logic for locking tasks      */
 /***********************************************************************************/
-  
+
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
    @nMobile      INT,           
    @nFunc        INT,           
@@ -124,6 +132,7 @@ BEGIN
       @cTaskDetailCaseID               NVARCHAR( 20),
       @tExtValidate                    VariableTable,
       @b_success                       INT,
+      @cSuggToLOC                      NVARCHAR( 10),
 
       -- 1855 old Step 2 variables
       @nCartonScanned      INT = 0,
@@ -140,16 +149,37 @@ BEGIN
       @cLockCaseID         NVARCHAR( 20),
       @cTotalToteQty       NVARCHAR( 5),
       @nAssignedToteQty    INT,
+      @nActQTY             INT,
 
 
       -- 1855 new step1 variables
       @cOrderKey     NVARCHAR( 10) = '',
       @cPickSlipNo   NVARCHAR( 18)
-
+   DECLARE
+   @nStep_CartID           INT,  @nScn_CartID            INT,
+   @nStep_CartMatrix       INT,  @nScn_CartMatrix        INT,
+   @nStep_Loc              INT,  @nScn_Loc               INT,
+   @nStep_SKUQTY           INT,  @nScn_SKUQTY            INT,
+   @nStep_Option           INT,  @nScn_Option            INT,
+   @nStep_ConfirmTote      INT,  @nScn_ConfirmTote       INT,
+   @nStep_ToLoc            INT,  @nScn_ToLoc             INT,
+   @nStep_UnAssign         INT,  @nScn_UnAssign          INT,
+   @nStep_NextTask         INT,  @nScn_NextTask          INT
+   SELECT
+   @nStep_CartID           = 1,  @nScn_CartID            = 5920,
+   @nStep_CartMatrix       = 2,  @nScn_CartMatrix        = 5921,
+   @nStep_Loc              = 3,  @nScn_Loc               = 5922,
+   @nStep_SKUQTY           = 4,  @nScn_SKUQTY            = 5923,
+   @nStep_ConfirmTote      = 5,  @nScn_ConfirmTote       = 5924,
+   @nStep_Option           = 6,  @nScn_Option            = 5925,
+   @nStep_ToLoc            = 7,  @nScn_ToLoc             = 5926,
+   @nStep_UnAssign         = 8,  @nScn_UnAssign          = 5927,
+   @nStep_NextTask         = 9,  @nScn_NextTask          = 5928,
+   @nStep_ContTask         = 10, @nScn_ContTask          = 5929
    DECLARE @tTaskDetailKeyList TABLE
    (
       id             INT IDENTITY(1,1),
-      TaskDetailKey  NVARCHAR( 10)
+      TaskDetailKey  NVARCHAR( 10) PRIMARY KEY
    )
    
    -- Set Constant value
@@ -178,7 +208,8 @@ BEGIN
          @cTaskDetailKey               = V_TaskDetailKey,
          @cPickSlipNo                  = V_PickSlipNo,
          @cWaveKey                     = V_WaveKey,
-         @nSuggQty                    = V_Integer1, 
+         @nSuggQty                     = V_Integer1,
+         @nActQTY                      = V_Integer3,
          @cCartID                      = V_String8,
          @cSuggFromLOC                 = V_String9,
          @cSuggCartonID                = V_String10,
@@ -257,6 +288,11 @@ BEGIN
          SET @nAfterStep = 99
 
       END -- back to 2nd screen
+      ELSE IF @nScn=@nScn_SKUQTY AND @nStep = @nStep_SKUQTY
+      BEGIN
+         SET @cOutField03 = rdt.rdtMaskValue(@nFunc,@cStorerKey,'SKU',@cSuggSKU )  --Mask SKU values
+         GOTO Quit
+      END
       -- generic esc handling end
 
       --Screnn logic
@@ -356,29 +392,71 @@ BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 1          
                   GOTO Quit          
                END      
+               --If any picked task goto toloc first
+               IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                              WHERE Storerkey = @cStorerKey
+                              AND   TaskType = 'ASTCPK'
+                              AND   [Status] = '5'
+                              AND   Groupkey <> ''
+                              AND   UserKey = @cUserName
+                              AND   DeviceID = @cCartID
+                              AND   CASEID <> ''
+                              AND   DropID <> '')
+               AND @cCartID <> ''
+               BEGIN
+                  SELECT TOP 1 
+                        @cTaskDetailKey = TaskDetailKey,
+                        @cSuggToLOC = toloc,
+                        @cGroupKey = Groupkey
+                  FROM dbo.TaskDetail WITH (NOLOCK)
+                  WHERE Storerkey = @cStorerKey
+                  AND   TaskType = 'ASTCPK'
+                  AND   [Status] = '5'
+                  AND   Groupkey <> ''
+                  AND   UserKey = @cUserName
+                  AND   DeviceID = @cCartID
+                  AND   DropID <> ''
+                  ORDER BY EditDate DESC
 
+                  -- Check Method valid
+                  SELECT @cCartPickMethod = Long
+                  FROM dbo.CODELKUP WITH (NOLOCK)
+                  WHERE LISTNAME = 'TMPickMtd'
+                  AND   Code = @cMethod
+                  AND   Storerkey = @cStorerKey
+
+                  -- Prepare next screen var
+                  SET @cOutField01 = @cCartPickMethod
+                  SET @cOutField02 = @cSuggToLOC -- To LOC
+                  SET @cOutField03 = ''
+
+                  SET @nAfterScn = @nScn_ToLoc
+                  SET @nAfterStep = @nStep_ToLoc
+
+                  GOTO SCN6414_Return_Value
+               END
+               IF @cContinuePickOnAssignedCart = '1' AND @cCartID <> ''
+               BEGIN
+                  IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                              WHERE Storerkey = @cStorerKey
+                              AND   TaskType = 'ASTCPK'
+                              AND   [Status] = '3'
+                              AND   Groupkey <> ''
+                              AND   UserKey = @cUserName
+                              AND   DeviceID = @cCartID
+                              AND   CASEID <> ''
+                              AND   DropID <> '')
+                  BEGIN
+                     SET @cOutField01 = ''
+
+                     SET @nAfterScn = @nScn_ContTask
+                     SET @nAfterStep = @nStep_ContTask
+
+                     GOTO SCN6414_Return_Value
+                  END
+               END   -- Comment out Continue Pick Logic for further investigation
                IF @cPickZone = 'PICK'
                BEGIN
-                  IF @cContinuePickOnAssignedCart = '1' AND @cCartID <> ''      
-                  BEGIN      
-                     IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
-                                 WHERE Storerkey = @cStorerKey      
-                                 AND   TaskType = 'ASTCPK'      
-                                 AND   [Status] = '3'      
-                                 AND   Groupkey <> ''      
-                                 AND   UserKey = @cUserName      
-                                 AND   DeviceID = @cCartID
-                                 AND   DropID <> '')      
-                     BEGIN      
-                        SET @cOutField01 = ''      
-                           
-                        SET @nAfterScn = @nScn_ContTask      
-                        SET @nAfterStep = @nStep_ContTask      
-                           
-                        GOTO SCN6414_Return_Value      
-                     END      
-                  END   -- Comment out Continue Pick Logic for further investigation    
-
                   --FCR-652 Validate PSNO
                   IF @cPickSlipNo = ''
                   BEGIN          
@@ -431,73 +509,75 @@ BEGIN
                                  AND   [Status] = '0'      
                                  AND   Groupkey = ''      
                                  AND   UserKey = ''      
-                                 AND   DeviceID = ''    
+                                 AND   DeviceID = ''
+                                 AND   ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
                                  AND   DropID = ''
                                  AND   WaveKey = @cWaveKey
                                  )
-                  BEGIN      
-                     SET @nErrNo = 220758        
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No open task        
-                     EXEC rdt.rdtSetFocusField @nMobile, 1          
-                     GOTO Quit      
-                  END 
-                  --v1.3 Jackc Check there is available task under Wave  
-                  -- Check pickzone valid          
-                  IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail TD WITH (NOLOCK)       
-                                 JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)    
-                                 WHERE TD.Storerkey = @cStorerKey      
-                                 AND   TD.TaskType = 'ASTCPK'      
-                                 AND   TD.[Status] = '0'      
-                                 AND   TD.Groupkey = ''      
-                                 AND   TD.UserKey = ''      
+                  BEGIN
+                     SET @nErrNo = 220758
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No open task
+                     EXEC rdt.rdtSetFocusField @nMobile, 1
+                     GOTO Quit
+                  END
+                  --v1.3 Jackc Check there is available task under Wave
+                  -- Check pickzone valid
+                  IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail TD WITH (NOLOCK)
+                                 JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)
+                                 WHERE TD.Storerkey = @cStorerKey
+                                 AND   TD.TaskType = 'ASTCPK'
+                                 AND   TD.[Status] = '0'
+                                 AND   TD.Groupkey = ''
+                                 AND   TD.UserKey = ''
                                  AND   TD.DeviceID = ''
+                                 AND   ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
                                  AND   TD.WaveKey = @cWaveKey -- FCR-652 add wavekey by JACKC
-                                 AND   LOC.Facility = @cFacility       
-                                 AND   LOC.PickZone = @cPickZone)          
-                  BEGIN --FCR 652 change err msg by JACKC         
-                     SET @nErrNo = 220753          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKZone NoTask         
-                     EXEC rdt.rdtSetFocusField @nMobile, 1          
-                     SET @cOutField01 = ''          
-                     GOTO Quit          
-                  END          
-                  SET @cOutField01 = @cPickZone          
-                           
-                  -- Check blank          
-                  IF @cCartID = ''          
-                  BEGIN          
-                     SET @nErrNo = 171803          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need CartID          
-                     EXEC rdt.rdtSetFocusField @nMobile, 2          
-                     GOTO Quit          
-                  END          
-                     
-                  -- Check cart valid          
-                  IF NOT EXISTS( SELECT 1 FROM dbo.DeviceProfile WITH (NOLOCK)       
-                                 WHERE DeviceType = 'CART'       
-                                 AND   DeviceID = @cCartID)          
-                  BEGIN          
-                     SET @nErrNo = 171804          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid CartID          
-                     EXEC rdt.rdtSetFocusField @nMobile, 2          
-                     SET @cOutField02 = ''          
-                     GOTO Quit          
-                  END          
-                     
-                  -- Check cart use by other          
-                  IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)       
-                              WHERE Storerkey = @cStorerKey      
-                              AND   TaskType = 'ASTCPK'      
+                                 AND   LOC.Facility = @cFacility
+                                 AND   LOC.PickZone = @cPickZone)
+                  BEGIN --FCR 652 change err msg by JACKC
+                     SET @nErrNo = 220753
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKZone NoTask
+                     EXEC rdt.rdtSetFocusField @nMobile, 1
+                     SET @cOutField01 = ''
+                     GOTO Quit
+                  END
+                  SET @cOutField01 = @cPickZone
+
+                  -- Check blank
+                  IF @cCartID = ''
+                  BEGIN
+                     SET @nErrNo = 171803
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need CartID
+                     EXEC rdt.rdtSetFocusField @nMobile, 2
+                     GOTO Quit
+                  END
+
+                  -- Check cart valid
+                  IF NOT EXISTS( SELECT 1 FROM dbo.DeviceProfile WITH (NOLOCK)
+                                 WHERE DeviceType = 'CART'
+                                 AND   DeviceID = @cCartID)
+                  BEGIN
+                     SET @nErrNo = 171804
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid CartID
+                     EXEC rdt.rdtSetFocusField @nMobile, 2
+                     SET @cOutField02 = ''
+                     GOTO Quit
+                  END
+
+                  -- Check cart use by other
+                  IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                              WHERE Storerkey = @cStorerKey
+                              AND   TaskType = 'ASTCPK'
                               AND   [STATUS] = '3'
-                              --AND   DeviceID = @cCartonID      
-                              AND   DeviceID = @cCartID     -- Fix original bug. Jackc  
-                              AND   UserKey <> @cUserName)          
-                  BEGIN          
-                     SET @nErrNo = 171805          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cart in use          
-                     EXEC rdt.rdtSetFocusField @nMobile, 2          
-                     SET @cOutField02 = ''          
-                     GOTO Quit          
+                              --AND   DeviceID = @cCartonID
+                              AND   DeviceID = @cCartID     -- Fix original bug. Jackc
+                              AND   UserKey <> @cUserName)
+                  BEGIN
+                     SET @nErrNo = 171805
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cart in use
+                     EXEC rdt.rdtSetFocusField @nMobile, 2
+                     SET @cOutField02 = ''
+                     GOTO Quit
                   END
 
                   --v1.3 Check scanned cart in step1 but not start to scan carton
@@ -507,238 +587,239 @@ BEGIN
                                  AND Scn = 6416
                                  AND V_string8 = @cCartID -- CartID
                                  AND UserName <> @cUserName)
-                  BEGIN         
-                     SET @nErrNo = 220761          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cart in use          
-                     EXEC rdt.rdtSetFocusField @nMobile, 2          
-                     SET @cOutField02 = ''          
-                     GOTO Quit          
+                  BEGIN
+                     SET @nErrNo = 220761
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cart in use
+                     EXEC rdt.rdtSetFocusField @nMobile, 2
+                     SET @cOutField02 = ''
+                     GOTO Quit
                   END
                   --v1.3 Check scanned cart in step1 but not start to scan carton
-                           
-                  SET @cOutField02 = @cCartID          
-                     
-                  -- Check blank          
-                  IF @cMethod = ''          
-                  BEGIN          
-                     SET @nErrNo = 171806          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Method          
-                     EXEC rdt.rdtSetFocusField @nMobile, 3          
-                     GOTO Quit          
-                  END          
-                     
-                  -- Check Method valid          
-                  SELECT @cCartPickMethod = Long      
-                  FROM dbo.CODELKUP WITH (NOLOCK)      
-                  WHERE LISTNAME = 'TMPickMtd'      
-                  AND   Code = @cMethod      
-                  AND   Storerkey = @cStorerKey      
-                        
-                  IF ISNULL( @cCartPickMethod, '') = ''      
-                  BEGIN          
-                     SET @nErrNo = 171807          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Method          
-                     EXEC rdt.rdtSetFocusField @nMobile, 3          
-                     SET @cOutField03 = ''          
-                     GOTO Quit          
-                  END          
-                  
-                  DECLARE @n INT      
-                  SELECT @n = CHARINDEX(',', @cCartPickMethod)      
-                  IF @n > 0      
-                  BEGIN      
-                     DECLARE @tPickMethod TABLE ( Method    NVARCHAR( 20) )      
-                     INSERT INTO @tPickMethod (Method) VALUES (LEFT( @cCartPickMethod, @n-1))      
-                     INSERT INTO @tPickMethod (Method) VALUES (LTRIM(SUBSTRING( @cCartPickMethod, @n+1, 20)))      
-                  END      
-                  ELSE      
-                     INSERT INTO @tPickMethod (Method) VALUES (@cCartPickMethod)      
-                           
-                  -- Check pickzone + method valid          
-                  IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail TD WITH (NOLOCK)       
-                                 JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)       
-                                 WHERE TD.Storerkey = @cStorerKey      
-                                 AND   TD.TaskType = 'ASTCPK'      
-                                 AND   TD.[Status] = '0'      
-                                 AND   TD.Groupkey = ''      
-                                 AND   TD.UserKey = ''      
-                                 AND   TD.DeviceID = ''      
-                                 --AND   TD.PickMethod = @cCartPickMethod      
-                                 AND   LOC.Facility = @cFacility       
-                                 AND   LOC.PickZone = @cPickZone      
-                                 AND   EXISTS ( SELECT 1 FROM @tPickMethod PM WHERE TD.PickMethod = PM.Method))      
-                  BEGIN          
-                     SET @nErrNo = 171808          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Method          
-                     EXEC rdt.rdtSetFocusField @nMobile, 3          
-                     SET @cOutField03 = ''          
-                     GOTO Quit          
-                  END          
-                  SET @cOutField03 = @cMethod          
-                  
-                     
-                  -- Extended validate        
-                  IF @cExtendedValidateSP <> ''        
-                  BEGIN        
-                     IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')        
-                     BEGIN        
-                        SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +        
-                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +         
-                           ' @cGroupKey, @cTaskDetailKey, @cPickZone, @cCartId, @cMethod, @cFromLoc, @cCartonId, ' +        
-                           ' @cSKU, @nQty, @cOption, @cToLOC, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT '        
-                  
-                        SET @cSQLParam =        
-                           ' @nMobile        INT,           ' +        
-                           ' @nFunc          INT,           ' +        
-                           ' @cLangCode      NVARCHAR( 3),  ' +        
-                           ' @nStep          INT,           ' +        
-                           ' @nInputKey      INT,           ' +        
-                           ' @cFacility      NVARCHAR( 5),  ' +        
-                           ' @cStorerKey     NVARCHAR( 15), ' +      
-                           ' @cGroupKey      NVARCHAR( 10), ' +        
-                           ' @cTaskDetailKey NVARCHAR( 10), ' +      
-                           ' @cPickZone      NVARCHAR( 10), ' +        
-                           ' @cCartId        NVARCHAR( 10), ' +      
-                           ' @cMethod        NVARCHAR( 1),  ' +        
-                           ' @cFromLoc       NVARCHAR( 10), ' +        
-                           ' @cCartonId      NVARCHAR( 20), ' +        
-                           ' @cSKU           NVARCHAR( 20), ' +        
-                           ' @nQty           INT,           ' +        
-                           ' @cOption        NVARCHAR( 1), ' +        
-                           ' @cToLOC         NVARCHAR( 10), ' +      
-                           ' @tExtValidate   VariableTable READONLY, ' +         
-                           ' @nErrNo         INT           OUTPUT, ' +        
-                           ' @cErrMsg        NVARCHAR( 20) OUTPUT  '        
-                        EXEC sp_ExecuteSQL @cSQL, @cSQLParam,        
-                           @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,         
-                           @cGroupKey, @cTaskDetailKey, @cPickZone, @cCartId, @cMethod, @cFromLoc, @cCartonId,       
-                           @cSKU, @nQty, @cOption, @cToLoc, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT        
-                  
-                        IF @nErrNo <> 0         
-                           GOTO Quit        
-                     END        
-                  END        
-                  
+
+                  SET @cOutField02 = @cCartID
+
+                  -- Check blank
+                  IF @cMethod = ''
+                  BEGIN
+                     SET @nErrNo = 171806
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Method
+                     EXEC rdt.rdtSetFocusField @nMobile, 3
+                     GOTO Quit
+                  END
+
+                  -- Check Method valid
+                  SELECT @cCartPickMethod = Long
+                  FROM dbo.CODELKUP WITH (NOLOCK)
+                  WHERE LISTNAME = 'TMPickMtd'
+                  AND   Code = @cMethod
+                  AND   Storerkey = @cStorerKey
+
+                  IF ISNULL( @cCartPickMethod, '') = ''
+                  BEGIN
+                     SET @nErrNo = 171807
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Method
+                     EXEC rdt.rdtSetFocusField @nMobile, 3
+                     SET @cOutField03 = ''
+                     GOTO Quit
+                  END
+
+                  DECLARE @n INT
+                  SELECT @n = CHARINDEX(',', @cCartPickMethod)
+                  IF @n > 0
+                  BEGIN
+                     DECLARE @tPickMethod TABLE ( Method    NVARCHAR( 20) )
+                     INSERT INTO @tPickMethod (Method) VALUES (LEFT( @cCartPickMethod, @n-1))
+                     INSERT INTO @tPickMethod (Method) VALUES (LTRIM(SUBSTRING( @cCartPickMethod, @n+1, 20)))
+                  END
+                  ELSE
+                     INSERT INTO @tPickMethod (Method) VALUES (@cCartPickMethod)
+
+                  -- Check pickzone + method valid
+                  IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail TD WITH (NOLOCK)
+                                 JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)
+                                 WHERE TD.Storerkey = @cStorerKey
+                                 AND   TD.TaskType = 'ASTCPK'
+                                 AND   TD.[Status] = '0'
+                                 AND   TD.Groupkey = ''
+                                 AND   TD.UserKey = ''
+                                 AND   TD.DeviceID = ''
+                                 AND   ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
+                                   --AND   TD.PickMethod = @cCartPickMethod
+                                 AND   LOC.Facility = @cFacility
+                                 AND   LOC.PickZone = @cPickZone
+                                 AND   EXISTS ( SELECT 1 FROM @tPickMethod PM WHERE TD.PickMethod = PM.Method))
+                  BEGIN
+                     SET @nErrNo = 171808
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Method
+                     EXEC rdt.rdtSetFocusField @nMobile, 3
+                     SET @cOutField03 = ''
+                     GOTO Quit
+                  END
+                  SET @cOutField03 = @cMethod
+
+
+                  -- Extended validate
+                  IF @cExtendedValidateSP <> ''
+                  BEGIN
+                     IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+                     BEGIN
+                        SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                           ' @cGroupKey, @cTaskDetailKey, @cPickZone, @cCartId, @cMethod, @cFromLoc, @cCartonId, ' +
+                           ' @cSKU, @nQty, @cOption, @cToLOC, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+                        SET @cSQLParam =
+                           ' @nMobile        INT,           ' +
+                           ' @nFunc          INT,           ' +
+                           ' @cLangCode      NVARCHAR( 3),  ' +
+                           ' @nStep          INT,           ' +
+                           ' @nInputKey      INT,           ' +
+                           ' @cFacility      NVARCHAR( 5),  ' +
+                           ' @cStorerKey     NVARCHAR( 15), ' +
+                           ' @cGroupKey      NVARCHAR( 10), ' +
+                           ' @cTaskDetailKey NVARCHAR( 10), ' +
+                           ' @cPickZone      NVARCHAR( 10), ' +
+                           ' @cCartId        NVARCHAR( 10), ' +
+                           ' @cMethod        NVARCHAR( 1),  ' +
+                           ' @cFromLoc       NVARCHAR( 10), ' +
+                           ' @cCartonId      NVARCHAR( 20), ' +
+                           ' @cSKU           NVARCHAR( 20), ' +
+                           ' @nQty           INT,           ' +
+                           ' @cOption        NVARCHAR( 1), ' +
+                           ' @cToLOC         NVARCHAR( 10), ' +
+                           ' @tExtValidate   VariableTable READONLY, ' +
+                           ' @nErrNo         INT           OUTPUT, ' +
+                           ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+                        EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                           @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                           @cGroupKey, @cTaskDetailKey, @cPickZone, @cCartId, @cMethod, @cFromLoc, @cCartonId,
+                           @cSKU, @nQty, @cOption, @cToLoc, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                        IF @nErrNo <> 0
+                           GOTO Quit
+                     END
+                  END
+
                   --v1.3 Jackc
                   /*
-                  DECLARE @cCurCaseID  NVARCHAR( 20)      
-                  DECLARE @cNewCaseID  NVARCHAR( 20)      
-                  DECLARE @nCtnCount   INT      
-                  SET @cCurCaseID = ''      
-                  SET @cNewCaseID = ''      
+                  DECLARE @cCurCaseID  NVARCHAR( 20)
+                  DECLARE @cNewCaseID  NVARCHAR( 20)
+                  DECLARE @nCtnCount   INT
+                  SET @cCurCaseID = ''
+                  SET @cNewCaseID = ''
                   SET @nCtnCount = 0
                   */
-                  --v1.3 Jackc end      
-                        
-                  SELECT @nCartLimit = Short      
-                  FROM dbo.CODELKUP WITH (NOLOCK)      
-                  WHERE LISTNAME = 'TMPICKMTD'      
-                  AND   Code = @cMethod      
-                  AND   Storerkey = @cStorerKey      
-                  
+                  --v1.3 Jackc end
+
+                  SELECT @nCartLimit = Short
+                  FROM dbo.CODELKUP WITH (NOLOCK)
+                  WHERE LISTNAME = 'TMPICKMTD'
+                  AND   Code = @cMethod
+                  AND   Storerkey = @cStorerKey
+
                   -- (james03)
                   IF @cPickNoMixWave = '1'
                   BEGIN
                      -- FCR-652 Jackc
                      SET @cPickWaveKey = @cWaveKey
-                     /*SELECT TOP 1 @cPickWaveKey = TD.WaveKey      
-                     FROM dbo.TaskDetail TD WITH (NOLOCK)      
-                     JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.LOC)      
-                     WHERE TD.Storerkey = @cStorerKey      
-                     AND   TD.TaskType = 'ASTCPK'      
-                     AND   TD.[Status] = '0'      
-                     AND   TD.Groupkey = ''      
-                     AND   TD.UserKey = ''      
-                     AND   TD.DeviceID = ''      
-                     AND   ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))      
-                     AND   LOC.Facility = @cFacility       
-                     AND   LOC.PickZone = @cPickZone        
-                     AND   EXISTS ( SELECT 1 FROM @tPickMethod PM WHERE TD.PickMethod = PM.Method)      
+                     /*SELECT TOP 1 @cPickWaveKey = TD.WaveKey
+                     FROM dbo.TaskDetail TD WITH (NOLOCK)
+                     JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.LOC)
+                     WHERE TD.Storerkey = @cStorerKey
+                     AND   TD.TaskType = 'ASTCPK'
+                     AND   TD.[Status] = '0'
+                     AND   TD.Groupkey = ''
+                     AND   TD.UserKey = ''
+                     AND   TD.DeviceID = ''
+                     AND   ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
+                     AND   LOC.Facility = @cFacility
+                     AND   LOC.PickZone = @cPickZone
+                     AND   EXISTS ( SELECT 1 FROM @tPickMethod PM WHERE TD.PickMethod = PM.Method)
                      ORDER BY CASE WHEN TD.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END, TD.WaveKey*/
-                     -- FCR-652 Jackc end      
+                     -- FCR-652 Jackc end
                   END
 
                   --V1.2 jackc Generate Groupkey
-                  SET @cGroupKey = ''      
+                  SET @cGroupKey = ''
                   SET @nErrNo = 0
                   SET @b_success = 1
 
-                  EXECUTE dbo.nspg_GetKey                                      
-                     'LVSLOCK',                                  
-                     10 ,                                        
-                     @cGroupKey OUTPUT,                       
-                     @b_success OUTPUT,                           
-                     @nErrNo OUTPUT,                                 
-                     @cErrmsg OUTPUT                              
-                        
-                  IF @b_success <> 1      
-                  BEGIN      
-                     SET @nErrNo = 220756      
-                     SET @cErrmsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get groupkey failure       
+                  EXECUTE dbo.nspg_GetKey
+                     'LVSLOCK',
+                     10 ,
+                     @cGroupKey OUTPUT,
+                     @b_success OUTPUT,
+                     @nErrNo OUTPUT,
+                     @cErrmsg OUTPUT
+
+                  IF @b_success <> 1
+                  BEGIN
+                     SET @nErrNo = 220756
+                     SET @cErrmsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get groupkey failure
                   END
                   --V1.2 jackc Generate Groupkey
 
                   --v1.3 Jackc Remove lock logic from step 1
                   /* Remove task lock logic in base 1855 step1*/
-                  --v1.3 Jackc Remove lock logic from step 1       
-                  
-                  IF @nErrNo <> 0      
-                     GOTO Quit      
-                  
-                  SET @cResult01 = ''      
-                  SET @cResult02 = ''      
-                  SET @cResult03 = ''      
-                  SET @cResult04 = ''      
-                  SET @cResult05 = ''      
-                  
+                  --v1.3 Jackc Remove lock logic from step 1
+
+                  IF @nErrNo <> 0
+                     GOTO Quit
+
+                  SET @cResult01 = ''
+                  SET @cResult02 = ''
+                  SET @cResult03 = ''
+                  SET @cResult04 = ''
+                  SET @cResult05 = ''
+
                   --v1.3 Jackc No need to show matrix on step2
                   /*
-                  -- Draw matrix           
-                  SET @nNextPage = 0            
-                  EXEC rdt.rdt_TM_Assist_ClusterPick_Matrix         
-                     @nMobile          = @nMobile,         
-                     @nFunc            = @nFunc,         
-                     @cLangCode        = @cLangCode,         
-                     @nStep            = @nStep,         
-                     @nInputKey        = @nInputKey,         
-                     @cFacility        = @cFacility,         
-                     @cStorerKey       = @cStorerKey,         
-                     @cPickZone        = @cPickZone,         
-                     @cCartID          = @cCartID,        
-                     @cMethod          = @cMethod,      
-                     @cResult01        = @cResult01   OUTPUT,          
-                     @cResult02        = @cResult02   OUTPUT,          
-                     @cResult03        = @cResult03   OUTPUT,          
-                     @cResult04        = @cResult04   OUTPUT,             
-                     @cResult05        = @cResult05   OUTPUT,          
-                     @nNextPage        = @nNextPage   OUTPUT,          
-                     @nErrNo           = @nErrNo      OUTPUT,          
-                     @cErrMsg          = @cErrMsg     OUTPUT 
-                        
-                  IF @nErrNo <> 0            
-                     GOTO Quit            
-                  */ 
-                  --v1.3 Jackc No need to show matrix on step2 end 
+                  -- Draw matrix
+                  SET @nNextPage = 0
+                  EXEC rdt.rdt_TM_Assist_ClusterPick_Matrix
+                     @nMobile          = @nMobile,
+                     @nFunc            = @nFunc,
+                     @cLangCode        = @cLangCode,
+                     @nStep            = @nStep,
+                     @nInputKey        = @nInputKey,
+                     @cFacility        = @cFacility,
+                     @cStorerKey       = @cStorerKey,
+                     @cPickZone        = @cPickZone,
+                     @cCartID          = @cCartID,
+                     @cMethod          = @cMethod,
+                     @cResult01        = @cResult01   OUTPUT,
+                     @cResult02        = @cResult02   OUTPUT,
+                     @cResult03        = @cResult03   OUTPUT,
+                     @cResult04        = @cResult04   OUTPUT,
+                     @cResult05        = @cResult05   OUTPUT,
+                     @nNextPage        = @nNextPage   OUTPUT,
+                     @nErrNo           = @nErrNo      OUTPUT,
+                     @cErrMsg          = @cErrMsg     OUTPUT
 
-                  -- Prepare next screen var        
-                  SET @cOutField01 = @cCartPickMethod        
-                  SET @cOutField02 = @cCartID        
-                  SET @cOutField03 = @cResult01        
-                  SET @cOutField04 = @cResult02        
-                  SET @cOutField05 = @cResult03        
-                  SET @cOutField06 = @cResult04        
-                  SET @cOutField07 = @cResult05        
-                  SET @cOutField08 = ''        
-                  SET @cOutField09 = 0        
+                  IF @nErrNo <> 0
+                     GOTO Quit
+                  */
+                  --v1.3 Jackc No need to show matrix on step2 end
+
+                  -- Prepare next screen var
+                  SET @cOutField01 = @cCartPickMethod
+                  SET @cOutField02 = @cCartID
+                  SET @cOutField03 = @cResult01
+                  SET @cOutField04 = @cResult02
+                  SET @cOutField05 = @cResult03
+                  SET @cOutField06 = @cResult04
+                  SET @cOutField07 = @cResult05
+                  SET @cOutField08 = ''
+                  SET @cOutField09 = 0
                   SET @cOutField10 = ''
-                        
-                  SET @cFromLoc = ''        
-                  SET @cCartonID = ''        
-                  SET @cSKU = ''        
-                  SET @nQTY = 0        
-                        
-                  -- Go to new screen 2        
-                  SET @nAfterScn = 6416        
+
+                  SET @cFromLoc = ''
+                  SET @cCartonID = ''
+                  SET @cSKU = ''
+                  SET @nQTY = 0
+
+                  -- Go to new screen 2
+                  SET @nAfterScn = 6416
                   SET @nAfterStep = 99
 
                   -- FCR-652 Return the values need to be saved to rdtmobrec
@@ -759,13 +840,21 @@ BEGIN
                      SET @cUDF14 = @cResult05
                      SET @cUDF15 = @cMethod
                      SET @cUDF16 = @cPickSlipNo
+                     SET @cUDF17 = @cSuggToLOC
                END -- Normal Picking FLow
                ELSE BEGIN --Automation Picking FLow
                   -- Check pickzone valid
+                  DECLARE 
+                     @cWaveKeyTemp NVARCHAR(10),
+                     @cToLocTemp NVARCHAR(10)
+
                   --Search the First Task
-                  SELECT TOP 1 @cTaskDetailKey = TaskDetailKey
+                  SELECT TOP 1 
+                     @cTaskDetailKey = TaskDetailKey,
+                     @cWaveKeyTemp = TD.WaveKey,
+                     @cToLocTemp = TD.ToLoc
                   FROM dbo.TaskDetail TD WITH (NOLOCK)
-                  INNER JOIN dbo.LOC LOC WITH (NOLOCK) 
+                  INNER JOIN dbo.LOC LOC WITH (NOLOCK)
                      ON ( TD.FromLoc = LOC.Loc)
                   WHERE TD.Storerkey = @cStorerKey
                      AND TD.TaskType = 'ASTCPK'
@@ -773,9 +862,13 @@ BEGIN
                      AND TD.Groupkey = ''
                      AND TD.UserKey = ''
                      AND TD.DeviceID = ''
+                     AND   ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
                      AND LOC.Facility = @cFacility
                      AND LOC.PickZone = @cPickZone
-                  ORDER BY TD.Priority, TD.TaskDetailKey
+                  ORDER BY
+                     TD.Priority,
+                     CASE WHEN TD.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+                     TD.TaskDetailKey
                   SELECT @nRowCount = @@ROWCOUNT
 
                   IF @nRowCount = 0
@@ -804,7 +897,7 @@ BEGIN
                         GOTO Quit
                      END
                   END
-                     
+
                   -- Check cart valid
                   IF NOT EXISTS( SELECT 1 FROM dbo.DeviceProfile WITH (NOLOCK)
                                  WHERE DeviceType = 'CART'
@@ -817,7 +910,7 @@ BEGIN
                      SET @cOutField02 = ''
                      GOTO Quit
                   END
-                     
+
                   -- Check cart use by other
                   IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
                               WHERE Storerkey = @cStorerKey
@@ -840,7 +933,7 @@ BEGIN
                                  AND Scn = 6416
                                  AND V_string8 = @cCartID -- CartID
                                  AND UserName <> @cUserName)
-                  BEGIN         
+                  BEGIN
                      SET @nErrNo = 220767
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cart in use
                      EXEC rdt.rdtSetFocusField @nMobile, 2
@@ -848,9 +941,9 @@ BEGIN
                      GOTO Quit
                   END
                   --v1.3 Check scanned cart in step1 but not start to scan carton
-                           
+
                   SET @cOutField02 = @cCartID
-                     
+
                   -- Check blank
                   IF @cMethod = ''
                   BEGIN
@@ -859,7 +952,7 @@ BEGIN
                      EXEC rdt.rdtSetFocusField @nMobile, 3
                      GOTO Quit
                   END
-                     
+
                   -- Check Method valid
                   SELECT @cCartPickMethod = Long,
                      @nCartLimit = Short
@@ -898,7 +991,7 @@ BEGIN
                      @b_success OUTPUT,
                      @nErrNo OUTPUT,
                      @cErrmsg OUTPUT
-                        
+
                   IF @b_success <> 1
                   BEGIN
                      SET @nErrNo = 220771
@@ -909,9 +1002,49 @@ BEGIN
                   IF @nErrNo <> 0
                      GOTO Quit
 
-                  SELECT @nRowCount = COUNT(DISTINCT TD.CaseID)
+                  DECLARE @tCaseID TABLE ( CaseID NVARCHAR(20) PRIMARY KEY )
+
+                  INSERT INTO @tCaseID (CaseID)
+                  SELECT CaseID
+                  FROM 
+                     (SELECT CaseID, 
+                           ROW_NUMBER() OVER(PARTITION BY PickZone
+                              ORDER BY 
+                                 Priority,
+                                 CASE WHEN UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+                                 TaskDetailKey) AS RowIndex
+                     FROM
+                        (SELECT LOC.PickZone, TD.CaseID, TD.Priority, TD.UserKeyOverRide, TD.TaskDetailKey, 
+                           ROW_NUMBER()OVER(PARTITION BY TD.CaseID
+                           ORDER BY
+                              TD.Priority,
+                              CASE WHEN TD.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+                              TD.TaskDetailKey
+                           ) AS row#
+                        FROM dbo.TaskDetail TD WITH (NOLOCK)
+                        INNER JOIN dbo.LOC LOC WITH (NOLOCK)
+                           ON TD.FromLoc = LOC.Loc
+                        WHERE TD.Storerkey = @cStorerKey
+                           AND TD.TaskType = 'ASTCPK'
+                           AND TD.Status = '0'
+                           AND TD.Groupkey = ''
+                           AND TD.UserKey = ''
+                           AND TD.DeviceID = ''
+                           AND ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
+                           AND LOC.Facility = @cFacility
+                           AND LOC.PickZone = @cPickZone
+                           AND TD.WaveKey = @cWaveKeyTemp
+                           AND TD.ToLoc = @cToLocTemp
+                        ) AS t
+                     WHERE t.row# = 1) AS t1
+                  WHERE t1.RowIndex <= @nCartLimit
+
+                  INSERT INTO @tTaskDetailKeyList (TaskDetailKey)
+                  SELECT DISTINCT TD.TaskDetailKey
                   FROM dbo.TaskDetail TD WITH (NOLOCK)
-                  INNER JOIN dbo.LOC LOC WITH (NOLOCK) 
+                  INNER JOIN @tCaseID TC
+                     ON TD.CaseID = TC.CaseID
+                  INNER JOIN dbo.LOC LOC WITH (NOLOCK)
                      ON TD.FromLoc = LOC.Loc
                   WHERE TD.Storerkey = @cStorerKey
                      AND TD.TaskType = 'ASTCPK'
@@ -919,42 +1052,18 @@ BEGIN
                      AND TD.Groupkey = ''
                      AND TD.UserKey = ''
                      AND TD.DeviceID = ''
+                     AND ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
                      AND LOC.Facility = @cFacility
                      AND LOC.PickZone = @cPickZone
-                     AND EXISTS (SELECT 1 FROM dbo.TaskDetail TD1 WITH (NOLOCK)
-                                 WHERE TD1.StorerKey = @cStorerKey
-                                    AND TD1.TaskDetailKey = @cTaskDetailKey
-                                    AND TD1.WaveKey = TD.WaveKey
-                                    AND TD1.ToLoc = TD.ToLoc)
+                     AND TD.WaveKey = @cWaveKeyTemp
+                     AND TD.ToLoc = @cToLocTemp
 
-                  SET @nRowCount = IIF(@nCartLimit <= @nRowCount, @nCartLimit, @nRowCount)
-
-                  INSERT INTO @tTaskDetailKeyList (TaskDetailKey)
-                  SELECT TaskDetailKey
-                  FROM
-                     (SELECT TD.TaskDetailKey, ROW_NUMBER()OVER(PARTITION BY TD.CaseID ORDER BY TD.Priority, TD.TaskDetailKey) AS row#
-                     FROM dbo.TaskDetail TD WITH (NOLOCK)
-                     INNER JOIN dbo.LOC LOC WITH (NOLOCK) 
-                        ON TD.FromLoc = LOC.Loc
-                     WHERE TD.Storerkey = @cStorerKey
-                        AND TD.TaskType = 'ASTCPK'
-                        AND TD.Status = '0'
-                        AND TD.Groupkey = ''
-                        AND TD.UserKey = ''
-                        AND TD.DeviceID = ''
-                        AND LOC.Facility = @cFacility
-                        AND LOC.PickZone = @cPickZone
-                        AND EXISTS (SELECT 1 FROM dbo.TaskDetail TD1 WITH (NOLOCK)
-                                    WHERE TD1.StorerKey = @cStorerKey
-                                       AND TD1.TaskDetailKey = @cTaskDetailKey
-                                       AND TD1.WaveKey = TD.WaveKey
-                                       AND TD1.ToLoc = TD.ToLoc)) AS t
-                  WHERE t.row# <= @nRowCount
+                  SELECT @nRowCount = COUNT(1) FROM @tCaseID
 
                   SET @cTotalToteQty = ISNULL(TRY_CAST(@nRowCount AS NVARCHAR(5)), 0)
 
                   --Lock the Tasks
-                  UPDATE TaskDetail WITH(ROWLOCK)
+                  UPDATE TD WITH(ROWLOCK)
                   SET 
                      UserKey = @cUserName,
                      DeviceID = @cCartID,
@@ -962,8 +1071,9 @@ BEGIN
                      Status = '3',
                      EditWho = @cUserName,
                      EditDate = GETDATE()
-                  WHERE StorerKey = @cStorerKey
-                     AND EXISTS(SELECT 1 FROM @tTaskDetailKeyList AS TDL WHERE TaskDetail.TaskDetailKey = TDL.TaskDetailKey)
+                  FROM dbo.TaskDetail TD WITH(ROWLOCK)
+                  INNER JOIN @tTaskDetailKeyList TDL
+                     ON TD.TaskDetailKey = TDL.TaskDetailKey
 
                   SET @cOutField01 = @cCartPickMethod
                   SET @cOutField02 = @cCartID
@@ -1020,20 +1130,20 @@ BEGIN
             SCN6416_Start:
             IF @nInputKey = 0
             BEGIN
-               IF EXISTS(SELECT 1      
-                  FROM dbo.TaskDetail WITH (NOLOCK)      
-                  WHERE Storerkey = @cStorerKey      
-                  AND   TaskType = 'ASTCPK'      
-                  AND   [Status] = '5'      
-                  AND   Groupkey = @cGroupKey      
-                  AND   UserKey = @cUserName      
+               IF EXISTS(SELECT 1
+                  FROM dbo.TaskDetail WITH (NOLOCK)
+                  WHERE Storerkey = @cStorerKey
+                  AND   TaskType = 'ASTCPK'
+                  AND   [Status] = '5'
+                  AND   Groupkey = @cGroupKey
+                  AND   UserKey = @cUserName
                   AND   DeviceID = @cCartID  )
                BEGIN
                   SET @nErrNo = 220777
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PickNotComplete
                   GOTO Quit
                END
-               -- Prepare next screen var        
+               -- Prepare next screen var
                SET @cOutField01 = ''        
                SET @cOutField02 = ''         
                SET @cOutField03 = ''         
@@ -1643,6 +1753,18 @@ BEGIN
                      GOTO Step_Matrix_Fail_1
                   END
 
+                  IF EXISTS(SELECT 1
+                           FROM dbo.TaskDetail TD WITH(NOLOCK)
+                           WHERE TD.Storerkey = @cStorerKey
+                              AND TD.TaskType = 'ASTCPK'
+                              AND DropID = @cCartonId
+                              AND Status = '9' )
+                  BEGIN
+                     SET @nErrNo =  220781
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote Not Release
+                     GOTO Step_Matrix_Fail_1
+                  END
+
                   SELECT @nCartonCnt = COUNT( DISTINCT DropID )
                   FROM dbo.TaskDetail WITH (NOLOCK)
                   WHERE Storerkey = @cStorerKey
@@ -1736,6 +1858,17 @@ BEGIN
                WHERE Variable = '@cGroupKey'
                --V1.1 JACKC END
                GOTO SCN6416_Start
+            END -- option 1
+
+         END -- step 10
+      END -- scn 5929
+      ELSE IF @nMOBRECStep = 6 --SHORT PICK CONFIRM
+      BEGIN
+         IF @nMOBRECScn = 5925
+         BEGIN
+            IF @cOption = '1' AND @nActQTY = 0
+            BEGIN
+               SET @cUDF01 = 'Y'
             END -- option 1
 
          END -- step 10

@@ -46,7 +46,8 @@ GO
 /*                            check to restrict unallocation for packing*/
 /*                            orders while click on option1             */
 /* 11-Feb-2025 SSA03    2.3   UWP-29893 Reverting changes to fix PROD   */
-/*                            issue*/
+/*                            issue                                     */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /************************************************************************/       
 CREATE OR ALTER PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional    
@@ -93,19 +94,26 @@ BEGIN
                                  ,PackType      CHAR(1)      NOT NULL DEFAULT('')         --(Wan05)                                  
                                  )     
    --(Wan03) - END        
-   SET @n_Err = 0     
-        
-   IF SUSER_SNAME() <> @c_UserName    --(Wan01)    
-   BEGIN    
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT    
-        
-      IF @n_Err <> 0     
-      BEGIN    
-         GOTO EXIT_SP    
-      END    
-        
-      EXECUTE AS LOGIN = @c_UserName    
-   END    
+  -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)    
         
    BEGIN TRY -- SWT01 - Begin Outer Begin Try       
         
@@ -586,7 +594,8 @@ BEGIN
    BEGIN    
       BEGIN TRAN    
    END                                                                
-   REVERT                                                         --(Wan01) - Move Down                 
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)                 
 END    
 GO
 GRANT EXECUTE ON  [WM].[lsp_Unallocation_Wrapper] TO [NSQL]

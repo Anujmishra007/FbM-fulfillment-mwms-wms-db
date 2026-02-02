@@ -6,7 +6,7 @@ GO
 
 
 /************************************************************************/
-/* Stored Proc: lsp_WM_Get_SKU_Image_URL                                */
+/* Stored Proc: isp_Get_SKU_Image_UR                                */
 /* Creation Date: 11-Sep-2019                                           */
 /* Copyright: LF Logistics                                              */
 /* Written by: Shong                                                    */
@@ -25,6 +25,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2023-04-5   yeekung  1.0   TPS-667 Created                           */
+/* 2025-04-10  GhChan   2.0   UWP-28682 Fixing new path handling (Gh01) */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_Get_SKU_Image_UR]
      @c_Storerkey          NVARCHAR(15)
@@ -41,6 +42,7 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+
    DECLARE @n_StartTCnt       INT
          , @n_Continue        INT
          , @c_SQL             NVARCHAR(2000)
@@ -48,7 +50,7 @@ BEGIN
 
    DECLARE @c_SkuImageServer  NVARCHAR(215),
            @c_CustStoredProc  NVARCHAR(100) = '',
-           @c_ImageFolder     NVARCHAR(200) = '',
+           @c_ImageFolder     NVARCHAR(250) = '',
            @c_SKUFolder       NVARCHAR(1000) = '',
            @c_ImageFile       NVARCHAR(255)  = '',
            @n_ID             INT            = 0,
@@ -58,7 +60,7 @@ BEGIN
            @c_Urltemplate     NVARCHAR(2000)= ''
 
    DECLARE @t_ImageFolder     TABLE
-            ( ImageFolder        NVARCHAR(20)  NOT NULL PRIMARY KEY
+            ( ImageFolder        NVARCHAR(50)  NOT NULL PRIMARY KEY
             )
 
    SET @c_SKUImageURL = ''
@@ -84,8 +86,8 @@ BEGIN
       BEGIN      
          CREATE TABLE #DirTree (
             Id int identity(1,1),
-            ImagePath NVARCHAR(200) NULL,       --(Wan02) 2020-11-24
-            ImageFile nvarchar(255),
+            ImagePath NVARCHAR(250) NULL,       --(Wan02) 2020-11-24
+            ImageFile nvarchar(500),
             Depth smallint,
             FileFlag bit  -- 0=folder 1=file
             )          
@@ -107,6 +109,7 @@ BEGIN
       SET @c_SKUImageURL = ''
       SET @c_ImageFolder = ''
 
+
       INSERT INTO @t_ImageFolder ( ImageFolder )
       SELECT ImageFolder = ISNULL(RTRIM(SKU.ImageFolder),'')
       FROM SKU WITH (NOLOCK)
@@ -121,7 +124,12 @@ BEGIN
       AND SIMG.ImageFolder <> '' AND SIMG.ImageFolder IS NOT NULL 
       ORDER BY ImageFolder
 
-
+      IF @@ROWCOUNT = 0
+      BEGIN
+         INSERT INTO @t_ImageFolder ( ImageFolder )
+         SELECT ImageFolder = 'SKU\' + @c_SKU --Gh01
+      END
+      
       SET @c_ImageFolder = ''
       -- Loop to get all folder that contains the sku Image
       WHILE  1= 1 --@n_SubFolder_SeqNo > 0  
@@ -136,19 +144,22 @@ BEGIN
 
          --SET @c_FolderSeqNo = RIGHT('000' +  CONVERT(NVARCHAR(3), @n_SubFolder_SeqNo),3)   
          --SET @c_SKUFolder = @c_SkuImageServer + @c_Storerkey + '\' + @c_ImagePrefix + @c_FolderSeqNo  + '\'
-         SET @c_SKUFolder = @c_SkuImageServer + @c_Storerkey + '\' + @c_ImageFolder  + '\'
+         SET @c_SKUFolder = @c_SkuImageServer + @c_Storerkey + '\' + @c_ImageFolder  + '\'  
+        
+        INSERT INTO #DirTree (ImageFile, Depth, FileFlag)
+         EXEC master..xp_dirtree @c_SKUFolder, 1, 1    --folder, depth 0=all(default) 1..x, 0=not list file(default) 1=list file  
 
-         INSERT INTO #DirTree (ImageFile, Depth, FileFlag)
-         EXEC master..xp_dirtree @c_SKUFolder, 1, 1    --folder, depth 0=all(default) 1..x, 0=not list file(default) 1=list file 
+         IF @@ROWCOUNT <> 0
+         BEGIN
+            SET @n_ID = SCOPE_IDENTITY()  
 
-         SET @n_ID = SCOPE_IDENTITY()
-      
-         UPDATE #DirTree 
-         SET ImagePath = @c_SKUFolder 
-         WHERE ID <= @n_ID  
-            AND ImagePath IS NULL      
-         --SET @n_SubFolder_SeqNo = @n_SubFolder_SeqNo - 1
-      END 
+            UPDATE #DirTree   
+            SET ImagePath = @c_SKUFolder   
+            WHERE ID <= @n_ID    
+                  AND ImagePath IS NULL        
+            --SET @n_SubFolder_SeqNo = @n_SubFolder_SeqNo - 1  
+         END
+      END   
       --(Wan02) 2020-11-24 - END
 
       DECLARE IMG_CUR CURSOR FAST_FORWARD READ_ONLY FOR 
@@ -165,6 +176,13 @@ BEGIN
          WHERE Depth = 1
          AND FileFlag = 1
          AND ImageFile Like @c_Sku + '{%'
+         UNION
+         SELECT ImageFile
+               ,ImagePath                                         --(Gh01) 2025-04-10
+         FROM #DirTree
+         WHERE Depth = 1
+         AND FileFlag = 1
+         AND ImageFile Like '%'+ @c_Sku + '%'
 
       OPEN IMG_CUR
                
@@ -201,9 +219,9 @@ BEGIN
             ORDER BY s.Id 
       END
    END
-   IF @c_SKUImageURL = ''
+   IF @c_SKUImageURL = '' AND @c_Urltemplate <> ''
    BEGIN
-      SELECT  @c_SKUImageURL= 'https://intranetapi.lfuat.net/GenericAPI/GetFile?src=IcOC6d%2BAoBNa16e0gLVR7PS6th0bgaLCsPIZ9M4UmX2CNC%2Fz69UrlCEmIguGHETX%2Bo1U7b8omrkl%2Bw9qT75BasN0VsuVylaxFaAgqXjo%2FlpuCd15Vao%2B6xpSHzVX1LVQzEk2HRWABiY%3D'
+      SET  @c_SKUImageURL= @c_Urltemplate + 'unknown'  --Gh01
    END
 
    EXIT_SP:

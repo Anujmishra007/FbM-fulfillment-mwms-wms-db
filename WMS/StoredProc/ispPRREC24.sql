@@ -24,7 +24,8 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 04-Mar-2022  WLChooi 1.0   DevOps Combine Script                        */
 /* 02-Jan-2023  NJOW01  1.1   WMS-24523 skip update if receiptdetail       */
-/*                            lottable10 is not blank                      */  
+/*                            lottable10 is not blank                      */
+/* 10-Oct-2025  SSA01   1.2  UWP-42248 -Enhanced session management        */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPRREC24]  
 (     @c_Receiptkey        NVARCHAR(10)  
@@ -253,7 +254,7 @@ BEGIN
                VALUES('COSTCO2LOTSEQ'   
                     , 1     
                     , '1'
-                    , GETDATE()
+                    , dbo.fnc_GetDate()    --(SSA01)
                )
             
                SET @c_SeqNo = '1'
@@ -456,8 +457,8 @@ BEGIN
            , Lottable08 = @c_Lottable08
            , Lottable10 = @c_Lottable10
            , TrafficCop = NULL
-           , EditWho    = SUSER_SNAME()
-           , EditDate   = GETDATE()
+           , EditWho    = dbo.fnc_GetUserName()      --(SSA01)
+           , EditDate   = dbo.fnc_GetDate()    --(SSA01)
          WHERE ReceiptKey = @c_Receiptkey
          AND ReceiptLineNumber = @c_ReceiptLineNumber
 

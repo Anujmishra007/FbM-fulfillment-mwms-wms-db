@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrBTB_FTAUpdate]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrBTB_FTAUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -22,8 +19,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
+/* 06-Oct-2025  AK01      1.0 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
-CREATE TRIGGER [dbo].[ntrBTB_FTAUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrBTB_FTAUpdate]
 ON  [dbo].[BTB_FTA]
 FOR UPDATE
 AS
@@ -54,8 +52,8 @@ BEGIN
    IF NOT UPDATE(EditDate) 
    BEGIN
       UPDATE BTB_FTA WITH (ROWLOCK)
-      SET EditWho = SUSER_SNAME()
-         ,EditDate = GETDATE()
+      SET EditWho = dbo.fnc_GetUserName()
+         ,EditDate = dbo.fnc_GetDate()
          ,TrafficCop = NULL
       FROM BTB_FTA
       JOIN INSERTED ON (BTB_FTA.BTB_FTAKey = INSERTED.BTB_FTAKey)
@@ -105,4 +103,5 @@ BEGIN
    END
 END -- procedure
 GO
+
 

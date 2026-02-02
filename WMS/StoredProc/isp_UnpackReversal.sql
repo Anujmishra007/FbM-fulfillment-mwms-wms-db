@@ -16,7 +16,7 @@ GO
 /*                                                                      */
 /* Parameters:                                                          */
 /*                                                                      */
-/* PVCS Version: 2.1                                                    */
+/* PVCS Version: 2.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -41,6 +41,9 @@ GO
 /*                            Reversal [CR]                             */
 /* 21-Sep-2022 WLChooi  2.1   JSM-96945 - Clear TTLCNTS if              */
 /*                            PackSummB4Packed is not turned on (WL01)  */
+/* 26-Jun-2025 WLC015   2.2   UWP-36744 Get Order Info from PICKHEADER  */
+/*                            if Packheader OrderKey & LoadKey are empty*/
+/*                            (WL02)                                    */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_UnpackReversal]
    @c_pickslipno  NVARCHAR(10),
@@ -84,6 +87,52 @@ BEGIN
    FROM PACKHEADER (NOLOCK)
    LEFT JOIN ORDERS (NOLOCK) ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
    WHERE PACKHEADER.Pickslipno = @c_pickslipno
+
+   --WL02 S
+   IF NOT EXISTS ( SELECT 1
+                   FROM PICKHEADER (NOLOCK)
+                   WHERE Pickheaderkey = @c_pickslipno )
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60000
+      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': PickslipNo Not Found in PICKHEADER table. (isp_UnpackReversal)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+   END
+   
+   IF (@n_continue = 1 OR @n_continue = 2)
+   BEGIN
+      IF ISNULL(@c_Orderkey, '') = '' AND ISNULL(@c_Loadkey, '') = ''
+      BEGIN
+         SELECT @c_Orderkey = ISNULL(Orderkey, '')
+              , @c_Loadkey = ISNULL(ExternOrderkey, '')
+         FROM PICKHEADER (NOLOCK)
+         WHERE Pickheaderkey = @c_Pickslipno
+      END
+      
+      IF ISNULL(@c_Loadkey, '') = ''
+      BEGIN
+         SELECT @c_Loadkey = ISNULL(Loadkey, '')
+         FROM ORDERS (NOLOCK)
+         WHERE Orderkey = @c_Orderkey
+      END
+      
+      IF ISNULL(@c_Facility, '') = ''
+      BEGIN
+         IF @c_Orderkey <> ''
+         BEGIN
+            SELECT @c_Facility = Facility
+            FROM ORDERS (NOLOCK)
+            WHERE Orderkey = @c_Orderkey
+         END
+         ELSE
+         BEGIN
+            SELECT TOP 1 @c_Facility = Facility
+            FROM LOADPLANDETAIL LPD (NOLOCK)
+            JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+            WHERE LPD.Loadkey = @c_Loadkey
+         END
+      END
+   END
+   --WL02 E
 
    IF @c_status <> '9'
    BEGIN

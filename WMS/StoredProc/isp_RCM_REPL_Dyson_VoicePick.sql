@@ -21,6 +21,8 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */
 /* 2022-08-01  Wan      1.0   Created & DevOps Combine Script            */
+/* 2025-10-10  SSA01    1.1   UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/   
 CREATE OR ALTER PROC [dbo].[isp_RCM_REPL_Dyson_VoicePick]  
    @c_Storerkey            NVARCHAR(15)
@@ -204,8 +206,8 @@ BEGIN
          )
          UPDATE r
             SET r.Confirmed = @c_VioceConfirmStatus
-               ,r.EditWho = SUSER_SNAME()
-               ,r.EditDate= GETDATE()
+               ,r.EditWho = dbo.fnc_GetUserName()      --(SSA01)
+               ,r.EditDate= dbo.fnc_GetDate()    --(SSA01)
          FROM dbo.REPLENISHMENT r
          JOIN upd ON upd.ReplenishmentKey = r.ReplenishmentKey
          

@@ -19,6 +19,7 @@ GO
 /* 2019-10-09 1.5  Chermaine  WMS-10777 Add EventLog                    */
 /* 2023-05-31 1.6  James      WMS-22615 Add UCCWithMultiSKU (james01)   */
 /* 2024-10-02 1.7  NLT013     FCR-939 Correct ExtValidateSP parameters  */
+/* 2025-07-28 0.0  JACKC      !!!Cutover!!! Use V0 repo for working     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_DynamicPick_UCCReplenTo] (

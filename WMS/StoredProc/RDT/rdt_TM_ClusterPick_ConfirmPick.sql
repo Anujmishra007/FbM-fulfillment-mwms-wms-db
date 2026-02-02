@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_TM_ClusterPick_ConfirmPick]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_TM_ClusterPick_ConfirmPick]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -13,9 +9,10 @@ GO
 /* Date       Rev  Author     Purposes                                        */  
 /* 2020-06-18 1.0  James      WMS-12055 Created                               */  
 /* 2021-09-07 1.1  James      WMS-17429 Add AssignPackLabelToOrdCfg (james01) */
+/* 2025-11-10 1.2  Dennis     UWP-43759 Enhancement                           */
 /******************************************************************************/  
   
-CREATE PROC rdt.rdt_TM_ClusterPick_ConfirmPick (  
+CREATE OR ALTER PROC rdt.rdt_TM_ClusterPick_ConfirmPick (  
     @nMobile         INT,  
     @nFunc           INT,  
     @cLangCode       NVARCHAR( 3),  
@@ -185,7 +182,8 @@ BEGIN
       AND   PD.QTY > 0 
       AND   PD.Status <> '4'
       AND   PD.Status < @cPickConfirmStatus 
-  
+      ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
+
    -- Discrete PickSlip  
    ELSE IF @cOrderKey <> ''  
       SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
@@ -199,7 +197,8 @@ BEGIN
       AND   PD.QTY > 0 
       AND   PD.Status <> '4' 
       AND   PD.Status < @cPickConfirmStatus 
-  
+      ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
+
    -- Conso PickSlip  
    ELSE IF @cLoadKey <> ''  
       SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
@@ -214,7 +213,8 @@ BEGIN
       AND   PD.QTY > 0 
       AND   PD.Status <> '4' 
       AND   PD.Status < @cPickConfirmStatus 
- 
+      ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
+
    -- Custom PickSlip  
    ELSE  
       SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
@@ -228,7 +228,8 @@ BEGIN
       AND   PD.QTY > 0 
       AND   PD.Status <> '4' 
       AND   PD.Status < @cPickConfirmStatus 
- 
+      ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
+
    OPEN @curPD
 
    -- Loop PickDetail  

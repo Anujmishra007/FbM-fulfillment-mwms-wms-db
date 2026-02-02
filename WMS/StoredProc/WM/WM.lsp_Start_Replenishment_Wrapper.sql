@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -28,6 +28,8 @@ GO
 /*                            replenishment trigger button New           */
 /* 2022-08-11  Wan02    1.3   DevOps Combine Script                      */
 /* 2024-04-23  Wan03    1.4   UWP-17448 Fixed infity commit tran loop    */
+/* 2025-09-02  SWT01    1.5   Enhanced session management pattern       */
+/* 2025-10-10  SPC040   1.6   Replace SUSER_SNAME with fnc_GetUserName   */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Start_Replenishment_Wrapper]  
    @c_Storerkey            NVARCHAR(15) = ''
@@ -85,23 +87,26 @@ BEGIN
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
    
    --(mingle01) - START
    BEGIN TRY
@@ -157,8 +162,8 @@ BEGIN
                   , Zone10                = @c_Zone10 
                   , Zone11                = @c_Zone11 
                   , Zone12                = @c_Zone12 
-                  , EditWho               = SUSER_SNAME()
-                  , EditDate              = GETDATE()
+                  , EditWho               = dbo.fnc_GetUserName()
+                  , EditDate              = dbo.fnc_GetDate()
                   , Trafficcop            = NULL
                WHERE RowRef = @n_RowRef 
             END TRY
@@ -554,10 +559,11 @@ BEGIN
    BEGIN 
       BEGIN TRAN
    END
-   REVERT
-END  
-GO
-GRANT EXECUTE ON [WM].[lsp_Start_Replenishment_Wrapper] TO nSQL 
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
+END
 GO
 
+GRANT EXECUTE ON [WM].[lsp_Start_Replenishment_Wrapper] TO nSQL 
+GO
 

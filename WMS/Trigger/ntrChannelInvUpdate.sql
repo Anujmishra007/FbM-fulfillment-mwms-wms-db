@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrChannelInvUpdate]') 
+﻿IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrChannelInvUpdate]') 
 AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
 DROP TRIGGER [dbo].[ntrChannelInvUpdate]
 GO
@@ -27,6 +27,7 @@ GO
 /* Date          Author  Ver.  Purposes                                         */  
 /* 04-March-2019 kocy  1.0   WMS-8095 - JDSports - Update EditDate              */
 /*                            & EditWho in Channel related tables               */
+/* 09-Oct-2025   SPC040  1.1  Replace SUSER_SNAME with fnc_GetUserName          */
 /********************************************************************************/  
 CREATE TRIGGER [dbo].[ntrChannelInvUpdate]  
 ON  [dbo].[ChannelInv] FOR UPDATE  
@@ -62,8 +63,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN  
       UPDATE ChannelInv  
-      SET EditDate = GETDATE(),  
-          EditWho = SUSER_SNAME()  
+      SET EditDate = dbo.fnc_GetDate(),  
+          EditWho = dbo.fnc_GetUserName()  
       FROM ChannelInv (NOLOCK), INSERTED (NOLOCK)  
       WHERE ChannelInv.Channel_ID = INSERTED.Channel_ID  
   

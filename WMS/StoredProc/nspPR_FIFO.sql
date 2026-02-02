@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPR_FIFO]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPR_FIFO]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -31,9 +28,11 @@ GO
 /* 02-Jan-2020 Wan02    1.3  Dynamic SQL review, impact SQL cache log   */ 
 /* 11-Jan-2021 WLChooi  1.4  WMS-15991 - Add FilterEmptyLotXX Codelkup  */
 /*                           (WL01)                                     */
+/* 20-Nov-2024  WLChooi 1.5  DevOps Combine Script                      */
+/* 20-Nov-2024  WLChooi 1.5  WMS-26556-Support Multi Facilities(WL02)   */
 /************************************************************************/
 
-CREATE PROC nspPR_FIFO
+CREATE OR ALTER PROC [dbo].[nspPR_FIFO]
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
 @c_lot NVARCHAR(10) ,
@@ -351,13 +350,15 @@ BEGIN
             " JOIN LOTxLOCxID (NOLOCK) ON (LOTxLOCxID.LOT = LOT.LOT AND LOTxLOCxID.LOT = LOTATTRIBUTE.LOT) " +    
             " JOIN LOC (NOLOCK) ON (LOTxLOCxID.LOC = LOC.LOC) " +    
             " JOIN ID (NOLOCK) ON (LOTxLOCxID.ID = ID.ID) " +        
+            " JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility " +   --WL02
             " LEFT OUTER JOIN (SELECT P.lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) " +    
             "                FROM   PreallocatePickdetail P (NOLOCK) " +
             "                JOIN   ORDERS (NOLOCK) ON P.Orderkey = ORDERS.Orderkey " +  
             "                JOIN   ORDERDETAIL (NOLOCK) ON ORDERS.Orderkey = ORDERDETAIL.Orderkey AND P.OrderLineNumber = ORDERDETAIL.OrderLineNumber " +  --NJOW02
+            "                JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON ORDERS.Facility = F.Facility " +   --WL02
             "                WHERE  P.Storerkey = @c_storerkey " +                                                                                       --(Wan02) 
             "                AND    P.SKU = @c_SKU " +                                                                                                   --(Wan02) 
-            "                AND    ORDERS.FACILITY = @c_facility " +                                                                                    --(Wan02)       
+            --"                AND    ORDERS.FACILITY = @c_facility " +                                                                                  --(Wan02)   --WL02
             "                AND    P.qty > 0 " +    
             CASE WHEN ISNULL(@c_ID,'') <> '' THEN " AND ORDERDETAIL.ID = @c_ID " ELSE " " END +   --NJOW02                                               --(Wan02)     
             "                GROUP BY p.Lot, ORDERS.Facility) P ON LOTxLOCxID.Lot = P.Lot AND P.Facility = LOC.Facility " +   
@@ -366,11 +367,11 @@ BEGIN
             " AND LOT.STATUS = 'OK'  " +   
             " AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK' " +     
             " AND LOC.LocationFlag = 'NONE' " +  
-            " AND LOC.Facility = @c_facility "  +                                                                                                        --(Wan02) 
+            --" AND LOC.Facility = @c_facility "  +                                                                                                      --(Wan02)   --WL02
             ISNULL(RTRIM(@c_Condition),'')  + 
-            " GROUP By LOT.STORERKEY, LOT.SKU, LOT.LOT, Lotattribute.Lottable05 " +
+            " GROUP By LOT.STORERKEY, LOT.SKU, LOT.LOT, Lotattribute.Lottable05, F.FacSort " +   --WL02
             " HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) >= @n_UOMBase " + --(Wan02)  
-            " ORDER BY Lotattribute.Lottable05, LOT.Lot " 
+            " ORDER BY F.FacSort, Lotattribute.Lottable05, LOT.Lot "   --WL02
       --Wan02 - START
       SET @c_SQLParms= N'@c_facility   NVARCHAR(5)'
                         + ',@c_storerkey  NVARCHAR(15)'
@@ -428,13 +429,5 @@ BEGIN
    END
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF 
+GRANT EXECUTE ON [dbo].[nspPR_FIFO] TO [NSQL]
 GO
-SET ANSI_NULLS OFF
-GO
-
-GRANT EXECUTE on nspPR_FIFO to nSQL
-GO
-
-

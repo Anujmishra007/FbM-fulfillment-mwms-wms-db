@@ -1,9 +1,9 @@
-IF EXISTS (SELECT name 
-	   FROM   dbo.sysobjects 
-	   WHERE  name = N'ntrBartenderLabelCfgUpdate' 
-	   AND 	  type = 'TR')
-    DROP TRIGGER ntrBartenderLabelCfgUpdate
-GO
+--IF EXISTS (SELECT name 
+--	   FROM   dbo.sysobjects 
+--	   WHERE  name = N'ntrBartenderLabelCfgUpdate' 
+--	   AND 	  type = 'TR')
+--    DROP TRIGGER ntrBartenderLabelCfgUpdate
+--GO
 
 SET ANSI_NULLS OFF
 GO
@@ -31,9 +31,10 @@ GO
 /* Date         Author  Ver.  Purposes                                     */  
 /* 08-10-19      kocy  1.0    Updates EditDate & EditWho                   */
 /*                            On BartenderlabelCfg Table                   */ 
+/* 06-10-2025   AK01    1.0   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /***************************************************************************/ 
 
-CREATE TRIGGER [dbo].[ntrBartenderLabelCfgUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrBartenderLabelCfgUpdate]
 ON [dbo].[BartenderLabelCfg] FOR UPDATE
 AS
 BEGIN
@@ -67,8 +68,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue=2 )
    BEGIN  
       UPDATE [dbo].[BartenderLabelCfg]  
-      SET EditDate = GETDATE(),  
-          EditWho = SUSER_SNAME()  
+      SET EditDate = dbo.fnc_GetDate(),  
+          EditWho = dbo.fnc_GetUserName()  
       FROM [dbo].[BartenderLabelCfg] WITH (NOLOCK), INSERTED (NOLOCK)  
       WHERE [dbo].[BartenderLabelCfg].LabelSerialNo = INSERTED.LabelSerialNo  
   
@@ -117,5 +118,6 @@ GO
 
 ALTER TABLE [dbo].[BartenderLabelCfg] ENABLE TRIGGER [ntrBartenderLabelCfgUpdate]
 GO
+
 
 

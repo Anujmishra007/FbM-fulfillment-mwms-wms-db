@@ -29,6 +29,7 @@ GO
 /* 02-Mar-2023  WLChooi  1.5  WMS-19079 - Add new logic to generate     */
 /*                            Case ID by SKU.PackQtyIndicator and fixed */
 /*                            FP/PP Calculation by Wave (WL04)          */
+/* 10-Oct-2025  SSA01    1.6  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV50]
@@ -348,10 +349,10 @@ BEGIN
        , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
        , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
        , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (getdate())    --(SSA01)
+       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())       --(SSA01)
+       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (getdate())    --(SSA01)
+       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())       --(SSA01)
        , [TrafficCop]           [NVARCHAR](1)    NULL
        , [ArchiveCop]           [NVARCHAR](1)    NULL
        , [OptimizeCop]          [NVARCHAR](1)    NULL
@@ -408,8 +409,8 @@ BEGIN
          SET --TaskdetailKey   = '', 
             Notes = ''
           , WaveKey = @c_Wavekey
-          , EditWho = SUSER_SNAME()
-          , EditDate = GETDATE()
+          , EditWho = dbo.fnc_GetUserName()          --(SSA01)
+          , EditDate = dbo.fnc_GetDate()    --(SSA01)
           , TrafficCop = NULL
          WHERE PickDetailKey = @c_curPickdetailkey
 
@@ -2831,8 +2832,8 @@ BEGIN
                UPDATE #PickDetail_WIP WITH (ROWLOCK)  
                SET CaseID = @c_CaseID 
                   ,TrafficCop = NULL  
-                  ,EditWho = SUSER_SNAME()
-                  ,EditDate = GETDATE()
+                  ,EditWho = dbo.fnc_GetUserName()        --(SSA01)
+                  ,EditDate = dbo.fnc_GetDate()    --(SSA01)
                WHERE Pickdetailkey = @c_pickdetailkey  
 
                SELECT @n_err = @@ERROR  
@@ -2897,8 +2898,8 @@ BEGIN
                   ,Qty = @n_packqty  
                   ,UOMQTY = CASE UOM WHEN '6' THEN @n_packqty ELSE UOMQty END   
                   ,TrafficCop = NULL  
-                  ,EditWho = SUSER_SNAME()
-                  ,EditDate = GETDATE()
+                  ,EditWho = dbo.fnc_GetUserName()          --(SSA01)
+                  ,EditDate = dbo.fnc_GetDate()    --(SSA01)
                 WHERE Pickdetailkey = @c_pickdetailkey  
 
                 SELECT @n_err = @@ERROR  
@@ -2961,8 +2962,8 @@ BEGIN
       UPDATE WAVE WITH (ROWLOCK)
       SET TMReleaseFlag = 'Y'        
        ,  TrafficCop = NULL      
-       ,  EditWho = SUSER_SNAME()
-       ,  EditDate= GETDATE()    
+       ,  EditWho = dbo.fnc_GetUserName()         --(SSA01)
+       ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
       WHERE WAVEKEY = @c_wavekey  
 
       SELECT @n_err = @@ERROR  

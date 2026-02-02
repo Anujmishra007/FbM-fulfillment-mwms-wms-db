@@ -6,11 +6,12 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_Replenish_V7_Confirm                            */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
-/* Date       Rev  Author     Purposes                                  */
-/* 25-03-2018 1.0  James      WMS-8254 Created                          */
-/* 2022-08-23 1.1  Ung        WMS-20562 Add UCC                         */
+/* Date       Rev    Author     Purposes                                */
+/* 25-03-2018 1.0    James      WMS-8254 Created                        */
+/* 2022-08-23 1.1    Ung        WMS-20562 Add UCC                       */
+/* 2025-03-17 1.2.0  JCH507     FCR-2728 Add customization SP entry     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_Replenish_V7_Confirm] (
@@ -56,6 +57,87 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @cSQL           NVARCHAR(MAX)  
+   DECLARE @cSQLParam      NVARCHAR(MAX)  
+   DECLARE @cReplConfirmSP NVARCHAR(20)
+
+   --V1.2.0 start
+   -- Get storer configure  
+   SET @cReplConfirmSP = rdt.RDTGetConfig( @nFunc, 'ReplConfirmSP', @cStorerKey)  
+   IF @cReplConfirmSP = '0'  
+      SET @cReplConfirmSP = ''  
+  
+   /***********************************************************************************************  
+                                              Custom Replenishment confirm  
+   ***********************************************************************************************/  
+   -- Custom logic  
+   IF @cReplConfirmSP <> ''  
+   BEGIN  
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cReplConfirmSP AND type = 'P')  
+      BEGIN  
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cReplConfirmSP) +  
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReplenBySKUQTY, @cMoveQTYAlloc, ' + 
+            '@cReplenKey, @cFromLOC, @cFromID, @cSKU, @nActQTY, @cUCCNo, @cToLOC, @cToID, @cLottableCode, ' +
+            '@cLottable01,   @cLottable02,   @cLottable03,   @dLottable04,   @dLottable05, ' +
+            '@cLottable06,   @cLottable07,   @cLottable08,   @cLottable09,   @cLottable10, ' +
+            '@cLottable11,   @cLottable12,   @dLottable13,   @dLottable14,   @dLottable15, ' +
+            '@nErrNo OUTPUT, @cErrMsg OUTPUT '  
+  
+         SET @cSQLParam =  
+            ' @nMobile           INT,           ' +   
+            ' @nFunc             INT,           ' +   
+            ' @cLangCode         NVARCHAR( 3),  ' +   
+            ' @nStep             INT,           ' +   
+            ' @nInputKey         INT,           ' +   
+            ' @cFacility         NVARCHAR( 5),  ' +   
+            ' @cStorerKey        NVARCHAR( 15), ' +     
+            ' @cReplenBySKUQTY   NVARCHAR( 1),  ' +     
+            ' @cMoveQtyAlloc     NVARCHAR( 1),  ' +   
+            ' @cReplenKey        NVARCHAR( 10), ' +   
+            ' @cFromLOC          NVARCHAR( 10), ' +
+            ' @cFromID           NVARCHAR( 18), ' +
+            ' @cSKU              NVARCHAR( 20), ' +
+            ' @nActQTY           INT,           ' +
+            ' @cUCCNo            NVARCHAR( 20), ' +
+            ' @cToLOC            NVARCHAR( 10), ' +
+            ' @cToID             NVARCHAR( 18), ' +
+            ' @cLottableCode     NVARCHAR( 18), ' + 
+            ' @cLottable01       NVARCHAR( 18), ' +
+            ' @cLottable02       NVARCHAR( 18), ' +
+            ' @cLottable03       NVARCHAR( 18), ' +
+            ' @dLottable04       DATETIME,      ' +
+            ' @dLottable05       DATETIME,      ' +
+            ' @cLottable06       NVARCHAR( 30), ' +
+            ' @cLottable07       NVARCHAR( 30), ' +
+            ' @cLottable08       NVARCHAR( 30), ' +
+            ' @cLottable09       NVARCHAR( 30), ' +
+            ' @cLottable10       NVARCHAR( 30), ' +
+            ' @cLottable11       NVARCHAR( 30), ' +
+            ' @cLottable12       NVARCHAR( 30), ' +
+            ' @dLottable13       DATETIME,      ' +
+            ' @dLottable14       DATETIME,      ' +
+            ' @dLottable15       DATETIME,      ' +
+            ' @nErrNo            INT           OUTPUT, ' +   
+            ' @cErrMsg           NVARCHAR(250) OUTPUT  '  
+              
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReplenBySKUQTY, @cMoveQTYAlloc
+            ,@cReplenKey, @cFromLOC, @cFromID, @cSKU, @nActQTY, @cUCCNo, @cToLOC, @cToID, @cLottableCode
+            ,@cLottable01,   @cLottable02,   @cLottable03,   @dLottable04,   @dLottable05
+            ,@cLottable06,   @cLottable07,   @cLottable08,   @cLottable09,   @cLottable10
+            ,@cLottable11,   @cLottable12,   @dLottable13,   @dLottable14,   @dLottable15
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT  
+  
+         GOTO Quit  
+      END  
+   END 
+   --V1.2.0 end
+
+   /**********************************************************************************  
+                           Standard Replenishment confirm  
+   ***********************************************************************************/ 
 
    DECLARE @nTranCount  INT
    SET @nTranCount = @@TRANCOUNT

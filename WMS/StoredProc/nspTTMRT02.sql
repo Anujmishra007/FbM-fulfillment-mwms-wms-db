@@ -27,6 +27,7 @@ GO
 /* Date        Rev  Author    Purposes                                  */
 /* 31-03-2016  1.0  ChewKP    CarterSZ Project                          */
 /* 15-11-2019  1.1  Chermaine WMS-11126 Add userkey override (cc01)     */
+/* 10-10-2025  1.2  SSA01     UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE PROC nspTTMRT02
@@ -162,8 +163,8 @@ BEGIN
         SET    STATUS = '0'  
               ,USERKEY = ''  
               ,REASONKEY = ''  
-              ,EditDate = GetDate()     
-              ,EditWho  = sUSER_sNAME()   
+              ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+              ,EditWho  = dbo.fnc_GetUserName()           --(SSA01)
               ,TrafficCop = NULL                      
         WHERE  USERKEY = @c_UserID  
                AND STATUS = '3' -- (Vicky02)  
@@ -451,8 +452,8 @@ BEGIN
                 SET    STATUS = '3'  
                       ,[UserKey] = @c_UserID  
                       ,[ReasonKey] = ''
-                      ,[EditDate] = GetDate()      
-                      ,[EditWho]  = sUSER_sNAME() 
+                      ,[EditDate] = dbo.fnc_GetDate()    --(SSA01)
+                      ,[EditWho]  = dbo.fnc_GetUserName()           --(SSA01)
                       ,[TrafficCop] = NULL        
                 WHERE  Storerkey = @c_StorerKey  
                   AND TaskType = 'RPT'  

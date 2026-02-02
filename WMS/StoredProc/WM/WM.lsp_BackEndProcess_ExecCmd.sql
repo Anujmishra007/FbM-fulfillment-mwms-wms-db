@@ -23,6 +23,7 @@ GO
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2023-02-24  Wan01    1.0   Created & DevOps Combine Script.          */
 /* 2023-05-12  Wan02    1.1   LFWM-4184 - PROD - CN  Lululemon ECOM     */
+/* 2025-05-26  SWT01    1.2   Setting Session Context for user name     */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BackEndProcess_ExecCmd]                                                                                                                     
    @c_Storerkey   NVARCHAR(15)   = ''
@@ -50,6 +51,8 @@ BEGIN
 
          ,  @CUR_PROC      CURSOR
 
+   DECLARE @b_ExecuteAs BIT = 0
+
    SET @CUR_PROC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT bepq.ProcessID
          ,bepq.ExecCmd
@@ -72,19 +75,24 @@ BEGIN
          SET @c_Status   = ''
          SET @c_StatusMsg= ''
          
+         -- (SWT01)
          IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''
          BEGIN
+            SET @b_ExecuteAs = 0
             EXEC [WM].[lsp_SetUser] 
-                  @c_UserName = @c_UserName  OUTPUT
-               ,  @n_Err      = @n_Err       OUTPUT
-               ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
             IF @n_Err <> 0 
             BEGIN
                SET @n_Continue = 3
             END
-    
-            EXECUTE AS LOGIN = @c_UserName
+
+            IF @b_ExecuteAs = 1                    
+               EXECUTE AS LOGIN = @c_UserName
+
          END
 
          IF @n_Continue IN (1,2)
@@ -162,7 +170,9 @@ BEGIN
          ,  @n_Err         = @n_Err       OUTPUT
          ,  @c_ErrMsg      = @c_ErrMsg    OUTPUT
 
-      REVERT 
+      IF @b_ExecuteAs = 1              -- (SWT01)
+         REVERT    
+
       FETCH NEXT FROM @CUR_PROC INTO @n_ProcessID, @c_SQL, @c_UserName
    END
    CLOSE @CUR_PROC

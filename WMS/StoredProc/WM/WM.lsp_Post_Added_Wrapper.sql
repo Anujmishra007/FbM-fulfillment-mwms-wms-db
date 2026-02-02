@@ -24,6 +24,7 @@ GO
 /* 15-Jan-2021 Wan02    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2023-11-17  Wan03    1.3   Performance Tune                           */
 /*                            Stucture Std as per WM.lsp_Post_Updated_Wrapper*/
+/* 2025-09-02  SWT01    1.4   Enhanced session management pattern       */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Post_Added_Wrapper]  
       @c_Module            NVARCHAR(60) = ''
@@ -151,15 +152,25 @@ BEGIN
    END                                                                                             --(Wan03) - END
 
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan02) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   -- Start enhanced session management (SWT01)
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      , @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-      IF @n_Err = 0 
-      BEGIN
-         EXECUTE AS LOGIN=@c_UserName
-      END
-   END                                   --(Wan02) - END
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
 
    BEGIN TRY   --(Wan01) - START
       IF @c_SQL <> ''
@@ -237,7 +248,8 @@ BEGIN
       execute nsp_logerror @n_err, @c_errmsg, 'lsp_Post_Added_Wrapper'  
    END CATCH   --(Wan01) - END
    EXIT_SP:                                                                                        --(Wan03) 
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)      
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_Post_Added_Wrapper] TO nSQL 

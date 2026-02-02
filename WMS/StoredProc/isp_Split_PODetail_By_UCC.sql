@@ -28,6 +28,8 @@ GO
 /*                              CODELKUP.Listname = "NIKEPOTYPE" into PODetail*/
 /*                              table. - (YokeBeen01)                         */  
 /* 10-May-2019  JovineNg  1.3   Add Storerkey as parameter  (JN01)            */
+/* 10-OCT-2025  SSA01     1.4   UWP-42248 -Enhanced session management        */
+/*                              and cleanup.                                  */
 /******************************************************************************/
 
 CREATE PROC dbo.isp_Split_PODetail_By_UCC
@@ -191,8 +193,8 @@ BEGIN
                   BEGIN
                      UPDATE UCC
                         SET Sourcekey = @c_POKey + @c_NewPOLineNumber,
-                            EditDate = GETDATE(),
-                            EditWho = SUSER_SNAME()
+                            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                            EditWho = dbo.fnc_GetUserName()       --(SSA01)
                       WHERE UCCNo = @c_UCCNO
                         AND Storerkey = @c_StorerKey
                         AND SKU = @c_Sku -- INC0680023
@@ -207,8 +209,8 @@ BEGIN
                      BEGIN
                         UPDATE PODETAIL WITH (ROWLOCK)
                            SET QtyOrdered = QtyOrdered - @n_UCCQty,
-                               EditDate = GETDATE(),
-                               EditWho = SUSER_SNAME()
+                               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                               EditWho = dbo.fnc_GetUserName()          --(SSA01)
                          WHERE POKey = @c_POKey
                            AND POLineNumber = @c_POLineNumber
 
@@ -228,8 +230,8 @@ BEGIN
                   -- Last Line, Only update the original line
                   UPDATE PODETAIL WITH (ROWLOCK)
                      SET Lottable10 = @c_Lottable10,  -- (YokeBeen01)
-                         EditDate = GETDATE(),
-                         EditWho = SUSER_SNAME()
+                         EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                         EditWho = dbo.fnc_GetUserName()        --(SSA01)
                    WHERE POKey = @c_POKey
                      AND POLineNumber = @c_POLineNumber
 
@@ -269,7 +271,7 @@ BEGIN
             UPDATE PODETAIL WITH (ROWLOCK)
                SET Lottable10 = @c_Lottable10,   -- (YokeBeen01)
                    TrafficCop = NULL,
-                   EditDate = GETDATE()
+                   EditDate = dbo.fnc_GetDate()    --(SSA01)
              WHERE POKey = @c_POKey
                AND POLineNumber = @c_POLineNumber
          END

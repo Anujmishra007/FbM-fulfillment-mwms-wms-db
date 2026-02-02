@@ -28,6 +28,8 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 2021-08-26   Michael  v1.1 Add Showfield Update_PD_PickslipNo         */
 /* 2022-03-23   Michael  V1.2 Add NULL to Temp Table                     */
+/* 2025-10-10   SSA01    V1.3 UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_print_wave_pickslip_04] (
@@ -219,7 +221,7 @@ BEGIN
       UPDATE PH WITH(ROWLOCK)
          SET PickType   = '1'
            , EditDate   = GETDATE()
-           , EditWho    = SUSER_SNAME()
+           , EditWho    = dbo.fnc_GetUserName()      --(SSA01)
            , TrafficCop = NULL
         FROM #TEMP_PICKHEADER TMP_PH
         JOIN dbo.PICKHEADER PH ON TMP_PH.Loadkey = PH.ExternOrderkey AND ISNULL(PH.Orderkey,'') = '' AND ISNULL(PH.Zone,'') = '7'

@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 06-Sep-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 10-Oct-2025  SSA01   1.1  UWP-42248 -Enhanced session management        */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPAKCF26]
 (
@@ -92,8 +93,8 @@ BEGIN
          SET RefNo = IIF(@c_UpdTrackingNo = 'Y', 'MSLIX' + SUBSTRING(PickSlipNo,2,9) + CONVERT(NVARCHAR,CartonNo), LabelNo)
            , RefNo2 = @c_Refno2
            , ArchiveCop = NULL
-           , EditDate = GETDATE()
-           , EditWho = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho = dbo.fnc_GetUserName()            --(SSA01)
          WHERE PickSlipNo = @c_PickSlipNo
          AND CartonNo = @n_CartonNo
 
@@ -113,8 +114,8 @@ BEGIN
             UPDATE PackInfo WITH (ROWLOCK)
             SET TrackingNo = 'MSLIX' + SUBSTRING(PickSlipNo,2,9) + CONVERT(NVARCHAR,CartonNo)
               , ArchiveCop = NULL
-              , EditDate = GETDATE()
-              , EditWho = SUSER_SNAME()
+              , EditDate = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho = dbo.fnc_GetUserName()           --(SSA01)
             WHERE PickSlipNo = @c_PickSlipNo
             AND CartonNo = @n_CartonNo
 
