@@ -179,17 +179,14 @@ BEGIN
       JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
       WHERE W.WaveKey = @c_Wavekey
 
-      -- If @c_Taskdetailkey is blank, assume UCC based - call from msp_ProcessShortReplenReAlloc01
-      -- Else check if Taskdetail.CaseID exists as UCCNo in UCC table
-      IF ISNULL(@c_Taskdetailkey, '') = '' SET @c_UCCNo = @c_Loc
-
+      -- Call from msp_ProcessShortReplenReAlloc01
       IF EXISTS ( SELECT 1
-                  FROM UCC (NOLOCK)
-                  WHERE UCCNo = @c_UCCNo
-                  AND Storerkey = @c_Storerkey
-                  AND SKU = @c_SKU ) AND ISNULL(@c_Taskdetailkey, '') = ''
+                  FROM TASKDETAIL TD (NOLOCK)
+                  WHERE TD.Taskdetailkey = @c_Taskdetailkey
+                  AND TD.TaskType = 'RPF'
+                  AND TD.FinalLOC = @c_Loc ) AND ISNULL(@c_Loc, '') <> ''
       BEGIN
-         SET @n_ByUCC = 1
+         SET @n_ByUCC = 0
          SET @n_ShortReplen = 1
       END
       ELSE IF EXISTS ( SELECT 1
@@ -297,35 +294,18 @@ BEGIN
    BEGIN
       IF @n_ByUCC = 1
       BEGIN
-         IF @n_ShortReplen = 1
-         BEGIN
-            INSERT INTO #T_ShortOrders (OrderKey)
-            SELECT PD.OrderKey
-            FROM PICKDETAIL PD WITH (NOLOCK)
-            WHERE PD.Storerkey = @c_StorerKey    
-            AND   PD.Sku = @c_SKU
-            AND   PD.[Status] = '4'
-            AND   EXISTS ( SELECT 1 
-                           FROM WAVEDETAIL WD (NOLOCK)
-                           WHERE WD.WaveKey = @c_Wavekey
-                           AND WD.OrderKey = PD.OrderKey )
-            GROUP BY PD.OrderKey
-         END
-         ELSE
-         BEGIN
-            INSERT INTO #T_ShortOrders (OrderKey)
-            SELECT PD.OrderKey
-            FROM PICKDETAIL PD WITH (NOLOCK)
-            WHERE PD.Storerkey = @c_StorerKey    
-            AND   PD.Sku = @c_SKU    
-            AND   PD.DropID = @c_UCCNo    
-            AND   PD.[Status] = '4'
-            AND   EXISTS ( SELECT 1 
-                           FROM WAVEDETAIL WD (NOLOCK)
-                           WHERE WD.WaveKey = @c_Wavekey
-                           AND WD.OrderKey = PD.OrderKey )
-            GROUP BY PD.OrderKey
-         END
+         INSERT INTO #T_ShortOrders (OrderKey)
+         SELECT PD.OrderKey
+         FROM PICKDETAIL PD WITH (NOLOCK)
+         WHERE PD.Storerkey = @c_StorerKey    
+         AND   PD.Sku = @c_SKU    
+         AND   PD.DropID = @c_UCCNo    
+         AND   PD.[Status] = '4'
+         AND   EXISTS ( SELECT 1 
+                        FROM WAVEDETAIL WD (NOLOCK)
+                        WHERE WD.WaveKey = @c_Wavekey
+                        AND WD.OrderKey = PD.OrderKey )
+         GROUP BY PD.OrderKey
       END
       ELSE
       BEGIN
