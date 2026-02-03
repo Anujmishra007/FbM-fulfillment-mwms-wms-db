@@ -815,7 +815,8 @@ BEGIN
                AND   p.Lot        = @c_Lot               
                AND   pw.LOC       = @c_FromLoc
                AND   pw.ID        = @c_FromID
-               HAVING SUM(lli.Qty - lli.QtyPicked - @n_QtyAllocated) >= 0
+               AND   lli.Qty - lli.QtyPicked - @n_QtyAllocated < 0
+               --HAVING SUM(lli.Qty - lli.QtyPicked - @n_QtyAllocated) >= 0
             END 
                        
             IF @n_Cnt = 0
