@@ -135,7 +135,7 @@ BEGIN
    IF @nStep = 0  GOTO Step_0   -- Menu. Func = 729
    IF @nStep = 1  GOTO Step_1   -- Scn = 4810. UCC, SKU, DESCR, QTY, extendedinfo...
 END
-GOTO Quit -- Do nothing if incorrect step
+RETURN
 
 
 /********************************************************************************
@@ -163,7 +163,8 @@ BEGIN
 
       SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerkey)
       IF @cDecodeSP IN ('0', '')
-         SET @cDecodeSP = ''
+      SET @cDecodeSP = ''
+
 
       SET @cExtendedUCCInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUCCInfoSP', @cStorerkey)
       IF @cExtendedUCCInfoSP IN ('0', '')
@@ -182,7 +183,7 @@ BEGIN
       @cStorerKey  = @cStorerKey,
       @nStep       = @nStep
 END
-GOTO Quit
+RETURN
 
 
 /************************************************************************************
