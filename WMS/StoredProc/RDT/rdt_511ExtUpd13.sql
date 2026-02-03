@@ -15,6 +15,7 @@ GO
 /* 2025-03-07 1.0.1  CYU027   FCR-2597                                  */
 /* 2025-04-17 1.0.2  CYU027   FCR-2936                                 */
 /* 2025-12-08 1.0.3  JCH507   FCR-7405                                 */
+/* 2026-06-12 1.0.4  NYE018   FCR-9762                                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_511ExtUpd13] (
@@ -46,6 +47,9 @@ BEGIN
    DECLARE @cTaskToLogiLoc       NVARCHAR( 10)
    DECLARE @cKitkey              NVARCHAR( 10)
    DECLARE @cKitExternStatus     NVARCHAR( 30)
+
+   DECLARE @cFromLocPutawayZone  NVARCHAR( 20)
+   DECLARE @cToLocPutawayZone    NVARCHAR( 20)
 
    IF @nFunc = 511 -- Move by ID
    BEGIN
@@ -166,6 +170,46 @@ BEGIN
                AND KD.Id = @cFromID
                AND KD.[Type] = 'F'
                AND KIT.KITKey = @cKitkey
+            
+            -- FCR-9762 Start
+            SELECT @cFromLocPutawayZone = PutawayZone FROM LOC (NOLOCK) WHERE LOC = @cFromLOC AND Facility = @cFacility
+            SELECT @cToLocPutawayZone = PutawayZone FROM LOC (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility
+
+            IF EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Code = '511-FROMLOC' AND Short = @cFromLocPutawayZone)
+               AND EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Code = '511-TOLOC' AND Short = @cToLocPutawayZone)
+            BEGIN
+               SELECT TOP 1 @cKitkey = K.KITKey
+               FROM KIT K (NOLOCK)
+               JOIN KITDETAIL KD (NOLOCK) ON K.KITKey = KD.KITKey
+               WHERE KD.Id = @cFromID
+                 AND KD.Type = 'F'
+                 AND K.Status <> '9'
+                 AND K.Facility = @cFacility
+
+               IF @@ROWCOUNT > 0
+               BEGIN
+                  BEGIN TRY
+                     -- Update KITDETAIL Location
+                     UPDATE KITDETAIL
+                     SET Loc = @cToLOC
+                     WHERE KITKey = @cKitkey 
+                        AND Id = @cFromID 
+                        AND Type = 'F'
+
+                     -- Update KIT.USRDEF6 if empty
+                     UPDATE KIT
+                     SET USRDEF6 = GETDATE()
+                     WHERE KITKey = @cKitkey 
+                        AND ISNULL(USRDEF6, '') = ''
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 233357
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToLocUpdFail
+                     GOTO Quit
+                  END CATCH
+               END
+            END
+            -- FCR-9762 End
 
          END
       END
