@@ -172,17 +172,17 @@ BEGIN
                AND KIT.KITKey = @cKitkey
             
             -- FCR-9762 Start
-            SELECT @cFromLocPutawayZone = PutawayZone FROM LOC (NOLOCK) WHERE LOC = @cFromLOC AND Facility = @cFacility
-            SELECT @cToLocPutawayZone = PutawayZone FROM LOC (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility
+            SELECT @cFromLocPutawayZone = PutawayZone FROM dbo.LOC (NOLOCK) WHERE LOC = @cFromLOC AND Facility = @cFacility
+            SELECT @cToLocPutawayZone = PutawayZone FROM dbo.LOC (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility
 
-            IF EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Storerkey = @cStorerKey 
+            IF EXISTS (SELECT 1 FROM dbo.CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Storerkey = @cStorerKey 
                         AND Code = '511-FROMLOC' AND Short = @cFromLocPutawayZone)
-               AND EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Storerkey = @cStorerKey 
+               AND EXISTS (SELECT 1 FROM dbo.CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Storerkey = @cStorerKey 
                         AND Code = '511-TOLOC' AND Short = @cToLocPutawayZone)
             BEGIN
                SELECT TOP 1 @cKitkey = K.KITKey
-               FROM KIT K (NOLOCK)
-               JOIN KITDETAIL KD (NOLOCK) ON K.KITKey = KD.KITKey
+               FROM dbo.KIT K (NOLOCK)
+               JOIN dbo.KITDETAIL KD (NOLOCK) ON K.KITKey = KD.KITKey
                WHERE KD.Id = @cFromID
                  AND KD.Type = 'F'
                  AND K.Status <> '9'
@@ -192,14 +192,14 @@ BEGIN
                BEGIN
                   BEGIN TRY
                      -- Update KITDETAIL Location
-                     UPDATE KITDETAIL
+                     UPDATE dbo.KITDETAIL WITH (ROWLOCK)
                      SET Loc = @cToLOC
                      WHERE KITKey = @cKitkey 
                         AND Id = @cFromID 
                         AND Type = 'F'
 
                      -- Update KIT.USRDEF6 if empty
-                     UPDATE KIT
+                     UPDATE dbo.KIT WITH (ROWLOCK)
                      SET USRDEF6 = GETDATE()
                      WHERE KITKey = @cKitkey 
                         AND ISNULL(USRDEF6, '') = ''
