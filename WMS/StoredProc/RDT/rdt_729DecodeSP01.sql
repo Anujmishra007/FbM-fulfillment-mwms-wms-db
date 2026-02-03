@@ -104,17 +104,6 @@ BEGIN
         GOTO Quit
     END
 
-    -- Retrieve actual SKU for this UCC from Database
-    DECLARE @cUCCSKU NVARCHAR(20)
-    SELECT TOP(1) @cUCCSKU = SKU
-    FROM dbo.UCC WITH (NOLOCK)
-    WHERE StorerKey = @cStorerKey
-        AND UCCNo = @cUCC
-
-    -- success
-    SET @nErrNo = 0
-    SET @cErrMsg = N''
-
 Quit:
 
 END

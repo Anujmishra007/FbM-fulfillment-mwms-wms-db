@@ -109,10 +109,6 @@ BEGIN
         AND U4.Lot       = LA.Lot
         WHERE LA.StorerKey = @cStorerKey
 
-    -- Success
-    SET @nErrNo  = 0
-    SET @cErrMsg = N''
-
 Quit:
 END
 GO

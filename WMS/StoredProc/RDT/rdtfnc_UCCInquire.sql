@@ -201,10 +201,8 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
 
-      IF ISNULL(@cBarcode, '') = ''
-      BEGIN
-         SET @cBarcode = @cInField01
-      END
+      SET @cBarcode = @cInField01
+      SET @cUCC = @cInFiel01
 
       IF @cDecodeSP <> ''
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
