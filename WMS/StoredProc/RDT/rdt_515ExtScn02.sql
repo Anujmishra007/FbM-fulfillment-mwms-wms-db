@@ -108,6 +108,7 @@ BEGIN
       @cChkFacility        NVARCHAR( 5),
       @cChkToLoc           NVARCHAR( 18),
       @cOption             NVARCHAR( 1),
+      @cPrePackIndicator   NVARCHAR( 1),
       @dSearchLottable04   DATETIME,
       @nQTY_Avail          INT,
       @nMQTY_Avail         INT,
@@ -269,12 +270,12 @@ BEGIN
 
       IF @nMOBRECStep = 6 AND @nMOBRECScn = 1045 AND @nStep = 7 AND @nScn = 1046
       BEGIN
-         IF EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                        AND SKU = @cSKU
-                        AND PrePackIndicator = '1')
+         IF @nInputKey = 1
          BEGIN
-            IF @nInputKey = 1
+            IF EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND SKU = @cSKU
+                           AND PrePackIndicator = '1')
             BEGIN
                SET @cDefaultCartonCNT = rdt.RDTGetConfig( @nFunc, 'DefaultCartonCNT', @cStorerKey)
                IF @cDefaultCartonCNT = '0'
@@ -286,6 +287,12 @@ BEGIN
                SET @nAfterStep = 99
                SET @nAfterScn  = 6815
             END
+            ELSE
+            BEGIN -- new to loc
+               SET @nAfterStep = 99
+               SET @nAfterScn = 6817
+            END
+
          END
 
          GOTO Quit
@@ -582,6 +589,7 @@ BEGIN
                SET @cOutField10 = @cToID
                SET @cOutField11 = ''
 
+
                SET @nAfterStep = 99 -- Go to new toLoc if RealloQty > 0
                SET @nAfterScn = 6817
 
@@ -609,15 +617,70 @@ BEGIN
                IF @nDebugFlag = 1
                   SELECT 'Scn6817, ESC'
 
-               SET @cDefaultCartonCNT = rdt.RDTGetConfig( @nFunc, 'DefaultCartonCNT', @cStorerKey)
-               IF @cDefaultCartonCNT = '0'
-                  SET @cDefaultCartonCNT = ''
+               IF EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND SKU = @cSKU
+                           AND PrePackIndicator = '1')
+               BEGIN
+                  IF @nDebugFlag = 1
+                     SELECT 'back to DropID screen'
 
-               SET @cOutField01 = ''
-               SET @cOutField02 = @cDefaultCartonCNT
+                  SET @cDefaultCartonCNT = rdt.RDTGetConfig( @nFunc, 'DefaultCartonCNT', @cStorerKey)
+                  IF @cDefaultCartonCNT = '0'
+                     SET @cDefaultCartonCNT = ''
 
-               SET @nAfterStep = 99
-               SET @nAfterScn  = 6815
+                  SET @cOutField01 = ''
+                  SET @cOutField02 = @cDefaultCartonCNT
+
+                  SET @nAfterStep = 99
+                  SET @nAfterScn  = 6815
+               END
+               ELSE
+               BEGIN
+                  IF @nDebugFlag = 1
+                     SELECT 'back to ToID screen'
+                     
+                  SET @cFieldAttr01 = ''
+                  SET @cFieldAttr02 = ''
+                  SET @cFieldAttr03 = ''
+                  SET @cFieldAttr04 = ''
+                  SET @cFieldAttr05 = ''
+                  SET @cFieldAttr06 = ''
+                  SET @cFieldAttr07 = ''
+                  SET @cFieldAttr08 = ''
+                  SET @cFieldAttr09 = ''
+                  SET @cFieldAttr10 = ''
+                  SET @cFieldAttr11 = ''
+                  SET @cFieldAttr12 = ''
+                  SET @cFieldAttr13 = ''
+                  SET @cFieldAttr14 = ''
+                  SET @cFieldAttr15 = ''
+
+                  -- Prepare ToID screen var
+                  SET @cToID = ''
+                  SET @cOutField01 = @cFromLOC
+                  SET @cOutField02 = @cID
+                  SET @cOutField03 = @cSKU
+                  SET @cOutField04 = SUBSTRING( @cSKUDescR, 1, 20)   -- SKU desc 1
+                  SET @cOutField05 = SUBSTRING( @cSKUDescR, 21, 20)  -- SKU desc 2
+                  IF @cPUOM_Desc = ''
+                  BEGIN
+                     SET @cOutField06 = '' -- @cPUOM_Desc
+                     SET @cOutField07 = '' -- @nPQTY_Avail
+                     SET @cFieldAttr07 = 'O'
+                  END
+                  ELSE
+                  BEGIN
+                     SET @cOutField06 = @cPUOM_Desc
+                     SET @cOutField07 = CAST( @nPQTY_Move AS NVARCHAR( 5))
+                  END
+                  SET @cOutField08 = @cMUOM_Desc
+                  SET @cOutField09 = CAST( @nMQTY_Move AS NVARCHAR( 5))
+                  SET @cOutField10 = '' -- ToID
+
+                  SET @nAfterScn = 1045
+                  SET @nAfterStep = 6 
+               END
             END --esc
 
             IF @nInputKey = 1
@@ -699,6 +762,7 @@ BEGIN
                                  WHERE ListName = 'VORZONE'
                                     AND StorerKey = @cStorerKey
                                     AND Code = @cToLocPAZone)
+               AND @nPreAlloQty > 0
                BEGIN
                   SET @cOutField01 = ''
 
@@ -743,38 +807,44 @@ BEGIN
                BEGIN TRAN  -- Begin our own transaction
                SAVE TRAN rdt_512ExtScn02_6817 -- For rollback or commit only our own 
                
-               -- Create drop id 
-               IF NOT EXISTS (SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cToID) AND ISNULL(@cToID, '') <> ''
-               BEGIN
-                  BEGIN TRY
-                     INSERT INTO dbo.DropID (Dropid, Status) VALUES (@cToID, '9')
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 256808
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins drop fail'
-                     GOTO RollBackTran_6817
-                  END CATCH
-               END
+               IF EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND SKU = @cSKU
+                           AND PrePackIndicator = '1')
+               BEGIN 
+                  -- Create drop id 
+                  IF NOT EXISTS (SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cToID) AND ISNULL(@cToID, '') <> ''
+                  BEGIN
+                     BEGIN TRY
+                        INSERT INTO dbo.DropID (Dropid, Status) VALUES (@cToID, '9')
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 256808
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins drop fail'
+                        GOTO RollBackTran_6817
+                     END CATCH
+                  END
 
-               -- create drop id detail
-               IF NOT EXISTS (SELECT 1 FROM dbo.DropidDetail WITH (NOLOCK) WHERE DropID = @cToID AND ChildId = @cCartonType)
-               BEGIN
-                  BEGIN TRY
-                     INSERT INTO dbo.DropidDetail (Dropid, ChildId, UserDefine01, UserDefine02) 
-                     VALUES (@cToID, ISNULL(@cCartonType,''), @cCartonCount, @cLottable02)
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 256809
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins dropdetail fail'
+                  -- create drop id detail
+                  IF NOT EXISTS (SELECT 1 FROM dbo.DropidDetail WITH (NOLOCK) WHERE DropID = @cToID AND ChildId = @cCartonType)
+                  BEGIN
+                     BEGIN TRY
+                        INSERT INTO dbo.DropidDetail (Dropid, ChildId, UserDefine01, UserDefine02) 
+                        VALUES (@cToID, ISNULL(@cCartonType,''), @cCartonCount, @cLottable02)
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 256809
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins dropdetail fail'
+                        GOTO RollBackTran_6817
+                     END CATCH
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nErrNo = 256810
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Carton Type already exists'
                      GOTO RollBackTran_6817
-                  END CATCH
-               END
-               ELSE
-               BEGIN
-                  SET @nErrNo = 256810
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Carton Type already exists'
-                  GOTO RollBackTran_6817
-               END
+                  END
+               END -- PrePackIndicator = 1
 
                -- Loop LOTxLOTxID
                FETCH NEXT FROM @curLLI INTO @cLOT, @nQTY_LLI
@@ -982,38 +1052,44 @@ BEGIN
                   BEGIN TRAN  -- Begin our own transaction
                   SAVE TRAN rdt_512ExtScn02_6816 -- For rollback or commit only our own 
                   
-                  -- Create drop id 
-                  IF NOT EXISTS (SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cToID) AND ISNULL(@cToID,'') <> ''
-                  BEGIN
-                     BEGIN TRY
-                        INSERT INTO dbo.DropID (Dropid, Status) VALUES (@cToID, '9')
-                     END TRY
-                     BEGIN CATCH
-                        SET @nErrNo = 256812
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins drop fail'
-                        GOTO RollBackTran_6816
-                     END CATCH
-                  END
+                  IF EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND SKU = @cSKU
+                           AND PrePackIndicator = '1')
+                  BEGIN 
+                     -- Create drop id 
+                     IF NOT EXISTS (SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cToID) AND ISNULL(@cToID, '') <> ''
+                     BEGIN
+                        BEGIN TRY
+                           INSERT INTO dbo.DropID (Dropid, Status) VALUES (@cToID, '9')
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 256808
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins drop fail'
+                           GOTO RollBackTran_6817
+                        END CATCH
+                     END
 
-                  -- create drop id detail
-                  IF NOT EXISTS (SELECT 1 FROM dbo.DropidDetail WITH (NOLOCK) WHERE DropID = @cToID AND ChildId = @cCartonType)
-                  BEGIN
-                     BEGIN TRY
-                        INSERT INTO dbo.DropidDetail (Dropid, ChildId, UserDefine01, UserDefine02) 
-                        VALUES (@cToID, ISNULL(@cCartonType,''), @cCartonCount, @cLottable02)
-                     END TRY
-                     BEGIN CATCH
-                        SET @nErrNo = 256813
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins dropdetail fail'
-                        GOTO RollBackTran_6816
-                     END CATCH
-                  END
-                  ELSE
-                  BEGIN
-                     SET @nErrNo = 256814
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Carton Type already exists'
-                     GOTO RollBackTran_6816
-                  END
+                     -- create drop id detail
+                     IF NOT EXISTS (SELECT 1 FROM dbo.DropidDetail WITH (NOLOCK) WHERE DropID = @cToID AND ChildId = @cCartonType)
+                     BEGIN
+                        BEGIN TRY
+                           INSERT INTO dbo.DropidDetail (Dropid, ChildId, UserDefine01, UserDefine02) 
+                           VALUES (@cToID, ISNULL(@cCartonType,''), @cCartonCount, @cLottable02)
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 256809
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins dropdetail fail'
+                           GOTO RollBackTran_6817
+                        END CATCH
+                     END
+                     ELSE
+                     BEGIN
+                        SET @nErrNo = 256810
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Carton Type already exists'
+                        GOTO RollBackTran_6817
+                     END
+                  END -- PrePackIndicator = 1
 
                   -- Loop LOTxLOTxID
                   FETCH NEXT FROM @curLLI INTO @cLOT, @nQTY_LLI
