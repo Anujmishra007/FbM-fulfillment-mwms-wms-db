@@ -141,7 +141,7 @@ BEGIN
 
                @cScannedUCCLoc         NVARCHAR( 10),
                @cScannedUCCLot         NVARCHAR( 10),
-               @cScannedUCCSKU         NVARCHAR( 10),
+               @cScannedUCCSKU         NVARCHAR( 30),
                @nScannedUCCQty         INT,
                @cScannedID             NVARCHAR( 18),
                @cScannedUCCStatus      NVARCHAR( 1),
@@ -208,7 +208,7 @@ BEGIN
                   GOTO Quit
                END
 
-               IF EXISTS(SELECT 1 FROM dbo.PickSerialNo WITH(NOLOCK) WHERE StorerKey = CAST(@nMobile AS NVARCHAR(10)) AND PickDetailKey = @cPickSlipNo AND SerialNO = @cScannedUCC)
+               IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE Mobile = @nMobile AND PickSlipNo = @cPickSlipNo AND Remarks = @cScannedUCC AND PickMethod = 'GetTask-U')
                BEGIN
                   SET @nErrNo = 255473
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC is scanned
@@ -385,7 +385,7 @@ BEGIN
                   GOTO Quit
                END
 
-               IF EXISTS(SELECT 1 FROM dbo.PickSerialNo WITH(NOLOCK) WHERE StorerKey = CAST(@nMobile AS NVARCHAR(10)) AND PickDetailKey = @cPickSlipNo AND SerialNO = @cSerialNo)
+               IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE Mobile = @nMobile AND PickSlipNo = @cPickSlipNo AND Remarks = @cSerialNo AND PickMethod = 'Pick-P')
                BEGIN
                   SET @nErrNo = 255474
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SerialNo is scanned
