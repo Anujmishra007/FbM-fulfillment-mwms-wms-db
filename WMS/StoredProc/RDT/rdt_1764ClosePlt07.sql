@@ -3,37 +3,22 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/***************************************************************************/
-/* Store procedure: rdt_TM_Replen_ClosePallet                              */
-/* Copyright      : IDS                                                    */
-/*                                                                         */
-/* Purpose: Confirm replenish                                              */
-/*                                                                         */
-/* Called from:                                                            */
-/*                                                                         */
-/* Modifications log:                                                      */
-/*                                                                         */
-/* Date        Rev  Author    Purposes                                     */
-/* 18-Oct-2013 1.0  Ung       Created                                      */
-/* 02-Jan-2014 1.1  Ung       Fix wrongly delete rfPutaway records         */
-/* 24-Feb-2014 1.2  Ung       Fix next task not generated                  */
-/* 15-Oct-2014 1.3  Ung       SOS323013 Lock orders to prevent deadlock    */
-/* 02-Mar-2016 1.4  Ung       SOS359988 Modify debug code                  */
-/* 04-May-2016 1.5  Ung       SOS366906 Add UCC MoveQTYAlloc without task  */
-/* 08-Jun-2016 1.6  Ung       SOS359988 Add ListKey to standard event log  */
-/* 12-Jul-2016 1.7  Ung       SOS372531 Support MoveQTYAlloc for SKU       */
-/* 12-Jul-2016 1.8  Ung       WMS-3133 Support MoveQTYAlloc/Replen for UCC */
-/* 02-Aug-2019 1.9  James     WMS-9942 Add sku, qty to eventlog (james01)  */
-/* 21-Aug-2020 2.0  James     WMS-14152 Cancel TransitLoc booking(james02) */
-/* 21-Apr-2021 2.1  James     WMS-15656 Add ClosePalletSP (james03)        */
-/* 23-Jan-2024 2.2  James     WMS-24300 Cancel booking even there is no    */
-/*                            booking (james04)                            */
-/* 02-Oct-2025 2.3  NickT     FCR-7730 Add @cScannedToLoc                  */
-/* 29-Jan-2026 2.4  NickT     FCR-10467 Remove debug code                  */
-/***************************************************************************/
+/******************************************************************************/
+/* Store procedure: rdt_1764ClosePlt07                                        */
+/* Copyright      : IDS                                                       */
+/*                                                                            */
+/* Purpose: Confirm replenish                                                 */
+/*                                                                            */
+/* Called from:                                                               */
+/*                                                                            */
+/* Modifications log:                                                         */
+/*                                                                            */
+/* Date        Rev  Author    Purposes                                        */
+/* 2026-01-29  1.0  NickT     FCR-10467 copied from rdt_TM_Replen_ClosePallet */
+/******************************************************************************/
 
 
-CREATE OR ALTER PROC [RDT].[rdt_TM_Replen_ClosePallet] (
+CREATE OR ALTER PROC [RDT].[rdt_1764ClosePlt07] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR(3),
@@ -75,6 +60,7 @@ BEGIN
    DECLARE @cClosePalletSP NVARCHAR( 20)
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
+   DECLARE @nRowRef        INT
 
    -- Init var
    SET @nErrNo = 0
@@ -84,37 +70,6 @@ BEGIN
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   -- Get storer config
-   SET @cClosePalletSP = rdt.rdtGetConfig( @nFunc, 'ClosePalletSP', @cStorerKey)
-   IF @cClosePalletSP = '0'
-      SET @cClosePalletSP = ''
-
-   /***********************************************************************************************
-                                     Custom Close Pallet
-   ***********************************************************************************************/
-   IF @cClosePalletSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cClosePalletSP AND type = 'P')
-      BEGIN
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cClosePalletSP) +
-            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cScannedToLoc'
-         SET @cSQLParam =
-            '@nMobile         INT,                    ' +
-            '@nFunc           INT,                    ' +
-            '@cLangCode       NVARCHAR( 3),           ' +
-            '@cUserName       NVARCHAR( 18),          ' +
-            '@cListKey        NVARCHAR( 10),          ' +
-            '@nErrNo          INT           OUTPUT,   ' +
-            '@cErrMsg         NVARCHAR( 20) OUTPUT,   ' +
-            '@cScannedToLoc   NVARCHAR( 10)           '
-
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cScannedToLoc
-
-         GOTO Quit
-      END
-   END
-
    /***********************************************************************************************
                                      Standard Close Pallet
    ***********************************************************************************************/
@@ -123,7 +78,7 @@ BEGIN
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_TM_Replen_ClosePallet -- For rollback or commit only our own transaction
+   SAVE TRAN rdt_1764ClosePlt07 -- For rollback or commit only our own transaction
 
    -- Lock orders to prevent deadlock
    DECLARE @curPD CURSOR
@@ -149,7 +104,7 @@ BEGIN
       WHERE OrderKey = @cOrderKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 78506
+         SET @nErrNo = 257656
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- LockOrderFail
          GOTO RollBackTran
       END
@@ -181,7 +136,7 @@ BEGIN
             AND ID = @cFromID
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 78501
+            SET @nErrNo = 257651
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
             GOTO RollBackTran
          END
@@ -192,7 +147,7 @@ BEGIN
             @cLangCode   = @cLangCode,
             @nErrNo      = @nErrNo  OUTPUT,
             @cErrMsg     = @cErrMsg OUTPUT,
-            @cSourceType = 'rdt_TM_Replen_ClosePallet',
+            @cSourceType = 'rdt_1764ClosePlt07',
             @cStorerKey  = @cStorerKey,
             @cFacility   = @cFacility,
             @cFromLOC    = @cFromLOC,
@@ -275,7 +230,7 @@ BEGIN
                      @cLangCode   = @cLangCode,
                      @nErrNo      = @nErrNo  OUTPUT,
                      @cErrMsg     = @cErrMsg OUTPUT,
-                     @cSourceType = 'rdt_TM_Replen_ClosePallet',
+                     @cSourceType = 'rdt_1764ClosePlt07',
                      @cStorerKey  = @cStorerKey,
                      @cFacility   = @cFacility,
                      @cFromLOC    = @cFromLOC,
@@ -369,7 +324,7 @@ BEGIN
                         @cLangCode   = @cLangCode,
                         @nErrNo      = @nErrNo  OUTPUT,
                         @cErrMsg     = @cErrMsg OUTPUT,
-                        @cSourceType = 'rdt_TM_Replen_ClosePallet',
+                        @cSourceType = 'rdt_1764ClosePlt07',
                         @cStorerKey  = @cStorerKey,
                         @cFacility   = @cFacility,
                         @cFromLOC    = @cFromLOC,
@@ -429,7 +384,7 @@ BEGIN
 
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 78508
+                        SET @nErrNo = 257658
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD UCC Fail
                         GOTO RollBackTran
                      END
@@ -459,7 +414,7 @@ BEGIN
                DELETE rdt.rdtRPFLog WHERE TaskDetailKey = @cTaskDetailKey AND UCCNo = @cUCCNo
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 78505
+                  SET @nErrNo = 257655
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DelRPFLogFail
                   GOTO RollBackTran
                END
@@ -501,7 +456,7 @@ BEGIN
                   @cLangCode   = @cLangCode,
                   @nErrNo      = @nErrNo  OUTPUT,
                   @cErrMsg     = @cErrMsg OUTPUT,
-                  @cSourceType = 'rdt_TM_Replen_ClosePallet',
+                  @cSourceType = 'rdt_1764ClosePlt07',
                   @cStorerKey  = @cStorerKey,
                   @cFacility   = @cFacility,
                   @cFromLOC    = @cFromLOC,
@@ -539,20 +494,36 @@ BEGIN
          END
       END
 
-      -- Commented by (james04)
-      --IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND ISNULL( TransitLOC, '') <> '')
-      --BEGIN
-      -- Unlock  suggested location
-      EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
-         ,''      --@cFromLOC
-         ,@cFromID--@cFromID
-         ,@cToLOC --@cSuggestedLOC
-         ,''      --@cStorerKey
-         ,@nErrNo  OUTPUT
-         ,@cErrMsg OUTPUT
+      BEGIN TRY
+         EXEC rdt.rdt_Putaway_PendingMoveIn 
+            @cUserName     = '',
+            @cType         = 'UNLOCK',      -- LOCK / UNLOCK
+            @cFromLOC      = '',
+            @cFromID       = '',
+            @cSuggestedLOC = @cToLOC,
+            @cStorerKey    = '',
+            @nErrNo        = @nErrNo    OUTPUT,
+            @cErrMsg       = @cErrMsg   OUTPUT, 
+            @cSKU          = @cSKU,
+            @nPutawayQTY   = @nQTY,
+            @cUCCNo        = '', 
+            @cFromLOT      = '', 
+            @cToID         = '', 
+            @cTaskDetailKey= '', 
+            @nFunc         = @nFunc, 
+            @cMoveQTYAlloc = '',
+            @cMoveQTYPick  = ''
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 257659
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec rdt_Putaway_PendingMoveIn failed
+         GOTO RollBackTran
+      END CATCH
+
       IF @nErrNo <> 0
-         GOTO Quit
-      --END
+      BEGIN
+         GOTO RollBackTran
+      END
 
       -- Update Task
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
@@ -565,7 +536,7 @@ BEGIN
       WHERE TaskDetailKey = @cTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 78504
+         SET @nErrNo = 257654
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
          GOTO RollBackTran
       END
@@ -581,11 +552,11 @@ BEGIN
    IF @nErrNo <> 0
       GOTO RollBackTran
 
-   COMMIT TRAN rdt_TM_Replen_ClosePallet -- Only commit change made here
+   COMMIT TRAN rdt_1764ClosePlt07 -- Only commit change made here
    GOTO Quit
 
 RollBackTran:
-   ROLLBACK TRAN rdt_TM_Replen_ClosePallet -- Only rollback change made here
+   ROLLBACK TRAN rdt_1764ClosePlt07 -- Only rollback change made here
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
@@ -598,5 +569,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_TM_Replen_ClosePallet] TO NSQL
+GRANT EXECUTE ON [rdt].[rdt_1764ClosePlt07] TO NSQL
 GO

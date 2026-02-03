@@ -14,4 +14,7 @@ execute rdt.rdtAddMsg 253657, 10, '253657^InvalidSPName',    'us_english', 1812
 execute rdt.rdtAddMsg 253658, 10, '253658^QcmdFail',         'us_english', 1812
 execute rdt.rdtAddMsg 253659, 10, '253659^SubmitQcmdFail',   'us_english', 1812
 
-SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID BETWEEN 125365172536515751 and 253700
+-- FCR-10467
+execute rdt.rdtAddMsg 253660, 10, '253660^UpdTaskFail',      'us_english', 1812, 0, '253660 Updaye TaskDetail Failed'
+
+SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID BETWEEN 253651 and 253700

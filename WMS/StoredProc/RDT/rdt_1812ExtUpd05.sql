@@ -7,6 +7,7 @@
 /*                                                                      */
 /* Date         Author  Ver.  Purposes                                  */
 /* 2025-12-12   Jackc   1.0   FCR-8481 Created                          */
+/* 2026-02-02   NickT   1.1   FCR-10467 Release locked tasks            */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1812ExtUpd05
@@ -44,6 +45,8 @@ BEGIN
    DECLARE @cTaskSKU             NVARCHAR(20)
    DECLARE @cTaskWaveKey         NVARCHAR(10)
    DECLARE @cTaskTaskType        NVARCHAR(10)
+   DECLARE @cGroupKey            NVARCHAR(10)
+   DECLARE @cAreaKey             NVARCHAR(10)
 
    DECLARE @cErrMsg1    NVARCHAR(125)
    DECLARE @cErrMsg2    NVARCHAR(125)
@@ -279,6 +282,77 @@ BEGIN
             GOTO Quit
          END -- inputkey=1
       END --st5
+      ELSE IF @nStep = 6
+      BEGIN
+         IF @nInputKey = 1 
+         BEGIN
+            SET @cGroupKey = ''
+            SELECT 
+               @cTaskTaskType = TD.TaskType,
+               @cTaskStatus   = TD.Status,
+               @cGroupKey     = TD.GroupKey,
+               @cAreaKey      = AD.AreaKey
+            FROM dbo.TaskDetail TD WITH (NOLOCK)
+            INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc
+            INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
+            WHERE TD.StorerKey = @cStorerkey
+               AND TD.TaskDetailKey = @cLastTaskDetailKey
+
+            IF ISNULL(@cGroupKey, '') <> '' AND @cTaskStatus = '9'
+            BEGIN
+               DECLARE @nLoopIndex INT
+               DECLARE @tTaskDetail TABLE
+               (
+                  RowRef            INT IDENTITY(1,1),
+                  TaskDetailKey     NVARCHAR(10)
+               )
+
+               INSERT INTO @tTaskDetail (TaskDetailKey)
+               SELECT DISTINCT TD.TaskDetailKey
+               FROM dbo.TaskDetail TD WITH(NOLOCK)
+               INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc
+               INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
+               WHERE TD.Status = '0'
+                  AND TD.TaskType = 'FCP'
+                  AND TD.UserKey = @cUserName
+                  AND AD.AreaKey = @cAreaKey
+                  AND TD.GroupKey = @cGroupKey
+                  AND TD.StorerKey = @cStorerKey
+
+               IF @@ROWCOUNT > 0
+               BEGIN
+                  SET @nLoopIndex = -1
+                  WHILE 1 = 1
+                  BEGIN
+                     SELECT TOP 1
+                        @cTaskDetailKey = TaskDetailKey,
+                        @nLoopIndex = RowRef
+                     FROM @tTaskDetail
+                     WHERE RowRef > @nLoopIndex
+                     ORDER BY RowRef
+
+                     IF @@ROWCOUNT = 0
+                        BREAK
+                     
+                     BEGIN TRY
+                        UPDATE dbo.TaskDetail WITH(ROWLOCK)
+                        SET UserKey = '',
+                           EditDate = GETDATE(),
+                           EditWho = @cUserName,
+                           TrafficCop = NULL
+                        WHERE StorerKey = @cStorerKey
+                           AND TaskDetailKey = @cTaskDetailKey
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 253660
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Updaye TaskDetail Failed
+                        GOTO Quit
+                     END CATCH
+                  END
+               END
+            END
+         END
+      END
    END
 
 Quit:
