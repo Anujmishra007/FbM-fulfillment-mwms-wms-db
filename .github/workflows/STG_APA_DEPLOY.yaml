@@ -21,6 +21,7 @@ on:
           - INDWMS
           - SDRWMS
 
+
 permissions: write-all
 
 env:
@@ -303,7 +304,8 @@ jobs:
       - name: print matrix values for testing test
         run: echo "APPROVED"
   DEPLOY:
-    runs-on: stage-weu-vm-management-agent
+
+    runs-on: stage-apa-vm-management-agent
     needs: [INIT_DEPLOY, APPROVAL]
     if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
     environment:
