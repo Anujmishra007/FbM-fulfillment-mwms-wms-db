@@ -175,8 +175,10 @@ BEGIN
             SELECT @cFromLocPutawayZone = PutawayZone FROM LOC (NOLOCK) WHERE LOC = @cFromLOC AND Facility = @cFacility
             SELECT @cToLocPutawayZone = PutawayZone FROM LOC (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility
 
-            IF EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Code = '511-FROMLOC' AND Short = @cFromLocPutawayZone)
-               AND EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Code = '511-TOLOC' AND Short = @cToLocPutawayZone)
+            IF EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Storerkey = @cStorerKey 
+                        AND Code = '511-FROMLOC' AND Short = @cFromLocPutawayZone)
+               AND EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE ListName = 'KITPAZONES' AND Storerkey = @cStorerKey 
+                        AND Code = '511-TOLOC' AND Short = @cToLocPutawayZone)
             BEGIN
                SELECT TOP 1 @cKitkey = K.KITKey
                FROM KIT K (NOLOCK)
