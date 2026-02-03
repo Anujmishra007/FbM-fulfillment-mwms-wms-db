@@ -2213,7 +2213,6 @@ BEGIN
          Lottable04 = CASE WHEN @cSkipLottable04 = '1' THEN Lottable04 ELSE @dLottable04 END,
          ConditionCode = @cConditionCode,
          SubreasonCode = @cSubreasonCode, 
-         UserDefine01 = @cUCC,
          EditDate = GETDATE(),  
          EditWho = SUSER_SNAME()    
          -- Commented by SHONG on 20th Sept 2007 SOS# 87068
@@ -2259,6 +2258,11 @@ BEGIN
          @cToID, @cToLOC, @cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05,
          @cReceiptLineNo_Borrowed, @bRowVer
 END
+
+UPDATE ReceiptDetail
+SET UserDefine01 = @cUCC
+WHERE ReceiptKey = @cReceiptKey
+AND ReceiptLineNumber = @cReceiptLineNumber
 
 -- Loop changed UCC
 DECLARE @cUCCNo NVARCHAR( 20)
@@ -2574,6 +2578,7 @@ IF @cDebug = '1'
 BEGIN
    SELECT * FROM @tRD  
    SELECT * FROM @tUCC  
+   SELECT * FROM ReceiptDetail WHERE ReceiptKey = @cReceiptKey
 END  
 ELSE  
 BEGIN  
