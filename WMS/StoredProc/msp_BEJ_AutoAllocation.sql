@@ -32,7 +32,8 @@ AS
 BEGIN    
    SET NOCOUNT ON   
    SET QUOTED_IDENTIFIER OFF   
-   SET ANSI_NULLS OFF     
+   SET ANSI_NULLS OFF
+
     
    DECLARE  @n_Continue       INT
             , @b_Success     INT
