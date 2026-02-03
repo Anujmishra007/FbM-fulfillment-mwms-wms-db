@@ -18,7 +18,8 @@ GO
 /* Data Modifications:                                                    */    
 /*                                                                        */    
 /* Updates:                                                               */    
-/* Date        Author   Ver   Purposes                                    */    
+/* Date        Author   Ver   Purposes                                    */ 
+/* 2026-02-03  Wan      1.0   Fixed                                       */   
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV09]        
    @c_Wavekey     NVARCHAR(10)    
@@ -787,36 +788,82 @@ BEGIN
             
             IF @n_Cnt = 0                                                           --2026-01-29
             BEGIN
-               SET @n_QtyAllocated = 0
-               SELECT @n_QtyAllocated = SUM(td.Qty)
-               FROM dbo.TaskDetail td (NOLOCK) 
-               WHERE td.Storerkey = @c_Storerkey
-               AND   td.Sku       = @c_Sku
-               AND   td.TaskType  IN ('FCP')                               
-               AND   td.FromLOC  = @c_FromLoc
-               AND   td.FromID   = @c_FromID   
-               AND   td.UOM      = '6'          
-               AND   td.SourceType= @c_SourceType
-               AND   td.[Status] NOT IN ('X','9') 
+               SET @n_QtyAllocated = 0  
+
+               SET @c_SQL = N'SELECT @n_QtyAllocated = SUM(td.Qty)'
+                          +  ' FROM dbo.TaskDetail td (NOLOCK)'   
+                          +  ' WHERE td.Storerkey = @c_Storerkey'  
+                          +  ' AND   td.Sku       = @c_Sku'  
+                          +  ' AND   td.TaskType  IN (''FCP'')'  
+                          +  CASE WHEN @c_Lot = '' 
+                                  THEN '' 
+                                  ELSE ' AND td.Lot = @c_Lot'
+                                  END
+                          +  ' AND   td.FromLOC  = @c_FromLoc'  
+                          +  ' AND   td.FromID   = @c_FromID'     
+                          +  ' AND   td.UOM      = ''6'''            
+                          +  ' AND   td.SourceType= @c_SourceType'  
+                          +  ' AND   td.[Status] NOT IN (''X'',''9'')'
+                           + ' GROUP BY td.FromLOC, td.FromID '
+                          +  CASE WHEN @c_Lot = '' 
+                                  THEN '' 
+                                  ELSE ',td.Lot'
+                                  END
+                                  
+               SET @c_SQLParms = N'@c_Storerkey    NVARCHAR(15)' 
+                               + ',@c_Sku          NVARCHAR(20)'  
+                               + ',@c_Lot          NVARCHAR(10)'   
+                               + ',@c_FromLoc      NVARCHAR(10)'  
+                               + ',@c_FromID       NVARCHAR(18)'
+                               + ',@c_SourceType   NVARCHAR(30)'
+                               + ',@n_QtyAllocated INT  OUTPUT' 
+                               
+               EXEC sp_ExecuteSQL @c_SQL     
+                                 ,@c_SQLParms 
+                                 ,@c_Storerkey     
+                                 ,@c_Sku            
+                                 ,@c_Lot             
+                                 ,@c_FromLoc        
+                                 ,@c_FromID  
+                                 ,@c_SourceType 
+                                 ,@n_QtyAllocated  OUTPUT      
 
                SET @n_QtyAllocated = @n_QtyAllocated + @n_Qty
                
-               SELECT TOP 1 @n_Cnt = 1
-               FROM  #PICKDETAIL_WIP AS pw
-               CROSS APPLY (SELECT Lot_pw = CASE WHEN @c_Lot = '' THEN pw.Lot ELSE @c_Lot END
-                                  ,Lot    = @c_Lot 
-                           ) p
-               JOIN  dbo.LOTxLOCxID lli (NOLOCK) ON   lli.Lot = p.Lot_pw
-                                                 AND  lli.Loc = pw.Loc
-                                                 AND  lli.ID  = pw.ID
-               WHERE pw.Storerkey = @c_Storerkey
-               AND   pw.Sku       = @c_Sku
-               AND   pw.UOM       = '6'
-               AND   p.Lot        = @c_Lot               
-               AND   pw.LOC       = @c_FromLoc
-               AND   pw.ID        = @c_FromID
-               AND   lli.Qty - lli.QtyPicked - @n_QtyAllocated < 0
-               --HAVING SUM(lli.Qty - lli.QtyPicked - @n_QtyAllocated) >= 0
+               SET @c_SQL = N'SELECT @n_Cnt = 1'
+                          + ' FROM dbo.LOTxLOCxID lli (NOLOCK)'  
+                          + ' WHERE lli.Storerkey = @c_Storerkey'  
+                          + ' AND lli.Sku = @c_Sku'  
+                          + CASE WHEN @c_Lot = '' 
+                                 THEN ''
+                                 ELSE ' AND lli.Lot = @c_Lot'
+                                 END
+                          + ' AND   lli.LOC = @c_FromLoc'  
+                          + ' AND   lli.ID = @c_FromID'
+                          + ' GROUP BY lli.LOC, lli.ID '
+                          +  CASE WHEN @c_Lot = '' 
+                                  THEN '' 
+                                  ELSE ',lli.Lot'
+                                  END
+                          + ' HAVING SUM(lli.Qty - lli.QtyPicked - @n_QtyAllocated)< 0'                             
+
+               SET @c_SQLParms = N'@c_Storerkey    NVARCHAR(15)' 
+                               + ',@c_Sku          NVARCHAR(20)'  
+                               + ',@c_Lot          NVARCHAR(10)'   
+                               + ',@c_FromLoc      NVARCHAR(10)'  
+                               + ',@c_FromID       NVARCHAR(18)' 
+                               + ',@n_QtyAllocated INT' 
+                               + ',@n_Cnt          INT   OUTPUT'
+                                  
+               EXEC sp_ExecuteSQL @c_SQL     
+                                 ,@c_SQLParms 
+                                 ,@c_Storerkey     
+                                 ,@c_Sku            
+                                 ,@c_Lot             
+                                 ,@c_FromLoc        
+                                 ,@c_FromID        
+                                 ,@n_QtyAllocated
+                                 ,@n_Cnt           OUTPUT
             END 
                        
             IF @n_Cnt = 0
