@@ -20,8 +20,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-07-31  AlexK    1.0   FCR-6833 - initial.                       */
-/* 2025-10-17  AlexK01  1.1   FCR-6833 - Change Request
-/* 2026-02-02  suryakanta.sahoo  1.5   FCR-10266 - Change Request  */
+/* 2025-10-17  AlexK01  1.1   FCR-6833 - Change Request                 */
+/* 2026-02-02  suryakanta.sahoo  1.5   FCR-10266 - Change Request       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_BEJ_UnWaveLoadShipOrders]
@@ -81,7 +81,18 @@ BEGIN
       --AND SpecialHandling = 'B'
 	  AND SOStatus NOT IN ('0', '9')
 
-      OPEN @CUR
+      UNION
+    -- Second Criteria Set
+      SELECT MIN(OrderKey) AS OrderKey   -- Needed because SELECT must match columns
+        FROM dbo.ORDERS ORD2 WITH (NOLOCK)
+        WHERE ORD2.Status = '0'
+          AND ORD2.SOStatus = '0'
+          AND ORD2.OrderGroup <> ''
+          AND ORD2.StorerKey = 'HP'
+        GROUP BY ORD2.UserDefine09
+        HAVING COUNT(DISTINCT ORD2.OrderGroup) <> 1;
+
+OPEN @CUR
       FETCH NEXT FROM @CUR INTO @c_OrderKey
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
