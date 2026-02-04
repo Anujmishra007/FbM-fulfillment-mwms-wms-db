@@ -236,7 +236,7 @@ BEGIN
          IF ISNULL(@cLot, '') <> ''
          BEGIN
             SELECT 
-               @nMovedQty = ISNULL(SUM(Qty-(QtyAllocated + QtyPicked)), 0)
+               @nMovedQty = ISNULL(SUM(Qty+PendingMoveIn-(QtyAllocated + QtyPicked)), 0)
             FROM dbo.LOTXLOCXID LLI WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) 
                ON LOC.LOC = LLI.LOC
@@ -529,7 +529,7 @@ BEGIN
                SET @cUDF02 = CAST(ISNULL(@nMQTY_PWY, 0) AS NVARCHAR(6)) 
                SET @cUDF03 = CAST(ISNULL(@nQTY_PWY, 0) AS NVARCHAR(6)) 
                SET @cUDF04 = CAST(ISNULL(@nQTY, 0) AS NVARCHAR(6)) 
-               SET @cUDF05 = CAST(ISNULL(@nPABookingKey, 0) AS NVARCHAR(6)) 
+               SET @cUDF05 = CAST(ISNULL(@nPABookingKey, 0) AS NVARCHAR(20)) 
                SET @cUDF06 = @cSuggestedLOC
                SET @cUDF07 = @cQTY_Avail  
                SET @cUDF08 = @cQTY_Alloc  
