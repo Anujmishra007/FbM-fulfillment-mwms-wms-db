@@ -246,7 +246,7 @@ BEGIN
             WHERE LLI.StorerKey = @cStorerKey 
                AND LLI.LOT = @cLot
                AND LLI.SKU = @cSKU
-               AND CL.LISTNAME ='VORZONE'
+               AND CL.LISTNAME ='523ZONE'
 
             SELECT 
                @nTotalPreAlloQty = ISNULL(QtyPreAllocated, 0) 
