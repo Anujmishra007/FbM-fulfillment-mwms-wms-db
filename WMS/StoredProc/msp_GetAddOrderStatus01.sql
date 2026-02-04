@@ -611,6 +611,11 @@ BEGIN
                            ,N'@n_TotalRecords INT OUTPUT'
                            ,@n_TotalRecords OUTPUT
 
+         IF @n_pageNo = 0
+         BEGIN
+            SET @n_pageNo = 1
+         END 
+         
          SET @n_TotalPages = CEILING((@n_TotalRecords*1.00)/(@n_PageSize*1.00))     --2025-10-14
          IF @n_PageNo > @n_TotalPages
          BEGIN
