@@ -19,7 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-02-03  Wan      1.0   Fixed                                       */   
+/* 2026-02-04  Wan      1.0   Fixed, CR v3.6                              */   
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV09]        
    @c_Wavekey     NVARCHAR(10)    
@@ -419,7 +419,7 @@ BEGIN
          AND   lli.Sku = @c_Sku
          AND   lli.Lot = @c_Lot      
          AND   lli.Loc <> @c_FinalLoc
-         AND   lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen >= @n_QtyNeed
+         AND   lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen > 0      --2026-02-04  
          AND   LOC.LocationType NOT IN ('PICK','CASE','DYNPPICK')
          AND   LOT.[Status] = 'OK'
          AND   ID.[Status]  = 'OK'
@@ -450,7 +450,7 @@ BEGIN
                AND   UCC.ID  = @c_FromID
                AND   UCC.[Status] = '1'
                AND   UCC.Qty <= @n_QtyToReplen
-               AND   UCC.Qty >= @n_QtyNeed
+               --AND   UCC.Qty >= @n_QtyNeed                                        --2026-02-04  
                AND   NOT EXISTS (SELECT 1 
                                  FROM #TMP_RPFUCC tru
                                  WHERE tru.UCC_RowRef = UCC.UCC_RowRef
@@ -624,8 +624,9 @@ BEGIN
       SET @c_SQL =   
             N' SET @cur_pick = CURSOR FAST_FORWARD READ_ONLY FOR'    
           + ' SELECT PD.Storerkey, PD.Sku'
-          +       ' ,CASE WHEN @c_DispatchCasePickMethod =''1'''                          
-          +             ' THEN PD.Lot ELSE '''' END AS Lot'
+          --+       ' ,CASE WHEN @c_DispatchCasePickMethod =''1'''                          
+          --+             ' THEN PD.Lot ELSE '''' END AS Lot'
+          +        ' , PD.Lot'                                                      --CR v3.6 ONBR: 1 sku = 1 lot             
           +       ' ,PD.Loc, PD.ID, SUM(PD.Qty) AS Qty '    
           +       ' ,PD.UOM, SUM(PD.UOMQty) AS UOMQty'  
           +       ' ,PD.DropID'               
@@ -695,8 +696,9 @@ BEGIN
           + ' AND PD.WIP_RefNo = @c_SourceType' 
           + ' AND PD.Taskdetailkey = '''''          
           + ' GROUP BY PD.Storerkey, PD.Sku'
-          +        ' , CASE WHEN @c_DispatchCasePickMethod =''1'''                       
-          +        '        THEN PD.Lot ELSE '''' END'
+          +        ' , PD.Lot'                                                      --CR v3.6 ONBR: 1 sku = 1 lot          
+          --+        ' , CASE WHEN @c_DispatchCasePickMethod =''1'''                       
+          --+        '        THEN PD.Lot ELSE '''' END'
           +        ' , PD.Loc, PD.ID, PD.UOM, O.Route'
           +        ' , PD.DropID'             
           +        ' , CASE WHEN @c_DispatchCasePickMethod =''1'''                        
