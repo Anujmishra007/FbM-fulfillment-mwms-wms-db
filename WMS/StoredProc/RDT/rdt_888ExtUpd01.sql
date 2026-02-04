@@ -18,8 +18,8 @@ CREATE OR ALTER   PROCEDURE [RDT].[rdt_888ExtUpd01]
    ,@cLangCode       NVARCHAR(  3)
    ,@nStep           INT
    ,@nInputKey       INT
-   ,@cFacility    NVARCHAR( 5) 
-   ,@cStorerKey   NVARCHAR( 15)
+   ,@cFacility       NVARCHAR( 5) 
+   ,@cStorerKey      NVARCHAR( 15)
    ,@cReceiptKey     NVARCHAR( 10)
    ,@cReceiptLineNo  NVARCHAR( 5)
    ,@cLOC            NVARCHAR( 10)
@@ -45,13 +45,16 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @nDebugFlag     INT = 0
+
    DECLARE @nTranCount     INT
    DECLARE @cErrMsg1       NVARCHAR(125)
    DECLARE @cErrMsg2       NVARCHAR(125)
    DECLARE @cErrMsg3       NVARCHAR(125)
    DECLARE @cSerialNoKey   NVARCHAR( 10)
    DECLARE @cSourceKey     NVARCHAR( 20)
-   DECLARE @cItrnKey       NVARCHAR( 10)  
+   DECLARE @cItrnKey       NVARCHAR( 10)
+   DECLARE @nRowCount      INT  
 
    IF @nFunc = 888
    BEGIN
@@ -62,11 +65,14 @@ BEGIN
             IF EXISTS (SELECT 1 FROM dbo.ReceiptSerialNo WITH (NOLOCK) WHERE UCCNo = @cUCC)
             BEGIN
 
-               DECLARE @curDel      CURSOR
-               DECLARE @nRcptSNKey   BIGINT
+               DECLARE @curDel         CURSOR
+               DECLARE @nRcptSNKey     BIGINT
+               DECLARE @cSerialNo      NVARCHAR(50)
 
                SET @curDel = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-               SELECT ReceiptSerialNoKey
+               SELECT 
+                  ReceiptSerialNoKey,
+                  SerialNo
                FROM dbo.ReceiptSerialNo WITH (NOLOCK)
                WHERE StorerKey = @cStorerkey
                AND   ReceiptKey = @cReceiptKey
@@ -80,9 +86,11 @@ BEGIN
                   SAVE TRAN rdt_888ExtUpd01
 
                OPEN @curDel
-               FETCH NEXT FROM @curDel INTO @nRcptSNKey
+               FETCH NEXT FROM @curDel INTO @nRcptSNKey, @cSerialNo
                WHILE @@FETCH_STATUS = 0
                BEGIN
+                  SET @nRowCount = 0
+
                   BEGIN TRY
                      DELETE FROM dbo.ReceiptSerialNo 
                      WHERE ReceiptSerialNoKey = @nRcptSNKey
@@ -100,48 +108,66 @@ BEGIN
 
                      GOTO Quit
                   END CATCH
-                  FETCH NEXT FROM @curDel INTO @nRcptSNKey
-               END
 
-               --handle serial no
-               SELECT @cSerialNoKey = SerialNokey 
-               FROM dbo.SerialNo WITH (NOLOCK) 
-               WHERE SerialNo = @cUCC
+                  SELECT @cSerialNoKey = SerialNoKey
+                  FROM dbo.SerialNO WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND SerialNo = @cSerialNo
 
-               IF @@ROWCOUNT = 1
-               BEGIN
-                  SET @cSourceKey = @cReceiptKey + @cReceiptLineNo
+                  SET @nRowCount = @@ROWCOUNT
 
-                  SELECT @cItrnKey = ItrnKey FROM dbo.Itrn WHERE SourceKey = @cSourceKey
-
-                  IF ISNULL(@cItrnKey, '') <> ''
+                  IF @nRowCount > 0
                   BEGIN
                      BEGIN TRY
-                        INSERT INTO ITrnSerialNo (ITrnKey, TranType, StorerKey, SKU, SerialNo, QTY, SourceKey, SourceType
-                                       ,Lot, Loc, ID
-                                       ,Channel, Channel_ID, UCCNo
-                                       )
-                        SELECT @cItrnKey, 'WD', StorerKey, SKU, SerialNo, Qty, @cSourceKey, 'rdt_888ExtUpd01'
-                              ,Lot, Loc, ID
-                              ,'', '', @cUCC
-                        FROM dbo.SerialNO WITH (NOLOCK)
-                        WHERE SerialNoKey = @cSerialNoKey
+                        DELETE dbo.SerialNo WHERE SerialNoKey = @cSerialNoKey
                      END TRY
                      BEGIN CATCH
-                        SELECT 'Fail to insert ItrnSN'
+                        IF @nTranCount > 0 AND XACT_STATE() <> -1
+                           ROLLBACK TRAN rdt_888ExtUpd01
+                        ELSE
+                           ROLLBACK TRAN
+
+                        SET @cErrMsg1 = '249152 Failed to delete SerialNo'
+                        SET @cErrMsg2 = 'SerialNo: ' + @cUCC
+                        SET @cErrMsg3 = 'Retry from the web'
+                        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+                        GOTO Quit
                      END CATCH
+
+                     SET @cSourceKey = @cReceiptKey + @cReceiptLineNo
+
+                     SELECT @cItrnKey = ItrnKey FROM dbo.Itrn WITH (NOLOCK) 
+                     WHERE SourceKey = @cSourceKey
+                        AND TranType = 'AJ'
+
+                     IF @nDebugFlag = 1
+                        INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)  
+                        VALUES('888ExtUpd01', GETDATE(), @cSourceKey, @cSerialNo, @cItrnKey, '', 'GetItrnKey') 
+
+                     IF ISNULL(@cItrnKey, '') <> ''
+                     BEGIN
+                        BEGIN TRY
+                           INSERT INTO ITrnSerialNo (ITrnKey, TranType, StorerKey, SKU, SerialNo, QTY, SourceKey, SourceType
+                                          ,Lot, Loc, ID
+                                          ,Channel, Channel_ID, UCCNo
+                                          )
+                           SELECT @cItrnKey, 'AJ', StorerKey, SKU, SerialNo, -Qty, @cSourceKey, 'rdt_888ExtUpd01'
+                                 ,Lot, Loc, ID
+                                 ,'', '', @cUCC
+                           FROM dbo.SerialNO WITH (NOLOCK)
+                           WHERE SerialNoKey = @cSerialNoKey
+                        END TRY
+                        BEGIN CATCH
+                           IF @nDebugFlag = 1
+                              INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)  
+                              VALUES('888ExtUpd01', GETDATE(), @cSourceKey, @cSerialNo, '', '', 'InsItrnSNFail') 
+                        END CATCH
+                     END
+
                   END
-                  
-                  BEGIN TRY
-                     DELETE dbo.SerialNo WHERE SerialNoKey = @cSerialNoKey
-                  END TRY
-                  BEGIN CATCH
-                     SET @cErrMsg1 = '249152 Failed to delete SerialNo'
-                     SET @cErrMsg2 = 'SerialNo: ' + @cUCC
-                     SET @cErrMsg3 = 'Retry from the web'
-                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
-                  END CATCH
-               END
+
+                  FETCH NEXT FROM @curDel INTO @nRcptSNKey, @cSerialNo
+               END               
 
                COMMIT TRAN
 
