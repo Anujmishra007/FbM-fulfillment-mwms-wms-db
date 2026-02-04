@@ -2259,10 +2259,11 @@ BEGIN
          @cReceiptLineNo_Borrowed, @bRowVer
 END
 
-UPDATE ReceiptDetail
-SET UserDefine01 = @cUCC
-WHERE ReceiptKey = @cReceiptKey
-AND ReceiptLineNumber = @cReceiptLineNumber
+IF @cUCC <> ''
+   UPDATE ReceiptDetail
+   SET UserDefine01 = @cUCC
+   WHERE ReceiptKey = @cReceiptKey
+   AND ReceiptLineNumber = @cReceiptLineNumberOutput
 
 -- Loop changed UCC
 DECLARE @cUCCNo NVARCHAR( 20)
