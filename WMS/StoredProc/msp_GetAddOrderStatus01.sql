@@ -286,7 +286,8 @@ BEGIN
          BEGIN
             SET @c_ReplaceFrom = ''
             SET @c_ReplaceTo   = ''   
-            SELECT @n_RowID = scc.RowID
+            SELECT TOP 1
+                   @n_RowID = scc.RowID
                   ,@c_ReplaceFrom = RTRIM(scc.ReplaceFrom)  
                   ,@c_ReplaceTo   = RTRIM(scc.ReplaceTo)                
             FROM @t_SCC scc  
