@@ -356,7 +356,7 @@ BEGIN
                      AND   Status = '1')  
       BEGIN  
          SET @nErrNo = 50012  
-         SET @cErrMsg = @cUCCNo
+         SET @cErrMsg = rdt.getmessage( @nErrNo, @cLangCode, 'DSP') -- 'Invalid UCC'
          GOTO Step_1_Fail  
       END  
   
