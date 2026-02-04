@@ -30,7 +30,7 @@ env:
   OWNER: ${{ github.repository_owner }}
   WORKFLOW_RUN_ID: ${{ github.event.repository.name }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
   REPO: ${{ github.event.repository.name }}
-  ENV_CODE: stage
+  ENV_CODE: stage-apa
   WMSDB_NAME: ${{ github.event.inputs.WMSDB }}
   WMSDB_METADATA_REPO: FbM-fulfillment-mwms-wms-db-metadata
 
