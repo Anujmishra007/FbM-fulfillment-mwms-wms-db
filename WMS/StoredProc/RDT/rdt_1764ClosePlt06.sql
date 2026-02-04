@@ -15,6 +15,7 @@ GO
 /*                                                                         */
 /* Date        Rev  Author    Purposes                                     */
 /* 2026-01-27  1.0  Dennis    UWP-47774 Created                            */
+/* 2026-01-29  1.1  NickT     FCR-10467 Unlock RFPutaway                   */
 /***************************************************************************/
 
 
@@ -60,6 +61,7 @@ BEGIN
    DECLARE @cClosePalletSP NVARCHAR( 20)
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
+   DECLARE @nRowRef        INT
 
    -- Init var
    SET @nErrNo = 0
@@ -68,6 +70,10 @@ BEGIN
    SELECT @cStorerKey = StorerKey
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
+
+   /***********************************************************************************************
+                                     Standard Close Pallet
+   ***********************************************************************************************/
 
    -- Handling transaction
    DECLARE @nTranCount INT
@@ -99,7 +105,7 @@ BEGIN
       WHERE OrderKey = @cOrderKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 78506
+         SET @nErrNo = 257656
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- LockOrderFail
          GOTO RollBackTran
       END
@@ -131,7 +137,7 @@ BEGIN
             AND ID = @cFromID
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 78501
+            SET @nErrNo = 257651
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
             GOTO RollBackTran
          END
@@ -381,7 +387,7 @@ BEGIN
 
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 78508
+                        SET @nErrNo = 257658
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD UCC Fail
                         GOTO RollBackTran
                      END
@@ -411,7 +417,7 @@ BEGIN
                DELETE rdt.rdtRPFLog WHERE TaskDetailKey = @cTaskDetailKey AND UCCNo = @cUCCNo
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 78505
+                  SET @nErrNo = 257655
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DelRPFLogFail
                   GOTO RollBackTran
                END
@@ -491,20 +497,36 @@ BEGIN
          END
       END
 
-      -- Commented by (james04)
-      --IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND ISNULL( TransitLOC, '') <> '')
-      --BEGIN
-      -- Unlock  suggested location
-      EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
-         ,''      --@cFromLOC
-         ,@cFromID--@cFromID
-         ,@cToLOC --@cSuggestedLOC
-         ,''      --@cStorerKey
-         ,@nErrNo  OUTPUT
-         ,@cErrMsg OUTPUT
+      BEGIN TRY
+         EXEC rdt.rdt_Putaway_PendingMoveIn 
+            @cUserName     = '',
+            @cType         = 'UNLOCK',      -- LOCK / UNLOCK
+            @cFromLOC      = '',
+            @cFromID       = '',
+            @cSuggestedLOC = @cToLOC,
+            @cStorerKey    = '',
+            @nErrNo        = @nErrNo    OUTPUT,
+            @cErrMsg       = @cErrMsg   OUTPUT, 
+            @cSKU          = @cSKU,
+            @nPutawayQTY   = @nQTY,
+            @cUCCNo        = '', 
+            @cFromLOT      = '', 
+            @cToID         = '', 
+            @cTaskDetailKey= '', 
+            @nFunc         = @nFunc, 
+            @cMoveQTYAlloc = '',
+            @cMoveQTYPick  = ''
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 257659
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec rdt_Putaway_PendingMoveIn failed
+         GOTO RollBackTran
+      END CATCH
+
       IF @nErrNo <> 0
-         GOTO Quit
-      --END
+      BEGIN
+         GOTO RollBackTran
+      END
 
       -- Update Task
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
@@ -517,7 +539,7 @@ BEGIN
       WHERE TaskDetailKey = @cTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 78504
+         SET @nErrNo = 257654
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
          GOTO RollBackTran
       END
@@ -532,20 +554,6 @@ BEGIN
       @cErrMsg OUTPUT
    IF @nErrNo <> 0
       GOTO RollBackTran
-
--- Debug code
-IF EXISTS( SELECT TOP 1 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND LocationCategory = 'PND_OUT')
-BEGIN
-   IF @cStorerKey = '18405'
-   BEGIN
-      IF NOT EXISTS( SELECT TOP 1 1 FROM TaskDetail WITH (NOLOCK) WHERE ListKey = @cListKey AND ListKey <> '' AND TaskType = 'RP1')
-      BEGIN
-         SET @nErrNo = 78507
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No RP1 created
-         GOTO RollBackTran
-      END
-   END
-END
 
    COMMIT TRAN rdt_1764ClosePlt06 -- Only commit change made here
    GOTO Quit
