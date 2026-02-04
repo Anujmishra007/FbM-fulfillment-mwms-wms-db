@@ -286,7 +286,8 @@ BEGIN
          BEGIN
             SET @c_ReplaceFrom = ''
             SET @c_ReplaceTo   = ''   
-            SELECT @n_RowID = scc.RowID
+            SELECT TOP 1
+                   @n_RowID = scc.RowID
                   ,@c_ReplaceFrom = RTRIM(scc.ReplaceFrom)  
                   ,@c_ReplaceTo   = RTRIM(scc.ReplaceTo)                
             FROM @t_SCC scc  
@@ -611,6 +612,11 @@ BEGIN
                            ,N'@n_TotalRecords INT OUTPUT'
                            ,@n_TotalRecords OUTPUT
 
+         IF @n_pageNo = 0
+         BEGIN
+            SET @n_pageNo = 1
+         END 
+         
          SET @n_TotalPages = CEILING((@n_TotalRecords*1.00)/(@n_PageSize*1.00))     --2025-10-14
          IF @n_PageNo > @n_TotalPages
          BEGIN
