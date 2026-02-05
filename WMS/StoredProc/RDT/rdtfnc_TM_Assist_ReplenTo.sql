@@ -18,6 +18,7 @@ GO
 /* 2025-01-25 1.5.0Dennis   FCR-2517 Extend Error message length        */
 /* 2024-12-04 1.6.0YYS027   FCR-1489 Fn1836 TM Assist Replen To         */
 /* 2025-05-29 0.0  JACKC    !!!Cutover. Use V0 for development !!!      */
+/* 2026-02-04 1.7.0 NickT   FCR-10467 Add transaction in step 1         */
 /************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ReplenTo] (
@@ -511,14 +512,26 @@ BEGIN
          END
       END
 
+      DECLARE @nTranCount INT
+      SET @nTranCount = @@TRANCOUNT
+      BEGIN TRAN  -- Begin our own transaction
+      SAVE TRAN rdtfnc_TM_Assist_ReplenTo -- For rollback or commit only our own transaction
+
+
       -- Confirm (move by ID, update task status = 9)    
       EXEC rdt.rdt_TM_Assist_ReplenTo_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey    
          ,@cTaskdetailKey      
          ,@cFinalLOC           
          ,@nErrNo   OUTPUT    
          ,@cErrMsg  OUTPUT    
-      IF @nErrNo <> 0    
+
+      IF @nErrNo <> 0
+      BEGIN
+         ROLLBACK TRAN rdtfnc_TM_Assist_ReplenTo
+         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+            COMMIT TRAN
          GOTO Step_1_Fail    
+      END
           
       -- Extended validate    
       IF @cExtendedUpdateSP <> ''    
@@ -542,9 +555,18 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
        
             IF @nErrNo <> 0    
+            BEGIN
+               ROLLBACK TRAN rdtfnc_TM_Assist_ReplenTo
+               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                  COMMIT TRAN
                GOTO Step_1_Fail    
+            END
          END    
       END
+
+      COMMIT TRAN rdtfnc_TM_Assist_ReplenTo -- Only commit change made here
+      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+         COMMIT TRAN
           
       -- Get next task    
       DECLARE @cNextTaskDetailKey NVARCHAR(10)    

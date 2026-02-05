@@ -497,31 +497,72 @@ BEGIN
          END
       END
 
-      BEGIN TRY
-         EXEC rdt.rdt_Putaway_PendingMoveIn 
-            @cUserName     = '',
-            @cType         = 'UNLOCK',      -- LOCK / UNLOCK
-            @cFromLOC      = '',
-            @cFromID       = '',
-            @cSuggestedLOC = @cToLOC,
-            @cStorerKey    = '',
-            @nErrNo        = @nErrNo    OUTPUT,
-            @cErrMsg       = @cErrMsg   OUTPUT, 
-            @cSKU          = @cSKU,
-            @nPutawayQTY   = @nQTY,
-            @cUCCNo        = '', 
-            @cFromLOT      = '', 
-            @cToID         = '', 
-            @cTaskDetailKey= '', 
-            @nFunc         = @nFunc, 
-            @cMoveQTYAlloc = '',
-            @cMoveQTYPick  = ''
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 257659
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec rdt_Putaway_PendingMoveIn failed
-         GOTO RollBackTran
-      END CATCH
+      SET @nErrNo = 0
+
+      SELECT TOP 1 @nRowRef = RowRef 
+      FROM dbo.RFPutaway WITH(NOLOCK) 
+      WHERE TaskDetailKey = @cTaskDetailKey
+         AND Lot = @cLOT
+         AND SKU = @cSKU
+         AND Qty = @nQTY
+
+      IF @@ROWCOUNT > 0 AND @nRowRef > 0
+      BEGIN
+         BEGIN TRY
+            EXEC rdt.rdt_Putaway_PendingMoveIn 
+               @cUserName     = '',
+               @cType         = 'UNLOCK',      -- LOCK / UNLOCK
+               @cFromLOC      = '',
+               @cFromID       = '',
+               @cSuggestedLOC = '',
+               @cStorerKey    = '',
+               @nErrNo        = @nErrNo    OUTPUT,
+               @cErrMsg       = @cErrMsg   OUTPUT, 
+               @cSKU          = '',
+               @nPutawayQTY   = '',
+               @cUCCNo        = '', 
+               @cFromLOT      = '', 
+               @cToID         = '', 
+               @cTaskDetailKey= '', 
+               @nFunc         = @nFunc, 
+               @cMoveQTYAlloc = '',
+               @cMoveQTYPick  = '',
+               @nRowRef = @nRowRef
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 257659
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec rdt_Putaway_PendingMoveIn failed
+            GOTO RollBackTran
+         END CATCH
+      END
+      ELSE
+      BEGIN
+         BEGIN TRY
+            EXEC rdt.rdt_Putaway_PendingMoveIn 
+               @cUserName     = '',
+               @cType         = 'UNLOCK',      -- LOCK / UNLOCK
+               @cFromLOC      = '',
+               @cFromID       = '',
+               @cSuggestedLOC = @cToLOC,
+               @cStorerKey    = '',
+               @nErrNo        = @nErrNo    OUTPUT,
+               @cErrMsg       = @cErrMsg   OUTPUT, 
+               @cSKU          = @cSKU,
+               @nPutawayQTY   = @nQTY,
+               @cUCCNo        = '', 
+               @cFromLOT      = @cLOT,
+               @cToID         = '', 
+               @cTaskDetailKey= '', 
+               @nFunc         = @nFunc, 
+               @cMoveQTYAlloc = '',
+               @cMoveQTYPick  = ''
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 257660
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec rdt_Putaway_PendingMoveIn failed
+            GOTO RollBackTran
+         END CATCH
+      END
 
       IF @nErrNo <> 0
       BEGIN

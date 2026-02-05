@@ -64,7 +64,8 @@ BEGIN
 
    SELECT 
       @cFacility = FACILITY,
-      @cStorerKey = Storerkey
+      @cStorerKey = Storerkey,
+      @cUserName = UserName
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -167,9 +168,10 @@ BEGIN
             SELECT TOP 1 @nRowRef = RowRef 
             FROM dbo.RFPutaway WITH(NOLOCK) 
             WHERE ISNULL(TaskDetailKey, '') <> '' 
-               AND TaskDetailKey IN (@cTaskDetaiKey, @cSourceKey)
+               AND ISNULL(ptcid, '') IN (@cTaskDetaiKey, @cSourceKey)
                AND SuggestedLOC = @cFinalLOC
                AND SKU = @cSKU
+               AND LOT = @cLot
                AND Qty = @nQty
 
             IF @@ROWCOUNT > 0 AND @nRowRef > 0
@@ -222,7 +224,7 @@ BEGIN
                      @nPutawayQTY   = @nQTY,
                      @nRowRef       = 0,
                      @cUCCNo        = '', 
-                     @cFromLOT      = '', 
+                     @cFromLOT      = @cLot, 
                      @cToID         = '', 
                      @cTaskDetailKey= '', 
                      @nFunc         = @nFunc, 
