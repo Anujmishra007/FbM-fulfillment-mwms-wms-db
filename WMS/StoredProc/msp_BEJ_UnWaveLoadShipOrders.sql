@@ -54,6 +54,8 @@ BEGIN
          , @c_MbolLineNumber        NVARCHAR(5)
          , @c_LoadKey               NVARCHAR(10)
          , @c_LoadLineNumber        NVARCHAR(5)
+         , @c_WaveKey               NVARCHAR(10)
+
 
    IF RIGHT(ISNULL(TRIM(@c_OtherConfig),''),2) = '##'
    BEGIN
