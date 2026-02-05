@@ -1,9 +1,13 @@
+IF NOT EXISTS (SELECT *
+               FROM sys.tables
+               WHERE name = 'Wave' AND type = 'U')
+BEGIN
 CREATE TABLE [dbo].[WAVE]
 (
 [WaveKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [WaveType] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_WaveType] DEFAULT ('0'),
 [Descr] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_Descr] DEFAULT (' '),
-[DispatchPalletPickMethod] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_DispatchPalletPickMethod] DEFAULT ('1'),
+[DispatchPQetPickMethod] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_DispatchPalletPickMethod] DEFAULT ('1'),
 [DispatchCasePickMethod] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_DispatchCasePickMethod] DEFAULT ('1'),
 [DispatchPiecePickMethod] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_DispatchPiecePickMethod] DEFAULT ('1'),
 [Status] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_Status] DEFAULT ('0'),
@@ -31,7 +35,9 @@ CREATE TABLE [dbo].[WAVE]
 [ReplenishStatus] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_ReplenishStatus] DEFAULT ('0'),
 [TMReleaseFlag] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_TMReleaseFlag] DEFAULT ('N'),
 [GenDynamicPickSlipCode] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_GenDynamicPickSlipCode] DEFAULT (''),
-[Strategykey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_Strategykey] DEFAULT ('')
+[Strategykey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_Strategykey] DEFAULT (''),
+[ExternStatus] [nvarchar] (10) NOT NULL CONSTRAINT [DF_WAVE_ExternStatus] DEFAULT (''),
+[EventDateTime] [datetime] NOT NULL CONSTRAINT [DF_WAVE_EventDateTime] DEFAULT (getdate()),
 ) ON [PRIMARY]
 GO
 
@@ -79,3 +85,27 @@ EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in 
 GO
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Wave.', 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN', N'WaveKey'
 GO
+EXEC sp_addextendedproperty N'MS_Description', N'ExternStatus' , 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN',N'ExternStatus'
+GO
+EXEC sp_addextendedproperty N'MS_Description', N'EventDateTime' , 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN',N'EventDateTime'
+
+END
+ELSE
+BEGIN
+IF NOT EXISTS (SELECT 1
+ 		               FROM sys.columns
+ 		               WHERE Name = 'ExternStatus' AND Object_ID = Object_ID('WAVE'))
+BEGIN
+ALTER TABLE WAVE ADD ExternStatus NVARCHAR(10) NOT NULL CONSTRAINT [DF_WAVE_ExternStatus]  DEFAULT (' ');
+EXEC sp_addextendedproperty N'MS_Description', N'ExternStatus', 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN', N'ExternStatus'
+END
+IF NOT EXISTS (SELECT *
+                       FROM sys.columns
+                       WHERE Name = 'EventDateTime'
+                         AND Object_ID = Object_ID('WAVE'))
+BEGIN
+ALTER TABLE WAVE
+    ADD EventDateTime [datetime] NOT NULL CONSTRAINT [DF_WAVE_EventDateTime] DEFAULT (getdate());
+EXEC sp_addextendedproperty N'MS_Description', N'EventDateTime', 'SCHEMA', N'dbo', 'TABLE',
+                     N'WAVE', 'COLUMN', N'EventDateTime'
+END
