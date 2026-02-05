@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/    
 /* Store procedure: rdt_1813ExtInfo02                                   */    
-/* Copyright      : IDS                                                 */    
+/* Copyright      : Maersk WMS                                          */    
 /*                                                                      */    
 /* Purpose: Show the Doc type (B2C or B2B)                              */    
 /*                                                                      */    
