@@ -1,3 +1,8 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
 /*****************************************************************************/
 /* Store Procedure: rdt_729DecodeSP01                                        */
 /*                                                                           */
@@ -44,10 +49,10 @@ BEGIN
         @s1 NVARCHAR(200) = N'', @s2 NVARCHAR(200) = N'', @s3 NVARCHAR(200) = N'',
         @s4 NVARCHAR(200) = N'', @s5 NVARCHAR(200) = N'', @s6 NVARCHAR(200) = N'',
         @s7 NVARCHAR(200) = N'', @s8 NVARCHAR(200) = N'', @s9 NVARCHAR(200) = N'',
-        @work NVARCHAR(400) = @cBarcode + N'&', @pos INT = 1, @next INT, @seg NVARCHAR(200), @i INT = 1
+        @work NVARCHAR(400) = @cBarcode + N'&', @pos INT = 1, @next INT = 1, @seg NVARCHAR(200), @i INT = 1
 
     BEGIN TRY
-        WHILE 1 = 1
+        WHILE @next > 0
         BEGIN
             SET @next = CHARINDEX(N'&', @work, @pos)
             IF @next = 0 BREAK
@@ -74,8 +79,8 @@ BEGIN
         GOTO Quit
     END CATCH
 
-    -- Build UCC = seg4 + seg5 + seg7 (e.g., 4525003831 + NB + 021712)
-    SET @cUCC = RTRIM(@s4) + RTRIM(@s5) + RTRIM(@s7)
+    -- Build UCC = seg4 + seg5 + seg7 
+    SET @cUCC = CONCAT(RTRIM(@s4), RTRIM(@s5), RTRIM(@s7))
 
     -- Fallbacks: if we couldn't parse into 4/5/7, allow direct use of barcode
     IF (ISNULL(@s4, '') = '' OR ISNULL(@s5, '') = '' OR ISNULL(@s7, '') = '')
@@ -111,7 +116,7 @@ GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
+SET ANSI_NULLS ON
 GO
 
 GRANT EXECUTE ON [RDT].[rdt_729DecodeSP01] TO [NSQL]

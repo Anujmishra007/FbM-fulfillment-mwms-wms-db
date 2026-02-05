@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /*****************************************************************************/
 /* Store Procedure: rdt_729GetUCCInfo03                                      */
 /*                                                                           */
@@ -55,62 +60,38 @@ BEGIN
     END
 
     ;WITH U AS (
-        SELECT TOP (1)
-            UCC.ID,
-            UCC.Loc,
-            UCC.ExternKey,
-            UCC.OrderKey,
-            UCC.Lot,
-            UCC.SKU
-        FROM dbo.UCC WITH (NOLOCK)
-        WHERE UCC.StorerKey = @cStorerKey
-            AND UCC.UCCNo     = @cUCC
-        ORDER BY UCC.ID -- deterministic pick
+    SELECT TOP (1) UCC.ID, UCC.Loc, UCC.ExternKey, UCC.OrderKey, UCC.Lot, UCC.SKU
+    FROM dbo.UCC WITH (NOLOCK)
+    WHERE UCC.StorerKey = @cStorerKey AND UCC.UCCNo = @cUCC
     )
+    
     SELECT
-        @cExtInfo01 = 'ID:    ' + CAST(U.ID AS NVARCHAR(15)),      -- UCC.ID with prefix
-        @cExtInfo02 = 'LOC:  ' + CAST(U.Loc AS NVARCHAR(15)),    -- UCC.LOC with prefix
-        @cExtInfo04 = CAST(U.ExternKey AS NVARCHAR(20)), -- UCC.ExternKey
-        @cExtInfo03 = N'',
-        @cExtInfo05 = N'',
-        @cExtInfo06 = N''
+        @cExtInfo01 = 'ID:    ' + CAST(U.ID AS NVARCHAR(15)),
+        @cExtInfo02 = 'LOC:  ' + CAST(U.Loc AS NVARCHAR(15)),
+        @cExtInfo03 = CAST(ISNULL(S.SUSR3, N'') AS NVARCHAR(20)),
+        @cExtInfo04 = CAST(U.ExternKey AS NVARCHAR(20)),
+        @cExtInfo05 = CAST(ISNULL(O.ExternOrderKey, N'') AS NVARCHAR(20)),
+        @cExtInfo06 = CAST(ISNULL(LA.Lottable01, N'') AS NVARCHAR(20))
     FROM U
+    LEFT JOIN dbo.SKU S WITH (NOLOCK) ON S.StorerKey = @cStorerKey AND S.SKU = U.SKU
+    LEFT JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = U.OrderKey
+    LEFT JOIN dbo.LotAttribute LA WITH (NOLOCK) ON LA.StorerKey = @cStorerKey AND LA.Lot = U.Lot
 
     IF @@ROWCOUNT = 0
     BEGIN
-        SET @nErrNo  = 257801 -- 'UCC NOT FOUND'
+        SET @nErrNo  = 257802 -- 'UCC NOT FOUND'
         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
         GOTO Quit
     END
 
-    SELECT TOP (1)
-        @cExtInfo03 = CAST(ISNULL(S.SUSR3, N'') AS NVARCHAR(20))
-    FROM dbo.SKU S WITH (NOLOCK)
-    JOIN dbo.UCC U2 WITH (NOLOCK)
-        ON U2.StorerKey = @cStorerKey
-        AND U2.UCCNo     = @cUCC
-        AND U2.SKU       = S.SKU
-        WHERE S.StorerKey = @cStorerKey
-
-    SELECT TOP (1)
-        @cExtInfo05 = CAST(ISNULL(O.ExternOrderKey, N'') AS NVARCHAR(20))
-    FROM dbo.Orders O WITH (NOLOCK)
-    JOIN dbo.UCC U3 WITH (NOLOCK)
-        ON U3.StorerKey = @cStorerKey
-        AND U3.UCCNo     = @cUCC
-        AND U3.OrderKey  = O.OrderKey
-
-    SELECT TOP (1)
-        @cExtInfo06 = CAST(ISNULL(LA.Lottable01, N'') AS NVARCHAR(20))
-    FROM dbo.LotAttribute LA WITH (NOLOCK)
-    JOIN dbo.UCC U4 WITH (NOLOCK)
-        ON U4.StorerKey = @cStorerKey
-        AND U4.UCCNo     = @cUCC
-        AND U4.Lot       = LA.Lot
-        WHERE LA.StorerKey = @cStorerKey
-
 Quit:
+
 END
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
 GRANT EXECUTE ON [RDT].[rdt_729GetUCCInfo03] TO [NSQL]
 GO

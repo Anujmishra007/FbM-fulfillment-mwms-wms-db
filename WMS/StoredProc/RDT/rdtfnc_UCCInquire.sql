@@ -163,7 +163,7 @@ BEGIN
 
       SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerkey)
       IF @cDecodeSP IN ('0', '')
-      SET @cDecodeSP = ''
+         SET @cDecodeSP = ''
 
 
       SET @cExtendedUCCInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUCCInfoSP', @cStorerkey)
@@ -183,7 +183,7 @@ BEGIN
       @cStorerKey  = @cStorerKey,
       @nStep       = @nStep
 END
-RETURN
+GOTO Quit
 
 
 /************************************************************************************
@@ -202,8 +202,8 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
 
-      SET @cBarcode = @cInField01
-      SET @cUCC = @cInFiel01
+      -- @cBarcode already populated from V_Barcode (FCR-9907)
+      SET @cUCC = @cBarcode
 
       IF @cDecodeSP <> ''
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
@@ -369,7 +369,7 @@ BEGIN
             '@cExtInfo06   NVARCHAR( 20)  OUTPUT, ' +
             '@cExtInfo07   NVARCHAR( 20)  OUTPUT, ' +
             '@nErrNo       INT            OUTPUT, ' +
-            '@cErrMsg      NVARCHAR( 20)  OUTPUT  '
+            '@cErrMsg      NVARCHAR(1024) OUTPUT  '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cUCC,
@@ -401,6 +401,7 @@ BEGIN
       SET @cOutField13 = @cExtInfo07
 
       SET @nMultiSKU = 0
+      SET @cBarcode = ''  -- Clear for next scan (FCR-9907)
    END
 
    IF @nInputKey = 0 -- ESC
