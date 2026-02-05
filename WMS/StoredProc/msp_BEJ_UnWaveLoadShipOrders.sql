@@ -122,12 +122,9 @@ OPEN @CUR
                DELETE FROM dbo.MBOLDetail
                WHERE MbolKey = @c_MbolKey
                AND MbolLineNumber = @c_MbolLineNumber
-            END
-            --Delete order from MOBL table containing Header details
-            IF NOT EXISTS ( SELECT 1 FROM dbo.MBOLDetail (NOLOCK) WHERE MbolKey = @c_MbolKey )
-            BEGIN
-                DELETE FROM dbo.MBOL
-                WHERE MbolKey = @c_MbolKey
+               --Delete order from MOBL table containing Header details
+               DELETE FROM dbo.MBOL
+               WHERE MbolKey = @c_MbolKey
             END
 
             --Delete order from LoadPlan Detail
