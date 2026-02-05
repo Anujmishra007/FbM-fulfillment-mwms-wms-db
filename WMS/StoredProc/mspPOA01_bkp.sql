@@ -53,28 +53,15 @@ BEGIN
    END
    /* Emergency Order Allocation */
    IF @n_Continue=1 OR @n_Continue=2
- BEGIN
+    BEGIN
 
-	  IF EXISTS (SELECT 1 FROM dbo.PICKDETAIL WHERE Orderkey=@c_Orderkey)
-	  BEGIN
-          UPDATE ORDERS WITH (ROWLOCK)
-          SET Ecom_Platform = 'EMG_EMER'
-          ,SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
-          THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
-          ,TrafficCop = NULL
-          WHERE Orderkey = @c_Orderkey
-          AND M_Fax2 = 'AUTO ALLOCATION'
-      END
-      ELSE
-      BEGIN
-          UPDATE ORDERS WITH (ROWLOCK)
-          SET Ecom_Platform = '3RDParty'
-          ,SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
-          THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
-          ,TrafficCop = NULL
-          WHERE Orderkey = @c_Orderkey
-          AND M_Fax2 = 'AUTO ALLOCATION'
-      END
+      UPDATE ORDERS WITH (ROWLOCK)
+      SET Ecom_Platform = 'EMG_EMER'
+      ,SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
+      THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
+      ,TrafficCop = NULL
+      WHERE Orderkey = @c_Orderkey
+      AND M_Fax2 = 'AUTO ALLOCATION'
 
     END
 
