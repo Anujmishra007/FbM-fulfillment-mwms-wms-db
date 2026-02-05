@@ -19,6 +19,7 @@ GO
 /* 2023/12/01 1.3  James       WMS-24256 Add display Loc (james02)      */
 /*                             Revamp the info display on screen 2      */
 /*                             ExtInfoSP only display 3 lines           */
+/* 2026/02/05 1.4  NYE018     FCR-9890 Add QR code decode serialno input */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_SerialNo_Inquiry] (
@@ -54,6 +55,9 @@ DECLARE
    @cSKU       NVARCHAR (20),
    @cSKUDescr  NVARCHAR (40),
    @cID        NVARCHAR (20),
+
+   @cDecodeSP  NVARCHAR( 20),
+   @cBarcode   NVARCHAR( MAX),
 
    @cExtendedInfoSP NVARCHAR(20),
    @cExtendedInfo1 NVARCHAR(20),
@@ -93,6 +97,8 @@ SELECT
    @nMenu      = Menu,
    @cLangCode  = Lang_code,
 
+   @cBarcode   = V_Barcode,
+
    @cStorerKey = StorerKey,
    @cFacility  = Facility,
    @cPrinter   = Printer,
@@ -110,6 +116,7 @@ SELECT
    @cExtendedInfo6 = V_String6,
    @cExtendedInfoSP = V_String7,
    @cSNoStatus    = V_String8,
+   @cDecodeSP     = V_String10,
    @cSerialNo     = V_String41,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
@@ -151,6 +158,10 @@ BEGIN
    SET @nScn  = 5090
    SET @nStep = 1
 
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerkey)
+      IF @cDecodeSP IN ('0', '')
+         SET @cDecodeSP = ''
+
    SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerkey)
    IF @cExtendedInfoSP = ' '
       SET @cExtendedInfoSP = ''
@@ -173,7 +184,8 @@ BEGIN
    BEGIN
 
       --Screen Mapping
-      SET @cSerialNo = @cInField01;
+      -- @cBarcode already populated from V_Barcode (FCR-9890)
+      SET @cSerialNo = @cBarcode
 
       --Validate Blank
       IF @cSerialNo ='' OR @cSerialNo IS NULL
@@ -183,6 +195,38 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step1_fail
       END
+      -- (FCR-9890) Logic for DecodeSP
+      IF @cDecodeSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
+               ' @cSerialNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile      INT,           ' +
+               ' @nFunc        INT,           ' +
+               ' @cLangCode    NVARCHAR( 3),  ' +
+               ' @nStep        INT,           ' +
+               ' @nInputKey    INT,           ' +
+               ' @cFacility    NVARCHAR( 5),  ' +
+               ' @cStorerKey   NVARCHAR( 15), ' +
+               ' @cBarcode     NVARCHAR( MAX), ' +
+               ' @cSerialNo    NVARCHAR( 20)  OUTPUT, ' +
+               ' @nErrNo       INT            OUTPUT, ' +
+               ' @cErrMsg      NVARCHAR( 1024)  OUTPUT'
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcode,
+               @cSerialNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         END
+      END
+
+      -- Check for DecodeSP errors immediately
+      IF @nErrNo <> 0
+      BEGIN
+         GOTO Step1_fail
+      END
+      -- (FCR-9890) Logic for DecodeSP
 
       -- (james01)
       SELECT TOP 1
@@ -276,6 +320,16 @@ BEGIN
             SET @cOutField09 = @cExtendedInfo1
             SET @cOutField10 = @cExtendedInfo2
             SET @cOutField11 = @cExtendedInfo3
+
+            SELECT @cID = V_ID 
+               FROM RDT.RDTMOBREC WITH (NOLOCK)
+               WHERE Mobile = @nMobile
+               AND ISNULL(V_ID, '') <> ''
+               
+            SET @cOutField07 = CASE WHEN LEN( @cID) <= 16 THEN ': ' + @cID 
+                              WHEN LEN( @cID) = 17 THEN ':' + @cID
+                              ELSE @cID
+                         END
          END
       END
 
@@ -356,6 +410,8 @@ BEGIN
       Step       = @nStep,
       Scn        = @nScn,
 
+      V_Barcode  = @cBarcode,
+
       StorerKey  = @cStorerKey,
       Facility   = @cFacility,
       Printer    = @cPrinter,
@@ -373,6 +429,7 @@ BEGIN
       V_String6  = @cExtendedInfo6,
       V_String7  = @cExtendedInfoSP,
       V_String8  = @cSNoStatus,
+      V_String10      = @cDecodeSP,
       V_String41 = @cSerialNo  ,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
