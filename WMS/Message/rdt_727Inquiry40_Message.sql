@@ -1,10 +1,9 @@
 
-execute rdt.rdtdropmsg 257641, 257660
+execute rdt.rdtdropmsg 258351, 258400
 
-execute rdt.rdtAddMsg 257641, 10, '257641:ToteID Req',  'us_english',  727, 0,  '257641: ToteID Req'
-execute rdt.rdtAddMsg 257642, 10, '257642:ToteID Inv',  'us_english',  727, 0,  '257642: ToteID Inv'
-execute rdt.rdtAddMsg 257643, 10, '257643:ToteID Inv',  'us_english',  727, 0,  '257643: ToteID Inv'
+execute rdt.rdtAddMsg 258351, 10, '258351:ToteID Req',  'us_english',  727, 0,  '258351: ToteID Req'
+execute rdt.rdtAddMsg 258352, 10, '258352:ToteID Inv',  'us_english',  727, 0,  '258352: ToteID Inv'
+execute rdt.rdtAddMsg 258353, 10, '258353:ToteID Inv',  'us_english',  727, 0,  '258353: ToteID Inv'
 
 
-
-SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 257641 AND 257660
+SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 258351 AND 258400
