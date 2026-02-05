@@ -150,7 +150,8 @@ OPEN @CUR
             END
 
             -- Delete order from wave detail
-            SELECT @c_WaveDetailKey = WaveDetailKey
+            SELECT @c_WaveDetailKey = WaveDetailKey,
+                   @c_WaveKey = WaveKey
             FROM dbo.WaveDetail (NOLOCK)
             WHERE OrderKey = @c_OrderKey
 
@@ -160,10 +161,10 @@ OPEN @CUR
                WHERE WaveDetailKey = @c_WaveDetailKey
             END
             --Delete order from Wave table containing wave Header details
-            IF NOT EXISTS ( SELECT 1 FROM dbo.WaveDetail (NOLOCK) WHERE OrderKey = @c_OrderKey )
+            IF NOT EXISTS ( SELECT 1 FROM dbo.WaveDetail (NOLOCK) WHERE WaveKey = @c_WaveKey )
             BEGIN
                 DELETE FROM dbo.WAVE
-                WHERE OrderKey = @c_OrderKey
+                WHERE WaveKey = @c_WaveKey
             END
             --Remove OrderGroup from Orders.
             UPDATE dbo.Orders WITH (ROWLOCK)
