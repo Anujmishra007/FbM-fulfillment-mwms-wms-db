@@ -84,10 +84,7 @@ BEGIN
       UNION
       SELECT ORD2.OrderKey
       FROM dbo.ORDERS ORD2 WITH (NOLOCK)
-      WHERE ORD2.Status = '0'
-        AND ORD2.SOStatus = '0'
-        AND ORD2.OrderGroup <> ''
-        AND ORD2.StorerKey = @c_StorerKey
+      WHERE ORD2.StorerKey = @c_StorerKey
         AND ORD2.UserDefine09 IN (
         SELECT UserDefine09
         FROM dbo.ORDERS WITH (NOLOCK)
