@@ -185,7 +185,8 @@ BEGIN
             LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK)  
                ON L.Loc = LLI.Loc  
                AND LLI.StorerKey = @cStorerKey  
-               AND L.Facility = @cFacility  
+               AND L.Facility = @cFacility
+               AND LLI.ID <> @cToID  
             WHERE L.Loc = @cToLOC  
               AND (LLI.Qty + ISNULL(LLI.PendingMoveIN, 0) > 0 OR LLI.Loc IS NULL)  
               AND L.Facility = @cFacility  
