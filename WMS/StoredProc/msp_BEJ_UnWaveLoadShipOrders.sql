@@ -88,12 +88,12 @@ BEGIN
       WHERE ORD2.StorerKey = @c_StorerKey       --suryakanta.sahoo 2026-02-02 - FCR-10266
         AND ORD2.UserDefine09 IN (              --suryakanta.sahoo 2026-02-02 - FCR-10266
         SELECT UserDefine09                     --suryakanta.sahoo 2026-02-02 - FCR-10266
-        FROM dbo.ORDERS WITH (NOLOCK)
-        WHERE Status = '0'
-        AND SOStatus = '0'
-        AND OrderGroup <> ''
-        AND StorerKey = @c_StorerKey
-        GROUP BY UserDefine09
+        FROM dbo.ORDERS WITH (NOLOCK)           --suryakanta.sahoo 2026-02-02 - FCR-10266
+        WHERE Status = '0'                      --suryakanta.sahoo 2026-02-02 - FCR-10266
+        AND SOStatus = '0'                      --suryakanta.sahoo 2026-02-02 - FCR-10266
+        AND OrderGroup <> ''                    --suryakanta.sahoo 2026-02-02 - FCR-10266
+        AND StorerKey = @c_StorerKey            --suryakanta.sahoo 2026-02-02 - FCR-10266
+        GROUP BY UserDefine09                   --suryakanta.sahoo 2026-02-02 - FCR-10266
         HAVING COUNT(DISTINCT OrderGroup) <> 1  --suryakanta.sahoo 2026-02-02 - FCR-10266
         )
     ORDER BY OrderKey
