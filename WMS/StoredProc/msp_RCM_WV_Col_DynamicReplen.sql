@@ -838,7 +838,7 @@ BEGIN
                         SET @c_logicalloc = ''             
                         SELECT TOP 1 @c_logicalloc = ISNULL(UDF01,'')            
                         FROM CODELKUP CL WITH (NOLOCK)             
-                        WHERE CL.ListName = 'COLGBRDPLoc'            
+                        WHERE CL.ListName = 'COLGBRDPLo'            
                         AND   CL.Code = @c_DPPPKZone            
                         AND   CL.Storerkey = @c_Storerkey            
             
@@ -2087,14 +2087,14 @@ BEGIN
       BEGIN                
          IF EXISTS ( SELECT 1            
                      FROM CODELKUP CL WITH (NOLOCK)            
-                     WHERE CL.ListName = 'COLGBRDPLoc'            
+                     WHERE CL.ListName = 'COLGBRDPLo'            
                      AND   CL.Code = @c_DPPPKZone            
                      AND   CL.Storerkey = @c_Storerkey            
                    )           
          BEGIN            
             UPDATE CODELKUP            
             SET UDF01 = @c_LogicalLoc            
-            WHERE ListName = 'COLGBRDPLoc'            
+            WHERE ListName = 'COLGBRDPLo'            
             AND Code = @c_DPPPKZone            
             AND Storerkey = @c_Storerkey            
             AND Code2 = ''            
@@ -2104,7 +2104,7 @@ BEGIN
             IF @c_LogicalLoc <> ''
             BEGIN
                INSERT INTO CODELKUP (ListName, Code, Description, Storerkey, UDF01)            
-               VALUES ('COLGBRDPLoc', @c_DPPPKZone,  @c_DPPPKZone, @c_Storerkey, @c_LogicalLoc)            
+               VALUES ('COLGBRDPLo', @c_DPPPKZone,  @c_DPPPKZone, @c_Storerkey, @c_LogicalLoc)            
             END
          END            
             
@@ -2113,7 +2113,7 @@ BEGIN
             SET @n_continue = 3                  
             SET @n_err = 97423                    
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)            
-                         +': Insert/Update Last DP Location into CODELKUP Table for ListName = ''COLGBRDPLoc'' Failed. (msp_RCM_WV_Col_DynamicReplen)'                   
+                         +': Insert/Update Last DP Location into CODELKUP Table for ListName = ''COLGBRDPLo'' Failed. (msp_RCM_WV_Col_DynamicReplen)'                   
             GOTO RETURN_SP             
          END             
                                                        
