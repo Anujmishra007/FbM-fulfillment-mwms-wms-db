@@ -1468,7 +1468,7 @@ BEGIN
    IF (@n_continue = 1 OR @n_continue = 2) 
    BEGIN
       SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT OH.Orderkey, PD.PickDetailKey, OH.StorerKey
+      SELECT DISTINCT OH.Orderkey, DEL.PickDetailKey, OH.StorerKey
       FROM   DELETED DEL
       JOIN   Orders OH WITH (NOLOCK)            ON DEL.OrderKey = OH.OrderKey
 	  JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
@@ -1499,7 +1499,7 @@ BEGIN
       DEALLOCATE @CUR_TriggerPoints
 
       SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT OH.OrderKey, PD.PickDetailKey, OH.StorerKey
+      SELECT DISTINCT OH.OrderKey, DEL.PickDetailKey, OH.StorerKey
       FROM   DELETED DEL
       JOIN   Orders OH WITH (NOLOCK)            ON DEL.OrderKey   = OH.OrderKey
       JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey

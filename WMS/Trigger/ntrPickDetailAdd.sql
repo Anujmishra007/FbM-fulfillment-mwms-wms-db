@@ -1004,7 +1004,7 @@ END -- IF EXISTS(StorerConfig - 'WAVEUPDLOG')
    IF (@n_continue = 1 OR @n_continue = 2) 
    BEGIN
       SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT OH.Orderkey, PD.PickDetailKey, OH.StorerKey
+      SELECT DISTINCT OH.Orderkey, INS.PickDetailKey, OH.StorerKey
       FROM   INSERTED INS
       JOIN   Orders OH WITH (NOLOCK)            ON INS.OrderKey = OH.OrderKey
 	  JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
@@ -1035,7 +1035,7 @@ END -- IF EXISTS(StorerConfig - 'WAVEUPDLOG')
       DEALLOCATE @CUR_TriggerPoints
 
       SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT OH.OrderKey, PD.PickDetailKey, OH.StorerKey
+      SELECT DISTINCT OH.OrderKey, INS.PickDetailKey, OH.StorerKey
       FROM   INSERTED INS
       JOIN   Orders OH WITH (NOLOCK)            ON INS.OrderKey   = OH.OrderKey
       JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
