@@ -970,10 +970,14 @@ BEGIN
                --SELECT TOP 1 loc + LocCheckDigit
                --FROM LOC WITH (NOLOCK)
                --WHERE LOC IN (
-                  SELECT TOP 1 ToLoc
-                  FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-                  WHERE receiptkey = @cReceiptKey 
-				     AND sku = @cSKU order by adddate desc
+                  SELECT TOP 1 ToLoc + LocCheckDigit
+                  FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
+				  INNER JOIN LOC L WITH(NOLOCK)
+				     ON RD.ToLoc = L.Loc
+                  WHERE RD.ReceiptKey = @cReceiptKey 
+				     AND RD.Sku = @cSKU 
+					 AND L.Facility = @cFacility
+				  ORDER BY RD.AddDate DESC
                --)
             ), ''
          )
@@ -1544,10 +1548,14 @@ BEGIN
                --SELECT TOP 1 loc + LocCheckDigit
                --FROM LOC WITH (NOLOCK)
                --WHERE LOC IN (
-                  SELECT TOP 1 ToLoc
-                  FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-                  WHERE receiptkey = @cReceiptKey 
-				     AND sku = @cSKU order by adddate desc
+                  SELECT TOP 1 ToLoc + LocCheckDigit
+                  FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
+				  INNER JOIN LOC L WITH(NOLOCK)
+				     ON RD.ToLoc = L.Loc
+                  WHERE RD.ReceiptKey = @cReceiptKey 
+				     AND RD.Sku = @cSKU 
+					 AND L.Facility = @cFacility
+				  ORDER BY RD.AddDate DESC
                --)
             ), ''
          )
