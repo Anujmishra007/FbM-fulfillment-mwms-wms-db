@@ -82,15 +82,23 @@ BEGIN
 	  AND SOStatus NOT IN ('0', '9')
 
       UNION
-    -- Second Criteria Set
-      SELECT MIN(OrderKey) AS OrderKey   -- Needed because SELECT must match columns
-        FROM dbo.ORDERS ORD2 WITH (NOLOCK)
-        WHERE ORD2.Status = '0'
-          AND ORD2.SOStatus = '0'
-          AND ORD2.OrderGroup <> ''
-          AND ORD2.StorerKey = 'HP'
-        GROUP BY ORD2.UserDefine09
-        HAVING COUNT(DISTINCT ORD2.OrderGroup) <> 1;
+      SELECT ORD2.OrderKey
+      FROM dbo.ORDERS ORD2 WITH (NOLOCK)
+      WHERE ORD2.Status = '0'
+        AND ORD2.SOStatus = '0'
+        AND ORD2.OrderGroup <> ''
+        AND ORD2.StorerKey = @c_StorerKey
+        AND ORD2.UserDefine09 IN (
+        SELECT UserDefine09
+        FROM dbo.ORDERS WITH (NOLOCK)
+        WHERE Status = '0'
+        AND SOStatus = '0'
+        AND OrderGroup <> ''
+        AND StorerKey = @c_StorerKey
+        GROUP BY UserDefine09
+        HAVING COUNT(DISTINCT OrderGroup) <> 1
+        )
+    ORDER BY OrderKey
 
 OPEN @CUR
       FETCH NEXT FROM @CUR INTO @c_OrderKey
@@ -118,7 +126,7 @@ OPEN @CUR
                WHERE MbolKey = @c_MbolKey
                AND MbolLineNumber = @c_MbolLineNumber
             END
-            --Delete order from MOBL table cintaing Header details
+            --Delete order from MOBL table containing Header details
             IF NOT EXISTS ( SELECT 1 FROM dbo.MBOLDetail (NOLOCK) WHERE MbolKey = @c_MbolKey )
             BEGIN
                 DELETE FROM dbo.MBOL
