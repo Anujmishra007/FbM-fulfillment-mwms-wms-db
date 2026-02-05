@@ -54,8 +54,7 @@ BEGIN
          , @c_MbolLineNumber        NVARCHAR(5)
          , @c_LoadKey               NVARCHAR(10)
          , @c_LoadLineNumber        NVARCHAR(5)
-         , @c_WaveKey               NVARCHAR(10)
-
+         , @c_WaveKey               NVARCHAR(10)  --suryakanta.sahoo 2026-02-02 - FCR-10266
 
    IF RIGHT(ISNULL(TRIM(@c_OtherConfig),''),2) = '##'
    BEGIN
@@ -83,19 +82,19 @@ BEGIN
       --AND SpecialHandling = 'B'
 	  AND SOStatus NOT IN ('0', '9')
 
-      UNION
-      SELECT ORD2.OrderKey
-      FROM dbo.ORDERS ORD2 WITH (NOLOCK)
-      WHERE ORD2.StorerKey = @c_StorerKey
-        AND ORD2.UserDefine09 IN (
-        SELECT UserDefine09
+      UNION                                     --suryakanta.sahoo 2026-02-02 - FCR-10266
+      SELECT ORD2.OrderKey                      --suryakanta.sahoo 2026-02-02 - FCR-10266
+      FROM dbo.ORDERS ORD2 WITH (NOLOCK)        --suryakanta.sahoo 2026-02-02 - FCR-10266
+      WHERE ORD2.StorerKey = @c_StorerKey       --suryakanta.sahoo 2026-02-02 - FCR-10266
+        AND ORD2.UserDefine09 IN (              --suryakanta.sahoo 2026-02-02 - FCR-10266
+        SELECT UserDefine09                     --suryakanta.sahoo 2026-02-02 - FCR-10266
         FROM dbo.ORDERS WITH (NOLOCK)
         WHERE Status = '0'
         AND SOStatus = '0'
         AND OrderGroup <> ''
         AND StorerKey = @c_StorerKey
         GROUP BY UserDefine09
-        HAVING COUNT(DISTINCT OrderGroup) <> 1
+        HAVING COUNT(DISTINCT OrderGroup) <> 1  --suryakanta.sahoo 2026-02-02 - FCR-10266
         )
     ORDER BY OrderKey
 
@@ -124,10 +123,17 @@ OPEN @CUR
                DELETE FROM dbo.MBOLDetail
                WHERE MbolKey = @c_MbolKey
                AND MbolLineNumber = @c_MbolLineNumber
-               --Delete order from MOBL table containing Header details
                DELETE FROM dbo.MBOL
                WHERE MbolKey = @c_MbolKey
+               --Delete order from MOBL table containing Header details
+               --suryakanta.sahoo 2026-02-02 - FCR-10266
+                IF NOT EXISTS ( SELECT 1 FROM dbo.MBOLDetail (NOLOCK) WHERE MbolKey = @c_MbolKey )
+                BEGIN
+                    DELETE FROM dbo.MBOL
+                    WHERE MbolKey = @c_MbolKey
+                END
             END
+
 
             --Delete order from LoadPlan Detail
              SELECT @c_LoadKey         = LoadKey
@@ -140,14 +146,14 @@ OPEN @CUR
                DELETE FROM dbo.LoadPlanDetail
                WHERE LoadKey = @c_LoadKey
                AND LoadLineNumber = @c_LoadLineNumber
-            END
-            --Delete order from Wave table containing Load Header details
-            IF NOT EXISTS ( SELECT 1 FROM dbo.LoadPlanDetail (NOLOCK) WHERE LoadKey = @c_LoadKey )
-            BEGIN
+              --Delete order from Wave table containing Load Header details
+              --suryakanta.sahoo 2026-02-02 - FCR-10266
+              IF NOT EXISTS ( SELECT 1 FROM dbo.LoadPlanDetail (NOLOCK) WHERE LoadKey = @c_LoadKey )
+              BEGIN
                 DELETE FROM dbo.LoadPlan
                 WHERE LoadKey = @c_LoadKey
+              END
             END
-
             -- Delete order from wave detail
             SELECT @c_WaveDetailKey = WaveDetailKey,
                    @c_WaveKey = WaveKey
@@ -158,12 +164,13 @@ OPEN @CUR
             BEGIN
                DELETE FROM dbo.WaveDetail
                WHERE WaveDetailKey = @c_WaveDetailKey
-            END
-            --Delete order from Wave table containing wave Header details
-            IF NOT EXISTS ( SELECT 1 FROM dbo.WaveDetail (NOLOCK) WHERE WaveKey = @c_WaveKey )
-            BEGIN
-                DELETE FROM dbo.WAVE
-                WHERE WaveKey = @c_WaveKey
+               --Delete order from Wave table containing wave Header details
+               --suryakanta.sahoo 2026-02-02 - FCR-10266
+               IF NOT EXISTS ( SELECT 1 FROM dbo.WaveDetail (NOLOCK) WHERE WaveKey = @c_WaveKey )
+                BEGIN
+                    DELETE FROM dbo.WAVE
+                    WHERE WaveKey = @c_WaveKey
+                END
             END
             --Remove OrderGroup from Orders.
             UPDATE dbo.Orders WITH (ROWLOCK)
