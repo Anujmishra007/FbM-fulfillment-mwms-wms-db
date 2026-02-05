@@ -19,7 +19,7 @@ GO
 /* 12-12-2025  1.0  PSJ036      UWP-48147 Created                       */   
 /************************************************************************/    
     
-ALTER   PROCEDURE [RDT].[rdt_1813ExtInfo02]    
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1813ExtInfo02]    
    @nMobile         INT,       
    @nFunc           INT,       
    @cLangCode       NVARCHAR( 3),
@@ -40,7 +40,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF    
    
    DECLARE @cCongsineeKey     NVARCHAR( 15),
-		   @cType             NVARCHAR( 10)
+         @cType             NVARCHAR( 10)
 
    SET @c_oFieled01 = ''
    
@@ -50,14 +50,15 @@ BEGIN
       BEGIN
          -- 1 Pallet 1 Ship To (Consignee)
          SET @cCongsineeKey = ''
-		 SET @cType         = ''
+         SET @cType         = ''
 
-         SELECT TOP 1 @cCongsineeKey = O.ConsigneeKey,
-					  @cType         = O.Type
+         SELECT TOP 1 
+            @cCongsineeKey = O.ConsigneeKey,
+            @cType         = O.Type
          FROM dbo.PickDetail PD WITH (NOLOCK) 
-         JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey)
+         INNER JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey)
          WHERE PD.StorerKey = @cStorerKey 
-         AND   PD.ID = @cFromID
+            AND PD.ID = @cFromID
 
          SET @c_oFieled01 = 'Order Type:' + @cType
       END
