@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_ITF_ntrPOD]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_ITF_ntrPOD]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -41,7 +37,7 @@ GO
 /*06-Sep-2022  YTKuek   1.2   Add GVTITF (YT01)                         */
 /************************************************************************/  
   
-CREATE PROC [dbo].[isp_ITF_ntrPOD]  
+CREATE OR ALTER PROC [dbo].[isp_ITF_ntrPOD]  
             @c_TriggerName          nvarchar(120)  
           , @c_SourceTable          nvarchar(60)  
           , @c_StorerKey            nvarchar(15)
