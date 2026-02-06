@@ -66,7 +66,8 @@ BEGIN
       ToLocation NVARCHAR(100),
       UID NVARCHAR(100),
       DataCheck NVARCHAR(100),
-      DropID NVARCHAR(100)
+      DropID NVARCHAR(100),
+	  SequenceCab NVARCHAR(100)
    );
       
    -- if taskdetailkey is not null (taskdetail + order)
@@ -88,7 +89,11 @@ BEGIN
 		 td.ToLoc,
 		 td.EditWho,
 		 '' AS DataCheck,
-		 @c_DropID
+		 @c_DropID,
+         CASE 
+	     WHEN orm.[Type] = '2' THEN CONCAT ('Sequence: ', orm.UserDefine01)
+	     ELSE ''
+	     END AS SequenceCab
       FROM dbo.TaskDetail td WITH (NOLOCK)
          INNER JOIN dbo.orders orm WITH (NOLOCK)
 	        ON td.orderkey = orm.orderkey
@@ -129,6 +134,10 @@ BEGIN
 		 FORMAT(MIN(pd.EditDate),'dd-MM-yyyy hh:mm tt'),
 		 pd.Loc,
 		 pd.EditWho,
+	     CASE 
+	     WHEN orm.[Type] = '2' THEN CONCAT ('Sequence: ', orm.UserDefine01)
+	     ELSE ''
+	     END AS SequenceCab,
 		 '' AS DataCheck,
 		 CASE WHEN cdl.[Description] = 'Full Pallet' THEN pd.ID
 		 WHEN cdl.[Description] != 'Full Pallet' THEN pd.DropID END				
@@ -164,7 +173,11 @@ BEGIN
 		 pd.EditWho, 
 		 pd.ID, 
 		 pd.DropID, 
-		 pd.SKU		  
+		 pd.SKU,
+	     CASE 
+	     WHEN orm.[Type] = '2' THEN CONCAT ('Sequence: ', orm.UserDefine01)
+	     ELSE ''
+	     END
       ORDER BY FORMAT(MIN(pd.EditDate),'dd-MM-yyyy hh:mm tt');  
 			  
       -- Get Satge Outbounds
@@ -223,7 +236,8 @@ BEGIN
 	     Col06,
 	     Col07,
 	     Col08,
-	     Col10
+	     Col10,
+	     Col11
       )
       SELECT 
          OrderName,
@@ -234,7 +248,8 @@ BEGIN
 	     @To_loc,
 	     UID,
 	     DropID,
-	     LabelHeader
+	     LabelHeader,
+	     SequenceCab
       FROM @tempTable WHERE ID = 0;
    END;
    --Final output
