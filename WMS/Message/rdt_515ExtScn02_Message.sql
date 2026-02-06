@@ -23,5 +23,6 @@ execute rdt.rdtAddMsg 256816, 10, '256816 InvChanged',      'us_english', 515, 0
 execute rdt.rdtAddMsg 256817, 10, '256817 ToIDRequired',    'us_english', 515, 0, '256817 ToID is empty'
 execute rdt.rdtAddMsg 256818, 10, '256818 DropDtlExists',   'us_english', 515, 0, '256818 DropID + CartonType already exists'
 execute rdt.rdtAddMsg 256819, 10, '256819 ToIDDuplicate',   'us_english', 515, 0, '256819 ToID exists in another Loc'
+execute rdt.rdtAddMsg 256820, 10, '256820 InvCartType',     'us_english', 515, 0, '256820 Invalid carton type'
 
 select * from rdt.rdtmsg (nolock) where message_id between 256801 and 256850

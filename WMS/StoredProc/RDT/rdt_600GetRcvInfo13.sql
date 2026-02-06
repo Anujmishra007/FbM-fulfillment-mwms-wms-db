@@ -1,12 +1,13 @@
 
 /******************************************************************************/
-/* Store procedure: rdt_600GetRcvInfo13                                          */
+/* Store procedure: rdt_600GetRcvInfo13                                       */
 /* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Purpose: Pass through lottables from decoding                              */
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2025-11-13   Cuize     1.0   FCR-7822 Created                              */
+/* 2026-01-30   Akash     1.1   UWP-47935                                     */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_600GetRcvInfo13
@@ -60,7 +61,9 @@ BEGIN
          SELECT TOP 1
             @cReceiptLottable02= Lottable02,
             @cReceiptLottable03= Lottable03,
-            @cReceiptLottable06= Lottable06
+            @cReceiptLottable06= Lottable06,
+            @cLottable07=Lottable07, -- V1.1 Akash
+            @cLottable08=Lottable08
          FROM dbo.ReceiptDetail WITH (NOLOCK)
          WHERE ReceiptKey = @cReceiptKey
             AND POKey = CASE WHEN @cPOKey = 'NOPO' THEN POKey ELSE @cPOKey END

@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                          */
 /*                                                                             */
 /* Date         Author    Ver.   Purposes                                      */
-/* 2026-01-08   JACKC     1.0.0  FCR-9547 Hold Loc+SKU when short              */ 
+/* 2026-01-08   JACKC     1.0.0  FCR-9547 Hold Loc+SKU when short              */
+/* 2026-01-30   JACKC     1.0.1  FCR-9547 call new hold wrapper                */  
 /*                                                                             */
 /*******************************************************************************/
 
@@ -90,7 +91,7 @@ BEGIN
                      ,@c_Loc = @cLoc
                      ,@c_ID  = ''    
                      ,@c_StorerKey    = @cStorerKey    
-                     ,@c_SKU          = ''    
+                     ,@c_SKU          = @cSKU    
                      ,@c_Lottable01   = ''    
                      ,@c_Lottable02   = ''    
                      ,@c_Lottable03   = ''    
@@ -106,7 +107,7 @@ BEGIN
                      ,@dt_Lottable13  = NULL    
                      ,@dt_Lottable14  = NULL    
                      ,@dt_Lottable15  = NULL    
-                     ,@c_Status       = 'PickShort'   
+                     ,@c_Status       = 'LOCSKUHOLD'   
                      ,@c_Hold         = '1'  
                      ,@b_success      = @bSuccess OUTPUT    
                      ,@n_Err          = @nErrNo OUTPUT    

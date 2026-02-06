@@ -23,7 +23,7 @@ GO
 /*          : @c_ReponseString: JSON String for Orderkey Status,OrderlineNo Status  */
 /*            & Pickdetailkey Status Return                                         */
 /*                                                                                  */  
-/* Version: 1.0                                                                     */  
+/* Version: 1.1                                                                     */  
 /*                                                                                  */  
 /* Data Modifications:                                                              */  
 /*                                                                                  */  
@@ -31,6 +31,7 @@ GO
 /* Date        Author      Ver   Purposes                                           */ 
 /* 2025-08-08  Wan         1.0   Adding tableid-allocpickdettd                      */
 /* 2025-10-29  Wan         1.0   UAT fix & Performance tune                         */
+/* 2026-02-04  Wan01       1.1   UWP-48264 - GBR PRD- JCB order search issue        */
 /************************************************************************************/  
 CREATE OR ALTER PROC [dbo].[msp_GetAddOrderStatus01]  
   @c_RequestString   NVARCHAR(MAX)   
@@ -51,6 +52,9 @@ BEGIN
          , @n_TotalRecords    INT = 0
          , @n_PageNo          INT = 0
          , @n_PageSize        INT = 0
+         
+         , @n_RowID           INT = 0                                               --(Wan01)
+         , @n_RowCount        INT = 0                                               --(Wan01)         
 
          , @c_TableId         NVARCHAR(30)   = ''
          , @c_OrderlineNumber NVARCHAR(5)    = ''
@@ -233,15 +237,18 @@ BEGIN
 
          IF @c_TableID IN ('sotd', 'picksearchtd')                                  --2025-09-09 - START
          BEGIN  
-            SET @c_StatusColumn = 'ORDERS.Status'   
+            SET @c_StatusColumn = 'ORDERS.Status'  
+            SET @c_Table        = 'ORDERS'                                          --Wan01             
          END  
          ELSE IF @c_TableID = 'sodetailtd'   
          BEGIN  
-            SET @c_StatusColumn = 'ORDERDETAIL.Status'  
+            SET @c_StatusColumn = 'ORDERDETAIL.Status' 
+            SET @c_Table        = 'ORDERDETAIL'                                     --Wan01                
          END  
          ELSE IF @c_TableID IN ('picktd','allocpickdettd')    
          BEGIN  
-            SET @c_StatusColumn = 'PICKDETAIL.Status'      
+            SET @c_StatusColumn = 'PICKDETAIL.Status'  
+            SET @c_Table        = 'PICKDETAIL'                                      --Wan01                   
          END                                                                        --2025-09-09 - END
                            
          UPDATE scc 
@@ -273,23 +280,37 @@ BEGIN
          WHERE scc.ReplaceFrom > ''
          AND (scc.[Value] like '%6%' OR scc.[Value] like '%7%')                     --2025-09-10     
 
-         SELECT @c_ReplaceFrom = RTRIM(scc.ReplaceFrom)
-               ,@c_ReplaceTo   = RTRIM(scc.ReplaceTo)
-               ,@c_Table       = RTRIM(scc.[Table])                                 --2025-09-10               
-         FROM @t_SCC scc
-         WHERE scc.ReplaceFrom > ''
-
-         SET @c_sqlCondStatus = ''                                                  --2025-09-10
-         IF @c_ReplaceFrom > ''
-         BEGIN 
-            SET @c_sqlCondStatus= ' AND ' + @c_ReplaceFrom                          --2025-09-10             
-         END
+         SET @c_sqlCondStatus = ''                                                  --(Wan01) - START
+         SET @n_RowID = 0                                                           
+         WHILE 1 = 1                                                                
+         BEGIN
+            SET @c_ReplaceFrom = ''
+            SET @c_ReplaceTo   = ''   
+            SELECT TOP 1
+                   @n_RowID = scc.RowID
+                  ,@c_ReplaceFrom = RTRIM(scc.ReplaceFrom)  
+                  ,@c_ReplaceTo   = RTRIM(scc.ReplaceTo)                
+            FROM @t_SCC scc  
+            WHERE scc.ReplaceFrom > '' 
+            AND scc.RowID > @n_RowID
+            ORDER BY scc.RowID
+            
+            SET @n_RowCount = @@ROWCOUNT
+            IF @n_RowCount = 0
+            BEGIN
+               BREAK
+            END            
          
-         IF @c_ReplaceTo > ''                                                        --2025-09-10   
-         BEGIN 
-            SET @c_sqlCondition = REPLACE(@c_sqlCondition, @c_ReplaceFrom, @c_ReplaceTo)
-         END
-                              
+            IF @c_ReplaceTo > ''                                                     --2025-09-10   
+            BEGIN 
+               IF @c_sqlCondStatus = ''                                                    
+               BEGIN
+                  SET @c_sqlCondStatus = @c_sqlCondition
+               END               
+               SET @c_sqlCondition = REPLACE(@c_sqlCondition, @c_ReplaceFrom, @c_ReplaceTo)
+            END
+         END                                                                        --(Wan01) - END
+                             
          IF @c_TableID IN ('sotd', 'picksearchtd')
          BEGIN
             SET @c_SQL = 'SELECT ORDERS.Orderkey, Orderlinenumber ='''', Pickdetailkey=''''' 
@@ -591,6 +612,11 @@ BEGIN
                            ,N'@n_TotalRecords INT OUTPUT'
                            ,@n_TotalRecords OUTPUT
 
+         IF @n_pageNo = 0
+         BEGIN
+            SET @n_pageNo = 1
+         END 
+         
          SET @n_TotalPages = CEILING((@n_TotalRecords*1.00)/(@n_PageSize*1.00))     --2025-10-14
          IF @n_PageNo > @n_TotalPages
          BEGIN

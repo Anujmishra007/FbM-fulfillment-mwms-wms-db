@@ -113,14 +113,34 @@ BEGIN
    -- 1) Already reach final location or 
    -- 2) There is no transit task involved or
    -- 3) Reach conveyor location
+   -- 4) No task in temp task
    IF EXISTS( SELECT 1 FROM @tTask WHERE ToLOC = FinalLOC)
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'ToLoc = FinalLoc, return'
       RETURN
+   END
    
    IF EXISTS( SELECT 1 FROM @tTask WHERE FinalLOC = '')
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'FinalLoc is empty, return'
       RETURN
+   END
    
    IF EXISTS( SELECT 1 FROM @tTask Task JOIN dbo.LOC WITH (NOLOCK) ON (Task.ToLOC = LOC.LOC) WHERE LOC.LocationCategory = 'INDUCTION')
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'LocCategory=Induction, return'
       RETURN
+   END
+
+   IF NOT EXISTS (SELECT 1 FROM @tTask)
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT '@tTask is empty'
+      RETURN
+   END
    
    -- Get TransitLOC for tasks
    DECLARE @curTask CURSOR

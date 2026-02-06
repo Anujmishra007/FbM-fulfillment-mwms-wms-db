@@ -366,6 +366,7 @@ BEGIN
       @cSuggLOT     = LOT,
       @cSuggFromLOC = FromLOC,
       @cSuggToLOC   = ToLOC,
+      @cToLoc       = ToLOC,
       @cSuggSKU     = SKU,
       @nQTY_RPL     = QTY,
       @cPickMethod  = PickMethod,

@@ -1,18 +1,20 @@
 
-/***************************************************************************/
-/* Store procedure: rdt_1764CreateTask16                                   */
-/* Copyright      : Maersk                                                 */
-/*                                                                         */
-/* Purpose: Cajamar                                                        */
-/*                                                                         */
-/* Called from:                                                            */
-/*                                                                         */
-/* Modifications log:                                                      */
-/*                                                                         */
-/* Date        Rev    Author    Purposes                                   */
-/* 2025/11/27  1.0.0  Jackc     FCR-8535 Created                           */
-/* 2025/12/18  1.0.1  Jackc     FCR-8535 Skip create task if all full short*/
-/****************************************************************************/
+/******************************************************************************/
+/* Store procedure: rdt_1764CreateTask16                                      */
+/* Copyright      : Maersk                                                    */
+/*                                                                            */
+/* Purpose: Cajamar                                                           */
+/*                                                                            */
+/* Called from:                                                               */
+/*                                                                            */
+/* Modifications log:                                                         */
+/*                                                                            */
+/* Date        Rev    Author    Purposes                                      */
+/* 2025/11/27  1.0.0  Jackc     FCR-8535 Created                              */
+/* 2025/12/18  1.0.1  Jackc     FCR-8535 Skip create task if all full short   */
+/* 2026/02/02  1.1.0  NickT     FCR-10467 Update ToLoc for second task        */
+/* 2026/02/06  1.1.1  JackC     FCR-10467 Not create 2nd task when full short */
+/******************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764CreateTask16] (
    @nMobile        INT,
@@ -72,6 +74,7 @@ BEGIN
       @cToLOC          = ToLOC, 
       @cToID           = ToID, 
       @nQTY            = QTY, 
+      @cFinalLOC       = FinalLoc,
       @nTransitCount   = TransitCount, 
       @cPriority       = Priority, 
       @cSourcePriority = SourcePriority, 
@@ -204,7 +207,12 @@ BEGIN
          SELECT StorerKey, SKU, LOT, QTY, FinalLOC, FinalID, CaseID, TaskDetailKey, UOM, UOMQty, PickMethod
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE ListKey = @cListKey
+            AND Status = '9'
             AND TransitCount = 0 -- Original task
+            AND (
+               (PickMethod = 'PP' AND Qty <> 0 AND ISNULL(ReasonKey,'') = '') --V1.1.1 Skip full short PP task
+               OR (PickMethod = 'FP')
+            )
       OPEN @curRPLog
       FETCH NEXT FROM @curRPLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @cUOM, @nUOMQty, @cPickMethod
       WHILE @@FETCH_STATUS = 0
@@ -233,10 +241,10 @@ BEGIN
             -- Insert final task
             BEGIN TRY
                INSERT INTO TaskDetail (
-                  TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, CaseID, AreaKey, UOM, UOMQty,
+                  TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, CaseID, AreaKey, UOM, UOMQty, FinalLoc, 
                   PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, SourceKey, WaveKey, Priority, SourcePriority, TrafficCop)
                VALUES (
-                  @cNewTaskDetailKey, 'ASTRPT', '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, @nQTY, @cCaseID, @cToLOCAreaKey, @cUOM, @nUOMQty,
+                  @cNewTaskDetailKey, 'ASTRPT', '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, @nQTY, @cCaseID, @cToLOCAreaKey, @cUOM, @nUOMQty, @cFinalLOC,
                   'PP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount, @cSourceType, @cOrgTaskKey, @cWaveKey, @cPriority, @cSourcePriority, NULL)
             END TRY
             BEGIN CATCH
@@ -251,10 +259,10 @@ BEGIN
             -- Insert final task
             BEGIN TRY
                INSERT INTO TaskDetail (
-                  TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey,
+                  TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, FinalLoc, 
                   PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, SourceKey, WaveKey, Priority, SourcePriority, TrafficCop)
                VALUES (
-                  @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, 0, @cToLOCAreaKey,
+                  @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, 0, @cToLOCAreaKey, @cFinalLOC,
                   'FP', @cStorerKey, '', '', '', @nTransitCount, @cSourceType, @cOrgTaskKey, @cWaveKey, @cPriority, @cSourcePriority, NULL)
             END TRY
             BEGIN CATCH
@@ -273,10 +281,10 @@ BEGIN
       BEGIN TRY 
          -- Insert transit task
          INSERT INTO TaskDetail (
-            TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, 
+            TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, FinalLoc, 
             PickMethod, Storerkey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, Priority, SourcePriority, TrafficCop)
          VALUES (
-            @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey, 
+            @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey, @cFinalLOC,
             'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cPriority, @cSourcePriority, NULL)
       END TRY
       BEGIN CATCH

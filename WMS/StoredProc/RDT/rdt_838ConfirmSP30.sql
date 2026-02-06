@@ -57,7 +57,8 @@ BEGIN
    DECLARE @cDropID     NVARCHAR( 20) = ''
    DECLARE @cRefNo      NVARCHAR( 20) = ''
    DECLARE @cRefNo2     NVARCHAR( 30) = ''
-   DECLARE @cUPC        NVARCHAR( 30) = ''    
+   DECLARE @cUPC        NVARCHAR( 30) = '',
+   @cDocType            NVARCHAR( 10)
    
    DECLARE @cGenLabelNo_SP       NVARCHAR( 20)
    DECLARE @cPackDetailCartonID  NVARCHAR( 20)
@@ -93,6 +94,12 @@ BEGIN
          GOTO RollBackTran
       END
    END
+
+   SELECT @cDocType = DocType,@cOrderKey = O.OrderKey
+   FROM ORDERS O (NOLOCK)
+   JOIN PICKHEADER PH (NOLOCK) ON PH.OrderKey = O.OrderKey
+   WHERE PH.PickHeaderKey = @cPickSlipNo
+     AND O.StorerKey = @cStorerKey
 
    -- Storer configure
    SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
@@ -185,6 +192,7 @@ BEGIN
       WHERE PickSlipNo = @cPickSlipNo 
          AND CartonNo = @nCartonNo
          AND LabelNo = @cLabelNo 
+         AND DropID = CASE WHEN @cDocType = 'N' THEN @cDropID ELSE DropID END
          AND SKU = @cSKU
       
       IF @cLabelLine = ''
@@ -210,18 +218,17 @@ BEGIN
    IF @cNewLine = 'Y'
    BEGIN
       IF @cUCCNo <> '' AND EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo AND RefNo = @cUCCNo AND SKU = @cSKU)
+         WHERE PickSlipNo = @cPickSlipNo AND DropID = @cUCCNo AND SKU = @cSKU)
       BEGIN
          -- Update Packdetail
          UPDATE dbo.PackDetail WITH (ROWLOCK) SET
             SKU = @cSKU,
             QTY = QTY + @nQTY,
-            DropID =  DropID ,
             EditWho = 'rdt.' + SUSER_SNAME(),
             EditDate = GETDATE(),
             ArchiveCop = NULL
          WHERE PickSlipNo = @cPickSlipNo
-            AND RefNo = @cUCCNo
+            AND DropID = @cUCCNo
             AND SKU = @cSKU
          IF @@ERROR <> 0
          BEGIN
@@ -230,17 +237,17 @@ BEGIN
             GOTO RollBackTran
          END
          SELECT @nCartonNo = CartonNo,@cLabelNo = LabelNo FROM dbo.PackDetail WITH (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo AND RefNo = @cUCCNo AND SKU = @cSKU
+         WHERE PickSlipNo = @cPickSlipNo AND DropID = @cUCCNo AND SKU = @cSKU
       END
       ELSE
       BEGIN
          -- Insert PackDetail
          INSERT INTO dbo.PackDetail
-            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY,
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY,EXPQTY,
             DropID, RefNo, RefNo2, UPC,
             AddWho, AddDate, EditWho, EditDate)
          VALUES
-            (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY,
+            (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY,@nQTY,
             @cDropID, @cRefNo, @cRefNo2, @cUPC,
             'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
          IF @@ERROR <> 0
@@ -257,6 +264,7 @@ BEGIN
       UPDATE dbo.PackDetail WITH (ROWLOCK) SET   
          SKU = @cSKU, 
          QTY = QTY + @nQTY, 
+         EXPQTY = CASE WHEN @cDocType = 'N' AND ISNULL(@cUCCNo,'') = '' THEN EXPQTY + @nQTY ELSE EXPQTY END,
          DropID =  DropID ,
          EditWho = 'rdt.' + SUSER_SNAME(), 
          EditDate = GETDATE(), 
@@ -287,6 +295,63 @@ BEGIN
          AND AddWho = 'rdt.' + SUSER_SNAME()
       ORDER BY CartonNo DESC -- max cartonno
    END   
+
+   IF @cDocType = 'N' AND ISNULL(@cUCCNo,'') = ''
+   BEGIN
+      DECLARE @nRemainQTY INT,
+      @nTotalPICKQTY      INT,
+      @nTotalPackQTY      INT
+
+      SELECT @nTotalPICKQTY = SUM(QTY)
+      FROM PICKDETAIL PD WITH (NOLOCK)
+      WHERE PD.StorerKey = @cStorerKey
+         AND PD.SKU =  @cSKU
+         AND PD.DropID = @cLabelNo
+         AND OrderKey = @cOrderKey
+      
+      SELECT @nTotalPackQTY = SUM(QTY)
+      FROM PACKDETAIL PD
+      WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+         AND LabelNo = @cLabelNo
+         AND LabelLine = @cLabelLine
+
+      SET @nRemainQTY = ISNULL(@nTotalPackQTY,0) - ISNULL(@nTotalPICKQTY,0)
+      INSERT INTO TRACEINFO (STEP1,STEP2,STEP3,STEP4,STEP5,COL1,COL2,COL3,COL4,COL5)
+      VALUES(@nTotalPackQTY,@nTotalPICKQTY,@nRemainQTY,@cFromDropID,@cLabelNo,@nCartonNo,@cSKU,@cOrderKey,@cLabelLine,SUSER_SNAME())
+      IF EXISTS (SELECT 1 FROM PICKDETAIL PD WITH (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+            AND PD.SKU = @cSKU
+            AND PD.DropID = @cFromDropID
+            AND QTY = @nRemainQTY
+            AND OrderKey = @cOrderKey)
+      BEGIN
+         UPDATE PICKDETAIL SET 
+            DROPID = @cLabelNo,
+            CaseID = @cLabelNo
+         WHERE StorerKey = @cStorerKey
+            AND SKU = @cSKU
+            AND DropID = @cFromDropID
+            AND QTY = @nRemainQTY
+            AND OrderKey = @cOrderKey
+      END
+
+      IF NOT EXISTS (SELECT 1 FROM PICKDETAIL PD WITH (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+            AND PD.SKU = @cSKU
+            AND PD.DropID = @cFromDropID
+            AND OrderKey = @cOrderKey
+            AND QTY > 0)
+      BEGIN
+         UPDATE PackDetail SET 
+            DropID = @cLabelNo,
+            ArchiveCop = NULL
+         WHERE PickSlipNo = @cPickSlipNo
+            AND CartonNo = @nCartonNo
+            AND LabelNo = @cLabelNo
+            AND LabelLine = @cLabelLine
+      END
+   END
 
    -- Insert PackInfo
    IF @cUCCNo <> ''

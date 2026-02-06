@@ -327,7 +327,7 @@ BEGIN
          END
          ELSE IF @cMUOM = '6'
          BEGIN
-            SELECT @cOutField09 = '2' 
+            SELECT @cOutField09 = CASE WHEN DocType='N' THEN '1' WHEN DocType='E' THEN '2' END FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey
          END
       END
       IF @nCurrentStep = 8
@@ -386,7 +386,7 @@ BEGIN
             END
             ELSE IF @cMUOM = '6'
             BEGIN
-               SELECT @cOutField09 = '2' 
+               SELECT @cOutField09 = CASE WHEN DocType='N' THEN '1' WHEN DocType='E' THEN '2' END FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey
             END
          END
       END
@@ -974,6 +974,7 @@ BEGIN
                   SET @nAfterStep = 8
                END
             END
+            GOTO QUIT
          END
          IF @nCurrentScn = 6708
          BEGIN

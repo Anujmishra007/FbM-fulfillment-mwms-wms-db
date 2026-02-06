@@ -165,7 +165,7 @@ BEGIN
       @cSuggSKU            = V_SKU,
       @nFromScn            = V_FromScn,
       @nFromStep           = V_FromStep,
-      @cInField01          = I_Field01,
+      --@cInField01          = I_Field01,
       @cDropID             = V_String3,
       @cPickMethod         = V_String4,
       @cSuggToloc          = V_String5,
@@ -184,224 +184,253 @@ BEGIN
 
    IF @nFunc = 1764 -- TM Replen
    BEGIN
-      IF @nMOBRECStep = 8 AND @nMOBRECScn = 2687 AND @nScn = 2109 AND @nStep = 9 --Skip ReasonCode screen
+      IF @nMOBRECStep = 8 AND @nMOBRECScn = 2687 
       BEGIN
          IF @nDebugFlag = 1
-            SELECT 'Ext shor pick - skip reason screen'
-         
+            SELECT 'From ShortPick screen'
+
          IF @nInputKey = 1
          BEGIN
+            IF @nDebugFlag = 1
+               SELECT 'From ShortPick Scn, Enter'
+
             SET @cOption = @cInField01
 
-            SELECT @cTTMTaskType = TaskType
-            FROM dbo.TaskDetail WITH (NOLOCK)
-            WHERE TaskDetailKey = @cTaskDetailKey
-
-            IF @nDebugFlag = 1
-                  SELECT @cTaskDetailKey AS TaskKey, @cTTMTaskType AS TaskType, @cOption AS Opt
-
-            IF @cOption = '1' AND @cTTMTaskType = 'RPF'
+            IF @nScn = 2109 AND @nStep = 9 --Skip ReasonCode screen
             BEGIN
                IF @nDebugFlag = 1
-                  SELECT 'Short option = 1'
-                  
-               SET @cDefaultSkipReason = rdt.RDTGetConfig( @nFunc, 'DefaultSkipReason', @cStorerKey)
-               IF @cDefaultSkipReason = '0'
-                  SET @cDefaultSkipReason = ''
+                  SELECT 'Ext shor pick - skip reason screen'
 
-               IF @cDefaultSkipReason <> ''
+               SELECT @cTTMTaskType = TaskType
+               FROM dbo.TaskDetail WITH (NOLOCK)
+               WHERE TaskDetailKey = @cTaskDetailKey
+
+               IF @nDebugFlag = 1
+                     SELECT @cTaskDetailKey AS TaskKey, @cTTMTaskType AS TaskType, @cOption AS Opt
+
+               IF @cOption = '1' AND @cTTMTaskType = 'RPF'
                BEGIN
                   IF @nDebugFlag = 1
-                     SELECT 'Default Skip reason', @cDefaultSkipReason
+                     SELECT 'Short option = 1'
+                     
+                  SET @cDefaultSkipReason = rdt.RDTGetConfig( @nFunc, 'DefaultSkipReason', @cStorerKey)
+                  IF @cDefaultSkipReason = '0'
+                     SET @cDefaultSkipReason = ''
 
-                  SET @cReasonCode = @cDefaultSkipReason 
-
-                  SET @cRealloNumberofRetry = rdt.RDTGetConfig( @nFunc, 'RealloNumberofRetry', @cStorerKey)
-                  IF @cRealloNumberofRetry = '0'
-                     SET @cRealloNumberofRetry = ''
-
-                  IF @cRealloNumberofRetry = ''
+                  IF @cDefaultSkipReason <> ''
                   BEGIN
-                     SET @nErrNo = 256206
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --RelloNo empty
-                     GOTO Ext_ShortPick_Fail
-                  END
+                     IF @nDebugFlag = 1
+                        SELECT 'Default Skip reason', @cDefaultSkipReason
 
-                  IF rdt.rdtIsValidQTY(@cRealloNumberofRetry, 0) = 0
-                  BEGIN
-                     SET @nErrNo = 256207
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --RelloNo empty
-                     GOTO Ext_ShortPick_Fail
-                  END
+                     SET @cReasonCode = @cDefaultSkipReason 
 
-                  IF NOT EXISTS( SELECT TOP 1 1
-                     FROM CodeLKUP WITH (NOLOCK)
-                     WHERE ListName = 'RDTTASKRSN'
-                        AND StorerKey = @cStorerKey
-                        AND Code = @cTTMTaskType
-                        AND @cReasonCode IN (UDF01, UDF02, UDF03, UDF04, UDF05))
-                  BEGIN
-                     SET @nErrNo = 256201
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Reason
-                     GOTO Ext_ShortPick_Fail
-                  END
+                     SET @cRealloNumberofRetry = rdt.RDTGetConfig( @nFunc, 'RealloNumberofRetry', @cStorerKey)
+                     IF @cRealloNumberofRetry = '0'
+                        SET @cRealloNumberofRetry = ''
 
-                  EXEC dbo.nspRFRSN01
-                     @c_sendDelimiter = NULL
-                     ,@c_ptcid         = 'RDT'
-                     ,@c_userid        = @cUserName
-                     ,@c_taskId        = 'RDT'
-                     ,@c_databasename  = NULL
-                     ,@c_appflag       = NULL
-                     ,@c_recordType    = NULL
-                     ,@c_server        = NULL
-                     ,@c_ttm           = NULL
-                     ,@c_TaskDetailKey = @cTaskDetailKey
-                     ,@c_fromloc       = @cSuggFromLOC
-                     ,@c_fromid        = @cSuggID
-                     ,@c_toloc         = @cSuggToloc
-                     ,@c_toid          = @cDropID
-                     ,@n_qty           = @nShortQTY
-                     ,@c_PackKey       = ''
-                     ,@c_uom           = ''
-                     ,@c_reasoncode    = @cReasonCode
-                     ,@c_outstring     = @c_outstring    OUTPUT
-                     ,@b_Success       = @b_Success      OUTPUT
-                     ,@n_err           = @nErrNo         OUTPUT
-                     ,@c_errmsg        = @cErrMsg        OUTPUT
-                     ,@c_userposition  = '1' -- 1=at from LOC
-                  IF @b_Success = 0 OR @nErrNo <> 0
-                     GOTO Ext_ShortPick_Fail
-
-                  EXEC rdt.rdt_TM_Replen_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
-                     @cTaskDetailKey,
-                     @cDropID,
-                     @nQTY,
-                     @cReasonCode,
-                     @cListKey,
-                     @nErrNo  OUTPUT,
-                     @cErrMsg OUTPUT
-                  IF @nErrNo <> 0
-                     GOTO Ext_ShortPick_Fail
-
-                  -- Get task reason info
-                  DECLARE @cContinueProcess         NVARCHAR(10)
-                  DECLARE @cRemoveTaskFromUserQueue NVARCHAR(10)
-                  SELECT
-                     @cContinueProcess = ContinueProcessing,
-                     @cRemoveTaskFromUserQueue = RemoveTaskFromUserQueue,
-                     @cTaskStatus = TaskStatus
-                  FROM dbo.TaskManagerReason WITH (NOLOCK)
-                  WHERE TaskManagerReasonKey = @cReasonCode
-
-                  IF @cRemoveTaskFromUserQueue = '1'
-                  BEGIN
-                     INSERT INTO TaskManagerSkipTasks (UserID, TaskDetailKey, TaskType, LOT, FromLOC, ToLOC, FromID, ToID, CaseID)
-                     SELECT UserKey, TaskDetailKey, TaskType, LOT, FromLOC, ToLOC, FromID, ToID, CaseID
-                     FROM dbo.TaskDetail WITH (NOLOCK)
-                     WHERE TaskDetailKey = @cTaskdetailKey
-                     IF @@ERROR <> 0
+                     IF @cRealloNumberofRetry = ''
                      BEGIN
-                        SET @nErrNo = 256202
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsSkipTskFail
+                        SET @nErrNo = 256206
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --RelloNo empty
                         GOTO Ext_ShortPick_Fail
                      END
-                  END
 
-                  -- Update TaskDetail.Status
-                  IF @cTaskStatus <> ''
-                  BEGIN
-                     -- Skip task
-                     IF @cTaskStatus = '0'
+                     IF rdt.rdtIsValidQTY(@cRealloNumberofRetry, 0) = 0
                      BEGIN
-                        UPDATE dbo.TaskDetail SET
-                           UserKey = ''
-                           ,ReasonKey = ''
-                           ,Status = '0'
-                           ,EditDate = GETDATE()
-                           ,EditWho  = SUSER_SNAME()
-                           ,TrafficCop = NULL
-                        WHERE TaskDetailKey = @cTaskDetailKey
+                        SET @nErrNo = 256207
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --RelloNo empty
+                        GOTO Ext_ShortPick_Fail
+                     END
+
+                     IF NOT EXISTS( SELECT TOP 1 1
+                        FROM CodeLKUP WITH (NOLOCK)
+                        WHERE ListName = 'RDTTASKRSN'
+                           AND StorerKey = @cStorerKey
+                           AND Code = @cTTMTaskType
+                           AND @cReasonCode IN (UDF01, UDF02, UDF03, UDF04, UDF05))
+                     BEGIN
+                        SET @nErrNo = 256201
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Reason
+                        GOTO Ext_ShortPick_Fail
+                     END
+
+                     EXEC dbo.nspRFRSN01
+                        @c_sendDelimiter = NULL
+                        ,@c_ptcid         = 'RDT'
+                        ,@c_userid        = @cUserName
+                        ,@c_taskId        = 'RDT'
+                        ,@c_databasename  = NULL
+                        ,@c_appflag       = NULL
+                        ,@c_recordType    = NULL
+                        ,@c_server        = NULL
+                        ,@c_ttm           = NULL
+                        ,@c_TaskDetailKey = @cTaskDetailKey
+                        ,@c_fromloc       = @cSuggFromLOC
+                        ,@c_fromid        = @cSuggID
+                        ,@c_toloc         = @cSuggToloc
+                        ,@c_toid          = @cDropID
+                        ,@n_qty           = @nShortQTY
+                        ,@c_PackKey       = ''
+                        ,@c_uom           = ''
+                        ,@c_reasoncode    = @cReasonCode
+                        ,@c_outstring     = @c_outstring    OUTPUT
+                        ,@b_Success       = @b_Success      OUTPUT
+                        ,@n_err           = @nErrNo         OUTPUT
+                        ,@c_errmsg        = @cErrMsg        OUTPUT
+                        ,@c_userposition  = '1' -- 1=at from LOC
+                     IF @b_Success = 0 OR @nErrNo <> 0
+                        GOTO Ext_ShortPick_Fail
+
+                     EXEC rdt.rdt_TM_Replen_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
+                        @cTaskDetailKey,
+                        @cDropID,
+                        @nQTY,
+                        @cReasonCode,
+                        @cListKey,
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT
+                     IF @nErrNo <> 0
+                        GOTO Ext_ShortPick_Fail
+
+                     -- Get task reason info
+                     DECLARE @cContinueProcess         NVARCHAR(10)
+                     DECLARE @cRemoveTaskFromUserQueue NVARCHAR(10)
+                     SELECT
+                        @cContinueProcess = ContinueProcessing,
+                        @cRemoveTaskFromUserQueue = RemoveTaskFromUserQueue,
+                        @cTaskStatus = TaskStatus
+                     FROM dbo.TaskManagerReason WITH (NOLOCK)
+                     WHERE TaskManagerReasonKey = @cReasonCode
+
+                     IF @cRemoveTaskFromUserQueue = '1'
+                     BEGIN
+                        INSERT INTO TaskManagerSkipTasks (UserID, TaskDetailKey, TaskType, LOT, FromLOC, ToLOC, FromID, ToID, CaseID)
+                        SELECT UserKey, TaskDetailKey, TaskType, LOT, FromLOC, ToLOC, FromID, ToID, CaseID
+                        FROM dbo.TaskDetail WITH (NOLOCK)
+                        WHERE TaskDetailKey = @cTaskdetailKey
                         IF @@ERROR <> 0
                         BEGIN
-                        SET @nErrNo = 256203
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail
+                           SET @nErrNo = 256202
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsSkipTskFail
                            GOTO Ext_ShortPick_Fail
                         END
                      END
 
-                     -- Cancel task
-                     IF @cTaskStatus = 'X'
+                     -- Update TaskDetail.Status
+                     IF @cTaskStatus <> ''
                      BEGIN
-                        UPDATE dbo.TaskDetail SET
-                           Status = 'X'
-                           ,EditDate = GETDATE()
-                           ,EditWho  = SUSER_SNAME()
-                           ,TrafficCop = NULL
-                        WHERE TaskDetailKey = @cTaskDetailKey
-                        IF @@ERROR <> 0
+                        -- Skip task
+                        IF @cTaskStatus = '0'
                         BEGIN
-                           SET @nErrNo = 256204
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail
-                           GOTO Ext_ShortPick_Fail
+                           UPDATE dbo.TaskDetail SET
+                              UserKey = ''
+                              ,ReasonKey = ''
+                              ,Status = '0'
+                              ,EditDate = GETDATE()
+                              ,EditWho  = SUSER_SNAME()
+                              ,TrafficCop = NULL
+                           WHERE TaskDetailKey = @cTaskDetailKey
+                           IF @@ERROR <> 0
+                           BEGIN
+                           SET @nErrNo = 256203
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail
+                              GOTO Ext_ShortPick_Fail
+                           END
                         END
-                     END
 
-                     -- Cancel picked UCC
-                     IF EXISTS( SELECT 1 FROM rdt.rdtRPFLog WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey)
-                     BEGIN
-                        DELETE rdt.rdtRPFLog WHERE TaskDetailKey = @cTaskDetailKey
-                        IF @@ERROR <> 0
+                        -- Cancel task
+                        IF @cTaskStatus = 'X'
                         BEGIN
-                           SET @nErrNo = 256205
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelRPFLogFail
-                           GOTO Ext_ShortPick_Fail
+                           UPDATE dbo.TaskDetail SET
+                              Status = 'X'
+                              ,EditDate = GETDATE()
+                              ,EditWho  = SUSER_SNAME()
+                              ,TrafficCop = NULL
+                           WHERE TaskDetailKey = @cTaskDetailKey
+                           IF @@ERROR <> 0
+                           BEGIN
+                              SET @nErrNo = 256204
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail
+                              GOTO Ext_ShortPick_Fail
+                           END
                         END
-                     END
-                  END -- taskStatus <> ''
 
-                  -- Continue process current task
-                  IF @cContinueProcess = '1'
-                  BEGIN
-                     -- Go to next task screen
-                     SET @cOption = ''
-                     SET @cOutField01 = '' -- Option
-                     SET @cOutField10 = '' -- ExtendedInfo
-                     
-                     SET @nAfterScn = @nScn_NextTask
-                     SET @nAfterStep = @nStep_NextTask
-                  END
-                  ELSE
-                  BEGIN
-                     -- Setup RDT storer config ContProcNotUpdTaskStatus, to avoid nspRFRSN01 set TaskDetail.Status = '9', when ContinueProcess <> 1
+                        -- Cancel picked UCC
+                        IF EXISTS( SELECT 1 FROM rdt.rdtRPFLog WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey)
+                        BEGIN
+                           DELETE rdt.rdtRPFLog WHERE TaskDetailKey = @cTaskDetailKey
+                           IF @@ERROR <> 0
+                           BEGIN
+                              SET @nErrNo = 256205
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelRPFLogFail
+                              GOTO Ext_ShortPick_Fail
+                           END
+                        END
+                     END -- taskStatus <> ''
 
-                     -- Go to next task/exit TM screen
-                     IF @cPickMethod = 'FP'
+                     -- Continue process current task
+                     IF @cContinueProcess = '1'
                      BEGIN
-                        SET @cToLOC = ''
-
-                        -- Prepare next screen var
-                        SET @cOutField01 = @cToLOC
-                        SET @cOutField10 = '' -- ExtendedInfo
-                        
-                        SET @nAfterScn = @nScn_Exit
-                        SET @nAfterStep = @nStep_Exit
-                     END
-
-                     -- Go to next task screen
-                     IF @cPickMethod = 'PP'
-                     BEGIN
+                        -- Go to next task screen
                         SET @cOption = ''
                         SET @cOutField01 = '' -- Option
+                        SET @cOutField10 = '' -- ExtendedInfo
+                        
                         SET @nAfterScn = @nScn_NextTask
                         SET @nAfterStep = @nStep_NextTask
                      END
-                  END --Continue process
-               END --Default skip reason set
-            END-- short
+                     ELSE
+                     BEGIN
+                        -- Setup RDT storer config ContProcNotUpdTaskStatus, to avoid nspRFRSN01 set TaskDetail.Status = '9', when ContinueProcess <> 1
 
+                        -- Go to next task/exit TM screen
+                        IF @cPickMethod = 'FP'
+                        BEGIN
+                           SET @cToLOC = ''
+
+                           -- Prepare next screen var
+                           SET @cOutField01 = @cToLOC
+                           SET @cOutField10 = '' -- ExtendedInfo
+                           
+                           SET @nAfterScn = @nScn_Exit
+                           SET @nAfterStep = @nStep_Exit
+                        END
+
+                        -- Go to next task screen
+                        IF @cPickMethod = 'PP'
+                        BEGIN
+                           SET @cOption = ''
+                           SET @cOutField01 = '' -- Option
+                           SET @nAfterScn = @nScn_NextTask
+                           SET @nAfterStep = @nStep_NextTask
+                        END
+                     END --Continue process
+                  END --Default skip reason set
+               END-- short
+               ELSE
+               BEGIN--Option 9, do nothing
+                  SET @nErrNo = 256208
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid option
+                  GOTO Ext_ShortPick_Fail
+               END
+
+               GOTO Quit
+            END --Skip reason code screen
+
+            IF @cOption = '9'
+            BEGIN
+               SET @nErrNo = 256209
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid option
+               GOTO Ext_ShortPick_Fail
+            END -- option = 9
+         END -- Enter
+
+         IF @nInputKey = 0
+         BEGIN
+            IF @nDebugFlag = 1
+               SELECT 'From ShortPick Scn, Esc'
             GOTO Quit
-         END --Enter
+         END
 
          Ext_ShortPick_Fail:
             SET @cOutField01 = ''
