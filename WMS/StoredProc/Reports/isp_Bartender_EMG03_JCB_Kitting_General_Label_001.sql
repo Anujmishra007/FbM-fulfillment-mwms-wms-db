@@ -74,7 +74,8 @@ BEGIN
         ToLocation NVARCHAR(100),
         UID NVARCHAR(100),
         DataCheck NVARCHAR(100),
-        DropID NVARCHAR(100)
+        DropID NVARCHAR(100),
+		SequenceCab NVARCHAR(100)
         --SKU NVARCHAR(100),
         --QTY NVARCHAR(100)
     );
@@ -128,7 +129,11 @@ BEGIN
 	  td.ToLoc,
 	  td.EditWho,
 	  '' AS DataCheck,
-	  @c_Sparm02
+	  @c_Sparm02,
+      CASE 
+	  WHEN orm.[Type] = '2' THEN CONCAT ('Sequence: ', orm.UserDefine01)
+	  ELSE ''
+	  END AS SequenceCab		
    FROM dbo.TaskDetail td WITH (NOLOCK)
       INNER JOIN dbo.orders orm WITH (NOLOCK)
 	     ON td.orderkey = orm.orderkey
@@ -198,7 +203,8 @@ BEGIN
 	     Col06,
 	     Col07,
 	     Col08,
-	     Col10
+	     Col10,
+	     Col11
       )
       SELECT 
          OrderName,
@@ -209,7 +215,8 @@ BEGIN
 	     @To_loc,
 	     UID,
 	     DropID,
-	     LabelHeader
+	     LabelHeader,
+	     SequenceCab
       FROM @tempTable WHERE ID = 0;
    END;
 
