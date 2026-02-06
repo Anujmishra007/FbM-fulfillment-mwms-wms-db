@@ -3255,11 +3255,11 @@ BEGIN
                IF @nPreScn = 6820 AND @nPreStep = 99 AND @nInputKey = 1 -- Enter from New Qty Scn
                BEGIN
                   --Export values to main SP
-                  SET @nPQTY_PWY       = CAST(@cUDF01 AS INT)
-                  SET @nMQTY_PWY       = CAST(@cUDF02 AS INT)
-                  SET @nQTY_PWY        = CAST(@cUDF03 AS INT)
-                  SET @nQty            = CAST(@cUDF04 AS INT)
-                  SET @nPABookingKey   = CAST(@cUDF05 AS INT)
+                  SET @nPQTY_PWY       = ISNULL(TRY_CAST(@cUDF01 AS INT), 0)
+                  SET @nMQTY_PWY       = ISNULL(TRY_CAST(@cUDF02 AS INT), 0)
+                  SET @nQTY_PWY        = ISNULL(TRY_CAST(@cUDF03 AS INT), 0)
+                  SET @nQty            = ISNULL(TRY_CAST(@cUDF04 AS INT), 0)
+                  SET @nPABookingKey   = ISNULL(TRY_CAST(@cUDF05 AS INT), 0)
                   SET @cSuggestedLOC   = @cUDF06
                   SET @cQTY_Avail      = @cUDF07  
                   SET @cQTY_Alloc      = @cUDF08  
@@ -3280,13 +3280,17 @@ BEGIN
       BEGIN
          IF @nPreScn = 6820 AND @nPreStep = 99 AND @nInputKey = 1 -- Enter from New Qty Scn
          BEGIN
-            IF @nErrNo IN (257209,257210) --No suggest loc, cleared values
+            IF @nErrNo IN (257209,257210) --No suggest loc,but continue the process
             BEGIN
-               SET @nPABookingKey   = 0
-               SET @cSuggestedLOC   = ''
-               SET @cQTY_Avail      = '0'  
-               SET @cQTY_Alloc      = '0' 
-               SET @cQTY_PMoveIn    = '0'
+               SET @nPQTY_PWY       = ISNULL(TRY_CAST(@cUDF01 AS INT), 0)
+               SET @nMQTY_PWY       = ISNULL(TRY_CAST(@cUDF02 AS INT), 0)
+               SET @nQTY_PWY        = ISNULL(TRY_CAST(@cUDF03 AS INT), 0)
+               SET @nQty            = ISNULL(TRY_CAST(@cUDF04 AS INT), 0)
+               SET @nPABookingKey   = ISNULL(TRY_CAST(@cUDF05 AS INT), 0)
+               SET @cSuggestedLOC   = @cUDF06
+               SET @cQTY_Avail      = @cUDF07  
+               SET @cQTY_Alloc      = @cUDF08  
+               SET @cQTY_PMoveIn    = @cUDF09
             END
             GOTO Quit
          END
