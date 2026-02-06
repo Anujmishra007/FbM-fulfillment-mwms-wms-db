@@ -111,7 +111,7 @@ AS
                   @cLine03       = @cErrMsg3,
                   @nDisplayMsg   = 0 
                
-               SET @nErrNo=-1
+               SET @nErrNo=0
             END        
          END   
       END
