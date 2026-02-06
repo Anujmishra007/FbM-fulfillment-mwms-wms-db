@@ -18,6 +18,7 @@ GO
 /* Date         Rev  Author      Purposes                               */  
 /* 03-Dec-2025  1.0  SKE140      Created for ToLOC validation           */  
 /* 15-Dec-2025  1.1  PPA374      Adding check against case in tasks     */  
+/* 06-Feb-2026  1.2  PPA374      UWP-48485                              */  
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_629ExtValJCB]  
