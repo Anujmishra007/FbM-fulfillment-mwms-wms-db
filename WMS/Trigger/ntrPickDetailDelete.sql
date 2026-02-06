@@ -65,7 +65,7 @@ GO
 /*                               PickDetailTrigger_SP run after inv update */
 /* 02-DEC-2024  Wan05      1.25  UWP-23317 - [FCR-618 819] Unpick SerialNo */
 /* 12-Aug-2025  WLChooi    1.26  FCR-5700 Trigger ITF By Wave (WL01)       */
-/* 07-Jan-2026  AndyWu01   1.27  FCR-9658 Trigger ITF By Order (AndyWu01)  */
+/* 07-Jan-2026  AndyWu01   1.27  FCR-9658 Trigger ITF By Order (AndyWu01)  */ 
 /***************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailDelete]
 ON [dbo].[PICKDETAIL]
