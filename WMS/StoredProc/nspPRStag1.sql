@@ -60,7 +60,7 @@ DECLARE @b_debug int,
         @c_SQL          NVARCHAR(max) ,         
         @c_SQLParms     NVARCHAR(4000) = ''         
     
-SELECT @b_debug=0  
+SELECT @b_debug=1 
   
 If @d_Lottable04 = '1900-01-01'  
 Begin  
@@ -94,7 +94,7 @@ BEGIN
     SELECT 'nspPRStag1 : After Lot Lookup .....'    
     SELECT '@c_LOT'=@c_LOT,'@c_Lottable01'=@c_Lottable01, '@c_Lottable02'=@c_Lottable02, '@c_Lottable03'=@c_Lottable03  
     SELECT '@d_Lottable04' = @d_Lottable04, '@d_Lottable05' = @d_Lottable05  
-    SELECT '@c_StorerKey' = @c_StorerKey  
+    SELECT '@c_StorerKey' = @c_StorerKey  , ' @c_Facility' = @c_Facility  , ' @c_sku' = @c_sku   
 END    
      
 -- Get OrderKey
@@ -183,7 +183,7 @@ BEGIN
       SELECT LOT.STORERKEY,   
              LOT.SKU,   
              LOT.LOT,    
-             QTYAVAILABLE = SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(ISNULL(P.QTYPREALLOCATED, 0))   
+             QTYAVAILABLE = SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED)-- - MIN(ISNULL(P.QTYPREALLOCATED, 0))   
       FROM  LOT (NOLOCK)   
       INNER JOIN LOTxLOCxID (NOLOCK) ON LOT.LOT = LOTxLOCxID.LOT  
       INNER JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC  
@@ -199,7 +199,7 @@ BEGIN
          AND (LOC.LocationType = 'IDZ' AND @n_AllocStagingLoc = 1)
          AND LOT.LOT = @c_LOT    
       GROUP BY LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable04, LOC.LocationType  
-      HAVING (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QtyAllocated) - SUM(LOTxLOCxID.QTYPicked)- MIN(ISNULL(P.QtyPreAllocated, 0))) > 0   
+      HAVING (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QtyAllocated) - SUM(LOTxLOCxID.QTYPicked)) > 0 -- - MIN(ISNULL(P.QtyPreAllocated, 0))) > 0   
       ORDER BY CASE WHEN @n_AllocStagingLoc = 1 AND LOC.LocationType = 'IDZ' THEN 0 ELSE 1 END, -- Prioritizes IDZ
                LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable04  
    END    
@@ -280,7 +280,7 @@ BEGIN
   
       SELECT @c_SQL = " DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR " +    
          " SELECT MIN(LOTxLOCxID.STORERKEY) , MIN(LOTxLOCxID.SKU), LOT.LOT," +    
-         " QTYAVAILABLE = ( SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MIN(ISNULL(P.QtyPreallocated, 0))) " +  
+         " QTYAVAILABLE = ( SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) ) " + -- - MIN(ISNULL(P.QtyPreallocated, 0))) " +  
          " FROM LOT (NOLOCK) " +    
          " INNER JOIN LOTxLOCxID (NOLOCK) ON LOT.LOT = LOTxLOCxID.LOT " +   
          " INNER JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC " +   
@@ -303,7 +303,7 @@ BEGIN
          " AND LOTATTRIBUTE.SKU = @c_SKU " +             
          dbo.fnc_RTrim(@c_LimitString) + " " +     
          " GROUP BY LOT.LOT , LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable04, LOC.LocationType  " +   
-         " HAVING (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QtyAllocated) - SUM(LOTxLOCxID.QTYPicked)- MIN(ISNULL(P.QtyPreAllocated, 0))) > 0 " +  
+         " HAVING (SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QtyAllocated) - SUM(LOTxLOCxID.QTYPicked)) > 0" + -- - MIN(ISNULL(P.QtyPreAllocated, 0))) > 0 " +  
           " ORDER BY CASE WHEN " + CAST(@n_AllocStagingLoc AS NVARCHAR(1)) + " = 1 AND LOC.LocationType = 'IDZ' THEN 0 ELSE 1 END, " +
          " LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable04 "   
            
