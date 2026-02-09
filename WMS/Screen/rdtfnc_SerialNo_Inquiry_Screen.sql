@@ -2,7 +2,7 @@
 DELETE rdt.RDTScn WHERE Scn = 5090 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5090, 'ENG',
      @cLine01 = 'SERIALNO:'
-	 ,@cLine02 = '%30i01'
+	 ,@cLine02 = '%200iV_Barcode' --FCR-9890
     ,@cLine14 = '%e'
     ,@cWebGroup = '{"1":["1","2"]}'
 	 ,@nfunc   = 627
