@@ -321,15 +321,18 @@ BEGIN
             SET @cOutField10 = @cExtendedInfo2
             SET @cOutField11 = @cExtendedInfo3
 
-            SELECT @cID = V_ID 
-               FROM RDT.RDTMOBREC WITH (NOLOCK)
-               WHERE Mobile = @nMobile
-               AND ISNULL(V_ID, '') <> ''
-               
-            SET @cOutField07 = CASE WHEN LEN( @cID) <= 16 THEN ': ' + @cID 
-                              WHEN LEN( @cID) = 17 THEN ':' + @cID
-                              ELSE @cID
-                         END
+            IF @cExtendedInfoSP = 'rdt_627ExtInfo02'
+            BEGIN
+               SELECT @cID = V_ID 
+                  FROM RDT.RDTMOBREC WITH (NOLOCK)
+                  WHERE Mobile = @nMobile
+                  AND ISNULL(V_ID, '') <> ''
+                  
+               SET @cOutField07 = CASE WHEN LEN( @cID) <= 16 THEN ': ' + @cID 
+                                 WHEN LEN( @cID) = 17 THEN ':' + @cID
+                                 ELSE @cID
+                           END
+            END
          END
       END
 
@@ -342,6 +345,7 @@ BEGIN
    IF @nInputKey = 0 --ESC
    BEGIN
       --go to main menu
+      SET @cBarcode   = ''  --clear barcode
       SET @nFunc       = @nMenu
       SET @nScn        = @nMenu
       SET @nStep       = 0
@@ -376,6 +380,7 @@ BEGIN
    IF @nInputKey = 0 -- ESC
    BEGIN
       -- Prepare prev screen var
+      SET @cBarcode     = ''  --clear barcode
       SET @cSerialNo    = ' '
       SET @cOutField01  = ' ' --SerialNo
       SET @cOutField02  = ' ' --SerialNo

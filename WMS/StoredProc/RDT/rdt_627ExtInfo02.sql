@@ -126,9 +126,13 @@ AS
          ORDER BY RSN.ReceiptSerialNoKey DESC
 
          -- ORD: ORDERS.ExternOrderKey
-         SELECT @cExternOrderKey = ExternOrderKey
-            FROM dbo.ORDERS WITH (NOLOCK)
-            WHERE OrderKey = @cOrderKey
+         SELECT TOP 1
+             @cExternOrderKey = O.ExternOrderKey
+            FROM dbo.ORDERS O WITH (NOLOCK)
+            JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON O.OrderKey = PH.OrderKey
+            JOIN dbo.PACKSERIALNO PSN WITH (NOLOCK) ON PH.PickSlipNo = PSN.PickSlipNo
+            WHERE PSN.SerialNo = @cSerialNo
+           AND PSN.SKU = @cSKU
 
          -- 3. FORMAT OUTPUT (Truncated to 20 chars to fit screen field)
          
