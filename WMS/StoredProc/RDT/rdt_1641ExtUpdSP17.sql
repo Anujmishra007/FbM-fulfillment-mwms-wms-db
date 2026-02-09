@@ -87,29 +87,31 @@ BEGIN
                          WHERE PalletKey = @cDropID)
          BEGIN  
             -- Insert Pallet info  
+			BEGIN TRY
             INSERT INTO dbo.Pallet (PalletKey, StorerKey) VALUES (@cDropID, @cStorerKey)  
-  
-            IF @@ERROR <> 0  
-            BEGIN  
+			END TRY
+            BEGIN CATCH
                SET @nErrNo = 258252  
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPLTFail  
                GOTO RollBackTran  
-            END  
+            END CATCH
          END  
+
+  		 SET @cDefaultLoc = rdt.RDTGetConfig( @nFunc, 'DefaultLoc', @cStorerKey) 
 
          -- Insert PalletDetail   
          DECLARE CUR_PalletDetail CURSOR LOCAL READ_ONLY FAST_FORWARD FOR   
-         SELECT PickSlipNo, SKU, ISNULL( SUM( Qty), 0)  
+         
+		 SELECT PickSlipNo, SKU, ISNULL( SUM( Qty), 0)  
          FROM dbo.PackDetail WITH (NOLOCK)  
          WHERE StorerKey = @cStorerKey  
          AND   LabelNo   = @cUCCNo  
          GROUP BY PickSlipNo, SKU  
-         OPEN CUR_PalletDetail  
+         
+		 OPEN CUR_PalletDetail  
          FETCH NEXT FROM CUR_PalletDetail INTO @cPickSlipNo, @cSKU, @nPD_Qty  
          WHILE @@FETCH_STATUS <> -1   
          BEGIN  
-			SET @cDefaultLoc = rdt.RDTGetConfig( @nFunc, 'DefaultLoc', @cStorerKey) 
-
             SELECT @cOrderKey = OrderKey   
             FROM dbo.PackHeader WITH (NOLOCK)   
             WHERE PickSlipNo = @cPickSlipNo 
@@ -117,31 +119,30 @@ BEGIN
             SELECT @cCountry	= O.C_Country,
                    @cPlatform	= OI.Platform,
                    @cShipperKey	= O.ShipperKey
-            FROM dbo.ORDERS O     (NOLOCK) 
-			JOIN dbo.OrderInfo OI (NOLOCK) ON O.orderkey = OI.OrderKey
+            FROM dbo.ORDERS O     WITH (NOLOCK) 
+			JOIN dbo.OrderInfo OI WITH (NOLOCK) ON O.orderkey = OI.OrderKey
             WHERE O.OrderKey = @cOrderKey  
 
 			SELECT @cLoadkey = O.LoadKey
-			FROM dbo.ORDERS O (NOLOCK)
+			FROM dbo.ORDERS O WITH (NOLOCK)
 			WHERE O.OrderKey=@cOrderKey 
-           
+
+			BEGIN TRY           
             INSERT INTO dbo.PalletDetail   
             (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, Loc)   
             VALUES  
             (@cDropID, 0, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cCountry+@cPlatform+@cShipperKey, @cOrderKey, @cLoadkey, @cDefaultLoc)  
-            
+
 			UPDATE dbo.ORDERS WITH (ROWLOCK) SET [DeliveryNote] = @cDropID WHERE OrderKey = @cOrderKey and StorerKey = @cStorerKey
-			
 			UPDATE dbo.Dropid WITH (ROWLOCK) SET [LoadKey] = @cLoadkey WHERE DropID = @cDropID
-			
-            IF @@ERROR <> 0  
-            BEGIN  
+			END TRY
+			BEGIN CATCH
                SET @nErrNo = 258253  
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPLTDetFail  
-               CLOSE CUR_PalletDetail        
+               CLOSE CUR_PalletDetail        			
                DEALLOCATE CUR_PalletDetail                 
                GOTO RollBackTran  
-            END  
+            END CATCH 
               
             FETCH NEXT FROM CUR_PalletDetail INTO @cPickSlipNo, @cSKU, @nPD_Qty  
          END  
@@ -185,9 +186,12 @@ BEGIN
                     @nPalletQty     INT,
                     @nQtyBalance    INT,
                     @nQtyToMove     INT
-                  
+
+ 		    SET @cDefaultLoc = rdt.RDTGetConfig( @nFunc, 'DefaultLoc', @cStorerKey) 
+      
             DECLARE CUR_Pallet CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
-            SELECT userdefine02,Packdet.qty
+            
+			SELECT userdefine02,Packdet.qty
             FROM dbo.PalletDetail PD WITH (NOLOCK)   
             INNER JOIN dbo.PackDetail PackDet WITH (NOLOCK) ON PackDet.StorerKey = PD.StorerKey AND PackDet.LabelNo = PD.CaseID  
             WHERE PD.StorerKey = @cStorerKey    
@@ -203,7 +207,7 @@ BEGIN
   
                DECLARE CUR_Pickdetail CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
                SELECT pkd.PickDetailKey,pkd.qty,pkd.sku,pkd.Loc,pkd.ID,pkd.lot
-               FROM  dbo.PICKDETAIL PKD (NOLOCK)
+               FROM  dbo.PICKDETAIL PKD WITH (NOLOCK)
                WHERE PKD.StorerKey = @cStorerKey  
 			   AND   PKD.[Status]  = '5'
                AND   PKD.orderkey  = @cCurOrderKey
@@ -217,8 +221,6 @@ BEGIN
                   ELSE  
                      SET @nQtyToMove =  @nQtyBalance  
 			
-			   SET @cDefaultLoc = rdt.RDTGetConfig( @nFunc, 'DefaultLoc', @cStorerKey) 
-
                   EXECUTE rdt.rdt_Move        
                      @nMobile     = @nMobile,        
                      @cLangCode   = @cLangCode,        
@@ -256,43 +258,42 @@ BEGIN
             CLOSE CUR_Pallet          
             DEALLOCATE CUR_Pallet 
 
-
-            UPDATE dbo.PALLETDETAIL WITH (ROWLOCK)
-			SET   [Status]  = '9'  
-            WHERE StorerKey = @cStorerKey  
-            AND   PalletKey = @cDropID  
-            AND   [Status] < '9'  
+			BEGIN TRY
+				UPDATE dbo.PALLETDETAIL WITH (ROWLOCK)
+				SET   [Status]  = '9'  
+				WHERE StorerKey = @cStorerKey  
+				AND   PalletKey = @cDropID  
+				AND   [Status] < '9'  
+            END TRY  
+            BEGIN CATCH 
+				SET @nErrNo = 258256 
+				SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd PLTDet Err  
+				GOTO RollBackTran  
+            END CATCH 
   
-            IF @@ERROR <> 0  
-           BEGIN  
-               SET @nErrNo = 258256 
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd PLTDet Err  
-               GOTO RollBackTran  
-            END  
-  
-            UPDATE dbo.PALLET WITH (ROWLOCK)
-			SET   [Status] = '9'  
-            WHERE StorerKey = @cStorerKey  
-            AND   PalletKey = @cDropID  
-            AND   [Status] < '9'  
-  
-            IF @@ERROR <> 0  
-            BEGIN  
-               SET @nErrNo = 258257  
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Close Plt Fail  
-               GOTO RollBackTran  
-            END  
+			BEGIN TRY
+				UPDATE dbo.PALLET WITH (ROWLOCK)
+				SET   [Status] = '9'  
+				WHERE StorerKey = @cStorerKey  
+				AND   PalletKey = @cDropID  
+				AND   [Status] < '9'  
+			END TRY
+            BEGIN CATCH 
+				SET @nErrNo = 258257  
+				SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Close Plt Fail  
+				GOTO RollBackTran  
+            END CATCH
 			
-			UPDATE dbo.DROPID WITH (ROWLOCK)
-			SET   [Status] = '5', [LabelPrinted] = 'Y'
-            WHERE DropID = @cDropID
-
-            IF @@ERROR <> 0
-            BEGIN
+			BEGIN TRY
+				UPDATE dbo.DROPID WITH (ROWLOCK)
+				SET   [Status] = '5', [LabelPrinted] = 'Y'
+				WHERE DropID = @cDropID
+			END TRY
+            BEGIN CATCH
                SET @nErrNo = 258258
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd DROPIDFail
                GOTO RollBackTran
-            END
+            END CATCH
 
             IF EXISTS ( SELECT 1 FROM rdt.RDTReport WITH (NOLOCK)     
                         WHERE StorerKey = @cStorerKey     
@@ -334,41 +335,39 @@ BEGIN
       IF @nInputKey = 1  
       BEGIN  
            
-         IF NOT EXISTS( SELECT 1 FROM dbo.PALLETDETAIL PD (NOLOCK)
-						JOIN  dbo.MBOLDETAIL MD (NOLOCK)  ON PD.UserDefine02 = MD.OrderKey
-						JOIN  dbo.PICKDETAIL PKD (NOLOCK) ON MD.ORDERKEY     = PKD.ORDERKEY  
+         IF NOT EXISTS( SELECT 1 FROM dbo.PALLETDETAIL PD WITH (NOLOCK)
+						JOIN  dbo.MBOLDETAIL MD  WITH (NOLOCK)  ON PD.UserDefine02 = MD.OrderKey
+						JOIN  dbo.PICKDETAIL PKD WITH (NOLOCK)  ON MD.ORDERKEY     = PKD.ORDERKEY  
                         WHERE PD.StorerKey = @cStorerKey  
                         AND   PD.PalletKey = @cDropID  
                         AND   PKD.STATUS = 9  
                         AND   PD.STATUS=9)  
          BEGIN  
-            
-            UPDATE dbo.PALLETDETAIL WITH (ROWLOCK) SET   
-               [Status] = '0'  
-            WHERE StorerKey = @cStorerKey  
-            AND   PalletKey = @cDropID  
-            AND   [Status] = '9'  
-           
-            IF @@ERROR <> 0  
-            BEGIN  
-               SET @nErrNo = 258259  
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltdt fail  
-               GOTO RollBackTran  
-            END  
-  
-            UPDATE dbo.PALLET WITH (ROWLOCK) SET   
-               [Status] = '0'  
-               ,[TrafficCop]= NULL  
-            WHERE StorerKey = @cStorerKey  
-            AND   PalletKey = @cDropID  
-            AND   [Status] = '9'  
-  
-            IF @@ERROR <> 0  
-            BEGIN  
-               SET @nErrNo = 258260  
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd Plt Fail     
-               GOTO RollBackTran  
-            END  
+            BEGIN TRY
+				UPDATE dbo.PALLETDETAIL WITH (ROWLOCK) 
+				SET   [Status] = '0'  
+				WHERE StorerKey = @cStorerKey  
+				AND   PalletKey = @cDropID  
+				AND   [Status] = '9'  
+			END TRY
+            BEGIN CATCH 
+				SET @nErrNo = 258259  
+				SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltdt fail  
+				GOTO RollBackTran  
+            END CATCH
+
+			BEGIN TRY
+				UPDATE dbo.PALLET WITH (ROWLOCK) 
+				SET [Status] = '0', [TrafficCop]= NULL  
+				WHERE StorerKey = @cStorerKey  
+				AND   PalletKey = @cDropID  
+				AND   [Status] = '9'  
+            END TRY
+			BEGIN CATCH 
+				SET @nErrNo = 258260  
+				SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd Plt Fail     
+				GOTO RollBackTran  
+            END CATCH 
   
          END  
          ELSE  
