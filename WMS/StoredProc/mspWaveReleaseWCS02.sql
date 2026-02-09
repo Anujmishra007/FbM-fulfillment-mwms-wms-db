@@ -24,8 +24,9 @@ GO
 /*                           click the Release to WCS button only        */  
 /* 2026-01-22   JihHaur 1.1  Change OrderType (JH01)                     */  
 /* 2026-01-28   JihHaur 1.2  Hotfix (JH02)                               */ 
+/* 2026-02-09   JihHaur 1.3  To avoid assign twice (JH03)                */ 
 /*************************************************************************/     
-CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]  
+CREATE   PROCEDURE [dbo].[mspWaveReleaseWCS02]  
   @c_Wavekey      NVARCHAR(10)    
  ,@b_Success      int        OUTPUT    
  ,@n_Err          int        OUTPUT    
@@ -49,7 +50,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
           , @c_TransmitBatch     NVARCHAR(30) = ''  
           , @c_OrderKey          NVARCHAR(10)    
           , @c_LoadKey           NVARCHAR(10)    
-          , @c_PreviousLoadKey   NVARCHAR(10)  = ''  
+          , @c_AssignedLoadKey   NVARCHAR(10) = ''    --(JH03)
+          , @c_AssignedStation   NVARCHAR(20) = ''    --(JH03)
+          , @c_PreviousLoadKey   NVARCHAR(10) = ''  
           , @n_CBMperOrder       Float                   
           , @n_AvailableStation  INT = 0         
           , @n_LoadKey_Cnt       INT = 0  
@@ -164,7 +167,29 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]
       END    
       CLOSE Cur_CountOrder     
       DEALLOCATE Cur_CountOrder    
-   END        
+   END     
+   
+   -- Check Loadkey already have assigned station (JH03 Start)
+   IF @n_continue = 1 OR @n_continue = 2      
+   BEGIN      
+      SELECT TOP 1 @c_AssignedLoadKey = LOADPLAN.LoadKey, @c_AssignedStation = LOADPLAN.UserDefine01
+      FROM WAVEDETAIL (NOLOCK)     
+      JOIN ORDERS (NOLOCK) ON WAVEDETAIL.Orderkey = ORDERS.OrderKey    
+      JOIN LOADPLANDETAIL (NOLOCK) ON LOADPLANDETAIL.OrderKey = ORDERS.Orderkey  
+      JOIN LOADPLAN (NOLOCK) ON LOADPLAN.LoadKey = LOADPLANDETAIL.LoadKey
+      WHERE WAVEDETAIL.WaveKey = @c_WaveKey        
+      AND ISNULL(LOADPLAN.UserDefine01,'') <> ''
+      GROUP BY LOADPLAN.loadkey     
+
+      IF @c_AssignedLoadKey <> ''
+      BEGIN                               
+         SELECT @n_continue = 3        
+         SELECT @n_err = 90025        
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': LoadKey ' + @c_LoadKey + ' have assinged to station ' + @c_AssignedStation + '.(mspWaveReleaseWCS02)'        
+      END           
+   END     
+   -- (JH03) End
+
      
    ----Check if WCS already sent  
    --IF @n_continue = 1 OR @n_continue = 2      
@@ -482,7 +507,3 @@ END --sp end
 GO
 GRANT EXECUTE ON [dbo].[mspWaveReleaseWCS02] TO [NSQL]
 GO
-
-
-
-
