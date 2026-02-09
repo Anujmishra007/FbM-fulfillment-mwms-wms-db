@@ -736,6 +736,15 @@ BEGIN
                -- PackInfo
                IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
                BEGIN
+                  SELECT @cLength = CartonLength, @cWidth = CartonWidth, @cHeight = CartonHeight
+                  FROM Cartonization C WITH (NOLOCK)
+                     JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
+                  WHERE S.StorerKey = @cStorerKey
+                     AND C.CartonType = @cCartonType
+
+                  SET @fCube = CAST(@cLength as  int) * CAST( @cWidth as int) * CAST( @cHeight as int)
+                  SET @fCube = @fCube / 1000000
+
                   INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, Qty, Weight, Cube, CartonType, RefNo, Length, Width, Height)
                   VALUES (@cPickSlipNo, @nCartonNo, @fCartonQty, @fWeight, @fCube, @cCartonType, @cRefNo, @cLength, @cWidth, @cHeight)  --(cc02)/(james20)
                   IF @@ERROR <> 0

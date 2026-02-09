@@ -55,7 +55,7 @@ GO
 /* 06-Nov-2025  SWT01   4.5   Change Update Table Sequance to align with*/
 /*                            with other Inventory update seq with      */
 /*                            1. SKUxLOC 2.LotxLocxID 3.Lot 4.ChanneInv */
-/* 07-Jan-2026  AndyWu  4.6   FCR-9658 Trigger ITF By Order (AndyWu01)  */
+/* 07-Jan-2026  AndyWu  4.6   FCR-9658 Trigger ITF By Order (AndyWu01)  */ 
 /************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailAdd]
 ON  [dbo].[PICKDETAIL]

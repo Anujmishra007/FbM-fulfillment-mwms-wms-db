@@ -230,7 +230,7 @@ BEGIN
       -- Check equipment profile
       SELECT @bSuccess = 0
       EXECUTE nspCheckEquipmentProfile
-          @cUserName = @cUserName
+          @c_userid = @cUserName
          ,@c_TaskDetailKey = @cNewTaskKey
          ,@c_StorerKey = @cStorerKey
          ,@c_sku = @cSKU

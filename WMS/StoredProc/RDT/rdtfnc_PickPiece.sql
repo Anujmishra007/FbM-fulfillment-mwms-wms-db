@@ -81,7 +81,9 @@ GO
 /* 2025-09-22   6.2.1   PPA374      Adding ExtUpd to step 2 inputkey 0           */
 /* 2025-09-30   6.3.0   NickT       FCR-6584 Set @cDefaultSKU = '0' in Step0     */
 /* 2025-10-17   6.3.1   NickT       FCR-6584 Fix issue: jump to wrong step       */
-/* 2026-01-04   6.4.0   NickT       FCR-9040 Add ExtScnSP in some steps          */
+/* 2025-09-22   6.4.0   PPA374      UWP-41253 Adding ExtUpd to step 2 inputkey 0 */
+/* 2026-01-04   6.5.0   NickT       FCR-9040 Add ExtScnSP in some steps          */
+/* 2026-02-02   6.6.0   Jackc       FCR-10041 ExtScn07 special jump logic        */
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -3948,12 +3950,12 @@ BEGIN
          --Extended Screen
          IF @cExtScnSP <> ''
          BEGIN
-            --Skip extscn logic because it jump back to step5_nexttask or step5_shortextscn04 labels
-            -- after execut rdt_839ExtScn04. There is new option screen replace the this one.
+            --(Sync reallo) Skip extscn logic because it jump back to step5_nexttask or step5_shortextscn04 labels
+            -- after execut rdt_839ExtScn04/07. There is new option screen replace the this one. 
 
             --IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P') --V5.8.0
             IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-               AND @cExtScnSP NOT IN ('rdt_839ExtScn04') --V5.8.0
+               AND @cExtScnSP NOT IN ('rdt_839ExtScn04','rdt_839ExtScn07') --V5.8.0
             BEGIN
                DELETE FROM @tExtScnData
 
@@ -4336,10 +4338,10 @@ BEGIN
       BEGIN
          SET @nAction = 0
       END
-      ELSE IF @cExtScnSP = 'rdt_839ExtScn04' --V5.8.0
+      ELSE IF @cExtScnSP IN ('rdt_839ExtScn04','rdt_839ExtScn07') --V5.8.0
       BEGIN
-         --Skip extscn logic because it jump back to step5_nexttask or step5_shortextscn04 labels
-         -- after execut rdt_839ExtScn04. There is new option screen replace the this one.
+         --(Sync reallo) Skip extscn logic because it jump back to step5_nexttask or step5_shortextscn04 labels
+            -- after execut rdt_839ExtScn04/07. There is new option screen replace the this one. 
          GOTO Quit
       END
       SET @nPre_Step = 5
@@ -6903,6 +6905,27 @@ BEGIN
             END
             ELSE IF @cUDF01 = 'No Need Update RDTMOBREC'
                RETURN
+         END
+
+         IF @cExtScnSP = 'rdt_839ExtScn07' --Sync short reallo
+         BEGIN
+            IF @nOri_Scn = 6823 AND @nOri_Step = 99 AND @nInputKey = 1
+            BEGIN
+               SET @cOption = @cUDF01
+
+               IF @cOption <> '9'
+                  GOTO STEP_5_NextTask
+               ELSE
+                  GOTO STEP_5_Short
+            END
+
+            IF @nOri_Scn = 6823 AND @nOri_Step = 99 AND @nInputKey = 0
+            BEGIN
+               SET @cOption = @cUDF01
+               SET @cBarcode = @cUDF02
+
+               GOTO Quit
+            END
          END
          GOTO Quit
       END
