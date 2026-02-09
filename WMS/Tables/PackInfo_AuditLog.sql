@@ -3,8 +3,6 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-DROP TABLE [dbo].[PackInfo_AuditLog]
-GO 
 
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PackInfo_AuditLog]') AND type in (N'U'))
 BEGIN
