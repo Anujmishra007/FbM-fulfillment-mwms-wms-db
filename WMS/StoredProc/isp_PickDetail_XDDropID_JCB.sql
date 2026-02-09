@@ -30,7 +30,7 @@ GO
 /*                               cancelling the task                    */
 /************************************************************************/
 
-CREATE OR ALTER   PROC [dbo].[isp_PickDetail_XDDropID_JCB] (
+CREATE OR ALTER PROC [dbo].[isp_PickDetail_XDDropID_JCB] (
      @b_Success         INT           OUTPUT
    , @n_Err             INT           OUTPUT
    , @c_ErrMsg          NVARCHAR(250) OUTPUT
