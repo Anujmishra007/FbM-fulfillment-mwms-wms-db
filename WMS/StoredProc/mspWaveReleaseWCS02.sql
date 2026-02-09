@@ -26,7 +26,7 @@ GO
 /* 2026-01-28   JihHaur 1.2  Hotfix (JH02)                               */ 
 /* 2026-02-09   JihHaur 1.3  To avoid assign twice (JH03)                */ 
 /*************************************************************************/     
-CREATE   PROCEDURE [dbo].[mspWaveReleaseWCS02]  
+CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS02]  
   @c_Wavekey      NVARCHAR(10)    
  ,@b_Success      int        OUTPUT    
  ,@n_Err          int        OUTPUT    
@@ -179,7 +179,7 @@ CREATE   PROCEDURE [dbo].[mspWaveReleaseWCS02]
       JOIN LOADPLAN (NOLOCK) ON LOADPLAN.LoadKey = LOADPLANDETAIL.LoadKey
       WHERE WAVEDETAIL.WaveKey = @c_WaveKey        
       AND ISNULL(LOADPLAN.UserDefine01,'') <> ''
-      GROUP BY LOADPLAN.loadkey     
+      GROUP BY LOADPLAN.loadkey, LOADPLAN.UserDefine01     
 
       IF @c_AssignedLoadKey <> ''
       BEGIN                               
