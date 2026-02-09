@@ -396,26 +396,23 @@ BEGIN
    )*/
 
    UPDATE LLI
-SET PendingMoveIN = 0
-FROM LOTxLOCxID LLI WITH (ROWLOCK)
-WHERE LLI.StorerKey = @cStorerKey
-  AND LLI.PendingMoveIN > 0
-
-  AND EXISTS (
-      SELECT 1
-      FROM LOTxLOCxID LLI2 WITH (NOLOCK)
-      WHERE LLI2.ID = LLI.ID
-        AND LLI2.StorerKey = LLI.StorerKey
-  )
-
-  AND NOT EXISTS (
-      SELECT 1
-      FROM LOTxLOCxID LLI3 WITH (NOLOCK)
-      WHERE LLI3.ID = LLI.ID
-        AND LLI3.StorerKey = @cStorerKey
-        AND LLI3.Qty > 0
-  )
-
+   SET PendingMoveIN = 0
+   FROM LOTxLOCxID LLI WITH (ROWLOCK)
+   WHERE LLI.StorerKey = @cStorerKey
+      AND LLI.PendingMoveIN > 0
+      AND EXISTS (
+         SELECT 1
+         FROM LOTxLOCxID LLI2 WITH (NOLOCK)
+         WHERE LLI2.ID = LLI.ID
+            AND LLI2.StorerKey = LLI.StorerKey
+      )
+      AND NOT EXISTS (
+         SELECT 1
+         FROM LOTxLOCxID LLI3 WITH (NOLOCK)
+         WHERE LLI3.ID = LLI.ID
+            AND LLI3.StorerKey = @cStorerKey
+            AND LLI3.Qty > 0
+      )
 
    --Delete RFPutaway that can no longer be done, to free up the location
    /*DELETE FROM RFPUTAWAY
@@ -435,17 +432,17 @@ WHERE LLI.StorerKey = @cStorerKey
 		 AND LLI2.Qty > 0
    )*/
 
-DELETE RF
-FROM RFPUTAWAY RF
-INNER JOIN LOTxLOCxID LLI WITH(NOLOCK)
-    ON LLI.ID = RF.FromID
-   AND LLI.StorerKey = @cStorerKey
-   AND LLI.PendingMoveIN > 0
-   AND LLI.Qty > 0
-INNER JOIN LOC L WITH(NOLOCK)
-    ON L.Loc = LLI.Loc
-   AND L.Facility = @cFacility
-   AND L.LocationCategory NOT IN ('STAGE','PNDIN')
+   DELETE RF
+   FROM RFPUTAWAY RF
+   INNER JOIN LOTxLOCxID LLI WITH(NOLOCK)
+      ON LLI.ID = RF.FromID
+      AND LLI.StorerKey = @cStorerKey
+      AND LLI.PendingMoveIN > 0
+      AND LLI.Qty > 0
+   INNER JOIN LOC L WITH(NOLOCK)
+      ON L.Loc = LLI.Loc
+      AND L.Facility = @cFacility
+      AND L.LocationCategory NOT IN ('STAGE','PNDIN')
 
    --Update pending qty that can no longer be done, to free up the location
    /*UPDATE LOTxLOCxID WITH(ROWLOCK)
@@ -467,19 +464,18 @@ INNER JOIN LOC L WITH(NOLOCK)
    )*/
 
    UPDATE LLI1
-SET PendingMoveIN = 0
-FROM LOTxLOCxID LLI1 WITH(ROWLOCK)
-INNER JOIN LOTxLOCxID LLI WITH(NOLOCK)
-    ON LLI1.ID = LLI.ID
-   AND LLI1.StorerKey = LLI.StorerKey
-   AND LLI.StorerKey = @cStorerKey
-   AND LLI.PendingMoveIN > 0
-   AND LLI.Qty > 0
-INNER JOIN LOC L WITH(NOLOCK)
-    ON L.Loc = LLI.Loc
-   AND L.Facility = @cFacility
-   AND L.LocationCategory NOT IN ('STAGE','PNDIN')
-
+   SET PendingMoveIN = 0
+   FROM LOTxLOCxID LLI1 WITH(ROWLOCK)
+   INNER JOIN LOTxLOCxID LLI WITH(NOLOCK)
+      ON LLI1.ID = LLI.ID
+      AND LLI1.StorerKey = LLI.StorerKey
+      AND LLI.StorerKey = @cStorerKey
+      AND LLI.PendingMoveIN > 0
+      AND LLI.Qty > 0
+   INNER JOIN LOC L WITH(NOLOCK)
+      ON L.Loc = LLI.Loc
+      AND L.Facility = @cFacility
+      AND L.LocationCategory NOT IN ('STAGE','PNDIN')
 
    --Delete RFPUTAWAY that got tasks archived
    DELETE R
@@ -563,10 +559,9 @@ INNER JOIN LOC L WITH(NOLOCK)
             END
          END CATCH
 
-         FETCH FROM CUR_PICK_LINES INTO @c_OrderKey, @c_PickDetailKey 
-	  END
+      FETCH FROM CUR_PICK_LINES INTO @c_OrderKey, @c_PickDetailKey 
+   END
 
-      CLOSE CUR_PICK_LINES
-      DEALLOCATE CUR_PICK_LINES
+   CLOSE CUR_PICK_LINES
+   DEALLOCATE CUR_PICK_LINES
 END
-
