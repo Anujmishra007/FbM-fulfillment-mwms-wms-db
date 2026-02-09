@@ -536,7 +536,10 @@ BEGIN
                SET @cUDF09 = @cQTY_PMoveIn
             END--Enter
 
+            GOTO Quit
+
             Scn_6820_Fail:
+               GOTO Quit
          END--6820
 
          

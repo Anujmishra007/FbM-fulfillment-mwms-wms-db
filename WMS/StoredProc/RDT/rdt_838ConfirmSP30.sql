@@ -300,49 +300,36 @@ BEGIN
    BEGIN
       DECLARE @nRemainQTY INT,
       @nTotalPICKQTY      INT,
-      @nTotalPackQTY      INT
+      @nTotalPackQTY      INT,
+      @cPickdetailKey     NVARCHAR(10)
 
       SELECT @nTotalPICKQTY = SUM(QTY)
       FROM PICKDETAIL PD WITH (NOLOCK)
       WHERE PD.StorerKey = @cStorerKey
          AND PD.SKU =  @cSKU
-         AND PD.DropID = @cLabelNo
+         AND PD.DropID = @cFromDropID
          AND OrderKey = @cOrderKey
       
-      SELECT @nTotalPackQTY = SUM(QTY)
+      SELECT @nTotalPackQTY = QTY
       FROM PACKDETAIL PD
       WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
          AND LabelNo = @cLabelNo
          AND LabelLine = @cLabelLine
 
-      SET @nRemainQTY = ISNULL(@nTotalPackQTY,0) - ISNULL(@nTotalPICKQTY,0)
       INSERT INTO TRACEINFO (STEP1,STEP2,STEP3,STEP4,STEP5,COL1,COL2,COL3,COL4,COL5)
       VALUES(@nTotalPackQTY,@nTotalPICKQTY,@nRemainQTY,@cFromDropID,@cLabelNo,@nCartonNo,@cSKU,@cOrderKey,@cLabelLine,SUSER_SNAME())
-      IF EXISTS (SELECT 1 FROM PICKDETAIL PD WITH (NOLOCK)
-         WHERE PD.StorerKey = @cStorerKey
-            AND PD.SKU = @cSKU
-            AND PD.DropID = @cFromDropID
-            AND QTY = @nRemainQTY
-            AND OrderKey = @cOrderKey)
+
+      IF @nTotalPICKQTY = @nTotalPackQTY
       BEGIN
          UPDATE PICKDETAIL SET 
             DROPID = @cLabelNo,
             CaseID = @cLabelNo
          WHERE StorerKey = @cStorerKey
-            AND SKU = @cSKU
-            AND DropID = @cFromDropID
-            AND QTY = @nRemainQTY
-            AND OrderKey = @cOrderKey
-      END
+         AND SKU =  @cSKU
+         AND DropID = @cFromDropID
+         AND OrderKey = @cOrderKey
 
-      IF NOT EXISTS (SELECT 1 FROM PICKDETAIL PD WITH (NOLOCK)
-         WHERE PD.StorerKey = @cStorerKey
-            AND PD.SKU = @cSKU
-            AND PD.DropID = @cFromDropID
-            AND OrderKey = @cOrderKey
-            AND QTY > 0)
-      BEGIN
          UPDATE PackDetail SET 
             DropID = @cLabelNo,
             ArchiveCop = NULL
