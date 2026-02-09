@@ -85,9 +85,9 @@ EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in 
 GO
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Wave.', 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN', N'WaveKey'
 GO
-EXEC sp_addextendedproperty N'MS_Description', N'ExternStatus' , 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN',N'ExternStatus'
+EXEC sp_addextendedproperty N'MS_Description', N'External wave status' , 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN',N'ExternStatus'
 GO
-EXEC sp_addextendedproperty N'MS_Description', N'EventDateTime' , 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN',N'EventDateTime'
+EXEC sp_addextendedproperty N'MS_Description', N'Captures the exact timestamp of the event' , 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN',N'EventDateTime'
 
 END
 ELSE
