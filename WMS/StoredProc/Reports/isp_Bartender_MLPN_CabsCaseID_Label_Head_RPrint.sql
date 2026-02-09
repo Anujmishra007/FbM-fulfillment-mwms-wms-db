@@ -64,7 +64,8 @@ BEGIN
       ToLocation NVARCHAR(100),
       UID NVARCHAR(100),
       DataCheck NVARCHAR(100),
-      CaseID NVARCHAR(100)
+      CaseID NVARCHAR(100),
+	  SequenceCab NVARCHAR(100)
    );
      
    -- get data from pickdetail
@@ -79,7 +80,11 @@ BEGIN
 	  pd.Loc,
 	  pd.EditWho,
 	  '' AS DataCheck,
-	  @c_CaseID
+	  @c_CaseID,
+	  CASE 
+	  WHEN orm.[Type] = '2' THEN CONCAT ('Sequence: ', orm.UserDefine01)
+	  ELSE ''
+	  END AS SequenceCab
    FROM dbo.PICKDETAIL pd WITH (NOLOCK)
 	  INNER JOIN dbo.ORDERS orm WITH (NOLOCK)
 	     ON orm.StorerKey = pd.StorerKey AND orm.OrderKey = pd.OrderKey
@@ -92,7 +97,11 @@ BEGIN
 	  pd.WaveKey, 
 	  orm.DeliveryDate, 
 	  pd.Loc, 
-	  pd.EditWho  				    				   				   
+	  pd.EditWho,
+	  CASE 
+	  WHEN orm.[Type] = '2' THEN CONCAT ('Sequence: ', orm.UserDefine01)
+	  ELSE ''
+	  END 
    ORDER BY FORMAT(MIN(pd.EditDate),'dd-MM-yyyy hh:mm tt'); 
 			  
    -- Get Satge Outbounds
@@ -150,7 +159,8 @@ BEGIN
 		 Col06,
 		 Col07,
 		 Col08,
-		 Col10
+		 Col10,
+	     Col11
       )
 	  SELECT 
 	     OrderName,
@@ -161,7 +171,8 @@ BEGIN
 		 @To_loc,
 		 UID,
 		 CaseID,
-		 LabelHeader
+		 LabelHeader,
+	     SequenceCab
       FROM @tempTable WHERE ID = 0;
    END;
    --Final output

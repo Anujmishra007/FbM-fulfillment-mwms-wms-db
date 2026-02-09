@@ -11,10 +11,10 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2026-01-20 1.0  BHA212   CREATE                                      */
-/*                                                                      */
+/* 2026-02-05 1.0  BHA212    Fix logic FCR-9111                         */
 /************************************************************************/
 
-CREATE OR ALTER   PROC [RDT].[rdt_830ExtScn04] (
+ALTER     PROC [RDT].[rdt_830ExtScn04] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -69,6 +69,11 @@ BEGIN
    DECLARE @cTempLottable04    NVARCHAR(100)
    DECLARE @cTempLottable13    NVARCHAR(100)
 
+   DECLARE @cDecodeLottable01    NVARCHAR( 18)
+   DECLARE @cDecodeLottable02    NVARCHAR( 18)
+   DECLARE @dDecodeLottable04    NVARCHAR(100)
+   DECLARE @dDecodeLottable13    NVARCHAR(100)
+
    SELECT    @cSKU         = V_SKU,
              @cLottableCode    = V_String3,
              @cBarcode         = V_Barcode
@@ -85,10 +90,10 @@ BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
 
-            SET @cLottable01 = ''
-            SET @cLottable02 = ''
-            SET @dLottable04 = NULL
-            SET @dLottable13 = NULL
+            SET @cDecodeLottable01 = ''
+            SET @cDecodeLottable02 = ''
+            SET @dDecodeLottable04 = NULL
+            SET @dDecodeLottable13 = NULL
 
             DECLARE @tDecodeList TABLE
             (
@@ -129,8 +134,8 @@ BEGIN
                SELECT @cTempLottable02 = Item FROM @tDecodeList WHERE ItemIndex = 5
 
 
-               SET @cLottable01 = @cTempLottable01
-               SET @cLottable02 = @cTempLottable02
+               SET @cDecodeLottable01 = @cTempLottable01
+               SET @cDecodeLottable02 = @cTempLottable02
 
                -- Validate and Convert Mfg Date (Lottable13)
                IF @cTempLottable13 <> ''
@@ -144,7 +149,7 @@ BEGIN
                   ELSE
                   BEGIN
                      BEGIN TRY
-                        SET @dLottable13 = rdt.rdtConvertToDate(@cTempLottable13)
+                        SET @dDecodeLottable13 = rdt.rdtConvertToDate(@cTempLottable13)
                      END TRY
                      BEGIN CATCH
                         SET @nErrNo = 254804 -- Error ConvDateFail
@@ -154,7 +159,7 @@ BEGIN
                   END
                END
                ELSE
-                  SET @dLottable13 = NULL
+                  SET @dDecodeLottable13 = NULL
 
                -- Validate and Convert Exp Date (Lottable04)
                IF @cTempLottable04 <> ''
@@ -168,7 +173,7 @@ BEGIN
                   ELSE
                   BEGIN
                      BEGIN TRY
-                        SET @dLottable04 = rdt.rdtConvertToDate(@cTempLottable04)
+                        SET @dDecodeLottable04 = rdt.rdtConvertToDate(@cTempLottable04)
                      END TRY
                      BEGIN CATCH
                         SET @nErrNo = 254804 -- Error ConvDateFail
@@ -178,7 +183,7 @@ BEGIN
                   END
                END
                ELSE
-                  SET @dLottable04 = NULL
+                  SET @dDecodeLottable04 = NULL
             END
             ELSE
             BEGIN
@@ -188,10 +193,10 @@ BEGIN
 
             -- Dynamic lottable
             EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, 1, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'PRECAPTURE', 'POPULATE', 5, 1,
-                 @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
-                 @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+                 @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cDecodeLottable01 OUTPUT,
+                 @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cDecodeLottable02 OUTPUT,
                  @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
-                 @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+                 @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dDecodeLottable04 OUTPUT,
                  @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
                  @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
                  @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
@@ -200,7 +205,7 @@ BEGIN
                  @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
                  @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
                  @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-                 @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+                 @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dDecodeLottable13 OUTPUT,
                  @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
                  @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
                  @nMorePage   OUTPUT,

@@ -2,6 +2,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/  
 /* Stored Procedure: msp_BEJ_AutoAllocation                             */
 /* Creation Date: 30-Apr-2025                                           */
@@ -21,7 +22,6 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Rev   Purposes                                  */
 /*2024-04-30    SSA01   1.0   Created - UWP-32704 - Auto Allocate SO    */
-/*2026-02/04    TPT     1.1   Added @n_Hrs - Ops control ahead allocat  */
 /************************************************************************/
 CREATE OR ALTER  PROC [dbo].[msp_BEJ_AutoAllocation]
      @c_StorerKey   NVARCHAR(15)   = ''
@@ -64,7 +64,6 @@ BEGIN
             , @c_PostAllocationSP      NVARCHAR(200)
             , @c_Type                  NVARCHAR(10)
             , @c_OrderLineNo           NVARCHAR(5)
-            , @n_Hrs				   INT = 24 --(TPT001)
 
     SELECT @c_APP_DB_Name           = qcfg.APP_DB_Name
            , @c_DataStream          = qcfg.DataStream
@@ -89,12 +88,6 @@ BEGIN
 
    SET @c_Priority = ''
    SELECT @c_Priority = dbO.fnc_GetParamValueFromString ('@c_Priority',@c_OtherConfig, @c_Priority)
-
---(TPT001)
-   SELECT @n_Hrs = ISNULL(CL.Short,24)
-   FROM CODELKUP CL WITH (NOLOCK)
-   WHERE CL.ListName = 'JCB_HRS_AL' AND CL.Storerkey=@c_StorerKey
---(TPT001)
 
    IF @b_debug = 1
           BEGIN
@@ -204,7 +197,6 @@ BEGIN
    ELSE
    BEGIN
        /* Normal orders allocation*/
-       
        IF @n_Continue=1 OR @n_Continue=2
        BEGIN
           DECLARE CUR_NORMAL_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -216,7 +208,7 @@ BEGIN
           AND o.Type IN ('0','1','2','6','8')
           AND o.Status IN ('0','1')
           AND o.OrderGroup <> 'XDOCK'
-          AND o.DeliveryDate <= DATEADD(hh,CASE DATEPART(dw,DATEADD(hh,24,getdate())) WHEN 7 THEN @n_Hrs+48 WHEN 1 THEN @n_Hrs+24 ELSE @n_Hrs END,getdate()) --(TPT001)
+          AND o.DeliveryDate <= DATEADD(hh,CASE DATEPART(dw,DATEADD(hh,24,getdate())) WHEN 7 THEN 72 WHEN 1 THEN 48 ELSE 24 END,getdate())
           AND o.Priority <> '1'
           ANd od.Lottable03 is NOT NULL
           AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')
@@ -336,7 +328,7 @@ BEGIN
           AND o.Type IN ('0','1','2')
           AND o.Status = '0'
           AND o.OrderGroup <> 'XDOCK'
-		  AND o.DeliveryDate <= DATEADD(hh,CASE DATEPART(dw,DATEADD(hh,24,getdate())) WHEN 7 THEN @n_Hrs+48 WHEN 1 THEN @n_Hrs+24 ELSE @n_Hrs END,getdate()) --(TPT001)
+          AND o.DeliveryDate <= DATEADD(hh,CASE DATEPART(dw,DATEADD(hh,24,getdate())) WHEN 7 THEN 72 WHEN 1 THEN 48 ELSE 24 END,getdate())
           AND o.Priority <> '1'
           ANd od.Lottable03 is NOT NULL
           AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')
@@ -470,5 +462,6 @@ EXIT_SP:
 END -- Procedure  
 
 GO
-GRANT EXECUTE ON [dbo].[msp_BEJ_AutoAllocation] TO nSQL
+ 
+GRANT EXECUTE ON msp_BEJ_AutoAllocation TO NSQL
 GO
