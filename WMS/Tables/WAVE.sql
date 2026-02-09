@@ -7,7 +7,7 @@ CREATE TABLE [dbo].[WAVE]
 [WaveKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [WaveType] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_WaveType] DEFAULT ('0'),
 [Descr] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_Descr] DEFAULT (' '),
-[DispatchPQetPickMethod] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_DispatchPalletPickMethod] DEFAULT ('1'),
+[DispatchPalletPickMethod] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_DispatchPalletPickMethod] DEFAULT ('1'),
 [DispatchCasePickMethod] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_DispatchCasePickMethod] DEFAULT ('1'),
 [DispatchPiecePickMethod] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_DispatchPiecePickMethod] DEFAULT ('1'),
 [Status] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_Status] DEFAULT ('0'),
