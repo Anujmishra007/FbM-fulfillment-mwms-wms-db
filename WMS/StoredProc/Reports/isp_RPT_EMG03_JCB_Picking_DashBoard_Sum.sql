@@ -63,6 +63,7 @@ BEGIN
 			AND od.OrderKey  = p.OrderKey
       WHERE od.StorerKey = 'JCB'
 	     AND od.Status IN ('2','3')
+	     AND od.OrderGroup <> 'XDOCK'
 		 AND od.DeliveryDate <= @delivery_date_limit
    )
    SELECT
