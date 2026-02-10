@@ -74,6 +74,8 @@ GO
 /*                              packed issues                           */
 /* 10-12-2012   Shong     4.0   SOS# 264161 - Update PickDetail with    */
 /*                                            Sort Sequence             */
+/* 10-10-2025   SSA01     4.1   UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                             */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_TCP_WCS_CARTON_CLOSE_IN]
@@ -589,7 +591,7 @@ BEGIN
                	   WHERE OrderKey = @c_OrderKey
                   	
                      INSERT INTO dbo.RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey, EditWho) -- SOS# 255550
-                     SELECT @c_NewPickDetailKey, PickSlipNo, OrderKey, OrderLineNumber, @c_LoadKey, 'TCP03a.' + sUser_sName() 
+                     SELECT @c_NewPickDetailKey, PickSlipNo, OrderKey, OrderLineNumber, @c_LoadKey, 'TCP03a.' + dbo.fnc_GetUserName()            --(SSA01)
                      FROM   dbo.PickDetail WITH (NOLOCK) 
                      WHERE  PickDetailKey = @c_PickDetailKey
 
@@ -1062,7 +1064,7 @@ BEGIN
                IF NOT EXISTS (SELECT 1 FROM dbo.RefKeyLookup (NOLOCK) WHERE PickDetailKey = @c_NewPickDetailKey)
                BEGIN
                   INSERT INTO dbo.RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey, EditWho) -- SOS# 255550
-                  VALUES (@c_NewPickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_LoadKey, 'TCP03b.' + sUser_sName())
+                  VALUES (@c_NewPickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_LoadKey, 'TCP03b.' + dbo.fnc_GetUserName())   --(SSA01)
 
                   SELECT @n_Err = @@ERROR
 
@@ -1461,7 +1463,7 @@ BEGIN
     SET STATUS   = @c_Status
      , ErrMsg   = @c_ErrMsg
      , Editdate = GETDATE()
-     , EditWho  = SUSER_SNAME()
+     , EditWho  = dbo.fnc_GetUserName()       --(SSA01)
    WHERE SerialNo = @n_SerialNo
 
    WHILE @@TRANCOUNT > @n_StartTCnt -- Commit until the level we started

@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrXdockHeaderAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-	DROP TRIGGER [dbo].[ntrXdockHeaderAdd]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -8,8 +6,9 @@ SET ANSI_NULLS OFF
 GO
 
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
+/* 06-OCT-2025  AK01   1.1 UWP-42143 Data Audit                         */
 
-CREATE TRIGGER ntrXdockHeaderAdd
+CREATE OR ALTER TRIGGER ntrXdockHeaderAdd
  ON  Xdock
  FOR INSERT
  AS
@@ -31,18 +30,18 @@ CREATE TRIGGER ntrXdockHeaderAdd
  ,         @n_cnt int                  
  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
       /* #INCLUDE <TRXDKHA1.SQL> */     
- IF @n_continue=1 or @n_continue=2
- BEGIN
- UPDATE XDOCK SET TrafficCop = NULL, AddDate = GETDATE(), AddWho=SUSER_SNAME(), EditDate = GETDATE(), EditWho=SUSER_SNAME() FROM XDOCK,inserted
- WHERE XDOCK.XdockKey=inserted.XdockKey
- SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
- IF @n_err <> 0
- BEGIN
- SELECT @n_continue = 3
- SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=77401   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
- SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table XDOCK. (ntrXdockHeaderAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
- END
- END
+ --IF @n_continue=1 or @n_continue=2
+ --BEGIN
+ --UPDATE XDOCK SET TrafficCop = NULL, AddDate = GETDATE(), AddWho=SUSER_SNAME(), EditDate = GETDATE(), EditWho=SUSER_SNAME() FROM XDOCK,inserted
+ --WHERE XDOCK.XdockKey=inserted.XdockKey
+ --SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+ --IF @n_err <> 0
+ --BEGIN
+ --SELECT @n_continue = 3
+ --SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=77401   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+ --SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table XDOCK. (ntrXdockHeaderAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+ --END
+ --END
  IF @n_continue=1 or @n_continue=2
  BEGIN
  IF EXISTS(SELECT * FROM INSERTED WHERE ReceiveStatus <> "0" or ShipStatus <> "0")
@@ -52,6 +51,27 @@ CREATE TRIGGER ntrXdockHeaderAdd
  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table XDOCK. Status is Non-Zero. (ntrXdockHeaderAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
  END
  END
+
+ --AK01 - S
+IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+BEGIN
+   UPDATE XDOCK
+     SET AddWho  = dbo.fnc_GetUserName(),
+         AddDate = dbo.fnc_GetDate(), 
+         EditWho = dbo.fnc_GetUserName(),
+         EditDate = dbo.fnc_GetDate(),
+         TrafficCop = NULL 
+   FROM XDOCK
+   JOIN INSERTED ON XDOCK.XDOCKKEY = INSERTED.XDOCKKEY
+   SELECT @n_err = @@ERROR
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=77403  
+      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table XDOCK. (ntrXDOCKAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+   END
+END
+--AK01 - E
       /* #INCLUDE <TRXDKHA2.SQL> */
  IF @n_continue=3  -- Error Occured - Process And Return
  BEGIN

@@ -38,8 +38,12 @@ GO
 /* 2021-12-21  Wan05    2.0   LFWM-3210 - SCE UAT SG ASN Should Not     */
 /*                            Populate Same POKey+POLinenumber          */
 /* 2023-03-01  Wan06    3.0   LFWM-3874 - [CN] SCE populate all for PO  */
+/*                            population                                */
 /* 2023-09-06  USH07    3.0   UWP-22179 - NoSamePO2DiffASN maintained   */
-/*                                                                      */
+/* 2024-01-31  Wan07    3.1   LFWM-4437-CN UAT  Sanrio_Add new configkey*/
+/*                            for Populate from PO for ANSReceipt and   */
+/*                            Trade Return                              */
+/* 2025-05-26  SWT01    3.2   Setting Session Context for user name     */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_ASN_PopulatePOs_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)
@@ -201,7 +205,8 @@ BEGIN
          ,  @c_DefaultRcptLOC          NVARCHAR(30)   = ''
          ,  @c_QCLocation              NVARCHAR(30)   = ''
          ,  @c_DefaultReturnPickFace   NVARCHAR(30)   = ''
-         ,  @c_POKeyListParam          NVARCHAR(MAX) = '' --NJOW01      --Wan06
+         ,  @c_POKeyListParam          NVARCHAR(MAX)  = '' --NJOW01     --Wan06
+         ,  @c_ASNPopulateOpenOrdPO    NVARCHAR(10)   = ''              --Wan07
 
          ,  @CUR_SCHEMA                CURSOR
          ,  @CUR_INVALIDPO             CURSOR
@@ -210,20 +215,26 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
 
-   IF SUSER_SNAME() <> @c_UserName        --(Wan02) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser]
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
+
+      EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-
-      IF @n_Err <> 0
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
+      IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName      --(Wan02) - END
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SWT01) - END
 
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
 
@@ -254,6 +265,7 @@ BEGIN
       FROM RECEIPT RH WITH (NOLOCK)
       WHERE RH.ReceiptKey = @c_ReceiptKey
 
+      SELECT @c_ASNPopulateOpenOrdPO = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ASNPopulateOpenOrdPO')  --(Wan07)
       /*-------------------------------------------------------*/
       /* BUILD TEMP TABLES & INSERT DATA - START               */
       /*-------------------------------------------------------*/
@@ -346,7 +358,10 @@ BEGIN
                              +                               ' ON T.PORefKey= PD.POKey'
                              + ' WHERE ((PD.Facility = @c_Facility AND @c_Facility <> '''') OR'
                              + ' (PD.Facility = '''' OR PD.Facility IS NULL))'
-                             + ' AND PD.QtyReceived <= PD.QtyOrdered'
+                             + CASE WHEN @c_ASNPopulateOpenOrdPO = 1 
+                                    THEN ' AND PD.QtyReceived < PD.QtyOrdered'
+                                    ELSE ' AND PD.QtyReceived <= PD.QtyOrdered'
+                                    END
                              + ' ORDER BY PD.POKey, PD.POLineNumber'
                   SET @c_SQLParms = N'@c_Facility NVARCHAR(5)'
 
@@ -934,7 +949,10 @@ BEGIN
             END TRY
             BEGIN CATCH
                --2020-09-15 - START
-               ROLLBACK TRAN
+               IF (XACT_STATE()) = -1                --(USH07- Start)
+               BEGIN
+                  ROLLBACK TRAN
+               END        
 
                WHILE @@TRANCOUNT < @n_StartTCnt
                BEGIN
@@ -1708,10 +1726,7 @@ BEGIN
             END TRY
             BEGIN CATCH
                --2020-09-15 - START
-                IF (XACT_STATE()) = -1                --(USH07- Start)
-               	BEGIN
-               			ROLLBACK TRAN
-               	END                                   --(USH07- End)
+               ROLLBACK TRAN
 
                WHILE @@TRANCOUNT < @n_StartTCnt
                BEGIN
@@ -1846,7 +1861,10 @@ EXIT_SP:
       BEGIN TRAN
    END
 
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_ASN_PopulatePOs_Wrapper] TO nSQL

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspAL_SG05]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspAL_SG05]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,8 +24,10 @@ GO
 /* Date         Author  Ver.  Purposes                                  */   
 /*2020-05-22    WLChooi 1.1   WMS-12902 - Sort by LOC.LocationCategory  */
 /*                            <> 'ASRS' (WL01)                          */
+/* 20-Nov-2024  WLChooi 1.2   DevOps Combine Script                     */
+/* 20-Nov-2024  WLChooi 1.2   WMS-26556-Support Multi Facilities(WL02)  */
 /************************************************************************/    
-CREATE  PROC [dbo].[nspAL_SG05]        
+CREATE OR ALTER PROC [dbo].[nspAL_SG05]        
    @c_Orderkey    NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -144,7 +141,7 @@ BEGIN
    AND Long = 'nspAL_SG05'
    AND Code = 'UOM2BYCONSIGNEE'
    AND Short <> 'N'
-   AND (Code2 = @c_Facility OR ISNULL(Code2,'') = '')
+   AND (Code2 IN (SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) OR ISNULL(Code2,'') = '')   --WL02
 
    IF @c_UOM = '2'
    BEGIN      
@@ -180,16 +177,16 @@ BEGIN
    --NJOW06 E
 
    --WL01 START
-   SET @c_SORTUOM1 = 'ORDER BY LA.Lottable05,
+   SET @c_SORTUOM1 = 'ORDER BY F.FacSort, LA.Lottable05,
                                CASE WHEN LOC.LocationCategory <> ''ASRS'' THEN 1 
                                     WHEN LOC.LocationCategory = ''ASRS''  THEN 2 ELSE 3 END,
                                (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) - @n_QtyLeftToFulfill,
-                               LOTxLOCxID.ID, LA.Lot, LOC.LogicalLocation, LOC.LOC '   
-   SET @c_SORTNOTUOM1 = 'ORDER BY LA.Lottable05, 
+                               LOTxLOCxID.ID, LA.Lot, LOC.LogicalLocation, LOC.LOC '   --WL02
+   SET @c_SORTNOTUOM1 = 'ORDER BY F.FacSort, LA.Lottable05, 
                                   CASE WHEN LOC.LocationCategory <> ''ASRS'' THEN 1 
                                        WHEN LOC.LocationCategory = ''ASRS''  THEN 2 ELSE 3 END,
                                   (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) - @n_QtyLeftToFulfill,
-                                  LA.Lot, LOC.LogicalLocation, LOC.LOC '
+                                  LA.Lot, LOC.LogicalLocation, LOC.LOC '   --WL02
    --WL01 END
 
    SELECT TOP 1 @n_RestrictDays = CASE WHEN (CON.Susr1 = 'DCNM1' OR CON.Susr2 = 'DCNM1' OR CON.Susr3 = 'DCNM1' OR CON.Susr4 = 'DCNM1' OR CON.Susr5 = 'DCNM1') AND
@@ -251,6 +248,7 @@ BEGIN
       JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
       JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
       JOIN SKUXLOC SL (NOLOCK) ON (LOTxLOCxID.Storerkey = SL.Storerkey AND LOTxLOCxID.Sku = SL.Sku AND LOTxLOCxID.Loc = SL.Loc)
+      JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility   --WL02
       LEFT JOIN (SELECT TD.FromLot, TD.FromLoc, TD.FromID, SUM(TD.FromQty) AS FromQty
                  FROM TRANSFER T (NOLOCK)
                  JOIN TRANSFERDETAIL TD (NOLOCK) ON T.Transferkey = TD.Transferkey
@@ -274,7 +272,7 @@ BEGIN
       AND LOC.Status <> ''HOLD''
       AND LOT.Status <> ''HOLD''
       AND ID.Status <> ''HOLD''
-      AND LOC.Facility = @c_Facility
+      /*AND LOC.Facility = @c_Facility   --WL02*/
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) > 0
       AND LOTxLOCxID.STORERKEY = @c_StorerKey
       AND LOTxLOCxID.SKU = @c_SKU 

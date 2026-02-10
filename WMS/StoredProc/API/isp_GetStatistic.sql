@@ -3,9 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
-
-
 /******************************************************************************/
 /* Store procedure: isp_GetStatistic                                          */
 /* Copyright      : LFLogistics                                               */
@@ -14,6 +11,7 @@ GO
 /* 2020-04-20   1.0  Chermaine  Created                                       */
 /* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)            */
 /* 2023-02-10   1.2  yeekung    TPS-663 correct 'Orders' (yeekung01)          */
+/* 2025-01-28   1.3  YeeKung    UWP-29489 Change API Username (yeekung02)     */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetStatistic] (
@@ -52,19 +50,19 @@ WITH (
 --SELECT @nFunc AS Func, @cLangCode AS LangCode,@cWorkstation as Workstation
 
 --convert login
-SET @n_Err = 0
-EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+--SET @n_Err = 0
+--EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-EXECUTE AS LOGIN = @cUserName
+--EXECUTE AS LOGIN = @cUserName
 
-IF @n_Err <> 0
-BEGIN
-   --INSERT INTO @errMsg(nErrNo,cErrMsg)
-   SET @b_Success = 0
-   SET @n_Err = @n_Err
-   SET @c_ErrMsg = @c_ErrMsg
-   GOTO EXIT_SP
-END
+--IF @n_Err <> 0
+--BEGIN
+--   --INSERT INTO @errMsg(nErrNo,cErrMsg)
+--   SET @b_Success = 0
+--   SET @n_Err = @n_Err
+--   SET @c_ErrMsg = @c_ErrMsg
+--   GOTO EXIT_SP
+--END
 
 ----SELECT @cUserName AS username
 ----select SUSER_SNAME ()
@@ -73,8 +71,8 @@ END
 IF @cUserName = ''
 BEGIN
    SET @b_Success = 0
-   SET @n_Err = 175624
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve username. Function : isp_GetStatistic'
+   SET @n_Err = 1000201
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve username. Function : isp_GetStatistic'
 
    GOTO EXIT_SP
 END

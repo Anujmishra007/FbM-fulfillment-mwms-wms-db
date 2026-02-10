@@ -29,6 +29,7 @@ GO
 /* 10-Dec-2024    SHONG01   1.5   Revise VAS Flag logic                  */
 /* 27-Jan-2025    USH022-01 1.6   Exclude LOT for ASTCPK tasktype        */
 /*                                Ticket-UWP-28865                       */
+/* 10-Oct-2025    SSA01     1.7  UWP-42248 -Enhanced session management  */
 /*************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV04]
    @c_WaveKey NVARCHAR(10)
@@ -450,10 +451,10 @@ BEGIN
          [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
          [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
          [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),                  --(SSA01)
+         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),          --(SSA01)
+         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),                 --(SSA01)
+         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),         --(SSA01)
          [TrafficCop] [nvarchar](1) NULL,
          [ArchiveCop] [nvarchar](1) NULL,
          [OptimizeCop] [nvarchar](1) NULL,
@@ -882,7 +883,7 @@ BEGIN
          BEGIN
             UPDATE PICKDETAIL WITH (ROWLOCK)
                SET PickSlipNo = CASE WHEN ISNULL(PickSlipNo,'') = '' THEN @c_PickSlipNo ELSE PickSlipNo END
-                  , EditDate = GETDATE()
+                  , EditDate = Gdbo.fnc_GetDate()   --(SSA01)
                   , TrafficCop = NULL
                   , TaskDetailKey = @c_TaskDetailKey
                   , Notes = CASE WHEN ISNULL(Notes,'') = '' THEN LOC ELSE Notes END
@@ -1181,7 +1182,7 @@ BEGIN
 
               UPDATE dbo.TaskDetail
                 SET Groupkey=@c_GroupKey,
-                    EditDate=GETDATE()
+                    EditDate=dbo.fnc_GetDate()   --(SSA01)
               WHERE TaskDetailKey = @c_TaskDetailKey
 
               FETCH NEXT FROM CUR_OrderTask INTO @n_RowID, @c_TaskDetailKey, @n_Cube, @n_Weight, @c_Sku, @c_SkuClass
@@ -1420,7 +1421,7 @@ BEGIN
                 SET Groupkey=@c_GroupKey,
                     Message02 = '',
                     Message03 = '',
-                    EditDate=GETDATE()
+                    EditDate=dbo.fnc_GetDate()   --(SSA01)
               WHERE TaskDetailKey = @c_TaskDetailKey
 
               FETCH NEXT FROM CUR_OrderTask INTO @n_RowID, @c_TaskDetailKey, @n_Cube, @n_Weight, @c_Sku, @c_SkuClass, @c_OrderKey

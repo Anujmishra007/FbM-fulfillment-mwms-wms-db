@@ -13,6 +13,8 @@ GO
 /* 2020-04-06   1.0  Chermaine  Created                                       */
 /* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)            */
 /* 2022-04-15   1.2  YeeKung    Add LblPrinter/PPr Printer in web (yeekung01) */
+/* 2025-02-14   1.3  yeekung    TPS-995 Change Error Message (yeekung02)      */
+/* 2025-04-24   2.1  GhChan     FCR-4207 Enhanced with of PrinterGroup (Gh01) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetPrinter] (
@@ -41,7 +43,9 @@ DECLARE
    @cLabelPrinterConfig NVARCHAR( 20),
    @cPaperPrinterConfig NVARCHAR( 20)
 
-
+DECLARE @tempListPrinter TABLE (
+   printer NVARCHAR(10)
+)
 --Decode Json Format
 SELECT @nFunc=Func, @cLangCode = LangCode, @cWorkstation = Workstation,
        @cLabelPrinter = LabelPrinter, @cPaperPrinter = PaperPrinter
@@ -55,20 +59,20 @@ WITH (
 )
 --SELECT @nFunc AS Func, @cLangCode AS LangCode,@cWorkstation as Workstation
 
---convert login
-SET @n_Err = 0
-EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+----convert login
+--SET @n_Err = 0
+--EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-EXECUTE AS LOGIN = @cUserName
+--EXECUTE AS LOGIN = @cUserName
 
-IF @n_Err <> 0
-BEGIN
-   --INSERT INTO @errMsg(nErrNo,cErrMsg)
-   SET @b_Success = 0
-   SET @n_Err = @n_Err
-   SET @c_ErrMsg = @c_ErrMsg
-   GOTO EXIT_SP
-END
+--IF @n_Err <> 0
+--BEGIN
+--   --INSERT INTO @errMsg(nErrNo,cErrMsg)
+--   SET @b_Success = 0
+--   SET @n_Err = @n_Err
+--   SET @c_ErrMsg = @c_ErrMsg
+--   GOTO EXIT_SP
+--END
 
 
 ----SELECT @cUserName AS username
@@ -80,8 +84,8 @@ BEGIN
    IF ISNULL(@cLabelPrinter,'')='' AND ISNULL(@cPaperPrinter,'')=''
    BEGIN
       SET @b_Success = 0
-      SET @n_Err = 175623
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Workstation ID. Function : isp_GetPrinter'
+      SET @n_Err = 1001151
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Workstation ID. Function : isp_GetPrinter'
 
       GOTO EXIT_SP
    END
@@ -92,14 +96,24 @@ BEGIN
    SELECT @cPaperPrinterConfig = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND PrinterType = 'Paper'
 END
 
+INSERT INTO @tempListPrinter (printer)
+SELECT AllPrinter
+FROM (
+SELECT PrinterID AS AllPrinter
+FROM rdt.rdtPrinter (NOLOCK)
+UNION
+SELECT DISTINCT PrinterGroup AS AllPrinter
+FROM rdt.rdtPrinterGroup (NOLOCK)
+) t
+
 SET @b_Success = 1
 SET @jResult =(
 SELECT @cLabelPrinterConfig AS LabelPrinterConfig,@cPaperPrinterConfig AS PaperPrinterConfig,* FROM (SELECT
-'[' +STUFF(( SELECT ',' + '"' + printerID  + '"'
-FROM rdt.rdtPrinter WITH (NOLOCK) FOR XML PATH('')),1,1,'')+ ']' as LabelPrinter
+'[' +STUFF(( SELECT ',' + '"' + printer  + '"'
+FROM @tempListPrinter FOR XML PATH('')),1,1,'')+ ']' as LabelPrinter
 ,
-'[' +STUFF(( SELECT ',' + '"' + printerID + '"'
-FROM rdt.rdtPrinter WITH (NOLOCK) FOR XML PATH('')),1,1,'')+ ']' as PaperPrinter
+'[' +STUFF(( SELECT ',' + '"' + printer + '"'
+FROM @tempListPrinter FOR XML PATH('')),1,1,'')+ ']' as PaperPrinter
 )PrinterList
 FOR JSON AUTO
 )

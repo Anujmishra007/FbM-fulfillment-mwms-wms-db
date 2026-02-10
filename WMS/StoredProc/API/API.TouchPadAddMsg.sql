@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2023-03-17 1.0  yeekung  Created                                     */
+/* 2024-01-21 1.1  YeeKung  TPS-995 Remove add System message (yeekung01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE API.TouchPadAddMsg  (
@@ -36,15 +37,6 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    ELSE
       SET @cLangCode = @cLang
        
-   -- Add message to SQL
-   IF EXISTS (SELECT error FROM master.dbo.sysmessages WHERE error = @nMsgID)
-   BEGIN
-      IF @cLangCode = 'ENG'
-         PRINT 'Message ' + LTRIM( CAST( @nMsgID AS NVARCHAR( 10))) + ' already exists in master.dbo.sysmessages'
-   END
-   ELSE
-      EXECUTE master.dbo.sp_addmessage @nMsgID, @nSeverity, @nMsg, @cLang
-      
    -- Add message to RDT
    IF EXISTS (SELECT Message_ID FROM API.TouchPadErrmsg 
       WHERE Message_ID = @nMsgID

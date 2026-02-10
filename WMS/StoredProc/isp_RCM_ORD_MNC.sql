@@ -13,6 +13,8 @@ GO
 /* 23-Mar-2023 1.0  yeekung   WMS-21873 Created                         */
 /* 02-Jun-2023 1.1  yeekung   WMS-22683 Add loc (yeekung01)             */
 /* 02-Aug-2023 1.2  Calvin    JSM-167907 Add Lot as Condition (CLVN01)  */
+/* 10-OCT-2025 1.3  SSA01     UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE OR ALTER   PROC [dbo].[isp_RCM_ORD_MNC] (
@@ -166,8 +168,8 @@ BEGIN
                   -- Top up PickDetail
                   UPDATE PickDetail SET
                      QTY = QTY + @nQTY,
-                     EditWho = SUSER_SNAME(),
-                     EditDate = GETDATE()
+                     EditWho = dbo.fnc_GetUserName(),    --(SSA01)
+                     EditDate = dbo.fnc_GetDate()    --(SSA01)
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                      SET @cErrMsg = 'UPDATE PickDetail Fail'
@@ -255,8 +257,8 @@ BEGIN
             BEGIN
                UPDATE PickDetail SET
                   Status = '5',
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName()     --(SSA01)
                WHERE PickDetailKey = @cPickDetailKey
                IF @@ERROR <> 0
                   SET @cErrMsg = 'UPDATE PickDetail Fail'
@@ -266,8 +268,8 @@ BEGIN
             -- Reset flag
             UPDATE Orders SET
                UserDefine10 = '',
-               EditWho = SUSER_SNAME(),
-               EditDate = GETDATE()
+               EditWho = dbo.fnc_GetUserName(),    --(SSA01)
+               EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE OrderKey = @c_OrderKey
          END
       END
@@ -276,8 +278,8 @@ BEGIN
           -- Reset flag
          UPDATE Orders SET
             UserDefine10 = 'PARTIALALLOC',
-            EditWho = SUSER_SNAME(),
-            EditDate = GETDATE()
+            EditWho = dbo.fnc_GetUserName(),        --(SSA01)
+            EditDate = dbo.fnc_GetDate()    --(SSA01)
          WHERE OrderKey = @c_OrderKey
       END
    END

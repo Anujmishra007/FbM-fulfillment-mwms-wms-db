@@ -19,6 +19,8 @@ GO
 /* 2024-05-21  1.0      NLT013    UWP-19518 Created                            */
 /* 2024-10-22  1.1.0    NLT013    FCR-973 Update the final task as VNAOUT      */
 /* 2024-10-22  1.1.1    NLT013    FCR-973 Update UOM and ListKey for last task */
+/* 2025-03-07  1.2.0    Dennis    FCR-2977  PP Update Dropid (de01)            */
+/* 2025-10-02  1.3.0    NickT     FCR-7730 Add @cScannedToLoc                  */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt03] (
@@ -28,7 +30,8 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt03] (
    @cUserName      NVARCHAR(18),
    @cListKey       NVARCHAR(10),
    @nErrNo         INT         OUTPUT,
-   @cErrMsg        NVARCHAR(20) OUTPUT  -- screen limitation, 20 char max
+   @cErrMsg        NVARCHAR(20) OUTPUT, -- screen limitation, 20 char max
+   @cScannedToLoc       NVARCHAR( 10) = ''  -- New param for FCR-7730
 ) AS
 BEGIN
    SET NOCOUNT ON
@@ -48,6 +51,12 @@ BEGIN
    DECLARE @cToID          NVARCHAR( 18)
    DECLARE @cSKU           NVARCHAR( 20)
    DECLARE @cLOT           NVARCHAR( 10)
+   DECLARE @cPDSKU         NVARCHAR( 20)
+   DECLARE @cPDLOT         NVARCHAR( 10)
+   DECLARE @cPDLOC         NVARCHAR( 10)
+   DECLARE @cPDID          NVARCHAR( 18)
+   DECLARE @nPDQTY         INT
+   DECLARE @cPICKDETAILKEY NVARCHAR( 10)
    DECLARE @cUCCNo         NVARCHAR( 20)
    DECLARE @nQTY           INT
    DECLARE @nSystemQTY     INT
@@ -66,13 +75,15 @@ BEGIN
    DECLARE @cLocCategory                  NVARCHAR( 10)
    DECLARE @cNewTaskDetailKey             NVARCHAR( 10)
    DECLARE @cFinalLOC      NVARCHAR( 10)
-   DECLARE @cUOM           NVARCHAR( 5)
+   DECLARE @cUOM           NVARCHAR( 5),
+   @cDropID                NVARCHAR(20)
 
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
 
-   SELECT @cStorerKey = StorerKey
+   SELECT @cStorerKey = StorerKey,
+   @cDropID = V_String3
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -238,7 +249,7 @@ BEGIN
                      @cFromLOC    = @cFromLOC,
                      @cToLOC      = @cToLOC,
                      @cFromID     = @cFromID,
-                     @cToID       = @cToID,
+                     @cToID       = @cDropID,--de01
                      @cUCC        = @cUCCNo,
                      @nQTYAlloc   = @nQTYAlloc,
                      @nQTYReplen  = @nQTYReplen,
@@ -332,7 +343,7 @@ BEGIN
                         @cFromLOC    = @cFromLOC,
                         @cToLOC      = @cToLOC,
                         @cFromID     = @cFromID,
-                        @cToID       = @cToID,
+                        @cToID       = @cDropID,--de01
                         @cSKU        = @cUCC_SKU,
                         @nQTY        = @nUCCQTY,
                         @nQTYAlloc   = @nQTYAlloc,
@@ -365,7 +376,7 @@ BEGIN
                         ID = CASE
                               WHEN @cLoseID = '1' THEN '' -- Lose ID
                               WHEN @cToID IS NULL THEN ID -- ID not change
-                              ELSE @cToID
+                              ELSE @cDropID --de01
                               END,
                         -- Lose UCC. Status 5=Picked/Repl
                         Status = CASE WHEN (@cToLocType = 'PICK' OR @cToLocType = 'CASE')  THEN '5'
@@ -464,7 +475,7 @@ BEGIN
                   @cFromLOC    = @cFromLOC,
                   @cToLOC      = @cToLOC,
                   @cFromID     = @cFromID,
-                  @cToID       = @cToID,
+                  @cToID       = @cDropID,--DE01
                   @cSKU        = @cSKU,
                   @nQTY        = @nQTY,
                   @nQTYAlloc   = @nQTYAlloc,
@@ -494,6 +505,46 @@ BEGIN
                   @cTaskDetailKey = @cTaskDetailKey
             END
          END
+
+         UPDATE dbo.PickDetail WITH(ROWLOCK) SET
+            ID = @cDropID
+         WHERE StorerKey = @cStorerKey 
+            AND ID = @cFromID
+            AND WaveKey = @cWaveKey
+            AND LOC = @cToLOC
+            AND STATUS <> '5'
+
+         UPDATE TD SET
+            FromID = @cDropID
+         FROM  dbo.TaskDetail TD WITH(ROWLOCK) 
+         INNER JOIN dbo.PickDetail PD WITH(ROWLOCK) ON PD.TaskDetailKey = TD.TaskDetailKey
+         WHERE PD.StorerKey = @cStorerKey 
+            AND PD.ID = @cDropID
+            AND PD.WaveKey = @cWaveKey
+            AND PD.LOC = @cToLOC
+            AND PD.STATUS <> '5'
+
+         IF EXISTS (SELECT 1   
+            FROM dbo.LOTxLOCxID WITH (NOLOCK)  
+            WHERE LOT = @cLOT  
+            AND LOC = @cToLOC  
+            AND ID = @cFromID
+            AND StorerKey = @cStorerKey)  
+         BEGIN  
+            UPDATE dbo.LotxLocxID WITH (ROWLOCK) SET   
+               PendingMoveIn = CASE WHEN PendingMoveIn - @nQTY >= 0 THEN PendingMoveIn - @nQTY ELSE 0 END  
+            WHERE Lot = @cLOT  
+               AND Loc = @cToLOC  
+               AND ID  = @cFromID  
+               AND StorerKey = @cStorerKey
+
+            IF @@ERROR <> 0  
+            BEGIN  
+               SET @nErrNo = 78104  
+               SET @cErrMsg = '78104 UPD LLI FAIL'  
+               GOTO RollBackTran  
+            END  
+         END  
       END
 
 

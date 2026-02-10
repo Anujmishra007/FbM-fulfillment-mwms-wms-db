@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
 /* 2021-09-28  Wan      1.0   Created & DevOps Combine Script.          */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_KitReleaseTask_Wrapper]
       @c_KitKey               NVARCHAR(10) = ''       
@@ -41,6 +42,7 @@ BEGIN
 
    DECLARE  @n_StartTCnt            INT = @@TRANCOUNT
          ,  @n_Continue             INT = 1
+         ,  @b_ExecuteAs            BIT = 0
 
          ,  @c_Facility             NVARCHAR(5)  = ''
          ,  @c_Storerkey            NVARCHAR(15) = '' 
@@ -53,20 +55,26 @@ BEGIN
    BEGIN TRAN        
 
    SET @n_Err = 0
+   
+   -- Enhanced session management (SWT01)
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser]
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
       IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- End enhanced session management (SWT01)
+
    BEGIN TRY
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
       BEGIN
@@ -159,7 +167,8 @@ EXIT_SP:
       BEGIN TRAN
    END
 
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
 GRANT EXECUTE ON  [WM].[lsp_KitReleaseTask_Wrapper] TO [NSQL]

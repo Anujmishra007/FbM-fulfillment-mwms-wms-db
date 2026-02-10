@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_598RcvCfm04]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_598RcvCfm04]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -13,10 +10,11 @@ GO
 /* Purpose: Receive across multiple ASN                                       */  
 /*                                                                            */  
 /* Date       Rev  Author     Purposes                                        */  
-/* 2021-11-29 1.0  James      WMS-18442. Created                              */  
+/* 2021-11-29 1.0  James      WMS-18442. Created                              */
+/* 2025-07-14 1.1  YeeKung    FCR-5719  Add new params                        */  
 /******************************************************************************/  
   
-CREATE PROCEDURE rdt.rdt_598RcvCfm04 (  
+CREATE OR ALTER PROCEDURE rdt.rdt_598RcvCfm04 (  
    @nFunc          INT,  
    @nMobile        INT,  
    @cLangCode      NVARCHAR( 3),  
@@ -54,8 +52,12 @@ CREATE PROCEDURE rdt.rdt_598RcvCfm04 (
    @nErrNo         INT                    OUTPUT,  
    @cErrMsg        NVARCHAR( 20)          OUTPUT,   
    @cReceiptKeyOutput NVARCHAR( 10)       OUTPUT,  
-   @cReceiptLineNumberOutput NVARCHAR( 5) OUTPUT,   
-   @cDebug         NVARCHAR( 1) = '0'  
+   @cReceiptLineNumberOutput NVARCHAR( 5) OUTPUT,
+   @cSerialNo      NVARCHAR( 30) = '',     
+   @nSerialQTY     INT = 0,     
+   @nBulkSNO       INT = 0,     
+   @nBulkSNOQTY    INT = 0,  
+   @cDebug         NVARCHAR( 1) = '0'
 ) AS  
      
 SET NOCOUNT ON  

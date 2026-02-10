@@ -26,10 +26,12 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
+/* Date         Author   Ver     Purposes                               */
 /* 02-Mar-2021  Shong         Update EditWho and EditDate               */
 /* 05-Mar-2021  Shong         Fixing Partial Encrypt Issues             */
 /* 08-Mar-2021  TLTING02 1.3  field length extend                       */
+/* 10-Oct-2025  SSA01    1.4  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_Create_Order_PI_Encrypted]
@@ -245,8 +247,8 @@ BEGIN
       , @vb_M_Address4, @vb_M_City,       @vb_M_Zip      
       , @vb_M_Country,  @vb_M_Phone1,     @vb_M_Phone2   
       , @vb_M_Fax1,     @vb_M_Fax2,       @vb_M_State    
-      , GETDATE(),      SUSER_SNAME(),    GETDATE()
-      , SUSER_SNAME()
+      , dbo.fnc_GetDate(),      dbo.fnc_GetUserName(),    dbo.fnc_GetDate()           --(SSA01)
+      , dbo.fnc_GetUserName()                                         --(SSA01)
       )
 
    END
@@ -285,8 +287,8 @@ BEGIN
            , M_Fax1     = @vb_M_Fax1    
            , M_Fax2     = @vb_M_Fax2    
            , M_State    = @vb_M_State   
-           , EditDate = GETDATE()
-           , EditWho = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()   --(SSA01)
+           , EditWho = dbo.fnc_GetUserName()       --(SSA01)
          WHERE Orderkey = @c_Orderkey
          
       END
@@ -337,8 +339,8 @@ BEGIN
            , M_Fax1     = @vb_M_Fax1    
            , M_Fax2     = @vb_M_Fax2    
            , M_State    = @vb_M_State   
-           , EditDate = GETDATE()
-           , EditWho = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()   --(SSA01)
+           , EditWho = dbo.fnc_GetUserName()     --(SSA01)
          WHERE Orderkey = @c_Orderkey
       END
    END

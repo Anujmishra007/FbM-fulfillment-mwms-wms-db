@@ -65,3 +65,17 @@ EXECUTE rdt.rdtAddScn 6441, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5"],"3":["6","7"],"4":["8","9","10","11","12"],"5":["13"]}'
    ,@nFunc = 605
+
+
+-- 6621 = TOLOC screen, step99
+DELETE rdt.RDTScn WHERE Scn = 6621 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6621, 'ENG'
+   ,@cLine01 = 'ASN: %10d01'
+   ,@cLine02 = 'REFNO:'
+   ,@cLine03 = '%20d02'
+   ,@cLine04 = ''
+   ,@cLine05 = 'TOLOC:'
+   ,@cLine06 = '%60i03'   --WMS5536 Extend to 60 chars
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5","6"]}'
+   ,@nFunc = 605

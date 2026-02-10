@@ -1,4 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntridsStkTrfDocAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntridsStkTrfDocAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 drop trigger [dbo].[ntridsStkTrfDocAdd]
 GO
 
@@ -7,6 +7,7 @@ GO
 SET ANSI_NULLS OFF 
 GO
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
+/* 09-Oct-2025  SPC040  1.0  Replace SUSER_SNAME with fnc_GetUserName   */
 
 CREATE TRIGGER ntridsStkTrfDocAdd
  ON  idsStkTrfDoc
@@ -33,7 +34,7 @@ CREATE TRIGGER ntridsStkTrfDocAdd
  	
  	IF @n_continue=1 or @n_continue=2
  	BEGIN
- 		UPDATE idsStkTrfDoc SET AddDate = GETDATE(), AddWho=SUSER_SNAME()
+ 		UPDATE idsStkTrfDoc SET AddDate = dbo.fnc_GetDate(), AddWho = dbo.fnc_GetUserName()
  		FROM idsStkTrfDoc, inserted
  		WHERE idsStkTrfDoc.stdno = inserted.stdno
  		SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT

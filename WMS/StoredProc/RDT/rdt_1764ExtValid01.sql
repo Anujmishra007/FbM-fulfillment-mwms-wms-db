@@ -1,28 +1,26 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdt_1764ExtValid01') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_1764ExtValid01
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_1764ExtValid01                                        */
-/* Purpose: Validate cannot over replen if replen task from DPP               */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date         Author    Ver.  Purposes                                      */
-/* 2021-02-25   James     1.0   WMS-16271. Created                            */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_1764ExtValid01                                          */
+/* Purpose: Validate cannot over replen if replen task from DPP                 */
+/*                                                                              */
+/* Modifications log:                                                           */
+/*                                                                              */
+/* Date         Author    Ver.    Purposes                                      */
+/* 2021-02-25   James     1.0     WMS-16271. Created                            */
+/* 2025-09-10   NickT     1.1.0   FCR-7730 Add parameter @cToLoc                */
+/********************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_1764ExtValid01
+CREATE OR ALTER PROCEDURE rdt.rdt_1764ExtValid01
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
    ,@nStep           INT
    ,@cTaskdetailKey  NVARCHAR( 10)
+   ,@cToLoc          NVARCHAR( 10)
    ,@nErrNo          INT           OUTPUT
    ,@cErrMsg         NVARCHAR( 20) OUTPUT
    ,@nAfterStep      INT = 0

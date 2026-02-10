@@ -25,6 +25,7 @@ GO
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2021-01-22  Wan      1.0   Created                                    */
+/* 2025-10-10  SSA01    1.1   UWP-42248 -Enhanced session management     */
 /*************************************************************************/
 CREATE PROCEDURE [dbo].[ispRVWAV38]
        @c_Wavekey      NVARCHAR(10)
@@ -254,8 +255,8 @@ BEGIN
              
             UPDATE pd
                   SET  pd.PickSlipNo = ''
-   		            , pd.EditWho  = SUSER_SNAME()
-   		            , pd.EditDate = GETDATE()
+   		            , pd.EditWho  = dbo.fnc_GetUserName()           --(SSA01)
+   		            , pd.EditDate = dbo.fnc_GetDate()   --(SSA01)
    		            , pd.TrafficCop = NULL
             FROM PICK p
             JOIN PICKDETAIL pd ON pd.PickDetailkey = p.PickDetailkey
@@ -456,8 +457,8 @@ BEGIN
              
          UPDATE pd
                SET  pd.TaskDetailKey = ''
-   		         , pd.EditWho  = SUSER_SNAME()
-   		         , pd.EditDate = GETDATE()
+   		         , pd.EditWho  = dbo.fnc_GetUserName()            --(SSA01)
+   		         , pd.EditDate = dbo.fnc_GetDate()   --(SSA01)
    		         , pd.TrafficCop = NULL
          FROM PICK p
          JOIN PICKDETAIL pd ON pd.PickDetailkey = p.PickDetailkey
@@ -590,8 +591,8 @@ BEGIN
             UPDATE WAVE
                 SET TMReleaseFlag = 'N'               
                  ,  TrafficCop = NULL                 
-                 ,  EditWho = SUSER_SNAME()           
-                 ,  EditDate= GETDATE()               
+                 ,  EditWho = dbo.fnc_GetUserName()            --(SSA01)
+                 ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
             WHERE WAVEKEY = @c_Wavekey
 
             SET @n_err = @@ERROR

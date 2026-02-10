@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrDeviceProfileUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrDeviceProfileUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -31,9 +29,10 @@ GO
 /* Updates:                                                                      */  
 /* Date         Author    Ver.  Purposes                                         */  
 /* 28-Oct-2013  TLTING    1.1  Review Editdate column update                     */
+/* 06-Oct-2025  AK01      1.2  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /*********************************************************************************/    
   
-CREATE TRIGGER [dbo].[ntrDeviceProfileUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrDeviceProfileUpdate]  
 ON  [dbo].[DeviceProfile]  
 FOR UPDATE  
 AS  
@@ -64,8 +63,8 @@ BEGIN -- main
    IF (@n_continue = 1 or @n_continue = 2) AND NOT UPDATE(EditDate)  
    BEGIN  
      UPDATE DeviceProfile WITH (ROWLOCK)  
-     SET DeviceProfile.EditWho = SUSER_SNAME(),  
-         DeviceProfile.EditDate = GETDATE()  
+     SET DeviceProfile.EditWho = dbo.fnc_GetUserName(),  
+         DeviceProfile.EditDate = dbo.fnc_GetDate()  
      FROM DeviceProfile JOIN INSERTED ON DeviceProfile.DeviceProfileKey = INSERTED.DeviceProfileKey  
        SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
        IF @n_err <> 0  

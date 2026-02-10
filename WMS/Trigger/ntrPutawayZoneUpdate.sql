@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /***************************************************************************************/
 /* Trigger: ntrPutawayZoneUpdate                                                 		*/
 /* Creation Date:                                                                		*/
@@ -25,6 +30,7 @@
 /* 28-Oct-2013  TLTING   		1.2  	Review Editdate column update                      */
 /* 04-Mar-2022  TLTING   		1.3   WMS-19029 prevent bulk update or delete           	*/
 /* 2022-04-12   kelvinongcy	1.4	amend way for control user run batch (kocy01)		*/  
+/* 06-Oct-2025  AK01          1.5   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /***************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPutawayZoneUpdate]
@@ -58,8 +64,8 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPutawayZoneUpdate]
    IF ( @n_continue=1 OR @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE PUTAWAYZONE WITH (ROWLOCK)
-      SET EditDate = GetDate(),
-          EditWho  = Suser_Sname(),
+      SET EditDate = dbo.fnc_GetDate(),
+          EditWho  = dbo.fnc_GetUserName(),
           TrafficCop = NULL
     FROM PUTAWAYZONE , INSERTED
     WHERE PUTAWAYZONE.PutawayZone = INSERTED.PutawayZone
@@ -73,7 +79,7 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPutawayZoneUpdate]
    --IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
    --    AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
    IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
-        AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
+        AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = dbo.fnc_GetUserName())
    BEGIN      
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=86310   -- Should Be Set To The SQL Err message but I don't know how to do so.
@@ -168,5 +174,7 @@ GO
 
 ALTER TABLE [dbo].[PutawayZone] ENABLE TRIGGER [ntrPutawayZoneUpdate]
 GO
+
+
 
 

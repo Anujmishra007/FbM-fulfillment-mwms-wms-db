@@ -1,7 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = Object_Id(N'[dbo].[ntrInventoryQCDetailUpdate]') AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrInventoryQCDetailUpdate]
-GO
-SET QUOTED_IDENTIFIER OFF
+﻿SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
@@ -43,9 +40,11 @@ GO
 /* 28-Oct-2013  TLTING     1.4   NOLOCK                                 */
 /* 22-Mar-2018  Wan01      1.7   WMS-4288 - [CN] UA Relocation Phase II-*/
 /*                               Exceed Channel of IQC                  */
+/* 25-JUN-2025  SSA01      1.8   UWP-3982- Added PalletType in inventory*/
+/* 09-Oct-2025  SPC040     1.9   Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
 
-CREATE TRIGGER ntrInventoryQCDetailUpdate
+CREATE OR ALTER TRIGGER ntrInventoryQCDetailUpdate
 ON InventoryQCDetail
 FOR UPDATE
 AS
@@ -109,6 +108,7 @@ AS
          @c_ToLocFlag         NVARCHAR(10)       -- Added by MaryVong on 29Sept04 (SOS25798 IDSTH-C4)
       , @c_Channel            NVARCHAR(20) = '' --(Wan01)
       , @n_Channel_ID         BIGINT = 0        --(Wan01)
+      , @c_PalletType         NVARCHAR(10) = ''  --(SSA01)
 
    IF UPDATE(ArchiveCop)
    BEGIN
@@ -123,8 +123,8 @@ AS
          AND NOT UPDATE(EditDate)
    BEGIN
     UPDATE InventoryQCDetail with (ROWLOCK)
-    SET EditDate   = GETDATE(),
-        EditWho    = SUSER_SNAME(),
+    SET EditDate = dbo.fnc_GetDate(),
+        EditWho = dbo.fnc_GetUserName(),
         TrafficCop = NULL
     FROM InventoryQCDetail, INSERTED
     WHERE InventoryQCDetail.QC_Key = INSERTED.QC_Key
@@ -164,6 +164,7 @@ AS
           @c_toid      = Inserted.toid
        ,  @c_Channel   = Inserted.Channel       --(Wan01)
        ,  @n_Channel_ID= Inserted.Channel_ID    --(Wan01)
+       ,  @c_PalletType= INSERTED.ToPalletType  --(SSA01)
    FROM Inserted, Deleted
    WHERE  Inserted.qc_key = Deleted.qc_key
    AND    Inserted.qclineno = Deleted.qclineno
@@ -307,7 +308,8 @@ AS
             ,  @c_errmsg       = @c_errmsg     OUTPUT                                                                                                                                                                                                                      
             ,  @c_MoveRefKey   = ''                                                                                                                                                                                                                                        
             ,  @c_Channel      = @c_Channel                                                                                                                                                                                                                                
-            ,  @n_Channel_ID   = @n_Channel_ID  OUTPUT                                                                                                                                                                                                                     
+            ,  @n_Channel_ID   = @n_Channel_ID  OUTPUT
+            ,  @c_PalletType   = @c_PalletType   --(SSA01)
 
       IF @b_success <> 1
       BEGIN
@@ -322,8 +324,8 @@ AS
          UPDATE InventoryQCDetail WITH (ROWLOCK)
          SET    Status     = '9',
                 TrafficCop = NULL,
-                EditDate = GETDATE(),   --tlting
-                EditWho = SUSER_SNAME()
+                EditDate = dbo.fnc_GetDate(),   --tlting
+                EditWho = dbo.fnc_GetUserName()
             ,   Channel_ID = @n_Channel_ID      --(Wan01)
          WHERE  qc_key     = @c_qc_key
          AND    qclineno   = @c_qclineno
@@ -407,8 +409,8 @@ AS
  IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)
  BEGIN
     UPDATE InventoryQCDetail with (ROWLOCK)
-    SET EditDate   = GETDATE(),
-        EditWho    = SUSER_SNAME(),
+    SET EditDate = dbo.fnc_GetDate(),
+        EditWho = dbo.fnc_GetUserName(),
         TrafficCop = NULL
     FROM InventoryQCDetail, INSERTED
     WHERE InventoryQCDetail.QC_Key = INSERTED.QC_Key

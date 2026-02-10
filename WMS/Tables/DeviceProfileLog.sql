@@ -1,7 +1,7 @@
     IF NOT EXISTS (SELECT *
                FROM sys.tables
                WHERE name = 'DeviceProfilelog'
-                 AND type = 'U')
+                 AND type in (N'U'))
    BEGIN
 
         CREATE TABLE [dbo].[DeviceProfileLog]
@@ -35,29 +35,47 @@
 
       CREATE NONCLUSTERED INDEX [IDX_DeviceProfileLog_DropID] ON [dbo].[DeviceProfileLog] ([DropID], [OrderKey]) ON [PRIMARY]
 
+	  GRANT DELETE ON  [dbo].[DeviceProfileLog] TO [NSQL]
+
+	  GRANT INSERT ON  [dbo].[DeviceProfileLog] TO [NSQL]
+	  
+	  GRANT SELECT ON  [dbo].[DeviceProfileLog] TO [NSQL]
+	  
+	  GRANT UPDATE ON  [dbo].[DeviceProfileLog] TO [NSQL]
+	  
+
     END
+
+
     ELSE
     BEGIN
+
+        IF NOT EXISTS (SELECT *
+                FROM sys.columns
+                WHERE Name = 'RowRef'
+                    AND Object_ID = Object_ID('dbo.DeviceProfilelog'))
+        BEGIN
+            ALTER TABLE dbo.DeviceProfilelog
+                ADD [RowRef] [bigint] NOT NULL IDENTITY(1, 1);
+        END
+ 
+
+
+
+
         IF NOT EXISTS (SELECT *
                 FROM sys.columns
                 WHERE Name = 'Facility'
-                    AND Object_ID = Object_ID('DeviceProfilelog'))
+                    AND Object_ID = Object_ID('dbo.DeviceProfilelog'))
         BEGIN
-            ALTER TABLE DeviceProfilelog
+            ALTER TABLE dbo.DeviceProfilelog
                 ADD Facility NVARCHAR(5)
                 CONSTRAINT [DF_DeviceProfileLog_Facility] DEFAULT ('');
         END
     END
 
-GO
+
 
 --DISABLE TRIGGER [dbo].[ntrDeviceProfileLogUpdate] ON [dbo].[DeviceProfileLog]
 --GO
-GRANT DELETE ON  [dbo].[DeviceProfileLog] TO [NSQL]
-GO
-GRANT INSERT ON  [dbo].[DeviceProfileLog] TO [NSQL]
-GO
-GRANT SELECT ON  [dbo].[DeviceProfileLog] TO [NSQL]
-GO
-GRANT UPDATE ON  [dbo].[DeviceProfileLog] TO [NSQL]
-GO
+

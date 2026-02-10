@@ -1,3 +1,7 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /***************************************************************************************/
 /* Trigger: ntrBillofMaterialUpdate                                              		*/
 /* Creation Date:                                                                		*/
@@ -25,9 +29,10 @@
 /* Data Modifications:                                                           		*/
 /*                                                                               		*/
 /* Updates:     	Author     	Ver	Purposes                                         	*/
-/* 23-May-2012  	TLTING02        	DM Data integrity - update editdate B4 trafficCop 	*/
-/* 28-Oct-2013 	TLTING          	Review Editdate column update                    	*/
+/* 23-May-2012  	TLTING02        DM Data integrity - update editdate B4 trafficCop 	*/
+/* 28-Oct-2013 	    TLTING          Review Editdate column update                    	*/
 /* 2022-04-12		kelvinongcy	1.3	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/* 06-Oct-2025      AK01        1.4 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /***************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrBillofMaterialUpdate]
@@ -65,8 +70,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE BillOfMaterial WITH (ROWLOCK)
-		SET EditDate = GETDATE(),
-		    EditWho = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho = dbo.fnc_GetUserName(),
           TrafficCop = NULL
 		FROM BillOfMaterial, INSERTED
       WHERE BillOfMaterial.Storerkey = INSERTED.Storerkey
@@ -128,5 +133,6 @@ GO
 
 ALTER TABLE [dbo].[BillOfMaterial] ENABLE TRIGGER [ntrBillofMaterialUpdate]
 GO
+
 
 

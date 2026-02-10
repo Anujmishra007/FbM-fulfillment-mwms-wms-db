@@ -17,6 +17,8 @@ GO
 /* 30-Sep-2016  1.1   Ung        Performance tuning                     */
 /* 21-Nov-2024  1.2.0 Dennis     FCR-1349 Extended Update               */
 /* 27-Nov-2022  1.3.0 PXL009     UWP-27586 correct the step jump        */
+/* 10-Jul-2025  0.0.0 Jackc      !!!Cutover!!! Use V0 repo for work     */
+/* 27-Aug-2025  1.4.0 NickT      FCR-6730 Add ExtendedScnSP             */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_ConfirmShortPick(
@@ -48,9 +50,9 @@ DECLARE
    @cFacility      NVARCHAR( 5),
    @cPrinter       NVARCHAR( 10),
 
-	@cWaveKey       NVARCHAR( 10),
-	@cLoadKey       NVARCHAR( 10),
-	@cOrderKey      NVARCHAR( 10),
+   @cWaveKey       NVARCHAR( 10),
+   @cLoadKey       NVARCHAR( 10),
+   @cOrderKey      NVARCHAR( 10),
    @cShort         NVARCHAR( 6), 
    @cPick          NVARCHAR( 6),
    @nFocusField    INT,
@@ -58,22 +60,38 @@ DECLARE
    @cExtendedUpdateSP   NVARCHAR( 20),
    @cSQL           NVARCHAR( MAX),
    @cSQLParam      NVARCHAR( MAX),
+   @tExtScnData    VariableTable,
+   @cExtendedScnSP NVARCHAR( 20),
+   @nAfterScn      INT,
+   @nAfterStep     INT,
+   @nAction        INT,
 
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1),
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),  @cFieldAttr04 NVARCHAR( 1),
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),  @cFieldAttr05 NVARCHAR( 1),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),  @cFieldAttr06 NVARCHAR( 1),
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),  @cFieldAttr07 NVARCHAR( 1),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),  @cFieldAttr08 NVARCHAR( 1),
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),  @cFieldAttr09 NVARCHAR( 1),
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),  @cFieldAttr10 NVARCHAR( 1),
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),  @cFieldAttr11 NVARCHAR( 1),
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),  @cFieldAttr12 NVARCHAR( 1),
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),  @cFieldAttr13 NVARCHAR( 1),
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),  @cFieldAttr14 NVARCHAR( 1),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),  @cFieldAttr15 NVARCHAR( 1) 
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1), @cLottable01     NVARCHAR( 18),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1), @cLottable02     NVARCHAR( 18),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1), @cLottable03     NVARCHAR( 18),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),  @cFieldAttr04 NVARCHAR( 1), @dLottable04     DATETIME,
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),  @cFieldAttr05 NVARCHAR( 1), @dLottable05     DATETIME,
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),  @cFieldAttr06 NVARCHAR( 1), @cLottable06     NVARCHAR( 30),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),  @cFieldAttr07 NVARCHAR( 1), @cLottable07     NVARCHAR( 30),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),  @cFieldAttr08 NVARCHAR( 1), @cLottable08     NVARCHAR( 30),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),  @cFieldAttr09 NVARCHAR( 1), @cLottable09     NVARCHAR( 30),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),  @cFieldAttr10 NVARCHAR( 1), @cLottable10     NVARCHAR( 30),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),  @cFieldAttr11 NVARCHAR( 1), @cLottable11     NVARCHAR( 30),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),  @cFieldAttr12 NVARCHAR( 1), @cLottable12     NVARCHAR( 30),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),  @cFieldAttr13 NVARCHAR( 1), @dLottable13     DATETIME,
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),  @cFieldAttr14 NVARCHAR( 1), @dLottable14     DATETIME,
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),  @cFieldAttr15 NVARCHAR( 1), @dLottable15     DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Getting Mobile information
 SELECT
@@ -97,9 +115,10 @@ SELECT
    @nFocusField      = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String3,  5), 0) = 1 THEN LEFT( V_String3,  5) ELSE 0 END,
 
    @cWaveKey         = V_String4,
-   @cOrderCount      = V_String5, 
+   @cOrderCount      = V_String5,
 
    @cExtendedUpdateSP   = V_String10,
+   @cExtendedScnSP      = V_String11,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -128,6 +147,7 @@ BEGIN
    IF @nStep = 2  GOTO Step_2  -- Scn = 3051. Info
    IF @nStep = 3  GOTO Step_3  -- Scn = 3052. Option
    IF @nStep = 4  GOTO Step_4  -- Scn = 3052. Option
+   IF @nStep = 99  GOTO Step_99  -- Scn = 3052. Option
 END
 RETURN -- Do nothing if incorrect step
 
@@ -145,11 +165,16 @@ BEGIN
    IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
 
+   SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScnSP = '0'
+      SET @cExtendedScnSP = ''
+
    -- Prepare next screen var
    SET @nFocusField = 1
    SET @cOutField01 = '' -- WaveKey
    SET @cOutField02 = '' -- LoadKey
    SET @cOutField03 = '' -- OrderKey
+   SET @cOutField04 = '' 
 
    SET @cFieldAttr01 = ''
    SET @cFieldAttr02 = ''
@@ -166,6 +191,13 @@ BEGIN
    SET @cFieldAttr13 = ''
    SET @cFieldAttr14 = ''
    SET @cFieldAttr15 = ''
+
+   IF @cExtendedScnSP <> '' 
+   BEGIN 
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         GOTO Step_99
+   END
+
 END
 GOTO Quit
 
@@ -185,59 +217,59 @@ BEGIN
        SET @cLoadKey = @cInField02
        SET @cOrderKey = @cInField03
        
-		-- Check if blank
-		IF @cWaveKey = '' AND @cLoadKey = '' AND @cOrderKey = ''
-		BEGIN
-	      SET @nErrNo = 75501
-	      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value
-	      EXEC rdt.rdtSetFocusField @nMobile, 01
-	      GOTO Quit
-		END
+      -- Check if blank
+      IF @cWaveKey = '' AND @cLoadKey = '' AND @cOrderKey = ''
+      BEGIN
+         SET @nErrNo = 75501
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value
+         EXEC rdt.rdtSetFocusField @nMobile, 01
+         GOTO Quit
+      END
 
-		-- Check if key-in more then 1
-		DECLARE @i INT
-		SET @i = 0
-		IF @cWaveKey <> '' SET @i = @i + 1
-		IF @cLoadKey <> '' SET @i = @i + 1 
-		IF @cOrderKey <> '' SET @i = @i + 1
-		IF @i <> 1
-		BEGIN
-	      SET @nErrNo = 75502
-	      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Key-in OneOnly
-	      EXEC rdt.rdtSetFocusField @nMobile, 01
-	      GOTO Quit
-		END
+      -- Check if key-in more then 1
+      DECLARE @i INT
+      SET @i = 0
+      IF @cWaveKey <> '' SET @i = @i + 1
+      IF @cLoadKey <> '' SET @i = @i + 1 
+      IF @cOrderKey <> '' SET @i = @i + 1
+      IF @i <> 1
+      BEGIN
+         SET @nErrNo = 75502
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Key-in OneOnly
+         EXEC rdt.rdtSetFocusField @nMobile, 01
+         GOTO Quit
+      END
 
       DECLARE @nOrderCount INT
       DECLARE @nShort      INT
       DECLARE @nPick       INT
 
-		IF @cWaveKey <> ''
-		BEGIN
-		   -- Check valid WaveKey
-			IF NOT EXISTS (SELECT 1 FROM dbo.Wave WITH (NOLOCK) WHERE WaveKey = @cWaveKey)
-			BEGIN
-		      SET @nErrNo = 75503
-		      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidWaveKey
-		      EXEC rdt.rdtSetFocusField @nMobile, 01
-		      GOTO Quit
-			END
+      IF @cWaveKey <> ''
+      BEGIN
+         -- Check valid WaveKey
+         IF NOT EXISTS (SELECT 1 FROM dbo.Wave WITH (NOLOCK) WHERE WaveKey = @cWaveKey)
+         BEGIN
+            SET @nErrNo = 75503
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidWaveKey
+            EXEC rdt.rdtSetFocusField @nMobile, 01
+            GOTO Quit
+         END
          
          -- Check not yet pick
-			IF EXISTS (SELECT 1
+         IF EXISTS (SELECT 1
             FROM PickDetail PD WITH (NOLOCK)
                INNER JOIN OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
                INNER JOIN WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
             WHERE WD.WaveKey = @cWaveKey
                AND PD.Status < '3'
                AND PD.QTY > 0)
-			BEGIN
-		      SET @nErrNo = 75504
-		      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotFinishPick
-		      EXEC rdt.rdtSetFocusField @nMobile, 01
-		      GOTO Quit
-			END
-			
+         BEGIN
+            SET @nErrNo = 75504
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotFinishPick
+            EXEC rdt.rdtSetFocusField @nMobile, 01
+            GOTO Quit
+         END
+         
          -- Get stat
          SELECT 
             @nOrderCount = COUNT( DISTINCT OD.OrderKey), 
@@ -253,30 +285,30 @@ BEGIN
       END
 
 
-		IF @cLoadKey <> ''
-		BEGIN
-		   -- Check valid LoadKey
-			IF NOT EXISTS (SELECT 1 FROM dbo.LoadPlan (NOLOCK) WHERE LoadKey = @cLoadKey)
-			BEGIN
-		      SET @nErrNo = 75505
-		      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLoadKey
-		      EXEC rdt.rdtSetFocusField @nMobile, 02
-		      GOTO Quit
-			END
+      IF @cLoadKey <> ''
+      BEGIN
+         -- Check valid LoadKey
+         IF NOT EXISTS (SELECT 1 FROM dbo.LoadPlan (NOLOCK) WHERE LoadKey = @cLoadKey)
+         BEGIN
+            SET @nErrNo = 75505
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLoadKey
+            EXEC rdt.rdtSetFocusField @nMobile, 02
+            GOTO Quit
+         END
 
          -- Check not yet pick
-			IF EXISTS (SELECT 1
+         IF EXISTS (SELECT 1
             FROM PickDetail PD WITH (NOLOCK)
                INNER JOIN OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
             WHERE OD.LoadKey = @cLoadKey
                AND PD.Status < '3'
                AND PD.QTY > 0)
-			BEGIN
-		      SET @nErrNo = 75506
-		      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotFinishPick
-		      EXEC rdt.rdtSetFocusField @nMobile, 02
-		      GOTO Quit
-			END
+         BEGIN
+            SET @nErrNo = 75506
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotFinishPick
+            EXEC rdt.rdtSetFocusField @nMobile, 02
+            GOTO Quit
+         END
 
          -- Get stat
          SELECT 
@@ -291,29 +323,29 @@ BEGIN
          SET @nFocusField = 2
       END
 
-		IF @cOrderKey <> ''
-		BEGIN
-		   -- Check valid OrderKey
-			IF NOT EXISTS (SELECT 1 FROM dbo.Orders (NOLOCK) WHERE OrderKey = @cOrderKey)
-			BEGIN
-		      SET @nErrNo = 75507
-		      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid OrdKey
-		      EXEC rdt.rdtSetFocusField @nMobile, 03
-		      GOTO Quit
-			END
+      IF @cOrderKey <> ''
+      BEGIN
+         -- Check valid OrderKey
+         IF NOT EXISTS (SELECT 1 FROM dbo.Orders (NOLOCK) WHERE OrderKey = @cOrderKey)
+         BEGIN
+            SET @nErrNo = 75507
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid OrdKey
+            EXEC rdt.rdtSetFocusField @nMobile, 03
+            GOTO Quit
+         END
 
          -- Check not yet pick
-			IF EXISTS (SELECT 1 
-			   FROM PickDetail PD WITH (NOLOCK) 
-			   WHERE PD.OrderKey = @cOrderKey 
-			      AND PD.Status < '3' 
-			      AND PD.QTY > 0)
-			BEGIN
-		      SET @nErrNo = 75508
-		      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotFinishPick
-		      EXEC rdt.rdtSetFocusField @nMobile, 03
-		      GOTO Quit
-			END
+         IF EXISTS (SELECT 1 
+            FROM PickDetail PD WITH (NOLOCK) 
+            WHERE PD.OrderKey = @cOrderKey 
+               AND PD.Status < '3' 
+               AND PD.QTY > 0)
+         BEGIN
+            SET @nErrNo = 75508
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotFinishPick
+            EXEC rdt.rdtSetFocusField @nMobile, 03
+            GOTO Quit
+         END
 
          -- Get stat
          SELECT 
@@ -370,12 +402,12 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Check any short
-		IF @cShort = '0'
-		BEGIN
-	      SET @nErrNo = 75509
-	      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No short pick
-	      GOTO Quit
-		END
+      IF @cShort = '0'
+      BEGIN
+         SET @nErrNo = 75509
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No short pick
+         GOTO Quit
+      END
 
       -- Prepare next screen var
       SET @cOutField01 = '' -- Option
@@ -398,6 +430,12 @@ BEGIN
 
       --set focus on previous scanned field
       EXEC rdt.rdtSetFocusField @nMobile, @nFocusField
+   END
+
+   IF @cExtendedScnSP <> '' 
+   BEGIN 
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         GOTO Step_99
    END
 END
 GOTO Quit
@@ -474,7 +512,6 @@ BEGIN
           -- Go to next screen
          SET @nScn  = @nScn + 1
          SET @nStep = @nStep + 1
-         GOTO Quit
       END
 
       IF @cOption = '2' -- No
@@ -490,7 +527,6 @@ BEGIN
          -- Go to prev screen
          SET @nScn  = @nScn - 1
          SET @nStep = @nStep - 1
-         GOTO Quit
       END
    END
 
@@ -507,6 +543,13 @@ BEGIN
       -- Go to prev screen
       SET @nScn  = @nScn - 1
       SET @nStep = @nStep - 1
+   END
+
+   Step3_Ext_Scn:
+   IF @cExtendedScnSP <> '' 
+   BEGIN 
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         GOTO Step_99
    END
 END
 GOTO Quit
@@ -537,6 +580,70 @@ BEGIN
       --set focus on previous scanned field
       EXEC rdt.rdtSetFocusField @nMobile, @nFocusField
    END
+
+   IF @cExtendedScnSP <> '' 
+   BEGIN 
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         GOTO Step_99
+   END
+END
+GOTO Quit
+
+Step_99:
+BEGIN
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtendedScnSP,
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         IF 'rdt_869ExtScn01' = @cExtendedScnSP
+         BEGIN
+            IF @cUDF30 = '1' -- No need to jump to Quit
+               RETURN
+         END
+         
+         GOTO Quit
+      END
+   END
+   Step_99_Fail:
+      GOTO Quit
 END
 GOTO Quit
 
@@ -567,6 +674,7 @@ BEGIN
       V_String5    = @cOrderCount, 
 
       V_String10   = @cExtendedUpdateSP,
+      V_String11   = @cExtendedScnSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,  FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,  FieldAttr02  = @cFieldAttr02,

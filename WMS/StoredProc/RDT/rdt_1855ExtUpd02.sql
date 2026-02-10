@@ -16,6 +16,8 @@ GO
 /* 2023-11-10   James     1.1   Enhance upd orders status logic(james01)*/
 /* 2023-11-14   James     1.2   Only display extended msg when orders is*/
 /*                              PENDCANC, not rollback tran (james02)   */
+/* 2024-10-29   James     1.3   WMS-26497 Add config to control whether */
+/*                              check ecom flag (james03)               */
 /************************************************************************/      
       
 CREATE OR ALTER PROCEDURE [rdt].[rdt_1855ExtUpd02]      
@@ -79,7 +81,8 @@ BEGIN
    DECLARE @curUpdOrdDtl      CURSOR    
    DECLARE @cErrMsg1          NVARCHAR( 20) = ''
    DECLARE @nPENDCANC         INT = 0
-   
+   DECLARE @cIgnoreEcomSingleFlag   NVARCHAR( 1)
+
    SET @nErrNo = 0    
        
    SELECT @cUserName = UserName    
@@ -100,6 +103,8 @@ BEGIN
          IF @cPickConfirmStatus = '0'      
             SET @cPickConfirmStatus = '5'      
 
+         SET @cIgnoreEcomSingleFlag = rdt.RDTGetConfig( @nFunc, 'IgnoreEcomSingleFlag', @cStorerKey)      
+
          IF OBJECT_ID('tempdb..#OrderKey') IS NOT NULL
             DROP TABLE #OrderKey
 
@@ -119,7 +124,8 @@ BEGIN
          AND   TD.Groupkey = @cGroupKey     
          AND   TD.DeviceID = @cCartID     
          AND   PD.[Status] = @cPickConfirmStatus    
-         AND   O.Ecom_Single_flag = 'S'    
+         AND   O.ECOM_SINGLE_Flag = CASE WHEN @cIgnoreEcomSingleFlag = '0' THEN 'S' 
+                                    ELSE O.ECOM_SINGLE_Flag END
          AND   O.[Status] < '3'    
          ORDER BY 1    
          OPEN @curUpdOrd    

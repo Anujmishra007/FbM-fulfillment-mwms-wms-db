@@ -3,10 +3,6 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'ntrVITALLogUpdate' AND type = 'TR')
-   DROP TRIGGER ntrVITALLogUpdate
-GO
-
 /************************************************************************/
 /* Trigger: ntrVITALLogUpdate                                           */
 /* Creation Date: 30-Jun-2008                                           */
@@ -34,9 +30,10 @@ GO
 /*                              (tlting01)                              */
 /* 28-Oct-2013  TLTING    1.2   Review Editdate column update           */
 /*                                                                      */
+/* 06-Oct-2025  AK01      1.3   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER ntrVITALLogUpdate
+CREATE OR ALTER TRIGGER ntrVITALLogUpdate
 ON  VITALLOG
 FOR UPDATE
 AS
@@ -74,8 +71,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
 	BEGIN 	
 	 	UPDATE VITALLOG WITH (ROWLOCK) 
-    	   SET EditDate = GETDATE(),
-     	       EditWho = SUSER_SNAME(),
+    	   SET EditDate = dbo.fnc_GetDate(),
+     	       EditWho = dbo.fnc_GetUserName(),
      	       Trafficcop = NULL
         FROM VITALLOG, INSERTED
        WHERE VITALLOG.VITALLOGKey = INSERTED.VITALLOGKey
@@ -127,4 +124,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

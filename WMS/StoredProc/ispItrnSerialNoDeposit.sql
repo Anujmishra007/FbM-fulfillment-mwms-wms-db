@@ -13,6 +13,7 @@ GO
 /* 2017-05-15 1.0  Ung         WMS-1817 Add serial no                         */
 /* 2024-08-12 1.1  Wan01       LFWM-4446 - RG[GIT] Serial Number Solution     */
 /*                             - Transfer by Serial Number                    */
+/* 2025-10-03 1.2  NJOW01      FCR-8281 update loc to itrnserialno            */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE dbo.ispITrnSerialNoDeposit (
@@ -80,6 +81,7 @@ CREATE OR ALTER PROCEDURE dbo.ispITrnSerialNoDeposit (
          ,@c_ID  = ID
          ,@c_Status = [Status]
          ,@c_UCCNo  = UCCNo
+         ,@c_Loc = LOC --NJOW01
    FROM SERIALNO WITH (NOLOCK)
    WHERE Storerkey  = @c_Storerkey
    AND   SerialNo   = @c_SerialNo

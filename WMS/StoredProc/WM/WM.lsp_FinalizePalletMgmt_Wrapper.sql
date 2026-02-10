@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_FinalizePalletMgmt_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_FinalizePalletMgmt_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,21 +13,29 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
-/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_FinalizePalletMgmt_Wrapper]  
-   @c_PMkey          NVARCHAR(10)
-,  @b_Success        INT          = 1  OUTPUT   
-,  @n_Err            INT          = 0  OUTPUT
-,  @c_Errmsg         NVARCHAR(255)= '' OUTPUT
-,  @c_UserName       NVARCHAR(128)= ''
+/* 10-Sep-2024  WLChooi  1.1  LFWM-5008 TH-SCE All Account - Pallet      */
+/*                            Management - Change Request for validate   */
+/*                            UID login (WL01)                           */
+/* 10-Sep-2024  WLChooi  1.1  DevOps Combine Script                      */
+/* 06-Oct-2025  SSA01    1.2   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                              */
+/*************************************************************************/    
+CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizePalletMgmt_Wrapper]  
+   @c_PMkey             NVARCHAR(10)
+,  @b_Success           INT           = 1  OUTPUT   
+,  @n_Err               INT           = 0  OUTPUT
+,  @c_Errmsg            NVARCHAR(255) = '' OUTPUT
+,  @c_UserName          NVARCHAR(128) = ''
+,  @c_StorerRestrict    NVARCHAR(250) = '' --Pass in list of user restricted storers with comma ',' separator     --WL01
+,  @c_FacilityRestrict  NVARCHAR(250) = '' --Pass in list of user restricted facilities with comma ',' separator  --WL01   
 AS  
 BEGIN  
    SET NOCOUNT ON
@@ -42,27 +45,32 @@ BEGIN
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0     --(SSA01)
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
 
-   --(mingle01) - START   
+   --(mingle01) - START
+   --(SSA01) - START
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
   
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+       IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   --(SSA01) - END
    --(mingle01) - END
 
    --(mingle01) - START
@@ -74,6 +82,9 @@ BEGIN
             ,  @b_Success   = @b_Success  OUTPUT
             ,  @n_err       = @n_err      OUTPUT
             ,  @c_errmsg    = @c_errmsg   OUTPUT
+            ,  @c_SourceApp        = 'WM'                  --WL01
+            ,  @c_StorerRestrict   = @c_StorerRestrict     --WL01
+            ,  @c_FacilityRestrict = @c_FacilityRestrict   --WL01
       END TRY
 
       BEGIN CATCH
@@ -131,10 +142,15 @@ EXIT_SP:
       BEGIN TRAN
    END
 
-   REVERT      
+   --(SSA01) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA01) - END
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizePalletMgmt_Wrapper] TO nSQL 
 GO
-
-

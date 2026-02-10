@@ -19,7 +19,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.3                                                          */  
+/* Version: 1.4 (SWT01)                                                 */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -29,6 +29,7 @@ GO
 /*                            Error                                      */
 /* 28-Dec-2020 SWT01    1.2   Adding Begin Try/Catch                     */
 /* 15-Jan-2021 Wan02    1.3   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-01-09  SWT01    1.4   Enhanced session management                */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_Kit_Gen_Components]  (
    @c_StorerKey      NVARCHAR(15), 
@@ -49,7 +50,8 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL ON
    SET ARITHABORT ON
 
-   DECLARE @n_Continue     INT = '1'         
+   DECLARE @b_ExecuteAs    BIT = 0 -- (SWT01)
+         , @n_Continue     INT = '1'         
          , @n_Count        INT = 0 
          , @c_ComponentSku NVARCHAR(20) = '' 
          , @n_ComponentQty INT = 0 
@@ -64,17 +66,21 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
+   
+   -- Enhanced session management (SWT01)
    IF SUSER_SNAME() <> @c_UserName       --(Wan02) - START
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT
    
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName 
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END                                   --(Wan02) - END
+   -- End enhanced session management (SWT01)
 
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
    
@@ -210,7 +216,9 @@ BEGIN
    BEGIN
       SET @b_Success = 1
    END
-   REVERT      
+   
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_Kit_Gen_Components] TO nSQL 

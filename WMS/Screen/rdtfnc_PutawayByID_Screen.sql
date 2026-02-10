@@ -67,6 +67,7 @@ EXECUTE rdt.rdtAddScn 4114, 'ENG',
    @cLine06 = '2 = NO',
    @cLine07 = '',
    @cLine08 = 'OPTION: %01i01',
+   @cLine13 = '%20d15', --fcr-9755 EXTINFO
    @cLine14 = '%e',     
    @nFunc   = 1819
 

@@ -1,45 +1,43 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_RCMConfigSP_TRF_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_RCMConfigSP_TRF_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_RCMConfigSP_TRF_Wrapper                         */  
-/* Creation Date: 2020-06-11                                             */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
+
+/*************************************************************************/
+/* Stored Procedure: lsp_RCMConfigSP_TRF_Wrapper                         */
+/* Creation Date: 2020-06-11                                             */
+/* Copyright: LFL                                                        */
+/* Written by: Wan                                                       */
+/*                                                                       */
 /* Purpose: LFWM-2159 - Dyanamic Menu RCMConfig PO                       */
 /*          ReceiptTransferSOAdjustmentWaveLoadPlanMbol                  */
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */ 
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/*                                                                       */
+/* Version: 1.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date        Author   Ver   Purposes                                   */
 /* 2021-02-09  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2021-07-05  Wan01    1.2   LFWM-2875 - UAT RG-Create RCM allocation   */
 /*                            feature in Adjustment Screen- SCE          */
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_RCMConfigSP_TRF_Wrapper]  
+/* 2025-04-29  TLTING91 1.3   Infinite loop commit tran                  */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_RCMConfigSP_TRF_Wrapper]
    @c_FromStorerkey  NVARCHAR(15)
-,  @c_TransferKey    NVARCHAR(10) 
-,  @b_Success        INT          = 1   OUTPUT   
+,  @c_TransferKey    NVARCHAR(10)
+,  @b_Success        INT          = 1   OUTPUT
 ,  @n_Err            INT          = 0   OUTPUT
 ,  @c_Errmsg         NVARCHAR(255)= ''  OUTPUT
 ,  @c_UserName       NVARCHAR(128)= ''
 ,  @c_Code           NVARCHAR(30) = ''           --(Wan01) Extended to 30
-AS  
-BEGIN  
+AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
@@ -48,39 +46,43 @@ BEGIN
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
 
-         , @n_Count           INT = 0 
+         , @n_Count           INT = 0
          , @c_RCMConfigSP     NVARCHAR(60) = ''
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
+
+   --TLTING01
+   WHILE  @@TRANCOUNT > 0
    BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
+      COMMIT TRAN
    END
-   --(mingle01) - END
-   
+
    --(mingle01) - START
    BEGIN TRY
-      WHILE  @@TRANCOUNT > 0
-      BEGIN
-         COMMIT TRAN
-      END
 
-      BEGIN TRAN
-
+   		BEGIN TRAN
       SELECT @c_RCMConfigSP = RTRIM(CL.Long)
       FROM CODELKUP CL (NOLOCK)
       WHERE CL.ListName = 'RCMConfig'
@@ -97,15 +99,15 @@ BEGIN
          END
       END
 
-      BEGIN TRY   
+      BEGIN TRY
          SET @b_Success = 1
-          
-         EXEC @c_RCMConfigSP 
+
+         EXEC @c_RCMConfigSP
             @c_TransferKey    = @c_TransferKey
          ,  @b_Success        = @b_Success   OUTPUT
-         ,  @n_Err            = @n_Err       OUTPUT  
-         ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT   
-         ,  @c_Code           = @c_Code        
+         ,  @n_Err            = @n_Err       OUTPUT
+         ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT
+         ,  @c_Code           = @c_Code
 
       END TRY
 
@@ -115,23 +117,32 @@ BEGIN
          SET @c_ErrMsg = ERROR_MESSAGE()
          SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing Transfer''s RCMConfig Custom SP' + @c_RCMConfigSP + '. (lsp_RCMConfigSP_TRF_Wrapper)'
                         + '( ' + @c_errmsg + ' ) |' + @c_RCMConfigSP
-      END CATCH    
-      
-      IF @n_err <> 0 
+      END CATCH
+
+      IF @n_err <> 0
       BEGIN
          SET @n_Continue = 3
          GOTO EXIT_SP
       END
+      
+      COMMIT TRAN   --TLTING01
+      
    END TRY
-   
+
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
+   --TLTING01
+   IF @@TRANCOUNT < @n_starttcnt 
+   BEGIN 
+   		BEGIN TRAN	
+   END
+      
    --(mingle01) - END
    EXIT_SP:
-   
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -163,10 +174,9 @@ BEGIN
       BEGIN TRAN
    END
 
-   REVERT      
-END  
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
+END
 GO
-GRANT EXECUTE ON [WM].[lsp_RCMConfigSP_TRF_Wrapper] TO nSQL 
+GRANT EXECUTE ON  [WM].[lsp_RCMConfigSP_TRF_Wrapper] TO [NSQL]
 GO
-
-

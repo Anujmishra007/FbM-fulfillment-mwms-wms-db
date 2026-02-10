@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_1764ClosePlt01]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_1764ClosePlt01]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -17,18 +15,20 @@ GO
 /*                                                                         */
 /* Modifications log:                                                      */
 /*                                                                         */
-/* Date        Rev  Author    Purposes                                     */
-/* 2021-04-21  1.0  James     WMS-15656. Created                           */
+/* Date        Rev    Author    Purposes                                   */
+/* 2021-04-21  1.0    James     WMS-15656. Created                         */
+/* 2025-10-02  1.1.0  NickT     FCR-7730 Add @cScannedToLoc                */
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdt_1764ClosePlt01] (
+CREATE OR ALTER PROC [RDT].[rdt_1764ClosePlt01] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR(3),
    @cUserName      NVARCHAR(18),
    @cListKey       NVARCHAR(10),
    @nErrNo         INT         OUTPUT,
-   @cErrMsg        NVARCHAR(20) OUTPUT  -- screen limitation, 20 char max
+   @cErrMsg        NVARCHAR(20) OUTPUT , -- screen limitation, 20 char max
+   @cScannedToLoc       NVARCHAR( 10) = ''  -- New param for FCR-7730
 ) AS
 BEGIN
    SET NOCOUNT ON

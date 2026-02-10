@@ -83,6 +83,9 @@ GO
 /* 17-04-2024   4.4   NLT013     UWP-18215 Catch SQL Server exception   */
 /*                               for PA tasks                           */
 /* 18-10-2024   4.5   Dennis     FCR-775 Custom Logic                   */
+/* 13-06-2025   4.6.0 NickT      FCR-5727 Get StorerKey from RDTMOBREC  */
+/*                               if it is not passed through            */
+/* 10-10-2025   4.7   SSA01      UWP-42248 -Enhanced session management */
 /************************************************************************/
 CREATE OR ALTER PROC    [dbo].[nspTMTM01]
                @c_sendDelimiter    NVARCHAR(1)
@@ -134,8 +137,19 @@ BEGIN
    DECLARE @cSQL           NVARCHAR(MAX)
    DECLARE @cSQLParam      NVARCHAR(MAX)
    DECLARE @cCustomSP      NVARCHAR(20)
-   -- Get storer configure
-   SET @cCustomSP = rdt.RDTGetConfig( @n_Func , 'CustomTMTM', @c_StorerKey)
+
+   -- Get storer configure @cUserStorerKey, it is only used to get configuration CustomTMTM
+   DECLARE @cUserStorerKey NVARCHAR( 15)
+   SET @cUserStorerKey = @c_StorerKey
+
+   IF ISNULL(@c_StorerKey, '') = ''
+   BEGIN
+      SELECT @cUserStorerKey = StorerKey
+      FROM rdt.RDTMOBREC WITH(NOLOCK)
+      WHERE UserName = @c_userid
+   END
+
+   SET @cCustomSP = rdt.RDTGetConfig( @n_Func , 'CustomTMTM', @cUserStorerKey)
    IF @cCustomSP = '0'
       SET @cCustomSP = ''
 
@@ -425,8 +439,8 @@ BEGIN
            SET    STATUS = '0'
                  ,UserKey = ''
                  ,Reasonkey = ''
-                 ,EditDate = GetDate()     -- (SHONG08)
-                 ,EditWho  = sUSER_sNAME()
+                 ,EditDate = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                 ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
                  ,TrafficCop = NULL
                  ,DropId = '' -- SOS# 248996
            WHERE  UserKey = @c_userid

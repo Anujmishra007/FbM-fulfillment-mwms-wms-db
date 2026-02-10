@@ -55,6 +55,7 @@ GO
 /* 27-Feb-2017 TLTING   1.9   Variable Nvarchar                          */
 /* 10-Jul-2017 JHTAN    2.0   IN00390534 Task Manager error (JH01)       */
 /* 01-04-2020  Wan01    2.1   Sync Exceed & SCE                          */
+/* 10-10-2025  SSA01    2.2   UWP-42248 -Enhanced session management     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispRLWAV02]
@@ -441,8 +442,8 @@ BEGIN
                UPDATE PICKDETAIL WITH (ROWLOCK)
                 SET PICKDETAIL.TaskdetailKey = ''
                   , PICKDETAIL.Wavekey = @c_Wavekey
-                  , EditWho    = SUSER_NAME()
-                  , EditDate   = GETDATE()
+                  , EditWho    = dbo.fnc_GetUserName() --(SSA01)
+                  , EditDate   = dbo.fnc_GetDate()    --(SSA01)
                   , TrafficCop = NULL
                 WHERE PICKDETAIL.Pickdetailkey = @c_curPickdetailkey
                SET @n_err = @@ERROR
@@ -865,8 +866,8 @@ BEGIN
          BEGIN
                UPDATE PICKDETAIL WITH (ROWLOCK)
                SET  PickSlipNo = @c_PickSlipNo
-                   ,EditWho = SUSER_NAME()
-                   ,EditDate= GETDATE()
+                   ,EditWho = dbo.fnc_GetUserName() --(SSA01)
+                   ,EditDate= dbo.fnc_GetDate()    --(SSA01)
                    ,TrafficCop = NULL
                 WHERE PICKDETAIL.Pickdetailkey = @c_curPickdetailkey
                SET @n_err = @@ERROR
@@ -977,8 +978,8 @@ BEGIN
           --, EditWho = SUSER_NAME()            --(Wan01)
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               
+           ,  EditWho = dbo.fnc_GetUserName()           --(Wan01)(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
       WHERE WAVEKEY = @c_wavekey
 
       SET @n_err = @@ERROR
@@ -1267,8 +1268,8 @@ BEGIN
 
          UPDATE PICKDETAIL WITH (ROWLOCK)
          SET Taskdetailkey = @c_TaskdetailKey
-            ,EditWho = SUSER_NAME()
-            ,EditDate= GETDATE()
+            ,EditWho = dbo.fnc_GetUserName() --(SSA01)
+            ,EditDate= dbo.fnc_GetDate()    --(SSA01)
             ,TrafficCop = NULL
          WHERE Pickdetailkey = @c_PickdetailKey
 
@@ -1351,8 +1352,8 @@ BEGIN
 
          UPDATE PICKDETAIL WITH (ROWLOCK)
          SET Taskdetailkey = @c_TaskdetailKey
-            ,EditWho = SUSER_NAME()
-            ,EditDate= GETDATE()
+            ,EditWho = dbo.fnc_GetUserName() --(SSA01)
+            ,EditDate= dbo.fnc_GetDate()    --(SSA01)
             ,TrafficCop = NULL
          WHERE Pickdetailkey = @c_PickdetailKey
 

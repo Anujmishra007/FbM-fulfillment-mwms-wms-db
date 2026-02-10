@@ -1,3 +1,5 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[MailQ]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[MailQ]
 (
 [Qid] [int] NOT NULL IDENTITY(1, 1),
@@ -92,14 +94,30 @@ CREATE TABLE [dbo].[MailQ]
 [C15Agg] [nvarchar] (25) NOT NULL CONSTRAINT [DF_MailQ_C15Agg] DEFAULT (''),
 [ArchiveCop] [nvarchar] (1) NULL
 ) ON [PRIMARY]
-GO
+
 ALTER TABLE [dbo].[MailQ] ADD CONSTRAINT [DBMail_mail_id_MustBeUnique] PRIMARY KEY CLUSTERED ([Qid]) ON [PRIMARY]
-GO
+
 GRANT DELETE ON  [dbo].[MailQ] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[MailQ] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[MailQ] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[MailQ] TO [NSQL]
-GO
+
+END
+
+ELSE
+BEGIN
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'ArchiveCop' AND Object_ID = Object_ID('dbo.MailQ'))
+BEGIN
+	ALTER TABLE dbo.[MailQ] ADD [ArchiveCop] [nvarchar] (1) NULL;
+	EXEC sp_addextendedproperty N'MS_Description', 'ArchiveCop', 'SCHEMA', N'dbo', 'TABLE', N'MailQ', 'COLUMN', N'ArchiveCop'
+				
+END
+
+
+END
+
+

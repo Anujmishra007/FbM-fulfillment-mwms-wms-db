@@ -22,6 +22,7 @@ GO
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2022-02-17  Wan01    1.0   Created.                                  */
 /* 2022-02-17  Wan01    1.0   DevOps Combine Script.                    */
+/* 2025-01-21  SWT01    1.1   Enhanced session management               */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_GetBookingByDay_Wrapper]                                                                                                                     
       @d_Date                 DATETIME
@@ -51,6 +52,7 @@ BEGIN
 
    DECLARE  @n_StartTCnt            INT = @@TRANCOUNT  
          ,  @n_Continue             INT = 1
+         ,  @b_ExecuteAs            BIT = 0
          
    SET @b_Success = 1
    SET @n_Err     = 0
@@ -63,13 +65,15 @@ BEGIN
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+            
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-    
-      EXECUTE AS LOGIN = @c_UserName
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
 
    BEGIN TRAN  
@@ -102,6 +106,14 @@ BEGIN
    END CATCH
 
 EXIT_SP:
+
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
+
    IF (XACT_STATE()) = -1                                     
    BEGIN
       SET @n_Continue = 3
@@ -138,7 +150,6 @@ EXIT_SP:
       BEGIN TRAN 
    END
          
-   REVERT
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_GetBookingByDay_Wrapper] TO nSQL 

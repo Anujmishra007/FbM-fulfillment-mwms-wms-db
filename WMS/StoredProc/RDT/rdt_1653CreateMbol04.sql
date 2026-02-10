@@ -17,6 +17,7 @@ GO
 /* 2024-10-03  1.1   NLT013   UWP-25272 Fix issue: move wrong qty to pallet        */
 /* 2024-10-08  1.2   NLT013   FCR-950 New Logic for create Pallet Detail           */
 /* 2025-02-25  1.3.0 NLT013   UWP-30546 Move inventory by CaseID                   */
+/* 2025-08-19  1.4.0 NickT    UWP-39586 Performance tuning                         */
 /***********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1653CreateMbol04] (
@@ -102,11 +103,12 @@ BEGIN
          FETCH NEXT FROM @curDel INTO @cPalletLineNumber
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE PALLETDETAIL SET ArchiveCop = '9'
+            UPDATE dbo.PALLETDETAIL WITH(ROWLOCK)
+            SET ArchiveCop = '9'
             WHERE PalletKey = @cPalletKey
             AND PalletLineNumber = @cPalletLineNumber
 
-            DELETE FROM PALLETDETAIL
+            DELETE FROM dbo.PALLETDETAIL WITH(ROWLOCK)
             WHERE PalletKey = @cPalletKey
             AND PalletLineNumber = @cPalletLineNumber
 
@@ -120,9 +122,9 @@ BEGIN
             FETCH NEXT FROM @curDel INTO @cPalletLineNumber
          END
 
-         UPDATE PALLET SET ArchiveCop = '9' WHERE PalletKey = @cPalletKey
+         UPDATE dbo.PALLET WITH(ROWLOCK) SET ArchiveCop = '9' WHERE PalletKey = @cPalletKey
 
-         DELETE FROM PALLET WHERE PalletKey = @cPalletKey
+         DELETE FROM dbo.PALLET WITH(ROWLOCK) WHERE PalletKey = @cPalletKey
 
          IF @@ERROR <> 0
          BEGIN

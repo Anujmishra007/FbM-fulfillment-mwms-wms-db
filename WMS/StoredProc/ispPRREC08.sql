@@ -28,6 +28,7 @@ GO
 /* 2022-05-25   WLChooi 1.2   DevOps Combine Script                        */
 /* 2022-05-25   WLChooi 1.2   WMS-19738 - Add new logic (WL02)             */
 /* 2023-03-15   NJOW01  1.3   WMS-21966 Skip update lottable09 by codelkup */
+/* 2025-10-10   SSA01   1.4   UWP-42248 -Enhanced session management       */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPRREC08]  
 (     @c_Receiptkey  NVARCHAR(10)  
@@ -108,8 +109,8 @@ BEGIN
    	       Userdefine01  = ToId,
              Lottable09    = CASE WHEN @c_UpdLottable09 = 'Y' THEN @c_Receiptkey ELSE Lottable09 END,  --WL02   --NJOW01
              TrafficCop    = NULL,           --WL02
-             EditDate      = GETDATE(),      --WL02
-             EditWho       = SUSER_SNAME()   --WL02
+             EditDate      = dbo.fnc_GetDate(),    --(SSA01)      --WL02
+             EditWho       = dbo.fnc_GetUserName()    --WL02,(SSA01)
    	   WHERE Receiptkey = @c_Receiptkey
          AND ReceiptLineNumber = @c_GetReceiptLineNumber
    	   --AND LEFT(ToID, 2) = 'PS'   --WL02
@@ -169,8 +170,8 @@ BEGIN
                                      THEN @c_CLUDF01 ELSE Lottable07 END,
              Lottable09       = CASE WHEN @c_UpdLottable09 = 'Y' THEN @c_Receiptkey ELSE Lottable09 END, --NJOW01
              TrafficCop       = NULL,        
-             EditDate         = GETDATE(),   
-             EditWho          = SUSER_SNAME()
+             EditDate         = dbo.fnc_GetDate(),    --(SSA01)
+             EditWho          = dbo.fnc_GetUserName()            --(SSA01)
    	   WHERE Receiptkey = @c_Receiptkey
          AND ReceiptLineNumber = @c_GetReceiptLineNumber
 

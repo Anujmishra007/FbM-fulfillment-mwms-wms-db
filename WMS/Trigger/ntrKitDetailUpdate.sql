@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -35,6 +35,7 @@ GO
 /* 24-Jan-2017  TLTING01 1.6  Remove Set ROWCOUNT                       */
 /* 19-Jan-2021  Wan01    1.7  WMS-16051 - ANFQHW_Exceed_Channel_Kitting */
 /* 25-Feb-2025  SSA01    1.8  UWP-29649 -  Populate PalletType          */
+/* 09-Oct-2025 SPC040    1.9  Replace SUSER_SNAME with fnc_GetUserName  */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrKitDetailUpdate]
@@ -103,7 +104,7 @@ BEGIN
                   AND ( INSERTED.[status] < '9' OR DELETED.[status] < '9' ) )
       BEGIN
          UPDATE KitDetail with (ROWLOCK)
-         SET   EditDate = GetDate(), EditWho = Suser_Sname(), --Added By Vicky 18Juky 2002 Patch from IDSHK
+         SET   EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), --Added By Vicky 18Juky 2002 Patch from IDSHK
                TrafficCop = NULL  
          FROM  INSERTED, DELETED
          WHERE KitDetail.KitKey = INSERTED.KitKey
@@ -148,7 +149,7 @@ BEGIN
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
       UPDATE KitDetail 
-      SET   EditDate = GetDate(), EditWho = Suser_Sname(), --Added By Vicky 18Juky 2002 Patch from IDSHK
+      SET   EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), --Added By Vicky 18Juky 2002 Patch from IDSHK
             TrafficCop = NULL 
       FROM  INSERTED, DELETED
       WHERE KitDetail.KitKey = INSERTED.KitKey
@@ -171,8 +172,8 @@ BEGIN
    BEGIN
    UPDATE KitDetail with (ROWLOCK)
       SET   LOTTABLE01 = KitDetail.PACKKEY, TrafficCop = NULL,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),
+            EditWho = dbo.fnc_GetUserName()
       FROM  INSERTED, SKU (NOLOCK)
       WHERE KitDetail.KitKey = INSERTED.KitKey
       AND   KitDetail.KitLineNumber = INSERTED.KitLineNumber
@@ -337,8 +338,8 @@ BEGIN
             BEGIN
                UPDATE KD WITH (ROWLOCK)
                   SET  Channel_ID = @n_Channel_ID
-                     , EditWho  = SUSER_SNAME()
-                     , EditDate = GETDATE()
+                     , EditWho  = dbo.fnc_GetUserName()
+                     , EditDate = dbo.fnc_GetDate()
                      , Trafficcop = NULL
                FROM KITDETAIL KD
                WHERE KD.KItKey = @c_KitKey
@@ -571,8 +572,8 @@ BEGIN
             BEGIN
                UPDATE KD WITH (ROWLOCK)
                   SET  Channel_ID = @n_Channel_ID
-                     , EditWho  = SUSER_SNAME()
-                     , EditDate = GETDATE()
+                     , EditWho  = dbo.fnc_GetUserName()
+                     , EditDate = dbo.fnc_GetDate()
                      , Trafficcop = NULL
                FROM KITDETAIL KD
                WHERE KD.KItKey = @c_KitKey
@@ -832,8 +833,8 @@ BEGIN
                                                 AND INSERTED.Type = 'T' -- Added By June 5.Jan.02 (OpenQty x updated Correctly)
                                              ), 
                TrafficCop = NULL, -- SHONG001 
-               EditDate = GETDATE(),    --tlting
-               EditWho = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),    --tlting
+               EditWho = dbo.fnc_GetUserName()
          FROM  KIT, INSERTED, DELETED
          WHERE KIT.KitKey = INSERTED.KitKey
          AND INSERTED.KitKey = DELETED.KitKey

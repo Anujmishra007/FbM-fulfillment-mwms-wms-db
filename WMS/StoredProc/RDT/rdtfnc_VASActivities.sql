@@ -2,9 +2,6 @@ IF NOT EXISTS(SELECT 1 FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID = 1157 AND 
    INSERT INTO rdt.RDTMsg(Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, EventType, Func, URL, Message_Text_Long)
    VALUES( 1157, 'ENG', 'FNC', 'VAS Activities', 'rdtfnc_VASActivities', '0', '0', '', '' )
 
-IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE Id = Object_Id(N'[rdt].[rdtfnc_VASActivities]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [rdt].[rdtfnc_VASActivities]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -20,9 +17,10 @@ GO
 /* Date       Rev  Author      Purposes                                          */
 /* 2024-02-27 1.0  NLT013      Create   first version (UWP-15257)                */
 /* 2024-08-14 1.1  LJQ006      Update   Outbound VAS (FCR-657)                   */
+/* 2024-11-15 1.2  CYU027      Update   Outbound VAS (FCR-1057)                  */
 /*********************************************************************************/
 
-CREATE PROCEDURE [rdt].[rdtfnc_VASActivities] (
+CREATE OR ALTER PROCEDURE [rdt].[rdtfnc_VASActivities] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
@@ -96,7 +94,18 @@ DECLARE
    @dLottable13         DATETIME,
    @dLottable14         DATETIME,
    @dLottable15         DATETIME,
-   
+   @cVasCode1           NVARCHAR( 20),
+   @cVasCode2           NVARCHAR( 20),
+   @cVasCode3           NVARCHAR( 20),
+   @cVasCode4           NVARCHAR( 20),
+   @cVasCode5           NVARCHAR( 20),
+   @cVasDesc1           NVARCHAR( 250),
+   @cVasDesc2           NVARCHAR( 250),
+   @cVasDesc3           NVARCHAR( 250),
+   @cVasDesc4           NVARCHAR( 250),
+   @cVasDesc5           NVARCHAR( 250),
+   @cSUSR1              NVARCHAR( 20),
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
@@ -160,6 +169,17 @@ SELECT
    @cOrderKey            = V_String10,
    @cOrderLineNumber     = V_String11,
    @cPickSKU             = V_String12,
+   @cVasCode1            = V_String13,
+   @cVasCode2            = V_String14,
+   @cVasCode3            = V_String15,
+   @cVasCode4            = V_String16,
+   @cVasCode5            = V_String17,
+   @cVasDesc1            = V_String18,
+   @cVasDesc2            = V_String19,
+   @cVasDesc3            = V_String20,
+   @cVasDesc4            = V_String21,
+   @cVasDesc5            = V_String22,
+   @cSUSR1               = V_String23,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -182,11 +202,13 @@ WHERE Mobile = @nMobile
 -- Screen constant
 DECLARE
    @nStep_ID               INT,     @nScn_ID             INT,
+   @nStep_LIST             INT,     @nScn_LIST           INT,
    @nStep_VASCode          INT,     @nScn_VASCode        INT
 
 SELECT
    @nStep_ID               = 1,  @nScn_ID             = 6360,
-   @nStep_VASCode          = 2,  @nScn_VASCode        = 6361
+   @nStep_LIST             = 2,  @nScn_LIST           = 6361,
+   @nStep_VASCode          = 3,  @nScn_VASCode        = 6362
 
 SELECT @nCurrentFuncID = 1157
 
@@ -195,7 +217,8 @@ IF @nFunc = @nCurrentFuncID
 BEGIN
    IF @nStep = 0                GOTO Step_0         -- Func = 1157. Menu
    IF @nStep = @nStep_ID        GOTO Step_ID        -- Scn  = 6360. ID
-   IF @nStep = @nStep_VASCode   GOTO Step_VASCode   -- Scn  = 6361. Enter/Scan VAS Code
+   IF @nStep = @nStep_LIST      GOTO Step_LIST      -- Scn  = 6361. VAS List
+   IF @nStep = @nStep_VASCode   GOTO Step_VASCode   -- Scn  = 6362. Enter/Scan VAS Code
 END
 RETURN -- Do nothing if incorrect step
 
@@ -220,7 +243,16 @@ BEGIN
       @cLottable01 = '', @cLottable02 = '', @cLottable03 = '', @dLottable04 = 0,  @dLottable05 = 0,
       @cLottable06 = '', @cLottable07 = '', @cLottable08 = '', @cLottable09 = '', @cLottable10 = '',
       @cLottable11 = '', @cLottable12 = '', @dLottable13 = 0,  @dLottable14 = 0,  @dLottable15 = 0
-
+   SELECT   @cVasCode1            = '',
+            @cVasCode2            = '',
+            @cVasCode3            = '',
+            @cVasCode4            = '',
+            @cVasCode5            = '',
+            @cVasDesc1            = '',
+            @cVasDesc2            = '',
+            @cVasDesc3            = '',
+            @cVasDesc4            = '',
+            @cVasDesc5            = ''
    -- Prepare next screen var
    SET @cOutField01 = '' -- ID
 
@@ -350,14 +382,70 @@ BEGIN
             GOTO Step_VASCode_Fail
          END
 
-         -- Prepare next screen var
-         SET @cOutField01 = ''
-         SET @cOutField02 = ''
-         SET @cOutField03 = ''
+         SELECT TOP 1
+            @cSUSR1 = LTRIM(RTRIM(s.SUSR1))
+         FROM dbo.STORER s (NOLOCK)
+                 JOIN dbo.ORDERS (NOLOCK) o ON o.consigneekey = s.storerkey
+         WHERE o.OrderKey = @cOrderKey
 
-         -- Go to next screen
-         SET @nScn  = @nScn_VASCode
-         SET @nStep = @nStep_VASCode
+         IF @@rowcount = 0
+            SET @cSUSR1 = ''
+
+         IF @cOVASFlag = 1 AND ISNULL(@cSUSR1,'') <> ''-- OUTBOUND ONLY
+         BEGIN
+            --Prepare Vas Code List For Next Screen, Start
+
+            DECLARE @vasList TABLE
+            (
+               Code NVARCHAR( 30),
+               Description NVARCHAR( 250),
+               RowRef INT IDENTITY(1,1) NOT NULL
+            )
+
+            INSERT INTO @vasList (Code, Description)
+            SELECT TOP 5 CODE2, Description
+            FROM dbo.CODELKUP WITH (NOLOCK)
+            WHERE Storerkey     = @cStorerKey
+              AND Code         = @cSUSR1
+              AND LISTNAME     = 'VASPROFILE'
+            ORDER BY CODE2
+
+            SELECT @cVasCode1 = Code, @cVasDesc1 = Description FROM @vasList WHERE RowRef = 1
+            SELECT @cVasCode2 = Code, @cVasDesc2 = Description FROM @vasList WHERE RowRef = 2
+            SELECT @cVasCode3 = Code, @cVasDesc3 = Description FROM @vasList WHERE RowRef = 3
+            SELECT @cVasCode4 = Code, @cVasDesc4 = Description FROM @vasList WHERE RowRef = 4
+            SELECT @cVasCode5 = Code, @cVasDesc5 = Description FROM @vasList WHERE RowRef = 5
+
+            IF ISNULL(@cVasCode1, '') = ''
+            BEGIN
+               SET @nErrNo = 211723
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'NO VAS activities for VAS Profile'
+               GOTO Step_VASCode_Fail
+            END
+
+            IF ISNULL(@cVasCode1,'') <> '' SET @cOutField01 = '1.'+@cVasCode1+'-'+@cVasDesc1
+            IF ISNULL(@cVasCode2,'') <> '' SET @cOutField02 = '2.'+@cVasCode2+'-'+@cVasDesc2
+            IF ISNULL(@cVasCode3,'') <> '' SET @cOutField03 = '3.'+@cVasCode3+'-'+@cVasDesc3
+            IF ISNULL(@cVasCode4,'') <> '' SET @cOutField04 = '4.'+@cVasCode4+'-'+@cVasDesc4
+            IF ISNULL(@cVasCode5,'') <> '' SET @cOutField05 = '5.'+@cVasCode5+'-'+@cVasDesc5
+
+            SET @nScn  = @nScn_LIST
+            SET @nStep = @nStep_LIST
+
+         END
+         ELSE
+         BEGIN
+
+            -- Prepare next screen var
+            SET @cOutField01 = ''
+            SET @cOutField02 = ''
+            SET @cOutField03 = ''
+
+            -- Go to next screen
+            SET @nScn  = @nScn_VASCode
+            SET @nStep = @nStep_VASCode
+         END
+         SET @cOutField06 = ''
 
          GOTO Quit
       END
@@ -446,9 +534,131 @@ BEGIN
 END
 GOTO Quit
 
+/********************************************************************************
+Step 2. scn = 6422
+      List of VAS Activities
+      1.VAS-Desc       (field01)
+      2.VAS-Desc       (field02)
+      3.VAS-Desc       (field03)
+      4.VAS-Desc       (field04)
+      5.VAS-Desc       (field05)
+      OPTION:        (field06 INPUT)
+********************************************************************************/
+Step_LIST:
+BEGIN
+
+   IF @nInputKey = 1
+   BEGIN
+
+      --SELECT VAS CODE, start
+
+      DECLARE @dFlag int
+      IF @cInField06 NOT IN ('1','2','3','4','5')
+      BEGIN
+         SET @dFlag = 1
+      END
+      ELSE
+      BEGIN
+         SET @cSql =
+                 'IF @cVasCode' + @cInField06 + ' <> '''' '
+                    + '  SET @cOutField01 = @cVasCode' + @cInField06 +' '
+                    + 'ELSE '
+                    + '  SET @dFlag = 1'
+
+         SET @cSQLParam =
+                 '@cVasCode1      NVARCHAR( 60),      ' +
+                 '@cVasCode2      NVARCHAR( 60),      ' +
+                 '@cVasCode3      NVARCHAR( 60),      ' +
+                 '@cVasCode4      NVARCHAR( 60),      ' +
+                 '@cVasCode5      NVARCHAR( 60),      ' +
+                 '@cOutField01    NVARCHAR( 60) OUTPUT,'+
+                 '@dFlag          INT           OUTPUT'
+
+         EXEC sp_ExecuteSQL @cSql, @cSQLParam,
+              @cVasCode1, @cVasCode2,
+              @cVasCode3, @cVasCode4,
+              @cVasCode5, @cOutField01 OUTPUT, @dFlag OUTPUT
+      END
+
+      IF @dFlag = 1
+      BEGIN
+         SET @nErrNo = 211725
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidVasCode
+         GOTO Step_List_Fail
+      END
+      --SELECT VAS CODE, end
+
+      --Vas compeleted List
+      DECLARE @compeletList TABLE
+      (
+        Code NVARCHAR( 20),
+        RowRef INT IDENTITY(1,1) NOT NULL
+      )
+
+      INSERT INTO @compeletList
+      SELECT DISTINCT(wod.Type+'-'+ck.Description)
+         FROM dbo.WorkOrder wo WITH(NOLOCK)
+            INNER JOIN dbo.WorkOrderDetail wod WITH(NOLOCK)
+               ON wo.StorerKey     = wod.StorerKey
+               AND wo.WorkOrderKey = wod.WorkOrderKey
+         LEFT JOIN CODELKUP ck WITH(NOLOCK) ON wod.Type = code2 AND ck.Storerkey = @cStorerKey AND ck.Code = @cSUSR1 AND LISTNAME     = 'VASPROFILE'
+      WHERE wo.Facility                               = @cFacility
+         AND wo.StorerKey                             = @cStorerKey
+         AND ISNULL(wo.ExternWorkOrderKey, '-1')      = @cOrderKey
+         AND ISNULL(wod.ExternLineNo, '-1')           = @cOrderLineNumber
+         AND ISNULL(wod.WkOrdUdef1, '-1')             = @cID
+         AND wod.status                               = 9   -- compelet
+      ORDER BY wod.Type+'-'+ck.Description
+
+      IF EXISTS (
+         SELECT 1 FROM @compeletList
+      )
+      BEGIN
+         SET @cOutField04 = 'Vas Completed: '
+
+         SELECT @cOutField05 = '1. '+Code FROM @compeletList WHERE RowRef = 1
+         SELECT @cOutField06 = '2. '+Code FROM @compeletList WHERE RowRef = 2
+         SELECT @cOutField07 = '3. '+Code FROM @compeletList WHERE RowRef = 3
+         SELECT @cOutField08 = '4. '+Code FROM @compeletList WHERE RowRef = 4
+         SELECT @cOutField09 = '5. '+Code FROM @compeletList WHERE RowRef = 5
+
+
+      END
+
+      --Vas compeleted List, end
+
+
+      SET @cOutField02 = ''
+      SET @cOutField03 = ''
+      SET @nScn  = @nScn_VASCode
+      SET @nStep = @nStep_VASCode
+
+   END
+
+   IF @nInputKey = 0 -- Esc or No
+   BEGIN
+      -- Prepare prev screen var
+      SET @cOutField01 = ''
+
+      --Go back to previous screen
+      SET @nScn  = @nScn_ID
+      SET @nStep = @nStep_ID
+   END
+   GOTO Quit
+
+
+   Step_List_Fail:
+   BEGIN
+      -- Reset this screen var
+      SET @cOutField06     = '' -- Option
+   END
+   GOTO Quit
+
+END
+
 
 /********************************************************************************
-Step_VASCode (Step 2). Scn = 6361. VAS Code screen
+Step_VASCode (Step 3). Scn = 6362. VAS Code screen
    Scn/Enter VAS Code   (field01)
    Enter: Next Scan
    Press 0 to Done
@@ -466,11 +676,11 @@ BEGIN
 
       --Check if VAS Code and Option are empty
       IF (@cServiceType IS NULL OR LEN(TRIM(@cServiceType)) = 0)
-         AND 
+         OR 
          (@cOption IS NULL OR LEN(TRIM(@cOption)) = 0)
       BEGIN
-         SET @nErrNo = 211705
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need VAS Code
+         SET @nErrNo = 211726
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NeedOptionAndVasCode
          GOTO Step_VASCode_Fail
       END
 
@@ -640,13 +850,7 @@ BEGIN
             GOTO Step_VASCode_Fail
          END
 
-         -- Prepare prev screen var
-         SET @cOutField01 = ''
-
-         --Go back to previous screen
-         SET @nScn  = @nScn_ID
-         SET @nStep = @nStep_ID
-         GOTO Quit
+         GOTO Step_ID_OR_LIST
       END
       
       -- Prepare next screen var
@@ -660,13 +864,48 @@ BEGIN
 
    IF @nInputKey = 0 -- Esc or No
    BEGIN
-      -- Prepare prev screen var
       SET @cOutField01 = ''
+      SET @cOutField06 = ''
 
-     --Go back to previous screen
-      SET @nScn  = @nScn_ID
-      SET @nStep = @nStep_ID
+      GOTO Step_ID_OR_LIST
+
    END
+
+
+   Step_ID_OR_LIST:
+   BEGIN
+      IF @cOVASFlag = 1 AND ISNULL(@cSUSR1,'') <> ''
+      BEGIN
+
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
+         SET @cOutField03 = ''
+         SET @cOutField04 = ''
+         SET @cOutField05 = ''
+
+         --GOTO LIST SCN
+         IF ISNULL(@cVasCode1,'') <> '' SET @cOutField01 = '1. '+@cVasCode1+'-'+@cVasDesc1
+         IF ISNULL(@cVasCode2,'') <> '' SET @cOutField02 = '2. '+@cVasCode2+'-'+@cVasDesc2
+         IF ISNULL(@cVasCode3,'') <> '' SET @cOutField03 = '3. '+@cVasCode3+'-'+@cVasDesc3
+         IF ISNULL(@cVasCode4,'') <> '' SET @cOutField04 = '4. '+@cVasCode4+'-'+@cVasDesc4
+         IF ISNULL(@cVasCode5,'') <> '' SET @cOutField05 = '5. '+@cVasCode5+'-'+@cVasDesc5
+
+         SET @nScn  = @nScn_LIST
+         SET @nStep = @nStep_LIST
+
+      END
+      ELSE
+      BEGIN
+         --GOTO ID SCN
+         SET @cOutField01 = ''
+
+         --Go back to previous screen
+         SET @nScn  = @nScn_ID
+         SET @nStep = @nStep_ID
+
+      END
+   END
+
    GOTO Quit
 
    Step_VASCode_Fail:
@@ -711,6 +950,17 @@ BEGIN
       V_String10   = @cOrderKey,
       V_String11   = @cOrderLineNumber,
       V_String12   = @cPickSKU,
+      V_String13   = @cVasCode1,
+      V_String14   = @cVasCode2,
+      V_String15   = @cVasCode3,
+      V_String16   = @cVasCode4,
+      V_String17   = @cVasCode5,
+      V_String18   = @cVasDesc1,
+      V_String19   = @cVasDesc2,
+      V_String20   = @cVasDesc3,
+      V_String21   = @cVasDesc4,
+      V_String22   = @cVasDesc5,
+      V_String23   = @cSUSR1,
 
 
       V_Lottable01 = @cLottable01,

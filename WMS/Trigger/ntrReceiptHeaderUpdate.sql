@@ -162,6 +162,7 @@ GO
 /*                                  ASN by config                              */
 /* 29-Jan-2024  Wan03        2.7    UWP-14379-Implement pre-save ASN standard  */
 /*                                  validation check                           */
+/* 06-Oct-2025  AK01         2.8    UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /*******************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
 ON  [dbo].[RECEIPT]
@@ -254,8 +255,8 @@ BEGIN
          AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE  RECEIPT with (ROWLOCK)
-      SET  EditDate = GETDATE(),
-      EditWho    = Suser_Sname(),
+      SET  EditDate = dbo.fnc_GetDate(),
+      EditWho    = dbo.fnc_GetUserName(),
       TrafficCop = NULL
       FROM RECEIPT, INSERTED
       WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
@@ -1652,8 +1653,8 @@ BEGIN
                         -- Close the PO
                         UPDATE PO with (ROWLOCK)
                            SET ExternStatus = '9',
-                           EditDate = GETDATE(),   --tlting
-                           EditWho = SUSER_SNAME()
+                           EditDate = dbo.fnc_GetDate(),   --tlting
+                           EditWho = dbo.fnc_GetUserName()
                          WHERE POKey = @c_UpdatePOKey
                            AND ExternStatus = '0'
                         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -2282,7 +2283,7 @@ BEGIN
                   IF @c_CloseASNStatusUpdFinalizeDate = '1' 
                   BEGIN
                      UPDATE RECEIPT WITH (ROWLOCK)
-                     SET  FinalizeDate = GETDATE(),
+                     SET  FinalizeDate = dbo.fnc_GetDate(),
                           TrafficCop   = NULL
                      WHERE Receiptkey = @c_receiptkey
                      SELECT @n_err = @@ERROR
@@ -2313,7 +2314,7 @@ BEGIN
                   SELECT @c_DocTypeUpdReceiptDate = dbo.fnc_GetParamValueFromString ('@c_DocTypeUpdReceiptDate', @c_option5, @c_DocTypeUpdReceiptDate)
                 
                   UPDATE RECEIPT WITH (ROWLOCK)
-                  SET  ReceiptDate = GETDATE(),
+                  SET  ReceiptDate = dbo.fnc_GetDate(),
                        TrafficCop   = NULL
                   WHERE Receiptkey = @c_receiptkey
                   AND DocType IN (SELECT Value
@@ -2588,8 +2589,8 @@ END --001
 IF ( @n_continue = 1 or @n_continue=2) AND NOT UPDATE(EditDate)
 BEGIN
    UPDATE  RECEIPT with (ROWLOCK)
-   SET  EditDate = GETDATE(),
-   EditWho = SUSER_SNAME(),
+   SET  EditDate = dbo.fnc_GetDate(),
+   EditWho = dbo.fnc_GetUserName(),
    TrafficCop = NULL
    FROM RECEIPT,
    INSERTED
@@ -2622,8 +2623,8 @@ BEGIN
       -- TLTING04         
       IF exists ( Select 1 from HolidayDetail  (NOLOCK) Where HolidayDescr like '%Financial LockDown%'  
                AND UserDefine01  = @c_storerkey  
-               AND datepart(MONTH , HolidayDate) = datepart(MONTH , getdate() )  
-               AND getdate() >= userdefine04 and getdate() <= userdefine05)                  
+               AND datepart(MONTH , HolidayDate) = datepart(MONTH , dbo.fnc_GetDate() )  
+               AND dbo.fnc_GetDate() >= userdefine04 and dbo.fnc_GetDate() <= userdefine05)                  
       AND
       Exists ( SELECT  1
                FROM RECEIPT, INSERTED, DELETED
@@ -2644,7 +2645,7 @@ END
 IF @n_continue = 1 or @n_continue=2
 BEGIN
    UPDATE  RECEIPT with (ROWLOCK)
-   SET  FinalizeDate = GETDATE(),
+   SET  FinalizeDate = dbo.fnc_GetDate(),
         TrafficCop   = NULL
    FROM RECEIPT, INSERTED, DELETED
    WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
@@ -2889,5 +2890,6 @@ ELSE
    END
 END
 GO
+
 
 

@@ -14,6 +14,7 @@ GO
 /* Date       Rev   Author   Purposes                                   */
 /* 2012-03-11 1.0   Ung      SOS238698 Created                          */
 /* 2024-11-27 1.1.0 Dennis   FCR-1349 Fix Bug                           */
+/* 2025-08-27 1.2.0 NickT    FCR-6730 Add Confirm Extended              */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_ConfirmShortPick (
@@ -32,18 +33,59 @@ SET ANSI_NULLS OFF
 SET QUOTED_IDENTIFIER OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
-DECLARE @cPickDetailKey NVARCHAR( 10)
-DECLARE @cPickSlipNo    NVARCHAR( 10),
-@nLoopIndex INT,
-@nRowCount  INT
+DECLARE 
+   @cPickDetailKey   NVARCHAR( 10),
+   @cPickSlipNo      NVARCHAR( 10),
+   @cConfirmSP       NVARCHAR( 20),
+   @cSQL             NVARCHAR( MAX),
+   @cSQLParam        NVARCHAR( MAX),
+   @cStorerKey       NVARCHAR( 15),
+   @nLoopIndex       INT,
+   @nRowCount        INT,
+   @nTranCount       INT
+
 DECLARE @List TABLE
-   (
+(
    ID INT IDENTITY(1,1) NOT NULL,
    PickDetailKey NVARCHAR(10)
-   )
+)
+   SELECT @cStorerKey = StorerKey
+   FROM rdt.rdtMobRec (NOLOCK)
+   WHERE Mobile = @nMobile
 
-DECLARE @nTranCount     INT
+   -- Get Confirm Extended config
+   SET @cConfirmSP = rdt.RDTGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
+   IF @cConfirmSP = '0'
+      SET @cConfirmSP = ''
+   
+   -- Confirm Extended update
+   IF @cConfirmSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cConfirmSP AND type = 'P')
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +
+            ' @nMobile, @nFunc, @cStorerKey, @cLangCode, @cWaveKey, @cLoadKey, @cOrderkey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+         SET @cSQLParam =
+            '@nMobile            INT,           ' +
+            '@nFunc              INT,           ' +
+            '@cStorerKey         NVARCHAR( 15), ' +
+            '@cLangCode          NVARCHAR( 3),  ' +
+            '@cWaveKey           NVARCHAR( 10), ' +
+            '@cLoadKey           NVARCHAR( 10), ' +
+            '@cOrderkey          NVARCHAR( 10), ' +
+            '@nErrNo             INT OUTPUT,    ' +
+            '@cErrMsg            NVARCHAR( 20) OUTPUT ' 
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cStorerKey, @cLangCode, @cWaveKey, @cLoadKey, @cOrderkey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         GOTO Quit
+      END
+   END
+
+
 SET @nTranCount = @@TRANCOUNT
+
 BEGIN TRAN
 SAVE TRAN rdt_ConfirmShortPick
 

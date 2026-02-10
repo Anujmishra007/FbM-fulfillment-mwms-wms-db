@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lspLottableRule_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lspLottableRule_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -33,9 +28,11 @@ GO
 /*                            to 01011900                                */
 /* 2021-08-11  Wan03    1.3   LFWM-2935 - UAT - TW  Adjustment Lottable  */
 /*                            Input Validation                           */
-/* 2021-10-14  Wan03    1.0   DevOps Script Combine                      */
+/* 2021-10-14  Wan03    1.4   DevOps Script Combine                      */
+/* 2025-10-06  SSA01    1.5   UWP-42142 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lspLottableRule_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lspLottableRule_Wrapper]
         @c_SPName                NVARCHAR(250)
       , @c_Listname              NVARCHAR(10)
       , @c_Storerkey             NVARCHAR(15)
@@ -99,6 +96,7 @@ BEGIN
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0     --(SSA01)
 
          , @n_WarningNo_Orig  INT = 0
          , @c_WarningMsg      NVARCHAR(255) = ''
@@ -113,14 +111,19 @@ BEGIN
    --(Wan01) - START
    IF SUSER_SNAME() <> @c_UserName        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+     --(SSA01) Start --
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT,@n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
     
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
                 
-      EXECUTE AS LOGIN = @c_UserName        
+      IF @b_ExecuteAs = 1
+      BEGIN
+         EXECUTE AS LOGIN = @c_UserName
+      END
+      --(SSA01) END --
    END 
    --(Wan01) - END    
    
@@ -428,7 +431,8 @@ BEGIN
    END
    
    --(Wan01)
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SSA01)
+   EXEC [WM].[lsp_ResetUser]  -- (SSA01)
    
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN

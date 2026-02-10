@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrCodeLKUPAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrCodeLKUPAdd]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -29,9 +26,10 @@ GO
 /* 26-Jun-2018  NJOW01   1.0  WMS-5221 disallow insert code PHYSICAL for*/
 /*                            listname DCTYPE                           */
 /* 12-Dec-2020  TLTING   1.1  Update Editdate column update             */ 
+/* 06-OCT-2025  AK01     1.2  UWP-42143 Data Audit                      */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrCodeLKUPAdd]  
+CREATE OR ALTER TRIGGER [dbo].[ntrCodeLKUPAdd]  
 ON  [dbo].[CODELKUP]   
 FOR INSERT  
 AS  
@@ -61,8 +59,8 @@ BEGIN
       EXISTS ( SELECT 1 FROM  INSERTED  WHERE   editdate < dateadd( mi, -5, getdate() ) ) 
    BEGIN  
       UPDATE CodeLKUP  
-         SET EditDate = GETDATE(),  
-             EditWho = SUSER_SNAME(),  
+         SET EditDate = dbo.fnc_GetDate(), --GETDATE(),         AK01
+             EditWho = dbo.fnc_GetUserName(), --SUSER_SNAME(),  AK01
              TrafficCop = NULL  
         FROM CodeLKUP, INSERTED  
        WHERE CodeLKUP.LISTNAME = INSERTED.LISTNAME
@@ -97,6 +95,28 @@ BEGIN
       END  
    END  
    
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE CODELKUP
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM CODELKUP
+      JOIN INSERTED ON CODELKUP.LISTNAME = INSERTED.LISTNAME
+      AND CODELKUP.Code = INSERTED.Code
+      AND CODELKUP.Storerkey = INSERTED.Storerkey
+      AND CODELKUP.code2 = INSERTED.code2
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85804  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table CODELKUP. (ntrCODELKUPAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+
    /* #INCLUDE <TRPU_2.SQL> */  
    IF @n_continue=3  -- Error Occured - Process And Return  
    BEGIN  

@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrWCS_SortationUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrWCS_SortationUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -16,9 +14,10 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 27-Jun-2012  Ung      1.0  Created                                   */
 /* 28-Oct-2013  TLTING   1.1  Review Editdate column update             */
+/* 09-Oct-2025  AK01     1.2  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrWCS_SortationUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrWCS_SortationUpdate]
 ON  [dbo].[WCS_Sortation]
 FOR UPDATE
 AS
@@ -59,8 +58,8 @@ BEGIN
       -- KHLim01 end
 
       UPDATE WCS_Sortation with (RowLock)
-         SET EditDate = GETDATE(),
-             EditWho = @c_PreUN + SUSER_SNAME() -- KHLim01
+         SET EditDate = dbo.fnc_GetDate(),
+             EditWho = @c_PreUN + dbo.fnc_GetUserName() -- KHLim01
         FROM WCS_Sortation, INSERTED
        WHERE WCS_Sortation.RowRef = INSERTED.RowRef
 

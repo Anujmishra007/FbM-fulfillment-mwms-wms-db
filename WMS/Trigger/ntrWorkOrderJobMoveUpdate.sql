@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrWorkOrderJobMoveUpdate' AND type = 'TR')
-   DROP TRIGGER ntrWorkOrderJobMoveUpdate
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -28,8 +25,10 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 04-FEB-2016  Wan01   1.1   SOS#361353 - Project Merlion -SKU Reservation*/
 /*                            Pallet Selection                             */
+/* 06-Oct-2025  AK01    1.2   UWP-42143 - Replace SUSER_SNAME with         */
+/*                            fnc_GetUserName                              */
 /***************************************************************************/
-CREATE TRIGGER ntrWorkOrderJobMoveUpdate ON WORKORDERJOBMOVE
+CREATE OR ALTER TRIGGER ntrWorkOrderJobMoveUpdate ON WORKORDERJOBMOVE
 FOR UPDATE
 AS
 BEGIN
@@ -82,8 +81,8 @@ BEGIN
    IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE WORKORDERJOBMOVE WITH (ROWLOCK)
-      SET EditDate = GETDATE() 
-         ,EditWho  = SUSER_SNAME() 
+      SET EditDate = dbo.fnc_GetDate() 
+         ,EditWho  = dbo.fnc_GetUserName() 
          ,TrafficCop = NULL
       FROM WORKORDERJOBMOVE
       JOIN DELETED  ON (DELETED.JobKey  = WORKORDERJOBMOVE.JobKey)
@@ -425,8 +424,8 @@ BEGIN
                BEGIN
                   UPDATE PICKDETAIL WITH (ROWLOCK)
                   SET MoveRefKey = @c_MoveRefKey
-                     ,EditWho    = SUSER_NAME()
-                     ,EditDate   = GETDATE()
+                     ,EditWho    = dbo.fnc_GetUserName()
+                     ,EditDate   = dbo.fnc_GetDate()
                      ,Trafficcop = NULL
                   WHERE LOT = @c_Lot
                   AND   Loc = @c_ToLoc
@@ -518,8 +517,8 @@ BEGIN
       BEGIN
          UPDATE WORKORDERJOBOPERATION WITH (ROWLOCK)
          SET QtyReserved = QtyReserved - @n_DELQty + @n_INSQty
-            ,EditWho     = SUSER_NAME()
-            ,EditDate    = GETDATE()
+            ,EditWho     = dbo.fnc_GetUserName()
+            ,EditDate    = dbo.fnc_GetDate()
          WHERE JobKey = @c_JobKey
          AND   JobLine= @c_JobLineNo
 
@@ -591,4 +590,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
+
 

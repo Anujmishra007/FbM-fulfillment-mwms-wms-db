@@ -67,6 +67,8 @@ GO
 /* 2020-09-04   Wan04     3.0    WMS-15010 - WMS-15010_CN AutoMbol WMS2WCS*/
 /*                               trigger rule                           */
 /* 27-Apr-2021  LZG       3.1    INC1482668 - Added ISNULL check (ZG01) */
+/* 10-OCT-2025 SSA01      3.2    UWP-42248 -Enhanced session management */
+/*                               and cleanup.                           */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_ScanOutPickSlip]
@@ -176,12 +178,12 @@ BEGIN
       (
          @c_PickSlipNo,
          GETDATE(),
-         SUSER_SNAME(),
+         dbo.fnc_GetUserName(),     --(SSA01)
          NULL,
          'U',
          NULL,
-         SUSER_SNAME(),
-         GETDATE()
+         dbo.fnc_GetUserName(),      --(SSA01)
+         dbo.fnc_GetDate()    --(SSA01)
       )
    END
 
@@ -421,13 +423,13 @@ BEGIN
                             '  IF @c_BackendPickCfm = ''1'' AND @c_DocType = ''E'' ' +  CHAR(13) +
                             '  BEGIN ' +  CHAR(13) +                  
                             '     UPDATE PICKDETAIL  ' +  CHAR(13) +
-                            '     SET ShipFlag = ''P'', EditDate = GETDATE(), EditWho = SUSER_SNAME() ' +  CHAR(13) +
+                            '     SET ShipFlag = ''P'', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName() ' +  CHAR(13) +
                             '     WHERE PickDetailKey = @c_PickDetailKey ' +  CHAR(13) +
                             '  END ' +  CHAR(13) +
                             '  ELSE ' +  CHAR(13) +
                             '  BEGIN ' +  CHAR(13) +
                             '     UPDATE PICKDETAIL  ' +  CHAR(13) +
-                            '     SET Status = ''5'', EditDate = GETDATE(), EditWho = SUSER_SNAME() ' +  CHAR(13) +
+                            '     SET Status = ''5'', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName() ' +  CHAR(13) +
                             '     WHERE PickDetailKey = @c_PickDetailKey ' +  CHAR(13) +
                             '  END ' +  CHAR(13) +             
                             'END ' +  CHAR(13) +
@@ -490,8 +492,8 @@ BEGIN
                      BEGIN
                         UPDATE ORDERS 
                            SET Status = '5',
-                               EditDate = GetDate(),
-                               EditWho  = sUser_sName()
+                               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                               EditWho  = dbo.fnc_GetUserName()      --(SSA01)
                         WHERE  OrderKey = @c_NextOrderKey
                         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
                         IF @n_err <> 0
@@ -523,7 +525,7 @@ BEGIN
                   WHILE @@FETCH_STATUS = 0
                   BEGIN
                      UPDATE ORDERDETAIL      
-                        SET [Status] = '5', EditDate = GETDATE(), EditWho=sUser_sName(), TrafficCop = NULL     
+                        SET [Status] = '5', EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName(), TrafficCop = NULL     --(SSA01)
                      WHERE OrderKey = @c_NextOrderKey   
                      AND   OrderLineNumber = @c_OrderLineNumber
          
@@ -563,8 +565,8 @@ BEGIN
                      BEGIN
                         UPDATE LOADPLANDETAIL 
                            SET STATUS = '5',
-                                 EditDate = GetDate(),
-                                 EditWho   = sUser_sName(),
+                                 EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                                 EditWho   = dbo.fnc_GetUserName(),      --(SSA01)
                                  TrafficCop = null
                         WHERE Loadkey  = @c_LoadKey
                           AND LoadLineNumber = @c_LoadLineNumber
@@ -772,7 +774,7 @@ BEGIN
                   IF @c_PickDet_Status < '4'
                   BEGIN
                      UPDATE PICKDETAIL  
-                        SET STATUS = '5', EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                        SET STATUS = '5', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()      --(SSA01)
                      WHERE  PickDetailKey = @c_PickDetailKey
                      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
                      IF @n_err <> 0
@@ -819,8 +821,8 @@ BEGIN
                      IF @c_Status < '5'
                      BEGIN
                         UPDATE Orders  
-                           SET Status = '5', EditDate = GetDate(),
-                        EditWho  = sUser_sName(), Trafficcop = NULL
+                           SET Status = '5', EditDate = Gdbo.fnc_GetDate(),    --(SSA01)
+                        EditWho  = dbo.fnc_GetUserName(), Trafficcop = NULL     --(SSA01)
                         WHERE Orderkey = @c_NextOrderKey
 
                         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -956,7 +958,7 @@ BEGIN
                      CtnCnt5 = @nCtnCnt5,
                      TotCtnWeight = @nTotalWeight,
                      TotCtnCube   = @nTotalCube,
-                     EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                     EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()       --(SSA01)
                   FROM LoadPlan
                   WHERE LoadKey = @c_LoadKey
                   IF @@ERROR <> 0
@@ -984,7 +986,7 @@ BEGIN
                         CtnCnt4 = @nCtnCnt4,
                         CtnCnt5 = @nCtnCnt5,
                         TotalCartons = @nCtnCnt1 + @nCtnCnt2 + @nCtnCnt3 + @nCtnCnt4 + @nCtnCnt5,
-                        EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                        EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()              --(SSA01)
                      WHERE OrderKey = @c_OrderKey
                         AND CtnCnt1 = 0
                         AND CtnCnt2 = 0
@@ -1005,7 +1007,7 @@ BEGIN
                   IF EXISTS ( SELECT 1 from  MBOLDetail (NOLOCK) WHERE OrderKey = @c_OrderKey AND Cube = 0 )
                   AND @nTotalCube > 0
                   BEGIN
-                     UPDATE MBOLDetail SET Cube = @nTotalCube, EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                     UPDATE MBOLDetail SET Cube = @nTotalCube, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()    --(SSA01)
                      WHERE OrderKey = @c_OrderKey AND Cube = 0
                      IF @@ERROR <> 0
                      BEGIN
@@ -1020,7 +1022,7 @@ BEGIN
                   AND @nTotalWeight > 0
                   BEGIN 
                      -- Update weight if user not key-in own value
-                     UPDATE MBOLDetail SET Weight = @nTotalWeight, EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                     UPDATE MBOLDetail SET Weight = @nTotalWeight, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()      --(SSA01)
                      WHERE OrderKey = @c_OrderKey AND Weight = 0
                      IF @@ERROR <> 0
                      BEGIN

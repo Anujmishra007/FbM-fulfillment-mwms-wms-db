@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 19-Apr-2023 WLChooi  1.0   DevOps Combine Script                     */
+/* 10-Oct-2025  SSA01   1.1   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRVWAV58]
    @c_Wavekey     NVARCHAR(10) 
@@ -78,8 +79,8 @@ BEGIN
    UPDATE WAVE WITH (ROWLOCK)  
    SET TMReleaseFlag = 'R'               
       ,Trafficcop = NULL  
-      ,EditWho = SUSER_SNAME()  
-      ,EditDate= GETDATE()  
+      ,EditWho = dbo.fnc_GetUserName()          --(SSA01)
+      ,EditDate= dbo.fnc_GetDate()   --(SSA01)
    WHERE Wavekey = @c_Wavekey   
    
    INSERT INTO @t_TaskDetail (TaskDetailKey, TaskType, [Status], UOM, CaseID)
@@ -183,8 +184,8 @@ BEGIN
       SET p.CaseID = ''
          ,p.PickSlipNo = ''
          ,p.TaskDetailKey = ''
-         ,p.EditWho = SUSER_SNAME()
-         ,p.EditDate = GETDATE()
+         ,p.EditWho = dbo.fnc_GetUserName()          --(SSA01)
+         ,p.EditDate = dbo.fnc_GetDate()   --(SSA01)
          ,p.TrafficCop = NULL
    FROM @t_PickDetail AS tpd
    JOIN dbo.PICKDETAIL p ON p.PickdetailKey = tpd.PickDetailKey
@@ -236,8 +237,8 @@ BEGIN
    UPDATE WAVE WITH (ROWLOCK)  
    SET TMReleaseFlag = 'N'               
       ,Trafficcop = NULL  
-      ,EditWho = SUSER_SNAME()  
-      ,EditDate= GETDATE()  
+      ,EditWho = dbo.fnc_GetUserName()           --(SSA01)
+      ,EditDate= dbo.fnc_GetDate()   --(SSA01)
       ,UserDefine09 = ''   --For PK
    WHERE Wavekey = @c_Wavekey   
      

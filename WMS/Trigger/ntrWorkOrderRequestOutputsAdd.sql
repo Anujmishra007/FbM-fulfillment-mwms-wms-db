@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrWorkOrderRequestOutputsAdd' AND type = 'TR')
-   DROP TRIGGER ntrWorkOrderRequestOutputsAdd
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -27,8 +24,9 @@ GO
 /*                                                                         */
 /* Modifications:                                                          */
 /* Date         Author   Ver  Purposes                                     */
+/* 06-OCT-2025  AK01     1.1  UWP-42143 Data Audit                         */
 /***************************************************************************/
-CREATE TRIGGER ntrWorkOrderRequestOutputsAdd ON WORKORDERREQUESTOUTPUTS
+CREATE OR ALTER TRIGGER ntrWorkOrderRequestOutputsAdd ON WORKORDERREQUESTOUTPUTS
 FOR INSERT
 AS
 BEGIN
@@ -133,6 +131,28 @@ BEGIN
    END
    CLOSE CUR_WO
    DEALLOCATE CUR_WO
+   
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE WorkOrderRequestOutputs
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(),
+            TrafficCop = NULL 
+      FROM WorkOrderRequestOutputs
+      JOIN INSERTED ON WorkOrderRequestOutputs.WkOrdReqOutputsKey = INSERTED.WkOrdReqOutputsKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63715  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table WorkOrderRequestOutputs. (ntrWorkOrderRequestOutputsAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+   
 QUIT:
    IF CURSOR_STATUS( 'LOCAL', 'CUR_WO') in (0 , 1)  
    BEGIN

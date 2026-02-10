@@ -27,7 +27,9 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
-/* 29-JAN-2018  Wan01     WMS-3662 - Add Externloadkey to WMS POD module*/
+/* 29-JAN-2018  Wan01     WMS-3662 - Add Externloadkey to WMS POD module   */
+/* 10-OCT-2025  SSA01   1.1   UWP-42248 -Enhanced session management       */
+/*                             and cleanup.                                */
 /***************************************************************************/
 CREATE PROC [dbo].[ispGNPOD01]
 (     @c_MBOLKey     NVARCHAR(10)
@@ -141,8 +143,8 @@ BEGIN
          BEGIN
             UPDATE POD  WITH (ROWLOCK)
             Set TrackCol01 = @c_SMSRefKey,
-               EditDate = GETDATE(),
-               EditWho = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+               EditWho = dbo.fnc_GetUserName()           --(SSA01)
             WHERE OrderKey = @c_OrderKey
               AND Mbolkey = @c_MBOLKey
          END

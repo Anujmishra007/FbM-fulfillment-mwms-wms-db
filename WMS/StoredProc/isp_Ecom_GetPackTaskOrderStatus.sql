@@ -43,6 +43,8 @@ GO
 /*                            qty_CR                                    */
 /* 10-AUG-2023 Wan13    2.4   Fixed NikeCN Issue that Pending Pick Order*/
 /*                            not Created into PACKTASKDETAIL           */
+/* 10-OCT-2025 SSA01    2.5    UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_Ecom_GetPackTaskOrderStatus] 
          @c_TaskBatchNo NVARCHAR(10)
@@ -335,8 +337,8 @@ BEGIN
          BEGIN TRAN                                --(Wan04)
          UPDATE PACKTASKDETAIL WITH (ROWLOCK)
          SET QtyAllocated = @n_OD_QtyAllocated
-           , EditDate = GETDATE()
-           , EditWho  = SUSER_NAME()
+           , EditDate = dbo.fnc_GetDate()   --(SSA01)
+           , EditWho  = dbo.fnc_GetUserName()     ---(SSA01)
          WHERE RowRef = @n_RowRef
          AND Status < '9'
          AND QtyAllocated <> @n_OD_QtyAllocated    --(Wan04) Avoid Multi User process same single mode batch # to re-update
@@ -601,7 +603,7 @@ BEGIN
          END TRY
          BEGIN CATCH
             INSERT INTO ERRLOG ( LogDate, UserId, ErrorID, SystemState, Module, ErrorText )
-            SELECT GETDATE(), SUSER_SNAME(), ERROR_NUMBER(), ERROR_STATE(), 'isp_Ecom_GetPackTaskOrderStatus', ERROR_MESSAGE()
+            SELECT dbo.fnc_GetDate(), dbo.fnc_GetUserName(), ERROR_NUMBER(), ERROR_STATE(), 'isp_Ecom_GetPackTaskOrderStatus', ERROR_MESSAGE()       --(SSA01)
 
          END CATCH
 

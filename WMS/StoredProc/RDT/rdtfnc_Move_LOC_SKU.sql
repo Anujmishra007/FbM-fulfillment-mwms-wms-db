@@ -19,6 +19,7 @@ GO
 /* 2016-09-30 1.2  Ung      Performance tuning                          */
 /* 2017-11-17 1.3  Ung      WMS-3429 Add custom DecodeSP                */
 /* 2024-05-21 1.4  Dennis   FCR-336 Check Digit                         */
+/* 2025-07-28 1.5  NickT    !!!Cutover. Use V0 for development!!!       */
 /************************************************************************/
 
 CREATE  PROCEDURE rdt.rdtfnc_Move_LOC_SKU (

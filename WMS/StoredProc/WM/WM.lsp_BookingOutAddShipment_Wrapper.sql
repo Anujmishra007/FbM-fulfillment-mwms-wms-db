@@ -22,6 +22,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2022-03-02  Wan01    1.0   Created.                                  */
 /* 2022-03-02  Wan01    1.0   DevOps Combine Script.                    */
+/* 2025-09-02  SWT01    1.1   Enhanced session management and cleanup.  */
+/* 2025-10-10  AK01     1.2   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() to fnc_GetDate()*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BookingOutAddShipment_Wrapper]                                                                                                                     
       @n_BookingNo            INT 
@@ -39,6 +42,7 @@ BEGIN
 
    DECLARE  @n_StartTCnt            INT = @@TRANCOUNT  
          ,  @n_Continue             INT = 1
+         ,  @b_ExecuteAs            BIT = 0
          
    DECLARE @t_Shipment     TABLE 
          (  RowRef         INT         PRIMARY KEY
@@ -54,6 +58,7 @@ BEGIN
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
@@ -62,7 +67,10 @@ BEGIN
          GOTO EXIT_SP
       END
     
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+      BEGIN
+         EXECUTE AS LOGIN = @c_UserName
+      END
    END
 
    BEGIN TRAN  
@@ -90,8 +98,8 @@ BEGIN
       BEGIN
          UPDATE dbo.Booking_Out WITH (ROWLOCK)
             SET [Status] = '0'
-               ,EditWho = SUSER_SNAME()
-               ,EditDate = GETDATE()
+               ,EditWho = dbo.fnc_GetUserName()
+               ,EditDate = dbo.fnc_GetDate()
          WHERE BookingNo = @n_BookingNo
          AND [Status] = 'R'
          
@@ -147,8 +155,12 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN 
    END
-         
-   REVERT
+
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+      EXEC [WM].[lsp_ResetUser]
+   END
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_BookingOutAddShipment_Wrapper] TO nSQL 

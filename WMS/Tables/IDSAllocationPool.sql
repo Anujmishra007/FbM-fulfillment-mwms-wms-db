@@ -1,3 +1,5 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[IDSAllocationPool]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[IDSAllocationPool]
 (
 [AllocPoolId] [uniqueidentifier] NOT NULL CONSTRAINT [DF_IDSAllocationPool_AllocPoolId] DEFAULT (newid()),
@@ -17,33 +19,49 @@ CREATE TABLE [dbo].[IDSAllocationPool]
 [Wavekey] [nvarchar] (10) NOT NULL CONSTRAINT [DF_IDSAllocationPool_Wavekey] DEFAULT (''),
 [AllocateCmd] [nvarchar] (1024) NOT NULL CONSTRAINT [DF_IDSAllocationPool_AllocateCmd] DEFAULT ('')
 ) ON [PRIMARY]
-GO
 
 ALTER TABLE [dbo].[IDSAllocationPool] ADD CONSTRAINT [PK_IDSAllocationPool] PRIMARY KEY CLUSTERED ([AllocPoolId]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 GRANT DELETE ON  [dbo].[IDSAllocationPool] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[IDSAllocationPool] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[IDSAllocationPool] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[IDSAllocationPool] TO [NSQL]
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'IDSAllocationPool', 'COLUMN', N'AddDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'IDSAllocationPool', 'COLUMN', N'AddWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Allocate Command', 'SCHEMA', N'dbo', 'TABLE', N'IDSAllocationPool', 'COLUMN', N'AllocateCmd'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying IDS Allocation Pool.', 'SCHEMA', N'dbo', 'TABLE', N'IDSAllocationPool', 'COLUMN', N'AllocPoolId'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'IDSAllocationPool', 'COLUMN', N'EditDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'IDSAllocationPool', 'COLUMN', N'EditWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Priority of the task. (1-highest through 9-lowest)', 'SCHEMA', N'dbo', 'TABLE', N'IDSAllocationPool', 'COLUMN', N'Priority'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'sourcekey', 'SCHEMA', N'dbo', 'TABLE', N'IDSAllocationPool', 'COLUMN', N'SourceKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Wavekey', 'SCHEMA', N'dbo', 'TABLE', N'IDSAllocationPool', 'COLUMN', N'Wavekey'
-GO
+
+END
+
+
+ELSE
+BEGIN 
+
+
+	--ALTER COLUMN 
+ IF  EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'SourceKey' AND Object_ID = Object_ID('dbo.IDSAllocationPool') and max_length <>30)
+			BEGIN
+				ALTER TABLE dbo.IDSAllocationPool 
+				ALTER COLUMN [SourceKey] [nvarchar] (15) NOT NULL;
+
+			END
+END

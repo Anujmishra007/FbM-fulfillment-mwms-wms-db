@@ -43,4 +43,7 @@ execute rdt.rdtAddMsg '72303', 10, '72303^DropID TooLong', 'us_english', 1764
 --WMS-17383
 execute rdt.rdtAddMsg '72304', 10, '72304^GenDropIDFail ', 'us_english', 1764
 
+--FCR-7730
+execute rdt.rdtAddMsg '72305', 10, '72305^Invalid LOC   ', 'us_english', 1764
+
 SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID BETWEEN 72266 and 72365 

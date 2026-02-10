@@ -64,6 +64,8 @@ GO
 /* 23-AUG-2024  NJOW07    3.5   LFWM-5050 AU Fix to display correct error msg    */
 /* 06-AUG-2024  Wan05     3.3   LFWM-4405 - [GIT] Serial Number Solution - Post  */
 /*                              Cycle Count by Adjustment Serialno               */
+/* 10-OCT-2025  SSA01     3.4   UWP-42248 -Enhanced session management and       */
+/*                              cleanup                                          */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispGenCCAdjustmentPost_MultiCnt] (
@@ -1458,8 +1460,8 @@ BEGIN
          BEGIN
             UPDATE CCDetail WITH (ROWLOCK)
                SET Lot = @c_Lot
-                 , EditWho = SUSER_SNAME()
-                 , EditDate= GETDATE()
+                 , EditWho = dbo.fnc_GetUserName()           --(SSA01)
+                 , EditDate= dbo.fnc_GetDate()   --(SSA01)
             WHERE ccdetailkey =  @c_CCDetailkey
             AND   cckey = @c_StockTakeKey
 
@@ -1483,8 +1485,8 @@ BEGIN
             BEGIN
                UPDATE CCSerialNoLog WITH (ROWLOCK)  
                SET Lot = @c_Lot 
-                 , EditWho = SUSER_SNAME()
-                 , EditDate= GETDATE()
+                 , EditWho = dbo.fnc_GetUserName()        --(SSA01)
+                 , EditDate= dbo.fnc_GetDate()   --(SSA01)
                WHERE ccKey    = @c_StockTakeKey
                AND CCDetailKey= @c_CCDetailkey
                AND lot <> @c_Lot
@@ -1963,8 +1965,8 @@ BEGIN
       BEGIN
          UPDATE CCSerialNoLog WITH (ROWLOCK)  
          SET [Status] = '9'
-            , EditWho = SUSER_SNAME()
-            , EditDate= GETDATE()
+            , EditWho = dbo.fnc_GetUserName()            --(SSA01)
+            , EditDate= dbo.fnc_GetDate()   --(SSA01)
          WHERE CountSerialKey = @n_CountSerialKey
          AND ccKey    = @c_StockTakeKey
          AND [Status] = '0'
