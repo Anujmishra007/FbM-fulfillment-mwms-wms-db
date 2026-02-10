@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-01   1.0  GCH225     Created                                          */
+/* 2026-02-05   2.0  GCH225     UWP-48097: Recommended CartonType from PackInfo  */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_API_GetCartonTypeList] (
@@ -31,26 +32,13 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
 
-   DECLARE @n_Continue                    INT            = 1  
-         , @n_StartCnt                    INT            = @@TRANCOUNT  
-         , @b_sp_Success                  INT  
-         , @n_sp_err                      INT  
-         , @c_sp_errmsg                   NVARCHAR(250)  = ''
-         , @DBUserName                    NVARCHAR(100)
-         , @b_sp_ExecuteAs                BIT
-
-   DECLARE
-      @cLangCode     NVARCHAR( 3),
-      @cStorerKey    NVARCHAR( 15),
-      @cFacility     NVARCHAR( 5),
-      @nFunc         INT,
-      @cStorerJson   NVARCHAR( 1048),
-      @cConfigVal    NVARCHAR(30)
-
-   DECLARE @errMsg TABLE (
-      nErrNo    INT,
-      cErrMsg   NVARCHAR( 1024)
-   )
+   DECLARE @n_Continue     INT            = 1  
+         , @n_StartCnt     INT            = @@TRANCOUNT  
+         , @b_sp_Success   INT  
+         , @n_sp_err       INT  
+         , @c_sp_errmsg    NVARCHAR(250)  = ''
+         , @DBUserName     NVARCHAR(100)
+         , @b_sp_ExecuteAs BIT
 
    DECLARE @storer TABLE (
       StorerKey     NVARCHAR( 15),
@@ -58,44 +46,90 @@ BEGIN
       catchCube     INT
    )
 
+   DECLARE @cType       NVARCHAR(30)
+         , @bIsDiscrete BIT
+         , @bIsCustom   BIT
+         , @cLangCode   NVARCHAR(3)
+         , @cPickSlipNo NVARCHAR(10)
+         , @cOrderKey   NVARCHAR(10)
+         , @cLoadKey    NVARCHAR(10)
+         , @cDropID     NVARCHAR(20)
+         , @cStorerKey  NVARCHAR(15)
+         , @cFacility   NVARCHAR(5)
+         , @cConfigVal  NVARCHAR(30)
+
+   SET @b_Success        = 0  
+   SET @n_ErrNo          = 0  
+   SET @c_ErrMsg         = ''  
+   SET @c_ResponseString = '' 
+   SET @bIsDiscrete      = 1
+   SET @bIsCustom        = 0
+   SET @cLangCode        = ''
+   SET @cPickSlipNo      = ''
+   SET @cOrderKey        = ''
+   SET @cLoadKey         = ''
+   SET @cDropID          = ''
+   SET @cStorerKey       = ''
+   SET @cFacility        = ''
 
    --Decode Json Format
-   --DECLARE curMsg CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-   select @nFunc = Func,@cLangCode = LangCode, @cStorerJson=Storer
+   SELECT  @cType       = cType
+         , @bIsDiscrete = bIsDiscrete
+         , @bIsCustom   = bIsCustom
+         , @cPickSlipNo = cPickSlipNo
+         , @cOrderKey   = cOrderKey
+         , @cLoadKey    = cLoadKey
+         , @cDropID     = cDropID
+         , @cLangCode   = cLangCode
+         , @cStorerKey  = cStorerKey
+         , @cFacility   = cFacility
    FROM OPENJSON(@c_RequestString)
    WITH (
-      Func       nvarchar( 5),
-      LangCode   NVARCHAR( 1),
-      Storer     nvarchar( max) as json
+        cType       NVARCHAR(30)
+	   , bIsDiscrete BIT
+      , bIsCustom   BIT
+      , cPickSlipNo NVARCHAR(10)      
+      , cOrderKey   NVARCHAR(10)
+      , cLoadKey    NVARCHAR(10)      
+      , cDropID     NVARCHAR(20)
+      , cLangCode   NVARCHAR(3)
+      , cStorerKey  NVARCHAR(15)
+      , cFacility   NVARCHAR(5)
    )
-
-   insert INTO @storer
-   SELECT vs.storerKey
-   , CASE WHEN SC.sValue LIKE '%W%' THEN 1 ELSE 0 END
-   , CASE WHEN SC.sValue LIKE '%C%' THEN 1 ELSE 0 END
-   FROM OPENJSON(@cStorerJson)
-   WITH (
-      StorerKey   NVARCHAR( 20)    '$.StorerKey'
-   )vs
-   LEFT JOIN ( SELECT storerKey, svalue 
-               FROM dbo.StorerConfig  WITH (NOLOCK) 
-               WHERE ConfigKey = 'TPS-captureWeight'
-               ) SC
-      ON (vs.StorerKey = SC.storerkey )
-
-    IF NOT EXISTS (SELECT 1 FROM @storer)
-    BEGIN
-      SET @b_Success = 0
-      SET @n_ErrNo = 10101
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'No StorerKey Found.'
-      GOTO EXIT_SP
-    END
-
 
    SELECT TOP 1 @cConfigVal = ISNULL(sValue,'0')
    FROM STORERCONFIG (NOLOCK)  
-   WHERE StorerKey IN ( SELECT StorerKey FROM @storer)
+   WHERE StorerKey = @cStorerKey
    AND ConfigKey = 'DefaultCartonType'
+     
+   IF @cType = 'toteid'
+   AND ( SELECT ISNULL(SUM(ExpQty), 0)
+         FROM PACKDETAIL (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+       ) > 0
+   AND ( SELECT ISNULL(COUNT(CartonNo), 0)
+         FROM PACKINFO (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+       ) = 1
+   BEGIN
+      SELECT TOP 1 @cConfigVal = CartonType
+      FROM PACKINFO (NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+   END
+   
+   INSERT INTO @storer
+   SELECT @cStorerKey
+        , IIF(sValue LIKE '%W%', 1, 0)
+        , IIF(sValue LIKE '%C%', 1, 0)
+   FROM STORERCONFIG  WITH (NOLOCK)  
+   WHERE StorerKey = @cStorerKey
+   AND ConfigKey = 'TPS-captureWeight'
+
+   IF NOT EXISTS (SELECT 1 FROM @storer)
+   BEGIN
+      INSERT INTO @storer (StorerKey, catchWeight, catchCube)
+      VALUES (@cStorerKey, 0, 0)
+   END
 
    --Json Format Output
    SET @b_Success = 1
@@ -112,19 +146,19 @@ BEGIN
                                     , CAST(ISNULL(Carton.MaxWeight,0) AS DECIMAL(10,3)) AS MaxWeight
                                     , CAST(Carton.[CUBE] AS DECIMAL(10,3)) AS [Cube]
                                     , Carton.UseSequence AS UseSequence
-                                    , CASE WHEN Carton.cartonType = @cConfigVal THEN CAST(1 AS BIT)
-                                           ELSE CAST(0 AS BIT)
-                                           END AS Recommended
+                                    , CAST(IIF(RTRIM(Carton.cartonType) = RTRIM(@cConfigVal), 1, 0) AS BIT) AS Recommended
                               FROM @storer vs
                               JOIN STORER S WITH (NOLOCK)  ON vs.StorerKey = s.StorerKey
-                              JOIN CARTONIZATION Carton WITH (NOLOCK) ON (S.cartonGroup=Carton.CartonizationGroup)
-                              WHERE Carton.cartonType <> ''
+                              JOIN CARTONIZATION Carton WITH (NOLOCK) 
+                              ON S.cartonGroup = Carton.CartonizationGroup
+                              WHERE S.StorerKey = @cStorerKey
+                              AND Carton.cartonType <> ''
                               ORDER BY Carton.[Cube] ASC
                               FOR JSON AUTO, WITHOUT_ARRAY_WRAPPER
                            ), '') 
-
    EXIT_SP:
       REVERT
+
 END
 
 

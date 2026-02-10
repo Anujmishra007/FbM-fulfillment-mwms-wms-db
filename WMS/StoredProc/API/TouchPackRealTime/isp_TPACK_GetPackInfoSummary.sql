@@ -7,6 +7,7 @@
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-01   1.0  GCH225     Created                                          */
+/* 2026-02-05   2.0  GCH225     UWP-48241:Support Show Closed Carton status      */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_GetPackInfoSummary] (
      @cType                NVARCHAR(30)      = ''
@@ -239,15 +240,20 @@ BEGIN
    BEGIN
       --if cType is toteID, then check whether can directly navigate to first carton, if only carton count is 1.
       IF @cType = 'toteid' 
+      AND @nTtlPickQty = @nTtlPackedQty
       AND ( SELECT COUNT(DISTINCT CartonNo)
             FROM PACKDETAIL (NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo
             AND DropID = @cDropID
       ) = 1
-      AND @nTtlPickQty = @nTtlPackedQty
+      AND EXISTS (SELECT 1 
+                  FROM PACKINFO(NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonStatus <> ''
+      )
       BEGIN
          SELECT @nPrecedingCartonNo = P.CartonNo
-              , @cPrecedingCartonStatus = ISNULL(P.CartonStatus, 'CLOSED')
+              , @cPrecedingCartonStatus = P.CartonStatus
          FROM PACKINFO P (NOLOCK)
          WHERE P.PickSlipNo = @cPickSlipNo
          AND EXISTS (SELECT 1 

@@ -14,6 +14,7 @@ GO
 /* 2025-04-15 1.0  SKE140   Completly changed the line receiving to have      */
 /*                          location validation after line receiving for JCB  */
 /* 2025-10-22 1.1  PPA374   Checking PO to receive the correct line           */
+/* 2025-10-22 1.2  PPA374   UWP-48485                                         */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_LineReceiving_JCB_V3] (
@@ -296,22 +297,22 @@ BEGIN
       SET @cOutField01 = @cInField01
       SET @cOutField02 = @cInField02
 
-	  -- 29/05/2025 Check if ASN is XDOCK
-	  IF EXISTS (SELECT 1 FROM RECEIPTDETAIL WITH(NOLOCK) WHERE TRIM(SKU) NOT LIKE 'XD%' AND ReceiptKey = @cReceiptKey)
-	  BEGIN
-	     SET @nErrNo = 218092
-		 SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Only for XDOCK ASN'
-		 GOTO QUIT
-	  END
+     -- 29/05/2025 Check if ASN is XDOCK
+     IF EXISTS (SELECT 1 FROM RECEIPTDETAIL WITH(NOLOCK) WHERE TRIM(SKU) NOT LIKE 'XD%' AND ReceiptKey = @cReceiptKey)
+     BEGIN
+        SET @nErrNo = 218092
+       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Only for XDOCK ASN'
+       GOTO QUIT
+     END
      
       -- 11-06-2025 Check Printer selecter or no
       IF (SELECT TOP 1 Printer FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile) = ''
-		 BEGIN
-		    SET @nErrNo = 218199
-			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'No label printer'
-			GOTO QUIT
-		 END
-	  
+       BEGIN
+          SET @nErrNo = 218199
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'No label printer'
+         GOTO QUIT
+       END
+     
       -- Validate at least one field must key-in
       IF @cReceiptKey = '' AND @cPOKey IN ('', 'NOPO')
       BEGIN
@@ -543,7 +544,7 @@ BEGIN
             GOTO Step_ASN
 
          SET @cID = @cAutoID
-		 SET @cVSID = @cAutoID
+       SET @cVSID = @cAutoID
       END
 
       -- Prepare next screen var
@@ -554,8 +555,8 @@ BEGIN
       -- Go to LOC screen
      /* SET @nScn = @nScn_LOC
       SET @nStep = @nStep_LOC*/
-	  
-	  
+     
+     
       -- Go to ID screen
       SET @nScn = @nScn_ID
       SET @nStep = @nStep_ID
@@ -712,8 +713,8 @@ BEGIN
       -- Go to LOC screen
      -- SET @nScn = @nScn_LOC
      -- SET @nStep = @nStep_LOC
-	  
-	  -- Go to ASN screen
+     
+     -- Go to ASN screen
       SET @nScn = @nScn_ASN
       SET @nStep = @nStep_ASN
    END
@@ -758,7 +759,7 @@ BEGIN
       -- Pad with zero
       SET @cLineNo = RIGHT( '00000' + CAST( @cLineNo AS NVARCHAR(5)), 5)
 
-	  SELECT TOP 1 @cPOKey = POKey FROM dbo.RECEIPTDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND ReceiptLineNumber = @cLineNo AND ReceiptKey = @cReceiptKey
+     SELECT TOP 1 @cPOKey = POKey FROM dbo.RECEIPTDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND ReceiptLineNumber = @cLineNo AND ReceiptKey = @cReceiptKey
 
       -- Get ReceiptDetail info
       SELECT
@@ -960,20 +961,24 @@ BEGIN
 
       IF @nMorePage = 1 -- Yes
       BEGIN
-	     --SET @cOutField03 = ''
+        --SET @cOutField03 = ''
          --SELECT @cOutField03 =  CASE WHEN CHARINDEX(',', BUSR6) > 0 THEN LEFT(BUSR6, CHARINDEX(',', BUSR6) - 1) ELSE BUSR6 END FROM dbo.sku WITH (NOLOCK) WHERE sku = @cSKU;
          --SELECT @cOutField03 =  CASE WHEN CHARINDEX(',', LONG) > 0 THEN LEFT(LONG, CHARINDEX(',', LONG) - 1) ELSE LONG END FROM dbo.codelkup WITH (NOLOCK) where LISTNAME='JCBXD_LANE' and short = @cSKU;
          --SELECT TOP 1 @cOutField03 = ToLoc FROM dbo.RECEIPTDETAIL WITH (NOLOCK) WHERE receiptkey = @cReceiptKey AND sku = @cSKU;
          SELECT @cOutField03 = ISNULL
-		 (
+       (
             (
                --SELECT TOP 1 loc + LocCheckDigit
                --FROM LOC WITH (NOLOCK)
                --WHERE LOC IN (
-                  SELECT TOP 1 ToLoc
-                  FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-                  WHERE receiptkey = @cReceiptKey 
-				     AND sku = @cSKU order by adddate desc
+               SELECT TOP 1 ToLoc + ISNULL(LocCheckDigit, '')
+               FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
+               INNER JOIN dbo.LOC L WITH(NOLOCK)
+                  ON RD.ToLoc = L.Loc
+               WHERE RD.ReceiptKey = @cReceiptKey 
+                  AND RD.Sku = @cSKU 
+                  AND L.Facility = @cFacility
+               ORDER BY RD.AddDate DESC
                --)
             ), ''
          )
@@ -1019,8 +1024,8 @@ BEGIN
    BEGIN
       --SET @cOutField01 = @cLOC
       --SET @cOutField02 = '' -- ID
-	    
-	  SET @cOutField01 = ''
+       
+     SET @cOutField01 = ''
       SET @cOutField02 = @cID --'' -- LineNo
 
       SET @nScn = @nScn_ID
@@ -1040,7 +1045,7 @@ Step 4. Scn = 6630. Location screen
    ASN      (field01)
    PO       (field02)
    TO LOC   (field03, input)
-							  
+                       
 ********************************************************************************/
 Step_LOC:
 BEGIN
@@ -1055,10 +1060,10 @@ BEGIN
       END
 
       -- Screen mapping
-	  DECLARE @cChkDigitON AS NVARCHAR(1)
+     DECLARE @cChkDigitON AS NVARCHAR(1)
 
-	  SELECT TOP 1 @cChkDigitON = CAST(CheckDigitLengthForLocation AS NVARCHAR(1)) FROM FACILITY WITH(NOLOCK) WHERE Facility = @cFacility
-	  SET @cChkDigit = 'CHK'+RIGHT(@cInField03,3)
+     SELECT TOP 1 @cChkDigitON = CAST(CheckDigitLengthForLocation AS NVARCHAR(1)) FROM FACILITY WITH(NOLOCK) WHERE Facility = @cFacility
+     SET @cChkDigit = 'CHK'+RIGHT(@cInField03,3)
       SET @cLOC = IIF(@cChkDigitON = 3,LEFT(LEFT(@cInField03,LEN(@cInField03) - 3),10),LEFT(@cInField03,10)) -- LOC
     
       -- Get the location
@@ -1070,19 +1075,19 @@ BEGIN
       WHERE LOC = @cLOC
 
       -- Validate location
-      IF @cChkLOC IS NULL OR @cChkLOC = ''										 
+      IF @cChkLOC IS NULL OR @cChkLOC = ''                               
       BEGIN
          SET @nErrNo = 218217
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOC
          GOTO Step_LOC_Fail
       END
 
-	  IF @cChkDigit <> 'CHK'+ISNULL((SELECT TOP 1 LocCheckDigit FROM LOC WITH(NOLOCK) WHERE LOC = @cLOC),'') AND @cChkDigitON = '3'
-	  BEGIN
-	     SET @nErrNo = 218227
+     IF @cChkDigit <> 'CHK'+ISNULL((SELECT TOP 1 LocCheckDigit FROM LOC WITH(NOLOCK) WHERE LOC = @cLOC),'') AND @cChkDigitON = '3'
+     BEGIN
+        SET @nErrNo = 218227
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Incorrect ChkDgt'
          GOTO Step_LOC_Fail
-	  END
+     END
 
       -- Validate location not in facility
       IF @cChkFacility <> @cFacility
@@ -1143,26 +1148,26 @@ BEGIN
       WHERE ReceiptKey = @cReceiptKey
          AND ReceiptLineNumber = @cLineNo
 
-		       
+             
 
-	  SELECT TOP 1 @cLottable03 = LEFT(ISNULL(RTRIM(RD.lottable03),'') + ' ' + ISNULL(RTRIM(C.Description),''),18)
+     SELECT TOP 1 @cLottable03 = LEFT(ISNULL(RTRIM(RD.lottable03),'') + ' ' + ISNULL(RTRIM(C.Description),''),18)
          FROM RECEIPTDETAIL RD WITH (NOLOCK)
-		 INNER JOIN CODELKUP C WITH(NOLOCK)
-		 ON RD.Lottable03 = C.Short AND C.LISTNAME = 'JCBPLANT#' AND RD.StorerKey = C.Storerkey
+       INNER JOIN CODELKUP C WITH(NOLOCK)
+       ON RD.Lottable03 = C.Short AND C.LISTNAME = 'JCBPLANT#' AND RD.StorerKey = C.Storerkey
          WHERE ReceiptKey = @cReceiptKey 
             AND Sku = @cSKU
-			AND RD.StorerKey = @cStorerKey
-			AND RD.ReceiptLineNumber = @cLineNo
+         AND RD.StorerKey = @cStorerKey
+         AND RD.ReceiptLineNumber = @cLineNo
             AND (POKey = @cPOKey OR @cPOKey = 'NOPO')                           -- TO HANDLE MULTIPLE PO
 
-	  SELECT TOP 1 @cLottable08 = LEFT(ISNULL(RTRIM(RD.Lottable08),'') + ' ' + ISNULL(RTRIM(S.Company),''),30) -- SUPPLIER ID
+     SELECT TOP 1 @cLottable08 = LEFT(ISNULL(RTRIM(RD.Lottable08),'') + ' ' + ISNULL(RTRIM(S.Company),''),30) -- SUPPLIER ID
          FROM RECEIPTDETAIL RD WITH (NOLOCK)
          INNER JOIN STORER S WITH(NOLOCK)
          ON RD.Lottable08 = S.StorerKey AND S.type = '5'
          WHERE ReceiptKey = @cReceiptKey
             AND Sku = @cSKU 
             AND RD.StorerKey = @cStorerKey
-			AND RD.ReceiptLineNumber = @cLineNo
+         AND RD.ReceiptLineNumber = @cLineNo
             AND (POKey = @cPOKey OR @cPOKey = 'NOPO')                           -- TO HANDLE MULTIPLE PO
 
       -- Extended validate
@@ -1369,7 +1374,7 @@ BEGIN
           -- Go to LineNo screen
          --SET @nScn = @nScn_QTY
          SET @nStep = @nStep_QTY
-		 GOTO Step_Qty
+       GOTO Step_Qty
       END
       END
 
@@ -1378,7 +1383,7 @@ BEGIN
       -- Prepare prev screen var
       SET @cOutField01 = @cID
       SET @cOutField02 = @cLineNo
-	  SET @cFieldAttr02 = ''
+     SET @cFieldAttr02 = ''
 
       -- Go to LineNo screen
       SET @nScn = @nScn_LineNo--@nScn_LineNo
@@ -1438,7 +1443,7 @@ BEGIN
       IF @nMorePage = 1 -- Yes
          GOTO Quit
 
-		 SELECT
+       SELECT
          @cSKU = SKU,
          @cLottable01 = Lottable01,
          @cLottable02 = ReceiptKey,
@@ -1494,7 +1499,7 @@ BEGIN
       -- Go to QTY screen
       --SET @nScn = @nScn_QTY
          SET @nStep = @nStep_QTY
-		 GOTO Step_Qty
+       GOTO Step_Qty
    END
 
    IF @nInputKey = 0 -- ESC
@@ -1535,19 +1540,23 @@ BEGIN
       -- Prepare prev screen var
       SET @cOutField01 = ''
       SET @cOutField02 = '' 
-	  --SELECT @cOutField03 =  CASE WHEN CHARINDEX(',', BUSR6) > 0 THEN LEFT(BUSR6, CHARINDEX(',', BUSR6) - 1) ELSE BUSR6 END FROM dbo.sku WITH (NOLOCK) WHERE sku = @cSKU;
+     --SELECT @cOutField03 =  CASE WHEN CHARINDEX(',', BUSR6) > 0 THEN LEFT(BUSR6, CHARINDEX(',', BUSR6) - 1) ELSE BUSR6 END FROM dbo.sku WITH (NOLOCK) WHERE sku = @cSKU;
       --SELECT @cOutField03 =  CASE WHEN CHARINDEX(',', LONG) > 0 THEN LEFT(LONG, CHARINDEX(',', LONG) - 1) ELSE LONG END FROM dbo.codelkup WITH (NOLOCK) where LISTNAME='JCBXD_LANE' and short = @cSKU;
       --SELECT TOP 1 @cOutField03 = ToLoc FROM dbo.RECEIPTDETAIL WITH (NOLOCK) WHERE receiptkey = @cReceiptKey AND sku = @cSKU;
       SELECT @cOutField03 = ISNULL
-		 (
+       (
             (
                --SELECT TOP 1 loc + LocCheckDigit
                --FROM LOC WITH (NOLOCK)
                --WHERE LOC IN (
-                  SELECT TOP 1 ToLoc
-                  FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-                  WHERE receiptkey = @cReceiptKey 
-				     AND sku = @cSKU order by adddate desc
+               SELECT TOP 1 ToLoc + ISNULL(LocCheckDigit, '')
+               FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
+               INNER JOIN dbo.LOC L WITH(NOLOCK)
+                  ON RD.ToLoc = L.Loc
+               WHERE RD.ReceiptKey = @cReceiptKey 
+                  AND RD.Sku = @cSKU 
+                  AND L.Facility = @cFacility
+               ORDER BY RD.AddDate DESC
                --)
             ), ''
          )
@@ -1584,7 +1593,7 @@ BEGIN
 
      SELECT @cOutField09 = '1'
      
-	 SET @nScn = @nScn_QTY
+    SET @nScn = @nScn_QTY
 
       -------10/APR/2025 ADDED LOCATION---
       SET @cLOC = @cOutField04
@@ -1605,7 +1614,7 @@ BEGIN
       WHERE LOC = @cLOC
 
       -- Validate location
-      IF @cChkLOC IS NULL OR @cChkLOC = ''										 
+      IF @cChkLOC IS NULL OR @cChkLOC = ''                               
       BEGIN
          SET @nErrNo = 218217
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOC
@@ -1782,19 +1791,19 @@ BEGIN
       IF @cReasonCode = ''
          SET @cReasonCode = 'OK'
 
-	  IF (
-	     SELECT SUM(QtyExpected) - SUM(BeforeReceivedQty) FROM dbo.RECEIPTDETAIL WITH(NOLOCK) 
+     IF (
+        SELECT SUM(QtyExpected) - SUM(BeforeReceivedQty) FROM dbo.RECEIPTDETAIL WITH(NOLOCK) 
          WHERE ReceiptKey = @cReceiptKey
             AND Lottable03 = @cLottable03
             AND Lottable08 = @cLottable08
             AND Lottable09 = @cLottable09
-			AND SKU = @cSKU
-		 ) <= 0
+         AND SKU = @cSKU
+       ) <= 0
       BEGIN
-	     SET @nErrNo = -4
+        SET @nErrNo = -4
          SET @cErrMsg = 'Over qty for line'--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
          GOTO Quit
-	  END
+     END
 
       -- Custom receiving logic
       IF @cRcptConfirmSP <> '' AND
@@ -1989,22 +1998,22 @@ BEGIN
          @nStep         = @nStep
 
       -- Go to message screen
-	  --Check if printing is required
+     --Check if printing is required
       SET @cPalletLabel = rdt.RDTGetConfig(@nFunc, 'XDOCKPrint', @cStorerKey);
-	  IF ISNULL(@cPalletLabel,'0') IN ('0','')
-	  BEGIN
-	     GOTO Scn_Msg
+     IF ISNULL(@cPalletLabel,'0') IN ('0','')
+     BEGIN
+        GOTO Scn_Msg
       END
 
-	  ELSE
-	  BEGIN
-	     SET @nScn = @nScn_Reprint
+     ELSE
+     BEGIN
+        SET @nScn = @nScn_Reprint
          SET @nStep = @nStep_Reprint
-		 SET @cOutField01 = ''
-	     GOTO Quit
-	  END
+       SET @cOutField01 = ''
+        GOTO Quit
+     END
 
-	  Scn_Msg:
+     Scn_Msg:
       SET @nScn = @nScn_Message
       SET @nStep = @nStep_Message
    END
@@ -2014,22 +2023,22 @@ BEGIN
 
    SELECT TOP 1 @cLottable03 = LEFT(ISNULL(RTRIM(RD.lottable03),'') + ' ' + ISNULL(RTRIM(C.Description),''),18)
          FROM RECEIPTDETAIL RD WITH (NOLOCK)
-		 INNER JOIN CODELKUP C WITH(NOLOCK)
-		 ON RD.Lottable03 = C.Short AND C.LISTNAME = 'JCBPLANT#' AND RD.StorerKey = C.Storerkey
+       INNER JOIN CODELKUP C WITH(NOLOCK)
+       ON RD.Lottable03 = C.Short AND C.LISTNAME = 'JCBPLANT#' AND RD.StorerKey = C.Storerkey
          WHERE ReceiptKey = @cReceiptKey 
             AND Sku = @cSKU
-			AND RD.StorerKey = @cStorerKey
-			AND RD.ReceiptLineNumber = @cLineNo
+         AND RD.StorerKey = @cStorerKey
+         AND RD.ReceiptLineNumber = @cLineNo
             AND (POKey = @cPOKey OR @cPOKey = 'NOPO')                           -- TO HANDLE MULTIPLE PO
 
-	  SELECT TOP 1 @cLottable08 = LEFT(ISNULL(RTRIM(RD.Lottable08),'') + ' ' + ISNULL(RTRIM(S.Company),''),30) -- SUPPLIER ID
+     SELECT TOP 1 @cLottable08 = LEFT(ISNULL(RTRIM(RD.Lottable08),'') + ' ' + ISNULL(RTRIM(S.Company),''),30) -- SUPPLIER ID
          FROM RECEIPTDETAIL RD WITH (NOLOCK)
          INNER JOIN STORER S WITH(NOLOCK)
          ON RD.Lottable08 = S.StorerKey AND S.type = '5'
          WHERE ReceiptKey = @cReceiptKey
             AND Sku = @cSKU 
             AND RD.StorerKey = @cStorerKey
-			AND RD.ReceiptLineNumber = @cLineNo
+         AND RD.ReceiptLineNumber = @cLineNo
             AND (POKey = @cPOKey OR @cPOKey = 'NOPO')                           -- TO HANDLE MULTIPLE PO
 
       -- Dynamic lottable
@@ -2109,13 +2118,13 @@ BEGIN
             GOTO QUIT
 
          SET @cID = @cAutoID
-		 SET @cVSID = @cAutoID
+       SET @cVSID = @cAutoID
       END
 
       -- Prepare next screen var
       SET @cOutField01 = ''
       SET @cOutField02 = @cID
-	  
+     
       -- Go back to ID screen
       SET @nScn = @nScn_ID
       SET @nStep = @nStep_ID
@@ -2123,7 +2132,7 @@ BEGIN
    ELSE
    BEGIN
       -- Prepare next screen var
-	  SET @cOutField01 = @cID
+     SET @cOutField01 = @cID
       SET @cOutField02 = '' -- @cLineNo
 
       -- Go back to LineNo screen
@@ -2248,7 +2257,7 @@ BEGIN
          -- Go to QTY screen
          --SET @nScn = @nScn_QTY
          SET @nStep = @nStep_QTY
-		 GOTO Step_Qty
+       GOTO Step_Qty
       END
    END
 
@@ -2493,7 +2502,7 @@ BEGIN
          -- Go to QTY screen
          --SET @nScn = @nScn_QTY
          SET @nStep = @nStep_QTY
-		 GOTO Step_Qty
+       GOTO Step_Qty
       END
    END
 
@@ -2548,9 +2557,9 @@ BEGIN
       END
    
       IF @cOption = '1' -- Yes
-	  BEGIN
-	     --
-		 SET @cPalletLabel = rdt.RDTGetConfig(@nFunc, 'XDOCKPrint', @cStorerKey);
+     BEGIN
+        --
+       SET @cPalletLabel = rdt.RDTGetConfig(@nFunc, 'XDOCKPrint', @cStorerKey);
                     
             IF @cPalletLabel = '0'
                SET @cPalletLabel = '';
@@ -2583,8 +2592,8 @@ BEGIN
                   ('@cSKU',               @cSKU),
                   ('@nQTY',               convert(nvarchar,@nQTY));*/
 
-				  ('@cReceiptKey',        @cReceiptKey),
-				  ('@cToID',              convert(NVARCHAR(20),@cID)),
+              ('@cReceiptKey',        @cReceiptKey),
+              ('@cToID',              convert(NVARCHAR(20),@cID)),
                   ('@nMobile',           convert(nvarchar,@nMobile))
 
 
@@ -2609,15 +2618,15 @@ BEGIN
                IF @nErrNo <> 0
                   RETURN;
             END
-		 --
-	  END
+       --
+     END
 
-	  IF @cOption = '9' -- No
+     IF @cOption = '9' -- No
       BEGIN
-	     SET @nScn = 4036
+        SET @nScn = 4036
          SET @nStep = 7
-	     GOTO QUIT
-	  END
+        GOTO QUIT
+     END
    END
    
    IF @nInputKey = 0 -- ESC
@@ -2693,7 +2702,7 @@ BEGIN
       V_String16 = @cVerifySKU,
       V_String17 = @cDecodeSP,
       V_String18 = @cDataCapture,
-	  V_String19 = @cVSID,
+     V_String19 = @cVSID,
 
       I_Field01 = '',  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = '',  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
