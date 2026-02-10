@@ -54,6 +54,7 @@ BEGIN
    DECLARE @nPackQTY    INT
    DECLARE @nPickQTY    INT
    DECLARE @cPackByFromDropID NVARCHAR( 1)
+   DECLARE @cDocType       NVARCHAR( 10)
 
    SET @cOrderKey = ''
    SET @cLoadKey = ''
@@ -69,10 +70,16 @@ BEGIN
    FROM dbo.PickHeader WITH (NOLOCK)
    WHERE PickHeaderKey = @cPickSlipNo
 
+   SELECT
+      @cDocType = DocType
+   FROM ORDERS (NOLOCK)
+   WHERE OrderKey = @cOrderKey
+
    -- Check QTY
    IF @cType = 'QTY'
    BEGIN
       -- Get storer config
+      SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
       SET @cPickStatus = rdt.rdtGetConfig( @nFunc, 'PickStatus', @cStorerKey)
       
       -- Add default PickStatus 5-picked, if not specified
@@ -118,6 +125,7 @@ BEGIN
          ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
             ' AND PD.StorerKey = @cStorerKey ' + 
             ' AND PD.SKU = @cSKU '  + 
+            CASE WHEN @cFromDropID <> '' AND @cPackByFromDropID = '1' AND @cDocType = 'N' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
             CASE WHEN @cPackFilter <> '' THEN @cPackFilter ELSE '' END
       SET @cSQLParam = 
          ' @cPickSlipNo NVARCHAR( 10), ' + 
@@ -356,7 +364,7 @@ BEGIN
                ' AND PD.StorerKey = @cStorerKey ' + 
                ' AND PD.SKU = @cSKU ' + 
                ' AND PD.Status IN (' + @cPickStatus + ') ' + 
-               --CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
+               CASE WHEN @cFromDropID <> '' AND @cDocType = 'N' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam = 
             ' @cOrderKey   NVARCHAR( 10), ' + 

@@ -39,12 +39,16 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 12-Aug-2025  WLChooi   1.0   Initial Version                         */
+/* 09-Feb-2026  AndyWu    4.6   FCR-9658 Trigger ITF By Order (AndyWu01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispReGenTransmitLog2]
                @c_TableName      NVARCHAR(30)
              , @c_Key1           NVARCHAR(10)
-             , @c_Key2           NVARCHAR(5)
+			 --AndyWu01 Start
+             --, @c_Key2           NVARCHAR(5)
+			 , @c_Key2           NVARCHAR(30)
+			 --AndyWu01 End
              , @c_Key3           NVARCHAR(20)
              , @c_TransmitBatch  NVARCHAR(30)
              , @b_Success        INT        OUTPUT

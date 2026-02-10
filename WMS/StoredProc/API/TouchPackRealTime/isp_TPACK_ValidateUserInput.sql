@@ -17,6 +17,7 @@ GO
 /* 2026-01-09   1.4  JWF011     UWP-42902: Update Solid SKU rule for VAS         */
 /* 2026-01-15   1.5  JWF011     UWP-42902: Fix MaxSKUCarton Rule                 */
 /* 2026-01-21   2.0  GCH225     UWP-45700: Update WoWkOrdUDef1 to SKU            */
+/* 2026-02-04   2.1  JWF011     UWP-48247: Add Recartonization check rule        */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -654,6 +655,37 @@ SKIP_VALIDATE:
       SET @n_Continue  = 3    
       GOTO EXIT_SP
    END
+
+   -- Recartonization Check Rule
+      IF EXISTS(  SELECT 1
+                  FROM PACKDETAIL (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND ExpQty > 0
+                  AND ExpQty = QTY 
+      )
+      AND @nCartonNo = 0
+      AND NOT EXISTS (  SELECT 1
+                        FROM WorkOrderDetail WOD (NOLOCK)
+                        JOIN CODELKUP CL (NOLOCK)
+                           ON CL.Code = WOD.Type
+                        WHERE WOD.ExternWorkOrderKey = @cOrderKey
+                        AND CL.Listname = 'WKORDType'
+                        AND CL.UDF02 IN ('ExactQTY', 'MAXQTY')
+                        AND WOD.QTY > 0
+                        AND WOD.Sku = @cSKU
+                        AND EXISTS (SELECT 1 FROM PICKDETAIL PID (NOLOCK)
+                                    WHERE PID.OrderKey = @cOrderKey
+                                    AND PID.OrderLineNumber = WOD.ExternLineNo
+                        )
+      )
+      BEGIN
+         SET @n_Continue  = 3
+         SET @n_ErrNo = 11527
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not Allow Recartonization'
+         GOTO EXIT_SP
+      END
+   -- Recartonization Check Rule (END)
 
    --VAS Code QTY Validation
    --Solid SKU Rule

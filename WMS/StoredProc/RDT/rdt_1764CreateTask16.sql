@@ -1,19 +1,20 @@
 
-/***************************************************************************/
-/* Store procedure: rdt_1764CreateTask16                                   */
-/* Copyright      : Maersk                                                 */
-/*                                                                         */
-/* Purpose: Cajamar                                                        */
-/*                                                                         */
-/* Called from:                                                            */
-/*                                                                         */
-/* Modifications log:                                                      */
-/*                                                                         */
-/* Date        Rev    Author    Purposes                                   */
-/* 2025/11/27  1.0.0  Jackc     FCR-8535 Created                           */
-/* 2025/12/18  1.0.1  Jackc     FCR-8535 Skip create task if all full short*/
-/* 2026/02/02  1.1.0  NickT     FCR-10467 Update ToLoc for second task     */
-/****************************************************************************/
+/******************************************************************************/
+/* Store procedure: rdt_1764CreateTask16                                      */
+/* Copyright      : Maersk                                                    */
+/*                                                                            */
+/* Purpose: Cajamar                                                           */
+/*                                                                            */
+/* Called from:                                                               */
+/*                                                                            */
+/* Modifications log:                                                         */
+/*                                                                            */
+/* Date        Rev    Author    Purposes                                      */
+/* 2025/11/27  1.0.0  Jackc     FCR-8535 Created                              */
+/* 2025/12/18  1.0.1  Jackc     FCR-8535 Skip create task if all full short   */
+/* 2026/02/02  1.1.0  NickT     FCR-10467 Update ToLoc for second task        */
+/* 2026/02/06  1.1.1  JackC     FCR-10467 Not create 2nd task when full short */
+/******************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764CreateTask16] (
    @nMobile        INT,
@@ -206,7 +207,12 @@ BEGIN
          SELECT StorerKey, SKU, LOT, QTY, FinalLOC, FinalID, CaseID, TaskDetailKey, UOM, UOMQty, PickMethod
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE ListKey = @cListKey
+            AND Status = '9'
             AND TransitCount = 0 -- Original task
+            AND (
+               (PickMethod = 'PP' AND Qty <> 0 AND ISNULL(ReasonKey,'') = '') --V1.1.1 Skip full short PP task
+               OR (PickMethod = 'FP')
+            )
       OPEN @curRPLog
       FETCH NEXT FROM @curRPLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @cUOM, @nUOMQty, @cPickMethod
       WHILE @@FETCH_STATUS = 0

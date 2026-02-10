@@ -31,7 +31,7 @@ GO
 /* Date        Author      Ver   Purposes                                           */ 
 /* 2025-08-08  Wan         1.0   Adding tableid-allocpickdettd                      */
 /* 2025-10-29  Wan         1.0   UAT fix & Performance tune                         */
-/* 2026-02-03  Wan01       1.1   UWP-48264 - GBR PRD- JCB order search issue        */
+/* 2026-02-04  Wan01       1.1   UWP-48264 - GBR PRD- JCB order search issue        */
 /************************************************************************************/  
 CREATE OR ALTER PROC [dbo].[msp_GetAddOrderStatus01]  
   @c_RequestString   NVARCHAR(MAX)   
@@ -280,12 +280,14 @@ BEGIN
          WHERE scc.ReplaceFrom > ''
          AND (scc.[Value] like '%6%' OR scc.[Value] like '%7%')                     --2025-09-10     
 
-         SET @n_RowID = 0                                                           --(Wan01) - START
+         SET @c_sqlCondStatus = ''                                                  --(Wan01) - START
+         SET @n_RowID = 0                                                           
          WHILE 1 = 1                                                                
          BEGIN
             SET @c_ReplaceFrom = ''
             SET @c_ReplaceTo   = ''   
-            SELECT @n_RowID = scc.RowID
+            SELECT TOP 1
+                   @n_RowID = scc.RowID
                   ,@c_ReplaceFrom = RTRIM(scc.ReplaceFrom)  
                   ,@c_ReplaceTo   = RTRIM(scc.ReplaceTo)                
             FROM @t_SCC scc  
@@ -301,6 +303,10 @@ BEGIN
          
             IF @c_ReplaceTo > ''                                                     --2025-09-10   
             BEGIN 
+               IF @c_sqlCondStatus = ''                                                    
+               BEGIN
+                  SET @c_sqlCondStatus = @c_sqlCondition
+               END               
                SET @c_sqlCondition = REPLACE(@c_sqlCondition, @c_ReplaceFrom, @c_ReplaceTo)
             END
          END                                                                        --(Wan01) - END
@@ -606,6 +612,11 @@ BEGIN
                            ,N'@n_TotalRecords INT OUTPUT'
                            ,@n_TotalRecords OUTPUT
 
+         IF @n_pageNo = 0
+         BEGIN
+            SET @n_pageNo = 1
+         END 
+         
          SET @n_TotalPages = CEILING((@n_TotalRecords*1.00)/(@n_PageSize*1.00))     --2025-10-14
          IF @n_PageNo > @n_TotalPages
          BEGIN

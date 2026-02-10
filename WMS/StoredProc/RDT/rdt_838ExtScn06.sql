@@ -200,6 +200,7 @@ BEGIN
       @nScan               INT
    DECLARE @nWeight FLOAT
    DECLARE @nCartonWeight FLOAT
+   DECLARE @fCube FLOAT
 
    SELECT 
       @nCurrentStep = Step,
@@ -327,7 +328,7 @@ BEGIN
          END
          ELSE IF @cMUOM = '6'
          BEGIN
-            SELECT @cOutField09 = '2' 
+            SELECT @cOutField09 = CASE WHEN DocType='N' THEN '1' WHEN DocType='E' THEN '2' END FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey
          END
       END
       IF @nCurrentStep = 8
@@ -342,12 +343,18 @@ BEGIN
             GROUP BY PD.PickSlipNo, PD.CartonNo
 
             SELECT
-               @cOutField05 = rdt.rdtFormatFloat( [Length]),
-               @cOutField06 = rdt.rdtFormatFloat( [Width]),
-               @cOutField07 = rdt.rdtFormatFloat( [Height])
-            FROM dbo.PackInfo WITH (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-               AND CartonNo  = @nCartonNo
+               @cOutField05 = LengthUOM1,
+               @cOutField06 = WidthUOM1,
+               @cOutField07 = HeightUOM1
+            FROM dbo.PackInfo PI WITH (NOLOCK)
+            JOIN dbo.UCC UCC (NOLOCK) ON UCC.UCCNo = PI.UCCNo AND UCC.StorerKey = @cStorerKey
+            JOIN dbo.SKU SKU (NOLOCK) ON SKU.SKU = UCC.SKU AND SKU.StorerKey = @cStorerKey
+            JOIN dbo.Pack P (NOLOCK) ON P.PackKey = SKU.PackKey
+            WHERE PI.PickSlipNo = @cPickSlipNo
+               AND PI.CartonNo  = @nCartonNo
+
+            SET @fCube = CAST(ISNULL(@cOutField05,0) as FLOAT) * CAST( ISNULL(@cOutField06,0) as FLOAT) * CAST( ISNULL(@cOutField07,0) as FLOAT)
+            SET @cOutField03 = rdt.rdtFormatFloat( @fCube)
 
             SET @nAfterStep = 99
             GOTO QUIT
@@ -386,7 +393,7 @@ BEGIN
             END
             ELSE IF @cMUOM = '6'
             BEGIN
-               SELECT @cOutField09 = '2' 
+               SELECT @cOutField09 = CASE WHEN DocType='N' THEN '1' WHEN DocType='E' THEN '2' END FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey
             END
          END
       END
@@ -720,7 +727,6 @@ BEGIN
                   END
                END
 
-               DECLARE @fCube FLOAT
                DECLARE @fWeight FLOAT
                DECLARE @fCartonQty FLOAT --(cc02)
                SET @fCube = CAST( @cCube AS FLOAT)
@@ -736,6 +742,15 @@ BEGIN
                -- PackInfo
                IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
                BEGIN
+                  SELECT @cLength = CartonLength, @cWidth = CartonWidth, @cHeight = CartonHeight
+                  FROM Cartonization C WITH (NOLOCK)
+                     JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
+                  WHERE S.StorerKey = @cStorerKey
+                     AND C.CartonType = @cCartonType
+
+                  SET @fCube = CAST(@cLength as  int) * CAST( @cWidth as int) * CAST( @cHeight as int)
+                  SET @fCube = @fCube / 1000000
+
                   INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, Qty, Weight, Cube, CartonType, RefNo, Length, Width, Height)
                   VALUES (@cPickSlipNo, @nCartonNo, @fCartonQty, @fWeight, @fCube, @cCartonType, @cRefNo, @cLength, @cWidth, @cHeight)  --(cc02)/(james20)
                   IF @@ERROR <> 0
@@ -974,6 +989,7 @@ BEGIN
                   SET @nAfterStep = 8
                END
             END
+            GOTO QUIT
          END
          IF @nCurrentScn = 6708
          BEGIN

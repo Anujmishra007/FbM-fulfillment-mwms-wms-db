@@ -236,7 +236,7 @@ BEGIN
          IF ISNULL(@cLot, '') <> ''
          BEGIN
             SELECT 
-               @nMovedQty = ISNULL(SUM(Qty-(QtyAllocated + QtyPicked)), 0)
+               @nMovedQty = ISNULL(SUM(Qty+PendingMoveIn-(QtyAllocated + QtyPicked)), 0)
             FROM dbo.LOTXLOCXID LLI WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) 
                ON LOC.LOC = LLI.LOC
@@ -246,7 +246,7 @@ BEGIN
             WHERE LLI.StorerKey = @cStorerKey 
                AND LLI.LOT = @cLot
                AND LLI.SKU = @cSKU
-               AND CL.LISTNAME ='VORZONE'
+               AND CL.LISTNAME ='523ZONE'
 
             SELECT 
                @nTotalPreAlloQty = ISNULL(QtyPreAllocated, 0) 
@@ -529,14 +529,17 @@ BEGIN
                SET @cUDF02 = CAST(ISNULL(@nMQTY_PWY, 0) AS NVARCHAR(6)) 
                SET @cUDF03 = CAST(ISNULL(@nQTY_PWY, 0) AS NVARCHAR(6)) 
                SET @cUDF04 = CAST(ISNULL(@nQTY, 0) AS NVARCHAR(6)) 
-               SET @cUDF05 = CAST(ISNULL(@nPABookingKey, 0) AS NVARCHAR(6)) 
+               SET @cUDF05 = CAST(ISNULL(@nPABookingKey, 0) AS NVARCHAR(20)) 
                SET @cUDF06 = @cSuggestedLOC
                SET @cUDF07 = @cQTY_Avail  
                SET @cUDF08 = @cQTY_Alloc  
                SET @cUDF09 = @cQTY_PMoveIn
             END--Enter
 
+            GOTO Quit
+
             Scn_6820_Fail:
+               GOTO Quit
          END--6820
 
          

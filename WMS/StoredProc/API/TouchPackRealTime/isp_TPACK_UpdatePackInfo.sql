@@ -21,6 +21,8 @@ GO
 /* 2026-01-15   1.8  JWF011     UWP-42902: Fix MaxSKUCarton Rule                    */
 /* 2026-01-21   2.0  GCH225     UWP-45700: Update WoWkOrdUDef1 to SKU               */
 /* 2026-01-23   3.0  GCH225     UWP-47567: Handle Open Carton to change WOD Status  */
+/* 2026-02-03   3.1  JWF011     UWP-48096: Add AuditLog for Carton Type change      */
+/* 2026-02-04   3.2  JWF011     UWP-48244: Add Recartonization check rule           */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_UpdatePackInfo] (
@@ -117,6 +119,43 @@ BEGIN
       SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Failed to Update into PackInfo, Current Carton No. not found.
       GOTO EXIT_SP
    END
+
+   -- Recartonization Check Rule
+   IF @cCartonStatus IN ('CLOSED', 'HOLD')
+   BEGIN
+      IF EXISTS ( SELECT 1
+                  FROM PACKDETAIL (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND ExpQty > 0
+                  AND ExpQty <> Qty
+      )
+      AND NOT EXISTS (  SELECT 1
+                        FROM WorkOrderDetail WOD (NOLOCK)
+                        JOIN CODELKUP CL (NOLOCK)
+                           ON CL.Code = WOD.Type
+                        WHERE WOD.ExternWorkOrderKey = @cOrderKey
+                        AND CL.Listname = 'WKORDType'
+                        AND CL.UDF02 IN ('ExactQTY', 'MAXQTY')
+                        AND WOD.QTY > 0
+                        AND EXISTS (SELECT 1 FROM PICKDETAIL PID (NOLOCK)
+                                    WHERE PID.OrderKey = @cOrderKey
+                                    AND PID.OrderLineNumber = WOD.ExternLineNo
+                        )
+                        AND EXISTS (SELECT 1 FROM PACKDETAIL PAD (NOLOCK)
+                                    WHERE PAD.PickSlipNo = @cPickSlipNo
+                                    AND PAD.CartonNo = @nCartonNo
+                                    AND PAD.SKU = WOD.Sku
+                        )
+      )
+      BEGIN
+         SET @n_Continue  = 3
+         SET @n_ErrNo = 11558
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not Allow Recartonization'
+         GOTO EXIT_SP
+      END
+   END
+   -- Recartonization Check Rule (END)
 
    IF @cCartonStatus = 'CLOSED'
    BEGIN
@@ -427,13 +466,82 @@ BEGIN
       END
    END
 
+   -- Add Audit Log for Carton Type change
+   IF @cCartonStatus = 'CLOSED'
+      AND EXISTS (SELECT 1 
+                  FROM PACKINFO (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND CartonType <> @cCartonType
+                  AND ISNULL(CartonType, '') <> ''
+                  )
+   BEGIN
+      INSERT INTO PackInfo_AuditLog (
+           ActionType
+         , PickSlipNo
+         , CartonNo
+         , [Weight]
+         , [Cube]
+         , Qty
+         , AddDate
+         , AddWho
+         , EditDate
+         , EditWho
+         , TrafficCop
+         , ArchiveCop
+         , CartonType
+         , RefNo
+         , [Length]
+         , [Width]
+         , [Height]
+         , UCCNo
+         , CartonGID
+         , CartonStatus
+         , TrackingNo
+      )  SELECT 'UPDATE'
+               , PickSlipNo
+               , CartonNo
+               , [Weight]
+               , [Cube]
+               , Qty
+               , AddDate
+               , AddWho
+               , EditDate
+               , EditWho
+               , TrafficCop
+               , ArchiveCop
+               , CartonType
+               , RefNo
+               , [Length]
+               , [Width]
+               , [Height]
+               , UCCNo
+               , CartonGID
+               , CartonStatus
+               , TrackingNo
+         FROM PACKINFO (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+   END
+   -- Add Audit Log for Carton Type change (END)
+
    UPDATE PACKINFO WITH (ROWLOCK)
    SET  EditWho = @c_UserID
       , EditDate = GETDATE()
       , CartonStatus = @cCartonStatus
       , CartonType = @cCartonType
-      , [Weight] = IIF(@bWeightByCarton = 1, (@fTtlWeight + @nCtnWeight), @fTtlWeight)
-      , [Cube] = IIF(@bCubeByCarton = 1, (@fTtlCube + @nCtnCube), @fTtlCube)
+      , [Weight] = IIF(@bWeightByCarton = 1
+                     , (@fTtlWeight + @nCtnWeight)
+                     , IIF(@fTtlWeight = 0
+                        , [Weight]
+                        , @fTtlWeight)
+                     )
+      , [Cube] = IIF(@bCubeByCarton = 1
+                  , (@fTtlCube + @nCtnCube)
+                  , IIF(@fTtlCube = 0
+                     , [Cube]
+                     , @fTtlCube)
+                  )
       , TrafficCop = NULL
    WHERE PickSlipNo = @cPickSlipNo
    AND CartonNo = @nCartonNo

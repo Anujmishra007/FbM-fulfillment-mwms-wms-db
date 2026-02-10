@@ -95,7 +95,7 @@ BEGIN
       BEGIN
          IF CHARINDEX( '&', @cBarcode) > 0
          BEGIN
-            IF LEN(@cBarcode) - LEN(REPLACE(@cBarcode, '&', '')) <> 8
+            IF LEN(@cBarcode) - LEN(REPLACE(@cBarcode, '&', '')) < 7
             BEGIN
                SET @nErrNo = 255451
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid barcode format

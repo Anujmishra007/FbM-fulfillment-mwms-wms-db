@@ -30,4 +30,6 @@ EXEC API.TouchPadAddMsg 11524, 10, 'QTY in a carton is more than VAS MAXQTY',   
 EXEC API.TouchPadAddMsg 11525, 10, 'Number of different SKU in a carton is more than VAS MaxSKUCarton',    'us_english'
 EXEC API.TouchPadAddMsg 11526, 10, 'Not allow to pack different SKU in a carton',    'us_english'
 
-EXEC API.TouchPadAddMsg 11527, 10, '',    'us_english'
+EXEC API.TouchPadAddMsg 11527, 10, 'Not Allow Recartonization',    'us_english'
+
+EXEC API.TouchPadAddMsg 11528, 10, '',    'us_english'

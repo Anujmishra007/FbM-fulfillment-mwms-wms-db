@@ -18,6 +18,7 @@ GO
 /* Date         Rev  Author      Purposes                               */  
 /* 03-Dec-2025  1.0  SKE140      Created for ToLOC validation           */  
 /* 15-Dec-2025  1.1  PPA374      Adding check against case in tasks     */  
+/* 06-Feb-2026  1.2  PPA374      UWP-48485                              */  
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_629ExtValJCB]  
@@ -185,7 +186,8 @@ BEGIN
             LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK)  
                ON L.Loc = LLI.Loc  
                AND LLI.StorerKey = @cStorerKey  
-               AND L.Facility = @cFacility  
+               AND L.Facility = @cFacility
+               AND LLI.ID <> @cToID  
             WHERE L.Loc = @cToLOC  
               AND (LLI.Qty + ISNULL(LLI.PendingMoveIN, 0) > 0 OR LLI.Loc IS NULL)  
               AND L.Facility = @cFacility  

@@ -65,7 +65,7 @@ GO
 /*                               PickDetailTrigger_SP run after inv update */
 /* 02-DEC-2024  Wan05      1.25  UWP-23317 - [FCR-618 819] Unpick SerialNo */
 /* 12-Aug-2025  WLChooi    1.26  FCR-5700 Trigger ITF By Wave (WL01)       */
-/* 07-Jan-2026  AndyWu01   1.27  FCR-9658 Trigger ITF By Order (AndyWu01)  */
+/* 07-Jan-2026  AndyWu01   1.27  FCR-9658 Trigger ITF By Order (AndyWu01)  */ 
 /***************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailDelete]
 ON [dbo].[PICKDETAIL]
@@ -1468,7 +1468,7 @@ BEGIN
    IF (@n_continue = 1 OR @n_continue = 2) 
    BEGIN
       SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT OH.Orderkey, PD.PickDetailKey, OH.StorerKey
+      SELECT DISTINCT OH.Orderkey, DEL.PickDetailKey, OH.StorerKey
       FROM   DELETED DEL
       JOIN   Orders OH WITH (NOLOCK)            ON DEL.OrderKey = OH.OrderKey
 	  JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
@@ -1499,7 +1499,7 @@ BEGIN
       DEALLOCATE @CUR_TriggerPoints
 
       SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT OH.OrderKey, PD.PickDetailKey, OH.StorerKey
+      SELECT DISTINCT OH.OrderKey, DEL.PickDetailKey, OH.StorerKey
       FROM   DELETED DEL
       JOIN   Orders OH WITH (NOLOCK)            ON DEL.OrderKey   = OH.OrderKey
       JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey

@@ -9,7 +9,7 @@ IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID = 729 AND Mes
 DELETE rdt.RDTScn WHERE Scn = 4810 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4810, 'ENG',
     @cLine01 = 'UCC:'
-   ,@cLine02 = '%20i01'
+   ,@cLine02 = '%200iV_Barcode' --FCR-9907
    ,@cLine03 = '%20d02:'
    ,@cLine04 = '%20d03'
    ,@cLine05 = '%20d04'

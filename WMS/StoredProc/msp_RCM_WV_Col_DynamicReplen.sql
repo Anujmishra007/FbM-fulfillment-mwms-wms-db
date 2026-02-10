@@ -38,7 +38,7 @@ GO
 /* Updates:                                                                                     */   
 /* Date               Author      Ver         Purposes                                          */   
 /* YYYY-MM-DD         {author}    {ver}       Close Cursor                                      */   
-/* 2026-01-12         JHT029      V.0         Dynamic Replenishment                             */   
+/* 2026-02-09         JHT029      1.0         FCR9741 ver1.8                                    */  
 /************************************************************************************************/   
 CREATE OR ALTER  PROCEDURE [dbo].[msp_RCM_WV_Col_DynamicReplen]      
       @c_WaveKey NVARCHAR(10),   
@@ -65,37 +65,39 @@ BEGIN
   
   DECLARE   
       @c_SourceType              NVARCHAR(20),  
-  @c_StorerKey               NVARCHAR(10),   
-  @c_Facility                NVARCHAR(20),   
-  @c_LocationType            NVARCHAR(10),   
-  @c_PickMethod              NVARCHAR(10),   
-  @c_Sku                     NVARCHAR(20),   
-  @c_Lot                     NVARCHAR( 10),   
-  @c_Id                      NVARCHAR( 18),   
-  @c_UomQty                  NVARCHAR( 10),   
-  @c_DropId                  NVARCHAR(20),   
-  @c_MoveRefKey              NVARCHAR(10),     
-  @c_PickFaceLocation        NVARCHAR(50),   
-  @c_DynamicPickFaceLocation NVARCHAR(50),   
-  @n_MinQty                  INT,   
-  @n_MaxQty                  INT,   
-  @n_StartTranCnt            INT,   
-  @c_ReplenishmentKey        NVARCHAR(50),   
-  @c_UCCNo                   NVARCHAR(20),   
-  @c_PickDetailKey           NVARCHAR(18),   
+      @c_StorerKey               NVARCHAR(10),   
+      @c_Facility                NVARCHAR(20),   
+      @c_LocationType            NVARCHAR(10),   
+      @c_PickMethod              NVARCHAR(10),   
+      @c_Sku                     NVARCHAR(20),  
+      @c_BUSR7                   NVARCHAR(30),         
+      @c_Lot                     NVARCHAR(10),   
+      @c_Id                      NVARCHAR(18),   
+      @c_UomQty                  NVARCHAR(10),   
+      @c_DropId                  NVARCHAR(20),   
+      @c_MoveRefKey              NVARCHAR(10),     
+      @c_PickFaceLocation        NVARCHAR(50),   
+      @c_DynamicPickFaceLocation NVARCHAR(50),   
+      @n_MinQty                  INT,   
+      @n_MaxQty                  INT,   
+      @n_StartTranCnt            INT,   
+      @c_ReplenishmentKey        NVARCHAR(50),   
+      @c_UCCNo                   NVARCHAR(20),   
+      @c_PickDetailKey           NVARCHAR(18),   
       @c_curPickdetailkey        NVARCHAR(18),   
-  @c_Loc                     NVARCHAR(10),  
-  @c_AreaKey                 NVARCHAR(10),         
-  @c_PutawayZone             NVARCHAR(10),   
-  @c_UOM                     NVARCHAR(10),   
-  @c_PackKey            NVARCHAR(10),   
-  @c_OrderKey                NVARCHAR(10),   
-  @n_UCCQty                  INT,   
-  @c_FromLoc                 NVARCHAR(50),   
-  @c_ToLoc                   NVARCHAR(50),   
-  @n_UCC_RowRef              INT,   
-  @n_qtytoReplen             INT ,   
-  --@c_SuccessFlag           NVARCHAR(1),   
+      @c_Loc                     NVARCHAR(10),  
+      @c_AreaKey                 NVARCHAR(10),         
+      @c_PutawayZone             NVARCHAR(10),   
+      @c_UOM                     NVARCHAR(10),   
+      @c_PackKey                 NVARCHAR(10),   
+      @c_OrderKey                NVARCHAR(10),   
+      @c_OrderLineNumber         NVARCHAR(5),  
+      @n_UCCQty                  INT,   
+      @c_FromLoc                 NVARCHAR(50),   
+      @c_ToLoc                   NVARCHAR(50),   
+      @n_UCC_RowRef              INT,   
+      @n_qtytoReplen             INT ,   
+      --@c_SuccessFlag           NVARCHAR(1),   
         
       @c_Wavekey_PD              NVARCHAR(10) = '' ,    
       @c_TaskDetailKey           NVARCHAR(10) ,  
@@ -135,8 +137,10 @@ BEGIN
       @c_UOM_Prev                NVARCHAR(10),   
       @n_UCCWODPLoc              INT = 0 ,  
       @n_UCCWOBULKDPLoc          INT = 0 ,  
-      @n_MinPalletCarton         INT   
-        
+      @n_MinPalletCarton         INT,         
+      @n_TotatOrderForSameUCC    INT,
+      @n_TotatCartonForSameLoc   INT
+
       SET @c_SourceType = 'msp_RCM_WV_Col_DynamicReplen'  
         
       SELECT TOP 1    
@@ -167,38 +171,38 @@ BEGIN
         
       IF @c_AllowMinReplenAndWaveRelease = 1   
       BEGIN  
-         IF EXISTS(SELECT 1 From TASKDETAIL (NoLock) Where StorerKey = @c_StorerKey AND TaskType IN ('RPF','ASTRPT') AND WaveKey = '' AND STATUS < '9' )  
+         IF EXISTS(SELECT 1 From TASKDETAIL (NoLock) Where StorerKey = @c_StorerKey AND TaskType IN ('RPF','ASTRPT') AND WaveKey = '' AND STATUS < '9' AND STATUS <> 'X')  
          BEGIN   
-      SELECT @n_continue = 3;   
-      SELECT @n_err = 94710;   
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Min Replenishment task in progress. (msp_RCM_WV_Col_DynamicReplen)';   
-      GOTO RETURN_SP;   
-     END;   
+            SELECT @n_continue = 3;   
+            SELECT @n_err = 94710;   
+            SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Min Replenishment task in progress. (msp_RCM_WV_Col_DynamicReplen)';   
+            GOTO RETURN_SP;   
+         END;   
       END  
   
   -- Error check for WaveKey existence   
       IF @n_continue = 1 OR @n_continue = 2    
       BEGIN    
-     IF NOT EXISTS(SELECT 1 FROM WaveDetail WITH (NOLOCK) WHERE WaveKey = @c_WaveKey)   
-     BEGIN   
-      SELECT @n_continue = 3;   
-      SELECT @n_err = 94711;   
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': No Orders is being populated into WaveDetail. (msp_RCM_WV_Col_DynamicReplen)';   
-      GOTO RETURN_SP;   
-     END;   
+         IF NOT EXISTS(SELECT 1 FROM WaveDetail WITH (NOLOCK) WHERE WaveKey = @c_WaveKey)   
+         BEGIN   
+            SELECT @n_continue = 3;   
+            SELECT @n_err = 94711;   
+            SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': No Orders is being populated into WaveDetail. (msp_RCM_WV_Col_DynamicReplen)';   
+            GOTO RETURN_SP;   
+         END;   
       END  
   
       -- Error check for WaveKey Status   
       IF @n_continue = 1 OR @n_continue = 2    
       BEGIN   
-     IF EXISTS(SELECT 1 FROM Wave WITH (NOLOCK) WHERE WaveKey = @c_WaveKey AND STATUS = '0')   
-     BEGIN   
-      SELECT @n_continue = 3;   
-      SELECT @n_err = 94712;   
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wave is not Allocated. (msp_RCM_WV_Col_DynamicReplen)';   
-      GOTO RETURN_SP;   
-     END;   
-  END  
+         IF EXISTS(SELECT 1 FROM Wave WITH (NOLOCK) WHERE WaveKey = @c_WaveKey AND STATUS = '0')   
+         BEGIN   
+            SELECT @n_continue = 3;   
+            SELECT @n_err = 94712;   
+            SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wave is not Allocated. (msp_RCM_WV_Col_DynamicReplen)';   
+            GOTO RETURN_SP;   
+         END;   
+      END  
   
       -- Error check for existing of Location P&D   
       IF @n_continue = 1 OR @n_continue = 2    
@@ -210,14 +214,14 @@ BEGIN
                      WHERE O.UserDefine09 = @c_WaveKey AND   
                            LocAisle.LocationType = 'PND' AND  
                            L.LocationType <> 'DYNPPICK'  
-     IF @c_LocAisle = ''  
-     BEGIN   
-      SELECT @n_continue = 3;   
-      SELECT @n_err = 94713;   
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + 'Loc:' + @c_PicDetailLoc + ' no P&D available. (msp_RCM_WV_Col_DynamicReplen)';   
-      GOTO RETURN_SP;   
-     END;   
-  END  
+        IF @c_LocAisle = ''  
+        BEGIN   
+         SELECT @n_continue = 3;   
+         SELECT @n_err = 94713;   
+         SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + 'Loc:' + @c_PicDetailLoc + ' no P&D available. (msp_RCM_WV_Col_DynamicReplen)';   
+         GOTO RETURN_SP;   
+        END;   
+     END  
   
       -- Error check for existing of Packing Station  
       IF @n_continue = 1 OR @n_continue = 2    
@@ -227,13 +231,13 @@ BEGIN
                            L.LocationType = 'OTHER' AND   
                            L.PutawayZone IN ('CSCPACK','CSCCNVYR')  
          IF @c_PackingStation = ''  
-     BEGIN   
-      SELECT @n_continue = 3;   
-      SELECT @n_err = 94714;   
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' Pack Station not setup in Loc table. (msp_RCM_WV_Col_DynamicReplen)';   
-      GOTO RETURN_SP;   
-     END;   
-  END  
+         BEGIN   
+            SELECT @n_continue = 3;   
+            SELECT @n_err = 94714;   
+            SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' Pack Station not setup in Loc table. (msp_RCM_WV_Col_DynamicReplen)';   
+            GOTO RETURN_SP;   
+         END;   
+      END  
   
       -- Error check for existing Sku's home location  
       DECLARE @t_PZ TABLE    
@@ -288,7 +292,8 @@ BEGIN
       ,  LocationCategory  NVARCHAR(10)   NOT NULL DEFAULT('')     
       ,  LogicalLocation   NVARCHAR(10)   NOT NULL DEFAULT('')                 
       ,  PickZone          NVARCHAR(10)   NOT NULL DEFAULT('')    
-      ,  MaxPallet         INT            NOT NULL DEFAULT(0)      
+      ,  LocLevel          INT            NOT NULL DEFAULT(0)      
+      --,  MaxPallet         INT            NOT NULL DEFAULT(0)    
       )         
        
       IF OBJECT_ID('tempdb..#TMP_LOC_DPP','u') IS NOT NULL    
@@ -305,7 +310,8 @@ BEGIN
       ,  LocationCategory  NVARCHAR(10)   NOT NULL DEFAULT('')     
       ,  LogicalLocation   NVARCHAR(10)   NOT NULL DEFAULT('')                 
       ,  PickZone          NVARCHAR(10)   NOT NULL DEFAULT('')    
-      ,  MaxPallet         INT            NOT NULL DEFAULT(0)      
+      ,  LocLevel          INT            NOT NULL DEFAULT(0)      
+      --,  MaxPallet         INT            NOT NULL DEFAULT(0)      
       )    
   
       CREATE TABLE #TMP_PICK    
@@ -334,7 +340,9 @@ BEGIN
       --,  Lottable01        NVARCHAR(18)   NULL     
       ,  TaskDetailKey     NVARCHAR(10)   NULL                            
       ,  OrderGroup        NVARCHAR(20)   NULL  
-      ,  Priority          NVARCHAR(10)   NULL        
+      ,  Priority          NVARCHAR(10)   NULL       
+      --,  OrderKey          NVARCHAR(10)   NULL  /*JH02*/
+      --,  OrderLineNumber   NVARCHAR(5)    NULL  /*JH02*/
       )        
         
       ------------------------------------------------------------------------------------    
@@ -365,6 +373,8 @@ BEGIN
          ,  TaskDetailKey        
          ,  OrderGroup  
          ,  Priority  
+         --,  OrderKey          /*JH02*/
+         --,  OrderLineNumber   /*JH02*/
          )    
       SELECT LOC.Facility    
             ,PD.Storerkey    
@@ -380,8 +390,8 @@ BEGIN
             --                    ELSE 'PP' END    
             ,PD.PickMethod  
             ,LogicalFromLoc   = ISNULL(RTRIM(LOC.LogicalLocation),'')    
-            ,FromLocType = CASE WHEN LOC.LocationType     <> 'DYNPPICK'     
-                                 AND LOC.LocationCategory <> 'SHELVING'     
+            ,FromLocType = CASE WHEN LOC.LocationType     <> 'PICK' --'DYNPPICK'     
+                                 --AND LOC.LocationCategory <> 'SHELVING'     
                                  AND SxL.LocationType NOT IN ('PICK','CASE')     
                                  THEN 'BULK'     
                                  ELSE 'DPP' END    
@@ -402,8 +412,10 @@ BEGIN
             ,TaskDetailKey = ISNULL(RTRIM(TD.TaskDetailkey),'')           
             ,O.OrderGroup  
             ,CLK.Short  
+            --,PD.OrderKey      /*JH02*/
+            --,PD.OrderLineNumber /*JH02*/
       FROM   WAVEDETAIL WD    WITH (NOLOCK)     
-      JOIN PICKDETAIL PD    WITH (NOLOCK) ON (WD.Orderkey = PD.Orderkey)    
+      JOIN   PICKDETAIL PD    WITH (NOLOCK) ON (WD.Orderkey = PD.Orderkey)    
       JOIN   ORDERS     O     WITH (NOLOCK) ON (WD.Orderkey = O.Orderkey)  
       JOIN   LOTATTRIBUTE LA  WITH (NOLOCK) ON (PD.Lot = LA.Lot)                     
       JOIN   LOC        LOC   WITH (NOLOCK) ON (PD.Loc = LOC.Loc)    
@@ -433,8 +445,8 @@ BEGIN
             ,  PD.PickMethod  
             ,  ISNULL(UCC.Qty,0)    
             ,  ISNULL(RTRIM(LOC.LogicalLocation),'')    
-            ,  CASE WHEN LOC.LocationType <> 'DYNPPICK'     
-                     AND LOC.LocationCategory <> 'SHELVING'     
+            ,  CASE WHEN LOC.LocationType <> 'PICK' --'DYNPPICK'        
+                     --AND LOC.LocationCategory <> 'SHELVING'     
                      AND SxL.LocationType NOT IN ('PICK','CASE')     
                      THEN 'BULK'     
                      ELSE 'DPP' END    
@@ -455,6 +467,8 @@ BEGIN
             ,  ISNULL(RTRIM(TD.TaskDetailkey),'')      
             ,  O.OrderGroup  
             ,  CLK.Short  
+            --,  PD.OrderKey        /*JH02*/
+            --,  PD.OrderLineNumber /*JH02*/
       ORDER BY PD.UOM    
             ,  LocationType                                            
             ,  CASE WHEN PD.UOM = '6' THEN '' ELSE PD.Loc END                        
@@ -485,9 +499,10 @@ BEGIN
          ,  LocationType    
          ,  LocationHandling               
          ,  LocationCategory     
-         ,  LogicalLocation                       
+         ,  LogicalLocation 
          ,  PickZone    
-         ,  MaxPallet    
+         ,  LocLevel
+         --,  MaxPallet    
          )     
          SELECT    
             Facility    
@@ -496,11 +511,13 @@ BEGIN
          ,  LocationHandling               
          ,  LocationCategory     
          ,  LogicalLocation                      
-         ,  PickZone    
-         ,  MaxPallet    
+         ,  PickZone 
+         ,  LocLevel
+         --,  MaxPallet    
          FROM LOC WITH (NOLOCK)    
          WHERE Facility = @c_Facility    --'GBTAM'--
-         AND LocationType = 'DYNPPICK' ----'DYNPICKP'  --Dynamic Pick Location  
+         AND LocationType = 'DYNPPICK' ----'DYNPICKP'  --Dynamic Pick
+         AND Status = 'OK'
       END   
        
       IF EXISTS (  SELECT 1 FROM #TMP_PICK TP WITH (NOLOCK)     
@@ -515,8 +532,9 @@ BEGIN
          ,  LocationHandling               
          ,  LocationCategory     
          ,  LogicalLocation                       
-         ,  PickZone    
-         ,  MaxPallet    
+         ,  PickZone   
+         ,  LocLevel
+         --,  MaxPallet    
          )     
          SELECT    
             Facility    
@@ -525,11 +543,13 @@ BEGIN
          ,  LocationHandling               
          ,  LocationCategory     
          ,  LogicalLocation                      
-         ,  PickZone    
-         ,  MaxPallet    
+         ,  PickZone 
+         ,  LocLevel
+         --,  MaxPallet    
          FROM LOC WITH (NOLOCK)    
          WHERE Facility = @c_Facility    
-         AND LocationType = 'PICK'--'DYNPPICK'    
+         AND LocationType = 'PICK'--'DYNPPICK'    --Pick Face  
+         AND Status = 'OK'
       END    
   
       --SET @n_NoOfUCCToDP = 0    
@@ -604,7 +624,9 @@ BEGIN
          --,  Lottable01      
          ,  TaskDetailkey    
          ,  OrderGroup  
-         ,  Priority           
+         ,  Priority      
+         --,  OrderKey          /*JH02*/
+         --,  OrderLineNumber   /*JH02*/
       FROM #TMP_PICK                                                                
       ORDER BY RowRef    
        
@@ -629,6 +651,8 @@ BEGIN
                                  , @c_TaskDetailkey     
                                  , @n_OrderGroup  
                                  , @n_Priority  
+                                 --, @c_OrderKey         /*JH02*/
+                                 --, @c_OrderLineNumber  /*JH02*/
     
       WHILE @@FETCH_STATUS <> -1    
       BEGIN    
@@ -643,529 +667,233 @@ BEGIN
             --GOTO ADD_PSLIP -- Need to Generate Pickslipno    
             GOTO NextPick    
          END    
-    
-         IF @c_UOM = '2' -- Single Order pick from Pallet Location    
-         BEGIN    
-            SET @c_DPPPKZone = ''    
-            SELECT TOP 1 @c_DPPPKZone = LOC.PickZone    
-            FROM SKUxLOC WITH (NOLOCK)    
-            JOIN LOC     WITH (NOLOCK) ON (SKUxLOC.Loc = LOC.Loc)    
-            WHERE SKUxLOC.Storerkey= @c_Storerkey    
-            AND   SKUxLOC.Sku      = @c_Sku    
-            AND   SKUxLOC.LocationType = 'PICK'    --Home Location    
-            AND   LOC.Facility     = @c_Facility    
-            ORDER BY LOC.LogicalLocation    
-                              ,  LOC.Loc    
-    
-            SELECT TOP 1 @c_ToLoc = L.Loc FROM Loc L WITH (NOLOCK)   
-                     WHERE L.Facility = @c_Facility AND   
-                           L.LocationType = 'OTHER' AND   
-                           L.PutawayZone = CASE WHEN @n_OrderGroup = 'B2C' THEN  'CSCPACK' ELSE 'CSCCNVYR' END  
+         
+         IF EXISTS (SELECT 1 FROM TASKDETAIL (NOLOCK) WHERE WAVEKEY <> @c_WaveKey AND TaskType IN ('ASTTPA','RPF','RP1','RPT') AND Caseid = @c_DropID AND STATUS NOT IN ('9', 'X'))   
+         BEGIN                 
+            GOTO NextPick    
+         END 
+
+         IF @c_UOM = '2' -- Single Order pick 
+         BEGIN
+            --Get the OrderKey And OrderLineNumber
+            SELECT @c_OrderKey = OrderKey, @c_OrderLineNumber = OrderLineNumber 
+            FROM PickDetail WITH (NOLOCK) 
+            WHERE StorerKey = @c_StorerKey AND 
+                     WaveKey = @c_WaveKey AND 
+                     DropID = @c_DropID AND 
+                     SKU = @c_Sku AND
+                     @c_UOM = '2' AND 
+                     Status < '5'
+
+            IF EXISTS (SELECT 1 FROM WorkOrderDetail WOD WITH (NOLOCK) 
+                              WHERE WOD.ExternWorkOrderKey = @c_OrderKey AND 
+                                    WOD.ExternLineNo = @c_OrderLineNumber AND 
+                                    WOD.Type = 'PU')
+            BEGIN
+                GOTO FIND_DPP
+            END
+            ELSE
+            BEGIN
+                SET @c_ToLocType = 'PS'  -- Pack Station    
+                SELECT TOP 1 @c_ToLoc = L.Loc FROM Loc L WITH (NOLOCK)   
+                WHERE L.Facility = @c_Facility AND   
+                      L.LocationType = 'OTHER' AND   
+                      L.PutawayZone = CASE WHEN @n_OrderGroup = 'B2C' THEN  'CSCPACK' ELSE 'CSCCNVYR' END  
               
-            --SELECT @c_ToLoc = ISNULL(RTRIM(Short),'')    
-            --FROM CODELKUP WITH (NOLOCK)      
-            --WHERE ListName = 'NIKEZONE'    
-            --AND   Code = @c_DPPPKZone                                                
-            --AND   Code2= @c_DispatchPiecePickMethod                                  
-            --AND   Storerkey = @c_Storerkey    
-    
-            SET @c_ToLocType = 'PS'  -- Pack Station    
-    
-            GOTO ADD_TASK    
-         END    
-    
-         --SET @c_LocationHandling = CASE WHEN @c_Lottable01 = 'A' THEN '3'    
-         --                               WHEN @c_Lottable01 = 'B' THEN '4'    
-         --                               ELSE ''    
-         --                               END    
+                GOTO ADD_TASK    
+            END
+           
+         END        
+   
          IF @c_UOM = '6'    
          BEGIN    
-            FIND_DP:                    
-               --SET @c_LocationCategory = 'SHELVING'    
+            --Check if same UCC (PICKDETAIL.DropID) is assigned for more than one order START           
+            SET @n_TotatOrderForSameUCC = 0    
+            SET @c_ToLocType = 'PICK'  
+            SET @c_ToLoc = ''
+
+            SELECT @n_TotatOrderForSameUCC = COUNT(DISTINCT PD.OrderKey)                     
+            FROM PICKDETAIL   PD  WITH (NOLOCK)
+            WHERE PD.Wavekey  = @c_Wavekey    
+            AND   PD.UOM      = '6'    
+            AND   PD.DropID   <>''    
+            AND   PD.Status   < '5'   
+            AND   PD.DropID   = @c_DropID    
+            AND   PD.Storerkey= @c_Storerkey    
+            AND   PD.Sku      = @c_Sku    
     
-               --IF @c_PickMethod = 'FP' // Regardless FP or PP, If the No Of Carton in the pallet > MinPalletCarton, LocationCategory = BULK    
-               --BEGIN    
-                  --SET @n_NoOfUCCSku      = 0    
-                  --SET @n_TotatCartoninID = 0    
+            IF @n_TotatOrderForSameUCC > 1 
+            BEGIN    
+               SET @c_ToLocType = 'DYNPPICK'  
+            END    
+            --Check if same UCC (PICKDETAIL.DropID) is assigned for more than one order END    
     
-                  --SELECT @n_TotatCartoninID = COUNT(DISTINCT PD.DropID)    
-                  --      ,@n_NoOfUCCSku = COUNT(DISTINCT UCC.Sku)    
-                  --FROM WAVEDETAIL   WD  WITH (NOLOCK)    
-                  --JOIN PICKDETAIL   PD  WITH (NOLOCK) ON (WD.Orderkey = PD.Orderkey)    
-                  --JOIN UCC          UCC WITH (NOLOCK) ON (PD.DropID = UCC.UCCNo)    
-                  --                          AND(UCC.Status > '1' AND UCC.Status < '6')    
-                  --WHERE WD.Wavekey  = @c_Wavekey    
-                  --AND   PD.UOM      = '6'    
-                  --AND   PD.DropID   <>''    
-                  --AND   PD.Status   < '5'    
-                  --AND   PD.ID       = @c_ID    
-                  --AND   PD.Storerkey= @c_Storerkey    
-                  --AND   PD.Sku      = @c_Sku    
-    
-                  --IF @n_NoOfUCCSku = 1 AND @n_TotatCartonInID > @n_MinPalletCarton AND @n_MinPalletCarton > 0    
-                  --BEGIN    
-                  --   SET @c_LocationCategory = 'BULK'    
-                  --END    
-               --END    
-    
-               --IF @c_LocationCategory = 'SHELVING'    
-               --BEGIN    
-                  SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(TD.ToLoc),'')                       
-                  FROM #TMP_LOC_DP  LOC WITH (NOLOCK)                                      
-                  JOIN TASKDETAIL   TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)    
-                  JOIN LOTATTRIBUTE LA  WITH (NOLOCK) ON (TD.Lot = LA.Lot)    
-                  WHERE LOC.LocationType = 'DYNPPICK'--'DYNPICKP'    
-                  --AND   LOC.LocationHandling = @c_LocationHandling      
-                  AND   LOC.LocationCategory = @c_LocationCategory                                                  
-                  AND   LOC.Facility = @c_Facility    
-                  AND   TD.TaskType IN ('ASTTPA','RPF','RP1','RPT')    
-                  AND   TD.UOM       = '6'    
-                  AND   TD.CaseID    <>''    
-                  AND   TD.Status    < '9'    
-                  --AND   TD.SourceType like 'RCM_WV_Col_DynamicReplen-%'    
-                  --AND   TD.SourceType = 'msp_RCM_WV_Col_DynamicReplen'    
-                  AND   TD.Wavekey  = @c_Wavekey    
-                  AND   TD.Storerkey= @c_Storerkey    
-                  --AND   TD.Sku      = @c_Sku                                             
-                  AND EXISTS (SELECT 1       
-                              FROM SKUxLOC SL WITH (NOLOCK)      
-                              JOIN LOC L WITH (NOLOCK) ON SL.loc = L.Loc                     
-                              WHERE SL.Storerkey =  @c_Storerkey      
-                              AND   SL.Sku =  @c_Sku         
-                              AND   SL.locationType = 'PICK'        
-                              AND   L.LocationType = 'PICK'--'DYNPPICK'        
-                              AND   L.PickZone = LOC.PickZone      
-                              --AND   L.LocationHandling = @c_LocationHandling      
-                              )                     
-                  GROUP BY TD.Storerkey    
-                        --,  TD.Sku                                                       
-                        ,  TD.ToLoc    
-                        ,  ISNULL(LOC.MaxPallet,0)    
-                  HAVING ISNULL(LOC.MaxPallet,0) > ISNULL(COUNT( DISTINCT TD.CaseID),0)    
-               --END    
-               --ELSE    
-               --BEGIN    
-               --   SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(TD.ToLoc),'')    
-               --   FROM #TMP_LOC_DP  LOC WITH (NOLOCK)                                     
-               --   JOIN TASKDETAIL   TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)    
-               --   JOIN LOTATTRIBUTE LA  WITH (NOLOCK) ON (TD.Lot = LA.Lot)    
-               --   WHERE LOC.LocationType = 'DYNPICKP'    
-               --   --AND   LOC.LocationHandling = @c_LocationHandling      
-               --   AND   LOC.LocationCategory = @c_LocationCategory                                                  
-               --   AND   LOC.Facility = @c_Facility    
-               --   AND   TD.TaskType IN ('ASTTPA') --('RPF','RP1','RPT')    
-               --   AND   TD.UOM       = '6'    
-               --   AND   TD.CaseID    <>''    
-               --   AND   TD.Status    < '9'    
-               --   AND   TD.FromID    = @c_ID    
-               --   --AND   TD.SourceType like 'RCM_WV_Col_DynamicReplen-%'    
-               --   AND   TD.SourceType = 'msp_RCM_WV_Col_DynamicReplen'   
-               --   AND   TD.Wavekey  = @c_Wavekey    
-               --   AND   TD.Storerkey= @c_Storerkey    
-               --   --AND   TD.Sku      = @c_Sku    
-               --END                   
-    
-               IF @c_ToLoc = ''    
-               BEGIN     
-                  GET_EMPTY_DP:    
-    
-                  --SET @c_LocationHandlings = '3'    
-    
-                  --IF @c_Lottable01 = 'B'    
-                  --BEGIN    
-                  --   SET @c_LocationHandlings = '3|4'    
-                  --END    
-    
-                  SET @c_DPPPKZone = ''    
-                  DECLARE CUR_DPP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-                  SELECT DPPPKZone = LOC.PickZone    
-                  FROM SKUxLOC WITH (NOLOCK)    
-                  JOIN #TMP_LOC_DPP  LOC WITH (NOLOCK) ON (SKUxLOC.Loc = LOC.Loc)     
-                  --JOIN dbo.fnc_DelimSplit ('|', @c_LocationHandlings) HLG             
-                  --                           ON (HLG.ColValue = LOC.LocationHandling)     
-                  WHERE SKUxLOC.Storerkey= @c_Storerkey    
-                  AND   SKUxLOC.Sku      = @c_Sku    
-                  AND   SKUxLOC.LocationType = 'PICK'                                
-                  AND   LOC.LocationType = 'PICK'--'DYNPPICK'    
-                  AND   LOC.Facility     = @c_Facility    
-                  GROUP BY LOC.PickZone                                             
-                        --,  LOC.LocationHandling                                      
-                        ,  LOC.LogicalLocation                                      
-                        ,  LOC.Loc                                                  
-                  ORDER BY --LOC.LocationHandling DESC,                    
-                           LOC.LogicalLocation    
-                        ,  LOC.Loc    
-    
-                  OPEN CUR_DPP    
-       
-                  FETCH NEXT FROM CUR_DPP INTO @c_DPPPKZone    
-                  WHILE @@FETCH_STATUS <> -1 AND @c_ToLoc = ''    
-                  BEGIN    
-                     -- Find Last Logical location in DP that has stock    
-                     IF NOT EXISTS (SELECT 1 FROM @t_DPRange WHERE PickZone = @c_DPPPKZone)    
-                     BEGIN                       
-                        SET @c_logicalloc = ''             
-                        SELECT TOP 1 @c_logicalloc = ISNULL(UDF01,'')            
-                        FROM CODELKUP CL WITH (NOLOCK)             
-                        WHERE CL.ListName = 'COLGBRDPLoc'            
-                        AND   CL.Code = @c_DPPPKZone            
-                        AND   CL.Storerkey = @c_Storerkey            
+            IF @c_ToLocType = 'PICK'
+            BEGIN    
+               --SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(TD.ToLoc),'')                       
+               SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(LOC.Loc),'')                       
+               FROM #TMP_LOC_DPP  LOC WITH (NOLOCK)                                      
+               --JOIN TASKDETAIL   TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)    
+               --JOIN LOTATTRIBUTE LA  WITH (NOLOCK) ON (TD.Lot = LA.Lot)    
+               JOIN SKUxLOC SL WITH (NOLOCK) ON SL.loc = LOC.Loc 
+               WHERE LOC.LocationType = 'PICK'--'DYNPICKP'    
+               --AND   LOC.LocationHandling = @c_LocationHandling      
+               --AND   LOC.LocationCategory = @c_LocationCategory                                                  
+               AND LOC.Facility = @c_Facility    
+               AND SL.Storerkey =  @c_Storerkey      
+               AND   SL.Sku =  @c_Sku         
+               AND   SL.locationType = 'PICK'       
+               AND   LOC.PickZone = LOC.PickZone      
+               --AND   TD.TaskType IN ('ASTTPA','RPF','RP1','RPT')    
+               --AND   TD.UOM       = '6'    
+               --AND   TD.CaseID    <>''    
+               --AND   TD.Status    < '9'    
+               ----AND   TD.SourceType like 'RCM_WV_Col_DynamicReplen-%'    
+               --AND   TD.SourceType = 'msp_RCM_WV_Col_DynamicReplen'    
+               --AND   TD.Wavekey  = @c_Wavekey    
+               --AND   TD.Storerkey= @c_Storerkey    
+               --AND   TD.Sku      = @c_Sku                                             
+               --AND EXISTS (SELECT 1       
+               --            FROM SKUxLOC SL WITH (NOLOCK)      
+               --            JOIN LOC L WITH (NOLOCK) ON SL.loc = L.Loc                     
+               --            WHERE SL.Storerkey =  @c_Storerkey      
+               --            AND   SL.Sku =  @c_Sku         
+               --            AND   SL.locationType = 'PICK'        
+               --            AND   L.LocationType = 'PICK'--'DYNPPICK'        
+               --            AND   L.PickZone = LOC.PickZone      
+               --            --AND   L.LocationHandling = @c_LocationHandling      
+               --            )                     
+               --GROUP BY TD.Storerkey    
+               --      --,  TD.Sku                                                       
+               --      ,  TD.ToLoc    
+                     --,  ISNULL(LOC.MaxPallet,0)    
+               --HAVING ISNULL(LOC.MaxPallet,0) > ISNULL(COUNT( DISTINCT TD.CaseID),0)    
+               IF @c_ToLoc = ''
+               BEGIN
+                  SELECT @n_continue = 3;   
+                  SELECT @n_err = 94717;   
+                  SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' SKU:' + @c_Sku + ' No PickFace (msp_RCM_WV_Col_DynamicReplen)';   
+                  GOTO RETURN_SP;   
+               END 
+            END    
             
-                        IF @c_logicalloc = ''            
-                        BEGIN            
- SET @c_logicalloc = ''            
-                           SELECT DISTINCT TOP 1 @c_logicalloc = LOC.LogicalLocation            
-                           FROM  #TMP_LOC_DP LOC WITH (NOLOCK)            
-                           JOIN  LOTxLOCxID LLI WITH (NOLOCK)  ON (LLI.Loc = LOC.Loc AND  LLI.Storerkey = @c_Storerkey)                                 
-                           WHERE LOC.LocationType = 'DYNPPICK'-- 'DYNPICKP'          --Dynamic Pick Location  
-                           --AND   LOC.LocationHandling = @c_LocationHandling                              
-                           AND   LOC.LocationCategory = @c_LocationCategory                               
-                           AND   LOC.Facility = @c_Facility             
-                           AND   LOC.PickZone = @c_DPPPKZone            
-                           AND   (LLI.Qty - LLi.QtyPicked) + LLI.PendingMoveIN > 0            
-                           ORDER BY LOC.LogicalLocation DESC            
-                        END       
+            IF @c_ToLocType = 'DYNPPICK'
+            BEGIN  
+               FIND_DPP:
+
+               --Check BUSR7   
+               SET @c_BUSR7= ''
+               SELECT TOP 1 @c_BUSR7 = ISNULL(BUSR7,'') FROM SKU WITH (NOLOCK)   
+                           WHERE StorerKey = @c_Storerkey AND SKU = @c_Sku 
+               IF @c_BUSR7 = ''              
+               BEGIN   
+                  SELECT @n_continue = 3;   
+                  SELECT @n_err = 94718;   
+                  SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' SKU:' + @c_Sku + ' No BUSR7 (msp_RCM_WV_Col_DynamicReplen)';   
+                  GOTO RETURN_SP;   
+               END;   
+               
+               --Check PutawayZone
+               SET @c_PutawayZone = ''
+               SELECT TOP 1 @c_PutawayZone = SHORT FROM CODELKUP WITH (NOLOCK)   
+                           WHERE StorerKey = @c_Storerkey AND LISTNAME = 'CSCUK01PT' AND Code = @c_BUSR7
+
+               IF NOT EXISTS (SELECT 1 FROM LOC WITH (NOLOCK)   
+                           WHERE Facility = @c_Facility AND LocationType = 'DYNPPICK' AND PutawayZone = @c_PutawayZone)              
+               BEGIN   
+                  SELECT @n_continue = 3;   
+                  SELECT @n_err = 94719;   
+                  SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' ' + @c_Sku + ' ' + @c_BUSR7 + ' Incorrect PutawayZone (msp_RCM_WV_Col_DynamicReplen)';   
+                  GOTO RETURN_SP;   
+               END;
+              
+               --1. Check DPP loc with same sku A from same wave + DPP locLevel > 0 + No of carton < 4
+               SELECT TOP 1 @c_ToLoc = LOC.LOC --ISNULL(RTRIM(TD.ToLoc),'')    
+               FROM #TMP_LOC_DP LOC WITH (NOLOCK)                                     
+               JOIN TASKDETAIL  TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)     
+               JOIN (SELECT Distinct LOC, ID 
+                           FROM LOTXLOCXID WITH (NOLOCK) 
+                           WHERE StorerKey = @c_Storerkey AND SKU = @c_Sku
+                           AND Qty - QtyPicked > 0 AND ISNULL(ID,'') <> '' GROUP BY Loc, ID) LLI ON (LOC.LOC = LLI.LOC)
+               WHERE LOC.LocationType = 'DYNPPICK'--'DYNPICKP'    
+                     AND LOC.LocLevel > 0
+                     AND LOC.Facility = @c_Facility  
+                     AND LOC.PickZone = @c_PutawayZone
+                     --AND   LOC.LocationHandling = @c_LocationHandling      
+                     --AND   LOC.LocationCategory = @c_LocationCategory                                                                 
+                     AND   TD.TaskType IN ('ASTTPA','RPF','RP1','RPT')  --AND   TD.TaskType IN ('RPF','RP1','RPT')  
+                     AND   TD.UOM       = '6'    
+                     --AND   TD.CaseID    <>''    
+                     AND   TD.Status    < '9'    
+                     --AND   TD.DropID    = @c_DropID      
+                     AND   TD.SourceType = 'msp_RCM_WV_Col_DynamicReplen'   
+                     AND   TD.Wavekey  = @c_Wavekey    
+                     AND   TD.Storerkey= @c_Storerkey    
+                     AND   TD.Sku      = @c_Sku    
+               GROUP BY LOC.LOC, LOC.LogicalLocation, LLI.ID
+               HAVING COUNT(DISTINCT LLI.ID) < 4
+               ORDER BY LOC.LogicalLocation
+
+               --2. DPP loc with different sku B from same wave + DPP locLevel > 0 + No of carton < 4
+               IF @c_ToLoc = ''
+               BEGIN
+                  SELECT TOP 1 @c_ToLoc = LOC.LOC --ISNULL(RTRIM(TD.ToLoc),'')    
+                  FROM #TMP_LOC_DP LOC WITH (NOLOCK)                                     
+                  JOIN TASKDETAIL  TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)     
+                  JOIN (SELECT Distinct LOC, ID , SKU
+                              FROM LOTXLOCXID WITH (NOLOCK) 
+                              WHERE StorerKey = @c_Storerkey AND SKU <> @c_Sku
+                              AND Qty - QtyPicked > 0 AND ISNULL(ID,'') <> '' GROUP BY Loc, ID, SKU) LLI ON (LOC.LOC = LLI.LOC)
+                  WHERE LOC.LocationType = 'DYNPPICK'--'DYNPICKP'    
+                        AND LOC.LocLevel > 0
+                        AND LOC.Facility = @c_Facility
+                        AND LOC.PickZone = @c_PutawayZone
+                        --AND   LOC.LocationHandling = @c_LocationHandling      
+                        --AND   LOC.LocationCategory = @c_LocationCategory                                                                 
+                        AND   TD.TaskType IN ('ASTTPA','RPF','RP1','RPT')  --AND   TD.TaskType IN ('RPF','RP1','RPT')  
+                        AND   TD.UOM       = '6'    
+                        --AND   TD.CaseID    <>''    
+                        AND   TD.Status    < '9'    
+                        --AND   TD.DropID    = @c_DropID      
+                        AND   TD.SourceType = 'msp_RCM_WV_Col_DynamicReplen'   
+                        AND   TD.Wavekey  = @c_Wavekey    
+                        AND   TD.Storerkey= @c_Storerkey    
+                        AND   TD.Sku      <> @c_Sku    
+                  GROUP BY LOC.LOC, LOC.LogicalLocation, LLI.ID, LLI.SKU
+                  HAVING COUNT(DISTINCT LLI.ID) < 4 AND COUNT(DISTINCT LLI.SKU) = 1
+                  ORDER BY LOC.LogicalLocation
+               END
+
+               --3. empty DPP loc ORDER BY locLevel DESC
+               IF @c_ToLoc = ''
+               BEGIN
+                  SELECT TOP 1 @c_ToLoc = LOC.LOC --ISNULL(RTRIM(TD.ToLoc),'')    
+                  FROM #TMP_LOC_DP LOC WITH (NOLOCK)     
+                  LEFT JOIN (SELECT DISTINCT LOC, SUM(Qty) - SUM (QtyPicked) AS TotalQty
+                              FROM LOTXLOCXID WITH (NOLOCK) 
+                              WHERE StorerKey = @c_Storerkey --AND SKU <> @c_Sku
+                              GROUP BY Loc) LLI ON (LOC.LOC = LLI.LOC)
+                  WHERE LOC.LocationType = 'DYNPPICK'--'DYNPICKP'    
+                        --AND LOC.LocLevel > 0
+                        AND LOC.Facility = @c_Facility
+                        AND LOC.PickZone = @c_PutawayZone
+                        AND (LLI.TotalQty = 0 OR LLI.LOC IS NULL)                       
+                  GROUP BY LOC.LOC, LOC.LocLevel, LOC.LogicalLocation                                 
+                  ORDER BY LOC.LocLevel DESC, LOC.LogicalLocation
+               END   
+              
+               IF @c_ToLoc = ''
+               BEGIN
+                  SELECT @n_continue = 3;   
+                  SELECT @n_err = 94720;   
+                  SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' ' + @c_Sku + ' ' + @c_PutawayZone + ' No empty DynamicPickFace (msp_RCM_WV_Col_DynamicReplen)';   
+                  GOTO RETURN_SP;   
+               END 
+            END                 
+         END       
     
-                        INSERT INTO @t_DPRange (PickZone, LogicalLocStart)    
-                        VALUES (@c_DPPPKZone, @c_logicalloc)    
-    
-                        --SET @c_DPPPKZone_Last = @c_DPPPKZone    
-                     END    
-                      
-                     GET_PICKZONE_DP:                                                                                                
-                     SET @n_LocQty = 0                                                                                               
-                     SET @c_Logicalloc = ''                                                                
-                     SET @c_LogicalLocStart = ''                                                                                     
-                     SELECT TOP 1   @c_ToLoc = LOC.Loc    
-                                 ,  @c_Logicalloc = LOC.LogicalLocation                                                              
-                                 ,  @c_LogicalLocStart = LR.LogicalLocStart                
-                                 ,  @n_LocQty = ISNULL(SUM((LLI.Qty - LLi.QtyPicked) + LLI.PendingMoveIN),0)      
-                     FROM  #TMP_LOC_DP  LOC WITH (NOLOCK)    
-                     JOIN  @t_DPRange   LR  ON (LOC.PickZone = LR.PickZone)                                                              
-                     LEFT JOIN  LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.Loc = LOC.Loc AND  LLI.Storerkey = @c_Storerkey)                                     
-                     WHERE LOC.LocationType = 'DYNPPICK'--'DYNPICKP'  --Dynamic Pick Location  
-                     --AND   LOC.LocationHandling = @c_LocationHandling                      
-                     AND   LOC.LocationCategory = @c_LocationCategory                      
-                     AND   LOC.Facility = @c_Facility     
-                     AND   LOC.PickZone = @c_DPPPKZone                         
-                     AND LOC.LogicalLocation > LR.LogicalLocStart    
-                     --AND   LLI.Storerkey IS NULL    
-                     GROUP BY LOC.LogicalLocation, LOC.Loc, LR.LogicalLocStart    
-                     --HAVING CASE WHEN ISNULL(SUM(LLI.Qty + LLI.QtyAllocated + LLi.QtyPicked + LLI.PendingMoveIN),0) = 0 THEN 0    
-                     --                        ELSE COUNT(1)    
-                     --                        END  = 0     
-                                                          
-                     ORDER BY LOC.LogicalLocation    
-                             ,LOC.Loc                          
-    
-                     IF @c_Toloc = '' AND @c_LogicalLocStart = ''    
-                     BEGIN    
-                        SELECT @c_LogicalLocStart =  LogicalLocStart     
-                        FROM @t_DPRange WHERE PickZone = @c_DPPPKZone    
-                     END    
-    
-                     IF @c_Toloc = '' AND @c_LogicalLocStart = ''    
-                     BEGIN    
-                        GOTO NEXT_DPPPKZone    
-                     END     
-    
-                     IF @c_Toloc = '' AND @c_LogicalLocStart <> ''  -- Last Loc, Search empty from begining    
-                     BEGIN    
-                        UPDATE @t_DPRange SET LogicalLocStart = '' WHERE PickZone = @c_DPPPKZone    
-                        GOTO GET_PICKZONE_DP    
-                     END    
-    
-                     IF @n_LocQty = 0     
-                     BEGIN     
-                        UPDATE @t_DPRange SET LogicalLocStart = @c_logicalloc WHERE PickZone = @c_DPPPKZone    
-                     END    
-                     ELSE    
-                     BEGIN     
-                        SET @c_Toloc = ''    
-                     END    
-                       
-    
-                     /* (Wan09) - START                                                    
-                     IF @c_ToLoc = ''    
-                     BEGIN     
-                        SELECT TOP 1 @c_ToLoc = LOC.Loc                                       
-                        FROM  LOC WITH (NOLOCK)                                        
-                        WHERE LOC.LocationType = 'DYNPICKP'    
-                        AND   LOC.LocationHandling = @c_LocationHandling                    
-                        AND   LOC.LocationCategory = @c_LocationCategory                  --(Wan08)    
-                        AND   LOC.Facility = @c_Facility     
-                        AND   LOC.PickZone = @c_DPPPKZone    
-    
-                        AND   NOT EXISTS (SELECT 1     
-                                          FROM LOTxLOCxID LLI WITH (NOLOCK)     
-                               WHERE LLI.Storerkey = @c_Storerkey                        
-                                          AND   LLI.Loc = LOC.Loc    
-                                         )     
-                        ORDER BY LOC.LogicalLocation    
-                                    ,LOC.Loc    
-                     END    
-                     --(Wan09) - END */    
-                     NEXT_DPPPKZone:                                                                           --(Wan09)    
-                     FETCH NEXT FROM CUR_DPP INTO @c_DPPPKZone    
-                  END    
-                  CLOSE  CUR_DPP    
-                  DEALLOCATE CUR_DPP    
-               END     
-    
-               IF @c_ToLoc = ''    
-               BEGIN     
-                   GOTO FIND_DPP --SET @n_Continue = 3    
-               END    
-    
-               SET @c_ToLocType = 'DP'       
-               GOTO ADD_TASK    
-         END    
+         ADD_TASK:      
           
-         FIND_DPP: -- UOM = '7'    
-            -- NOT Need to Add Task, Direct Generate PickSlipNo - START    
-            IF @c_TaskDetailKey <> ''    
-            BEGIN    
-               --SET @b_DirectGenPickSlip = 1        -- INC0924060     
-               --GOTO ADD_PSLIP    
-               GOTO NextPick  
-            END    
-            --(Wan11) - NOT Need to Add Task, Direct Generate PickSlipNo - END    
-    
-            SET @c_ToLocType = 'DPP'    
-            -- Find Sku in DPP Loc    
-            /*    
-            -- 1) Find from RPF     
-            -- 2) Else find from In Transit    
-            */    
-            --IF @c_Lottable01 = 'B'                                                   
-            --BEGIN    
-               --3) Find loc or pending move in loc with same sku     
-               SELECT TOP 1 @c_ToLoc = LOC.Loc    
-               FROM LOTxLOCxID   LLI WITH (NOLOCK)    
-               JOIN #TMP_LOC_DPP LOC WITH (NOLOCK) ON (LLI.Loc = LOC.Loc)  --(Wan09)    
-               WHERE LLI.Storerkey= @c_Storerkey    
-               AND   LLI.Sku = @c_Sku      
-               AND   LLI.Qty + LLI.PendingMoveIN > 0                                
-               --AND   LOC.LocationCategory = 'SHELVING'    
-               AND   LOC.LocationType = 'DYNPPICK'    
-               --AND   LOC.LocationHandling = @c_LocationHandling                       
-               AND   LOC.Facility = @c_Facility    
-               ORDER BY LOC.LogicalLocation    
-                     ,  LOC.Loc    
-            --END    
-    
-            IF @c_ToLoc = ''    
-            BEGIN    
-               --4) Ops Pre-defined Loc for Sku. Find pick face loc setup in skuxloc only     
-               --(Wan09) - START    
-               --SET @n_CaseCnt = 0.00    
-               --SELECT @n_CaseCnt = CASE WHEN ISNUMERIC(ISNULL(SKU.SUSR1,0.00)) = 1     
-               --                         THEN ISNULL(CAST(SKU.SUSR1 AS INT),0.00) * 1.00    
-               --                         ELSE 0.00    
-               --                         END    
-               --FROM SKU WITH (NOLOCK)    
-               --WHERE SKU.Storerkey= @c_Storerkey    
-               --AND   SKU.Sku = @c_Sku      
-     
-               --IF @n_CaseCnt = 0.00    
-               --BEGIN    
-               --   SET @n_CaseCnt = 1.00    
-               --END    
-               --(Wan09) - END    
-    
-               SELECT TOP 1 @c_ToLoc = LOC.Loc    
-               FROM SKUxLOC SxL  WITH (NOLOCK)    
-               JOIN #TMP_LOC_DPP LOC WITH (NOLOCK) ON (SxL.Loc = LOC.Loc)  --(Wan09)    
-               LEFT JOIN  LOTxLOCxID LLI WITH (NOLOCK)  ON  (LLI.Loc = LOC.Loc)     
-                                                        AND (LLI.Storerkey = @c_Storerkey)    
-                                                        AND (LLI.Sku = @c_Sku)     
-               WHERE SxL.Storerkey= @c_Storerkey    
-               AND   SxL.Sku = @c_Sku      
-               AND   SxL.LocationType = 'PICK'                                       
-               AND   LOC.Facility = @c_Facility    
-               --AND   LOC.LocationCategory = 'SHELVING'    
-               AND   LOC.LocationType = 'PICK'--'DYNPPICK'    
-               --AND   LOC.LocationHandling = @c_LocationHandling     
-               --(WAN09) - START -- Release To Home Location without Location Limit Checking, Operation to control not overflow to much   
-               --GROUP BY SxL.Storerkey, SxL.Sku, SxL.QtyLocationLimit, SxL.Qty, SxL.QtyPicked, LOC.Loc, LOC.LogicalLocation, LOC.MaxPallet    
-               --HAVING SxL.QtyLocationLimit >= ((SxL.Qty - SxL.QtyPicked) + ISNULL(SUM(LLI.PendingMoveIn),0) + @n_UCCQty)      
-               --AND CEILING(((SxL.Qty - SxL.QtyPicked) + ISNULL(SUM(LLI.PendingMoveIn),0)) / @n_CaseCnt * 1.00 ) <= LOC.MaxPallet       
-               ORDER BY LOC.LogicalLocation    
-                     ,  LOC.Loc    
-               --(WAN09) - END    
-            END    
-    
-            --IF @c_Lottable01 = 'B' AND @c_ToLoc = ''                                                                                                   
-            IF @c_ToLoc = ''                                                                                                   
-            BEGIN    
-               DECLARE CUR_DPP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-               SELECT DPPPKZone = LOC.PickZone    
-               FROM SKUxLOC WITH (NOLOCK)    
-               JOIN #TMP_LOC_DPP LOC WITH (NOLOCK) ON (SKUxLOC.Loc = LOC.Loc)     
-               WHERE SKUxLOC.Storerkey= @c_Storerkey    
-               AND   SKUxLOC.Sku      = @c_Sku    
-               AND   SKUxLOC.LocationType = 'PICK'      
-               AND   LOC.LocationType = 'PICK'--'DYNPPICK'    
-               --AND   LOC.LocationHandling IN ( '3', '4' )    
-               AND   LOC.Facility     = @c_Facility    
-               GROUP BY LOC.PickZone    
-                     --,  LOC.LocationHandling    
-                     ,  LOC.LogicalLocation                                        
-                     ,  LOC.Loc     
-               ORDER BY --LOC.LocationHandling DESC ,   
-                        LOC.LogicalLocation    
-                     ,  LOC.Loc    
-    
-               OPEN CUR_DPP    
-       
-               FETCH NEXT FROM CUR_DPP INTO @c_DPPPKZone    
-               WHILE @@FETCH_STATUS <> -1 AND @c_ToLoc = ''    
-               BEGIN    
-                  SELECT TOP 1 @c_ToLoc = LOC.Loc    
-                  FROM #TMP_LOC_DPP LOC WITH (NOLOCK)                                      
-                  LEFT JOIN  LOTxLOCxID LLI WITH (NOLOCK)  ON (LLI.Loc = LOC.Loc AND  LLI.Storerkey = @c_Storerkey)         
-                  WHERE --LOC.LocationCategory = 'SHELVING'  AND     
-                  LOC.LocationType = 'DYNPPICK'    
-                  --AND   LOC.LocationHandling = @c_LocationHandling    
-                  AND   LOC.Facility = @c_Facility     
-                  AND   LOC.PickZone = CASE WHEN @c_DPPPKZone = '' THEN LOC.PickZone ELSE @c_DPPPKZone END
-                  --(Wan09) - START    
-                  AND   LLI.Storerkey IS NULL    
-                  GROUP BY LOC.LogicalLocation, LOC.Loc    
-                  HAVING CASE WHEN ISNULL(SUM((LLI.Qty - LLi.QtyPicked) + LLI.PendingMoveIN),0) = 0 THEN 0    
-                                          ELSE COUNT(1)    
-                                          END  = 0     
-                  --(Wan09) - END                
-                  ORDER BY LOC.LogicalLocation    
-                        ,  LOC.Loc    
-                  /*--(Wan09) - START    
-                  IF @c_ToLoc = ''    
-                  BEGIN     
-                     SELECT TOP 1 @c_ToLoc = LOC.Loc    
-                     FROM LOC WITH (NOLOCK)                                         
-                     WHERE LOC.LocationCategory = 'SHELVING'    
-                     AND   LOC.LocationType = 'DYNPPICK'    
-                     AND   LOC.LocationHandling = @c_LocationHandling    
-                     AND   LOC.Facility = @c_Facility     
-                     AND   LOC.PickZone = @c_DPPPKZone    
-                     --(Wan09) - START    
-                     AND   NOT EXISTS (SELECT 1 FROM LOTxLOCxID LLI WITH (NOLOCK)    
-                                       WHERE LLI.Loc = LOC.Loc AND LLI.Storerkey = @c_Storerkey         
-                                       )    
-                     --(Wan09) - END    
-                     ORDER BY LOC.LogicalLocation    
-                              , LOC.Loc    
-                  END    
-                  --(Wan09) - END */    
-                  FETCH NEXT FROM CUR_DPP INTO @c_DPPPKZone    
-               END    
-               CLOSE CUR_DPP    
-               DEALLOCATE CUR_DPP    
-            END    
-           
-            --IF @c_ToLoc = ''  --JH01 START
-            --BEGIN
-            --   SELECT TOP 1 @c_ToLoc = LOC.Loc    
-            --   FROM #TMP_LOC_DPP LOC WITH (NOLOCK)                                      
-            --   LEFT JOIN  LOTxLOCxID LLI WITH (NOLOCK)  ON (LLI.Loc = LOC.Loc AND  LLI.Storerkey = @c_Storerkey)         
-            --   WHERE --LOC.LocationCategory = 'SHELVING'  AND     
-            --   LOC.LocationType = 'DYNPPICK'    
-            --   --AND   LOC.LocationHandling = @c_LocationHandling    
-            --   AND   LOC.Facility = @c_Facility     
-            --   --AND   LOC.PickZone = CASE WHEN @c_DPPPKZone = '' THEN LOC.PickZone ELSE @c_DPPPKZone END
-            --   --(Wan09) - START    
-            --   --AND   LLI.Storerkey IS NULL    
-            --   GROUP BY LOC.LogicalLocation, LOC.Loc    
-            --   HAVING CASE WHEN ISNULL(SUM((LLI.Qty - LLi.QtyPicked) + LLI.PendingMoveIN),0) = 0 THEN 0    
-            --                           ELSE COUNT(1)    
-            --                           END  = 0     
-            --   --(Wan09) - END                
-            --   ORDER BY LOC.LogicalLocation    
-            --         ,  LOC.Loc    
-            --END  --JH01 END
-                
-            IF @c_FromLocType <> 'DPP' AND @c_DropID <> '' AND @c_ToLoc <> ''    
-            BEGIN    
-               SET @b_UpdMultiWave = 1                  
-    
-               DELETE FROM @t_UPDPICK    
-    
-               INSERT INTO @t_UPDPICK    
-                  (      
-                     t.PickDetailKey     
-                  ,  t.Loadkey      
-                  ,  t.Orderkey      
-                  ,  t.Consigneekey      
-                  ,  t.[Route]      
-                  ,  t.ExternOrderkey     
-                  ,  t.Wavekey     
-                  ,  t.Qty               
-                  )    
-               SELECT PD.PickDetailKey      
-                     ,OH.Loadkey      
-                     ,OH.Orderkey      
-                     ,Consigneekey = ISNULL(RTRIM(OH.Consigneekey),'')      
-                     ,Route = ISNULL(RTRIM(OH.Route),'')      
-                     ,ExternOrderkey = ISNULL(RTRIM(OH.ExternOrderkey),'')      
-                     ,WD.Wavekey     
-                     ,PD.Qty                                          
-               FROM WAVEDETAIL WD WITH (NOLOCK)                                              
-               JOIN ORDERS     OH WITH (NOLOCK) ON (WD.Orderkey = OH.Orderkey)                
-               JOIN PICKDETAIL PD WITH (NOLOCK) ON (PD.Orderkey = OH.Orderkey)       
-               LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON (PD.Taskdetailkey = TD.TaskdetailKey)      
-                                                     AND(TD.TaskDetailkey <> '')      
-                                                     AND(TD.[Status] <> 'X')                           
-               WHERE PD.Lot = @c_Lot      
-               AND   PD.Loc = @c_FromLoc      
-               AND   PD.ID  = @c_Id      
-               AND   PD.UOM = @c_UOM      
-               AND PD.DropID = @c_DropID                                                
-               AND   PD.[Status] < '9'        
-               AND   TD.TaskDetailkey IS NULL      
-               ORDER BY PD.PickDetailKey    
-                
-               SELECT @n_Qty = ISNULL(SUM(Qty),0)                                     
-               FROM @t_UPDPICK    
-            END                
-    
-         ADD_TASK:    
-    
-            IF @c_ToLoc = '' AND @c_UOM <> '6'      
-            BEGIN    
-               SET @n_Continue = 3    
-               SET @n_Err = 94718    
-               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)    
-                            +': ' + CASE WHEN @c_UOM = '2' THEN 'Pack Station' ELSE 'DPP Location for Sku: ' + @c_Sku END    
-                            + ' Not found. (msp_RCM_WV_Col_DynamicReplen)'    
-               GOTO RETURN_SP    
-            END    
-  
-            --Check other replenishment and recalculate the qty  
-            --IF @c_ToLoc <> ''            
-            --BEGIN    
-            --   SELECT @n_OtherTaskQty = SUM(Qty)   
-            --   FROM TASKDETAIL (NOLOCK)  
-            --   WHERE StorerKey = @c_StorerKey  
-            --         AND TaskType IN ('ASTTPA','RPF','RP1','RPT')  
-            --         AND ToLoc = @c_ToLoc   
-            --         AND SKU = @c_Sku  
-            --         AND Status < '9'  
-  
-            --   SELECT @n_AllPickDetailQty = SUM(Qty)   
-            --   FROM PICKDETAIL (NOLOCK)  
-            --   WHERE StorerKey = @c_StorerKey  
-            --         --AND OrderKey NOT IN (SELECT OrderKey FROM WAVEDETAIL (NoLock) WHERE WaveKey = @c_WaveKey)  
-            --         AND ToLoc = @c_ToLoc   
-            --         AND SKU = @c_Sku  
-            --         AND Status < '5'  
-  
-            --   IF @n_OtherTaskQty >= @n_AllPickDetailQty  
-            --   BEGIN  
-            --      GOTO NextPick  
-            --   END  
-  
-            --END  
-  
             ---Check other replenishment  
             IF @c_ToLoc <> ''            
             BEGIN                 
@@ -1188,12 +916,12 @@ BEGIN
                IF @n_err <> 0      
                BEGIN    
                   SET @n_continue = 3      
-                  SET @n_Err = 94719     
+                  SET @n_Err = 94721     
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update TASKDETAIL.Priority Failed. (msp_RCM_WV_Col_DynamicReplen)'     
                   GOTO RETURN_SP    
-               END               
-  
+               END  
             END  
+
             IF @c_ToLoc <> ''            
             BEGIN    
                UPDATE #TMP_PICK    
@@ -1204,7 +932,7 @@ BEGIN
                IF @n_err <> 0      
                BEGIN    
                   SET @n_continue = 3      
-                  SET @n_Err = 94720     
+                  SET @n_Err = 94722     
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update #TMP_PICK Failed. (msp_RCM_WV_Col_DynamicReplen)'     
                   GOTO RETURN_SP    
                END                       
@@ -1215,7 +943,7 @@ BEGIN
                SET @c_TaskType = 'RPF'    
     
                SET @b_success = 1      
-         EXECUTE nspg_getkey      
+               EXECUTE nspg_getkey      
                      'TaskDetailKey'     
                      , 10      
                      , @c_taskdetailkey OUTPUT      
@@ -1316,7 +1044,7 @@ BEGIN
                   ,  @c_TaskType --Tasktype      
                   ,  @c_Storerkey      
                   ,  @c_Sku      
-  ,  @c_UOM         -- UOM,      
+                  ,  @c_UOM         -- UOM,      
                   ,  @n_UCCQty      -- UOMQty,      
                   ,  @n_UCCQty      --Qty    
                   ,  @n_Qty         --systemqty    
@@ -1349,7 +1077,7 @@ BEGIN
                IF @n_err <> 0      
                BEGIN    
                   SET @n_continue = 3      
-                  SET @n_Err = 97421     
+                  SET @n_Err = 97423     
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Taskdetail Failed. (msp_RCM_WV_Col_DynamicReplen)'     
                   GOTO RETURN_SP    
                END       
@@ -1583,27 +1311,30 @@ BEGIN
                                     , @c_TaskDetailkey    --(Wan11)                                     
                                     , @n_OrderGroup  
                                     , @n_Priority  
-         IF @n_Continue = 3 AND @c_UOM_Prev = '6' AND (@c_UOM <> '6' OR @@FETCH_STATUS = -1)     
-         BEGIN                
-            SET @n_UCCWODPLoc = 0    
-            SET @n_UCCWOBULKDPLoc = 0    
-            SELECT @n_UCCWOBULKDPLoc = SUM(CASE WHEN @n_MinPalletCarton > 0 THEN T.TotalCartonInID ELSE 0 END)    
-                  ,@n_UCCWODPLoc = SUM(CASE WHEN @n_MinPalletCarton = 0 THEN T.TotalCartonInID ELSE 0 END)    
-            FROM (    
-               SELECT ID    
-                     ,TotalCartonInID = COUNT(DISTINCT DropID)      
-               FROM #TMP_PICK    
-               WHERE UOM = '6'      
-               AND ToLoc = ''    
-               GROUP BY ID          
-               ) T    
+                                    --, @c_OrderKey          /*JH02*/
+                                    --, @c_OrderLineNumber   /*JH02*/
+
+         --IF @n_Continue = 3 AND @c_UOM_Prev = '6' AND (@c_UOM <> '6' OR @@FETCH_STATUS = -1)     
+         --BEGIN                
+         --   SET @n_UCCWODPLoc = 0    
+         --   SET @n_UCCWOBULKDPLoc = 0    
+         --   SELECT @n_UCCWOBULKDPLoc = SUM(CASE WHEN @n_MinPalletCarton > 0 THEN T.TotalCartonInID ELSE 0 END)    
+         --         ,@n_UCCWODPLoc = SUM(CASE WHEN @n_MinPalletCarton = 0 THEN T.TotalCartonInID ELSE 0 END)    
+         --   FROM (    
+         --      SELECT ID    
+         --            ,TotalCartonInID = COUNT(DISTINCT DropID)      
+         --      FROM #TMP_PICK    
+         --      WHERE UOM = '6'      
+         --      AND ToLoc = ''    
+         --      GROUP BY ID          
+         --      ) T    
     
-            SET @n_Err = 97422    
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Not enough DP Location. '    
-                         +'No of UCC: ' + CONVERT(NVARCHAR(5),@n_UCCWODPLoc) + ' still need(s) Shelving DP Loc, '    
-                         +'No of UCC: ' + CONVERT(NVARCHAR(5),@n_UCCWOBULKDPLoc) + ' still need(s) BULK DP Loc (msp_RCM_WV_Col_DynamicReplen)'                
-            GOTO RETURN_SP    
-         END    
+         --   SET @n_Err = 97422    
+         --   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Not enough DP Location. '    
+         --                +'No of UCC: ' + CONVERT(NVARCHAR(5),@n_UCCWODPLoc) + ' still need(s) Shelving DP Loc, '    
+         --                +'No of UCC: ' + CONVERT(NVARCHAR(5),@n_UCCWOBULKDPLoc) + ' still need(s) BULK DP Loc (msp_RCM_WV_Col_DynamicReplen)'                
+         --   GOTO RETURN_SP    
+         --END    
       END    
       CLOSE CUR_PD    
       DEALLOCATE CUR_PD    
@@ -2038,56 +1769,56 @@ BEGIN
       --      ,LDP.LogicalLocStart                
       --FROM @t_DPRange  LDP    
                    
-      DECLARE @CUR_DP CURSOR             
-      SET @CUR_DP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                  
-      SELECT LDP.PickZone            
-            ,LDP.LogicalLocStart                
-      FROM @t_DPRange  LDP                  
-      ORDER BY LDP.PickZone             
+      --DECLARE @CUR_DP CURSOR             
+      --SET @CUR_DP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                  
+      --SELECT LDP.PickZone            
+      --      ,LDP.LogicalLocStart                
+      --FROM @t_DPRange  LDP                  
+      --ORDER BY LDP.PickZone             
                      
-      OPEN @CUR_DP                  
-      FETCH NEXT FROM @CUR_DP INTO  @c_DPPPKZone                 
-                                 ,  @c_logicalloc                
+      --OPEN @CUR_DP                  
+      --FETCH NEXT FROM @CUR_DP INTO  @c_DPPPKZone                 
+      --                           ,  @c_logicalloc                
              
-      WHILE @@FETCH_STATUS <> -1                  
-      BEGIN                
-         IF EXISTS ( SELECT 1            
-                     FROM CODELKUP CL WITH (NOLOCK)            
-                     WHERE CL.ListName = 'COLGBRDPLoc'            
-                     AND   CL.Code = @c_DPPPKZone            
-                     AND   CL.Storerkey = @c_Storerkey            
-                   )           
-         BEGIN            
-            UPDATE CODELKUP            
-            SET UDF01 = @c_LogicalLoc            
-            WHERE ListName = 'COLGBRDPLoc'            
-            AND Code = @c_DPPPKZone            
-            AND Storerkey = @c_Storerkey            
-            AND Code2 = ''            
-         END             
-         ELSE            
-         BEGIN      
-            IF @c_LogicalLoc <> ''
-            BEGIN
-               INSERT INTO CODELKUP (ListName, Code, Description, Storerkey, UDF01)            
-               VALUES ('COLGBRDPLoc', @c_DPPPKZone,  @c_DPPPKZone, @c_Storerkey, @c_LogicalLoc)            
-            END
-         END            
+      --WHILE @@FETCH_STATUS <> -1                  
+      --BEGIN                
+      --   IF EXISTS ( SELECT 1            
+      --               FROM CODELKUP CL WITH (NOLOCK)            
+      --               WHERE CL.ListName = 'COLGBRDPLo'            
+      --               AND   CL.Code = @c_DPPPKZone            
+      --               AND   CL.Storerkey = @c_Storerkey            
+      --             )           
+      --   BEGIN            
+      --      UPDATE CODELKUP            
+      --      SET UDF01 = @c_LogicalLoc            
+      --      WHERE ListName = 'COLGBRDPLo'            
+      --      AND Code = @c_DPPPKZone            
+      --      AND Storerkey = @c_Storerkey            
+      --      AND Code2 = ''            
+      --   END             
+      --   ELSE            
+      --   BEGIN      
+      --      IF @c_LogicalLoc <> ''
+      --      BEGIN
+      --         INSERT INTO CODELKUP (ListName, Code, Description, Storerkey, UDF01)            
+      --         VALUES ('COLGBRDPLo', @c_DPPPKZone,  @c_DPPPKZone, @c_Storerkey, @c_LogicalLoc)            
+      --      END
+      --   END            
             
-         IF @@ERROR <> 0            
-         BEGIN            
-            SET @n_continue = 3                  
-            SET @n_err = 97423                    
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)            
-                         +': Insert/Update Last DP Location into CODELKUP Table for ListName = ''COLGBRDPLoc'' Failed. (msp_RCM_WV_Col_DynamicReplen)'                   
-            GOTO RETURN_SP             
-         END             
+      --   IF @@ERROR <> 0            
+      --   BEGIN            
+      --      SET @n_continue = 3                  
+      --      SET @n_err = 97423                    
+      --      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)            
+      --                   +': Insert/Update Last DP Location into CODELKUP Table for ListName = ''COLGBRDPLo'' Failed. (msp_RCM_WV_Col_DynamicReplen)'                   
+      --      GOTO RETURN_SP             
+      --   END             
                                                        
-         FETCH NEXT FROM @CUR_DP INTO @c_DPPPKZone       
-                                    , @c_logicalloc             
-      END            
-      CLOSE @CUR_DP            
-      DEALLOCATE @CUR_DP                 
+      --   FETCH NEXT FROM @CUR_DP INTO @c_DPPPKZone       
+      --                              , @c_logicalloc             
+      --END            
+      --CLOSE @CUR_DP            
+      --DEALLOCATE @CUR_DP                 
    
   IF @n_continue = 1 OR @n_continue = 2   
   BEGIN   
@@ -2165,6 +1896,7 @@ BEGIN
          END      
          RETURN      
       END  
-END
-
-
+END 
+GO
+GRANT EXECUTE ON [dbo].[msp_RCM_WV_Col_DynamicReplen] TO [NSQL]
+GO 
