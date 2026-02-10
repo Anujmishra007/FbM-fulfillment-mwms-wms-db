@@ -361,7 +361,8 @@ BEGIN
              FROM  ORDERS OH WITH (NOLOCK)                  
              --JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (OH.StorerKey = RD.StorerKey AND RD.ExternReceiptkey = OH.ExternOrderKey)   --NJOW01 removed
              WHERE OH.Storerkey = @c_Storerkey                  
-             AND OH.ExternOrderKey = @c_ExternReceiptkey
+             AND OH.ExternOrderKey = @c_ExternReceiptkey     
+             AND ISNULL(OH.ExternOrderKey,'') <> ''  --JH05
              AND OH.Consigneekey = @c_Consigneekey
              AND OH.DeliveryDate = @c_DeliveryDate                
              AND OH.Door = @c_Door      /*JH01*/
