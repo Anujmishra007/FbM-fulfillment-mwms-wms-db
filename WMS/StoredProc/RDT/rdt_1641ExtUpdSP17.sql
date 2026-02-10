@@ -308,10 +308,10 @@ BEGIN
 
 						IF @nErrNo <> 0
 						BEGIN
-							IF CURSOR_STATUS('local', 'CUR_PalletDetail') >= - 1
+							IF CURSOR_STATUS('local', 'CUR_Pickdetail') >= - 1
 							BEGIN
-								CLOSE CUR_PalletDetail;
-								DEALLOCATE CUR_PalletDetail;
+								CLOSE CUR_Pickdetail;
+								DEALLOCATE CUR_Pickdetail;
 							END
 
 							IF CURSOR_STATUS('local', 'CUR_Pallet') >= - 1
@@ -426,7 +426,7 @@ BEGIN
 						,@cPaperPrinter
 						,'LPALLET'     -- Report type    
 						,@tOutBoundLis -- Report params    
-						,'rdt_1641ExtUpdSPON'
+						,'rdt_1641ExtUpdSP17'
 						,@nErrNo OUTPUT
 						,@cErrMsg OUTPUT
 
