@@ -15,6 +15,8 @@ GO
 /* 2025-08-21 1.1.1   Dennis   FCR-3959 Fix Inventory Hold Bug          */
 /* 2025-08-25 1.1.2   Dennis   FCR-3959 New Scn                         */
 /* 2025-11-25 1.1.3   PPA374   Adding reason code to OD and OH notes    */
+/* 2026-02-10 1.1.4   PPA374   UWP-48781 not closing pallet if not the  */ 
+/*                             whole order of a specific type is picked */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1812ExtScn06] (  
@@ -1683,6 +1685,36 @@ BEGIN
          BEGIN
             IF @cInField01 = '9' -- Close Pallet
             BEGIN
+			   IF EXISTS (
+			      SELECT 1
+				  FROM ORDERS O WITH(NOLOCK)
+				  INNER JOIN CODELKUP CL WITH(NOLOCK)
+				     ON CL.Long = O.Type
+					 AND CL.LISTNAME = 'JCBCLPALOT'
+					 AND CL.SHORT = 'Y'
+				  WHERE O.OrderKey = @cOrderKey
+			   )
+			   AND EXISTS (
+			      SELECT 1
+                  FROM dbo.TaskDetail TD WITH (NOLOCK)    
+                  INNER JOIN dbo.LOC WITH(NOLOCK) ON LOC.LOC = TD.FromLOC
+                  WHERE TD.ListKey <> @cListKey  
+                     AND TD.UserKey = @cUserName  
+                     AND TD.AreaKey = @cAreaKey
+                     AND TD.Storerkey = @cStorerKey
+                     AND TD.Status = '3'
+                     AND TaskType IN ('FCP','FCP1')
+                     AND OrderKey = @cOrderKey
+			   )
+			   BEGIN
+                  SET @nErrNo = 239667
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
+                  SET @nAfterStep = @nMOBRECStep
+                  SET @nAfterScn = @nMOBRECScn
+                  SET @cOutField01 = ''
+                  GOTO Quit
+			   END
+
                IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
                AND EXISTS (SELECT 1 FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = '0')
                BEGIN
@@ -1741,6 +1773,29 @@ BEGIN
          BEGIN
             IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = 'S')
             OR NOT EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey)
+			OR (
+			EXISTS (
+			      SELECT 1
+				  FROM ORDERS O WITH(NOLOCK)
+				  INNER JOIN CODELKUP CL WITH(NOLOCK)
+				     ON CL.Long = O.Type
+					 AND CL.LISTNAME = 'JCBCLPALOT'
+					 AND CL.SHORT = 'Y'
+				  WHERE O.OrderKey = @cOrderKey
+			   )
+			   AND EXISTS (
+			      SELECT 1
+                  FROM dbo.TaskDetail TD WITH (NOLOCK)    
+                  INNER JOIN dbo.LOC WITH(NOLOCK) ON LOC.LOC = TD.FromLOC
+                  WHERE TD.ListKey <> @cListKey  
+                     AND TD.UserKey = @cUserName  
+                     AND TD.AreaKey = @cAreaKey
+                     AND TD.Storerkey = @cStorerKey
+                     AND TD.Status = '3'
+                     AND TaskType IN ('FCP','FCP1')
+                     AND OrderKey = @cOrderKey
+			   )
+			)
             BEGIN
                SET @nErrNo = 239665
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pls choose an option
