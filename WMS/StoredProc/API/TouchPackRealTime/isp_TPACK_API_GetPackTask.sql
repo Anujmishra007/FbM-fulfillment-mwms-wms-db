@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-01   1.0  GCH225     Created                                          */
 /* 2025-11-17   1.1  JWF011     UWP-43858: VAS Tote PreCartonize check rule      */
+/* 2026-02-05   2.0  GCH225     UWP-48237: Handle PenAudit status                */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetPackTask] (
@@ -411,16 +412,20 @@ BEGIN
             GOTO EXIT_SP
          END
 
-         -- VAS PreCartonize Check
-         IF (SELECT SUM(ExpQty) FROM PACKDETAIL (NOLOCK) WHERE DropID = @cDropID) > 0
-         BEGIN
-            SELECT @cCartonType = CartonType
-                 , @fWeight     = Weight
-                 , @fCube       = Cube
-            FROM PACKINFO (NOLOCK)
-            WHERE PickSlipNo = (SELECT TOP 1 PickSlipNo FROM PACKDETAIL (NOLOCK) WHERE DropID = @cDropID)
-            AND CartonNo = 1
+         SELECT @cCartonType     = CartonType
+              , @fWeight         = [Weight]
+              , @fCube           = [Cube]
+         FROM PACKINFO (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonStatus IN ('', 'PenAudit')
 
+         -- VAS PreCartonize Check
+         IF @@ROWCOUNT = 1
+         AND (SELECT ISNULL(SUM(ExpQty), 0)
+         FROM PACKDETAIL (NOLOCK) 
+         WHERE DropID = @cDropID) > 0
+
+         BEGIN
             EXEC [API].[isp_TPACK_UpdatePackInfo]
                  @cType                = @cType            
                , @bIsDiscrete          = @bIsDiscrete      

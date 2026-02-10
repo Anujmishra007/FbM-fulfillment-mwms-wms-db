@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-22   1.0  GCH225     Created                                          */
+/* 2026-02-06   2.0  GCH225     UWP-48119: 1 tote, 1 carton, 1 sku Scenario      */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetCartonDetail] (
@@ -58,6 +59,13 @@ BEGIN
          , @cScanType            NVARCHAR(20)
          , @bClickAll            BIT  
          , @bClickFirstOnly      BIT
+         , @bAutoCloseCarton     BIT
+         , @nLabelLineCount      INT
+         , @nTtlQty              INT
+         , @cSKU                 NVARCHAR(20)
+         , @nExpQty              INT
+         , @nActualQty           INT
+         , @cResponseJson        NVARCHAR(MAX)
    
    DECLARE @oSKUList TABLE (
       SKU NVARCHAR(20) PRIMARY KEY
@@ -86,6 +94,13 @@ BEGIN
    SET @cScanType          = ''
    SET @bClickAll          = 0
    SET @bClickFirstOnly    = 1
+   SET @bAutoCloseCarton   = 0
+   SET @nLabelLineCount    = 0
+   SET @nTtlQty            = 0
+   SET @cSKU               = ''
+   SET @nExpQty            = 0
+   SET @nActualQty         = 0
+   SET @cResponseJson      = ''
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
@@ -157,6 +172,91 @@ BEGIN
       GOTO EXIT_SP   
    END
 
+   -- one row count means only 1 carton case scenario only perform auto close carton.
+   -- pre-cartonization case only can proceed.
+   -- single SKU only proceed
+   -- Qty in packdetail is zero only proceed
+   -- DocType is not 'E' in Order table only proceed
+
+   SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
+         , @nTtlQty = ISNULL(SUM(Qty), 0)
+         , @nLabelLineCount = COUNT(DISTINCT LabelLine)
+         , @cSKU = MAX(SKU)
+   FROM PACKDETAIL (NOLOCK) 
+   WHERE PickSlipNo = @cPickSlipNo
+   AND CartonNo = @nCartonNo
+   AND DropID = @cDropID
+
+   SELECT 1
+   FROM PACKINFO (NOLOCK)
+   WHERE PickSlipNo = @cPickSlipNo
+   AND CartonNo = @nCartonNo
+   AND CartonStatus = 'INPROGRESS'
+
+   IF @@ROWCOUNT = 1  
+   AND @nExpQty > 0
+   AND @nTtlQty = 0  
+   AND @nLabelLineCount = 1 
+   AND EXISTS (SELECT 1 
+               FROM ORDERS (NOLOCK)
+               WHERE OrderKey = @cOrderKey
+               AND DocType <> 'E'
+   ) 
+   BEGIN 
+      SET @bAutoCloseCarton = 1
+      SET @nActualQty = @nExpQty
+      IF NOT EXISTS (SELECT 1
+                     FROM STORERCONFIG (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                     AND ConfigKey = 'TPS-VAS'
+                     AND sValue IN ('1', '3')
+      )
+      BEGIN
+         EXEC [API].[isp_TPACK_ValidateUserInput]
+              @cType             = @cType            
+            , @bIsDiscrete       = @bIsDiscrete      
+            , @bIsCustom         = @bIsCustom        
+            , @cPickSlipNo       = @cPickSlipNo       
+            , @cOrderKey         = @cOrderKey
+            , @cLoadKey          = @cLoadKey          
+            , @cDropID           = @cDropID
+            , @cStorerKey        = @cStorerKey        
+            , @cFacility         = @cFacility   
+            , @cInputValue1      = @cSKU
+            , @cInputValue2      = ''
+            , @cInputValue3      = ''
+            , @cScanType         = 'sku'
+            , @cSKU              = @cSKU
+            , @nCartonNo         = @nCartonNo
+            , @nQty              = @nActualQty
+            , @c_UserID          = @c_UserID
+            , @cLangCode         = @cLangCode
+            , @nPageIndex        = 0
+            , @nPageSize         = 20
+            , @c_OperationType   = @c_OperationType
+            , @cResponseJson     = @cResponseJson OUTPUT
+            , @b_Success         = @b_Success     OUTPUT
+            , @n_ErrNo           = @n_ErrNo       OUTPUT
+            , @c_ErrMsg          = @c_ErrMsg      OUTPUT
+
+         IF @b_Success = 0
+         BEGIN    
+            SET @n_Continue = 3  
+            GOTO EXIT_SP
+         END
+         
+         IF (TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bAutoCloseCarton') AS BIT) = 0 
+         AND TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bShowLottableScreen') AS BIT) = 0
+         )
+         BEGIN
+            SET @cResponseJson = JSON_MODIFY(@cResponseJson, '$.meta.bAutoCloseCarton', @bAutoCloseCarton);
+         END
+         
+         SET @c_ResponseString = ISNULL ((JSON_QUERY(@cResponseJson)),'')
+         GOTO EXIT_SP
+      END
+   END
+   
     --Check Multi SKU Selection
    EXEC [API].[isp_TPACK_CheckMultiSKUSelection]
          @cType             = @cType            
@@ -222,11 +322,11 @@ BEGIN
                                                        , @bClickFirstOnly     AS bClickFirstOnly
                                                        , CAST(0 AS BIT)       AS bShowADScreen
                                                        , CAST(0 AS BIT)       AS bShowLottableScreen
-                                                       , CAST(0 AS BIT)       AS bAutoCloseCarton
+                                                       , @bAutoCloseCarton    AS bAutoCloseCarton
                                                        , @nCartonNo           AS nCartonNo
                                                        , 0                    AS nNumberOfADField
                                                        , 0                    AS nDisplayADQty
-                                                       , 0                    AS nActualQty
+                                                       , @nActualQty          AS nActualQty
                                      FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                                     )) AS meta
                                   , JSON_QUERY(CASE WHEN ISJSON(@cPackDetailList) = 1
