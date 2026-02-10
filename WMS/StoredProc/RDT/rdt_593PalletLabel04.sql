@@ -20,7 +20,7 @@ CREATE OR ALTER PROC rdt.rdt_593PalletLabel04 (
    @nStep      INT,
    @cLangCode  NVARCHAR( 3),
    @cStorerKey NVARCHAR( 15),
-   @cOption    NVARCHAR( 1),
+   @cOption    NVARCHAR( 5),
    @cParam1    NVARCHAR(20),  -- Qty
    @cParam2    NVARCHAR(20),  -- Prefix
    @cParam3    NVARCHAR(20),
