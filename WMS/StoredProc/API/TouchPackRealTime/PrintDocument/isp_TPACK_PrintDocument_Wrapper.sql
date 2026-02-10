@@ -14,6 +14,7 @@ GO
 /* 2025-09-09   1.1  YLI237     UWP-43135                                        */
 /* 2026-01-23   2.0  GCH225     UWP-47547: Removed the error prompt for JobID,   */
 /*                                         not all PrintType will return JobID   */
+/* 2025-01-23    2.1  YLI237    UWP-45422                                        */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_Wrapper] (
@@ -35,6 +36,9 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_Wrapper] (
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
    , @oPrintConfigJson     NVARCHAR(MAX)     = ''
+   , @cSKU                 NVARCHAR(100)     = ''
+   , @bIsAutoPrint         BIT               = 0
+   , @nCopy                INT               = 1   
    , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
    , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
    , @b_Success            INT               = 0   OUTPUT  
@@ -194,6 +198,9 @@ BEGIN
           , @bPrintPaperFlag   = @bPrintPaperFlag
           , @cLabelPrinter     = @cLabelPrinter    
           , @cPaperPrinter     = @cPaperPrinter    
+          , @cSKU              = @cSKU
+          , @bIsAutoPrint      = @bIsAutoPrint
+          , @nCopy             = @nCopy
           , @cPrintLabelJobIDs = @cPrintLabelJobIDs   OUTPUT
           , @cPrintPaperJobIDs = @cPrintPaperJobIDs   OUTPUT
           , @b_Success         = @b_Success           OUTPUT

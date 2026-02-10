@@ -12,6 +12,8 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-09-10   1.0  GCH225     Created                                          */
 /* 2025-11-11   1.1  YLI237     UWP-43135                                        */
+/* 2026-01-27   1.2  YLI237     Add ReportLineNo support for                     */
+/*                              Multi Reports in PrinterGroup                    */                                                                          
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_Std] (
@@ -59,6 +61,7 @@ BEGIN
          , @cPrinterInGroup      NVARCHAR(10)
          , @cCustomLabelSP       NVARCHAR(30)
          , @ctempLabelJobIDs     NVARCHAR(MAX)
+         , @cReportLineNo        NVARCHAR(20) = ''
    
    DECLARE @cFieldName1       NVARCHAR(MAX)
          , @cFieldName2       NVARCHAR(MAX)
@@ -136,6 +139,7 @@ BEGIN
                , ISNULL(WMR.KeyFieldName2, '')
                , ISNULL(WMR.KeyFieldName3, '')
                , ISNULL(WMR.KeyFieldName4, '')
+               , IsNull(WMRD.ReportLineNo, '')
          FROM WMREPORT WMR (NOLOCK)
          JOIN WMREPORTDETAIL WMRD (NOLOCK) 
          ON WMR.ReportID = WMRD.ReportID
@@ -154,6 +158,7 @@ BEGIN
                                     , @cFieldName2
                                     , @cFieldName3
                                     , @cFieldName4
+                                    , @cReportLineNo
          WHILE @@FETCH_STATUS = 0
          BEGIN
             SET @IsAggregate1 = CASE WHEN @cFieldName1 <> '' AND (
@@ -285,6 +290,7 @@ BEGIN
                   WHERE WMRD.StorerKey = @cStorerKey  
                   AND WMR.ReportType = @cReportType
                   AND RTP.PrinterGroup = @cLabelPrinter  
+                  AND WMRD.ReportLineNo = @cReportLineNo  --1.2
                   -- UWP-43135 End
 
                   IF @cPrinterInGroup = ''  
@@ -326,6 +332,7 @@ BEGIN
                   , @c_KeyValue2    = @cParams2        
                   , @c_KeyValue3    = @cParams3     
                   , @c_KeyValue4    = @cParams4    
+                  , @c_KeyValue5    = @cReportLineNo
                   , @b_Success      = @b_Success         OUTPUT      
                   , @n_Err          = @n_ErrNo           OUTPUT
                   , @c_ErrMsg       = @c_ErrMsg          OUTPUT
@@ -349,6 +356,7 @@ BEGIN
                                        , @cFieldName2
                                        , @cFieldName3
                                        , @cFieldName4
+                                       , @cReportLineNo
          END
          CLOSE CUR_LBL
          DEALLOCATE CUR_LBL
@@ -499,6 +507,7 @@ BEGIN
             , ISNULL(WMR.KeyFieldName2, '')
             , ISNULL(WMR.KeyFieldName3, '')
             , ISNULL(WMR.KeyFieldName4, '')
+            , ISNULL(WMRD.ReportLineNo, '')
       FROM WMREPORT WMR (NOLOCK)
       JOIN WMREPORTDETAIL WMRD (NOLOCK) 
       ON WMR.ReportID = WMRD.ReportID
@@ -517,6 +526,8 @@ BEGIN
                                     , @cFieldName2
                                     , @cFieldName3
                                     , @cFieldName4
+                                    , @cReportLineNo
+
       WHILE @@FETCH_STATUS = 0
       BEGIN
          SET @IsAggregate1 = CASE WHEN @cFieldName1 <> '' AND (
@@ -630,6 +641,7 @@ BEGIN
                AND WMR.ReportType = @cReportType
                AND RTP.PrinterGroup = @cLabelPrinter  
                -- UWP-43135 End
+               AND WMRD.ReportLineNo = @cReportLineNo -- 1.2
 
                IF @cPrinterInGroup = ''  
                BEGIN  
@@ -669,7 +681,8 @@ BEGIN
                , @c_KeyValue1    = @cParams1        
                , @c_KeyValue2    = @cParams2        
                , @c_KeyValue3    = @cParams3     
-               , @c_KeyValue4    = @cParams4    
+               , @c_KeyValue4    = @cParams4   
+               , @c_KeyValue5    = @cReportLineNo
                , @b_Success      = @b_Success            OUTPUT      
                , @n_Err          = @n_ErrNo              OUTPUT
                , @c_ErrMsg       = @c_ErrMsg             OUTPUT
@@ -691,6 +704,8 @@ BEGIN
                                        , @cFieldName2
                                        , @cFieldName3
                                        , @cFieldName4
+                                       , @cReportLineNo
+
       END
       CLOSE CUR_PAPER
       DEALLOCATE CUR_PAPER

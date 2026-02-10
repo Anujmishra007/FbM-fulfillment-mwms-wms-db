@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
-/* 30-Jan-2026  WLChooi  1.0  Initial Version                           */
+/* 09-Feb-2026  WLChooi  1.0  Initial Version                           */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspWAVPK01]  
         @c_Wavekey NVARCHAR(10)
@@ -219,14 +219,16 @@ BEGIN
       END                   
        
       SET @c_Sku = ''  
-      SELECT TOP 1 @c_Sku = OD.Sku  
-      FROM dbo.WAVEDETAIL WD (NOLOCK)  
-      JOIN dbo.ORDERDETAIL OD (NOLOCK) ON WD.Orderkey = OD.Orderkey  
-      JOIN dbo.SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku  
-      WHERE WD.WaveKey = @c_Wavekey                        
-      AND STDCUBE = 0   
-      AND (Width = 0 OR Length = 0 OR Height = 0)
-  
+      SELECT TOP 1 @c_Sku = SKU.Sku  
+      FROM dbo.PICKDETAIL PD (NOLOCK)
+      JOIN dbo.SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku  
+      WHERE EXISTS ( SELECT 1
+                     FROM WAVEDETAIL WD (NOLOCK)
+                     WHERE WD.Wavekey = @c_Wavekey
+                     AND WD.Orderkey = PD.Orderkey )                      
+      AND SKU.STDCUBE = 0   
+      AND (SKU.Width = 0 OR SKU.Length = 0 OR SKU.Height = 0)
+
       IF ISNULL(@c_Sku,'') <> ''  
       BEGIN  
          SET @n_continue = 3  
