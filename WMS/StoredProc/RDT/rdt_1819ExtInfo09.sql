@@ -1,15 +1,20 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
-/* Store procedure: rdt_1819ExtInfo08                                   */
-/* Copyright      : LFLogistics                                         */
+/* Store procedure: rdt_1819ExtInfo09                                   */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
-/* Purpose: Display final location                                      */
+/* Customer: DAIMLER TRUCK AG                                           */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
-/* 2025-12-04 1.0  JRA432   Galaxy Specific Extended Info               */
+/* 2026-02-10 1.0  Jackc    FCR-9755 Created                            */
 /************************************************************************/
 
-CREATE OR ALTER     PROCEDURE [RDT].[rdt_1819ExtInfo08] (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1819ExtInfo09] (
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
@@ -30,12 +35,19 @@ CREATE OR ALTER     PROCEDURE [RDT].[rdt_1819ExtInfo08] (
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   IF @nAfterStep = 2 -- Successful putaway
+   DECLARE @cFacility   NVARCHAR( 5)
+   DECLARE @cPAZone     NVARCHAR(20)
+   DECLARE @cLocaisle     NVARCHAR(20)
+
+   SELECT @cFacility = Facility FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
+
+   IF @nAfterStep = 5 -- Successful putaway
    BEGIN
       IF @nInputKey = 1 -- ENTER
       BEGIN
-		 IF EXISTS(SELECT 1 FROM dbo.Loc (NOLOCK) WHERE loc = @cSuggLOC AND LocLevel > 0)
-         SET @cExtendedInfo = 'Slave Pallet Req!'
-		 
+         SET @cExtendedInfo = 'SCANNED: ' + @cToLOC
       END
    END
+GO
+GRANT EXECUTE ON  [RDT].[rdt_1819ExtInfo09] TO [NSQL]
+GO
