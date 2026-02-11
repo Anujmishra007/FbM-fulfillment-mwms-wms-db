@@ -44,6 +44,8 @@ GO
 /* 31-Dec-2025  VNI056       2.2    FCR-9732 Add Interface Trigger pts. for    */
 /*                                   custom trigger config                     */
 /* 11-Feb-2026  VNI056       2.3   FCR-10961 =>add config key for transmitlog  */
+
+/* 11-Feb-2026  USH022       2.4   UWP-48211:UCCNo Validation for adjustmentdetail*/
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrAdjustmentDetailAdd]
@@ -74,12 +76,49 @@ BEGIN
 
    SELECT @n_continue=1, @n_starttcnt = @@TRANCOUNT
    /* #INCLUDE <TRADA1.SQL> */
-  
+
    -- To Skip all the trigger process when Insert the history records from Archive as user request
    IF EXISTS( SELECT 1 FROM INSERTED WHERE ArchiveCop = '9')
    BEGIN
       SELECT @n_continue = 4
    END
+   --USH022 Start(2.4)
+       IF @n_continue=1 or @n_continue=2
+       BEGIN
+         IF EXISTS (
+            SELECT UCCNo FROM INSERTED
+            WHERE UCCNo IS NOT NULL AND UCCNo <> '' AND StorerKey = INSERTED.StorerKey
+            GROUP BY UCCNo
+            HAVING COUNT(*) > 1
+         )
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 70002
+            SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)
+                                      + ': VAL# Duplicate UCCNo not allowed. (ntrAdjustmentDetailAdd)'
+         END
+
+         IF @n_continue=1 or @n_continue=2
+         BEGIN
+           IF EXISTS (
+               SELECT i.UCCNo
+               FROM INSERTED i
+               JOIN ADJUSTMENTDETAIL a
+               ON i.UCCNo = a.UCCNo
+               AND i.UCCNo IS NOT NULL AND i.UCCNo <> ''
+               AND i.StorerKey = a.StorerKey
+               AND NOT (i.AdjustmentKey = a.AdjustmentKey AND i.AdjustmentLineNumber = a.AdjustmentLineNumber)
+               GROUP BY i.UCCNo
+           )
+           BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 70002
+               SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)
+                                   + ': VAL# Duplicate UCCNo not allowed in batch inserted. (ntrAdjustmentDetailAdd)'
+           END
+         END
+       END
+   --USH022 End(2.4)
 
    IF @n_continue=1 or @n_continue=2
    BEGIN
