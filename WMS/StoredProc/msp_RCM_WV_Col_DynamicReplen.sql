@@ -797,12 +797,20 @@ BEGIN
                SET @c_PutawayZone = ''
                SELECT TOP 1 @c_PutawayZone = SHORT FROM CODELKUP WITH (NOLOCK)   
                            WHERE StorerKey = @c_Storerkey AND LISTNAME = 'CSCUK01PT' AND Code = @c_BUSR7
+               
+               IF @c_PutawayZone = ''              
+               BEGIN   
+                  SELECT @n_continue = 3;   
+                  SELECT @n_err = 94719;   
+                  SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' ' + @c_Sku + ' ' + @c_BUSR7 + ' No PutawayZone (msp_RCM_WV_Col_DynamicReplen)';   
+                  GOTO RETURN_SP;   
+               END;
 
                IF NOT EXISTS (SELECT 1 FROM LOC WITH (NOLOCK)   
                            WHERE Facility = @c_Facility AND LocationType = 'DYNPPICK' AND PutawayZone = @c_PutawayZone)              
                BEGIN   
                   SELECT @n_continue = 3;   
-                  SELECT @n_err = 94719;   
+                  SELECT @n_err = 94720;   
                   SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' ' + @c_Sku + ' ' + @c_BUSR7 + ' Incorrect PutawayZone (msp_RCM_WV_Col_DynamicReplen)';   
                   GOTO RETURN_SP;   
                END;
@@ -885,7 +893,7 @@ BEGIN
                IF @c_ToLoc = ''
                BEGIN
                   SELECT @n_continue = 3;   
-                  SELECT @n_err = 94720;   
+                  SELECT @n_err = 94721;   
                   SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' ' + @c_Sku + ' ' + @c_PutawayZone + ' No empty DynamicPickFace (msp_RCM_WV_Col_DynamicReplen)';   
                   GOTO RETURN_SP;   
                END 
@@ -916,7 +924,7 @@ BEGIN
                IF @n_err <> 0      
                BEGIN    
                   SET @n_continue = 3      
-                  SET @n_Err = 94721     
+                  SET @n_Err = 94722     
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update TASKDETAIL.Priority Failed. (msp_RCM_WV_Col_DynamicReplen)'     
                   GOTO RETURN_SP    
                END  
@@ -932,7 +940,7 @@ BEGIN
                IF @n_err <> 0      
                BEGIN    
                   SET @n_continue = 3      
-                  SET @n_Err = 94722     
+                  SET @n_Err = 94723    
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update #TMP_PICK Failed. (msp_RCM_WV_Col_DynamicReplen)'     
                   GOTO RETURN_SP    
                END                       
@@ -1077,7 +1085,7 @@ BEGIN
                IF @n_err <> 0      
                BEGIN    
                   SET @n_continue = 3      
-                  SET @n_Err = 97423     
+                  SET @n_Err = 97424     
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Taskdetail Failed. (msp_RCM_WV_Col_DynamicReplen)'     
                   GOTO RETURN_SP    
                END       
@@ -1835,8 +1843,8 @@ BEGIN
   END   
   ELSE   
   BEGIN   
-         SET @n_err = 97424  
-   SELECT @c_errmsg = 'NSQL' + CONVERT(char(6), @n_err) + 'Replenishment not done, Something went wrong in current transaction'   
+      SET @n_err = 97425 
+      SELECT @c_errmsg = 'NSQL' + CONVERT(char(6), @n_err) + 'Replenishment not done, Something went wrong in current transaction'   
   END   
    
   RETURN_SP:   
@@ -1896,7 +1904,7 @@ BEGIN
          END      
          RETURN      
       END  
-END 
+END   
 GO
 GRANT EXECUTE ON [dbo].[msp_RCM_WV_Col_DynamicReplen] TO [NSQL]
-GO 
+GO
