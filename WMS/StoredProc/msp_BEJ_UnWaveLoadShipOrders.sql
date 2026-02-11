@@ -21,6 +21,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-07-31  AlexK    1.0   FCR-6833 - initial.                       */
 /* 2025-10-17  AlexK01  1.1   FCR-6833 - Change Request                 */
+/* 2026-02-02  suryakanta.sahoo  1.5   FCR-10266 - Change Request       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_BEJ_UnWaveLoadShipOrders]
@@ -53,6 +54,7 @@ BEGIN
          , @c_MbolLineNumber        NVARCHAR(5)
          , @c_LoadKey               NVARCHAR(10)
          , @c_LoadLineNumber        NVARCHAR(5)
+         , @c_WaveKey               NVARCHAR(10)  --suryakanta.sahoo 2026-02-02 - FCR-10266
 
    IF RIGHT(ISNULL(TRIM(@c_OtherConfig),''),2) = '##'
    BEGIN
@@ -73,14 +75,30 @@ BEGIN
       WHERE StorerKey = @c_StorerKey
       AND [Status] = '0'
       AND OrderGroup <> ''
-      --AND UserDefine09 IS NOT NULL 
+      --AND UserDefine09 IS NOT NULL
       --AND UserDefine09 <> ''
-      AND EXISTS ( SELECT 1 FROM dbo.WAVEDETAIL WD WITH (NOLOCK) 
+      AND EXISTS ( SELECT 1 FROM dbo.WAVEDETAIL WD WITH (NOLOCK)
          WHERE WD.OrderKey = ORD.OrderKey)
       --AND SpecialHandling = 'B'
 	  AND SOStatus NOT IN ('0', '9')
 
-      OPEN @CUR
+      UNION                                     --suryakanta.sahoo 2026-02-02 - FCR-10266
+      SELECT ORD2.OrderKey                      --suryakanta.sahoo 2026-02-02 - FCR-10266
+      FROM dbo.ORDERS ORD2 WITH (NOLOCK)        --suryakanta.sahoo 2026-02-02 - FCR-10266
+      WHERE ORD2.StorerKey = @c_StorerKey       --suryakanta.sahoo 2026-02-02 - FCR-10266
+        AND ORD2.UserDefine09 IN (              --suryakanta.sahoo 2026-02-02 - FCR-10266
+        SELECT UserDefine09                     --suryakanta.sahoo 2026-02-02 - FCR-10266
+        FROM dbo.ORDERS WITH (NOLOCK)           --suryakanta.sahoo 2026-02-02 - FCR-10266
+        WHERE Status = '0'                      --suryakanta.sahoo 2026-02-02 - FCR-10266
+        AND SOStatus = '0'                      --suryakanta.sahoo 2026-02-02 - FCR-10266
+        AND OrderGroup <> ''                    --suryakanta.sahoo 2026-02-02 - FCR-10266
+        AND StorerKey = @c_StorerKey            --suryakanta.sahoo 2026-02-02 - FCR-10266
+        GROUP BY UserDefine09                   --suryakanta.sahoo 2026-02-02 - FCR-10266
+        HAVING COUNT(DISTINCT OrderGroup) <> 1  --suryakanta.sahoo 2026-02-02 - FCR-10266
+        )
+    ORDER BY OrderKey
+
+OPEN @CUR
       FETCH NEXT FROM @CUR INTO @c_OrderKey
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
@@ -97,40 +115,63 @@ BEGIN
             -- Delete order from MBOL detail
             SELECT @c_MbolKey          = MbolKey
                   ,@c_MbolLineNumber   = MbolLineNumber
-            FROM dbo.MBOLDetail (NOLOCK) 
+            FROM dbo.MBOLDetail (NOLOCK)
             WHERE OrderKey = @c_OrderKey
 
             IF ISNULL(@c_MbolKey, '') <> '' AND ISNULL(@c_MbolLineNumber, '') <> ''
             BEGIN
-               DELETE FROM dbo.MBOLDetail 
+               DELETE FROM dbo.MBOLDetail
                WHERE MbolKey = @c_MbolKey
                AND MbolLineNumber = @c_MbolLineNumber
+               DELETE FROM dbo.MBOL
+               WHERE MbolKey = @c_MbolKey
+               --Delete order from MOBL table containing Header details
+               --suryakanta.sahoo 2026-02-02 - FCR-10266
+                IF NOT EXISTS ( SELECT 1 FROM dbo.MBOLDetail (NOLOCK) WHERE MbolKey = @c_MbolKey )
+                BEGIN
+                    DELETE FROM dbo.MBOL
+                    WHERE MbolKey = @c_MbolKey
+                END
             END
+
 
             --Delete order from LoadPlan Detail
              SELECT @c_LoadKey         = LoadKey
                    ,@c_LoadLineNumber  = LoadLineNumber
-            FROM dbo.LoadPlanDetail (NOLOCK) 
+            FROM dbo.LoadPlanDetail (NOLOCK)
             WHERE OrderKey = @c_OrderKey
 
             IF ISNULL(@c_LoadKey, '') <> '' AND ISNULL(@c_LoadLineNumber, '') <> ''
             BEGIN
-               DELETE FROM dbo.LoadPlanDetail 
+               DELETE FROM dbo.LoadPlanDetail
                WHERE LoadKey = @c_LoadKey
                AND LoadLineNumber = @c_LoadLineNumber
+              --Delete order from Wave table containing Load Header details
+              --suryakanta.sahoo 2026-02-02 - FCR-10266
+              IF NOT EXISTS ( SELECT 1 FROM dbo.LoadPlanDetail (NOLOCK) WHERE LoadKey = @c_LoadKey )
+              BEGIN
+                DELETE FROM dbo.LoadPlan
+                WHERE LoadKey = @c_LoadKey
+              END
             END
-
             -- Delete order from wave detail
-            SELECT @c_WaveDetailKey = WaveDetailKey
-            FROM dbo.WaveDetail (NOLOCK) 
+            SELECT @c_WaveDetailKey = WaveDetailKey,
+                   @c_WaveKey = WaveKey
+            FROM dbo.WaveDetail (NOLOCK)
             WHERE OrderKey = @c_OrderKey
 
             IF ISNULL(@c_WaveDetailKey, '') <> ''
             BEGIN
-               DELETE FROM dbo.WaveDetail 
+               DELETE FROM dbo.WaveDetail
                WHERE WaveDetailKey = @c_WaveDetailKey
+               --Delete order from Wave table containing wave Header details
+               --suryakanta.sahoo 2026-02-02 - FCR-10266
+               IF NOT EXISTS ( SELECT 1 FROM dbo.WaveDetail (NOLOCK) WHERE WaveKey = @c_WaveKey )
+                BEGIN
+                    DELETE FROM dbo.WAVE
+                    WHERE WaveKey = @c_WaveKey
+                END
             END
-
             --Remove OrderGroup from Orders.
             UPDATE dbo.Orders WITH (ROWLOCK)
             SET OrderGroup          = ''
@@ -151,7 +192,7 @@ BEGIN
             BEGIN
                PRINT 'Error on OrderKey ' + @c_OrderKey + ': ' + @c_ErrMsg;
             END
-               
+
          END CATCH
 
          FETCH NEXT FROM @CUR INTO @c_OrderKey

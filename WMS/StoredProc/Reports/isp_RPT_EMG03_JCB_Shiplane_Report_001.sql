@@ -6,13 +6,13 @@ GO
 
 /***************************************************************************/
 /* Stored Procedure: isp_RPT_EMG03_JCB_Shiplane_Report_001                 */
-/* Creation Date: 10-02-2025										                           */
+/* Creation Date: 10-02-2025										       */
 /* Copyright: Maersk CE EUR                                                */
 /* Written by: VMA237                                                      */
 /*                                                                         */
 /* Purpose:                                                                */
 /*                                                                         */
-/* Called By: isp_RPT_EMG03_JCB_Shiplane_Report_001		                     */
+/* Called By: isp_RPT_EMG03_JCB_Shiplane_Report_001		                   */
 /*                                                                         */
 /* GitLab Version: 1.0                                                     */
 /*                                                                         */
@@ -23,11 +23,11 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 10-02-2025   VMA237  1.0   Initial Version (WCEET-2813)                 */
-/* 02-02-2026   AGM046	2.0	  Added status Marshalled					             */
+/* 02-02-2026   AGM046	2.0	  Added status Marshalled					   */
 /*                                                                         */
 /***************************************************************************/
 
-ALTER PROC [BI].[isp_RPT_EMG03_JCB_Shiplane_Report_001]
+CREATE OR ALTER PROC [BI].[isp_RPT_EMG03_JCB_Shiplane_Report_001]
      @Facility						NVARCHAR (30) 
 	 ,@StorerKey					NVARCHAR (30) 
 	 ,@BusinessUnit					NVARCHAR (30)	= ''
