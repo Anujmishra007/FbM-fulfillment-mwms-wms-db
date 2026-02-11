@@ -555,7 +555,7 @@ BEGIN
       DECLARE Cur_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT INS.AdjustmentKey, INS.StorerKey FROM INSERTED INS
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = INS.StorerKey
-      WHERE  ITC.Configkey in('WSADJADDLOG', 'ADJADDLOG') AND ITC.SourceTable = 'ADJUSTMENTDETAIL' --[ver 1.9]
+      WHERE  ITC.Configkey in('WSADJADDLOG', 'ADJADDLOG') AND ITC.SourceTable = 'ADJUSTMENTDETAIL' --[ver 2.3]
       AND    ITC.sValue      = '1'
 
       SELECT @c_AdjustmentKey = AdjustmentKey, @c_StorerKey = StorerKey FROM INSERTED
