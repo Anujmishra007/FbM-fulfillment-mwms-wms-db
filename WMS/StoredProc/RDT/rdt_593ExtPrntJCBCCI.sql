@@ -55,7 +55,9 @@ BEGIN
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
    --
-   SET @cCaseID = @cParam1   
+   SET @cCaseID = @cParam1
+   IF (@cCaseID IS NOT NULL AND LTRIM(RTRIM(@cCaseID)) <> '')
+   BEGIN	
    --
    IF @nInputKey = 1
    BEGIN
@@ -105,7 +107,8 @@ BEGIN
 
       IF @nErrNo <> 0
          GOTO Quit
-   END -- @nInputKey = 1  
+   END -- @nInputKey = 1 
+   END -- Empty caseid	
 Quit:
 END
 GO
