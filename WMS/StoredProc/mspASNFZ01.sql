@@ -45,7 +45,7 @@ GO
 /* 2025-05-14  JH01     1.8   UWP-31657 - Change to map Receipt/ReceiptDetail*/
 /* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
 /* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */ 
-/* 2026-10-02  NJOW01   2.1   UWP-48746 Performance tuning                 */   
+/* 2026-02-11  NJOW01   2.1   UWP-48746 Performance tuning                 */   
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
