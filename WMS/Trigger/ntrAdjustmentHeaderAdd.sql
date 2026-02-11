@@ -71,6 +71,7 @@ GO
 /* 09-Oct-2025  SPC040    1.7  Replace SUSER_SNAME with fnc_GetUserName     */
 /* 31-Dec-2025  VNI056    1.8    FCR-9732 Add Interface Trigger pts. for    */
 /*                                   custom trigger config                  */
+/* 11-Feb-2026  VNI056    1.9   FCR-10961 =>add config key for transmitlog  */
 /****************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
@@ -740,7 +741,7 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
       DECLARE Cur_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT INS.AdjustmentKey, INS.StorerKey FROM INSERTED INS
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = INS.StorerKey
-      WHERE  ITC.SourceTable = 'ADJUSTMENT'
+      WHERE  ITC.Configkey in('WSADJADDLOG', 'ADJADDLOG') AND ITC.SourceTable = 'ADJUSTMENT'  --[ver 1.9]
       AND    ITC.sValue      = '1'
 
       OPEN Cur_TriggerPoints
