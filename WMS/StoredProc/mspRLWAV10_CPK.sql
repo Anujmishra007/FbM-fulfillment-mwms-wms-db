@@ -4,7 +4,7 @@ SET ANSI_NULLS OFF
 GO
 
 /*************************************************************************/    
-/* Stored Procedure: mspRLWAV10                                          */    
+/* Stored Procedure: mspRLWAV10_CPK                                      */    
 /* Creation Date: 2026-01-22                                             */    
 /* Copyright: Maersk Logistics                                           */    
 /* Written by: Wan                                                       */    
