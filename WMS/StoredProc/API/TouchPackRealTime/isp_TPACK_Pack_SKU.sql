@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-05   1.0  GCH225     Created                                          */
+/* 2026-02-11   2.0  GCH225     UWP:45984: Fix for PreCartonize issue            */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_Pack_SKU] (
@@ -221,8 +222,8 @@ BEGIN
          AND CartonNo = @nCartonNo
          AND LabelNo = @cLabelNo
          AND SKU = @cSKU
-         AND UPC = ''
-         AND LOTTABLEVALUE = ''
+         AND (UPC = '' OR UPC IS NULL)
+         AND (LOTTABLEVALUE = '' OR LOTTABLEVALUE IS NULL)
       END
 
       IF @@ROWCOUNT = 1
