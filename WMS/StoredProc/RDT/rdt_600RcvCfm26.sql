@@ -1,8 +1,9 @@
-SET ANSI_NULLS OFF
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
-
+SET ANSI_NULLS OFF
+GO
+ 
 /******************************************************************************/
 /* Store procedure: rdt_600RcvCfm26                                           */
 /* Copyright: Maersk                                                          */
@@ -119,11 +120,11 @@ BEGIN
       FROM Receipt (NOLOCK)   
       WHERE ReceiptKey = @cReceiptKey
 
-      SELECT @cTOLocation = Userdefine02
+      SELECT TOP 1 @cTOLocation = UDF02
       FROM CODELKUP (NOLOCK)
       WHERE LISTNAME = 'ONAPIENVE'
          AND StorerKey = @cStorerKey
-         AND Code = '1'
+   AND Code = '1'
 
       INSERT INTO RFIDMaster ( RFIDNo,StorerKey,TIDNo,SKU,Status,DocRefno2,Source ) 
       VALUES (@cSerialNo,@cStorerKey,@cExternReceiptKey,@cSKUCode,'0',@cLottable02,@cTOLocation)
@@ -134,5 +135,11 @@ BEGIN
    QUIT:
 END
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
 GRANT EXECUTE ON rdt.rdt_600RcvCfm26 TO NSQL
 GO
