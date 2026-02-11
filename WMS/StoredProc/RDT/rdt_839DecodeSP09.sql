@@ -298,7 +298,7 @@ BEGIN
                SET @cSerialNo = @cSegment4 + @cSegment5 + @cSegment7
 
                SELECT
-                     @cScannedUCCLot = LotNo
+                  @cScannedUCCLot = Lot
                FROM dbo.SerialNo WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND SerialNo = @cSerialNo
