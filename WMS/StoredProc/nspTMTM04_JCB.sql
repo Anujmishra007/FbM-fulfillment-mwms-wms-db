@@ -2749,9 +2749,9 @@ END
 				  AND NOT EXISTS(
 				     SELECT 1 FROM dbo.TaskManagerUserDetail TMUS WITH(NOLOCK) 
 					 WHERE TMUS.PermissionType = TD.TaskType 
-					 AND TMUS.UserKey = @c_userid 
-					 AND TMUS.Permission = '1' 
-					 AND AreaKey = @c_AreaKey01
+					    AND TMUS.UserKey = @c_userid 
+					    AND TMUS.Permission = '1' 
+					    AND AreaKey = @c_AreaKey01
 			      )
 			)
          BEGIN
