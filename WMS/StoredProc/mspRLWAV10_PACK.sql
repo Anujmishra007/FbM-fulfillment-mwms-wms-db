@@ -958,7 +958,7 @@ BEGIN
                         ,cz.Dim2
                         ,cz.Dim3
                         ,CartonDefault = 1
-                  FROM #CTNZ AS cz  
+                  FROM @t_CTNZ AS cz  
                   WHERE cz.CartonizationGroup = @c_CTNGroup
                   ORDER BY cz.RowID
 
@@ -1232,7 +1232,7 @@ BEGIN
                         SET @n_ItemWgt = 0.00
                         SET @n_ItemCBM = @n_StdCube*@n_Qty_PI
                         SET @n_ItemWgt = @n_StdGrossWgt*@n_Qty_PI
-
+                        
                         IF @n_CBMLeftToFulFill > @n_ItemCBM
                         BEGIN
                            SET @n_QtyCBM_PI = FLOOR(@n_ItemCBM/@n_StdCube) 
@@ -1261,8 +1261,10 @@ BEGIN
                         END
                      END
                   END
-                  
-                  IF @n_QtyToPack_PI = 0
+
+                  SET @n_QtyToPack_PI = IIF(@n_QtyToPack_PI < 0, 0, @n_QtyToPack_PI)
+
+                  IF @n_QtyToPack_PI = 0 AND @b_NewCarton = 0
                   BEGIN
                      SET @b_NewCarton = 1
                      GOTO CLOSE_CTN
