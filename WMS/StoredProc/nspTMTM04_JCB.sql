@@ -845,7 +845,7 @@ BEGIN
             ELSE
             BEGIN
                -- (james06)
-               IF @c_ContinueTask = 1 AND ISNULL( @c_LastTaskType, '') <> ''
+               IF @c_ContinueTask = '1' AND ISNULL( @c_LastTaskType, '') <> ''
                BEGIN
                   SELECT TOP 1
                          @c_CurrentLineNumber = TTMStrategyLineNumber
@@ -2746,7 +2746,13 @@ END
                   AND (
                      TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                   )			
-				  AND NOT EXISTS(SELECT 1 FROM dbo.TaskManagerUserDetail TMUS WITH(NOLOCK) WHERE TMUS.PermissionType = TD.TaskType AND TMUS.UserKey = @c_userid AND TMUS.Permission = '1' AND AreaKey = @c_AreaKey01)
+				  AND NOT EXISTS(
+				     SELECT 1 FROM dbo.TaskManagerUserDetail TMUS WITH(NOLOCK) 
+					 WHERE TMUS.PermissionType = TD.TaskType 
+					 AND TMUS.UserKey = @c_userid 
+					 AND TMUS.Permission = '1' 
+					 AND AreaKey = @c_AreaKey01
+			      )
 			)
          BEGIN
 	        SELECT @n_continue = 3
@@ -3046,7 +3052,7 @@ END
         IF (
             SELECT COUNT(DISTINCT AD.PutawayZone) - COUNT(RM.C_String30) 
             FROM dbo.AreaDetail AD WITH(NOLOCK)
-            INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
+            LEFT JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
                 ON PAZEED.PutawayZone = AD.PutawayZone
             LEFT JOIN RDT.RDTMOBREC RM WITH(NOLOCK)
                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
@@ -3174,7 +3180,6 @@ END
         RETURN
     END
 END -- End Proc
-
 GO
 
 SET QUOTED_IDENTIFIER OFF
