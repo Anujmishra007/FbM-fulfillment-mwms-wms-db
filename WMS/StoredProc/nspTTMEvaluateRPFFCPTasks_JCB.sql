@@ -23,6 +23,7 @@ GO
 /* 2025-12-16  2.0.1  PPA374   Adding fix to avoid blocking replen tasks without orderkey       */
 /* 2026-01-05  2.0.2  PPA374   Changing aisle in use to C_String28                              */
 /* 2026-02-12  2.0.3  PPA374   Adding INLOCKED flag as a valid location flag to pick from or to */
+/* 2026-02-12  2.0.4  PPA374   Not checking aisle in use for PND_OUT unless task is back to VNA */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspTTMEvaluateRPFFCPTasks_JCB]
