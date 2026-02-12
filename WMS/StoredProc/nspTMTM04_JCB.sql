@@ -17,8 +17,9 @@ GO
 /* 2025-12-11   2.1   PPA374    Added new error for the MHE not for To Loc      */
 /* 2026-01-05   2.2   PPA374    Changing aisle in use to C_String28             */
 /* 2026-01-09   2.3   PPA374    Adding Permission and In Progress errors        */
+/* 2026-02-12   2.4   PPA374    Adding 'INLOCKED' flag as an ok flag to pick    */
 /********************************************************************************/
-CREATE OR ALTER PROC    [RDT].[nspTMTM04_JCB]
+CREATE OR ALTER PROC [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
    ,@c_ptcid            NVARCHAR(5)
    ,@c_userid           NVARCHAR(18)
@@ -844,7 +845,7 @@ BEGIN
             ELSE
             BEGIN
                -- (james06)
-               IF @c_ContinueTask = 1 AND ISNULL( @c_LastTaskType, '') <> ''
+               IF @c_ContinueTask = '1' AND ISNULL( @c_LastTaskType, '') <> ''
                BEGIN
                   SELECT TOP 1
                          @c_CurrentLineNumber = TTMStrategyLineNumber
@@ -2206,6 +2207,7 @@ END
                     ON TD.ToLoc = LLI.Loc
                     AND LLI.StorerKey = @cStorerKey
                     AND LLI.Qty > 0
+					AND LLI.ID <> ''
                  LEFT JOIN #Aisle_InUsed AI1
                     ON L.LocAisle = AI1.LocAisle
                     AND L.Facility = @cFacility
@@ -2293,11 +2295,11 @@ END
                     )
                     AND (
 				       L.Status <> 'OK' 
-					   OR L.LocationFlag NOT IN ('', 'NONE') 
+					   OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED') 
 					   OR L1.Status <> 'OK' 
-					   OR L1.LocationFlag NOT IN ('', 'NONE')
+					   OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED')
 					   OR L2.Status <> 'OK' 
-					   OR L2.LocationFlag NOT IN ('', 'NONE')
+					   OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED')
 				    )
 					AND AI1.LocAisle IS NULL   
                     AND AI2.LocAisle IS NULL   
@@ -2307,16 +2309,16 @@ END
               SET TD.StatusMsg =
                  CASE 
                     WHEN 
-                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
-                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
+                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Both loc on hold or flag'
 
                     WHEN 
-                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Toloc on hold or flag'
 
                     WHEN 
-                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Fromloc on hold or flag' 
                  END
               FROM TaskDetail TD
@@ -2335,9 +2337,9 @@ END
                     )
                 AND (
                        L.Status <> 'OK'
-                    OR L.LocationFlag NOT IN ('', 'NONE')
+                    OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     OR L1.Status <> 'OK'
-                    OR L1.LocationFlag NOT IN ('', 'NONE')
+                    OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     )*/
 
               SELECT @n_continue = 3
@@ -2744,7 +2746,7 @@ END
                   AND (
                      TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                   )			
-				  AND NOT EXISTS(SELECT 1 FROM dbo.TaskManagerUserDetail TMUS WITH(NOLOCK) WHERE TMUS.PermissionType = TD.TaskType AND TMUS.UserKey = @c_userid AND TMUS.Permission = 1 AND AreaKey = @c_AreaKey01)
+				  AND NOT EXISTS(SELECT 1 FROM dbo.TaskManagerUserDetail TMUS WITH(NOLOCK) WHERE TMUS.PermissionType = TD.TaskType AND TMUS.UserKey = @c_userid AND TMUS.Permission = '1' AND AreaKey = @c_AreaKey01)
 			)
          BEGIN
 	        SELECT @n_continue = 3
@@ -2972,20 +2974,20 @@ END
               SET TD.StatusMsg =
                  CASE 
                     WHEN 
-                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
-                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
+                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Both loc on hold or flag'
 
                     WHEN 
-                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Toloc on hold or flag'
 
                     WHEN 
-                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Fromloc on hold or flag' 
 
 					WHEN 
-					   (L2.Status <> 'OK' OR L2.LocationFlag NOT IN ('', 'NONE'))
+					   (L2.Status <> 'OK' OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'FinalLoc on hold or flag'
                  END
               FROM TaskDetail TD
@@ -3007,11 +3009,11 @@ END
                     )
                 AND (
                        L.Status <> 'OK'
-                    OR L.LocationFlag NOT IN ('', 'NONE')
+                    OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     OR L1.Status <> 'OK'
-                    OR L1.LocationFlag NOT IN ('', 'NONE')
+                    OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED')
 					OR L2.Status <> 'OK'
-                    OR L2.LocationFlag NOT IN ('', 'NONE')
+                    OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     )
 
 			UPDATE TaskDetail 
@@ -3025,6 +3027,7 @@ END
                        ON TD.ToLoc = LLI.Loc
                        AND LLI.StorerKey = @cStorerKey
                        AND LLI.Qty > 0
+					   AND LLI.ID <> ''
                  WHERE TD.AreaKey = @c_AreaKey01
 		            AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                     AND L.Facility = @cFacility
