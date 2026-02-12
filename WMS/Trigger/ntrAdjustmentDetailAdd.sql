@@ -77,7 +77,7 @@ BEGIN
 
    SELECT @n_continue=1, @n_starttcnt = @@TRANCOUNT
    /* #INCLUDE <TRADA1.SQL> */
-
+    DECLARE @b_ColumnsUpdated VARBINARY(1000) = COLUMNS_UPDATED()   --VER 2.5
    -- To Skip all the trigger process when Insert the history records from Archive as user request
    IF EXISTS( SELECT 1 FROM INSERTED WHERE ArchiveCop = '9')
    BEGIN
@@ -610,6 +610,7 @@ BEGIN
           , @c_SourceTable    = 'ADJUSTMENTDETAIL'
 --          , @c_Storerkey      = @c_Storerkey               --[ver 2.5]
           , @c_AdjustmentKey  = @c_AdjustmentKey
+          , @b_ColumnsUpdated = @b_ColumnsUpdated            --[VER 2.5]
           , @b_Success        = @b_Success   OUTPUT
           , @n_err            = @n_err       OUTPUT
           , @c_errmsg         = @c_errmsg    OUTPUT

@@ -125,7 +125,7 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
 
    SET @c_AdjStatusControl = 0   --(Wan01)
    SET @c_FinalizedFlag    = ''  --(Wan01)
-
+   DECLARE @b_ColumnsUpdated VARBINARY(1000) = COLUMNS_UPDATED()   --VER 2.0
    /* #INCLUDE <TRAHA1.SQL> */
    
    -- To Skip all the trigger process when Insert the history records from Archive as user request
@@ -755,6 +755,7 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
               , @c_SourceTable    = 'ADJUSTMENT'
               --, @c_Storerkey      = @c_Storerkey           --[ver 2.0]
               , @c_AdjustmentKey  = @c_AdjustmentKey
+              , @b_ColumnsUpdated = @b_ColumnsUpdated        --Ver 2.0
               , @b_Success        = @b_Success   OUTPUT
               , @n_err            = @n_err       OUTPUT
               , @c_errmsg         = @c_errmsg    OUTPUT
