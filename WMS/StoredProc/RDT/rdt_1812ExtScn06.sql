@@ -1709,7 +1709,7 @@ BEGIN
             )
             BEGIN
                   SET @nErrNo = 239667
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --239667More cabs task
                   SET @nAfterStep = @nMOBRECStep
                   SET @nAfterScn = @nMOBRECScn
                   SET @cOutField01 = ''
