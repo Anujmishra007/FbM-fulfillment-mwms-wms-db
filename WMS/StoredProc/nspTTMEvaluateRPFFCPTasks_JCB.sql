@@ -310,6 +310,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+	                       AND LOC.LocationCategory <> 'PND_OUT'
                      ) --V1.0.1(1)
          END TRY
          BEGIN CATCH
@@ -359,6 +360,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+	                       AND LOC.LocationCategory <> 'PND_OUT'
                      ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
@@ -455,6 +457,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+	                       AND LOC.LocationCategory <> 'PND_OUT'
                      ) --V1.0.1(1)
             AND ((EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
                   WHERE LISTNAME = 'JCBCOMPML'
@@ -569,6 +572,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+	                       AND LOC.LocationCategory <> 'PND_OUT'
                      ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
@@ -621,6 +625,7 @@ BEGIN
 		 AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+	                       AND LOC.LocationCategory <> 'PND_OUT'
                      ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
