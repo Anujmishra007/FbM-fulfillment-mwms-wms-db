@@ -17,6 +17,7 @@ GO
 /* 2025-11-25 1.1.3   PPA374   Adding reason code to OD and OH notes    */
 /* 2026-02-10 1.1.4   PPA374   UWP-48781 not closing pallet if not the  */ 
 /*                             whole order of a specific type is picked */
+/* 2026-02-12 1.1.5   PPA374   Adding 'INLOCKED' flag for consideration */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1812ExtScn06] (  
@@ -791,7 +792,7 @@ BEGIN
                         WHERE a.Id <> b.Id
                            AND a.Id = @cSuggID
                      AND L.Facility = @cFacility
-                           AND L.LocationFlag IN ('','NONE')
+                           AND L.LocationFlag IN ('','NONE','INLOCKED')
                            AND L.Status = 'OK'
                            AND ID.Status = 'OK'
                      )
@@ -825,7 +826,7 @@ BEGIN
                      AND LA.Lottable03 = @cOutField01
                      AND LLI.ID <> @cSuggID
                 AND L.Facility = @cFacility
-                     AND L.LocationFlag IN ('','NONE')
+                     AND L.LocationFlag IN ('','NONE','INLOCKED')
                      AND L.Status = 'OK'
                      AND ID.Status = 'OK'
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
@@ -1041,7 +1042,7 @@ BEGIN
                            WHERE a.Id <> b.Id
                               AND a.Id = @cSuggID
                        AND L.Facility = @cFacility
-                              AND L.LocationFlag IN ('','NONE')
+                              AND L.LocationFlag IN ('','NONE','INLOCKED')
                               AND L.Status = 'OK'
                               AND ID.Status = 'OK'
                         )
@@ -1075,7 +1076,7 @@ BEGIN
                      AND LA.Lottable03 = @cOutField01
                      AND LLI.ID <> @cSuggID
                      AND L.Facility = @cFacility
-                     AND L.LocationFlag IN ('','NONE')
+                     AND L.LocationFlag IN ('','NONE','INLOCKED')
                      AND L.Status = 'OK'
                      AND ID.Status = 'OK'
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
