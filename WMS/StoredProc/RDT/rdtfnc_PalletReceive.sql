@@ -884,7 +884,7 @@ BEGIN
       IF @cOption = '2'
       BEGIN
          -- Get next line
-         EXEC rdt.rdt_PalletReceive_GetDetail @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cFacility, @cStorerKey,
+         EXEC rdt.rdt_PalletReceive_GetDetail @nFunc, @nMobile, @cLangCode, @nScn, @nInputKey, @cFacility, @cStorerKey,
             @cActReceiptKey,
             @cID,
             @cSKU        OUTPUT,
