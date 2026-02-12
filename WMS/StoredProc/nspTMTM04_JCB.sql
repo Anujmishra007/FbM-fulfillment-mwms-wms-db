@@ -19,7 +19,7 @@ GO
 /* 2026-01-09   2.3   PPA374    Adding Permission and In Progress errors        */
 /* 2026-02-12   2.4   PPA374    Adding 'INLOCKED' flag as an ok flag to pick    */
 /********************************************************************************/
-CREATE OR ALTER PROC   [RDT].[nspTMTM04_JCB]
+CREATE OR ALTER PROC    [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
    ,@c_ptcid            NVARCHAR(5)
    ,@c_userid           NVARCHAR(18)
