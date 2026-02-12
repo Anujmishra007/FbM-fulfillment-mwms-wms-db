@@ -845,7 +845,7 @@ BEGIN
             ELSE
             BEGIN
                -- (james06)
-               IF @c_ContinueTask = '1' AND ISNULL( @c_LastTaskType, '') <> ''
+               IF @c_ContinueTask = 1 AND ISNULL( @c_LastTaskType, '') <> ''
                BEGIN
                   SELECT TOP 1
                          @c_CurrentLineNumber = TTMStrategyLineNumber
