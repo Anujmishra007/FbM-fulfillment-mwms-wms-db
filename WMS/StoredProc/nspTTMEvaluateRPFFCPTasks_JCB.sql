@@ -786,7 +786,7 @@ BEGIN
 
    -- Check if any task candidate were found
    -- 1. Weight of the pallet: sum of (LOTxLOCxID.Qty * SKU.STDGROSSWGT) must be <= max weight of the MHE provided (EquipmentProfile.MaximumWeight).
-   -- 2. If â€œTo Locâ€ is PNDOUT, pallet capacity minus existing inventory must be >= 0.
+   -- 2. If "To Loc" is PNDOUT, pallet capacity minus existing inventory must be >= 0.
    -- 3.   If the task is picking, ToLoc can be either marshalling lane or kitting location, need check if ToLoc's Status = 'OK', also need check the LocationFlag NOT IN ('','NONE')
 
    SET @nLoopIndex = -1
@@ -1093,7 +1093,7 @@ BEGIN
          END
       END --END while
 
-      -- 3. If the first task is from PND OUT. Tasks having â€œFrom Locâ€ category as PND OUT must be sorted not only by priority, delivery date, logical loc and loc, 
+      -- 3. If the first task is from PND OUT. Tasks having "From Loc" category as PND OUT must be sorted not only by priority, delivery date, logical loc and loc, 
       --    but also by number of unique users already having tasks assigned to that location. 
       --    need select a best task in the PND OUT location where minimum user is working on it 
 
@@ -1552,7 +1552,7 @@ BEGIN
             PRINT @cLogMsg
          END
 
-         -- If task is â€œFPâ€, stop searching for other tasks
+         -- If task is "FP", stop searching for other tasks
          IF @cPickMethod = 'FP'
          BEGIN
             IF @bDebug = 1
@@ -1572,7 +1572,7 @@ BEGIN
                SET @cLogMsg = CONCAT_WS(',', 'Orderkey is not retrieved from @tTaskCandidate, try to get it from PickDetail', '')
                PRINT @cLogMsg
             END
-            -- If task is â€œPPâ€, then search other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
+            -- If task is "PP", then search other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
             IF @cTaskType IN ('FCP', 'FCP1')
             BEGIN
                SELECT @cCandidateOrderKey = PD.OrderKey
@@ -1641,7 +1641,7 @@ BEGIN
       ELSE
       BEGIN
          --CandidateTaskDetailKey empty means a task is found, now continue to loop list to make the qualified tasks will be locked for the same user
-         -- If task is â€œPPâ€, then all other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
+         -- If task is "PP", then all other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
          IF @cPickMethod = 'PP' AND ISNULL(@cCandidateOrderKey, '') <> ''
          BEGIN
             IF @cTaskType IN ('FCP', 'FCP1') 
