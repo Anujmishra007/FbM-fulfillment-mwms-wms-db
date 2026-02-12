@@ -178,82 +178,90 @@ BEGIN
    -- Qty in packdetail is zero only proceed
    -- DocType is not 'E' in Order table only proceed
 
-   SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
-         , @nTtlQty = ISNULL(SUM(Qty), 0)
-         , @nLabelLineCount = COUNT(DISTINCT LabelLine)
-         , @cSKU = MAX(SKU)
-   FROM PACKDETAIL (NOLOCK) 
-   WHERE PickSlipNo = @cPickSlipNo
-   AND CartonNo = @nCartonNo
-   AND DropID = @cDropID
+   IF EXISTS ( SELECT 1 
+               FROM STORERCONFIG (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+               AND ConfigKey = 'TPS-AutoCloseCarton'
+               AND sValue = '1'
+   )
+   BEGIN
+      SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
+            , @nTtlQty = ISNULL(SUM(Qty), 0)
+            , @nLabelLineCount = COUNT(DISTINCT LabelLine)
+            , @cSKU = MAX(SKU)
+      FROM PACKDETAIL (NOLOCK) 
+      WHERE PickSlipNo = @cPickSlipNo
+      AND CartonNo = @nCartonNo
+      AND DropID = @cDropID
 
-   SELECT 1
-   FROM PACKINFO (NOLOCK)
-   WHERE PickSlipNo = @cPickSlipNo
-   AND CartonNo = @nCartonNo
-   AND CartonStatus = 'INPROGRESS'
+      SELECT 1
+      FROM PACKINFO (NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+      AND CartonNo = @nCartonNo
+      AND CartonStatus = 'INPROGRESS'
 
-   IF @@ROWCOUNT = 1  
-   AND @nExpQty > 0
-   AND @nTtlQty = 0  
-   AND @nLabelLineCount = 1 
-   AND EXISTS (SELECT 1 
-               FROM ORDERS (NOLOCK)
-               WHERE OrderKey = @cOrderKey
-               AND DocType <> 'E'
-   ) 
-   BEGIN 
-      SET @bAutoCloseCarton = 1
-      SET @nActualQty = @nExpQty
-      IF NOT EXISTS (SELECT 1
-                     FROM STORERCONFIG (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                     AND ConfigKey = 'TPS-VAS'
-                     AND sValue IN ('1', '3')
+      IF @@ROWCOUNT = 1  
+      AND @nExpQty > 0
+      AND @nTtlQty = 0  
+      AND @nLabelLineCount = 1 
+      AND EXISTS (SELECT 1 
+                  FROM ORDERS (NOLOCK)
+                  WHERE OrderKey = @cOrderKey
+                  AND DocType <> 'E'
       )
-      BEGIN
-         EXEC [API].[isp_TPACK_ValidateUserInput]
-              @cType             = @cType            
-            , @bIsDiscrete       = @bIsDiscrete      
-            , @bIsCustom         = @bIsCustom        
-            , @cPickSlipNo       = @cPickSlipNo       
-            , @cOrderKey         = @cOrderKey
-            , @cLoadKey          = @cLoadKey          
-            , @cDropID           = @cDropID
-            , @cStorerKey        = @cStorerKey        
-            , @cFacility         = @cFacility   
-            , @cInputValue1      = @cSKU
-            , @cInputValue2      = ''
-            , @cInputValue3      = ''
-            , @cScanType         = 'sku'
-            , @cSKU              = @cSKU
-            , @nCartonNo         = @nCartonNo
-            , @nQty              = @nActualQty
-            , @c_UserID          = @c_UserID
-            , @cLangCode         = @cLangCode
-            , @nPageIndex        = 0
-            , @nPageSize         = 20
-            , @c_OperationType   = @c_OperationType
-            , @cResponseJson     = @cResponseJson OUTPUT
-            , @b_Success         = @b_Success     OUTPUT
-            , @n_ErrNo           = @n_ErrNo       OUTPUT
-            , @c_ErrMsg          = @c_ErrMsg      OUTPUT
-
-         IF @b_Success = 0
-         BEGIN    
-            SET @n_Continue = 3  
-            GOTO EXIT_SP
-         END
-         
-         IF (TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bAutoCloseCarton') AS BIT) = 0 
-         AND TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bShowLottableScreen') AS BIT) = 0
+      BEGIN 
+         SET @bAutoCloseCarton = 1
+         SET @nActualQty = @nExpQty
+         IF NOT EXISTS (SELECT 1
+                        FROM STORERCONFIG (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                        AND ConfigKey = 'TPS-VAS'
+                        AND sValue IN ('1', '3')
          )
          BEGIN
-            SET @cResponseJson = JSON_MODIFY(@cResponseJson, '$.meta.bAutoCloseCarton', @bAutoCloseCarton);
+            EXEC [API].[isp_TPACK_ValidateUserInput]
+               @cType             = @cType            
+               , @bIsDiscrete       = @bIsDiscrete      
+               , @bIsCustom         = @bIsCustom        
+               , @cPickSlipNo       = @cPickSlipNo       
+               , @cOrderKey         = @cOrderKey
+               , @cLoadKey          = @cLoadKey          
+               , @cDropID           = @cDropID
+               , @cStorerKey        = @cStorerKey        
+               , @cFacility         = @cFacility   
+               , @cInputValue1      = @cSKU
+               , @cInputValue2      = ''
+               , @cInputValue3      = ''
+               , @cScanType         = 'sku'
+               , @cSKU              = @cSKU
+               , @nCartonNo         = @nCartonNo
+               , @nQty              = @nActualQty
+               , @c_UserID          = @c_UserID
+               , @cLangCode         = @cLangCode
+               , @nPageIndex        = 0
+               , @nPageSize         = 20
+               , @c_OperationType   = @c_OperationType
+               , @cResponseJson     = @cResponseJson OUTPUT
+               , @b_Success         = @b_Success     OUTPUT
+               , @n_ErrNo           = @n_ErrNo       OUTPUT
+               , @c_ErrMsg          = @c_ErrMsg      OUTPUT
+
+            IF @b_Success = 0
+            BEGIN    
+               SET @n_Continue = 3  
+               GOTO EXIT_SP
+            END
+            
+            IF (TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bAutoCloseCarton') AS BIT) = 0 
+            AND TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bShowLottableScreen') AS BIT) = 0
+            )
+            BEGIN
+               SET @cResponseJson = JSON_MODIFY(@cResponseJson, '$.meta.bAutoCloseCarton', @bAutoCloseCarton);
+            END
+            
+            SET @c_ResponseString = ISNULL ((JSON_QUERY(@cResponseJson)),'')
+            GOTO EXIT_SP
          END
-         
-         SET @c_ResponseString = ISNULL ((JSON_QUERY(@cResponseJson)),'')
-         GOTO EXIT_SP
       END
    END
    
