@@ -15,7 +15,8 @@ GO
 /* 2025-08-21 1.1.1   Dennis   FCR-3959 Fix Inventory Hold Bug          */
 /* 2025-08-25 1.1.2   Dennis   FCR-3959 New Scn                         */
 /* 2025-11-25 1.1.3   PPA374   Adding reason code to OD and OH notes    */
-/* 2026-02-12 1.1.4   PPA374   Adding 'INLOCKED' flag for consideration */
+/* 2026-02-10 1.1.4   PPA374   UWP-48781 not closing pallet if not the  */ 
+/*                             whole order of a specific type is picked */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1812ExtScn06] (  
@@ -260,33 +261,33 @@ BEGIN
                   GOTO Step_9_Fail
                END
 
-			   IF EXISTS (
-			      SELECT 1 
-				  FROM LOC L WITH(NOLOCK)
-				     INNER JOIN CODELKUP C WITH(NOLOCK)
-				        ON C.LISTNAME = 'JCBBKRCODE'
-						AND C.StorerKey = @cStorerKey
-						AND C.Long = L.LocationCategory
-			      WHERE LOC = @cSuggFromLOC 
-				     AND L.Facility = @cFacility
-			   )
-			   BEGIN
-			      IF @cReasonCode NOT IN (
-				     SELECT Short 
-					 FROM CODELKUP C WITH(NOLOCK)
-					    INNER JOIN LOC L WITH(NOLOCK)
-						   ON L.LocationCategory = C.Long
-					 WHERE C.LISTNAME = 'JCBBKRCODE' 
-					    AND C.StorerKey = @cStorerKey
-						AND L.Facility = @cFacility
-						AND L.Loc = @cSuggFromLOC
-				  )
-				  BEGIN
-			         SET @nErrNo = 218259
+            IF EXISTS (
+               SELECT 1 
+              FROM LOC L WITH(NOLOCK)
+                 INNER JOIN CODELKUP C WITH(NOLOCK)
+                    ON C.LISTNAME = 'JCBBKRCODE'
+                  AND C.StorerKey = @cStorerKey
+                  AND C.Long = L.LocationCategory
+               WHERE LOC = @cSuggFromLOC 
+                 AND L.Facility = @cFacility
+            )
+            BEGIN
+               IF @cReasonCode NOT IN (
+                 SELECT Short 
+                FROM CODELKUP C WITH(NOLOCK)
+                   INNER JOIN LOC L WITH(NOLOCK)
+                     ON L.LocationCategory = C.Long
+                WHERE C.LISTNAME = 'JCBBKRCODE' 
+                   AND C.StorerKey = @cStorerKey
+                  AND L.Facility = @cFacility
+                  AND L.Loc = @cSuggFromLOC
+              )
+              BEGIN
+                  SET @nErrNo = 218259
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO Step_9_Fail
-				  END
-			   END
+              END
+            END
 
                IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
                   WHERE LLI.StorerKey = @cStorerKey
@@ -691,7 +692,7 @@ BEGIN
                   END
                END
 
-			   UPDATE O
+            UPDATE O
                SET O.CancelReasonCode =
                      LEFT (CASE 
                         WHEN O.CancelReasonCode IS NULL OR LTRIM(RTRIM(O.CancelReasonCode)) = '' THEN @cReasonCode
@@ -780,17 +781,17 @@ BEGIN
                            ROW_NUMBER() OVER (ORDER BY b.Id, b.Loc) as RowNum
                         FROM SkuSummary a
                         INNER JOIN SkuSummary b ON a.SkuQtyPattern = b.SkuQtyPattern
-			            INNER JOIN dbo.LOC L WITH(NOLOCK)
+                     INNER JOIN dbo.LOC L WITH(NOLOCK)
                            ON b.LOC = L.Loc
                         INNER JOIN dbo.LOC L2 WITH(NOLOCK)
                            ON L2.Loc = @cSuggFromLOC
                            AND L.LocationCategory = L2.LocationCategory
-						   INNER JOIN dbo.ID WITH(NOLOCK)
+                     INNER JOIN dbo.ID WITH(NOLOCK)
                            ON b.ID = ID.Id
                         WHERE a.Id <> b.Id
                            AND a.Id = @cSuggID
-						   AND L.Facility = @cFacility
-                           AND L.LocationFlag IN ('','NONE','INLOCKED')
+                     AND L.Facility = @cFacility
+                           AND L.LocationFlag IN ('','NONE')
                            AND L.Status = 'OK'
                            AND ID.Status = 'OK'
                      )
@@ -809,12 +810,12 @@ BEGIN
                      SELECT TOP 3 LLI.LOC,LLI.ID
                      FROM LOTxLOCxID LLI(NOLOCK)
                      JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
-					 JOIN LOC L WITH(NOLOCK)
+                JOIN LOC L WITH(NOLOCK)
                      ON LLI.LOC = L.Loc
                      JOIN LOC L2 WITH(NOLOCK)
                      ON L2.Loc = @cSuggFromLOC
                      AND L.LocationCategory = L2.LocationCategory
-					 JOIN ID WITH(NOLOCK)
+                JOIN ID WITH(NOLOCK)
                      ON LLI.ID = ID.Id
                      WHERE LLI.QTY > 0
                      AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
@@ -823,8 +824,8 @@ BEGIN
                      AND LLI.QTY = @nQTY_RPL
                      AND LA.Lottable03 = @cOutField01
                      AND LLI.ID <> @cSuggID
-					 AND L.Facility = @cFacility
-                     AND L.LocationFlag IN ('','NONE','INLOCKED')
+                AND L.Facility = @cFacility
+                     AND L.LocationFlag IN ('','NONE')
                      AND L.Status = 'OK'
                      AND ID.Status = 'OK'
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
@@ -886,41 +887,41 @@ BEGIN
                      END
                      SET @cOutField01 = @cUDF01
                      SET @cFieldAttr01 = 'O'
-                     --Print Label					   			         
-			         SET @TypeOrder = 99	                    
-					 -- GET TYPE ORDER
-			         SELECT @TypeOrder = o.[Type]
+                     --Print Label                                    
+                  SET @TypeOrder = 99                       
+                -- GET TYPE ORDER
+                  SELECT @TypeOrder = o.[Type]
                      FROM ORDERS o WITH(NOLOCK)
                      WHERE o.OrderKey = @cOrderKey
                        AND o.StorerKey = @cStorerKey
-					  --
-					 SET @cPickMethodAUX =''
-					  --
-				  SELECT @cPickMethodAUX = td.pickmethod
-					FROM taskdetail td WITH(NOLOCK)
-				   WHERE td.taskdetailkey = @cTaskdetailKey
-					/*
-					-- Insert trace
-					INSERT INTO [dbo].[TraceInfo]
-				   ([TraceName],
-				   [TimeIn],[TimeOut],[TotalTime],[Step1],[Step2],[Step3],[Step4] ,[Step5],[Col1],[Col2],[Col3],[Col4],[Col5])
-					Select N'rdt_1812ExtScn06_99'
-				   ,NULL,NULL,NULL,@TypeOrder,@cPickMethodAUX,@cPalletLabel,@cUDF01,@cTaskdetailKey,NULL,NULL,NULL,NULL,NULL 
-				   */
-					 IF @cPalletLabel <> '' AND @TypeOrder = 0 AND @cPickMethodAUX = 'PP'
+                 --
+                SET @cPickMethodAUX =''
+                 --
+              SELECT @cPickMethodAUX = td.pickmethod
+               FROM taskdetail td WITH(NOLOCK)
+               WHERE td.taskdetailkey = @cTaskdetailKey
+               /*
+               -- Insert trace
+               INSERT INTO [dbo].[TraceInfo]
+               ([TraceName],
+               [TimeIn],[TimeOut],[TotalTime],[Step1],[Step2],[Step3],[Step4] ,[Step5],[Col1],[Col2],[Col3],[Col4],[Col5])
+               Select N'rdt_1812ExtScn06_99'
+               ,NULL,NULL,NULL,@TypeOrder,@cPickMethodAUX,@cPalletLabel,@cUDF01,@cTaskdetailKey,NULL,NULL,NULL,NULL,NULL 
+               */
+                IF @cPalletLabel <> '' AND @TypeOrder = 0 AND @cPickMethodAUX = 'PP'
                      BEGIN
                         -- Common params
                         INSERT INTO @tPalletLabel (Variable, Value) VALUES
                         ( '@cStorerKey', @cStorerKey),
                         ( '@cDropID', @cUDF01)                        
-						-- Print label
+                  -- Print label
                         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPrinter, @cPrinter_Paper,
                            @cPalletLabel, -- Report type
                            @tPalletLabel, -- Report params
                            'rdt_1812ExtScn06',
                            @nErrNo  OUTPUT,
                            @cErrMsg OUTPUT
-						   --
+                     --
                         IF @nErrNo <> 0
                            GOTO Quit
                      END
@@ -1030,17 +1031,17 @@ BEGIN
                               ROW_NUMBER() OVER (ORDER BY b.Id, b.Loc) as RowNum
                            FROM SkuSummary a
                            INNER JOIN SkuSummary b ON a.SkuQtyPattern = b.SkuQtyPattern
-						   INNER JOIN dbo.LOC L WITH(NOLOCK)
+                     INNER JOIN dbo.LOC L WITH(NOLOCK)
                               ON b.LOC = L.Loc
                            INNER JOIN dbo.LOC L2 WITH(NOLOCK)
                               ON L2.Loc = @cSuggFromLOC
                               AND L.LocationCategory = L2.LocationCategory
-						   INNER JOIN dbo.ID WITH(NOLOCK)
+                     INNER JOIN dbo.ID WITH(NOLOCK)
                               ON b.ID = ID.Id
                            WHERE a.Id <> b.Id
                               AND a.Id = @cSuggID
-							  AND L.Facility = @cFacility
-                              AND L.LocationFlag IN ('','NONE','INLOCKED')
+                       AND L.Facility = @cFacility
+                              AND L.LocationFlag IN ('','NONE')
                               AND L.Status = 'OK'
                               AND ID.Status = 'OK'
                         )
@@ -1059,12 +1060,12 @@ BEGIN
                      SELECT TOP 3 LLI.LOC,LLI.ID
                      FROM LOTxLOCxID LLI(NOLOCK)
                      JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
-					 JOIN LOC L WITH(NOLOCK)
+                JOIN LOC L WITH(NOLOCK)
                      ON LLI.LOC = L.Loc
                      JOIN LOC L2 WITH(NOLOCK)
                      ON L2.Loc = @cSuggFromLOC
                      AND L.LocationCategory = L2.LocationCategory
-					 JOIN ID WITH(NOLOCK)
+                JOIN ID WITH(NOLOCK)
                      ON LLI.ID = ID.Id
                      WHERE LLI.QTY > 0
                      AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
@@ -1074,7 +1075,7 @@ BEGIN
                      AND LA.Lottable03 = @cOutField01
                      AND LLI.ID <> @cSuggID
                      AND L.Facility = @cFacility
-                     AND L.LocationFlag IN ('','NONE','INLOCKED')
+                     AND L.LocationFlag IN ('','NONE')
                      AND L.Status = 'OK'
                      AND ID.Status = 'OK'
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
@@ -1684,6 +1685,36 @@ BEGIN
          BEGIN
             IF @cInField01 = '9' -- Close Pallet
             BEGIN
+            IF EXISTS (
+               SELECT 1
+               FROM dbo.ORDERS O WITH(NOLOCK)
+               INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+                 ON CL.Long = O.Type
+                  AND CL.LISTNAME = 'JCBCLPALOT'
+                  AND CL.SHORT = 'Y'
+               WHERE O.OrderKey = @cOrderKey
+            )
+            AND EXISTS (
+               SELECT 1
+                  FROM dbo.TaskDetail TD WITH (NOLOCK)    
+                  INNER JOIN dbo.LOC WITH(NOLOCK) ON LOC.LOC = TD.FromLOC
+                  WHERE TD.ListKey <> @cListKey  
+                     AND TD.UserKey = @cUserName  
+                     AND TD.AreaKey = @cAreaKey
+                     AND TD.Storerkey = @cStorerKey
+                     AND TD.Status = '3'
+                     AND TaskType IN ('FCP','FCP1')
+                     AND OrderKey = @cOrderKey
+            )
+            BEGIN
+                  SET @nErrNo = 239667
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
+                  SET @nAfterStep = @nMOBRECStep
+                  SET @nAfterScn = @nMOBRECScn
+                  SET @cOutField01 = ''
+                  GOTO Quit
+            END
+
                IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
                AND EXISTS (SELECT 1 FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = '0')
                BEGIN
@@ -1693,7 +1724,7 @@ BEGIN
                      GOTO Quit
                END
                
-			   IF EXISTS (
+            IF EXISTS (
                   SELECT 1
                   FROM RDT.RDTMOBREC R WITH (NOLOCK)
                      INNER JOIN CODELKUP C WITH (NOLOCK)
@@ -1701,26 +1732,26 @@ BEGIN
                   WHERE R.Mobile = @nMobile
                      AND C.ListName = 'JCBPREASON'
                )
-			   BEGIN
-			      UPDATE TaskDetail 
-				  SET 
-					 Status = '0',
-					 UserKey = ''
-				  WHERE Status = '3'
-				     AND UserKey = @cUserName
-					 AND OrderKey = @cOrderKey
+            BEGIN
+               UPDATE TaskDetail 
+              SET 
+                Status = '0',
+                UserKey = ''
+              WHERE Status = '3'
+                 AND UserKey = @cUserName
+                AND OrderKey = @cOrderKey
 
-			      UPDATE RDT.RDTMOBREC
-			      SET C_String29 = ''
-			      WHERE Mobile = @nMobile 
-				  SET @nAfterStep = 7
+               UPDATE RDT.RDTMOBREC
+               SET C_String29 = ''
+               WHERE Mobile = @nMobile 
+              SET @nAfterStep = 7
                   SET @nAfterScn = 4026
                   SET @cOutField01 = ''
                   GOTO Quit
-			   END
-				  
+            END
+              
                IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE (ListKey = @cListKey AND Status = '5') OR (TaskDetailKey = @cTaskdetailKey AND Status = '3'))
-			      AND NOT EXISTS (
+               AND NOT EXISTS (
                      SELECT 1
                      FROM RDT.RDTMOBREC R WITH (NOLOCK)
                         INNER JOIN CODELKUP C WITH (NOLOCK)
@@ -1742,6 +1773,29 @@ BEGIN
          BEGIN
             IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = 'S')
             OR NOT EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey)
+            OR (
+               EXISTS (
+                     SELECT 1
+                     FROM dbo.ORDERS O WITH(NOLOCK)
+                     INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+                        ON CL.Long = O.Type
+                        AND CL.LISTNAME = 'JCBCLPALOT'
+                        AND CL.SHORT = 'Y'
+                     WHERE O.OrderKey = @cOrderKey
+                  )
+                  AND EXISTS (
+                     SELECT 1
+                        FROM dbo.TaskDetail TD WITH (NOLOCK)    
+                        INNER JOIN dbo.LOC WITH(NOLOCK) ON LOC.LOC = TD.FromLOC
+                        WHERE TD.ListKey <> @cListKey  
+                           AND TD.UserKey = @cUserName  
+                           AND TD.AreaKey = @cAreaKey
+                           AND TD.Storerkey = @cStorerKey
+                           AND TD.Status = '3'
+                           AND TaskType IN ('FCP','FCP1')
+                           AND OrderKey = @cOrderKey
+                  )
+            )
             BEGIN
                SET @nErrNo = 239665
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pls choose an option
@@ -1831,22 +1885,22 @@ BEGIN
          END
       END
       
-	  
-	  IF @nMOBRECStep = 4
+     
+     IF @nMOBRECStep = 4
       BEGIN
          IF @nInputKey = 1 
          BEGIN
-		    /*
-		    -- Insert test
+          /*
+          -- Insert test
             INSERT INTO [dbo].[TraceInfo]
-			   ([TraceName],
-			   [TimeIn],[TimeOut],[TotalTime],[Step1],[Step2],[Step3],[Step4] ,[Step5],[Col1],[Col2],[Col3],[Col4],[Col5])
-		       Select N'rdt_1812ExtScn06_Step_4'
-			   ,NULL,NULL,NULL,@nMobile,@nFunc,@nStep,@nInputKey,@cTaskdetailKey,@cDropID,@nAfterStep,NULL,NULL,NULL 
-			 */
+            ([TraceName],
+            [TimeIn],[TimeOut],[TotalTime],[Step1],[Step2],[Step3],[Step4] ,[Step5],[Col1],[Col2],[Col3],[Col4],[Col5])
+             Select N'rdt_1812ExtScn06_Step_4'
+            ,NULL,NULL,NULL,@nMobile,@nFunc,@nStep,@nInputKey,@cTaskdetailKey,@cDropID,@nAfterStep,NULL,NULL,NULL 
+          */
           DECLARE @nStepAux INT
-			  SET @nStepAux = @nStep
-			  SET @nStep = @nMOBRECStep
+           SET @nStepAux = @nStep
+           SET @nStep = @nMOBRECStep
 
               -- Extended update
               IF @cExtendedUpdateSP <> ''
@@ -1859,7 +1913,7 @@ BEGIN
                         '@nMobile         INT,           ' +
                         '@nFunc           INT,           ' +
                         '@cLangCode       NVARCHAR( 3),  ' +
-                        '@nStep           INT,           ' +											
+                        '@nStep           INT,           ' +                                 
                         '@nInputKey       INT,           ' +
                         '@cTaskdetailKey  NVARCHAR( 10), ' +
                         '@cDropID         NVARCHAR( 20), ' +
@@ -1872,7 +1926,7 @@ BEGIN
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
 
-					SET @nStep = @nStepAux
+               SET @nStep = @nStepAux
 
                      IF @nErrNo <> 0
                         GOTO Quit
@@ -1880,10 +1934,10 @@ BEGIN
                END               
          END
       END
-	  
+     
 
-	  
-	  IF (@nMOBRECScn <> 4020 AND @nScn = 4020) OR @nAfterScn = 4020 -- DROPID SCREEN
+     
+     IF (@nMOBRECScn <> 4020 AND @nScn = 4020) OR @nAfterScn = 4020 -- DROPID SCREEN
       BEGIN
          SET @cOutField01 = ''
          -- Auto gen Drop ID
@@ -1905,42 +1959,42 @@ BEGIN
             SET @cOutField01 = @cUDF01
             SET @cFieldAttr01 = 'O' -- DropID
             --
-			
-			SET @TypeOrder = 99			
+         
+         SET @TypeOrder = 99         
             
-			-- GET TYPE ORDER
-			SELECT @TypeOrder = o.[Type]
+         -- GET TYPE ORDER
+         SELECT @TypeOrder = o.[Type]
               FROM ORDERS o WITH(NOLOCK)
              WHERE o.OrderKey = @cOrderKey
                AND o.StorerKey = @cStorerKey
             
-			   SET @cPickMethodAUX =''
+            SET @cPickMethodAUX =''
 
-			SELECT @cPickMethodAUX = td.pickmethod
-	          FROM taskdetail td WITH(NOLOCK)
-	         WHERE td.taskdetailkey = @cTaskdetailKey
-			/*
-			-- Insert test
-			INSERT INTO [dbo].[TraceInfo]
-			([TraceName],
-			[TimeIn],[TimeOut],[TotalTime],[Step1],[Step2],[Step3],[Step4] ,[Step5],[Col1],[Col2],[Col3],[Col4],[Col5])
-			Select N'rdt_1812ExtScn06_4020'
-			,NULL,NULL,NULL,@TypeOrder,@cPickMethodAUX,@cPalletLabel,@cUDF01,@cTaskdetailKey,NULL,NULL,NULL,NULL,NULL 
-			*/
-			--
+         SELECT @cPickMethodAUX = td.pickmethod
+             FROM taskdetail td WITH(NOLOCK)
+            WHERE td.taskdetailkey = @cTaskdetailKey
+         /*
+         -- Insert test
+         INSERT INTO [dbo].[TraceInfo]
+         ([TraceName],
+         [TimeIn],[TimeOut],[TotalTime],[Step1],[Step2],[Step3],[Step4] ,[Step5],[Col1],[Col2],[Col3],[Col4],[Col5])
+         Select N'rdt_1812ExtScn06_4020'
+         ,NULL,NULL,NULL,@TypeOrder,@cPickMethodAUX,@cPalletLabel,@cUDF01,@cTaskdetailKey,NULL,NULL,NULL,NULL,NULL 
+         */
+         --
             IF @cPalletLabel <> '' AND @TypeOrder = 0 AND @cPickMethodAUX = 'PP' 
             BEGIN
                -- Common params
                INSERT INTO @tPalletLabel (Variable, Value) VALUES
                ( '@cStorerKey', @cStorerKey),
                ( '@cDropID', @cUDF01)          
-			   -- Print label
+            -- Print label
                EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPrinter, @cPrinter_Paper,
                   @cPalletLabel, -- Report type
                   @tPalletLabel, -- Report params
                   'rdt_1812ExtScn06',
                   @nErrNo  OUTPUT,
-                  @cErrMsg OUTPUT				
+                  @cErrMsg OUTPUT            
                IF @nErrNo <> 0
                   GOTO Quit
             END
