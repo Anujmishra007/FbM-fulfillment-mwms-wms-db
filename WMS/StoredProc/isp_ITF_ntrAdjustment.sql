@@ -39,6 +39,7 @@ GO
 /* Date         Author    Ver.  Purposes                                */  
 /* 18-May-2015  KTLow     1.1   SOS#336290 - Web Service ITRN (KT01)    */  
 /* 24-Jan-2017  TLTING01  1.2   SET ANSI NULLS Option                   */
+/* 12-Feb-2026  VNI056    1.3   FCR-11002   (VNI01)                     */
 /************************************************************************/  
   
 CREATE PROC isp_ITF_ntrAdjustment  
@@ -104,7 +105,7 @@ BEGIN
       END  
    END  
   
-   IF (ISNULL(RTRIM(@c_SourceTable),'') <> 'ADJUSTMENT')  
+   IF (ISNULL(RTRIM(@c_SourceTable),'') <> 'ADJUSTMENT' AND ISNULL(RTRIM(@c_SourceTable),'') <> 'ADJUSTMENTDETAIL')  --(VNI01)
    BEGIN  
       RETURN  
    END  
@@ -219,8 +220,18 @@ BEGIN
                   EXEC ispGenTransmitLog2 @c_Tablename, @c_AdjustmentKey, '', @c_StorerKey, '' 
                                           , @b_success OUTPUT  
                                           , @n_Err OUTPUT  
-                                          , @c_ErrMsg OUTPUT  
-                       
+                                          , @c_ErrMsg OUTPUT
+                                                                 --(VNI01)(START)
+                  IF @c_ConfigKey = 'WSADJADDLOGC'
+                  BEGIN
+                    DECLARE @tranflag  VARCHAR(1) = (SELECT transmitFlag FROM [DBO].[TRANSMITLOG2] WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key3 = @c_Storerkey)
+                    IF @tranflag >= '5'
+                    BEGIN
+                        SET @tranflag = '0'
+                    END
+                    UPDATE [DBO].[TRANSMITLOG2] WITH (ROWLOCK) SET transmitflag = @tranflag WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key3 = @c_Storerkey
+                  END
+                                                                --(VNI01)(END)
                   IF @b_success <> 1  
                   BEGIN  
                      SET @n_continue = 3  

@@ -72,6 +72,7 @@ GO
 /* 31-Dec-2025  VNI056    1.8    FCR-9732 Add Interface Trigger pts. for    */
 /*                                   custom trigger config                  */
 /* 11-Feb-2026  VNI056    1.9   FCR-10961 =>add config key for transmitlog  */
+/* 12-Feb-2026  VNI056    2.0   FCR-11002                                   */
 /****************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
@@ -741,7 +742,7 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
       DECLARE Cur_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT INS.AdjustmentKey, INS.StorerKey FROM INSERTED INS
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = INS.StorerKey
-      WHERE  ITC.Configkey in('WSADJADDLOG', 'ADJADDLOG') AND ITC.SourceTable = 'ADJUSTMENT'  --[ver 1.9]
+      WHERE  ITC.Configkey = 'WSADJADDLOGC' AND ITC.SourceTable = 'ADJUSTMENT'  --[ver 2.0]
       AND    ITC.sValue      = '1'
 
       OPEN Cur_TriggerPoints
@@ -749,10 +750,10 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-         EXECUTE dbo.isp_ITF_ntrAdjustmentWithStorer
+         EXECUTE dbo.isp_ITF_ntrAdjustment                       --[ver 2.0]
                 @c_TriggerName    = 'ntrAdjustmentHeaderAdd'
               , @c_SourceTable    = 'ADJUSTMENT'
-              , @c_Storerkey      = @c_Storerkey
+              --, @c_Storerkey      = @c_Storerkey           --[ver 2.0]
               , @c_AdjustmentKey  = @c_AdjustmentKey
               , @b_Success        = @b_Success   OUTPUT
               , @n_err            = @n_err       OUTPUT
