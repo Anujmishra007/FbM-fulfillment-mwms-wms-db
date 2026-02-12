@@ -331,7 +331,7 @@ BEGIN
                               AND CL.Code = @cOrderType
                               AND LOC.[Status] = 'OK'
                        AND LOC.Facility = @cFacility
-                              AND (LOC.LocationFlag = '' OR LOC.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED')
+                              AND (LOC.LocationFlag = '' OR LOC.LocationFlag = 'NONE' OR LOC.LocationFlag = 'INLOCKED')
                         )
                         BEGIN
                            SET @nErrNo = 239657
