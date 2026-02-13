@@ -5,7 +5,7 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_1868UnpackConfirm02                             */
+/* Store procedure: rdt_1868UnpackCfm02                                 */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Date         Rev   Author      Purposes                              */
@@ -13,7 +13,7 @@ GO
 /************************************************************************/
 
 
-CREATE OR ALTER PROC rdt.rdt_1868UnpackConfirm02 (
+CREATE OR ALTER PROC rdt.rdt_1868UnpackCfm02 (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -194,5 +194,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_1868UnpackConfirm02 TO NSQL
+GRANT EXECUTE ON RDT.rdt_1868UnpackCfm02 TO NSQL
 GO
