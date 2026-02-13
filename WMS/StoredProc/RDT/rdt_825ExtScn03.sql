@@ -102,7 +102,7 @@ BEGIN
             BEGIN
 
                 -- Clear fields for next pallet
-                SELECT @cFieldAttr02 = '', @cFieldAttr03 = '', @cFieldAttr04 = '', @cFieldAttr05 = '', @cFieldAttr07 = ''
+                SELECT @cFieldAttr01 = '', @cFieldAttr02 = '', @cFieldAttr03 = '', @cFieldAttr04 = '', @cFieldAttr05 = '', @cFieldAttr07 = ''
 
                 SET @cOutField01 = ''   -- PalletKey
                 SET @cOutField02 = ''   -- Length
@@ -141,34 +141,58 @@ BEGIN
             END
         END
 
-        -- Coming from Screen 3 (Scn 5112) - Show confirmation screen
+        -- Coming from Screen 3 (Scn 5112)
         IF @nMobScn = 5112
         BEGIN
-            -- Populate confirmation screen with display-only data
-            SET @cOutField01 = @cPalletKey    -- PalletKey (display only)
-            SET @cOutField02 = @cLength       -- Length (display only)
-            SET @cOutField03 = @cWidth        -- Width (display only)
-            SET @cOutField04 = @cHeight       -- Height (display only)
-            SET @cOutField05 = @cWeight       -- Weight (display only)
-            SET @cOutField06 = @cCaptureInfo  -- CaptureInfo (display only)
-            SET @cOutField07 = @cStackability -- Stackability (display only)
+            IF @nInputKey = 1 -- ENTER - Show confirmation screen
+            BEGIN
+                -- Populate confirmation screen with display-only data
+                SET @cOutField01 = @cPalletKey
+                SET @cOutField02 = @cLength
+                SET @cOutField03 = @cWidth
+                SET @cOutField04 = @cHeight
+                SET @cOutField05 = @cWeight
+                SET @cOutField06 = @cCaptureInfo
+                SET @cOutField07 = @cStackability
 
-            -- Set all fields to display only ('D')
-            SET @cFieldAttr01 = 'D'
-            SET @cFieldAttr02 = 'D'
-            SET @cFieldAttr03 = 'D'
-            SET @cFieldAttr04 = 'D'
-            SET @cFieldAttr05 = 'D'
-            SET @cFieldAttr06 = 'D'
-            SET @cFieldAttr07 = 'D'
+                -- Set all fields to display only ('O')
+                SET @cFieldAttr01 = 'O'
+                SET @cFieldAttr02 = 'O'
+                SET @cFieldAttr03 = 'O'
+                SET @cFieldAttr04 = 'O'
+                SET @cFieldAttr05 = 'O'
+                SET @cFieldAttr06 = 'O'
+                SET @cFieldAttr07 = 'O'
 
-            -- Set to confirmation screen
-            SET @nAfterScn = 6829
-            SET @nAfterStep = 99
+                -- Set to confirmation screen
+                SET @nAfterScn = 6829
+                SET @nAfterStep = 99
 
-            GOTO Quit
+                GOTO Quit
+            END
+
+            IF @nInputKey = 0 -- ESC - Go back to Screen 2 (PalletKey)
+            BEGIN
+                -- Clear fields
+                SELECT @cFieldAttr01 = '', @cFieldAttr02 = '', @cFieldAttr03 = '', @cFieldAttr04 = '', @cFieldAttr05 = '', @cFieldAttr07 = ''
+
+                SET @cOutField01 = ''
+                SET @cOutField02 = ''
+                SET @cOutField03 = ''
+                SET @cOutField04 = ''
+                SET @cOutField05 = ''
+                SET @cOutField06 = ''
+                SET @cOutField07 = ''
+
+                -- Go to Screen 2 (PalletKey)
+                SET @nAfterScn = 5111
+                SET @nAfterStep = 2
+
+                GOTO Quit
+            END
         END
     END
+    
 
 Quit:
 

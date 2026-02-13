@@ -721,15 +721,6 @@ BEGIN
          GOTO Quit
       END
 
-      -- FCR-9672: If ExtScnSP is configured, go to Step_99 (skip update here)
-      IF @cExtScnSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-         BEGIN
-            GOTO Step_99
-         END
-      END
-
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -800,6 +791,16 @@ BEGIN
       SET @nScn  = @nScn - 1
       SET @nStep = @nStep - 1
    END
+
+   -- FCR-9672: If ExtScnSP is configured, go to Step_99 (skip update here)
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
 END
 GOTO Quit
 
