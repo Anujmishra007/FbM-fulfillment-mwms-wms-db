@@ -2869,7 +2869,7 @@ END
 			)
 
 			UPDATE TaskDetail
-			SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for To Loc' --PPA374 13/02/2026
+			SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for From Loc' --PPA374 13/02/2026
 			WHERE TaskDetailKey IN (
                SELECT TaskDetailKey
                FROM dbo.TaskDetail TD WITH(NOLOCK)
