@@ -72,7 +72,7 @@ IF NOT EXISTS (SELECT 1
  		               FROM sys.columns
  		               WHERE Name = 'ExternStatus' AND Object_ID = Object_ID('WAVE'))
 BEGIN
-ALTER TABLE WAVE ADD ExternStatus NVARCHAR(10) NOT NULL CONSTRAINT [DF_WAVE_ExternStatus]  DEFAULT ('');
+ALTER TABLE WAVE ADD ExternStatus NVARCHAR(10) NULL;
 EXEC sp_addextendedproperty N'MS_Description', N'ExternStatus', 'SCHEMA', N'dbo', 'TABLE', N'WAVE', 'COLUMN', N'ExternStatus'
 END
 IF NOT EXISTS (SELECT *
@@ -81,10 +81,9 @@ IF NOT EXISTS (SELECT *
                          AND Object_ID = Object_ID('WAVE'))
 BEGIN
 ALTER TABLE WAVE
-    ADD EventDateTime [datetime] NOT NULL CONSTRAINT [DF_WAVE_EventDateTime] DEFAULT (getdate());
+    ADD EventDateTime [datetime] NULL;
 EXEC sp_addextendedproperty N'MS_Description', N'EventDateTime', 'SCHEMA', N'dbo', 'TABLE',
                      N'WAVE', 'COLUMN', N'EventDateTime'
-END
 END
 
 -- Make ExternStatus nullable
@@ -119,4 +118,5 @@ ALTER TABLE [dbo].[WAVE] DROP CONSTRAINT [DF_WAVE_EventDateTime];
 END
 
 ALTER TABLE [dbo].[WAVE] ALTER COLUMN [EventDateTime] [datetime] NULL;
+END
 END
