@@ -90,6 +90,7 @@ GO
 /* 2025-10-16 5.6  Ung      FCR-8112 Add serial no                            */
 /*                          Add rdt format for ID                             */
 /* 2026-01-26 5.7  Jackc    FCR-9756 Add ExtScn                               */ 
+/* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                     */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
@@ -205,6 +206,9 @@ DECLARE
    @cSQLOrderBy         NVARCHAR( MAX),
    @nRowCount           INT,
 
+   @cLOCCheckDigitSP    NVARCHAR( 20),
+   @cCheckDigitLOC      NVARCHAR( 20),
+
    --(jackc01)
    @cExtScnSP           NVARCHAR( 20),
    @tExtScnData         VariableTable,
@@ -296,6 +300,7 @@ SELECT
    @nPABookingKey = V_Integer7,
    @nPieceScanQTY = V_Integer8,
    --C_Integer1 used in extscn (jackc01)
+   @cLOCCheckDigitSP    = C_String1,
 
    @cPASuggestSKU       = V_String20,
    @cPABySKUAndLOT      = V_String21,
@@ -403,6 +408,8 @@ BEGIN
    SET @cSKUStatus = rdt.RDTGetConfig( @nFunc, 'SKUStatus', @cStorer)
    IF @cSKUStatus = '0'
       SET @cSKUStatus = ''
+
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorer)
 
    --(jackc01)
    SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorer)
@@ -660,6 +667,23 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need LOC
          EXEC rdt.rdtSetFocusField @nMobile, 3 -- LOC
          GOTO Step_1_Fail
+      END
+
+
+      SET @cCheckDigitLOC = @cInField03
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+      
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cOutField03 = ''
+            GOTO Step_1_Fail
+         END
+         SET @cLOC = @cCheckDigitLOC
       END
 
       -- (yeekung02) add loc prefix
@@ -1938,6 +1962,18 @@ BEGIN
          SET @nErrNo = 73877
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need Final LOC
          GOTO Step_4_Fail
+      END
+    
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_4_Fail
+         SET @cFinalLOC = @cCheckDigitLOC
       END
 
       -- Loc prefix
@@ -3357,6 +3393,7 @@ BEGIN
       V_Integer7 = @nPABookingKey,
       V_Integer8 = @nPieceScanQTY,
       --C_Integer1 used in extscn (jackc01)
+      C_String1  = @cLOCCheckDigitSP,
 
       V_String20 = @cPASuggestSKU,
       V_String21 = @cPABySKUAndLOT,
