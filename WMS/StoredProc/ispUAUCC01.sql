@@ -24,6 +24,7 @@ GO
 /* 06/10/2016   TLTING    1.1 ADD NOLOCK                                */
 /* 07/09/2017   Leong     1.2 IN00459369 - Add StorerKey.               */
 /* 04-Dec-2025  WL01      1.3 UWP-44797 Support update by Pickdetailkey */
+/* 13-Feb-2026  TK01      1.4 UWP-48857 Restructure Update using Loop   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispUAUCC01]
@@ -45,27 +46,70 @@ BEGIN
          , @n_Continue           INT
          , @n_StartTCount        INT
 
-   SET @b_Success = 1
-   SET @n_Err     = 0
-   SET @c_ErrMsg  = ''
-   SET @b_Debug   = '0'
-   SET @n_Continue= 1
-   SET @n_StartTCount = @@TRANCOUNT
+   DECLARE @CUR_UCC              CURSOR      --(TK01)
+         , @n_UCC_RowRef         INT         --(TK01)
+
+   SET @b_Success       = 1
+   SET @n_Err           = 0
+   SET @c_ErrMsg        = ''
+   SET @b_Debug         = '0'
+   SET @n_Continue      = 1
+   SET @n_StartTCount   = @@TRANCOUNT
 
    BEGIN TRAN
+
+   --(TK01) - Start - Commented for restructure using Loop
+   --WL01 S
+   -- If @c_Pickdetailkey is provided (from ntrPickDetailUpdate), use PickDetailKey path
+   -- If @c_Pickdetailkey is blank (from ntrPickDetailDelete), use #D_PICKDETAIL path
+   --IF ISNULL(TRIM(@c_Pickdetailkey), '') <> ''
+   --BEGIN
+   --   UPDATE U 
+   --   SET U.STATUS = '1'
+   --     , U.PickdetailKey = ''
+   --     , U.OrderKey = ''
+   --     , U.OrderLineNumber = ''
+   --     , U.WaveKey = ''
+   --   FROM UCC U
+   --   WHERE  U.Storerkey = @c_Storerkey
+   --   AND    U.Status > '2' AND U.Status < '6'
+   --   AND    EXISTS ( SELECT 1 
+   --                   FROM PICKDETAIL PD (NOLOCK) 
+   --                   WHERE PD.PickDetailKey = @c_Pickdetailkey
+   --                   AND PD.Storerkey = @c_Storerkey
+   --                   AND PD.DropID = U.UCCNo
+   --                   AND PD.Status < '9' )
+   --   AND NOT EXISTS ( SELECT 1 
+   --                    FROM PICKDETAIL PD (NOLOCK) 
+   --                    WHERE PD.Storerkey = @c_Storerkey
+   --                    AND PD.DropID = U.UCCNo
+   --                    AND PD.Status < '9'
+   --                    AND PD.Qty > 0 )   --1 UCC Shares multiple pickdetail - ensure ALL have Qty = 0
+   --END
+   --ELSE IF OBJECT_ID('tempdb..#D_PICKDETAIL') IS NOT NULL
+   --BEGIN   --WL01 E
+   --   UPDATE UCC SET STATUS = '1'
+   --      ,UCC.PickdetailKey = ''
+   --      ,UCC.OrderKey = ''
+   --      ,UCC.OrderLineNumber = ''
+   --      ,UCC.WaveKey = ''
+   --   FROM UCC U
+   --   WHERE  U.Storerkey = @c_Storerkey
+   --   AND    U.Status > '2' AND U.Status < '6'
+   --   AND    EXISTS (SELECT 1 FROM #D_PICKDETAIL d WHERE d.DropID = U.UCCNo AND d.Storerkey = @c_Storerkey AND d.Status < '9') -- IN00459369
+   --   AND    NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.DropID = U.UCCNo AND PD.Storerkey = @c_Storerkey AND PD.Status < '9') -- IN00459369
+   --END   --WL01   
+
 
    --WL01 S
    -- If @c_Pickdetailkey is provided (from ntrPickDetailUpdate), use PickDetailKey path
    -- If @c_Pickdetailkey is blank (from ntrPickDetailDelete), use #D_PICKDETAIL path
    IF ISNULL(TRIM(@c_Pickdetailkey), '') <> ''
    BEGIN
-      UPDATE U 
-      SET U.STATUS = '1'
-        , U.PickdetailKey = ''
-        , U.OrderKey = ''
-        , U.OrderLineNumber = ''
-        , U.WaveKey = ''
-      FROM UCC U
+
+      SET @CUR_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT U.UCC_RowRef
+      FROM   UCC U (NOLOCK)
       WHERE  U.Storerkey = @c_Storerkey
       AND    U.Status > '2' AND U.Status < '6'
       AND    EXISTS ( SELECT 1 
@@ -80,20 +124,55 @@ BEGIN
                        AND PD.DropID = U.UCCNo
                        AND PD.Status < '9'
                        AND PD.Qty > 0 )   --1 UCC Shares multiple pickdetail - ensure ALL have Qty = 0
+
    END
    ELSE IF OBJECT_ID('tempdb..#D_PICKDETAIL') IS NOT NULL
-   BEGIN   --WL01 E
-      UPDATE UCC SET STATUS = '1'
-         ,UCC.PickdetailKey = ''
-         ,UCC.OrderKey = ''
-         ,UCC.OrderLineNumber = ''
-         ,UCC.WaveKey = ''
-      FROM UCC U
+   BEGIN
+
+      SET @CUR_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT U.UCC_RowRef
+      FROM   UCC U (NOLOCK)
       WHERE  U.Storerkey = @c_Storerkey
       AND    U.Status > '2' AND U.Status < '6'
       AND    EXISTS (SELECT 1 FROM #D_PICKDETAIL d WHERE d.DropID = U.UCCNo AND d.Storerkey = @c_Storerkey AND d.Status < '9') -- IN00459369
       AND    NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.DropID = U.UCCNo AND PD.Storerkey = @c_Storerkey AND PD.Status < '9') -- IN00459369
-   END   --WL01
+
+   END
+
+   IF CURSOR_STATUS('variable', '@CUR_UCC') >= -1
+   BEGIN
+
+      OPEN @CUR_UCC
+      FETCH NEXT FROM @CUR_UCC INTO @n_UCC_RowRef
+
+      WHILE @@FETCH_STATUS = 0 and @n_Continue = 1
+      BEGIN
+
+         UPDATE UCC WITH (ROWLOCK)
+         SET STATUS = '1'
+           , PickdetailKey = ''
+           , OrderKey = ''
+           , OrderLineNumber = ''
+           , WaveKey = ''
+         WHERE  UCC_RowRef = @n_UCC_RowRef
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 80010
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+                         +': Update UCC Table Failed. (ispUAUCC01)'
+                         +'(' + ERROR_MESSAGE() + ')' 
+         END
+
+         FETCH NEXT FROM @CUR_UCC INTO @n_UCC_RowRef
+      END
+      CLOSE @CUR_UCC
+      DEALLOCATE @CUR_UCC
+
+   END
+   --(TK01) - End
+
 
    IF @n_continue = 3  -- Error Occured - Process And Return
    BEGIN
