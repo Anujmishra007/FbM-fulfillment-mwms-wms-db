@@ -65,6 +65,7 @@ GO
 /* 2025-06-25 5.5  Dennis   FCR-5716 ExtScn SP                                   */
 /* 2025-06-25 5.6  Cuize    FCR-6888 GOTO step 98                                */
 /* 2025-11-04 5.7  NickT    UWP-43481 Fix: SQL Exception happens                 */
+/* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                        */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -212,6 +213,9 @@ DECLARE
    @ctemp_OutField15    NVARCHAR( 60),
    @cBacktoScreen1      NVARCHAR( 1),  --(Tianlei)
 
+   @cLOCCheckDigitSP    NVARCHAR( 20),
+   @cCheckDigitLOC      NVARCHAR( 20),
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
@@ -328,6 +332,8 @@ SELECT
    @cDecimalQty         = V_String46,
    @cBacktoScreen1      = V_String47,  --(Tianlei)
 
+   @cLOCCheckDigitSP    = C_String3,
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
@@ -394,6 +400,8 @@ BEGIN
    SET @cDropListSP = rdt.RDTGetConfig( @nFunc, 'DropListSP', @cStorerKey)
    IF @cDropListSP = '0'
       SET @cDropListSP = ''
+
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -1041,6 +1049,20 @@ BEGIN
          SET @nErrNo = 59415
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need LOC
          GOTO Step_2_Fail
+      END
+
+      SET @cCheckDigitLOC = @cInField03
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
+         SET @cLOC = @cCheckDigitLOC
+         SET @cLocNeedCheck = @cCheckDigitLOC
       END
 
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
@@ -4701,6 +4723,22 @@ BEGIN
       -- Screen mapping
       SET @cFinalLOC = @cInField02
 
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cOutField02 = ''
+            GOTO Quit
+         END
+         SET @cFinalLOC = @cCheckDigitLOC
+      END
+
       --Loc Prefix
       IF @cLOCLookupSP = 1
       BEGIN
@@ -5811,6 +5849,8 @@ BEGIN
       V_String45   = @cExtScnSP,
       V_String46   = @cDecimalQty,
       V_String47   = @cBacktoScreen1,  --(Tianlei)
+
+      C_String3    = @cLOCCheckDigitSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
