@@ -145,7 +145,7 @@ BEGIN
       OPEN @CUR_UCC
       FETCH NEXT FROM @CUR_UCC INTO @n_UCC_RowRef
 
-      WHILE @@FETCH_STATUS = 0
+      WHILE @@FETCH_STATUS = 0 and @n_Continue = 1
       BEGIN
 
          UPDATE UCC WITH (ROWLOCK)
