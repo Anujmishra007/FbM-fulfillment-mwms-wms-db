@@ -22,6 +22,7 @@ GO
 /* 2025-11-11  2.0.0  PPA374   Updating aisle in use logic                                      */
 /* 2025-12-16  2.0.1  PPA374   Adding fix to avoid blocking replen tasks without orderkey       */
 /* 2026-01-05  2.0.2  PPA374   Changing aisle in use to C_String28                              */
+/* 2026-02-10  2.1.0  Dennis   FCR-10220                                                        */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspTTMEvaluateRPFFCPTasks_JCB]
@@ -93,9 +94,9 @@ BEGIN
       @cCurTaskDetail         NVARCHAR(10),
       @cTempToLoc             NVARCHAR(10),
       @b_SkipTheTask          INT,
-	  @nWaitSecondsS          INT,
-	  @nWaitSecondsL          INT,
-	  
+      @nWaitSecondsS          INT,
+      @nWaitSecondsL          INT,
+     
 
       @cCandidateTaskDetailKey            NVARCHAR(10),
       @cCandidateTaskType                 NVARCHAR(10),
@@ -234,7 +235,7 @@ BEGIN
       AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
       AND TD.Status IN ('0','3')
       AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @c_UserID
-	  AND TD.Storerkey = @cStorerKey
+     AND TD.Storerkey = @cStorerKey
 
    UNION ALL
 
@@ -333,7 +334,7 @@ BEGIN
          INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON PD.StorerKey = ORM.StorerKey AND PD.OrderKey = ORM.OrderKey
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
-		 INNER JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD.FinalLOC = LOC2.Loc AND LOC2.Facility = @cFacility
+         INNER JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD.FinalLOC = LOC2.Loc AND LOC2.Facility = @cFacility
          INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
          WHERE TD.StorerKey = @cStorerKey
             AND
@@ -395,14 +396,14 @@ BEGIN
                LEFT JOIN dbo.PickDetail PD1 WITH (NOLOCK) ON TD2.StorerKey = PD1.StorerKey AND TD2.TaskDetailKey = PD1.TaskDetailKey AND PD1.OrderKey = PD.OrderKey
                JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD2.FromLoc = LOC2.Loc AND LOC2.Facility = @cFacility
                LEFT JOIN dbo.SKU S WITH(NOLOCK) ON TD2.Sku = S.Sku AND S.StorerKey = TD2.Storerkey
-			   WHERE TD2.OrderKey = PD.OrderKey
+            WHERE TD2.OrderKey = PD.OrderKey
                AND (
-			      TD2.Status IN ('S','H')
-			      OR (LOC2.Status <> 'OK' OR LOC2.LocationFlag NOT IN ('','NONE'))
-			      OR (TD2.Status = '3' AND TD2.UserKey <> @c_UserID)
-				  OR TD2.Qty * ISNULL(S.STDGROSSWGT,0) > @fMaximumWeight
-				  OR (PD1.TaskDetailKey IS NULL AND TD2.Status IN ('0','3') AND TD2.AreaKey = @c_AreaKey01) --PPA 20/11/2025 fixing to not provide orders with pickdetail is missing
-			   )
+               TD2.Status IN ('S','H')
+               OR (LOC2.Status <> 'OK' OR LOC2.LocationFlag NOT IN ('','NONE'))
+               OR (TD2.Status = '3' AND TD2.UserKey <> @c_UserID)
+              OR TD2.Qty * ISNULL(S.STDGROSSWGT,0) > @fMaximumWeight
+              OR (PD1.TaskDetailKey IS NULL AND TD2.Status IN ('0','3') AND TD2.AreaKey = @c_AreaKey01) --PPA 20/11/2025 fixing to not provide orders with pickdetail is missing
+            )
                AND TD2.TaskType IN ('FCP', 'FCP1')
                AND TD2.PickMethod = 'PP'
                AND LOC2.PutawayZone = LOC.PutawayZone
@@ -509,7 +510,7 @@ BEGIN
          INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON PD.StorerKey = ORM.StorerKey AND PD.OrderKey = ORM.OrderKey
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
-		 INNER JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD.FinalLOC = LOC2.Loc AND LOC2.Facility = @cFacility
+         INNER JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD.FinalLOC = LOC2.Loc AND LOC2.Facility = @cFacility
          INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
          WHERE TD.StorerKey = @cStorerKey
             AND
@@ -521,7 +522,7 @@ BEGIN
             AND TD.TaskType IN ('RPF', 'RP1')
             AND TD.PickMethod IN ('PP', 'FP')
             AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
-			AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE'))
+            AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE'))
             AND ((LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
             --OR It is Marshalling lane
              OR (EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
@@ -585,14 +586,14 @@ BEGIN
          INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
-		 INNER JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD.FinalLOC = LOC2.Loc AND LOC2.Facility = @cFacility
+       INNER JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD.FinalLOC = LOC2.Loc AND LOC2.Facility = @cFacility
        WHERE TD.AreaKey = @c_AreaKey01
          AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
          AND TD.TaskType IN ('RPF','RPF1','RP1')
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
          AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
-		 AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE'))
+       AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE'))
          AND TD.PickMethod IN ('PP', 'FP')
          AND TD.StorerKey = @cStorerKey
          AND (
@@ -614,10 +615,10 @@ BEGIN
                   AND TD2.AreaKey = TD.AreaKey
                   AND TD2.TaskType IN ('RPF','RPF1','RP1')
                   AND TD2.Status = 'S'
-				  AND TD.TaskType IN ('FCP','FCP1')
-				  AND TD2.OrderKey <> ''
+              AND TD.TaskType IN ('FCP','FCP1')
+              AND TD2.OrderKey <> ''
          )
-		 AND NOT EXISTS (SELECT 1
+       AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
                      ) --V1.0.1(1)
@@ -891,14 +892,14 @@ BEGIN
       END
       ELSE
       BEGIN
-	     SELECT @fPalletWeight = SUM(@nQty * SKU.STDGROSSWGT)
-		 FROM TaskDetail TD WITH (NOLOCK)
-		 INNER JOIN dbo.SKU WITH(NOLOCK) ON TD.StorerKey = SKU.StorerKey AND TD.SKU = SKU.SKU
-		 WHERE TD.FromLoc = @cFromLoc
-		 AND TD.FromID = @cFromID
-		 AND TD.SKU = @cSKU
-		 AND TD.Storerkey = @cStorerKey
-		 AND TD.TaskDetailKey = @cTaskDetailKey
+        SELECT @fPalletWeight = SUM(@nQty * SKU.STDGROSSWGT)
+       FROM TaskDetail TD WITH (NOLOCK)
+       INNER JOIN dbo.SKU WITH(NOLOCK) ON TD.StorerKey = SKU.StorerKey AND TD.SKU = SKU.SKU
+       WHERE TD.FromLoc = @cFromLoc
+       AND TD.FromID = @cFromID
+       AND TD.SKU = @cSKU
+       AND TD.Storerkey = @cStorerKey
+       AND TD.TaskDetailKey = @cTaskDetailKey
 
          /*SELECT @fPalletWeight = SUM(@nQty * SKU.STDGROSSWGT)
          FROM dbo.LOTXLOCXID LLI WITH (NOLOCK)
@@ -1807,7 +1808,7 @@ BEGIN
          TD.EditWho = @c_UserID,
          TD.Groupkey = FORMAT(GETDATE(), 'ddMMyyHHmm'),
          TD.TrafficCop = NULL,
-		 TD.StatusMsg = ''
+         TD.StatusMsg = ''
       FROM dbo.TaskDetail TD
       INNER JOIN @tTaskCandidate TC ON TD.TaskDetailKey = TC.TaskDetailKey
       WHERE TD.StorerKey = @cStorerKey
@@ -1821,6 +1822,28 @@ BEGIN
       SET @c_errmsg = rdt.rdtgetmessage( @n_err, @cLangCode, 'DSP') --Update TaskDetail Fail
       GOTO Fail
    END CATCH
+
+   DECLARE @cListKey NVARCHAR(10),@cGroupKey NVARCHAR(20)
+
+   SELECT @cListKey = TD.ListKey,@cGroupKey = TD.Groupkey,@cFromLOC = TD.FromLOC
+   FROM TASKDETAIL TD WITH(NOLOCK) 
+   JOIN LOC LOC (NOLOCK) ON TD.FromLOC = LOC.Loc AND LOC.Facility = @cFacility
+   JOIN AREADETAIL AD (NOLOCK) ON AD.AreaKey = 'MOTHERSONS' AND LOC.PutawayZone = AD.PutawayZone
+   WHERE TD.StorerKey = @cStorerKey
+   AND TD.TaskType LIKE 'RP%'
+   AND TD.Status = '3'
+   AND TD.UserKey = @c_UserID
+
+   IF ISNULL(@cListKey,'') <> '' AND ISNULL(@cGroupKey,'') <> ''
+   BEGIN
+      UPDATE TASKDETAIL
+      SET STATUS = '3', UserKey = @c_UserID,ListKey = @cListKey,Groupkey = @cGroupKey
+      WHERE STATUS = '0'
+      AND (UserKey = '' AND UserKeyOverRide IN ('', @c_UserID) )
+      AND StorerKey = @cStorerKey
+      AND TaskType LIKE 'RP%'
+      AND FromLOC = @cFromLOC
+   END
 
    IF @bDebug = 1
    BEGIN
