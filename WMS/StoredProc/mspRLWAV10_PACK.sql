@@ -544,7 +544,6 @@ BEGIN
                  +                    ' AND SKU.Sku = PICKDETAIL.Sku'
                  +  ' JOIN PACK (NOLOCK) ON  PACK.Packkey = SKU.Packkey'
                  +  ' JOIN LOC (NOLOCK) ON LOC.Loc = PICKDETAIL.ToLoc'                 
-                 +  ' JOIN ORDERDETAIL (NOLOCK)  ON ORDERDETAIL.Orderkey = ORDERS.Orderkey'
                  +  ' CROSS APPLY (SELECT MIN(val) AS MinVal' 
                  +                    ' , SUM(val) - MIN(val) - MAX(val) AS MidVal'
                  +                    ' , MAX(val) AS MaxVal'                        
@@ -557,8 +556,8 @@ BEGIN
                  +                     ' , [Type] = MIN(w.[Type])'
                  +                     ' , VASQty = MAX(CASE WHEN w.[Type] = ''PU'' THEN w.Qty ELSE 0 END)'
                  +                ' FROM WORKORDERDETAIL w (NOLOCK)'
-                 +                ' WHERE w.ExternWorkOrderKey = ORDERDETAIL.Orderkey'
-                 +                ' AND w.ExternLineNo = ORDERDETAIL.OrderLineNumber'
+                 +                ' WHERE w.ExternWorkOrderKey = PICKDETAIL.Orderkey'
+                 +                ' AND w.ExternLineNo = PICKDETAIL.OrderLineNumber'
                  +                ' AND w.[Type] IN (''PA'',''PD'',''PU'')'
                  +              ' ) AS WORKORDERDETAIL'
                  +  ' CROSS APPLY ( SELECT SumSKUQty = FLOOR(SUM(PD.Qty)/PQI.PackQtyIndicator)'
@@ -794,7 +793,7 @@ BEGIN
             ,  pcz.UOM               
             ,  pcz.Qty               
             ,  pcz.DropID           
-            ,  PickRefkey = ''      
+            ,  PickRefkey = pcz.PickDetailKey      
             ,  RefPickMode = ''     
             ,  Notes      = ''                
             ,  [Status]   = '9'
@@ -853,7 +852,7 @@ BEGIN
          ORDER BY cd.CartonSeqNo DESC
 
          SET @cur_PCKGRPS = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT top 1  RowID_pcz = MIN(pcz.RowID) 
+         SELECT   RowID_pcz = MIN(pcz.RowID) 
                ,  pcz.HardCTNGrpNo
                ,  pcz.SortCTNGrpNo
                ,  pcz.BUSR7
@@ -1176,6 +1175,17 @@ BEGIN
                                  )
                      BEGIN
                         --Get smaller carton if any and close carton
+                        IF NOT EXISTS ( SELECT 1 
+                                        FROM #OptimizeItemToPack )
+                        BEGIN
+                           INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
+                           SELECT Storerkey, Sku, cd.[Length], cd.Width, cd.Height, cd.Qty
+                           FROM #CartonDetail AS cd
+                           WHERE cd.Orderkey = @c_Orderkey
+                           AND   cd.CartonSeqNo = @n_CartonSeqNo
+                           AND   cd.[Status] = '0'
+                        END
+
                         GOTO CLOSE_CTN
                      END
 
@@ -1233,24 +1243,30 @@ BEGIN
                         SET @n_ItemCBM = @n_StdCube*@n_Qty_PI
                         SET @n_ItemWgt = @n_StdGrossWgt*@n_Qty_PI
                         
-                        IF @n_CBMLeftToFulFill > @n_ItemCBM
+                        IF @n_StdCube > 0
                         BEGIN
-                           SET @n_QtyCBM_PI = FLOOR(@n_ItemCBM/@n_StdCube) 
-                        END
-                        ELSE
-                        BEGIN
-                           SET @n_QtyCBM_PI = FLOOR(@n_CBMLeftToFulFill/@n_StdCube) 
+                           IF @n_CBMLeftToFulFill > @n_ItemCBM
+                           BEGIN
+                              SET @n_QtyCBM_PI = FLOOR(@n_ItemCBM/@n_StdCube) 
+                           END
+                           ELSE
+                           BEGIN
+                              SET @n_QtyCBM_PI = FLOOR(@n_CBMLeftToFulFill/@n_StdCube) 
+                           END
                         END
 
-                        IF @n_WgtLeftToFulFill > @n_ItemWgt
+                        IF @n_StdGrossWgt > 0
                         BEGIN
-                           SET @n_QtyWgt_PI = FLOOR(@n_ItemWgt/@n_StdGrossWgt) 
+                           IF @n_WgtLeftToFulFill > @n_ItemWgt
+                           BEGIN
+                              SET @n_QtyWgt_PI = FLOOR(@n_ItemWgt/@n_StdGrossWgt) 
+                           END
+                           ELSE
+                           BEGIN
+                              SET @n_QtyWgt_PI = FLOOR(@n_WgtLeftToFulFill/@n_StdGrossWgt)
+                           END
                         END
-                        ELSE
-                        BEGIN
-                           SET @n_QtyWgt_PI = FLOOR(@n_WgtLeftToFulFill/@n_StdGrossWgt)
-                        END
-                     
+
                         IF @n_QtyWgt_PI < @n_QtyCBM_PI
                         BEGIN
                            SET @n_QtyToPack_PI = @n_QtyWgt_PI
@@ -1320,6 +1336,7 @@ BEGIN
                            IF @b_Success = 0
                            BEGIN
                               SET @n_Continue = 3
+                              BREAK
                            END
                            
                            IF @n_Continue = 1
@@ -1698,6 +1715,7 @@ BEGIN
                         IF @b_Success = 0
                         BEGIN
                            SET @n_Continue = 3
+                           BREAK
                         END
                         
                         IF @n_Continue = 1
@@ -2177,7 +2195,7 @@ BEGIN
                      ,cd.Sku
                      ,Qty    = CASE WHEN cd.IsVas = 1 AND cd.UOM >= '6' 
                                     THEN 0
-                                    WHEN cd.[Audit] = 0 
+                                    WHEN cd.[Audit] = 1 
                                     THEN 0 
                                     ELSE SUM(cd.Qty) END
                      ,ExpQty = CASE WHEN cd.IsVas = 1 AND cd.UOM >= '6' 
