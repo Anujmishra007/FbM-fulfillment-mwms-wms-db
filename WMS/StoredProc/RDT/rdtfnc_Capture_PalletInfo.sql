@@ -792,13 +792,7 @@ BEGIN
       SET @nStep = @nStep - 1
    END
 
-   -- FCR-9672: If ExtScnSP is configured, go to Step_99 (skip update here)
-   INSERT INTO @tExtScnData (Variable, Value) values ('@cPalletKey', @cPalletKey)
-   INSERT INTO @tExtScnData (Variable, Value) values ('@cLength', @cLength)
-   INSERT INTO @tExtScnData (Variable, Value) values ('@cWidth', @cWidth)
-   INSERT INTO @tExtScnData (Variable, Value) values ('@cHeight', @cHeight)
-   INSERT INTO @tExtScnData (Variable, Value) values ('@cWeight', @cWeight)  
-
+   -- FCR-9672: If ExtScnSP is configured, go to Step_99
    IF @cExtScnSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
