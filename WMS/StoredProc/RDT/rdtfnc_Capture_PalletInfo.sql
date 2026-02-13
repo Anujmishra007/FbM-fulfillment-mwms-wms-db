@@ -702,12 +702,12 @@ BEGIN
          GOTO Quit
       END
 
-      UPDATE dbo.Pallet WITH (ROWLOCK) SET 
+      UPDATE dbo.Pallet WITH (ROWLOCK) SET
          Length = @cLength,
          Width = @cWidth,
          Height = @cHeight,
-         GrossWgt = @cWeight,      
-         PalletType = CASE WHEN  @cStackability = '1' THEN 'YES' ELSE 'NO' END 
+         GrossWgt = @cWeight,
+         PalletType = CASE WHEN  @cStackability = '1' THEN 'YES' ELSE 'NO' END
       WHERE PalletKey = @cPalletKey
       AND   StorerKey = @cStorerKey
       AND   [Status] < '9'
@@ -719,6 +719,15 @@ BEGIN
          SET @cOutField05 = ''
          EXEC rdt.rdtSetFocusField @nMobile, 5
          GOTO Quit
+      END
+
+      -- FCR-9672: If ExtScnSP is configured, go to Step_99 (skip update here)
+      IF @cExtScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         BEGIN
+            GOTO Step_99
+         END
       END
 
       -- Extended update
@@ -750,26 +759,6 @@ BEGIN
                @cPalletKey, @cDefaultLength, @cDefaultWidth, @cDefaultHeight, @cDefaultWeight, @nErrNo OUTPUT, @cErrMsg OUTPUT
             IF @nErrNo <> 0
                GOTO QUIT
-         END
-      END
-
-      -- FCR-9672: If ExtScnSP = 'rdt_825ExtScn03', go to confirmation screen instead of updating directly
-      IF @cExtScnSP = 'rdt_825ExtScn03'
-      BEGIN
-         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-         BEGIN
-            -- Save captured values to V_String columns before calling ExtScn03
-            UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET
-               V_String6  = @cWeight,
-               V_String7  = @cLength,
-               V_String8  = @cWidth,
-               V_String9  = @cHeight,
-               V_String17 = @cStackability,
-               V_String41 = @cPalletKey
-            WHERE Mobile = @nMobile
-
-            SET @nAction = 3
-            GOTO Step_99
          END
       END
 
