@@ -178,6 +178,7 @@ BEGIN
 	  ) a
    WHERE od.storerkey = 'JCB'
       AND od.status IN ('2','3')
+	  AND od.OrderGroup <> 'XDOCK' 
 	  AND od.DeliveryDate <= @delivery_date_limit
    ORDER BY od.DeliveryDate ASC
 END

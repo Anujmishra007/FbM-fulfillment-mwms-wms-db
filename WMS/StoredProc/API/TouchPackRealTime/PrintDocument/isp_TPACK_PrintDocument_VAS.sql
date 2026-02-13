@@ -4,13 +4,13 @@ SET QUOTED_IDENTIFIER OFF
 GO
   
 /*********************************************************************************/
-/* Store procedure: isp_TPACK_PrintDocument_Std                                  */
+/* Store procedure: isp_TPACK_PrintDocument_VAS                                  */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
 /* Purpose        : Specific reports printing function by VAS Code               */
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
-/* 2025-11-14   1.0  YLI237     UWP-43135                                        */
+/* 2025-12-24   1.0  YLI237     UWP-43509                                        */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_VAS] (
@@ -24,7 +24,7 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_VAS] (
    , @cStorerKey           NVARCHAR(15)      = ''
    , @cFacility            NVARCHAR(5)       = ''
    , @nCartonNo            INT               = 0
-   , @cSku                 NVARCHAR(50)      = ''
+   , @cSKU                 NVARCHAR(50)      = ''
    , @c_UserID             NVARCHAR(256)     = ''  
    , @cLangCode            NVARCHAR(3)       = ''
    , @bIsLastCarton        BIT               = 0
@@ -32,6 +32,8 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_VAS] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
+   , @nCopy               INT               = 0
+   , @bIsAutoPrint         BIT               = 0
    , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
    , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
    , @b_Success            INT               = 0   OUTPUT  
@@ -66,6 +68,7 @@ BEGIN
          , @cBillToKey           NVARCHAR(50)
          , @cFinalUDF01          NVARCHAR(MAX)
          , @cVASPrintUDF01       NVARCHAR(MAX)
+         , @cReportLine          NVARCHAR(50)
    
    DECLARE @cFieldName1       NVARCHAR(MAX)
          , @cFieldName2       NVARCHAR(MAX)
@@ -79,12 +82,15 @@ BEGIN
          , @IsAggregate2      BIT = 0
          , @IsAggregate3      BIT = 0
          , @IsAggregate4      BIT = 0
+         , @bIsCartonLevel    BIT = 0
+         , @Option2           NVARCHAR(250)
+
 
    -- Variables for workflow implementation
-   DECLARE @cTypeFromWOD      NVARCHAR(30)
-         , @cUDF01Value       NVARCHAR(MAX)
-         , @cParsedReportID   NVARCHAR(10)
-         , @cParsedReportLineNo NVARCHAR(10)
+   -- DECLARE @cTypeFromWOD      NVARCHAR(30)
+   --       , @cUDF01Value       NVARCHAR(MAX)
+
+   
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
    SET @c_ErrMsg           = '' 
@@ -93,10 +99,27 @@ BEGIN
    SET @cModuleID          = 'TPPACK'
    SET @cCustomLabelSP     = ''
 
-   SELECT @cConsigneeKey = ConsigneeKey, @cMarkForKey = MarkForKey, @cBillToKey = BillToKey
-   FROM Orders (NOLOCK)
-   WHERE OrderKey = @cOrderKey
-     AND StorerKey = @cStorerKey
+   IF @bIsAutoPrint IS NULL
+   BEGIN
+      SET @bIsAutoPrint = 0
+   END
+
+   
+   SELECT @Option2 = OPTION2 FROM STORERCONFIG (NOLOCK) WHERE CONFIGKEY = 'TPS-VAS' AND STORERKEY = @cStorerKey
+
+   IF @Option2 = 'Carton'
+   BEGIN
+      SET @bIsCartonLevel = 1
+   END
+   ELSE
+   BEGIN
+      SET @bIsCartonLevel = 0
+   END
+   
+   -- SELECT @cConsigneeKey = ConsigneeKey, @cMarkForKey = MarkForKey, @cBillToKey = BillToKey
+   -- FROM Orders (NOLOCK)
+   -- WHERE OrderKey = @cOrderKey
+   --   AND StorerKey = @cStorerKey
 
    DECLARE @VASReports TABLE (
       ReportID         NVARCHAR(10),
@@ -110,126 +133,76 @@ BEGIN
       KeyFieldName4    NVARCHAR(MAX)
    )
 
-   -- Group WorkOrderDetails by Type
-   -- Process each type group through the workflow
-   DECLARE type_cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT DISTINCT Type
-   FROM WorkOrderDetail (NOLOCK)
-   WHERE ExternWorkOrderKey = @cOrderKey
-     AND StorerKey = @cStorerKey
-     AND (@cSku = '' OR SKU = @cSku)
-
-   OPEN type_cursor
-   FETCH NEXT FROM type_cursor INTO @cTypeFromWOD
-
-   WHILE @@FETCH_STATUS = 0
+   IF IsNull(@cSKU,'') <> '' 
    BEGIN
-      -- Initialize variables
-      SET @cUDF01Value = ''
-      SET @cUDF04Value = ''
-      SET @cFinalUDF01 = ''
+      INSERT INTO @VASReports (ReportID, ReportLineNo, PrintSource, DefaultPrinterID, IsPaperPrinter, KeyFieldName1, KeyFieldName2, KeyFieldName3, KeyFieldName4)
+      EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
+           @cType       = @cType,
+           @cStorerKey  = @cStorerKey,
+           @cFacility   = @cFacility,
+           @cOrderKey   = @cOrderKey,
+           @cPickSlipNo = @cPickSlipNo,
+           @nCartonNo   = @nCartonNo,
+           @cSKU        = @cSKU,
+           @isSKUScan      = 1,
+           @cLangCode   = @cLangCode,
+           @bIsAutoPrint = @bIsAutoPrint
 
-      -- Query CodeLookup table for the current type
-      SELECT @cUDF01Value = CL.UDF01
-           , @cUDF04Value = CL.UDF04
-      FROM CodeLkup CL (NOLOCK)
-      WHERE CL.Listname = 'WKOrdType'
-        AND CL.Code = @cTypeFromWOD
-        AND (CL.StorerKey = '' OR CL.StorerKey = @cStorerKey)
-      
-      -- Check if we got a UDF01 value
-      IF @cUDF01Value IS NOT NULL AND @cUDF01Value <> ''
-      BEGIN
-         SET @cFinalUDF01 = @cUDF01Value
-
-         -- Logic for UDF04 check
-         IF @cUDF04Value <> 'pricelb'
-         BEGIN
-            SET @cVASPrintUDF01 = ''
-            SET @cCode2 = ''
-
-            SELECT @cVASPrintUDF01 = UDF01, @cCode2 = Code2
-            FROM CodeLkup (NOLOCK)
-            WHERE Listname = 'VASPrintCP'
-              AND Long = @cTypeFromWOD
-              AND Short = @cUDF04Value
-              AND StorerKey = @cStorerKey
-
-            IF @@ROWCOUNT > 0
-            BEGIN
-               IF @cCode2 = @cConsigneeKey OR @cCode2 = @cMarkForKey OR @cCode2 = @cBillToKey
-               BEGIN
-                  SET @cFinalUDF01 = @cVASPrintUDF01
-               END
-            END
-         END
-
-         -- Parse UDF01 value to extract ReportID and ReportLineNo
-         -- Format: WMReportDetail.ReportID/WMReportDetail.ReportLineNo
-         
-         -- Check if the format is valid (contains '/')
-         IF CHARINDEX('/', @cFinalUDF01) = 0
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_ErrNo = 14251
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Invalid UDF01 format in CodeLkup. Expected format: ReportID/ReportLineNo'
-            GOTO EXIT_SP
-         END
-         
-         -- Check if there's content before and after the '/'
-         IF CHARINDEX('/', @cFinalUDF01) = 1 OR CHARINDEX('/', @cFinalUDF01) = LEN(@cFinalUDF01)
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_ErrNo = 14251
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Invalid UDF01 format in CodeLkup. Expected format: ReportID/ReportLineNo'
-            GOTO EXIT_SP
-         END
-         
-         SET @cParsedReportID = LEFT(@cFinalUDF01, CHARINDEX('/', @cFinalUDF01) - 1)
-         SET @cParsedReportLineNo = SUBSTRING(@cFinalUDF01, CHARINDEX('/', @cFinalUDF01) + 1, LEN(@cFinalUDF01))
-         
-         -- Check if ReportLineNo is not empty
-         IF @cParsedReportLineNo = ''
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_ErrNo = 14251
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Invalid ReportLineNo format in CodeLkup. Expected non-empty value'
-            GOTO EXIT_SP
-         END
-
-         -- Retrieve Report Details
-         INSERT INTO @VASReports (ReportID, ReportLineNo, PrintSource, DefaultPrinterID, IsPaperPrinter, KeyFieldName1, KeyFieldName2, KeyFieldName3, KeyFieldName4)
-         SELECT WMR.ReportID,
-                WMRD.ReportLineNo,
-                IIF(WMRD.PrintType = 'LOGIREPORT', 'JReport', 'WMReport'),
-                ISNULL(WMRD.DefaultPrinterID, ''),
-                WMRD.IsPaperPrinter,
-                ISNULL(WMR.KeyFieldName1, ''),
-                ISNULL(WMR.KeyFieldName2, ''),
-                ISNULL(WMR.KeyFieldName3, ''),
-                ISNULL(WMR.KeyFieldName4, '')
-         FROM WMReportDetail WMRD (NOLOCK)
-         JOIN WMReport WMR (NOLOCK) ON WMR.ReportID = WMRD.ReportID AND WMR.ModuleID = @cModuleID
-         WHERE WMRD.ReportID = @cParsedReportID
-           AND WMRD.ReportLineNo = @cParsedReportLineNo
-           AND WMRD.StorerKey = @cStorerKey
-           AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
-      END
-
-      FETCH NEXT FROM type_cursor INTO @cTypeFromWOD
+           IF @@ROWCOUNT = 0
+           BEGIN
+              SET @n_Continue = 3
+              SET @n_ErrNo = 14258
+              SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Invalid UDF01 format in CodeLkup. Expected format: ReportID/ReportLineNo'
+              GOTO EXIT_SP
+           END
    END
+   ELSE
+   BEGIN
+      -- PrintDoc check
+      -- IF @bPrintLabelFlag = 1 AND bPrintPaperFlag=1
+      -- Set @bIsPrintDoc = 0
+      -- ELSE
+      -- Set @bIsPrintDoc = 1
 
-   CLOSE type_cursor
-   DEALLOCATE type_cursor
+
+      DECLARE sku_cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT SKU
+      FROM PACKDETAIL (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+        AND PickSlipNo = @cPickSlipNo
+        AND CartonNo = @nCartonNo
+
+      OPEN sku_cursor
+      DECLARE @loopSKU NVARCHAR(50)
+      FETCH NEXT FROM sku_cursor INTO @loopSKU
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         INSERT INTO @VASReports (ReportID, ReportLineNo, PrintSource, DefaultPrinterID, IsPaperPrinter, KeyFieldName1, KeyFieldName2, KeyFieldName3, KeyFieldName4)
+         EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
+              @cType       = @cType,
+              @cStorerKey  = @cStorerKey,
+              @cFacility   = @cFacility,
+              @cOrderKey   = @cOrderKey,
+              @cPickSlipNo = @cPickSlipNo,
+              @nCartonNo   = @nCartonNo,
+              @cSKU        = @loopSKU,
+              @cLangCode   = @cLangCode,
+              @bIsAutoPrint = @bIsAutoPrint,
+              @bIsCartonLevel = @bIsCartonLevel
+         FETCH NEXT FROM sku_cursor INTO @loopSKU
+      END
+      CLOSE sku_cursor
+      DEALLOCATE sku_cursor
+   END
 
    -- Check if any VAS reports were found
-   IF NOT EXISTS (SELECT 1 FROM @VASReports)
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_ErrNo = 14252
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'No VAS reports found for the given work order and storer'
-      GOTO EXIT_SP
-   END
+   -- IF NOT EXISTS (SELECT 1 FROM @VASReports)
+   -- BEGIN
+   --    SET @n_Continue = 3
+   --    SET @n_ErrNo = 14252
+   --    SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'No VAS reports found for the given work order and storer'
+   --    GOTO EXIT_SP
+   -- END
 
    -- Continue with the rest of the existing logic for actual printing
    IF @bPrintLabelFlag = 1
@@ -246,12 +219,12 @@ BEGIN
          IF EXISTS (SELECT 1 FROM @VASReports WHERE IsPaperPrinter <> 'Y')
          BEGIN
             DECLARE CUR_VASLBL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT ReportID, PrintSource, DefaultPrinterID, KeyFieldName1, KeyFieldName2, KeyFieldName3, KeyFieldName4
+            SELECT ReportID, ReportLineNo,PrintSource, DefaultPrinterID, KeyFieldName1, KeyFieldName2, KeyFieldName3, KeyFieldName4
             FROM @VASReports
             WHERE IsPaperPrinter <> 'Y'
             ORDER BY ReportID
             OPEN CUR_VASLBL
-            FETCH NEXT FROM CUR_VASLBL INTO @cReportID, @cPrintSource, @cDefaultPrinterID, @cFieldName1, @cFieldName2, @cFieldName3, @cFieldName4
+            FETCH NEXT FROM CUR_VASLBL INTO @cReportID, @cReportLine ,@cPrintSource, @cDefaultPrinterID, @cFieldName1, @cFieldName2, @cFieldName3, @cFieldName4
             WHILE @@FETCH_STATUS = 0
             BEGIN
                SET @IsAggregate1 = CASE WHEN @cFieldName1 <> '' AND (
@@ -400,11 +373,12 @@ BEGIN
                      , @c_UserName     = @c_UserID   
                      , @c_ComputerName = ''
                      , @c_PrinterID    = @cLabelPrinter         
-                     , @n_NoOfCopy     = '1'     
+                     , @n_NoOfCopy     = @nCopy      
                      , @c_KeyValue1    = @cParams1        
                      , @c_KeyValue2    = @cParams2        
                      , @c_KeyValue3    = @cParams3     
                      , @c_KeyValue4    = @cParams4    
+                     , @c_KeyValue5    = @cReportLine
                      , @b_Success      = @b_Success         OUTPUT      
                      , @n_Err          = @n_ErrNo           OUTPUT
                      , @c_ErrMsg       = @c_ErrMsg          OUTPUT
@@ -418,7 +392,7 @@ BEGIN
                   GOTO EXIT_SP  
                END
                SET @cPrintLabelJobIDs = IIF(@cPrintLabelJobIDs <> '', @cPrintLabelJobIDs + '|' + @ctempLabelJobIDs, @ctempLabelJobIDs)
-               FETCH NEXT FROM CUR_VASLBL INTO @cReportID, @cPrintSource, @cDefaultPrinterID, @cFieldName1, @cFieldName2, @cFieldName3, @cFieldName4
+               FETCH NEXT FROM CUR_VASLBL INTO @cReportID, @cReportLine, @cPrintSource, @cDefaultPrinterID, @cFieldName1, @cFieldName2, @cFieldName3, @cFieldName4
             END
             CLOSE CUR_VASLBL
             DEALLOCATE CUR_VASLBL
@@ -486,12 +460,12 @@ BEGIN
       IF EXISTS (SELECT 1 FROM @VASReports WHERE IsPaperPrinter = 'Y')
       BEGIN
          DECLARE CUR_VASPAPER CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT ReportID, PrintSource, DefaultPrinterID, KeyFieldName1, KeyFieldName2, KeyFieldName3, KeyFieldName4
+         SELECT ReportID, PrintSource, ReportLineNo, DefaultPrinterID, KeyFieldName1, KeyFieldName2, KeyFieldName3, KeyFieldName4
          FROM @VASReports
          WHERE IsPaperPrinter = 'Y'
          ORDER BY ReportID
          OPEN CUR_VASPAPER
-         FETCH NEXT FROM CUR_VASPAPER INTO  @cReportID, @cPrintSource, @cDefaultPrinterID, @cFieldName1, @cFieldName2, @cFieldName3, @cFieldName4
+         FETCH NEXT FROM CUR_VASPAPER INTO  @cReportID, @cReportLine,@cPrintSource, @cDefaultPrinterID, @cFieldName1, @cFieldName2, @cFieldName3, @cFieldName4
          WHILE @@FETCH_STATUS = 0
          BEGIN
             SET @IsAggregate1 = CASE WHEN @cFieldName1 <> '' AND (
@@ -611,7 +585,8 @@ BEGIN
                   , @c_KeyValue1    = @cParams1        
                   , @c_KeyValue2    = @cParams2        
                   , @c_KeyValue3    = @cParams3     
-                  , @c_KeyValue4    = @cParams4    
+                  , @c_KeyValue4    = @cParams4  
+                  , @c_KeyValue5    = @cReportLine
                   , @b_Success      = @b_Success            OUTPUT      
                   , @n_Err          = @n_ErrNo              OUTPUT
                   , @c_ErrMsg       = @c_ErrMsg             OUTPUT
@@ -624,10 +599,47 @@ BEGIN
                SET @n_Continue = 3 
                GOTO EXIT_SP  
             END   
-            FETCH NEXT FROM CUR_VASPAPER INTO  @cReportID, @cPrintSource, @cDefaultPrinterID, @cFieldName1, @cFieldName2, @cFieldName3, @cFieldName4
+            FETCH NEXT FROM CUR_VASPAPER INTO  @cReportID, @cReportLine, @cPrintSource, @cDefaultPrinterID, @cFieldName1, @cFieldName2, @cFieldName3, @cFieldName4
          END
          CLOSE CUR_VASPAPER
          DEALLOCATE CUR_VASPAPER
+      END
+   END
+
+   -- Execute Standard Print Document Logic
+   IF IsNull(@cSKU,'') = ''
+   BEGIN
+      IF (@bIsAutoPrint = 0) OR NOT EXISTS (SELECT 1 FROM @VASReports)
+      BEGIN
+         EXEC [API].[isp_TPACK_PrintDocument_Std] 
+              @cType             = @cType
+            , @bIsDiscrete       = @bIsDiscrete
+            , @bIsCustom         = @bIsCustom
+            , @cPickSlipNo       = @cPickSlipNo
+            , @cOrderKey         = @cOrderKey
+            , @cLoadKey          = @cLoadKey
+            , @cDropID           = @cDropID
+            , @cStorerKey        = @cStorerKey
+            , @cFacility         = @cFacility
+            , @nCartonNo         = @nCartonNo
+            , @c_UserID          = @c_UserID
+            , @cLangCode         = @cLangCode
+            , @bIsLastCarton     = @bIsLastCarton
+            , @bPrintLabelFlag   = @bPrintLabelFlag
+            , @bPrintPaperFlag   = @bPrintPaperFlag
+            , @cLabelPrinter     = @cLabelPrinter
+            , @cPaperPrinter     = @cPaperPrinter
+            , @cPrintLabelJobIDs = @cPrintLabelJobIDs OUTPUT
+            , @cPrintPaperJobIDs = @cPrintPaperJobIDs OUTPUT
+            , @b_Success         = @b_Success OUTPUT
+            , @n_ErrNo           = @n_ErrNo OUTPUT
+            , @c_ErrMsg          = @c_ErrMsg OUTPUT
+   
+         IF @n_ErrNo <> 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO EXIT_SP
+         END
       END
    END
 

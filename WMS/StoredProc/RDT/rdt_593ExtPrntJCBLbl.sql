@@ -95,6 +95,9 @@ BEGIN
 			   ,NULL
    */   
    --
+   IF (@cID IS NOT NULL AND LTRIM(RTRIM(@cID)) <> '')
+   BEGIN
+   --	
    IF @nInputKey = 1
    BEGIN      	 	    
       -- GET Taskdetailkey		  
@@ -281,6 +284,7 @@ BEGIN
 	     GOTO Quit				
 	  END	 
   END --@nInputKey = 1
+  END --empty @ID	
 Quit:
 END
 GO

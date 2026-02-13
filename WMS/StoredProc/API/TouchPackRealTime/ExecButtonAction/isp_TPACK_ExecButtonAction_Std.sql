@@ -14,6 +14,7 @@ GO
 /* 2026-01-14   1.1  Sean02     UWP-46904 - Only update unpacked items           */
 /*                                (CaseID empty)                                 */
 /* 2026-01-16   1.2  Sean03     UWP-47102 - Fix Scan by Pickslip                 */
+/* 2026-02-04   1.3  Sean03     UWP-42549 - type= Pickslip  & isCustom = 1       */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExecButtonAction_Std] (
@@ -99,17 +100,31 @@ BEGIN
       END
       ELSE
       BEGIN
-         -- Wave/Load based update
-         UPDATE pd WITH (ROWLOCK)
-         SET pd.Status = 4
-            ,pd.Qty = CASE WHEN @bUnallocate = 1 THEN 0 ELSE pd.Qty END
-         FROM PICKDETAIL pd 
-         INNER JOIN @tDiffList d ON pd.SKU = d.SKU
-         INNER JOIN LOADPLANDETAIL lpd WITH (NOLOCK) 
-            ON lpd.OrderKey = pd.OrderKey AND lpd.LoadKey = @cLoadKey
-         WHERE d.DiffQty > 0
-            AND pd.Status <> 4
-            AND ISNULL(pd.CaseID, '') = ''
+         IF @bIsCustom = 0
+         BEGIN
+            UPDATE pd WITH (ROWLOCK)
+            SET pd.Status = 4
+               ,pd.Qty = CASE WHEN @bUnallocate = 1 THEN 0 ELSE pd.Qty END
+            FROM PICKDETAIL pd 
+            INNER JOIN @tDiffList d ON pd.SKU = d.SKU
+            INNER JOIN LOADPLANDETAIL lpd WITH (NOLOCK) 
+               ON lpd.OrderKey = pd.OrderKey AND lpd.LoadKey = @cLoadKey
+            WHERE d.DiffQty > 0
+               AND pd.Status <> 4
+               AND ISNULL(pd.CaseID, '') = ''
+         End
+         ELSE -- Sean03 S
+         BEGIN
+            UPDATE pd WITH (ROWLOCK)
+            SET pd.Status = 4
+               ,pd.Qty = CASE WHEN @bUnallocate = 1 THEN 0 ELSE pd.Qty END
+            FROM PICKDETAIL pd 
+            INNER JOIN @tDiffList d ON pd.SKU = d.SKU
+            WHERE pd.PickSlipNo = @cPickSlipNo 
+               And d.DiffQty > 0
+               AND pd.Status <> 4
+               AND ISNULL(pd.CaseID, '') = ''
+         End -- Sean03 E
       END
    END
    ELSE IF @cType = 'toteid'

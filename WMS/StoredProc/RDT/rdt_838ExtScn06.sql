@@ -200,6 +200,7 @@ BEGIN
       @nScan               INT
    DECLARE @nWeight FLOAT
    DECLARE @nCartonWeight FLOAT
+   DECLARE @fCube FLOAT
 
    SELECT 
       @nCurrentStep = Step,
@@ -342,12 +343,18 @@ BEGIN
             GROUP BY PD.PickSlipNo, PD.CartonNo
 
             SELECT
-               @cOutField05 = rdt.rdtFormatFloat( [Length]),
-               @cOutField06 = rdt.rdtFormatFloat( [Width]),
-               @cOutField07 = rdt.rdtFormatFloat( [Height])
-            FROM dbo.PackInfo WITH (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-               AND CartonNo  = @nCartonNo
+               @cOutField05 = LengthUOM1,
+               @cOutField06 = WidthUOM1,
+               @cOutField07 = HeightUOM1
+            FROM dbo.PackInfo PI WITH (NOLOCK)
+            JOIN dbo.UCC UCC (NOLOCK) ON UCC.UCCNo = PI.UCCNo AND UCC.StorerKey = @cStorerKey
+            JOIN dbo.SKU SKU (NOLOCK) ON SKU.SKU = UCC.SKU AND SKU.StorerKey = @cStorerKey
+            JOIN dbo.Pack P (NOLOCK) ON P.PackKey = SKU.PackKey
+            WHERE PI.PickSlipNo = @cPickSlipNo
+               AND PI.CartonNo  = @nCartonNo
+
+            SET @fCube = CAST(ISNULL(@cOutField05,0) as FLOAT) * CAST( ISNULL(@cOutField06,0) as FLOAT) * CAST( ISNULL(@cOutField07,0) as FLOAT)
+            SET @cOutField03 = rdt.rdtFormatFloat( @fCube)
 
             SET @nAfterStep = 99
             GOTO QUIT
@@ -720,7 +727,6 @@ BEGIN
                   END
                END
 
-               DECLARE @fCube FLOAT
                DECLARE @fWeight FLOAT
                DECLARE @fCartonQty FLOAT --(cc02)
                SET @fCube = CAST( @cCube AS FLOAT)

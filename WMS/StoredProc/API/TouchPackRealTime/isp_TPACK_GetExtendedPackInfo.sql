@@ -10,7 +10,8 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-01   1.0  GCH225     Created                                          */
-/* 2025-11-27   1.0  Sean01     Add Pack Type determination                      */
+/* 2025-11-27   1.1  Sean01     Add Pack Type determination                      */
+/* 2026-02-03   1.2  JWF011     UWP-48100: Add TPS-ExtFieldDisplay Config        */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_GetExtendedPackInfo] (
      @cType                NVARCHAR(30)      = ''
@@ -45,6 +46,10 @@ BEGIN
          , @cVasSP         NVARCHAR(50)
          , @cWorkIns       NVARCHAR(4000)
          , @cVasCol1Val    NVARCHAR(250)
+
+         , @cExtFieldSP    NVARCHAR(50)
+         , @cExtFieldCol   NVARCHAR(100)
+         , @cExtFieldVal   NVARCHAR(1000)
    
    DECLARE @DynamicData TABLE (
         rowRef       INT IDENTITY(1,1) PRIMARY KEY
@@ -220,6 +225,80 @@ BEGIN
    VALUES ('PackType', @cPackType)
    -- sean01 end
 
+   -- Ext Field Display
+   SELECT TOP 1 @cExtFieldSP = sValue
+   FROM STORERCONFIG (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+   AND ConfigKey = 'TPS-ExtFieldDisplay'
+   AND sValue <> ''
+
+   IF @@ROWCOUNT = 1
+   AND @cExtFieldSP <> ''
+   AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE [Name] = @cExtFieldSP AND [type] = 'P')
+   BEGIN
+      SET @cSQL = 'EXEC API.' + @cExtFieldSP
+                + '  @cType         = @cType                 '
+                + ', @bIsDiscrete   = @bIsDiscrete           '
+                + ', @bIsCustom     = @bIsCustom             '
+                + ', @cPickSlipNo   = @cPickSlipNo           '
+                + ', @cOrderKey     = @cOrderKey             '
+                + ', @cLoadKey      = @cLoadKey              '
+                + ', @cDropID       = @cDropID               '
+                + ', @cStorerKey    = @cStorerKey            '
+                + ', @cFacility     = @cFacility             '
+                + ', @cLangCode     = @cLangCode             '
+                + ', @b_Success     = @b_Success      OUTPUT '
+                + ', @n_ErrNo         = @n_ErrNo      OUTPUT '
+                + ', @c_ErrMsg      = @c_ErrMsg       OUTPUT '
+                + ', @cExtFieldCol  = @cExtFieldCol   OUTPUT '
+                + ', @cExtFieldVal  = @cExtFieldVal   OUTPUT '
+
+      SET @cSQLParams = N'  @cType        NVARCHAR(30)          '
+                      + N', @bIsDiscrete  BIT                   '
+                      + N', @bIsCustom    BIT                   '
+                      + N', @cPickSlipNo  NVARCHAR(10)          '
+                      + N', @cOrderKey    NVARCHAR(10)          '
+                      + N', @cLoadKey     NVARCHAR(10)          '
+                      + N', @cDropID      NVARCHAR(20)          '
+                      + N', @cStorerKey   NVARCHAR(15)          '
+                      + N', @cFacility    NVARCHAR(5)           '
+                      + N', @cLangCode    NVARCHAR(10)          '
+                      + N', @b_Success    INT OUTPUT            '
+                      + N', @n_ErrNo      INT OUTPUT            '
+                      + N', @c_ErrMsg     NVARCHAR(250)  OUTPUT '
+                      + N', @cExtFieldCol NVARCHAR(100)  OUTPUT '
+                      + N', @cExtFieldVal NVARCHAR(1000) OUTPUT '
+
+      EXEC sp_executesql  @cSQL
+                        , @cSQLParams
+                        , @cType
+                        , @bIsDiscrete
+                        , @bIsCustom
+                        , @cPickSlipNo
+                        , @cOrderKey
+                        , @cLoadKey
+                        , @cDropID
+                        , @cStorerKey
+                        , @cFacility
+                        , @cLangCode
+                        , @b_Success      OUTPUT
+                        , @n_ErrNo        OUTPUT
+                        , @c_ErrMsg       OUTPUT
+                        , @cExtFieldCol   OUTPUT
+                        , @cExtFieldVal   OUTPUT
+
+      IF @b_Success = 0
+      BEGIN
+      SELECT @n_ErrNo,@c_ErrMsg
+         SET @n_ErrNo = @n_ErrNo
+         SET @c_ErrMsg = @c_ErrMsg
+         GOTO EXIT_SP
+      END
+
+      INSERT INTO @DynamicData(fieldname, fieldvalue)
+      VALUES (@cExtFieldCol, @cExtFieldVal)
+   END
+   -- Ext Field Display (END)
 
    IF NOT EXISTS (SELECT 1 FROM @DynamicData)
    BEGIN

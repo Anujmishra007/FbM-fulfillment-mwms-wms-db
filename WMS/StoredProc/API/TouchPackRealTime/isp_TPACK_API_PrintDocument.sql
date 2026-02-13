@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-09-08   1.0  GCH225     Created                                          */
+/* 2026-01-23   1.1  YLI237     Modify for UWP-45422                             */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_PrintDocument] (
@@ -58,6 +59,9 @@ BEGIN
          , @cLabelPrinter        NVARCHAR(10)
          , @cPaperPrinter        NVARCHAR(10)
          , @oPrintConfigJson     NVARCHAR(MAX)
+         , @cSKU                 NVARCHAR(100)
+         , @bIsAutoPrint         BIT
+         , @nCopy                INT
 
 
    SET @b_Success             = 0  
@@ -82,6 +86,10 @@ BEGIN
    SET @cLabelPrinter         = ''
    SET @cPaperPrinter         = ''
    SET @oPrintConfigJson      = ''
+   SET @cSKU                  = ''
+   SET @bIsAutoPrint          = 0
+   SET @nCopy                 = 1
+
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
@@ -135,6 +143,9 @@ BEGIN
                                     WHEN oPrintConfigJson IN ('{}', '[]') THEN ''
                                     ELSE oPrintConfigJson
                                 END
+         , @cSKU   = cSKU
+         , @bIsAutoPrint       = bIsAutoPrint
+         , @nCopy              = nCopy
    FROM OPENJSON(@c_RequestString)
    WITH (
 	      cType                NVARCHAR(30)
@@ -152,8 +163,14 @@ BEGIN
        , bPrintPaperFlag      BIT
        , bPrintLabelFlag      BIT
        , cLabelPrinter        NVARCHAR(30)  
+       , cPaperPrinter        NVARCHAR(30)
+       , cSKU                 NVARCHAR(100)
+       , bIsSKUScan            BIT
+       , bIsAutoPrint          BIT
+       --, nQueueID             INT
        , cPaperPrinter        NVARCHAR(30)  
        , oPrintConfigJson     NVARCHAR(MAX) AS JSON
+       , nCopy                INT
    )
 
    IF @cPickSlipNo = ''
@@ -164,13 +181,13 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @nCartonNo = 0
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_ErrNo = 11752
-      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'CartonNo cannot be empty.'
-      GOTO EXIT_SP
-   END
+   -- IF @nCartonNo = 0 AND @isSKUScan <> 1
+   -- BEGIN
+   --    SET @n_Continue = 3
+   --    SET @n_ErrNo = 11752
+   --    SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'CartonNo cannot be empty.'
+   --    GOTO EXIT_SP
+   -- END
 
    EXEC [API].[isp_TPACK_PrintDocument_Wrapper]
      @cType                = @cType            
@@ -191,6 +208,8 @@ BEGIN
    , @cLabelPrinter        = @cLabelPrinter
    , @cPaperPrinter        = @cPaperPrinter
    , @oPrintConfigJson     = @oPrintConfigJson
+   , @cSku                 = @cSKU
+   , @bIsAutoPrint         = @bIsAutoPrint
    , @cPrintLabelJobIDs    = @cPrintLabelJobIDs OUTPUT
    , @cPrintPaperJobIDs    = @cPrintPaperJobIDs OUTPUT
    , @b_Success            = @b_Success         OUTPUT

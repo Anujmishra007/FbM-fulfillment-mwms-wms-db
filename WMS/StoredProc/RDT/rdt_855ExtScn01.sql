@@ -27,6 +27,7 @@ GO
 /* 2025-10-15 1.8.0 CYU027    FCR-6657 validation to AVOID SHORT                       */
 /* 2025-12-01 1.9.0 NickT     UWP-44802 Correct parameter text string                  */
 /* 2025-12-01 1.9.1 NickT     UWP-44802 Return variable values to main SP              */
+/* 2026-02-13 2.0.0 NickT     UWP-48945 Calculate PickDetail.Qty in right way          */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn01] (
@@ -299,18 +300,25 @@ BEGIN
                  AND WOD.type = 'S02'
                  AND TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT) > 0)
          BEGIN
-
             DECLARE @wSKU NVARCHAR(20)
             DECLARE @wQty INT = 0
 
+            DECLARE @tPKD TABLE
+            (
+               StorerKey         NVARCHAR( 15),
+               OrderKey          NVARCHAR( 10),
+               SKU               NVARCHAR( 20),
+               Qty               INT
+            )
+
             IF EXISTS ( SELECT 1
-                 FROM dbo.ORDERS ord WITH (NOLOCK)
-                         INNER JOIN dbo.PickDetail pd WITH (NOLOCK) ON ord.OrderKey = pd.OrderKey
-                         INNER JOIN dbo.Wave w WITH (NOLOCK) ON ord.UserDefine09 = w.WaveKey
-                 WHERE ord.StorerKey = @cStorerkey
-                   AND pd.StorerKey = @cStorerkey
-                   AND (pd.CaseID = @cDropID OR pd.DropId = @cDropID)
-                   AND w.UserDefine09 = 'Y')
+                  FROM dbo.ORDERS ord WITH (NOLOCK)
+                  INNER JOIN dbo.PickDetail pd WITH (NOLOCK) ON ord.OrderKey = pd.OrderKey
+                  INNER JOIN dbo.Wave w WITH (NOLOCK) ON ord.UserDefine09 = w.WaveKey
+                  WHERE ord.StorerKey = @cStorerkey
+                     AND pd.StorerKey = @cStorerkey
+                     AND (pd.CaseID = @cDropID OR pd.DropId = @cDropID)
+                     AND w.UserDefine09 = 'Y')
             BEGIN -- Automation
                SELECT TOP 1
                   @wSKU = W.SKU,
@@ -322,20 +330,29 @@ BEGIN
                         SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) AS WorkOrderQty,
                         SUM(pd.Qty) AS PickQty
                      FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
-                             INNER JOIN dbo.PackHeader ph WITH(NOLOCK)
-                                        ON (WOD.StorerKey = ph.StorerKey AND WOD.ExternWorkOrderKey = ph.OrderKey)
-                             INNER JOIN dbo.PackDetail pd WITH(NOLOCK)
-                                        ON (ph.StorerKey = pd.StorerKey AND ph.PickSlipNo = pd.PickSlipNo AND WOD.WkOrdUdef1 = Pd.SKU)
+                     INNER JOIN dbo.PackHeader ph WITH(NOLOCK)
+                        ON (WOD.StorerKey = ph.StorerKey AND WOD.ExternWorkOrderKey = ph.OrderKey)
+                     INNER JOIN dbo.PackDetail pd WITH(NOLOCK)
+                        ON (ph.StorerKey = pd.StorerKey AND ph.PickSlipNo = pd.PickSlipNo AND WOD.WkOrdUdef1 = Pd.SKU)
                      WHERE pd.StorerKey = @cStorerkey
-                       AND ( pd.LabelNo = @cDropID or pd.dropID = @cDropID)
-                       AND WOD.type = 'S02'
+                        AND ( pd.LabelNo = @cDropID or pd.dropID = @cDropID)
+                        AND WOD.type = 'S02'
                      GROUP BY pd.SKU
                      HAVING SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) > 0
-                  ) as W
+                  ) AS W
                WHERE W.WorkOrderQty <> W.PickQty
             END
             ELSE
             BEGIN -- Manuel
+               DELETE FROM @tPKD
+
+               INSERT INTO @tPKD (StorerKey, OrderKey, SKU, Qty)
+               SELECT StorerKey, OrderKey, SKU, SUM(Qty) 
+               FROM dbo.PickDetail WITH(NOLOCK) 
+               WHERE StorerKey = @cStorerKey 
+                  AND (CaseID = @cDropID OR DROPID = @cDropID)
+               GROUP BY StorerKey, OrderKey, SKU
+
                SELECT TOP 1
                   @wSKU = W.SKU,
                   @wQty = W.WorkOrderQty
@@ -346,19 +363,16 @@ BEGIN
                         SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) AS WorkOrderQty,
                         SUM(PKD.Qty) AS PickQty
                      FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
-                             INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON
-                        WOD.StorerKey = PKD.StorerKey
-                           AND WOD.ExternWorkOrderKey = PKD.OrderKey
-                           AND WOD.WkOrdUdef1 = PKD.SKU
-                     WHERE PKD.StorerKey = @cStorerkey
-                       AND (PKD.CaseID = @cDropID OR PKD.DROPID = @cDropID)
-                       AND WOD.type = 'S02'
+                     INNER JOIN @tPKD PKD
+                        ON WOD.StorerKey = PKD.StorerKey
+                        AND WOD.ExternWorkOrderKey = PKD.OrderKey
+                        AND WOD.WkOrdUdef1 = PKD.SKU
+                     WHERE WOD.type = 'S02'
                      GROUP BY PKD.SKU
                      HAVING SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) > 0
-                  ) as W
+                  ) AS W
                WHERE W.WorkOrderQty <> W.PickQty
             END
-
 
             IF (ISNULL(@wSKU,'')<>'')
             BEGIN

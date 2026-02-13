@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.0                                                  */
+/* GitHub Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 13-Jan-2026 WLChooi  1.0   Initial Version                           */
+/* 11-Feb-2026 WLChooi  1.1   UWP-48731 Add Error Logging (WL01)        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -786,7 +787,9 @@ BEGIN
                          @n_splitqty, PD.QtyMoved, PD.Status,
                          PD.DropID, PD.Loc, PD.ID, PD.PackKey, PD.UpdateSource, PD.CartonGroup, PD.CartonType,
                          PD.ToLoc, PD.DoReplenish, PD.ReplenishZone, PD.DoCartonize, PD.PickMethod,
-                         PD.WaveKey, PD.EffectiveDate, '9', PD.ShipFlag, PD.PickSlipNo, PD.TaskDetailKey, PD.TaskManagerReasonKey, PD.Notes, PD.WIP_Refno, PD.Channel_ID
+                         PD.WaveKey, PD.EffectiveDate, '9', PD.ShipFlag, PD.PickSlipNo, PD.TaskDetailKey, PD.TaskManagerReasonKey, 
+                         '*RefPickKey: ' + @c_PickDetailKey + ' Qty: ' + CONVERT(NVARCHAR(10), @n_splitqty),   --WL01 
+                         PD.WIP_Refno, PD.Channel_ID
                   FROM #PickDetail_WIP PD (NOLOCK)
                   JOIN dbo.SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
                   JOIN dbo.PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
@@ -1502,6 +1505,8 @@ BEGIN
             COMMIT TRAN
          END
       END
+      EXECUTE dbo.nsp_LogError @n_Err, @c_Errmsg, 'msp_ProcessShortPickReAlloc01'   --WL01
+      RAISERROR (@c_Errmsg, 16, 1) WITH SETERROR   --WL01
       RETURN
    END
    ELSE

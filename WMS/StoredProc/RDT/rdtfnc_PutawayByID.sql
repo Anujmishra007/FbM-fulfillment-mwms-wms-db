@@ -3,32 +3,34 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdtfnc_PutawayByID                                  */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Putaway by pallet ID                                        */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2015-03-19 1.0  Ung      SOS336606 Created                           */
-/* 2015-09-28 1.1  Ung      Add MoveQTYAlloc, MoveQTYPick               */
-/*                          Add PutawayMatchSuggestLOC                  */
-/* 2016-08-04 1.2  Ung      SOS374890 Add DefaultToLOC                  */
-/*                          Performance turning                         */
-/* 2018-06-11 1.3  James    WMS5390 Add rdt_decode (james01)            */
-/* 2018-09-03 1.4  James    WMS6233 Add sucessfully putaway scn(james02)*/
-/* 2019-01-28 1.5  James    WMS7793 Add pallet criteria scn (james03)   */
-/* 2019-07-17 1.6  James    WMS9858 Add loc prefix (james04)            */   
-/* 2019-08-07 1.7  James    WMS10120 Add screen confirm overwrite       */
-/*                          suggested loc (james05)                     */
-/* 2023-03-20 1.8  Dennis   UWP-14536 Check Digit                       */
-/* 2024-04-18 1.9  Calvin   UWP-18503 Map full input values (CLVN01)    */
-/* 2024-06-11 2.0  NLT013   FCR-267 Unlock locations for all UCC        */
-/* 2024-07-31 2.1  CYU027   FCR-122 Add Reason Code for Override        */
-/* 2025-10-13 2.2  YKC028   FCR-8113 Add RDtformat                      */
-/************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdtfnc_PutawayByID                                           */
+/* Copyright      : LF Logistics                                                 */
+/*                                                                               */
+/* Purpose: Putaway by pallet ID                                                 */
+/*                                                                               */
+/* Modifications log:                                                            */
+/*                                                                               */
+/* Date       Rev  Author   Purposes                                             */
+/* 2015-03-19 1.0  Ung      SOS336606 Created                                    */
+/* 2015-09-28 1.1  Ung      Add MoveQTYAlloc, MoveQTYPick                        */
+/*                          Add PutawayMatchSuggestLOC                           */
+/* 2016-08-04 1.2  Ung      SOS374890 Add DefaultToLOC                           */
+/*                          Performance turning                                  */
+/* 2018-06-11 1.3  James    WMS5390 Add rdt_decode (james01)                     */
+/* 2018-09-03 1.4  James    WMS6233 Add sucessfully putaway scn(james02)         */
+/* 2019-01-28 1.5  James    WMS7793 Add pallet criteria scn (james03)            */
+/* 2019-07-17 1.6  James    WMS9858 Add loc prefix (james04)                     */   
+/* 2019-08-07 1.7  James    WMS10120 Add screen confirm overwrite                */
+/*                          suggested loc (james05)                              */
+/* 2023-03-20 1.8  Dennis   UWP-14536 Check Digit                                */
+/* 2024-04-18 1.9  Calvin   UWP-18503 Map full input values (CLVN01)             */
+/* 2024-06-11 2.0  NLT013   FCR-267 Unlock locations for all UCC                 */
+/* 2024-07-31 2.1  CYU027   FCR-122 Add Reason Code for Override                 */
+/* 2025-08-25 0.0  Jackc    !!!Cutover. Use V0 repo for work!!!                  */
+/* 2025-10-13 2.2  YKC028   FCR-8113 Add RDtformat                               */
+/* 2026-02-01 2.2  Jackc    FCR-9755 Add extinfo to st2 PAMatchLoc = 2(jack01)   */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PutawayByID] (
    @nMobile    INT,
@@ -790,6 +792,38 @@ BEGIN
             -- Go to LOC not match screen
             SET @nScn = @nScn + 3
             SET @nStep = @nStep + 3
+
+            -- Extended info (jack01)
+            IF @cExtendedInfoSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+               BEGIN
+                  SET @cExtendedInfo = ''
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @cExtendedInfo OUTPUT, ' + 
+                     ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                  SET @cSQLParam =
+                     '@nMobile         INT,           ' +
+                     '@nFunc           INT,           ' +
+                     '@cLangCode       NVARCHAR( 3),  ' +
+                     '@nStep           INT,           ' +
+                     '@nAfterStep      INT,           ' +
+                     '@nInputKey       INT,           ' + 
+                     '@cFromID         NVARCHAR( 18), ' +
+                     '@cSuggLOC        NVARCHAR( 10), ' +
+                     '@cPickAndDropLOC NVARCHAR( 10), ' +
+                     '@cToLOC          NVARCHAR( 10), ' +
+                     '@cExtendedInfo   NVARCHAR( 20) OUTPUT, ' +
+                     '@nErrNo          INT           OUTPUT, ' +
+                     '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+      
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @cExtendedInfo OUTPUT, 
+                     @nErrNo OUTPUT, @cErrMsg OUTPUT
+      
+                  SET @cOutField15 = @cExtendedInfo
+               END
+            END
             
             GOTO Quit
          END
