@@ -76,6 +76,7 @@ BEGIN
    DECLARE @nPickQty             INT
    DECLARE @nMPOCFlag            INT
    DECLARE @bSuccess             INT
+   DECLARE @InputQty             INT
 
    DECLARE @tPackData TABLE
    (
@@ -538,7 +539,7 @@ BEGIN
    ELSE
    -- MPOC Order
    BEGIN
-      DECLARE @InputQty INT = @nQty
+      SET @InputQty = @nQty
       DELETE FROM @tPackData
 
       INSERT INTO @tPackData (PickSlipNo, PickDetailKey, OrderKey, SKU, Qty, PackedQty)
@@ -577,7 +578,7 @@ BEGIN
 
          SELECT @nRowCount = @@ROWCOUNT
 
-         IF @nRowCount = 0 OR @InputQty < 0
+         IF @nRowCount = 0 OR @InputQty <= 0
             BREAK
 
          -- Get PickHeader info
@@ -780,10 +781,11 @@ BEGIN
       END
    END
 
+   SET @InputQty = @nQty
    -- Handle PickDetail
    IF @nMPOCFlag <> 1
    BEGIN
-      WHILE @nQTY > 0
+      WHILE 1 = 1
       BEGIN
          SELECT TOP 1 
             @cPickDetailKey = PickDetailKey,
@@ -798,7 +800,7 @@ BEGIN
          ORDER BY OrderKey, OrderLineNumber, PickDetailKey
 
          SELECT @nRowCount = @@ROWCOUNT
-         IF @nRowCount = 0
+         IF @nRowCount = 0 OR @InputQty <= 0
             BREAK
 
          IF @nPickQTY > @nQTY
@@ -835,7 +837,7 @@ BEGIN
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                @cNewPickDetailKey,
                Status, 
-               @nPickQTY - @nQTY,
+               @nPickQTY - @InputQty,
                NULL, -- TrafficCop
                '1'   -- OptimizeCop
             FROM dbo.PickDetail WITH (NOLOCK)
@@ -843,7 +845,7 @@ BEGIN
 
             UPDATE dbo.PickDetail WITH(ROWLOCK)
             SET CaseID = @cLabelNo,
-               Qty = @nQTY,
+               Qty = @InputQty,
                EditDate = GETDATE(),
                EditWho = SUSER_NAME(),
                TrafficCop = NULL
@@ -858,7 +860,7 @@ BEGIN
                TrafficCop = NULL
             WHERE PickDetailKey = @cPickDetailKey
 
-            SET @nQTY = @nQTY - @nPickQTY
+            SET @InputQty = @InputQty - @nPickQTY
          END
       END
 
@@ -891,7 +893,7 @@ BEGIN
 
          SELECT @nRowCount = @@ROWCOUNT
 
-         IF @nRowCount = 0
+         IF @nRowCount = 0 OR @InputQty <= 0
             BREAK
 
          IF @nPickQty > @nPackedQty
@@ -942,6 +944,8 @@ BEGIN
             EditWho = SUSER_NAME(),
             TrafficCop = NULL
          WHERE PickDetailKey = @cPickDetailKey
+
+         SET @InputQty = @InputQty - @nPickQTY
       END
    END
 
