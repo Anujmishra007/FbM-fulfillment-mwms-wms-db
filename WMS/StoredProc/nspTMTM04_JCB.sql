@@ -18,6 +18,7 @@ GO
 /* 2026-01-05   2.2   PPA374    Changing aisle in use to C_String28             */
 /* 2026-01-09   2.3   PPA374    Adding Permission and In Progress errors        */
 /* 2026-02-12   2.4   PPA374    Adding 'INLOCKED' flag as an ok flag to pick    */
+/* 2026-02-13   2.5   PPA374    Adding "MHE not for source loc" errror message  */
 /********************************************************************************/
 CREATE OR ALTER PROC    [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
@@ -2735,6 +2736,37 @@ END
 		    GOTO QuitErrorCheck
 		 END
 
+		 -- MHE not suitable for the source location
+		 IF @n_err = 63060
+		    AND EXISTS (
+               SELECT 1 
+               FROM dbo.TaskDetail TD WITH(NOLOCK)
+                  INNER JOIN dbo.LOC L WITH(NOLOCK)
+                     ON L.Loc = TD.FromLoc
+                  INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
+                     ON PAZEED.PutawayZone = L.PutawayZone
+                  INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
+               WHERE TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                     AND TD.AreaKey = @c_AreaKey01
+                     AND TD.StorerKey = @cStorerKey
+                     AND (
+                        TD.Status = '0'
+                        OR (
+						   TD.Status = '3'
+                           AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+					 )
+					 AND L.Facility = @cFacility
+					 AND RM.UserName = @c_userid
+			)
+         BEGIN
+	        SELECT @n_continue = 3
+            SELECT @n_err = 218265
+            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') --'218265^MHE not for FromLoc' --PPA374 11/12/2025
+		    GOTO QuitErrorCheck
+		 END
+
 		 --No permission
 		 IF @n_err = 63060
 		    AND EXISTS (
@@ -2795,7 +2827,7 @@ END
 
 	  QuitErrorCheck:
 	  --Update tasks for errors:
-	  IF @n_err IN ('218257','218245','218255','218258','218252','218253','218254','218261','218262')
+	  IF @n_err IN ('218257','218245','218255','218258','218252','218253','218254','218261','218262','218265')
 	  BEGIN
 
 	  	  	UPDATE TaskDetail
@@ -2818,6 +2850,31 @@ END
                FROM dbo.TaskDetail TD WITH(NOLOCK)
                   INNER JOIN dbo.LOC L WITH(NOLOCK)
                      ON L.Loc = TD.ToLoc
+                  INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
+                     ON PAZEED.PutawayZone = L.PutawayZone
+                  INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
+               WHERE TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                     AND TD.AreaKey = @c_AreaKey01
+                     AND TD.StorerKey = @cStorerKey
+                     AND (
+                        TD.Status = '0'
+                        OR (
+						   TD.Status = '3'
+                           AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+					 )
+					 AND L.Facility = @cFacility
+					 AND RM.UserName = @c_userid
+			)
+
+			UPDATE TaskDetail
+			SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for To Loc' --PPA374 13/02/2026
+			WHERE TaskDetailKey IN (
+               SELECT TaskDetailKey
+               FROM dbo.TaskDetail TD WITH(NOLOCK)
+                  INNER JOIN dbo.LOC L WITH(NOLOCK)
+                     ON L.Loc = TD.FromLoc
                   INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
                      ON PAZEED.PutawayZone = L.PutawayZone
                   INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
