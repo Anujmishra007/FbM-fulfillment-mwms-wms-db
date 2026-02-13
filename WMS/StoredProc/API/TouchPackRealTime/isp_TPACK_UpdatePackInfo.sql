@@ -122,6 +122,12 @@ BEGIN
 
    -- Recartonization Check Rule
    IF @cCartonStatus IN ('CLOSED', 'HOLD')
+   AND EXISTS( SELECT 1 
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-RecartonBlocked'
+               AND SValue = '1'
+   )
    BEGIN
       IF EXISTS ( SELECT 1
                   FROM PACKDETAIL (NOLOCK)

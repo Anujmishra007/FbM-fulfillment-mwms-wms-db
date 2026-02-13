@@ -657,6 +657,13 @@ SKIP_VALIDATE:
    END
 
    -- Recartonization Check Rule
+   IF EXISTS(  SELECT 1 
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-RecartonBlocked'
+               AND SValue = '1'
+   )
+   BEGIN
       IF EXISTS(  SELECT 1
                   FROM PACKDETAIL (NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
@@ -668,7 +675,7 @@ SKIP_VALIDATE:
       AND NOT EXISTS (  SELECT 1
                         FROM WorkOrderDetail WOD (NOLOCK)
                         JOIN CODELKUP CL (NOLOCK)
-                           ON CL.Code = WOD.Type
+                        ON CL.Code = WOD.Type
                         WHERE WOD.ExternWorkOrderKey = @cOrderKey
                         AND CL.Listname = 'WKORDType'
                         AND CL.UDF02 IN ('ExactQTY', 'MAXQTY')
@@ -685,6 +692,7 @@ SKIP_VALIDATE:
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not Allow Recartonization'
          GOTO EXIT_SP
       END
+   END
    -- Recartonization Check Rule (END)
 
    --VAS Code QTY Validation

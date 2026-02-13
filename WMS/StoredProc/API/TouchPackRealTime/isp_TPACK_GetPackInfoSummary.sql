@@ -7,7 +7,8 @@
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-01   1.0  GCH225     Created                                          */
-/* 2026-02-05   2.0  GCH225     UWP-48241:Support Show Closed Carton status      */
+/* 2026-02-05   2.0  GCH225     UWP-48241: Support Show Closed Carton status     */
+/* 2026-02-11   3.0  GCH225     UWP-48267: Fix AllocQty and PickQty Null issue   */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_GetPackInfoSummary] (
      @cType                NVARCHAR(30)      = ''
@@ -158,7 +159,7 @@ BEGIN
    END
    
    --Get Total Allocated Qty
-   SELECT @nTtlAllocQty = SUM(TtlPickedQty)
+   SELECT @nTtlAllocQty = ISNULL(SUM(TtlPickedQty), 0)
    FROM @PickQtyStatus
    WHERE [Status] <= '9'
 
@@ -219,7 +220,7 @@ BEGIN
    END
 
    --Get Total SKU Count & Total Picked Qty with condition check
-   SELECT @nTtlPickQty = SUM(TtlPickedQty) 
+   SELECT @nTtlPickQty = ISNULL(SUM(TtlPickedQty), 0)
         , @nTtlSkuCount = COUNT(DISTINCT Sku) 
    FROM @PickQtyStatus
 
