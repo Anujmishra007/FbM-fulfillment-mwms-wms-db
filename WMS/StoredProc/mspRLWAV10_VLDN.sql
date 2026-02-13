@@ -141,43 +141,6 @@ BEGIN
       FROM #PickDetail_WIP AS pw
       JOIN ORDERS o (NOLOCK) On o.OrderKey = pw.OrderKey
       ORDER BY pickdetailkey
-
-      SET @c_Loc =''
-      SELECT TOP 1 @c_Loc = l.loc
-      FROM #PICKDETAIL_WIP AS pw
-      JOIN LOC l (NOLOCK) ON l.loc = pw.ToLoc                        --ToLoc is getting at mspRLWAV10_DATA
-      LEFT JOIN AreaDetail ad (NOLOCK) ON ad.PutawayZone = l.PickZone
-      WHERE pw.TaskDetailKey = ''
-      --AND   l.LocationType <> PackStation
-      AND ad.AreaKey IS NULL
-
-      IF @c_Loc = ''
-      BEGIN
-         SELECT TOP 1 @c_Loc = td.Toloc
-         FROM #PICKDETAIL_WIP AS pw
-         JOIN TaskDetail td (NOLOCK) ON  td.TaskType IN ('RPF','RP1')
-                                     AND td.CaseID   = pw.DropID
-                                     AND td.Status   <> 'X'
-                                     AND td.Storerkey= pw.Storerkey
-                                     AND td.FromID   = pw.ID
-                                     AND td.SourceType = @c_SourceType
-
-         JOIN LOC l (NOLOCK) ON l.loc = td.ToLoc 
-         LEFT JOIN AreaDetail ad (NOLOCK) ON ad.PutawayZone = l.PickZone
-         WHERE pw.UOM >= '6'
-         AND pw.TaskDetailKey = ''
-         AND ad.AreaKey IS NULL
-      END
-
-      IF @c_Loc > ''
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err      = 63020
-         SET @c_ErrMsg   = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
-                         + 'Missing areakey for picking loc. Loc: '             
-                         + @c_Loc                                           
-                         + '. (mspRLWAV10_VLDN)'
-      END
    END
 
    IF @n_Continue = 1
