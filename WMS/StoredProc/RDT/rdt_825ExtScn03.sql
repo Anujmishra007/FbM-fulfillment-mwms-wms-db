@@ -155,15 +155,6 @@ BEGIN
                 SET @cOutField06 = @cCaptureInfo
                 SET @cOutField07 = @cStackability
 
-                -- Set all fields to display only ('O')
-                SET @cFieldAttr01 = 'O'
-                SET @cFieldAttr02 = 'O'
-                SET @cFieldAttr03 = 'O'
-                SET @cFieldAttr04 = 'O'
-                SET @cFieldAttr05 = 'O'
-                SET @cFieldAttr06 = 'O'
-                SET @cFieldAttr07 = 'O'
-
                 -- Set to confirmation screen
                 SET @nAfterScn = 6829
                 SET @nAfterStep = 99
@@ -192,10 +183,9 @@ BEGIN
             END
         END
     END
-    
+
 
 Quit:
-
 END
 
 GO
