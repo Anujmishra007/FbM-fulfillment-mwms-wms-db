@@ -36,8 +36,8 @@ CREATE TABLE [dbo].[WAVE]
 [TMReleaseFlag] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_TMReleaseFlag] DEFAULT ('N'),
 [GenDynamicPickSlipCode] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_GenDynamicPickSlipCode] DEFAULT (''),
 [Strategykey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_WAVE_Strategykey] DEFAULT (''),
-[ExternStatus] [nvarchar] (10) NOT NULL CONSTRAINT [DF_WAVE_ExternStatus] DEFAULT (''),
-[EventDateTime] [datetime] NOT NULL CONSTRAINT [DF_WAVE_EventDateTime] DEFAULT (getdate())
+[ExternStatus] [nvarchar] (10) NULL,
+[EventDateTime] [datetime] NULL
 ) ON [PRIMARY]
 
 ALTER TABLE [dbo].[WAVE] WITH NOCHECK ADD CONSTRAINT [CK_WAVE_WaveKey_Numeric] CHECK ((isnumeric([WaveKey])=(1)))
@@ -85,4 +85,38 @@ ALTER TABLE WAVE
 EXEC sp_addextendedproperty N'MS_Description', N'EventDateTime', 'SCHEMA', N'dbo', 'TABLE',
                      N'WAVE', 'COLUMN', N'EventDateTime'
 END
+END
+
+-- Make ExternStatus nullable
+IF EXISTS (SELECT 1 FROM sys.columns
+           WHERE Name = 'ExternStatus'
+           AND Object_ID = Object_ID('WAVE')
+           AND is_nullable = 0)
+BEGIN
+
+    IF EXISTS (SELECT 1 FROM sys.default_constraints
+               WHERE name = 'DF_WAVE_ExternStatus'
+               AND parent_object_id = OBJECT_ID('WAVE'))
+BEGIN
+ALTER TABLE [dbo].[WAVE] DROP CONSTRAINT [DF_WAVE_ExternStatus];
+END
+
+ALTER TABLE [dbo].[WAVE] ALTER COLUMN [ExternStatus] [nvarchar](10) NULL;
+END
+
+-- Make EventDateTime nullable
+IF EXISTS (SELECT 1 FROM sys.columns
+           WHERE Name = 'EventDateTime'
+           AND Object_ID = Object_ID('WAVE')
+           AND is_nullable = 0)
+BEGIN
+
+    IF EXISTS (SELECT 1 FROM sys.default_constraints
+               WHERE name = 'DF_WAVE_EventDateTime'
+               AND parent_object_id = OBJECT_ID('WAVE'))
+BEGIN
+ALTER TABLE [dbo].[WAVE] DROP CONSTRAINT [DF_WAVE_EventDateTime];
+END
+
+ALTER TABLE [dbo].[WAVE] ALTER COLUMN [EventDateTime] [datetime] NULL;
 END
