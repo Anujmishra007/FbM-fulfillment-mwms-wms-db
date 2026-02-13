@@ -15,6 +15,7 @@ GO
 /* 28-07-2025  2.0  PPA374     Restricting move when task exists                 */
 /* 20-11-2025  3.0  SKE140     Restricting FROMLOC if HOLD                       */
 /* 06-01-2026  4.0  PPA374     Adding weight validation for the ID, loc and beam */
+/* 13-02-2026  4.1  PPA374     Splitting JCBMBILOC into two CODELKUPs            */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_511ExtValJCB] (
@@ -155,13 +156,13 @@ BEGIN
                   SELECT 1
                   FROM dbo.CODELKUP C WITH(NOLOCK)
                   WHERE Code = @cLocCat
-                     AND LISTNAME = 'JCBMBILOC'
+                     AND LISTNAME = 'JCBMBILOCM'
                      AND Short = 1
 					 AND C.Storerkey = @cStorerKey
                )
             BEGIN
                SET @nErrNo = 218234
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Loc got task / stock'
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 218234^Over Max Pal
 			   GOTO QUIT
             END
 
@@ -171,7 +172,7 @@ BEGIN
                   SELECT 1
                   FROM dbo.CODELKUP C WITH(NOLOCK)
                   WHERE Code = @cLocCat
-                     AND LISTNAME = 'JCBMBILOC'
+                     AND LISTNAME = 'JCBMBILOCH'
                      AND Short = 1
 					 AND Storerkey = @cStorerKey
                )
