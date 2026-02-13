@@ -93,6 +93,13 @@ BEGIN
     FROM rdt.rdtMobRec (NOLOCK)
     WHERE Mobile = @nMobile
 
+    SELECT @cPalletKey = Value FROM @tExtScnData WHERE Variable = '@cPalletKey'
+    SELECT @cLength = Value FROM @tExtScnData WHERE Variable = '@cLength'
+    SELECT @cWidth = Value FROM @tExtScnData WHERE Variable = '@cWidth'
+    SELECT @cHeight = Value FROM @tExtScnData WHERE Variable = '@cHeight'
+    SELECT @cWeight = Value FROM @tExtScnData WHERE Variable = '@cWeight'
+
+
     IF @nFunc = 825
     BEGIN
         -- Handle confirmation screen (Screen 4 - Scn 6829)
