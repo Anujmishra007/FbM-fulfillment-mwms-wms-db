@@ -29,6 +29,7 @@ GO
 /*                              2. Fix codelkup retrieve if > 1 storer  */
 /*                              No need join rdt.storerconfig           */
 /* 20-Apr-2017 1.6  James       Remove ANSI_WARNINGS (james03)          */
+/* 07-Aug-2025 1.7  Cuize       FCR-5702 Extend Length                  */
 /************************************************************************/
 
 CREATE PROC rdt.rdt_CycleCount_GetLottables (
@@ -36,9 +37,9 @@ CREATE PROC rdt.rdt_CycleCount_GetLottables (
    @cStorer          NVARCHAR( 15),
    @cSKU             NVARCHAR( 20),
    @cClkupShort      NVARCHAR( 10), -- 'PRE' or 'POST'
-   @cIn_Lottable01   NVARCHAR( 18),
-   @cIn_Lottable02   NVARCHAR( 18),
-   @cIn_Lottable03   NVARCHAR( 18),
+   @cIn_Lottable01   NVARCHAR( 60),
+   @cIn_Lottable02   NVARCHAR( 60),
+   @cIn_Lottable03   NVARCHAR( 60),
    @dIn_Lottable04   DATETIME,
    @dIn_Lottable05   DATETIME,
    @cLotLabel01      NVARCHAR( 20) OUTPUT,

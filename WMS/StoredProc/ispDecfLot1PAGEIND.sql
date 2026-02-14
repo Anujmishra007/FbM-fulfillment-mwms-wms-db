@@ -11,15 +11,15 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
-/* 2025-07-24   Cuize     1.0   Created                                 */
+/* 2025-07-24   Cuize     1.0   FCR-5702 Created                        */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE dbo.ispDecfLot1PAGEIND
      @c_Storerkey          NVARCHAR(15)
    , @c_Sku                NVARCHAR(20)
-   , @c_Lottable01Value    NVARCHAR(18)
-   , @c_Lottable02Value    NVARCHAR(18)
-   , @c_Lottable03Value    NVARCHAR(18)
+   , @c_Lottable01Value    NVARCHAR(60)
+   , @c_Lottable02Value    NVARCHAR(60)
+   , @c_Lottable03Value    NVARCHAR(60)
    , @dt_Lottable04Value   DATETIME
    , @dt_Lottable05Value   DATETIME
    , @c_Lottable06Value    NVARCHAR(30)   = ''
