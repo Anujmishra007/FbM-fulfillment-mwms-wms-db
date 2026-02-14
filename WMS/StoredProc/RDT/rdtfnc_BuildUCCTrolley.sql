@@ -454,7 +454,7 @@ BEGIN
             @cTaskDetailKey = TaskDetailKey
          FROM dbo.TaskDetail WITH(NOLOCK)
          WHERE StorerKey = @cStorerKey
-            AND TaskType IN ('RPF', 'RP1', 'RPT')
+            AND TaskType IN ('RPF', 'RP1', 'RPT', 'ASTTPA')
             AND Status = '0'
             AND CaseID = @cUCC
 

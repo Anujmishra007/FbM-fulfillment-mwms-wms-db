@@ -14,6 +14,7 @@ GO
 /* 2025-03-17 1.0  Dennis      FCR-2814 Created                         */
 /* 2025-05-12 1.1  Dennis      UWP-34249 Performance Tune               */
 /* 2025-10-14 1.2  NickT       UWP-42331 Add PKD query cond: Lottable01 */
+/* 2026-02-09 1.3  Dennis      UWP-48571 BugFix                         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ConfirmSP24] (
@@ -361,26 +362,9 @@ BEGIN
                AND SKU = @cSKU
                AND SerialNo = @cSerialNo)
          BEGIN
-            SELECT TOP 1 @cPickDetailKey = pkd.PickDetailKey
-            FROM dbo.PickDetail pkd (NOLOCK)
-            INNER JOIN dbo.PickHeader pkh (NOLOCK) ON pkh.OrderKey = pkd.OrderKey AND pkh.StorerKey = pkd.StorerKey
-            INNER JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (pkd.LOT = LA.LOT)
-            LEFT JOIN dbo.PackSerialNo psn (NOLOCK) ON psn.PickDetailKey = pkd.PickDetailKey
-            WHERE pkd.StorerKey = @cStorerKey
-            AND pkh.PickHeaderKey = @cPickSlipNo
-            AND LA.Lottable01 = @cLottable01
-            AND pkd.SKU = @cSKU
-            AND psn.PackSerialNoKey IS NULL
-            
-            IF ISNULL(@cPickDetailKey,'')=''
-            BEGIN
-               SET @nErrNo = 208327
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PickDetail NotFound
-               GOTO RollBackTran
-            END
             -- Insert PackSerialNo 
-            INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY,PICKDETAILKEY)
-            VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY,@cPickDetailKey)
+            INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY)
+            VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY)
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 208310
@@ -450,26 +434,9 @@ BEGIN
       -- New serial no
       IF @nRowCount = 0
       BEGIN
-         SELECT TOP 1 @cPickDetailKey = pkd.PickDetailKey
-         FROM dbo.PickDetail pkd (NOLOCK)
-         INNER JOIN dbo.PickHeader pkh (NOLOCK) ON pkh.OrderKey = pkd.OrderKey AND pkh.StorerKey = pkd.StorerKey
-         INNER JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (pkd.LOT = LA.LOT)
-         LEFT JOIN dbo.PackSerialNo psn (NOLOCK) ON psn.PickDetailKey = pkd.PickDetailKey
-         WHERE pkd.StorerKey = @cStorerKey
-         AND pkh.PickHeaderKey = @cPickSlipNo
-         AND LA.Lottable01 = @cLottable01
-         AND pkd.SKU = @cSKU
-         AND psn.PackSerialNoKey IS NULL
-
-         IF ISNULL(@cPickDetailKey,'')=''
-         BEGIN
-            SET @nErrNo = 208327
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PickDetail NotFound
-            GOTO RollBackTran
-         END
          -- Insert PackSerialNo 
-         INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY,PickDetailKey)
-         VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY,@cPickDetailKey)
+         INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY)
+         VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY)
          IF @@ERROR <> 0
          BEGIN
             SET @nErrNo = 208315
@@ -712,6 +679,13 @@ BEGIN
          
          SET @nQTY_Bal = 0 -- Reduce balance
       END
+
+      UPDATE PackSerialNo SET PICKDETAILKEY = @cPickDetailKey
+      WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+         AND LabelNo = @cLabelNo
+         AND LabelLine = @cLabelLine
+         AND SerialNo = @cSerialNo
 
       -- Exit condition
       IF @nQTY_Bal = 0

@@ -248,7 +248,7 @@ BEGIN
                 + ', @cFacility     = @cFacility             '
                 + ', @cLangCode     = @cLangCode             '
                 + ', @b_Success     = @b_Success      OUTPUT '
-                + ', @n_Err         = @n_ErrNo        OUTPUT '
+                + ', @n_ErrNo         = @n_ErrNo      OUTPUT '
                 + ', @c_ErrMsg      = @c_ErrMsg       OUTPUT '
                 + ', @cExtFieldCol  = @cExtFieldCol   OUTPUT '
                 + ', @cExtFieldVal  = @cExtFieldVal   OUTPUT '

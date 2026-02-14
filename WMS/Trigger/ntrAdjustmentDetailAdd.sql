@@ -44,9 +44,7 @@ GO
 /* 31-Dec-2025  VNI056       2.2    FCR-9732 Add Interface Trigger pts. for    */
 /*                                   custom trigger config                     */
 /* 11-Feb-2026  VNI056       2.3   FCR-10961 =>add config key for transmitlog  */
-/* 11-Feb-2026  USH022       2.4      UWP-48211:UCCNo Validation for           */
-/*                                                adjustmentdetail             */
-/*12-Feb-2025   VNI056       2.5    FCR-11002 =>Update CFG key and proc        */
+/* 12-Feb-2025  VNI056       2.4    FCR-11002 =>Update CFG key and proc        */
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrAdjustmentDetailAdd]
@@ -77,49 +75,12 @@ BEGIN
 
    SELECT @n_continue=1, @n_starttcnt = @@TRANCOUNT
    /* #INCLUDE <TRADA1.SQL> */
-    DECLARE @b_ColumnsUpdated VARBINARY(1000) = COLUMNS_UPDATED()   --VER 2.5
+    DECLARE @b_ColumnsUpdated VARBINARY(1000) = COLUMNS_UPDATED()   --VER 2.4
    -- To Skip all the trigger process when Insert the history records from Archive as user request
    IF EXISTS( SELECT 1 FROM INSERTED WHERE ArchiveCop = '9')
    BEGIN
       SELECT @n_continue = 4
    END
-   --USH022 Start(2.4)
-       IF @n_continue=1 or @n_continue=2
-       BEGIN
-         IF EXISTS (
-            SELECT UCCNo FROM INSERTED
-            WHERE UCCNo IS NOT NULL AND UCCNo <> '' AND StorerKey = INSERTED.StorerKey
-            GROUP BY UCCNo
-            HAVING COUNT(*) > 1
-         )
-         BEGIN
-            SELECT @n_continue = 3
-            SELECT @n_err = 70002
-            SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)
-                                      + ': VAL# Duplicate UCCNo not allowed. (ntrAdjustmentDetailAdd)'
-         END
-
-         IF @n_continue=1 or @n_continue=2
-         BEGIN
-           IF EXISTS (
-               SELECT i.UCCNo
-               FROM INSERTED i
-               JOIN ADJUSTMENTDETAIL a
-               ON i.UCCNo = a.UCCNo
-               AND i.UCCNo IS NOT NULL AND i.UCCNo <> ''
-               AND i.StorerKey = a.StorerKey
-               AND NOT (i.AdjustmentKey = a.AdjustmentKey AND i.AdjustmentLineNumber = a.AdjustmentLineNumber)
-               GROUP BY i.UCCNo
-           )
-           BEGIN
-               SELECT @n_continue = 3
-               SELECT @n_err = 70002
-               SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)
-                                   + ': VAL# Duplicate UCCNo not allowed in batch inserted. (ntrAdjustmentDetailAdd)'
-           END
-         END
-       END
-   --USH022 End(2.4)
 
    IF @n_continue=1 or @n_continue=2
    BEGIN
@@ -595,7 +556,7 @@ BEGIN
       DECLARE Cur_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT INS.AdjustmentKey, INS.StorerKey FROM INSERTED INS
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = INS.StorerKey
-      WHERE  ITC.Configkey = 'WSADJADDLOGC' AND ITC.SourceTable = 'ADJUSTMENTDETAIL' --[ver 2.5]
+      WHERE  ITC.Configkey = 'WSADJADDLOGC' AND ITC.SourceTable = 'ADJUSTMENTDETAIL' --[ver 2.4]
       AND    ITC.sValue      = '1'
 
       SELECT @c_AdjustmentKey = AdjustmentKey, @c_StorerKey = StorerKey FROM INSERTED
@@ -605,12 +566,12 @@ BEGIN
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-      EXECUTE dbo.isp_ITF_ntrAdjustment                   --[ver 2.5]
+      EXECUTE dbo.isp_ITF_ntrAdjustment                   --[ver 2.4]
             @c_TriggerName    = 'ntrAdjustmentDetailAdd'
           , @c_SourceTable    = 'ADJUSTMENTDETAIL'
---          , @c_Storerkey      = @c_Storerkey               --[ver 2.5]
+--          , @c_Storerkey      = @c_Storerkey               --[ver 2.4]
           , @c_AdjustmentKey  = @c_AdjustmentKey
-          , @b_ColumnsUpdated = @b_ColumnsUpdated            --[VER 2.5]
+          , @b_ColumnsUpdated = @b_ColumnsUpdated            --[VER 2.4]
           , @b_Success        = @b_Success   OUTPUT
           , @n_err            = @n_err       OUTPUT
           , @c_errmsg         = @c_errmsg    OUTPUT
