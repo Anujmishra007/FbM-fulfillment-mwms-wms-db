@@ -6906,6 +6906,27 @@ BEGIN
             ELSE IF @cUDF01 = 'No Need Update RDTMOBREC'
                RETURN
          END
+
+         IF @cExtScnSP = 'rdt_839ExtScn07' --Sync short reallo
+         BEGIN
+            IF @nOri_Scn = 6823 AND @nOri_Step = 99 AND @nInputKey = 1
+            BEGIN
+               SET @cOption = @cUDF01
+
+               IF @cOption <> '9'
+                  GOTO STEP_5_NextTask
+               ELSE
+                  GOTO STEP_5_Short
+            END
+
+            IF @nOri_Scn = 6823 AND @nOri_Step = 99 AND @nInputKey = 0
+            BEGIN
+               SET @cOption = @cUDF01
+               SET @cBarcode = @cUDF02
+
+               GOTO Quit
+            END
+         END
          GOTO Quit
       END
    END -- Ext scn sp <> ''
