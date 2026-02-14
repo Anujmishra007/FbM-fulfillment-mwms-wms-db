@@ -42,6 +42,8 @@ BEGIN
          , @c_Facility           NVARCHAR(5) = ''
          , @c_Storerkey          NVARCHAR(15)= ''
          , @c_SourceType         NVARCHAR(30)= 'mspRLWAV10'
+         , @c_RPFSourceType      NVARCHAR(30)= 'msp_RCM_WV_Col_Dynam'
+         , @c_RPFSourceType2     NVARCHAR(30)= 'msp_RCM_WV_Col_DynamicReplen'
          , @c_PickCondition_SQL  NVARCHAR(MAX)= ''
 
          , @c_SQL                NVARCHAR(MAX) = ''
@@ -109,8 +111,8 @@ BEGIN
                                              AND td.CaseID   = pw.DropID
                                              AND td.Status   NOT IN ('X','9')
                                              AND td.Storerkey= pw.Storerkey
-                                             AND td.FromID   = pw.ID
-                                             AND td.SourceType = @c_SourceType
+                                             AND td.ToID     = pw.ID
+                                             AND td.SourceType IN (@c_RPFSourceType, @c_RPFSourceType2)
    END
  
 QUIT_SP:

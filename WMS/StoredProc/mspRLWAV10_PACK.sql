@@ -698,11 +698,11 @@ BEGIN
             WHERE cl1.ListName = 'CSCUK01GCR'
             AND   cl1.Code     > ''
             AND   cl1.Storerkey= @c_Storerkey
-            AND   cl1.Code2    = @c_BillToKey
+            AND   cl1.Code2    IN (@c_BillToKey, '')
             AND   cl1.Long     = 'ECO'   --ECO stands for ECOM
             AND   cl1.Short    > ''
             AND   cl1.UDF01    = 'Y'
-            ORDER BY cl1.Code
+            ORDER BY CASE WHEN cl1.Code2 = @c_BillToKey THEN 1 ELSE 2 END, cl1.Code
 
             SET @n_ROwCount = @@ROWCOUNT
             IF @n_ROwCount = 0
@@ -812,7 +812,7 @@ BEGIN
                         JOIN @TMP_CL cl2 ON  cl2.ListName = 'CSCUK01GCR'
                                          AND cl2.Code > ''
                                          AND cl2.Storerkey = pcz.Storerkey
-                                         AND cl2.Code2 = @c_BillToKey
+                                         AND cl2.Code2 IN (@c_BillToKey, '')
                                          AND cl2.Long  = cl1.UDF01
                                          AND cl2.UDF01 = 'Y'
                         JOIN @t_CTNZ AS cz ON cz.CartonType = cl2.Short
@@ -821,7 +821,7 @@ BEGIN
                         AND   cl1.Storerkey = pcz.Storerkey
                         AND   cl1.UDF01 > ''
                         AND   cz.[Cube] >= cs.TotalPackCube
-                        ORDER BY cz.RowID
+                        ORDER BY CASE WHEN cl2.Code2 = @c_BillToKey THEN 1 ELSE 2 END, cz.RowID
                      ) czb
          OUTER APPLY (  SELECT TOP 1  
                               cz.CartonizationGroup
@@ -1016,11 +1016,11 @@ BEGIN
                      WHERE cl1.ListName = 'CSCUK01GCR'
                      AND   cl1.Code     > ''
                      AND   cl1.Storerkey= @c_Storerkey
-                     AND   cl1.Code2    = @c_BillToKey
+                     AND   cl1.Code2    IN (@c_BillToKey, '')
                      AND   cl1.Long     = @c_CTNGroup_BTK         --BillToKey CartonGroup          
                      AND   cl1.Short    > ''
                      AND   cl1.UDF01    = 'Y'
-                     ORDER BY cl1.Code
+                     ORDER BY CASE WHEN cl1.Code2 = @c_BillToKey THEN 1 ELSE 2 END, cl1.Code
                      SET @n_RowCount = @@ROWCOUNT
                   END
 
