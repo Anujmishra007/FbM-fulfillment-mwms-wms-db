@@ -68,7 +68,7 @@ BEGIN
     -- RDT.RDTMobRec variables for volumetric data
     DECLARE
         @cPalletKey      NVARCHAR( 30),
-        @cSavedPalletKey NVARCHAR( 30),  -- Preserved PalletKey (V_String42)
+        @cSavedPalletKey NVARCHAR( 30),  -- Preserved PalletKey (C_String1)
         @cOrigPalletKey  NVARCHAR( 30),  -- Original PalletKey from main SP (V_String41)
         @cLength         NVARCHAR( 10),
         @cWidth          NVARCHAR( 10),
@@ -87,7 +87,7 @@ BEGIN
         @nMobScn         = Scn,
         @cCaptureInfo    = V_String16,
         @cOrigPalletKey  = V_String41,  -- Read original PalletKey from main SP
-        @cSavedPalletKey = V_String42   -- Read preserved PalletKey
+        @cSavedPalletKey = C_String1    -- ExtScn saved PalletKey
     FROM rdt.rdtMobRec (NOLOCK)
     WHERE Mobile = @nMobile
 
@@ -154,7 +154,7 @@ BEGIN
             IF @nInputKey = 1 -- ENTER - Show confirmation screen
             BEGIN
                 -- Use @cInField values directly (from screen input)
-                -- PalletKey: try @cInField01, then saved V_String42, then original V_String41
+                -- PalletKey: try @cInField01, then saved C_String1, then original V_String41
                 SET @cPalletKey = ISNULL(NULLIF(@cInField01, ''), ISNULL(NULLIF(@cSavedPalletKey, ''), @cOrigPalletKey))
                 SET @cLength = @cInField02
                 SET @cWidth = @cInField03
@@ -162,9 +162,9 @@ BEGIN
                 SET @cWeight = @cInField05
                 SET @cStackability = @cInField07
 
-                -- Save PalletKey to V_String42 for preservation (main SP will clear V_String41)
+                -- Save PalletKey to C_String1 for preservation (main SP will clear V_String41)
                 UPDATE rdt.rdtMobRec WITH (ROWLOCK)
-                SET V_String42 = @cPalletKey
+                SET C_String1 = @cPalletKey
                 WHERE Mobile = @nMobile
 
                 -- Populate confirmation screen with display-only data
@@ -208,7 +208,6 @@ BEGIN
 
 Quit:
 END
-
 GO
 
 SET QUOTED_IDENTIFIER OFF
