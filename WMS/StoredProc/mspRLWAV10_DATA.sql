@@ -42,8 +42,6 @@ BEGIN
          , @c_Facility           NVARCHAR(5) = ''
          , @c_Storerkey          NVARCHAR(15)= ''
          , @c_SourceType         NVARCHAR(30)= 'mspRLWAV10'
-         , @c_RPFSourceType      NVARCHAR(30)= 'msp_RCM_WV_Col_Dynam'
-         , @c_RPFSourceType2     NVARCHAR(30)= 'msp_RCM_WV_Col_DynamicReplen'
          , @c_PickCondition_SQL  NVARCHAR(MAX)= ''
 
          , @c_SQL                NVARCHAR(MAX) = ''
@@ -99,20 +97,24 @@ BEGIN
       -- UOM = 6, RPF To DP,  Pick from DP
       -- UOM = 7, RPF to DPP, Pick from DPP
       UPDATE pw
-         SET pw.ToLoc = CASE WHEN td.Taskdetailkey IS NULL THEN pw.Loc 
-                             WHEN pw.UOM = '2' THEN pw.Loc 
-                             ELSE td.FinalLoc END
-            ,pw.UpdateSource = CASE WHEN td.TaskDetailKey IS NOT NULL 
-                                    THEN td.TaskDetailKey
-                                    ELSE ''
-                                    END
+         SET pw.ToLoc = CASE WHEN pw.UOM = '2' THEN pw.Loc
+                             WHEN td_rpf.TaskDetailKey IS NOT NULL THEN td_rpf.FinalLoc
+                             WHEN td_asttpa.TaskDetailKey IS NOT NULL THEN td_asttpa.ToLoc
+                             ELSE pw.Loc END
+            ,pw.UpdateSource = CASE WHEN td_rpf.TaskDetailKey IS NOT NULL THEN td_rpf.TaskDetailKey
+                                    WHEN td_asttpa.TaskDetailKey IS NOT NULL THEN td_asttpa.TaskDetailKey
+                                    ELSE '' END
       FROM #PICKDETAIL_WIP AS pw
-      LEFT OUTER JOIN TaskDetail td (NOLOCK) ON  td.TaskType IN ('RPF','RP1')
-                                             AND td.CaseID   = pw.DropID
-                                             AND td.Status   NOT IN ('X','9')
-                                             AND td.Storerkey= pw.Storerkey
-                                             AND td.ToID     = pw.ID
-                                             AND td.SourceType IN (@c_RPFSourceType, @c_RPFSourceType2)
+      LEFT OUTER JOIN TaskDetail td_rpf (NOLOCK)
+             ON td_rpf.TaskType   IN ('RPF','RP1')
+            AND td_rpf.CaseID     = pw.DropID
+            AND td_rpf.Status     NOT IN ('X','9')
+            AND td_rpf.Storerkey  = pw.Storerkey
+      LEFT OUTER JOIN TaskDetail td_asttpa (NOLOCK)
+             ON td_asttpa.TaskType = 'ASTTPA'
+            AND td_asttpa.CaseID   = pw.DropID
+            AND td_asttpa.Status   NOT IN ('X','9')
+            AND td_asttpa.Storerkey= pw.Storerkey
    END
  
 QUIT_SP:
