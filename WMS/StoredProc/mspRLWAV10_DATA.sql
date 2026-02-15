@@ -62,7 +62,7 @@ BEGIN
                             + ' AND NOT EXISTS (SELECT 1'
                             +                '  FROM TASKDETAIL td (NOLOCK)' 
                             +                '  WHERE td.TaskdetailKey = PICKDETAIL.TaskdetailKey'
-                            +                '  AND td.Taskdetailkey = ''CPK'''
+                            +                '  AND td.Tasktype = ''CPK'''
                             +                '  AND td.SourceType    = ''mspRLWAV10'''
                             +                '  AND td.[Status]      <> ''X'''
                             +                ' )'
