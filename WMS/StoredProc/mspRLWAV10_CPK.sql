@@ -269,7 +269,7 @@ BEGIN
            , CODELKUP.UDF05   
            , CODELKUP.Code2  
       FROM CODELKUP (NOLOCK)  
-      WHERE CODELKUP.Listname IN ('CSCUKZONE', 'CSCUK01OPY' ) 
+      WHERE CODELKUP.Listname IN ('CSCUK01ZNE', 'CSCUK01OPY' ) 
       AND   CODELKUP.Storerkey = @c_Storerkey
       ORDER BY CODELKUP.Listname
            ,   CODELKUP.Code 
@@ -360,7 +360,7 @@ BEGIN
       FROM #TASKDETAIL_WIP AS tw
       JOIN LOC l (NOLOCK) ON l.loc = tw.FromLoc 
       JOIN AREADETAIL ad (NOLOCK) ON ad.PutawayZone = l.PickZone   
-      JOIN @TMP_CL CL ON  CL.ListName = 'CSCUKZONE'  
+      JOIN @TMP_CL CL ON  CL.ListName = 'CSCUK01ZNE'  
                       AND CL.Code     = l.PickZone  
                       AND CL.Storerkey= tw.Storerkey  
 
@@ -436,15 +436,10 @@ BEGIN
          SET PickMethod = CSP.PickMethod  
       FROM CSP
       JOIN #TASKDETAIL_WIP tw ON tw.RowID = CSP.RowID   
-  
-      SET @c_Status = '0'
-      IF EXISTS ( SELECT 1 
-                  FROM #TASKDETAIL_WIP
-                  WHERE RefTaskKey > ''
-                )
-      BEGIN 
-         SET @c_Status = 'H'
-      END 
+
+      UPDATE tw
+      SET [Status] = IIF(RefTaskKey > '', 'H', '0')
+      FROM #TASKDETAIL_WIP tw
    END
 
    IF @n_Continue = 1
@@ -626,6 +621,20 @@ BEGIN
       END  
       CLOSE @CUR_TW  
       DEALLOCATE @CUR_TW
+   END
+
+   IF @n_Continue = 1
+   BEGIN
+      EXEC isp_CreatePickdetail_WIP 
+         @c_Loadkey = ''                                 
+      ,  @c_Wavekey   = @c_Wavekey
+      ,  @c_WIP_RefNo = @c_SourceType
+      ,  @c_PickCondition_SQL = ''  
+      ,  @c_Action  = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
+      ,  @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
+      ,  @b_Success = @b_Success OUTPUT
+      ,  @n_Err     = @n_err     OUTPUT
+      ,  @c_ErrMsg  = @c_errmsg  OUTPUT
    END
 
    QUIT_SP: 

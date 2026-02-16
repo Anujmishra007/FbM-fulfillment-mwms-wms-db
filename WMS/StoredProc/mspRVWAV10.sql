@@ -44,7 +44,6 @@ BEGIN
 
    DECLARE @c_Taskdetailkey   NVARCHAR(10) = ''
          , @c_Pickslipno      NVARCHAR(10) = ''
-         , @c_Pickslipno_P    NVARCHAR(10) = ''
          , @c_CartonNo        NVARCHAR(5) = ''
  
    -- Reject if wave not yet release
@@ -152,7 +151,9 @@ BEGIN
             GOTO QUIT_SP
          END
 
-         IF @c_Pickslipno_P <> @c_Pickslipno
+         IF NOT EXISTS ( SELECT 1
+                         FROM PACKDETAIL (NOLOCK)
+                         WHERE Pickslipno = @c_Pickslipno )
          BEGIN
             DELETE FROM dbo.PackHeader
             WHERE PickSlipNo = @c_Pickslipno
@@ -169,7 +170,6 @@ BEGIN
             END
          END
          
-         SET @c_Pickslipno_P = @c_Pickslipno
          FETCH NEXT FROM CUR_PACK INTO @c_Pickslipno, @c_CartonNo
       END
       CLOSE CUR_PACK

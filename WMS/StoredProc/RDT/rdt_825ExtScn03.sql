@@ -67,31 +67,30 @@ BEGIN
 
     -- RDT.RDTMobRec variables for volumetric data
     DECLARE
-        @cPalletKey     NVARCHAR( 30),
-        @cLength        NVARCHAR( 10),
-        @cWidth         NVARCHAR( 10),
-        @cHeight        NVARCHAR( 10),
-        @cWeight        NVARCHAR( 10),
-        @cStackability  NVARCHAR( 10),
-        @cCaptureInfo   NVARCHAR( 10)
+        @cPalletKey      NVARCHAR( 30),
+        @cSavedPalletKey NVARCHAR( 30),  -- Preserved PalletKey (C_String1)
+        @cOrigPalletKey  NVARCHAR( 30),  -- Original PalletKey from main SP (V_String41)
+        @cLength         NVARCHAR( 10),
+        @cWidth          NVARCHAR( 10),
+        @cHeight         NVARCHAR( 10),
+        @cWeight         NVARCHAR( 10),
+        @cStackability   NVARCHAR( 10),
+        @cCaptureInfo    NVARCHAR( 10)
 
     -- Initialize output parameters
     SET @nAfterScn = @nScn
     SET @nAfterStep = @nStep
 
-    -- Retrieve current mobile session data
+    -- Retrieve current mobile session data (for confirmation screen ESC handling)
     SELECT
-        @nMobStep      = Step,
-        @nMobScn       = Scn,
-        @cLength       = V_String7,
-        @cWidth        = V_String8,
-        @cHeight       = V_String9,
-        @cWeight       = V_String6,
-        @cStackability = V_String17,
-        @cCaptureInfo  = V_String16,
-        @cPalletKey    = V_String41
+        @nMobStep        = Step,
+        @nMobScn         = Scn,
+        @cCaptureInfo    = V_String16,
+        @cOrigPalletKey  = V_String41,  -- Read original PalletKey from main SP
+        @cSavedPalletKey = C_String1    -- ExtScn saved PalletKey
     FROM rdt.rdtMobRec (NOLOCK)
     WHERE Mobile = @nMobile
+
 
     IF @nFunc = 825
     BEGIN
@@ -121,6 +120,14 @@ BEGIN
 
             IF @nInputKey = 0 -- ESC - Go back to edit screen (Screen 3)
             BEGIN
+                -- Use @cInField values (from confirmation screen) or saved PalletKey
+                SET @cPalletKey = ISNULL(NULLIF(@cInField01, ''), ISNULL(NULLIF(@cSavedPalletKey, ''), @cOrigPalletKey))
+                SET @cLength = @cInField02
+                SET @cWidth = @cInField03
+                SET @cHeight = @cInField04
+                SET @cWeight = @cInField05
+                SET @cStackability = @cInField07
+
                 -- Set fields as editable
                 SELECT @cFieldAttr02 = '', @cFieldAttr03 = '', @cFieldAttr04 = '', @cFieldAttr05 = '', @cFieldAttr07 = ''
 
@@ -146,6 +153,20 @@ BEGIN
         BEGIN
             IF @nInputKey = 1 -- ENTER - Show confirmation screen
             BEGIN
+                -- Use @cInField values directly (from screen input)
+                -- PalletKey: try @cInField01, then saved C_String1, then original V_String41
+                SET @cPalletKey = ISNULL(NULLIF(@cInField01, ''), ISNULL(NULLIF(@cSavedPalletKey, ''), @cOrigPalletKey))
+                SET @cLength = @cInField02
+                SET @cWidth = @cInField03
+                SET @cHeight = @cInField04
+                SET @cWeight = @cInField05
+                SET @cStackability = @cInField07
+
+                -- Save PalletKey to C_String1 for preservation (main SP will clear V_String41)
+                UPDATE rdt.rdtMobRec WITH (ROWLOCK)
+                SET C_String1 = @cPalletKey
+                WHERE Mobile = @nMobile
+
                 -- Populate confirmation screen with display-only data
                 SET @cOutField01 = @cPalletKey
                 SET @cOutField02 = @cLength
@@ -187,7 +208,6 @@ BEGIN
 
 Quit:
 END
-
 GO
 
 SET QUOTED_IDENTIFIER OFF

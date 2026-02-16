@@ -148,6 +148,7 @@ BEGIN
       @cPreviousOrderKey      NVARCHAR( 10),
       @cCloseDropIDFlag       NVARCHAR( 1) = '',
       @cPickDetailKey         NVARCHAR( 18),
+      @cRowRefTemp            INT,
       @nMorePage              INT,
       @nSerialQTY             INT,
       @cPackQty               INT,
@@ -160,6 +161,7 @@ BEGIN
       @nUPCQty                INT = 0,
       @nTranCount             INT,
       @nLoopIndex             INT = -1,
+      @cRemarks               NVARCHAR( 30),
 
       @cChkLottable01 NVARCHAR( 18),   @cChkLottable02 NVARCHAR( 18),   @cChkLottable03 NVARCHAR( 18),
       @dChkLottable04 DATETIME,        @dChkLottable05 DATETIME,        @cChkLottable06 NVARCHAR( 30),
@@ -172,7 +174,8 @@ BEGIN
       RowRef                  INT  PRIMARY KEY,
       PickDetailKey           NVARCHAR( 18),
       OrderKey                NVARCHAR( 10),
-      OrderLineNumber         NVARCHAR( 5)
+      OrderLineNumber         NVARCHAR( 5),
+      Remarks                 NVARCHAR( 30)
    )
 
    -- Screen constant
@@ -365,8 +368,8 @@ BEGIN
                         AND PickSlipNo = @cPickSlipNo
                         AND AddWho = @cUserName)
             BEGIN
-               SET @nAfterScn = @nScn_AbortPick
-               SET @nAfterStep = @nStep_AbortPick
+               SET @nAfterScn = 6840
+               SET @nAfterStep = 99
 
                SET @nPre_Step = @nCurrentStep
             END
@@ -386,8 +389,8 @@ BEGIN
          BEGIN
             DELETE FROM @tRDTPickLog
 
-            INSERT INTO @tRDTPickLog ( RowRef )
-            SELECT RowRef 
+            INSERT INTO @tRDTPickLog ( RowRef, Remarks )
+            SELECT RowRef, Remarks
             FROM rdt.rdtPickLog WITH(NOLOCK)
             WHERE Mobile = @nMobile
                AND PickSlipNo = @cPickSlipNo
@@ -402,13 +405,25 @@ BEGIN
                SET @nLoopIndex = -1
                WHILE 1 = 1
                BEGIN
-                  SELECT TOP 1 @nLoopIndex = RowRef 
+                  SELECT TOP 1 @nLoopIndex = RowRef,
+                     @cRemarks = Remarks
                   FROM @tRDTPickLog
                   WHERE RowRef > @nLoopIndex
                   ORDER BY RowRef
 
                   IF @@ROWCOUNT = 0
                      BREAK
+
+                  BEGIN TRY
+                     UPDATE dbo.SerialNo WITH(ROWLOCK)
+                     SET UserDefine01 = '0'
+                     WHERE UCCNo = ISNULL(@cRemarks, '')
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 255537
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update SerialNo failed
+                     GOTO UPD_RDTMOBREC
+                  END CATCH
                   
                   BEGIN TRY
                      DELETE FROM RDT.rdtPickLog
@@ -421,11 +436,24 @@ BEGIN
                   END CATCH
                END
             END
+
+            IF @nStep = @nStep_NoMoreTask
+               AND EXISTS(SELECT 1 
+                     FROM rdt.rdtPickLog WITH(NOLOCK)
+                     WHERE Mobile = @nMobile
+                        AND PickSlipNo = @cPickSlipNo
+                        AND AddWho = @cUserName
+                        AND ((Status = '9'AND PickMethod IN( 'GetTask-U', 'GetTask-P') ) OR PickMethod = 'PickTask-P' ) 
+                     )
+            BEGIN
+               SET @nAfterScn = 6828
+               SET @nAfterStep = 99
+            END
          END
       END
       ELSE IF @nCurrentStep = @nStep_ConfirmLOC
       BEGIN
-         IF @nInputKey = 0 -- ENTER
+         IF @nInputKey = 0 -- ESC
          BEGIN
             IF EXISTS(SELECT 1 
                      FROM rdt.rdtPickLog 
@@ -433,81 +461,12 @@ BEGIN
                         AND PickSlipNo = @cPickSlipNo
                         AND AddWho = @cUserName)
             BEGIN
-               SET @nAfterScn = @nScn_AbortPick
-               SET @nAfterStep = @nStep_AbortPick
+               SET @nAfterScn = 6840
+               SET @nAfterStep = 99
                SET @cOutField01 = ''
             END
          END
          SET @nPre_Step = @nStep_ConfirmLOC
-      END
-      ELSE IF @nCurrentStep = @nStep_AbortPick
-      BEGIN
-         IF @nInputKey = 1 -- ENTER
-         BEGIN
-            SET @cOption = TRIM(@cInField01)
-            IF @cOption = '1'
-            BEGIN
-               IF @nPre_Step IN( @nStep_PickZone, @nStep_ConfirmLOC, @nStep_SKUQTY)
-               BEGIN
-                  SET @nAfterScn = @nScn_PickSlipNo
-                  SET @nAfterStep = @nStep_PickSlipNo
-
-                  SET @cOutField01 = ''
-                  SET @cOutField02 = '' --PickZone
-                  SET @cOutField03 = '' --DropID
-
-                  EXEC rdt.rdtSetFocusField @nMobile, 21 -- PickZone
-
-                  SET @nPre_Step = @nCurrentStep
-               END
-            END
-            IF @cOption = '2'  -- No
-            BEGIN
-               IF @nPre_Step = @nStep_PickZone
-               BEGIN
-                  SET @nAfterScn = @nScn_PickZone
-                  SET @nAfterStep = @nStep_PickZone
-
-                  SET @cOutField01 = @cPickSlipNo
-                  SET @cOutField02 = '' --PickZone
-                  SET @cOutField03 = '' --DropID
-                  SET @nTtlBalQty = 0
-                  SET @nBalQty = 0
-                  SET @cSuggLOC = ''
-                  SET @cCurrLOC = ''
-                  SET @cSkippedSKU = ''
-                  SET @cSuggSKU = ''
-                  SET @cOutField15 = ''
-
-                  EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
-
-                  SET @nPre_Step = @nCurrentStep
-               END
-            END
-         END
-         ELSE IF @nInputKey = 0 -- ESC
-         BEGIN
-            IF @nPre_Step = @nStep_PickZone
-            BEGIN
-               SET @nAfterScn = @nScn_PickZone
-               SET @nAfterStep = @nStep_PickZone
-
-               SET @cOutField01 = @cPickSlipNo
-               SET @cOutField02 = '' --PickZone
-               SET @cOutField03 = '' --DropID
-               SET @nTtlBalQty = 0
-               SET @nBalQty = 0
-               SET @cSuggLOC = ''
-               SET @cCurrLOC = ''
-               SET @cSkippedSKU = ''
-               SET @cSuggSKU = ''
-               SET @cOutField15 = ''
-
-               EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
-
-               SET @nPre_Step = @nCurrentStep
-            END
-         END
       END
       ELSE IF @nCurrentStep = @nStep_VerifyID
       BEGIN
@@ -1344,7 +1303,7 @@ BEGIN
                      ELSE
                      BEGIN
                         -- Go to No More Task screen
-                        SET @nAfterScn = 6776
+                        SET @nAfterScn = 6828
                         SET @nAfterStep = 99
                      END
                   END
@@ -2001,7 +1960,7 @@ BEGIN
                         AND RPL.PickMethod = 'GetTask-P'
                         AND RPL.Status = '0'
                         AND RPL.PickLockQty < RPL.ActQty
-                        AND (LOT.Lot = @cScannedLot OR (LOT.Lot = @cScannedLot AND @cScannedLottable01 = LA.Lottable01))
+                        AND (LOT.Lot = @cScannedLot OR (LOT.Lot <> @cScannedLot AND @cScannedLottable01 = LA.Lottable01))
                      ORDER BY RPL.OrderKey, IIF(LOT.Lot = @cScannedLot, 1, 2), RPL.PickLockQty DESC, RPL.PickDetailKey
 
                      SELECT @nRowCount = @@ROWCOUNT
@@ -2023,6 +1982,18 @@ BEGIN
                      BEGIN CATCH
                         SET @nErrNo = 255518
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert rdtPickLog failed
+                        EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+                        GOTO UPD_RDTMOBREC
+                     END CATCH
+
+                     BEGIN TRY
+                        UPDATE dbo.SerialNo WITH(ROWLOCK)
+                        SET UserDefine01 = '3'
+                        WHERE SerialNo = @cScannedSN
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 255536
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update SerialNo failed
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                         GOTO UPD_RDTMOBREC
                      END CATCH
@@ -2821,7 +2792,7 @@ BEGIN
                                              AND AddWho = @cUserName)
                               BEGIN
                                  -- No more task, complete pick slip
-                                 SET @nAfterScn = 6776
+                                 SET @nAfterScn = 6828
                                  SET @nAfterStep = 99
                               END
                               ELSE
@@ -2888,8 +2859,8 @@ BEGIN
                SET @cOutField15 =''
 
                -- Go to Abort screen
-               SET @nAfterScn = @nScn_AbortPick
-               SET @nAfterStep = @nStep_AbortPick
+               SET @nAfterScn = 6840
+               SET @nAfterStep = 99
                GOTO UPD_RDTMOBREC
             END
          END
@@ -2913,7 +2884,6 @@ BEGIN
             DECLARE @cScannedUCCorSNQty   INT
             DECLARE @cPickDetailKeyRollback NVARCHAR(18)
             DECLARE @cPickDetailType NVARCHAR(10)
-            DECLARE @cRowRefTemp INT
 
             IF @nInputKey = 1
             BEGIN
@@ -3459,7 +3429,7 @@ BEGIN
                      ELSE
                      BEGIN
                         -- Go to No More Task screen
-                        SET @nAfterScn = 6776
+                        SET @nAfterScn = 6828
                         SET @nAfterStep = 99
                      END
                   END
@@ -3549,7 +3519,8 @@ BEGIN
                   @cPickDetailKeyRollback = PickDetailKey,
                   @cPickDetailType = PickMethod,
                   @cRowRefTemp = RowRef,
-                  @cScannedUCCorSNQty = ActQty
+                  @cScannedUCCorSNQty = ActQty,
+                  @cRemarks = Remarks
                FROM RDT.rdtPickLog WITH(NOLOCK)
                WHERE PickSlipNo = @cPickSlipNo
                   AND Mobile = @nMobile
@@ -3590,7 +3561,8 @@ BEGIN
                            GOTO UPD_RDTMOBREC
                         END CATCH
 
-                        SELECT TOP 1 @cRowRefTemp = RowRef
+                        SELECT TOP 1 @cRowRefTemp = RowRef,
+                           @cRemarks = Remarks
                         FROM RDT.rdtPickLog WITH(NOLOCK)
                         WHERE PickDetailKey =  @cPickDetailKeyRollback
                            AND PickSlipNo = @cPickSlipNo
@@ -3608,6 +3580,17 @@ BEGIN
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Delete rdtPickLog failed
                            GOTO UPD_RDTMOBREC
                         END CATCH
+
+                        BEGIN TRY
+                           UPDATE dbo.SerialNo WITH(ROWLOCK)
+                           SET UserDefine01 = '0'
+                           WHERE SerialNo = @cRemarks
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 255538
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update SerialNo failed
+                           GOTO UPD_RDTMOBREC
+                        END CATCH
                      END
                      ELSE IF @cPickDetailType = 'Pick-P'
                      BEGIN
@@ -3618,6 +3601,17 @@ BEGIN
                         BEGIN CATCH
                            SET @nErrNo = 255523
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Delete rdtPickLog failed
+                           GOTO UPD_RDTMOBREC
+                        END CATCH
+
+                        BEGIN TRY
+                           UPDATE dbo.SerialNo WITH(ROWLOCK)
+                           SET UserDefine01 = '0'
+                           WHERE SerialNo = @cRemarks
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 255539
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update SerialNo failed
                            GOTO UPD_RDTMOBREC
                         END CATCH
 
@@ -3654,12 +3648,12 @@ BEGIN
             END
          END
          /********************************************************************************
-         Scn = 6776. No More Task screen
+         Scn = 6828. No More Task screen
             To ID             (field01)
             Close DropID
             Close all Drop ID
          ********************************************************************************/
-         ELSE IF @nCurrentScn = 6776
+         ELSE IF @nCurrentScn = 6828
          BEGIN
             IF @nInputKey = 1
             BEGIN
@@ -4208,7 +4202,7 @@ BEGIN
                            SET @cOutField01 = '' -- PickSlipNo
 
                            -- Go to No More Task, Close All DropID screen
-                           SET @nAfterScn = 6776
+                           SET @nAfterScn = 6828
                            SET @nAfterStep = 99
                            GOTO Quit
                         END
@@ -4261,6 +4255,200 @@ BEGIN
                -- Go to SKU QTY screen
                SET @nAfterScn = 6774
                SET @nAfterStep = 99
+            END
+         END
+         /********************************************************************************
+         Scn = 6840. Abort pick screen
+            CONFIRM OPTION?
+            1 = Yes
+            2 = No
+            9 = Close ALL Pallet
+            OPTION:        (field01)
+         ********************************************************************************/
+         ELSE IF @nCurrentScn = 6840
+         BEGIN
+            IF @nInputKey = 1 -- ENTER
+            BEGIN
+               SET @cOption = TRIM(@cInField01)
+
+               IF @cOption = ''
+               BEGIN
+                  SET @nErrNo = 255540
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Option required
+                  GOTO Quit
+               END
+
+               IF @cOption NOT IN ('1', '2', '9')
+               BEGIN
+                  SET @nErrNo = 255541
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Invalid Option
+                  GOTO Quit
+               END
+
+               IF @cOption = '1'
+               BEGIN
+                  SET @nTranCount = @@TRANCOUNT
+                  BEGIN TRAN  -- Begin our own transaction
+                  SAVE TRAN rdt_839ExtScn06_6840 -- For rollback or commit only our own transaction
+
+                  WHILE 1 = 1
+                  BEGIN
+                     SELECT TOP 1 @cRowRefTemp = RowRef,
+                        @cRemarks = Remarks
+                     FROM RDT.rdtPickLog WITH(NOLOCK)
+                     WHERE PickSlipNo = @cPickSlipNo
+                        AND Mobile = @nMobile
+                        AND AddWho = @cUserName
+
+                     IF @@ROWCOUNT = 0
+                        BREAK
+
+                     BEGIN TRY
+                        DELETE FROM RDT.rdtPickLog
+                        WHERE RowRef = @cRowRefTemp
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 255542
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Delete rdtPickLog failed
+
+                        IF XACT_STATE() = -1
+                           ROLLBACK TRAN rdt_839ExtScn06_6840
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+                        GOTO Quit
+                     END CATCH
+
+                     BEGIN TRY
+                        UPDATE dbo.SerialNo WITH(ROWLOCK)
+                        SET UserDefine01 = '0'
+                        WHERE SerialNo = @cRemarks
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 255543
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update SerialNo failed
+                        IF XACT_STATE() = -1
+                           ROLLBACK TRAN rdt_839ExtScn06_6840
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+                        GOTO Quit
+                     END CATCH
+                  END
+
+                  COMMIT TRAN rdt_839ExtScn06_6840 -- Only commit change made here
+                  WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                     COMMIT TRAN
+                  
+                  IF @nPre_Step IN( @nStep_PickZone, @nStep_ConfirmLOC, @nStep_SKUQTY)
+                  BEGIN
+                     SET @nAfterScn = @nScn_PickSlipNo
+                     SET @nAfterStep = @nStep_PickSlipNo
+
+                     SET @cOutField01 = ''
+                     SET @cOutField02 = '' --PickZone
+                     SET @cOutField03 = '' --DropID
+
+                     EXEC rdt.rdtSetFocusField @nMobile, 21 -- PickZone
+
+                     SET @nPre_Step = @nCurrentStep
+                  END
+               END
+               ELSE IF @cOption = '2'  -- No
+               BEGIN
+                  IF @nPre_Step = @nStep_PickZone
+                  BEGIN
+                     SET @nAfterScn = @nScn_PickZone
+                     SET @nAfterStep = @nStep_PickZone
+
+                     SET @cOutField01 = @cPickSlipNo
+                     SET @cOutField02 = '' --PickZone
+                     SET @cOutField03 = '' --DropID
+                     SET @nTtlBalQty = 0
+                     SET @nBalQty = 0
+                     SET @cSuggLOC = ''
+                     SET @cCurrLOC = ''
+                     SET @cSkippedSKU = ''
+                     SET @cSuggSKU = ''
+                     SET @cOutField15 = ''
+
+                     EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
+
+                     SET @nPre_Step = @nCurrentStep
+                  END
+                  ELSE IF @nPre_Step = @nStep_ConfirmLOC
+                  BEGIN
+                     -- Prepare next screen var
+                     SET @cOutField01 = @cSuggLOC
+                     SET @cOutField02 = '' -- LOC
+
+                     SET @nAfterScn = @nScn_ConfirmLOC
+                     SET @nAfterStep = @nStep_ConfirmLOC
+                  END
+               END
+               ELSE IF @cOption = '9'
+               BEGIN
+                  EXEC RDT.rdt_PickPiece_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
+                     ,@cPickSlipNo
+                     ,@cPickZone
+                     ,'ALLDROPID'
+                     ,@cSuggLOC
+                     ,@cSuggSKU
+                     ,@nActQTY
+                     ,@cLottableCode
+                     ,@cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05
+                     ,@cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10
+                     ,@cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
+                     ,@cPackData1,  @cPackData2,  @cPackData3 
+                     ,@cSuggID
+                     ,@cSerialNo   = '' 
+                     ,@nSerialQTY  = 0
+                     ,@nBulkSNO    = 0
+                     ,@nBulkSNOQTY = 0
+                     ,@nErrNo      = @nErrNo  OUTPUT
+                     ,@cErrMsg     = @cErrMsg OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO Quit
+
+                  -- Scan out
+                  SET @nErrNo = 0
+                  EXEC rdt.rdt_PickPiece_ScanOut @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+                     ,@cPickSlipNo
+                     ,@nErrNo       OUTPUT
+                     ,@cErrMsg      OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO Quit
+
+                  -- Prepare next screen var
+                  SET @cOutField01 = '' -- PickSlipNo
+
+                  -- Go to PickSlipNo screen
+                  SET @nAfterScn = @nScn_PickSlipNo
+                  SET @nAfterStep = @nStep_PickSlipNo
+                  GOTO Quit
+               END
+            END
+            ELSE IF @nInputKey = 0 -- ESC
+            BEGIN
+               IF @nPre_Step = @nStep_PickZone
+               BEGIN
+                  SET @nAfterScn = @nScn_PickZone
+                  SET @nAfterStep = @nStep_PickZone
+
+                  SET @cOutField01 = @cPickSlipNo
+                  SET @cOutField02 = '' --PickZone
+                  SET @cOutField03 = '' --DropID
+                  SET @nTtlBalQty = 0
+                  SET @nBalQty = 0
+                  SET @cSuggLOC = ''
+                  SET @cCurrLOC = ''
+                  SET @cSkippedSKU = ''
+                  SET @cSuggSKU = ''
+                  SET @cOutField15 = ''
+
+                  EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
+
+                  SET @nPre_Step = @nCurrentStep
+               END
             END
          END
       END
