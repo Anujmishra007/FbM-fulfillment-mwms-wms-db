@@ -272,28 +272,28 @@ BEGIN
                      AND CL.SHORT = 'Y'
                   WHERE O.OrderKey = @cOrderKey
                )
-			         AND EXISTS (
-			            SELECT 1 
-				          FROM dbo.TaskDetail WITH(NOLOCK) 
-				          WHERE OrderKey = @cOrderKey 
-				             AND Status > '3'
-			               AND (UserKey = @cUserName OR UserKeyOverRide = @cUserName)
-				             AND AreaKey = @cAreaKey
-			         )
-			         BEGIN
+			   AND EXISTS (
+			      SELECT 1 
+				  FROM dbo.TaskDetail WITH(NOLOCK) 
+				  WHERE OrderKey = @cOrderKey 
+				     AND Status > '3'
+			         AND (UserKey = @cUserName OR UserKeyOverRide = @cUserName)
+				     AND AreaKey = @cAreaKey
+			   )
+			   BEGIN
                   IF @cReasonCode NOT IN (
                      SELECT Short 
                      FROM CODELKUP C WITH(NOLOCK)
                      WHERE C.LISTNAME = 'JCBCABSRSN' 
                         AND C.StorerKey = @cStorerKey
-						            AND UDF01 = 'Y'
+					    AND UDF01 = 'Y'
                   )
-			            BEGIN
+			      BEGIN
                      SET @nErrNo = 239668
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO Step_9_Fail
-			            END
-			         END
+			      END
+			   END
 
                IF EXISTS (
                   SELECT 1
@@ -304,15 +304,15 @@ BEGIN
                      AND CL.SHORT = 'Y'
                   WHERE O.OrderKey = @cOrderKey
                )
-			         AND @cReasonCode <> ''
-			         BEGIN
-			            UPDATE dbo.TaskDetail
-			            SET Status = 0
-			            WHERE OrderKey = @cOrderKey
-			               AND Status = '3'
-			               AND (UserKey = @cUserName OR UserKeyOverRide = @cUserName)
-				             AND AreaKey = @cAreaKey
-			         END
+			   AND @cReasonCode <> ''
+			   BEGIN
+			      UPDATE dbo.TaskDetail
+			      SET Status = 0
+			      WHERE OrderKey = @cOrderKey
+			         AND Status = '3'
+			         AND (UserKey = @cUserName OR UserKeyOverRide = @cUserName)
+				     AND AreaKey = @cAreaKey
+			   END
      
                IF EXISTS (
                   SELECT 1 
