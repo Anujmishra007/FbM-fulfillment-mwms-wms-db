@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave Release                                               */    
 /*                                                                       */    
-/* Version: 1.0                                                          */    
+/* Version: 2.0                                                          */
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -43,7 +43,9 @@ GO
 /* 2025-10-10  SSA08    1.9   UWP-42248 -Enhanced session management     */
 /* 2025-10-24  PPA374   1.10  UWP-42949 -Added PP type for the RPF task  */
 /* 2025-12-04  Wan01    1.11  FCR-3958 CR V2.3 (Work with PPA374)        */
-/* 2026-01-06  Wan01          UWP-45254, CR V2.3 fixed                   */  
+/* 2026-01-06  Wan01          UWP-45254, CR V2.3 fixed                   */
+/* 2026-02-13  VNI01    2.0   UWP-48774 , BUG FIX FOR MISSING TASKDETKEY */
+/*                              ON SECOND WAVE RELEASE(WORK WITH PPA374) */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -693,6 +695,17 @@ BEGIN
                                           AND TD.Sourcetype = @c_SourceType
                                           AND TD.Tasktype   = 'FCP'                 --2025-07-01
          WHERE TD.Taskdetailkey IS NULL
+            AND NOT EXISTS (                                    -- VNI01(START)
+                SELECT 1 FROM TASKDETAIL TD1 WITH (NOLOCK)
+                INNER JOIN PICKDETAIL PD1 WITH (NOLOCK)
+                    ON TD1.Taskdetailkey = PD1.Taskdetailkey
+                    AND TD1.StorerKey = PD1.StorerKey
+                    AND TD1.OrderKey = PD1.OrderKey
+                WHERE TD1.Status NOT IN ('9','X')
+                    AND PD1.TaskDetailKey <> ''
+                    AND TD1.StorerKey = @c_StorerKey
+                    AND TD1.TaskType IN ('FCP1', 'RCP1', 'RP1')
+            )                                                    -- VNI01(END)
       END
    END
 
