@@ -142,6 +142,8 @@ DECLARE
    @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
    @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
+-- FCR-9672: C_String1 is used by rdt_825ExtScn03 for saved PalletKey
+
 -- Getting Mobile information
 SELECT
    @nFunc            = Func,
@@ -792,7 +794,7 @@ BEGIN
       SET @nStep = @nStep - 1
    END
 
-   -- FCR-9672: If ExtScnSP is configured, go to Step_99 (skip update here)
+   -- FCR-9672: If ExtScnSP is configured, go to Step_99
    IF @cExtScnSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')

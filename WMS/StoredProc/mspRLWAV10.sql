@@ -44,7 +44,7 @@ BEGIN
          , @c_Orderkey        NVARCHAR(10)= ''
          , @c_Loadkey         NVARCHAR(10)= ''
          , @c_PickSlipNo      NVARCHAR(10)= ''
-         , @c_SourcetType     NVARCHAR(30)= 'mspRLWAV10'
+         , @c_SourceType      NVARCHAR(30)= 'mspRLWAV10'
 
          , @c_SQL             NVARCHAR(MAX) = ''
          , @c_SQLParms        NVARCHAR(2000)= ''
@@ -216,6 +216,24 @@ BEGIN
          print 'PICK'
       END
    END
+   
+   IF @n_Continue = 1 
+   BEGIN
+      UPDATE WAVE WITH (ROWLOCK)
+         SET TMReleaseFlag = 'Y'
+          ,  TrafficCop = NULL
+          ,  EditWho  = SUSER_SNAME()
+          ,  EditDate = GETDATE()
+      WHERE WaveKey = @c_Wavekey
+
+      SELECT @n_Err = @@ERROR
+
+      IF @n_Err <> 0
+      BEGIN
+         SET @n_Continue = 3
+      END
+   END
+
 QUIT_SP:
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NOT NULL
    BEGIN

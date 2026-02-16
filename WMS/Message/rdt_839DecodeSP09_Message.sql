@@ -26,5 +26,6 @@ EXECUTE rdt.rdtAddMsg 255471, 10, '255471 StockAllocated',     'us_english', 839
 EXECUTE rdt.rdtAddMsg 255472, 10, '255472 StockAllocated',     'us_english', 839, 0, '255472 Stock is allocated'
 EXECUTE rdt.rdtAddMsg 255473, 10, '255473 UCCScanned',         'us_english', 839, 0, '255473 UCC is scanned'
 EXECUTE rdt.rdtAddMsg 255474, 10, '255474 SerialNoScanned',    'us_english', 839, 0, '255474 SerialNo is scanned'
+EXECUTE rdt.rdtAddMsg 255475, 10, '255475 SerialNoScanned',    'us_english', 839, 0, '255475 SerialNo is scanned'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 255451 AND 255500

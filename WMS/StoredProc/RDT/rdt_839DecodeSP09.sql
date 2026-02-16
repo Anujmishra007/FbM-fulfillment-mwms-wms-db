@@ -279,7 +279,8 @@ BEGIN
                DECLARE 
                   @cSerialNo           NVARCHAR(50),
                   @cSKUBUSR5           NVARCHAR(30),
-                  @cSKUBUSR6           NVARCHAR(30)
+                  @cSKUBUSR6           NVARCHAR(30),
+                  @cSerialNoStatus     NVARCHAR(10)
                
                SELECT @cSKUBUSR5 = @cSegment2, @cSKUBUSR6 = @cSegment3
 
@@ -298,7 +299,12 @@ BEGIN
                SET @cSerialNo = @cSegment4 + @cSegment5 + @cSegment7
 
                SELECT
-                  @cScannedUCCLot = Lot
+                  @cScannedUCCLot = Lot,
+                  @cScannedUCC = UCCNo,
+                  @cScannedID = ID,
+                  @cScannedUCCLoc = Loc,
+                  @cScannedUCCSKU = SKU,
+                  @cSerialNoStatus = TRIM(ISNULL(UserDefine01, ''))
                FROM dbo.SerialNo WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND SerialNo = @cSerialNo
@@ -312,77 +318,57 @@ BEGIN
                   GOTO Quit
                END
 
-               SELECT @cScannedUCC = ParentSerialNo
-               FROM dbo.MasterSerialNo MSN WITH(NOLOCK)
-               WHERE UnitType = 'BB'
-                  AND StorerKey = @cStorerKey
-                  AND SerialNo = @cSerialNo
-
-               IF @@ROWCOUNT > 0
+               IF @cSerialNoStatus IN ('3', '5')
                BEGIN
-                  SELECT @nRowCount = COUNT(1)
-                     FROM dbo.MasterSerialNo MSN WITH(NOLOCK)
-                  WHERE UnitType = 'UCC'
-                     AND StorerKey = @cStorerKey
-                     AND SerialNo = @cScannedUCC
+                  SET @nErrNo = 255475
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  SerialNo is scanned
+                  GOTO Quit
+               END
 
-                  IF @nRowCount > 0
+               IF ISNULL(@cScannedUCC, '') <> ''
+               BEGIN
+                  SELECT 
+                     @cScannedUCCLoc = Loc,
+                     @cScannedUCCLot = Lot,
+                     @cScannedUCCSKU = SK.SKU,
+                     @nScannedUCCQty = Qty,
+                     @cScannedID     = ID,
+                     @cScannedUCCStatus = Status
+                  FROM dbo.UCC WITH(NOLOCK)
+                  INNER JOIN dbo.SKU SK WITH(NOLOCK) ON UCC.StorerKey = SK.StorerKey AND UCC.SKU = SK.SKU
+                  WHERE UCC.UCCNo = @cScannedUCC
+                     AND UCC.StorerKey = @cStorerKey
+
+                  SET @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount = 0
                   BEGIN
-                     SELECT 
-                        @cScannedUCCLoc = Loc,
-                        @cScannedUCCLot = Lot,
-                        @cScannedUCCSKU = SK.SKU,
-                        @nScannedUCCQty = Qty,
-                        @cScannedID     = ID,
-                        @cScannedUCCStatus = Status
-                     FROM dbo.UCC WITH(NOLOCK)
-                     INNER JOIN dbo.SKU SK WITH(NOLOCK) ON UCC.StorerKey = SK.StorerKey AND UCC.SKU = SK.SKU
-                     WHERE UCC.UCCNo = @cScannedUCC
-                        AND UCC.StorerKey = @cStorerKey
-
-                     SET @nRowCount = @@ROWCOUNT
-
-                     IF @nRowCount = 0
-                     BEGIN
-                        SET @nErrNo = 255460
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid UCC
-                        GOTO Quit
-                     END
-
-                     -- Check multi SKU UCC
-                     IF @nRowCount > 1
-                     BEGIN
-                        SET @nErrNo = 255467
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Multi SKU UCC
-                        GOTO Quit
-                     END
-
-                     IF @cScannedUCCLoc <> @cLOC
-                     BEGIN
-                        SET @nErrNo = 255462
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Loc does not match
-                        GOTO Quit
-                     END
-
-                     IF @cScannedUCCSKU <> @cSuggSKU
-                     BEGIN
-                        SET @nErrNo = 255463
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU does not match
-                        GOTO Quit
-                     END
-                  END
-                  ELSE
-                  BEGIN
-                     SET @nErrNo = 255470
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC does not exist in MasterSerialNo
+                     SET @nErrNo = 255460
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid UCC
                      GOTO Quit
                   END
-               END
-               ELSE
-               BEGIN
-                  SET @nErrNo = 255468
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SerialNo does not exist in MasterSerialNo
-                  GOTO Quit
+
+                  -- Check multi SKU UCC
+                  IF @nRowCount > 1
+                  BEGIN
+                     SET @nErrNo = 255467
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Multi SKU UCC
+                     GOTO Quit
+                  END
+
+                  IF @cScannedUCCLoc <> @cLOC
+                  BEGIN
+                     SET @nErrNo = 255462
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Loc does not match
+                     GOTO Quit
+                  END
+
+                  IF @cScannedUCCSKU <> @cSuggSKU
+                  BEGIN
+                     SET @nErrNo = 255463
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU does not match
+                     GOTO Quit
+                  END
                END
 
                IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE Mobile = @nMobile AND PickSlipNo = @cPickSlipNo AND Remarks = @cSerialNo AND PickMethod = 'Pick-P')
