@@ -59,7 +59,6 @@ BEGIN
          , @c_HardCTNGroup          NVARCHAR(1000) = ''
          , @c_SortCTNGroup          NVARCHAR(1000) = ''
          , @b_CZN_Check             BIT            = 0
-         , @b_GetSmaller            BIT            = 1
 
          , @n_ID_oitp               INT            = 0
          , @n_RowID_cz              INT            = 0         
@@ -523,8 +522,9 @@ BEGIN
                  +  ', PACK.LengthUOM3'            
                  +  ', PACK.WidthUOM3'            
                  +  ', PACK.HeightUOM3'           
-                 +  ', SKU.StdCube'  
-                 +  ', SKU.StdGrossWgt'  
+                 +  ', StdCube = CASE WHEN ISNULL(SKU.StdCube, 0.00) = 0.00 THEN PACK.CubeUOM3 ELSE SKU.StdCube END'
+                 +  ', StdGrossWgt = CASE WHEN ISNULL(SKU.StdGrossWgt, 0.00) = 0.00 THEN SKU.GrossWgt ELSE SKU.StdGrossWgt END'  
+                 +  ', Weight = CASE WHEN ISNULL(SKU.StdGrossWgt, 0.00) = 0.00 THEN SKU.GrossWgt ELSE SKU.StdGrossWgt END'
                  +  ', Dim1 = sds.MinVal'
                  +  ', Dim2 = sds.MidVal'
                  +  ', Dim3 = sds.MaxVal'
@@ -577,7 +577,7 @@ BEGIN
       INSERT INTO #PRECTN  (  [PickDetailKey], [OrderKey], [DocType], [BillToKey]         
                            ,  [PackGrpNo], [HardCTNGrpNo],[SortCTNGrpNo]     
                            ,  [Storerkey], [Sku], [BUSR7], [ItemClass], [Size]              
-                           ,  [Length], [Width], [Height], [StdCube], [StdGrossWgt]
+                           ,  [Length], [Width], [Height], [StdCube], [StdGrossWgt], [Weight]
                            ,  [Dim1], [Dim2], [Dim3]
                            ,  [PackQtyIndicator]         
                            ,  [UOM], [Qty], [DropID]  
@@ -648,7 +648,7 @@ BEGIN
                ,cz.Dim2
                ,cz.Dim3
                ,CartonDefault = 1
-         FROM #CTNZ AS cz  
+         FROM @t_CTNZ AS cz  
          
          WHERE cz.CartonizationGroup = @c_CTNGroup
          ORDER BY cz.RowID
@@ -698,14 +698,14 @@ BEGIN
             WHERE cl1.ListName = 'CSCUK01GCR'
             AND   cl1.Code     > ''
             AND   cl1.Storerkey= @c_Storerkey
-            AND   cl1.Code2    = @c_BillToKey
+            AND   cl1.Code2    IN (@c_BillToKey, '')
             AND   cl1.Long     = 'ECO'   --ECO stands for ECOM
             AND   cl1.Short    > ''
             AND   cl1.UDF01    = 'Y'
-            ORDER BY cl1.Code
+            ORDER BY CASE WHEN cl1.Code2 = @c_BillToKey THEN 1 ELSE 2 END, cl1.Code
 
-            SET @n_ROwCount = @@ROWCOUNT
-            IF @n_ROwCount = 0
+            SET @n_RowCount = @@ROWCOUNT
+            IF @n_RowCount = 0
             BEGIN
                INSERT INTO #CTNZ  
                   (  
@@ -812,7 +812,7 @@ BEGIN
                         JOIN @TMP_CL cl2 ON  cl2.ListName = 'CSCUK01GCR'
                                          AND cl2.Code > ''
                                          AND cl2.Storerkey = pcz.Storerkey
-                                         AND cl2.Code2 = @c_BillToKey
+                                         AND cl2.Code2 IN (@c_BillToKey, '')
                                          AND cl2.Long  = cl1.UDF01
                                          AND cl2.UDF01 = 'Y'
                         JOIN @t_CTNZ AS cz ON cz.CartonType = cl2.Short
@@ -821,7 +821,7 @@ BEGIN
                         AND   cl1.Storerkey = pcz.Storerkey
                         AND   cl1.UDF01 > ''
                         AND   cz.[Cube] >= cs.TotalPackCube
-                        ORDER BY cz.RowID
+                        ORDER BY CASE WHEN cl2.Code2 = @c_BillToKey THEN 1 ELSE 2 END, cz.RowID
                      ) czb
          OUTER APPLY (  SELECT TOP 1  
                               cz.CartonizationGroup
@@ -841,7 +841,7 @@ BEGIN
          --------------------------
          SET @n_SkuAccessQty   = 0
          PRECZN:
-         SET @n_HardCTNGrpNo_P = ''
+         SET @n_HardCTNGrpNo_P = 0
          SET @c_ItemClass_P    = ''
          SET @c_Size_P         = ''
 
@@ -1016,11 +1016,11 @@ BEGIN
                      WHERE cl1.ListName = 'CSCUK01GCR'
                      AND   cl1.Code     > ''
                      AND   cl1.Storerkey= @c_Storerkey
-                     AND   cl1.Code2    = @c_BillToKey
+                     AND   cl1.Code2    IN (@c_BillToKey, '')
                      AND   cl1.Long     = @c_CTNGroup_BTK         --BillToKey CartonGroup          
                      AND   cl1.Short    > ''
                      AND   cl1.UDF01    = 'Y'
-                     ORDER BY cl1.Code
+                     ORDER BY CASE WHEN cl1.Code2 = @c_BillToKey THEN 1 ELSE 2 END, cl1.Code
                      SET @n_RowCount = @@ROWCOUNT
                   END
 
@@ -1209,6 +1209,8 @@ BEGIN
                      ORDER BY cz.RowID
 
                      SET @n_CartonSeqNo = @n_CartonSeqNo + 1
+                     SET @n_TotalCBM   = 0.00   --Reset CBM
+                     SET @n_TotalWgt   = 0.00   --Reset Wgt
                      SET @n_CBMLeftToFulFill = @n_CartonCube  
                      SET @n_WgtLeftToFulFill = @n_CartonWeight
 
@@ -1294,7 +1296,7 @@ BEGIN
                   IF @n_QtyToPack = 0 AND @b_NewCarton = 1
                   BEGIN
                      SET @b_API          = 0
-                     SET @b_GetSmaller   = 0
+                     SET @n_GetSmaller   = 0
                      SET @n_QtyToPack_PI = 1
                      SET @n_QtyToPack    = @n_QtyToPack_PI * @n_PackQtyIndicator
                      SET @c_CartonType   = @c_CartonType_Max
@@ -1536,7 +1538,7 @@ BEGIN
                         SET @n_TotalWgt            = @n_TotalWgt + (@n_StdGrossWgt*@n_QtyToPack_PI)
                         SET @n_QtyLeftToFulFill_PI = @n_QtyLeftToFulFill_PI - @n_QtyToPack_PI
                         SET @n_CBMLeftToFulFill    = @n_CBMLeftToFulFill - (@n_StdCube*@n_QtyToPack_PI)
-                        SET @n_WgtLeftToFulFill    = @n_WgtLeftToFulFill - (@n_StdCube*@n_QtyToPack_PI)
+                        SET @n_WgtLeftToFulFill    = @n_WgtLeftToFulFill - (@n_StdGrossWgt*@n_QtyToPack_PI)
                         SET @n_Qty_PI              = @n_Qty_PI - @n_QtyToPack_PI 
                         SET @n_Qty                 = @n_Qty    - @n_QtyToPack
                      END
@@ -1642,16 +1644,17 @@ BEGIN
          IF @n_Continue = 1 
          BEGIN
             SET @cur_CLOSECTN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT cd.OrderKey, cd.CartonSeqNo, cd.IsApi
+            SELECT TOP 1
+                   cd.OrderKey, cd.CartonSeqNo, cd.IsApi
                  , SUM((cd.Qty / cd.PackQtyIndicator) * cd.StdCube)
                  , SUM((cd.Qty / cd.PackQtyIndicator) * cd.StdGrossWgt)
                  , cz.RowID
             FROM #CartonDetail AS cd
-            JOIN #CTNZ AS cz ON cd.CartonGroup = cz.CartonizationGroup AND cd.CartonType = cz.CartonType
+            JOIN @t_CTNZ AS cz ON cd.CartonGroup = cz.CartonizationGroup AND cd.CartonType = cz.CartonType
             WHERE cd.[Status] = '0'
             AND cd.UOM >= '6'
             GROUP BY cd.OrderKey, cd.CartonSeqNo, cd.IsApi, cz.RowID
-            ORDER BY cd.OrderKey, cd.CartonSeqNo
+            ORDER BY cd.OrderKey, cd.CartonSeqNo DESC
 
             OPEN @cur_CLOSECTN
 
@@ -1782,7 +1785,7 @@ BEGIN
          END
 
          SET @n_AuditPercent = CASE WHEN ISNUMERIC(@c_AuditPercent) = 1 
-                                    THEN CONVERT(Decimal(5,2), @n_AuditPercent)
+                                    THEN CONVERT(Decimal(5,2), @c_AuditPercent)
                                     ELSE 0
                                     END
                   
@@ -1814,9 +1817,8 @@ BEGIN
                               AND cd.UOM >= '6'
                               AND cd.[Status] = '9'
                               AND cd.IsVas    = 0
-                              GROUP BY cd.UOM, cd.CartonSeqNo
-                              ORDER BY CASE WHEN cd.UOM >= '6' THEN 1 ELSE 9 END
-                                    ,  cd.CartonSeqNo DESC
+                              GROUP BY cd.OrderKey, cd.CartonSeqNo
+                              ORDER BY cd.CartonSeqNo DESC
                            ) aud
                WHERE cd.Orderkey = @c_Orderkey
                AND cd.CartonSeqNo = aud.CartonSeqNo
@@ -2113,7 +2115,7 @@ BEGIN
                BEGIN
                   SELECT @c_PickSlipNo
                         ,CartonNo   = cd.CartonSeqNo 
-                        ,[Weight]   = ISNULL(SUM(cd.Weight * cd.Qty),0.00)
+                        ,[Weight]   = ISNULL(SUM((cd.Qty / cd.PackQtyIndicator) * cd.StdGrossWgt), 0.00)
                         ,[Cube]     = cz.[Cube]                                   
                         ,Qty        = ISNULL(SUM(cd.Qty),0)
                         ,CartonType = cd.CartonType
@@ -2243,7 +2245,7 @@ BEGIN
                   )
                SELECT @c_PickSlipNo
                      ,CartonNo   = cd.CartonSeqNo  + @n_CartonNo_Last              
-                     ,[Weight]   = ISNULL(SUM(cd.Weight * cd.Qty),0.00)
+                     ,[Weight]   = ISNULL(SUM((cd.Qty / cd.PackQtyIndicator) * cd.StdGrossWgt), 0.00)
                      ,[Cube]     = cz.[Cube]                                   
                      ,Qty        = CASE WHEN cd.[Audit] = 1 
                                         THEN 0 
@@ -2261,7 +2263,7 @@ BEGIN
                                  ,  cz1.CartonWidth
                                  ,  cz1.CartonHeight
                                  ,  cz1.[Cube] 
-                            FROM #CTNZ AS cz1 
+                            FROM @t_CTNZ AS cz1 
                             WHERE cz1.CartonizationGroup = cd.CartonGroup
                             AND cz1.CartonType = cd.CartonType
                             ) cz
