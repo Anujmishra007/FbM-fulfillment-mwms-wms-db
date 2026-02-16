@@ -13,6 +13,7 @@ GO
 /* 2025-06-09  1.0.0   JACKC       FCR-3959                             */
 /* 2025-10-20  1.0.1   Dennis      FCR-3959                             */ 
 /* 2025-10-20  1.0.2   SOMA        Added ID Zero Weight validation      */ 
+/* 2026-02-12  1.0.3   PPA374      Adding 'INLOCKED' flag for picking   */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtVal05]
@@ -144,7 +145,7 @@ BEGIN
                         ON L.LOC = C.Short
                         AND L.Facility = @cFacility
                         AND L.Status = 'OK'
-                        AND L.LocationFlag IN ('', 'NONE')
+                        AND L.LocationFlag IN ('', 'NONE', 'INLOCKED')
                   WHERE C.Short = @cToLOC
                  AND C.LISTNAME = 'JCBCOMPML'
             )
@@ -157,7 +158,7 @@ BEGIN
                            FROM dbo.LOC WITH (NOLOCK)
                            WHERE LOC = @cSuggToLOC
                      AND Facility = @cFacility
-                           AND (Status <> 'OK' OR LocationFlag NOT IN ('','NONE')) 
+                           AND (Status <> 'OK' OR LocationFlag NOT IN ('','NONE', 'INLOCKED')) 
                            )
                BEGIN--only allow to overwrithe when SuggToLoc is on hold
                   IF @nDebugFlag = 1
@@ -197,7 +198,7 @@ BEGIN
                           AND CL.LONG = @cOrdCompany
                           AND CL.Storerkey = @cStorerKey
                     AND L.Facility = @cFacility
-                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
+                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED'))
                      )
                      BEGIN
                         IF @nDebugFlag = 1
@@ -244,7 +245,7 @@ BEGIN
                              AND CL.LONG = @cOrdCompany
                              AND L.Status = 'OK'
                       AND L.Facility = @cFacility
-                             AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
+                             AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED')
                         ) -- ToLoc must be a marshalling lane of the same company and not on hold
                         BEGIN
                            SET @nErrNo = 239654
@@ -283,7 +284,7 @@ BEGIN
                           AND CL.Code = @cOrderType
                           AND L.Status = 'OK'
                     AND L.Facility = @cFacility
-                          AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
+                          AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED')
                      )
                      BEGIN-- All locations in these kitting location categories are on hold
                         IF @nDebugFlag = 1
@@ -330,7 +331,7 @@ BEGIN
                               AND CL.Code = @cOrderType
                               AND LOC.[Status] = 'OK'
                        AND LOC.Facility = @cFacility
-                              AND (LOC.LocationFlag = '' OR LOC.LocationFlag = 'NONE')
+                              AND (LOC.LocationFlag = '' OR LOC.LocationFlag = 'NONE' OR LOC.LocationFlag = 'INLOCKED')
                         )
                         BEGIN
                            SET @nErrNo = 239657
@@ -397,7 +398,7 @@ BEGIN
                      WHERE L1.Facility = @cFacility
                         AND L1.Loc = @cToLOC
                         AND (
-                              L1.LocationFlag NOT IN ('', 'NONE')
+                              L1.LocationFlag NOT IN ('', 'NONE', 'INLOCKED')
                               OR L1.Status <> 'OK'
                            )
                   )
@@ -411,7 +412,7 @@ BEGIN
                            AND C.ListName = 'JCBCOMPML'
                      WHERE L2.Facility = @cFacility
                         AND (
-                              L2.LocationFlag IN ('', 'NONE')
+                              L2.LocationFlag IN ('', 'NONE', 'INLOCKED')
                               AND L2.Status = 'OK'
                            )
                   )

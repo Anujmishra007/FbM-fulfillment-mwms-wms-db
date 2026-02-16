@@ -17,6 +17,8 @@ GO
 /* 2025-11-25 1.1.3   PPA374   Adding reason code to OD and OH notes    */
 /* 2026-02-10 1.1.4   PPA374   UWP-48781 not closing pallet if not the  */ 
 /*                             whole order of a specific type is picked */
+/* 2026-02-12 1.1.5   PPA374   Adding 'INLOCKED' flag for consideration */
+/* 2026-02-16 1.2.0   PPA374   Adding CABS picking reason code rules    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1812ExtScn06] (  
@@ -261,33 +263,84 @@ BEGIN
                   GOTO Step_9_Fail
                END
 
-            IF EXISTS (
-               SELECT 1 
-              FROM LOC L WITH(NOLOCK)
-                 INNER JOIN CODELKUP C WITH(NOLOCK)
-                    ON C.LISTNAME = 'JCBBKRCODE'
-                  AND C.StorerKey = @cStorerKey
-                  AND C.Long = L.LocationCategory
-               WHERE LOC = @cSuggFromLOC 
-                 AND L.Facility = @cFacility
-            )
-            BEGIN
-               IF @cReasonCode NOT IN (
-                 SELECT Short 
-                FROM CODELKUP C WITH(NOLOCK)
-                   INNER JOIN LOC L WITH(NOLOCK)
-                     ON L.LocationCategory = C.Long
-                WHERE C.LISTNAME = 'JCBBKRCODE' 
-                   AND C.StorerKey = @cStorerKey
-                  AND L.Facility = @cFacility
-                  AND L.Loc = @cSuggFromLOC
-              )
-              BEGIN
-                  SET @nErrNo = 218259
+               IF EXISTS (
+                  SELECT 1
+                  FROM dbo.ORDERS O WITH(NOLOCK)
+                  INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+                     ON CL.Long = O.Type
+                     AND CL.LISTNAME = 'JCBCLPALOT'
+                     AND CL.SHORT = 'Y'
+                  WHERE O.OrderKey = @cOrderKey
+               )
+			   AND EXISTS (
+			      SELECT 1 
+				  FROM dbo.TaskDetail WITH(NOLOCK) 
+				  WHERE OrderKey = @cOrderKey 
+				     AND Status > '3'
+			         AND (UserKey = @cUserName OR UserKeyOverRide = @cUserName)
+				     AND AreaKey = @cAreaKey
+			   )
+			   BEGIN
+                  IF @cReasonCode NOT IN (
+                     SELECT Short 
+                     FROM CODELKUP C WITH(NOLOCK)
+                     WHERE C.LISTNAME = 'JCBCABSRSN' 
+                        AND C.StorerKey = @cStorerKey
+					    AND UDF01 = 'Y'
+                  )
+			      BEGIN
+                     SET @nErrNo = 239668
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO Step_9_Fail
-              END
-            END
+			      END
+			   END
+
+               IF EXISTS (
+                  SELECT 1
+                  FROM dbo.ORDERS O WITH(NOLOCK)
+                  INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+                     ON CL.Long = O.Type
+                     AND CL.LISTNAME = 'JCBCLPALOT'
+                     AND CL.SHORT = 'Y'
+                  WHERE O.OrderKey = @cOrderKey
+               )
+			   AND @cReasonCode <> ''
+			   BEGIN
+			      UPDATE dbo.TaskDetail
+			      SET Status = 0
+			      WHERE OrderKey = @cOrderKey
+			         AND Status = '3'
+			         AND (UserKey = @cUserName OR UserKeyOverRide = @cUserName)
+				     AND AreaKey = @cAreaKey
+			   END
+     
+               IF EXISTS (
+                  SELECT 1 
+                  FROM LOC L WITH(NOLOCK)
+                  INNER JOIN CODELKUP C WITH(NOLOCK)
+                     ON C.LISTNAME = 'JCBBKRCODE'
+                     AND C.StorerKey = @cStorerKey
+                     AND C.Long = L.LocationCategory
+                  WHERE LOC = @cSuggFromLOC 
+                     AND L.Facility = @cFacility
+               )
+               BEGIN
+                  IF @cReasonCode NOT IN (
+                     SELECT Short 
+                     FROM CODELKUP C WITH(NOLOCK)
+                     INNER JOIN LOC L WITH(NOLOCK)
+                        ON L.LocationCategory = C.Long
+                     WHERE C.LISTNAME = 'JCBBKRCODE' 
+                        AND C.StorerKey = @cStorerKey
+                        AND L.Facility = @cFacility
+                        AND L.Loc = @cSuggFromLOC
+                  )
+                  BEGIN
+                     SET @nErrNo = 218259
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Step_9_Fail
+                  END
+               END
 
                IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
                   WHERE LLI.StorerKey = @cStorerKey
@@ -791,7 +844,7 @@ BEGIN
                         WHERE a.Id <> b.Id
                            AND a.Id = @cSuggID
                      AND L.Facility = @cFacility
-                           AND L.LocationFlag IN ('','NONE')
+                           AND L.LocationFlag IN ('','NONE','INLOCKED')
                            AND L.Status = 'OK'
                            AND ID.Status = 'OK'
                      )
@@ -825,7 +878,7 @@ BEGIN
                      AND LA.Lottable03 = @cOutField01
                      AND LLI.ID <> @cSuggID
                 AND L.Facility = @cFacility
-                     AND L.LocationFlag IN ('','NONE')
+                     AND L.LocationFlag IN ('','NONE','INLOCKED')
                      AND L.Status = 'OK'
                      AND ID.Status = 'OK'
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
@@ -1041,7 +1094,7 @@ BEGIN
                            WHERE a.Id <> b.Id
                               AND a.Id = @cSuggID
                        AND L.Facility = @cFacility
-                              AND L.LocationFlag IN ('','NONE')
+                              AND L.LocationFlag IN ('','NONE','INLOCKED')
                               AND L.Status = 'OK'
                               AND ID.Status = 'OK'
                         )
@@ -1075,7 +1128,7 @@ BEGIN
                      AND LA.Lottable03 = @cOutField01
                      AND LLI.ID <> @cSuggID
                      AND L.Facility = @cFacility
-                     AND L.LocationFlag IN ('','NONE')
+                     AND L.LocationFlag IN ('','NONE','INLOCKED')
                      AND L.Status = 'OK'
                      AND ID.Status = 'OK'
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
@@ -1708,7 +1761,7 @@ BEGIN
             )
             BEGIN
                   SET @nErrNo = 239667
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --239667More cabs task
                   SET @nAfterStep = @nMOBRECStep
                   SET @nAfterScn = @nMOBRECScn
                   SET @cOutField01 = ''
