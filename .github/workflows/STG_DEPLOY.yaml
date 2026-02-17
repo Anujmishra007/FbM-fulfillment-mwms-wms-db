@@ -43,7 +43,6 @@ env:
   WMSDB_NAME: ${{ github.event.inputs.WMSDB }}
   WMSDB_METADATA_REPO: FbM-fulfillment-mwms-wms-db-metadata
 
-
 jobs:
   INIT_DEPLOY:
     runs-on: ubuntu-latest
@@ -161,10 +160,10 @@ jobs:
                   write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ there are no *.sql files between version $($DB_CURRENT_VERSION) to  $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                   }
 
-            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)"
-            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)"
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
             }
           }else{
               if ('${{ github.event.inputs.WMSDB }}' -in $json_metadata.databases.PSObject.Properties.name){write-host "WMSDB:: ${{ github.event.inputs.WMSDB }} exists in stage.json"}else{throw "WMSDB does not exist in stage.json"}
@@ -362,7 +361,7 @@ jobs:
         with:
           name: ${{ matrix.data.DATBASE_NAME }}-sql-scripts-logs
           path: ./logs/${{ matrix.data.DATBASE_NAME }}.txt
-          
+
       - name: Deployment Started Notification
         if: steps.validate.outcome == 'success'
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
