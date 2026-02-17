@@ -109,7 +109,8 @@ BEGIN
          RowID             INT,
          OK                NVARCHAR(1),
 		 SpaceTakenTotal   INT,
-		 PalletsINTotal    INT
+		 PalletsINTotal    INT,
+		 CommingleSku      INT
       )
 
       -- Creating indexes
@@ -303,7 +304,8 @@ BEGIN
       T2.RowID,
       T2.OK,
 	  T2.SpaceTakenTotal,
-	  T2.PalletsINTotal
+	  T2.PalletsINTotal,
+	  T2.CommingleSku
    FROM (
       SELECT 
          T1.Loc,
@@ -332,7 +334,8 @@ BEGIN
          T1.RowID,
          T1.OK,
          SUM(T1.SpaceTaken) OVER (PARTITION BY T1.LOC) AS SpaceTakenTotal,
-         SUM(CASE WHEN T1.PalletsIN IS NULL THEN 0 ELSE 1 END) OVER (PARTITION BY T1.LOC) AS PalletsINTotal
+         SUM(CASE WHEN T1.PalletsIN IS NULL THEN 0 ELSE 1 END) OVER (PARTITION BY T1.LOC) AS PalletsINTotal,
+		 T1.CommingleSku
       FROM (
          SELECT 
             L.Loc,
@@ -368,7 +371,8 @@ BEGIN
                PARTITION BY LLI.Id, L.LOC 
                ORDER BY LLI.ID
             ) AS RowID,
-            '1' AS OK
+            '1' AS OK,
+			L.CommingleSku
          FROM dbo.LOC L WITH (NOLOCK)
          CROSS APPLY (
             SELECT 
@@ -665,12 +669,41 @@ BEGIN
                MidLocOccupied,
                SpaceTakenTotal,
                PalletsINTotal
-            FROM (
-               SELECT 
-                  * 
-               FROM #tLocList 
-               WHERE OK = '1'
-            ) T1
+            FROM 
+			(
+               SELECT L.*
+               FROM #tLocList L
+               WHERE L.OK = '1'
+                  AND 
+				  (
+                     L.CommingleSku = 1
+                     OR NOT EXISTS
+                     (
+                        SELECT 1
+                        FROM dbo.LOTxLOCxID L1 WITH (NOLOCK)
+                        WHERE L1.StorerKey = @cStorerKey
+                           AND L1.ID = @cLPNToRelease
+                           AND L1.Qty > 0
+                           AND EXISTS
+                           (
+                              SELECT 1
+                              FROM dbo.LOTxLOCxID LX WITH (NOLOCK)
+                              WHERE LX.StorerKey = @cStorerKey
+                                 AND LX.LOC = L.LOC
+                                 AND LX.Qty + LX.PendingMoveIN > 0
+                           )
+                           AND NOT EXISTS
+                           (
+                              SELECT 1
+                              FROM dbo.LOTxLOCxID L2 WITH (NOLOCK)
+                              WHERE L2.StorerKey = @cStorerKey
+                                 AND L2.LOC = L.LOC
+                                 AND L2.Qty + L2.PendingMoveIN > 0
+                                 AND L2.SKU = L1.SKU
+                           )
+                     )
+                  )
+            )T1
          ) T2
          LEFT JOIN dbo.CODELKUP CL WITH (NOLOCK)
             ON CL.CODE = T2.LOC
