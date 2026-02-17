@@ -1830,6 +1830,28 @@ BEGIN
       GOTO Fail
    END CATCH
 
+   DECLARE @cListKey NVARCHAR(10),@cGroupKey NVARCHAR(20)
+
+   SELECT @cListKey = TD.ListKey,@cGroupKey = TD.Groupkey,@cFromLOC = TD.FromLOC
+   FROM TASKDETAIL TD WITH(NOLOCK)
+   JOIN LOC LOC (NOLOCK) ON TD.FromLOC = LOC.Loc AND LOC.Facility = @cFacility
+   JOIN AREADETAIL AD (NOLOCK) ON AD.AreaKey = 'MOTHERSONS' AND LOC.PutawayZone = AD.PutawayZone
+   WHERE TD.StorerKey = @cStorerKey
+   AND TD.TaskType LIKE 'RP%'
+   AND TD.Status = '3'
+   AND TD.UserKey = @c_UserID
+
+   IF ISNULL(@cListKey,'') <> '' AND ISNULL(@cGroupKey,'') <> ''
+   BEGIN
+      UPDATE TASKDETAIL
+      SET STATUS = '3', UserKey = @c_UserID,ListKey = @cListKey,Groupkey = @cGroupKey
+      WHERE STATUS = '0'
+      AND (UserKey = '' AND UserKeyOverRide IN ('', @c_UserID) )
+      AND StorerKey = @cStorerKey
+      AND TaskType LIKE 'RP%'
+      AND FromLOC = @cFromLOC
+   END
+				
    IF @bDebug = 1
    BEGIN
       SELECT 'Locked candidate tasks in TaskDetail', * 
