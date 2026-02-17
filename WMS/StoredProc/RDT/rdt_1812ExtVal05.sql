@@ -14,6 +14,7 @@ GO
 /* 2025-10-20  1.0.1   Dennis      FCR-3959                             */ 
 /* 2025-10-20  1.0.2   SOMA        Added ID Zero Weight validation      */ 
 /* 2026-02-12  1.0.3   PPA374      Adding 'INLOCKED' flag for picking   */
+/* 2026-02-17  1.0.4   PPA374      Only allowing to enter required qty  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtVal05]
@@ -110,7 +111,7 @@ BEGIN
             IF @nDebugFlag = 1
                SELECT @nQty AS Qty, @nTaskQty AS TaskQty
             
-            IF @nQty <> 0 AND @nQty <> @nTaskQTY
+            IF /*@nQty <> 0 AND*/ @nQty <> @nTaskQTY
             BEGIN
                SET @nErrNo = 239651
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
@@ -438,5 +439,3 @@ GO
 
 GRANT EXECUTE ON rdt.rdt_1812ExtVal05 TO NSQL 
 GO   
-
-
