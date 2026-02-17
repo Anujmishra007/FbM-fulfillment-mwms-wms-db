@@ -604,7 +604,7 @@ BEGIN
       AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
       AND TD.Status IN ('0','3')
       AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @cUserName
-     AND TD.Storerkey = @cStorerKey
+      AND TD.Storerkey = @cStorerKey
 
    UNION ALL
 
@@ -2586,6 +2586,7 @@ GO
 GRANT EXECUTE ON RDT.rdtfnc_TM_PutawayFrom_JCB TO NSQL
 
 GO
+
 
 
 
