@@ -62,8 +62,7 @@ DECLARE
    @nSNQTY           INT,
    @bsuccess         INT,
    @nTranCount       INT,
-   @cStatus          NVARCHAR(20),
-   @cPickDetailKey   NVARCHAR(18) 
+   @cStatus          NVARCHAR(20)
        
 DECLARE @CloseCtnList TABLE (    
    SKU             NVARCHAR( 20),    
@@ -172,8 +171,7 @@ BEGIN
          SET @cSerialNo = @cADCode    
       END      
       
-      SELECT @cOrderLineNumber = PD.OrderLineNumber       
-            ,@cPickDetailKey = ISNULL(PD.PickDetailKey,'')
+      SELECT @cOrderLineNumber = ISNULL(PD.OrderLineNumber,'')
       FROM dbo.PickDetail PD WITH (NOLOCK)      
       WHERE PD.StorerKey = @cStorerKey      
          AND PD.OrderKey = @cOrderKey      
@@ -184,18 +182,19 @@ BEGIN
                                              AND S.OrderLineNumber = PD.OrderLineNUmber      
                                              AND S.SKU = @cSKU  ) 
       SELECT @cLblLineNumber = PD.LabelLine  
-           , @cLabelNo = labelno  
+           , @cLabelNo = PD.LabelNo  
       FROM dbo.Packheader PH WITH (NOLOCK)    
          JOIN dbo.packdetail PD(nolock) ON PH.PickSlipNo=PD.PickSlipNo
-      WHERE PD.StorerKey = @cStorerKey      
-         AND PH.OrderKey = @cOrderKey      
+      WHERE PH.StorerKey = @cStorerKey      
+         AND PH.PickSlipNo = @cpickslipno      
          AND PD.SKU = @cSKU
+         AND PD.CartonNo = @nCartonNo
       
       SET @cSerialNoKey = ''
 
       SELECT  @cSerialNoKey = SerialNoKey
       FROM SerialNo (NOLOCK)
-      WHERE StorerKEy = @cStorerKey      
+      WHERE StorerKey = @cStorerKey      
       AND SKU = @cSKU      
       AND SerialNo = @cSerialNo 
 
@@ -210,9 +209,7 @@ BEGIN
       BEGIN    
          IF EXISTS(  SELECT  1
                      FROM SerialNo (NOLOCK)
-                     WHERE StorerKEy = @cStorerKey      
-                        AND SKU = @cSKU      
-                        AND SerialNo = @cSerialNo
+                     WHERE SerialNoKey = @cSerialNoKey
                         AND (OrderKey <> ''
                         OR [Status] <> '1')
                         )
@@ -224,7 +221,7 @@ BEGIN
                      where PickSlipNo=@cpickslipNo    
                      and storerkey=@cStorerKey    
                      and sku=@csku
-                     and serialno=@cADCode)    
+                     and serialno=@cSerialNo)    
          BEGIN
             GOTO NEXTITEM  -- PackSerialNo Exists then proceed the next records because the frontend return all the same AD for the each SKU during close carton.
 
@@ -235,7 +232,7 @@ BEGIN
          END  
    
          INSERT INTO PackSerialNo(pickslipno,cartonno,labelno,labelline,storerkey,SerialNo,sku,qty, PickDetailKey,AddWho,AddDate,EditWho,EditDate)    
-         values(@cpickslipno,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@cserialno,@csku,@nQty, @cPickDetailKey, @cUserName,GETDATE(),@cUserName,GETDATE())    
+         values(@cpickslipno,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@cserialno,@csku,@nQty, '', @cUserName,GETDATE(),@cUserName,GETDATE())    
     
          IF @@ERROR <> 0       
          BEGIN 

@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_523DecodeSP03                                   */
-/* Copyright      : LF logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: decode Serialno to SKU                                      */
 /*                                                                      */
@@ -13,7 +13,9 @@ GO
 /* Date        Rev  Author      Purposes                                */
 /* 2023-07-26  1.0  yeekung     WMS-23078 Created                       */ 
 /* 2023-10-09  1.1  ivanyi  bug fix INC2178187(ivan01)                  */   
-/* 2024-10-24  1.2  ShaoAn      Extended parameter definition           */ 
+/* 2024-10-24  1.2  ShaoAn      Extended parameter definition           */
+/* 2025-02-25  1.3  Ung         WMS-25502 Add ID param output           */ 
+/* 2025-10-16  1.4  Ung         FCR-8112 Add serial no                  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP03
@@ -30,7 +32,8 @@ CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP03
    @cUCC              NVARCHAR( 20)  OUTPUT, 
    @cLOC              NVARCHAR( 10)  OUTPUT, 
    @cSKU              NVARCHAR( 20)  OUTPUT, 
-   @nQTY              INT            OUTPUT, 
+   @nQTY              INT            OUTPUT,  
+   @cSerialNo         NVARCHAR( 30)  OUTPUT, 
    @cLottable01       NVARCHAR( 18)  OUTPUT, 
    @cLottable02       NVARCHAR( 18)  OUTPUT, 
    @cLottable03       NVARCHAR( 18)  OUTPUT, 

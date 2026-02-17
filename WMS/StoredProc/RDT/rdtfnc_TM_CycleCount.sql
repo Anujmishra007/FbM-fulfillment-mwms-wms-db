@@ -45,6 +45,12 @@ GO
 /* 2025-02-11 3.2    JCH507   FCR-1917 Add ext upd entry                         */
 /* 2025-05-19 4.2.0  JACKC      UWP-34563 Count SKU task genrerates cc detaill   */ 
 /*                               for all SKUs on the loc                         */
+/* 2025-06-17 4.3.0  NickT    FCR-4971 Add ExtScn in Step 3                      */
+/* 2025-07-16 4.4.0  James    FCR-6059 Change @nFromScn @nFromStep rdtMobRec     */
+/*                            variable mapping (james17)                         */
+/* 2025-06-17 4.5.0  NickT    UWP-37598 Update TaskDetail.EndTime when CC done   */
+/* 2025-08-12 0.0.0  JackC    !!!Cutover. Use V0 repo for work!!!                */
+/* 2024-01-13 4.6.0  NickT    UWP-46877 Add ExtScn in Step 4                     */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
@@ -65,6 +71,7 @@ DECLARE
 -- Define a variable
 DECLARE
    @nFunc               INT,
+   @nCurrentFunc        INT,
    @nScn                INT,
    @nStep               INT,
    @cLangCode           NVARCHAR(3),
@@ -222,6 +229,7 @@ DECLARE @cStorerConfig_UCC  NVARCHAR( 1)     -- (james05)
 -- Getting Mobile information
 SELECT
    @nFunc            = Func,
+   @nCurrentFunc     = Func,
    @nScn             = Scn,
    @nStep            = Step,
    @nInputKey        = InputKey,
@@ -278,9 +286,10 @@ SELECT
 
    @nUCCQty          = V_Integer1,
    @nRowID           = V_Integer2,
+   @nFromScn         = V_Integer3,
+   @nFromStep        = V_Integer4,
 
-   @nFromScn         = V_String30,
-   @nFromStep        = V_String31,
+
    @cAreakey         = V_String32,
    @cTTMStrategykey  = V_String33,
    @cTTMTasktype     = V_String34,
@@ -1818,7 +1827,7 @@ BEGIN
          SET @nScn = 2930
          SET @nStep = 1
 
-         GOTO QUIT
+         GOTO Step_3_ExtScn
       END
       ELSE IF @cOptions = '2'
       BEGIN
@@ -2610,8 +2619,9 @@ BEGIN
       SET @nStep = @nStep - 1
    END
 
+   Step_3_ExtScn:
    SET @nAction = 3 --Prepare output fields
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nCurrentFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
    BEGIN
       SET @cExtendedScreenSP = ''
@@ -2670,9 +2680,10 @@ BEGIN
          -- Update TaskDetail Status = '9'
          Update dbo.TaskDetail
          SET Status = '9'
-               ,EditDate = GetDate()
-               ,EditWho  = @cUserName
-               ,TrafficCop = NULL
+            ,EndTime = GetDate()
+            ,EditDate = GetDate()
+            ,EditWho  = @cUserName
+            ,TrafficCop = NULL
          WHERE TaskDetailKey = @cTaskDetailKey
 
          IF @@Error <> 0
@@ -2736,7 +2747,7 @@ BEGIN
          SET @nScn = @nScn + 2
          SET @nStep = @nStep + 2
 
-         GOTO QUIT
+         GOTO Step_4_ExtScn
       END
 
       IF @cOptions = '2'
@@ -2847,6 +2858,19 @@ BEGIN
       END
 
    END
+
+   Step_4_ExtScn:
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nCurrentFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   
+   IF @cExtendedScreenSP <> ''
+   Begin
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_4_Fail:
@@ -3581,7 +3605,7 @@ GOTO Quit
 
 Step_99:
 BEGIN
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nCurrentFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
    BEGIN
       SET @cExtendedScreenSP = ''
@@ -3590,6 +3614,12 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
+
+         DELETE FROM @tExtScnData
+
+         INSERT INTO @tExtScnData (Variable, Value) 
+         VALUES
+            ('@cOptions', @cOptions)
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtendedScreenSP, 
@@ -3695,9 +3725,9 @@ BEGIN
 
       V_Integer1 = @nUCCQty,
       V_Integer2 = @nRowID,
+      V_Integer3 = @nFromScn,
+      V_Integer4 = @nFromStep,
 
-      V_String30 = @nFromScn,
-      V_String31 = @nFromStep,
       V_String32 = @cAreakey,
       V_String33 = @cTTMStrategykey,
       V_String34 = @cTTMTasktype,

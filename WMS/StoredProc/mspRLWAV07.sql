@@ -22,6 +22,7 @@ GO
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */
 /* 15-MAY-2025 NJOW     1.0   Initial version                            */
+/* 10-Oct-2025 SSA01    1.1  UWP-42248 -Enhanced session management      */
 /*************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV07]
@@ -164,10 +165,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV07]
           [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
           [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
           [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),                   --(SSA01)
+          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),           --(SSA01)
+          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),                  --(SSA01)
+          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),          --(SSA01)
           [TrafficCop] [nvarchar](1) NULL,
           [ArchiveCop] [nvarchar](1) NULL,
           [OptimizeCop] [nvarchar](1) NULL,
@@ -529,8 +530,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV07]
           --SET STATUS = '1' -- Released        
           SET TMReleaseFlag = 'Y'               
            ,  TrafficCop = NULL                 
-           ,  EditWho = SUSER_SNAME()           
-           ,  EditDate= GETDATE()               
+           ,  EditWho = dbo.fnc_GetUserName()          --(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
        WHERE WAVEKEY = @c_wavekey
        SELECT @n_err = @@ERROR
        IF @n_err <> 0

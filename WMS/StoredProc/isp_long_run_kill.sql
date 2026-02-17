@@ -1,5 +1,6 @@
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 
@@ -23,14 +24,15 @@ GO
 /* Date         Author        Purposes                                  */
 /* 2013-Aug-15  KHLim         add a parameter as threshold value (KH01) */
 /* 2014-Jul-11  KHLim         add a parameter as threshold value (KH02) */
-/* 2016-Oct-11  JayLim       add SET ROWCOUNT pattern                  */
+/* 2016-Oct-11  JayLim       add SET ROWCOUNT pattern                   */
 /*                            increase spid nvarchar(3) to (9) (Jay01)  */
 /* 2018-Aug-01  TLTING        hyperion user filter                      */
 /* 2019-Arp-08  TLTING        multiple kill                             */
 /* 2023-Feb-10  TLTING01      avoid leading space                       */
+/* 2025-Oct-29  CYO019        change @cPattern = '%SELECT%' (CYO019-1)  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_long_run_kill] (
-   @cCountry   NVARCHAR(5),
+   @cCountry   NVARCHAR(20),
    @cListTo    NVARCHAR(max),
    @cListCc    NVARCHAR(max) = '',
    @nLast      int          = 3   -- minute (follow longest frequency of the SQL scheduled job)
@@ -56,7 +58,7 @@ BEGIN
             @cDBCCInfo  nvarchar(4000)
 
    SET @cImpt     = 'Normal'
-   SET @cPattern  = 'SELECT %'   -- SQL pattern of EventInfo
+   SET @cPattern  = '%SELECT%'   --CYO019-1    -- SQL pattern of EventInfo
    SET @cPattern3 = 'SET ROWCOUNT %' -- (Jay01)
    SET @cPattern2  = '%sp_updatestats%'   -- AND LEFT(program_name,8)='SQLAgent' (only job that invoked by SQLAgent schedule)
 
@@ -109,8 +111,6 @@ BEGIN
          BEGIN
             SELECT @sql = 'KILL ' + CAST(@SPID as NVARCHAR(9)) + ''
             EXEC (@sql)
-
-            SET @cImpt = 'High'
 
             SET @cSubject = 'Performance Trace - WMS - ' + @cCountry + '- Process Killed'
             SET @cBody = '<style type="text/css">
@@ -174,5 +174,5 @@ BEGIN
    END
 END
 GO
-GRANT EXECUTE ON  [dbo].[isp_long_run_kill] TO [NSQL]
-GO
+
+

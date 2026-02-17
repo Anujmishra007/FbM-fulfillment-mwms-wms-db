@@ -18,6 +18,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver.   Purposes                                */
 /* 08-May-2025  WLC015   1.0    Created (FCR-3778)                      */
+/* 06-OCT-2025  AK01     1.1    UWP-42143 Data Audit                    */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrLoadPlanLaneDetailAdd]
@@ -245,6 +246,31 @@ BEGIN
       CLOSE @CUR_MAIN
       DEALLOCATE @CUR_MAIN
    END
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE LoadPlanLaneDetail
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM LoadPlanLaneDetail
+      JOIN INSERTED ON LoadPlanLaneDetail.LoadKey = INSERTED.LoadKey
+      AND LoadPlanLaneDetail.ExternOrderKey = INSERTED.ExternOrderKey
+      AND LoadPlanLaneDetail.ConsigneeKey = INSERTED.ConsigneeKey
+      AND LoadPlanLaneDetail.LP_LaneNumber = INSERTED.LP_LaneNumber
+      AND LoadPlanLaneDetail.MBOLKey = INSERTED.MBOLKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=60531 
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table LoadPlanLaneDetail. (ntrLoadPlanLaneDetailAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
    QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return

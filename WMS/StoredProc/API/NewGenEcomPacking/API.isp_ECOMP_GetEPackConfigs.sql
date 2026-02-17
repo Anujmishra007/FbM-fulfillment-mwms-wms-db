@@ -18,6 +18,14 @@
 /* Updates:                                                             */
 /* Date           Author   Purposes	                                    */
 /* 10-Oct-2024    Alex     #JIRA PAC-355 Initial                        */
+/* 09-Jun-2025    JWF011   #UWP-34792 - Update datatype length          */
+/*                         of @c_EPACKCCTVWMLOC                         */
+/* 31-July-2025   JWF011   #UWP-38657 - Update datatype length          */
+/*                         of EPACKCCTVOFFSETSEC                        */
+/* 19-Aug-2025    JWF011   #UWP-39631 UWP-39649 - Add EPACKCCTVORDERNO  */
+/* 20-Aug-2025    JWF011   #UWP-39059 - Add configs for CCTV logs       */
+/* 28-Aug-2025    JWF011   #UWP-40141 - Update EPACKCCTVORDERNO         */
+/* 15-Sep-2025    JWF011   #UWP-41185 - Update EPACKCCTVORDERNO         */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetEPackConfigs](
      @c_StorerKey                      NVARCHAR(15)   = ''
@@ -44,15 +52,28 @@ BEGIN
          
          , @c_EPACKCCTVRECORDTYPE      NVARCHAR(10)   = ''
          
-         , @c_EPACKCCTVOFFSETSEC1      NVARCHAR(1)    = ''
+         , @c_EPACKCCTVOFFSETSEC1      NVARCHAR(3)    = ''
          , @c_EPACKCCTVWMTYPE          NVARCHAR(1)    = ''
-         , @c_EPACKCCTVWMLOC           NVARCHAR(1)    = ''
-         , @c_EPACKCCTVOFFSETSEC2      NVARCHAR(1)    = ''
+         , @c_EPACKCCTVWMLOC           NVARCHAR(2)    = ''
+         , @c_EPACKCCTVOFFSETSEC2      NVARCHAR(3)    = ''
          , @c_EPACKCCTVEXSCAN          NVARCHAR(1)    = ''
          , @c_EPACKCCTVWM_CTNNO        NVARCHAR(1)    = ''
          , @c_EPACKCCTVWM_SKU          NVARCHAR(1)    = ''
          , @c_EPACKCCTVWM_SN           NVARCHAR(1)    = ''
          , @c_EPACKCCTVWM_TRACKNO      NVARCHAR(1)    = ''
+         , @c_EPACKCCTVORDERNO         NVARCHAR(100)  = ''
+
+         , @b_sp_Success               INT
+         , @n_sp_err                   INT
+         , @c_sp_errmsg                NVARCHAR(250)  = ''
+
+         , @c_sc_SValue                NVARCHAR(30)   = ''
+         , @c_sc_Option1               NVARCHAR(50)   = ''
+         , @c_SQLQuery                 NVARCHAR(4000) = ''
+         , @c_SQLParams                NVARCHAR(1000) = ''
+
+         , @c_EPACKCCTVLOCALLOGARCHIVETIME        NVARCHAR(3)  = ''
+         , @c_EPACKCCTVLOCALLOGDELETETIME         NVARCHAR(3)  = ''
 
 
    DECLARE @t_EPACKConfig  AS Table (
@@ -72,6 +93,8 @@ BEGIN
       SET @c_EPACKCCTVWMLOC      = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVWMLOC')
       SET @c_EPACKCCTVOFFSETSEC1 = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVOFFSETSEC1')
       SET @c_EPACKCCTVOFFSETSEC2 = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVOFFSETSEC2')
+      SET @c_EPACKCCTVLOCALLOGARCHIVETIME = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVLOCALLOGARCHIVETIME')
+      SET @c_EPACKCCTVLOCALLOGDELETETIME = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVLOCALLOGDELETETIME')
 
       SET @c_EPACKCCTVWM_CTNNO = CASE 
                                     WHEN EXISTS ( SELECT 1 FROM [dbo].[Codelkup] WITH (NOLOCK) 
@@ -104,7 +127,39 @@ BEGIN
                                                     AND StorerKey = @c_StorerKey ) THEN '1' 
                                       ELSE '0' 
                                    END
-      
+
+      -- EPACKCCTVORDERNO Start
+      SET @c_EPACKCCTVORDERNO = ''
+      IF @c_OrderKey <> ''
+      BEGIN
+         EXEC [dbo].[nspGetRight]
+            @c_Facility          = ''
+         ,  @c_StorerKey         = @c_StorerKey
+         ,  @c_sku               = ''
+         ,  @c_ConfigKey         = 'EPACKCCTVORDERNO'
+         ,  @b_Success           = @b_sp_Success          OUTPUT   
+         ,  @c_authority         = @c_sc_SValue           OUTPUT
+         ,  @n_err               = @n_sp_err              OUTPUT    
+         ,  @c_errmsg            = @c_sp_errmsg           OUTPUT  
+         ,  @c_Option1           = @c_sc_Option1          OUTPUT
+
+         IF @c_sc_SValue IS NOT NULL AND RTRIM(@c_sc_SValue) = '1'
+         BEGIN
+            SET @c_sc_Option1 = ISNULL(RTRIM(@c_sc_Option1), '')
+
+            SET @c_SQLQuery = 'SELECT '
+                        + '  @c_EPACKCCTVORDERNO = ' + CASE WHEN @c_sc_Option1 <> '' AND @c_sc_Option1 LIKE 'ORDERS.%' THEN @c_sc_Option1 ELSE ''''' ' END 
+                        + ' FROM [dbo].[ORDERS] WITH (NOLOCK) '
+                        + 'WHERE OrderKey = @c_OrderKey '
+            
+            SET @c_SQLParams = '@c_OrderKey NVARCHAR(10), '
+                              + '@c_EPACKCCTVORDERNO NVARCHAR(100) OUTPUT '
+
+            EXEC sp_executesql @c_SQLQuery, @c_SQLParams, @c_OrderKey, @c_EPACKCCTVORDERNO OUTPUT
+         END
+      END
+      -- EPACKCCTVORDERNO End
+
       INSERT INTO @t_EPACKConfig (ConfigName, [Value]) 
       SELECT 'EPACKCCTVWMTYPE'     , @c_EPACKCCTVWMTYPE    
       UNION ALL 
@@ -121,6 +176,12 @@ BEGIN
       SELECT 'EPACKCCTVWM_SN'      , @c_EPACKCCTVWM_SN     
       UNION ALL 
       SELECT 'EPACKCCTVWM_TRACKNO' , @c_EPACKCCTVWM_TRACKNO
+      UNION ALL 
+      SELECT 'EPACKCCTVORDERNO'    , @c_EPACKCCTVORDERNO
+      UNION ALL 
+      SELECT 'EPACKCCTVLOCALLOGARCHIVETIME'    , @c_EPACKCCTVLOCALLOGARCHIVETIME
+      UNION ALL 
+      SELECT 'EPACKCCTVLOCALLOGDELETETIME'    , @c_EPACKCCTVLOCALLOGDELETETIME
 
       IF @c_PackMode = 'M'
       BEGIN

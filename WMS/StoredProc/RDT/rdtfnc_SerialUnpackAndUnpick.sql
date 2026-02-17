@@ -9,6 +9,7 @@ GO
 /*                                                                                              */
 /* Date         Rev  Author         Purposes                                                    */
 /* 2024-11-05   1.0  TLE109         FCR-917 Serial Unpack and Unpick                            */
+/* 2025-01-15   1.1  NYE018         FCR-9889 Added Decode QR logic                              */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_SerialUnpackAndUnpick] (
@@ -59,6 +60,10 @@ DECLARE
    @cToLOC           NVARCHAR( 20),
    @nScannedNum      INT,
    
+   -- FCR-9889
+   @cDecodeSP  NVARCHAR( 20),
+   @cBarcode   NVARCHAR( MAX),
+   -- FCR-9889
 
 
 
@@ -102,6 +107,9 @@ SELECT
    @cStorerKey       = StorerKey,
    @cUserName        = UserName,
    @nEnter           = V_Integer1,
+
+   @cBarcode         = V_Barcode,     -- FCR-9889
+   @cDecodeSP        = V_String10,    -- FCR-9889
 
    @cPickSlipNo      = V_PickSlipNo,
    @cUnPackType      = V_String1,
@@ -159,6 +167,11 @@ BEGIN
    SET @nStep = 1
    SET @cOutField01 = ''
    SET @nScannedNum = 0
+
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerkey)
+      IF @cDecodeSP IN ('0', '')
+         SET @cDecodeSP = ''
+   
 END
 GOTO QUIT
 
@@ -334,8 +347,9 @@ BEGIN
          GOTO QUIT
       END
 
-      DECLARE @cSerialNo NVARCHAR( 100)
-      SET @cSerialNo = @cInField01
+      DECLARE @cSerialNo NVARCHAR( 200)
+      -- @cBarcode already populated from V_Barcode (FCR-9889)
+      SET @cSerialNo = @cBarcode
 
       IF @cSerialNo = ''
       BEGIN
@@ -344,6 +358,38 @@ BEGIN
          GOTO Step_4_QUIT
       END
 
+      -- FCR-9889 - Decode QR code if decode SP is configured
+      IF @cDecodeSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
+               ' @cSerialNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile      INT,           ' +
+               ' @nFunc        INT,           ' +
+               ' @cLangCode    NVARCHAR( 3),  ' +
+               ' @nStep        INT,           ' +
+               ' @nInputKey    INT,           ' +
+               ' @cFacility    NVARCHAR( 5),  ' +
+               ' @cStorerKey   NVARCHAR( 15), ' +
+               ' @cBarcode     NVARCHAR( MAX), ' +
+               ' @cSerialNo    NVARCHAR( 20)  OUTPUT, ' +
+               ' @nErrNo       INT            OUTPUT, ' +
+               ' @cErrMsg      NVARCHAR( 1024)  OUTPUT'
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcode,
+               @cSerialNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         END
+      END
+
+      -- Check for DecodeSP errors immediately
+      IF @nErrNo <> 0
+      BEGIN
+         GOTO Step_4_QUIT
+      END
+      -- (FCR-9889) Logic for DecodeSP
 
       IF @cUnPackType = @cUNPACK_MODEL  --only unpack
       BEGIN
@@ -474,6 +520,7 @@ BEGIN
 END
 Step_4_QUIT:
 
+   SET @cBarcode   = ''  --clear barcode (FCR-9889)
    SET @cOutField01 = ''
    SET @cOutFIeld04 = ''
    IF @nStep = 4
@@ -499,9 +546,6 @@ Step_4_QUIT:
       SET @cOutField03 = ''
       SET @cOutField04 = ''
    END
-
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN
    GOTO QUIT
 
 
@@ -528,6 +572,9 @@ BEGIN
       Facility       = @cFacility,
       V_Integer1     = @nEnter,
       
+      V_Barcode     = @cBarcode,  -- FCR-9889
+      V_String10    = @cDecodeSP, -- FCR-9889
+
       V_PickSlipNo   = @cPickSlipNo,
       V_String1      = @cUnPackType,
       V_Loc          = @cToLoc,

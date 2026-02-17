@@ -18,6 +18,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 2024-06-13  1.0  NLT013   FCR-386. Created                           */
 /* 2025-02-08  1.1  Deenis   FCR-1109 Step 99 Validation                */
+/* 2025-08-28  1.2  JackC    FCR-7438 Rework SingleUnitOrder            */
 /************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_855ExtValid07] (  
@@ -46,18 +47,20 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF  
   
    DECLARE 
-         @cInputKey        NVARCHAR(1),
-         @cOption          NVARCHAR(1),
-         @nRowCount        INT,
-         @cNAMVAS855       NVARCHAR(1),
-         @cPPAStatus       NVARCHAR(1),
-         @nScn             INT
+         @cInputKey           NVARCHAR(1),
+         @cOption             NVARCHAR(1),
+         @nRowCount           INT,
+         @cNAMVAS855          NVARCHAR(1),
+         @cPPAStatus          NVARCHAR(1),
+         @nScn                INT,
+         @cSingleUnitOrdFlag  NVARCHAR(1)
 
    
    SELECT @cInputKey = Value FROM @tExtValidate WHERE Variable = '@nInputKey'
    SELECT @cOption = Value FROM @tExtValidate WHERE Variable = '@cOption'
    SELECT
-   @nScn       = Scn
+      @nScn                   = Scn,
+      @cSingleUnitOrdFlag   = C_String2 -- V1.2
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -70,40 +73,75 @@ BEGIN
          IF @cInputKey = '1'  -- Enter
          BEGIN
             DECLARE 
-               @nPackedQty        INT,
+               @nPackedQty       INT,
                @nPickedQty       INT
-
-            SELECT @nRowCount = COUNT(1)
-            FROM dbo.PickDetail  WITH(NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND ISNULL(CaseID, '') = @cDropID
-               AND Status < '5'
-
-            IF @nRowCount > 0
+            
+            IF @cSingleUnitOrdFlag = 'Y'
             BEGIN
-               SET @nErrNo = 216806
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Pick is not finished
-               GOTO Quit
-            END
+               SELECT @nRowCount = COUNT(1)
+               FROM dbo.PickDetail  WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND ISNULL(DropID, '') = @cDropID
+                  AND Status < '5'
 
-            SELECT @nPackedQty = SUM(Qty)
-            FROM dbo.PackDetail  WITH(NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND ISNULL(LabelNo, '') = @cDropID
+               IF @nRowCount > 0
+               BEGIN
+                  SET @nErrNo = 216808
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Pick is not finished
+                  GOTO Quit
+               END
 
-            SELECT @nPickedQty = SUM(Qty)
-            FROM dbo.PickDetail  WITH(NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND ISNULL(CaseID, '') = @cDropID
+               SELECT @nPackedQty = SUM(Qty)
+               FROM dbo.PackDetail  WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND ISNULL(DropID, '') = @cDropID
 
-            IF @nPackedQty <> @nPickedQty
+               SELECT @nPickedQty = SUM(Qty)
+               FROM dbo.PickDetail  WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND ISNULL(DropID, '') = @cDropID
+
+               IF @nPackedQty <> @nPickedQty
+               BEGIN
+                  SET @nErrNo = 216807
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- QTY:PICK<>PACK
+                  GOTO Quit
+               END
+            END--SingleUnitOrder
+            ELSE
             BEGIN
-               SET @nErrNo = 216801
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- QTY:PICK<>PACK
-               GOTO Quit
+               SELECT @nRowCount = COUNT(1)
+               FROM dbo.PickDetail  WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND ISNULL(CaseID, '') = @cDropID
+                  AND Status < '5'
+
+               IF @nRowCount > 0
+               BEGIN
+                  SET @nErrNo = 216806
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Pick is not finished
+                  GOTO Quit
+               END
+
+               SELECT @nPackedQty = SUM(Qty)
+               FROM dbo.PackDetail  WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND ISNULL(LabelNo, '') = @cDropID
+
+               SELECT @nPickedQty = SUM(Qty)
+               FROM dbo.PickDetail  WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND ISNULL(CaseID, '') = @cDropID
+
+               IF @nPackedQty <> @nPickedQty
+               BEGIN
+                  SET @nErrNo = 216801
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- QTY:PICK<>PACK
+                  GOTO Quit
+               END
             END
-         END
-      END
+         END--inputkey=1
+      END--st1
       ELSE IF @nStep = 3  -- SKU
       BEGIN
          IF @cInputKey = '1'  -- Enter

@@ -4,13 +4,14 @@ SET ANSI_NULLS OFF
 GO
 
 /*********************************************************************************/
-/* Store procedure: rdtfnc_BuildPalletToKit                                            */
+/* Store procedure: rdtfnc_BuildPalletToKit                                      */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
 /* Purpose: Kitting via RDT                                                      */
 /*                                                                               */
 /* Date        Rev    Author  Purposes                                           */
 /* 2025-03-07  1.0.0  JCH507  FCR-2728 created                                   */
+/* 2025-08-12  0.0.0  JCH507  !!!Cutover. Use V0 repo for work!!!                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_BuildPalletToKit] (

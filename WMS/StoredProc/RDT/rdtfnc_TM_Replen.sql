@@ -57,7 +57,18 @@ GO
 /* 2023-04-05 4.0  Ung        WMS-22053 Revise ExtendedInfo                   */
 /* 2024-06-14 4.1  Dennis     UWP-20813 Check Digit                           */
 /* 2025-03-13 4.2  NLT013     UWP-31321 Be able to close pending pallet       */
-/* 2025-05-21 1.1  NLT013     UWP-34785 Add new Exit Screen for Levis         */
+/* 2025-05-21 4.3  NLT013     UWP-34785 Add new Exit Screen for Levis         */
+/* 2025-07-10 0.0  JackC      !!!Cutover!!! Use V0 repo for work              */
+/* 2025-08-04 4.4.0 NickT     UWP-37578 Extend length of  @cOption            */
+/* 2025-08-08 4.5.0 NickT     UWP-39061 SuggestToLoc is reset by mistake      */
+/* 2025-08-10 4.6.0 NickT     FCR-7730 Support OverwriteToLOC                 */
+/* 2025-10-10 4.7.0 NickT     FCR-7928 Reallocate for short task              */
+/* 2025-11-08 4.8.0 NickT     UWP-43838 If move start, no need proceed again, */
+/*                            Special fix for USA levis, customized logic     */
+/* 2025-11-13 4.9.0 NickT     UWP-44117 Fix issue: Cannot drop pending pallet */
+/* 2025-11-14 4.10.0 NickT    UWP-43847 Fix issue: PickDetail status is not updated*/
+/* 2025-12-04 4.11  Dennis    FCR-3959 ExtScnSp                               */
+/* 2026-01-13 4.12  Jackc     FCR-10031 Add extscn entry to step_shortpick    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -80,7 +91,7 @@ DECLARE
    @cUserPosition       NVARCHAR(1),
    @nTotPickQty         INT,
    @c_outstring         NVARCHAR(255),
-   @cOption             NVARCHAR(1),
+   @cOption             NVARCHAR(2),
    @cNextTaskDetailKey  NVARCHAR(10),
    @cReasonCode         NVARCHAR(10),
    @nRowRef             INT,
@@ -184,6 +195,7 @@ DECLARE
    @tExtScnData         VariableTable,
    @tExtValData         VariableTable,
    @nAction             INT,
+   @cOverwriteToLOC     NVARCHAR(1),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -310,6 +322,7 @@ SELECT
    @cSwapUCCSP         = V_String43,
    @cExtendedWCSSP     = V_String44,
    @cLOCCheckDigitSP   = V_string45,
+   @cOverwriteToLOC    = V_String46,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -368,7 +381,6 @@ BEGIN
    IF @nStep = 7 GOTO Step_Exit        -- Scn = 2686 Pallet is close. Next task / Exit
    IF @nStep = 8 GOTO Step_ShortPick   -- Scn = 2687 Short pick / Close pallet
    IF @nStep = 9 GOTO Step_Reason      -- Scn = 2109 Reason code
-   IF @nStep = 9 GOTO Step_Reason      -- Scn = 2109 Reason code
    IF @nStep = 99 GOTO Step_99         -- Step 99 
 END
 RETURN -- Do nothing if incorrect step
@@ -419,6 +431,7 @@ BEGIN
    SET @cDefaultFromID = rdt.rdtGetConfig( @nFunc, 'DefaultFromID', @cStorerKey)
    SET @cDefaultSKU = rdt.rdtGetConfig( @nFunc, 'DefaultSKU', @cStorerKey)
    SET @cDisableOverReplen = rdt.rdtGetConfig( @nFunc, 'DisableOverReplen', @cStorerKey)
+   SET @cOverwriteToLOC = rdt.rdtGetConfig( @nFunc, 'OverwriteToLOC', @cStorerKey)
 
    SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cStorerKey)
    IF @cDecodeLabelNo = '0'
@@ -756,6 +769,32 @@ BEGIN
          GOTO Step_DropID_Fail
       END
 
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep, @cDropID '
+            SET @cSQLParam =
+               '@nMobile         INT,        ' +
+               '@nFunc           INT,        ' +
+               '@cLangCode       NVARCHAR( 3),   ' +
+               '@nStep           INT,        ' +
+               '@cTaskdetailKey  NVARCHAR( 10),  ' +
+               '@cToLoc          NVARCHAR( 10),  ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT,' +
+               '@nAfterStep      INT,        ' +
+               '@cDropID         NVARCHAR( 20)  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep, @cDropID
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       /*
             BEGIN TRAN
 
@@ -867,6 +906,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_DropID_Fail:
@@ -1140,6 +1188,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_FromLOC_Fail:
@@ -1843,18 +1900,19 @@ BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                '@nMobile         INT,        ' +
                '@nFunc           INT,        ' +
                '@cLangCode       NVARCHAR( 3),   ' +
                '@nStep           INT,        ' +
                '@cTaskdetailKey  NVARCHAR( 10),  ' +
+               '@cToLoc          NVARCHAR( 10),  ' +
                '@nErrNo          INT OUTPUT, ' +
                '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
                GOTO Quit
@@ -2132,6 +2190,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+   
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_SKU_Fail:
@@ -2497,6 +2564,30 @@ BEGIN
       IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND Status IN ('5', '0', 'X'))
          GOTO Quit
 
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,        ' +
+               '@nFunc           INT,        ' +
+               '@cLangCode       NVARCHAR( 3),   ' +
+               '@nStep           INT,        ' +
+               '@cTaskdetailKey  NVARCHAR( 10),  ' +
+               '@cToLoc          NVARCHAR( 10),  ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       -- Prepare next screen variable
       SET @cOutField01 = @cSuggSKU
       SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
@@ -2545,6 +2636,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_NextTask_Fail:
@@ -2579,6 +2679,23 @@ BEGIN
          GOTO Step_ToLOC_Fail
       END
 
+      DECLARE @cCheckMoveStatus  NVARCHAR( 10)
+      SET @cCheckMoveStatus = rdt.rdtGetConfig(@nFunc, 'CheckMoveStatus', @cStorerKey)
+      IF @cCheckMoveStatus = '1'
+      BEGIN
+         IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                       AND DropID = @cDropID
+                       AND ListKey = @cListKey
+                       AND UserKey = @cUserName
+                       AND Message03 IN ('MoveInProgress', 'MoveCompleted')
+                       AND Status IN ('5','9')
+                  )
+         BEGIN
+            GOTO JumpTo_Exit_Screen
+         END
+      END
+
       -- (james03)        
       IF @cLOCLookupSP = 1              
       BEGIN              
@@ -2606,20 +2723,57 @@ BEGIN
 
       SET @nIsToLOCDiff = 0
       -- Check if FromLOC match
-      IF @cDefaultSuggToLOC <> '' 
+      IF @cOverwriteToLOC <> '1'
       BEGIN
-         IF @cToLOC <> @cDefaultSuggToLOC
-            SET @nIsToLOCDiff = 1
+         IF @cDefaultSuggToLOC <> '' 
+         BEGIN
+            IF @cToLOC <> @cDefaultSuggToLOC
+               SET @nIsToLOCDiff = 1
+         END
+         ELSE
+         BEGIN
+            IF @cToLOC <> @cSuggToLOC
+               SET @nIsToLOCDiff = 1
+         END
+
+         IF @nIsToLOCDiff = 1
+         BEGIN
+            SET @nErrNo = 72286
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC Diff
+            GOTO Step_ToLOC_Fail
+         END
       END
-      ELSE
-         IF @cToLOC <> @cSuggToLOC
-            SET @nIsToLOCDiff = 1
-      
-      IF @nIsToLOCDiff = 1
+
+      -- Check if ToLoc is valid
+      IF NOT EXISTS( SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC)
       BEGIN
-         SET @nErrNo = 72286
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC Diff
-        GOTO Step_ToLOC_Fail
+         SET @nErrNo = 72305
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOC
+         GOTO Step_ToLOC_Fail
+      END
+
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@cToLoc          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
       END
 
       -- Handling transaction
@@ -2650,7 +2804,8 @@ BEGIN
          @cUserName,
          @cListKey,
          @nErrNo  OUTPUT,
-         @cErrMsg OUTPUT
+         @cErrMsg OUTPUT,
+         @cToLOC
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_TM_Replen
@@ -2714,6 +2869,8 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
          END
       END
+
+      JumpTo_Exit_Screen:
       -- Prepare next screen var
       SET @cOutField01 = @cToLOC
       SET @cOutField10 = '' -- ExtendedInfo
@@ -3187,6 +3344,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_ShortPick_Fail:
@@ -3537,7 +3703,14 @@ BEGIN
       BEGIN
          DECLARE 
             @nCurrentScn      INT = @nScn,
-            @nCurrentStep     INT = @nStep
+            @nCurrentStep     INT = @nStep,
+            @nPreviousScn     INT,
+            @nPreviousStep    INT
+
+         SELECT @nPreviousScn = Scn, @nPreviousStep = Step
+         FROM RDT.RDTMOBREC WITH (NOLOCK)
+         WHERE Mobile = @nMobile
+
          DELETE FROM @tExtScnData
 
          INSERT INTO @tExtScnData (Variable, Value) 
@@ -3582,7 +3755,7 @@ BEGIN
 
          IF @cExtScnSP = 'rdt_1764ExtScn01'
          BEGIN
-            IF @nStep = @nStep_ToLoc
+            IF @nStep = @nStep_ToLoc AND @nPreviousStep = 0
             BEGIN
                SET @cTTMTaskType    = @cUDF01
                SET @cSuggID         = @cUDF02
@@ -3600,6 +3773,27 @@ BEGIN
             END
             ELSE 
             BEGIN
+               IF @nPreviousStep = @nStep_ShortPick -- From Short Pick Screen and Skip reason screen
+               BEGIN
+                  IF @cOption = '1' AND @nInputKey = 1 -- ENTER
+                  BEGIN
+                     IF @cUDF01 <> ''
+                        SET @cReasonCode = @cUDF01
+                  END
+               END
+               
+               IF @nPreviousStep = @nStep_Reason
+               BEGIN
+                  IF @nInputKey = 1 -- ENTER
+                  BEGIN
+                     -- Reset QTY to 0 if SKIP/SHORT Task
+                     IF @cUDF01 = '0'
+                     BEGIN
+                        SET @nQTY = 0
+                     END
+                  END
+               END
+
                IF @nScn = 2100 AND @nInputKey = 0 -- Back to 1st screen of TM Task Management
                BEGIN
                   SET @nFunc = 1756
@@ -3706,6 +3900,7 @@ BEGIN
       V_String43   = @cSwapUCCSP,
       V_String44   = @cExtendedWCSSP,
       V_string45   = @cLOCCheckDigitSP,
+      V_String46   = @cOverwriteToLOC,
 
       V_Integer1   = @nQTY_RPL,
       V_Integer2   = @nPQTY_RPL,

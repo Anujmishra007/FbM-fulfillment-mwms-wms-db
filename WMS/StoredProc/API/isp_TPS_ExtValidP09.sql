@@ -9,7 +9,8 @@ GO
 /* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date         Rev  Author      Purposes                                     */
-/* 2024-05-08   1.0  GhChan      FCR-4548                                     */
+/* 2025-05-08   1.0  GCH225      FCR-4548                                     */
+/* 2025-08-26   1.0  GCH225      UWP-40099 Further check previous barcode     */
 /******************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPS_ExtValidP09] (
@@ -27,27 +28,44 @@ SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 BEGIN
 	DECLARE
-		@cStorerKey   NVARCHAR ( 15),
-      @cFacility    NVARCHAR ( 5),
-      @nFunc        INT,
-      @cBarcode     NVARCHAR( 60),
-      @cUserName    NVARCHAR( 30),
-      @cLangCode    NVARCHAR( 3),
-      @cSKU         NVARCHAR( 30),
-      @cScanNo      NVARCHAR( 50)
+		@cStorerKey       NVARCHAR ( 15),
+      @cFacility        NVARCHAR ( 5),
+      @nFunc            INT,
+      @cBarcode         NVARCHAR( 60),
+      @cUserName        NVARCHAR( 30),
+      @cLangCode        NVARCHAR( 3),
+      @cSKU             NVARCHAR( 30),
+      @cScanNo          NVARCHAR( 50),
+      @cPreviousBarcode NVARCHAR(MAX),
+      @Duplicates       NVARCHAR(2000)
 
+   SET @Duplicates = ''
 	--Decode Json Format
-   SELECT @cStorerKey = StorerKey, @cFacility = Facility,  @nFunc = Func, @cBarcode = Barcode, @cUserName = UserName, @cLangCode = LangCode, @cScanNo = ScanNo
+   SELECT @cStorerKey = StorerKey, @cFacility = Facility,  @nFunc = Func, @cBarcode = Barcode, @cUserName = UserName, @cLangCode = LangCode, @cScanNo = ScanNo, @cPreviousBarcode = PreviousBarcode
    FROM OPENJSON(@json)
    WITH (
-      StorerKey   NVARCHAR ( 15),
-      Facility    NVARCHAR ( 5),
-      Func        INT,
-      Barcode     NVARCHAR( 60),
-      UserName    NVARCHAR( 30),
-      LangCode    NVARCHAR( 3),
-      ScanNo      NVARCHAR( 50)
+      StorerKey         NVARCHAR ( 15),
+      Facility          NVARCHAR ( 5),
+      Func              INT,
+      Barcode           NVARCHAR( 60),
+      UserName          NVARCHAR( 30),
+      LangCode          NVARCHAR( 3),
+      ScanNo            NVARCHAR( 50),
+      PreviousBarcode   NVARCHAR(MAX) as JSON
    )
+
+   SELECT  @Duplicates = STRING_AGG(value, ',')
+   FROM OPENJSON(@cPreviousBarcode)
+   GROUP BY value
+   HAVING COUNT(value) > 1
+
+   IF @Duplicates <> ''
+   BEGIN
+      SET @b_Success = 0
+      SET @n_Err = 400000
+	   SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Error: Duplicated Scan found in current batch.(' + @Duplicates + ')'
+      GOTO EXIT_SP
+   END
 
    SET @b_Success = 1
    SET @jResult = ''

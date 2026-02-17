@@ -5,7 +5,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: isp_GetWorkstation                                        */
-/* Copyright      : LFLogistics                                               */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-05-05   1.0  Chermaine  Created                                       */
@@ -14,7 +14,8 @@ GO
 /* 2025-02-20   1.3  yeekung    UWP-27764 Add New Params (yeekung02)          */
 /* 2025-03-26   1.4  yeekung    UWP-31832 Filter out userid in appsection     */
 /*                              (yeekung03)                                   */
-/* 2025-04-25   2.1  GhChan     Enhanced the whole logic with support V0 & V2 */
+/* 2025-04-25   2.2  GCH225     Enhanced the whole logic with support V0 & V2 */
+/* 2025-07-24   2.3  GCH225     UWP-38019 New Shared Workstation Flow         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetWorkstation] (
@@ -32,15 +33,17 @@ SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
 DECLARE
-   @cLangCode        NVARCHAR( 3),
-   @cUserName        NVARCHAR( 30),
-   @cStorerKey       NVARCHAR( 15) = '',
-   @cFacility        NVARCHAR( 5) = '',
-   @nFunc            INT,
-   @cDeviceID        NVARCHAR( 50),
-   @cDefaultWorkstation     NVARCHAR( 30),
-   @cTargetVersion          NVARCHAR( 12),
-   @cCurrentVersion         NVARCHAR( 12)
+   @cLangCode           NVARCHAR( 3),
+   @cUserName           NVARCHAR( 128),
+   @cStorerKey          NVARCHAR( 15) = '',
+   @cFacility           NVARCHAR( 5) = '',
+   @nFunc               INT,
+   @cDeviceID           NVARCHAR( 50),
+   @cDefaultWorkstation NVARCHAR( 30),
+   @cTargetVersion      NVARCHAR( 12),
+   @cCurrentVersion     NVARCHAR( 12),
+   @cSQL                NVARCHAR( 1000),
+   @cSQLParam           NVARCHAR( 1000)
 
 DECLARE @tempworkstation TABLE (
    workstation NVARCHAR( 30)
@@ -57,26 +60,6 @@ WITH (
       Facility    NVARCHAR(  5),
       UserName      NVARCHAR( 128)
 )
---SELECT @nFunc AS Func, @cLangCode AS LangCode,@cWorkstation as Workstation
-
-----convert login
---SET @n_Err = 0
---EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-
---EXECUTE AS LOGIN = @cUserName
-
---IF @n_Err <> 0
---BEGIN
---   --INSERT INTO @errMsg(nErrNo,cErrMsg)
---   SET @b_Success = 0
---   SET @n_Err = @n_Err
---   SET @c_ErrMsg = @c_ErrMsg
---   GOTO EXIT_SP
---END
-
-
-----SELECT @cUserName AS username
-----select SUSER_SNAME ()
 
 IF @cDeviceID <>''
 BEGIN
@@ -115,13 +98,9 @@ BEGIN
       SELECT WorkStation 
       FROM Api.AppWorkstation WITH (NOLOCK)
       WHERE DeviceID = ''
-         AND DefaultStorerkey = @cStorerKey
-         AND DefaultFacility = @cFacility
-
+      AND ((DefaultStorerkey = @cStorerKey AND DefaultFacility = @cFacility)
+      OR (DefaultStorerkey = 'SHARE' AND DefaultFacility = @cFacility))
    END
-   
-
-   
 
    SET @jResult =(
       SELECT @cDefaultWorkstation AS DefaultWorkstation,@cCurrentVersion AS CurrentVersion, @cTargetVersion AS TargetVersion,* FROM (
@@ -138,24 +117,6 @@ BEGIN
 
    GOTO EXIT_SP
 END
-
---SET @b_Success = 1
-
---SET @jResult =(
---SELECT @cDefaultWorkstation AS DefaultWorkstation,workstation
---FROM Api.AppWorkstation WITH (NOLOCK)
---FOR JSON AUTO
---)
-
---SET @jResult =(
---SELECT @cDefaultWorkstation AS DefaultWorkstation,@cCurrentVersion AS CurrentVersion, @cTargetVersion AS TargetVersion,* FROM (SELECT
---'[' +STUFF(( SELECT ',' + '"' + workstation  + '"'
---FROM Api.AppWorkstation APP WITH (NOLOCK) 
---WHERE APP.deviceID = '' FOR XML PATH('')),1,1,'')+ ']' as WorkStationList
---)WorkStationList1
---FOR JSON AUTO , INCLUDE_NULL_VALUES
---)
-
 
 EXIT_SP:
    REVERT

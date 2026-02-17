@@ -31,6 +31,7 @@ GO
 /* 22-Oct-2019  TLTING01 1.7  Blocking tuning                           */
 /* 14-Oct-2021  KSChin   1.8  add tracker to DEL_ReceiptDetail table    */
 /* 29-Apr-2025  Wan02    1.9  FCR-3576 - ReceiptSerialno Enhancement    */
+/* 24-Sep-2025  PPA371   2.0  UWP-40707 - Delete Pallet and palletdetails */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailDelete]
@@ -76,6 +77,7 @@ BEGIN
 
          , @n_ReceiptSerialNoKey BIGINT                                             --(Wan02)
          , @cur_RD               CURSOR                                             --(Wan02)
+		 ,@c_palletkey		 nvarchar(30)
     /* #INCLUDE <TRRDD1.SQL> */
     IF (
            SELECT COUNT(*)
@@ -561,6 +563,53 @@ BEGIN
          SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Insert DEL_RECEIPT Failed. (ntrOrderHeaderDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
       END
    END    -- Added End by KS Chin
+
+    -- Delete records from PalletDetail where ReceiptKey and ReceiptLineNumber match the deleted records
+    IF @n_continue = 1 OR @n_continue = 2
+    BEGIN
+
+	IF EXISTS (
+    SELECT 1
+    FROM PALLETDETAIL (NOLOCK)
+    INNER JOIN DELETED
+    ON PalletDetail.ReceiptKey = DELETED.ReceiptKey
+    GROUP BY PalletDetail.ReceiptKey
+    HAVING COUNT(distinct PalletDetail.ReceiptKey) > 1
+)
+BEGIN
+    DELETE PalletDetail with (rowlock)
+    FROM PalletDetail
+    INNER JOIN DELETED
+    ON PalletDetail.ReceiptKey = DELETED.ReceiptKey
+    AND PalletDetail.ReceiptLineNumber = DELETED.ReceiptLineNumber;
+END
+ELSE
+BEGIN
+    SELECT TOP 1 @c_palletkey = PalletKey
+    FROM PALLETDETAIL (NOLOCK)
+    INNER JOIN DELETED
+    ON PALLETDETAIL.ReceiptKey = DELETED.ReceiptKey;
+
+    DELETE PalletDetail with (rowlock)
+    FROM PalletDetail
+    INNER JOIN DELETED
+    ON PalletDetail.ReceiptKey = DELETED.ReceiptKey
+    AND PalletDetail.ReceiptLineNumber = DELETED.ReceiptLineNumber;
+
+IF NOT EXISTS( Select top 1 1 from palletdetail with (nolock) where palletkey=@c_palletkey)
+	DELETE Pallet
+    WHERE Pallet.PalletKey = @c_palletkey;
+END
+
+        -- Check for errors
+        IF @@ERROR <> 0
+        BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 62402
+            SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Insert DEL_RECEIPT Failed. (ntrReceiptDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+
+        END
+    END
 
     /* #INCLUDE <TRRDD2.SQL> */
     IF @n_continue=3 -- Error Occured - Process And Return

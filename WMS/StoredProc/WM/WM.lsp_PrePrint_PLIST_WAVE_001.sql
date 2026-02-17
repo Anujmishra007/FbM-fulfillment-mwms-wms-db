@@ -21,6 +21,7 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 03-May-2023 WLChooi  1.0   DevOps Script Combine                      */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_PrePrint_PLIST_WAVE_001]  
     @n_WMReportRowID BIGINT 
@@ -76,20 +77,26 @@ BEGIN
 
    IF @c_UserName = '' SET @c_UserName = SUSER_SNAME()
 
-   IF SUSER_SNAME() <> @c_UserName 
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
 
    BEGIN TRAN
 
@@ -163,7 +170,8 @@ BEGIN
       BEGIN TRAN
    END
 
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01) 
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_PrePrint_PLIST_WAVE_001] TO [nSQL] 

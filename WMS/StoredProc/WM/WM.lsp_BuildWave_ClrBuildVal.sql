@@ -1,94 +1,100 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_BuildWave_ClrBuildVal]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_BuildWave_ClrBuildVal]
-GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/                                                                                  
-/* Store Procedure: lsp_BuildWave_ClrBuildVal                           */                                                                                  
-/* Creation Date: 08-MAR-2018                                           */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
-/* Written by: Wan                                                      */                                                                                  
-/*                                                                      */                                                                                  
+
+/************************************************************************/
+/* Store Procedure: lsp_BuildWave_ClrBuildVal                           */
+/* Creation Date: 08-MAR-2018                                           */
+/* Copyright: LFL                                                       */
+/* Written by: Wan                                                      */
+/*                                                                      */
 /* Purpose: LFWM-1790 - SPs for Wave Release Screen - ( Wave Creation   */
-/*          Tab - HomeScreen )                                          */                                                                                  
-/*                                                                      */                                                                                  
-/* Called By: SCE                                                       */                                                                                  
-/*          :                                                           */                                                                                  
-/* PVCS Version: 1.1                                                    */                                                                                  
-/*                                                                      */                                                                                  
-/* Version: 8.0                                                         */                                                                                  
-/*                                                                      */                                                                                  
-/* Data Modifications:                                                  */                                                                                  
-/*                                                                      */                                                                                  
-/* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */  
+/*          Tab - HomeScreen )                                          */
+/*                                                                      */
+/* Called By: SCE                                                       */
+/*          :                                                           */
+/* PVCS Version: 1.1                                                    */
+/*                                                                      */
+/* Version: 8.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver.  Purposes                                  */
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /* 15-Jan-2021 Wan01    1.1   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_BuildWave_ClrBuildVal]                                                                                                                       
-      @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
-   ,  @b_Success           INT            = 1  OUTPUT  
-   ,  @n_err               INT            = 0  OUTPUT                                                                                                             
-   ,  @c_ErrMsg            NVARCHAR(255)  = '' OUTPUT 
-   ,  @c_UserName          NVARCHAR(128)  = ''                  
+/* 2025-05-26  SWT01    1.2   Setting Session Context for user name     */
+/* 10-Oct-2025 AK01     1.3   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
+/************************************************************************/
+CREATE OR ALTER PROC [WM].[lsp_BuildWave_ClrBuildVal]
+      @c_BuildParmKey      NVARCHAR(10)
+   ,  @b_Success           INT            = 1  OUTPUT
+   ,  @n_err               INT            = 0  OUTPUT
+   ,  @c_ErrMsg            NVARCHAR(255)  = '' OUTPUT
+   ,  @c_UserName          NVARCHAR(128)  = ''
 AS
 BEGIN
-   SET NOCOUNT ON                                                                                                                                           
-   SET ANSI_NULLS OFF                                                                                                                                       
-   SET QUOTED_IDENTIFIER OFF                                                                                                                                
-   SET CONCAT_NULL_YIELDS_NULL OFF                                                                                                                          
-   
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
    DECLARE @n_Continue        BIT = 1
-         , @n_StartTCnt       INT = @@TRANCOUNT  
-         
-         , @c_BuildParmLineNo NVARCHAR(5) = ''                                                                                                                               
-  
+         , @n_StartTCnt       INT = @@TRANCOUNT
+
+         , @c_BuildParmLineNo NVARCHAR(5) = ''
+
    DECLARE @CUR_BPD           CURSOR
 
    SET @b_Success = 1
 
-   SET @n_Err = 0 
-   
-   IF SUSER_SNAME() <> @c_UserName        --(Wan01) 
+   SET @n_Err = 0
+
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
    BEGIN 
+
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
-      END  
-                      
-      EXECUTE AS LOGIN = @c_UserName      --(Wan01) 
+      END
+
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
    END
-   
+   -- (SWT01) - END
+
    BEGIN TRY   --(Wan01) - START
       BEGIN TRAN
 
-      IF EXISTS ( SELECT 1 
+      IF EXISTS ( SELECT 1
                   FROM BUILDPARM WITH (NOLOCK)
                   WHERE BuildParmKey = @c_BuildParmKey
-                  AND ( RestrictionBuildValue01 <> '' OR RestrictionBuildValue02 <> '' OR 
-                        RestrictionBuildValue03 <> '' OR RestrictionBuildValue04 <> '' OR 
+                  AND ( RestrictionBuildValue01 <> '' OR RestrictionBuildValue02 <> '' OR
+                        RestrictionBuildValue03 <> '' OR RestrictionBuildValue04 <> '' OR
                         RestrictionBuildValue05 <> ''
                       )
                 )
       BEGIN
-         BEGIN TRY                                                                                                                                                      
-            UPDATE BUILDPARM 
+         BEGIN TRY
+            UPDATE BUILDPARM
                SET   RestrictionBuildValue01 = ''
                   ,  RestrictionBuildValue02 = ''
                   ,  RestrictionBuildValue03 = ''
                   ,  RestrictionBuildValue04 = ''
                   ,  RestrictionBuildValue05 = ''
-                  ,  EditDate = GETDATE()
+                  ,  EditDate = dbo.fnc_GetDate()
                   ,  EditWho  = @c_UserName
                   ,  TrafficCop = NULL
             WHERE BuildParmKey = @c_BuildParmKey
@@ -97,12 +103,12 @@ BEGIN
          BEGIN CATCH
             SET @n_Continue = 3
             SET @n_Err     = 555551
-            SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                                                        
-            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
+            SET @c_ErrMsg  = ERROR_MESSAGE()
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
                            + ': Update BUILDPARM fail. Actual Build Values Not Clear. (lsp_BuildWave_ClrBuildVal) '
-                           + '( ' + @c_ErrMsg + ' )'    
+                           + '( ' + @c_ErrMsg + ' )'
 
-            IF (XACT_STATE()) = -1  
+            IF (XACT_STATE()) = -1
             BEGIN
                ROLLBACK TRAN
 
@@ -110,46 +116,46 @@ BEGIN
                BEGIN
                   BEGIN TRAN
                END
-            END                                                                                                                 
-            GOTO EXIT_SP   
+            END
+            GOTO EXIT_SP
          END CATCH
       END
 
       SET @c_BuildParmLineNo = ''
-      SET @CUR_BPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
+      SET @CUR_BPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT Code = BPD.BuildParmLineNo
       FROM BUILDPARMDETAIL BPD WITH (NOLOCK)
       WHERE BPD.BuildParmKey = @c_BuildParmKey
       AND   BPD.BuildValue <> ''
-      ORDER BY BPD.BuildParmLineNo                                                                                                                                            
-                                                                                                                                                            
-      OPEN @CUR_BPD                                                                                                                                    
-                                                                                                                                                            
+      ORDER BY BPD.BuildParmLineNo
+
+      OPEN @CUR_BPD
+
       FETCH NEXT FROM @CUR_BPD INTO @c_BuildParmLineNo
-                                                                    
-      WHILE @@FETCH_STATUS <> -1                             
-      BEGIN 
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
          BEGIN TRAN
-         BEGIN TRY                                                                                                                                                      
+         BEGIN TRY
             UPDATE BUILDPARMDETAIL
                SET   BuildValue = ''
-                  ,  EditDate = GETDATE()
+                  ,  EditDate = dbo.fnc_GetDate()
                   ,  EditWho  = @c_UserName
                   ,  TrafficCop = NULL
             WHERE BuildParmKey = @c_BuildParmKey
-            AND   BuildParmLineNo = @c_BuildParmLineNo  
+            AND   BuildParmLineNo = @c_BuildParmLineNo
             AND   BuildValue <> ''
          END TRY
 
          BEGIN CATCH
             SET @n_Continue = 3
             SET @n_Err     = 555552
-            SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                                                        
-            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
+            SET @c_ErrMsg  = ERROR_MESSAGE()
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
                            + ': Update BUILDPARMDETAIL fail. Actual Build Value Not Clear. (lsp_BuildWave_ClrBuildVal) '
-                           + '( ' + @c_ErrMsg + ' )'    
+                           + '( ' + @c_ErrMsg + ' )'
 
-            IF (XACT_STATE()) = -1  
+            IF (XACT_STATE()) = -1
             BEGIN
                ROLLBACK TRAN
 
@@ -157,26 +163,26 @@ BEGIN
                BEGIN
                   BEGIN TRAN
                END
-            END                                                                                                                 
-            GOTO EXIT_SP   
+            END
+            GOTO EXIT_SP
          END CATCH
 
-         WHILE @@TRANCOUNT > 0 
+         WHILE @@TRANCOUNT > 0
          BEGIN
             COMMIT TRAN
          END
 
          FETCH NEXT FROM @CUR_BPD INTO @c_BuildParmLineNo
-      END                                                                                                                                                            
+      END
       CLOSE @CUR_BPD
       DEALLOCATE @CUR_BPD
    END TRY
    BEGIN CATCH
-      SET @n_Continue = 3   
+      SET @n_Continue = 3
       SET @c_ErrMsg   = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH            --(Wan01) - END
-EXIT_SP:    
+EXIT_SP:
   IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -207,9 +213,13 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN
    END
-   
-   REVERT   
+
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END -- Procedure
 GO
-GRANT EXECUTE ON [WM].[lsp_BuildWave_ClrBuildVal] TO nSQL 
-GO        
+GRANT EXECUTE ON  [WM].[lsp_BuildWave_ClrBuildVal] TO [NSQL]
+GO
+

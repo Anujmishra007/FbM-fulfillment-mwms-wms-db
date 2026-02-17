@@ -20,6 +20,8 @@ GO
 /* Date        Author   Ver.  Purposes                                    */
 /* 2025-04-04  Wan01    1.1   UWP-31258-FCR-822 Partial Pallet Serial No  */
 /*                            Move                                        */
+/* 10-Oct-2025  SSA01   1.2   UWP-42248 -Enhanced session management      */
+/* 2025-10-20  Michael  1.3   FCR-8378-StrCfg SerialNoUpdateLotLocID(ML01)*/
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_SerialNoMoveCheck]
      @c_ItrnKey      NVARCHAR(10)
@@ -76,6 +78,17 @@ BEGIN
 
      ,@n_SerialQty         INT = 0                                                  --(Wan01)   
      ,@c_SerialNo          NVARCHAR(30) = ''                                        --(Wan01)   
+     ,@c_Facility          NVARCHAR(15) = ''        --ML01
+     ,@c_SerialNoUpdateLotLocID NVARCHAR(30) = ''   --ML01
+     ,@c_LoseUCC           NVARCHAR(1)  = ''        --ML01
+
+   --ML01-S
+   SELECT @c_Facility = Facility
+   FROM LOC (NOLOCK)
+   WHERE Loc = @c_FromLoc
+
+   SELECT @c_SerialNoUpdateLotLocID = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')
+   --ML01-E
 
    SELECT @c_SerialNoCapture = SerialNoCapture 
    FROM dbo.SKU WITH (NOLOCK) 
@@ -83,16 +96,26 @@ BEGIN
    AND SKU = @c_Sku
 
    IF @c_SerialNoCapture NOT IN ('1','3') 
+   AND @c_SerialNoCapture NOT IN ('2')   --ML01
       GOTO Quit_SP
 
    IF @n_Continue IN (1,2)
    BEGIN
       IF @c_FromID <> @c_ToID AND @c_Lot <> ''
+      OR @c_FromLoc <> @c_ToLoc AND @c_Lot <> ''   --ML01
       BEGIN
          IF EXISTS(SELECT 1 FROM dbo.SerialNo SN WITH (NOLOCK) 
                   WHERE SN.Lot = @c_Lot
+                  AND (SN.ID <> '' OR SN.Loc = @c_FromLoc) --ML01
                   AND SN.ID = @c_FromID)
          BEGIN              
+            --ML01-S
+            SET @c_LoseUCC = ''
+            SELECT @c_LoseUCC = LoseUCC
+              FROM LOC (NOLOCK)
+             WHERE Loc = @c_ToLoc
+            --ML01-E
+
             DECLARE CUR_SWAP_ID CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
             SELECT SN.SerialNoKey
                   ,SN.SerialNo                                                      --(Wan01)
@@ -100,6 +123,7 @@ BEGIN
             FROM dbo.SerialNo SN WITH (NOLOCK) 
             WHERE SN.LOT = @c_Lot
             AND SN.ID = @c_FromID
+            AND (SN.ID <> '' OR SN.Loc = @c_FromLoc) --ML01
             AND SN.StorerKey = @c_StorerKey
             AND SN.SKU = @c_Sku
             -- ORDER BY SN.SerialNoKey
@@ -112,7 +136,9 @@ BEGIN
             WHILE @@FETCH_STATUS = 0
             BEGIN
                UPDATE dbo.SerialNo WITH (ROWLOCK)
-                  SET ID = @c_ToID, EditDate=GETDATE(), EditWho=SUSER_SNAME()
+                  SET ID = @c_ToID, EditDate=dbo.fnc_GetDate() , EditWho=dbo.fnc_GetUserName()      --(SSA01)
+                    , Loc = CASE WHEN @c_SerialNoUpdateLotLocID = '1' THEN @c_ToLoc ELSE Loc END    --ML01
+                    , UCCNo = CASE WHEN @c_LoseUCC = '1' THEN '' ELSE UCCNo END                     --ML01
                WHERE SerialNoKey = @c_SerialNoKey 
                SELECT @n_err = @@ERROR
                IF @n_err <> 0
@@ -191,3 +217,7 @@ BEGIN
    END
    /* End Return Statement */
 END -- Create Proc 
+GO
+
+GRANT EXECUTE ON [dbo].[msp_SerialNoMoveCheck] TO NSQL  
+GO 

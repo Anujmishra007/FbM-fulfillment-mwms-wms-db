@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_FinalizeKit_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,8 +26,13 @@ GO
 /*                           1.1   Fixed Uncommitable Transaction              */
 /* 2021-01-15  Wan03         1.2   Execute Login if @c_UserName<>SUSER_SNAME() */
 /* 2025-05-28  Shreekanth    1.3   Updating Editwho in KIT to Namedser (SG01)  */
+/* 2025-10-06  SSA01         1.4   UWP-42142 -Enhanced session management      */
+/*                             and cleanup.                                    */
+/* 2025-12-22  Michael       1.5   FCR-9761 - Add new StorerConfig             */
+/*                                 CopyKitExpQty2UsedQtyIfZero to copy From    */
+/*                                 ExpectedQty to UsedQty if Qty=0 (ML01)      */
 /*******************************************************************************/
-CREATE PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]
    @c_KITKey               NVARCHAR(10)
 ,  @b_Success              INT          = 1  OUTPUT   
 ,  @n_Err                  INT          = 0  OUTPUT
@@ -51,7 +51,8 @@ BEGIN
 
    DECLARE @n_Continue           INT = 1
          , @n_StartTCnt          INT = @@TRANCOUNT
-         , @n_CurrTrnCnt         INT = 0  
+         , @n_CurrTrnCnt         INT = 0
+         , @b_ExecuteAs          BIT = 0   --(SSA01)
 
    DECLARE @c_TableName          NVARCHAR(50)   = 'KIT'
          , @c_SourceType         NVARCHAR(50)   = 'lsp_FinalizeKit_Wrapper'
@@ -121,6 +122,7 @@ BEGIN
          , @CUR_KITTO            CURSOR
 
          , @CUR_UPDKITTO         CURSOR   --(Wan01)
+         , @c_CopyKitExpQty2UsedQtyIfZero NVARCHAR(30) = ''
 
    --(Wan01) - START
    DECLARE
@@ -143,24 +145,29 @@ BEGIN
 
    SET @n_ErrGroupKey = 0
 
-   SET @n_Err = 0 
+   SET @n_Err = 0
+   --(SSA01) - START
    IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
       
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   --(Wan03) - END
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   --(SSA01) - END
+   --(Wan03) - END
 
    BEGIN TRY         --(Wan02) - START
-      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo  < 1
+--ML01      IF @c_ProceedWithWarning = 'N' AND @n_WarningNo  < 1
       BEGIN
          -------------------
          -- Validation Start
@@ -171,6 +178,16 @@ BEGIN
          FROM KIT K  WITH (NOLOCK)
          WHERE K.KitKey = @c_KitKey
 
+         --ML01-S
+         SET @c_CopyKitExpQty2UsedQtyIfZero = ''
+         SELECT TOP 1 @c_CopyKitExpQty2UsedQtyIfZero = SValue   -- 1=Auto Copy, 2=Prompt to Confirm Copy
+         FROM dbo.STORERCONFIG (NOLOCK)
+         WHERE Configkey = 'CopyKitExpQty2UsedQtyIfZero'
+         AND Storerkey IN ('ALL', @c_Storerkey)
+         AND Facility IN ('', @c_Facility)
+         ORDER BY CASE WHEN Storerkey='ALL' THEN 2 ELSE 1 END, Facility DESC
+         --ML01-E
+
          SET @n_KitFrom         = 0 
          SET @n_TotalKitFromQty = 0
          SET @c_ParentFromSku   = ''
@@ -180,7 +197,8 @@ BEGIN
                ,Lot = RTRIM(KD.Lot)
                ,Loc = RTRIM(KD.Loc)
                ,ID  = RTRIM(KD.ID)
-               ,KitFromQty =  KD.Qty
+--ML01               ,KitFromQty =  KD.Qty
+               ,KitFromQty = CASE WHEN @c_CopyKitExpQty2UsedQtyIfZero IN ('1','2') AND KD.ExpectedQty>0 AND KD.Qty=0 AND KD.Lot<>'' THEN KD.ExpectedQty ELSE KD.Qty END   --ML01
          FROM KITDETAIL KD WITH (NOLOCK)
          WHERE KD.KitKey = @c_KitKey
          AND KD.[Type] = 'F'
@@ -212,7 +230,7 @@ BEGIN
                SET @n_continue = 3   
                SET @n_err = 554501
                SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
-                             + ': Zero QtyCompleted found at Kit From. (lsp_FinalizeKit_Wrapper)'
+                             + ': Zero UsedQty found at Kit From. (lsp_FinalizeKit_Wrapper)'
 
                EXEC [WM].[lsp_WriteError_List] 
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
@@ -512,7 +530,7 @@ BEGIN
             IF @c_Lottable05Label = 'RCP_DATE' AND @c_Lottable05 = ''
             BEGIN
                SET @c_Lottable05 = CONVERT( NVARCHAR(10), GETDATE(), 120 )
-               SET @b_UpdateLot03= 1
+               SET @b_UpdateLot05= 1
             END
 
             SET @n_No = 1
@@ -594,7 +612,7 @@ BEGIN
             IF @b_UpdateLot03 = 1 OR @b_UpdateLot05 = 1
             BEGIN
                IF @b_UpdateLot03 = 0 SET @c_Lottable03 = ''
-               IF @b_UpdateLot03 = 0 SET @c_Lottable05 = ''
+               IF @b_UpdateLot05 = 0 SET @c_Lottable05 = ''
                
                INSERT INTO @t_UpdateKITTo ( KitLineNumber, Lottable03, Lottable05 )
                VALUES (@c_kitLineNumber, @c_Lottable03, @c_Lottable05)
@@ -715,6 +733,7 @@ BEGIN
          END
 
          IF @n_UnMatchQtySet > 0
+            AND @c_ProceedWithWarning = 'N' AND @n_WarningNo  < 1   --ML01
          BEGIN
             SET @n_WarningNo = 1
             SET @c_ErrMsg = 'Total of Component Quantity does not match to the quantity set in BOM Master. '
@@ -724,10 +743,61 @@ BEGIN
          --------------------------
          -- 1st Warning Check END
          --------------------------
+
+         --ML01-S
+         IF @c_ProceedWithWarning = 'N' AND @n_WarningNo  < 1
+         BEGIN
+            IF @c_CopyKitExpQty2UsedQtyIfZero = '2' AND
+               EXISTS(SELECT TOP 1 1 FROM KITDETAIL (NOLOCK)
+                   WHERE KitKey = @c_KitKey
+                     AND [Type] = 'F'
+                     AND ExpectedQty > 0
+                     AND Qty = 0
+                     AND Lot <> '')
+            BEGIN
+               SET @n_WarningNo = 1
+               SET @c_ErrMsg = 'Confirm copying ExpectedQty to UsedQty when UsedQty = 0?'
+               GOTO EXIT_SP
+            END
+         END
+         --ML01-E
       END 
    
       --(Wan01) - START
       BEGIN TRAN
+
+      --ML01-S
+      IF @c_CopyKitExpQty2UsedQtyIfZero IN ('1','2') AND
+         EXISTS(SELECT TOP 1 1 FROM KITDETAIL (NOLOCK)
+             WHERE KitKey = @c_KitKey
+               AND [Type] = 'F'
+               AND ExpectedQty > 0
+               AND Qty = 0
+               AND Lot <> '')
+      BEGIN
+         BEGIN TRY
+         UPDATE KITDETAIL WITH(ROWLOCK)
+            SET Qty = ExpectedQty
+          WHERE KitKey = @c_KitKey
+            AND [Type] = 'F'
+            AND ExpectedQty > 0
+            AND Qty = 0
+            AND Lot <> ''
+         END TRY
+         BEGIN CATCH
+            SET @n_continue = 3   
+            SET @n_err = 554512
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                           + ': Update KITDETAIL Table Fail. (lsp_FinalizeKit_Wrapper)'
+                           + '(' + @c_errmsg + ')' 
+            IF (XACT_STATE()) = -1
+               ROLLBACK TRAN;  
+            GOTO EXIT_SP
+         END CATCH
+      END
+      --ML01-E
+
       SET @CUR_UPDKITTO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
       SELECT kitLineNumber
             ,Lottable03
@@ -742,14 +812,15 @@ BEGIN
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          BEGIN TRY
-            UPDATE KITDETAIL 
+            UPDATE KITDETAIL WITH(ROWLOCK)
             SET Lottable03 = CASE WHEN @c_Lottable03 <> '' THEN @c_Lottable03 ELSE Lottable03 END
                ,Lottable05 = CASE WHEN @c_Lottable05 <> '' THEN CONVERT(DATETIME, @c_Lottable05, 121) ELSE Lottable05 END
-               ,EditWho = @c_UserName
-               ,EditDate= GETDATE()
+               ,EditWho = dbo.fnc_GetUserName()   --(SSA01)
+               ,EditDate= dbo.fnc_GetDate()    --(SSA01)
                ,TrafficCop = NULL
             WHERE KitKey = @c_KitKey
             AND   KITLineNumber = @c_KITLineNumber
+            AND   [Type] = 'T'   --ML01
          END TRY
          BEGIN CATCH
             SET @n_continue = 3   
@@ -835,7 +906,7 @@ BEGIN
       SET @n_CurrTrnCnt = @@TRANCOUNT  
       WHILE @n_CurrTrnCnt > @n_StartTCnt  
       BEGIN  
-        SET @n_CurrTrnCnt = @n_CurrTrnCnt - 1   
+         SET @n_CurrTrnCnt = @n_CurrTrnCnt - 1   
          COMMIT TRAN  
       END  
         
@@ -856,11 +927,15 @@ BEGIN
    BEGIN  
       BEGIN TRAN  
    END*/  
+   --(SSA01) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
 
-   REVERT      
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA01) - END
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizeKit_Wrapper] TO nSQL 
 GO
-
-

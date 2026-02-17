@@ -26,6 +26,10 @@
 /* 10-Sep-2024    Alex04   #PAC-353 - Bundle Packing validation         */
 /* 25-Feb-2025    CSC166   #FCR-3165 - Save UserID Into                 */
 /*                         PackHeader.AddWho                            */
+/* 15-Jul-2025    Sean     #FCR-6199 - Packing SKU Decode               */
+/* 23-Jul-2025    Sean01     #UWP-38247 - Compatible with Login User    */
+/* 20-Aug-2025    Jiawen   #UWP-39649 - Add CCTV Configs                */
+/* 15-Sep-2025    JWF011   #UWP-41185 - Update OrderKey for CCTV Config */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU_M](
      @b_Debug           INT            = 0
@@ -59,8 +63,8 @@ BEGIN
          , @n_IsExists                    INT            = 0
 
          , @c_StorerKey                   NVARCHAR(15)   = ''
-         , @c_ScanSKULabel                NVARCHAR(200)  = ''
-         , @c_SKU                         NVARCHAR(200)  = ''
+         , @c_ScanSKULabel                NVARCHAR(500)  = ''
+         , @c_SKU                         NVARCHAR(500)  = ''
          , @c_NewSKU                      NVARCHAR(20)   = ''
          , @c_Facility                    NVARCHAR(15)   = ''
                   
@@ -126,6 +130,9 @@ BEGIN
    DECLARE @n_PackSerialNoKey             BIGINT         = 0
          , @b_ScanQRInSKULabel            BIT            = 0         --Alex02
 
+   DECLARE @c_EPACKConfigJSON             NVARCHAR(4000) = ''
+   DECLARE @n_OrderCount                  INT            = 0
+
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
    SET @c_ErrMsg                          = ''
@@ -161,33 +168,34 @@ BEGIN
       ,  [Value]           NVARCHAR(120)  NULL
    )
 
-   DECLARE @DBUserName NVARCHAR(100)	--#FCR-3165
-   SET @DBUserName = @c_UserID			--#FCR-3165
+   -- UWP-38247 - Compatible with Login User S
 
-   --Change Login User
-   SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @DBUserName OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
+   DECLARE @DBUserName NVARCHAR(100),
+        @b_sp_ExecuteAs BIT
 
-   --#FCR-3165
-   IF @DBUserName LIKE '%' + @c_UserID + '%'
+   EXEC [API].[isp_ECOMP_ValidateAndSetUser]
+        @c_UserID      = @c_UserID,
+        @c_DBUserName  = @DBUserName OUTPUT,
+        @b_ExecuteAs   = @b_sp_ExecuteAs OUTPUT,
+        @b_Success     = @b_sp_Success OUTPUT,
+        @n_ErrNo       = @n_sp_err OUTPUT,
+        @c_ErrMsg      = @c_sp_errmsg OUTPUT;
+
+   IF @b_sp_Success = 0
    BEGIN
-    EXECUTE AS LOGIN = @DBUserName    --@c_UserID 
-    SET @c_UserID = @DBUserName
-   END
-
-   /*--Change Login User
-   SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
-
-   EXECUTE AS LOGIN = @c_UserID */   
-       
-   IF @n_sp_err <> 0     
-   BEGIN      
       SET @b_Success = 0      
       SET @n_ErrNo = @n_sp_err      
       SET @c_ErrMsg = @c_sp_errmsg     
-      GOTO QUIT      
+      GOTO QUIT
    END
+
+   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+      EXECUTE AS LOGIN = @DBUserName
+      SET @c_UserID = @DBUserName
+   END
+
+   -- UWP-38247 - Compatible with Login User E   
 
    SELECT @c_StorerKey     = ISNULL(RTRIM(StorerKey   ), '')
          ,@c_Facility      = ISNULL(RTRIM(Facility    ), '')
@@ -438,6 +446,7 @@ BEGIN
    -- update/insert packserialno
    IF @c_SerialNo <> '' AND @b_ScanQRInSKULabel = 1
    BEGIN
+      
       SET @b_IsSKUPacked = 1
    END
 
@@ -453,6 +462,9 @@ BEGIN
       , @c_Facility                 = @c_Facility
       , @c_SKU                      = @c_SKU
       , @n_CartonNo                 = @n_CartonNo
+      , @c_SerialNo                 = @c_SerialNo
+      , @c_ScanSKULabel             = @c_ScanSKULabel
+      , @b_ScanQRInSKULabel         = @b_ScanQRInSKULabel
       , @b_IsOrderMatch             = @b_IsOrderMatch        OUTPUT
       , @b_IsSKUPacked              = @b_IsSKUPacked         OUTPUT
       , @c_PackHeaderOrderKey       = @c_PHOrderKey          OUTPUT
@@ -468,18 +480,7 @@ BEGIN
       GOTO QUIT
    END
 
-   -- update/insert packserialno
-   IF @b_IsSKUPacked = 1 AND @b_ScanQRInSKULabel = 1
-   BEGIN
-      INSERT INTO [dbo].[PackSerialNo] (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY)
-      SELECT TOP 1 
-         PickSlipNo, CartonNo, '', LabelLine, StorerKey, SKU, @c_SerialNo, 1 --QTY --Alex03
-      FROM [dbo].[PackDetail] WITH (NOLOCK) 
-      WHERE PickSlipNo = @c_PickSlipNo 
-      AND CartonNo = @n_CartonNo
-      AND StorerKey = @c_StorerKey
-      AND SKU = @c_SKU
-   END
+  
 
    IF @b_Debug = 1 
    BEGIN
@@ -595,6 +596,42 @@ BEGIN
       SET @b_AutoCloseCarton = 0
    END
 
+   --CCTV Configs Start
+   IF @c_OrderKey = ''
+   BEGIN
+      IF @c_PickSlipNo <> '' 
+      BEGIN 
+         SELECT TOP 1 @c_OrderKey = ISNULL(RTRIM(OrderKey), '')
+         FROM dbo.PackHeader (NOLOCK) 
+         WHERE PickSlipNo = @c_PickSlipNo
+      END
+
+      IF @c_OrderKey = ''
+      BEGIN
+         SELECT
+            @n_OrderCount = COUNT(*),
+            @c_OrderKey = CASE
+                              WHEN COUNT(*) = 1 THEN MAX(ISNULL(RTRIM(OrderKey), ''))
+                              ELSE ''
+                          END
+         FROM dbo.PackTaskDetail (NOLOCK) 
+         WHERE TaskBatchNo = @c_TaskBatchID
+         AND SKU = @c_SKU
+      END
+   END
+
+   EXEC [API].[isp_ECOMP_GetEPackConfigs]
+         @c_StorerKey       = @c_StorerKey   
+      ,  @c_Facility        = @c_Facility    
+      ,  @c_UserId          = @c_UserID      
+      ,  @c_ComputerName    = @c_ComputerName
+      ,  @c_PackMode        = @c_OrderMode    
+      ,  @c_TaskBatchID     = @c_TaskBatchID 
+      ,  @c_OrderKey        = @c_OrderKey    
+      ,  @c_DropID          = @c_DropID      
+      ,  @c_EPACKConfigJSON = @c_EPACKConfigJSON OUTPUT
+   --CCTV Configs End
+
    SET @c_ResponseString = ISNULL(( 
                               SELECT
                                      @c_PickSlipNo             As 'PickSlipNo'
@@ -618,10 +655,19 @@ BEGIN
                                        FROM @t_PackingRules
                                        FOR JSON PATH
                                      ) AS 'SKU_PackingRules'
+                                    ,(
+                                       JSON_QUERY(@c_EPACKConfigJSON)
+                                     ) As 'EPACKConfig'
                               FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                            ), '')
 
    QUIT:
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      

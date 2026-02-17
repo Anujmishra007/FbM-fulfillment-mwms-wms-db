@@ -42,6 +42,7 @@ GO
 /*                               and caused Prompt error 67994          */
 /* 17-Apl-2025  2.2     Wan04    UWP-32707 - FCR-3957 - JCB Putaway Using*/
 /*                               TM SCE                                 */
+/* 06-OCT-2025  2.3     AK01     UWP-42143 Data Audit                   */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrTaskDetailAdd]
@@ -619,6 +620,28 @@ BEGIN
             END
         END -- WHILE 1=1
     END
+    
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE TaskDetail
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM TaskDetail
+      JOIN INSERTED ON TaskDetail.TaskDetailKey = INSERTED.TaskDetailKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67997
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table TaskDetail. (ntrTaskDetailAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+   
     /* #INCLUDE <TRTASKDA2.SQL> */
     IF @n_continue=3 -- Error Occured - Process And Return
     BEGIN

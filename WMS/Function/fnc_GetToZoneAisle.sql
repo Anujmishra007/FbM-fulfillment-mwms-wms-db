@@ -209,6 +209,7 @@ BEGIN
       BEGIN
          SELECT TOP 1 @c_ToAisle = LocAisle
          FROM @t_ZA
+         WHERE [Zone] = @c_ToZone                        --2025-08-13
          ORDER BY RowNum Desc
       END    
 

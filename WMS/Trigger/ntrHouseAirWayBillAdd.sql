@@ -1,13 +1,42 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrHouseAirWayBillAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrHouseAirWayBillAdd]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-/* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
-CREATE TRIGGER ntrHouseAirWayBillAdd
+
+/************************************************************************/
+/* Trigger: ntrHouseAirWayBillAdd                                       */
+/* Creation Date:                                                       */
+/* Copyright: IDS                                                       */
+/* Written by:                                                          */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Input Parameters:                                                    */
+/*                                                                      */
+/* Output Parameters:                                                   */
+/*                                                                      */
+/* Return Status:                                                       */
+/*                                                                      */
+/* Usage:                                                               */
+/*                                                                      */
+/* Local Variables:                                                     */
+/*                                                                      */
+/* Called By: When records inserted                                     */
+/*                                                                      */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author  Ver.  Purposes                                   */
+/* 17-Mar-2009 TLTING        Change user_name() to SUSER_SNAME()        */
+/* 06-OCT-2025 AK01    1.1   UWP-42143 Data Audit                       */
+/************************************************************************/
+CREATE OR ALTER TRIGGER ntrHouseAirWayBillAdd
  ON  HouseAirWayBill
  FOR INSERT
  AS
@@ -42,10 +71,10 @@ CREATE TRIGGER ntrHouseAirWayBillAdd
  BEGIN
  UPDATE HouseAirWayBill
  SET  TrafficCop = NULL,
- AddDate = GETDATE(),
- AddWho = SUSER_SNAME(),
- EditDate = GETDATE(),
- EditWho = SUSER_SNAME()
+ AddDate = dbo.fnc_GetDate(),       --GETDATE(),      AK01
+ AddWho = dbo.fnc_GetUserName(),    --SUSER_SNAME(),  AK01
+ EditDate = dbo.fnc_GetDate(),      --GETDATE(),      AK01
+ EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME(),  AK01
  FROM HouseAirWayBill, INSERTED
  WHERE HouseAirWayBill.HAWBKey = INSERTED.HAWBKey
  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -56,6 +85,7 @@ CREATE TRIGGER ntrHouseAirWayBillAdd
  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table HouseAirWayBill. (nspHouseAirWayBillAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
  END
  END
+ 
       /* #INCLUDE <TRHABHA2.SQL> */
  IF @n_continue=3  -- Error Occured - Process And Return
  BEGIN

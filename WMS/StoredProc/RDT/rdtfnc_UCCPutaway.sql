@@ -1,15 +1,7 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdtfnc_UCCPutaway]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdtfnc_UCCPutaway]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
   
 /*****************************************************************************/  
 /* Store procedure: rdtfnc_UCCPutaway                                        */  
-/* Copyright      : IDS                                                      */  
+/* Copyright      : Maersk                                                      */  
 /*                                                                           */  
 /* Purpose: Putaway by UCC                                                   */  
 /*                                                                           */  
@@ -48,14 +40,16 @@ GO
 /* 03-SEP-2021 2.5      James    WMS-17795 Remove hardcode PA Zone display   */  
 /*                               by config (james05)                         */  
 /* 21-Feb-2022 2.6      Yeekung  JSM-52910 comment step_1_fail (yeekung01)   */
-/* 17-Oct-2024 2.7      ShaoAn   FCR-759-1000 ID and UCC Length Issue        */
-/* 24-Oct-2024 2.7.1             Remove Customer Recode                      */
-/* 14-Mar-2025 2.8.0    Dennis   FCR-3449 Extended Screen                    */
-/* 29-May-2025 2.9.0    Dennis   UWP-35136 Fix Bug (de01)                    */
-/* 2025-06-19  0.0.0    JACKC    !!!Cutover. Use V0 repo for work!!!         */
+/* 16-Apr-2024 2.7      James    WMS-25257 Skip mix sku ucc scn (james06)    */
+/* 17-Oct-2024 2.8      ShaoAn   FCR-759-1000 ID and UCC Length Issue        */
+/* 24-Oct-2024 2.8.1             Remove Customer Recode                      */
+/* 14-Mar-2025 2.9.0    Dennis   FCR-3449 Extended Screen                    */
+/* 29-May-2025 3.0.0    Dennis   UWP-35136 Fix Bug (de01)                    */
+/************************** Merged Into V0 ***********************************/
+/* 26-Aug-2025 3.1.0    Dennis   UWP-40042 Fix Bug                           */
 /*****************************************************************************/  
   
-CREATE PROCEDURE [RDT].[rdtfnc_UCCPutaway] (  
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_UCCPutaway] (  
    @nMobile    INT,  
    @nErrNo     INT  OUTPUT,  
    @cErrMsg    NVARCHAR( 20) OUTPUT -- screen limitation, 20 char max  
@@ -114,7 +108,8 @@ DECLARE
    @nPABookingKey       INT,              -- (james04)  
    @nPAErrNo            INT,              -- (james04)  
    @cPAMatchSuggestLOC  NVARCHAR( 1),     -- (cc02)  
-   @cNotDisplayPAZone   NVARCHAR( 1),  
+   @cNotDisplayPAZone   NVARCHAR( 1),
+   @cPutawayMixSKUUCC   NVARCHAR( 1),     -- (james06)  
    @cDecodeSP           NVARCHAR( 20),    ---(ShaoAn)  
    @cLottable01         NVARCHAR( 18),
    @cLottable02         NVARCHAR( 18),
@@ -131,6 +126,7 @@ DECLARE
    @dLottable13         DATETIME,
    @dLottable14         DATETIME,
    @dLottable15         DATETIME,
+   @cBarcodeUCC         NVARCHAR( 200),
 
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),  
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),  
@@ -166,7 +162,8 @@ SELECT
    @nStep      = Step,  
    @nInputKey  = InputKey,  
    @nMenu      = Menu,  
-   @cLangCode  = Lang_code,  
+   @cLangCode  = Lang_code, 
+   @cBarcodeUCC = V_Barcode, 
   
    @cStorerkey = StorerKey,  
    @cFacility  = Facility,  
@@ -180,8 +177,9 @@ SELECT
    @cLOT          = V_LOT,  
    @nUCCQTY       = V_QTY,  
   
-   @cSuggestedLOC = V_String1,  
-   @cPAZone       = V_String2,  
+   @cSuggestedLOC       = V_String1,  
+   @cPAZone             = V_String2,
+   @cPutawayMixSKUUCC   = V_String3,  
      
    @cExtendedInfoSP     = V_String21,  
    @cExtendedInfo       = V_String22,  
@@ -261,7 +259,10 @@ BEGIN
    SET @cPAMatchSuggestLOC = rdt.RDTGetConfig( @nFunc, 'PutawayMatchSuggestLOC', @cStorerKey) --(cc02)  
   
    -- (james05)  
-   SET @cNotDisplayPAZone = rdt.RDTGetConfig( @nFunc, 'NotDisplayPAZone', @cStorerKey)  
+   SET @cNotDisplayPAZone = rdt.RDTGetConfig( @nFunc, 'NotDisplayPAZone', @cStorerKey)
+
+   -- (james06)
+   SET @cPutawayMixSKUUCC = rdt.RDTGetConfig( @nFunc, 'PutawayMixSKUUCC', @cStorerKey)  
   
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
@@ -295,7 +296,7 @@ BEGIN
    IF @nInputKey = 1 -- Yes or Send  
    BEGIN  
       -- Screen mapping  
-      SET @cUCCNo = @cInField01  
+      SET @cUCCNo = LEFT(@cBarcodeUCC,20) 
 
       SET @cUCCNo = RTRIM(LTRIM(ISNULL(@cUCCNo,'')))
 
@@ -321,14 +322,41 @@ BEGIN
             IF @nErrNo <> 0
                GOTO Step_1_Fail
       END
+      -- Customize decode    
+      ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')    
+      BEGIN    
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +    
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode,' +    
+            ' @cUCC OUTPUT,' + 
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '   
 
+         SET @cSQLParam =    
+            ' @nMobile           INT                  , ' +    
+            ' @nFunc             INT                  , ' +    
+            ' @cLangCode         NVARCHAR( 3)         , ' +    
+            ' @nStep             INT                  , ' +    
+            ' @nInputKey         INT                  , ' +    
+            ' @cFacility         NVARCHAR( 5)         , ' +    
+            ' @cStorerKey        NVARCHAR( 15)        , ' +    
+            ' @cBarcode          NVARCHAR( 200)        , ' +    
+            ' @cUCC              NVARCHAR( 20)  OUTPUT, ' +
+            ' @nErrNo            INT            OUTPUT, ' +    
+            ' @cErrMsg           NVARCHAR( 20)  OUTPUT'    
+   
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcodeUCC,
+            @cUCCNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT    
+
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
       IF NOT EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK)  
                      WHERE StorerKey = @cStorerKey  
                      AND   UCCNo = @cUCCNo  
                      AND   Status = '1')  
       BEGIN  
          SET @nErrNo = 50012  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'INVALID UCC'  
+         SET @cErrMsg = rdt.getmessage( @nErrNo, @cLangCode, 'DSP') -- 'Invalid UCC'
          GOTO Step_1_Fail  
       END  
   
@@ -383,7 +411,7 @@ BEGIN
       IF @nMultiSKU > 1  
       BEGIN  
          -- If it is multi sku, check if it is allow to putaway with mix sku ucc  
-         IF rdt.RDTGetConfig( @nFunc, 'PutawayMixSKUUCC', @cStorerKey) = 1  
+         IF @cPutawayMixSKUUCC = '1'
          BEGIN  
             -- Check if we have inventory to move  
   
@@ -394,13 +422,27 @@ BEGIN
             SET @nStep = @nStep + 3  
   
             GOTO Quit  
-         END  
-         ELSE  -- config not turn on then error  
-         BEGIN  
-            SET @nErrNo = 50014  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'MIX SKU UCC'  
-            GOTO Step_1_Fail  
-         END  
+         END
+         ELSE
+         BEGIN -- (james06)
+            -- Flow thru screen mix sku ucc without prompt to user input
+         	IF @cPutawayMixSKUUCC = '2'
+            BEGIN
+               SET @cInField01 = '1'
+               
+               -- Go to next screen  
+               SET @nScn = @nScn + 3  
+               SET @nStep = @nStep + 3 
+
+               GOTO Step_4
+            END
+            ELSE  -- config not turn on then error  
+            BEGIN  
+               SET @nErrNo = 50014  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'MIX SKU UCC'  
+               GOTO Step_1_Fail
+            END  
+         END
       END  
   
       -- Extended update  
@@ -544,7 +586,7 @@ BEGIN
             END  
          END  
       END  
-  
+    
       SET @cOutField01 = @cUCCNo  
       SET @cOutField02 = @cFromLOC  
       SET @cOutField03 = @cSuggestedLOC  
@@ -573,10 +615,12 @@ BEGIN
       SET @nScn  = @nMenu  
       SET @nStep = 0  
    END  
+   SET @cBarcodeUCC = ''
    GOTO Quit  
   
    Step_1_Fail:  
    BEGIN  
+      SET @cBarcodeUCC = ''
       SET @cOutField01 = ''  
       SET @cUCCNo = ''  
    END  
@@ -685,7 +729,7 @@ BEGIN
          ,@cErrMsg       OUTPUT  
       IF @nErrNo <> 0  
       BEGIN  
-         --ROLLBACK TRAN rdtfnc_UCCPutaway  
+         ROLLBACK TRAN rdtfnc_UCCPutaway  
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
             COMMIT TRAN  
   
@@ -910,7 +954,7 @@ BEGIN
          IF @nPAErrNo <> 0 AND  
             @nPAErrNo <> -1 -- No suggested LOC  
          BEGIN  
-   SET @nErrNo = @nPAErrNo  
+            SET @nErrNo = @nPAErrNo  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  
             GOTO Step_4_Fail  
          END  
@@ -1204,20 +1248,26 @@ BEGIN
          @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
-         IF @nErrNo <> 0 AND @nErrNo <> 50016 --de01
+         IF @nErrNo <> 0 AND @nErrNo <> 50016 --de01--50016 indicates no loc found. It is not an exception
             GOTO Step_99_Fail
-         IF @nStepBak = 99 AND @nStep = 0
-            SET @nFunc = @nMenu
-         IF @nStepBak = 99 AND @nStep = 2
+
+         IF @cExtScnSP = 'rdt_521ExtScn01'
          BEGIN
-            SET @cUCCNo = @cUDF01
-            SET @cFromLOC = @cUDF02
-            SET @cID = @cUDF03
-            SET @cSKU = @cUDF04
-            SET @nUCCQTY = CAST(@cUDF05 AS INT)  
-            SET @cLOT = @cUDF06
-            SET @cSuggestedLOC = @cUDF07
+            IF @nStepBak = 99 AND @nStep = 0
+               SET @nFunc = @nMenu
+            IF @nStepBak = 99 AND @nStep = 2
+            BEGIN
+               SET @cUCCNo = @cUDF01
+               SET @cFromLOC = @cUDF02
+               SET @cID = @cUDF03
+               SET @cSKU = @cUDF04
+               SET @nUCCQTY = CAST(@cUDF05 AS INT)  
+               SET @cLOT = @cUDF06
+               SET @cSuggestedLOC = @cUDF07
+               SET @nPABookingKey = @cUDF08
+            END
          END
+
       END
    END
 
@@ -1251,10 +1301,12 @@ BEGIN
       V_ID        = @cID,  
       V_SKU       = @cSKU,  
       V_LOT       = @cLOT,  
-      V_QTY       = @nUCCQTY,  
+      V_QTY       = @nUCCQTY, 
+      V_Barcode   = @cBarcodeUCC, 
   
       V_String1   = @cSuggestedLOC,  
-      V_String2   = @cPAZone,  
+      V_String2   = @cPAZone,
+      V_String3   = @cPutawayMixSKUUCC,      
   
       V_String21 = @cExtendedInfoSP,  
       V_String22 = @cExtendedInfo,  

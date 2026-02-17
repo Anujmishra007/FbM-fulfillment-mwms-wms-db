@@ -32,6 +32,8 @@ GO
 /*								  (Original fixed at 22-Aug-2005. Conso version	*/
 /*									from PVCS at 15-Nov-2006)							*/
 /* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
+/* 10-OCT-2025  SSA01      1.2 UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROCEDURE isp_Ship_ULP_Order 
@@ -99,8 +101,8 @@ BEGIN -- main
 			
 			UPDATE OrderDetail
 			SET  	trafficcop = null,
-					EditDate = GetDate(),
-					EditWho  = sUser_sName(), 
+					EditDate = dbo.fnc_GetDate(),    --(SSA01)
+					EditWho  = dbo.fnc_GetUserName(),       --(SSA01)
 					status = '9'
 			FROM  #OrderRef 
 			WHERE OrderDetail.OrderKey = #OrderRef.OrderKey 
@@ -136,8 +138,8 @@ BEGIN -- main
                            
 	   		UPDATE ORDERS
 	   		SET   Trafficcop = null,
-	   			   EditDate = GetDate(),
-					   EditWho  = sUser_sName(), 
+	   			   EditDate = dbo.fnc_GetDate(),    --(SSA01)
+					   EditWho  = dbo.fnc_GetUserName(),     --(SSA01)
 			   	   Status = '9', 
 			   	   SoStatus = '9'
 			   FROM  #OrderRef 
@@ -227,8 +229,8 @@ BEGIN -- main
 
 				   UPDATE ORDERS
 					SET   trafficcop = null,
-							EditDate = GetDate(),
-	            		EditWho  = sUser_sName(), 
+							EditDate = dbo.fnc_GetDate(),    --(SSA01)
+	            		EditWho  = dbo.fnc_GetUserName(),    --(SSA01)
 							Status = '9', 
 							SoStatus = '9'
 					WHERE externOrderKey = @c_ExternOrderKey
@@ -256,8 +258,8 @@ BEGIN -- main
 
 				      UPDATE ORDERDETAIL
 				      SET   Trafficcop = null,
-				      	 	EditDate = GetDate(),
-		                  EditWho  = sUser_sName(), 
+				      	 	EditDate = dbo.fnc_GetDate(),    --(SSA01)
+		                  EditWho  = dbo.fnc_GetUserName(),    --(SSA01)
 				            Status = '9'
 				      WHERE externOrderKey = @c_ExternOrderKey
 				      AND   Status < '9' 				      
@@ -372,8 +374,8 @@ BEGIN -- main
 
       UPDATE PICKDETAIL
 	      SET ShipFlag = 'Y',
-	          EditDate = GetDate(),
-	          EditWho  = sUser_sName(),                              
+	          EditDate = dbo.fnc_GetDate(),    --(SSA01)
+	          EditWho  = dbo.fnc_GetUserName(),       --(SSA01)
 	          TrafficCop = NULL
       FROM PICKDETAIL  (NOLOCK) 
       JOIN  #OrderRef (NOLOCK) ON PICKDETAIL.OrderKey = #OrderRef.OrderKey AND  
@@ -407,8 +409,8 @@ BEGIN -- main
       BEGIN
           UPDATE LOADPLANDETAIL
              SET STATUS = '9', 
-					  EditDate = GetDate(),
-	              EditWho  = sUser_sName(), 
+					  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+	              EditWho  = dbo.fnc_GetUserName(),     --(SSA01)
                  Trafficcop = null
           FROM  LOADPLANDETAIL
           JOIN  #OrderRef ON #OrderRef.Orderkey = LOADPLANDETAIL.Orderkey 
@@ -438,8 +440,8 @@ BEGIN -- main
 			BEGIN
 				UPDATE LoadPlan
 				SET 	 Status = '9',
-						 EditDate = GetDate(),
-					    EditWho  = sUser_sName(), 
+						 EditDate = dbo.fnc_GetDate(),    --(SSA01)
+					    EditWho  = dbo.fnc_GetUserName(),      --(SSA01)
 					    TrafficCop = NULL
 				WHERE  Loadkey = @c_Loadkey
 				AND    LoadPlan.Status < '9'

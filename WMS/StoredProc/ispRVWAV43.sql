@@ -25,6 +25,7 @@ GO
 /* 2021-11-17  Wan01    1.1   Update TMRelaseFlag to 'R' to prevent     */
 /*                            ReReverse & ReRelease before their process*/
 /*                            End                                       */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispRVWAV43]
@@ -83,8 +84,8 @@ BEGIN
    UPDATE WAVE WITH (ROWLOCK)  
    SET TMReleaseFlag = 'R'               
       ,Trafficcop = NULL  
-      ,EditWho = SUSER_SNAME()  
-      ,EditDate= GETDATE()  
+      ,EditWho = dbo.fnc_GetUserName()           --(SSA01)
+      ,EditDate= dbo.fnc_GetDate()   --(SSA01)
    WHERE Wavekey = @c_Wavekey   
    --(Wan01) - END
    
@@ -226,8 +227,8 @@ BEGIN
          ,p.PickSlipNo = ''
          ,p.Notes = CASE WHEN tpd.DocType = 'E' THEN '' ELSE p.Notes END
          ,p.TaskDetailKey = ''
-         ,p.EditWho = SUSER_SNAME()
-         ,p.EditDate = GETDATE()
+         ,p.EditWho = dbo.fnc_GetUserName()          --(SSA01)
+         ,p.EditDate = dbo.fnc_GetDate()   --(SSA01)
          ,p.TrafficCop = NULL
    FROM @t_PickDetail AS tpd
    JOIN dbo.PICKDETAIL p ON p.PickdetailKey = tpd.PickDetailKey
@@ -258,8 +259,8 @@ BEGIN
    UPDATE WAVE WITH (ROWLOCK)  
    SET TMReleaseFlag = 'N'               
       ,Trafficcop = NULL  
-      ,EditWho = SUSER_SNAME()  
-      ,EditDate= GETDATE()  
+      ,EditWho = dbo.fnc_GetUserName()             --(SSA01)
+      ,EditDate= dbo.fnc_GetDate()   --(SSA01)
    WHERE Wavekey = @c_Wavekey   
      
    SET @n_err = @@ERROR  

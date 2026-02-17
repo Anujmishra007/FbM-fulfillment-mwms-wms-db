@@ -32,6 +32,7 @@ GO
 /*                              JCB-ALLOC                               */
 /* 2025-05-29  Wan01    1.4   FCR-4962 - JCB - Kitting Allocation       */
 /* 2025-06-17                 - Adding OD.Lottable03 <> '' filtering    */
+/* 2025-12-19                 - FCR v1.31                               */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB06] (
      @c_OrderKey        NVARCHAR(10)
@@ -83,6 +84,7 @@ BEGIN
           ,@c_SQL                   NVARCHAR(MAX)  = ''
           ,@c_SQLParm               NVARCHAR(MAX)  = ''
           ,@c_Conditions            NVARCHAR(MAX)  = ''
+          ,@c_Cond                  NVARCHAR(MAX)  = ''                             --(Wan01) 2025-12-31
           ,@n_OpenQty               INT            = 0
           ,@n_PickQty               INT            = 0
           ,@n_IDQtyAvai             INT            = 0
@@ -124,16 +126,26 @@ BEGIN
                          AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  
                                          AND CODE = @c_Type  AND UDF01 = ''1'' 
                                          AND LONG = LOC.Loc AND LONG IS NOT NULL) '                                                       
-   SELECT @c_Type = cl.UDF01                                                     --(Wan01)- START
+   SELECT @c_Type = cl.UDF01                                                        --(Wan01)- START
    FROM CODELKUP cl (NOLOCK)
    WHERE cl.ListName = 'ispPRJCB06'
    AND   cl.Code = 'OrderType'
 
-   IF @c_Type = '' SET @c_Type = '6'                                             --(Wan01) - END 
+   IF @c_Type = '' SET @c_Type = '6'                                                --(Wan01) - END 
+   
+   SELECT @c_Cond = cl.Notes                                                        --(Wan01) 2025-12-31 - START
+   FROM CODELKUP cl (NOLOCK)
+   WHERE cl.ListName = 'JCB_AL'
+   AND   cl.Code = 'Condition'
+   AND   cl.Code2= @c_Type
+
+   IF @c_Cond IN ('', NULL) SET @c_Cond = ' AND LOC.LocationFlag = ''None'''   
+      
+   SET @c_Conditions = @c_Conditions + ' ' + @c_Cond                                --(Wan03) - END
    
    IF ISNULL(@c_Orderkey,'') <> ''
    BEGIN
-      --SET @n_Continue = 4                                                      --(Wan01)
+      --SET @n_Continue = 4                                                         --(Wan01)
       SET @CUR_ORDER_LINES = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT OD.StorerKey, OD.Sku
                      ,Openqty = SUM(OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked))
@@ -159,7 +171,7 @@ BEGIN
       JOIN ORDERDETAIL AS OD WITH (NOLOCK) ON OD.OrderKey = o.OrderKey
       JOIN SKU WITH (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
       JOIN PACK WITH (NOLOCK) ON SKU.Packkey = PACK.Packkey
-      JOIN string_split (@c_Type, ',') ss ON ss.[value] = o.Type                 --2025-06-18
+      JOIN string_split (@c_Type, ',') ss ON ss.[value] = o.Type                    --2025-06-18
       WHERE o.OrderKey = @c_OrderKey
       AND (OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked)) > 0
       AND o.SOStatus <> 'CANC' 
@@ -215,7 +227,7 @@ BEGIN
       JOIN SKU WITH (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
       JOIN PACK WITH (NOLOCK) ON SKU.Packkey = PACK.Packkey
       JOIN LoadPlanDetail LPD WITH (NOLOCK) ON o.OrderKey = LPD.OrderKey
-      JOIN string_split (@c_Type, ',') ss ON ss.[value] = o.Type                 --(Wan01)
+      JOIN string_split (@c_Type, ',') ss ON ss.[value] = o.Type                    --(Wan01)
       WHERE LPD.LoadKey = @c_Loadkey
       AND (OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked)) > 0
       AND o.SOStatus <> 'CANC' 
@@ -325,6 +337,7 @@ BEGIN
            SELECT @c_OrderKey as orderkey, @c_OrderLineNumber as orderlinenumber, @c_SKU as sku, @n_OpenQty as openqty
         END
 
+        -- Query Table alias 1) cannot be changes 2) same as other pickcode as filter condition is configurable
         SET @c_SQL = N'SET @CUR_INV = CURSOR FAST_FORWARD READ_ONLY FOR
            SELECT LLI.Loc, LLI.ID, LA.Lottable11                                    --(Wan01)
                 , QtyAvai = SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen)
@@ -336,7 +349,7 @@ BEGIN
            JOIN SKUXLOC SL (NOLOCK) ON (LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc)
            JOIN SKU (NOLOCK) ON (LLI.Storerkey = Sku.Storerkey AND LLI.Sku = Sku.Sku)
            JOIN PUTAWAYZONE pa (NOLOCK) ON loc.Putawayzone = pa.Putawayzone
-           WHERE LOC.LocationFlag = ''NONE''
+           WHERE LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'')                    --(Wan01)
            AND LOC.Status = ''OK''
            --AND LOT.Status = ''OK''                                                --(Wan01)
            AND ID.Status = ''OK''

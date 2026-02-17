@@ -24,6 +24,11 @@ GO
 /* 2024-08-03  Wan01    1.1   LFWM-4397 - RG [GIT] Serial Number Solution*/
 /*                            - Adjustment by Serial Number             */
 /* 2024-06-13  SSA01    1.2   FCR-3982 - Added Pallettype to Adjustment */
+/* 2025-10-06  SSA02    1.3   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                             */
+/* 2025-10-21  Michael  1.4   FCR-8377- Add SerialNoUpdateLotLocID(ML01)*/
+/* 2026-01-02  USH022   1.5   UWP-23881- Validation added for valid     */
+/*                            adjustmentkey                             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ADJ_PopulateLLI_Wrapper]                                                                                                                     
    @c_AdjustmentKey        NVARCHAR(10)         
@@ -83,6 +88,7 @@ BEGIN
          ,  @c_FinalizeAdjustment         NVARCHAR(10)   = ''  
          ,  @c_AdjStatusControl           NVARCHAR(10)   = ''
          ,  @c_ASNFizUpdLotToSerialNo     NVARCHAR(10)   = ''                       --(Wan01)
+         ,  @c_SerialNoUpdateLotLocID     NVARCHAR(10)   = ''      --ML01
          
          ,  @c_TableName                  NVARCHAR(50)   = 'AdjustmentDetail'
          ,  @c_SourceType                 NVARCHAR(50)   = 'lsp_ADJ_PopulateLLI_Wrapper' 
@@ -115,20 +121,39 @@ BEGIN
    
    SET @n_ErrGroupKey = 0
                
-   SET @n_Err = 0 
+   SET @n_Err = 0
+   -- (SSA02) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT
     
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
                 
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    
+     IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SSA02) - END
 
-   BEGIN TRY 
+   BEGIN TRY
+        IF NOT EXISTS (
+            SELECT 1
+            FROM dbo.ADJUSTMENT WITH (NOLOCK)
+            WHERE AdjustmentKey = @c_Adjustmentkey
+        )
+        BEGIN
+            SET @n_Continue = 3
+            SET @n_Err      = 561750
+            SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Adjustment Key not found (lsp_ADJ_PopulateLLI_Wrapper)'
+
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_AdjustmentKey, '', '', 'ERROR', 0, @n_Err, @c_Errmsg)
+
+            GOTO EXIT_SP
+        END
       SELECT @c_Facility = a.Facility
             ,@c_Storerkey= a.Storerkey 
       FROM dbo.ADJUSTMENT AS a (NOLOCK)
@@ -138,6 +163,14 @@ BEGIN
       SELECT @c_AdjStatusControl = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_Facility, @c_Storerkey,'','AdjStatusControl') AS fsgr
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                            --(Wan01)
       FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr  --(Wan01)
+
+      --ML01-S
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
+      FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+
+      IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
+         SET @c_ASNFizUpdLotToSerialNo = '1'
+      --ML01-E
 
       IF @c_FinalizeAdjustment IN (0,'') AND @c_AdjStatusControl IN (0,'')
       BEGIN
@@ -630,8 +663,10 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN
    END  
-         
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SSA02)
+      REVERT
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA02)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_ADJ_PopulateLLI_Wrapper] TO nSQL 

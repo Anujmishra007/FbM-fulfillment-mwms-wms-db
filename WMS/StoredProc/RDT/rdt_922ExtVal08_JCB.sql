@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2024-10-18 1.0  VJI011     none packing process enhancement for JCB  */
+/* 2026-01-16 2.0  TPT001     Adding validation for the booking logic   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_922ExtVal08_JCB] (
@@ -100,6 +101,20 @@ BEGIN
 
     IF @nStep = 2  -- LabelNo/DropID
     BEGIN
+       IF EXISTS (
+	       SELECT 1 
+		    FROM dbo.LOC L WITH(NOLOCK) 
+		    INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) 
+			    ON L.LOC = PD.LOC 
+			   AND PD.DropID = @cLabelNo 
+			   AND L.PutawayZone <> 'JCB_ML'
+	    ) 
+	    BEGIN
+	       SET @nErrNo = 218246
+          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'DropID not in ML'
+          GOTO Quit
+	    END
+   
       IF @cType = 'R' --Refno
       BEGIN
         
@@ -352,15 +367,50 @@ BEGIN
         END
         
         -- check Place of Loading
-        IF @cPlaceOfLoading = '' or @cPlaceOfLoading <> @cDoor
+        IF @cPlaceOfLoading <>''
         BEGIN
-           SET @nErrNo = 218037
-           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Door Mismatch
-           EXEC rdt.rdtSetFocusField @nMobile, 1 -- RefNo1
-           GOTO Quit
+        	IF UPPER(@cPlaceOfLoading) <> UPPER(@cDoor)
+        	BEGIN
+           		SET @nErrNo = 218037
+           		SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Door Mismatch
+           		EXEC rdt.rdtSetFocusField @nMobile, 1 -- RefNo1
+           		GOTO Quit
+        	END
         END
+        
       END
-
+/*      
+      IF @cType = 'R'
+      BEGIN
+      	--DECLARE @c_ExtMBOLKey NVARCHAR(18) =''
+        DECLARE @n_BookingExists INT =0
+        --SELECT @c_ExtMBOLKEY=ExternMbolKey FROM dbo.MBOL WHERE MbolKey=@cMBOLKey
+        SELECT @n_BookingExists=1 FROM dbo.Booking_Out WHERE BookingNo=@cRefNo
+        IF @n_BookingExists=0
+       		BEGIN
+       		    SET @nErrNo = 212020
+                SET @cErrMsg = 'NO BOOKING' 
+                EXEC rdt.rdtSetFocusField @nMobile, 2
+                GOTO Quit
+       		END
+       		
+       	IF ISNULL( @cRefNo , '') = ''
+       	BEGIN
+       	   SET @nErrNo = 212020
+           SET @cErrMsg = 'REF2 BLANK' 
+           EXEC rdt.rdtSetFocusField @nMobile, 2
+           GOTO Quit
+       	END
+       	IF ISNULL( @cDoor , '') = ''
+       	BEGIN
+       	   SET @nErrNo = 212020
+           SET @cErrMsg = 'REF1 BLANK' 
+           EXEC rdt.rdtSetFocusField @nMobile, 1
+           GOTO Quit
+       	END
+       	
+      END
+*/
     END
 
 Quit:
@@ -374,4 +424,7 @@ SET ANSI_NULLS ON
 GO
 
 GRANT EXECUTE ON rdt.rdt_922ExtVal08_JCB TO NSQL
+
 GO
+
+

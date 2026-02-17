@@ -7,6 +7,8 @@ SET ANSI_NULLS OFF
 GO
 
 /* 26-Nov-2013  TLTING     Change user_name() to SUSER_SNAME()          */
+/* 10-Oct-2025  SSA01      UWP-42248 -Enhanced session management       */
+/*                             and cleanup.                             */
 
 CREATE PROCEDURE ispMoreThanOneExpiryDate ( 
    @c_storerstart NVARCHAR(10),
@@ -58,7 +60,7 @@ AS
       INSERT INTO #RESULT
       (Storerkey, Sku, Descr, BatchNo, ExpiryDate, QTY, username)
       SELECT StorerKey = #tempstore.storerkey, Sku = #tempstore.sku, a.descr, 
-            BatchNo = BatchNo, ExpiryDate = ISNULL(convert(char(10), ExpiryDate, 3), ''), QTY = sum(qty), Suser_Sname()
+            BatchNo = BatchNo, ExpiryDate = ISNULL(convert(char(10), ExpiryDate, 3), ''), QTY = sum(qty), dbo.fnc_GetUserName()               --(SSA01)
       FROM #tempstore, sku a (NOLOCK)
       WHERE #tempstore.sku = @c_sku
       AND   batchno = @c_batchno

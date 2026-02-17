@@ -29,6 +29,8 @@ GO
 /* 03-JAN-2019  Wan01   1.1   WMS-7286 - PRHK-GTM Picking For COPACK Sku*/
 /* 05-APR-2021  Wan02   1.2   WMS-16593-SG-ASRS-GTM Picking Enhancement */
 /*                            CPI                                       */
+/* 10-OCT-2025  SSA01   1.3   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC [dbo].[isp_KioskASRSPKRevTaskCfm] 
             @c_JobKey         NVARCHAR(10)
@@ -216,8 +218,8 @@ BEGIN
         
             UPDATE p  
                SET MoveRefKey = @c_MoveRefKey  
-                  ,EditWho    = SUSER_NAME()  
-                  ,EditDate   = GETDATE()  
+                  ,EditWho    = dbo.fnc_GetUserName()    --(SSA01)
+                  ,EditDate   = dbo.fnc_GetDate()   --(SSA01)
                   ,Trafficcop = NULL  
             FROM PD  
             JOIN PICKDETAIL AS p ON pd.PickDetailKey = p.PickDetailKey  
@@ -432,8 +434,8 @@ BEGIN
 
          UPDATE PICKDETAIL WITH (ROWLOCK)
          SET MoveRefKey = @c_MoveRefKey
-            ,EditWho    = SUSER_NAME()
-            ,EditDate   = GETDATE()
+            ,EditWho    = dbo.fnc_GetUserName()    --(SSA01)
+            ,EditDate   = dbo.fnc_GetDate()   --(SSA01)
             ,Trafficcop = NULL
          WHERE Pickdetailkey = @c_PickdetailKey
 
@@ -560,8 +562,8 @@ BEGIN
    BEGIN
       UPDATE ID WITH (ROWLOCK)
       SET PalletFlag = 'PACKNHOLD'
-         ,EditWho = SUSER_NAME()
-         ,EditDate= GETDATE()
+         ,EditWho = dbo.fnc_GetUserName()    --(SSA01)
+         ,EditDate= dbo.fnc_GetDate()   --(SSA01)
          ,Trafficcop= NULL
       WHERE ID = @c_ID
 
@@ -588,8 +590,8 @@ BEGIN
 
       UPDATE TASKDETAIL WITH (ROWLOCK)
       SET Status = @c_TaskStatus
-         ,EditWho= SUSER_NAME()
-         ,EditDate=GETDATE()
+         ,EditWho= dbo.fnc_GetUserName()    --(SSA01)
+         ,EditDate=dbo.fnc_GetDate()   --(SSA01)
          ,Trafficcop = NULL
       WHERE FromID = @c_ID
       AND   Orderkey = @c_Orderkey
@@ -608,8 +610,8 @@ BEGIN
 
       UPDATE TASKDETAIL WITH (ROWLOCK)
       SET Status = '4'
-         ,EditWho= SUSER_NAME()
-         ,EditDate=GETDATE()
+         ,EditWho= dbo.fnc_GetUserName()    --(SSA01)
+         ,EditDate=dbo.fnc_GetDate()   --(SSA01)
          ,Trafficcop = NULL
       WHERE TaskdetailKey = @c_JobKey
       AND   TaskType = 'GTMJOB'
@@ -787,8 +789,8 @@ BEGIN
    BEGIN
       UPDATE dbo.TASKDETAIL
       SET FromID = @c_PickToID
-         ,EditDate = GETDATE()
-         ,EditWho  = SUSER_SNAME()
+         ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+         ,EditWho  = dbo.fnc_GetUserName()     --(SSA01)
          ,TrafficCop = NULL
       WHERE TaskDetailKey = @c_TaskdetailKey_upd
             
@@ -809,8 +811,8 @@ BEGIN
       BEGIN
          UPDATE dbo.GTMTask
          SET PalletId = @c_PickToID
-            ,EditDate = GETDATE()
-            ,EditWho  = SUSER_SNAME()
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+            ,EditWho  = dbo.fnc_GetUserName()    --(SSA01)
          WHERE TaskDetailKey = @c_TaskdetailKey_upd
                
          IF @@ERROR <> 0
@@ -830,8 +832,8 @@ BEGIN
       BEGIN
          UPDATE dbo.GTMLoop
          SET PalletId = @c_PickToID
-            ,EditDate = GETDATE()
-            ,EditWho  = SUSER_SNAME()
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+            ,EditWho  = dbo.fnc_GetUserName()    --(SSA01)
          WHERE PalletID = @c_ID
                
          IF @@ERROR <> 0

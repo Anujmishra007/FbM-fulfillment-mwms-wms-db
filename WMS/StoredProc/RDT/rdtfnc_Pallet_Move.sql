@@ -26,6 +26,7 @@ GO
 /* 2024-07-16 1.3   CYU027   FCR-575                                    */
 /* 2024-11-28 1.4   CYU027   FCR-1391 Levis                             */
 /* 2025-01-10 1.5.0 Dennis   UWP-28966 BugFix                           */
+/* 2025-08-27 1.6.0 NickT    FCR-7160 Add @nInputkey to valiation SP    */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Pallet_Move] (
@@ -346,13 +347,14 @@ IF @nInputKey = 1 -- ENTER
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
-                        ' @nMobile, @nFunc, @cLangCode, @nStep, @cFacility, @cStorer, @cID, @cToLOC, @cSuggestLoc, ' +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cID, @cToLOC, @cSuggestLoc, ' +
                         ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                     '@nMobile      INT,           ' +
                     '@nFunc        INT,           ' +
                     '@cLangCode    NVARCHAR( 3),  ' +
                     '@nStep        INT,           ' +
+                    '@nInputKey    INT,           ' +
                     '@cFacility    NVARCHAR( 5),  ' +
                     '@cStorer      NVARCHAR( 15), ' +
                     '@cID          NVARCHAR( 18), ' +
@@ -362,7 +364,7 @@ IF @nInputKey = 1 -- ENTER
                     '@cErrMsg            NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                 @nMobile, @nFunc, @cLangCode, @nStep, @cFacility, @cStorer, @cID, @cToLOC, @cSuggestLoc,
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cID, @cToLOC, @cSuggestLoc,
                  @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0

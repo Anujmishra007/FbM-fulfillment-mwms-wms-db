@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_GetDupWorkOrderRouting]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_GetDupWorkOrderRouting]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Proc: lsp_GetDupWorkOrderRouting                              */
 /* Creation Date: 03-Sep-2018                                           */
@@ -27,8 +23,9 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 26-May-2025 SWT02    1.2   Setting Session Context for user name     */
 /************************************************************************/
-CREATE PROC [WM].[lsp_GetDupWorkOrderRouting]
+CREATE OR ALTER PROC [WM].[lsp_GetDupWorkOrderRouting]
            @c_MasterWorkOrder NVARCHAR(50)
          , @c_WorkOrderName   NVARCHAR(50)
          , @c_TableName       NVARCHAR(50)
@@ -40,9 +37,9 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  
+   DECLARE
            @n_StartTCnt    INT
-         , @n_Continue     INT 
+         , @n_Continue     INT
          , @b_Success      INT
          , @n_err          INT
          , @c_errmsg       NVARCHAR(255)
@@ -70,23 +67,23 @@ BEGIN
    SET @n_err      = 0
    SET @c_errmsg   = ''
 
-   SET @c_GenKeyColumn = CASE WHEN @c_TableName = 'WorkOrderSteps' 
+   SET @c_GenKeyColumn = CASE WHEN @c_TableName = 'WorkOrderSteps'
                               THEN 'StepNumber'
-                              WHEN @c_TableName = 'WorkOrderInputs' 
+                              WHEN @c_TableName = 'WorkOrderInputs'
                               THEN 'WkOrdInputsKey'
-                              WHEN @c_TableName = 'WorkOrderOutputs' 
+                              WHEN @c_TableName = 'WorkOrderOutputs'
                               THEN 'WkOrdOutputsKey'
                               WHEN @c_TableName = 'WorkOrderPackets'
                               THEN 'WkOrdPacketsKey'
                               ELSE ''
                               END
 
-   CREATE TABLE #TMP_WOM ( TmpRowid  INT NOT NULL IDENTITY(1,1) PRIMARY KEY )   
+   CREATE TABLE #TMP_WOM ( TmpRowid  INT NOT NULL IDENTITY(1,1) PRIMARY KEY )
 
    SET @c_SQLColumns = ISNULL(CONVERT(VARCHAR(4000),
-                     (  SELECT c.COLUMN_NAME + ' ' 
-                             + c.DATA_TYPE 
-                             + CASE WHEN DATA_TYPE = 'NVARCHAR' THEN '(' + CONVERT(NVARCHAR(4),CHARACTER_MAXIMUM_LENGTH)+ ')' 
+                     (  SELECT c.COLUMN_NAME + ' '
+                             + c.DATA_TYPE
+                             + CASE WHEN DATA_TYPE = 'NVARCHAR' THEN '(' + CONVERT(NVARCHAR(4),CHARACTER_MAXIMUM_LENGTH)+ ')'
                                                                 ELSE '' END + ','
                         FROM INFORMATION_SCHEMA.COLUMNS c WITH (NOLOCK)
                         WHERE c.TABLE_NAME = @c_TableName --'WORKORDERROUTING'
@@ -105,10 +102,10 @@ BEGIN
    EXECUTE ( @c_SQL )
 
    SET @c_SQLColumns = ''
- 
+
    SET @c_SQLColumns = ISNULL(CONVERT(VARCHAR(4000),(SELECT c.Name + ','
    FROM tempdb.sys.columns c (NOLOCK)
-   WHERE c.object_id = object_id('tempdb..#TMP_WOM') 
+   WHERE c.object_id = object_id('tempdb..#TMP_WOM')
    AND c.Name <> 'TmpRowid'
    ORDER BY c.Column_id
    FOR XML PATH(''), TYPE)),'')
@@ -118,26 +115,29 @@ BEGIN
       SET @c_SQLColumns = LEFT(@c_SQLColumns, LEN(@c_SQLColumns)-1)
    END
 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
-   BEGIN
-      SET @n_Err = 0 
-      EXEC [WM].[lsp_SetUser] 
-               @c_UserName = @c_UserName  OUTPUT
-            ,  @n_Err      = @n_Err       OUTPUT
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      EXECUTE AS LOGIN = @c_UserName
+   DECLARE @b_ExecuteAs            BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
 
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
+
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
    END                                   --(Wan01) - END
-   
+
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
-   
+
       SET @c_SQL = N'INSERT INTO #TMP_WOM ('
-                 + ' ' + @c_SQLColumns  + ')'            
+                 + ' ' + @c_SQLColumns  + ')'
                  + 'SELECT'
                  + ' ' + @c_SQLColumns
                  + ' FROM dbo.' + @c_TableName + ' WITH (NOLOCK)'
@@ -146,10 +146,10 @@ BEGIN
                  + CASE WHEN @c_GenKeyColumn = '' THEN '' ELSE ' ORDER BY ' + @c_GenKeyColumn END
 
       SET @c_SQLParms=N'@c_MasterWorkOrder   NVARCHAR(50)'
-                     +',@c_WorkOrderName     NVARCHAR(50)'  
+                     +',@c_WorkOrderName     NVARCHAR(50)'
 
 
-      EXEC sp_ExecuteSQL @c_SQL  
+      EXEC sp_ExecuteSQL @c_SQL
                         ,@c_SQLParms
                         ,@c_MasterWorkOrder
                         ,@c_WorkOrderName
@@ -157,7 +157,7 @@ BEGIN
       IF @c_GenKeyColumn <> ''
       BEGIN
          SET @CUR_GENKEY = CURSOR FAST_FORWARD READ_ONLY FOR
-         SELECT TmpRowID      
+         SELECT TmpRowID
          FROM #TMP_WOM
          ORDER BY TmpRowID
 
@@ -176,28 +176,28 @@ BEGIN
             BEGIN
                BEGIN TRY
                   EXECUTE nspg_GetKey
-                        @c_GenKeyColumn 
-                     ,  10 
-                     ,  @c_KeyColValue OUTPUT 
-                     ,  @b_Success     OUTPUT 
-                     ,  @n_Err         OUTPUT 
+                        @c_GenKeyColumn
+                     ,  10
+                     ,  @c_KeyColValue OUTPUT
+                     ,  @b_Success     OUTPUT
+                     ,  @n_Err         OUTPUT
                      ,  @c_ErrMsg      OUTPUT
                END TRY
 
                BEGIN CATCH
                   SET @n_Continue = 3
                   GOTO EXIT_SP
-               END CATCH  
+               END CATCH
             END
 
             SET @c_SQL = N'UPDATE #TMP_WOM'
-                       + ' SET ' + @c_GenKeyColumn + ' = @c_KeyColValue'            
+                       + ' SET ' + @c_GenKeyColumn + ' = @c_KeyColValue'
                        + ' WHERE TmpRowID = @n_TmpRowID'
 
             SET @c_SQLParms=N'@n_TmpRowID    INT'
-                           +',@c_KeyColValue NVARCHAR(10)'  
+                           +',@c_KeyColValue NVARCHAR(10)'
 
-            EXEC sp_ExecuteSQL @c_SQL  
+            EXEC sp_ExecuteSQL @c_SQL
                               ,@c_SQLParms
                               ,@n_TmpRowID
                               ,@c_KeyColValue
@@ -205,12 +205,12 @@ BEGIN
             FETCH NEXT FROM @CUR_GENKEY INTO @n_TmpRowID
          END
          CLOSE @CUR_GENKEY
-         DEALLOCATE @CUR_GENKEY 
+         DEALLOCATE @CUR_GENKEY
       END
 
       IF @c_TableName IN ('WORKORDERINPUTS', 'WORKORDEROUTPUTS')
       BEGIN
-         SET @CUR_REFKEY = CURSOR FAST_FORWARD READ_ONLY FOR  
+         SET @CUR_REFKEY = CURSOR FAST_FORWARD READ_ONLY FOR
          SELECT TmpRowID
                ,StepNumber
          FROM #TMP_WOM
@@ -226,11 +226,11 @@ BEGIN
                      SELECT RowID = ROW_NUMBER() OVER (ORDER BY StepNumber)
                            ,  StepNumber
                         FROM WORKORDERSTEPS WITH (NOLOCK)
-                     WHERE MasterWorkOrder = @c_MasterWorkOrder 
-                     AND WorkOrderName = @c_WorkOrderName 
+                     WHERE MasterWorkOrder = @c_MasterWorkOrder
+                     AND WorkOrderName = @c_WorkOrderName
                   ) t
-    
-            IF @n_RowID > 0 
+
+            IF @n_RowID > 0
             BEGIN
                SET @c_RefKeyValue = RIGHT('00000' + CONVERT(VARCHAR(5), @n_RowID),5)
 
@@ -243,34 +243,39 @@ BEGIN
                                              , @c_StepNumber
          END
          CLOSE @CUR_REFKEY
-         DEALLOCATE @CUR_REFKEY 
+         DEALLOCATE @CUR_REFKEY
       END
-   
-   END TRY  
-  
-   BEGIN CATCH 
-      SET @n_Continue = 3                       --(Wan01)   
-      GOTO EXIT_SP  
+
+   END TRY
+
+   BEGIN CATCH
+      SET @n_Continue = 3                       --(Wan01)
+      GOTO EXIT_SP
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
 EXIT_SP:
 
    IF @n_Continue = 3
    BEGIN
-      TRUNCATE TABLE #TMP_WOM; 
+      TRUNCATE TABLE #TMP_WOM;
    END
-   
+
    SET @c_SQLColumns = REPLACE(@c_SQLColumns, 'WorkOrderName', 'WorkOrderName = ''''')
 
    SET @c_SQL = N'SELECT'
               + ' ' + @c_SQLColumns
               + ' FROM #TMP_WOM'
 
-   EXEC sp_ExecuteSQL @c_SQL  
+   EXEC sp_ExecuteSQL @c_SQL
 
    DROP TABLE #TMP_WOM;
 
-   REVERT
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
 END -- procedure
 GO
-GRANT EXECUTE ON [WM].[lsp_GetDupWorkOrderRouting] TO nSQL 
+GRANT EXECUTE ON  [WM].[lsp_GetDupWorkOrderRouting] TO [NSQL]
 GO

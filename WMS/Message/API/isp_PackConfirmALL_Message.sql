@@ -34,3 +34,5 @@ execute API.TouchPadAddMsg 1001428, 10, 'INS QTask Fail. Function : isp_PackConf
 execute API.TouchPadAddMsg 1001429, 10, 'UPD QTask Fail . Function : isp_PackConfirmALL',    'us_english'
 execute API.TouchPadAddMsg 1001430, 10, 'Label Printer setup not done. Please setup the Label Printer. Function : isp_PackConfirmALL',    'us_english'
 execute API.TouchPadAddMsg 1001431, 10, 'Label Printer setup not done. Please setup the Label Printer. Function : isp_PackConfirmALL',    'us_english'
+execute API.TouchPadAddMsg 1001432, 10, 'No Session context found. Function : isp_PackConfirmALL',    'us_english'
+execute API.TouchPadAddMsg 1001433, 10, 'Invalid Post Extended Update SP Name Function : isp_PackConfirmALL',    'us_english'

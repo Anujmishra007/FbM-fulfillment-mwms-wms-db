@@ -38,7 +38,9 @@ GO
 /* 2012-06-29   ChewKP    1.5   TM CycleCount Task Standardization      */
 /*                              (ChewKP01)                              */
 /* 2012-07-09   ChewKP    1.6   SOS#249039 - AutoConfirm ShortPick      */
-/*                              (ChewKP02)                              */                
+/*                              (ChewKP02)                              */
+/* 2025-10-10   SSA01     1.7  UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[isp_TCP_RESIDUAL_SHORT_IN]
                 @c_MessageNum  NVARCHAR(10)
@@ -523,8 +525,8 @@ BEGIN
    UPDATE dbo.TCPSocket_INLog WITH (ROWLOCK)
    SET STATUS   = @c_Status
      , ErrMsg   = @c_ErrMsg
-     , Editdate = GETDATE()
-     , EditWho  = SUSER_SNAME()
+     , Editdate = dbo.fnc_GetDate()    --(SSA01)
+     , EditWho  = dbo.fnc_GetUserName()      --(SSA01)
    WHERE SerialNo = @n_SerialNo
 
    WHILE @@TRANCOUNT > @n_StartTCnt -- Commit until the level we started

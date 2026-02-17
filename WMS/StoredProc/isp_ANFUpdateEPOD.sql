@@ -28,6 +28,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver. Purposes                                 */
+/* 2025-10-10   SSA01     1.1  UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/
  
 
@@ -121,8 +123,8 @@ BEGIN
                BEGIN
                   UPDATE dbo.Docstatustrack
                   Set Finalized = N'Y',
-                     Editdate = Getdate(),
-                     Editwho = Suser_Sname()
+                     Editdate = dbo.fnc_GetDate(),   --(SSA01)
+                     Editwho = dbo.fnc_GetUserName()      --(SSA01)
                   WHERE RowRef = @n_RowRef
                END
 

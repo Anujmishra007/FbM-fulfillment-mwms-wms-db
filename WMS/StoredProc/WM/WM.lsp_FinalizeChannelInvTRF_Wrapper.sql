@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_FinalizeChannelInvTRF_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_FinalizeChannelInvTRF_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -27,8 +22,10 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2021-09-07  Wan      1.0   Created.                                   */
 /* 2021-09-22  Wan      1.0   DevOps Script Combine                      */
+/* 2025-10-06   SSA01   1.1   UWP-42142 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_FinalizeChannelInvTRF_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeChannelInvTRF_Wrapper]
       @c_Facility          NVARCHAR(5)  
    ,  @c_Storerkey         NVARCHAR(15)  
    ,  @n_Channel_id        BIGINT  
@@ -49,28 +46,32 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue     INT = 1
-         , @n_StartTCnt    INT = @@TRANCOUNT 
+         , @n_StartTCnt    INT = @@TRANCOUNT
+         , @b_ExecuteAs    BIT = 0    --(SSA01)
                  
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-
+  -- (SSA01) - START
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
     
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
-   
+   -- (SSA01) - END
+
    BEGIN TRAN
 
    BEGIN TRY
@@ -141,7 +142,12 @@ BEGIN
    BEGIN
       BEGIN TRAN
    END
-   REVERT
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizeChannelInvTRF_Wrapper] TO nSQL 

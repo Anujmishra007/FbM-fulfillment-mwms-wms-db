@@ -8,6 +8,11 @@ execute rdt.rdtAddMsg 233352, 10, '233352NoProductionLine',         'us_english'
 execute rdt.rdtAddMsg 233353, 10, '233353InsTaskFail',              'us_english', 511, 0 , '233353 Insert task failed'
 execute rdt.rdtAddMsg 233354, 10, '233354InvProdLine',              'us_english', 511, 0 , '233354 KIT {} does not have valid production line location'
 execute rdt.rdtAddMsg 233355, 10, '233355nspg_getkey',              'us_english', 511, 0 , '233355 nspg_getkey failed'
+execute rdt.rdtAddMsg 233356, 10, '233356KitOnHold',                'us_english', 511, 0 , '233356 Cannot move the pallet. Kit is on hold'
+
+-- FCR-9762
+execute rdt.rdtAddMsg 233357, 10, '233357ToLocUpdFail',                'us_english', 511, 0 , '233357 ToLoc Update failed'
+
 
 
 

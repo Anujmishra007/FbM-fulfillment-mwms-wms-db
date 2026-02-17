@@ -117,7 +117,6 @@ DECLARE  @cConsignee     NVARCHAR(15)
 DECLARE  @cReportType    nvarchar(20)
 DECLARE  @cLabelPrinter  NVARCHAR ( 30)
 DECLARE  @cPaperPrinter  NVARCHAR ( 30)
-DECLARE  @nJobID         INT
 DECLARE  @nRC            INT
 DECLARE  @cSQL           NVARCHAR ( MAX)
 DECLARE  @cSQLParam      NVARCHAR ( MAX)
@@ -254,8 +253,6 @@ BEGIN
                , @c_JobIDs      = @cLabelJobID         OUTPUT    
                , @c_AutoPrint  = 'N'     
 
-               SET @cLabelJobID = @nJobID
-
                IF @n_Err <> 0
                   GOTO QUIT
 
@@ -355,8 +352,6 @@ BEGIN
                , @c_JobIDs      = @cLabelJobID         OUTPUT    
                , @c_AutoPrint  = 'N'     
 
-               SET @cLabelJobID = @nJobID
-
                IF @n_Err <> 0
                   GOTO Quit
 
@@ -402,8 +397,6 @@ BEGIN
          , @b_SCEPreView   = 0         
          , @c_JobIDs      = @cLabelJobID         OUTPUT    
          , @c_AutoPrint  = 'N'     
-
-         SET @cLabelJobID = @nJobID
 
       END
 
@@ -587,14 +580,12 @@ BEGIN
          , @c_ErrMsg    = @c_ErrMsg          OUTPUT
          , @c_PrintSource  = @c_PrintSource        
          , @b_SCEPreView   = 0         
-         , @c_JobIDs      = @nJobID         OUTPUT    
+         , @c_JobIDs      = @cLabelJobID     OUTPUT    
          , @c_AutoPrint  = 'N' 
          
          --To avoid the label print in sequence
          --EG: Labelno should print out first by use tcp method and UCC is bartender method
          --    but UCC print out first, 
-
-         SET @cLabelJobID = @nJobID
 
          FETCH NEXT FROM @cCurLabel INTO @cReportType
 
@@ -782,10 +773,8 @@ BEGIN
             , @c_ErrMsg       = @c_ErrMsg          OUTPUT
             , @c_PrintSource  = @c_PrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs       = @nJobID         OUTPUT    
+            , @c_JobIDs       = @cPackingJobID         OUTPUT    
             , @c_AutoPrint    = 'N'   
-                     
-            SET @cPackingJobID = @nJobID 
 
             FETCH NEXT FROM @cCurPaper INTO @cReportType
          END
@@ -795,12 +784,8 @@ BEGIN
 Quit:
 
 END
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
+ 
 GO
 GRANT EXECUTE ON api.isp_TPS_ExtPrint04 TO NSQL
 GO
-
 

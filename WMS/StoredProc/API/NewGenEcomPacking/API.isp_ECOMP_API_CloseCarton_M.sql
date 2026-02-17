@@ -20,6 +20,7 @@
 /* 14-Jul-2023     Alex       #JIRA PAC-7 Initial                       */
 /* 07-Aug-2024     Alex01     #JIRA PAC-352 Bug fixes                   */
 /* 10-Sep-2024     Alex02     #PAC-353 - Bundle Packing validation      */
+/* 23-Jul-2025     Sean       #UWP-38247 - Compatible with Login User   */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_CloseCarton_M](
      @b_Debug           INT            = 0
@@ -111,19 +112,36 @@ BEGIN
    SET @c_ErrMsg                          = ''
    SET @c_ResponseString                  = ''
   
-   --Change Login User
-   SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
 
-   EXECUTE AS LOGIN = @c_UserID    
-       
-   IF @n_sp_err <> 0     
-   BEGIN      
+   -- UWP-38247 - Compatible with Login User S
+
+   DECLARE @DBUserName NVARCHAR(100),
+        @b_sp_ExecuteAs BIT
+
+   EXEC [API].[isp_ECOMP_ValidateAndSetUser]
+        @c_UserID      = @c_UserID,
+        @c_DBUserName  = @DBUserName OUTPUT,
+        @b_ExecuteAs   = @b_sp_ExecuteAs OUTPUT,
+        @b_Success     = @b_sp_Success OUTPUT,
+        @n_ErrNo       = @n_sp_err OUTPUT,
+        @c_ErrMsg      = @c_sp_errmsg OUTPUT;
+
+   IF @b_sp_Success = 0
+   BEGIN
       SET @b_Success = 0      
       SET @n_ErrNo = @n_sp_err      
       SET @c_ErrMsg = @c_sp_errmsg     
-      GOTO QUIT      
+      GOTO QUIT
    END
+
+   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+      EXECUTE AS LOGIN = @DBUserName
+      SET @c_UserID = @DBUserName
+   END
+
+   -- UWP-38247 - Compatible with Login User E
+
 
    SELECT @c_PickSlipNo       = ISNULL(RTRIM(PickSlipNo     ), '')
          ,@c_ComputerName     = ISNULL(RTRIM(ComputerName   ), '')
@@ -315,121 +333,6 @@ BEGIN
                     + '. Failed to generate label no - ' + @c_sp_errmsg
       GOTO QUIT
    END
-   --IF @c_PHOrderKey <> ''
-   --BEGIN
-
-   --END
-   ---- Update LabelNo (Begin)
-   --DECLARE CUR_EPACKD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-   --SELECT DISTINCT CartonNo     
-   --      ,LabelNo     
-   --FROM [dbo].[PACKDETAIL] WITH (NOLOCK)    
-   --WHERE PickSlipNo = @c_PickSlipNo    
-   --ORDER BY CartonNo    
-       
-   --OPEN CUR_EPACKD    
-       
-   --FETCH NEXT FROM CUR_EPACKD INTO @n_EPD_CartonNo    
-   --                              ,@c_EPD_LabelNo     
-   --WHILE @@FETCH_STATUS <> -1    
-   --BEGIN    
-   --   IF RTRIM(@c_EPD_LabelNo) = '' OR @c_EPD_LabelNo IS NULL    
-   --   BEGIN    
-   --      EXEC isp_GenUCCLabelNo_Std      
-   --            @cPickslipNo   = @c_PickSlipNo    
-   --         ,  @nCartonNo     = @n_EPD_CartonNo    
-   --         ,  @cLabelNo      = @c_EPD_LabelNo     OUTPUT    
-   --         ,  @b_success     = @b_sp_Success      OUTPUT    
-   --         ,  @n_err         = @n_sp_err          OUTPUT    
-   --         ,  @c_errmsg      = @c_sp_errmsg       OUTPUT    
-    
-   --      IF @b_sp_Success <> 1    
-   --      BEGIN    
-   --         SET @n_continue = 3    
-   --         SET @n_ErrNo = 60050     
-   --         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_sp_err)+': Error Executing isp_GenUCCLabelNo_Std. ([API].[isp_ECOMP_API_CloseCarton_M])'     
-   --                      + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_sp_errmsg),'') + ' ) '     
-   --         GOTO QUIT    
-   --      END    
-   --   END
-      
-   --   IF @c_EPD_LabelNo <> 'ERROR'
-   --   BEGIN
-   --      DECLARE CUR_EPACKL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-   --      SELECT LabelLine     
-   --      FROM   PACKDETAIL WITH (NOLOCK)    
-   --      WHERE PickSlipNo = @c_PickSlipNo    
-   --      AND   CartonNo = @n_EPD_CartonNo    
-          
-   --      OPEN CUR_EPACKL    
-          
-   --      FETCH NEXT FROM CUR_EPACKL INTO @c_LabelLine    
-   --      WHILE @@FETCH_STATUS <> -1    
-   --      BEGIN    
-   --         UPDATE PACKDETAIL WITH (ROWLOCK)    
-   --         SET LabelNo    = @c_EPD_LabelNo    
-   --            ,EditWho    = SUSER_NAME()    
-   --            ,EditDate   = GETDATE()
-   --         WHERE PickSlipNo = @c_PickSlipNo    
-   --         AND   CartonNo   = @n_EPD_CartonNo    
-   --         AND   LabelLine  = @c_LabelLine    
-    
-   --         SET @n_sp_err = @@ERROR    
-   --         IF @n_sp_err <> 0    
-   --         BEGIN    
-   --            SET @n_continue = 3    
-   --            SET @n_ErrNo = 60050     
-   --            SET @c_sp_errmsg = ERROR_MESSAGE()
-   --            SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_sp_err)+': Error Update PACKDETAIL Table. (isp_ECOMP_PackConfirm)'     
-   --                         + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_sp_errmsg),'') + ' ) '     
-   --            GOTO QUIT   
-   --         END    
-   --         FETCH NEXT FROM CUR_EPACKL INTO @c_LabelLine    
-   --      END    
-   --      CLOSE CUR_EPACKL    
-   --      DEALLOCATE CUR_EPACKL    
-    
-   --      DECLARE CUR_EPACKSN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-   --      SELECT PackSerialNoKey     
-   --      FROM   PACKSERIALNO WITH (NOLOCK)    
-   --      WHERE PickSlipNo = @c_PickSlipNo    
-   --      AND   CartonNo   = @n_EPD_CartonNo    
-          
-   --      OPEN CUR_EPACKSN    
-          
-   --      FETCH NEXT FROM CUR_EPACKSN INTO @n_PackSerialNoKey    
-   --      WHILE @@FETCH_STATUS <> -1    
-   --      BEGIN    
-   --         UPDATE PACKSERIALNO WITH (ROWLOCK)    
-   --         SET PickSlipNo = @c_PickSlipNo    
-   --            ,LabelNo    = @c_EPD_LabelNo    
-   --            ,EditWho    = SUSER_NAME()    
-   --            ,EditDate   = GETDATE()    
-   --            ,ArchiveCop = NULL    
-   --         WHERE PackSerialNoKey = @n_PackSerialNoKey    
-    
-   --         SET @n_sp_err = @@ERROR    
-   --         IF @n_sp_err <> 0    
-   --         BEGIN    
-   --            SET @n_continue = 3    
-   --            SET @n_ErrNo = 60055     
-   --            SET @c_sp_errmsg = ERROR_MESSAGE()
-   --            SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_sp_err)+': Error Update PACKSERIALNO Table. (isp_ECOMP_PackConfirm)'     
-   --                         + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_sp_errmsg),'') + ' ) '     
-   --            GOTO QUIT    
-   --         END    
-   --         FETCH NEXT FROM CUR_EPACKSN INTO @n_PackSerialNoKey    
-   --      END    
-   --      CLOSE CUR_EPACKSN    
-   --      DEALLOCATE CUR_EPACKSN    
-   --   END
-
-   --   FETCH NEXT FROM CUR_EPACKD INTO @n_EPD_CartonNo    
-   --                                  ,@c_EPD_LabelNo     
-   --END    
-   --CLOSE CUR_EPACKD    
-   --DEALLOCATE CUR_EPACKD  
-   ---- Update LabelNo (End)
 
    IF @b_IsLastCarton <> 1
    BEGIN
@@ -493,6 +396,12 @@ BEGIN
                            ), '')
 
    QUIT:
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      

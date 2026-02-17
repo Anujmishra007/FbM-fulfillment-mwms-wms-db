@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ASN_PopulateSODs_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ASN_PopulateSODs_Wrapper] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -34,8 +29,16 @@ GO
 /* 15-Jan-2021 Wan03    1.3   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2020-08-11  Wan04    1.4   LFWM-2962 - Populate Order details -Populate*/
 /*                            SO Detail fail.                           */
+/* 2024-05-04  NJOW01   1.5   WMS-24887 add populate so custom mapping  */
+/*                            'SO2ASNMAP' by codelkup                   */
+/* 2025-01-06  NJOW02   1.6   LFWM-4980 Fix when check order count for  */
+/*                            PopulateReturnMaxOrder need to exclude    */
+/*                            same orderkey                             */
+/* 2025-01-27  NJOW03   1.7   WMS-3683 receiptdetail sorting based on   */
+/*                            orderline sequence from parameter         */
+/* 2025-05-26  SWT01    1.8   Setting Session Context for user name     */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_ASN_PopulateSODs_Wrapper]                                                                                                                     
+CREATE OR ALTER PROC [WM].[lsp_ASN_PopulateSODs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
    ,  @c_OrderKeyList         NVARCHAR(4000) = ''  -- Order Keys seperated by '|'; for eg '0000128313|0000128314|0000128314' => 0000128314 to twice as pass 2 orderlinenumber ; IF @c_WarningNo = 1, Get Overdue pass & Y response Orderkey & Line to pass to continue populate
    ,  @c_OrderLineNumberList  NVARCHAR(4000) = ''  -- OrderLineNumber seperated by '|'; for eg '00001|00001|00002'
@@ -124,9 +127,25 @@ BEGIN
          ,  @c_GenConsignee2Carrierkey NVARCHAR(30)   = ''
          ,  @c_DefaultReturnPickFace   NVARCHAR(30)   = ''
          ,  @c_OverdueMsg              NVARCHAR(255)  = ''
+         ,  @c_ListName                NVARCHAR(10)   = '' --NJOW01
+         ,  @c_Code                    NVARCHAR(30)   = '' --NJOW01
+         ,  @c_Code2                   NVARCHAR(30)   = '' --NJOW01
+         ,  @c_UpdateCol               NVARCHAR(60)   = '' --NJOW01
+         ,  @c_ReturnSQL               NVARCHAR(MAX)  = '' --NJOW01
+         ,  @c_UserDefine01            NVARCHAR(30)   = '' --NJOW01
+         ,  @c_UserDefine02            NVARCHAR(30)   = '' --NJOW01
+         ,  @c_UserDefine03            NVARCHAR(30)   = '' --NJOW01
+         ,  @c_UserDefine04            NVARCHAR(30)   = '' --NJOW01
+         ,  @c_UserDefine05            NVARCHAR(30)   = '' --NJOW01
+         ,  @dt_UserDefine06           DATETIME            --NJOW01
+         ,  @dt_UserDefine07           DATETIME            --NJOW01
+         ,  @c_UserDefine08            NVARCHAR(30)   = '' --NJOW01
+         ,  @c_UserDefine09            NVARCHAR(30)   = '' --NJOW01
+         ,  @c_UserDefine10            NVARCHAR(30)   = '' --NJOW01        
 
          ,  @CUR_SCHEMA                CURSOR
          ,  @CUR_ORD                   CURSOR
+         ,  @CUR_COLMAP                CURSOR  --NJOW01
 
    DECLARE @tCODELKUP TABLE
          (  RowRef         INT   IDENTITY(1,1) Primary Key
@@ -140,20 +159,26 @@ BEGIN
    IF @b_PopulateFromArchive = 1 SET @c_IsArch = 'Y' 
                
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
-   BEGIN   
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
+
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
-      END 
-                
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   --(Wan03) - END
+      END
+
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT01) - END                                     --(Wan03) - END
 
    BEGIN TRY -- Wan01 - Begin Outer Begin Try
       SET @n_ErrGroupKey = 0
@@ -378,7 +403,8 @@ BEGIN
                         +                               ' ON T.OrderRefKey= ORDERDETAIL.Orderkey'
                         +                               ' AND T.OrderRefLineNo = ORDERDETAIL.OrderLineNumber'
                         + ' WHERE ORDERDETAIL.ShippedQty > 0'
-                        + ' ORDER BY ORDERDETAIL.OrderKey, ORDERDETAIL.OrderLineNumber'
+                        + ' ORDER BY T.RowRef'      --NJOW03  
+                        --+ ' ORDER BY ORDERDETAIL.OrderKey, ORDERDETAIL.OrderLineNumber'
             EXEC sp_ExecuteSQL @c_SQL
          END
 
@@ -501,8 +527,19 @@ BEGIN
                                          AND RD.Storerkey = OH.Storerkey
             WHERE RD.ReceiptKey = @c_ReceiptKey 
 
+            --SELECT @n_ToPopulateOrderCnt = COUNT(DISTINCT T.OrderRefkey)
+            --FROM @tSOH T
+            
+            --NJOW02        
+            SET @n_ToPopulateOrderCnt = 0
             SELECT @n_ToPopulateOrderCnt = COUNT(DISTINCT T.OrderRefkey)
             FROM @tSOH T
+            WHERE T.OrderRefkey NOT IN (SELECT OH.Orderkey
+                                        FROM RECEIPTDETAIL RD WITH (NOLOCK)
+                                        JOIN ORDERS OH WITH (NOLOCK) ON  RD.ExternReceiptKey = OH.ExternOrderkey 
+                                                                     AND RD.Storerkey = OH.Storerkey
+                                        WHERE RD.ReceiptKey = @c_ReceiptKey
+                                        )            
 
             IF @n_PopulatedOrderCnt + @n_ToPopulateOrderCnt > @n_PopulateReturnMaxOrder
             BEGIN
@@ -673,6 +710,16 @@ BEGIN
                , @c_Orderkey   = OH.Orderkey
                , @c_Consigneekey   = ISNULL(OH.Consigneekey,'')
                , @c_ExternOrderkey = ISNULL(OH.ExternOrderkey,'')
+               , @c_UserDefine01   = ISNULL(OH.UserDefine01,'')      --NJOW01    
+               , @c_UserDefine02   = ISNULL(OH.UserDefine02,'')      --NJOW01    
+               , @c_UserDefine03   = ISNULL(OH.UserDefine03,'')      --NJOW01    
+               , @c_UserDefine04   = ISNULL(OH.UserDefine04,'')      --NJOW01    
+               , @c_UserDefine05   = ISNULL(OH.UserDefine05,'')      --NJOW01    
+               , @dt_UserDefine06  = OH.UserDefine06                 --NJOW01    
+               , @dt_UserDefine07  = OH.UserDefine07                 --NJOW01    
+               , @c_UserDefine08   = ISNULL(OH.UserDefine08,'')      --NJOW01    
+               , @c_UserDefine09   = ISNULL(OH.UserDefine09,'')      --NJOW01    
+               , @c_UserDefine10   = ISNULL(OH.UserDefine10,'')      --NJOW01                   
          FROM #tORDERS OH
          WHERE OH.RowRef > @n_RowRef_OH
          ORDER BY OH.RowRef 
@@ -717,6 +764,17 @@ BEGIN
                , CarrierCity   
                , CarrierState
                , CarrierZip
+               , UserDefine01 --NJOW01
+               , UserDefine02 --NJOW01
+               , UserDefine03 --NJOW01
+               , UserDefine04 --NJOW01
+               , UserDefine05 --NJOW01
+               , UserDefine06 --NJOW01
+               , UserDefine07 --NJOW01
+               , UserDefine08 --NJOW01
+               , UserDefine09 --NJOW01
+               , UserDefine10 --NJOW01
+               , POkey        --NJOW01       
                   )  
             SELECT
                  Receiptkey= @c_Receiptkey 
@@ -732,7 +790,17 @@ BEGIN
                , CarrierCity        = @c_CarrierCity
                , CarrierState       = @c_CarrierState
                , CarrierZip         = @c_CarrierZip
-
+               , UserDefine01       = @c_UserDefine01   --NJOW01
+               , UserDefine02       = @c_UserDefine02   --NJOW01
+               , UserDefine03       = @c_UserDefine03   --NJOW01
+               , UserDefine04       = @c_UserDefine04   --NJOW01
+               , UserDefine05       = @c_UserDefine05   --NJOW01
+               , UserDefine06       = @dt_UserDefine06  --NJOW01
+               , UserDefine07       = @dt_UserDefine07  --NJOW01
+               , UserDefine08       = @c_UserDefine08   --NJOW01
+               , UserDefine09       = @c_UserDefine09   --NJOW01
+               , UserDefine10       = @c_UserDefine10   --NJOW01
+               , POKey              = @c_Orderkey       --NJOW01
             SET @n_RowRef_RH = @@IDENTITY  
          END
          ELSE
@@ -745,8 +813,125 @@ BEGIN
                   , CarrierCity        = @c_CarrierCity
                   , CarrierState       = @c_CarrierState
                   , CarrierZip         = @c_CarrierZip
+                  , POKey              = @c_Orderkey          --NJOW01
+                  , UserDefine01       = @c_UserDefine01      --NJOW01
+                  , UserDefine02       = @c_UserDefine02      --NJOW01
+                  , UserDefine03       = @c_UserDefine03      --NJOW01
+                  , UserDefine04       = @c_UserDefine04      --NJOW01
+                  , UserDefine05       = @c_UserDefine05      --NJOW01
+                  , UserDefine06       = @dt_UserDefine06     --NJOW01
+                  , UserDefine07       = @dt_UserDefine07     --NJOW01
+                  , UserDefine08       = @c_UserDefine08      --NJOW01
+                  , UserDefine09       = @c_UserDefine09      --NJOW01
+                  , UserDefine10       = @c_UserDefine10      --NJOW01                      
             WHERE RowRef = @n_RowRef_RH
          END
+         
+         --NJOW01 S
+         SET @c_ListName = 'SO2ASNMAP'
+         SET @CUR_COLMAP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT Code  = CL.Code
+               ,Code2 = CL.Code2
+         FROM CODELKUP CL WITH (NOLOCK)
+         WHERE CL.ListName = @c_ListName
+         AND   CL.Short = 'H'
+         AND   CL.Storerkey = @c_Storerkey
+         UNION                                                                                     
+         SELECT Code  = CL.Code
+               ,Code2 = CL.Code2
+         FROM CODELKUP CL WITH (NOLOCK)
+         WHERE CL.ListName = @c_ListName
+         AND   CL.Short = 'H'
+         AND   CL.Storerkey = @c_Storerkey
+         AND  @c_DocType IN (SELECT LTRIM(RTRIM(ss.value)) FROM STRING_SPLIT(CL.UDF03,',') AS ss) 
+         ORDER BY CL.Code
+
+         OPEN @CUR_COLMAP
+
+         FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2
+
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            SET @c_ReturnSQL = ''
+            SET @c_UpdateCol = ''
+            BEGIN TRY
+               EXEC [WM].[lsp_Populate_GetDocFieldsMap]
+                  @c_SourceTable       =  'ORDERS'
+               ,  @c_Sourcekey         =  @c_Orderkey
+               ,  @c_SourceLineNumber  =  ''
+               ,  @c_ListName          =  @c_ListName
+               ,  @c_Code              =  @c_Code
+               ,  @c_Storerkey         =  @c_Storerkey
+               ,  @c_Code2             =  @c_Code2
+               ,  @c_DBName            =  @c_DBName
+               ,  @c_UpdateCol         =  @c_UpdateCol   OUTPUT
+               ,  @c_ReturnSQL         =  @c_ReturnSQL   OUTPUT
+            END TRY
+
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @n_Err = 558857
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing lsp_Populate_GetDocFieldsMap - Header. (lsp_ASN_PopulateSODs_Wrapper)'
+                              + '(' + @c_ErrMsg + ')'
+
+               EXEC [WM].[lsp_WriteError_List]
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_Receiptkey
+                  ,  @c_Refkey2     = @c_Orderkey
+                  ,  @c_Refkey3     = ''
+                  ,  @c_WriteType   = 'ERROR'
+                  ,  @n_err2        = @n_err
+                  ,  @c_errmsg2     = @c_errmsg
+                  ,  @b_Success     = @b_Success   
+                  ,  @n_err         = @n_err       
+                  ,  @c_errmsg      = @c_errmsg    
+                  
+               GOTO EXIT_SP
+            END CATCH
+
+            SET @c_UpdateCol = RTRIM(LTRIM(@c_UpdateCol))        
+
+            IF @c_ReturnSQL <> ''
+            BEGIN
+               SET @c_SQL = @c_ReturnSQL
+
+               -- Direct mapping
+               IF CHARINDEX('WHERE', @c_ReturnSQL ) = 0
+               BEGIN
+                  SET @c_SQL = REPLACE(@c_SQL, ' ORDERS ', ' #tORDERS ORDERS ')
+                  SET @c_SQL = REPLACE(@c_SQL, ' ORDERDETAIL ', ' #tORDERDETAIL ORDERDETAIL ')
+                  SET @c_SQL = REPLACE(@c_SQL, ' PICKDETAIL ', ' #tPICKDETAIL PICKDETAIL ')
+                  SET @c_SQL = REPLACE(@c_SQL, ' LOTATTRIBUTE ', ' #tLOTATTRIBUTE LOTATTRIBUTE ')
+                  IF CHARINDEX('#tORDERS', @c_SQL) > 0
+                         SET @c_SQL = @c_SQL + ' WHERE ORDERS.RowRef = @n_RowRef_OH'
+               END
+
+               IF @c_SQL <> ''
+               BEGIN
+                  SET @c_SQL = 'UPDATE #tRECEIPT'
+                             + ' SET ' + @c_UpdateCol + ' = (' + @c_SQL + ')'
+                             + ' WHERE RowRef = @n_RowRef_RH'
+
+                  SET @c_SQLParms = '@n_RowRef_OH  INT'
+                                  +',@n_RowRef_RH  INT'
+                                  +',@c_OrderKey      NVARCHAR(10)'       
+
+                  EXEC sp_ExecuteSQL @c_SQL
+                           , @c_SQLParms
+                           , @n_RowRef_OH
+                           , @n_RowRef_RH
+                           , @c_OrderKey                                  
+               END
+            END
+
+            FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2
+         END
+         CLOSE @CUR_COLMAP
+         DEALLOCATE @CUR_COLMAP
+         --NJOW01 E         
      
          SET @n_RowRef_OD = 0
          WHILE 1 = 1
@@ -756,6 +941,7 @@ BEGIN
                   ,@c_Sku          = OD.Sku
                   ,@c_OD_UserDefine06 = CASE WHEN ISDATE(OD.UserDefine06) = 1 THEN OD.UserDefine06 ELSE NULL END
                   ,@c_OD_UserDefine07 = CASE WHEN ISDATE(OD.UserDefine07) = 1 THEN OD.UserDefine07 ELSE NULL END
+                  ,@c_OrderLineNumber = OD.OrderLineNumber --NJOW01
             FROM #tORDERDETAIL OD
             WHERE OD.OrderKey = @c_Orderkey
             AND OD.RowRef > @n_RowRef_OD
@@ -909,7 +1095,116 @@ BEGIN
                ,  ISNULL(OD.UserDefine08,'')  
                ,  ISNULL(OD.UserDefine09,'')
                ,  ISNULL(OD.Channel,'') 
-
+               
+            --NJOW01 S         
+            SET @n_RowRef_RD = @@IDENTITY
+            
+            SET @c_ListName = 'SO2ASNMAP'
+            SET @CUR_COLMAP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT Code  = CL.Code
+                  ,Code2 = CL.Code2
+            FROM CODELKUP CL WITH (NOLOCK)
+            WHERE CL.ListName = @c_ListName
+            AND   CL.Short = 'D'
+            AND   CL.Storerkey = @c_Storerkey
+            UNION                                                                                     
+            SELECT Code  = CL.Code
+                  ,Code2 = CL.Code2
+            FROM CODELKUP CL WITH (NOLOCK)
+            WHERE CL.ListName = @c_ListName
+            AND   CL.Short = 'D'
+            AND   CL.Storerkey = @c_Storerkey
+            AND  @c_DocType IN (SELECT LTRIM(RTRIM(ss.value)) FROM STRING_SPLIT(CL.UDF03,',') AS ss) 
+            ORDER BY CL.Code
+            
+            OPEN @CUR_COLMAP
+            
+            FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2
+            
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               SET @c_ReturnSQL = ''
+               SET @c_UpdateCol = ''
+               BEGIN TRY
+                  EXEC [WM].[lsp_Populate_GetDocFieldsMap]
+                     @c_SourceTable       =  'ORDERDETAIL'
+                  ,  @c_Sourcekey         =  @c_Orderkey
+                  ,  @c_SourceLineNumber  =  @c_OrderLineNumber
+                  ,  @c_ListName          =  @c_ListName
+                  ,  @c_Code              =  @c_Code
+                  ,  @c_Storerkey         =  @c_Storerkey
+                  ,  @c_Code2             =  @c_Code2
+                  ,  @c_DBName            =  @c_DBName
+                  ,  @c_UpdateCol         =  @c_UpdateCol   OUTPUT
+                  ,  @c_ReturnSQL         =  @c_ReturnSQL   OUTPUT
+               END TRY
+            
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @n_Err = 558858
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing lsp_Populate_GetDocFieldsMap - Detail. (lsp_ASN_PopulateSODs_Wrapper)'
+                                 + '(' + @c_ErrMsg + ')'
+            
+                  EXEC [WM].[lsp_WriteError_List]
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_Receiptkey
+                     ,  @c_Refkey2     = @c_Orderkey
+                     ,  @c_Refkey3     = ''
+                     ,  @c_WriteType   = 'ERROR'
+                     ,  @n_err2        = @n_err
+                     ,  @c_errmsg2     = @c_errmsg
+                     ,  @b_Success     = @b_Success   
+                     ,  @n_err         = @n_err       
+                     ,  @c_errmsg      = @c_errmsg    
+                     
+                  GOTO EXIT_SP
+               END CATCH
+            
+               SET @c_UpdateCol = RTRIM(LTRIM(@c_UpdateCol))        
+            
+               IF @c_ReturnSQL <> ''
+               BEGIN
+                  SET @c_SQL = @c_ReturnSQL
+            
+                  -- Direct mapping
+                  IF CHARINDEX('WHERE', @c_ReturnSQL ) = 0
+                  BEGIN
+                     SET @c_SQL = REPLACE(@c_SQL, ' ORDERS ', ' #tORDERS ORDERS ')
+                     SET @c_SQL = REPLACE(@c_SQL, ' ORDERDETAIL ', ' #tORDERDETAIL ORDERDETAIL ')
+                     SET @c_SQL = REPLACE(@c_SQL, ' PICKDETAIL ', ' #tPICKDETAIL PICKDETAIL ')
+                     SET @c_SQL = REPLACE(@c_SQL, ' LOTATTRIBUTE ', ' #tLOTATTRIBUTE LOTATTRIBUTE ')
+                     IF CHARINDEX('#tORDERDETAIL', @c_SQL) > 0
+                            SET @c_SQL = @c_SQL + ' WHERE ORDERDETAIL.RowRef = @n_RowRef_OD'
+                  END
+            
+                  IF @c_SQL <> ''
+                  BEGIN
+                     SET @c_SQL = 'UPDATE #tRECEIPTDETAIL'
+                                + ' SET ' + @c_UpdateCol + ' = (' + @c_SQL + ')'
+                                + ' WHERE RowRef = @n_RowRef_RD'
+            
+                     SET @c_SQLParms = '@n_RowRef_OD  INT'
+                                     +',@n_RowRef_RD  INT'
+                                     +',@c_OrderKey      NVARCHAR(10)'       
+                                     +',@c_OrderLineNumber NVARCHAR(5)'  
+                                     
+                     EXEC sp_ExecuteSQL @c_SQL
+                              , @c_SQLParms
+                              , @n_RowRef_OD
+                              , @n_RowRef_RD
+                              , @c_OrderKey                                  
+                              , @c_OrderLineNumber
+                  END
+               END
+            
+               FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2
+            END
+            CLOSE @CUR_COLMAP
+            DEALLOCATE @CUR_COLMAP
+            --NJOW01 E                                                                             
          END
       END
 
@@ -968,6 +1263,60 @@ BEGIN
                ,CarrierCity      = T.CarrierCity
                ,CarrierState     = T.CarrierState
                ,CarrierZip       = T.CarrierZip
+               ,POKey            = T.POKey              --NJOW01       
+               ,UserDefine01     = T.UserDefine01       --NJOW01       
+               ,UserDefine02     = T.UserDefine02       --NJOW01       
+               ,UserDefine03     = T.UserDefine03       --NJOW01       
+               ,UserDefine04     = T.UserDefine04       --NJOW01       
+               ,UserDefine05     = T.UserDefine05       --NJOW01       
+               ,UserDefine06     = T.UserDefine06       --NJOW01       
+               ,UserDefine07     = T.UserDefine07       --NJOW01       
+               ,UserDefine08     = T.UserDefine08       --NJOW01       
+               ,UserDefine09     = T.UserDefine09       --NJOW01       
+               ,UserDefine10     = T.UserDefine10       --NJOW01                                                   
+               ,RecType          = T.RecType            --NJOW01
+               ,WarehouseReference = T.WarehouseReference  --NJOW01               
+               ,ReceiptGroup = CASE WHEN ISNULL(T.ReceiptGroup,'') <> '' THEN T.ReceiptGroup ELSE RECEIPT.ReceiptGroup END --NJOW01
+               ,CarrierReference = CASE WHEN ISNULL(T.CarrierReference,'') <> '' THEN T.CarrierReference ELSE RECEIPT.CarrierReference END --NJOW01
+               ,OriginCountry = CASE WHEN ISNULL(T.OriginCountry,'') <> '' THEN T.OriginCountry ELSE RECEIPT.OriginCountry END --NJOW01
+               ,DestinationCountry = CASE WHEN ISNULL(T.DestinationCountry,'') <> '' THEN T.DestinationCountry ELSE RECEIPT.DestinationCountry END --NJOW01
+               ,VehicleNumber = CASE WHEN ISNULL(T.VehicleNumber,'') <> '' THEN T.VehicleNumber ELSE RECEIPT.VehicleNumber END --NJOW01
+               ,PlaceOfLoading = CASE WHEN ISNULL(T.PlaceOfLoading,'') <> '' THEN T.PlaceOfLoading ELSE RECEIPT.PlaceOfLoading END --NJOW01
+               ,PlaceOfDischarge = CASE WHEN ISNULL(T.PlaceOfDischarge,'') <> '' THEN T.PlaceOfDischarge ELSE RECEIPT.PlaceOfDischarge END --NJOW01
+               ,PlaceofDelivery = CASE WHEN ISNULL(T.PlaceofDelivery,'') <> '' THEN T.PlaceofDelivery ELSE RECEIPT.PlaceofDelivery END --NJOW01
+               ,IncoTerms = CASE WHEN ISNULL(T.IncoTerms,'') <> '' THEN T.IncoTerms ELSE RECEIPT.IncoTerms END --NJOW01
+               ,TermsNote = CASE WHEN ISNULL(T.TermsNote,'') <> '' THEN T.TermsNote ELSE RECEIPT.TermsNote END --NJOW01
+               ,ContainerKey= CASE WHEN ISNULL(T.ContainerKey,'') <> '' THEN T.ContainerKey ELSE RECEIPT.ContainerKey END --NJOW01
+               ,Signatory = CASE WHEN ISNULL(T.Signatory,'') <> '' THEN T.Signatory ELSE RECEIPT.Signatory END --NJOW01
+               ,PlaceofIssue = CASE WHEN ISNULL(T.PlaceofIssue,'') <> '' THEN T.PlaceofIssue ELSE RECEIPT.PlaceofIssue END --NJOW01
+               ,Notes = CASE WHEN ISNULL(T.Notes,'') <> '' THEN T.Notes ELSE RECEIPT.Notes END --NJOW01
+               ,ContainerType = CASE WHEN ISNULL(T.ContainerType,'') <> '' THEN T.ContainerType ELSE RECEIPT.ContainerType END --NJOW01
+               ,ASNReason = CASE WHEN ISNULL(T.ASNReason,'') <> '' THEN T.ASNReason ELSE RECEIPT.ASNReason END --NJOW01
+               ,PROCESSTYPE = CASE WHEN ISNULL(T.PROCESSTYPE,'') <> '' THEN T.PROCESSTYPE ELSE RECEIPT.PROCESSTYPE END --NJOW01
+               ,RoutingTool = CASE WHEN ISNULL(T.RoutingTool,'') <> '' THEN T.RoutingTool ELSE RECEIPT.RoutingTool END --NJOW01
+               ,GIS_ControlNo = CASE WHEN ISNULL(T.GIS_ControlNo,'') <> '' THEN T.GIS_ControlNo ELSE RECEIPT.GIS_ControlNo END --NJOW01
+               ,Cust_ISA_ControlNo = CASE WHEN ISNULL(T.Cust_ISA_ControlNo,'') <> '' THEN T.Cust_ISA_ControlNo ELSE RECEIPT.Cust_ISA_ControlNo END --NJOW01
+               ,Cust_GIS_ControlNo = CASE WHEN ISNULL(T.Cust_GIS_ControlNo,'') <> '' THEN T.Cust_GIS_ControlNo ELSE RECEIPT.Cust_GIS_ControlNo END --NJOW01            
+               ,SellerName = CASE WHEN ISNULL(T.SellerName,'') <> '' THEN T.SellerName ELSE RECEIPT.SellerName END --NJOW01
+               ,SellerCompany = CASE WHEN ISNULL(T.SellerCompany,'') <> '' THEN T.SellerCompany ELSE RECEIPT.SellerCompany END --NJOW01
+               ,SellerAddress1 = CASE WHEN ISNULL(T.SellerAddress1,'') <> '' THEN T.SellerAddress1 ELSE RECEIPT.SellerAddress1 END --NJOW01
+               ,SellerAddress2 = CASE WHEN ISNULL(T.SellerAddress2,'') <> '' THEN T.SellerAddress2 ELSE RECEIPT.SellerAddress2 END --NJOW01
+               ,SellerAddress3 = CASE WHEN ISNULL(T.SellerAddress3,'') <> '' THEN T.SellerAddress3 ELSE RECEIPT.SellerAddress3 END --NJOW01
+               ,SellerAddress4 = CASE WHEN ISNULL(T.SellerAddress4,'') <> '' THEN T.SellerAddress4 ELSE RECEIPT.SellerAddress4 END --NJOW01
+               ,SellerCity = CASE WHEN ISNULL(T.SellerCity,'') <> '' THEN T.SellerCity ELSE RECEIPT.SellerCity END --NJOW01
+               ,SellerState = CASE WHEN ISNULL(T.SellerState,'') <> '' THEN T.SellerState ELSE RECEIPT.SellerState END --NJOW01
+               ,SellerZip = CASE WHEN ISNULL(T.SellerZip,'') <> '' THEN T.SellerZip ELSE RECEIPT.SellerZip END --NJOW01
+               ,SellerCountry = CASE WHEN ISNULL(T.SellerCountry,'') <> '' THEN T.SellerCountry ELSE RECEIPT.SellerCountry END --NJOW01
+               ,SellerContact1 = CASE WHEN ISNULL(T.SellerContact1,'') <> '' THEN T.SellerContact1 ELSE RECEIPT.SellerContact1 END --NJOW01
+               ,SellerContact2 = CASE WHEN ISNULL(T.SellerContact2,'') <> '' THEN T.SellerContact2 ELSE RECEIPT.SellerContact2 END --NJOW01
+               ,SellerPhone1 = CASE WHEN ISNULL(T.SellerPhone1,'') <> '' THEN T.SellerPhone1 ELSE RECEIPT.SellerPhone1 END --NJOW01
+               ,SellerPhone2 = CASE WHEN ISNULL(T.SellerPhone2,'') <> '' THEN T.SellerPhone2 ELSE RECEIPT.SellerPhone2 END --NJOW01
+               ,SellerEmail1 = CASE WHEN ISNULL(T.SellerEmail1,'') <> '' THEN T.SellerEmail1 ELSE RECEIPT.SellerEmail1 END --NJOW01
+               ,SellerEmail2 = CASE WHEN ISNULL(T.SellerEmail2,'') <> '' THEN T.SellerEmail2 ELSE RECEIPT.SellerEmail2 END --NJOW01
+               ,SellerFax1 = CASE WHEN ISNULL(T.SellerFax1,'') <> '' THEN T.SellerFax1 ELSE RECEIPT.SellerFax1 END --NJOW01
+               ,SellerFax2 = CASE WHEN ISNULL(T.SellerFax2,'') <> '' THEN T.SellerFax2 ELSE RECEIPT.SellerFax2 END --NJOW01
+               ,HoldChannel = CASE WHEN ISNULL(T.HoldChannel,'') <> '' THEN T.HoldChannel ELSE RECEIPT.HoldChannel END --NJOW01
+               ,TrackingNo = CASE WHEN ISNULL(T.TrackingNo,'') <> '' THEN T.TrackingNo ELSE RECEIPT.TrackingNo END --NJOW01                                                        
          FROM #tRECEIPT T
          JOIN RECEIPT ON T.Receiptkey = RECEIPT.Receiptkey
       END TRY
@@ -1215,7 +1564,10 @@ EXIT_SP:
       BEGIN TRAN
    END  
          
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_ASN_PopulateSODs_Wrapper] TO nSQL 

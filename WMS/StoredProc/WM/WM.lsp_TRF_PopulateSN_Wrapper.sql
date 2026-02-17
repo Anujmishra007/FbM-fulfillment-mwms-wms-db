@@ -14,13 +14,15 @@ GO
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
 /*                                                                      */                                                                                  
-/* Version: V0                                                          */                                                                                  
+/* Version: V1.3                                                        */                                                                                  
 /*                                                                      */                                                                                  
 /* Data Modifications:                                                  */                                                                                  
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */
-/*2025-05-26   SSA01    1.1   UWP-3982- Added PalletType                */
+/* 2025-05-26  SSA01    1.1   UWP-3982- Added PalletType                */
+/* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
+/* 2025-10-10  Michael  1.3   FCR-8380- Add SerialNoUpdateLotLocID(ML01)*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_TRF_PopulateSN_Wrapper]                                                                                                                     
    @c_TransferKey          NVARCHAR(10)         
@@ -112,6 +114,10 @@ BEGIN
          ,  @n_LogWarningNo               INT            = 0
          ,  @c_FromPalletType             NVARCHAR(10)   = ''           --(SSA01)
          ,  @c_ToPalletType               NVARCHAR(10)   = ''           --(SSA01)
+         ,  @c_SerialNoUpdateLotLocID     NVARCHAR(10)   = ''   --ML01
+         ,  @n_Temp                       INT                   --ML01
+         ,  @c_FromUCCNo                  NVARCHAR(20)   = ''   --ML01
+         ,  @c_ToUCCNo                    NVARCHAR(20)   = ''   --ML01
          
          ,  @CUR_LLI                      CURSOR
          ,  @CUR_ERRLIST                  CURSOR   
@@ -131,18 +137,26 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
                
-   SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName        
+   -- Start enhanced session management (SWT01)
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-    
-      IF @n_Err <> 0 
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-                
-      EXECUTE AS LOGIN = @c_UserName        
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END                                    
+   -- End enhanced session management (SWT01)                                    
 
    BEGIN TRY                                   
       SET @n_ErrGroupKey = 0
@@ -164,6 +178,10 @@ BEGIN
       FROM dbo.fnc_SelectGetRight (@c_FromFacility, @c_FromStorerkey,'','ChannelInventoryMgmt') AS fsgr
       SELECT @c_ChannelInventoryMgmt_To   = fsgr.Authority 
       FROM dbo.fnc_SelectGetRight (@c_ToFacility, @c_ToStorerkey,'','ChannelInventoryMgmt') AS fsgr
+
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                                     --ML01
+      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID') AS fsgr  --ML01
+      
  
       IF @c_ChannelInventoryMgmt_From = '1'
       BEGIN
@@ -195,10 +213,17 @@ BEGIN
 
       SET @c_SelectSQL = 'SELECT SerialNo.SerialNoKey'
                        + ', ' +CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' 
+                                      OR @c_SerialNoUpdateLotLocID = '1'   --ML01
                                     THEN 'SerialNo.Lot'
                                     ELSE '''''' --'ISNULL(SerialNo.LotNo,'''')'
                                     END
       SELECT @c_SearchSQL = dbo.fnc_ParseSearchSQL(@c_SearchSQL, @c_SelectSQL) 
+
+      --ML01-S
+      SET @n_Temp = CHARINDEX(' WHERE ', @c_SearchSQL, 1)
+      IF @n_Temp > 0 AND @c_SearchSQL NOT LIKE '%SerialNo.Loc%'
+         SET @c_SearchSQL = STUFF(@c_SearchSQL, @n_Temp + 7, 0, '((LOTxLOCxID.ID <> '''' AND ISNULL(SerialNo.Loc,'''')='''') OR LOTxLOCxID.Loc = SerialNo.Loc) AND ')
+      --ML01-E
 
       IF @c_SearchSQL = ''
       BEGIN
@@ -248,16 +273,33 @@ BEGIN
             ,l.Lottable15
             ,sn.SerialNo
             ,i.PalletType                     --(SSA01)
+            ,ISNULL(RTRIM(UCC.UCCNo),'')      --ML01
       FROM #tSN AS ts 
       JOIN dbo.SerialNo AS sn (NOLOCK) ON sn.SerialNoKey = ts.SerialNoKey
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Storerkey = sn.Storerkey
                                             AND ltlci.Sku = sn.Sku
-                                            AND ltlci.ID  = sn.ID AND ltlci.ID <> ''
+--ML01                                            AND ltlci.ID  = sn.ID AND ltlci.ID <> ''
+                                            AND ltlci.ID  = sn.ID                        --ML01
+                                            AND ((ltlci.ID <> '' AND ISNULL(sn.Loc,'')='') OR ltlci.Loc = sn.Loc)   --ML01
                                             AND ltlci.Lot = ts.Lot 
       JOIN dbo.LOTATTRIBUTE AS l (NOLOCK) ON l.Lot = ltlci.Lot                                    
       JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = l.StorerKey AND s.Sku = l.Sku
       JOIN dbo.PACK AS p (NOLOCK) ON p.PackKey= s.PACKKey
       JOIN dbo.ID As i (NOLOCK) ON i.id = ltlci.ID
+      --ML01-S
+      OUTER APPLY (
+         SELECT TOP 1 UCCNo
+         FROM UCC WITH(NOLOCK)
+         WHERE UCC.Storerkey = sn.Storerkey
+           AND UCC.UCCNo = sn.UCCNo
+           AND sn.UCCNo <> ''
+           AND UCC.Status = '1'
+           AND UCC.Sku = sn.Sku
+           AND UCC.Lot = sn.Lot
+           AND UCC.ID = sn.ID
+           AND ((sn.ID<>'' AND ISNULL(sn.Loc,'')='') OR UCC.Loc = sn.Loc)
+      ) UCC
+      --ML01-E
       WHERE ltlci.Qty - ltlci.Qtyallocated - ltlci.QtyPicked >= sn.qty
       AND s.SerialNoCapture IN ('1','2', '3')
       AND sn.[Status] = '1'
@@ -290,6 +332,7 @@ BEGIN
                                     ,@dt_FromLottable15
                                     ,@c_FromSerialNo
                                     ,@c_FromPallettype                  --(SSA01)
+                                    ,@c_FromUCCNo   --ML01
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
@@ -316,7 +359,8 @@ BEGIN
          SET @dt_ToLottable14 = @dt_FromLottable14
          SET @dt_ToLottable15 = @dt_FromLottable15
          SET @c_ToSerialNo    = @c_FromSerialNo
-         SET @c_ToPallettype = @c_FromPallettype
+         SET @c_ToPallettype  = @c_FromPallettype
+         SET @c_ToUCCNo       = @c_FromUCCNo   --ML01
          
          IF @c_ChannelInventoryMgmt_From = '1'
          BEGIN
@@ -394,6 +438,8 @@ BEGIN
                ,  ToSerialNo
                ,  FromPalletType
                ,  ToPalletType
+               ,  UserDefine01   --ML01
+               ,  UserDefine02   --ML01
                )
          VALUES(  @c_TransferKey
                ,  @c_TransferLineNumber
@@ -449,6 +495,8 @@ BEGIN
                ,  @c_ToSerialNo
                ,  @c_FromPalletType                  --(SSA01)
                ,  @c_ToPalletType                    --(SSA01)
+               ,  @c_FromUCCNo   --ML01
+               ,  @c_ToUCCNo     --ML01
                )
  
          IF @@ERROR <> 0
@@ -490,6 +538,7 @@ BEGIN
                                        ,@dt_FromLottable15
                                        ,@c_FromSerialNo
                                        ,@c_FromPallettype
+                                       ,@c_FromUCCNo   --ML01
       END
       CLOSE @CUR_LLI
       DEALLOCATE @CUR_LLI
@@ -598,7 +647,8 @@ EXIT_SP:
       BEGIN TRAN
    END  
          
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_TRF_PopulateSN_Wrapper] TO nSQL 

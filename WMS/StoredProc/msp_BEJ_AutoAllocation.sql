@@ -8,31 +8,33 @@ GO
 /* Copyright: Maersk                                                    */
 /* Written by:                                                          */  
 /*                                                                      */  
-/* Purpose: UWP-32704 - Auto Allocate SO                                */
-/*                                                                      */  
+/* Purpose: FCR-3955 UWP-32704 - Auto Allocate SO                       */
+/*                                                                      */
 /* Called By: Call by SQL Scheduler Job                                 */
-/*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
-/*                                                                      */  
-/* Version: 1.0                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author  Rev   Purposes                                  */  
-/************************************************************************/  
-CREATE OR ALTER PROC [dbo].[msp_BEJ_AutoAllocation]
+/*                                                                      */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 1.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author  Rev   Purposes                                  */
+/*2024-04-30    SSA01   1.0   Created - UWP-32704 - Auto Allocate SO    */
+/*2026-02/04    TPT     1.1   Added @n_Hrs - Ops control ahead allocat  */
+/************************************************************************/
+CREATE OR ALTER  PROC [dbo].[msp_BEJ_AutoAllocation]
      @c_StorerKey   NVARCHAR(15)   = ''
    , @c_Facility    NVARCHAR(5)    = ''
    , @c_OtherConfig NVARCHAR(4000)  = ''
    , @b_debug       INT = 0
 
-AS    
-BEGIN    
-   SET NOCOUNT ON   
-   SET QUOTED_IDENTIFIER OFF   
-   SET ANSI_NULLS OFF     
-    
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+
    DECLARE  @n_Continue       INT
             , @b_Success     INT
             , @n_Err         INT
@@ -56,11 +58,13 @@ BEGIN
             , @cMax_SKU_Per_Order      NVARCHAR(1000)
             , @dCutOffDate             DATETIME -- (SWT02)
             , @n_Priority    INT
-            , @cCommand              NVARCHAR(2014)
-            , @c_Priority NVARCHAR(1)
-            , @c_Status NVARCHAR(10)
-            , @c_PostAllocationSP NVARCHAR(200)
-            , @c_Type NVARCHAR(10)
+            , @cCommand                NVARCHAR(2014)
+            , @c_Priority              NVARCHAR(1)
+            , @c_Status                NVARCHAR(10)
+            , @c_PostAllocationSP      NVARCHAR(200)
+            , @c_Type                  NVARCHAR(10)
+            , @c_OrderLineNo           NVARCHAR(5)
+            , @n_Hrs				   INT = 24 --(TPT001)
 
     SELECT @c_APP_DB_Name           = qcfg.APP_DB_Name
            , @c_DataStream          = qcfg.DataStream
@@ -86,6 +90,12 @@ BEGIN
    SET @c_Priority = ''
    SELECT @c_Priority = dbO.fnc_GetParamValueFromString ('@c_Priority',@c_OtherConfig, @c_Priority)
 
+--(TPT001)
+   SELECT @n_Hrs = ISNULL(CL.Short,24)
+   FROM CODELKUP CL WITH (NOLOCK)
+   WHERE CL.ListName = 'JCB_HRS_AL' AND CL.Storerkey=@c_StorerKey
+--(TPT001)
+
    IF @b_debug = 1
           BEGIN
             print('@c_Priority:'+@c_Priority)
@@ -104,7 +114,7 @@ BEGIN
         WHERE o.StorerKey = @c_StorerKey
         AND o.Facility = @c_Facility
         AND o.Type IN ('0','1','2','6','8')
-        AND o.Status < 2
+        AND o.Status IN ('0','1')
         AND o.OrderGroup <> 'XDOCK'
         AND o.Priority = '1'
         AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')
@@ -181,7 +191,7 @@ BEGIN
           END TRY
           BEGIN CATCH
                       SET @c_ErrMsg = ERROR_MESSAGE()
-                      GOTO EXIT_SP
+                      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoAllocation'
           END CATCH
 
           FETCH NEXT FROM CUR_EMG_ORDERKEY INTO @c_OrderKey,@n_Qty
@@ -194,6 +204,7 @@ BEGIN
    ELSE
    BEGIN
        /* Normal orders allocation*/
+       
        IF @n_Continue=1 OR @n_Continue=2
        BEGIN
           DECLARE CUR_NORMAL_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -203,17 +214,16 @@ BEGIN
           WHERE o.StorerKey = @c_StorerKey
           AND o.Facility = @c_Facility
           AND o.Type IN ('0','1','2','6','8')
-          AND o.Status = '0'
+          AND o.Status IN ('0','1')
           AND o.OrderGroup <> 'XDOCK'
-          AND o.DeliveryDate <= dateadd(hh,48,getdate())
+          AND o.DeliveryDate <= DATEADD(hh,CASE DATEPART(dw,DATEADD(hh,24,getdate())) WHEN 7 THEN @n_Hrs+48 WHEN 1 THEN @n_Hrs+24 ELSE @n_Hrs END,getdate()) --(TPT001)
           AND o.Priority <> '1'
           ANd od.Lottable03 is NOT NULL
           AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')
           AND (CASE WHEN ISNULL(SequenceNo,0) = 0 OR (SequenceNo = 99999999) THEN 0 ELSE SequenceNo END) < 24
-          AND ISNULL(o.Ecom_Platform,'') <> '3RDParty'
+          AND ISNULL(o.Ecom_Platform,'') NOT LIKE '3RDParty%'
           group by o.orderkey,o.Type
           HAVING sum(od.openqty) > 0
-
 
          OPEN CUR_NORMAL_ORDERKEY
 
@@ -224,23 +234,34 @@ BEGIN
           BEGIN
             print(@c_Orderkey)
           END
+          BEGIN TRY
             EXEC nsp_OrderProcessing_Wrapper
                   @c_Orderkey,
                   '', --@c_oskey
                   'N', -- @c_docarton,
                   'N', -- @c_doroute,
                   '' --@c_tblprefix
+          END TRY
+          BEGIN CATCH
+              SELECT @n_continue = 3
+              SELECT @c_errmsg = ERROR_MESSAGE()           --Wan01
+              SET @n_err = 550156
+              SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+':'+@c_Orderkey+ '(' + @c_errmsg + '): Execute nsp_orderprocessing_wrapper Failed. (msp_BEJ_AutoAllocation)'
+              EXECUTE nsp_logerror @n_err, @c_errmsg, 'msp_BEJ_AutoAllocation'
 
-            SELECT @n_err = @@ERROR
+              UPDATE ORDERS WITH (ROWLOCK)
+                 SET Ecom_Platform = 'EMG'
+                 , SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
+                 THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
+                 , TrafficCop = NULL
+                 , Notes2 = @c_errmsg
+                 WHERE Orderkey = @c_Orderkey
+          END CATCH
 
-              IF @n_err <> 0
-              BEGIN
-                 SELECT @n_continue = 3
-                 SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 550156
-                 SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Execute nsp_orderprocessing_wrapper Failed. (msp_BEJ_AutoAllocation)'
-                  + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-                 GOTO EXIT_SP
-              END
+          SELECT @n_err = @@ERROR
+
+          IF @n_err = 0
+          BEGIN
 
             UPDATE ORDERS WITH (ROWLOCK)
             SET Ecom_Platform = 'EMG'
@@ -263,42 +284,43 @@ BEGIN
                        BEGIN
                           SELECT @n_continue = 3
                           SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 550158
-                          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Execute isp_SplitNotFullAllocOrder Failed. (msp_BEJ_AutoAllocation)'
+                          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+':'+@c_OrderKey +': Execute isp_SplitNotFullAllocOrder Failed. (msp_BEJ_AutoAllocation)'
                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-                          GOTO EXIT_SP
-                       END
-                 IF  @b_success = 1
-                       BEGIN
-                       UPDATE ORDERS WITH (ROWLOCK)
-                        SET Ecom_Platform = 'EMG'
-                        ,SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999) OR (Cast(Orders.SequenceNo as Int) = 1)
-                        THEN 1 ELSE Cast(Orders.SequenceNo as Int)-1 END
-                        ,TrafficCop = NULL
-                        WHERE Orderkey = @c_Orderkey
+                          EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoAllocation'
                        END
              END
-
-            FETCH NEXT FROM CUR_NORMAL_ORDERKEY INTO @c_OrderKey,@n_Qty,@c_Type
-         END
-
+          END
+          FETCH NEXT FROM CUR_NORMAL_ORDERKEY INTO @c_OrderKey,@n_Qty,@c_Type
+       END
          CLOSE CUR_NORMAL_ORDERKEY
          DEALLOCATE CUR_NORMAL_ORDERKEY
        END
         /* Third Party Preallocation*/
-       IF @n_Continue=1 OR @n_Continue=2
-       BEGIN
-          DECLARE CUR_THIRD_PARTY_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-          SELECT o.OrderKey,sum(od.OpenQty),li.avaialbleQty
+
+           IF OBJECT_ID('tempdb..#skuQty','u') IS NOT NULL
+           BEGIN
+             DROP TABLE #skuQty;
+           END
+
+           CREATE TABLE #skuQty
+           (
+             OrderKey       NVARCHAR(10)   NOT NULL
+           , Sku            NVARCHAR(20)   NOT NULL DEFAULT('')
+           , QtyAvailable   INT            NOT NULL DEFAULT(0)
+           , QtyOpen        INT            NOT NULL DEFAULT(0)
+           , OrderLineNo    NVARCHAR(5)    NOT NULL
+           )
+
+          INSERT INTO #skuQty
+          SELECT o.OrderKey, od.sku, SUM(li.avaialbleQty), od.openQty,od.OrderLineNumber
           FROM ORDERS o WITH (NOLOCK)
           JOIN ORDERDETAIL od WITH (NOLOCK) on od.OrderKey = o.Orderkey
-          JOIN (SELECT LLI.Storerkey, LLI.sku,LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen as avaialbleQty
+          JOIN ( SELECT LLI.storerkey, LLI.sku, LA.Lottable03, SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) as avaialbleQty
                    FROM LOTxLOCxID LLI (NOLOCK)
                    JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
                    JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
                    JOIN LOT (NOLOCK) ON (LLI.LOT = LOT.LOT)
                    JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
-                   JOIN SKUXLOC SL (NOLOCK) ON (LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc)
-                   JOIN SKU (NOLOCK) ON (LLI.Storerkey = Sku.Storerkey AND LLI.Sku = Sku.Sku)
                    JOIN PUTAWAYZONE PA (NOLOCK) ON LOC.Putawayzone = PA.Putawayzone
                    WHERE LOC.LocationFlag = 'NONE'
                    AND LOC.Status = 'OK'
@@ -307,25 +329,48 @@ BEGIN
                    AND LOC.Facility = @c_Facility
                    AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) > 0
                    AND LLI.STORERKEY = @c_StorerKey
-                   AND pa.ZoneCategory = 'OTHER') li on li.Storerkey = o.storerkey and li.sku = od.sku
+                   AND pa.ZoneCategory = 'OTHER'
+                   GROUP BY LLI.Storerkey, LLI.sku,LA.Lottable03) li ON od.sku = li.sku AND od.Lottable03 = li.Lottable03 AND o.storerkey = li.storerkey
           WHERE o.StorerKey = @c_StorerKey
           AND o.Facility = @c_Facility
           AND o.Type IN ('0','1','2')
           AND o.Status = '0'
           AND o.OrderGroup <> 'XDOCK'
-          AND o.DeliveryDate <= dateadd(hh,48,getdate())
+		  AND o.DeliveryDate <= DATEADD(hh,CASE DATEPART(dw,DATEADD(hh,24,getdate())) WHEN 7 THEN @n_Hrs+48 WHEN 1 THEN @n_Hrs+24 ELSE @n_Hrs END,getdate()) --(TPT001)
           AND o.Priority <> '1'
           ANd od.Lottable03 is NOT NULL
           AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')
           AND (CASE WHEN ISNULL(SequenceNo,0) = 0 OR (SequenceNo = 99999999)
           THEN 1 ELSE SequenceNo END) BETWEEN 1 AND 24
-          AND ISNULL(o.Ecom_Platform,'') <> '3RDParty'
-          group by o.OrderKey,li.avaialbleQty
+          AND ISNULL(o.Ecom_Platform,'') NOT LIKE '3RDParty%'
+          AND NOT EXISTS (
+                   SELECT 1
+                   FROM LOTxLOCxID LLI (NOLOCK)
+                   JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
+                   JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
+                   JOIN LOT (NOLOCK) ON (LLI.LOT = LOT.LOT)
+                   JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
+                   LEFT JOIN PUTAWAYZONE PA (NOLOCK) ON LOC.Putawayzone = PA.Putawayzone
+                   WHERE LOC.LocationFlag = 'NONE'
+                   AND LOC.Status = 'OK'
+                   AND LOT.Status = 'OK'
+                   AND ID.Status = 'OK'
+                   AND LOC.Facility = @c_Facility
+                   AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) > 0
+                   AND LLI.STORERKEY =  @c_StorerKey
+                   AND LLI.Sku = od.sku
+                   GROUP BY LLI.Storerkey, LLI.sku,LA.Lottable03
+				           HAVING COUNT(DISTINCT PA.ZoneCategory) > 1 )
+          GROUP BY o.OrderKey,od.sku,od.openQty,od.OrderLineNumber
           HAVING sum(od.openqty) > 0
+          ORDER BY o.OrderKey
+
+       DECLARE CUR_THIRD_PARTY_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+       SELECT DISTINCT OrderKey, OrderLineNo FROM #skuQty
 
        OPEN CUR_THIRD_PARTY_ORDERKEY
 
-       FETCH NEXT FROM CUR_THIRD_PARTY_ORDERKEY INTO @c_OrderKey, @n_Qty, @n_QtyAvailable
+       FETCH NEXT FROM CUR_THIRD_PARTY_ORDERKEY INTO @c_OrderKey, @c_OrderLineNo
 
        WHILE @@FETCH_STATUS <> -1
        BEGIN
@@ -333,37 +378,64 @@ BEGIN
           BEGIN
             print(@c_Orderkey)
           END
-          EXEC nsp_OrderProcessing_Wrapper
-                @c_Orderkey,
-                '', --@c_oskey
-                'N', -- @c_docarton,
-                'N', -- @c_doroute,
-                '' --@c_tblprefix
-           SELECT @n_err = @@ERROR
-           IF @n_err <> 0
-            BEGIN
-               SELECT @n_continue = 3
-               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 550157
-               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Execute nsp_orderprocessing_wrapper Failed. (msp_BEJ_AutoAllocation)'
-                + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-               GOTO EXIT_SP
-            END
-          IF @n_QtyAvailable > @n_Qty
+
+       IF EXISTS (SELECT 1
+          FROM #skuQty
+          WHERE QtyAvailable < QtyOpen
+          AND OrderKey = @c_Orderkey
+          AND OrderLineNo = @c_OrderLineNo)
           BEGIN
-            UPDATE ORDERS WITH (ROWLOCK)
-            SET Ecom_Platform = '3RDParty'
-            ,SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
-            THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
-            ,TrafficCop = NULL
-            WHERE Orderkey = @c_Orderkey
+              UPDATE ORDERDETAIL WITH (ROWLOCK)
+              SET UserDefine03 = '3RDPartyQty'
+              , TrafficCop = NULL
+              WHERE Orderkey = @c_Orderkey
+              AND OrderLineNumber = @c_OrderLineNo
           END
-
-          FETCH NEXT FROM CUR_THIRD_PARTY_ORDERKEY INTO @c_OrderKey, @n_Qty, @n_QtyAvailable
+       ELSE
+          BEGIN
+              UPDATE ORDERDETAIL WITH (ROWLOCK)
+              SET UserDefine03 = '3RDParty'
+              , TrafficCop = NULL
+              WHERE Orderkey = @c_Orderkey
+              AND OrderLineNumber = @c_OrderLineNo
+          END
+          FETCH NEXT FROM CUR_THIRD_PARTY_ORDERKEY INTO @c_OrderKey, @c_OrderLineNo
        END
-
        CLOSE CUR_THIRD_PARTY_ORDERKEY
        DEALLOCATE CUR_THIRD_PARTY_ORDERKEY
-      END
+
+       DECLARE CUR_THIRD_PARTY_SPLIT_ORDER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+       SELECT DISTINCT OrderKey FROM #skuQty
+
+       OPEN CUR_THIRD_PARTY_SPLIT_ORDER
+
+       FETCH NEXT FROM CUR_THIRD_PARTY_SPLIT_ORDER INTO @c_OrderKey
+
+       WHILE @@FETCH_STATUS <> -1
+       BEGIN
+          IF @b_debug = 1
+          BEGIN
+            print(@c_Orderkey)
+          END
+          EXEC isp_SplitNonThirdPartyOrder
+          @c_OrderKey ,
+          @b_success  OUTPUT,
+          @n_err      OUTPUT,
+          @c_errmsg   OUTPUT
+
+          IF @n_err <> 0 AND ISNULL(@c_errmsg,'') <> ''
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 550159
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+':'+@c_OrderKey +': Execute isp_SplitNotThirdPartOrder Failed. (msp_BEJ_AutoAllocation)'
+               + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+             EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoAllocation'
+            END
+          FETCH NEXT FROM CUR_THIRD_PARTY_SPLIT_ORDER INTO @c_OrderKey
+       END
+       CLOSE CUR_THIRD_PARTY_SPLIT_ORDER
+       DEALLOCATE CUR_THIRD_PARTY_SPLIT_ORDER
+
    END
 EXIT_SP:
     
@@ -396,6 +468,7 @@ EXIT_SP:
    END    
     
 END -- Procedure  
+
 GO
 GRANT EXECUTE ON [dbo].[msp_BEJ_AutoAllocation] TO nSQL
 GO

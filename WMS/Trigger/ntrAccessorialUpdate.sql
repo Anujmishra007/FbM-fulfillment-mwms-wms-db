@@ -1,6 +1,10 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrAccessorialUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrAccessorialUpdate]
+--if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrAccessorialUpdate]') 
+--              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
+--drop trigger [dbo].[ntrAccessorialUpdate]
+--GO
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/  
 /* Trigger: ntrAccessorialUpdate                                        */  
@@ -22,9 +26,10 @@ GO
 /*                                                                      */  
 /* Modifications:                                                       */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 06-Oct-2025  AK01     1.0  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName       */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrAccessorialUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrAccessorialUpdate]  
 ON  [dbo].[Accessorial]   
 FOR UPDATE  
 AS  
@@ -53,8 +58,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2  ) AND NOT UPDATE(EditDate) 
    BEGIN  
       UPDATE Accessorial  
-         SET EditDate = GETDATE(),  
-             EditWho = SUSER_SNAME()
+         SET EditDate = dbo.fnc_GetDate(),  
+             EditWho = dbo.fnc_GetUserName()
         FROM Accessorial, INSERTED  
        WHERE Accessorial.Accessorialkey = INSERTED.Accessorialkey
 
@@ -97,3 +102,4 @@ BEGIN
       RETURN  
    END  
 END  
+

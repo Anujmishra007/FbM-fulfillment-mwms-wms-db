@@ -29,6 +29,7 @@ GO
 /* 2021-08-17   WLChooi  1.1  Bug Fix (WL01)                             */   
 /* 2021-09-08   WLChooi  1.2  DevOps Combine Script                      */   
 /* 2021-09-08   WLChooi  1.2  WMS-17879 - Update Pickdetail.Notes (WL02) */
+/* 2025-10-10   SSA01    1.3  UWP-42248 -Enhanced session management     */
 /*************************************************************************/     
 
 CREATE PROCEDURE [dbo].[ispRLWAV42]        
@@ -254,10 +255,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV42]
       ,  [PickMethod]            [nvarchar](1)     NOT NULL    DEFAULT (' ')  
       ,  [WaveKey]               [nvarchar](10)    NOT NULL    DEFAULT (' ')  
       ,  [EffectiveDate]         [datetime]        NOT NULL    DEFAULT (getdate())  
-      ,  [AddDate]               [datetime]        NOT NULL    DEFAULT (getdate())  
-      ,  [AddWho]                [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())  
-      ,  [EditDate]              [datetime]        NOT NULL    DEFAULT (getdate())  
-      ,  [EditWho]               [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())  
+      ,  [AddDate]               [datetime]        NOT NULL    DEFAULT (getdate())          --(SSA01)
+      ,  [AddWho]                [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())       --(SSA01)
+      ,  [EditDate]              [datetime]        NOT NULL    DEFAULT (getdate())           --(SSA01)
+      ,  [EditWho]               [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())       --(SSA01)
       ,  [TrafficCop]            [nvarchar](1)     NULL  
       ,  [ArchiveCop]            [nvarchar](1)     NULL  
       ,  [OptimizeCop]           [nvarchar](1)     NULL  
@@ -313,8 +314,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV42]
          SET #PickDetail_WIP.TaskdetailKey = '', 
              #PickDetail_WIP.Notes = '',   
              #PickDetail_WIP.Wavekey = @c_Wavekey,   
-             EditWho    = SUSER_SNAME(),  
-             EditDate   = GETDATE(),     
+             EditWho    = dbo.fnc_GetUserName(),          --(SSA01)
+             EditDate   = dbo.fnc_GetDate(),    --(SSA01)
              TrafficCop = NULL  
          WHERE #PickDetail_WIP.Pickdetailkey = @c_curPickdetailkey
          --WL02 E
@@ -762,8 +763,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV42]
       UPDATE WAVE     
       SET TMReleaseFlag = 'Y'             
        ,  TrafficCop = NULL               
-       ,  EditWho = SUSER_SNAME()         
-       ,  EditDate= GETDATE()             
+       ,  EditWho = dbo.fnc_GetUserName()          --(SSA01)
+       ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
       WHERE WAVEKEY = @c_wavekey      
    
       SELECT @n_err = @@ERROR

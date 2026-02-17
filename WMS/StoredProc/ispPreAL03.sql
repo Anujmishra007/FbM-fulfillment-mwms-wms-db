@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 2.4                                                    */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -31,8 +31,16 @@ GO
 /* 28/05/2020  NJOW07   1.6   WMS-13544 Change FIFO to use lottable04   */
 /* 14/09/2020  Leong    1.7   INC1283171 - Bug Fix.                     */
 /* 15/12/2021  NJOW08   1.8   WMS-18573 Lottable07 filtring condition   */
-/* 15/12/2021  NJOW08   1.8   DEVOPS combine script                     */
+/* 15/12/2021  NJOW08   1.8   DEVOPS combine script                     */  
 /* 01/06/2022  CLVN01   1.9   JSM-71556 Add LocationFlag <> HOLD        */
+/* 06/12/2023  NJOW09   2.0   WMS-24370 Add new codelkup condition and  */
+/*                            filtering                                 */
+/* 06/12/2023  NJOW10   2.1   WMS-24373 Add new codelkup condition and  */
+/*                            filtering                                 */              
+/* 25/10/2024  NJOW11   2.2   WMS-26521 lottable03 with ok status is not*/
+/*                            allow allocate from hold loc.             */
+/* 07/07/2025  MICHAEL  2.3   FCR-6166 Alloc by DMG-BOX for Tester(ML01)*/
+/* 17/11/2025  MICHAEL  2.5   FCR-6166 Fix Lottable07 issue (ML02)      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispPreAL03]
@@ -108,12 +116,29 @@ BEGIN
          , @n_SkuGroupShelfLife2 INT --NJOW06
          , @c_SortMode           NVARCHAR(10)='' --NJOW08
          , @c_AllowHOLDLoc       NVARCHAR(1) ='N' --NJOW08
+         , @c_ALLOBYSHSL         NVARCHAR(1) = 'N' --NJOW11
 
          --NJOW04
-   DECLARE @c_CONSIGTAG          NVARCHAR(1)
+   DECLARE @c_CONSIGTAG          NVARCHAR(1) 
          , @c_DMGALLOC           NVARCHAR(1)
          , @c_RTNNOALLOC         NVARCHAR(1)
          , @c_Lottable03Inc      NVARCHAR(50)
+         , @c_SortByHold         NVARCHAR(1) --NJOW09         
+         , @c_Userdefine04       NVARCHAR(40) = '' --NJOW09
+
+--ML01-S
+   DECLARE @c_DmgBoxTester       NVARCHAR(10) = 'N'
+         , @c_SKUGroup           NVARCHAR(10)
+         , @c_DMG_BOX            NVARCHAR(1)  = ''
+
+   IF EXISTS ( SELECT TOP 1 1
+      FROM ORDERS OH WITH (NOLOCK)
+      JOIN CODELKUP CL WITH (NOLOCK) ON CL.ListName = 'PRESTALLOC' AND CL.Code = '*DMGBOX-TESTER' AND CL.Storerkey = OH.Storerkey
+      WHERE OH.Orderkey = @c_Orderkey )
+   BEGIN
+      SET @c_DmgBoxTester = 'Y'
+   END
+--ML01-E
 
    SELECT @c_CONSIGTAG = 'N', @c_DMGALLOC = 'N', @c_RTNNOALLOC = 'N'
 
@@ -147,7 +172,7 @@ BEGIN
                                              AND(CL.Code = OH.Consigneekey)
                                              AND(CL.Storerkey = OH.Storerkey)
             WHERE OH.Orderkey = @c_Orderkey
-            )
+            )   
    BEGIN
         SET @c_RTNNOALLOC = 'Y'
    END
@@ -184,7 +209,8 @@ BEGIN
          ,OD.Sku
          ,Lottable01 = ISNULL(RTRIM(OD.Lottable01),'')
          ,Lottable02 = ISNULL(RTRIM(OD.Lottable02),'')
-         ,Lottable03 = ISNULL(RTRIM(OD.Lottable03),'')
+         ,Lottable03 = CASE WHEN CL4.Code IS NOT NULL THEN 
+                            OH.Userdefine04 ELSE ISNULL(RTRIM(OD.Lottable03),'') END --NJOW09
          ,Lottable04 = ISNULL(OD.Lottable04,'19000101')
          ,Lottable05 = ISNULL(OD.Lottable05,'19000101')
          ,Lottable06 = ISNULL(RTRIM(OD.Lottable06),'')
@@ -203,19 +229,27 @@ BEGIN
          ,PK.Packkey
          ,QtyLeftToFullFill = OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked + OD.ShippedQty )
          ,SKU.Lottable04Label
-         ,MinShelfLife = CASE WHEN ISNUMERIC (ISNULL(RTRIM(SKU.Susr2),'0')) = 1
+         ,MinShelfLife = CASE WHEN ISNUMERIC (ISNULL(RTRIM(SKU.Susr2),'0')) = 1 AND CL4.Code IS NULL --NJOW09
                               THEN ISNULL(RTRIM(SKU.Susr2),'0')
                               ELSE 0
                               END
          ,Pallet = ISNULL(PK.Pallet,0)
          ,Strategykey = SKU.Strategykey --NJOW01
-         ,ConMinShelfLife = ISNULL(CONS.MinShelflife,0)  --NJOW01
-         ,SkuOGShelflife = CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END --NJOW03
-         ,SkuGroupShelfLife = CASE WHEN ISNUMERIC(CL3.Short) = 1 THEN CAST(CL3.Short AS INT)  --NJOW08
-                                   WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END --NJOW06         
-         ,SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 THEN CAST(CL2.Short AS INT) ELSE 0 END --NJOW06          
+         ,ConMinShelfLife = CASE WHEN @c_DmgBoxTester='Y' AND ISNULL(SKU.Strategykey,'')<>'PPDFEFO' AND CL7.Code IS NOT NULL THEN ISNULL(CONS.MinShelflife,0) --ML01
+                                 WHEN CL4.Code IS NULL AND CL5.Code IS NULL THEN ISNULL(CONS.MinShelflife,0) ELSE 0 END --NJOW01  --NJOW09
+         ,SkuOGShelflife = CASE WHEN ISNUMERIC(SKU.Susr2) = 1 AND CL4.Code IS NULL AND CL5.Code IS NULL THEN CAST(SKU.Susr2 AS INT) ELSE 0 END --NJOW03  --NJOW09
+         ,SkuGroupShelfLife = CASE WHEN @c_DmgBoxTester='Y' AND CL.Code2='TESTER' AND ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT)  --ML01
+                                   WHEN ISNUMERIC(CL3.Short) = 1 AND CL4.Code IS NULL AND CL5.Code IS NULL THEN CAST(CL3.Short AS INT)  --NJOW08  --NJOW09
+                                   WHEN ISNUMERIC(CL.Short) = 1 AND CL4.Code IS NULL AND CL5.Code IS NULL THEN CAST(CL.Short AS INT) ELSE 0 END --NJOW06  --NJOW09
+         ,SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 AND CL4.Code IS NULL AND CL5.Code IS NULL THEN CAST(CL2.Short AS INT) ELSE 0 END --NJOW06 --NJOW09
          ,SortMode = ISNULL(CL.Long,'')  --NJOW08
-         ,AllowHoldLoc = CASE WHEN CL3.Code IS NOT NULL THEN 'Y' ELSE 'N' END --NJOW08
+         ,AllowHoldLoc = CASE WHEN (CL3.Code IS NOT NULL OR CL4.Code IS NOT NULL OR CL5.Code IS NOT NULL OR CL6.Code IS NOT NULL OR CL7.Code IS NOT NULL) THEN 'Y' ELSE 'N' END --NJOW08  --NJOW09 --NJOW10 --ML01
+         ,SortByHold = CASE WHEN CL5.Code IS NOT NULL THEN 'Y' ELSE 'N' END --NJOW09
+         ,ISNULL(CL6.Code2,'') --NJOW10
+         ,Userdefine04 = CASE WHEN CL4.Code IS NOT NULL THEN ISNULL(OH.Userdefine04,'') ELSE '' END --NJOW09
+         ,ALLOBYSHSL = CASE WHEN CL5.Code IS NOT NULL THEN 'Y' ELSE 'N' END --NJOW11
+         ,SKU.SKUGroup  --ML01
+         ,DMG_BOX = CASE WHEN CL7.Code IS NULL THEN 'N' ELSE 'Y' END  --ML01
    FROM ORDERS OH      WITH (NOLOCK)
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey  = OD.Orderkey)
    JOIN SKU        SKU WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey)
@@ -244,7 +278,12 @@ BEGIN
                          ) CL2
    OUTER APPLY (SELECT TOP 1 CL4.Code2, CL4.Short, CL4.Code FROM CODELKUP CL4 (NOLOCK) WHERE OH.Storerkey = CL4.Storerkey AND SKU.Busr6 = CL4.Code AND CL4.Listname = 'ALLOBYLTBL' 
                AND (CONS.Secondary = CL4.UDF01 OR CONS.Secondary = CL4.UDF02 OR CONS.Secondary = CL4.UDF03 OR CONS.Secondary = CL4.UDF04 OR CONS.Secondary = CL4.UDF05)
-               AND ISNULL(CONS.Secondary, '') <> '') CL3   --NJOW08                         
+               AND ISNULL(CONS.Secondary, '') <> '') CL3   --NJOW08               
+   OUTER APPLY (SELECT TOP 1 CL05.Code FROM CODELKUP CL05 (NOLOCK) WHERE OH.Storerkey = CL05.Storerkey AND CL05.Listname IN('PRESTALLOC','MDMALLOC') AND CL05.Code = 'ALLOBYLTBL' AND OH.Userdefine04 = CL05.Code2 AND ISNULL(OH.Userdefine04,'') <> '') CL4   --NJOW09  --NJOW10              
+   OUTER APPLY (SELECT TOP 1 CL06.Code FROM CODELKUP CL06 (NOLOCK) WHERE OH.Storerkey = CL06.Storerkey AND CL06.Listname = 'PRESTALLOC' AND CL06.Code = 'ALLOBYSHSL' AND OH.Userdefine03 = CL06.Code2 AND ISNULL(OH.Userdefine03,'') <> '') CL5   --NJOW09               
+   OUTER APPLY (SELECT TOP 1 CL07.Code2, CL07.Code FROM CODELKUP CL07 (NOLOCK) WHERE OH.Storerkey = CL07.Storerkey AND CL07.Listname = 'MDMALLOC' AND CL07.Code = 'BENKING' AND OH.C_Company = CL07.Long AND ISNULL(OH.C_Company,'') <> '') CL6   --NJOW10                  
+   OUTER APPLY (SELECT TOP 1 Code FROM CODELKUP WITH(NOLOCK) WHERE Storerkey=OH.Storerkey AND Listname='PRESTALLOC' AND Code='*DMGBOX-TESTER' AND Code2=SKU.SKUGroup       --ML01
+                AND CONS.Secondary IN (UDF01,UDF02,UDF03,UDF04,UDF05) AND ISNULL(CONS.Secondary,'')<>'') CL7  --ML01
    WHERE OH.Orderkey = @c_Orderkey
    AND   OH.SOStatus <> 'CANC'
    AND   OH.Status < '9'
@@ -286,6 +325,12 @@ BEGIN
                               , @n_SkuGroupShelfLife2 --NJOW06
                               , @c_SortMode --NJOW08
                               , @c_AllowHoldLoc --NJOW08
+                              , @c_SortByHold --NJOW09
+                              , @c_ID --NJOW10
+                              , @c_Userdefine04 --NJOW09
+                              , @c_ALLOBYSHSL --NJOW11
+                              , @c_SKUGroup --ML01
+                              , @c_DMG_BOX --ML01
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       IF @b_debug = 1
@@ -321,34 +366,48 @@ BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable02 = @c_Lottable02'
       END
 
-      SET @c_Lottable03Inc = ''
-
-      IF @c_CONSIGTAG = 'Y' --NJOW04
-         SET @c_Lottable03Inc = '''PER-TAG'',''TAG'''
-
-      IF  @c_DMGALLOC = 'Y' --NJOW04
-          IF @c_Lottable03Inc = ''
-             SET @c_Lottable03Inc = '''DMG-OK'''
-         ELSE
-             SET @c_Lottable03Inc = @c_Lottable03Inc + ',''DMG-OK'''
-
-      IF @c_RTNNOALLOC = 'N' --NJOW04
+      IF @c_Lottable03 <> ''  --NJOW09
       BEGIN
-          IF @c_Lottable03Inc = ''
-             SET @c_Lottable03Inc = '''OK-RTN'''
-         ELSE
-             SET @c_Lottable03Inc = @c_Lottable03Inc + ',''OK-RTN'''
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 = @c_Lottable03'
       END
       ELSE
-      BEGIN  -- Y
-          IF @c_Lottable03Inc = ''
-             SET @c_Lottable03Inc = '''OK-RTN'',''OK'''
+      BEGIN
+         SET @c_Lottable03Inc = ''
+         
+         IF @c_CONSIGTAG = 'Y' --NJOW04
+            SET @c_Lottable03Inc = '''PER-TAG'',''TAG'''
+         
+         IF  @c_DMGALLOC = 'Y' --NJOW04
+             IF @c_Lottable03Inc = ''
+                SET @c_Lottable03Inc = '''DMG-OK'''
+            ELSE
+                SET @c_Lottable03Inc = @c_Lottable03Inc + ',''DMG-OK'''
+         
+         IF @c_RTNNOALLOC = 'N' --NJOW04
+            AND @c_Storerkey <> 'MDM' --NJOW10
+            --AND @c_ALLOBYSHSL = 'N'   --NJOW11			        
+         BEGIN
+             IF @c_Lottable03Inc = ''
+                SET @c_Lottable03Inc = '''OK-RTN''' 
+            ELSE
+                SET @c_Lottable03Inc = @c_Lottable03Inc + ',''OK-RTN'''
+         END
          ELSE
-             SET @c_Lottable03Inc = @c_Lottable03Inc + ',''OK-RTN'',''OK'''
+         BEGIN  -- Y
+             IF @c_Lottable03Inc = ''
+                SET @c_Lottable03Inc = '''OK-RTN'',''OK'''
+            ELSE
+                SET @c_Lottable03Inc = @c_Lottable03Inc + ',''OK-RTN'',''OK'''
+         END
+
+         --ML01-S
+         IF @c_DmgBoxTester='Y' AND @c_SKUGroup = 'TESTER' AND @c_DMG_BOX = 'Y'
+            SET @c_Lottable03Inc = '''DMG-BOX'',''DMG-OK'',''OK'''
+         --ML01-E
+
+         IF @c_Lottable03Inc <> ''
+            SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 IN(' + @c_Lottable03Inc + ') '
       END
-      
-      IF @c_Lottable03Inc <> ''
-         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 IN(' + @c_Lottable03Inc + ') '
 
       IF @n_SkuGroupShelfLife > 0 AND @c_Strategy = 'FEFO' --NJOW06
       BEGIN
@@ -372,7 +431,8 @@ BEGIN
       BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable04 > CONVERT(DATETIME, CONVERT(NVARCHAR(8), DATEADD(day, @n_MinShelfLife, GETDATE()), 112))'
       END
-      ELSE IF @c_Strategy = 'FEFO'
+      ELSE IF @c_Strategy = 'FEFO' 
+             AND ISNULL(@c_Userdefine04,'') = ''  --NJOW09
       BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND DateDiff(Day, GETDATE(), LA.Lottable04) > 0 '  --NJOW03
       END
@@ -407,10 +467,16 @@ BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable06 = @c_Lottable06'
       END
                                      
- 	    IF @c_Lottable07 <> ''
+ 	   IF @c_Lottable07 <> ''
       BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable07 = @c_Lottable07'
       END
+      --ML02-S
+      ELSE IF EXISTS(SELECT TOP 1 1 FROM CODELKUP(NOLOCK) WHERE ListName='ALLOBYLTBL' AND Storerkey=@c_Storerkey AND Code2<>'')
+      BEGIN
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable07 NOT IN (SELECT DISTINCT Code2 FROM CODELKUP(NOLOCK) WHERE ListName=''ALLOBYLTBL'' AND Storerkey=LLI.Storerkey)'
+      END
+      --ML02-E
 
       IF @c_Lottable08 <> ''
       BEGIN
@@ -451,6 +517,15 @@ BEGIN
       BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable15 = CONVERT(DATETIME, CONVERT(NVARCHAR(8), @dt_Lottable15, 112))'
       END
+      
+      IF ISNULL(@c_ID,'') <> '' --NJOW10
+      BEGIN
+         SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LLI.Id = @c_ID '
+      END
+      
+      --NJOW11
+      IF @c_ALLOBYSHSL = 'Y'
+        SET @n_MinShelfLife = 0
 
       SET @c_SQL =
                N'DECLARE CUR_LLI CURSOR FAST_FORWARD READ_ONLY FOR'
@@ -479,9 +554,11 @@ BEGIN
                + CASE WHEN @c_AllowHoldLoc <> 'Y' THEN  --NJOW08
                    ' AND LOC.Locationflag <> ''HOLD'''               
                  ELSE '' END  
-			        --+ ' AND LOC.Locationflag <> ''HOLD''' --CLVN01
-			        + CASE WHEN @c_AllowHoldLoc = 'Y' THEN  --NJOW08			        
+			        --+ ' AND LOC.Locationflag <> ''HOLD''' --CLVN01			        
+			        + CASE WHEN @c_AllowHoldLoc = 'Y' AND @c_ALLOBYSHSL = 'N' THEN  --NJOW08	--NJOW11		        
                   ' AND NOT (LA.Lottable03 IN (''OK-RTN'',''OK'') AND (ID.Status <> ''OK'' OR LOC.Status <> ''OK'' OR LOT.Status <> ''OK'')) '  --NJOW04
+                     WHEN @c_AllowHoldLoc = 'Y' AND @c_ALLOBYSHSL = 'Y' THEN  --NJOW11			        
+                  ' AND NOT (LA.Lottable03 IN (''OK-RTN'',''OK'') AND (ID.Status <> ''OK'' OR LOC.Status <> ''OK'' OR LOT.Status <> ''OK'')) AND NOT(LA.Lottable03 = ''OK'' AND LOC.LocationFlag <> ''NONE'' AND LA.Lottable07 <> ''PPM'')'   --NJOW04 NJOW11
 			          ELSE
                   ' AND NOT (LA.Lottable03 IN (''OK-RTN'',''OK'') AND (ID.Status <> ''OK'' OR LOC.Status <> ''OK'' OR LOT.Status <> ''OK'' OR LOC.LocationFlag <> ''NONE'')) '  --NJOW04
                 END                                 
@@ -490,7 +567,23 @@ BEGIN
                + ' AND LOC.Facility = @c_Facility'
                + ' AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED) > 0'
                + ' ' + @c_AddWhereSQL
-               + ' ORDER BY CASE WHEN LA.Lottable03 IN(''PER-TAG'',''TAG'') THEN 1 WHEN LA.Lottable03 = ''DMG-OK'' THEN 2 WHEN LA.Lottable03 = ''OK'' THEN 3 WHEN LA.Lottable03 = ''OK-RTN'' THEN 4 ELSE 5 END'  --NJOW04
+               + CASE WHEN @c_SortByHold = 'Y' THEN --NJOW09
+--ML01                    ' ORDER BY CASE WHEN LOC.locationflag IN (''NONE'','''') THEN 1 ELSE 2 END, CASE WHEN LA.Lottable03 IN(''PER-TAG'',''TAG'') THEN 1 WHEN LA.Lottable03 = ''DMG-OK'' THEN 2 WHEN LA.Lottable03 = ''OK'' THEN 3 WHEN LA.Lottable03 = ''OK-RTN'' THEN 4 ELSE 5 END'  --NJOW04
+                    ' ORDER BY CASE WHEN LOC.locationflag IN (''NONE'','''') THEN 1 ELSE 2 END,'  --ML01
+                 ELSE
+--ML01                    ' ORDER BY CASE WHEN LA.Lottable03 IN(''PER-TAG'',''TAG'') THEN 1 WHEN LA.Lottable03 = ''DMG-OK'' THEN 2 WHEN LA.Lottable03 = ''OK'' THEN 3 WHEN LA.Lottable03 = ''OK-RTN'' THEN 4 ELSE 5 END'  --NJOW04
+                    ' ORDER BY'  --ML01
+                 END
+--ML01-S
+               +    ' CASE WHEN LA.Lottable03 IN(''PER-TAG'',''TAG'') THEN 10'
+               + CASE WHEN @c_DmgBoxTester='Y' THEN
+                         ' WHEN LA.Lottable03 = ''DMG-BOX'' AND SKU.SkuGroup = ''TESTER'' THEN 15'
+                      ELSE '' END
+               +         ' WHEN LA.Lottable03 = ''DMG-OK'' THEN 20'
+               +         ' WHEN LA.Lottable03 = ''OK'' THEN 30'
+               +         ' WHEN LA.Lottable03 = ''OK-RTN'' THEN 40'
+               +         ' ELSE 50 END'
+--ML01-E
                +        ',  LA.Lottable04' 
                + CASE WHEN @c_Strategy = 'FEFO' AND @c_SortMode = 'LEFO' THEN ' DESC ' ELSE '' END --NJOW08
                +        ',  LA.Lottable05'
@@ -523,6 +616,7 @@ BEGIN
                       + ',@n_ConMinShelfLife INT'
                       + ',@n_SkuGroupShelfLife INT'
                       + ',@n_SkuGroupShelfLife2 INT'
+                      + ',@c_ID           NVARCHAR(18)' --NJOW10
 
       IF @b_debug = 1
       BEGIN
@@ -556,6 +650,7 @@ BEGIN
          ,@n_ConMinShelfLife
          ,@n_SkuGroupShelfLife
          ,@n_SkuGroupShelfLife2
+         ,@c_ID --NJOW10
 
       OPEN CUR_LLI
 
@@ -688,7 +783,13 @@ BEGIN
                                  , @n_SkuGroupShelfLife --NJOW06
                                  , @n_SkuGroupShelfLife2 --NJOW06
                                  , @c_SortMode --NJOW08
-                                 , @c_AllowHoldLoc --NJOW08                              
+                                 , @c_AllowHoldLoc --NJOW08                                
+                                 , @c_SortByHold --NJOW09                
+                                 , @c_ID --NJOW10                           
+                                 , @c_Userdefine04 --NJOW09           
+                                 , @c_ALLOBYSHSL --NJOW11                                                                                                          
+                                 , @c_SKUGroup --ML01
+                                 , @c_DMG_BOX --ML01
    END
 
    QUIT_SP:
@@ -736,5 +837,3 @@ END -- Procedure
 GO
 GRANT EXECUTE ON [dbo].[ispPreAL03] TO nSQL
 GO
-
-

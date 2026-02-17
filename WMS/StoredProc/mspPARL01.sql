@@ -31,7 +31,12 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-05-20  Wan      1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
-/* 2025-06-11                 TM SCE                                    */
+/* 2025-07-16                 TM SCE                                    */
+/* 2025-07-25  Wan01    1.1   UWP-38325 - GBRProd-ASN Release-Putaway   */
+/*                            issue                                     */
+/*                            PerformanceTune to reduce blocking        */
+/*                            Remove WIP update                         */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARL01
@@ -132,16 +137,16 @@ BEGIN
    END
 
    CREATE TABLE #TMP_GRP                                                      
-   (  Loc                NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LogicalLocation    NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  Facility           NVARCHAR(5)    NOT NULL DEFAULT('') 
-   ,  LocationGroup      NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LocationCategory   NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LocLevel           INT            NOT NULL DEFAULT(0)
-   ,  LocAisle           NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LocationRoom       NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  MaxPallet          INT            NOT NULL DEFAULT(0)
-   ,  [Floor]            NVARCHAR(6)    NOT NULL DEFAULT('')
+   (  Loc                  NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LogicalLocation      NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  Facility             NVARCHAR(5)    NOT NULL DEFAULT('') 
+   ,  LocationGroup        NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocationCategory     NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocLevel             INT            NOT NULL DEFAULT(0)
+   ,  LocAisle             NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocationRoom         NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  MaxPallet            INT            NOT NULL DEFAULT(0)
+   ,  [Floor]              NVARCHAR(6)    NOT NULL DEFAULT('')
    )
 
    IF OBJECT_ID('tempdb..#TMP_GRP_STYLE') IS NOT NULL
@@ -150,18 +155,18 @@ BEGIN
    END
 
    CREATE TABLE #TMP_GRP_STYLE                                                       
-   (  RowID              INT            IDENTITY(1,1) PRIMARY KEY
-   ,  Loc                NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LogicalLocation    NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  Facility           NVARCHAR(5)    NOT NULL DEFAULT('') 
-   ,  LocationGroup      NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LocationCategory   NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LocLevel           INT            NOT NULL DEFAULT(0)
-   ,  LocAisle           NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LocationRoom       NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  [Floor]            NVARCHAR(6)    NOT NULL DEFAULT('')
-   ,  MaxPallet          INT            NOT NULL DEFAULT(0)
-   ,  WeightLimit        FLOAT          NOT NULL DEFAULT(0.00)
+   (  RowID                INT            IDENTITY(1,1) PRIMARY KEY
+   ,  Loc                  NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LogicalLocation      NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  Facility             NVARCHAR(5)    NOT NULL DEFAULT('') 
+   ,  LocationGroup        NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocationCategory     NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocLevel             INT            NOT NULL DEFAULT(0)
+   ,  LocAisle             NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocationRoom         NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  [Floor]              NVARCHAR(6)    NOT NULL DEFAULT('')
+   ,  MaxPallet            INT            NOT NULL DEFAULT(0)
+   ,  WeightLimit          FLOAT          NOT NULL DEFAULT(0.00)
    )
 
    IF OBJECT_ID('tempdb..#TMP_OCPGRP_STYLE') IS NOT NULL
@@ -170,19 +175,62 @@ BEGIN
    END
 
    CREATE TABLE #TMP_OCPGRP_STYLE                                                      
-   (  RowID              INT            IDENTITY(1,1)  
-   ,  Loc                NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LogicalLocation    NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  Facility           NVARCHAR(5)    NOT NULL DEFAULT('') 
-   ,  LocationGroup      NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LocationCategory   NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LocLevel           INT            NOT NULL DEFAULT(0)
-   ,  LocAisle           NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  LocationRoom       NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  [Floor]            NVARCHAR(6)    NOT NULL DEFAULT('')
+   (  RowID                INT            IDENTITY(1,1)  
+   ,  Loc                  NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LogicalLocation      NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  Facility             NVARCHAR(5)    NOT NULL DEFAULT('') 
+   ,  LocationGroup        NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocationCategory     NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocLevel             INT            NOT NULL DEFAULT(0)
+   ,  LocAisle             NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocationRoom         NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  [Floor]              NVARCHAR(6)    NOT NULL DEFAULT('')
    )
    CREATE NONCLUSTERED INDEX ix_tmpOCPGRP ON #TMP_OCPGRP_STYLE 
    (LocationGroup, LocationCategory, LocLevel, Loc, LocAisle, LocationRoom, [Floor]);
+
+   IF OBJECT_ID('tempdb..#TMP_PND') IS NOT NULL                                     --(Wan01) - START
+   BEGIN
+      DROP TABLE #TMP_PND;
+   END
+
+   CREATE TABLE #TMP_PND                                                      
+   (  Loc                  NVARCHAR(10)   NOT NULL PRIMARY KEY
+   ,  Facility             NVARCHAR(5)    NOT NULL DEFAULT ('')
+   ,  LogicalLocation      NVARCHAR(10)   NOT NULL DEFAULT ('')      
+   ,  LocationType         NVARCHAR(10)   NOT NULL DEFAULT ('')
+   ,  LocationFlag         NVARCHAR(10)   NOT NULL DEFAULT ('')
+   ,  LocationGroup        NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocationCategory     NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocLevel             INT            NOT NULL DEFAULT(0)
+   ,  LocAisle             NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  LocationRoom         NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  MaxPallet            INT            NOT NULL DEFAULT(0)
+   ,  [Floor]              NVARCHAR(6)    NOT NULL DEFAULT('')
+   )
+
+   CREATE NONCLUSTERED INDEX ix_TMP_PND_1 ON #TMP_PND 
+   (Facility, LocationCategory, LocAisle, [Floor]);
+
+   IF OBJECT_ID('tempdb..#TMP_BEAMLOC') IS NOT NULL                                 
+   BEGIN
+      DROP TABLE #TMP_BEAMLOC;
+   END
+
+   CREATE TABLE #TMP_BEAMLOC                                                      
+   (  LocationGroup        NVARCHAR(10)   DEFAULT ('')
+   ,  LocationCategory     NVARCHAR(10)   DEFAULT ('')
+   ,  LocAisle             NVARCHAR(10)   DEFAULT ('')
+   ,  LocationRoom         NVARCHAR(10)   DEFAULT ('')
+   ,  LocLevel             INT            DEFAULT (0)
+   ,  [Status]             NVARCHAR(10)   DEFAULT ('')
+   ,  StartLoc             NVARCHAR(10)   DEFAULT ('')
+   ,  EndLoc               NVARCHAR(10)   DEFAULT ('')
+   ,  EmptyLocCount        INT            DEFAULT (1)
+   ,  EmptyLPNCount        INT            DEFAULT (1)
+   ,  LocCount             INT            DEFAULT (1)
+   ,  TotalPalletWeights   FLOAT          DEFAULT (0.00)
+   )                                                                                --(Wan01) - END
    
    IF EXISTS ( SELECT 1 FROM RECEIPT r (NOLOCK)
                WHERE r.ReceiptKey = @c_ReceiptKey
@@ -195,13 +243,13 @@ BEGIN
       GOTO QUIT_SP
    END
   
-   IF EXISTS ( SELECT 1 FROM RECEIPTDETAIL rd (NOLOCK)                              --2025-06-11  
-               WHERE rd.ReceiptKey = @c_ReceiptKey  
-               AND   rd.PutawayLoc = 'WIP'
-              )  
-   BEGIN  
-       GOTO QUIT_SP 
-   END
+   --IF EXISTS ( SELECT 1 FROM RECEIPTDETAIL rd (NOLOCK)                            --(Wan01) --2025-06-11  
+   --            WHERE rd.ReceiptKey = @c_ReceiptKey  
+   --            AND   rd.PutawayLoc = 'WIP'
+   --           )  
+   --BEGIN  
+   --    GOTO QUIT_SP 
+   --END
    
    WHILE @@TRANCOUNT > 0
    BEGIN
@@ -241,8 +289,8 @@ BEGIN
       UPDATE RECEIPTDETAIL WITH (ROWLOCK)
          SET PutawayLoc = ''
             ,TrafficCop = NULL
-            ,EditDate = GETDATE()
-            ,EditWho  = SUSER_SNAME()
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+            ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
       WHERE ReceiptKey = @c_ReceiptKey
       AND   ReceiptLineNumber = @c_ReceiptLineNumber
 
@@ -273,29 +321,49 @@ BEGIN
                         , LocationGroup, LocationCategory, LocLevel, LocAisle          
                         , LocationRoom, [Floor], MaxPallet
                         )
-   SELECT loc = MIN(CASE WHEN l.LocationRoom = '' THEN l.Loc ELSE '' END)
-         ,LogicalLocation = MIN(l.LogicalLocation) 
+   SELECT loc = MIN(CASE WHEN ISNULL(l.LocationRoom,'') = '' THEN l.Loc ELSE '' END)
+         ,LogicalLocation = ISNULL(MIN(l.LogicalLocation),'') 
          ,l.Facility
-         ,l.LocationGroup
+         ,LocationGroup = ISNULL(l.LocationGroup,'')
          ,l.LocationCategory
          ,l.LocLevel
-         ,l.LocAisle
-         ,l.LocationRoom
-         ,l.[Floor]
-         ,MaxPallet = SUM(l.MaxPallet)
+         ,LocAisle = ISNULL(l.LocAisle,'')
+         ,LocationRoom = ISNULL(l.LocationRoom,'')
+         ,[Floor] = ISNULL(l.[Floor],'')
+         ,MaxPallet = ISNULL(SUM(l.MaxPallet),0)
    FROM LOC l (NOLOCK)
    WHERE l.Facility = @c_Facility
    AND   l.LocationFlag IN ('', 'NONE')
    AND   l.[Status] = 'OK'
    AND   l.MaxPallet > 0
-   GROUP BY CASE WHEN l.LocationRoom = '' THEN l.Loc ELSE '' END
+   GROUP BY CASE WHEN ISNULL(l.LocationRoom,'') = '' THEN l.Loc ELSE '' END
          ,  l.Facility
-         ,  l.LocationGroup
+         ,  ISNULL(l.LocationGroup,'')
          ,  l.LocationCategory
-         ,  l.LocAisle
-         ,  l.[Floor]
+         ,  ISNULL(l.LocAisle,'')
+         ,  ISNULL(l.[Floor],'')
          ,  l.LocLevel
-         ,  l.LocationRoom
+         ,  ISNULL(l.LocationRoom,'')
+
+   INSERT INTO #TMP_PND ( Loc, LogicalLocation, Facility, LocationType, LocationFlag   --(Wan01)     
+                        , LocationGroup, LocationCategory, LocLevel, LocAisle          
+                        , LocationRoom, [Floor], MaxPallet
+                        )
+   SELECT l.loc  
+         ,l.LogicalLocation 
+         ,l.Facility
+         ,l.LocationType
+         ,l.LocationFlag
+         ,LocationGroup = ISNULL(l.LocationGroup,'')
+         ,l.LocationCategory
+         ,l.LocLevel
+         ,LocAisle = ISNULL(l.LocAisle,'')
+         ,LocationRoom = ISNULL(l.LocationRoom,'')
+         ,[Floor] = ISNULL(l.[Floor],'')
+         ,MaxPallet = ISNULL(l.MaxPallet,0)
+   FROM LOC l (NOLOCK)
+   WHERE l.Facility = @c_Facility
+   AND   l.LocationCategory = 'PNDIN'
 
    INSERT INTO @TMP_PA_CL (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
    SELECT CODELKUP.Listname   
@@ -377,7 +445,6 @@ BEGIN
    AND CODELKUP.Storerkey = @c_Storerkey
    ORDER BY CODELKUP.Code
 
-
    SET @CUR_PAID = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT rd.ReceiptKey
          ,rd.Storerkey
@@ -429,13 +496,13 @@ BEGIN
       SET @c_FinalLoc = ''
       SET @c_LocationCategory_F = ''
       
-      BEGIN TRAN                                                                    --2025-06-11
-      UPDATE RECEIPTDETAIL WITH (ROWLOCK)
-      SET PutawayLoc = 'WIP'
-         ,TrafficCop = NULL
-      WHERE Receiptkey = @c_Receiptkey
-      AND ToLoc = @c_FromLoc 
-      AND ToID  = @c_FromID
+      --BEGIN TRAN                                                                  --(Wan01)  --2025-06-11
+      --UPDATE RECEIPTDETAIL WITH (ROWLOCK)
+      --SET PutawayLoc = 'WIP'
+      --   ,TrafficCop = NULL
+      --WHERE Receiptkey = @c_Receiptkey
+      --AND ToLoc = @c_FromLoc 
+      --AND ToID  = @c_FromID
 
       IF @@ERROR <> 0  
       BEGIN  
@@ -531,6 +598,7 @@ BEGIN
                                        AND lg.Code = s.Style
          WHERE rd.ToLoc = @c_FromLoc
          AND   rd.ToID  = @c_FromID
+         AND   rd.ReceiptKey = @c_ReceiptKey                                        --(Wan01)
          GROUP BY lg.Code
                ,  lg.Long 
                ,  lg.UDF01
@@ -656,10 +724,10 @@ BEGIN
                                         AND og.LocationRoom = l.LocationRoom
                                         AND og.[Floor]  = l.[Floor]
                                         AND og.Loc      = l.Loc 
-         LEFT OUTER JOIN LOC pnd (NOLOCK) ON pnd.Facility = l.Facility
-                                         AND pnd.LocationCategory = 'PNDIN'
-                                         AND pnd.LocAisle = l.LocAisle
-                                         AND pnd.[Floor]  = l.[Floor]
+         LEFT OUTER JOIN #TMP_PND pnd ON  pnd.Facility = l.Facility
+                                      AND pnd.LocationCategory = 'PNDIN'
+                                      AND pnd.LocAisle = l.LocAisle
+                                      AND pnd.[Floor]  = l.[Floor]
          WHERE og.RowID IS NULL
          AND   NOT EXISTS (SELECT 1 FROM LotxLocxID lli (NOLOCK)
                            WHERE lli.Storerkey =  @c_Storerkey
@@ -687,6 +755,7 @@ BEGIN
             IF @b_Debug = 1
             BEGIN
                PRINT   '@c_FromID : '+ @c_FromID
+                     + ', @c_LocationGroups: '+ @c_LocationGroups                 
                      + ', @c_LocationCategory: '+ @c_LocationCategory
                      + ', @c_LocationRoom: ' + @c_LocationRoom 
                      + ', @c_LocAisle:' + @c_LocAisle 
@@ -700,21 +769,50 @@ BEGIN
 
             IF @c_LocationRoom > ''  
             BEGIN
+               TRUNCATE TABLE #TMP_BEAMLOC;
+
+               INSERT INTO #TMP_BEAMLOC  
+                  (  LocationGroup         
+                  ,  LocationCategory      
+                  ,  LocAisle              
+                  ,  LocationRoom          
+                  ,  LocLevel              
+                  ,  [Status]              
+                  ,  StartLoc              
+                  ,  EndLoc                
+                  ,  EmptyLocCount         
+                  ,  EmptyLPNCount         
+                  ,  LocCount              
+                  ,  TotalPalletWeights
+                  )
+               SELECT 
+                     bl.LocationGroup         
+                  ,  bl.LocationCategory      
+                  ,  bl.LocAisle              
+                  ,  bl.LocationRoom          
+                  ,  bl.LocLevel              
+                  ,  bl.[Status]              
+                  ,  bl.StartLoc              
+                  ,  bl.EndLoc                
+                  ,  bl.EmptyLocCount         
+                  ,  bl.EmptyLPNCount         
+                  ,  bl.LocCount              
+                  ,  bl.TotalPalletWeights
+               FROM dbo.fnc_GetBeamLoc(@c_Storerkey, @c_Facility
+                                    ,  @c_LocationGroups, @c_LocationCategory, @c_LocAisle
+                                    ,  @c_LocationRoom,  @n_LocLevel) bl 
+                                       
                IF @b_Debug = 2
                BEGIN
-                  SELECT TOp 5 l.Loc, bl.EmptyLPNCount, bl.LocCount, bl.Status
-                  FROM dbo.fnc_GetBeamLoc(@c_Storerkey, @c_Facility
-                                       ,  @c_LocationGroups, @c_LocationCategory, @c_LocAisle, @c_LocationRoom
-                                       ,  @n_LocLevel) bl 
+                  SELECT TOP 5 l.Loc, bl.EmptyLPNCount, bl.LocCount, bl.Status
+                  FROM #TMP_BEAMLOC bl 
                   JOIN LOC l (NOLOCK) ON l.Loc = bl.StartLoc
                   WHERE bl.TotalPalletWeights + @n_GrossWgt_P <= @n_WeightLimit
                   ORDER BY l.LogicalLocation
                END
                
                SELECT TOP 1 @c_FinalLoc = l.Loc
-               FROM dbo.fnc_GetBeamLoc(@c_Storerkey, @c_Facility
-                                          , @c_LocationGroups, @c_LocationCategory, @c_LocAisle, @c_LocationRoom
-                                          , @n_LocLevel) bl 
+               FROM #TMP_BEAMLOC bl 
                JOIN LOC l (NOLOCK) ON l.Loc = bl.StartLoc
                WHERE bl.TotalPalletWeights + @n_GrossWgt_P <= @n_WeightLimit
                AND   bl.LocCount >= @n_NoOfLoc
@@ -796,6 +894,7 @@ BEGIN
          END
       END
 
+      BEGIN TRAN                                                                    --(Wan01) 
       IF @n_Continue = 1
       BEGIN
          EXECUTE nspg_GetKey
@@ -832,7 +931,7 @@ BEGIN
             
             SELECT TOP 1 
                    @c_Putawayzone   = l.PutawayZone
-                  ,@c_LocationGroup = l.LocationGroup
+                  ,@c_LocationGroup = ISNULL(l.LocationGroup,'')                    --2025-07-16
                   ,@c_LocationCategory = l.LocationCategory
             FROM dbo.LOC l (NOLOCK)
             WHERE Loc = @c_ToLoc
@@ -934,7 +1033,7 @@ BEGIN
                   WHERE rd.ReceiptKey = @c_ReceiptKey
                   AND   rd.ToLoc= @c_FromLoc
                   AND   rd.ToID = @c_FromID
-                  AND   rd.PutawayLoc = 'WIP'
+                  AND   rd.PutawayLoc = ''                                          --(Wan01)
                   ORDER BY rd.ReceiptKey
                         ,  rd.ReceiptLineNumber
 
@@ -947,8 +1046,8 @@ BEGIN
                      UPDATE RECEIPTDETAIL WITH (ROWLOCK)
                         SET PutawayLoc = @c_FinalLoc
                            ,TrafficCop = NULL
-                           ,EditDate = GETDATE()
-                           ,EditWho  = SUSER_SNAME()
+                           ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+                           ,EditWho  = dbo.fnc_GetUserName()         --(SSA01)
                      WHERE ReceiptKey = @c_ReceiptKey
                      AND   ReceiptLineNumber = @c_ReceiptLineNumber
 
@@ -1001,7 +1100,7 @@ BEGIN
       ELSE IF @n_Continue = 1 
       BEGIN
          SET @n_NoOfTasks = @n_NoOfTasks + 1                                  --2025-06-03
-         IF @@TRANCOUNT > 0                                                   
+         WHILE @@TRANCOUNT > 0                                                --(Wan01)                                     
          BEGIN
             COMMIT TRAN
          END
@@ -1036,6 +1135,16 @@ BEGIN
    BEGIN
       DROP TABLE #TMP_OCPGRP_STYLE;
    END
+
+   IF OBJECT_ID('tempdb..#TMP_PND') IS NOT NULL                                     --(Wan01) - START
+   BEGIN
+      DROP TABLE #TMP_PND;
+   END
+   
+   IF OBJECT_ID('tempdb..#TMP_BEAMLOC') IS NOT NULL
+   BEGIN
+      DROP TABLE #TMP_BEAMLOC;
+   END                                                                              --(Wan01) - END
 
    IF @n_Err_rv > 0
    BEGIN

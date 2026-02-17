@@ -82,6 +82,7 @@ GO
 /* 2024-01-29 2.2  Wan02    UWP-14379-Implement pre-save ASN standard   */
 /*                          validation check                            */
 /* 2024-07-02 2.3  Inv Team UWP-17135 - Migrate Inbound Door booking    */
+/* 2025-10-06 2.4  AK01     UWP-42143 Data Audit                        */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER ntrReceiptHeaderAdd
@@ -348,7 +349,7 @@ END
 
 IF @n_continue=1 OR @n_continue=2
 BEGIN
-   UPDATE RECEIPT SET TrafficCop = NULL, AddDate = GETDATE(), AddWho=SUSER_SNAME(), EditDate = GETDATE(), EditWho=SUSER_SNAME() 
+   UPDATE RECEIPT SET TrafficCop = NULL, AddDate = dbo.fnc_GetDate(), AddWho=dbo.fnc_GetUserName(), EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName() 
    FROM RECEIPT,inserted
    WHERE RECEIPT.ReceiptKey=inserted.ReceiptKey
    SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -962,6 +963,7 @@ END
 /* Interface Trigger Points Calling Process - (End)     */  
 /********************************************************/  
 
+   
       /* #INCLUDE <TRRHA2.SQL> */
 IF @n_continue=3  -- Error Occured - Process And Return
 BEGIN

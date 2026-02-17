@@ -19,6 +19,7 @@ GO
 /* Date        Rev  Author    Purposes                                  */
 /* 2024-03-08  1.0  NLT013    UWP-16452 Created                         */
 /* 2024-05-16  1.1  NLT013    UWP-19518 Ability to config task priority */
+/* 2024-10-10  1.1  SSA01    UWP-42248 -Enhanced session management     */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_VNAPalletPickConfirm] (
@@ -174,8 +175,8 @@ BEGIN
          UPDATE dbo.PickDetail WITH (ROWLOCK) SET
             Status = @cPickedStatus,
             DropID = CASE WHEN @cID = '' THEN DropID ELSE @cID END,
-            EditDate = GETDATE(),
-            EditWho  = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),   --(SSA01)
+            EditWho  = dbo.fnc_GetUserName()        --(SSA01)
          WHERE PickDetailKey = @cPickDetailKey
 
          IF @@ERROR <> 0
@@ -196,8 +197,8 @@ BEGIN
          UPDATE dbo.PickDetail WITH (ROWLOCK) SET
             Status = @cPickedStatus,
             DropID = CASE WHEN @cID = '' THEN DropID ELSE @cID END,
-            EditDate = GETDATE(),
-            EditWho  = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+            EditWho  = dbo.fnc_GetUserName()      --(SSA01)
          WHERE PickDetailKey = @cPickDetailKey
 
          IF @@ERROR <> 0
@@ -222,8 +223,8 @@ BEGIN
                Status = '4',
                TaskDetailKey = '',
                TrafficCop = NULL,
-               EditDate = GETDATE(),
-               EditWho  = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+               EditWho  = dbo.fnc_GetUserName()     --(SSA01)
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
             BEGIN
@@ -303,8 +304,8 @@ BEGIN
                QTY = @nQTY_Bal,
                DropID = CASE WHEN @cID = '' THEN DropID ELSE @cID END,
                Trafficcop = NULL,
-               EditDate = GETDATE(),
-               EditWho  = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+               EditWho  = dbo.fnc_GetUserName()     --(SSA01)
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
             BEGIN
@@ -316,8 +317,8 @@ BEGIN
             -- Confirm orginal PickDetail with exact QTY
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                Status = @cPickedStatus,
-               EditDate = GETDATE(),
-               EditWho  = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+               EditWho  = dbo.fnc_GetUserName()      --(SSA01)
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
             BEGIN
@@ -331,8 +332,8 @@ BEGIN
                Status = '4',
                TaskDetailKey = '',
                TrafficCop = NULL,
-               EditDate = GETDATE(),
-               EditWho  = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+               EditWho  = dbo.fnc_GetUserName()     --(SSA01)
             WHERE PickDetailKey = @cNewPickDetailKey
             IF @@ERROR <> 0
             BEGIN
@@ -390,7 +391,7 @@ BEGIN
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
       Status            = @cPickConfirmStatus, -- Closed
       EndTime           = GETDATE(),
-      EditDate          = GETDATE(),
+      EditDate          = dbo.fnc_GetDate(),    --(SSA01)
       EditWho           = @cUserName,
       Trafficcop        = NULL,
       StatusMsg         = '',

@@ -1,6 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = N'ntrSHIFTUpdate' AND type = 'TR')
-    DROP TRIGGER ntrSHIFTUpdate
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -35,8 +33,9 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 28-Oct-2013  TLTING    1.1   Review Editdate column update           */
+/* 06-Oct-2025  AK01      1.2   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
-CREATE TRIGGER [dbo].[ntrSHIFTUpdate] 
+CREATE OR ALTER TRIGGER [dbo].[ntrSHIFTUpdate] 
 ON  [dbo].[SHIFT] 
 FOR UPDATE 
 AS 
@@ -67,8 +66,8 @@ SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT, @b_debug = 0
 IF ( @n_continue = 1 OR @n_continue= 2 ) AND NOT UPDATE(EditDate)
 BEGIN
      UPDATE SHIFT
-        SET EditWho = SUSER_SNAME(),
-             EditDate = GetDate()
+        SET EditWho = dbo.fnc_GetUserName(),
+             EditDate = dbo.fnc_GetDate()
      FROM SHIFT, INSERTED
     WHERE SHIFT.Sequence = INSERTED.Sequence
    SELECT @n_err = @@ERROR
@@ -108,4 +107,5 @@ BEGIN
    END
    RETURN
 END
+
 

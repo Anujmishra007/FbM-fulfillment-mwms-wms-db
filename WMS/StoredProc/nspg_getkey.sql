@@ -33,6 +33,8 @@ GO
 /* 18-Feb-2019  tlting     1.17 NewGetKeySeq Entry                      */
 /* 17-Jun-2019  Shong      1.18 Add EditDate column                     */
 /* 21-Jan-2023  Leong      1.19 JSM-123320 - Revise sequence batch key  */
+/* 02-Dec-2024  TLTING02   1.20 Sequence batch should return first value*/
+/* 24-Sep-2025  tlting     1.17 Add WorkOrderSeqKey                     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspg_GetKey]
@@ -64,6 +66,12 @@ SET @n_batchCnt = 0
 SELECT @n_starttcnt=@@TRANCOUNT, @n_continue = 1, @b_success = 0, @n_err = 0, @c_errmsg = ''
 
 BEGIN TRANSACTION
+	
+IF @KeyName = 'WorkOrder'
+BEGIN
+	 SET @KeyName =  'WorkOrderSeqKey'
+END	
+	
 
 IF EXISTS ( SELECT 1 FROM sys.sequences (NOLOCK) WHERE name = @KeyName  )
 BEGIN
@@ -219,8 +227,9 @@ BEGIN
       SET @n_batchCnt = @n_batch - 1
       WHILE @n_batchCnt > 0
       BEGIN
-         IF @KeyName = 'GroupKey'-- JSM-123320
-         BEGIN
+	     -- TLTING02
+         --IF @KeyName = 'GroupKey'-- JSM-123320
+         --BEGIN
             EXEC dbo.[nspg_GetKey2]
               @KeyName
             , ''
@@ -231,20 +240,20 @@ BEGIN
             , @c_errmsg   OUTPUT
             , @b_resultset
             , 1
-         END
-         ELSE
-         BEGIN
-            EXEC dbo.[nspg_GetKey2]
-              @KeyName
-            , ''
-            , @fieldlength
-            , @keystring OUTPUT
-            , @b_Success OUTPUT
-            , @n_err     OUTPUT
-            , @c_errmsg  OUTPUT
-            , @b_resultset
-            , 1
-         END
+         --END
+         --ELSE
+         --BEGIN
+         --   EXEC dbo.[nspg_GetKey2]
+         --     @KeyName
+         --   , ''
+         --   , @fieldlength
+         --   , @keystring OUTPUT
+         --   , @b_Success OUTPUT
+         --   , @n_err     OUTPUT
+         --   , @c_errmsg  OUTPUT
+         --   , @b_resultset
+         --   , 1
+         --END
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3

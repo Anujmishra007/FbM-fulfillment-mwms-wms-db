@@ -24,6 +24,10 @@
 /*                         PackSerialNo                                 */
 /* 25-Feb-2025    CSC166   #FCR-3165 - Save UserID Into                 */
 /*                         PackHeader.AddWho                            */
+/* 04-Jul-2025    Sean     #FCR-6199 - Packing SKU Decode               */
+/* 23-Jul-2025    Sean01     #UWP-38247 - Compatible with Login User    */
+/* 20-Aug-2025    Jiawen     #UWP-39649 - Add CCTV Configs              */
+/* 15-Sep-2025    JWF011   #UWP-41185 - Update OrderKey for CCTV Config */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU](
      @b_Debug           INT            = 0
@@ -57,8 +61,8 @@ BEGIN
          , @n_IsExists                    INT            = 0
 
          , @c_StorerKey                   NVARCHAR(15)   = ''
-         , @c_ScanSKULabel                NVARCHAR(200)  = ''
-         , @c_SKU                         NVARCHAR(200)  = ''
+         , @c_ScanSKULabel                NVARCHAR(500)  = ''
+         , @c_SKU                         NVARCHAR(500)  = ''
          , @c_NewSKU                      NVARCHAR(20)   = ''
          , @c_Facility                    NVARCHAR(15)   = ''
                   
@@ -110,6 +114,9 @@ BEGIN
          , @c_OrderMode                   NVARCHAR(1)    = ''
          , @b_ScanQRInSKULabel            BIT            = 0         --Alex02
 
+   DECLARE @c_EPACKConfigJSON             NVARCHAR(4000) = ''
+   DECLARE @n_OrderCount                  INT            = 0
+
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
    SET @c_ErrMsg                          = ''
@@ -147,28 +154,34 @@ BEGIN
       ,  [Value]           NVARCHAR(120)  NULL
    )
 
-   DECLARE @DBUserName NVARCHAR(100)	--#FCR-3165
-   SET @DBUserName = @c_UserID			--#FCR-3165
+   -- UWP-38247 - Compatible with Login User S
 
-   --Change Login User
-   SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @DBUserName OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
+   DECLARE @DBUserName NVARCHAR(100),
+        @b_sp_ExecuteAs BIT
 
-   --#FCR-3165
-   IF @DBUserName LIKE '%' + @c_UserID + '%'
+   EXEC [API].[isp_ECOMP_ValidateAndSetUser]
+        @c_UserID      = @c_UserID,
+        @c_DBUserName  = @DBUserName OUTPUT,
+        @b_ExecuteAs   = @b_sp_ExecuteAs OUTPUT,
+        @b_Success     = @b_sp_Success OUTPUT,
+        @n_ErrNo       = @n_sp_err OUTPUT,
+        @c_ErrMsg      = @c_sp_errmsg OUTPUT;
+
+   IF @b_sp_Success = 0
    BEGIN
-    EXECUTE AS LOGIN = @DBUserName    --@c_UserID 
-    SET @c_UserID = @DBUserName
-   END
-   
-       
-   IF @n_sp_err <> 0     
-   BEGIN      
       SET @b_Success = 0      
       SET @n_ErrNo = @n_sp_err      
       SET @c_ErrMsg = @c_sp_errmsg     
-      GOTO QUIT      
-   END  
+      GOTO QUIT
+   END
+
+   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+      EXECUTE AS LOGIN = @DBUserName
+      SET @c_UserID = @DBUserName
+   END
+
+   -- UWP-38247 - Compatible with Login User E    
 
    SELECT @c_StorerKey     = ISNULL(RTRIM(StorerKey   ), '')
          ,@c_Facility      = ISNULL(RTRIM(Facility    ), '')
@@ -338,7 +351,7 @@ BEGIN
       INSERT INTO [dbo].[PackHeader] (PickSlipNo, StorerKey, [Route], OrderKey, OrderRefNo, LoadKey, ConsigneeKey, [Status], CartonGroup, TaskBatchNo, ComputerName, PackStatus, EstimateTotalCtn, AddWho)
       VALUES(@c_PickSlipNo, @c_StorerKey, @c_Route, '', @c_OrderRefNo, @c_LoadKey, @c_ConsigneeKey, '0', @c_CartonGroup, @c_TaskBatchID, @c_ComputerName, '0', 0, @c_UserID)
    END
-   
+
    INSERT INTO @t_PackingRules
    EXEC [API].[isp_ECOMP_GetPackingRules]
         @c_StorerKey                = @c_StorerKey
@@ -373,6 +386,32 @@ BEGIN
       PRINT '@b_ScanQRInSKULabel = ' + CONVERT(NVARCHAR(2), @b_ScanQRInSKULabel)
    END
 
+   --Sean S
+   SET @b_sp_Success = 1
+   EXEC [API].[isp_ECOMP_SKUDecode_PostAction_Wrapper]
+         @b_Debug          = @b_Debug
+      ,  @c_PickSlipNo     = @c_PickSlipNo
+      ,  @n_CartonNo       = @n_CartonNo
+      ,  @c_OrderKey       = @c_OrderKey
+      ,  @c_Storerkey      = @c_Storerkey
+      ,  @c_SKU            = @c_ScanSKULabel
+      ,  @b_Success        = @b_sp_Success   OUTPUT  
+      ,  @n_Err            = @n_sp_err       OUTPUT  
+      ,  @c_ErrMsg         = @c_sp_errmsg    OUTPUT  
+
+   IF @b_sp_Success = 0
+   BEGIN
+      SET @n_Continue = 3 
+      SET @n_ErrNo = @n_sp_err
+      SET @c_ErrMsg = @c_sp_errmsg
+      GOTO QUIT
+   END
+   ELSE IF @b_sp_Success = 1
+   BEGIN
+      GOTO SKIP_PACKDETAIL
+   END
+   --Sean E
+
    --Insert/Update PackDetail ONLY after Scan serial number/lottable.
    IF NOT (@c_IsSerialNoMandatory = '1' OR @c_IsLottableMandatory = '1') OR @b_ScanQRInSKULabel = 1
    BEGIN
@@ -396,6 +435,8 @@ BEGIN
          VALUES (@c_PickSlipNo, @n_CartonNo, '', '00001', @c_StorerKey, @c_SKU, @c_SerialNo, 1)
       END
    END
+
+   SKIP_PACKDETAIL:
 
    --Get Default CartonType
    EXEC [API].[isp_ECOMP_GetDefaultCartonType]
@@ -421,6 +462,42 @@ BEGIN
       SELECT * FROM dbo.PackSerialNo WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo
    END
  
+   --CCTV Configs Start
+   IF @c_OrderKey = ''
+   BEGIN
+      IF @c_PickSlipNo <> '' 
+      BEGIN 
+         SELECT TOP 1 @c_OrderKey = ISNULL(RTRIM(OrderKey), '')
+         FROM dbo.PackHeader (NOLOCK) 
+         WHERE PickSlipNo = @c_PickSlipNo
+      END
+
+      IF @c_OrderKey = ''
+      BEGIN
+         SELECT
+            @n_OrderCount = COUNT(*),
+            @c_OrderKey = CASE
+                              WHEN COUNT(*) = 1 THEN MAX(ISNULL(RTRIM(OrderKey), ''))
+                              ELSE ''
+                          END
+         FROM dbo.PackTaskDetail (NOLOCK) 
+         WHERE TaskBatchNo = @c_TaskBatchID
+         AND SKU = @c_SKU
+      END
+   END
+
+   EXEC [API].[isp_ECOMP_GetEPackConfigs]
+         @c_StorerKey       = @c_StorerKey   
+      ,  @c_Facility        = @c_Facility    
+      ,  @c_UserId          = @c_UserID      
+      ,  @c_ComputerName    = @c_ComputerName
+      ,  @c_PackMode        = @c_OrderMode    
+      ,  @c_TaskBatchID     = @c_TaskBatchID 
+      ,  @c_OrderKey        = @c_OrderKey    
+      ,  @c_DropID          = @c_DropID      
+      ,  @c_EPACKConfigJSON = @c_EPACKConfigJSON OUTPUT
+   --CCTV Configs End
+
    --when qr code display?
    SET @c_ResponseString = ISNULL(( 
                               SELECT TOP 1
@@ -452,12 +529,21 @@ BEGIN
                                        WHERE PickSlipNo = @c_PickSlipNo
                                        FOR JSON PATH 
                                      ) AS 'PackTask.CartonPackedSKU'
+                                    ,(
+                                       JSON_QUERY(@c_EPACKConfigJSON)
+                                     ) As 'EPACKConfig'
                               FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                            ), '')
 
    
 
    QUIT:
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      
@@ -483,4 +569,7 @@ BEGIN
       END      
       RETURN      
    END
-END -- Procedure  
+END -- Procedure
+GO
+GRANT EXECUTE ON [API].[isp_ECOMP_API_ScanSKU] TO NSQL
+GO

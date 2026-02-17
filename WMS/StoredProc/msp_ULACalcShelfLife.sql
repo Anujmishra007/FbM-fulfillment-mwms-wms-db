@@ -24,8 +24,9 @@ GO
 /*                            Code Calculation Function                          */
 /* 2025-02-27  Wan02    1.2   UWP-30082[FCR-2681] - ShelfLife Code Base on       */
 /*                            Configurable SkuGroup                              */
-/* 2025-05-06  VIBIN01   1.3  FCR - 4255 - Exclude the SLCODE ML14 and ML46      */
-/* 2025-05-27  PPA371   1.4  FCR - 4006 - Added check if storer config is enabled */
+/* 2025-05-06  VIBIN01  1.3   FCR - 4255 - Exclude the SLCODE ML14 and ML46      */
+/* 2025-05-27  PPA371   1.4   FCR - 4006 - Added check if storer config is enable*/
+/* 2025-09-18  MICHAEL  1.5   FCR-7927 - Exclude ML18 and ML13 from Hold (ML01)  */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ULACalcShelfLife] (
@@ -383,10 +384,10 @@ BEGIN
                           SET @c_ToLottable06 = @c_Lottable06
 
 
-						IF (@c_CustomField <> '1' AND @c_ShelfLife IN ('ML13', 'ML18'))  --(PPA371) begin
-						BEGIN
-							SET @c_ToLottable06 = '1'
-						END										                         --(PPA371) end
+--ML01						IF (@c_CustomField <> '1' AND @c_ShelfLife IN ('ML13', 'ML18'))  --(PPA371) begin
+--ML01						BEGIN
+--ML01							SET @c_ToLottable06 = '1'
+--ML01						END										                         --(PPA371) end
 
                          BEGIN TRAN;
                           INSERT INTO TransferDetail (

@@ -65,6 +65,7 @@ GO
 /*                        - Moved existing trigger points to perform in */  
 /*                          sub-sp isp_ITF_ntrPO. - (YokeBeen02)        */  
 /* 24-May-2023  WLChooi   WMS-22565 - Enhance UPDATEEXTPO (WL01)        */
+/* 06-Oct-2025  AK01      UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/  
   
 CREATE OR ALTER TRIGGER ntrPOHeaderUpdate  
@@ -136,7 +137,7 @@ BEGIN
          AND NOT UPDATE(EditDate)  
    BEGIN  
       UPDATE PO WITH (ROWLOCK)  
-         SET EditDate = GETDATE(), EditWho = SUSER_SNAME(), TrafficCop = NULL  
+         SET EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), TrafficCop = NULL  
          FROM PO, INSERTED  
          WHERE PO.POKey = INSERTED.POKey  
          AND PO.[status] < '9'   
@@ -301,8 +302,8 @@ BEGIN
       UPDATE PODetail WITH (ROWLOCK)  
          SET ExternPokey = INSERTED.ExternPOkey,  
              Trafficcop = NULL,  
-             EditDate = GETDATE(),   --tlting  
-             EditWho = SUSER_SNAME()  
+             EditDate = dbo.fnc_GetDate(),   --tlting  
+             EditWho = dbo.fnc_GetUserName()  
         FROM PODetail, INSERTED, DELETED  
        WHERE PODetail.Pokey = INSERTED.POKey  
          AND INSERTED.POKEY = DELETED.POkey  
@@ -339,7 +340,7 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue=2 ) AND NOT UPDATE(EditDate)  
    BEGIN  
       UPDATE PO WITH (ROWLOCK)  
-         SET EditDate = GETDATE(), EditWho = SUSER_SNAME(), TrafficCop = NULL  
+         SET EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), TrafficCop = NULL  
         FROM PO, INSERTED, DELETED  
        WHERE PO.POKey = INSERTED.POKey  
          AND PO.POKey = DELETED.POKey  
@@ -782,4 +783,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 

@@ -70,6 +70,7 @@ GO
 /*                               and QtyReplen                          */
 /* 17-Apl-2025  3.7     Wan03    UWP-32707 - FCR-3957 - JCB Putaway Using*/
 /*                               TM SCE                                 */
+/* 06-Oct-2025  1.0     AK01     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/ 
        
 CREATE OR ALTER TRIGGER [dbo].[ntrTaskDetailUpdate]        
@@ -116,7 +117,7 @@ BEGIN
  -- tlting01  
    IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)  
    BEGIN  
-      UPDATE Taskdetail SET TrafficCop = NULL, EditDate = GETDATE(), EditWho=SUSER_SNAME()   
+      UPDATE Taskdetail SET TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName()   
       FROM Taskdetail,Inserted  
       WHERE Taskdetail.TaskdetailKey=Inserted.TaskdetailKey  
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
@@ -407,8 +408,8 @@ BEGIN
                 
                      UPDATE LotxLocxID  with (RowLOCK)      
                      SET    QtyReplen = @n_nQtyReplen,  
-                            EditDate = GETDATE(),   --tlting  
-                            EditWho = SUSER_SNAME()        
+                            EditDate = dbo.fnc_GetDate(),   --tlting  
+                            EditWho = dbo.fnc_GetUserName()        
                      WHERE  Loc = @c_fromloc        
                             AND ID = @c_fromid        
                             AND SKU = @c_sku    
@@ -439,8 +440,8 @@ BEGIN
                BEGIN        
                   UPDATE LotxLocxID with (ROWLOCK)         
                      SET QtyReplen = QtyReplen - @n_qty,  
-                         EditDate = GETDATE(),   --tlting  
-                         EditWho = SUSER_SNAME()        
+                         EditDate = dbo.fnc_GetDate(),   --tlting  
+                         EditWho = dbo.fnc_GetUserName()        
                   WHERE Loc      = @c_fromloc         
                   AND ID         = @c_fromid        
                   AND SKU        = @c_sku        
@@ -512,8 +513,8 @@ BEGIN
                      EXEC nspInsertIntoPutawayTask @c_taskdetailkey, @c_fromloc, @c_toloc, @c_fromid, @c_sku, @c_fromoutloc output, @b_isDiffFloor output        
                      UPDATE TASKDETAIL with (ROWLOCK)        
                      SET  LOGICALFROMLOC = FROMLOC,        
-                          EDITDATE = GETDATE(), -- (Vicky03)        
-                          EDITWHO = sUSER_sName(), -- (Vicky03)        
+                          EDITDATE = dbo.fnc_GetDate(), -- (Vicky03)        
+                          EDITWHO = dbo.fnc_GetUserName(), -- (Vicky03)        
                      TRAFFICCOP = NULL        
                      WHERE TASKDETAIL.taskdetailkey = @c_taskdetailkey        
                              
@@ -521,8 +522,8 @@ BEGIN
                      SET  LOGICALTOLOC = ( CASE WHEN @b_isDiffFloor = 1 THEN @c_FromOutLoc        
                      ELSE TOLOC        
                      END ),        
-                          EDITDATE = GETDATE(), -- (Vicky03)        
-                          EDITWHO = sUSER_sName(), -- (Vicky03)        
+                          EDITDATE = dbo.fnc_GetDate(), -- (Vicky03)        
+                          EDITWHO = dbo.fnc_GetUserName(), -- (Vicky03)        
                      TRAFFICCOP = NULL        
                      WHERE TASKDETAIL.taskdetailkey = @c_taskdetailkey        
                   END        
@@ -530,15 +531,15 @@ BEGIN
                   BEGIN        
                      UPDATE TASKDETAIL  with (ROWLOCK)       
                      SET  LOGICALFROMLOC = FROMLOC,        
-                          EDITDATE = GETDATE(), -- (Vicky03)        
-                          EDITWHO = sUSER_sName(), -- (Vicky03)        
+                          EDITDATE = dbo.fnc_GetDate(), -- (Vicky03)        
+                          EDITWHO = dbo.fnc_GetUserName(), -- (Vicky03)        
                      TRAFFICCOP = NULL        
                      WHERE TASKDETAIL.taskdetailkey = @c_taskdetailkey        
                              
                      UPDATE TASKDETAIL with (ROWLOCK)        
                      SET  LOGICALTOLOC = TOLOC,        
-                          EDITDATE = GETDATE(), -- (Vicky03)        
-                          EDITWHO = sUSER_sName(), -- (Vicky03)        
+                          EDITDATE = dbo.fnc_GetDate(), -- (Vicky03)        
+                          EDITWHO = dbo.fnc_GetUserName(), -- (Vicky03)        
                      TRAFFICCOP = NULL        
                      WHERE TASKDETAIL.taskdetailkey = @c_taskdetailkey        
                   END        
@@ -678,8 +679,8 @@ BEGIN
                   BEGIN        
                      UPDATE TASKDETAIL with (ROWLOCK)  
                      SET Status = @c_rc_taskStatus,        
-                          EDITDATE = GETDATE(), -- (Vicky03)        
-                          EDITWHO = sUSER_sName() -- (Vicky03)        
+                          EDITDATE = dbo.fnc_GetDate(), -- (Vicky03)        
+                          EDITWHO = dbo.fnc_GetUserName() -- (Vicky03)        
                      WHERE TASKDETAILKEY = @c_taskdetailkey        
                              
                      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT        
@@ -791,8 +792,8 @@ BEGIN
                         SELECT @c_pickdetailkey = SUBSTRING(@c_sourcekey,1,10)        
                         UPDATE  PICKDETAIL with (ROWLOCK)        
                         SET  Status = '3',  
-                              EditDate = GETDATE(),   --tlting  
-                              EditWho = SUSER_SNAME()        
+                              EditDate = dbo.fnc_GetDate(),   --tlting  
+                              EditWho = dbo.fnc_GetUserName()        
                         WHERE  PICKDETAILKEY = @c_pickdetailkey        
                         AND Status IN ('0', '1', '2')        
                                 
@@ -809,8 +810,8 @@ BEGIN
                      BEGIN        
                         UPDATE PICKDETAIL with (ROWLOCK)        
                         SET Status = '3',  
-                           EditDate = GETDATE(),   --tlting  
-                           EditWho = SUSER_SNAME()        
+                           EditDate = dbo.fnc_GetDate(),   --tlting  
+                           EditWho = dbo.fnc_GetUserName()        
                         WHERE PICKSLIPNO = @c_taskdetailkey        
                         AND Status IN ('0', '1', '2')        
                                 
@@ -856,8 +857,8 @@ BEGIN
                             TOLOC  = @c_toloc,        
                             DROPID = @c_toid,        
                             QTY    = @n_qty,  
-                            EditDate = GETDATE(),   --tlting  
-                            EditWho = SUSER_SNAME()        
+                            EditDate = dbo.fnc_GetDate(),   --tlting  
+                            EditWho = dbo.fnc_GetUserName()        
                         WHERE PICKDETAILKEY = @c_pickdetailkey        
                         -- Added By SHONG SOS# 9136        
                         -- Error when Pickdetail was shipped        
@@ -905,8 +906,8 @@ BEGIN
                              TOLOC  = @c_toloc,        
                              DROPID = @c_toid,        
                              QTY    = @n_qty,  
-                             EditDate = GETDATE(),   --tlting  
-                             EditWho = SUSER_SNAME()        
+                             EditDate = dbo.fnc_GetDate(),   --tlting  
+                             EditWho = dbo.fnc_GetUserName()        
                         WHERE PICKDETAILKEY = @c_pickdetailkey        
                         -- Added By SHONG SOS# 9136        
                         -- Error when Pickdetail was shipped        

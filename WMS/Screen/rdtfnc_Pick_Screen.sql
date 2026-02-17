@@ -67,7 +67,7 @@ EXECUTE rdt.rdtAddScn 835, 'ENG',
    @cLine10 = '4 %18d08',
    @cLine11 = '',
    @cLine12 = 'UCC: %10d09', -- 9999/9999
-   @cLine13 = '%20i10',
+   @cLine13 = '%60i10', --FCR-7545
    @cLine14 = '%e'
 
 -- 836 = ID

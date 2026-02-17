@@ -1,6 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrWorkOrderJobUpdate' AND type = 'TR')
-   DROP TRIGGER ntrWorkOrderJobUpdate
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -31,8 +29,10 @@ GO
 /* 26-JAN-2016  YTWan    1.2  SOS#315603 - Project Merlion - VAP SKU       */
 /*                            Reservation Strategy - MixSku in 1 Pallet    */
 /*                            enhancement                                  */	
+/* 06-Oct-2025  AK01     1.3  UWP-42143 - Replace SUSER_SNAME with         */
+/*                            fnc_GetUserName                              */
 /***************************************************************************/
-CREATE TRIGGER ntrWorkOrderJobUpdate ON WORKORDERJOB 
+CREATE OR ALTER TRIGGER ntrWorkOrderJobUpdate ON WORKORDERJOB 
 FOR UPDATE
 AS
 BEGIN
@@ -87,8 +87,8 @@ BEGIN
    IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE WORKORDERJOB WITH (ROWLOCK)
-      SET EditDate = GETDATE() 
-         ,EditWho  = SUSER_SNAME() 
+      SET EditDate = dbo.fnc_GetDate() 
+         ,EditWho  = dbo.fnc_GetUserName() 
          ,TrafficCop = NULL
       FROM WORKORDERJOB
       JOIN DELETED  ON (DELETED.JobKey = WORKORDERJOB.JobKey AND DELETED.WorkOrderkey = WORKORDERJOB.WorkOrderkey)
@@ -160,8 +160,8 @@ BEGIN
          BEGIN
             UPDATE TASKDETAIL WITH (ROWLOCK)
             SET SourcePriority = @c_Sequence
-               ,EditWho      = SUSER_NAME()
-               ,EditDate     = GETDATE()
+               ,EditWho      = dbo.fnc_GetUserName()
+               ,EditDate     = dbo.fnc_GetDate()
                ,Trafficcop   = NULL
             FROM TASKDETAIL 
             JOIN  JOBTASKLOOKUP WITH (NOLOCK) ON (TASKDETAIL.TaskDetailkey = JOBTASKLOOKUP.TaskDetailkey)
@@ -187,8 +187,8 @@ BEGIN
             ,UOMQtyRemaining = WOR.UOMQtyRemaining - ( @n_UOMQtyJob + (DELETED.UOMQtyJob * -1) )  
             ,QtyReleased     = WOR.QtyReleased + ( @n_QtyReleased + (DELETED.QtyReleased * -1) ) 
             ,WorkStation  = @c_WorkStation
-            ,EditWho      = SUSER_NAME()
-            ,EditDate     = GETDATE()
+            ,EditWho      = dbo.fnc_GetUserName()
+            ,EditDate     = dbo.fnc_GetDate()
       FROM DELETED      
       JOIN WORKORDERREQUEST WOR ON (DELETED.WorkOrderkey = WOR.WorkOrderkey)
       WHERE DELETED.Jobkey = @c_Jobkey 
@@ -206,8 +206,8 @@ BEGIN
 
       UPDATE WORKORDERJOB WITH (ROWLOCK)
       SET QtyJob = WOJ.QtyJob + ( (@n_UOMQtyJob + (DELETED.UOMQtyJob * -1)) * WOR.PackQty )
-         ,EditWho   = SUSER_NAME()
-         ,EditDate  = GETDATE()
+         ,EditWho   = dbo.fnc_GetUserName()
+         ,EditDate  = dbo.fnc_GetDate()
          ,Trafficcop= NULL
       FROM DELETED      
       JOIN WORKORDERJOB WOJ   ON (DELETED.JobKey = WOJ.JobKey)
@@ -230,8 +230,8 @@ BEGIN
       SET QtyJob      = WOJD.QtyJob +  ( (@n_UOMQtyJob + (DELETED.UOMQtyJob * -1)) * WOR.PackQty )
          ,UOMQtyJob   = WOJD.UOMQtyJob + (@n_UOMQtyJob + (DELETED.UOMQtyJob * -1))
          ,QtyReleased = WOJD.QtyReleased + ( @n_QtyReleased + (DELETED.QtyReleased * -1) ) 
-         ,EditWho     = SUSER_NAME()
-         ,EditDate    = GETDATE()
+         ,EditWho     = dbo.fnc_GetUserName()
+         ,EditDate    = dbo.fnc_GetDate()
       FROM DELETED 
       JOIN WORKORDERJOBDETAIL WOJD               ON (DELETED.JobKey = WOJD.JobKey)
       JOIN WORKORDERJOB       WOJ  WITH (NOLOCK) ON (DELETED.JobKey = WOJ.JobKey)
@@ -426,4 +426,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
+
 

@@ -19,6 +19,9 @@
 /* Date           Author      Purposes                                  */
 /* 22-May-2024    Alex01      #PAC-343 bug fixed - missing pick header  */
 /* 21-Mar-2025    Alex02      #FCR-3671 bug fixed - deadlock            */
+/* 28-Jul-2025    Sean01      #UWP-37808 bug fixed - pickdetail.status  */
+/*                             couldn't update to 5 after unpack and    */
+/*                             reconfirm                                */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_GenLabelNo] (  
      @b_Debug                    INT            = 0  
@@ -107,20 +110,24 @@ BEGIN
             FETCH NEXT FROM CUR_EPICKH INTO @c_PickHeaderKey  
             WHILE @@FETCH_STATUS <> -1      
             BEGIN      
-               --Alex02 S
+               -- Alex02 S
                IF NOT EXISTS ( SELECT 1 FROM PICKHEADER (NOLOCK) WHERE PickHeaderKey = @c_PickSlipNo )
                BEGIN
                   INSERT INTO PICKHEADER ( PickHeaderKey, WaveKey, OrderKey, ExternOrderKey, StorerKey, ConsigneeKey, Priority, Type, Zone, Status, PickType, EffectiveDate, ConsoOrderKey, LoadKey )
                   SELECT @c_PickSlipNo, WaveKey, OrderKey, ExternOrderKey, StorerKey, ConsigneeKey, Priority, Type, Zone, Status, PickType, EffectiveDate, ConsoOrderKey, LoadKey
                   FROM PICKHEADER WITH (NOLOCK) 
                   WHERE PickHeaderKey = @c_PickHeaderKey
+               -- Sean01 S
+                  DELETE FROM PICKHEADER WHERE PickHeaderKey = @c_PickHeaderKey
                END
 
-               DELETE FROM PICKHEADER WHERE PickHeaderKey = @c_PickHeaderKey
-               --UPDATE [dbo].[PICKHEADER] WITH (ROWLOCK)  
-               --SET [PickHeaderKey] = @c_PickSlipNo  
-               --WHERE [PickHeaderKey] = @c_PickHeaderKey  
-               --Alex02 E
+               -- DELETE FROM PICKHEADER WHERE PickHeaderKey = @c_PickHeaderKey
+               -- Sean01 E
+
+               -- UPDATE [dbo].[PICKHEADER] WITH (ROWLOCK)  
+               -- SET [PickHeaderKey] = @c_PickSlipNo  
+               -- WHERE [PickHeaderKey] = @c_PickHeaderKey  
+               -- Alex02 E
                FETCH NEXT FROM CUR_EPICKH INTO @c_PickHeaderKey  
             END      
             CLOSE CUR_EPICKH      

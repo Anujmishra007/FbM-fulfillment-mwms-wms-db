@@ -22,7 +22,9 @@ GO
 /* 2022-02-25  Wan      1.0   Created.                                   */  
 /* 2022-02-25  Wan      1.0   DevOps Conmbine Script                     */
 /* 2023-06-23  LUKE     1.1   JSM-158391                                 */
-/*                            UPDATE @_batch from 0 to 1 (Luke01)        */  
+/*                            UPDATE @_batch from 0 to 1 (Luke01)        */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/   
 CREATE OR ALTER  PROCEDURE [dbo].[isp_RCM_CTR_GenMBOL]    
    @c_ContainerKey   NVARCHAR(10)   
@@ -93,8 +95,8 @@ BEGIN
         
    UPDATE dbo.CONTAINER WITH (ROWLOCK)  
    SET MBOLKey = @c_MBOLKey   
-      ,EditWHo = SUSER_SNAME()  
-      ,EditDate= GETDATE()  
+      ,EditWHo = dbo.fnc_GetUserName()      --(SSA01)
+      ,EditDate= dbo.fnc_GetDate()    --(SSA01)
    WHERE ContainerKey = @c_ContainerKey  
                         
    SET @n_Err = @@ERROR    

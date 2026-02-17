@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ChannelInvHold_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ChannelInvHold_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -27,8 +22,10 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2021-09-21  Wan      1.0   Created.                                   */
 /* 2021-09-22  Wan      1.0   DevOps Script Combine                      */
+/* 2025-10-06  SSA01    1.1   UWP-42142 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_ChannelInvHold_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_ChannelInvHold_Wrapper]
       @c_HoldType           NVARCHAR(10)   
    ,  @c_SourceKey          NVARCHAR(20) = ''  
    ,  @c_SourceLineNo       NVARCHAR(20) = ''  
@@ -69,21 +66,25 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-
+   -- (SSA01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
     
-      EXECUTE AS LOGIN = @c_UserName
+     IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SSA01) - END
    
    BEGIN TRAN
 
@@ -169,7 +170,11 @@ BEGIN
    BEGIN
       BEGIN TRAN
    END
-   REVERT
+
+   IF @b_ExecuteAs = 1              -- (SSA01)
+      REVERT
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_ChannelInvHold_Wrapper] TO nSQL 

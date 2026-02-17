@@ -31,6 +31,8 @@ GO
 /* 2023-06-02   James    2.4  Change V_MAX to V_Max (james02)                 */
 /* 2023-09-20   JLC042   2.5  Add Sound Level and Vibration Level(JLC042)     */
 /* 2023-10-26   JLC042   2.6  Reset default vaule of storer-faclity           */
+/* 2025-07-23   Dennis   2.7  Add Trace ID                                    */
+/* 2025-11-06   NickT    2.8  UWP-43698 Block deuplicate request              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtSetMobColRetActionHttp] (

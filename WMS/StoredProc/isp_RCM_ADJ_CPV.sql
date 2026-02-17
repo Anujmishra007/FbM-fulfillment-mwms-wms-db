@@ -15,6 +15,8 @@ GO
 /* 03-10-2018 1.0  Ung       WMS-6149 Created                           */
 /* 07-03-2019 1.1  ChewKP    Changes.                                   */
 /* 08-04-2019 1.2  Ung       WMS-6149 Bug fix                           */
+/* 10-10-2025 1.3  SSA01     UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_RCM_ADJ_CPV] (
@@ -129,8 +131,8 @@ BEGIN
                   LOC = @cLOC, 
                   ID = @cID, 
                   Lottable04 = @dExternLottable04, 
-                  EditDate = GETDATE(), 
-                  EditWho = SUSER_SNAME(), 
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName(),     --(SSA01)
                   TrafficCop = NULL
                WHERE AdjustmentKey = @c_AdjustmentKey
                   AND AdjustmentLineNumber = @cADJLineNo
@@ -145,8 +147,8 @@ BEGIN
                -- Book the stock
                UPDATE LOTxLOCxID SET
                   QTYReplen = QTYReplen + @nQTY_ADJ, 
-                  EditDate = GETDATE(), 
-                  EditWho = SUSER_SNAME()
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName()     --(SSA01)
                WHERE LOT = @cLOT
                   AND LOC = @cLOC
                   AND ID = @cID
@@ -190,8 +192,8 @@ BEGIN
                   ID = @cID, 
                   QTY = -@nQTY_LLI, 
                   Lottable04 = @dExternLottable04, 
-                  EditDate = GETDATE(), 
-                  EditWho = SUSER_SNAME(), 
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName(),     --(SSA01)
                   TrafficCop = NULL
                WHERE AdjustmentKey = @c_AdjustmentKey
                   AND AdjustmentLineNumber = @cADJLineNo
@@ -206,8 +208,8 @@ BEGIN
                -- Book the stock
                UPDATE LOTxLOCxID SET
                   QTYReplen = QTYReplen + @nQTY_LLI, 
-                  EditDate = GETDATE(), 
-                  EditWho = SUSER_SNAME()
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName()    --(SSA01)
                WHERE LOT = @cLOT
                   AND LOC = @cLOC
                   AND ID = @cID
@@ -238,8 +240,8 @@ BEGIN
          BEGIN
             UPDATE AdjustmentDetail SET
                Lottable04 = @dExternLottable04, 
-               EditDate = GETDATE(), 
-               EditWho = SUSER_SNAME(), 
+               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+               EditWho = dbo.fnc_GetUserName(),       --(SSA01)
                TrafficCop = NULL
             WHERE AdjustmentKey = @c_AdjustmentKey
                AND AdjustmentLineNumber = @cADJLineNo
@@ -265,8 +267,8 @@ BEGIN
          UPDATE Adjustment SET 
             -- FinalizedFlag = 'Y', 
             UserDefine10 = '',  
-            EditWho = SUSER_SNAME(), 
-            EditDate = GETDATE() 
+            EditWho = dbo.fnc_GetUserName(),     --(SSA01)
+            EditDate = dbo.fnc_GetDate()    --(SSA01)
          WHERE AdjustmentKey = @c_AdjustmentKey
          IF @@ERROR <> 0
          BEGIN  

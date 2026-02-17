@@ -28,6 +28,7 @@ GO
 /* 01-AUG-2017  NJOW04   1.3  fix Catpure error msg from called sp      */
 /* 22-JUL-2022  NJOW05   1.4  fix allow BuildLoadReleaseTask_SP config  */
 /*                            SP execute at load plan RCM               */
+/* 10-Oct-2025  SSA01    1.5  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[nspLoadReleasePickTask_Wrapper]
    @c_loadkey NVARCHAR(10)
@@ -246,8 +247,8 @@ BEGIN
          	  UPDATE ORDERS WITH (ROWLOCK)
          	  SET SOStatus = 'TSRELEASED',
          	      TrafficCop = NULL,
-         	      EditWho = SUSER_SNAME(),
-         	      EditDate = GETDATE()
+         	      EditWho = dbo.fnc_GetUserName(),          --(SSA01)
+         	      EditDate = dbo.fnc_GetDate()   --(SSA01)
          	  WHERE Loadkey = @c_Loadkey
          	  AND Storerkey = @c_Storerkey
          END

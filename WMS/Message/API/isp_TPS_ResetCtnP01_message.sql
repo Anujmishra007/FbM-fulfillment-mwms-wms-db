@@ -16,3 +16,4 @@ execute API.TouchPadAddMsg 1001960, 10, 'Unable to Update SerialNo. Function : i
 execute API.TouchPadAddMsg 1001961, 10, 'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP01',    'us_english'
 execute API.TouchPadAddMsg 1001962, 10, 'Unable to Delete PackDetail. Function : isp_TPS_ResetCtnP01',    'us_english'
 execute API.TouchPadAddMsg 1001963, 10, 'Unable to Update UCC. Function : isp_TPS_ResetCtnP01',    'us_english'
+execute API.TouchPadAddMsg 1001964, 10, 'No Session context found. Function : isp_TPS_ResetCtnP01',    'us_english'

@@ -27,6 +27,8 @@ GO
 /*                         to avoid blocking in ntrLoadPlanDelete       */
 /*                         (if configkey 'FinalizeLP' is turned on)     */
 /* 14-Jan-2016  Leong      SOS# 361123 - Add DataMartDELLOG.            */
+/* 10-Oct-2025  SSA01      UWP-42248 -Enhanced session management       */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROCEDURE isp_Combine_Load
@@ -201,8 +203,8 @@ BEGIN
          UPDATE LOADPLANDETAIL WITH (ROWLOCK)
          SET   LoadKey        = @c_ToLoadKey,
                LoadLineNumber = @c_NewToLoadLineNo,
-               EditWho        = SUSER_SNAME(),
-               EditDate       = GETDATE(),
+               EditWho        = dbo.fnc_GetUserName(),          --(SSA01)
+               EditDate       = dbo.fnc_GetDate(),   --(SSA01)
                TrafficCop     = NULL
          WHERE LoadKey        = @c_FromLoadKey
          AND   LoadLineNumber = @c_FromLoadLineNo
@@ -316,8 +318,8 @@ BEGIN
              CaseCnt    = @n_TotCaseCnt,
              Weight     = @n_TotWeight,
              Cube       = @n_TotCube,
-             EditWho    = SUSER_SNAME(),
-             EditDate   = GETDATE(),
+             EditWho    = dbo.fnc_GetUserName(),        --(SSA01)
+             EditDate   = dbo.fnc_GetDate(),   --(SSA01)
              TrafficCop = NULL
          WHERE LoadKey  = @c_ToLoadKey
 
@@ -352,8 +354,8 @@ BEGIN
          -- Update Orders
          UPDATE ORDERS WITH (ROWLOCK)
          SET LoadKey    = @c_ToLoadKey,
-             EditWho    = SUSER_SNAME(),
-             EditDate   = GETDATE(),
+             EditWho    = dbo.fnc_GetUserName(),        --(SSA01)
+             EditDate   = dbo.fnc_GetDate(),   --(SSA01)
              TrafficCop = NULL
          FROM @tOrder T
          INNER JOIN ORDERS OH ON (T.OrderKey = OH.OrderKey)
@@ -369,8 +371,8 @@ BEGIN
          -- Update OrderDetail
          UPDATE ORDERDETAIL WITH (ROWLOCK)
          SET LoadKey    = @c_ToLoadKey,
-             EditWho    = SUSER_SNAME(),
-             EditDate   = GETDATE(),
+             EditWho    = dbo.fnc_GetUserName(),         --(SSA01)
+             EditDate   = dbo.fnc_GetDate(),  --(SSA01)
              TrafficCop = NULL
          FROM @tOrder T
             INNER JOIN ORDERDETAIL OD ON (T.OrderKey = OD.OrderKey AND T.OrderLineNumber = OD.OrderLineNumber)

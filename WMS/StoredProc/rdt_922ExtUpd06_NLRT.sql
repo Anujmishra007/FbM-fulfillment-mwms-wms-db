@@ -1,4 +1,7 @@
-
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /*******************************************************************************************************************************/
 /* Store procedure: rdt_922ExtUpd06_NLRT                                                                                       */
 /* Copyright      : Maersk                                                                                                     */
@@ -10,6 +13,7 @@
 /* 2024-10-18 1.0    VJI011     none packing process enhancement for ACT                                                       */
 /* 2024-10-18 1.1.0  NLT013     UWP-27868 Open qty is wrong                                                                    */
 /* 2025-02-05 2.0    AGA399     Copy SP version for Amazon rdt_922ExtUpd06_AMZ to All customer of NLRT with same config        */
+/* 2025-10-10 2.1    SSA01      UWP-42248 -Enhanced session management                                                         */
 /*******************************************************************************************************************************/
 
 CREATE OR ALTER     PROC [RDT].[rdt_922ExtUpd06_NLRT] (
@@ -327,8 +331,8 @@ BEGIN
                         QtyPicked    =  QtyPicked + @nQtyPicked, 
                         QtyAllocated =  QtyAllocated + @nQtyAllocated,  
                         Status       =  '5',  
-                        EditDate = GETDATE(),  
-                        EditWho = SUSER_SNAME(), 
+                        EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                        EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                         TrafficCop   = NULL  
                      WHERE OrderKey = @cChildOrderKey  
                         AND OrderLineNumber = @cOrderLineNumber  
@@ -351,8 +355,8 @@ BEGIN
                SET 
                   OpenQty      = @nChildTotalQty, 
                   Status         = '5',
-                  EditDate     = GETDATE(),  
-                  EditWho = SUSER_SNAME(), 
+                  EditDate     = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                   TrafficCop   = NULL  
                WHERE OrderKey = @cChildOrderKey  
                AND StorerKey = @cStorerKey
@@ -360,8 +364,8 @@ BEGIN
                UPDATE dbo.OrderDetail WITH(ROWLOCK)
                SET
                   Status         = '5',
-                  EditDate     = GETDATE(),  
-                  EditWho = SUSER_SNAME(), 
+                  EditDate     = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                   TrafficCop   = NULL  
                WHERE OrderKey = @cChildOrderKey  
                   AND StorerKey = @cStorerKey
@@ -393,7 +397,7 @@ BEGIN
                            ELSE Status
                         END,
                      */ 
-                     EditDate = GETDATE(),  
+                     EditDate = dbo.fnc_GetDate(),    --(SSA01)
                      TrafficCop = NULL 
                   WHERE OrderKey = @cParentOrderKey
                      AND OrderLineNumber = @cOrderLineNumber
@@ -414,8 +418,8 @@ BEGIN
                UPDATE dbo.ORDERS WITH(ROWLOCK)
                SET 
                   OpenQty      = @nParentTotalQty, 
-                  EditDate     = GETDATE(),  
-                  EditWho = SUSER_SNAME(), 
+                  EditDate     = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                   TrafficCop   = NULL  
                WHERE OrderKey = @cParentOrderKey  
                   AND StorerKey = @cStorerKey
@@ -425,7 +429,7 @@ BEGIN
                   BEGIN
                      UPDATE dbo.RefKeyLookUp SET
                         OrderKey = @cChildOrderKey, 
-                        EditDate = GETDATE() 
+                        EditDate = dbo.fnc_GetDate()    --(SSA01)
                      FROM dbo.RefKeyLookUp RKL  
                         JOIN dbo.PicKDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                      WHERE PD.OrderKey = @cParentOrderKey  
@@ -444,7 +448,7 @@ BEGIN
                   -- Change PickDetail (from parent to child)
                   UPDATE dbo.PickDetail SET
                      OrderKey = @cChildOrderKey, 
-                     EditDate = GETDATE(),  
+                     EditDate = dbo.fnc_GetDate(),    --(SSA01)
                      TrafficCop = NULL 
                   WHERE OrderKey = @cParentOrderKey  
                      AND OrderLineNumber = @cOrderLineNumber
@@ -689,8 +693,8 @@ BEGIN
                   -- Change PackDetail (from parent to child)
                   UPDATE dbo.PackDetail SET
                      PickSlipNo = @cChildPickSlipNo, 
-                     EditDate = GETDATE(), 
-                     EditWho = SUSER_SNAME(), 
+                     EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                     EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                      ArchiveCop = NULL
                   WHERE PickSlipNo = @cParentPickSlipNo
                      AND LabelNo = @cLabelNo
@@ -704,8 +708,8 @@ BEGIN
                   -- Change PackInfo (from parent to child)
                   UPDATE dbo.PackInfo SET
                      PickSlipNo = @cChildPickSlipNo, 
-                     EditDate = GETDATE(), 
-                     EditWho = SUSER_SNAME(), 
+                     EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                     EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                      TrafficCop = NULL
                   WHERE PickSlipNo = @cParentPickSlipNo
                      AND CartonNo = @nCartonNo
@@ -721,8 +725,8 @@ BEGIN
                   BEGIN
                      UPDATE dbo.PackSerialNo SET
                         PickSlipNo = @cChildPickSlipNo, 
-                        EditDate = GETDATE(), 
-                        EditWho = SUSER_SNAME(), 
+                        EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                        EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                         TrafficCop = NULL
                      WHERE PickSlipNo = @cParentPickSlipNo
                         AND CartonNo = @nCartonNo
@@ -739,8 +743,8 @@ BEGIN
                   BEGIN
                      UPDATE dbo.PackDetailInfo SET
                         PickSlipNo = @cChildPickSlipNo, 
-                        EditDate = GETDATE(), 
-                        EditWho = SUSER_SNAME(), 
+                        EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                        EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                         TrafficCop = NULL
                      WHERE PickSlipNo = @cParentPickSlipNo
                         AND CartonNo = @nCartonNo
@@ -786,4 +790,12 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END
+GO
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS ON 
+GO
+
+GRANT EXECUTE ON rdt.rdt_922ExtUpd06_NLRT TO NSQL 
+GO  
 

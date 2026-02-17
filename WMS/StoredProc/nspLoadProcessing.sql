@@ -118,7 +118,8 @@ GO
 /* 17-APR-2024  NJOW27  4.1   WMS-25272 Allow auto set skippreallocation*/            
 /*                            by config if not setup preallocation      */ 
 /* 20-SEP-2024  SPChin  4.2   INC7245374 - Bug Fixed                    */             
-/* 22-Jan-2025  NJOW28  4.3   WMS-24396 - Fix @c_DynUOMQty condition    */           
+/* 22-Jan-2025  NJOW28  4.3   WMS-24396 - Fix @c_DynUOMQty condition    */
+/* 21-Feb-2025  WLChooi 4.4   WMS-26556 Support multi facilities (WL01) */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspLoadProcessing]
      @c_LoadKey NVARCHAR(10)
@@ -212,8 +213,8 @@ BEGIN
          @c_Lottable08 NVARCHAR(30),              @c_Lottable09 NVARCHAR(30),
          @c_Lottable10 NVARCHAR(30),              @c_Lottable11 NVARCHAR(30),
          @c_Lottable12 NVARCHAR(30),
-         @d_Lottable13 Datetime,                  @d_Lottable14 Datetime,
-         @d_Lottable15 Datetime,                  @c_Lottable13 NVARCHAR(30),
+         @d_Lottable13 DATETIME,                  @d_Lottable14 DATETIME,
+         @d_Lottable15 DATETIME,                  @c_Lottable13 NVARCHAR(30),
          @c_Lottable14 NVARCHAR(30),              @c_Lottable15 NVARCHAR(30),
          @c_Lottable_Parm NVARCHAR(20),           @c_SQLExecute NVARCHAR(4000),
          @c_Lottable04 NVARCHAR(30),              @c_Lottable05 NVARCHAR(30)
@@ -326,22 +327,22 @@ BEGIN
 
       -- SWT01
       SET @c_ChannelInventoryMgmt = '0'
-      If @n_continue = 1 or @n_continue = 2
-      Begin
-         Select @b_success = 0
-         Execute nspGetRight2 --(Wan03)
+      IF @n_continue = 1 OR @n_continue = 2
+      BEGIN
+         SELECT @b_success = 0
+         EXECUTE nspGetRight2 --(Wan03)
          @c_Facility,
          @c_StorerKey,        -- Storer
          '',                   -- Sku
          'ChannelInventoryMgmt',  -- ConfigKey
-         @b_success    output,
-         @c_ChannelInventoryMgmt  output,
-         @n_Err        output,
-         @c_ErrMsg     output
-         If @b_success <> 1
-         Begin
-            Select @n_continue = 3, @c_ErrMsg = 'nspLoadProcessing:' + ISNULL(RTRIM(@c_ErrMsg),'')
-         End
+         @b_success    OUTPUT,
+         @c_ChannelInventoryMgmt  OUTPUT,
+         @n_Err        OUTPUT,
+         @c_ErrMsg     OUTPUT
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_continue = 3, @c_ErrMsg = 'nspLoadProcessing:' + ISNULL(RTRIM(@c_ErrMsg),'')
+         END
       END
    END  -- IF (@n_Continue = 1 OR @n_Continue = 2)
    -- Chee01
@@ -2074,7 +2075,8 @@ BEGIN
                            FROM LOTxLOCxID  LLI WITH (NOLOCK)
                            JOIN LOC         LOC WITH (NOLOCK) ON (LLI.Loc = LOC.LOC)
                            WHERE LLI.Lot =  @c_aLOT
-                           AND   LOC.Facility = @c_aFacility
+                           --AND   LOC.Facility = @c_AFacility   --WL01   
+                           AND   LOC.Facility IN ( SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_aStorerKey, @c_aFacility) )   --WL01
 
                            IF @n_FacLotAvailQty < @n_cQtyAvailable
                            BEGIN

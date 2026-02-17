@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -33,6 +33,7 @@ GO
 /* 13-Sep-2019  SHONG     LoseID Location should set ToID to ''         */  
 /* 18-Aug-2022  WLChooi   WMS-20526 - ReplenUpdateUCC (WL01)            */
 /* 18-Aug-2022  WLChooi   DevOps Combine Script                         */
+/* 09-Oct-2025  SPC040  1.3  Replace SUSER_SNAME with fnc_GetUserName   */
 /************************************************************************/  
 CREATE OR ALTER TRIGGER [dbo].[ntrReplenishmentDelete]
 ON [dbo].[REPLENISHMENT]
@@ -98,7 +99,7 @@ BEGIN
          SELECT ReplenishmentKey, ReplenishmentGroup, Storerkey, Sku, FromLoc, ToLoc, Lot, Id, Qty, QtyMoved, 
                QtyInPickLoc, Priority, UOM, PackKey, ArchiveCop, Confirmed, ReplenNo, Remark, AddDate, AddWho,
                EditDate, EditWho, RefNo, DropID, LoadKey, Wavekey, OriginalFromLoc, OriginalQty, [ToID], 
-               getdate(), suser_sname(), 'delete', MoveRefKey, PendingMoveIn,
+               dbo.fnc_GetDate(), dbo.fnc_GetUserName(), 'delete', MoveRefKey, PendingMoveIn,
                QtyReplen
          FROM DELETED  
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -167,8 +168,8 @@ BEGIN
    			   UPDATE PICKDETAIL WITH (ROWLOCK)
    			   SET MoveRefKey = '', 
    			       TrafficCop = NULL,
-   			       EditDate   = GETDATE(), 
-   			       EditWho    = SUSER_SNAME()
+   			       EditDate = dbo.fnc_GetDate(), 
+   			       EditWho = dbo.fnc_GetUserName()
    			   WHERE PickDetailKey = @c_PickDetailKey  
    		
    			   FETCH FROM cur_PickDetail INTO @c_PickDetailKey, @c_MoveRefKey
@@ -186,8 +187,8 @@ BEGIN
             BEGIN                                                                                               
          	   UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
                SET QtyReplen = CASE WHEN (QtyReplen - @n_QtyReplen) < 0 THEN 0 ELSE QtyReplen - @n_QtyReplen END,                                                   
-                   EditWho = SUSER_SNAME(),
-                   EditDate = GETDATE()
+                   EditWho = dbo.fnc_GetUserName(),
+                   EditDate = dbo.fnc_GetDate()
                WHERE Lot = @c_Lot                                                                               
                AND Loc = @c_FromLoc                                                                             
                AND ID = @c_Id                                                                               
@@ -223,8 +224,8 @@ BEGIN
        	 	         SET PendingMoveIn = CASE WHEN (PendingMoveIn - @n_PendingMoveIn) < 0 THEN 0 
        	 	                                 ELSE PendingMoveIn - @n_PendingMoveIn 
        	 	                           END,
-                        EditDate = GETDATE(),   
-                        EditWho = SUSER_SNAME()       	 	         
+                        EditDate = dbo.fnc_GetDate(),   
+                        EditWho = dbo.fnc_GetUserName()       	 	         
        	 	  WHERE Lot = @c_LOT 
                 AND LOC = @c_ToLoc      
                 AND ID  = @c_ToID     

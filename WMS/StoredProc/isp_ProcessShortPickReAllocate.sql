@@ -32,7 +32,8 @@ GO
 /* 02-Feb-2023 James          1.5   Short pick all orders within the hold loc (james02)            */    
 /* 23-Mar-2023 LZG            1.6   Ignore OrderKey and OrderLineNumber when shorting to short all */    
 /*                                  orders with same criteria, follow original design (ZG01)       */    
-/* 14-Jul-2023 James          1.7   Set orders status 0 when nothing allocated (james03)           */  
+/* 14-Jul-2023 James          1.7   Set orders status 0 when nothing allocated (james03)           */
+/* 10-OCT-2025 SSA01          1.8   UWP-42248 -Enhanced session management and cleanup             */
 /***************************************************************************************************/    
 CREATE OR ALTER PROC [dbo].[isp_ProcessShortPickReAllocate] (    
        @c_Orderkey         NVARCHAR(10)    
@@ -448,8 +449,8 @@ BEGIN
    UPDATE dbo.ORDERDETAIL SET    
       STATUS = @c_OrdStatus,    
       TrafficCop = NULL,    
-      EditWho = SUSER_SNAME(),    
-      EditDate = GETDATE()    
+      EditWho = dbo.fnc_GetUserName(),       --(SSA01)
+      EditDate = dbo.fnc_GetDate()   --(SSA01)
    WHERE OrderKey = @c_Orderkey    
    AND   OrderLineNumber = @c_OrderLineNumber    
       
@@ -481,8 +482,8 @@ BEGIN
    UPDATE dbo.ORDERS SET    
       STATUS = @c_OrdStatus,    
       TrafficCop = NULL,    
-      EditWho = SUSER_SNAME(),    
-      EditDate = GETDATE()    
+      EditWho = dbo.fnc_GetUserName(),      --(SSA01)
+      EditDate = dbo.fnc_GetDate()   --(SSA01)
    WHERE OrderKey = @c_Orderkey    
       
    IF @@ERROR <> 0    

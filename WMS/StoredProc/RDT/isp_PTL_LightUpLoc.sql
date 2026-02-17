@@ -23,12 +23,13 @@ GO
 /* 2022-03-22 1.7  yeekung    WMS-18729 add params (Yeekung04)                */
 /* 2023-04-06 1.8  yeekung    WMS-22163 Merge all lightup                     */ 
 /* 2024-07-30 1.9  yeekung    UWP-22410 Add new Column(yeekung05)					*/
-/******************************************************************************/    
+/* 2026-01-02 2.0  Cuize      FCR-9765 Add new DeviceModel for On Running 	   */
+/******************************************************************************/
 CREATE OR ALTER PROC [PTL].[isp_PTL_LightUpLoc]    
 (    
    @n_Func           INT    
   ,@n_PTLKey         BIGINT    
-  ,@c_DisplayValue   NVARCHAR(10)    
+  ,@c_DisplayValue   NVARCHAR(20)
   ,@b_Success        INT OUTPUT    
   ,@n_Err            INT OUTPUT    
   ,@c_ErrMsg         NVARCHAR(215) OUTPUT    
@@ -286,6 +287,28 @@ BEGIN
 
       END
       SET @cLightcmd = @c_LightCommand
+   END
+   ELSE IF @c_DeviceModel IN ('BATCH12') -- 'Batch Display 12 digit', ON running Brazil, v2.0
+   BEGIN
+      -- Only usinf for sending message
+      SET @c_LightCommand = 'PQ500m1$21$12$21AF101'  -- blue light with message
+
+
+      DECLARE @c_DisplayValueLength INT
+      SET @c_DisplayValueLength = LEN(ISNULL(@c_DisplayValue, ''))
+
+      IF @c_DisplayValueLength < 1 SET @c_DisplayValueLength = 1
+      IF @c_DisplayValueLength > 20 SET @c_DisplayValueLength = 20
+
+      DECLARE @c_FormattedLength VARCHAR(2)
+      SET @c_FormattedLength = RIGHT('0' + CAST(@c_DisplayValueLength AS VARCHAR(2)), 2)
+
+
+      SET @c_LightCommand = @c_LightCommand + @c_DevicePos + 'A' + @c_FormattedLength + @c_DisplayValue
+      --example: PQ500m1$21$12$21AF1011111A09COMPLETED
+
+
+
    END
   
   	SET @cFacility = CASE WHEN ISNULL(@cFacility,'') ='' THEN '' ELSE @cFacility END

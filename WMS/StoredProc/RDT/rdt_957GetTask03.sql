@@ -9,6 +9,7 @@ GO
 /*                                                                            */
 /* Date       Rev    Author     Purposes                                      */
 /* 2025-04-07 1.0.0  NLT013     FCR-2704 Created                              */
+/* 2025-08-29 1.1.0  Dennis     FCR-7346 Add Validation                       */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957GetTask03] (
@@ -50,7 +51,7 @@ BEGIN
    DECLARE @cSuggID     NVARCHAR( 18)
    DECLARE @cSuggSKU    NVARCHAR( 20)
    DECLARE @nSuggQTY    INT
-
+   DECLARE @cDropID        NVARCHAR( 20)
    DECLARE @cCurrLOC    NVARCHAR( 10)
    DECLARE @cCurrID     NVARCHAR( 18)
    DECLARE @cCurrLogicalLOC   NVARCHAR( 18)
@@ -64,6 +65,20 @@ BEGIN
 
    SET @cCurrLOC = @cLOC
    SET @cCurrID  = @cID
+
+   IF @nStep = 2
+   BEGIN
+      SELECT @cDropID = I_Field03
+      FROM RDT.RDTMOBREC (NOLOCK)
+      WHERE Mobile = @nMobile
+
+      IF EXISTS (SELECT 1 FROM dbo.PackDetail (NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID)
+      BEGIN
+         SET @nErrNo = 245751
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Drop ID in use
+         GOTO QUIT
+      END
+   END
 
    -- Get PickHeader info
    SELECT TOP 1

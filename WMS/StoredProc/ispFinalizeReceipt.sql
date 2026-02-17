@@ -86,9 +86,14 @@ GO
 /*                        commingle sku in a loc.                       */
 /* 10-Feb-2023  NJOW11    DEVOPS Combine Script                         */
 /* 19-Jun-2025  JH01      UWP-36358 - Enhanced the error message show   */
+/* 10-JUL-2025  Wan08     UWP-37554 - Increases Variable Length         */
+/* 10-OCT-2025 SSA01      UWP-42248 -Enhanced session management        */
+/*                             and cleanup.                             */
+/*13-JAN-2026  SSA02      FCR-9773 - ASN - KCB Inspection Hold LPNs     */
 /************************************************************************/  
+
   
-CREATE OR ALTER PROC    [dbo].[ispFinalizeReceipt]  
+CREATE OR ALTER PROC [dbo].[ispFinalizeReceipt]  
                @c_ReceiptKey   NVARCHAR(10)  
 ,              @b_Success      int       = 1  OUTPUT  
 ,              @n_err          int       = 0  OUTPUT  
@@ -146,7 +151,9 @@ BEGIN
             @c_RCPTSTATStatus    NVARCHAR(1),  
             @c_busr5             NVARCHAR(30),  
             @c_ToLoc             NVARCHAR(10),  
-            @c_ReceiptHoldCode   NVARCHAR(10) --NJOW03  
+            @c_ReceiptHoldCode   NVARCHAR(10), --NJOW03
+            @c_ToId              NVARCHAR(18), -- (SSA02)
+            @c_UserDefine02      NVARCHAR(30)  -- (SSA02)
   
     DECLARE @c_debug  NVARCHAR(1)  
   
@@ -191,12 +198,12 @@ BEGIN
            @c_SQLParm                     NVARCHAR(2000),  
            @nLottableRules                INT  
   
-        ,  @c_PostFinalizeReceiptSP     NVARCHAR(10)            --(Wan01)  
+        ,  @c_PostFinalizeReceiptSP     NVARCHAR(30)            --(Wan08) --(Wan01)  
         ,  @c_FinalizeSplitReceiptLine  NVARCHAR(10)            --(Wan02)  
         ,  @c_NewReceiptLineNumber      NVARCHAR(5)             --(Wan02)  
         ,  @n_NewQtyExpected            INT                     --(Wan02)  
           
-        ,  @c_PreFinalizeReceiptSP      NVARCHAR(10)            --(Wan03)  
+        ,  @c_PreFinalizeReceiptSP      NVARCHAR(30)            --(Wan08) --(Wan03)  
         ,  @c_UDF01                     NVARCHAR(60) --NJOW07  
         ,  @c_Value                     NVARCHAR(60) --NJOW07  
         ,  @c_DocType                   NVARCHAR(10)            --(Wan06)     
@@ -640,7 +647,7 @@ BEGIN
          INSERT INTO TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5    
                                , Col1, Col2, Col3, Col4, Col5)    
          SELECT 'ispGenLot1_TH01', GETDATE(), EditDate, EditWho, ReceiptKey, ReceiptLineNumber    
-               , @c_Lottable01Value, @c_Lottable02Value, sUser_sName(), '*1*', '', ''    
+               , @c_Lottable01Value, @c_Lottable02Value, dbo.fnc_GetUserName(), '*1*', '', ''           --(SSA01)
          FROM dbo.ReceiptDetail WITH (NOLOCK)    
          WHERE ReceiptKey = @c_ReceiptKey    
          AND ReceiptLineNumber = @c_ReceiptLineNo    
@@ -824,8 +831,8 @@ BEGIN
                       Lottable13 = CASE WHEN ISNULL(@d_Lottable13, '')  = '' THEN Lottable13 ELSE @d_Lottable13 END,  
                       Lottable14 = CASE WHEN ISNULL(@d_Lottable14, '')  = '' THEN Lottable14 ELSE @d_Lottable14 END,  
                       Lottable15 = CASE WHEN ISNULL(@d_Lottable15, '')  = '' THEN Lottable15 ELSE @d_Lottable15 END,  
-                      EditDate = GETDATE(),   
-                      EditWho = SUSER_SNAME(),   
+                      EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                      EditWho = dbo.fnc_GetUserName(),         --(SSA01)
                       TrafficCop = NULL   
                WHERE ReceiptKey = @c_ReceiptKey  
                  AND ReceiptLineNumber = @c_ReceiptLineNo  
@@ -1193,8 +1200,8 @@ BEGIN
                ToLoc = CASE WHEN @c_RCPTSTATStatus = '1' AND LEN(ISNULL(RTRIM(@c_ToLoc), '')) > 0  
                      THEN ISNULL(RTRIM(ToLoc), '') + @c_ToLoc  
                      ELSE ToLoc END,        -- tlting    
-               EditDate = GETDATE(),   
-               EditWho = SUSER_SNAME()    
+               EditDate = dbo.fnc_GetDate(),   --(SSA01)
+               EditWho = dbo.fnc_GetUserName()      --(SSA01)
       WHERE ReceiptKey = @c_ReceiptKey  
          AND ReceiptLineNumber = @c_ReceiptLineNo  
 
@@ -1359,8 +1366,8 @@ BEGIN
   
              UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
                SET QtyExpected = QtyExpected - QtyReceived   
-                  ,EditWho     = SUSER_NAME()  
-                  ,EditDate    = GETDATE()  
+                  ,EditWho     = dbo.fnc_GetUserName()        --(SSA01)
+                  ,EditDate    = dbo.fnc_GetDate()   --(SSA01)
                   ,Trafficcop  = NULL  
             WHERE ReceiptKey = @c_ReceiptKey  
               AND ReceiptLineNumber = @c_ReceiptLineNo  
@@ -1949,8 +1956,8 @@ BEGIN
                                             THEN CAST(@n_StockBalQty as NVARCHAR(30))  
                                        ELSE UserDefine02  
                                   END,   
-                   EditDate = GETDATE(),  
-                   EditWho = SUSER_SNAME()   
+                   EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                   EditWho = dbo.fnc_GetUserName()         --(SSA01)
             WHERE ReceiptKey = @c_ReceiptKey  
             SET @n_err = @@ERROR  
             IF @n_err <> 0  
@@ -2038,7 +2045,7 @@ BEGIN
                SET @n_continue= 3   
                SET @b_Success = 0  
                SET @n_err  = 163084 
-               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/ 
+               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/
             END   
          END   
       END
@@ -2081,7 +2088,7 @@ BEGIN
                SET @n_continue= 3   
                SET @b_Success = 0  
                SET @n_err  = 163085  
-               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/ 
+               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/
             END
          END
       END  
@@ -2196,6 +2203,78 @@ BEGIN
       CLOSE Cur_ReceiptDetail  
       DEALLOCATE Cur_ReceiptDetail  
       --WL02 End
+
+      --(SSA02) - START: Add Inventory Hold based on UserDefine02 field in ReceiptDetail
+      DECLARE Cur_ReceiptDetail CURSOR FAST_FORWARD READ_ONLY FOR
+      SELECT RD.StorerKey, RD.ToID, RD.SKU, RD.Lottable08, RD.Lottable09, RD.UserDefine02, CL.CODE
+      FROM  Receipt R WITH (NOLOCK)
+      JOIN ReceiptDetail RD (NOLOCK) ON RD.ReceiptKey = R.ReceiptKey
+      JOIN SKU SKU (NOLOCK) ON (RD.STORERKEY = SKU.STORERKEY AND RD.SKU = SKU.SKU)
+      JOIN STORERCONFIG SC (NOLOCK) ON RD.Storerkey = SC.Storerkey AND SC.Configkey = 'MarkForKCBInspection'
+                                    AND SC.Svalue = '1' AND (ISNULL(SC.Facility,'') = '' OR SC.Facility = R.Facility)
+      JOIN CODELKUP CL (NOLOCK) ON (CL.CODE = 'KCB BLOCK' AND CL.ListName = 'INVHOLD' AND CL.Storerkey = RD.StorerKey
+       AND (ISNULL(CL.CODE2,'') = '' OR CL.CODE2 = R.Facility))
+      WHERE RD.ReceiptKey = @c_ReceiptKey
+         AND RD.QtyReceived > 0
+         AND RD.FinalizeFlag = 'Y'
+         AND ISNULL(RD.UserDefine02,'') <> '' AND RD.UserDefine02 <> 'N'
+         AND R.DocType = 'A'
+      ORDER BY RD.ReceiptLineNumber
+      OPEN Cur_ReceiptDetail
+
+       FETCH NEXT FROM Cur_ReceiptDetail INTO @c_StorerKey, @c_ToId, @c_SKU, @c_Lottable08, @c_Lottable09, @c_UserDefine02, @c_ReceiptHoldCode
+       WHILE @@FETCH_STATUS <> -1 AND ( @n_continue = 1 or @n_continue = 2)
+       BEGIN
+            IF NOT EXISTS (SELECT 1 FROM InventoryHold WITH (NOLOCK)
+               WHERE StorerKey = @c_storerkey
+                  AND SKU = @c_sku
+                  AND Lottable08 = @c_Lottable08
+                  AND Lottable09 = @c_Lottable09
+                  AND ID = @c_ToId)
+            BEGIN
+               SELECT @b_success = 1
+               SET @c_Reason = 'AUTO HOLD on RECEIPT for KCBInspection REASON = ' + ISNULL(RTRIM(@c_ReceiptHoldCode), '')
+
+               EXEC nspInventoryHoldWrapper
+                  '',               -- lot
+                  '',               -- loc
+                  @c_ToId,          -- id
+                  @c_StorerKey,     -- storerkey
+                  @c_SKU,           -- sku
+                  '',               -- lottable01
+                  '',               -- lottable02
+                  '',               -- lottable03
+                  NULL,             -- lottable04
+                  NULL,             -- lottable05
+                  '',               --lottable06
+                  '',               --lottable07
+                  @c_Lottable08,    --lottable08
+                  @c_Lottable09,    --lottable09
+                  '',               --lottable10
+                  '',               --lottable11
+                  '',               --lottable12
+                  NULL,             --lottable13
+                  NULL,             --lottable14
+                  NULL,             --lottable15
+                  @c_ReceiptHoldCode,  -- status
+                  '1',              -- hold
+                  @b_success OUTPUT,
+                  @n_err OUTPUT,
+                  @c_errmsg OUTPUT,
+                  @c_Reason   -- remark
+
+               IF @n_err <> 0
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Receipt Fail. (''ispFinalizeReceipt'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+               END
+            END
+
+            FETCH NEXT FROM Cur_ReceiptDetail INTO @c_StorerKey, @c_ToId, @c_SKU, @c_Lottable08, @c_Lottable09,@c_UserDefine02,@c_ReceiptHoldCode
+         END -- @@FETCH_STATUS <> -1
+
+         CLOSE Cur_ReceiptDetail
+         DEALLOCATE Cur_ReceiptDetail
    END  
   
    -- TraceInfo (tlting01) - Start  

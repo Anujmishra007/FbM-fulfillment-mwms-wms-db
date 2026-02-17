@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrPalletMgmtUpdate' AND type = 'TR')
-   DROP TRIGGER ntrPalletMgmtUpdate
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -27,8 +24,9 @@ GO
 /*                                                                         */
 /* Modifications:                                                          */
 /* Date         Author  Ver   Purposes                                     */
+/* 06-Oct-2025  AK01    1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /***************************************************************************/
-CREATE TRIGGER ntrPalletMgmtUpdate ON PALLETMGMT
+CREATE OR ALTER TRIGGER ntrPalletMgmtUpdate ON PALLETMGMT
 FOR UPDATE
 AS
 BEGIN
@@ -62,8 +60,8 @@ BEGIN
    IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE PALLETMGMT WITH (ROWLOCK)
-      SET EditDate = GETDATE() 
-         ,EditWho  = SUSER_SNAME() 
+      SET EditDate = dbo.fnc_GetDate() 
+         ,EditWho  = dbo.fnc_GetUserName() 
          ,TrafficCop = NULL
       FROM PALLETMGMT
       JOIN DELETED  ON (DELETED.PMKey = PALLETMGMT.PMKey)
@@ -166,4 +164,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

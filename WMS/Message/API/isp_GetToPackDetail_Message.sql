@@ -14,3 +14,4 @@ execute API.TouchPadAddMsg 1000860, 10, '1000860 Incorrect dynamic E-Comm Cube c
 execute API.TouchPadAddMsg 1000861, 10, '1000861 Execute Custom SQL Failed. Function : isp_GetToPackDetail',    'us_english'
 execute API.TouchPadAddMsg 1000862, 10, '1000862 QTY Over Packed. Function : isp_GetToPackDetail',    'us_english'
 execute API.TouchPadAddMsg 1000863, 10, '1000863 Execute Custom SQL Failed. Function : isp_GetToPackDetail',    'us_english'
+execute API.TouchPadAddMsg 1000864, 10, 'Result No PickDetail found. Function : isp_GetToPackDetail',    'us_english'

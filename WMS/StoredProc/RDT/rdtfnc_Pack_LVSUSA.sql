@@ -13,6 +13,7 @@ GO
 /* 2024-10-16   1.0    JCH507     FCR-946 New Pack for LVSUSA                                   */
 /* 2025-04-30   1.1.0  NickT      UWP-33520 Recalculate weight and cube                         */
 /* 2025-04-30   1.1.1  JCH507     UWP-33520 Weight/Cube calculation issue in merge/new          */
+/* 2025-08-12   0.0    JCH507     !!!Cutover. Use V0 repo for work!!!                           */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_pack_LVSUSA] (

@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 05-Oct-2021 WLChooi  1.0   DevOps Combine Script                     */
+/* 10-OCT-2025 SSA01    1.1   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_GetMBOLPackingListPDF01]
@@ -239,8 +241,8 @@ BEGIN
       UPDATE ORDERS WITH (ROWLOCK)
       SET InvoiceNo = CAST(@c_InvoiceNo AS NVARCHAR(20))
         , TrafficCop = NULL
-        , EditDate = GETDATE()
-        , EditWho = SUSER_SNAME()
+        , EditDate = dbo.fnc_GetDate()   --(SSA01)
+        , EditWho = dbo.fnc_GetUserName()       --(SSA01)
       WHERE OrderKey = @c_Param01
 
       UPDATE MBOLDETAIL WITH (ROWLOCK)

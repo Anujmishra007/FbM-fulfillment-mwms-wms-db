@@ -21,6 +21,7 @@ SELECT [CCKey]
 , [Facility]
 FROM [CC] (NOLOCK)
 GO
+
 GRANT DELETE ON  [dbo].[V_CC] TO [NSQL]
 GO
 GRANT INSERT ON  [dbo].[V_CC] TO [NSQL]

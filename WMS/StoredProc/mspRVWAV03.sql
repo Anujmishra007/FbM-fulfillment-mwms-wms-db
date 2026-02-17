@@ -14,7 +14,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave Release                                               */    
 /*                                                                       */    
-/* PVCS Version: 1.1                                                     */    
+/* PVCS Version: 1.3                                                     */    
 /*                                                                       */    
 /* Version: 7.0                                                          */    
 /*                                                                       */    
@@ -26,6 +26,9 @@ GO
 /*                            Release (Automation and Manual Operations) */
 /* 2025-05-16  SWT01    1.2   If No Task Created, then if all PikDetail  */
 /*                            UOM = 2 (Full Carton). Then allow reverse  */
+/* 22-Jul-2025 WLC015   1.3   FCR-6612 Update Orderinfo.ReferenceID to   */
+/*                            blank (WL01)                               */
+/* 10-Oct-2025 SSA01    1.4  UWP-42248 -Enhanced session management      */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV03]        
  @c_wavekey      NVARCHAR(10) 
@@ -41,7 +44,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF    
       
    DECLARE @n_continue       INT = 1      
-         , @n_starttcnt      INT = @@TRANCOUNT        -- Holds the current transaction count    
+         , @n_starttcnt      INT = @@TRANCOUNT        --  Holds the current transaction count    
          , @n_debug          INT = 0  
          , @n_cnt            INT = 0  
          , @c_otherwavekey   NVARCHAR(10) = '' 
@@ -61,6 +64,7 @@ BEGIN
          , @CUR_DELPICK      CURSOR
          , @CUR_DELPRECARTON CURSOR
          , @CUR_UPDATEORD    CURSOR                                              --(Wan01)
+         , @CUR_ORDERINFO    CURSOR    --WL01
                      
    SET @b_success=0
    SET @n_err=0
@@ -308,7 +312,7 @@ BEGIN
       BEGIN
          UPDATE ORDERS WITH (ROWLOCK)
             SET ContainerQty = 0
-               ,EditDate = GETDATE()
+               ,EditDate = dbo.fnc_GetDate()   --(SSA01)
                ,TrafficCop = NULL
          WHERE Orderkey = @c_Orderkey
 
@@ -324,15 +328,51 @@ BEGIN
       END
       CLOSE @CUR_UPDATEORD
       DEALLOCATE @CUR_UPDATEORD
-   END                                                                              --(Wan01) - END  
+   END                                                                              --(Wan01) - END
+
+   --WL01 S
+   IF (@n_continue = 1 OR @n_continue = 2)
+   BEGIN
+      SET @CUR_ORDERINFO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+      SELECT DISTINCT OI.Orderkey
+      FROM dbo.WAVEDETAIL WD WITH (NOLOCK)
+      JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OI.OrderKey = WD.OrderKey
+      WHERE WD.WaveKey = @c_wavekey
+      AND (OI.ReferenceId IS NOT NULL AND OI.ReferenceId <> '')
+
+      OPEN @CUR_ORDERINFO
+
+      FETCH NEXT FROM @CUR_ORDERINFO INTO @c_Orderkey
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+      BEGIN
+         UPDATE dbo.OrderInfo
+         SET ReferenceId = ''
+         WHERE OrderKey = @c_Orderkey
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 81050
+            SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) + ': Updating OrderInfo Failed (mspRVWAV03)'  
+                          + ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
+         END
+
+         FETCH NEXT FROM @CUR_ORDERINFO INTO @c_Orderkey
+      END
+      CLOSE @CUR_ORDERINFO
+      DEALLOCATE @CUR_ORDERINFO
+   END
+   --WL01 E
+
    -----Reverse wave status------  
    IF @n_continue = 1 or @n_continue = 2    
    BEGIN    
       UPDATE WAVE   
          SET TMReleaseFlag = 'N'                
           ,  TrafficCop = NULL                  
-          ,  EditWho = SUSER_SNAME()            
-          ,  EditDate= GETDATE()                 
+          ,  EditWho = dbo.fnc_GetUserName()          --(SSA01)
+          ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
       WHERE WAVEKEY = @c_wavekey                
       SELECT @n_err = @@ERROR    
       IF @n_err <> 0    

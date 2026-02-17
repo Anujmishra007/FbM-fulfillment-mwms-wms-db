@@ -14,6 +14,7 @@ GO
 /* Date         Rev  Author   Purposes                                  */
 /* 2022-02-03   1.0  Ung      WMS-18864 Created base on rdt_523ExtPA34  */
 /*                            Add product zone, default LOC             */
+/* 2025-04-23   1.1  NLT013   UWP-32244 Extended Menu No range          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_523ExtPA46] (
@@ -78,7 +79,7 @@ BEGIN
    WHERE ListName = 'SEPPAZONE'
       AND Code = @cBUSR4
       AND StorerKey = @cStorerKey
-      AND Code2 = CAST( @nFunc AS NVARCHAR(4))
+      AND Code2 = CAST( @nFunc AS NVARCHAR(11))
    
    SET @cSuggestedLOC = ''
 

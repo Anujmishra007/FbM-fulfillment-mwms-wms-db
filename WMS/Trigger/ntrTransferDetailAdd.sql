@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -31,6 +31,7 @@ GO
 /* 07-Feb-2016  SWT02      Channel Management                           */
 /* 23-JUL-2019  Wan01      WMS-9872 - CN_NIKESDC_Exceed_Channel         */
 /* 26-MAY-2025  SSA01      UWP-3982- Added PalletType                   */
+/* 09-Oct-2025  SPC040  1.0  Replace SUSER_SNAME with fnc_GetUserName   */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrTransferDetailAdd]
@@ -477,8 +478,8 @@ BEGIN
             SET FromChannel_ID = @n_FromChannel_ID, 
                   ToChannel_ID  = @n_ToChannel_ID, 
                   TrafficCop = NULL, 
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME() 
+                  EditDate = dbo.fnc_GetDate(),
+                  EditWho = dbo.fnc_GetUserName() 
             WHERE TransferKey = @c_TransferKey            
                AND TransferLineNumber = @c_TransferLineNumber    
       

@@ -16,6 +16,7 @@ GO
 /* 09-04-2018 1.4  Ung         WMS-3845 Add PackConfirmSP               */  
 /* 14-09-2020 1.5  Chermaine   WMS-14253 Add isnull (cc01)              */
 /* 03-06-2023 1.6  Ung         WMS-22608 Add multi PickDetail.Status    */
+/* 12-11-2025 2.2  NickT       UWP-43907 Merge code from V0             */
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_Pack_PackConfirm (  
@@ -32,6 +33,7 @@ CREATE OR ALTER PROC rdt.rdt_Pack_PackConfirm (
    ,@cPrintPackList NVARCHAR( 1) OUTPUT  
    ,@nErrNo       INT            OUTPUT  
    ,@cErrMsg      NVARCHAR(250)  OUTPUT  
+   ,@nUseStandard INT = 0
 )  
 AS  
 BEGIN  
@@ -44,10 +46,13 @@ BEGIN
    DECLARE @cSQLParam      NVARCHAR(MAX)  
    DECLARE @cPackConfirmSP NVARCHAR(20)  
   
-   -- Get storer configure  
-   SET @cPackConfirmSP = rdt.RDTGetConfig( @nFunc, 'PackConfirmSP', @cStorerKey)  
-   IF @cPackConfirmSP = '0'  
-      SET @cPackConfirmSP = ''  
+   -- Get storer configure
+   IF @nUseStandard = 0
+   BEGIN
+      SET @cPackConfirmSP = rdt.RDTGetConfig( @nFunc, 'PackConfirmSP', @cStorerKey)  
+      IF @cPackConfirmSP = '0'  
+         SET @cPackConfirmSP = ''
+   END
   
    /***********************************************************************************************  
                                               Custom pack confirm  

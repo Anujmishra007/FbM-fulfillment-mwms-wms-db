@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 03-Mar-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 10-Oct-2025  SSA01   1.1  UWP-42248 -Enhanced session management        */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPAKCF19]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -161,8 +162,8 @@ BEGIN
             UPDATE ORDERS
             SET TrackingNo = @c_ExternOrderkey
               , TrafficCop = NULL
-              , EditDate   = GETDATE()
-              , EditWho    = SUSER_SNAME()
+              , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho    = dbo.fnc_GetUserName()           --(SSA01)
             WHERE OrderKey = @c_Orderkey
             
             IF @@ERROR <> 0  
@@ -206,8 +207,8 @@ BEGIN
             UPDATE ORDERS
             SET UserDefine01 = @c_UserDefine01
               , TrafficCop = NULL
-              , EditDate   = GETDATE()
-              , EditWho    = SUSER_SNAME()
+              , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho    = dbo.fnc_GetUserName()              --(SSA01)
             WHERE OrderKey = @c_Orderkey
             
             IF @@ERROR <> 0  

@@ -29,6 +29,10 @@ GO
 /* 2025-03-11 1.6.4  Dennis     FCR-3925  Add Validation for Tote Rel              */
 /* 2025-04-11 1.6.5  Dennis     UWP-31758 Skip Confirm Tote after Short pick       */
 /* 2025-04-25 1.6.6  DENNIS     FCR-4243 Resume tasks                              */
+/* 2025-06-18 1.6.7  DENNIS     UWP-36228 Filter task                              */
+/* 2025-07-16 1.7.0  NickT      UWP-37893 PickDetail.CaseID is not updated as empty string*/
+/* 2025-08-14 1.8.0  Cuize      Goto STEP 99 for Mask SKU                          */
+/* 2025-09-03 1.9.0  NickT      UWP-40527 Improve the logic for locking tasks      */
 /***********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -175,7 +179,7 @@ BEGIN
    DECLARE @tTaskDetailKeyList TABLE
    (
       id             INT IDENTITY(1,1),
-      TaskDetailKey  NVARCHAR( 10)
+      TaskDetailKey  NVARCHAR( 10) PRIMARY KEY
    )
    
    -- Set Constant value
@@ -284,6 +288,11 @@ BEGIN
          SET @nAfterStep = 99
 
       END -- back to 2nd screen
+      ELSE IF @nScn=@nScn_SKUQTY AND @nStep = @nStep_SKUQTY
+      BEGIN
+         SET @cOutField03 = rdt.rdtMaskValue(@nFunc,@cStorerKey,'SKU',@cSuggSKU )  --Mask SKU values
+         GOTO Quit
+      END
       -- generic esc handling end
 
       --Screnn logic
@@ -391,18 +400,23 @@ BEGIN
                               AND   Groupkey <> ''
                               AND   UserKey = @cUserName
                               AND   DeviceID = @cCartID
+                              AND   CASEID <> ''
                               AND   DropID <> '')
                AND @cCartID <> ''
                BEGIN
-                  SELECT TOP 1 @cTaskDetailKey = TaskDetailKey,@cSuggToLOC = toloc FROM dbo.TaskDetail WITH (NOLOCK)
-                     WHERE Storerkey = @cStorerKey
-                     AND   TaskType = 'ASTCPK'
-                     AND   [Status] = '5'
-                     AND   Groupkey <> ''
-                     AND   UserKey = @cUserName
-                     AND   DeviceID = @cCartID
-                     AND   DropID <> ''
-                     ORDER BY EditDate DESC
+                  SELECT TOP 1 
+                        @cTaskDetailKey = TaskDetailKey,
+                        @cSuggToLOC = toloc,
+                        @cGroupKey = Groupkey
+                  FROM dbo.TaskDetail WITH (NOLOCK)
+                  WHERE Storerkey = @cStorerKey
+                  AND   TaskType = 'ASTCPK'
+                  AND   [Status] = '5'
+                  AND   Groupkey <> ''
+                  AND   UserKey = @cUserName
+                  AND   DeviceID = @cCartID
+                  AND   DropID <> ''
+                  ORDER BY EditDate DESC
 
                   -- Check Method valid
                   SELECT @cCartPickMethod = Long
@@ -430,6 +444,7 @@ BEGIN
                               AND   Groupkey <> ''
                               AND   UserKey = @cUserName
                               AND   DeviceID = @cCartID
+                              AND   CASEID <> ''
                               AND   DropID <> '')
                   BEGIN
                      SET @cOutField01 = ''
@@ -829,8 +844,15 @@ BEGIN
                END -- Normal Picking FLow
                ELSE BEGIN --Automation Picking FLow
                   -- Check pickzone valid
+                  DECLARE 
+                     @cWaveKeyTemp NVARCHAR(10),
+                     @cToLocTemp NVARCHAR(10)
+
                   --Search the First Task
-                  SELECT TOP 1 @cTaskDetailKey = TaskDetailKey
+                  SELECT TOP 1 
+                     @cTaskDetailKey = TaskDetailKey,
+                     @cWaveKeyTemp = TD.WaveKey,
+                     @cToLocTemp = TD.ToLoc
                   FROM dbo.TaskDetail TD WITH (NOLOCK)
                   INNER JOIN dbo.LOC LOC WITH (NOLOCK)
                      ON ( TD.FromLoc = LOC.Loc)
@@ -980,8 +1002,48 @@ BEGIN
                   IF @nErrNo <> 0
                      GOTO Quit
 
-                  SELECT @nRowCount = COUNT(DISTINCT TD.CaseID)
+                  DECLARE @tCaseID TABLE ( CaseID NVARCHAR(20) PRIMARY KEY )
+
+                  INSERT INTO @tCaseID (CaseID)
+                  SELECT CaseID
+                  FROM 
+                     (SELECT CaseID, 
+                           ROW_NUMBER() OVER(PARTITION BY PickZone
+                              ORDER BY 
+                                 Priority,
+                                 CASE WHEN UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+                                 TaskDetailKey) AS RowIndex
+                     FROM
+                        (SELECT LOC.PickZone, TD.CaseID, TD.Priority, TD.UserKeyOverRide, TD.TaskDetailKey, 
+                           ROW_NUMBER()OVER(PARTITION BY TD.CaseID
+                           ORDER BY
+                              TD.Priority,
+                              CASE WHEN TD.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+                              TD.TaskDetailKey
+                           ) AS row#
+                        FROM dbo.TaskDetail TD WITH (NOLOCK)
+                        INNER JOIN dbo.LOC LOC WITH (NOLOCK)
+                           ON TD.FromLoc = LOC.Loc
+                        WHERE TD.Storerkey = @cStorerKey
+                           AND TD.TaskType = 'ASTCPK'
+                           AND TD.Status = '0'
+                           AND TD.Groupkey = ''
+                           AND TD.UserKey = ''
+                           AND TD.DeviceID = ''
+                           AND ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
+                           AND LOC.Facility = @cFacility
+                           AND LOC.PickZone = @cPickZone
+                           AND TD.WaveKey = @cWaveKeyTemp
+                           AND TD.ToLoc = @cToLocTemp
+                        ) AS t
+                     WHERE t.row# = 1) AS t1
+                  WHERE t1.RowIndex <= @nCartLimit
+
+                  INSERT INTO @tTaskDetailKeyList (TaskDetailKey)
+                  SELECT DISTINCT TD.TaskDetailKey
                   FROM dbo.TaskDetail TD WITH (NOLOCK)
+                  INNER JOIN @tCaseID TC
+                     ON TD.CaseID = TC.CaseID
                   INNER JOIN dbo.LOC LOC WITH (NOLOCK)
                      ON TD.FromLoc = LOC.Loc
                   WHERE TD.Storerkey = @cStorerKey
@@ -990,49 +1052,18 @@ BEGIN
                      AND TD.Groupkey = ''
                      AND TD.UserKey = ''
                      AND TD.DeviceID = ''
-                     AND   ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
+                     AND ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
                      AND LOC.Facility = @cFacility
                      AND LOC.PickZone = @cPickZone
-                     AND EXISTS (SELECT 1 FROM dbo.TaskDetail TD1 WITH (NOLOCK)
-                                 WHERE TD1.StorerKey = @cStorerKey
-                                    AND TD1.TaskDetailKey = @cTaskDetailKey
-                                    AND TD1.WaveKey = TD.WaveKey
-                                    AND TD1.ToLoc = TD.ToLoc)
+                     AND TD.WaveKey = @cWaveKeyTemp
+                     AND TD.ToLoc = @cToLocTemp
 
-                  SET @nRowCount = IIF(@nCartLimit <= @nRowCount, @nCartLimit, @nRowCount)
-
-                  INSERT INTO @tTaskDetailKeyList (TaskDetailKey)
-                  SELECT TaskDetailKey
-                  FROM
-                     (SELECT TD.TaskDetailKey, ROW_NUMBER()OVER(PARTITION BY TD.CaseID
-                        ORDER BY
-                           TD.Priority,
-                           CASE WHEN TD.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
-                           TD.TaskDetailKey
-                     ) AS row#
-                     FROM dbo.TaskDetail TD WITH (NOLOCK)
-                     INNER JOIN dbo.LOC LOC WITH (NOLOCK)
-                        ON TD.FromLoc = LOC.Loc
-                     WHERE TD.Storerkey = @cStorerKey
-                        AND TD.TaskType = 'ASTCPK'
-                        AND TD.Status = '0'
-                        AND TD.Groupkey = ''
-                        AND TD.UserKey = ''
-                        AND TD.DeviceID = ''
-                        AND   ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))
-                        AND LOC.Facility = @cFacility
-                        AND LOC.PickZone = @cPickZone
-                        AND EXISTS (SELECT 1 FROM dbo.TaskDetail TD1 WITH (NOLOCK)
-                                    WHERE TD1.StorerKey = @cStorerKey
-                                       AND TD1.TaskDetailKey = @cTaskDetailKey
-                                       AND TD1.WaveKey = TD.WaveKey
-                                       AND TD1.ToLoc = TD.ToLoc)) AS t
-                  WHERE t.row# <= @nRowCount
+                  SELECT @nRowCount = COUNT(1) FROM @tCaseID
 
                   SET @cTotalToteQty = ISNULL(TRY_CAST(@nRowCount AS NVARCHAR(5)), 0)
 
                   --Lock the Tasks
-                  UPDATE TaskDetail WITH(ROWLOCK)
+                  UPDATE TD WITH(ROWLOCK)
                   SET 
                      UserKey = @cUserName,
                      DeviceID = @cCartID,
@@ -1040,8 +1071,9 @@ BEGIN
                      Status = '3',
                      EditWho = @cUserName,
                      EditDate = GETDATE()
-                  WHERE StorerKey = @cStorerKey
-                     AND EXISTS(SELECT 1 FROM @tTaskDetailKeyList AS TDL WHERE TaskDetail.TaskDetailKey = TDL.TaskDetailKey)
+                  FROM dbo.TaskDetail TD WITH(ROWLOCK)
+                  INNER JOIN @tTaskDetailKeyList TDL
+                     ON TD.TaskDetailKey = TDL.TaskDetailKey
 
                   SET @cOutField01 = @cCartPickMethod
                   SET @cOutField02 = @cCartID

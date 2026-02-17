@@ -29,6 +29,8 @@ GO
 /*                            Issue                                      */
 /* 2022-07-13  Wan04    1.4   DevObj Combine script                      */
 /* 2022-06-11  SSA01    1.5   FCR-3982- Added PalletType Validation      */
+/* 2025-10-06  SSA02    1.6   UWP-42142 -Enhanced session management     */
+/*                            and cleanup.                               */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_finalizeADJ_Wrapper]  
    @c_AdjustmentKey  NVARCHAR(10)
@@ -97,6 +99,7 @@ BEGIN
          
          , @c_CrossWH         NVARCHAR(30)
          , @c_ReasonCode      NVARCHAR(30)   = ''              --(Wan04)
+         , @c_InvalidADLineNo       NVARCHAR(5)
 
          , @CUR_AJD           CURSOR
 
@@ -105,7 +108,8 @@ BEGIN
    SET @c_TableName = 'ADJUSTMENT'
    SET @c_SourceType = 'lsp_finalizeADJ_Wrapper'
    SET @n_ErrGroupKey= 0
-
+   -- Start enhanced session management (SSA02)
+   DECLARE @b_ExecuteAs        BIT = 0
    SET @n_Err = 0 
    IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
    BEGIN
@@ -113,14 +117,16 @@ BEGIN
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-
+      IF @b_ExecuteAs = 1
       EXECUTE AS LOGIN = @c_UserName
    END                                   --(Wan03) - END
+   -- End enhanced session management (SSA02)
    
    WHILE @@TRANCOUNT > 0
    BEGIN
@@ -185,47 +191,6 @@ BEGIN
                , @n_err         = @n_err       
                , @c_errmsg      = @c_errmsg   
       END
-      --(SSA01) start --
-      IF @n_continue IN(1,2)
-      BEGIN
-          IF EXISTS(
-          SELECT 1
-          FROM ADJUSTMENTDETAIL(NOLOCK) AD
-          WHERE
-            (
-            AD.PalletType IS NOT NULL
-            AND AD.PalletType != ''
-            AND AD.AdjustmentKey = @c_Adjustmentkey
-            AND NOT EXISTS (
-              SELECT 1
-              FROM PalletTypeMaster(NOLOCK) ptm
-              WHERE ptm.PalletType = AD.PalletType
-              AND ptm.StorerKey = AD.StorerKey
-              AND ptm.facility = @c_Facility
-              )
-            )
-            )
-            BEGIN
-            SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551124
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+' PalletType is not valid. (lsp_finalizeADJ_Wrapper)'
-
-            EXEC [WM].[lsp_WriteError_List]
-                  @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
-                  @c_TableName   = @c_TableName,
-                  @c_SourceType  = @c_SourceType,
-                  @c_Refkey1     = @c_Adjustmentkey,
-                  @c_Refkey2     = '',
-                  @c_Refkey3     = '',
-                  @n_err2        = @n_err,
-                  @c_errmsg2     = @c_errmsg,
-                  @b_Success     = @b_Success OUTPUT,
-                  @n_err         = @n_err OUTPUT,
-                  @c_errmsg      = @c_errmsg OUTPUT
-              GOTO EXIT_SP
-            END
-      END
-      --(SSA01) end --
 
       IF OBJECT_ID('tempdb..#UPDLOT05','u') IS NOT NULL
       BEGIN
@@ -780,7 +745,44 @@ BEGIN
                      , @n_err         = @n_err       
                      , @c_errmsg      = @c_errmsg          
          END
-         --(Wan04) - END   
+         --(Wan04) - END
+         --(SSA01) - START
+          IF @n_continue IN(1,2)
+          BEGIN
+                SELECT TOP 1 @c_InvalidADLineNo = AD.AdjustmentLineNumber
+                FROM ADJUSTMENTDETAIL(NOLOCK) AD
+                WHERE AD.PalletType IS NOT NULL
+                AND AD.PalletType != ''
+                AND AD.AdjustmentKey = @c_Adjustmentkey
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM PalletTypeMaster(NOLOCK) ptm
+                  WHERE ptm.PalletType = AD.PalletType
+                  AND ptm.StorerKey = AD.StorerKey
+                  AND ptm.facility = @c_Facility
+                  )
+                IF @c_InvalidADLineNo IS NOT NULL AND @c_InvalidADLineNo <> ''
+                BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551124
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': LineNo : '+@c_InvalidADLineNo+': Pallet Type Not Found In Pallet Type Master Data (lsp_finalizeADJ_Wrapper)'
+
+                  EXEC [WM].[lsp_WriteError_List]
+                        @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
+                        @c_TableName   = @c_TableName,
+                        @c_SourceType  = @c_SourceType,
+                        @c_Refkey1     = @c_Adjustmentkey,
+                        @c_Refkey2     = @c_InvalidADLineNo,
+                        @c_Refkey3     = '',
+                        @n_err2        = @n_err,
+                        @c_errmsg2     = @c_errmsg,
+                        @b_Success     = @b_Success OUTPUT,
+                        @n_err         = @n_err OUTPUT,
+                        @c_errmsg      = @c_errmsg OUTPUT
+                    GOTO EXIT_SP
+                END
+          END
+        --(SSA01) - END
          FETCH NEXT FROM @CUR_AJD INTO    @c_AdjLineNo 
                                        ,  @c_Storerkey 
                                        ,  @c_Sku       
@@ -825,8 +827,8 @@ BEGIN
             BEGIN TRY
                UPDATE ADJUSTMENTDETAIL WITH (ROWLOCK)
                SET Lottable05 = GETDATE()
-                  ,EditWho    = @c_UserName
-                  ,EditDate   = GETDATE()
+                  ,EditWho    = dbo.fnc_GetUserName()   --(SSA02)
+                  ,EditDate   = dbo.fnc_GetDate()    --(SSA02)
                   ,Trafficcop = NULL
                WHERE AdjustmentKey = @c_AdjustmentKey    
                AND AdjustmentLineNumber = @c_AdjLineNo
@@ -956,7 +958,8 @@ BEGIN
       BEGIN TRAN
    END
  
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SSA02)
+   EXEC [WM].[lsp_ResetUser]  -- (SSA02)
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_finalizeADJ_Wrapper] TO nSQL 

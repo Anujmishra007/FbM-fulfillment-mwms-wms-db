@@ -27,6 +27,7 @@ GO
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /* Date         Author    Ver.  Purposes                                */  
+/* 06-OCT-2025  AK01      1.1   UWP-42143 Data Audit                    */
 /************************************************************************/  
   
 CREATE OR ALTER TRIGGER [dbo].[ntrOTMIDTrackAdd]  
@@ -106,6 +107,27 @@ BEGIN
       CLOSE OrdCur
       DEALLOCATE OrdCur
    END
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE OTMIDTrack
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM OTMIDTrack
+      JOIN INSERTED ON OTMIDTrack.MUID = INSERTED.MUID
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62901
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table OTMIDTrack. (ntrOTMIDTrackAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
 /* #INCLUDE <TROHU2.SQL> */
    IF @n_Continue=3  -- Error Occured - Process And Return

@@ -31,7 +31,7 @@ EXECUTE rdt.rdtAddScn 6513, 'ENG'
 DELETE rdt.RDTScn WHERE Scn = 6514 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6514, 'ENG'
    ,@cLine01 = 'SERIALNO'
-   ,@cLine02 = '%30i01'
+   ,@cLine02 = '%200iV_Barcode' --FCR-9889
    ,@cLine05 = 'Scanned SN: %08d02'
    ,@cLine08 = 'Option %01i04'
    ,@cLine09 = '9: Finish %10d03'

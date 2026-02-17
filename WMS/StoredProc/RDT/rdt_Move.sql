@@ -33,7 +33,7 @@ GO
 /*                          accurate, rewrite the checking part         */
 /* 2008-03-19 1.6  James    Break @curUCC into 2 statement and forced   */
 /*                          to use index hint IDX_UCC_LOTxLOCxID        */
-/* 2010-10-01 1.7  Shong    Qty Available need to deduct ReplenQty      */
+/* 2010-10-01 1.7  Shong    Qty Available need to deduct ReplenQty  */
 /* 2011-11-11 1.8  ChewKP   LCI Project Changes Update UCC Table        */
 /*                          (ChewKP01)                                  */
 /* 2011-11-29 1.9  Ung      SOS229877 Add MoveCheckLOCColumnRestriction */
@@ -72,7 +72,9 @@ GO
 /* 2024-04-07 4.5  Ung      WMS-25173 Add UCC.Status = 4-Replen         */
 /* 2024-10-01 4.6  James    WMS-26122 Add UCCPickStatus (james05)       */
 /* 2024-11-12 4.7  PXL009   FCR-1125 Merged 4.5, 4.6 from v0 branch     */
-/* 2024-11-27 4.8.0  NLT013 FCR-1522 Support Overallocation for UL      */
+/* 2024-11-27 4.8.0  NLT013   FCR-1522 Support Overallocation for UL    */
+/* 2025-05-12 4.9.0  NLT013 UWP-34122 MAXSKU does not work in FN514     */
+/* 2025-10-16 5.0  Ung      FCR-8112 Add serial no                      */ 
 /************************************************************************/
 
 CREATE OR ALTER  PROCEDURE [RDT].[rdt_Move] (
@@ -102,7 +104,11 @@ CREATE OR ALTER  PROCEDURE [RDT].[rdt_Move] (
    @cCaseID     NVARCHAR( 20) = '',
    @cChannel    NVARCHAR( 20) = '',
    @nChannel_ID BIGINT = 0,
-   @cWaveKey    NVARCHAR( 10) = ''
+   @cWaveKey    NVARCHAR( 10) = '', 
+   @cSerialNo   NVARCHAR( 30) = '',   -- For move with SerialNoUpdateLotLocID
+   @nSerialQTY  INT = 0,              -- Same as above
+   @nBulkSNO    INT = 0,              -- Same as above. Use rdt.rdtMoveSerialNoLog table
+   @nBulkSNOQTY INT = 0               -- Same as above
 ) AS
 
 SET NOCOUNT ON
@@ -110,46 +116,48 @@ SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
-DECLARE @cSQL          NVARCHAR( MAX)
-DECLARE @cSQLParam     NVARCHAR( MAX)
-DECLARE @nRowCount     INT
-DECLARE @cStorerConfig_UCC  NVARCHAR( 1)
-DECLARE @cChkFacility  NVARCHAR( 5)
-DECLARE @cToLocType    NVARCHAR( 10)
-DECLARE @cLoseID       NVARCHAR( 1)
-DECLARE @cToIDForItrn  NVARCHAR( 18)
-DECLARE @cMoveQTYAlloc NVARCHAR( 1)
-DECLARE @cMoveQTYPick  NVARCHAR( 1)
-DECLARE @cMoveRefKey   NVARCHAR( 10)
-DECLARE @cUCCAllocStatus  NVARCHAR( 1)
-DECLARE @cUCCPickStatus   NVARCHAR( 1)
+DECLARE @cSQL                    NVARCHAR( MAX)
+DECLARE @cSQLParam               NVARCHAR( MAX)
+DECLARE @nRowCount               INT
+DECLARE @cStorerConfig_UCC       NVARCHAR( 1)
+DECLARE @cSerialNoUpdateLotLocID NVARCHAR( 1)
+DECLARE @cSerialNoCapture        NVARCHAR( 1)
+DECLARE @cChkFacility            NVARCHAR( 5)
+DECLARE @cToLocType              NVARCHAR( 10)
+DECLARE @cLoseID                 NVARCHAR( 1)
+DECLARE @cToIDForItrn            NVARCHAR( 18)
+DECLARE @cMoveQTYAlloc           NVARCHAR( 1)
+DECLARE @cMoveQTYPick            NVARCHAR( 1)
+DECLARE @cMoveRefKey             NVARCHAR( 10)
+DECLARE @cUCCAllocStatus         NVARCHAR( 1)
+DECLARE @cUCCPickStatus          NVARCHAR( 1)
 
-DECLARE @cUCCLOT NVARCHAR( 10)
-DECLARE @cLOT    NVARCHAR( 10)
-DECLARE @cLOC    NVARCHAR( 10)
-DECLARE @cID     NVARCHAR( 18)
-DECLARE @cLoseUCC NVARCHAR( 1) -- (ChewKP02)
-DECLARE @cFromLocLoseUCC NVARCHAR( 1)  -- (ChewKP04)
-      , @cToLocLoseUCC NVARCHAR( 1)    -- (ChewKP04)
+DECLARE @cUCCLOT                 NVARCHAR( 10)
+DECLARE @cLOT                    NVARCHAR( 10)
+DECLARE @cLOC                    NVARCHAR( 10)
+DECLARE @cID                     NVARCHAR( 18)
+DECLARE @cLoseUCC                NVARCHAR( 1) -- (ChewKP02)
+DECLARE @cFromLocLoseUCC         NVARCHAR( 1) -- (ChewKP04)
+DECLARE @cToLocLoseUCC           NVARCHAR( 1) -- (ChewKP04)
 
-DECLARE @nFromLOC_UCC INT
-DECLARE @nFromLOC_SKU INT
-DECLARE @nToLOC_UCC   INT
-DECLARE @nToLOC_SKU   INT
+DECLARE @nFromLOC_UCC            INT
+DECLARE @nFromLOC_SKU            INT
+DECLARE @nToLOC_UCC              INT
+DECLARE @nToLOC_SKU              INT
 
-DECLARE @nMoveLoop  INT
-       ,@cNSKU        NVARCHAR(20)
-       ,@cByPassUCCTrack NVARCHAR(1)
-       ,@cStorerConfig_ByPassCantMixSKUnUCC NVARCHAR(1)
+DECLARE @nMoveLoop               INT
+DECLARE @cNSKU                   NVARCHAR(20)
+DECLARE @cByPassUCCTrack         NVARCHAR(1)
+DECLARE @cStorerConfig_ByPassCantMixSKUnUCC NVARCHAR(1)
 
-DECLARE @cFromStatus    NVARCHAR( 10) = ''
-DECLARE @cToStatus      NVARCHAR( 10) = ''
-DECLARE @tItrnUCCVar    VARIABLETABLE
-DECLARE @cItrnKey       NVARCHAR(10)
+DECLARE @cFromStatus             NVARCHAR( 10) = ''
+DECLARE @cToStatus               NVARCHAR( 10) = ''
+DECLARE @tItrnUCCVar             VARIABLETABLE
+DECLARE @cItrnKey                NVARCHAR(10)
 
-DECLARE @nMaxSKU        INT = 0
-DECLARE @nSKUCnt        INT = 0
-DECLARE @nIsSKUExists   INT = 0
+DECLARE @nMaxSKU                 INT = 0
+DECLARE @nSKUCnt                 INT = 0
+DECLARE @nIsSKUExists            INT = 0
 
 SET @nErrNo = 0
 SET @nQTY = IsNULL( @nQTY, 0)
@@ -160,6 +168,12 @@ SELECT @cStorerConfig_UCC = CASE WHEN SValue = '1' THEN '1' ELSE '0' END
 FROM dbo.StorerConfig (NOLOCK)
 WHERE StorerKey = @cStorerKey
    AND ConfigKey = 'UCC'
+   
+SET @cSerialNoUpdateLotLocID = '0' -- Default Off
+SELECT @cSerialNoUpdateLotLocID = CASE WHEN SValue = '1' THEN '1' ELSE '0' END
+FROM dbo.StorerConfig (NOLOCK)
+WHERE StorerKey = @cStorerKey
+   AND ConfigKey = 'SerialNoUpdateLotLocID'
 
 -- Move QTYAlloc (ung01)
 SET @cMoveQTYPick = rdt.RDTGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
@@ -599,7 +613,7 @@ BEGIN
             AND   LOC.Facility = @cFacility
             AND   LOC.Loc = @cFromLOC
             AND   NOT EXISTS ( SELECT 1 FROM dbo.LOTxLOCxID LLI2 WITH (NOLOCK)
-                  JOIN dbo.LOC LOC2 WITH (NOLOCK) ON ( LLI.Loc = LOC.Loc)
+                  JOIN dbo.LOC LOC2 WITH (NOLOCK) ON ( LLI2.Loc = LOC2.Loc)
                   WHERE LLI2.StorerKey = @cStorerKey
                   AND   (LLI2.QTY - LLI2.QTYPicked > 0 OR LLI2.PendingMoveIn > 0)
                   AND   LOC2.Facility = @cFacility
@@ -662,10 +676,14 @@ END
 -- Validate SKU (optional)
 IF @cSKU IS NOT NULL
 BEGIN
-   IF NOT EXISTS( SELECT 1
-      FROM dbo.SKU SKU (NOLOCK)
-      WHERE SKU.StorerKey = @cStorerKey
-         AND SKU.SKU = @cSKU)
+   -- Get SKU info
+   SELECT @cSerialNoCapture = SerialNoCapture
+   FROM dbo.SKU WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+      AND SKU = @cSKU
+   
+   -- Check SKU valid
+   IF @@ROWCOUNT = 0
    BEGIN
       SET @nErrNo = 60521
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SKU
@@ -759,6 +777,52 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTY<Alloc+Pick
       GOTO Fail
    END
+   
+   -- Check serial no
+   IF @cSerialNoUpdateLotLocID = '1' AND  -- Serial no with LOT, LOC, ID
+      @cSerialNoCapture IN ('1', '2')     -- SKU turned on serial no
+   BEGIN
+      IF @cSerialNo   IS NULL SET @cSerialNo = ''
+      IF @nSerialQTY  IS NULL SET @nSerialQTY = 0
+      IF @nBulkSNO    IS NULL SET @nBulkSNO = 0
+      IF @nBulkSNOQTY IS NULL SET @nBulkSNOQTY = 0
+      
+      IF @nBulkSNO NOT IN (0, 1)
+         SET @nBulkSNO = 0
+
+      -- Check no serial no pass-in
+      IF @cSerialNo = '' AND @nBulkSNO = 0
+      BEGIN
+         SET @nErrNo = 60901
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need SerialNo 
+         GOTO Fail
+      END
+      
+      -- Check pass-in both
+      IF @cSerialNo <> '' AND @nBulkSNO = 1
+      BEGIN
+         SET @nErrNo = 60902
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Either SN/Bulk
+         GOTO Fail
+      END
+      
+      -- Single serial no
+      IF @cSerialNo <> ''
+      BEGIN
+         -- Validate serial no
+         EXEC RDT.rdtIsValidSerialNo @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT,
+            @cSerialNo,
+            @cStorerKey,
+            @cStatus = '1', -- 1=Received
+            @cChkSKU = @cSKU,
+            @nChkQTY = @nQTY,
+            @cChkLOT = @cFromLOT,
+            @cChkLOC = @cFromLOC,
+            @cChkID  = @cFromID
+         IF @nErrNo <> 0
+            GOTO Fail
+      END
+   END
 END
 
 -- Validate QTY
@@ -831,6 +895,7 @@ DECLARE @nBal_Avail  INT
 DECLARE @nBal_Alloc  INT
 DECLARE @nBal_Pick   INT
 DECLARE @nBal_Replen INT
+DECLARE @nBal_SNQTY  INT
 
 DECLARE @nLLI_QTY    INT
 DECLARE @nLLI_Avail  INT
@@ -843,6 +908,7 @@ DECLARE @nPD_Pick    INT
 
 DECLARE @curLLI CURSOR
 DECLARE @curUCC CURSOR
+DECLARE @curSNO CURSOR
 
 
 IF ((@cSKU IS NULL AND @cUCC IS NULL) AND -- Move by ID or LOC and
@@ -874,7 +940,7 @@ BEGIN
       ' @cFromID     NVARCHAR(18), ' +
       ' @cFromLOT    NVARCHAR(10), ' +
       ' @nLLI_Alloc  INT OUTPUT,   ' +
-' @nLLI_Pick   INT OUTPUT    '
+      ' @nLLI_Pick   INT OUTPUT    '
    EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cStorerKey, @cFromLOC, @cFromID, @cFromLOT,
       @nLLI_Alloc OUTPUT,
       @nLLI_Pick  OUTPUT
@@ -1284,36 +1350,37 @@ SET @curLLI = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    ORDER BY LLI.StorerKey, LLI.SKU, LLI.LOT, LLI.QTY OPTION (RECOMPILE)
 */
 
-SET @cSQL =     
-   ' SET @curLLI = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' +     
-      ' SELECT ' +     
-         ' LLI.LOT, ' +     
-         ' LLI.LOC, ' +     
-         ' LLI.ID,  ' +     
-         ' LLI.QTY, ' +     
+SET @cSQL =
+   ' SET @curLLI = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' +
+      ' SELECT ' +
+         ' LLI.LOT, ' +
+         ' LLI.LOC, ' +
+         ' LLI.ID,  ' +
+         ' LLI.QTY, ' +
          --' LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - ' +
-		 ' LLI.QTY - (LLI.QTYAllocated - LLI.QTYExpected) - LLI.QTYPicked - ' +  --FCR-1152
-         CASE WHEN @nQTYReplen > 0 THEN '0' ELSE '(CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)' END + ' QTYAvail, ' +     
-         ' LLI.QTYAllocated, ' +     
-         ' LLI.QTYPicked, ' +     
-         ' LLI.QTYReplen, ' +     
-         ' SKU.SKU, ' +     
-         ' SKU.PackKey, ' +     
-         ' Pack.PackUOM3 ' +     
-      ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK ) ' +      
-         ' INNER JOIN dbo.SKU SKU (NOLOCK) ON (LLI.StorerKey = SKU.Storerkey AND LLI.SKU = SKU.SKU) ' +     
-         ' INNER JOIN dbo.Pack Pack (NOLOCK) ON (SKU.PackKey = Pack.PackKey) ' +     
-      ' WHERE LLI.StorerKey = @cStorerKey ' +      
-         ' AND LLI.LOC = @cFromLOC ' +      
+		 ' LLI.QTY - (LLI.QTYAllocated - LLI.QTYExpected) - LLI.QTYPicked - ' +  --FCR-1522
+         CASE WHEN @nQTYReplen > 0 THEN '0' ELSE '(CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)' END + ' QTYAvail, ' +
+         ' LLI.QTYAllocated, ' +
+         ' LLI.QTYPicked, ' +
+         ' LLI.QTYReplen, ' +
+         ' SKU.SKU, ' +
+         ' SKU.PackKey, ' +
+         ' SKU.SerialNoCapture, ' + 
+         ' Pack.PackUOM3 ' +
+      ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK ) ' +
+         ' INNER JOIN dbo.SKU SKU (NOLOCK) ON (LLI.StorerKey = SKU.Storerkey AND LLI.SKU = SKU.SKU) ' +
+         ' INNER JOIN dbo.Pack Pack (NOLOCK) ON (SKU.PackKey = Pack.PackKey) ' +
+      ' WHERE LLI.StorerKey = @cStorerKey ' +
+         ' AND LLI.LOC = @cFromLOC ' +
          ' AND LLI.Qty > 0 ' +      
-         CASE WHEN @cFromID  IS NULL THEN '' ELSE ' AND LLI.ID  = @cFromID  ' END +     
-         CASE WHEN @cFromLOT IS NULL THEN '' ELSE ' AND LLI.LOT = @cFromLOT ' END +     
-         CASE WHEN @cSKU     IS NULL THEN '' ELSE ' AND LLI.SKU = @cSKU     ' END + -- Move by SKU    
-         CASE WHEN @cUCC     IS NULL THEN '' ELSE ' AND LLI.LOT = @cUCCLOT  ' END + -- Move by UCC (already got LOT,LOC,ID)    
-         ' AND LLI.QTY - ' +     
-            CASE WHEN @cMoveQTYAlloc = '1' THEN '0' ELSE ' (LLI.QTYAllocated - LLI.QTYExpected) ' END + ' - ' +       --FCR-1152
-            CASE WHEN @cMoveQTYPick = '1'  THEN '0' ELSE ' LLI.QTYPicked ' END + ' - ' +     
-            CASE WHEN @nQTYReplen > 0      THEN '0' ELSE ' (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END) ' END +     
+         CASE WHEN @cFromID  IS NULL THEN '' ELSE ' AND LLI.ID  = @cFromID  ' END +
+         CASE WHEN @cFromLOT IS NULL THEN '' ELSE ' AND LLI.LOT = @cFromLOT ' END +
+         CASE WHEN @cSKU     IS NULL THEN '' ELSE ' AND LLI.SKU = @cSKU     ' END + -- Move by SKU
+         CASE WHEN @cUCC     IS NULL THEN '' ELSE ' AND LLI.LOT = @cUCCLOT  ' END + -- Move by UCC (already got LOT,LOC,ID)
+         ' AND LLI.QTY - ' +
+            CASE WHEN @cMoveQTYAlloc = '1' THEN '0' ELSE ' (LLI.QTYAllocated - LLI.QTYExpected) ' END + ' - ' +       --FCR-1522
+            CASE WHEN @cMoveQTYPick = '1'  THEN '0' ELSE ' LLI.QTYPicked ' END + ' - ' +
+            CASE WHEN @nQTYReplen > 0      THEN '0' ELSE ' (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END) ' END +
             ' >= 0 ' +     
       ' ORDER BY SKU.SKU, LLI.LOT, LLI.QTY ' +        --tlting01
       ' OPTION (FORCE ORDER) ' +  --tlting01
@@ -1359,7 +1426,7 @@ SAVE TRAN rdt_Move -- For rollback or commit only our own transaction
 
 -- Loop LOTxLOCxID candidate
 -- OPEN @curLLI
-FETCH NEXT FROM @curLLI INTO @cLOT, @cLOC, @cID, @nLLI_QTY, @nLLI_Avail, @nLLI_Alloc, @nLLI_Pick, @nLLI_Replen, @cLLI_SKU, @cPackKey, @cPackUOM3
+FETCH NEXT FROM @curLLI INTO @cLOT, @cLOC, @cID, @nLLI_QTY, @nLLI_Avail, @nLLI_Alloc, @nLLI_Pick, @nLLI_Replen, @cLLI_SKU, @cPackKey, @cSerialNoCapture, @cPackUOM3
 WHILE @@FETCH_STATUS = 0
 BEGIN
    -- Get ToLOC LocationType
@@ -1437,7 +1504,7 @@ BEGIN
          ELSE
             SELECT @nToLOC_SKU =
                CASE WHEN @cMoveQTYAlloc = '1'
-    THEN IsNULL( SUM( QTY - QTYPicked), 0)
+                  THEN IsNULL( SUM( QTY - QTYPicked), 0)
                   ELSE IsNULL( SUM( QTY - QtyAllocated - QTYPicked - (CASE WHEN QtyReplen < 0 THEN 0 ELSE QtyReplen END)), 0) -- (Avail + Alloc)
                END
             FROM dbo.LOTxLOCxID (NOLOCK)
@@ -1741,6 +1808,175 @@ BEGIN
          DEALLOCATE @curUCC
       END
 
+      -- Update serial no
+      IF @cSerialNoUpdateLotLocID = '1' AND  -- serial no with LOT, LOC, ID
+         @cSerialNoCapture IN ('1', '2')     -- 1 = INBOUND & OUTBOUND; 2 = INBOUND ONLY; 3 = OUTBOUND ONLY
+      BEGIN
+         DECLARE @cMove_SerialNo       NVARCHAR( 30)
+         DECLARE @nMove_SerialQTY      INT
+         DECLARE @cMove_UCCNo          NVARCHAR( 20)
+         DECLARE @cSerialNoKey         NVARCHAR( 10)
+         DECLARE @nMoveSerialNoLogKey  BIGINT
+         DECLARE @cSerialNo_ToID       NVARCHAR( 18)
+
+         SET @nBal_SNQTY = @nQTY_Move 
+         
+         -- Move by LOC or ID
+         IF @cSKU IS NULL AND
+            @cUCC IS NULL
+         BEGIN
+            SET @cSQL = 
+               ' SET @curSNO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' + 
+                  ' SELECT SerialNoKey, SerialNo, QTY, UCCNo, 0 AS MoveSerialNoLogKey ' + 
+                  ' FROM dbo.SerialNo WITH (NOLOCK) ' + 
+                  ' WHERE StorerKey = @cStorerKey ' + 
+                     ' AND LOT = @cLOT ' + 
+                     ' AND LOC = @cLOC ' + 
+                     ' AND ID  = @cID ' + 
+               ' OPEN @curSNO '
+         END
+         
+         -- Move by UCC
+         ELSE IF @cUCC IS NOT NULL
+         BEGIN
+            SET @cSQL = 
+               ' SET @curSNO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' + 
+                  ' SELECT SerialNoKey, SerialNo, QTY, UCCNo, 0 AS MoveSerialNoLogKey ' + 
+                  ' FROM dbo.SerialNo WITH (NOLOCK) ' + 
+                  ' WHERE StorerKey = @cStorerKey ' + 
+                     ' AND LOT = @cLOT ' + 
+                     ' AND LOC = @cLOC ' + 
+                     ' AND ID  = @cID ' + 
+                     ' AND UCCNo = @cUCCNo ' + 
+                     ' AND Status = ''1'' ' + 
+               ' OPEN @curSNO '
+         END
+         
+         -- Move by SKU
+         ELSE IF @cSKU IS NOT NULL
+         BEGIN
+            -- Many serial no
+            IF @nBulkSNO = '1'
+            BEGIN
+               -- Get affected serial no
+               SET @cSQL = 
+                  ' SET @curSNO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' + 
+                     ' SELECT SN.SerialNoKey, SN.SerialNo, SN.QTY, SN.UCCNo, MVLog.MoveSerialNoLogKey ' + 
+                     ' FROM rdt.rdtMoveSerialNoLog MVLog WITH (NOLOCK) ' + 
+                        ' JOIN dbo.SerialNo SN WITH (NOLOCK) ON (MVLog.SerialNo = SN.SerialNo AND MVLog.StorerKey = SN.StorerKey AND MVLog.SKU = SN.SKU) ' + 
+                     ' WHERE MVLog.Mobile = @nMobile ' + 
+                        ' AND MVLog.Func = @nFunc ' + 
+                        ' AND SN.StorerKey = @cStorerKey ' + 
+                        ' AND SN.LOT = @cLOT ' + 
+                        ' AND SN.LOC = @cLOC ' + 
+                        ' AND SN.ID  = @cID ' + 
+                        ' AND SN.Status = ''1'' ' + 
+                  ' OPEN @curSNO '
+            END
+                        
+            -- Single serial no    
+            ELSE IF @cSerialNo <> ''     
+            BEGIN
+               SET @cSQL = 
+                  ' SET @curSNO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' + 
+                     ' SELECT SerialNoKey, SerialNo, QTY, UCCNo, 0 AS MoveSerialNoLogKey' + 
+                     ' FROM dbo.SerialNo WITH (NOLOCK) ' + 
+                     ' WHERE StorerKey = @cStorerKey ' + 
+                        ' AND LOT = @cLOT ' + 
+                        ' AND LOC = @cLOC ' + 
+                        ' AND ID  = @cID ' + 
+                        ' AND Status = ''1'' ' + 
+                        ' AND SerialNo = @cSerialNo ' +
+                  ' OPEN @curSNO '
+            END
+         END
+         
+         SET @cSQLParam =
+            ' @curSNO      CURSOR OUTPUT, ' +
+            ' @nMobile     INT,           ' + 
+            ' @nFunc       INT,           ' + 
+            ' @cStorerKey  NVARCHAR(15),  ' +
+            ' @cLOT        NVARCHAR(10),  ' +
+            ' @cLOC        NVARCHAR(10),  ' +
+            ' @cID         NVARCHAR(18),  ' +
+            ' @cUCCNo      NVARCHAR(20),  ' +
+            ' @cSerialNo   NVARCHAR(30)   ' 
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @curSNO OUTPUT,
+            @nMobile, 
+            @nFunc, 
+            @cStorerKey,
+            @cLOT,
+            @cLOC,
+            @cID,
+            @cUCC, 
+            @cSerialNo
+
+         -- Loop serial no
+         FETCH NEXT FROM @curSNO INTO @cSerialNoKey, @cMove_SerialNo, @nMove_SerialQTY, @cMove_UCCNo, @nMoveSerialNoLogKey
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            -- Update serial no
+            UPDATE dbo.SerialNo SET
+               LOC = @cToLOC,
+               ID = 
+                  CASE
+                     WHEN @cLoseID = '1' THEN '' -- Lose ID
+                     WHEN @cToID IS NULL THEN ID -- ID not change
+                     ELSE @cToID
+                  END, 
+               UCCNo = IIF( @cLoseUCC = '1', '', UCCNo), 
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE(),
+               TrafficCop = NULL
+            WHERE SerialNoKey = @cSerialNoKey
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 60550
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd SNO fail
+               GOTO RollBackTran
+            END
+            
+            -- Get To ID
+            SELECT @cSerialNo_ToID = ID FROM dbo.SerialNo WITH (NOLOCK) WHERE SerialNoKey = @cSerialNoKey
+            
+            -- Remove log
+            IF @nMoveSerialNoLogKey > 0
+               DELETE rdt.rdtMoveSerialNoLog WHERE MoveSerialNoLogKey = @nMoveSerialNoLogKey
+            
+            -- Insert ItrnSerialNo
+            INSERT INTO dbo.ItrnSerialNo (
+               ITrnKey, TranType, StorerKey, SKU, QTY, SerialNo, SourceKey, SourceType, 
+               LOT, LOC, ID, Channel, Channel_ID, UCCNo, FromLoc, FromID)
+            VALUES (
+               @cItrnKey, 'MV', @cStorerKey, @cLLI_SKU, @nMove_SerialQTY, @cMove_SerialNo, '', @cSourceType, 
+               @cLOT, @cToLOC, @cSerialNo_ToID, @cChannel, @nChannel_ID, ISNULL( @cMove_UCCNo, ''), @cLOC, @cID)
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 60903
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins ITnSN fail
+               GOTO RollBackTran
+            END
+            
+            -- Reduce balance
+            SET @nBal_SNQTY = @nBal_SNQTY - @nMove_SerialQTY
+            
+            FETCH NEXT FROM @curSNO INTO @cSerialNoKey, @cMove_SerialNo, @nMove_SerialQTY, @cMove_UCCNo, @nMoveSerialNoLogKey
+         END
+         
+         -- Validate not fully moved
+         IF @nBal_SNQTY <> 0
+         BEGIN
+            SET @nErrNo = 60904
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MoveSNnotTally
+            GOTO RollBackTran
+         END
+         
+         CLOSE @curSNO
+         DEALLOCATE @curSNO
+      END
+
       -- Reduce booking (QTYReplen) after QTY moved out
       IF @nQTYReplen > 0 AND
          @nLLI_Replen > 0 AND
@@ -1824,12 +2060,9 @@ BEGIN
          IF @nMoveCnt = 0
             BREAK   --exit loop if reached max no. of move count
       END
-
-
-
    END
 
-   FETCH NEXT FROM @curLLI INTO @cLOT, @cLOC, @cID, @nLLI_QTY, @nLLI_Avail, @nLLI_Alloc, @nLLI_Pick, @nLLI_Replen, @cLLI_SKU, @cPackKey, @cPackUOM3
+   FETCH NEXT FROM @curLLI INTO @cLOT, @cLOC, @cID, @nLLI_QTY, @nLLI_Avail, @nLLI_Alloc, @nLLI_Pick, @nLLI_Replen, @cLLI_SKU, @cPackKey, @cSerialNoCapture, @cPackUOM3
 END
 
 -- Validate not fully moved

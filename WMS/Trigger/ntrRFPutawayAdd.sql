@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE Id = OBJECT_ID(N'[dbo].[ntrRFPutawayAdd]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrRFPutawayAdd]
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -26,9 +24,10 @@ GO
 /*                               by id counting.                              */
 /* 06-Aug-2017  Ung        1.7   Share LoseIdNoValidateMaxPltByID with RDT    */
 /* 04-Oct-2019  Leong      1.8   INC0881047 - Revise error message.           */
+/* 06-OCT-2025  AK01       1.9   UWP-42143 Data Audit                         */
 /******************************************************************************/
 
-CREATE TRIGGER ntrRFPutawayAdd
+CREATE OR ALTER TRIGGER ntrRFPutawayAdd
 ON  [dbo].[RFPutaway]
 FOR INSERT
 AS
@@ -259,6 +258,28 @@ BEGIN
       CLOSE CURSOR_INSERTED
       DEALLOCATE CURSOR_INSERTED
    END
+   
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE RFPUTAWAY
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM RFPUTAWAY
+      JOIN INSERTED ON RFPUTAWAY.RowRef = INSERTED.RowRef
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=82160  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RFPUTAWAY. (ntrRFPUTAWAYAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+   
    GOTO QUIT
 
 QUIT:

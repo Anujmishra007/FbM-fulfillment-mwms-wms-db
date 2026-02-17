@@ -1,4 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrStocktakeparametersUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrStocktakeparametersUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 drop trigger [dbo].[ntrStocktakeparametersUpdate]
 GO
 
@@ -31,6 +31,7 @@ GO
 /* 20-Sep-2010  MC       1.1  SOS187913 - Add STKTAKELOG as Configkey   */
 /*                            for Interface (MC01)                      */
 /* 28-Oct-2013  TLTING   1.2  Review Editdate column update             */
+/* 09-Oct-2025  SPC040   1.3  Replace SUSER_SNAME with fnc_GetUserName  */
 /************************************************************************/
 CREATE TRIGGER ntrStocktakeparametersUpdate
 ON Stocktakesheetparameters
@@ -174,8 +175,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE Stocktakesheetparameters
-         SET EditDate = GetDate(),
-             EditWho  = SUser_SName()
+         SET EditDate = dbo.fnc_GetDate(),
+             EditWho = dbo.fnc_GetUserName()
       FROM INSERTED
       WHERE Stocktakesheetparameters.StockTakeKey = INSERTED.StockTakeKey
    

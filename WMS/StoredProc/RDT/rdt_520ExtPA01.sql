@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author   Purposes                                  */
 /* 20-11-2024   1.0  CYU027   FCR-1205 Created                          */
 /* 03-10-2025   1.1  Dennis   Bug Fix                                   */
+/* 2025-09-05   1.2  Jackc    UWP-40608 Performance tuning              */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_520ExtPA01] (
@@ -70,7 +71,7 @@ BEGIN
       IF OBJECT_ID('tempdb..#LocationTypeList') IS NOT NULL
          DROP TABLE #LocationTypeList
 
-      CREATE TABLE #LocationTypeList (Value nvarchar (10))
+      CREATE TABLE #LocationTypeList (Value NVARCHAR (10))
       DECLARE @SQL NVARCHAR(max)
       DECLARE @SQLParam NVARCHAR(MAX)
       DECLARE @index INT = 1
@@ -132,9 +133,20 @@ BEGIN
          JOIN LOTxLOCxID LLI (NOLOCK) ON (LLI.LOC = LOC.LOC)
          JOIN SKU (NOLOCK) ON ( SKU.StorerKey = LLI.StorerKey AND SKU.SKU = LLI.SKU)
       WHERE LOC.Facility = @cFacility
-         AND LOC.LocationType in (SELECT * FROM #LocationTypeList)
+         AND LOC.LocationType IN (SELECT Value FROM #LocationTypeList)
          AND LLI.StorerKey = @cStorerKey
          AND LLI.SKU = @cSKU
+         AND (
+            LOC.commingleSKU = '1'
+            OR (
+                LOC.commingleSKU <> '1'
+                AND (
+                    SELECT COUNT(DISTINCT LLI2.SKU)
+                    FROM LOTxLOCxID LLI2 WITH (NOLOCK)
+                    WHERE LLI2.LOC = LOC.LOC
+                ) = 1
+            )
+         )
          GROUP BY LOC.CubicCapacity, LOC.LOC, LOC.Floor, LOC.Logicallocation
          HAVING ISNULL(SUM((LLI.Qty - LLI.QtyPicked) + LLI.PendingMoveIn), 0) > 0  -- Not Empty
          AND MAX( LOC.CubicCapacity) -
@@ -157,13 +169,13 @@ BEGIN
       FROM LOC (NOLOCK)
               LEFT JOIN LOTxLOCxID LLI (NOLOCK) ON (LLI.LOC = LOC.LOC)
       WHERE LOC.Facility = @cFacility
-         AND LOC.LocationType in (SELECT * FROM #LocationTypeList)
+         AND LOC.LocationType in (SELECT Value FROM #LocationTypeList)
          AND LOC.PutawayZone IN (
             SELECT DISTINCT(LOC.PutawayZone)  -- SELECT ZONES WITH SAME SKU
             FROM LOC (NOLOCK)
                JOIN LOTxLOCxID LLI (NOLOCK) ON (LLI.LOC = LOC.LOC)
             WHERE LOC.Facility = @cFacility
-               AND LOC.LocationType in (SELECT * FROM #LocationTypeList)
+               AND LOC.LocationType in (SELECT Value FROM #LocationTypeList)
                AND LLI.StorerKey = @cStorerKey
                AND LLI.SKU = @cSKU
             GROUP BY LOC.loc,LOC.PutawayZone
@@ -187,7 +199,7 @@ BEGIN
       FROM LOC (NOLOCK)
          LEFT JOIN LOTxLOCxID LLI (NOLOCK) ON (LLI.LOC = LOC.LOC)
       WHERE LOC.Facility = @cFacility
-        AND LOC.LocationType in (SELECT * FROM #LocationTypeList)
+        AND LOC.LocationType in (SELECT Value FROM #LocationTypeList)
       GROUP BY LOC.Floor, LOC.LOC, LOC.Logicallocation
       HAVING ISNULL(SUM((LLI.Qty - LLI.QtyPicked) + LLI.PendingMoveIn), 0) = 0 --empty location
          AND MAX( LOC.CubicCapacity) >= CAST( @n_PalletCube AS NVARCHAR( 20)) -- check capacity

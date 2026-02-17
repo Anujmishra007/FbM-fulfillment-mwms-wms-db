@@ -44,6 +44,8 @@ GO
 /* 2025-03-03  SSA07    1.7   UWP-30752 - seller order naming convention   */
 /* 2025-05-14  JH01     1.8   UWP-31657 - Change to map Receipt/ReceiptDetail*/
 /* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
+/* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */ 
+/* 2026-02-11  NJOW01   2.1   UWP-48746 Performance tuning                 */   
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
@@ -95,6 +97,7 @@ BEGIN
          , @c_ExternPOKey        NVARCHAR(20)  = ''            --(SSA04)
          , @c_Id                 NVARCHAR(36)                  --(SSA06)
          , @CUR_RECDET           CURSOR
+         , @c_NewTran            NVARCHAR(1) = 'N'  --NJOW01
 
    SET @b_Success= 1
    SET @n_Err    = 0
@@ -225,6 +228,8 @@ BEGIN
       ,  M_Vat              NVARCHAR(18)   NULL
       ,  ShipperKey         NVARCHAR(15)   NULL       DEFAULT ('')
       )
+      
+   CREATE INDEX IDX_TMP_ORD ON #TMP_ORD (ExternOrderKey, Consigneekey, Door, DeliveryDate)    --NJOW01
 
    CREATE TABLE #TMP_ORDDTL
       (  Orderkey          NVARCHAR(10)   NOT NULL   DEFAULT('')     -- (SSA01)
@@ -289,6 +294,20 @@ BEGIN
    --   GOTO QUIT_SP
    --END  /*JH01*/
    
+   --NJOW01 S
+   SET @c_NewTran = 'Y'
+
+   IF @c_NewTran = 'Y'
+   BEGIN
+      WHILE @@TRANCOUNT > 0  
+      BEGIN
+         COMMIT TRAN
+      END
+      
+      BEGIN TRAN      
+   END   	   	
+   --NJOW01 E 
+   
    --Construct order records
    IF @n_continue IN(1,2)
    BEGIN
@@ -337,19 +356,42 @@ BEGIN
              /*Check if existing externorderkey created SO - Start*/ /*JH01*/    
              SET @c_ExistingOrderKey = ''
              Set @c_ExistingOrderStatus = ''
-             SELECT @c_ExistingOrderKey = ISNULL(OH.OrderKey,''), @c_ExistingOrderStatus  = OH.Status                                            
+             
+             SELECT TOP 1 @c_ExistingOrderKey = ISNULL(OH.OrderKey,''), @c_ExistingOrderStatus  = OH.Status    --NJOW01 add top 1                                        
              FROM  ORDERS OH WITH (NOLOCK)                  
-             JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (OH.StorerKey = RD.StorerKey AND RD.ExternReceiptkey = OH.ExternOrderKey)   
-                           WHERE OH.Storerkey = @c_Storerkey                  
-                           AND OH.ExternOrderKey = @c_ExternReceiptkey
-                           AND OH.Consigneekey = @c_Consigneekey
-                           AND OH.DeliveryDate = @c_DeliveryDate                
-                           AND OH.Door = @c_Door      /*JH01*/
+             --JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (OH.StorerKey = RD.StorerKey AND RD.ExternReceiptkey = OH.ExternOrderKey)   --NJOW01 removed
+             WHERE OH.Storerkey = @c_Storerkey                  
+             AND OH.ExternOrderKey = @c_ExternReceiptkey     
+             AND ISNULL(OH.ExternOrderKey,'') <> ''  --JH05
+             AND OH.Consigneekey = @c_Consigneekey
+             AND OH.DeliveryDate = @c_DeliveryDate                
+             AND OH.Door = @c_Door      /*JH01*/
+            
             IF @c_ExistingOrderKey <> ''
             BEGIN
                IF @c_ExistingOrderStatus = '0' 
                BEGIN
-                  DELETE ORDERDETAIL WHERE ORDERKEY = @c_ExistingOrderKey 
+               	  --NJOW01 S
+                  DECLARE CUR_ORDDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR               	  
+                     SELECT OrderLineNumber
+                     FROM ORDERDETAIL (NOLOCK)
+                     WHERE Orderkey = @c_ExistingOrderKey
+                 
+                  OPEN CUR_ORDDET
+
+                  FETCH NEXT FROM CUR_ORDDET INTO @c_OrderLineNumber
+                  
+                  WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
+                  BEGIN
+                     DELETE ORDERDETAIL WHERE Orderkey = @c_ExistingOrderKey AND OrderLineNumber = @c_OrderLineNumber
+                     
+                     FETCH NEXT FROM CUR_ORDDET INTO @c_OrderLineNumber
+                  END
+                  CLOSE CUR_ORDDET
+                  DEALLOCATE CUR_ORDDET
+                  --NJOW01 E
+                                                                                                                	
+                  --DELETE ORDERDETAIL WHERE ORDERKEY = @c_ExistingOrderKey --NJOW01 Removed
                END
                ELSE 
                BEGIN
@@ -359,13 +401,28 @@ BEGIN
              /*Check if existing externorderkey created SO - End*/ /*JH01*/    
 
             ---- (SSA01) start -----
-            IF EXISTS (SELECT 1
-                     FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door )   /*JH01 add @c_ExternReceiptkey*/
-            BEGIN
-			        SELECT @c_Orderkey = orderkey
-			        FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door  /*JH01 add @c_ExternReceiptkey*/
-            END
-            ELSE
+            
+            --NJOW01 S
+            SET @c_Orderkey = ''
+
+	          SELECT TOP 1 @c_Orderkey = Orderkey
+			      FROM #TMP_ORD 
+			      WHERE ExternOrderKey = @c_ExternReceiptkey 
+			      AND  Consigneekey = @c_Consigneekey 
+			      and DeliveryDate = @c_DeliveryDate 
+			      and Door = @c_Door  /*JH01 add @c_ExternReceiptkey*/
+			      --NJOW01 E
+            
+            --NJOW01 Removed
+            --IF EXISTS (SELECT 1
+            --         FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door )   /*JH01 add @c_ExternReceiptkey*/
+            --BEGIN
+			      --  SELECT @c_Orderkey = orderkey
+			      --  FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door  /*JH01 add @c_ExternReceiptkey*/
+            --END
+            --ELSE
+            
+            IF ISNULL(@c_Orderkey,'') = '' --NJOW01
             BEGIN
                IF @c_ExistingOrderKey <> ''              /*JH01*/    
                BEGIN
@@ -466,7 +523,8 @@ BEGIN
                   FROM  RECEIPT RH  (NOLOCK)                                                            --(JH01)
                   JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)               --(JH01)
                   LEFT JOIN  STORER S WITH (NOLOCK) ON (S.StorerKey = RD.UserDefine02 AND S.Type = '2'  AND S.ConsigneeFor = RD.StorerKey)
-                  WHERE RD.ExternReceiptkey = @c_ExternReceiptkey                                      --(JH01)
+                  WHERE RD.ExternReceiptkey = @c_ExternReceiptkey                                        --(JH01)
+			            AND RD.ReceiptKey = @c_Receiptkey                                                      --(JH03)
                   -- FROM  PO  (NOLOCK)                                                                  --(JH01)
                   -- WHERE PO.Pokey = @c_POKey                                                           --(JH01)
                   GROUP BY S.Company, S.Address1, S.Address2, S.Address3, RH.SellerCompany, RH.CarrierReference, RH.SellerName, RH.SellerAddress1, --(JH01)
@@ -474,7 +532,7 @@ BEGIN
                END               
             END
 
-		      INSERT INTO #TMP_ORDDTL
+	          INSERT INTO #TMP_ORDDTL
             (  OrderKey
 			      ,  ReceiptKey
             ,  POKey
@@ -516,10 +574,10 @@ BEGIN
          END
          --(SSA07) end-- comment out by JH01*/
          IF NOT EXISTS (SELECT 1
-                     FROM #TMP_ORDDTL)   /*JH01 #TMP_ORD*/
+                        FROM #TMP_ORDDTL)   /*JH01 #TMP_ORD*/
          BEGIN
-         SET @n_Continue = 3
-         GOTO QUIT_SP
+            SET @n_Continue = 3
+            GOTO QUIT_SP
          END
    END
 
@@ -865,7 +923,53 @@ BEGIN
    END
 
    QUIT_SP:
+   
+   --NJOW01 S
+   IF @n_continue = 3 
+   BEGIN
+   	  IF @c_NewTran = 'Y'
+   	  BEGIN
+   	  	 IF @@TRANCOUNT > 0
+   	  	 BEGIN
+            ROLLBACK TRAN
+         END
+      END
+      ELSE 
+      BEGIN
+      	 IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTranCount
+      	 BEGIN
+      	    ROLLBACK TRAN
+      	 END
+      END
+      
+      SET @b_success = 0
+   END
+   ELSE
+   BEGIN
+   	  IF @c_NewTran = 'Y'
+   	  BEGIN
+   	     WHILE @@TRANCOUNT > 0
+         BEGIN  
+            COMMIT TRAN  
+         END  
+   	  END
+   	  ELSE
+   	  BEGIN
+   	     WHILE @@TRANCOUNT > @n_StartTranCount  
+         BEGIN  
+            COMMIT TRAN  
+         END  
+      END   
+      SET @b_success = 1
+   END
+   
+   WHILE @@TRANCOUNT < @n_StartTranCount 
+   BEGIN  
+      BEGIN TRAN  
+   END       
+   --NJOW01 E        
 
+   /*  --NJOW01 Removed
    IF @n_continue = 3  -- Error Occured - Process And Return
    BEGIN
       SET @b_success = 0
@@ -879,6 +983,7 @@ BEGIN
    BEGIN
       SET @b_success = 1
    END
+   */
    RETURN
 END
 GO
