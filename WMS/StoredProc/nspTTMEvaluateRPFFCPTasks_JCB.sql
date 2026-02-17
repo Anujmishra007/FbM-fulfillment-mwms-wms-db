@@ -24,6 +24,7 @@ GO
 /* 2026-01-05  2.0.2  PPA374   Changing aisle in use to C_String28                              */
 /* 2026-02-12  2.0.3  PPA374   Adding INLOCKED flag as a valid location flag to pick from or to */
 /* 2026-02-12  2.0.4  PPA374   Not checking aisle in use for PND_OUT unless task is back to VNA */
+/* 2026-02-10  2.1.0  Dennis   FCR-10220                                                        */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspTTMEvaluateRPFFCPTasks_JCB]
