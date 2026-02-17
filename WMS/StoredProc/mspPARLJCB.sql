@@ -31,7 +31,7 @@ GO
 /* 2025-12-17  PPA374   1.2   Updating area retrieving logic            */
 /************************************************************************/
 
-ALTER   PROC [dbo].[mspPARLJCB]
+CREATE OR ALTER PROC [dbo].[mspPARLJCB]
    @c_ReceiptKey  NVARCHAR(10) = ''
 ,  @b_Success     INT          = 1  OUTPUT
 ,  @n_Err         INT          = 0  OUTPUT
