@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /*********************************************************************************/
-/* Store procedure: rdt_684AutoGenJCB                                            */
+/* Store procedure: rdt_684AutoGenJCB2                                           */
 /* Copyright      : Maersk                                                       */
 /* Customer       : JCB                                                          */
 /*                                                                               */
