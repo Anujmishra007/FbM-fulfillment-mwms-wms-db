@@ -1226,17 +1226,17 @@ BEGIN
    Step_3_Fail:
    BEGIN
         IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
-      BEGIN
-        UPDATE dbo.TaskDetail WITH (ROWLOCK)
-         SET Status = '0',
-            ReasonKey = '',
-            UserKey = '',
-            EditDate = GETDATE(),
-            EditWho = 'RDTPA'
-         WHERE TaskDetailKey = @cTaskdetailKey
+        BEGIN
+           UPDATE dbo.TaskDetail WITH (ROWLOCK)
+           SET Status = '0',
+               ReasonKey = '',
+               UserKey = '',
+               EditDate = GETDATE(),
+               EditWho = 'RDTPA'
+           WHERE TaskDetailKey = @cTaskdetailKey
 
-        SET @cSuggID = ''
-     END
+           SET @cSuggID = ''
+        END
 
       SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
       SET @cOutField02 = @cSuggID  --Suggested FromID
@@ -1602,7 +1602,7 @@ BEGIN
    BEGIN
       IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
       BEGIN
-        UPDATE dbo.TaskDetail WITH (ROWLOCK)
+         UPDATE dbo.TaskDetail WITH (ROWLOCK)
          SET Status = '0',
             ReasonKey = '',
             UserKey = '',
@@ -1610,8 +1610,8 @@ BEGIN
             EditWho = 'RDTPA'
          WHERE TaskDetailKey = @cTaskdetailKey
 
-        SET @cSuggID = ''
-     END
+         SET @cSuggID = ''
+      END
 
       -- Go to previous screen
       SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
@@ -1670,7 +1670,7 @@ BEGIN
          AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
          AND TD.Status IN ('0','3')
          AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @cUserName
-        AND TD.Storerkey = @cStorerKey
+         AND TD.Storerkey = @cStorerKey
 
       UNION ALL
 
@@ -1716,7 +1716,7 @@ BEGIN
             AND LOC.LocationCategory IN  ('PND_IN', 'PND', 'PNDIN')
             AND TD.TaskType IN ('PAF', 'PA1')
             AND LOC1.Status = 'OK'
-          AND LOC1.LocationFlag IN ('','NONE')
+            AND LOC1.LocationFlag IN ('','NONE')
             AND ((TD.Status = '0' AND TD.UserKey = '') OR (TD.Status = '3' AND TD.UserKey = @cUserName))
             AND TD.UserKeyOverRide IN (@cUserName, '')
             AND AD.AreaKey = @cAreaKey
@@ -1729,7 +1729,7 @@ BEGIN
                            FROM dbo.TaskManagerSkipTasks TST WITH(NOLOCK)
                            WHERE TST.TaskDetailKey = TD.TaskDetailKey
                               AND TST.TaskType = TD.TaskType)
-         AND (NOT EXISTS(SELECT 1 
+            AND (NOT EXISTS(SELECT 1 
                         FROM @tAisleInUsed AIU
                         WHERE AIU.LocAisle = LOC1.LocAisle
                      ) OR LOC1.LocationCategory <> 'VNA')
@@ -1760,8 +1760,8 @@ BEGIN
             AND TD.UserKeyOverRide IN (@cUserName, '')
             AND AD.AreaKey = @cAreakey
             AND PL.GrossWgt <= @fMaximumWeight
-         AND LOC1.Status = 'OK'
-          AND LOC1.LocationFlag IN ('','NONE')
+            AND LOC1.Status = 'OK'
+            AND LOC1.LocationFlag IN ('','NONE')
             AND NOT EXISTS(SELECT 1 
                            FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
                            WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
@@ -1770,7 +1770,7 @@ BEGIN
                            FROM dbo.TaskManagerSkipTasks TST WITH(NOLOCK)
                            WHERE TST.TaskDetailKey = TD.TaskDetailKey
                               AND TST.TaskType = TD.TaskType)
-         AND (NOT EXISTS(SELECT 1 
+            AND (NOT EXISTS(SELECT 1 
                         FROM @tAisleInUsed AIU
                         WHERE AIU.LocAisle = LOC1.LocAisle
                      ) OR LOC1.LocationCategory <> 'VNA')
@@ -1823,18 +1823,18 @@ BEGIN
               AND Status = '0' 
               AND EXISTS(
                  SELECT 1 
-                FROM dbo.LOC L WITH(NOLOCK) 
-                WHERE TD.ToLoc = L.Loc 
-                   AND L.Facility = @cFacility 
-                  AND L.LocationCategory = 'VNA' 
-                  AND L.LocAisle IN (
-                     SELECT LocAisle FROM @tAisleInUsed
-                  )
+                 FROM dbo.LOC L WITH(NOLOCK) 
+                 WHERE TD.ToLoc = L.Loc 
+                    AND L.Facility = @cFacility 
+                    AND L.LocationCategory = 'VNA' 
+                    AND L.LocAisle IN (
+                       SELECT LocAisle FROM @tAisleInUsed
+                    )
               )
-         )
+           )
            BEGIN
              SET @cErrMsg = 'Aisle in use'
-          END
+           END
         END
 
          SET @nScn = @nScn - 3            --Area Screen
@@ -1843,9 +1843,9 @@ BEGIN
       END
       ELSE 
       BEGIN
-        IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+         IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
          BEGIN
-           UPDATE dbo.TaskDetail WITH (ROWLOCK)
+            UPDATE dbo.TaskDetail WITH (ROWLOCK)
             SET Status = '0',
                ReasonKey = '',
                UserKey = '',
@@ -2081,7 +2081,7 @@ BEGIN
                      @cToLocAreaKey          NVARCHAR(10),
                      @cToLocPutawayZone      NVARCHAR(10),
                      @nToLocLevel            INT,
-                @cToLocFloor            NVARCHAR(10)
+                     @cToLocFloor            NVARCHAR(10)
 
                   IF @cSuggToLoc <> '' AND @cLOCHoldKey <> ''
                   BEGIN
@@ -2457,9 +2457,9 @@ BEGIN
       -- Go to ID screen
       IF @nFromStep = 3
       BEGIN
-        IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+         IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
          BEGIN
-           UPDATE dbo.TaskDetail WITH (ROWLOCK)
+            UPDATE dbo.TaskDetail WITH (ROWLOCK)
             SET Status = '0',
                ReasonKey = '',
                UserKey = '',
@@ -2543,7 +2543,7 @@ BEGIN
       V_String6      = @cOverwriteToLOC, 
       V_String7      = @cDefaultFromLOC, 
       V_String8      = @cToLoc,
-     C_String28     = @cToLoc,
+      C_String28     = @cToLoc,
       V_String10     = @cExtScnSP,
       V_String11     = @cEquipmentProfileKey,
       
@@ -2586,6 +2586,7 @@ GO
 GRANT EXECUTE ON RDT.rdtfnc_TM_PutawayFrom_JCB TO NSQL
 
 GO
+
 
 
 
