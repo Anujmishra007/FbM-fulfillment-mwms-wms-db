@@ -659,7 +659,7 @@ BEGIN
          AND TD.UserKeyOverRide IN (@cUserName, '')
          AND AD.AreaKey = @cAreakey
          AND LOC1.Status = 'OK'
-       AND LOC1.LocationFlag IN ('','NONE')
+         AND LOC1.LocationFlag IN ('','NONE')
          AND PL.GrossWgt <= @fMaximumWeight
          AND LLI.Qty - LLI.QtyPicked > 0
          AND NOT EXISTS(SELECT 1 
@@ -675,24 +675,24 @@ BEGIN
 
      IF EXISTS (
         SELECT 1 
-       FROM dbo.TaskDetail TD WITH(NOLOCK) 
-          INNER JOIN LOC L WITH(NOLOCK)
-            ON L.Loc = TD.ToLoc
-         INNER JOIN @tAisleInUsed A
-            ON A.LocAisle = L.LocAisle
-       WHERE AreaKey = @cAreaKey 
+        FROM dbo.TaskDetail TD WITH(NOLOCK) 
+           INNER JOIN LOC L WITH(NOLOCK)
+              ON L.Loc = TD.ToLoc
+           INNER JOIN @tAisleInUsed A
+              ON A.LocAisle = L.LocAisle
+        WHERE AreaKey = @cAreaKey 
            AND (TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @cUserName OR TD.UserKeyOverRide = @cUserName)))
-         AND TD.Storerkey = @cStorerKey
-         AND L.Facility = @cFacility
-         AND L.LocationCategory = 'VNA'
-         AND A.Userkey <> @cUserName
-       )
-       AND ISNULL(@cTaskdetailKey, '') = ''
-     BEGIN
-        SET @nErrNo = 218256
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Aisle in use'
-         GOTO Step_2_Fail
-     END
+           AND TD.Storerkey = @cStorerKey
+           AND L.Facility = @cFacility
+           AND L.LocationCategory = 'VNA'
+           AND A.Userkey <> @cUserName
+     )
+        AND ISNULL(@cTaskdetailKey, '') = ''
+        BEGIN
+           SET @nErrNo = 218256
+           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Aisle in use'
+           GOTO Step_2_Fail
+        END
 
       IF ISNULL(@cTaskdetailKey, '') = ''
       BEGIN
@@ -2586,6 +2586,7 @@ GO
 GRANT EXECUTE ON RDT.rdtfnc_TM_PutawayFrom_JCB TO NSQL
 
 GO
+
 
 
 
