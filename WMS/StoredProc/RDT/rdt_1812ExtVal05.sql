@@ -36,7 +36,8 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    
-   DECLARE @nDebugFlag INT = 0
+   DECLARE @nDebugFlag   INT = 0
+   DECLARE @cSKUVerified NVARCHAR(20)
 
    DECLARE  @cSuggToLOC          NVARCHAR(10),
             @cSuggToLocCategory  NVARCHAR(10),
@@ -53,7 +54,6 @@ BEGIN
 
    --GET task info
    
-
    IF @nDebugFlag = 1
       SELECT 'Executing rdt_1812ExtVal05'
 
@@ -65,7 +65,7 @@ BEGIN
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskDetailKey
    
-   SELECT TOP 1 @cFacility = Facility, @cVID = V_ID FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
+   SELECT TOP 1 @cFacility = Facility, @cVID = V_ID, @cSKUVerified = ISNULL(V_String25,0) FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
    SELECT TOP 1 @cCompany = C_Company FROM dbo.ORDERS WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey
 
    IF @nFunc = 1812 -- PickSKU
@@ -111,7 +111,8 @@ BEGIN
             IF @nDebugFlag = 1
                SELECT @nQty AS Qty, @nTaskQty AS TaskQty
             
-            IF /*@nQty <> 0 AND*/ @nQty <> @nTaskQTY
+            IF (@cSKUVerified <> '1' AND @nQty <> 0 AND @nQty <> @nTaskQTY)
+			OR (@cSKUVerified = '1' AND @nQty <> @nTaskQTY)
             BEGIN
                SET @nErrNo = 239651
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
