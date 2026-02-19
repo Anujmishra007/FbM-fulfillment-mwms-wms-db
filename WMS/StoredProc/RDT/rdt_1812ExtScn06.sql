@@ -268,18 +268,22 @@ BEGIN
                   FROM dbo.ORDERS O WITH(NOLOCK)
                   INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
                      ON CL.Long = O.Type
+					 AND CL.Storerkey = O.StorerKey
                      AND CL.LISTNAME = 'JCBCLPALOT'
                      AND CL.SHORT = 'Y'
                   WHERE O.OrderKey = @cOrderKey
+				  AND O.StorerKey = @cStorerKey
                )
 			   AND EXISTS (
 			      SELECT 1 
 				  FROM dbo.TaskDetail WITH(NOLOCK) 
 				  WHERE OrderKey = @cOrderKey 
 				     AND Status > '3'
-			         AND (UserKey = @cUserName OR UserKeyOverRide = @cUserName)
+			         AND UserKey = @cUserName
 				     AND AreaKey = @cAreaKey
+					 AND PickMethod = 'PP'
 			   )
+			   AND @cPickMethod = 'PP'
 			   BEGIN
                   IF @cReasonCode NOT IN (
                      SELECT Short 
@@ -300,20 +304,43 @@ BEGIN
                   FROM dbo.ORDERS O WITH(NOLOCK)
                   INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
                      ON CL.Long = O.Type
+					 AND CL.Storerkey = O.StorerKey
                      AND CL.LISTNAME = 'JCBCLPALOT'
                      AND CL.SHORT = 'Y'
                   WHERE O.OrderKey = @cOrderKey
+				  AND O.StorerKey = @cStorerKey
                )
 			   AND @cReasonCode <> ''
+			   AND @cPickMethod = 'PP'
 			   BEGIN
 			      UPDATE dbo.TaskDetail
 			      SET Status = 0
 			      WHERE OrderKey = @cOrderKey
 			         AND Status = '3'
-			         AND (UserKey = @cUserName OR UserKeyOverRide = @cUserName)
+			         AND UserKey = @cUserName
 				     AND AreaKey = @cAreaKey
+					 AND PickMethod = 'PP'
 			   END
      
+	           IF NOT EXISTS (
+			      SELECT 1
+				  FROM ORDERS O WITH(NOLOCK)
+				  INNER JOIN CODELKUP C WITH(NOLOCK)
+				     ON O.Type = C.Long
+					 AND O.StorerKey = C.Storerkey
+					 AND C.LISTNAME = 'JCBPPREASN'
+					 AND UDF01 = 'Y'
+				  WHERE O.OrderKey = @cOrderKey
+				  AND O.StorerKey = @cStorerKey
+				  AND C.Short = @cReasonCode
+			   )
+			   AND @cPickMethod = 'PP'
+			   BEGIN
+                     SET @nErrNo = 239669
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Step_9_Fail
+			   END
+
                IF EXISTS (
                   SELECT 1 
                   FROM LOC L WITH(NOLOCK)
@@ -1742,10 +1769,12 @@ BEGIN
                SELECT 1
                FROM dbo.ORDERS O WITH(NOLOCK)
                INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
-                 ON CL.Long = O.Type
-                  AND CL.LISTNAME = 'JCBCLPALOT'
+                  ON CL.Long = O.Type
+                  AND CL.Storerkey = O.StorerKey
+				  AND CL.LISTNAME = 'JCBCLPALOT'
                   AND CL.SHORT = 'Y'
                WHERE O.OrderKey = @cOrderKey
+			      AND O.StorerKey = @cStorerKey
             )
             AND EXISTS (
                SELECT 1
@@ -1759,6 +1788,7 @@ BEGIN
                      AND TaskType IN ('FCP','FCP1')
                      AND OrderKey = @cOrderKey
             )
+			AND @cPickMethod = 'PP'
             BEGIN
                   SET @nErrNo = 239667
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --239667More cabs task
@@ -1832,9 +1862,11 @@ BEGIN
                      FROM dbo.ORDERS O WITH(NOLOCK)
                      INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
                         ON CL.Long = O.Type
+						AND CL.Storerkey = O.StorerKey
                         AND CL.LISTNAME = 'JCBCLPALOT'
                         AND CL.SHORT = 'Y'
                      WHERE O.OrderKey = @cOrderKey
+					    AND O.StorerKey = @cStorerKey
                   )
                   AND EXISTS (
                      SELECT 1
