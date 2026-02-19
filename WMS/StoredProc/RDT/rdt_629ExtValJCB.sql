@@ -225,7 +225,7 @@ BEGIN
             GOTO QUIT;  
          END  
   
-         IF EXISTS (SELECT 1 FROM LOC L WITH(NOLOCK) WHERE Facility = @cFacility AND LOC = @cToLOC AND ISNULL(LoseId,0) = '0')
+         IF EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE Facility = @cFacility AND LOC = @cToLOC AND ISNULL(LoseId,0) = '0')
 		 AND ISNULL(@cToID,'') = ''
          BEGIN  
             SET @nErrNo = 218266  
