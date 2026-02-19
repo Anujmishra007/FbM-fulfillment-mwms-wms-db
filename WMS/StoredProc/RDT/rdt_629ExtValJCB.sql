@@ -1,3 +1,6 @@
+USE [GBRWMS]
+GO
+/****** Object:  StoredProcedure [RDT].[rdt_629ExtValJCB]    Script Date: 2/19/2026 11:27:01 AM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +21,6 @@ GO
 /* Date         Rev  Author      Purposes                               */  
 /* 03-Dec-2025  1.0  SKE140      Created for ToLOC validation           */  
 /* 15-Dec-2025  1.1  PPA374      Adding check against case in tasks     */  
-/* 06-Feb-2026  1.2  PPA374      UWP-48485                              */  
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_629ExtValJCB]  
@@ -223,13 +225,16 @@ BEGIN
             GOTO QUIT;  
          END  
   
+         IF EXISTS (SELECT 1 FROM LOC L WITH(NOLOCK) WHERE Facility = @cFacility AND LOC = @cToLOC AND ISNULL(LoseId,0) = '0')
+		 AND ISNULL(@cToID,'') = ''
+         BEGIN  
+            SET @nErrNo = 218266  
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'); -- 'Need ID for this loc'  
+            GOTO QUIT;  
+         END  
       END  
    END  
   
 QUIT:  
    RETURN;  
 END
-	
-GO
-GRANT EXECUTE ON rdt.rdt_629ExtValJCB TO NSQL
-GO
