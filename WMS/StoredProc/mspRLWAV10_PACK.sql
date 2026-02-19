@@ -458,10 +458,10 @@ BEGIN
       ,  CartonLength = ISNULL(c.CartonLength,0.00)  
       ,  CartonWidth  = ISNULL(c.CartonWidth,0.00)   
       ,  CartonHeight = ISNULL(c.CartonHeight,0.00) 
-      ,  FillTolerance= 100.00                                       --Not using FillTolerance
       ,  Dim1 = cds.MinVal
       ,  Dim2 = cds.MidVal
       ,  Dim3 = cds.MaxVal
+      ,  FillTolerance= 100.00                                       --Not using FillTolerance
       FROM dbo.CARTONIZATION AS c (NOLOCK)
       CROSS APPLY (SELECT MIN(val) AS MinVal 
                         , SUM(val) - MIN(val) - MAX(val) AS MidVal
