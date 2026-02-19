@@ -2026,7 +2026,7 @@ BEGIN
                         AND PickMethod = 'GetTask-U'
 
                      BEGIN TRY
-                        UPDATE RDT.rdtPickLog WITH(NOLOCK)
+                        UPDATE RDT.rdtPickLog WITH(ROWLOCK)
                         SET
                            Status = '4'
                         WHERE RowRef = @nrdtPickLogID
