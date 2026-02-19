@@ -39,14 +39,15 @@ BEGIN
    FROM LOTxLOCxID (NOLOCK)  
    JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC  
    WHERE LOTxLOCxID.Lot = @c_lot  
-   AND LOC.Locationflag <>"HOLD"  
-   AND LOC.Locationflag <> "DAMAGE"  
-   AND LOC.Status <> "HOLD"  
-   AND LOC.LocationType = "XDOCK"     
+   AND LOC.Locationflag <>'HOLD' 
+   AND LOC.Locationflag <> 'DAMAGE'  
+   AND LOC.Status <> 'HOLD'  
+   AND LOC.LocationType = 'XDOCK'     
    AND LOC.Facility = @c_Facility  
    AND LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked > 0  
      
 END  
 GO
 GRANT EXECUTE ON [dbo].[nspALDAM02] TO [NSQL]
+
 GO
