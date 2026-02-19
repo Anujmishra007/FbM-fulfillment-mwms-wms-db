@@ -1920,7 +1920,7 @@ BEGIN
                      END
                      
                      BEGIN TRY
-                        UPDATE RDT.rdtPickLog
+                        UPDATE RDT.rdtPickLog WITH(ROWLOCK)
                         SET Remarks = @cScannedUCC,
                            DropID = IIF(@cDropIDScn = 'PickZoneScn', @cDropID, ''),
                            PickLockQty = ActQty,
@@ -2026,7 +2026,7 @@ BEGIN
                         AND PickMethod = 'GetTask-U'
 
                      BEGIN TRY
-                        UPDATE RDT.rdtPickLog
+                        UPDATE RDT.rdtPickLog WITH(NOLOCK)
                         SET
                            Status = '4'
                         WHERE RowRef = @nrdtPickLogID
@@ -2901,10 +2901,9 @@ BEGIN
 
                IF @cOption = '1'
                BEGIN
+                  SET @cCloseDropIDFlag = 'Y'
                   IF @cScannedDropID = ''
                   BEGIN
-                     SET @cCloseDropIDFlag = 'Y'
-
                      SET @cOutField05 = '1'
                      EXEC rdt.rdtSetFocusField @nMobile, 2 -- SKU
                      
