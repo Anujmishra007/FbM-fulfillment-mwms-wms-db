@@ -47,8 +47,9 @@ GO
 /* 26-JUN-2025  SSA01     2.7 UWP-3982- Added PalletType in inventory    */
 /* 10-Oct-2025  SSA02     2.8 UWP-42248 -Enhanced session management     */
 /* 21-Oct-2025  Michael   2.9 FCR-8377- Add SerialNoUpdateLotLocID (ML01)*/
-/* 05-Nov-2025  SSA03     3.0 UWP-43625- updated sequence of update Lot */
-/*                            table to avoid deadlock                   */
+/* 05-Nov-2025  SSA03     3.0 UWP-43625- updated sequence of update Lot  */
+/*                            table to avoid deadlock                    */
+/* 18-Nov-2025  SSA04     3.1 FCR-8415-NL-LCL SHIPPING CO-Upd Pallet Type*/
 /*************************************************************************/
 CREATE OR ALTER PROC  [dbo].[nspItrnAddAdjustmentCheck]
                @c_itrnkey      NVARCHAR(10)
@@ -148,6 +149,7 @@ BEGIN
       , @c_TranType                 NVARCHAR(10) = ''    --(Wan05)
       , @c_ASNFizUpdLotToSerialNo   NVARCHAR(30) = ''    --(Wan05)
       , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML01
+      , @c_UCCNo                    NVARCHAR(20) = ''   --ML01
       
    SET @c_IDLottable01     = ''
    SET @c_IDLottable02     = ''
@@ -888,24 +890,26 @@ BEGIN
             END
          END
       END
-   -- SSA04 start --
-   IF @n_continue=1 or @n_continue=2
-   BEGIN
-   	  IF ISNULL(RTRIM(@c_toid), '') <> ''
-   	  BEGIN
-         UPDATE PALLET with (ROWLOCK) SET PalletType = @c_PalletType
-		     WHERE PalletKey = @c_toid
-	       /* Check SQL Error Message */
-	      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-	      IF @n_err <> 0
-	      BEGIN
-	         SELECT @n_continue = 3
-	         SELECT @n_err = 62084
-	         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Pallet. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
-	      END
+
+      -- SSA04 start --
+      IF @n_continue=1 or @n_continue=2
+      BEGIN
+           IF ISNULL(RTRIM(@c_toid), '') <> ''
+           BEGIN
+            UPDATE PALLET with (ROWLOCK) SET PalletType = @c_PalletType
+              WHERE PalletKey = @c_toid
+             /* Check SQL Error Message */
+            SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+            IF @n_err <> 0
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 62084
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Pallet. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
+            END
+         END
       END
-   END
-   -- SSA04 End --
+      -- SSA04 End --
+
       IF @n_continue=1 or @n_continue=2
       BEGIN
          SELECT @n_rcnt=NULL, @n_curqty=NULL
@@ -1144,7 +1148,9 @@ BEGIN
       IF @n_continue=1 or @n_continue=2
       BEGIN 
          SET @c_SerialNo = '' 
+         SET @c_UCCNo = ''   --ML01
          SELECT @c_SerialNo  = a.SerialNo
+              , @c_UCCNo     = a.UCCNo   --ML01
               , @c_SourceKey = i.SourceKey
               , @c_SourceType= i.SourceType
               , @c_TranType  = i.TranType
@@ -1268,7 +1274,8 @@ BEGIN
                       ,   N''                                                    -- UserDefine04 - nvarchar(30)
                       ,   N''                                                    -- UserDefine05 - nvarchar(30)
                       ,   N''                                                    -- LabelLine - nvarchar(5)
-                      ,   N''                                                    -- UCCNo - nvarchar(20)
+--ML01                      ,   N''                                                    -- UCCNo - nvarchar(20)
+                      ,   @c_UCCNo   --ML01
                       ,   IIF(@c_ASNFizUpdLotToSerialNo='1'
                            OR @c_SerialNoUpdateLotLocID='1'   --ML01
                              ,@c_Lot,'')                                         -- Lot - nvarchar(10)
