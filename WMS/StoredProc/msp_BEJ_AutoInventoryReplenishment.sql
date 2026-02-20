@@ -59,7 +59,6 @@ BEGIN
             , @n_QtyAvailableIced INT = 0
             , @n_QtyAllocatedIced INT = 0
 
-
    SELECT @n_StartTCnt=@@TRANCOUNT , @n_Continue=1, @b_Success=1, @n_Err=0
 
    SELECT @c_ErrMsg=''
