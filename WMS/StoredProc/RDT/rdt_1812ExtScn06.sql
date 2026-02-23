@@ -868,6 +868,12 @@ BEGIN
                            ON L2.Loc = @cSuggFromLOC
                            --AND L.LocationCategory = L2.LocationCategory
 
+						INNER JOIN AreaDetail AD WITH(NOLOCK)
+						   ON L2.PutawayZone = AD.PutawayZone
+
+						INNER JOIN AreaDetail AD2 WITH(NOLOCK)
+						   ON L.PutawayZone = AD2.PutawayZone
+
 					    INNER JOIN dbo.CODELKUP C WITH(NOLOCK)
                            ON C.Long = L.LocationCategory
                            AND C.StorerKey = @cStorerKey
@@ -897,6 +903,7 @@ BEGIN
                                  OR (ISNULL(C.UDF05,'') <> '' AND ISNULL(C2.UDF05,'') <> '' AND C.UDF05 = C2.UDF05)
                               )
                            )
+						   AND AD.AreaKey = AD2.AreaKey
                      )
                      INSERT INTO @tOptions (ID,LOC)
                      SELECT 
@@ -918,6 +925,12 @@ BEGIN
                      JOIN LOC L2 WITH(NOLOCK)
                      ON L2.Loc = @cSuggFromLOC
                      --AND L.LocationCategory = L2.LocationCategory
+
+					 INNER JOIN AreaDetail AD WITH(NOLOCK)
+						ON L2.PutawayZone = AD.PutawayZone
+
+				     INNER JOIN AreaDetail AD2 WITH(NOLOCK)
+						ON L.PutawayZone = AD2.PutawayZone
 
 					 INNER JOIN dbo.CODELKUP C WITH(NOLOCK)
                         ON C.Long = L.LocationCategory
@@ -953,6 +966,7 @@ BEGIN
                            OR (ISNULL(C.UDF05,'') <> '' AND ISNULL(C2.UDF05,'') <> '' AND C.UDF05 = C2.UDF05)
                         )
                      )
+					 AND AD.AreaKey = AD2.AreaKey
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
                   END
 
@@ -1162,6 +1176,12 @@ BEGIN
                               ON L2.Loc = @cSuggFromLOC
                               --AND L.LocationCategory = L2.LocationCategory
 
+					       INNER JOIN AreaDetail AD WITH(NOLOCK)
+						      ON L2.PutawayZone = AD.PutawayZone
+
+				           INNER JOIN AreaDetail AD2 WITH(NOLOCK)
+						      ON L.PutawayZone = AD2.PutawayZone
+
 					       INNER JOIN dbo.CODELKUP C WITH(NOLOCK)
                               ON C.Long = L.LocationCategory
                               AND C.StorerKey = @cStorerKey
@@ -1191,7 +1211,7 @@ BEGIN
                                     OR (ISNULL(C.UDF05,'') <> '' AND ISNULL(C2.UDF05,'') <> '' AND C.UDF05 = C2.UDF05)
                                  )
                               )
-
+							  AND AD.AreaKey = AD2.AreaKey
                         )
                         INSERT INTO @tOptions (ID,LOC)
                         SELECT 
@@ -1213,6 +1233,12 @@ BEGIN
                      JOIN LOC L2 WITH(NOLOCK)
                      ON L2.Loc = @cSuggFromLOC
                      --AND L.LocationCategory = L2.LocationCategory
+
+					 INNER JOIN AreaDetail AD WITH(NOLOCK)
+						ON L2.PutawayZone = AD.PutawayZone
+
+				     INNER JOIN AreaDetail AD2 WITH(NOLOCK)
+						ON L.PutawayZone = AD2.PutawayZone
 
 					 INNER JOIN dbo.CODELKUP C WITH(NOLOCK)
                         ON C.Long = L.LocationCategory
@@ -1247,6 +1273,7 @@ BEGIN
                            OR (ISNULL(C.UDF04,'') <> '' AND ISNULL(C2.UDF04,'') <> '' AND C.UDF04 = C2.UDF04)
                            OR (ISNULL(C.UDF05,'') <> '' AND ISNULL(C2.UDF05,'') <> '' AND C.UDF05 = C2.UDF05)
                         )
+					 AND AD.AreaKey = AD2.AreaKey
                      )
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
                      END
