@@ -50,13 +50,15 @@ BEGIN
    DECLARE @cTaskLOT          NVARCHAR( 10)  
    DECLARE @cTaskFromLoc      NVARCHAR( 10)  
    DECLARE @cTaskFromID       NVARCHAR( 18)
-   DECLARE @cTaskFromLocCate NVARCHAR( 10)
+   DECLARE @cTaskFromLocCate  NVARCHAR( 10)
    DECLARE @cTaskPickMethod   NVARCHAR( 10)  
    DECLARE @nTaskQTY          INT  
    DECLARE @nQTY              INT
    DECLARE @cUserName         NVARCHAR(18)
    DECLARE @cLottable03       NVARCHAR(60)
    DECLARE @cOrderKeyToUpd    NVARCHAR(20)
+   DECLARE @cNewPutawayZone   NVARCHAR(20)
+   DECLARE @cTaskArea         NVARCHAR(20)
 
    SELECT @cLottable03 = O_Field01
    FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -92,7 +94,8 @@ BEGIN
       @cTaskPickMethod = TD.PickMethod,   
       @cUserName = USERKEY,
       --@nTaskQTY = SystemQty, FP task qty = 0
-      @cTaskFromLocCate = LOC.LocationCategory  
+      @cTaskFromLocCate = LOC.LocationCategory,  
+	  @cTaskArea = AreaKey
    FROM dbo.TaskDetail TD WITH (NOLOCK)
    JOIN dbo.LOC  WITH (NOLOCK)
       ON TD.FromLOC = LOC.LOC
@@ -234,14 +237,15 @@ BEGIN
       @nNewQTY = SUM(QTY),
       @nNewAvailableQty = SUM(Qty - QtyAllocated - QtyPicked - QtyReplen),
       @cNewLOC = LLI.LOC,
-      @cNewLocCate = LOC.LocationCategory
+      @cNewLocCate = LOC.LocationCategory,
+	  @cNewPutawayZone = PutawayZone
    FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
    JOIN dbo.LOC WITH (NOLOCK)
       ON LLI.Loc = LOC.LOC
    WHERE StorerKey = @cStorerKey
       AND ID = @cNewID
       AND QTY > 0
-   GROUP BY SKU, LLI.LOC, LOC.LocationCategory
+   GROUP BY SKU, LLI.LOC, LOC.LocationCategory, LOC.PutawayZone
 
    --IF @cNewLocCate <> @cTaskFromLocCate
    IF NOT EXISTS (
@@ -250,6 +254,12 @@ BEGIN
 	  WHERE LISTNAME = 'JCBBKFRMLC'
          AND StorerKey = @cStorerKey
          AND Long = @cNewLocCate
+   )
+   OR NOT EXISTS (
+      SELECT 1 
+	  FROM AreaDetail WITH(NOLOCK)
+	  WHERE PutawayZone = @cNewPutawayZone
+	     AND AreaKey = @cTaskArea
    )
    BEGIN
       SET @nErrNo = 239912
