@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.2                                                  */
+/* GitHub Version: 1.3                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,8 @@ GO
 /* 11-Feb-2026 WLChooi  1.1   UWP-48731 Add Error Logging (WL01)        */
 /* 13-Feb-2026 WLChooi  1.2   UWP-48732 Split Pickdetail add Notes for  */
 /*                            tracing purpose (WL02)                    */
+/* 23-Feb-2026 WLChooi  1.3   UWP-48530 Insert RPF Task if the UCC of   */
+/*                            the task has already completed (WL03)     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -1286,7 +1288,8 @@ BEGIN
                             WHERE WaveKey = @c_WaveKey
                             AND TaskType = 'RPF'
                             AND Caseid = CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END
-                            AND FromLoc = @c_FromLoc)
+                            AND FromLoc = @c_FromLoc
+                            AND [Status] <> '9' )   --WL03
                   BEGIN
                      SET @b_InsertTask = 0
                   END
