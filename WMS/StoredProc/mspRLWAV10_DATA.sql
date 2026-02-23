@@ -13,13 +13,14 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.0                                                          */    
+/* Version: 1.1                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 23-Feb-2026 WLChooi  1.1   FCR-11090 Fix CPK Task Status (WL01)       */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_DATA]        
    @c_Wavekey     NVARCHAR(10)
@@ -105,16 +106,16 @@ BEGIN
                                     WHEN td_asttpa.TaskDetailKey IS NOT NULL THEN td_asttpa.TaskDetailKey
                                     ELSE '' END
       FROM #PICKDETAIL_WIP AS pw
-      LEFT OUTER JOIN TaskDetail td_rpf (NOLOCK)
-             ON td_rpf.TaskType   IN ('RPF','RP1')
-            AND td_rpf.CaseID     = pw.DropID
-            AND td_rpf.Status     NOT IN ('X','9')
-            AND td_rpf.Storerkey  = pw.Storerkey
-      LEFT OUTER JOIN TaskDetail td_asttpa (NOLOCK)
-             ON td_asttpa.TaskType = 'ASTTPA'
-            AND td_asttpa.CaseID   = pw.DropID
-            AND td_asttpa.Status   NOT IN ('X','9')
-            AND td_asttpa.Storerkey= pw.Storerkey
+      LEFT OUTER JOIN TaskDetail td_rpf (NOLOCK) ON td_rpf.TaskType  IN ('RPF','RP1')
+                                                AND td_rpf.FinalLoc  = pw.Loc             --WL01
+                                                AND td_rpf.Wavekey   = pw.Wavekey         --WL01
+                                                AND td_rpf.Status    NOT IN ('X','9')
+                                                AND td_rpf.Storerkey = pw.Storerkey
+      LEFT OUTER JOIN TaskDetail td_asttpa (NOLOCK) ON td_asttpa.TaskType  = 'ASTTPA'
+                                                   AND td_asttpa.ToLoc     = pw.Loc       --WL01
+                                                   AND td_asttpa.Wavekey   = pw.Wavekey   --WL01
+                                                   AND td_asttpa.Status    NOT IN ('X','9')
+                                                   AND td_asttpa.Storerkey = pw.Storerkey    
    END
  
 QUIT_SP:
