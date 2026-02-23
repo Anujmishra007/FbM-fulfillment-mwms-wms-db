@@ -7,7 +7,7 @@ GO
 /* Stored Procedure: mspRLWAV10_PACK                                     */    
 /* Creation Date: 2026-01-22                                             */    
 /* Copyright: Maersk Logistics                                           */    
-/* Written by: Wai Lum                                                       */
+/* Written by: Wan                                                       */
 /*                                                                       */    
 /* Purpose: FCR-10124 - UK Columbia SportWear Release Wave               */    
 /*                                                                       */    
@@ -24,6 +24,7 @@ GO
 /* 20-Feb-2026 USH022   1.2   (FCR-10124) Added CodeLkpConf for          */
 /*                            UOM and ORDERGROUP on marking              */
 /*                            PackInfor.CartonStatus=ORDERAUDIT(ush022-2)*/
+/* 23-Feb-2026 WLChooi  1.3   FCR-11069 Fix Incorrect CartonType (WL01)  */
 /*************************************************************************/      
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -153,6 +154,11 @@ BEGIN
          , @c_SQL                   NVARCHAR(4000) = ''
          , @c_SQLParms              NVARCHAR(4000) = ''
          , @c_SQLCond               NVARCHAR(4000) = ''
+         , @c_Option5               NVARCHAR(4000) = ''     --WL01
+         , @c_PackECOM              NVARCHAR(10)   = 'N'    --WL01
+
+   DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
+         , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
 
    DECLARE @cur_PCKGRPH          CURSOR
          , @cur_PCKGRPS          CURSOR
@@ -436,6 +442,15 @@ BEGIN
                           +      ' WHEN WORKORDERDETAIL.Type = ''PD'''
                           +      ' THEN WORKORDERDETAIL.Type'
                           +      ' ELSE '''' END'
+
+      -- Get optional configuration if available
+      SELECT @c_Option5 = ISNULL(fgr.Option5,'')
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
+
+      IF ISNULL(@c_Option5, '') <> ''
+      BEGIN
+         SELECT @c_PackECOM = dbo.fnc_GetParamValueFromString('@c_PackECOM', @c_Option5, @c_PackECOM)
+      END
    END
 
    IF @n_Continue = 1
@@ -511,6 +526,14 @@ BEGIN
       FROM @TMP_CL AS cl
       WHERE cl.Listname = 'CSCUK01CFG'
 
+      -- Set optional configuration
+      SET @c_SQLCond = ' WHERE 1=1'
+
+      IF @c_PackECOM = 'N'
+      BEGIN
+         SET @c_SQLCond = @c_SQLCond + ' AND ORDERS.DocType = ''N'''
+      END
+
       -- Picking Loc: PICKDETAIL.ToLoc, get at mspRLWAV10_DATA
       SET @c_SQL = N'SELECT PICKDETAIL.PickDetailKey'
                  +  ', ORDERS.OrderKey'
@@ -578,6 +601,7 @@ BEGIN
                  +                ' AND PD.Storerkey = PICKDETAIL.Storerkey'
                  +                ' AND PD.SKU = PICKDETAIL.SKU'
                  +              ' ) AS PICKSKU'
+                 +  @c_SQLCond
                  +  ' ORDER BY PackGrpNo'
                  +         ' , HardCTNGrpNo'
                  +         ' , SortCTNGrpNo'
@@ -1032,12 +1056,69 @@ BEGIN
                      WHERE cl1.ListName = 'CSCUK01GCR'
                      AND   cl1.Code     > ''
                      AND   cl1.Storerkey= @c_Storerkey
-                     AND   cl1.Code2    IN (@c_BillToKey, '')
+                     AND   cl1.Code2    = @c_BillToKey   --WL01
                      AND   cl1.Long     = @c_CTNGroup_BTK         --BillToKey CartonGroup
                      AND   cl1.Short    > ''
                      AND   cl1.UDF01    = 'Y'
-                     ORDER BY CASE WHEN cl1.Code2 = @c_BillToKey THEN 1 ELSE 2 END, cl1.Code
+                     ORDER BY cl1.Code
                      SET @n_RowCount = @@ROWCOUNT
+                     
+                     --WL01 S
+                     IF @n_RowCount = 0
+                     BEGIN
+                        INSERT INTO #CTNZ
+                        (
+                              CartonizationGroup
+                           ,  CartonType
+                           ,  [Cube]
+                           ,  MaxWeight
+                           ,  CartonLength
+                           ,  CartonWidth
+                           ,  CartonHeight
+                           ,  Dim1
+                           ,  Dim2
+                           ,  Dim3
+                        )
+                        SELECT cz.CartonizationGroup
+                              ,cz.CartonType
+                              ,cz.[Cube]
+                              ,CartonWeight = CASE WHEN ISNUMERIC(cl1.UDF02) = 0
+                                                   THEN cz.MaxWeight
+                                                   WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
+                                                   THEN cz.MaxWeight
+                                                   ELSE cl1.UDF02
+                                                   END
+                              ,cz.CartonLength
+                              ,cz.CartonWidth
+                              ,cz.CartonHeight
+                              ,cz.Dim1
+                              ,cz.Dim2
+                              ,cz.Dim3
+                        FROM @TMP_CL cl1
+                        JOIN @t_CTNZ cz  ON  cz.CartonizationGroup = @c_CTNGroup
+                                         AND cz.CartonType = cl1.Short
+                        WHERE cl1.ListName = 'CSCUK01GCR'
+                        AND   cl1.Code     > ''
+                        AND   cl1.Storerkey= @c_Storerkey
+                        AND   cl1.Code2    = ''
+                        AND   cl1.Long     = @c_CTNGroup_BTK         --BillToKey CartonGroup
+                        AND   cl1.Short    > ''
+                        AND   cl1.UDF01    = 'Y'
+                        ORDER BY cl1.Code
+                        SET @n_RowCount = @@ROWCOUNT
+                     END
+
+                     IF @n_RowCount > 0
+                     BEGIN
+                        SELECT TOP 1
+                                 @c_CartonType_Max = cz.CartonType
+                              ,  @n_CartonCube_Max = cz.[Cube]
+                              ,  @n_CartonWeight_Max = cz.MaxWeight
+                        FROM #CTNZ AS cz
+                        WHERE CartonDefault = 0
+                        ORDER BY cz.RowID
+                     END
+                     --WL01 E
                   END
 
                   IF @n_RowCount = 0 OR (@n_RowCount = 1 AND @c_CTNGroup_BTK = '')
@@ -1801,9 +1882,6 @@ BEGIN
 
          --Lookup OrderType
          --(ush022-2) start
-         DECLARE @c_OrderGroupAllowed  NVARCHAR (20) = '';
-         DECLARE @c_DocTypeAllowed     NVARCHAR (20) = '';
-
          SELECT TOP 1
                   @c_OrderGroupAllowed = CL.Code,
                   @c_DocTypeAllowed    = CL.Long
@@ -1892,7 +1970,7 @@ BEGIN
             BEGIN
                EXEC [dbo].[isp_CreatePickSlip]
                    @c_Orderkey              = @c_Orderkey
-                  ,@c_Wavekey               = @c_Wavekey                            --2026-01-20
+                  ,@c_Wavekey               = @c_Wavekey
                   ,@c_PickslipType          = '3'
                   ,@c_ConsolidateByLoad     = 'N'
                   ,@c_Refkeylookup          = 'N'
