@@ -1,0 +1,7 @@
+-- 259501 - 259550 - FCR-10102 NYR018
+
+execute rdt.rdtDropMsg 259501, 259550
+
+execute rdt.rdtAddMsg 259501, 10, '259501^FromLOC      ',  'us_english', 1868, 0, '259501^From LOC Not Exists'
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 259501 AND 259550
