@@ -9,6 +9,7 @@
 /* 2025-06-11  1.0.0   Jackc       FCR-3959 Created                     */
 /* 2025-10-10  1.0.1   Dennis      FCR-3959                             */
 /* 2025-12-16  1.0.2   PPA374      Added workaround for swap ID         */
+/* 2026-02-23  1.0.3   PPA374      Allowing to swap from other bulk loc */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812SwapID05]
    @nMobile           INT,
@@ -242,7 +243,14 @@ BEGIN
       AND QTY > 0
    GROUP BY SKU, LLI.LOC, LOC.LocationCategory
 
-   IF @cNewLocCate <> @cTaskFromLocCate
+   --IF @cNewLocCate <> @cTaskFromLocCate
+   IF NOT EXISTS (
+      SELECT 1 
+	  FROM CODELKUP C WITH(NOLOCK)
+	  WHERE LISTNAME = 'JCBBKFRMLC'
+         AND StorerKey = @cStorerKey
+         AND Long = @cNewLocCate
+   )
    BEGIN
       SET @nErrNo = 239912
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cannot swap id from this loc
