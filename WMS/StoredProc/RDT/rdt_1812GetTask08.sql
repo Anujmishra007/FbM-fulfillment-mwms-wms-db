@@ -14,6 +14,7 @@ GO
 /* Date        Rev    Author    Purposes                                */    
 /* 2025-06-11  1.0.0  Dennis    FCR-3959. Created                       */
 /* 2025-12-03  1.0.1  PPA374    Added same side VNA pick logic          */
+/* 2026-02-23  1.0.2  PPA374    Checking order for next task            */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1812GetTask08] (    
@@ -85,6 +86,7 @@ BEGIN
    AND TD.Storerkey = @cStorerKey
    AND TD.Status = '3'
    AND TaskType IN ('FCP','FCP1')
+   AND OrderKey = @cOrderKey
    ORDER BY 
    IIF(LOC.LocAisle = ISNULL(@cLastAisle,'') AND ISNULL(@cLastCategory,'') = 'VNA',1,99),
    IIF(LOC.LocAisle = ISNULL(@cLastAisle,'') AND ISNULL(@cLastCategory,'') = 'VNA' AND ISNULL(@cLastSide,'') = LOC.Floor,1,99),
