@@ -652,7 +652,7 @@ BEGIN
                MaxPallet - IIF(CL.CODE IS NOT NULL, PalletsINTotal, SpaceTakenTotal)
             ) AS BeamSpaceLeft
          FROM (
-            SELECT
+            SELECT DISTINCT
                Loc,
                PALogicalLoc, 
                MaxPallet,
