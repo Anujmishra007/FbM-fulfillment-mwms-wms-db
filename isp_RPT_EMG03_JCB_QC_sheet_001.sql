@@ -28,8 +28,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
-/* 10-09-2025   VMA237  1.0   Initial Version (WCEET-????)                 */
-/*																           */
+/* 10-09-2025   VMA237  1.0   Initial Version  WCEET-3459                  */
+/* 02-18-2026   AGM046  1.1   Order Changed, added picker				   */
 /*                                                                         */
 /***************************************************************************/
 
@@ -51,18 +51,7 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-/* Testing data */
---DECLARE 
-    --@Facility            NVARCHAR(30) = 'EMG03',
-    --@StorerKey           NVARCHAR(30) = 'JCB',
-    --@Bay                 NVARCHAR(30) = 'Bay',
-    --@Trailer_Number      NVARCHAR(30) = 'Trailer_Number',
-    --@Transfer_Reference  NVARCHAR(30) = 'Transfer_Reference',
-    --@Deliver_To          NVARCHAR(30) = 'Deliver_To',
-    --@Despatch_Date       DATE         = '20250910', 
-    --@Location            NVARCHAR(MAX) = 'ESM041,ESM041B,ESM041C,ESM042,ESM042B,ESM042C,ESM043,ESM044,ESM045,ESM046,ESM047,ESM048,ESM049,ESM050,ESM051,ESM052,ESM053,ESM054,ESM055,ESM056,ESM057,ESM058,ESM059,ESM060,ESM061,ESM062';
-
-	SET @Location = REPLACE(REPLACE(REPLACE(@Location, '[', ''), ']', ''), ' ', '');
+   SET @Location = REPLACE(REPLACE(REPLACE(@Location, '[', ''), ']', ''), ' ', '');
 
 SELECT  'Unit 5, SEGRO Logistics Park, East Midlands Gateway, Kegworth, Leicestershine, DE74, 2DL' AS [Despatcher],
 		pcd.Storerkey,
@@ -124,5 +113,6 @@ ORDER BY
 	
 END
 GO
+
 
 
