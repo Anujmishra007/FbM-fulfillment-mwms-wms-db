@@ -19,6 +19,7 @@ GO
 /*                             whole order of a specific type is picked */
 /* 2026-02-12 1.1.5   PPA374   Adding 'INLOCKED' flag for consideration */
 /* 2026-02-16 1.2.0   PPA374   Adding CABS picking reason code rules    */
+/* 2026-02-23 1.2.1   PPA374   Allowing bulk swap from other categories */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1812ExtScn06] (  
@@ -861,19 +862,41 @@ BEGIN
                            ROW_NUMBER() OVER (ORDER BY b.Id, b.Loc) as RowNum
                         FROM SkuSummary a
                         INNER JOIN SkuSummary b ON a.SkuQtyPattern = b.SkuQtyPattern
-                     INNER JOIN dbo.LOC L WITH(NOLOCK)
+                        INNER JOIN dbo.LOC L WITH(NOLOCK)
                            ON b.LOC = L.Loc
                         INNER JOIN dbo.LOC L2 WITH(NOLOCK)
                            ON L2.Loc = @cSuggFromLOC
-                           AND L.LocationCategory = L2.LocationCategory
+                           --AND L.LocationCategory = L2.LocationCategory
+
+					    INNER JOIN dbo.CODELKUP C WITH(NOLOCK)
+                           ON C.Long = L.LocationCategory
+                           AND C.StorerKey = @cStorerKey
+                           AND C.LISTNAME = 'JCBBKFRMLC'
+
+                        INNER JOIN dbo.CODELKUP C2 WITH(NOLOCK)
+                           ON C2.Long = L2.LocationCategory
+                           AND C2.StorerKey = @cStorerKey
+                           AND C2.LISTNAME = 'JCBBKFRMLC'
+
                      INNER JOIN dbo.ID WITH(NOLOCK)
                            ON b.ID = ID.Id
                         WHERE a.Id <> b.Id
                            AND a.Id = @cSuggID
-                     AND L.Facility = @cFacility
+                           AND L.Facility = @cFacility
                            AND L.LocationFlag IN ('','NONE','INLOCKED')
                            AND L.Status = 'OK'
                            AND ID.Status = 'OK'
+						   AND (
+                              L.LocationCategory = L2.LocationCategory
+                              OR
+                              (
+                                 (ISNULL(C.UDF01,'') <> '' AND ISNULL(C2.UDF01,'') <> '' AND C.UDF01 = C2.UDF01)
+                                 OR (ISNULL(C.UDF02,'') <> '' AND ISNULL(C2.UDF02,'') <> '' AND C.UDF02 = C2.UDF02)
+                                 OR (ISNULL(C.UDF03,'') <> '' AND ISNULL(C2.UDF03,'') <> '' AND C.UDF03 = C2.UDF03)
+                                 OR (ISNULL(C.UDF04,'') <> '' AND ISNULL(C2.UDF04,'') <> '' AND C.UDF04 = C2.UDF04)
+                                 OR (ISNULL(C.UDF05,'') <> '' AND ISNULL(C2.UDF05,'') <> '' AND C.UDF05 = C2.UDF05)
+                              )
+                           )
                      )
                      INSERT INTO @tOptions (ID,LOC)
                      SELECT 
@@ -890,12 +913,23 @@ BEGIN
                      SELECT TOP 3 LLI.LOC,LLI.ID
                      FROM LOTxLOCxID LLI(NOLOCK)
                      JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
-                JOIN LOC L WITH(NOLOCK)
+                     JOIN LOC L WITH(NOLOCK)
                      ON LLI.LOC = L.Loc
                      JOIN LOC L2 WITH(NOLOCK)
                      ON L2.Loc = @cSuggFromLOC
-                     AND L.LocationCategory = L2.LocationCategory
-                JOIN ID WITH(NOLOCK)
+                     --AND L.LocationCategory = L2.LocationCategory
+
+					 INNER JOIN dbo.CODELKUP C WITH(NOLOCK)
+                        ON C.Long = L.LocationCategory
+                        AND C.StorerKey = @cStorerKey
+                        AND C.LISTNAME = 'JCBBKFRMLC'
+
+                     INNER JOIN dbo.CODELKUP C2 WITH(NOLOCK)
+                        ON C2.Long = L2.LocationCategory
+                        AND C2.StorerKey = @cStorerKey
+                        AND C2.LISTNAME = 'JCBBKFRMLC'
+
+                     JOIN ID WITH(NOLOCK)
                      ON LLI.ID = ID.Id
                      WHERE LLI.QTY > 0
                      AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
@@ -904,10 +938,21 @@ BEGIN
                      AND LLI.QTY = @nQTY_RPL
                      AND LA.Lottable03 = @cOutField01
                      AND LLI.ID <> @cSuggID
-                AND L.Facility = @cFacility
+                     AND L.Facility = @cFacility
                      AND L.LocationFlag IN ('','NONE','INLOCKED')
                      AND L.Status = 'OK'
                      AND ID.Status = 'OK'
+				     AND (
+                        L.LocationCategory = L2.LocationCategory
+                        OR
+                        (
+                           (ISNULL(C.UDF01,'') <> '' AND ISNULL(C2.UDF01,'') <> '' AND C.UDF01 = C2.UDF01)
+                           OR (ISNULL(C.UDF02,'') <> '' AND ISNULL(C2.UDF02,'') <> '' AND C.UDF02 = C2.UDF02)
+                           OR (ISNULL(C.UDF03,'') <> '' AND ISNULL(C2.UDF03,'') <> '' AND C.UDF03 = C2.UDF03)
+                           OR (ISNULL(C.UDF04,'') <> '' AND ISNULL(C2.UDF04,'') <> '' AND C.UDF04 = C2.UDF04)
+                           OR (ISNULL(C.UDF05,'') <> '' AND ISNULL(C2.UDF05,'') <> '' AND C.UDF05 = C2.UDF05)
+                        )
+                     )
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
                   END
 
@@ -1111,19 +1156,42 @@ BEGIN
                               ROW_NUMBER() OVER (ORDER BY b.Id, b.Loc) as RowNum
                            FROM SkuSummary a
                            INNER JOIN SkuSummary b ON a.SkuQtyPattern = b.SkuQtyPattern
-                     INNER JOIN dbo.LOC L WITH(NOLOCK)
+                           INNER JOIN dbo.LOC L WITH(NOLOCK)
                               ON b.LOC = L.Loc
                            INNER JOIN dbo.LOC L2 WITH(NOLOCK)
                               ON L2.Loc = @cSuggFromLOC
-                              AND L.LocationCategory = L2.LocationCategory
-                     INNER JOIN dbo.ID WITH(NOLOCK)
+                              --AND L.LocationCategory = L2.LocationCategory
+
+					       INNER JOIN dbo.CODELKUP C WITH(NOLOCK)
+                              ON C.Long = L.LocationCategory
+                              AND C.StorerKey = @cStorerKey
+                              AND C.LISTNAME = 'JCBBKFRMLC'
+
+                           INNER JOIN dbo.CODELKUP C2 WITH(NOLOCK)
+                              ON C2.Long = L2.LocationCategory
+                              AND C2.StorerKey = @cStorerKey
+                              AND C2.LISTNAME = 'JCBBKFRMLC'
+
+                           INNER JOIN dbo.ID WITH(NOLOCK)
                               ON b.ID = ID.Id
                            WHERE a.Id <> b.Id
                               AND a.Id = @cSuggID
-                       AND L.Facility = @cFacility
+                              AND L.Facility = @cFacility
                               AND L.LocationFlag IN ('','NONE','INLOCKED')
                               AND L.Status = 'OK'
                               AND ID.Status = 'OK'
+						      AND (
+                                 L.LocationCategory = L2.LocationCategory
+                                 OR
+                                 (
+                                    (ISNULL(C.UDF01,'') <> '' AND ISNULL(C2.UDF01,'') <> '' AND C.UDF01 = C2.UDF01)
+                                    OR (ISNULL(C.UDF02,'') <> '' AND ISNULL(C2.UDF02,'') <> '' AND C.UDF02 = C2.UDF02)
+                                    OR (ISNULL(C.UDF03,'') <> '' AND ISNULL(C2.UDF03,'') <> '' AND C.UDF03 = C2.UDF03)
+                                    OR (ISNULL(C.UDF04,'') <> '' AND ISNULL(C2.UDF04,'') <> '' AND C.UDF04 = C2.UDF04)
+                                    OR (ISNULL(C.UDF05,'') <> '' AND ISNULL(C2.UDF05,'') <> '' AND C.UDF05 = C2.UDF05)
+                                 )
+                              )
+
                         )
                         INSERT INTO @tOptions (ID,LOC)
                         SELECT 
@@ -1140,12 +1208,23 @@ BEGIN
                      SELECT TOP 3 LLI.LOC,LLI.ID
                      FROM LOTxLOCxID LLI(NOLOCK)
                      JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
-                JOIN LOC L WITH(NOLOCK)
+                     JOIN LOC L WITH(NOLOCK)
                      ON LLI.LOC = L.Loc
                      JOIN LOC L2 WITH(NOLOCK)
                      ON L2.Loc = @cSuggFromLOC
-                     AND L.LocationCategory = L2.LocationCategory
-                JOIN ID WITH(NOLOCK)
+                     --AND L.LocationCategory = L2.LocationCategory
+
+					 INNER JOIN dbo.CODELKUP C WITH(NOLOCK)
+                        ON C.Long = L.LocationCategory
+                        AND C.StorerKey = @cStorerKey
+                        AND C.LISTNAME = 'JCBBKFRMLC'
+
+                     INNER JOIN dbo.CODELKUP C2 WITH(NOLOCK)
+                        ON C2.Long = L2.LocationCategory
+                        AND C2.StorerKey = @cStorerKey
+                        AND C2.LISTNAME = 'JCBBKFRMLC'
+
+                     JOIN ID WITH(NOLOCK)
                      ON LLI.ID = ID.Id
                      WHERE LLI.QTY > 0
                      AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
@@ -1158,6 +1237,17 @@ BEGIN
                      AND L.LocationFlag IN ('','NONE','INLOCKED')
                      AND L.Status = 'OK'
                      AND ID.Status = 'OK'
+				     AND (
+                        L.LocationCategory = L2.LocationCategory
+                        OR
+                        (
+                           (ISNULL(C.UDF01,'') <> '' AND ISNULL(C2.UDF01,'') <> '' AND C.UDF01 = C2.UDF01)
+                           OR (ISNULL(C.UDF02,'') <> '' AND ISNULL(C2.UDF02,'') <> '' AND C.UDF02 = C2.UDF02)
+                           OR (ISNULL(C.UDF03,'') <> '' AND ISNULL(C2.UDF03,'') <> '' AND C.UDF03 = C2.UDF03)
+                           OR (ISNULL(C.UDF04,'') <> '' AND ISNULL(C2.UDF04,'') <> '' AND C.UDF04 = C2.UDF04)
+                           OR (ISNULL(C.UDF05,'') <> '' AND ISNULL(C2.UDF05,'') <> '' AND C.UDF05 = C2.UDF05)
+                        )
+                     )
                      ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
                      END
 
