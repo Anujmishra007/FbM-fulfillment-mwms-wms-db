@@ -65,7 +65,8 @@ BEGIN
    @cLastLoc            NVARCHAR(10),
    @cLastSide           NVARCHAR(10),
    @cLastAisle          NVARCHAR(10),
-   @cLastCategory       NVARCHAR(20)
+   @cLastCategory       NVARCHAR(20),
+   @cOrderKey           NVARCHAR(10)
 
    SELECT @cStorerKey = StorerKey,
    @cTaskDetailKey  = V_TaskDetailKey,
@@ -76,6 +77,8 @@ BEGIN
    SET @cNewTaskKey = ''
 
    SELECT TOP 1 @cLastSide = Floor, @cLastAisle = LocAisle, @cLastCategory = LocationCategory FROM LOC WITH(NOLOCK) WHERE LOC = @cLastLoc
+
+   SELECT TOP 1 @cOrderKey = OrderKey FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
 
    SELECT TOP 1 @cNewTaskKey = TaskDetailKey
    FROM dbo.TaskDetail TD WITH (NOLOCK)    
@@ -138,6 +141,9 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( 239660, @cLangCode, 'DSP') -- SO IS FULLY PICKED
    END
 
+Fail:    
+    
+END 
 Fail:    
     
 END 
