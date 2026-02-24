@@ -443,6 +443,7 @@ BEGIN
             END TRY
             BEGIN CATCH
                SET @n_Continue = 3
+               SET @c_ErrMsg = ERROR_MESSAGE()
             END CATCH    
             
             IF @n_err <> 0 
@@ -689,6 +690,8 @@ BEGIN
             COMMIT TRAN
          END
       END
+      EXECUTE dbo.nsp_LogError @n_Err, @c_Errmsg, 'msp_ProcessShortPickReAlloc05'
+      RAISERROR (@c_Errmsg, 16, 1) WITH SETERROR
       RETURN
    END
    ELSE
