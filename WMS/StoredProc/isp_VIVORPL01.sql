@@ -126,11 +126,12 @@ BEGIN
                             LOC.Status = 'OK' AND
                             ID.Status = 'OK' AND
                             LOC.LocationCategory <> 'shelving' AND
-                            LOC.Locationtype = 'BULK' AND
+                            (LOC.Locationtype = 'BULK' OR LOC.LocationType = 'PICK') AND
                             (LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED) > 0
                    ORDER BY
                     CASE WHEN LOC.LocationCategory <> 'shelving' THEN 0 ELSE 1 END,
-                    CASE WHEN LOC.LocationType IN ('BULK') THEN 0 ELSE 1 END,
+                    CASE WHEN LOC.LocationType = 'PICK' THEN 0 ELSE 1 END,
+                    CASE WHEN LOC.LocationType = 'BULK' THEN 0 ELSE 1 END,
                    LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED
 
             IF @n_FromQty > @n_QtyReplen

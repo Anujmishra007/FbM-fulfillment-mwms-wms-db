@@ -616,6 +616,7 @@ BEGIN
                     AND NOT (@c_LocationType='CASE' AND LLI.ID='')
                   ORDER BY
                   CASE WHEN LOC.LocationCategory <> 'shelving' THEN 0 ELSE 1 END,
+                  CASE WHEN LOC.LocationType = 'PICK' THEN 0 ELSE 1 END,
                   CASE WHEN LOC.LocationType IN (SELECT LocationType From @t_Bulk_LocType) THEN 0 ELSE 1 END,
                   OnHandQty, LOC.LogicalLocation
                ELSE
@@ -645,6 +646,7 @@ BEGIN
                             LOC.PUTAWAYZONE = CASE WHEN @c_ReplenFlag = 'FP+PARM2' THEN @c_Zone02 ELSE LOC.PUTAWAYZONE END   --WL01
                    ORDER BY
                    CASE WHEN LOC.LocationCategory <> 'shelving' THEN 0 ELSE 1 END,
+                   CASE WHEN LOC.LocationType = 'PICK' THEN 0 ELSE 1 END,
                    CASE WHEN LOC.LocationType IN (SELECT LocationType From @t_Bulk_LocType) THEN 0 ELSE 1 END,
                    OnHandQty, LOC.LogicalLocation
 
