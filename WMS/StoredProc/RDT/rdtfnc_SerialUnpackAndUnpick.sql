@@ -333,13 +333,6 @@ BEGIN
 
       SET @cToLOC = @cToInLOC
 
-      -- FCR-10102
-      IF @cExtScnSP <> ''
-      BEGIN
-         GOTO Step_ExtendedScreen
-      END
-      -- FCR-10102
-
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1  
 
@@ -350,8 +343,17 @@ BEGIN
    BEGIN
       SET @cToLOC = ''
       SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1    
+      SET @nStep = @nStep - 1  
+      GOTO Step_3_QUIT  
    END
+
+   -- FCR-10102
+   IF @cExtScnSP <> ''
+   BEGIN
+      GOTO Step_ExtendedScreen
+   END
+   -- FCR-10102
+
 END
 Step_3_QUIT:
    SET @cOutField01 = ''

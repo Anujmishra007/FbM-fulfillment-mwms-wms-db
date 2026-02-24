@@ -90,35 +90,40 @@ BEGIN
       END
 
       -- Redirect from Screen 3 (Location Scan)
-      IF @nScn = 6513 
-      BEGIN
-         SELECT @cLastInput = Value FROM @tExtScnData WHERE Variable = '@cOption'
-         
-         -- Update State to '2' (Unpack & Unpick) and save Location
-         UPDATE rdt.rdtMobRec SET V_String1 = '2', V_Loc = @cLastInput WHERE Mobile = @nMobile
-         
-         SET @nAfterScn = 6841
-         SET @nAfterStep = 99
-         SET @cOutField03 = 'UnPack And UnPick'
-         SET @cOutField01 = '' 
-         GOTO Quit
-      END
-
       -- Back Logic from Step 4 (Screen 6514) -> Redirect to Screen 2A (6841)
-      IF @nScn = 6514 AND @nInputKey = 0
+      IF @nScn = 6514 
       BEGIN
-         -- When user presses ESC on Serial Scan (Step 4), return to SKU Scan (Step 99 / Scn 6841)
-         
-         SET @nAfterScn = 6841
-         SET @nAfterStep = 99
-         SET @cOutField01 = '' 
-         
-         IF @cCurrentUnPackType = '2'
-             SET @cOutField03 = 'UnPack And UnPick'
-         ELSE
-             SET @cOutField03 = 'UnPack'
 
-         GOTO Quit
+         -- Case A: Forward flow (Enter Key from Step 3 or Start of Step 4)
+         IF @nInputKey = 1 AND @cInField01 <> '' AND @cCurrentUnPackType = '2'
+         BEGIN
+            
+             -- Capture the Location scanned in Step 3
+             SELECT @cLastInput = Value FROM @tExtScnData WHERE Variable = '@cOption'
+             
+             -- Update State to '2' (Unpack & Unpick) and save Location
+             UPDATE rdt.rdtMobRec SET V_String1 = '2', V_Loc = @cLastInput WHERE Mobile = @nMobile
+             
+             SET @nAfterScn = 6841
+             SET @nAfterStep = 99
+             SET @cOutField03 = 'UnPack And UnPick'
+             SET @cOutField01 = '' 
+             GOTO Quit
+         END
+         -- When user presses ESC on Serial Scan (Step 4), return to SKU Scan (Step 99 / Scn 6841)
+         IF @nInputKey = 0
+         BEGIN
+            SET @nAfterScn = 6841
+            SET @nAfterStep = 99
+            SET @cOutField01 = '' 
+            
+            IF @cCurrentUnPackType = '2'
+                SET @cOutField03 = 'UnPack And UnPick'
+            ELSE
+                SET @cOutField03 = 'UnPack'
+
+            GOTO Quit
+        END
       END
 
       -- ------------------------------------------------------------------------------------
