@@ -141,10 +141,6 @@ WHERE LOT.LOT = @c_lot
   AND LOC.Facility = @c_facility
   AND LOTXLOCXID.STORERKEY = @c_storerkey
   AND LOTXLOCXID.SKU = @c_sku
--- ===================================================================
--- UOMBASE FILTERS
--- ===================================================================
-  AND ID.QTY >= @n_uombase
   AND ((LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) % @n_uombase) = 0
   AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) >= @n_uombase
 ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.LOTTABLE05
