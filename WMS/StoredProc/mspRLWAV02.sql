@@ -46,6 +46,8 @@ GO
 /* 2026-01-06  Wan01          UWP-45254, CR V2.3 fixed                   */
 /* 2026-02-13  VNI01    2.0   UWP-48774 , BUG FIX FOR MISSING TASKDETKEY */
 /*                              ON SECOND WAVE RELEASE(WORK WITH PPA374) */
+/* 2026-02-25  PPA374   2.1   Update logic to not fail allocation check  */
+/*                              on shipped orders                        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -302,10 +304,10 @@ BEGIN
                                                     ELSE 3 END)
                   ) cl2  
       OUTER APPLY (SELECT od1.Orderkey                                              --2025-09-04
-                        , [Status] = CASE WHEN SUM(od1.QtyAllocated + od1.QtyPicked) = 0
-                                          THEN '0'
-                                          WHEN SUM(od1.OpenQty) = SUM(od1.QtyAllocated + od1.QtyPicked) 
+                        , [Status] = CASE WHEN SUM(od1.OpenQty) = SUM(od1.QtyAllocated + od1.QtyPicked) --25/02/2026 PPA374 Swapped places with '0' check to avoid failing shipped orders
                                           THEN '2'
+                                          WHEN SUM(od1.QtyAllocated + od1.QtyPicked) = 0
+                                          THEN '0'
                                           ELSE '1'
                                           END
                    FROM ORDERDETAIL od1 (NOLOCK)  
