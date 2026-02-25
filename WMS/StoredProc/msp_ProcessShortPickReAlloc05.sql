@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.0                                                  */
+/* GitHub Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 09-Jan-2026 WLChooi  1.0   Initial Version                           */
+/* 25-Feb-2026 WLChooi  1.1   UWP-49450 Clear Userdefine01 value (WL01) */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc05] (    
@@ -134,6 +135,7 @@ BEGIN
             Storerkey   NVARCHAR(15)
           , CaseID      NVARCHAR(20)
           , SKU         NVARCHAR(20)
+          , Qty         INT
           , PRIMARY KEY (Storerkey, CaseID, SKU)
       )
 
@@ -430,26 +432,44 @@ BEGIN
       BEGIN
          IF EXISTS (SELECT 1 FROM sys.objects (NOLOCK) WHERE OBJECT_ID(@c_RCMConfigSP) = object_id AND [Type] = 'P')
          BEGIN
+            --WL01 S
             BEGIN TRY   
-               SET @b_Success = 1
-                
-               EXEC @c_RCMConfigSP 
-                  @c_Wavekey        = @c_Wavekey
-               ,  @b_Success        = @b_Success   OUTPUT
-               ,  @n_Err            = @n_Err       OUTPUT  
-               ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT   
-               ,  @c_Code           = @c_WVRCMConfigCode        
-            
+               UPDATE dbo.WAVE
+               SET UserDefine01 = ''
+                 , EditDate = GETDATE()
+                 , EditWho = SUSER_SNAME()
+                 , TrafficCop = NULL    
+               WHERE WaveKey = @c_WaveKey   
             END TRY
             BEGIN CATCH
                SET @n_Continue = 3
                SET @c_ErrMsg = ERROR_MESSAGE()
             END CATCH    
-            
-            IF @n_err <> 0 
+
+            IF @n_Continue IN (1, 2)
             BEGIN
-               SET @n_Continue = 3
+               BEGIN TRY   
+                  SET @b_Success = 1
+                
+                  EXEC @c_RCMConfigSP 
+                     @c_Wavekey        = @c_Wavekey
+                  ,  @b_Success        = @b_Success   OUTPUT
+                  ,  @n_Err            = @n_Err       OUTPUT  
+                  ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT   
+                  ,  @c_Code           = @c_WVRCMConfigCode        
+            
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+               END CATCH    
+            
+               IF @n_err <> 0 
+               BEGIN
+                  SET @n_Continue = 3
+               END
             END
+            --WL01 E
          END
       END
    END
@@ -458,8 +478,8 @@ BEGIN
    -- Clear Caseid for shorted lines
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      INSERT INTO #T_CaseID (CaseID, Storerkey, SKU)
-      SELECT SP.CaseID, SP.Storerkey, SP.SKU
+      INSERT INTO #T_CaseID (CaseID, Storerkey, SKU, Qty)
+      SELECT SP.CaseID, SP.Storerkey, SP.SKU, SUM(SP.QtyMoved)
       FROM #PickDetail_WIP SP
       JOIN #T_ShortOrders T ON SP.OrderKey = T.OrderKey
       WHERE SP.WaveKey = @c_Wavekey
@@ -468,6 +488,7 @@ BEGIN
       AND SP.Storerkey  = @c_StorerKey
       AND SP.SKU = @c_SKU
       AND (SP.CaseID IS NOT NULL AND SP.CaseID <> '')
+      GROUP BY SP.CaseID, SP.Storerkey, SP.SKU
 
       INSERT INTO #T_Packdetail (PickSlipNo, CartonNo)
       SELECT DISTINCT PD.PickSlipNo, PD.CartonNo
