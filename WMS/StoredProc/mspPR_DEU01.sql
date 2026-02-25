@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[mspPR_DEU01]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-DROP PROCEDURE [dbo].[mspPR_DEU01]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -46,7 +43,7 @@ GO
 /* Date         Author    Purposes                                      */
 /************************************************************************/
 
-CREATE PROCEDURE [dbo].[nspPR_CH03]
+CREATE OR ALTER [dbo].[mspPR_DEU01]
 -- for NIKE CN
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
@@ -77,28 +74,25 @@ DECLARE @n_shelflife int
 DECLARE @c_UOMBase NVARCHAR(10)
 
 SELECT @c_UOMBase = @n_uombase
-
-           IF @d_lottable04 = '1900-01-01'
-BEGIN
-SELECT @d_lottable04 = null
-END
-
-   IF @d_lottable05 = '1900-01-01'
-BEGIN
-SELECT @d_lottable05 = null
-END
-
+    IF @d_lottable04 = '1900-01-01'
+        BEGIN
+            SELECT @d_lottable04 = null
+        END
+    IF @d_lottable05 = '1900-01-01'
+        BEGIN
+            SELECT @d_lottable05 = null
+        END
    IF @b_debug = 1
-BEGIN
-SELECT "nspPR_CH01 : Before Lot Lookup ....."
-SELECT '@c_lot'=@c_lot,'@c_lottable01'=@c_lottable01, '@c_lottable02'=@c_lottable02, '@c_lottable03'=@c_lottable03
-SELECT '@d_lottable04' = @d_lottable04, '@d_lottable05' = @d_lottable05, '@c_manual' = @c_manual  , '@c_sku' = @c_sku
-SELECT '@c_storerkey' = @c_storerkey, '@c_facility' = @c_facility
-END
+        BEGIN
+            SELECT "nspPR_CH01 : Before Lot Lookup ....."
+            SELECT '@c_lot'=@c_lot,'@c_lottable01'=@c_lottable01, '@c_lottable02'=@c_lottable02, '@c_lottable03'=@c_lottable03
+            SELECT '@d_lottable04' = @d_lottable04, '@d_lottable05' = @d_lottable05, '@c_manual' = @c_manual  , '@c_sku' = @c_sku
+            SELECT '@c_storerkey' = @c_storerkey, '@c_facility' = @c_facility
+        END
 
-   -- when any of the lottables is supplied, get the specific lot
---   IF (@c_lottable01<>'' OR @c_lottable02<>'' OR @c_lottable03<>'' OR
---       @d_lottable04 IS NOT NULL OR @d_lottable05 IS NOT NULL) OR LEFT(@c_lot,1) = '*'
+        --   when any of the lottables is supplied, get the specific lot
+        --   IF (@c_lottable01<>'' OR @c_lottable02<>'' OR @c_lottable03<>'' OR
+        --   @d_lottable04 IS NOT NULL OR @d_lottable05 IS NOT NULL) OR LEFT(@c_lot,1) = '*'
 
    IF ((ISNULL(LTRIM(RTRIM(@c_lottable01)),'')) <> '' OR
        (ISNULL(LTRIM(RTRIM(@c_lottable02)),'')) <> '' OR
@@ -124,77 +118,72 @@ END
    -- IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) IS NOT NULL AND LEFT(@c_lot, 1) <> '*'
    -- END : SOS76195
 BEGIN
-
-		/* Lot specific candidate set */
-DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR
-SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT,
-       QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
-FROM LOT (NOLOCK)
-         INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT
-         INNER JOIN LOTXLOCXID (NOLOCK) ON LOTXLOCXID.LOT = LOT.LOT
-         INNER JOIN LOC (NOLOCK) ON LOTXLOCXID.LOC = LOC.LOC
-         INNER JOIN ID (NOLOCK) ON LOTXLOCXID.ID = ID.ID
-         INNER JOIN SKUxLOC (NOLOCK) ON SKUxLOC.StorerKey = LOTxLOCxID.StorerKey
-    AND SKUxLOC.SKU = LOTxLOCxID.SKU
-    AND SKUxLOC.LOC = LOTxLOCxID.LOC
-WHERE LOT.LOT = @c_lot
-  AND LOC.Facility = @c_facility
-  AND LOTXLOCXID.STORERKEY = @c_storerkey
-  AND LOTXLOCXID.SKU = @c_sku
-  AND ((LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) % @n_uombase) = 0
-  AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) >= @n_uombase
-ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.LOTTABLE05
+/* Lot specific candidate set */
+    DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR
+        SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT,
+            QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
+        FROM LOT (NOLOCK)
+            INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT
+            INNER JOIN LOTXLOCXID (NOLOCK) ON LOTXLOCXID.LOT = LOT.LOT
+            INNER JOIN LOC (NOLOCK) ON LOTXLOCXID.LOC = LOC.LOC
+            INNER JOIN ID (NOLOCK) ON LOTXLOCXID.ID = ID.ID
+            INNER JOIN SKUxLOC (NOLOCK) ON SKUxLOC.StorerKey = LOTxLOCxID.StorerKey
+            AND SKUxLOC.SKU = LOTxLOCxID.SKU
+            AND SKUxLOC.LOC = LOTxLOCxID.LOC
+        WHERE LOT.LOT = @c_lot
+            AND LOC.Facility = @c_facility
+            AND LOTXLOCXID.STORERKEY = @c_storerkey
+            AND LOTXLOCXID.SKU = @c_sku
+            AND ((LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) % @n_uombase) = 0
+            AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) >= @n_uombase
+        ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.LOTTABLE05
 
 
     IF @b_debug = 1
-BEGIN
-SELECT ' Lot not null'
-SELECT 	LOT.STORERKEY,LOT.SKU,LOT.LOT ,
-          QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
-FROM LOT, LOTATTRIBUTE
-WHERE LOT.LOT = LOTATTRIBUTE.LOT
-  AND LOT.LOT = @c_lot
-ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.LOTTABLE02
-END
+    BEGIN
+        SELECT ' Lot not null'
+        SELECT 	LOT.STORERKEY,LOT.SKU,LOT.LOT ,
+            QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
+        FROM LOT, LOTATTRIBUTE
+        WHERE LOT.LOT = LOTATTRIBUTE.LOT
+        AND LOT.LOT = @c_lot
+        ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.LOTTABLE02
+    END
 END
 ELSE
-BEGIN
+    BEGIN
       /* Everything Else when no lottable supplied */
-   	IF @c_manual = 'N'
-BEGIN
+   	    IF @c_manual = 'N'
+        BEGIN
          IF @b_debug = 1 SELECT 'Manual = N and Lot is NULL'
-
-SELECT @n_shelflife = convert(int, SKU.SUSR2)
-FROM SKU (NOLOCK)
-WHERE SKU = @c_sku
-  AND STORERKEY = @c_storerkey
-
-SELECT @c_lottable04label = SKU.Lottable04label
-FROM SKU (NOLOCK)
-WHERE SKU = @c_sku
-  AND STORERKEY = @c_storerkey
-
-SELECT @c_Limitstring1 = ''
-
+        SELECT @n_shelflife = convert(int, SKU.SUSR2)
+        FROM SKU (NOLOCK)
+        WHERE SKU = @c_sku
+        AND STORERKEY = @c_storerkey
+        SELECT @c_lottable04label = SKU.Lottable04label
+        FROM SKU (NOLOCK)
+        WHERE SKU = @c_sku
+        AND STORERKEY = @c_storerkey
+        SELECT @c_Limitstring1 = ''
            IF @c_lottable04label = 'MANDATE'
-BEGIN
+        BEGIN
             IF @n_shelflife > 0
-BEGIN
-SELECT @c_Limitstring1 = dbo.fnc_RTrim(@c_LimitString1) + " AND lottable04  > N'"  +  convert(char(15), DateAdd(day, - @n_shelflife, getdate()), 106) + "'"
---      SELECT dbo.fnc_RTrim(@c_LimitString1) + " AND convert(char(10), lottable04, 106)  < N'" + convert(char(20), DateAdd(day, @n_shelflife, getdate()), 106) + "'"
-END
+        BEGIN
+            SELECT @c_Limitstring1 = dbo.fnc_RTrim(@c_LimitString1) + " AND lottable04  > N'"  +  convert(char(15), DateAdd(day, - @n_shelflife, getdate()), 106) + "'"
+        --  SELECT dbo.fnc_RTrim(@c_LimitString1) + " AND convert(char(10), lottable04, 106)  < N'" + convert(char(20), DateAdd(day, @n_shelflife, getdate()), 106) + "'"
+        END
 
 ELSE
-BEGIN
-SELECT @c_Limitstring1 = dbo.fnc_RTrim(@c_LimitString1) + " AND Lottable05 <= N'" + convert(char(15), getdate(), 106) + "'"
-END
+        BEGIN
+            SELECT @c_Limitstring1 = dbo.fnc_RTrim(@c_LimitString1) + " AND Lottable05 <= N'" + convert(char(15), getdate(), 106) + "'"
+        END
 END
 
-         IF @b_debug = 1
-BEGIN
-SELECT 'Manual = N'
-SELECT 'limitstring' , @c_limitstring1
-END
+    IF @b_debug = 1
+        BEGIN
+            SELECT 'Manual = N'
+            SELECT 'limitstring' , @c_limitstring1
+        END
 
 --SELECT 'abc' = @c_limitstring1
 
@@ -230,59 +219,58 @@ EXEC ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR  ' +
 
 
          IF @b_debug = 1
-BEGIN
-SELECT 'AND LOC.FACILITY = N''' + @c_facility + '''' + @c_LimitString1 + '"'
-END
+        BEGIN
+            SELECT 'AND LOC.FACILITY = N''' + @c_facility + '''' + @c_LimitString1 + '"'
+        END
 
-END
+    END
 ELSE
-BEGIN
-         IF @b_debug = 1 SELECT 'Manual = Y and Lot is NULL'
+        BEGIN
+        IF @b_debug = 1 SELECT 'Manual = Y and Lot is NULL'
 
-SELECT @c_LimitString = ''
+        SELECT @c_LimitString = ''
 
            -- IF @c_lottable01 <> ' '
            IF ISNULL(RTRIM(@c_lottable01),'') <> '' -- SOS128087
-SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND Lottable01= N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable01)) + "'"
+                SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND Lottable01= N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable01)) + "'"
 
            -- IF @c_lottable02 <> ' '
            IF ISNULL(RTRIM(@c_lottable02),'') <> '' -- SOS128087
-SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND lottable02= N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable02)) + "'"
+                SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND lottable02= N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable02)) + "'"
 
            -- IF @c_lottable03 <> ' '
            IF ISNULL(RTRIM(@c_lottable03),'') <> '' -- SOS128087
-SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND lottable03= N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable03)) + "'"
+                SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND lottable03= N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable03)) + "'"
 
            -- IF @d_lottable04 IS NOT NULL AND @d_lottable04 <> '1900-01-01'
            IF ISNULL(RTRIM(@d_lottable04),'') <> '' AND ISNULL(RTRIM(@d_lottable04),'') <> '1900-01-01' -- SOS128087
-SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND lottable04 = N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(char(20), @d_lottable04))) + "'"
+                SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND lottable04 = N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(char(20), @d_lottable04))) + "'"
 
            -- IF @d_lottable05 IS NOT NULL  AND @d_lottable05 <> '1900-01-01'
            IF ISNULL(RTRIM(@d_lottable05),'') <> '' AND ISNULL(RTRIM(@d_lottable05),'') <> '1900-01-01' -- SOS128087
-SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND lottable05= N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(char(20), @d_lottable05))) + "'"
+                SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND lottable05= N'" + dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(char(20), @d_lottable05))) + "'"
 
            IF LEFT(@c_lot,1) = '*'
-BEGIN
-SELECT @n_shelflife = convert(int, substring(@c_lot, 2, 9))
-
+        BEGIN
+            SELECT @n_shelflife = convert(int, substring(@c_lot, 2, 9))
            IF @n_shelflife < 13
--- it's month
-BEGIN
-SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + " AND lottable04  > N'"  + convert(char(15), dateadd(month, @n_shelflife, getdate()), 106) + "'"
-END
+            -- it's month
+            BEGIN
+                SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + " AND lottable04  > N'"  + convert(char(15), dateadd(month, @n_shelflife, getdate()), 106) + "'"
+            END
 ELSE
-BEGIN
-SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + " AND lottable04  > N'" + convert(char(15), DateAdd(day, @n_shelflife, getdate()), 106) + "'"
-END
-END
+            BEGIN
+                SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + " AND lottable04  > N'" + convert(char(15), DateAdd(day, @n_shelflife, getdate()), 106) + "'"
+            END
+        END
          IF @b_debug = 1
-BEGIN
-SELECT '@c_limitstring', @c_limitstring
-END
+            BEGIN
+                SELECT '@c_limitstring', @c_limitstring
+            END
 			-- set @b_debug = 1
 
       	IF @b_debug = 1
-BEGIN
+        BEGIN
             Print (' DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
                 	' SELECT MIN(LOTXLOCXID.STORERKEY) , MIN(LOTXLOCXID.SKU), LOT.LOT, ' +
                   ' QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated) ) ' +
