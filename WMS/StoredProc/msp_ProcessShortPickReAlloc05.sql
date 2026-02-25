@@ -135,6 +135,7 @@ BEGIN
             Storerkey   NVARCHAR(15)
           , CaseID      NVARCHAR(20)
           , SKU         NVARCHAR(20)
+          , Qty         INT
           , PRIMARY KEY (Storerkey, CaseID, SKU)
       )
 
@@ -477,8 +478,8 @@ BEGIN
    -- Clear Caseid for shorted lines
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      INSERT INTO #T_CaseID (CaseID, Storerkey, SKU)
-      SELECT SP.CaseID, SP.Storerkey, SP.SKU
+      INSERT INTO #T_CaseID (CaseID, Storerkey, SKU, Qty)
+      SELECT SP.CaseID, SP.Storerkey, SP.SKU, SUM(SP.QtyMoved)
       FROM #PickDetail_WIP SP
       JOIN #T_ShortOrders T ON SP.OrderKey = T.OrderKey
       WHERE SP.WaveKey = @c_Wavekey
@@ -487,6 +488,7 @@ BEGIN
       AND SP.Storerkey  = @c_StorerKey
       AND SP.SKU = @c_SKU
       AND (SP.CaseID IS NOT NULL AND SP.CaseID <> '')
+      GROUP BY SP.CaseID, SP.Storerkey, SP.SKU
 
       INSERT INTO #T_Packdetail (PickSlipNo, CartonNo)
       SELECT DISTINCT PD.PickSlipNo, PD.CartonNo
