@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.0                                                          */    
+/* Version: 1.4                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -25,6 +25,7 @@ GO
 /*                            UOM and ORDERGROUP on marking              */
 /*                            PackInfor.CartonStatus=ORDERAUDIT(ush022-2)*/
 /* 23-Feb-2026 WLChooi  1.3   FCR-11069 Fix Incorrect CartonType (WL01)  */
+/* 25-Feb-2026 WLChooi  1.4   FCR-11069 Fix Incorrect CartonType (WL02)  */
 /*************************************************************************/      
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -156,6 +157,7 @@ BEGIN
          , @c_SQLCond               NVARCHAR(4000) = ''
          , @c_Option5               NVARCHAR(4000) = ''     --WL01
          , @c_PackECOM              NVARCHAR(10)   = 'N'    --WL01
+         , @c_OtherParms            NVARCHAR(MAX)  = ''     --WL02
 
    DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
          , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
@@ -557,7 +559,7 @@ BEGIN
                  +  ', PACK.LengthUOM3'
                  +  ', PACK.WidthUOM3'
                  +  ', PACK.HeightUOM3'
-                 +  ', StdCube = CASE WHEN ISNULL(SKU.StdCube, 0.00) = 0.00 THEN PACK.CubeUOM3 ELSE SKU.StdCube END'
+                 +  ', StdCube = CASE WHEN ISNULL(PACK.CubeUOM3, 0.00) = 0.00 THEN SKU.StdCube ELSE PACK.CubeUOM3 END'   --WL02   
                  +  ', StdGrossWgt = CASE WHEN ISNULL(SKU.StdGrossWgt, 0.00) = 0.00 THEN SKU.GrossWgt ELSE SKU.StdGrossWgt END'
                  +  ', Weight = CASE WHEN ISNULL(SKU.StdGrossWgt, 0.00) = 0.00 THEN SKU.GrossWgt ELSE SKU.StdGrossWgt END'
                  +  ', Dim1 = sds.MinVal'
@@ -734,41 +736,87 @@ BEGIN
             WHERE cl1.ListName = 'CSCUK01GCR'
             AND   cl1.Code     > ''
             AND   cl1.Storerkey= @c_Storerkey
-            AND   cl1.Code2    IN (@c_BillToKey, '')
+            AND   cl1.Code2    = @c_BillToKey   --WL02
             AND   cl1.Long     = 'ECO'   --ECO stands for ECOM
             AND   cl1.Short    > ''
             AND   cl1.UDF01    = 'Y'
-            ORDER BY CASE WHEN cl1.Code2 = @c_BillToKey THEN 1 ELSE 2 END, cl1.Code
-
+            ORDER BY cz.RowID, cl1.Code   --WL02
             SET @n_RowCount = @@ROWCOUNT
+            
             IF @n_RowCount = 0
             BEGIN
+               --WL02 S
                INSERT INTO #CTNZ
-                  (
-                        CartonizationGroup
-                     ,  CartonType
-                     ,  [Cube]
-                     ,  MaxWeight
-                     ,  CartonLength
-                     ,  CartonWidth
-                     ,  CartonHeight
-                     ,  Dim1
-                     ,  Dim2
-                     ,  Dim3
-                  )
+               (
+                     CartonizationGroup
+                  ,  CartonType
+                  ,  [Cube]
+                  ,  MaxWeight
+                  ,  CartonLength
+                  ,  CartonWidth
+                  ,  CartonHeight
+                  ,  Dim1
+                  ,  Dim2
+                  ,  Dim3
+               )
                SELECT cz.CartonizationGroup
                      ,cz.CartonType
                      ,cz.[Cube]
-                     ,cz.MaxWeight
+                     ,CartonWeight = CASE WHEN ISNUMERIC(cl1.UDF02) = 0
+                                          THEN cz.MaxWeight
+                                          WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
+                                          THEN cz.MaxWeight
+                                          ELSE cl1.UDF02
+                                          END
                      ,cz.CartonLength
                      ,cz.CartonWidth
                      ,cz.CartonHeight
                      ,cz.Dim1
                      ,cz.Dim2
                      ,cz.Dim3
-               FROM @t_CTNZ cz
-               WHERE cz.CartonizationGroup = @c_CTNGroup
-               ORDER BY cz.RowID
+               FROM @TMP_CL cl1
+               JOIN @t_CTNZ cz  ON  cz.CartonizationGroup = @c_CTNGroup
+                                AND cz.CartonType = cl1.Short
+               WHERE cl1.ListName = 'CSCUK01GCR'
+               AND   cl1.Code     > ''
+               AND   cl1.Storerkey= @c_Storerkey
+               AND   cl1.Code2    = ''
+               AND   cl1.Long     = 'ECO'   --ECO stands for ECOM
+               AND   cl1.Short    > ''
+               AND   cl1.UDF01    = 'Y'
+               ORDER BY cz.RowID, cl1.Code
+               SET @n_RowCount = @@ROWCOUNT
+               --WL02 E
+
+               IF @n_RowCount = 0
+               BEGIN
+                  INSERT INTO #CTNZ
+                     (
+                           CartonizationGroup
+                        ,  CartonType
+                        ,  [Cube]
+                        ,  MaxWeight
+                        ,  CartonLength
+                        ,  CartonWidth
+                        ,  CartonHeight
+                        ,  Dim1
+                        ,  Dim2
+                        ,  Dim3
+                     )
+                  SELECT cz.CartonizationGroup
+                        ,cz.CartonType
+                        ,cz.[Cube]
+                        ,cz.MaxWeight
+                        ,cz.CartonLength
+                        ,cz.CartonWidth
+                        ,cz.CartonHeight
+                        ,cz.Dim1
+                        ,cz.Dim2
+                        ,cz.Dim3
+                  FROM @t_CTNZ cz
+                  WHERE cz.CartonizationGroup = @c_CTNGroup
+                  ORDER BY cz.RowID
+               END
             END
          END
          ------------------------
@@ -812,11 +860,11 @@ BEGIN
             ,  pcz.OrderKey
             ,  pcz.OrderGroup                                              --(ush022-2)
             ,  pcz.DocType                                                 --(ush022-2)
-            ,  CartonGroup = ISNULL(czb.CartonizationGroup,czs.CartonizationGroup)
-            ,  CartonType  = ISNULL(czb.CartonType,czs.CartonType)
+            ,  CartonGroup = COALESCE(czb.CartonizationGroup,cze.CartonizationGroup,czs.CartonizationGroup)    --WL02
+            ,  CartonType  = COALESCE(czb.CartonType,cze.CartonType,czs.CartonType)                            --WL02
             ,  CartonSeqNo = DENSE_RANK() OVER (ORDER BY pcz.DropID)
-            ,  CartonCube  = ISNULL(czb.[Cube],czs.[Cube])
-            ,  CartonWeight= ISNULL(czb.MaxWeight,czs.MaxWeight)
+            ,  CartonCube  = COALESCE(czb.[Cube],cze.[Cube],czs.[Cube])                                        --WL02
+            ,  CartonWeight= COALESCE(czb.MaxWeight,cze.MaxWeight,czs.MaxWeight)                               --WL02
             ,  LabelNo = ''
             ,  pcz.Storerkey
             ,  pcz.Sku
@@ -852,7 +900,7 @@ BEGIN
                         JOIN @TMP_CL cl2 ON  cl2.ListName = 'CSCUK01GCR'
                                          AND cl2.Code > ''
                                          AND cl2.Storerkey = pcz.Storerkey
-                                         AND cl2.Code2 IN (@c_BillToKey, '')
+                                         AND cl2.Code2 = @c_BillToKey   --WL02
                                          AND cl2.Long  = cl1.UDF01
                                          AND cl2.UDF01 = 'Y'
                         JOIN @t_CTNZ AS cz ON cz.CartonType = cl2.Short
@@ -861,8 +909,29 @@ BEGIN
                         AND   cl1.Storerkey = pcz.Storerkey
                         AND   cl1.UDF01 > ''
                         AND   cz.[Cube] >= cs.TotalPackCube
-                        ORDER BY CASE WHEN cl2.Code2 = @c_BillToKey THEN 1 ELSE 2 END, cz.RowID
+                        ORDER BY cz.RowID   --WL02
                      ) czb
+         --WL02
+         OUTER APPLY (  SELECT TOP 1
+                              cz.CartonizationGroup
+                           ,  cz.CartonType
+                           ,  cz.[Cube]
+                           ,  cz.MaxWeight
+                        FROM @TMP_CL cl1
+                        JOIN @TMP_CL cl2 ON  cl2.ListName = 'CSCUK01GCR'
+                                         AND cl2.Code > ''
+                                         AND cl2.Storerkey = pcz.Storerkey
+                                         AND cl2.Code2 = ''
+                                         AND cl2.Long  = cl1.UDF01
+                                         AND cl2.UDF01 = 'Y'
+                        JOIN @t_CTNZ AS cz ON cz.CartonType = cl2.Short
+                        WHERE cl1.ListName = 'CSCUK01PT'
+                        AND   cl1.Code = pcz.BUSR7
+                        AND   cl1.Storerkey = pcz.Storerkey
+                        AND   cl1.UDF01 > ''
+                        AND   cz.[Cube] >= cs.TotalPackCube
+                        ORDER BY cz.RowID
+                     ) cze
          OUTER APPLY (  SELECT TOP 1
                               cz.CartonizationGroup
                            ,  cz.CartonType
@@ -1060,7 +1129,7 @@ BEGIN
                      AND   cl1.Long     = @c_CTNGroup_BTK         --BillToKey CartonGroup
                      AND   cl1.Short    > ''
                      AND   cl1.UDF01    = 'Y'
-                     ORDER BY cl1.Code
+                     ORDER BY cz.RowID, cl1.Code   --WL02
                      SET @n_RowCount = @@ROWCOUNT
                      
                      --WL01 S
@@ -1104,7 +1173,7 @@ BEGIN
                         AND   cl1.Long     = @c_CTNGroup_BTK         --BillToKey CartonGroup
                         AND   cl1.Short    > ''
                         AND   cl1.UDF01    = 'Y'
-                        ORDER BY cl1.Code
+                        ORDER BY cz.RowID, cl1.Code   --WL02
                         SET @n_RowCount = @@ROWCOUNT
                      END
 
@@ -1119,6 +1188,25 @@ BEGIN
                         ORDER BY cz.RowID
                      END
                      --WL01 E
+
+                     --WL02 S
+                     IF @n_debug = 3
+                     BEGIN
+                        PRINT ' | SKU=' + ISNULL(@c_Sku, '')
+                            + ' | StdCube=' + ISNULL(CAST(@n_StdCube AS NVARCHAR(30)), '')
+                            + ' | StdGrossWgt=' + ISNULL(CAST(@n_StdGrossWgt AS NVARCHAR(30)), '')
+                            + ' | CTNGroup_BTK=' + ISNULL(@c_CTNGroup_BTK, '')
+                            + ' | API=' + ISNULL(CAST(@b_API AS NVARCHAR(1)), '')
+                            + ' | Qty=' + ISNULL(CAST(@n_Qty AS NVARCHAR(20)), '')
+                            + ' | QtyPI=' + ISNULL(CAST(@n_Qty_PI AS NVARCHAR(20)), '')
+                        PRINT ' | MaxCartonType=' + ISNULL(CAST(@c_CartonType_Max AS NVARCHAR(10)), '')
+
+                        SET @c_OtherParms = (STUFF((SELECT ', ' + TRIM(CartonType) 
+                                                    FROM #CTNZ 
+                                                    WHERE CartonDefault = 0 ORDER BY RowID FOR XML PATH('')),1,2,'' ))
+                        PRINT ' | CartonType=' + ISNULL(CAST(@c_OtherParms AS NVARCHAR(MAX)), '') + CHAR(13)
+                     END
+                     --WL02 E
                   END
 
                   IF @n_RowCount = 0 OR (@n_RowCount = 1 AND @c_CTNGroup_BTK = '')
