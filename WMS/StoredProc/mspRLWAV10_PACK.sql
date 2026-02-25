@@ -64,7 +64,7 @@ BEGIN
          , @c_PackType              NVARCHAR(50)   = ''   
          , @c_HardCTNGroup          NVARCHAR(1000) = ''
          , @c_SortCTNGroup          NVARCHAR(1000) = ''
-         , @b_CZN_Check             BIT            = 0
+         , @b_CZN_Check             INT            = 0
 
          , @n_ID_oitp               INT            = 0
          , @n_RowID_cz              INT            = 0         
@@ -1782,6 +1782,29 @@ BEGIN
 
                                  GOTO CTZ_API
                                  CZN_Close:
+
+                                 --WL02 S
+                                 IF @c_IsCompletePack = 'TRUE'
+                                    SET @c_IsCompletePack = 'FALSE'
+                                 ELSE
+                                 BEGIN
+                                    SELECT TOP 1
+                                         @c_CartonType   = cz.CartonType
+                                       , @n_CartonCube   = cz.[Cube]
+                                       , @n_CartonWeight = cz.MaxWeight
+                                       , @n_FillTolerance= 100.00
+                                       , @n_RowID_cz     = cz.RowID
+                                    FROM #CTNZ cz
+                                    WHERE cz.CartonizationGroup = @c_CTNGroup
+                                    AND   cz.[Cube]    >= @n_TotalCBM
+                                    AND   cz.MaxWeight >= @n_TotalWgt
+                                    AND   cz.CartonDefault = 0
+                                    AND   cz.RowID < @n_RowID_cz
+                                    ORDER BY cz.RowID DESC
+
+                                    SET @c_IsCompletePack = 'TRUE'
+                                 END
+                                 --WL02 E
                               END
                            END
                         END
@@ -1839,7 +1862,7 @@ BEGIN
                  , SUM((cd.Qty / cd.PackQtyIndicator) * cd.StdGrossWgt)
                  , cz.RowID
             FROM #CartonDetail AS cd
-            JOIN @t_CTNZ AS cz ON cd.CartonGroup = cz.CartonizationGroup AND cd.CartonType = cz.CartonType
+            JOIN #CTNZ AS cz ON cd.CartonGroup = cz.CartonizationGroup AND cd.CartonType = cz.CartonType
             WHERE cd.[Status] = '0'
             AND cd.UOM >= '6'
             GROUP BY cd.OrderKey, cd.CartonSeqNo, cd.IsApi, cz.RowID
@@ -1919,6 +1942,29 @@ BEGIN
                            BREAK
                         END
                      END   -- @b_API = 1 Loop
+
+                     --WL02 S
+                     IF @c_IsCompletePack = 'TRUE'
+                        SET @c_IsCompletePack = 'FALSE'
+                     ELSE
+                     BEGIN
+                        SELECT TOP 1
+                             @c_CartonType   = cz.CartonType
+                           , @n_CartonCube   = cz.[Cube]
+                           , @n_CartonWeight = cz.MaxWeight
+                           , @n_FillTolerance= 100.00
+                           , @n_RowID_cz     = cz.RowID
+                        FROM #CTNZ cz
+                        WHERE cz.CartonizationGroup = @c_CTNGroup
+                        AND   cz.[Cube]    >= @n_TotalCBM
+                        AND   cz.MaxWeight >= @n_TotalWgt
+                        AND   cz.CartonDefault = 0
+                        AND   cz.RowID < @n_RowID_cz
+                        ORDER BY cz.RowID DESC
+
+                        SET @c_IsCompletePack = 'TRUE'
+                     END
+                     --WL02 E
                   END
                END
 
