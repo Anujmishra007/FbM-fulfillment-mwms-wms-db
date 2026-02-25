@@ -73,8 +73,12 @@ BEGIN
 
 
     BEGIN TRY
-        SELECT @n_OrderCnt = COUNT(*),
-        @c_Storerkey = ORDERS.Storerkey
+        SELECT @n_OrderCnt = COUNT(*)
+        FROM ORDERS
+        JOIN WAVEDETAIL ON WAVEDETAIL.OrderKey = ORDERS.OrderKey
+        WHERE WAVEDETAIL.WaveKey = @c_WaveKey
+
+        SELECT @c_Storerkey = ORDERS.Storerkey
         FROM ORDERS
         JOIN WAVEDETAIL ON WAVEDETAIL.OrderKey = ORDERS.OrderKey
         WHERE WAVEDETAIL.WaveKey = @c_WaveKey
@@ -144,7 +148,7 @@ BEGIN
 			JOIN WAVEDETAIL ON WAVEDETAIL.OrderKey = ORDERS.OrderKey
 			WHERE WAVEDETAIL.WaveKey = @c_WaveKey
 			AND ORDERS.MBOLkey = @c_MBolkey
-			ISNULL(ORDERS.C_Country,'') IN ('GB','NO')
+			AND ISNULL(ORDERS.C_Country,'') IN ('GBR','NOR','GB','NO')
 		)
         BEGIN
 			SET @n_continue = 3
