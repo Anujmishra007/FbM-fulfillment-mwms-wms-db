@@ -24,7 +24,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
-/*25-02-2026    VNI01    1.1  skip conversion and return direct         */
+/*25-02-2026    VNI01    1.1  UWP-48073 :skip conversion and return direct */
 /*                            multiplication IF ALL UOM parms are empty */
 /************************************************************************/
 
