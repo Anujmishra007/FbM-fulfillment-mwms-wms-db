@@ -435,7 +435,7 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            IF @nTranCount = 0 ROLLBACK TRAN ELSE ROLLBACK TRAN tran_SerialUnpack
+            ROLLBACK TRAN 
             GOTO Step_4_QUIT
          END
 
@@ -445,13 +445,13 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            IF @nTranCount = 0 ROLLBACK TRAN ELSE ROLLBACK TRAN tran_SerialUnpack
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
       
          
          SET @nScannedNum = @nScannedNum + 1
-         IF @nTranCount = 0 COMMIT TRAN
+         COMMIT TRAN
       END
       ELSE IF @cUnPackType = @cUNPACKANDUNPICK_MODEL  --unpack and unpick
       BEGIN
@@ -466,7 +466,7 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            IF @nTranCount = 0 ROLLBACK TRAN ELSE ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN 
             GOTO Step_4_QUIT
          END
 
@@ -490,7 +490,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 228264
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --228264^OrderKey Not Exists
-            IF @nTranCount = 0 ROLLBACK TRAN ELSE ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
 
@@ -506,7 +506,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 228265 
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --228265^SKU Or PickDetailKey Not Exists
-            IF @nTranCount = 0 ROLLBACK TRAN ELSE ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
 
@@ -516,7 +516,7 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            IF @nTranCount = 0 ROLLBACK TRAN ELSE ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
 
@@ -526,12 +526,12 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            IF @nTranCount = 0 ROLLBACK TRAN ELSE ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
 
          SET @nScannedNum = @nScannedNum + 1
-         IF @nTranCount = 0 COMMIT TRAN
+         COMMIT TRAN
       END
    END
    ELSE
