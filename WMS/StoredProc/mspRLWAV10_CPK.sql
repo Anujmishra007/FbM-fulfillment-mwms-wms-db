@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.1                                                          */    
+/* Version: 1.2                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -21,6 +21,7 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
 /* 25-Feb-2026 WLChooi  1.1   FCR-11138 Add ASTCPK TaskType (WL01)       */
+/* 23-Feb-2026 WLChooi  1.2   FCR-11090 Fix CPK Task Status (WL02)       */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -38,7 +39,7 @@ BEGIN
    DECLARE    
          @n_StartTCnt            INT = @@TRANCOUNT  
       ,  @n_Continue             INT = 1 
-      ,  @n_CasesPerCart         INT = 4 
+      ,  @n_CasesPerCart         INT = 4
 
       ,  @c_TaskDetailKey        NVARCHAR(10)   = ''         
       ,  @c_TaskType             NVARCHAR(10)   = ''        
@@ -102,7 +103,9 @@ BEGIN
       ,  @c_MergedTaskPriority   NVARCHAR(10)   = '2'
       ,  @c_Groupkey_P           NVARCHAR(10)   = ''       
       ,  @c_Groupkey_New         NVARCHAR(10)   = ''
-      ,  @c_DocType              NVARCHAR(10)   = ''   --WL01 
+      ,  @c_DocType              NVARCHAR(10)   = ''   --WL01
+      ,  @c_Facility             NVARCHAR(5)    = ''
+      ,  @c_Option5              NVARCHAR(MAX)  = ''
       
       ,  @CUR_TW                 CURSOR
  
@@ -252,7 +255,21 @@ BEGIN
    IF @n_Continue = 1 
    BEGIN
       SELECT TOP 1 @c_Storerkey = pw.Storerkey
-      FROM #PickDetail_WIP AS pw 
+                 , @c_Facility = o.Facility
+      FROM #PickDetail_WIP AS pw
+      JOIN ORDERS o (NOLOCK) ON o.Orderkey = pw.OrderKey
+
+      -- Get optional configuration if available
+      SELECT @c_Option5 = ISNULL(fgr.Option5,'')
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
+
+      IF ISNULL(@c_Option5, '') <> ''
+      BEGIN
+         SELECT @n_CasesPerCart = TRY_CAST(dbo.fnc_GetParamValueFromString('@n_CasesPerCart', @c_Option5, @n_CasesPerCart) AS INT)
+
+         IF ISNULL(@n_CasesPerCart, 0) = 0
+            SET @n_CasesPerCart = 4
+      END
 
       INSERT INTO @TMP_CL (Listname, Code, Description, Short, Long                
                         ,  Notes, Notes2, Storerkey
@@ -447,6 +464,19 @@ BEGIN
       UPDATE tw
       SET [Status] = IIF(RefTaskKey > '', 'H', '0')
       FROM #TASKDETAIL_WIP tw
+
+      --WL02
+      -- If available open RPF/ASTTPA task within the Wavekey, set CPK task to H
+      UPDATE tw
+      SET [Status] = 'H'
+      FROM #TASKDETAIL_WIP tw
+      WHERE [Status] = '0'
+      AND EXISTS ( SELECT 1
+                   FROM TASKDETAIL TD (NOLOCK)
+                   WHERE TD.Wavekey = @c_Wavekey
+                   AND TD.TaskType IN ('RPF', 'ASTTPA')
+                   AND TD.[Status] NOT IN ('X', '9')
+                  )
    END
 
    IF @n_Continue = 1

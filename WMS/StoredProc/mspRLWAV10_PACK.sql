@@ -416,7 +416,6 @@ BEGIN
          ,  @c_Storerkey = p.Storerkey
       FROM #PickDetail_WIP p
       JOIN ORDERS o (NOLOCK) ON o.Orderkey = p.OrderKey
-      ORDER BY p.PickDetailKey
 
       SET @c_PackType     = 'ORDERS.Orderkey'
       SET @c_HardCTNGroup = 'ORDERS.Orderkey, ISNULL(SKU.BUSR7,'''')'
@@ -529,7 +528,7 @@ BEGIN
       WHERE cl.Listname = 'CSCUK01CFG'
 
       -- Set optional configuration
-      SET @c_SQLCond = ' WHERE 1=1'
+      SET @c_SQLCond = ' WHERE (PICKDETAIL.CaseID = '''' OR PICKDETAIL.CaseID IS NULL)'
 
       IF @c_PackECOM = 'N'
       BEGIN
