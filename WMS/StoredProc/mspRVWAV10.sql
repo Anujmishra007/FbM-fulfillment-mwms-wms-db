@@ -13,13 +13,15 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.0                                                          */    
+/* Version: 1.2                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 20-Feb-2026 WLChooi  1.1   FCR-11076 Added CPK filter (WL01)          */
+/* 26-Feb-2026 WLChooi  1.2   FCR-11158 Added ASTCPK Task (WL02)         */
 /*************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV10]
       @c_Wavekey      NVARCHAR(10)
@@ -44,7 +46,6 @@ BEGIN
 
    DECLARE @c_Taskdetailkey   NVARCHAR(10) = ''
          , @c_Pickslipno      NVARCHAR(10) = ''
-         , @c_Pickslipno_P    NVARCHAR(10) = ''
          , @c_CartonNo        NVARCHAR(5) = ''
  
    -- Reject if wave not yet release
@@ -67,8 +68,8 @@ BEGIN
       IF EXISTS ( SELECT 1 FROM TASKDETAIL TD (NOLOCK)
                   WHERE TD.Wavekey = @c_Wavekey
                   AND TD.Sourcetype IN ('mspRLWAV10')
-                  AND TD.[Status] <> '0'
-                  AND TD.Tasktype IN ('CPK') )
+                  AND TD.[Status] NOT IN ('0', 'H')   --WL01
+                  AND TD.Tasktype IN ('CPK', 'ASTCPK') )   --WL02
       BEGIN
          SELECT @n_Continue = 3
          SELECT @n_Err = 67020
@@ -94,7 +95,7 @@ BEGIN
       FROM TASKDETAIL (NOLOCK)
       WHERE Wavekey = @c_Wavekey
       AND Sourcetype IN ('mspRLWAV10')
-      AND Tasktype IN ('CPK')
+      AND Tasktype IN ('CPK', 'ASTCPK')   --WL02
 
       OPEN CUR_TASK
 
@@ -152,7 +153,9 @@ BEGIN
             GOTO QUIT_SP
          END
 
-         IF @c_Pickslipno_P <> @c_Pickslipno
+         IF NOT EXISTS ( SELECT 1
+                         FROM PACKDETAIL (NOLOCK)
+                         WHERE Pickslipno = @c_Pickslipno )
          BEGIN
             DELETE FROM dbo.PackHeader
             WHERE PickSlipNo = @c_Pickslipno
@@ -169,7 +172,6 @@ BEGIN
             END
          END
          
-         SET @c_Pickslipno_P = @c_Pickslipno
          FETCH NEXT FROM CUR_PACK INTO @c_Pickslipno, @c_CartonNo
       END
       CLOSE CUR_PACK

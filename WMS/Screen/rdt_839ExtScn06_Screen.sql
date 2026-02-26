@@ -43,9 +43,9 @@ EXECUTE rdt.rdtAddScn 6775, 'ENG'
    ,@cWebGroup = '{"1":["1","2","3"],"2":["5","6","7"]}'
    ,@nFunc = 839
 
--- 6776 = No More Task screen
-DELETE rdt.RDTScn WHERE Scn = 6776 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 6776, 'ENG'
+-- 6828 = No More Task screen
+DELETE rdt.RDTScn WHERE Scn = 6828 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6828, 'ENG'
    ,@cLine01 = 'No More Task'
    ,@cLine02 = 'Close all Drop ID'
    ,@cLine03 = ''
@@ -67,5 +67,22 @@ EXECUTE rdt.rdtAddScn 6777, 'ENG'
    ,@cLine04 = '1 = SHORT'
    ,@cLine05 = '2 = BAL PICK LATER'
    ,@cLine08 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 839
+
+
+-- 6840 = Abort LOC screen
+DELETE rdt.RDTScn WHERE Scn = 6840 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6840, 'ENG'
+   ,@cLine01 = ''
+   ,@cLine02 = 'ABORT PICKING?'
+   ,@cLine03 = ''
+   ,@cLine04 = '1 = YES'
+   ,@cLine05 = '2 = NO'
+   ,@cLine06 = ''
+   ,@cLine07 = '9 = Close ALL Pallet'
+   ,@cLine08 = ''
+   ,@cLine09 = 'OPTION: %01i01'
+   ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
    ,@nFunc = 839

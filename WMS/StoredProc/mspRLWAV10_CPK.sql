@@ -13,13 +13,14 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.0                                                          */    
+/* Version: 1.1                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 25-Feb-2026 WLChooi  1.1   FCR-11138 Add ASTCPK TaskType (WL01)       */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -100,7 +101,8 @@ BEGIN
       ,  @c_ZeroSystemQty        NVARCHAR(5)    = 'N'    
       ,  @c_MergedTaskPriority   NVARCHAR(10)   = '2'
       ,  @c_Groupkey_P           NVARCHAR(10)   = ''       
-      ,  @c_Groupkey_New         NVARCHAR(10)   = '' 
+      ,  @c_Groupkey_New         NVARCHAR(10)   = ''
+      ,  @c_DocType              NVARCHAR(10)   = ''   --WL01 
       
       ,  @CUR_TW                 CURSOR
  
@@ -184,7 +186,8 @@ BEGIN
          ,  SkuPerCarton      INT            NOT NULL DEFAULT(0)  
          ,  CartonType        NVARCHAR(10)   NOT NULL DEFAULT('')   
          ,  CartonCube        FLOAT          NOT NULL DEFAULT(0.00) 
-         ,  SortNo            INT            NOT NULL DEFAULT(0)  
+         ,  SortNo            INT            NOT NULL DEFAULT(0)
+         ,  DocType           NVARCHAR(10)   NOT NULL DEFAULT('')   --WL01
          ) 
 
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NULL
@@ -269,7 +272,7 @@ BEGIN
            , CODELKUP.UDF05   
            , CODELKUP.Code2  
       FROM CODELKUP (NOLOCK)  
-      WHERE CODELKUP.Listname IN ('CSCUKZONE', 'CSCUK01OPY' ) 
+      WHERE CODELKUP.Listname IN ('CSCUK01ZNE', 'CSCUK01OPY' ) 
       AND   CODELKUP.Storerkey = @c_Storerkey
       ORDER BY CODELKUP.Listname
            ,   CODELKUP.Code 
@@ -292,6 +295,7 @@ BEGIN
          ,  RefTaskKey
          ,  CartonPerLoc
          ,  CartonCube
+         ,  DocType   --WL01
          )
       SELECT 
             pw.Wavekey             
@@ -310,6 +314,7 @@ BEGIN
          ,  RefTaskKey = pw.UpdateSource              --Picking Loc. Update at mspRLWAV10_Data 
          ,  p1.CartonPerLoc
          ,  p2.SkuPerCarton
+         ,  O.DocType   --WL01
       FROM #PICKDETAIL_WIP AS pw
       JOIN LOC l (NOLOCK) ON l.loc = pw.Toloc
       JOIN  (  SELECT pw1.ToLoc  
@@ -321,7 +326,8 @@ BEGIN
                   ,  SkuPerCarton = COUNT(DISTINCT pw2.Sku)  
                FROM #PICKDETAIL_WIP pw2
                GROUP BY pw2.CaseID
-            ) AS p2 ON p2.CaseID = pw.CaseID 
+            ) AS p2 ON p2.CaseID = pw.CaseID
+      JOIN ORDERS O (NOLOCK) ON O.Orderkey = pw.Orderkey   --WL01 
       WHERE pw.UOM >= '6'
       GROUP BY         
             pw.Wavekey             
@@ -337,6 +343,7 @@ BEGIN
          ,  l.LoseId         
          ,  p1.CartonPerLoc
          ,  p2.SkuPerCarton
+         ,  O.DocType   --WL01
 
       --------------------------------------------------------------------  
       -- Update Task Priority Base on ORDERS.Priority 
@@ -360,7 +367,7 @@ BEGIN
       FROM #TASKDETAIL_WIP AS tw
       JOIN LOC l (NOLOCK) ON l.loc = tw.FromLoc 
       JOIN AREADETAIL ad (NOLOCK) ON ad.PutawayZone = l.PickZone   
-      JOIN @TMP_CL CL ON  CL.ListName = 'CSCUKZONE'  
+      JOIN @TMP_CL CL ON  CL.ListName = 'CSCUK01ZNE'  
                       AND CL.Code     = l.PickZone  
                       AND CL.Storerkey= tw.Storerkey  
 
@@ -436,15 +443,10 @@ BEGIN
          SET PickMethod = CSP.PickMethod  
       FROM CSP
       JOIN #TASKDETAIL_WIP tw ON tw.RowID = CSP.RowID   
-  
-      SET @c_Status = '0'
-      IF EXISTS ( SELECT 1 
-                  FROM #TASKDETAIL_WIP
-                  WHERE RefTaskKey > ''
-                )
-      BEGIN 
-         SET @c_Status = 'H'
-      END 
+
+      UPDATE tw
+      SET [Status] = IIF(RefTaskKey > '', 'H', '0')
+      FROM #TASKDETAIL_WIP tw
    END
 
    IF @n_Continue = 1
@@ -471,6 +473,7 @@ BEGIN
             ,tw.AreaKey
             ,tw.GroupKey
             ,tw.Status
+            ,tw.DocType   --WL01
       FROM #TASKDETAIL_WIP tw
       ORDER BY tw.SortNo
             ,  tw.GroupKey
@@ -497,11 +500,12 @@ BEGIN
                                  ,  @c_RefTaskKey
                                  ,  @c_AreaKey
                                  ,  @c_GroupKey
-                                 ,  @c_Status 
+                                 ,  @c_Status
+                                 ,  @c_DocType   --WL01
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN  
-         SET @c_TaskType  = 'CPK'
+         SET @c_TaskType  = IIF(@c_DocType = 'E', 'ASTCPK', 'CPK')   --WL01
          SET @c_SourceKey = @c_Wavekey
          SET @c_LinkTaskToPick_SQL = ' AND PICKDETAIL.UOM = @c_UOM'
                                    + ' AND PICKDETAIL.CaseID = @c_CaseID'
@@ -622,10 +626,25 @@ BEGIN
                                     ,  @c_RefTaskKey
                                     ,  @c_AreaKey
                                     ,  @c_GroupKey
-                                    ,  @c_Status 
+                                    ,  @c_Status
+                                    ,  @c_DocType   --WL01 
       END  
       CLOSE @CUR_TW  
       DEALLOCATE @CUR_TW
+   END
+
+   IF @n_Continue = 1
+   BEGIN
+      EXEC isp_CreatePickdetail_WIP 
+         @c_Loadkey = ''                                 
+      ,  @c_Wavekey   = @c_Wavekey
+      ,  @c_WIP_RefNo = @c_SourceType
+      ,  @c_PickCondition_SQL = ''  
+      ,  @c_Action  = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
+      ,  @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
+      ,  @b_Success = @b_Success OUTPUT
+      ,  @n_Err     = @n_err     OUTPUT
+      ,  @c_ErrMsg  = @c_errmsg  OUTPUT
    END
 
    QUIT_SP: 

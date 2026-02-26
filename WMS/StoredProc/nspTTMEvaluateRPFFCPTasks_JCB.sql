@@ -22,6 +22,9 @@ GO
 /* 2025-11-11  2.0.0  PPA374   Updating aisle in use logic                                      */
 /* 2025-12-16  2.0.1  PPA374   Adding fix to avoid blocking replen tasks without orderkey       */
 /* 2026-01-05  2.0.2  PPA374   Changing aisle in use to C_String28                              */
+/* 2026-02-12  2.0.3  PPA374   Adding INLOCKED flag as a valid location flag to pick from or to */
+/* 2026-02-12  2.0.4  PPA374   Not checking aisle in use for PND_OUT unless task is back to VNA */
+/* 2026-02-10  2.1.0  Dennis   FCR-10220                                                        */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspTTMEvaluateRPFFCPTasks_JCB]
@@ -299,8 +302,8 @@ BEGIN
             --AND TD.AreaKey = @c_AreaKey01
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
-         AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
-            AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+         AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE','INLOCKED'))
+            AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE','INLOCKED'))
             AND NOT EXISTS (SELECT 1 
                         FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
                         WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
@@ -309,6 +312,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+	                       AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
          END TRY
          BEGIN CATCH
@@ -344,9 +348,9 @@ BEGIN
             )
             AND TD.TaskType IN ('RPF', 'RP1')
             AND TD.PickMethod IN ('PP', 'FP')
-            AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
-            AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
-            AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE'))
+            AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE','INLOCKED'))
+            AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE','INLOCKED'))
+            AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE','INLOCKED'))
             --AND TD.AreaKey = @c_AreaKey01
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
@@ -358,6 +362,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+	                       AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
@@ -387,7 +392,7 @@ BEGIN
                (TD.Status = '3' AND TD.UserKey = @c_UserID )
             )
             AND TD.TaskType IN ('FCP', 'FCP1')
-            AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
+            AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE','INLOCKED'))
             AND TD.PickMethod IN ('PP', 'FP')
             AND (TD.PickMethod = 'FP' 
                OR (TD.PickMethod = 'PP' AND NOT EXISTS (
@@ -398,7 +403,7 @@ BEGIN
 			   WHERE TD2.OrderKey = PD.OrderKey
                AND (
 			      TD2.Status IN ('S','H')
-			      OR (LOC2.Status <> 'OK' OR LOC2.LocationFlag NOT IN ('','NONE'))
+			      OR (LOC2.Status <> 'OK' OR LOC2.LocationFlag NOT IN ('','NONE','INLOCKED'))
 			      OR (TD2.Status = '3' AND TD2.UserKey <> @c_UserID)
 				  OR TD2.Qty * ISNULL(S.STDGROSSWGT,0) > @fMaximumWeight
 				  OR (PD1.TaskDetailKey IS NULL AND TD2.Status IN ('0','3') AND TD2.AreaKey = @c_AreaKey01) --PPA 20/11/2025 fixing to not provide orders with pickdetail is missing
@@ -408,7 +413,7 @@ BEGIN
                AND LOC2.PutawayZone = LOC.PutawayZone
                AND TD2.AreaKey = TD.AreaKey
                )))
-            AND ((LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+            AND ((LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE','INLOCKED'))
             --OR It is Marshalling lane
              OR (EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
                   WHERE LISTNAME = 'JCBCOMPML'
@@ -419,7 +424,7 @@ BEGIN
                         WHERE CL.LISTNAME = 'JCBCOMPML'
                           AND CL.LONG = ORM.c_company
                           AND CL.Storerkey = @cStorerKey
-                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
+                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED'))
                      )
                )
             --OR its kitting loc
@@ -439,7 +444,7 @@ BEGIN
                            AND CL.Code = ORM.Type
                            AND CL.Storerkey = @cStorerKey
                            AND L.Status = 'OK'
-                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
+                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED')
                      )
                )
             )
@@ -454,6 +459,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+		                   AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
             AND ((EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
                   WHERE LISTNAME = 'JCBCOMPML'
@@ -464,7 +470,7 @@ BEGIN
                         WHERE CL.LISTNAME = 'JCBCOMPML'
                           AND CL.LONG = ORM.c_company
                           AND CL.Storerkey = @cStorerKey
-                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
+                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED'))
                      ))
                OR (EXISTS (SELECT 1
                      FROM dbo.CodeLKUP CL WITH (NOLOCK )
@@ -482,7 +488,7 @@ BEGIN
                            AND CL.Code = ORM.Type
                            AND CL.Storerkey = @cStorerKey
                            AND L.Status = 'OK'
-                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
+                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED')
                      )
                )
             )
@@ -520,9 +526,9 @@ BEGIN
             )
             AND TD.TaskType IN ('RPF', 'RP1')
             AND TD.PickMethod IN ('PP', 'FP')
-            AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
-			AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE'))
-            AND ((LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+            AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE', 'INLOCKED'))
+			AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE', 'INLOCKED'))
+            AND ((LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE', 'INLOCKED'))
             --OR It is Marshalling lane
              OR (EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
                   WHERE LISTNAME = 'JCBCOMPML'
@@ -533,7 +539,7 @@ BEGIN
                         WHERE CL.LISTNAME = 'JCBCOMPML'
                           AND CL.LONG = ORM.c_company
                           AND CL.Storerkey = @cStorerKey
-                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
+                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED'))
                      )
                )
             --OR its kitting loc
@@ -553,7 +559,7 @@ BEGIN
                            AND CL.Storerkey = @cStorerKey
                            AND CL.Code = ORM.Type
                            AND L.Status = 'OK'
-                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
+                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED')
                      )
                )
             )
@@ -568,6 +574,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+		                   AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
@@ -587,12 +594,12 @@ BEGIN
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
 		 INNER JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD.FinalLOC = LOC2.Loc AND LOC2.Facility = @cFacility
        WHERE TD.AreaKey = @c_AreaKey01
-         AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
+         AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE', 'INLOCKED'))
          AND TD.TaskType IN ('RPF','RPF1','RP1')
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
-         AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
-		 AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE'))
+         AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE', 'INLOCKED'))
+		 AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE', 'INLOCKED'))
          AND TD.PickMethod IN ('PP', 'FP')
          AND TD.StorerKey = @cStorerKey
          AND (
@@ -620,6 +627,7 @@ BEGIN
 		 AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+		                   AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
@@ -785,7 +793,7 @@ BEGIN
 
    -- Check if any task candidate were found
    -- 1. Weight of the pallet: sum of (LOTxLOCxID.Qty * SKU.STDGROSSWGT) must be <= max weight of the MHE provided (EquipmentProfile.MaximumWeight).
-   -- 2. If “To Loc” is PNDOUT, pallet capacity minus existing inventory must be >= 0.
+   -- 2. If â€œTo Locâ€ is PNDOUT, pallet capacity minus existing inventory must be >= 0.
    -- 3.   If the task is picking, ToLoc can be either marshalling lane or kitting location, need check if ToLoc's Status = 'OK', also need check the LocationFlag NOT IN ('','NONE')
 
    SET @nLoopIndex = -1
@@ -972,7 +980,7 @@ BEGIN
             WHERE LOC1.Facility = @cFacility
             AND LOC1.LOC <> @cToLoc
             AND LOC1.LocationCategory = 'PND_OUT'
-            AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+            AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE', 'INLOCKED'))
             GROUP BY LOC1.Loc
             HAVING COUNT(DISTINCT LLI.ID) + COUNT(DISTINCT TD.TaskDetailKey) < MAX(ISNULL(LOC1.MaxPallet, 99999))
 
@@ -1016,7 +1024,7 @@ BEGIN
          WHERE CLK.LISTNAME = 'JCBKITORDT'
             AND CLK.Storerkey = @cStorerKey
             AND LOC.Facility =  @cFacility
-            --AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
+            --AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE', 'INLOCKED'))
 
          -- b. Check if ToLoc is a valid marshalling lane            Y
          IF ISNULL(@nRowCount, 0) = 0
@@ -1036,7 +1044,7 @@ BEGIN
                AND CLK.Short = @cToLoc
                AND LOC.Facility = @cFacility
                AND CLK.Storerkey = @cStorerKey
-               --AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
+               --AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE', 'INLOCKED'))
 
             SELECT @cOrderKey = PD.OrderKey
             FROM dbo.PickDetail PD WITH(NOLOCK)
@@ -1075,7 +1083,7 @@ BEGIN
             WHERE Loc = @cToLoc
                AND Facility = @cFacility
                AND LocationCategory IN ('PND', 'PND_OUT')
-               --AND (Status = 'OK' AND LocationFlag IN ('','NONE'))
+               --AND (Status = 'OK' AND LocationFlag IN ('','NONE', 'INLOCKED'))
          END
 
          -- If ToLoc is not valid, skip the task               Y
@@ -1092,7 +1100,7 @@ BEGIN
          END
       END --END while
 
-      -- 3. If the first task is from PND OUT. Tasks having “From Loc” category as PND OUT must be sorted not only by priority, delivery date, logical loc and loc, 
+      -- 3. If the first task is from PND OUT. Tasks having â€œFrom Locâ€ category as PND OUT must be sorted not only by priority, delivery date, logical loc and loc, 
       --    but also by number of unique users already having tasks assigned to that location. 
       --    need select a best task in the PND OUT location where minimum user is working on it 
 
@@ -1326,7 +1334,7 @@ BEGIN
                      WHERE LOC1.Facility = @cFacility
                      AND LOC1.LOC <> @cToLoc
                      AND LOC1.LocationCategory = 'PND_OUT'
-                     AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+                     AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE', 'INLOCKED'))
                      GROUP BY LOC1.Loc
                      HAVING COUNT(DISTINCT LLI.ID) + COUNT(DISTINCT TD.TaskDetailKey) < MAX(ISNULL(LOC1.MaxPallet, 99999))
 
@@ -1388,7 +1396,7 @@ BEGIN
                WHERE CLK.LISTNAME = 'JCBKITORDT'
                   AND CLK.Storerkey = @cStorerKey
                   AND LOC.Facility =  @cFacility
-                  --AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
+                  --AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE', 'INLOCKED'))
 
                -- b. Check if ToLoc is a valid marshalling lane
                IF ISNULL(@nRowCount, 0) = 0
@@ -1401,7 +1409,7 @@ BEGIN
                      AND CLK.Short = @cToLoc
                      AND LOC.Facility = @cFacility
                      AND CLK.Storerkey = @cStorerKey
-                     --AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
+                     --AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE', 'INLOCKED'))
 
                   SELECT @cOrderKey = PD.OrderKey
                   FROM dbo.PickDetail PD WITH(NOLOCK)
@@ -1432,7 +1440,7 @@ BEGIN
                   WHERE Loc = @cToLoc
                      AND Facility = @cFacility
                      AND LocationCategory IN ('PND', 'PND_OUT')
-                     --AND (Status = 'OK' AND LocationFlag IN ('','NONE'))
+                     --AND (Status = 'OK' AND LocationFlag IN ('','NONE', 'INLOCKED'))
                END
 
                -- If ToLoc is not valid, skip the task
@@ -1551,7 +1559,7 @@ BEGIN
             PRINT @cLogMsg
          END
 
-         -- If task is “FP”, stop searching for other tasks
+         -- If task is â€œFPâ€, stop searching for other tasks
          IF @cPickMethod = 'FP'
          BEGIN
             IF @bDebug = 1
@@ -1571,7 +1579,7 @@ BEGIN
                SET @cLogMsg = CONCAT_WS(',', 'Orderkey is not retrieved from @tTaskCandidate, try to get it from PickDetail', '')
                PRINT @cLogMsg
             END
-            -- If task is “PP”, then search other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
+            -- If task is â€œPPâ€, then search other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
             IF @cTaskType IN ('FCP', 'FCP1')
             BEGIN
                SELECT @cCandidateOrderKey = PD.OrderKey
@@ -1640,7 +1648,7 @@ BEGIN
       ELSE
       BEGIN
          --CandidateTaskDetailKey empty means a task is found, now continue to loop list to make the qualified tasks will be locked for the same user
-         -- If task is “PP”, then all other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
+         -- If task is â€œPPâ€, then all other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
          IF @cPickMethod = 'PP' AND ISNULL(@cCandidateOrderKey, '') <> ''
          BEGIN
             IF @cTaskType IN ('FCP', 'FCP1') 
@@ -1822,6 +1830,28 @@ BEGIN
       GOTO Fail
    END CATCH
 
+   DECLARE @cListKey NVARCHAR(10),@cGroupKey NVARCHAR(20)
+
+   SELECT @cListKey = TD.ListKey,@cGroupKey = TD.Groupkey,@cFromLOC = TD.FromLOC
+   FROM TASKDETAIL TD WITH(NOLOCK)
+   JOIN LOC LOC (NOLOCK) ON TD.FromLOC = LOC.Loc AND LOC.Facility = @cFacility
+   JOIN AREADETAIL AD (NOLOCK) ON AD.AreaKey = 'MOTHERSONS' AND LOC.PutawayZone = AD.PutawayZone
+   WHERE TD.StorerKey = @cStorerKey
+   AND TD.TaskType LIKE 'RP%'
+   AND TD.Status = '3'
+   AND TD.UserKey = @c_UserID
+
+   IF ISNULL(@cListKey,'') <> '' AND ISNULL(@cGroupKey,'') <> ''
+   BEGIN
+      UPDATE TASKDETAIL
+      SET STATUS = '3', UserKey = @c_UserID,ListKey = @cListKey,Groupkey = @cGroupKey
+      WHERE STATUS = '0'
+      AND (UserKey = '' AND UserKeyOverRide IN ('', @c_UserID) )
+      AND StorerKey = @cStorerKey
+      AND TaskType LIKE 'RP%'
+      AND FromLOC = @cFromLOC
+   END
+				
    IF @bDebug = 1
    BEGIN
       SELECT 'Locked candidate tasks in TaskDetail', * 

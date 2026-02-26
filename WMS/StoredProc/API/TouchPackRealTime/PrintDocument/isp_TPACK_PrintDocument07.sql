@@ -81,6 +81,18 @@ BEGIN
    SET @c_ErrMsg           = '' 
    SET @cSQL               = ''
    SET @cSQLParam          = ''
+   SET @cFieldName1        = ''
+   SET @cFieldName2        = ''
+   SET @cFieldName3        = ''
+   SET @cFieldName4        = ''
+   SET @cParams1           = ''
+   SET @cParams2           = ''
+   SET @cParams3           = ''
+   SET @cParams4           = ''
+   SET @IsAggregate1       = 0
+   SET @IsAggregate2       = 0
+   SET @IsAggregate3       = 0
+   SET @IsAggregate4       = 0
    SET @cModuleID          = 'TPPACK'
    SET @cCustomLabelSP     = ''
    SET @cReportType        = ''
@@ -445,8 +457,20 @@ BEGIN
       END
    END
 
-   SET @cSQL = ''
-   SET @cSQLParam = ''
+   SET @cSQL         = ''
+   SET @cSQLParam    = ''
+   SET @cFieldName1  = ''
+   SET @cFieldName2  = ''
+   SET @cFieldName3  = ''
+   SET @cFieldName4  = ''
+   SET @cParams1     = ''
+   SET @cParams2     = ''
+   SET @cParams3     = ''
+   SET @cParams4     = ''
+   SET @IsAggregate1 = 0
+   SET @IsAggregate2 = 0
+   SET @IsAggregate3 = 0
+   SET @IsAggregate4 = 0
 
    IF @bPrintPaperFlag = 1
    BEGIN

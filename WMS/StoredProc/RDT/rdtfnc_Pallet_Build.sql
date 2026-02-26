@@ -34,6 +34,7 @@ GO
 /* 2023-11-22 2.6  YeeKung  UWP-11213 Fix Bug   (yeekung05)                   */
 /* 2023-12-03 2.7  YeeKung  UWP-11635 Fix Bug   (yeekung06)                   */
 /* 2024-12-02 3.0.0 LJQ006  FCR-1406. Created                                 */
+/* 2026-02-16 4.0.0 NYE018  FCR-10366 add loc check digit                     */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_Pallet_Build](
@@ -118,6 +119,9 @@ DECLARE
    @tExtScnData               VariableTable,
    @cExtScnSP                 NVARCHAR(20),
    @nAction                   INT,
+
+   @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10366
+   @cCheckDigitLOC      NVARCHAR( 20), -- FCR-10366
 
    @cLottable01 NVARCHAR( 18),   @cChkLottable01 NVARCHAR( 18),
    @cLottable02 NVARCHAR( 18),   @cChkLottable02 NVARCHAR( 18),
@@ -220,6 +224,8 @@ SELECT
    @cDefaultLoc               = V_String29, --(yeekung02)
    @cExtScnSP                 = V_String30,
 
+   @cLOCCheckDigitSP          = V_String31, -- FCR-10366
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -305,6 +311,8 @@ BEGIN
 
    --(yeekung02)
    SET @cDefaultLoc = rdt.RDTGetConfig( @nFunc, 'DefaultLoc', @cStorerKey)
+   IF @cDefaultLoc = '0'           -- Added this check to remove 0 in the screen Loc field - NYE018
+      SET @cDefaultLoc = ''        -- NYE018
 
    -- (james01)
    SET @cPltBuildNotInsDropID = rdt.RDTGetConfig( @nFunc, 'PltBuildNotInsDropID', @cStorerKey)
@@ -336,6 +344,8 @@ BEGIN
 
    -- (james04)
    SET @cPalletNoMixOrderKey = rdt.RDTGetConfig( @nFunc, 'PalletNoMixOrderKey', @cStorerKey)
+
+   SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-10366
 
    -- initialise all variable
    SET @cDropID = ''
@@ -700,6 +710,23 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 2
          GOTO Step_2_Fail
       END
+
+      -- FCR-10366
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_2_Fail
+         END
+         SET @cDropLOC = @cCheckDigitLOC
+      END
+      -- FCR-10366
 
       SET @cOutField01 = @cDropID
       SET @cOutField02 = @cDropLOC
@@ -1963,6 +1990,8 @@ BEGIN
       V_String28    = @cDecodeSP,
       V_String29    = @cDefaultLoc, --(yeekung02)
       V_String30    = @cExtScnSP,
+
+      V_String31    = @cLOCCheckDigitSP, -- FCR-10366
       
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

@@ -24,6 +24,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
+/*25-02-2026    VNI01    1.1  UWP-48073 :skip conversion and return direct */
+/*                            multiplication IF ALL UOM parms are empty */
 /************************************************************************/
 
 CREATE FUNCTION [dbo].[fnc_CalculateCube] (@nLength Float, @nWidth Float, @nHeight Float, @cDimUOM NVARCHAR(30), @cVolUOM NVARCHAR(30), @cStorerkey NVARCHAR(15) )  
@@ -32,7 +34,13 @@ AS
 BEGIN  
    DECLARE @nCube Float
           ,@cSvalue NVARCHAR(10)
-           
+
+                                                                                        --VNI01(START)
+   IF ISNULL(@cDimUOM,'') = '' AND ISNULL(@cVolUOM,'') = '' AND ISNULL(@cStorerkey,'') = ''
+   BEGIN
+       RETURN ISNULL(@nLength * @nWidth * @nHeight, 0)
+   END
+                                                                                        --VNI01(END)
    IF ISNULL(@cStorerkey,'') <> '' AND ISNULL(@cDimUOM,'') = ''  
    BEGIN
       SELECT TOP 1 @cDimUOM = SValue

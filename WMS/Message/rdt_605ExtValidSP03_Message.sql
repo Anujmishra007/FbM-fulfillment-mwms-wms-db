@@ -8,6 +8,7 @@ execute rdt.rdtAddMsg 255402, 10, '255402^SNQtyNotTally',   'us_english', 605, 0
 execute rdt.rdtAddMsg 255403, 10, '255403^InvalidLot02',    'us_english', 605, 0, '255403 Invalid Lottable02 format'
 execute rdt.rdtAddMsg 255404, 10, '255404^InvalidLot02',    'us_english', 605, 0, '255404 Invalid Lottable02 format'
 execute rdt.rdtAddMsg 255405, 10, '255405^InvalidSUSR4',    'us_english', 605, 0, '255405 SUSR4 must be numeric'
-execute rdt.rdtAddMsg 255406, 10, '255406^ExceedDOTRange',  'us_english', 605, 0, '255406 Excceed the DOT range'
+execute rdt.rdtAddMsg 255406, 10, '255406^ExceedDOTRange',  'us_english', 605, 0, '255406 The DOT range exceed 8'
+execute rdt.rdtAddMsg 255407, 10, '255407^ExceedDOTRange',  'us_english', 605, 0, '255407 Oldest DOT exceed the max value'
 
 select * from rdt.rdtmsg with (nolock) where message_id between 255401 and 255450

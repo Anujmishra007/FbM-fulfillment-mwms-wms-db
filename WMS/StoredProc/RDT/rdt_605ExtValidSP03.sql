@@ -11,8 +11,9 @@ GO
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date        Rev  Author      Purposes                                */
-/* 2026-01-05  1.0  Jackc       FCR-9215 Created                        */
+/* Date        Rev    Author      Purposes                              */
+/* 2026-01-05  1.0.0  Jackc       FCR-9215 Created                      */
+/* 2026-01-05  1.0.1  Jackc       FCR-9215 Update DOT Validation        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_605ExtValidSP03] (
@@ -137,6 +138,13 @@ BEGIN
                GOTO Quit
             END
 
+            IF @nWeekDiff > 8
+            BEGIN
+               SET @nErrNo = 255406
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END
+
             SELECT @cSUSR4 = SUSR4 
             FROM SKU WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
@@ -152,12 +160,26 @@ BEGIN
                GOTO Quit
             END
 
-            IF @nWeekDiff > CAST(@cSUSR4 AS INT) AND @cSUSR4 <> '0'
+            DECLARE @nCurrentYear INT, @nCurrentWeek INT
+            SELECT 
+               @nCurrentYear = RIGHT(DATENAME(YEAR, GETDATE()), 2),
+               @nCurrentWeek = DATEPART(WEEK, GETDATE())
+
+            IF @nDebugFlag = 1
+               SELECT @nCurrentYear AS CurrentYear, @nCurrentWeek AS CurrentWeek, @nOldestYear AS OldestYear, @nOldestWeek AS OldestWeek
+
+            DECLARE @nOldestToCurrentWeekDiff INT
+            IF @nCurrentYear > @nOldestYear
+               SET @nOldestToCurrentWeekDiff = (@nCurrentYear - @nOldestYear) * 52 + (@nCurrentWeek - @nOldestWeek)
+            ELSE
+               SET @nOldestToCurrentWeekDiff = @nCurrentWeek - @nOldestWeek
+
+            IF @nOldestToCurrentWeekDiff > CAST(@cSUSR4 AS INT) AND @cSUSR4 <> '0'
             BEGIN
-               SET @nErrNo = 255406
+               SET @nErrNo = 255407
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                GOTO Quit
-            END 
+            END
          END--st1
       END --Enter
    END --605

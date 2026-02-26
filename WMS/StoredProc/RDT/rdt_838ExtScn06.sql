@@ -748,7 +748,7 @@ BEGIN
                   WHERE S.StorerKey = @cStorerKey
                      AND C.CartonType = @cCartonType
 
-                  SET @fCube = CAST(@cLength as  int) * CAST( @cWidth as int) * CAST( @cHeight as int)
+                  SET @fCube = CAST(@cLength as FLOAT) * CAST( @cWidth as FLOAT) * CAST( @cHeight as FLOAT)
                   SET @fCube = @fCube / 1000000
 
                   INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, Qty, Weight, Cube, CartonType, RefNo, Length, Width, Height)

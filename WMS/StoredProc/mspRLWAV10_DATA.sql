@@ -13,13 +13,14 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.0                                                          */    
+/* Version: 1.1                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 23-Feb-2026 WLChooi  1.1   FCR-11090 Fix CPK Task Status (WL01)       */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_DATA]        
    @c_Wavekey     NVARCHAR(10)
@@ -60,7 +61,7 @@ BEGIN
                             + ' AND NOT EXISTS (SELECT 1'
                             +                '  FROM TASKDETAIL td (NOLOCK)' 
                             +                '  WHERE td.TaskdetailKey = PICKDETAIL.TaskdetailKey'
-                            +                '  AND td.Taskdetailkey = ''CPK'''
+                            +                '  AND td.Tasktype = ''CPK'''
                             +                '  AND td.SourceType    = ''mspRLWAV10'''
                             +                '  AND td.[Status]      <> ''X'''
                             +                ' )'
@@ -97,20 +98,24 @@ BEGIN
       -- UOM = 6, RPF To DP,  Pick from DP
       -- UOM = 7, RPF to DPP, Pick from DPP
       UPDATE pw
-         SET pw.ToLoc = CASE WHEN td.Taskdetailkey IS NULL THEN pw.Loc 
-                             WHEN pw.UOM = '2' THEN pw.Loc 
-                             ELSE td.FinalLoc END
-            ,pw.UpdateSource = CASE WHEN td.TaskDetailKey IS NOT NULL 
-                                    THEN td.TaskDetailKey
-                                    ELSE ''
-                                    END
+         SET pw.ToLoc = CASE WHEN pw.UOM = '2' THEN pw.Loc
+                             WHEN td_rpf.TaskDetailKey IS NOT NULL THEN td_rpf.FinalLoc
+                             WHEN td_asttpa.TaskDetailKey IS NOT NULL THEN td_asttpa.ToLoc
+                             ELSE pw.Loc END
+            ,pw.UpdateSource = CASE WHEN td_rpf.TaskDetailKey IS NOT NULL THEN td_rpf.TaskDetailKey
+                                    WHEN td_asttpa.TaskDetailKey IS NOT NULL THEN td_asttpa.TaskDetailKey
+                                    ELSE '' END
       FROM #PICKDETAIL_WIP AS pw
-      LEFT OUTER JOIN TaskDetail td (NOLOCK) ON  td.TaskType IN ('RPF','RP1')
-                                             AND td.CaseID   = pw.DropID
-                                             AND td.Status   NOT IN ('X','9')
-                                             AND td.Storerkey= pw.Storerkey
-                                             AND td.FromID   = pw.ID
-                                             AND td.SourceType = @c_SourceType
+      LEFT OUTER JOIN TaskDetail td_rpf (NOLOCK) ON td_rpf.TaskType  IN ('RPF','RP1')
+                                                AND td_rpf.FinalLoc  = pw.Loc             --WL01
+                                                AND td_rpf.Wavekey   = pw.Wavekey         --WL01
+                                                AND td_rpf.Status    NOT IN ('X','9')
+                                                AND td_rpf.Storerkey = pw.Storerkey
+      LEFT OUTER JOIN TaskDetail td_asttpa (NOLOCK) ON td_asttpa.TaskType  = 'ASTTPA'
+                                                   AND td_asttpa.ToLoc     = pw.Loc       --WL01
+                                                   AND td_asttpa.Wavekey   = pw.Wavekey   --WL01
+                                                   AND td_asttpa.Status    NOT IN ('X','9')
+                                                   AND td_asttpa.Storerkey = pw.Storerkey    
    END
  
 QUIT_SP:

@@ -17,6 +17,8 @@ GO
 /* 2025-12-11   2.1   PPA374    Added new error for the MHE not for To Loc      */
 /* 2026-01-05   2.2   PPA374    Changing aisle in use to C_String28             */
 /* 2026-01-09   2.3   PPA374    Adding Permission and In Progress errors        */
+/* 2026-02-12   2.4   PPA374    Adding 'INLOCKED' flag as an ok flag to pick    */
+/* 2026-02-13   2.5   PPA374    Adding "MHE not for source loc" errror message  */
 /********************************************************************************/
 CREATE OR ALTER PROC    [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
@@ -844,7 +846,7 @@ BEGIN
             ELSE
             BEGIN
                -- (james06)
-               IF @c_ContinueTask = 1 AND ISNULL( @c_LastTaskType, '') <> ''
+               IF @c_ContinueTask = '1' AND ISNULL( @c_LastTaskType, '') <> ''
                BEGIN
                   SELECT TOP 1
                          @c_CurrentLineNumber = TTMStrategyLineNumber
@@ -2206,6 +2208,7 @@ END
                     ON TD.ToLoc = LLI.Loc
                     AND LLI.StorerKey = @cStorerKey
                     AND LLI.Qty > 0
+					AND LLI.ID <> ''
                  LEFT JOIN #Aisle_InUsed AI1
                     ON L.LocAisle = AI1.LocAisle
                     AND L.Facility = @cFacility
@@ -2293,11 +2296,11 @@ END
                     )
                     AND (
 				       L.Status <> 'OK' 
-					   OR L.LocationFlag NOT IN ('', 'NONE') 
+					   OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED') 
 					   OR L1.Status <> 'OK' 
-					   OR L1.LocationFlag NOT IN ('', 'NONE')
+					   OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED')
 					   OR L2.Status <> 'OK' 
-					   OR L2.LocationFlag NOT IN ('', 'NONE')
+					   OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED')
 				    )
 					AND AI1.LocAisle IS NULL   
                     AND AI2.LocAisle IS NULL   
@@ -2307,16 +2310,16 @@ END
               SET TD.StatusMsg =
                  CASE 
                     WHEN 
-                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
-                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
+                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Both loc on hold or flag'
 
                     WHEN 
-                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Toloc on hold or flag'
 
                     WHEN 
-                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Fromloc on hold or flag' 
                  END
               FROM TaskDetail TD
@@ -2335,9 +2338,9 @@ END
                     )
                 AND (
                        L.Status <> 'OK'
-                    OR L.LocationFlag NOT IN ('', 'NONE')
+                    OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     OR L1.Status <> 'OK'
-                    OR L1.LocationFlag NOT IN ('', 'NONE')
+                    OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     )*/
 
               SELECT @n_continue = 3
@@ -2733,6 +2736,37 @@ END
 		    GOTO QuitErrorCheck
 		 END
 
+		 -- MHE not suitable for the source location
+		 IF @n_err = 63060
+		    AND EXISTS (
+               SELECT 1 
+               FROM dbo.TaskDetail TD WITH(NOLOCK)
+                  INNER JOIN dbo.LOC L WITH(NOLOCK)
+                     ON L.Loc = TD.FromLoc
+                  INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
+                     ON PAZEED.PutawayZone = L.PutawayZone
+                  INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
+               WHERE TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                     AND TD.AreaKey = @c_AreaKey01
+                     AND TD.StorerKey = @cStorerKey
+                     AND (
+                        TD.Status = '0'
+                        OR (
+						   TD.Status = '3'
+                           AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+					 )
+					 AND L.Facility = @cFacility
+					 AND RM.UserName = @c_userid
+			)
+         BEGIN
+	        SELECT @n_continue = 3
+            SELECT @n_err = 218265
+            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') --'218265^MHE not for FromLoc' --PPA374 11/12/2025
+		    GOTO QuitErrorCheck
+		 END
+
 		 --No permission
 		 IF @n_err = 63060
 		    AND EXISTS (
@@ -2744,7 +2778,13 @@ END
                   AND (
                      TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                   )			
-				  AND NOT EXISTS(SELECT 1 FROM dbo.TaskManagerUserDetail TMUS WITH(NOLOCK) WHERE TMUS.PermissionType = TD.TaskType AND TMUS.UserKey = @c_userid AND TMUS.Permission = 1 AND AreaKey = @c_AreaKey01)
+				  AND NOT EXISTS(
+				     SELECT 1 FROM dbo.TaskManagerUserDetail TMUS WITH(NOLOCK) 
+					 WHERE TMUS.PermissionType = TD.TaskType 
+					    AND TMUS.UserKey = @c_userid 
+					    AND TMUS.Permission = '1' 
+					    AND AreaKey = @c_AreaKey01
+			      )
 			)
          BEGIN
 	        SELECT @n_continue = 3
@@ -2787,7 +2827,7 @@ END
 
 	  QuitErrorCheck:
 	  --Update tasks for errors:
-	  IF @n_err IN ('218257','218245','218255','218258','218252','218253','218254','218261','218262')
+	  IF @n_err IN ('218257','218245','218255','218258','218252','218253','218254','218261','218262','218265')
 	  BEGIN
 
 	  	  	UPDATE TaskDetail
@@ -2810,6 +2850,31 @@ END
                FROM dbo.TaskDetail TD WITH(NOLOCK)
                   INNER JOIN dbo.LOC L WITH(NOLOCK)
                      ON L.Loc = TD.ToLoc
+                  INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
+                     ON PAZEED.PutawayZone = L.PutawayZone
+                  INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
+               WHERE TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                     AND TD.AreaKey = @c_AreaKey01
+                     AND TD.StorerKey = @cStorerKey
+                     AND (
+                        TD.Status = '0'
+                        OR (
+						   TD.Status = '3'
+                           AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+						)
+					 )
+					 AND L.Facility = @cFacility
+					 AND RM.UserName = @c_userid
+			)
+
+			UPDATE TaskDetail
+			SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for From Loc' --PPA374 13/02/2026
+			WHERE TaskDetailKey IN (
+               SELECT TaskDetailKey
+               FROM dbo.TaskDetail TD WITH(NOLOCK)
+                  INNER JOIN dbo.LOC L WITH(NOLOCK)
+                     ON L.Loc = TD.FromLoc
                   INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH (NOLOCK)
                      ON PAZEED.PutawayZone = L.PutawayZone
                   INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
@@ -2972,20 +3037,20 @@ END
               SET TD.StatusMsg =
                  CASE 
                     WHEN 
-                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
-                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
+                       AND (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Both loc on hold or flag'
 
                     WHEN 
-                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE'))
+                       (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Toloc on hold or flag'
 
                     WHEN 
-                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+                       (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Fromloc on hold or flag' 
 
 					WHEN 
-					   (L2.Status <> 'OK' OR L2.LocationFlag NOT IN ('', 'NONE'))
+					   (L2.Status <> 'OK' OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'FinalLoc on hold or flag'
                  END
               FROM TaskDetail TD
@@ -3007,11 +3072,11 @@ END
                     )
                 AND (
                        L.Status <> 'OK'
-                    OR L.LocationFlag NOT IN ('', 'NONE')
+                    OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     OR L1.Status <> 'OK'
-                    OR L1.LocationFlag NOT IN ('', 'NONE')
+                    OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED')
 					OR L2.Status <> 'OK'
-                    OR L2.LocationFlag NOT IN ('', 'NONE')
+                    OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     )
 
 			UPDATE TaskDetail 
@@ -3025,6 +3090,7 @@ END
                        ON TD.ToLoc = LLI.Loc
                        AND LLI.StorerKey = @cStorerKey
                        AND LLI.Qty > 0
+					   AND LLI.ID <> ''
                  WHERE TD.AreaKey = @c_AreaKey01
 		            AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                     AND L.Facility = @cFacility
@@ -3043,7 +3109,7 @@ END
         IF (
             SELECT COUNT(DISTINCT AD.PutawayZone) - COUNT(RM.C_String30) 
             FROM dbo.AreaDetail AD WITH(NOLOCK)
-            INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
+            LEFT JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
                 ON PAZEED.PutawayZone = AD.PutawayZone
             LEFT JOIN RDT.RDTMOBREC RM WITH(NOLOCK)
                     ON RM.C_String30 = PAZEED.EquipmentProfileKey
@@ -3171,7 +3237,6 @@ END
         RETURN
     END
 END -- End Proc
-
 GO
 
 SET QUOTED_IDENTIFIER OFF

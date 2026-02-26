@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.1                                                  */
+/* GitHub Version: 1.3                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,10 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 13-Jan-2026 WLChooi  1.0   Initial Version                           */
 /* 11-Feb-2026 WLChooi  1.1   UWP-48731 Add Error Logging (WL01)        */
+/* 13-Feb-2026 WLChooi  1.2   UWP-48732 Split Pickdetail add Notes for  */
+/*                            tracing purpose (WL02)                    */
+/* 23-Feb-2026 WLChooi  1.3   UWP-48530 Insert RPF Task if the UCC of   */
+/*                            the task has already completed (WL03)     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -589,6 +593,22 @@ BEGIN
       JOIN MatchingRows MR ON SP.PickDetailKey = MR.PickDetailKey
    END
 
+   --WL02 S
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @c_Automation = 'Y'
+   BEGIN
+      --Update UOM & Pickmethod for VAS
+      UPDATE #PickDetail_WIP
+         SET UOM = '6'
+            ,PickMethod = '3'
+      FROM #PickDetail_WIP pd
+      JOIN dbo.WorkOrderDetail wod (NOLOCK) ON  wod.ExternWorkOrderKey = pd.Orderkey
+                                             AND wod.ExternLineNo = pd.OrderLineNumber
+      WHERE pd.UOM = '2'
+      AND wod.[Type] IN ( 'S02', 'S06', 'J05' )
+      AND wod.Qty > 0
+   END
+   --WL02 E
+
    -- Redo Pre-cartonization
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
@@ -788,7 +808,7 @@ BEGIN
                          PD.DropID, PD.Loc, PD.ID, PD.PackKey, PD.UpdateSource, PD.CartonGroup, PD.CartonType,
                          PD.ToLoc, PD.DoReplenish, PD.ReplenishZone, PD.DoCartonize, PD.PickMethod,
                          PD.WaveKey, PD.EffectiveDate, '9', PD.ShipFlag, PD.PickSlipNo, PD.TaskDetailKey, PD.TaskManagerReasonKey, 
-                         '*RefPickKey: ' + @c_PickDetailKey + ' Qty: ' + CONVERT(NVARCHAR(10), @n_splitqty),   --WL01 
+                         '*RefPickKey: ' + @c_PickDetailKey + ' Qty: ' + CONVERT(NVARCHAR(10), @n_splitqty),   --WL02
                          PD.WIP_Refno, PD.Channel_ID
                   FROM #PickDetail_WIP PD (NOLOCK)
                   JOIN dbo.SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
@@ -801,7 +821,8 @@ BEGIN
                       UOMQty = 
                       CASE WHEN UOM = '6' THEN @n_packqty 
                            WHEN UOM = '2' AND CaseCnt > 0 AND @n_packqty % CAST(IIF(CaseCnt > 0, CaseCnt, 1) AS INT) = 0 THEN FLOOR(@n_packqty / CaseCnt) 
-                      ELSE UOMQty END 
+                      ELSE UOMQty END,
+                      Notes = '*PickDetailKey: ' + @c_PickDetailKey + ' Qty: ' + CONVERT(NVARCHAR(10), @n_packqty)   --WL02
                       --UOMQTY = CASE UOM WHEN '6' THEN @n_packqty ELSE UOMQty END
                   FROM #PICKDETAIL_WIP 
                   JOIN dbo.SKU (NOLOCK) ON #PICKDETAIL_WIP .Storerkey = SKU.Storerkey AND #PICKDETAIL_WIP .Sku = SKU.Sku
@@ -892,16 +913,18 @@ BEGIN
    --Initialize Data - Copy from mspRLWAV03
    IF @n_Continue IN (1,2) AND @c_Automation = 'Y'                 
    BEGIN
-      --Update UOM & Pickmethod for VAS
-      UPDATE #PickDetail_WIP
-         SET UOM = '6'
-            ,PickMethod = '3'
-      FROM #PickDetail_WIP pd
-      JOIN dbo.WorkOrderDetail wod (NOLOCK) ON  wod.ExternWorkOrderKey = pd.Orderkey
-                                             AND wod.ExternLineNo = pd.OrderLineNumber
-      WHERE pd.UOM = '2'
-      AND wod.[Type] IN ( 'S02', 'S06', 'J05' )
-      AND wod.Qty > 0
+      --WL02 S - Move up
+      ----Update UOM & Pickmethod for VAS
+      --UPDATE #PickDetail_WIP
+      --   SET UOM = '6'
+      --      ,PickMethod = '3'
+      --FROM #PickDetail_WIP pd
+      --JOIN dbo.WorkOrderDetail wod (NOLOCK) ON  wod.ExternWorkOrderKey = pd.Orderkey
+      --                                       AND wod.ExternLineNo = pd.OrderLineNumber
+      --WHERE pd.UOM = '2'
+      --AND wod.[Type] IN ( 'S02', 'S06', 'J05' )
+      --AND wod.Qty > 0
+      --WL02 E - Move up
 
       INSERT INTO #T_ORDERSKU (Orderkey, Storerkey, SKU, WCS)
       SELECT DISTINCT P.OrderKey, P.Storerkey, P.SKU, 0
@@ -1265,7 +1288,8 @@ BEGIN
                             WHERE WaveKey = @c_WaveKey
                             AND TaskType = 'RPF'
                             AND Caseid = CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END
-                            AND FromLoc = @c_FromLoc)
+                            AND FromLoc = @c_FromLoc
+                            AND [Status] <> '9' )   --WL03
                   BEGIN
                      SET @b_InsertTask = 0
                   END

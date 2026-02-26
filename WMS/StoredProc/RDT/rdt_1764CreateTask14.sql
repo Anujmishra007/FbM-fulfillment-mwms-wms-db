@@ -67,6 +67,7 @@ BEGIN
    DECLARE @cRefTaskKey       NVARCHAR( 10)
    DECLARE @cPickMethod       NVARCHAR( 10)
    DECLARE @cTaskType         NVARCHAR( 10)
+   DECLARE @cFacility         NVARCHAR( 5)
 
    DECLARE @cNewTaskStatus    NVARCHAR( 10)
 
@@ -91,6 +92,8 @@ BEGIN
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
+
+   SELECT @cFacility = Facility FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
 
    DECLARE @tTask TABLE
    (
@@ -189,7 +192,8 @@ BEGIN
       
       SET @cNewTaskDetailKey = ''
 
-      IF EXISTS(SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND LocationCategory = 'PND_OUT')
+      IF EXISTS(SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND LocationCategory = 'PND_OUT' AND Facility = @cFacility)
+      OR EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND LocationCategory = 'INTRANSIT' AND Facility = @cFacility) 
       BEGIN
          SET @nSuccess = 0
          EXECUTE dbo.nspg_getkey
@@ -214,15 +218,22 @@ BEGIN
             @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, @nQty, @cToLOCAreaKey, @cFinalLOC,@nUOMQty,@nSystemQTY,
             @cOrderKey,
             'FP', @cStorerKey, @cSKU, @cLOT, @cNewTaskDetailKey, @nTransitCount+1, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL,@cTaskDetailKey)
-		 
-		 UPDATE dbo.TaskDetail
-		 SET QtyReplen = Qty
-		 WHERE TaskDetailKey = @cNewTaskDetailKey
+       
+         UPDATE dbo.TaskDetail
+         SET QtyReplen = Qty
+         WHERE TaskDetailKey = @cNewTaskDetailKey
 
          UPDATE dbo.TASKDETAIL
             SET RefTaskKey = @cNewTaskDetailKey
          WHERE RefTaskKey = @cTaskDetailKey
             AND TaskType = 'FCP'
+         
+         IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND LocationCategory = 'INTRANSIT' AND Facility = @cFacility) 
+         BEGIN
+            UPDATE dbo.TaskDetail
+            SET STATUS = '3',UserKey = @cUserName
+            WHERE TaskDetailKey = @cNewTaskDetailKey
+         END
 
          SET @cNewTaskDetailKey = ''
       END
