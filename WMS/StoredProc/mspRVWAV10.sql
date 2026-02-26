@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.1                                                          */    
+/* Version: 1.2                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -21,6 +21,7 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
 /* 20-Feb-2026 WLChooi  1.1   FCR-11076 Added CPK filter (WL01)          */
+/* 26-Feb-2026 WLChooi  1.2   FCR-11158 Added ASTCPK Task (WL02)         */
 /*************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV10]
       @c_Wavekey      NVARCHAR(10)
@@ -68,7 +69,7 @@ BEGIN
                   WHERE TD.Wavekey = @c_Wavekey
                   AND TD.Sourcetype IN ('mspRLWAV10')
                   AND TD.[Status] NOT IN ('0', 'H')   --WL01
-                  AND TD.Tasktype IN ('CPK') )
+                  AND TD.Tasktype IN ('CPK', 'ASTCPK') )   --WL02
       BEGIN
          SELECT @n_Continue = 3
          SELECT @n_Err = 67020
@@ -94,7 +95,7 @@ BEGIN
       FROM TASKDETAIL (NOLOCK)
       WHERE Wavekey = @c_Wavekey
       AND Sourcetype IN ('mspRLWAV10')
-      AND Tasktype IN ('CPK')
+      AND Tasktype IN ('CPK', 'ASTCPK')   --WL02
 
       OPEN CUR_TASK
 
