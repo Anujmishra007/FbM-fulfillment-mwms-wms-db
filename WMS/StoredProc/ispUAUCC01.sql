@@ -25,14 +25,15 @@ GO
 /* 07/09/2017   Leong     1.2 IN00459369 - Add StorerKey.               */
 /* 04-Dec-2025  WL01      1.3 UWP-44797 Support update by Pickdetailkey */
 /* 13-Feb-2026  TK01      1.4 UWP-48857 Restructure Update using Loop   */
+/* 25-Feb-2026  TK02      1.5 UWP-48857 Add TraceInfo Logging           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispUAUCC01]
-(   @c_Storerkey  NVARCHAR(15)
-  , @b_Success    INT           OUTPUT
-  , @n_Err        INT           OUTPUT
-  , @c_ErrMsg     NVARCHAR(255) OUTPUT
-  , @c_Pickdetailkey NVARCHAR(10) = ''   --WL01
+(   @c_Storerkey        NVARCHAR(15)
+  , @b_Success          INT           OUTPUT
+  , @n_Err              INT           OUTPUT
+  , @c_ErrMsg           NVARCHAR(255) OUTPUT
+  , @c_Pickdetailkey    NVARCHAR(10) = ''   --WL01
 )
 AS
 BEGIN
@@ -46,15 +47,34 @@ BEGIN
          , @n_Continue           INT
          , @n_StartTCount        INT
 
-   DECLARE @CUR_UCC              CURSOR      --(TK01)
-         , @n_UCC_RowRef         INT         --(TK01)
+   DECLARE @CUR_UCC              CURSOR         --(TK01)
+         , @n_UCC_RowRef         INT            --(TK01)
+         , @c_LogTraceInfo       NVARCHAR(10)   --(TK02)
+         , @n_CountBfore         INT            --(TK02)
+         , @n_CountAfter         INT            --(TK02)
+         , @d_Trace_StartTime    DATETIME       --(TK02)
+         , @d_Trace_EndTime      DATETIME       --(TK02)
+         , @c_Step               NVARCHAR(10)   --(TK02)
 
-   SET @b_Success       = 1
-   SET @n_Err           = 0
-   SET @c_ErrMsg        = ''
-   SET @b_Debug         = '0'
-   SET @n_Continue      = 1
-   SET @n_StartTCount   = @@TRANCOUNT
+   SET @b_Success             = 1
+   SET @n_Err                 = 0
+   SET @c_ErrMsg              = ''
+   SET @b_Debug               = '0'
+   SET @n_Continue            = 1
+   SET @n_StartTCount         = @@TRANCOUNT
+   SET @c_LogTraceInfo        = ''           --(TK02)
+   SET @n_CountBfore          = -1           --(TK02)
+   SET @n_CountAfter          = 0            --(TK02)
+   SET @d_Trace_StartTime     = GETDATE()    --(TK02)
+   SET @d_Trace_EndTime       = GETDATE()    --(TK02)
+   SET @c_Step                = ''           --(TK02)
+
+   --(TK02)
+   SELECT @c_LogTraceInfo = Short 
+   FROM Codelkup (NOLOCK)
+   WHERE Listname  = 'TraceInfo'
+   AND Code = 'UAUCC'
+   AND StorerKey = @c_Storerkey
 
    BEGIN TRAN
 
@@ -112,18 +132,19 @@ BEGIN
       FROM   UCC U (NOLOCK)
       WHERE  U.Storerkey = @c_Storerkey
       AND    U.Status > '2' AND U.Status < '6'
-      AND    EXISTS ( SELECT 1 
-                      FROM PICKDETAIL PD (NOLOCK) 
-                      WHERE PD.PickDetailKey = @c_Pickdetailkey
-                      AND PD.Storerkey = @c_Storerkey
-                      AND PD.DropID = U.UCCNo
-                      AND PD.Status < '9' )
-      AND NOT EXISTS ( SELECT 1 
-                       FROM PICKDETAIL PD (NOLOCK) 
-                       WHERE PD.Storerkey = @c_Storerkey
-                       AND PD.DropID = U.UCCNo
-                       AND PD.Status < '9'
-                       AND PD.Qty > 0 )   --1 UCC Shares multiple pickdetail - ensure ALL have Qty = 0
+      AND    EXISTS     (SELECT 1 FROM PICKDETAIL PD1 (NOLOCK) WHERE PD1.PickDetailKey = @c_Pickdetailkey AND PD1.Storerkey = @c_Storerkey AND PD1.DropID = U.UCCNo AND PD1.Status < '9' )
+      AND    NOT EXISTS (SELECT 1 FROM PICKDETAIL PD2 (NOLOCK) WHERE PD2.Storerkey = @c_Storerkey AND PD2.DropID = U.UCCNo AND PD2.Status < '9' AND PD2.Qty > 0 )   --1 UCC Shares multiple pickdetail - ensure ALL have Qty = 0
+
+      --(TK02)
+      IF @c_LogTraceInfo = '1'
+      BEGIN
+         SELECT @n_CountBfore = COUNT(U.UCC_RowRef), @d_Trace_StartTime = GETDATE(), @c_Step = 'With_PDKey' 
+         FROM   UCC U (NOLOCK)
+         WHERE  U.Storerkey = @c_Storerkey
+         AND    U.Status > '2' AND U.Status < '6'
+         AND    EXISTS     (SELECT 1 FROM PICKDETAIL PD1 (NOLOCK) WHERE PD1.PickDetailKey = @c_Pickdetailkey AND PD1.Storerkey = @c_Storerkey AND PD1.DropID = U.UCCNo AND PD1.Status < '9' )
+         AND    NOT EXISTS (SELECT 1 FROM PICKDETAIL PD2 (NOLOCK) WHERE PD2.Storerkey = @c_Storerkey AND PD2.DropID = U.UCCNo AND PD2.Status < '9' AND PD2.Qty > 0 )   --1 UCC Shares multiple pickdetail - ensure ALL have Qty = 0
+      END
 
    END
    ELSE IF OBJECT_ID('tempdb..#D_PICKDETAIL') IS NOT NULL
@@ -136,6 +157,17 @@ BEGIN
       AND    U.Status > '2' AND U.Status < '6'
       AND    EXISTS (SELECT 1 FROM #D_PICKDETAIL d WHERE d.DropID = U.UCCNo AND d.Storerkey = @c_Storerkey AND d.Status < '9') -- IN00459369
       AND    NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.DropID = U.UCCNo AND PD.Storerkey = @c_Storerkey AND PD.Status < '9') -- IN00459369
+
+      --(TK02)
+      IF @c_LogTraceInfo = '1'
+      BEGIN
+         SELECT @n_CountBfore = COUNT(U.UCC_RowRef), @d_Trace_StartTime = GETDATE(), @c_Step = 'With_#D_PICKDETAIL' 
+         FROM   UCC U (NOLOCK)
+         WHERE  U.Storerkey = @c_Storerkey
+         AND    U.Status > '2' AND U.Status < '6'
+         AND    EXISTS (SELECT 1 FROM #D_PICKDETAIL d WHERE d.DropID = U.UCCNo AND d.Storerkey = @c_Storerkey AND d.Status < '9') -- IN00459369
+         AND    NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.DropID = U.UCCNo AND PD.Storerkey = @c_Storerkey AND PD.Status < '9') -- IN00459369
+      END
 
    END
 
@@ -164,6 +196,11 @@ BEGIN
                          +': Update UCC Table Failed. (ispUAUCC01)'
                          +'(' + ERROR_MESSAGE() + ')' 
          END
+         ELSE
+         BEGIN
+            IF @@ROWCOUNT > 0
+               SET @n_CountAfter = @n_CountAfter + 1
+         END
 
          FETCH NEXT FROM @CUR_UCC INTO @n_UCC_RowRef
       END
@@ -173,6 +210,33 @@ BEGIN
    END
    --(TK01) - End
 
+   --(TK02) - Start
+   IF @c_LogTraceInfo = '1'
+   BEGIN
+
+      SET @d_Trace_EndTime = GETDATE()
+
+      EXEC isp_InsertTraceInfo
+           @c_TraceCode = 'UAUCC'
+         , @c_TraceName = 'ispUAUCC01'  
+         , @c_StartTime = @d_Trace_StartTime  
+         , @c_EndTime   = @d_Trace_EndTime
+         , @c_Step1     = @c_Storerkey 
+         , @c_Step2     = @c_Pickdetailkey  
+         , @c_Step3     = @c_Step 
+         , @c_Step4     = @n_CountBfore
+         , @c_Step5     = @n_CountAfter
+         , @c_Col1      = ''
+         , @c_Col2      = ''  
+         , @c_Col3      = ''  
+         , @c_Col4      = ''  
+         , @c_Col5      = ''  
+         , @b_Success   = 1  
+         , @n_Err       = 0
+         , @c_ErrMsg    = '' 
+
+   END
+   --(TK02) - END
 
    IF @n_continue = 3  -- Error Occured - Process And Return
    BEGIN
