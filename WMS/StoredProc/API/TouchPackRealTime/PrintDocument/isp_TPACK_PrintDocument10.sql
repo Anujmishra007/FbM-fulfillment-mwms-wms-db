@@ -4,16 +4,16 @@ SET QUOTED_IDENTIFIER OFF
 GO
   
 /*********************************************************************************/
-/* Store procedure: isp_TPACK_PrintDocument08                                    */
+/* Store procedure: isp_TPACK_PrintDocument10                                    */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
 /* Purpose        : Custom Print Label and Paper Function                        */
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
-/* 2025-10-28   1.0  GCH225     Cloned from isp_TPS_ExtPrint08 (FCR-5588)        */
+/* 2026-02-23   1.0  GCH225     UWP-49257 Created.                               */
 /*********************************************************************************/
 
-CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument08] (
+CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument10] (
      @cType                NVARCHAR(30)      = ''
    , @bIsDiscrete          BIT               = 0
    , @bIsCustom            BIT               = 0
@@ -45,21 +45,25 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
 
-   DECLARE @n_Continue           INT            = 1  
-         , @n_StartCnt           INT            = @@TRANCOUNT  
+   DECLARE @n_Continue        INT            = 1  
+         , @n_StartCnt        INT            = @@TRANCOUNT  
+         , @b_sp_Success      INT  
+         , @n_sp_err          INT  
+         , @c_sp_errmsg       NVARCHAR(250)  = ''
+         , @DBUserName        NVARCHAR(100)
+         , @b_sp_ExecuteAs    BIT  
 
-   DECLARE @cModuleID            NVARCHAR(30)
-         , @cReportType          NVARCHAR(30)
-         , @cSQL                 NVARCHAR(MAX)
-         , @cSQLParam            NVARCHAR(MAX)
-         , @cReportID            NVARCHAR(10)
-         , @cPrintSource         NVARCHAR(30)
-         , @cDefaultPrinterID    NVARCHAR(30)
-         , @groupByFields        NVARCHAR(MAX)
-         , @cPrinterInGroup      NVARCHAR(10)
-         , @ctempLabelJobIDs     NVARCHAR(MAX)
-         , @ctempPaperJobIDs     NVARCHAR(MAX)
-   
+   DECLARE @cModuleID         NVARCHAR(30)
+         , @cReportType       NVARCHAR(30)
+         , @cSQL              NVARCHAR(MAX)
+         , @cSQLParam         NVARCHAR(MAX)
+         , @cReportID         NVARCHAR(10)
+         , @cPrintSource      NVARCHAR(30)
+         , @cDefaultPrinterID NVARCHAR(30)
+         , @groupByFields     NVARCHAR(MAX)
+         , @cPrinterInGroup   NVARCHAR(10)
+         , @cCustomLabelSP    NVARCHAR(30)
+
    DECLARE @cFieldName1       NVARCHAR(MAX)
          , @cFieldName2       NVARCHAR(MAX)
          , @cFieldName3       NVARCHAR(MAX)
@@ -72,42 +76,62 @@ BEGIN
          , @IsAggregate2      BIT = 0
          , @IsAggregate3      BIT = 0
          , @IsAggregate4      BIT = 0
+         , @cField01          NVARCHAR(10)
+         , @cVASType          NVARCHAR(10)
+         , @ctempLabelJobIDs  NVARCHAR(MAX)
+         , @cLabelNo          NVARCHAR(20)
+         , @cTemplateCode     NVARCHAR(50)
+         , @cReportLineNo     NVARCHAR(5)
 
-   SET @nContinuePrint     = 0
-   SET @b_Success          = 0  
-   SET @n_ErrNo            = 0  
-   SET @c_ErrMsg           = '' 
-   SET @cSQL               = ''
-   SET @cSQLParam          = ''
-   SET @cFieldName1        = ''
-   SET @cFieldName2        = ''
-   SET @cFieldName3        = ''
-   SET @cFieldName4        = ''
-   SET @cParams1           = ''
-   SET @cParams2           = ''
-   SET @cParams3           = ''
-   SET @cParams4           = ''
-   SET @IsAggregate1       = 0
-   SET @IsAggregate2       = 0
-   SET @IsAggregate3       = 0
-   SET @IsAggregate4       = 0
-   SET @cModuleID          = 'TPPACK'
+   SET @b_Success       = 0  
+   SET @n_ErrNo         = 0  
+   SET @c_ErrMsg        = '' 
+   SET @cSQL            = ''
+   SET @cSQLParam       = ''
+   SET @cFieldName1     = ''
+   SET @cFieldName2     = ''
+   SET @cFieldName3     = ''
+   SET @cFieldName4     = ''
+   SET @cParams1        = ''
+   SET @cParams2        = ''
+   SET @cParams3        = ''
+   SET @cParams4        = ''
+   SET @IsAggregate1    = 0
+   SET @IsAggregate2    = 0
+   SET @IsAggregate3    = 0
+   SET @IsAggregate4    = 0
+   SET @cModuleID       = 'TPPACK'
+   SET @cCustomLabelSP  = ''
+   SET @cReportType     = 'TPFULLCTNLBL'
+
+   IF NOT EXISTS (SELECT 1 
+                  FROM ORDERS O (NOLOCK)
+                  INNER JOIN PICKDETAIL PD (NOLOCK) 
+                  ON O.OrderKey = PD.OrderKey
+                  WHERE O.OrderKey = @cOrderKey
+                  AND O.OrderGroup = 'B2B'
+                  AND PD.UOM = '2'
+   )
+   BEGIN
+      GOTO EXIT_SP
+   END
 
    IF @bPrintLabelFlag = 1
    BEGIN
-      IF NOT EXISTS (SELECT 1
-                     FROM WMREPORT WMR (NOLOCK) 
-                     JOIN WMREPORTDETAIL WMRD (NOLOCK) 
-                     ON WMR.ReportID =WMRD.ReportID
-                     WHERE WMRD.StorerKey  = @cStorerKey 
-                     AND WMR.ModuleID = @cModuleID
-                     AND WMRD.IsPaperPrinter <> 'Y'
-                     AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
-                     AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
+      IF NOT EXISTS ( SELECT 1
+                  FROM WMREPORT WMR (NOLOCK) 
+                  JOIN WMREPORTDETAIL WMRD (NOLOCK) 
+                  ON WMR.ReportID =WMRD.ReportID
+                  WHERE WMRD.StorerKey  = @cStorerKey 
+                  AND WMR.ReportType = @cReportType
+                  AND WMR.ModuleID = @cModuleID
+                  AND WMRD.IsPaperPrinter <> 'Y'
+                  AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
+                  AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
       )  
       BEGIN 
          SET @n_Continue = 3
-         SET @n_ErrNo = 13801
+         SET @n_ErrNo = 11851
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No records found in WMReport.'
          GOTO EXIT_SP
       END
@@ -117,6 +141,7 @@ BEGIN
                   JOIN WMREPORTDETAIL WMRD (NOLOCK) 
                   ON WMR.ReportID = WMRD.ReportID
                   WHERE WMRD.Storerkey = @cStorerKey
+                  AND WMR.ReportType = @cReportType
                   AND WMR.ModuleID = @cModuleID
                   AND WMRD.IsPaperPrinter <> 'Y'
                   AND (WMR.KeyFieldName1 = '' OR WMR.KeyFieldName1 IS NULL)
@@ -125,7 +150,7 @@ BEGIN
       )
       BEGIN
          SET @n_Continue = 3
-         SET @n_ErrNo = 13802
+         SET @n_ErrNo = 11852
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
          GOTO EXIT_SP
       END
@@ -138,11 +163,12 @@ BEGIN
             , ISNULL(WMR.KeyFieldName2, '')
             , ISNULL(WMR.KeyFieldName3, '')
             , ISNULL(WMR.KeyFieldName4, '')
-            , WMR.ReportType
+            , IsNull(WMRD.ReportLineNo, '')
       FROM WMREPORT WMR (NOLOCK)
       JOIN WMREPORTDETAIL WMRD (NOLOCK) 
       ON WMR.ReportID = WMRD.ReportID
       WHERE WMRD.Storerkey = @cStorerKey
+      AND WMR.ReportType = @cReportType
       AND WMR.ModuleID = @cModuleID
       AND WMRD.IsPaperPrinter <> 'Y'
       AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
@@ -156,7 +182,7 @@ BEGIN
                                  , @cFieldName2
                                  , @cFieldName3
                                  , @cFieldName4
-                                 , @cReportType
+                                 , @cReportLineNo
       WHILE @@FETCH_STATUS = 0
       BEGIN
          SET @IsAggregate1 = CASE WHEN @cFieldName1 <> '' AND (
@@ -196,7 +222,7 @@ BEGIN
                      WHERE StorerKey = @cStorerKey
                      AND ConfigKey = 'TPS-PrintAfterPacked'
                      AND sValue = '1'
-         ) AND @bIsLastCarton = 1 
+         )  AND @bIsLastCarton = 1
          BEGIN 
             SET  @cSQL = ' SELECT  @cParams1 = '+ @cFieldName1  
                      SELECT @cSQL = IIF(@cFieldName2 <> '', @cSQL + ',@cParams2=' + @cFieldName2, @cSQL) 
@@ -275,12 +301,21 @@ BEGIN
                SET @cPrinterInGroup = ''  
 
                -- Check if report print to a specific printer in group  
-               SELECT @cPrinterInGroup = PrinterID  
-               FROM rdt.RDTREPORTTOPRINTER (NOLOCK)  
-               WHERE Function_ID = '838'  
-               AND StorerKey = @cStorerKey  
-               AND ReportType = @cReportType
-               AND PrinterGroup = @cLabelPrinter  
+               -- UWP-43135 Start
+               SELECT TOP 1 @cPrinterInGroup = RTP.PrinterID 
+               FROM rdt.RDTREPORTTOPRINTER RTP (NOLOCK) 
+               INNER JOIN WMREPORTDETAIL WMRD (NOLOCK)
+               ON RTP.ReportType = WMRD.ReportID 
+               AND RTP.StorerKey = WMRD.StorerKey 
+               AND RTP.ReportLineNo = WMRD.ReportLineNo
+               INNER JOIN WMREPORT WMR (NOLOCK)
+               ON WMR.ReportID = WMRD.ReportID 
+               AND WMR.ModuleID = @cModuleID
+               WHERE WMRD.StorerKey = @cStorerKey  
+               AND WMR.ReportType = @cReportType
+               AND RTP.PrinterGroup = @cLabelPrinter  
+               AND WMRD.ReportLineNo = @cReportLineNo  --1.2
+               -- UWP-43135 End
 
                IF @cPrinterInGroup = ''  
                BEGIN  
@@ -295,7 +330,7 @@ BEGIN
                IF @cPrinterInGroup = ''  
                BEGIN  
                   SET @n_Continue = 3
-                  SET @n_ErrNo = 13803    
+                  SET @n_ErrNo = 11853    
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not found PrinterID in PrinterGroup.'  
                   GOTO EXIT_SP  
                END
@@ -321,6 +356,7 @@ BEGIN
                , @c_KeyValue2    = @cParams2        
                , @c_KeyValue3    = @cParams3     
                , @c_KeyValue4    = @cParams4    
+               , @c_KeyValue5    = @cReportLineNo
                , @b_Success      = @b_Success         OUTPUT      
                , @n_Err          = @n_ErrNo           OUTPUT
                , @c_ErrMsg       = @c_ErrMsg          OUTPUT
@@ -328,7 +364,7 @@ BEGIN
                , @b_SCEPreView   = 0         
                , @c_JobIDs       = @ctempLabelJobIDs  OUTPUT    
                , @c_AutoPrint    = 'N'     
-            
+         
          IF @n_ErrNo <> 0   
          BEGIN  
             SET @n_Continue = 3 
@@ -344,7 +380,7 @@ BEGIN
                                     , @cFieldName2
                                     , @cFieldName3
                                     , @cFieldName4
-                                    , @cReportType
+                                    , @cReportLineNo
       END
       CLOSE CUR_LBL
       DEALLOCATE CUR_LBL
@@ -367,35 +403,10 @@ BEGIN
 
    IF @bPrintPaperFlag = 1
    BEGIN
-      IF (
-      @bIsDiscrete = 1
-      AND EXISTS (SELECT 1 
-                  FROM PICKDETAIL (NOLOCK)
-                  WHERE OrderKey = @cOrderKey
-                  AND [Status] < '5'
-                 )
-      ) 
-      OR
-      (
-      @bIsDiscrete = 0
-      AND EXISTS (SELECT 1 
-                  FROM PICKDETAIL PD (NOLOCK)
-                  WHERE EXISTS (SELECT 1
-                                FROM LOADPLANDETAIL LPD (NOLOCK)
-                                WHERE LPD.LoadKey = @cLoadKey
-                                AND LPD.OrderKey = PD.OrderKey
-                               )
-                  AND PD.[Status] < '5'
-                 )
-      )
-      BEGIN
-         GOTO EXIT_SP
-      END
-
       IF NOT EXISTS ( SELECT 1 
                   FROM WMREPORT WMR (NOLOCK) 
                   JOIN WMREPORTDETAIL WMRD (NOLOCK)  
-                  ON WMR.ReportID = WMRD.ReportID
+                  ON WMR.ReportID =WMRD.ReportID
                   WHERE WMRD.StorerKey  = @cStorerKey 
                   AND WMR.ModuleID = @cModuleID
                   AND WMRD.IsPaperPrinter = 'Y'
@@ -403,7 +414,7 @@ BEGIN
       )  
       BEGIN
          SET @n_Continue = 3
-         SET @n_ErrNo = 13804
+         SET @n_ErrNo = 11854
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Paper: No records found in WMReport.'
          GOTO EXIT_SP
       END
@@ -421,7 +432,7 @@ BEGIN
       )
       BEGIN
          SET @n_Continue = 3
-         SET @n_ErrNo = 13805
+         SET @n_ErrNo = 11855
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Paper: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
          GOTO EXIT_SP
       END 
@@ -434,7 +445,7 @@ BEGIN
             , ISNULL(WMR.KeyFieldName2, '')
             , ISNULL(WMR.KeyFieldName3, '')
             , ISNULL(WMR.KeyFieldName4, '')
-            , WMR.ReportType
+            , ISNULL(WMRD.ReportLineNo, '')
       FROM WMREPORT WMR (NOLOCK)
       JOIN WMREPORTDETAIL WMRD (NOLOCK) 
       ON WMR.ReportID = WMRD.ReportID
@@ -452,7 +463,8 @@ BEGIN
                                     , @cFieldName2
                                     , @cFieldName3
                                     , @cFieldName4
-                                    , @cReportType
+                                    , @cReportLineNo
+
       WHILE @@FETCH_STATUS = 0
       BEGIN
          SET @IsAggregate1 = CASE WHEN @cFieldName1 <> '' AND (
@@ -551,13 +563,22 @@ BEGIN
             BEGIN  
                SET @cPrinterInGroup = ''  
 
-               -- Check if report print to a specific printer in group  
-               SELECT @cPrinterInGroup = PrinterID  
-               FROM rdt.RDTREPORTTOPRINTER (NOLOCK)  
-               WHERE Function_ID = '838'  
-               AND StorerKey = @cStorerKey  
-               AND ReportType = @cReportType
-               AND PrinterGroup = @cPaperPrinter  
+               -- Check if report print to a specific printer in group 
+               -- UWP-43135 Start
+               SELECT TOP 1 @cPrinterInGroup = RTP.PrinterID 
+               FROM rdt.RDTREPORTTOPRINTER RTP (NOLOCK) 
+               INNER JOIN WMREPORTDETAIL WMRD (NOLOCK)
+               ON RTP.ReportType = WMRD.ReportID 
+               AND RTP.StorerKey = WMRD.StorerKey 
+               AND RTP.ReportLineNo = WMRD.ReportLineNo
+               INNER JOIN WMREPORT WMR (NOLOCK)
+               ON WMR.ReportID = WMRD.ReportID 
+               AND WMR.ModuleID = @cModuleID
+               WHERE WMRD.StorerKey = @cStorerKey  
+               AND WMR.ReportType = @cReportType
+               AND RTP.PrinterGroup = @cLabelPrinter  
+               -- UWP-43135 End
+               AND WMRD.ReportLineNo = @cReportLineNo -- 1.2
 
                IF @cPrinterInGroup = ''  
                BEGIN  
@@ -572,7 +593,7 @@ BEGIN
                IF @cPrinterInGroup = ''  
                BEGIN  
                   SET @n_Continue = 3
-                  SET @n_ErrNo = 13806    
+                  SET @n_ErrNo = 11856    
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Paper: Not found PrinterID in PrinterGroup.'  
                   GOTO EXIT_SP  
                END
@@ -597,23 +618,22 @@ BEGIN
                , @c_KeyValue1    = @cParams1        
                , @c_KeyValue2    = @cParams2        
                , @c_KeyValue3    = @cParams3     
-               , @c_KeyValue4    = @cParams4    
+               , @c_KeyValue4    = @cParams4   
+               , @c_KeyValue5    = @cReportLineNo
                , @b_Success      = @b_Success            OUTPUT      
                , @n_Err          = @n_ErrNo              OUTPUT
                , @c_ErrMsg       = @c_ErrMsg             OUTPUT
                , @c_PrintSource  = @cPrintSource        
                , @b_SCEPreView   = 0         
-               , @c_JobIDs       = @ctempPaperJobIDs    OUTPUT    
+               , @c_JobIDs       = @cPrintPaperJobIDs    OUTPUT    
                , @c_AutoPrint    = 'N'     
       
          IF @n_ErrNo <> 0   
          BEGIN  
-            SET @n_Continue = 3  
+            SET @n_Continue = 3 
             GOTO EXIT_SP  
          END   
-         
-         SET @cPrintPaperJobIDs = IIF(@cPrintPaperJobIDs <> '', @cPrintPaperJobIDs + '|' + @ctempPaperJobIDs, @ctempPaperJobIDs)
-
+      
          FETCH NEXT FROM CUR_PAPER INTO  @cReportID
                                        , @cPrintSource
                                        , @cDefaultPrinterID
@@ -621,7 +641,7 @@ BEGIN
                                        , @cFieldName2
                                        , @cFieldName3
                                        , @cFieldName4
-                                       , @cReportType
+                                       , @cReportLineNo
       END
       CLOSE CUR_PAPER
       DEALLOCATE CUR_PAPER

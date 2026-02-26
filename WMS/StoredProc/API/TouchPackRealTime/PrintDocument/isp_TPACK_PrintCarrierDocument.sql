@@ -4,39 +4,22 @@ SET QUOTED_IDENTIFIER OFF
 GO
   
 /*********************************************************************************/
-/* Store procedure: isp_TPACK_PrintQCLabel_Std                                   */
+/* Store procedure: isp_TPACK_PrintCarrierDocument                               */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
-/* Purpose        : Standard Print QC Label                                      */
+/* Purpose        : Standard Print Carrier Document thru IML                     */
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
-/* 2025-12-31   1.0  GCH225     Created                                          */
+/* 2026-02-23   1.0  GCH225     UWP-48263 Created                                */
 /*********************************************************************************/
 
-CREATE OR ALTER  PROC [API].[isp_TPACK_PrintQCLabel_Std] (
-     @cType                NVARCHAR(30)      = ''
-   , @bIsDiscrete          BIT               = 0
-   , @bIsCustom            BIT               = 0
-   , @cPickSlipNo          NVARCHAR(10)      = ''
-   , @cOrderKey            NVARCHAR(10)      = ''
-   , @cLoadKey             NVARCHAR(10)      = ''
-   , @cDropID              NVARCHAR(20)      = ''
-   , @cStorerKey           NVARCHAR(15)      = ''
-   , @cFacility            NVARCHAR(5)       = ''
-   , @nCartonNo            INT               = 0
-   , @c_UserID             NVARCHAR(256)     = ''  
-   , @cLangCode            NVARCHAR(3)       = ''
-   , @bIsLastCarton        BIT               = 0
-   , @bPrintLabelFlag      BIT               = 0
-   , @bPrintPaperFlag      BIT               = 0
-   , @cLabelPrinter        NVARCHAR(30)      = ''
-   , @cPaperPrinter        NVARCHAR(30)      = ''
-   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
-   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
-   , @nContinuePrint       INT               = 0   OUTPUT
-   , @b_Success            INT               = 0   OUTPUT  
-   , @n_ErrNo              INT               = 0   OUTPUT
-   , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
+CREATE OR ALTER  PROC [API].[isp_TPACK_PrintCarrierDocument] (
+     @cStorerKey  NVARCHAR(15)   = ''
+   , @cLabelNo    NVARCHAR(20)   = ''
+   , @cOrderKey   NVARCHAR(10)   = ''
+   , @bSuccess    INT            = 0   OUTPUT  
+   , @nErrNo      INT            = 0   OUTPUT
+   , @cErrMsg     NVARCHAR(250)  = ''  OUTPUT
 )
 AS
 BEGIN  
@@ -45,20 +28,25 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
 
-   DECLARE @n_Continue           INT            = 1  
-         , @n_StartCnt           INT            = @@TRANCOUNT  
+   DECLARE @n_Continue        INT            = 1  
+         , @n_StartCnt        INT            = @@TRANCOUNT
 
-   DECLARE @cModuleID            NVARCHAR(30)
-         , @cReportType          NVARCHAR(30)
-         , @cSQL                 NVARCHAR(MAX)
-         , @cSQLParam            NVARCHAR(MAX)
-         , @cReportID            NVARCHAR(10)
-         , @cPrintSource         NVARCHAR(30)
-         , @cDefaultPrinterID    NVARCHAR(30)
-         , @groupByFields        NVARCHAR(MAX)
-         , @cPrinterInGroup      NVARCHAR(10)
-         , @ctempLabelJobIDs     NVARCHAR(MAX)
-   
+   DECLARE @cModuleID         NVARCHAR(30)
+         , @cSQL              NVARCHAR(MAX)
+         , @cSQLParam         NVARCHAR(MAX)
+         , @cReportID         NVARCHAR(10)
+         , @cPrintSource      NVARCHAR(30)
+         , @cDefaultPrinterID NVARCHAR(30)
+         , @groupByFields     NVARCHAR(MAX)
+         , @cPrinterInGroup   NVARCHAR(10)
+         , @ctempLabelJobIDs  NVARCHAR(MAX)
+         , @cLabelPrinter     NVARCHAR(30)
+         , @cUserID           NVARCHAR(256)
+         , @cPickSlipNo       NVARCHAR(20)
+         , @nCartonNo         INT
+         , @cFacility         NVARCHAR(20)
+         , @cLangCode         NVARCHAR(10)
+
    DECLARE @cFieldName1       NVARCHAR(MAX)
          , @cFieldName2       NVARCHAR(MAX)
          , @cFieldName3       NVARCHAR(MAX)
@@ -72,50 +60,88 @@ BEGIN
          , @IsAggregate3      BIT = 0
          , @IsAggregate4      BIT = 0
 
-   SET @nContinuePrint     = 0
-   SET @b_Success          = 0  
-   SET @n_ErrNo            = 0  
-   SET @c_ErrMsg           = '' 
-   SET @cSQL               = ''
-   SET @cSQLParam          = ''
-   SET @cFieldName1        = ''
-   SET @cFieldName2        = ''
-   SET @cFieldName3        = ''
-   SET @cFieldName4        = ''
-   SET @cParams1           = ''
-   SET @cParams2           = ''
-   SET @cParams3           = ''
-   SET @cParams4           = ''
-   SET @IsAggregate1       = 0
-   SET @IsAggregate2       = 0
-   SET @IsAggregate3       = 0
-   SET @IsAggregate4       = 0
-   SET @cModuleID          = 'TPPACK'
+   SET @bSuccess        = 0  
+   SET @nErrNo          = 0  
+   SET @cErrMsg         = '' 
+   SET @cSQL            = ''
+   SET @cSQLParam       = ''
+   SET @cFieldName1     = ''
+   SET @cFieldName2     = ''
+   SET @cFieldName3     = ''
+   SET @cFieldName4     = ''
+   SET @cParams1        = ''
+   SET @cParams2        = ''
+   SET @cParams3        = ''
+   SET @cParams4        = ''
+   SET @IsAggregate1    = 0
+   SET @IsAggregate2    = 0
+   SET @IsAggregate3    = 0
+   SET @IsAggregate4    = 0
+   SET @cModuleID       = 'TPPACK'
+   SET @cLabelPrinter   = ''
+   SET @cLangCode       = 'ENG'
 
-   IF @bPrintLabelFlag = 0
+   SELECT @cUserID = EditWho
+        , @cPickSlipNo = PickSlipNo
+        , @nCartonNo = CartonNo
+   FROM PACKDETAIL (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+   AND LabelNo = @cLabelNo
+   
+   IF EXISTS(SELECT 1
+              FROM PACKHEADER (NOLOCK)
+              WHERE PickSlipNo = @cPickSlipNo
+              AND OrderKey = @cOrderKey
+   )
    BEGIN
-      SET @n_Continue = 3
-      SET @n_ErrNo = 19999
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Invalid bPrintLabelFlag. Failed to perform print QC label.'
-      GOTO EXIT_SP
+      SELECT @cFacility = Facility
+      FROM ORDERS (NOLOCK)
+      WHERE OrderKey = @cOrderKey
    END
-      
-   SET @cReportType = 'TPSHIPPLBL'
+   ELSE
+   BEGIN
+      SELECT @cFacility = O.Facility
+      FROM ORDERS O (NOLOCK)
+      WHERE EXISTS (SELECT 1 
+                    FROM LOADPLANDETAIL LPD (NOLOCK)
+                    WHERE LPD.OrderKey = @cOrderKey
+                    AND LPD.LoadKey = O.ExternOrderKey
+      )
+   END
+
+   SELECT @cLabelPrinter = PrinterID
+   FROM API.AppPrinter P (NOLOCK)
+   WHERE EXISTS ( SELECT 1 
+                  FROM API.AppWorkstation W (NOLOCK) 
+                  WHERE W.Workstation = P.Workstation
+                  AND EXISTS (SELECT 1 
+                              FROM API.AppSection S (NOLOCK) 
+                              WHERE S.DeviceID = W.DeviceID
+                              AND S.UserID = @cUserID
+                              AND S.ScanNo = @cPickSlipNo
+                              )
+               )
+            
    IF NOT EXISTS (SELECT 1
                   FROM WMREPORT WMR (NOLOCK) 
                   JOIN WMREPORTDETAIL WMRD (NOLOCK) 
                   ON WMR.ReportID =WMRD.ReportID
-                  WHERE WMRD.StorerKey  = @cStorerKey 
-                  AND WMR.ReportType = @cReportType
+                  WHERE WMRD.StorerKey = @cStorerKey 
+                  AND EXISTS(SELECT 1
+                             FROM CODELKUP CLK (NOLOCK)
+                             WHERE CLK.LISTNAME = 'TPACK-ReportType'
+                             AND CLK.Code = WMR.ReportType
+                             AND CLK.StorerKey = WMRD.StorerKey
+                  )
                   AND WMR.ModuleID = @cModuleID
                   AND WMRD.IsPaperPrinter <> 'Y'
-                  AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
+                  AND (WMRD.UserName = '' OR WMRD.UserName = @cUserID)
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
    )  
    BEGIN 
       SET @n_Continue = 3
-      SET @n_ErrNo = 11851
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No records found in WMReport.'
+      SET @nErrNo = 11851
+      SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Label: No records found in WMReport.'
       GOTO EXIT_SP
    END
 
@@ -123,18 +149,23 @@ BEGIN
                FROM WMREPORT WMR (NOLOCK)
                JOIN WMREPORTDETAIL WMRD (NOLOCK) 
                ON WMR.ReportID = WMRD.ReportID
-               WHERE WMRD.Storerkey = @cStorerKey
-               AND WMR.ReportType = @cReportType
+               WHERE WMRD.StorerKey = @cStorerKey
+               AND EXISTS( SELECT 1
+                           FROM CODELKUP CLK (NOLOCK)
+                           WHERE CLK.LISTNAME = 'TPACK-ReportType'
+                           AND CLK.Code = WMR.ReportType
+                           AND CLK.StorerKey = WMRD.StorerKey
+                        )
                AND WMR.ModuleID = @cModuleID
                AND WMRD.IsPaperPrinter <> 'Y'
                AND (WMR.KeyFieldName1 = '' OR WMR.KeyFieldName1 IS NULL)
-               AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
+               AND (WMRD.UserName = '' OR WMRD.UserName = @cUserID)
                AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
    )
    BEGIN
       SET @n_Continue = 3
-      SET @n_ErrNo = 11852
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
+      SET @nErrNo = 11852
+      SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Label: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
       GOTO EXIT_SP
    END
 
@@ -149,11 +180,16 @@ BEGIN
    FROM WMREPORT WMR (NOLOCK)
    JOIN WMREPORTDETAIL WMRD (NOLOCK) 
    ON WMR.ReportID = WMRD.ReportID
-   WHERE WMRD.Storerkey = @cStorerKey
-   AND WMR.ReportType = @cReportType
+   WHERE WMRD.StorerKey = @cStorerKey
+   AND EXISTS( SELECT 1
+               FROM CODELKUP CLK (NOLOCK)
+               WHERE CLK.LISTNAME = 'TPACK-ReportType'
+               AND CLK.Code = WMR.ReportType
+               AND CLK.StorerKey = WMRD.StorerKey
+            )
    AND WMR.ModuleID = @cModuleID
    AND WMRD.IsPaperPrinter <> 'Y'
-   AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
+   AND (WMRD.UserName = '' OR WMRD.UserName = @cUserID)
    AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
    ORDER BY WMR.ReportID        
    OPEN CUR_LBL
@@ -198,34 +234,16 @@ BEGIN
                            UPPER(@cFieldName4) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
                         ) THEN 1 ELSE 0 END
 
-      IF EXISTS(SELECT 1
-                  FROM STORERCONFIG (NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                  AND ConfigKey = 'TPS-PrintAfterPacked'
-                  AND sValue = '1'
-      ) AND @bIsLastCarton = 1 
-      BEGIN 
-         SET  @cSQL = ' SELECT  @cParams1 = '+ @cFieldName1  
-                  SELECT @cSQL = IIF(@cFieldName2 <> '', @cSQL + ',@cParams2=' + @cFieldName2, @cSQL) 
-                  SELECT @cSQL = IIF(@cFieldName3 <> '', @cSQL + ',@cParams3=' + @cFieldName3, @cSQL)
-                  SELECT @cSQL = IIF(@cFieldName4 <> '', @cSQL + ',@cParams4=' + @cFieldName4, @cSQL)
-         SET @cSQL = @cSQL 
-                     + ' FROM PACKDETAIL (NOLOCK) '
-                     + ' WHERE StorerKey = @cStorerKey '
-                     + ' AND PickSlipNo = @cPickSlipNo '
-      END
-      ELSE
-      BEGIN 
-         SET  @cSQL = ' SELECT  @cParams1 = '+ @cFieldName1  
-                  SELECT @cSQL = IIF(@cFieldName2 <> '', @cSQL + ',@cParams2=' + @cFieldName2, @cSQL) 
-                  SELECT @cSQL = IIF(@cFieldName3 <> '', @cSQL + ',@cParams3=' + @cFieldName3, @cSQL)
-                  SELECT @cSQL = IIF(@cFieldName4 <> '', @cSQL + ',@cParams4=' + @cFieldName4, @cSQL)
-         SET @cSQL = @cSQL 
-                     + ' FROM PACKDETAIL (NOLOCK) '
-                     + ' WHERE StorerKey = @cStorerKey '
-                     + ' AND PickSlipNo = @cPickSlipNo '
-                     + ' AND CartonNo = @nCartonNo '
-      END
+   
+      SET  @cSQL = ' SELECT  @cParams1 = '+ @cFieldName1  
+               SELECT @cSQL = IIF(@cFieldName2 <> '', @cSQL + ',@cParams2=' + @cFieldName2, @cSQL) 
+               SELECT @cSQL = IIF(@cFieldName3 <> '', @cSQL + ',@cParams3=' + @cFieldName3, @cSQL)
+               SELECT @cSQL = IIF(@cFieldName4 <> '', @cSQL + ',@cParams4=' + @cFieldName4, @cSQL)
+      SET @cSQL = @cSQL 
+                  + ' FROM PACKDETAIL (NOLOCK) '
+                  + ' WHERE StorerKey = @cStorerKey '
+                  + ' AND PickSlipNo = @cPickSlipNo '
+                  + ' AND CartonNo = @nCartonNo '
 
       SET @groupByFields = ''
 
@@ -293,7 +311,12 @@ BEGIN
             ON WMR.ReportID = WMRD.ReportID 
             AND WMR.ModuleID = @cModuleID
             WHERE WMRD.StorerKey = @cStorerKey  
-            AND WMR.ReportType = @cReportType
+            AND EXISTS( SELECT 1
+                        FROM CODELKUP CLK (NOLOCK)
+                        WHERE CLK.LISTNAME = 'TPACK-ReportType'
+                        AND CLK.Code = WMR.ReportType
+                        AND CLK.StorerKey = WMRD.StorerKey
+                     )
             AND RTP.PrinterGroup = @cLabelPrinter  
             -- UWP-43135 End
 
@@ -310,8 +333,8 @@ BEGIN
             IF @cPrinterInGroup = ''  
             BEGIN  
                SET @n_Continue = 3
-               SET @n_ErrNo = 11853    
-               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not found PrinterID in PrinterGroup.'  
+               SET @nErrNo = 11853    
+               SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Not found PrinterID in PrinterGroup.'  
                GOTO EXIT_SP  
             END
 
@@ -328,7 +351,7 @@ BEGIN
             , @c_ReportID     = @cReportID         
             , @c_Storerkey    = @cStorerKey         
             , @c_Facility     = @cFacility        
-            , @c_UserName     = @c_UserID   
+            , @c_UserName     = @cUserID   
             , @c_ComputerName = ''
             , @c_PrinterID    = @cLabelPrinter         
             , @n_NoOfCopy     = '1'     
@@ -336,21 +359,19 @@ BEGIN
             , @c_KeyValue2    = @cParams2        
             , @c_KeyValue3    = @cParams3     
             , @c_KeyValue4    = @cParams4    
-            , @b_Success      = @b_Success         OUTPUT      
-            , @n_Err          = @n_ErrNo           OUTPUT
-            , @c_ErrMsg       = @c_ErrMsg          OUTPUT
+            , @bSuccess       = @bSuccess         OUTPUT      
+            , @n_Err          = @nErrNo           OUTPUT
+            , @c_ErrMsg       = @cErrMsg          OUTPUT
             , @c_PrintSource  = @cPrintSource        
             , @b_SCEPreView   = 0         
             , @c_JobIDs       = @ctempLabelJobIDs  OUTPUT    
             , @c_AutoPrint    = 'N'     
             
-      IF @n_ErrNo <> 0   
+      IF @nErrNo <> 0   
       BEGIN  
          SET @n_Continue = 3 
          GOTO EXIT_SP  
       END
-
-      SET @cPrintLabelJobIDs = IIF(@cPrintLabelJobIDs <> '', @cPrintLabelJobIDs + '|' + @ctempLabelJobIDs, @ctempLabelJobIDs)
 
       FETCH NEXT FROM CUR_LBL INTO @cReportID
                                  , @cPrintSource
@@ -366,7 +387,7 @@ BEGIN
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
    BEGIN      
-      SET @b_Success = 0      
+      SET @bSuccess = 0      
       IF @@TRANCOUNT > @n_StartCnt AND @@TRANCOUNT = 1 
       BEGIN               
          ROLLBACK TRAN      
@@ -382,7 +403,7 @@ EXIT_SP:
    END      
    ELSE      
    BEGIN      
-      SELECT @b_Success = 1      
+      SELECT @bSuccess = 1      
       WHILE @@TRANCOUNT > @n_StartCnt      
       BEGIN      
          COMMIT TRAN      
@@ -395,5 +416,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON [API].[isp_TPACK_PrintQCLabel_Std] TO NSQL
+GRANT EXECUTE ON [API].[isp_TPACK_PrintCarrierDocument] TO NSQL
 GO

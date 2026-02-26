@@ -24,6 +24,7 @@ GO
 /* 2026-02-03   3.1  JWF011     UWP-48096: Add AuditLog for Carton Type change      */
 /* 2026-02-04   3.2  JWF011     UWP-48244: Add Recartonization check rule           */
 /* 2026-02-13   3.3  GCH225     UWP-48895: Bug fix AuditLog Carton Type Change      */
+/* 2026-02-24   3.4  GCH225     UWP-49353: Fix for Hold status for specific cases   */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_UpdatePackInfo] (
@@ -122,7 +123,7 @@ BEGIN
    END
 
    -- Recartonization Check Rule
-   IF @cCartonStatus IN ('CLOSED', 'HOLD')
+   IF @cCartonStatus IN ('CLOSED')
    AND EXISTS( SELECT 1 
                FROM STORERCONFIG (NOLOCK)
                WHERE Storerkey = @cStorerKey
