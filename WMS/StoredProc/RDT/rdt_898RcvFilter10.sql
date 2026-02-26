@@ -12,6 +12,7 @@ GO
 /*                                                                        */
 /* Date        Rev    Author      Purposes                                */
 /* 2025-11-02  1.0.0  Dennis      FCR-8472 Create                         */
+/* 2026-02-25  1.1.0  NYE018      FCR-10500 Consider only YYYYMM for lot3 */
 /**************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_898RcvFilter10
@@ -71,7 +72,7 @@ BEGIN
          CASE @CurrentField
             WHEN 'Lottable01' THEN '     AND Lottable01 = ' + QUOTENAME(@cLottable01,'''')
             WHEN 'Lottable02' THEN '     AND Lottable02 = ' + QUOTENAME(@cLottable02,'''')
-            WHEN 'Lottable03' THEN '     AND Lottable03 = ' + QUOTENAME(@cLottable03,'''')
+            WHEN 'Lottable03' THEN '     AND LEFT(Lottable03, 6) = ' + QUOTENAME(LEFT(@cLottable03, 6),'''') -- FCR-10500 (NYE018)
             WHEN 'Lottable04' THEN '     AND Lottable04 = ' + QUOTENAME(CONVERT( NVARCHAR(20), @dLottable04,120),'''')
             ELSE ''
             END
