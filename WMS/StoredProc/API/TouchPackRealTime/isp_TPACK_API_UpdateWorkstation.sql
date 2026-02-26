@@ -174,7 +174,11 @@ BEGIN
 
 
    --update new deviceID
-   IF NOT EXISTS (SELECT TOP 1 1 FROM api.AppWorkstation WHERE Workstation = @cWorkstation AND deviceID ='')
+   IF EXISTS (SELECT TOP 1 1 FROM api.AppWorkstation WHERE Workstation = @cWorkstation AND deviceID =@cDeviceID)
+   BEGIN
+      GOTO PROCEED
+   END
+   ELSE
    BEGIN
       SET @b_Success = 0
       SET @n_ErrNo = 10656

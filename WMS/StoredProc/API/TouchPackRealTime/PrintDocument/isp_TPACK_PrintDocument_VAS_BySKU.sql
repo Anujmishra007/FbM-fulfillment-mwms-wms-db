@@ -186,7 +186,7 @@ BEGIN
    END
 
    IF NOT EXISTS (SELECT 1
-                  FROM WORKORDERDETAIL WMRD (NOLOCK)
+                  FROM WMREPORTDETAIL WMRD (NOLOCK)
                   JOIN WMREPORT WMR (NOLOCK) 
                   ON WMR.ReportID = WMRD.ReportID                   
                   WHERE WMRD.ReportID = @ReportID
@@ -212,7 +212,7 @@ BEGIN
          , ISNULL(WMR.KeyFieldName3, '') AS KeyFieldName3
          , ISNULL(WMR.KeyFieldName4, '') AS KeyFieldName4
          , 1 AS IsSKUReport
-   FROM WORKORDERDETAIL WMRD (NOLOCK)
+   FROM WMREPORTDETAIL WMRD (NOLOCK)
    JOIN WMREPORT WMR (NOLOCK) 
    ON WMR.ReportID = WMRD.ReportID 
    WHERE WMRD.ReportID = @ReportID
@@ -220,7 +220,7 @@ BEGIN
    AND WMR.ModuleID = @cModuleID
    AND WMRD.StorerKey = @cStorerKey
    AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
-   AND WMRD.ReportType='TPVAS'
+   AND WMR.ReportType='TPVAS'
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
