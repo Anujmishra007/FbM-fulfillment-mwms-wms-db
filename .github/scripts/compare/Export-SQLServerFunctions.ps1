@@ -54,11 +54,15 @@ param(
     [string]$SchemaFilter
 )
 
-# Function to sanitize filename
+# Function to sanitize filename (handles both OS-specific and GitHub Actions artifact restrictions)
 function Get-SafeFileName {
     param([string]$Name)
+    # GitHub Actions artifacts don't allow: " : < > | * ? \r \n
+    # Also include OS-specific invalid chars
     $invalidChars = [IO.Path]::GetInvalidFileNameChars() -join ''
-    $pattern = "[{0}]" -f [regex]::Escape($invalidChars)
+    $additionalInvalid = '":;<>|*?'  # Explicitly add chars that may not be caught on Linux
+    $allInvalid = $invalidChars + $additionalInvalid
+    $pattern = "[{0}]" -f [regex]::Escape($allInvalid)
     return $Name -replace $pattern, '_'
 }
 
