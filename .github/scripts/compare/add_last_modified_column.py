@@ -53,14 +53,27 @@ def preserve_hyperlinks(ws):
     Returns a list of (cell_ref, target, display_text) tuples.
     """
     hyperlinks = []
-    for hyperlink in ws.hyperlinks:
-        cell = ws[hyperlink.ref]
-        display_text = cell.value
-        hyperlinks.append({
-            'ref': hyperlink.ref,
-            'target': hyperlink.target,
-            'display': display_text
-        })
+
+    # Try new openpyxl API first (ws.hyperlinks)
+    if hasattr(ws, 'hyperlinks') and ws.hyperlinks:
+        for hyperlink in ws.hyperlinks:
+            cell = ws[hyperlink.ref]
+            display_text = cell.value
+            hyperlinks.append({
+                'ref': hyperlink.ref,
+                'target': hyperlink.target,
+                'display': display_text
+            })
+    else:
+        # Fallback: iterate through cells to find hyperlinks
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.hyperlink:
+                    hyperlinks.append({
+                        'ref': cell.coordinate,
+                        'target': cell.hyperlink.target,
+                        'display': cell.value
+                    })
     return hyperlinks
 
 
@@ -68,8 +81,12 @@ def restore_hyperlinks(ws, hyperlinks, col_shift=1, insert_col=2):
     """
     Restore hyperlinks with shifted cell references.
     """
-    # Clear existing hyperlinks
-    ws.hyperlinks = []
+    # Clear existing hyperlinks if the attribute exists
+    if hasattr(ws, 'hyperlinks'):
+        try:
+            ws.hyperlinks = []
+        except (AttributeError, TypeError):
+            pass  # Older openpyxl versions may not support assignment
 
     for hl in hyperlinks:
         old_ref = hl['ref']
