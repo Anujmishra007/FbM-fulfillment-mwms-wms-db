@@ -14,6 +14,7 @@ GO
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-08-15 1.0  CYU027   UWP-12109 - Created                         */
 /* 2024-10-08 1.1  Dennis   FCR-867 New work flow                       */
+/* 2025-08-12 1.2  Dennis   UWP-39283 Fix Bug                           */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PalletLoading] (
@@ -474,7 +475,7 @@ BEGIN
              @cLoc     = LLI.Loc,
              @cPackKey = SKU.PACKKey
       FROM LOTxLOCxID LLI WITH(NOLOCK)
-              INNER JOIN SKU WITH(NOLOCK) ON SKU.Sku = LLI.Sku
+      INNER JOIN SKU WITH(NOLOCK) ON SKU.Sku = LLI.Sku AND LLI.StorerKey = SKU.StorerKey
       WHERE SKU.ALTSKU = @cAltSku
         AND LLI.StorerKey = @cStorerKey
       GROUP BY LLI.SKU, LLI.Loc, SKU.PACKKey
@@ -556,7 +557,7 @@ BEGIN
                       @cLot     = LLI.Lot,
                       @cID      = LLI.ID
          FROM LOTxLOCxID LLI WITH (NOLOCK)
-            INNER JOIN SKU WITH (NOLOCK) ON SKU.Sku = LLI.Sku
+         INNER JOIN SKU WITH (NOLOCK) ON SKU.Sku = LLI.Sku AND LLI.StorerKey = SKU.StorerKey
          WHERE SKU.sku = @cSku
             AND LLI.StorerKey = @cStorerKey
          ORDER BY (LLI.qty-LLI.qtyallocated-LLI.qtypicked) DESC

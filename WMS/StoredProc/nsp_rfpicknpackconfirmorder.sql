@@ -1,6 +1,7 @@
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_rfpicknpackconfirmorder]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[nsp_rfpicknpackconfirmorder]
 GO
+/* 10-Oct-2025 SSA01    1.0  UWP-42248 -Enhanced session management      */
 
 CREATE PROC nsp_rfpicknpackconfirmorder (
 	@c_storerkey	 NVARCHAR(15),
@@ -71,8 +72,8 @@ BEGIN
 				-- update pickdetail
 				UPDATE PICKDETAIL
 				SET    PickSlipNo = @c_pickslipno,
-				       EditWho    = sUser_sName(), 
-				       EditDate   = GetDate(),
+				       EditWho    = dbo.fnc_GetUserName(),        --(SSA01)
+				       EditDate   = dbo.fnc_GetDate(),    --(SSA01)
 						 Trafficcop = NULL
 				FROM PICKDETAIL JOIN LOC
 					ON PICKDETAIL.Loc = LOC.Loc

@@ -9,8 +9,10 @@ GO
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date       Rev  Author     Purposes                                  */
-/* 2024-05-21 1.0  Dennis     FCR-336 Check Digit                       */
+/* Date       Rev   Author    Purposes                                  */
+/* 2024-05-21 1.0   Dennis    FCR-336 Check Digit                       */
+/* 2025-08-26 1.1.0 NickT     FCR-7251 lenght of LOCCHECKDIGIT can be   */
+/*                            less than CheckDigitLengthForLocation     */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_LOCLookUp_CheckDigit (
@@ -36,6 +38,7 @@ AS
    DECLARE
    @nRowCount            INT,
    @cPalletTypeInUse     NVARCHAR( 5),
+   @cCheckDigit          NVARCHAR( 2),
    @nCheckDigit          INT,
    @cActLoc              NVARCHAR( 20),
    @cPalletTypeSave      NVARCHAR( 10),
@@ -43,20 +46,19 @@ AS
    @cOriginalLOC         NVARCHAR( 10)
 
    SELECT
-      @nCheckDigit = CheckDigitLengthForLocation
+      @cCheckDigit = CheckDigitLengthForLocation
    FROM dbo.FACILITY WITH (NOLOCK)
    WHERE facility = @cFacility
 
-   SET @cCheckDigitLOC =  RIGHT(RTRIM(@cLOC), @nCheckDigit)
-   SET @cOriginalLOC = LEFT(RTRIM(@cLOC), CASE WHEN LEN(@cLOC)-@nCheckDigit > 0 THEN LEN(@cLOC)-@nCheckDigit ELSE 1 END)
+   SET @nCheckDigit = ISNULL(TRY_CAST(@cCheckDigit AS INT), -1)
 
    IF @nCheckDigit > 0 
    BEGIN
       SELECT @cActLoc = loc 
       FROM dbo.LOC WITH (NOLOCK)
-      WHERE Facility = @cFacility 
-      AND LOC = @cOriginalLOC 
-      AND LOCCHECKDIGIT = @cCheckDigitLOC
+      WHERE Facility = @cFacility
+      AND LEN(LOCCHECKDIGIT) <= @nCheckDigit
+      AND LOC + LOCCHECKDIGIT = @cLOC
 
       SET @nRowCount = @@ROWCOUNT
       IF @nRowCount > 1

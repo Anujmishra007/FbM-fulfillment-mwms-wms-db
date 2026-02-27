@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 19-Apr-2023 WLChooi  1.0   DevOps Combine Script                     */
+/* 10-Oct-2025 SSA01    1.1  UWP-42248 -Enhanced session management     */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLWAV58_PK]
    @c_Wavekey NVARCHAR(10)
@@ -136,10 +137,10 @@ BEGIN
        , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
        , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
        , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (getdate())          --(SSA01)
+       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())      --(SSA01)
+       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (getdate())          --(SSA01)
+       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())       --(SSA01)
        , [TrafficCop]           [NVARCHAR](1)    NULL
        , [ArchiveCop]           [NVARCHAR](1)    NULL
        , [OptimizeCop]          [NVARCHAR](1)    NULL

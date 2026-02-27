@@ -24,7 +24,8 @@
 /* 2012-02-25 1.1  ChewKP     Bug Fixes (ChewKP01)                      */  
 /* 2016-09-30 1.2  Ung        Performance tuning                        */    
 /* 2018-10-26 1.3  Gan        Performance tuning                        */
-/* 2024-10-08 1.4  JCH507     UWP-25454 Data convertion error at st6    */   
+/* 2024-10-08 1.4  JCH507     UWP-25454 Data convertion error at st6    */
+/* 2026-06-19 0.0  Jack       !!!Cutover.Use V0 repo for work!!!        */   
 /************************************************************************/  
 CREATE PROC [RDT].[rdtfnc_UCCReturn] (  
 @nMobile    int,  

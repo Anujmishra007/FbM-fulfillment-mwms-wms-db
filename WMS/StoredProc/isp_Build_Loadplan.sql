@@ -68,6 +68,8 @@ GO
 /*                              NVARCHAR(250) to NVARCHAR(4000) (SY01)  */
 /* 2022/11/10   NJOW11    v3.3  log @n_NoOfOrderToRelease to buildloadlog*/
 /*                              UDF02 and fix Max order to release      */
+/* 2025/10/10   SSA01     v3.4  UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/
 CREATE  OR ALTER PROC [dbo].[isp_Build_Loadplan]
    @cParmCode              NVARCHAR(10),
@@ -1349,8 +1351,8 @@ BEGIN
                                END,
           Status    = @c_Status,  -- (Wan06) '0',
           Trafficcop = NULL,
-          EditDate = GETDATE(),
-          EditWho = SUSER_SNAME()
+          EditDate = dbo.fnc_GetDate(),   --(SSA01)
+          EditWho = dbo.fnc_GetUserName()               --(SSA01)
       WHERE LoadKey = @c_LoadKey
 
       IF @@ERROR <> 0

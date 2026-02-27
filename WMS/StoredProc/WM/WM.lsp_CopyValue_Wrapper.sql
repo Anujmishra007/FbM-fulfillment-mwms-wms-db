@@ -8,7 +8,7 @@ GO
 /* Copyright: LFL                                                        */  
 /* Written by: Wan                                                       */  
 /*                                                                       */  
-/* Purpose: LFWM-3648 - [CN]NIKE_TradeReturnASNReceipt_¡±Copy value to    */
+/* Purpose: LFWM-3648 - [CN]NIKE_TradeReturnASNReceipt_ï¿½ï¿½Copy value to    */
 /*          support all details in one receiptkey                        */                                                       
 /*                                                                       */  
 /* Called By:                                                            */  
@@ -23,6 +23,7 @@ GO
 /* 2023-02-12 Wan      1.0   Created & DevOps Combine Script             */
 /* 2023-05-22 Wan01    1.1   LFWM-3964: Fix Where Clause Issue- SP SQL   */
 /*                           vary from SQL search button                 */
+/* 2025-01-21 SWT01    1.2   Enhanced session management                */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_CopyValue_Wrapper]  
    @c_TableName            NVARCHAR(50)         --TableName To Copy From and To
@@ -45,6 +46,7 @@ BEGIN
    DECLARE 
            @n_StartTCnt INT            = @@TRANCOUNT
          , @n_Continue  INT            = 1
+         , @b_ExecuteAs BIT            = 0
          
          , @c_CopyValue NVARCHAR(4000) = ''
          , @c_SQL       NVARCHAR(4000) = ''
@@ -59,20 +61,24 @@ BEGIN
       SET @n_Err = 0 
       SET @c_Errmsg = ''
       
+      -- (SWT01) Enhanced session management - Start
       IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''
       BEGIN
          EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
          IF @n_Err <> 0 
          BEGIN
             GOTO EXIT_SP
          END
-    
-         EXECUTE AS LOGIN = @c_UserName
+
+         IF @b_ExecuteAs = 1
+            EXECUTE AS LOGIN = @c_UserName
       END
+      -- (SWT01) Enhanced session management - End
       
       SET @c_SPName = 'WM.lsp_CopyValue_' + RTRIM(@c_TableName) + '_Std'
 
@@ -88,7 +94,7 @@ BEGIN
                  + ',@c_CopyFromKey2= @c_CopyFromKey2'
                  + ',@c_CopyFromKey3= @c_CopyFromKey3'
                  + ',@c_SearchSQL   = @c_SearchSQL'                                 --(Wan01)        
-                 --+ ',@c_SearchCondition=@c_SearchCondition'                       --(Wan01)               
+                 --+ ',@c_SearchCondition=@c_SearchCondition'                       
                  + ',@b_Success     = @b_Success   OUTPUT'    
                  + ',@n_Err         = @n_Err       OUTPUT'
                  + ',@c_Errmsg      = @c_Errmsg    OUTPUT'
@@ -99,7 +105,7 @@ BEGIN
                       + ',@c_CopyFromKey2    NVARCHAR(30)'
                       + ',@c_CopyFromKey3    NVARCHAR(30)'
                       + ',@c_SearchSQL       NVARCHAR(MAX)'                         --(Wan01)                    
-                      --+ ',@c_SearchCondition NVARCHAR(MAX)'                       --(Wan01)
+                      --+ ',@c_SearchCondition NVARCHAR(MAX)'                 
                       + ',@b_Success         INT             OUTPUT'    
                       + ',@n_Err             INT             OUTPUT'
                       + ',@c_Errmsg          NVARCHAR(255)   OUTPUT'
@@ -113,7 +119,7 @@ BEGIN
                         ,@c_CopyFromKey2  
                         ,@c_CopyFromKey3 
                         ,@c_SearchSQL                                               --(Wan01)                    
-                        --,@c_SearchCondition                                       --(Wan01)
+                        --,@c_SearchCondition 
                         ,@b_Success       OUTPUT    
                         ,@n_Err           OUTPUT
                         ,@c_Errmsg        OUTPUT
@@ -132,6 +138,10 @@ BEGIN
    END CATCH 
         
    EXIT_SP:  
+
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 
    IF (XACT_STATE()) = -1  
    BEGIN

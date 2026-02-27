@@ -30,6 +30,7 @@ GO
 /*                               (james01)                              */
 /* 12-01-2010   1.3   James      Cater for PrePack (james02)            */
 /* 25-03-2010   1.4   Vicky      Insert to Alert (Vicky02)              */
+/* 10-10-2025   1.5   SSA01      UWP-42248 -Enhanced session management */
 /************************************************************************/
 
 CREATE PROC    nspRFTPA03
@@ -418,9 +419,9 @@ BEGIN
                   Reasonkey = CASE WHEN ISNULL(@c_reasoncode, '') = '' THEN Reasonkey ELSE @c_reasoncode END,
                   --UserPosition = '2', -- This task is being performed at the TOLOC
                   UserPosition = CASE WHEN @c_userposition <> '' THEN @c_userposition ELSE '2' END, -- (Vicky01)
-                  EndTime = getdate(),
-                  EditDate = getdate(),
-                  EditWho = suser_sname()
+                  EndTime = dbo.fnc_GetDate(),    --(SSA01)
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName()       --(SSA01)
              WHERE taskdetailkey = @c_taskdetailkey
 --            END
 

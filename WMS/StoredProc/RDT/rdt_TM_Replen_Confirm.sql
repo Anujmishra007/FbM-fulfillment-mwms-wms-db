@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_TM_Replen_Confirm]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_TM_Replen_Confirm]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -23,9 +19,13 @@ GO
 /* 24-May-2014 1.2  Ung       Fix split task, ListKey not reset         */
 /* 29-Jul-2016 1.3  Ung       SOS324184 Fix split task QTY <> SystemQTY */
 /* 07-Sep-2016 1.4  Ung       SOS372531 Add GroupKey                    */
+/* 17-Jun-2025 1.5  Dennis    FCR-3959 Customize Confirm                */
+/* 09-Nov-2025 1.6  NickT     UWP-43838 Skip completed task             */
+/* 11-Nov-2025 1.7  NickT     UWP-43955 Fix Exception for USA Levis     */
+/* 07-Jan-2026 1.8  NickT     FCR-7928 Add ConfirmSP                    */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_TM_Replen_Confirm] (
+CREATE OR ALTER PROC [rdt].[rdt_TM_Replen_Confirm] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -59,11 +59,51 @@ BEGIN
    DECLARE @cStatus           NVARCHAR( 10)
    DECLARE @cSQL              NVARCHAR( MAX)
    DECLARE @cSQLParam         NVARCHAR( MAX)
+   DECLARE @cConfirmSP        NVARCHAR(20)
 
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
    SET @cNewTaskDetailKey = ''
+
+   -- Get storer config
+   SET @cConfirmSP = rdt.rdtGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
+   IF @cConfirmSP = '0'
+      SET @cConfirmSP = ''
+
+   /***********************************************************************************************
+                                          Custom confirm
+   ***********************************************************************************************/
+   IF @cConfirmSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cConfirmSP AND type = 'P')
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +
+            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY, @cReasonKey, @cListKey, ' +
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+         SET @cSQLParam =
+            ' @nMobile        INT,           ' +
+            ' @nFunc          INT,           ' +
+            ' @cLangCode      NVARCHAR( 3),  ' +
+            ' @cUserName      NVARCHAR( 18), ' +
+            ' @cFacility      NVARCHAR( 5),  ' +
+            ' @cStorerKey     NVARCHAR( 15), ' +
+            ' @cTaskDetailKey NVARCHAR( 10), ' +
+            ' @cDropID        NVARCHAR( 20), ' +
+            ' @nQTY           INT,           ' +
+            ' @cReasonKey     NVARCHAR( 10), ' +
+            ' @cListKey       NVARCHAR( 10), ' +
+            ' @nErrNo         INT           OUTPUT, ' +
+            ' @cErrMsg        NVARCHAR( 20) OUTPUT, ' +
+            ' @nDebug         INT = 0               '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY, @cReasonKey, @cListKey,
+            @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         GOTO Quit
+      END
+   END
 
    -- Get task info
    SET @nSystemQTY = 0
@@ -76,7 +116,8 @@ BEGIN
       @nSystemQTY = SystemQTY, 
       @cLOT = LOT, 
       @cPickMethod = PickMethod, 
-      @cStatus = Status
+      @cStatus = Status,
+      @cReasonKey = ReasonKey
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskDetailKey
 
@@ -87,6 +128,7 @@ BEGIN
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
+
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_TM_Replen_Confirm -- For rollback or commit only our own transaction
 

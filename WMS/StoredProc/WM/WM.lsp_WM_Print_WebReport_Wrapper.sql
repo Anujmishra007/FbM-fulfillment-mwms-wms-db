@@ -23,6 +23,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2023-02-15  Wan      1.0   Created & DevOps Combine Script           */ 
 /* 2023-10-23  Wan01    1.1   Return URL if Print from SCE module       */
+/* 2024-12-19  WLChooi  2.4   LFWM-5019 Support printing LogiReport via */
+/*                            Cloud Print from SCE (WL01)               */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Print_WebReport_Wrapper]
    @n_WMReportRowID      BIGINT 
@@ -57,6 +59,7 @@ CREATE OR ALTER PROC [WM].[lsp_WM_Print_WebReport_Wrapper]
 ,  @n_Err                INT            = 0  OUTPUT
 ,  @c_ErrMsg             NVARCHAR(255)  = '' OUTPUT
 ,  @c_ReturnURL          NVARCHAR(MAX)  = '' OUTPUT
+,  @c_PrintSource        NVARCHAR(10)   = 'JReport'   --WL01
 AS
 BEGIN
    SET NOCOUNT ON
@@ -111,6 +114,13 @@ BEGIN
       --END
       SELECT @b_PrintOverInternet = dbo.fnc_GetCloudPrint (@c_ModuleID, @c_PrintType, @c_PrinterID)
       --(Wan01) - END 
+
+      --WL01 S
+      IF @c_PrintType IN ( 'JReport', 'LogiReport' ) AND @c_PrintSource = 'JReportBE'
+      BEGIN
+         SELECT @b_PrintOverInternet = dbo.fnc_GetCloudPrint ('', @c_PrintType, @c_PrinterID)
+      END
+      --WL01 E
 
       EXEC WM.lsp_WM_Get_WebReport_URL
             @c_ReportID          = @c_ReportID

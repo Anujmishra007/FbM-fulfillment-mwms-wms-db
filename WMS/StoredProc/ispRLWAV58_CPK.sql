@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 19-Apr-2023 WLChooi  1.0   DevOps Combine Script                     */
+/* 10-Oct-2025 SSA01    1.1  UWP-42248 -Enhanced session management     */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLWAV58_CPK]
    @c_Wavekey NVARCHAR(10)
@@ -364,8 +365,8 @@ BEGIN
    UPDATE p WITH (ROWLOCK)
    SET p.TaskDetailKey = up.TaskDetailkey
      , p.TrafficCop = NULL
-     , p.EditWho = SUSER_SNAME()
-     , p.EditDate = GETDATE()
+     , p.EditWho = dbo.fnc_GetUserName()       --(SSA01)
+     , p.EditDate = dbo.fnc_GetDate()    --(SSA01)
    FROM UPD_PD AS up
    JOIN dbo.PICKDETAIL AS p ON p.PickDetailKey = up.PickDetailKey
    WHERE (p.TaskDetailKey = '' OR p.TaskDetailKey IS NULL)

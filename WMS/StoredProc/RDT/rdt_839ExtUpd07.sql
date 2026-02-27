@@ -6,16 +6,19 @@ GO
 
 
 
-/******************************************************************************/
-/* Store procedure: rdt_839ExtUpd07                                           */
-/* Copyright      : Maersk                                                    */ 
-/* Purpose:Extended Puma                                                      */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date         Author    Ver.  Purposes                                      */
-/* 2024-07-16   JHU151    1.0   FCR-428 Created                               */
-/******************************************************************************/
+/*******************************************************************************/
+/* Store procedure: rdt_839ExtUpd07                                            */
+/* Copyright      : Maersk                                                     */ 
+/* Purpose:Extended Puma                                                       */
+/*                                                                             */
+/* Modifications log:                                                          */
+/*                                                                             */
+/* Date         Author    Ver.   Purposes                                      */
+/* 2024-07-16   JHU151    1.0    FCR-428 Created                               */
+/* 2025-04-11   JCH507    1.1.0  FCR-2705 Support new screen                   */
+/* 2025-05-20   JACKC     1.2.0  UWP-24683 Should not send IML once short but  */ 
+/*                                 the current dropid is finished              */
+/*******************************************************************************/
 
 CREATE OR ALTER     PROCEDURE [RDT].[rdt_839ExtUpd07]
     @nMobile         INT                   
@@ -60,9 +63,11 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @bSuccess INT   
-   DECLARE @nExists  INT
-   DECLARE @cShort   NVARCHAR(20)
+   DECLARE @bSuccess    INT   
+   DECLARE @nExists     INT
+   DECLARE @cShort      NVARCHAR(20)
+   DECLARE @nScn        INT
+   DECLARE @nDebugFlag  INT = 0
    
    DECLARE
       @cStoredProcedure  NVARCHAR(50),
@@ -79,6 +84,8 @@ BEGIN
       @cOrderKey         NVARCHAR(10) = '',
       @cLoadKey          NVARCHAR(10) = '',
       @cZone             NVARCHAR(18) = '',
+      @nOpenPKDCount     INT = 0, --V1.2.0
+      @cPickConfirmStatus  NVARCHAR( 1), --V1.2.0
       @c_errmsg          NVARCHAR(250)
       
    SET @nErrNo          = 0
@@ -86,6 +93,9 @@ BEGIN
 
    IF @nFunc = 839
    BEGIN
+
+      SELECT @nScn = scn FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
+
       IF @nStep = 1
       BEGIN
          BEGIN
@@ -171,10 +181,145 @@ BEGIN
          END
       END
 
-    
-      IF @nStep = 5 -- Close DropID or Short pick
+      --V1.2.0 start
+      IF @nStep = 4
       BEGIN
-         IF @nInputKey = 1 AND @cOption IN ('1', '3') -- ENTER and close drop ID --NLT013 option = 1 is short pick, need trigger msg to WCS
+         IF @nDebugFlag = 1
+            SELECT 'Running rdt_839ExtUpd07 Step4'
+
+         -- Get PickHeader info
+         SELECT TOP 1
+            @cOrderKey = OrderKey,
+            @cLoadKey = ExternOrderKey,
+            @cZone = Zone
+         FROM dbo.PickHeader WITH (NOLOCK)
+         WHERE PickHeaderKey = @cPickSlipNo
+
+         SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+         IF @cPickConfirmStatus = '0'
+            SET @cPickConfirmStatus = '5'
+
+         -- Check is there any open pickdetail under current psno.
+         -- if no, means no more task went to the scanout logic, the dropid is closed. Otherwise can continue the picking
+         IF @cZone IN ('XD', 'LB', 'LP')
+         BEGIN
+            IF @cPickZone = ''
+               SELECT @nOpenPKDCount = COUNT(1)
+               FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE RKL.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+                  AND PD.Status < @cPickConfirmStatus
+            ELSE
+               SELECT @nOpenPKDCount = COUNT(1)
+               FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE RKL.PickSlipNo = @cPickSlipNo
+                  AND LOC.PickZone <> @cPickZone
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+                  AND PD.Status < @cPickConfirmStatus
+         END
+
+         -- Discrete PickSlip
+         ELSE IF @cOrderKey <> ''
+         BEGIN
+            IF @cPickZone = ''
+               SELECT @nOpenPKDCount = COUNT(1)
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE PD.OrderKey = @cOrderKey
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+                  AND PD.Status < @cPickConfirmStatus
+            ELSE
+               SELECT @nOpenPKDCount = COUNT(1)
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE PD.OrderKey = @cOrderKey
+                  AND LOC.PickZone <> @cPickZone
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+                  AND PD.Status < @cPickConfirmStatus
+         END
+
+         -- Conso PickSlip
+         ELSE IF @cLoadKey <> ''
+         BEGIN
+            IF @cPickZone = ''
+               SELECT @nOpenPKDCount = COUNT(1)
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE LPD.LoadKey = @cLoadKey
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+                  AND PD.Status < @cPickConfirmStatus
+            ELSE
+               SELECT @nOpenPKDCount = COUNT(1)
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE LPD.LoadKey = @cLoadKey
+                  AND LOC.PickZone <> @cPickZone
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+                  AND PD.Status < @cPickConfirmStatus
+         END
+
+         -- Custom PickSlip
+         ELSE
+         BEGIN
+            IF @cPickZone = ''
+               SELECT @nOpenPKDCount = COUNT(1)
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+                  AND PD.Status < @cPickConfirmStatus
+            ELSE
+               SELECT @nOpenPKDCount = COUNT(1)
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND LOC.PickZone <> @cPickZone
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+                  AND PD.Status < @cPickConfirmStatus
+         END
+
+         IF @nDebugFlag = 1
+            SELECT @nOpenPKDCount AS OpenPickDetailCount, @cDropID AS DropID
+
+         IF @nOpenPKDCount = 0 -- there is no open pickdetail, then rdt go to PSNO screen, trigger IML at this time
+         BEGIN
+            -- Using drop ID, send tote to WCS
+            IF @cDropID <> ''
+            BEGIN
+               IF @nDebugFlag = 1
+                  SELECT 'Send IML'
+
+               --Trigger MSG to WCS 
+               EXEC rdt.rdt_839SendMsgToWCS @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+                  ,@cPickSlipNo
+                  ,@cDropID
+                  ,@nErrNo       OUTPUT
+                  ,@cErrMsg      OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END -- dropid <> ''
+         END
+      END --step_4
+      --V1.2.0 end
+    
+      IF @nStep = 5 OR (@nStep = 99 AND @nScn = 6524) -- Close DropID or Short pick
+      BEGIN
+         --IF @nInputKey = 1 AND @cOption IN ('1', '3') -- ENTER and close drop ID --NLT013 option = 1 is short pick, need trigger msg to WCS
+         IF @nInputKey = 1 AND @cOption IN ('3') -- only send IML when user close the current dropid on short pick screen --V1.2.0
          BEGIN
             -- Using drop ID, send tote to WCS
             IF @cDropID <> ''
@@ -190,7 +335,7 @@ BEGIN
             END
          END
 
-         IF @nInputKey = 1 AND @cOption = '1'
+         IF @nInputKey = 1 AND @cOption IN ('1', '9') --V1.1
          BEGIN
             SELECT 
                   @cReasonCode = code2,

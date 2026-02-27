@@ -25,6 +25,7 @@ GO
 /* 04-APR-2022  Wan02    1.2  DevOps Combine Script                     */
 /* 04-APR-2022  Wan02    1.2  LFWM-3336 - Door Booking SPsDB queries    */
 /*                            clarification                             */
+/* 03-Dec-2025 PPA01     1.3  UWP-44277 Add @c_InOut = 'A' for All      */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE isp_GetBookingBlockSlot
@@ -41,19 +42,31 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
      
    DECLARE @c_bay        NVARCHAR(10),  
-           @n_day        INT  
+           @n_day        INT  ,
+           @c_bay2       NVARCHAR(10)
                                     
    /*CREATE TABLE #TMP_BLOCKSLOT_OUTPUT (
        Loc NVarchar(10) NULL,
        TimeFrom Varchar(10) NULL,
        TimeTo Varchar(10) NULL)*/          
-   
+   --ppa01-S
    SELECT @n_day = DATEPART(dw, @d_Date)
    IF @c_inout = 'I'
+   BEGIN
       SELECT @c_bay = 'BAYIN'
+      SELECT @c_bay2 = 'BAYIN'
+   END
+   ELSE IF @c_inout = 'A'
+   BEGIN
+      SELECT @c_bay = 'BAYIN'
+      SELECT @c_bay2 = 'BAYOUT'
+   END
    ELSE
-      SELECT @c_bay = 'BAYOUT' 
-   
+   BEGIN
+      SELECT @c_bay = 'BAYOUT'
+      SELECT @c_bay2 = 'BAYOUT'
+   END
+   --ppa01-E
    SELECT LOC.Loc,
           CASE WHEN BS.FromTime IS NULL THEN '00:00' 
           ELSE
@@ -75,7 +88,7 @@ BEGIN
    WHERE BS.Facility = @c_Facility
    AND (ISNULL(BS.Day,0)=0 OR BS.Day = @n_day)
    AND ISNULL(BS.Loc,'') <> ''
-   AND LOC.LocationCategory IN('BAY',@c_bay)
+   AND LOC.LocationCategory IN('BAY',@c_bay, @c_bay2)--ppa01
    AND (LOC.Loc = @c_Door OR ISNULL(@c_Door,'')='')
    AND CONVERT(datetime, CONVERT(varchar(12), BS.FromDate, 112)) <= @d_Date
    AND (CONVERT(datetime, CONVERT(varchar(12), BS.ToDate, 112) + ' 23:59:59:998') >= @d_Date OR BS.ToDate IS NULL )
@@ -100,7 +113,7 @@ BEGIN
    WHERE BS.Facility = @c_Facility
    AND (ISNULL(BS.Day,0)=0 OR BS.Day = @n_day)
    AND ISNULL(BS.Loc,'') = ''
-   AND LOC.LocationCategory IN('BAY',@c_bay)
+   AND LOC.LocationCategory IN('BAY',@c_bay, @c_bay2) --ppa01
    AND (LOC.Loc = @c_Door OR ISNULL(@c_Door,'')='')
    AND CONVERT(datetime, CONVERT(varchar(12), BS.FromDate, 112)) <= @d_Date
    AND (CONVERT(datetime, CONVERT(varchar(12), BS.ToDate, 112) + ' 23:59:59:998') >= @d_Date OR BS.ToDate IS NULL )

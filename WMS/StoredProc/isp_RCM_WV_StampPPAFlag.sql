@@ -26,6 +26,8 @@ GO
 /* 28-Oct-2021  WLChooi   1.0   DevOps Combine Script                   */
 /* 28-Mar-2022  WLChooi   1.1   WMS-19326 - Change UserDefine03 to      */
 /*                              UserDefine10 (WL01)                     */
+/* 10-Oct-2025  SSA01     1.2   UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_WV_StampPPAFlag]
    @c_Wavekey  NVARCHAR(10),
@@ -136,8 +138,8 @@ BEGIN
       UPDATE ORDERS
       SET M_vat      = @c_PPA
         , TrafficCop = NULL
-        , EditDate   = GETDATE()
-        , EditWho    = SUSER_SNAME()
+        , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+        , EditWho    = dbo.fnc_GetUserName()     --(SSA01)
       WHERE OrderKey = @c_Orderkey
 
       SELECT @n_err = @@ERROR
@@ -241,8 +243,8 @@ BEGIN
             UPDATE ORDERS
             SET M_vat      = @c_PPA
               , TrafficCop = NULL
-              , EditDate   = GETDATE()
-              , EditWho    = SUSER_SNAME()
+              , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho    = dbo.fnc_GetUserName()     --(SSA01)
             WHERE OrderKey = @c_Orderkey
             
             SELECT @n_err = @@ERROR

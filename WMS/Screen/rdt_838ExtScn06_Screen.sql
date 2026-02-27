@@ -1,0 +1,15 @@
+-- 6708
+DELETE rdt.RDTScn WHERE Scn = 6708 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6708, 'ENG'
+   ,@cLine01 = 'CartonType Suggested:'
+   ,@cLine02 = '%20d01'
+   ,@cLine03 = 'CartonType Scanned:'
+   ,@cLine04 = '%20d02'
+   ,@cLine05 = ''
+   ,@cLine06 = 'Confirm The Change?'
+   ,@cLine07 = '1 = YES'
+   ,@cLine08 = '9 = GO BACK'
+   ,@cLine09 = 'Option:%05i03^DT:INT'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["6","7","8"]}'
+   ,@nFunc = 838

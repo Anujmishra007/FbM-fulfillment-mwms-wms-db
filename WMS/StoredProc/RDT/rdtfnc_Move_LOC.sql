@@ -41,6 +41,9 @@ GO
 /* 2023-02-22 3.1  YeeKung   WMS-21820 Add rdtformat toid (yeekung03)   */
 /* 2024-08-28 3.2  JHU151    FCR-650.   default to id                   */
 /* 2024-10-25 3.3  XLL045    FCR-759-1002 ID  Length Issue              */
+/* 2025-06-04 0.0  JACKC     !!!Cutover. Use V2 verion in V0 Repo for   */ 
+/*                            development!!!                            */
+/* 2026-02-17 4.0  Sreeja    FCR-10368 Check digit validaton            */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_LOC] (
@@ -130,6 +133,10 @@ DECLARE
    @cExtScnSP           NVARCHAR( 20),
    @tExtScnData			VariableTable,
 
+   -- Variables for check digit (FCR-10368, Sreeja)
+   @cLOCCheckDigitSP    NVARCHAR( 20),
+   @cCheckDigitLOC      NVARCHAR( 20),
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -202,6 +209,8 @@ SELECT
    @cLOCLookupSP        = V_String10, --(cc01)
    @cExtendedUpdateSP   = V_String11,
    @cExtScnSP           = V_String12,
+
+   @cLOCCheckDigitSP    = V_String13, -- (FCR-10368, Sreeja) Check digit validation 
 
    @nTotalRec     = V_Integer1,
    @nCurrentRec   = V_Integer2,
@@ -295,6 +304,8 @@ BEGIN
       SET @cExtScnSP = ''
    END
 
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey) -- (FCR-10368, Sreeja)
+
     -- (Vicky06) EventLog - Sign In Function
     EXEC RDT.rdt_STD_EventLog
      @cActionType = '1', -- Sign in function
@@ -328,6 +339,20 @@ BEGIN
          SET @nErrNo = 62551
          SET @cErrMsg = rdt.rdtgetmessage( 62551, @cLangCode, 'DSP') --'LOC needed'
          GOTO Step_1_Fail
+      END
+
+      -- Check digit validation if config exists (FCR-10368, Sreeja)
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+            GOTO Step_1_Fail
+         SET @cFromLOC = @cCheckDigitLOC
       END
 
       -- add from loc prefix (cc01)
@@ -849,6 +874,21 @@ BEGIN
 
          GOTO Quit
       END
+
+      -- Validate ToLOC check digit (FCR-10368, Sreeja)
+      SET @cCheckDigitLOC = @cInField11
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
+         SET @cToLOC = @cCheckDigitLOC
+      END
+
 
       -- add loc prefix (cc01)
      IF @cLOCLookupSP = 1   and @nCounter<1
@@ -1499,6 +1539,8 @@ BEGIN
       V_String10 = @cLOCLookupSP,   --(cc01)
       V_String11 = @cExtendedUpdateSP,
       V_String12 = @cExtScnSP,
+
+      V_String13    = @cLOCCheckDigitSP, --(FCR=10368, SREEJA)
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

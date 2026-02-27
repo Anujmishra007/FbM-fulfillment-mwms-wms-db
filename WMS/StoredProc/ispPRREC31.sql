@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 29-NOV-2023  NJOW    1.0   DEVOPS combine script                        */
+/* 10-Oct-2025  SSA01   1.1  UWP-42248 -Enhanced session management        */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPRREC31]  
 (     @c_Receiptkey  NVARCHAR(10)  
@@ -76,8 +77,8 @@ BEGIN
             UPDATE RECEIPTDETAIL WITH (ROWLOCK)
             SET Lottable02 = @c_Lottable02
               , TrafficCop   = NULL
-              , EditWho      = SUSER_SNAME()
-              , EditDate     = GETDATE()
+              , EditWho      = dbo.fnc_GetUserName()      --(SSA01)
+              , EditDate     = dbo.fnc_GetDate()    --(SSA01)
             WHERE Receiptkey = @c_Receiptkey
             AND ReceiptLineNumber = @c_ReceiptLineNumber2
             

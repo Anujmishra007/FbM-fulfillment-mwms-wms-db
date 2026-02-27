@@ -1,23 +1,18 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Move_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Move_Wrapper]
-GO
-
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/  
 /* Stored Procedure: lsp_Move_Wrapper                                   */  
 /* Creation Date: 15-Mar-2018                                           */  
-/* Copyright: LFLogistics                                               */  
+/* Copyright: Maersk                                                    */  
 /* Written by:                                                          */  
 /*                                                                      */  
 /* Purpose: Inventory Move                                              */  
 /*                                                                      */  
 /* Called By: Inventory Move / TM Inventory Move                        */  
 /*                                                                      */  
-/* PVCS Version: 1.1                                                    */  
+/* PVCS Version: 1.4                                                    */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
@@ -30,25 +25,40 @@ GO
 /*                            Revert when Sub SP Raise error            */
 /* 2020-12-08  Wan03    1.1   LFWM-2440 - UAT Philippines PH SCE Inventory*/
 /*                            Move using ToUOM Not Functional           */
-/************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_Move_Wrapper]
-   @c_Storerkey NVARCHAR(15) 
-  ,@c_Sku NVARCHAR(20)
-  ,@c_Lot NVARCHAR(10)
-  ,@c_Loc NVARCHAR(10)
-  ,@c_Id NVARCHAR(18)
-  ,@c_ToLoc NVARCHAR(10)
-  ,@c_ToID NVARCHAR(18)
-  ,@n_ToQty INT
-  ,@c_ToPackkey NVARCHAR(10) = '' --If TM Move optional
-  ,@c_ToUom NVARCHAR(10)  = ''    --If TM Move optional
-  ,@c_TaskManagerMove CHAR(1) = 'N'
-  ,@b_Success INT = 1 OUTPUT
-   ,@n_Err INT = 0 OUTPUT
-   ,@c_ErrMsg NVARCHAR(250)='' OUTPUT
-  ,@n_WarningNo INT = 0       OUTPUT
-   ,@c_ProceedWithWarning CHAR(1) = 'N' 
-  ,@c_UserName NVARCHAR(128)=''
+/* 2023-11-21  NJOW01   1.2   JSM-192497 -Include movemethod for TM Move*/
+/* 2023-11-21  NJOW01   1.2   DEVOPS Combine Script                     */
+/* 2024-04-23  Wan04    1.3   LFWM-4161 - TM Inventory Move Error       */
+/* 2024-06-18  Wan05    1.4   LFWM-4607 - RG UATPROD-All storer-Print Label*/
+/*                            button is not responding in Inventory Move*/
+/*                            module                                    */
+/* 2025-10-06  Michael  1.5   UWP-42038 - Inventory Moves not executed  */
+/*                            StorerCfg CheckNonCommingleSKUInMove On   */
+/*                            and move to non-CommingleSku loc (ML01)   */
+/* 2025-05-26  SWT01    1.6   Setting Session Context for user name     */
+/* 2025-10-10  SPC040   1.7   Replace SUSER_SNAME with fnc_GetUserName  */
+/* 2025-10-20  Michael  1.8   FCR-8378 - Add StorerConfig               */
+/*                            SerialNoUpdateLotLocID (ML02)             */
+/************************************************************************/    
+CREATE OR ALTER PROCEDURE [WM].[lsp_Move_Wrapper]
+   @c_Storerkey            NVARCHAR(15) 
+  ,@c_Sku                  NVARCHAR(20)
+  ,@c_Lot                  NVARCHAR(10)
+  ,@c_Loc                  NVARCHAR(10)
+  ,@c_Id                   NVARCHAR(18)
+  ,@c_ToLoc                NVARCHAR(10)
+  ,@c_ToID                 NVARCHAR(18)
+  ,@n_ToQty                INT
+  ,@c_ToPackkey            NVARCHAR(10) = ''    --If TM Move optional
+  ,@c_ToUom                NVARCHAR(10) = ''    --If TM Move optional
+  ,@c_TaskManagerMove      CHAR(1)      = 'N'
+  ,@b_Success              INT = 1           OUTPUT
+  ,@n_Err                  INT = 0           OUTPUT
+  ,@c_ErrMsg               NVARCHAR(250)=''  OUTPUT
+  ,@n_WarningNo            INT = 0           OUTPUT
+  ,@c_ProceedWithWarning   CHAR(1)      = 'N' 
+  ,@c_UserName             NVARCHAR(128)= ''
+  ,@c_MoveMethod           NVARCHAR(10) = ''                                              --(Wan04)
+  ,@c_Movekey              NVARCHAR(10) = '' OUTPUT                                       --(Wan05)                 
   AS
 BEGIN 
    SET NOCOUNT ON
@@ -57,80 +67,139 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
     
    SET @n_Err = 0 
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
    BEGIN 
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-             
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-                    
-      EXECUTE AS LOGIN = @c_UserName
-    END
+
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT01) - END
+
    --(Wan01) - START
    BEGIN TRY   
-       DECLARE @n_Continue                   INT
-              ,@n_starttcnt                  INT    
-              ,@c_itrnkey                    NVARCHAR(10) 
-              --,@c_PrintMoveLabel             NVARCHAR(10)
-              ,@c_Facility                   NVARCHAR(5)
-              ,@c_Movekey                    NVARCHAR(10)
-              ,@c_CheckNonCommingleSKUInMove NVARCHAR(10)
-           
-       SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
-            
-       IF @n_continue IN(1,2) AND (@c_ProceedWithWarning <> 'Y' OR @n_WarningNo < 1)
-       BEGIN
-          SELECT @c_Facility = Facility
-          FROM LOC (NOLOCK)
-          WHERE Loc = @c_Loc
+      DECLARE @n_Continue                    INT
+            ,@n_starttcnt                    INT    
+            ,@c_itrnkey                      NVARCHAR(10) 
+            ,@c_PrintMoveLabel               NVARCHAR(10)                           --(Wan05)                  
+            ,@c_Facility                     NVARCHAR(5)
+            --,@c_Movekey                    NVARCHAR(10)                           --(Wan05) 
+            ,@c_CheckNonCommingleSKUInMove   NVARCHAR(10)
+            --,@c_MoveMethod                 NVARCHAR(10)=''                        --(Wan04)--NJOW01
+            ,@c_Sourcekey                    NVARCHAR(20)=''                        --(Wan05) 
+            ,@c_SourceType                   NVARCHAR(30)='lsp_Move_Wrapper'        --(Wan05)              
+            ,@c_SerialNoUpdateLotLocID       NVARCHAR(30) = ''   --ML02
+            ,@c_SerialNoCapture              NVARCHAR(1)  = ''   --ML02
+
+      SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
+
+      SELECT @c_Facility = Facility                                                 --(Wan05) - START
+      FROM LOC (NOLOCK)
+      WHERE Loc = @c_Loc                                                            --(Wan05) - END
+
+      IF @n_continue IN(1,2) AND (@c_ProceedWithWarning <> 'Y' OR @n_WarningNo < 1)
+      BEGIN
+         SELECT @c_CheckNonCommingleSKUInMove = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'CheckNonCommingleSKUInMove')
        
-          SELECT @c_CheckNonCommingleSKUInMove = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'CheckNonCommingleSKUInMove')
-       
-          IF @c_CheckNonCommingleSKUInMove = '1'
-          BEGIN
-             IF EXISTS(SELECT 1
-                         FROM LOC (NOLOCK)
-                          WHERE Loc = @c_ToLoc
-                          AND CommingleSku = '0')
-                BEGIN
-                   IF EXISTS(SELECT COUNT(DISTINCT SKU)
-                              FROM SKUXLOC (NOLOCK)
-                              WHERE SKU <> @c_Sku
-                              AND Loc = @c_ToLoc
-                              AND Qty > 0)                  
-                    BEGIN
-                       SELECT @n_WarningNo = 1
-                   SELECT @n_continue = 3  
-                       SELECT @c_errmsg = 'Move Sku To Non Commingle Location ?'                  
-                    END                                           
-                END
+         IF @c_CheckNonCommingleSKUInMove = '1'
+         BEGIN
+            IF EXISTS(SELECT 1
+                        FROM LOC (NOLOCK)
+                        WHERE Loc = @c_ToLoc
+                        AND CommingleSku = '0')
+            BEGIN
+--ML01               IF EXISTS(SELECT COUNT(DISTINCT SKU)
+               IF EXISTS(SELECT TOP 1 1   --ML01
+                        FROM SKUXLOC (NOLOCK)
+                        WHERE SKU <> @c_Sku
+                        AND Loc = @c_ToLoc
+                        AND Qty > 0)                  
+               BEGIN
+--ML01                  SELECT @n_WarningNo = 1
+--ML01                  SELECT @n_continue = 4                                            --(Wan05)
+--ML01                  SELECT @c_errmsg = 'Move Sku To Non Commingle Location ?'
+--ML01-S
+                  SET @n_Continue = 3
+                  SET @n_err = 552704
+                  SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Not Allow to move commingle sku To Location: '+ISNULL(TRIM(@c_ToLoc),'')+'. (lsp_Move_Wrapper)'
+--ML01-E
+               END                                           
+            END
           END 
        END
+
+      --ML02-S
+      IF @n_continue IN(1,2)
+      BEGIN
+         SELECT @c_SerialNoUpdateLotLocID = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')
+
+         SET @c_SerialNoCapture = ''
+         SELECT @c_SerialNoCapture = SerialNoCapture
+         FROM SKU (NOLOCK)
+         WHERE Storerkey = @c_Storerkey AND Sku = @c_Sku
+
+         IF @c_SerialNoUpdateLotLocID = '1' AND @c_SerialNoCapture IN ('1', '2')
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 552705
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': UI Movment NOT allowed. Please use RDT for SerialNo Move. (lsp_Move_Wrapper)'
+         END
+      END
+      --ML02-E
     
        IF @n_continue IN(1,2) AND @c_TaskManagerMove = 'Y' 
        BEGIN
          IF ISNULL(@c_ToID,'') = ''
             SET @c_ToID = @c_ID 
-          
+         
+         IF @c_MoveMethod IN ('', NULL)                                             --(Wan04) - START
+         BEGIN
+            --NJOW01 S   
+            IF EXISTS(SELECT 1 
+                      FROM LOTXLOCXID LLI (NOLOCK) 
+                      WHERE LLI.qty > 0 
+                      AND LLI.ID <> ''
+                      AND LLI.Storerkey = @c_Storerkey
+                      AND LLI.ID = @c_ID
+                      AND LLI.Loc = @c_Loc
+                      HAVING SUM(LLI.Qty) = @n_ToQty)
+            BEGIN
+               SET @c_MoveMethod = 'FP'
+            END
+            ELSE 
+            BEGIN
+               SET @c_MoveMethod = 'PP'
+            END
+            --NJOW01 E 
+         END                                                                        --(Wan04) - END
+
          IF @c_sku = 'MIXED_SKU'
             SET @c_sku = ''
          BEGIN TRY          
             EXEC dbo.isp_TaskManagerMove 
-                  @c_storerkey = @c_Storerkey, 
-                  @c_sku = @c_Sku, 
-                  @c_fromloc = @c_Loc, 
-                  @c_fromid = @c_ID, 
-                  @c_toloc = @c_ToLoc, 
-                  @c_toid = @c_ToId, 
-                  @n_qty = @n_ToQty, 
-                  @b_Success = @b_Success OUTPUT,
-                  @n_err = @n_err OUTPUT, 
-                  @c_errmsg = @c_errmsg OUTPUT
+                  @c_storerkey   = @c_Storerkey  
+               ,  @c_sku         = @c_Sku 
+               ,  @c_Lot         = @c_Lot                                           --(Wan04) 
+               ,  @c_fromloc     = @c_Loc  
+               ,  @c_fromid      = @c_ID  
+               ,  @c_toloc       = @c_ToLoc 
+               ,  @c_toid        = @c_ToId  
+               ,  @n_qty         = @n_ToQty  
+               ,  @b_Success     = @b_Success   OUTPUT 
+               ,  @n_err         = @n_err       OUTPUT  
+               ,  @c_errmsg      = @c_errmsg    OUTPUT 
+               ,  @c_MoveMethod  = @c_MoveMethod --NJOW01                  
          END TRY
 
          BEGIN CATCH
@@ -154,10 +223,30 @@ BEGIN
             SET @n_continue = 3      
             GOTO EXIT_SP
          END           
-       END   
+      END   
 
-       IF @n_continue IN(1,2) AND @c_TaskManagerMove <> 'Y' 
-       BEGIN 
+      IF @n_continue IN(1,2) AND @c_TaskManagerMove <> 'Y' 
+      BEGIN 
+         SET @c_SourceKey = ''                                                      --(Wan05) - START
+
+         SELECT @c_PrintMoveLabel = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PRINTMOVELABEL')
+
+         IF @c_PrintMoveLabel = '1'
+         BEGIN
+            IF @c_Movekey = ''
+            BEGIN
+               EXEC dbo.nspg_GetKey               
+                    @KeyName = 'MOVEKEY'    
+                  , @fieldlength = 10
+                  , @keystring = @c_Movekey OUTPUT  
+                  , @b_Success = @b_Success OUTPUT    
+                  , @n_err     = @n_err     OUTPUT                              
+                  , @c_errmsg  = @c_errmsg  OUTPUT
+                  , @n_batch  = 1 
+            END 
+            SET @c_SourceKey = @c_Movekey
+         END                                                                        --(Wan05) - END                                                                
+                                                                       
          --(Wan03) - START             
          --IF ISNULL(@c_ToPackkey,'') = ''
          --BEGIN
@@ -205,8 +294,8 @@ BEGIN
             @f_netwgt         = 0 ,
             @f_otherunit1     = 0 ,
             @f_otherunit2     = 0 ,
-            @c_sourcetype     = '' ,
-            @c_sourcekey      = '' ,
+            @c_sourcetype     = @c_Sourcetype,                                      --(Wan05)
+            @c_sourcekey      = @c_SourceKey,                                       --(Wan05)
             @c_packkey        = @c_ToPackkey,
             @c_uom            = @c_ToUom ,
             @b_uomcalc        = 1 ,
@@ -237,8 +326,7 @@ BEGIN
             SET @n_continue = 3      
             GOTO EXIT_SP
          END                     
-       END   
-
+      END   
        /*
        IF @n_continue IN(1,2)
        BEGIN
@@ -271,7 +359,7 @@ BEGIN
                 
                 UPDATE TempMoveSKU
                 SET MoveKey = @c_Movekey  
-                WHERE AddWho = SUSER_SNAME()
+                WHERE AddWho = dbo.fnc_GetUserName()
                 AND ISNULL(Movekey,'')=''
              END                                               
           END
@@ -325,7 +413,11 @@ BEGIN
    BEGIN
       BEGIN TRAN
    END                              -- (Wan01) - END  
-   REVERT                           -- (Wan02) - Move down
+
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        -- (Wan02) - Move down
+
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_Move_Wrapper] TO nSQL 

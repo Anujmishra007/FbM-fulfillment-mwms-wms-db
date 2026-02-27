@@ -14,6 +14,7 @@ GO
 /* 15-11-2019  Chermaine 1.1  WMS-11126 Add userkey override (cc01)     */
 /* 24-06-2022  YeeKung   1.2  JSM-76992 Performance Tune (yeekung01)    */
 /* 03-10-2022  Ung       1.3  WMS-20786 Fix wave not consider priority  */
+/* 27-05-2024  Ung       1.4  WMS-25346 Add DeviceID                    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspTTMRP14]
     @c_UserID    NVARCHAR(18)
@@ -59,6 +60,7 @@ BEGIN
       ,@cPickMethod     NVARCHAR( 10)    
       ,@c_FromLOC       NVARCHAR( 10)   
       ,@cFacility       NVARCHAR( 5)
+      ,@cDeviceID       NVARCHAR( 20)
 
    DECLARE @tDoc TABLE
    (
@@ -102,8 +104,12 @@ BEGIN
    -- Get Last LOCAisle
    SELECT @c_LastLOCAisle = LOCAisle FROM LOC WITH (NOLOCK) WHERE LOC = @c_LastLOC
 
-  -- Get facility
-   SELECT @cFacility = Facility FROM rdt.rdtMobRec WITH (NOLOCK) WHERE UserName = SUSER_SNAME()
+   -- Get session info
+   SELECT 
+      @cFacility = Facility, 
+      @cDeviceID = DeviceID 
+   FROM rdt.rdtMobRec WITH (NOLOCK) 
+   WHERE UserName = SUSER_SNAME()
 
    -- Get wave release sequence
    INSERT INTO @tDoc (WaveKey)
@@ -140,6 +146,7 @@ BEGIN
          AND TaskDetail.Status = '0'
          AND TaskDetail.UserKeyOverRide IN (@c_userid, '')  --(cc01)
          AND TaskDetail.WaveKey=@cWaveKey
+         AND TaskDetail.DeviceID = @cDeviceID
          AND NOT EXISTS( SELECT 1
             FROM TaskDetail T1 WITH (NOLOCK)
             WHERE TaskDetail.GroupKey <> '' 
@@ -452,6 +459,9 @@ BEGIN
          SET @cFoundTask = 'Y'
          BREAK -- Task assiged sucessfully, Quit Now
       END
+
+      CLOSE Cursor_RPFTaskCandidates
+      DEALLOCATE Cursor_RPFTaskCandidates
 
       IF @cFoundTask = 'Y'
          BREAK -- Task assiged sucessfully, Quit Now

@@ -38,6 +38,8 @@ GO
 /*                            inventory, get the most empty loc         */
 /* 2019-05-28  WLChooi  1.7   WMS-9180 - Split line by each qty & Fix   */
 /*                            Freeseat issue (WL01)                     */
+/* 2025-10-10  SSA01    1.8   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC ispBatPA02
            @c_ReceiptKey     NVARCHAR(10)
@@ -1338,8 +1340,8 @@ BEGIN
                   BEGIN
                      UPDATE RECEIPTDETAIL 
                      SET UserDefine10 = CONVERT(NVARCHAR(20), @n_PABookingKey)
-                        ,EditWho = SUSER_SNAME()
-                        ,EditDate= GETDATE()
+                        ,EditWho = dbo.fnc_GetUserName()        --(SSA01)
+                        ,EditDate= dbo.fnc_GetDate()   --(SSA01)
                         ,TrafficCop = NULL
                      WHERE ReceiptKey = @c_ReceiptKey
                      AND ReceiptLineNumber = @c_ReceiptLineUpdate

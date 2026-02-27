@@ -17,7 +17,9 @@
 /* Updates:                                                             */                                                                                            
 /* Date        Author   Ver.  Purposes                                  */          
 /* 17-Feb-2022 YTWan    1.1   Fix Wave.status not update to 9           */          
-/*                            After MBOL Shipped - (JSM-51565)          */             
+/*                            After MBOL Shipped - (JSM-51565)          */
+/* 10-OCT-2025 SSA01    1.2   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/             
 CREATE OR ALTER  PROC [dbo].[isp_GetWaveStatus]          
       @c_WaveKey     NVARCHAR(15)           
@@ -65,8 +67,8 @@ BEGIN
       BEGIN                             
          UPDATE WAVE           
             SET [Status] = @c_Status          
-            ,   EditWho  = SUSER_SNAME()          
-            ,   EditDate = GETDATE()          
+            ,   EditWho  = dbo.fnc_GetUserName()       --(SSA01)
+            ,   EditDate = dbo.fnc_GetDate()   --(SSA01)
             ,   TrafficCop = NULL            
          WHERE Wavekey = @c_WaveKey          
          AND [Status] <> @c_Status          

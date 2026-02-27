@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /*********************************************************************************/    
 /* Trigger: ntrStorerUpdate                                                      */    
 /* Creation Date:                                                                */    
@@ -26,6 +31,7 @@
 /* 27-Apr-2020  CSCHONG       1.4  WMS-12867 (CS01)                              */  
 /* 04-Mar-2022  TLTING   		1.5  WMS-19029 prevent bulk update or delete       */ 
 /* 2022-04-12   kelvinongcy	1.6  amend way for control user run batch (kocy01)	*/
+/* 06-Oct-2025  AK01          1.7  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /*********************************************************************************/    
 CREATE  OR ALTER TRIGGER [dbo].[ntrStorerUpdate] 
 ON [dbo].[STORER]  
@@ -68,7 +74,7 @@ BEGIN
    --IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
    --    AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
    IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
-        AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
+        AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = dbo.fnc_GetUserName())
    BEGIN        
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85811   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
@@ -152,8 +158,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)  
    BEGIN  
       UPDATE STORER WITH (ROWLOCK) 
-         SET EditDate = GETDATE(),  
-             EditWho  = SUSER_SNAME()  
+         SET EditDate = dbo.fnc_GetDate(),  
+             EditWho  = dbo.fnc_GetUserName()  
       FROM INSERTED, DELETED  
       WHERE STORER.StorerKey = INSERTED.StorerKey  
       AND   STORER.StorerKey = DELETED.StorerKey  
@@ -192,7 +198,7 @@ BEGIN
          BEGIN  
             IF (@n_continue = 1 OR @n_continue = 2) -- SOS# 351221  
             BEGIN  
-               SELECT @c_FieldName = 'STR-EditWho', @c_OldValue = '', @c_NewValue = SUSER_SNAME()  
+               SELECT @c_FieldName = 'STR-EditWho', @c_OldValue = '', @c_NewValue = dbo.fnc_GetUserName()  
                SELECT @c_OldValue = EditWho FROM DELETED WHERE Storerkey = @c_Storerkey  
         
                IF @c_OldValue <> @c_NewValue  
@@ -273,4 +279,6 @@ END
 GO
 ALTER TABLE [dbo].[Storer] ENABLE TRIGGER [ntrStorerUpdate]
 GO
+
+
 

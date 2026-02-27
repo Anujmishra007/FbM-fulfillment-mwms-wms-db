@@ -46,6 +46,7 @@ DELETE rdt.RDTScn WHERE Scn = 4643 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4643, 'ENG'
    ,@cLine01 = ''
    ,@cLine02 = 'No more task in LOC'
+   ,@cLine03 = '%10d01'              -- FCR-10366
    ,@cLine04 = ''
    ,@cLine05 = 'Press ENTER or ESC'
    ,@cLine06 = 'to continue'
@@ -160,3 +161,17 @@ EXECUTE rdt.rdtAddScn 6445, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["5","6"],"4":["7","8","9","10"],"5":["11","12"],"6":["13"]}'
    ,@nFunc = 839
+
+   -- 6524 = Short pick screen
+   DELETE rdt.RDTScn WHERE Scn = 6524 AND Lang_Code = 'ENG'
+   EXECUTE rdt.rdtAddScn 6524, 'ENG'
+      ,@cLine01 = ''
+      ,@cLine02 = 'CONFIRM OPTION?' -- WMS-11654
+      ,@cLine03 = ''
+      ,@cLine04 = '1 = SHORT'       -- WMS-11654
+      ,@cLine05 = '2 = BAL PICK LATER' -- WMS-11654
+      ,@cLine06 = '3 = CLOSE DROPID' -- (ChewKP01) 
+      ,@cLine07 = '9 = Alternate PICK LOC' -- (ChewKP01)
+      ,@cLine08 = 'OPTION: %01i01'
+      ,@cLine14 = '%e'
+      ,@nFunc = 839

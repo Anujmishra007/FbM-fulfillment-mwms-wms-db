@@ -1,7 +1,4 @@
-IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrPickingVoiceUpdate]') 
-AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-DROP TRIGGER [dbo].[ntrPickingVoiceUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -24,9 +21,10 @@ GO
 /* Date         Author  Ver.  Purposes                                     */  
 /* 31-03-21     kocy  1.0    Updates EditDate & EditWho                    */
 /*                            On PickingVoice Table                        */ 
+/* 06-Oct-2025  AK01    1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /***************************************************************************/ 
 
-CREATE TRIGGER [dbo].[ntrPickingVoiceUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrPickingVoiceUpdate]
 ON [dbo].[PickingVoice] FOR UPDATE
 AS
 BEGIN
@@ -60,8 +58,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue=2 )
    BEGIN  
       UPDATE [dbo].[PickingVoice]  
-      SET EditDate = GETDATE(),  
-          EditWho = SUSER_SNAME()  
+      SET EditDate = dbo.fnc_GetDate(),  
+          EditWho = dbo.fnc_GetUserName()  
       FROM [dbo].[PickingVoice] WITH (NOLOCK), INSERTED (NOLOCK)  
       WHERE [dbo].[PickingVoice].PickingVoiceKey = INSERTED.PickingVoiceKey 
 
@@ -111,5 +109,6 @@ GO
 
 ALTER TABLE [dbo].[PickingVoice] ENABLE TRIGGER [ntrPickingVoiceUpdate]
 GO
+
 
 

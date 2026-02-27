@@ -1,4 +1,4 @@
-SET QUOTED_IDENTIFIER OFF
+﻿SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
@@ -36,6 +36,8 @@ GO
 /* 23-FEB-2021  Wan04       1.9      WMS-16391 - [CN] ANFQHW_WMS_Transfer Finalize_CR */
 /* 12-Aug-2022  Leong       2.0      JSM-86964 Initialize variable.                   */
 /* 13-Feb-2025  WLChooi     2.1      UWP-30034 Populate PalletType (WL01)             */
+/* 25-JUN-2025  SSA01       2.2      UWP-3982- Added PalletType in inventory          */
+/* 09-Oct-2025  SPC040      2.3      Replace SUSER_SNAME with fnc_GetUserName         */
 /**************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrTransferDetailUpdate]
@@ -108,8 +110,8 @@ BEGIN
          AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE  TRANSFERDETAIL
-      SET  EditDate   = GetDate(),
-           EditWho    = Suser_Sname(),
+      SET  EditDate = dbo.fnc_GetDate(),
+           EditWho = dbo.fnc_GetUserName(),
            TrafficCop = NULL
       FROM TRANSFERDETAIL, INSERTED, DELETED
       WHERE TRANSFERDETAIL.Transferkey = INSERTED.Transferkey
@@ -277,6 +279,8 @@ BEGIN
                ,  @c_ChannelInventoryMgmt  NVARCHAR(10) = '0' -- (SWT02)
                ,  @c_TransferKey           NVARCHAR(10) = ''
                ,  @c_TransferLineNumber    NVARCHAR(5)  = ''
+               ,  @c_FromPalletType        NVARCHAR(10) = ''  --(SSA01)
+               ,  @c_ToPalletType          NVARCHAR(10) = ''  --(SSA01)
 
          DECLARE @c_Bondedflag NVARCHAR(1)
 
@@ -466,8 +470,10 @@ BEGIN
                         @d_ToLottable14           = ToLottable14,
                         @d_ToLottable15           = ToLottable15,
                         @c_FromChannel            = FromChannel, -- (SWT02)
-                        @c_ToChannel              = ToChannel    -- (SWT02)
-                     ,  @n_FromChannel_ID         = FromChannel_ID --(Wan04)
+                        @c_ToChannel              = ToChannel,    -- (SWT02)
+                        @n_FromChannel_ID         = FromChannel_ID, --(Wan04)
+                        @c_FromPalletType         = FromPalletType,     --(SSA01)
+                        @c_ToPalletType           = ToPalletType        --(SSA01)
                FROM INSERTED
                WHERE TransferKey + TransferLineNumber > @c_TransferPrimaryKey
                AND Status = '9'
@@ -612,6 +618,7 @@ BEGIN
                         @b_UOMCalc    = 0,
                         @d_EffectiveDate = @d_EffectiveDate,
                         @c_ItrnKey    = '',
+                        @c_PalletType = @c_FromPalletType,   --(SSA01)
                         @b_Success    = @b_Success OUTPUT,
                         @n_err        = @n_err     OUTPUT,
                         @c_errmsg     = @c_errmsg  OUTPUT
@@ -671,7 +678,7 @@ BEGIN
                         @b_UOMCalc    = 0,
                         @d_EffectiveDate = @d_EffectiveDate,
                         @c_ItrnKey    = '',
-                        @c_PalletType = @c_PalletType,   --WL01
+                        @c_PalletType = @c_ToPalletType,   --WL01 --(SSA01)
                         @b_Success    = @b_Success OUTPUT,
                         @n_err        = @n_err     OUTPUT,
                         @c_errmsg     = @c_errmsg  OUTPUT
@@ -688,8 +695,8 @@ BEGIN
                   SET FromChannel_ID = @n_FromChannel_ID,
                       ToChannel_ID  = @n_ToChannel_ID,
                       TrafficCop = NULL,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),
+                      EditWho = dbo.fnc_GetUserName()
                   WHERE TransferKey = @c_TransferKey
                     AND TransferLineNumber = @c_TransferLineNumber
 
@@ -718,8 +725,8 @@ BEGIN
          BEGIN
             UPDATE TRANSFER
             SET  TRANSFER.OpenQty = TRANSFER.OpenQty - DELETED.FromQty + INSERTED.FromQty,
-                 EditDate = GETDATE(),   --tlting
-                 EditWho = SUSER_SNAME()
+                 EditDate = dbo.fnc_GetDate(),   --tlting
+                 EditWho = dbo.fnc_GetUserName()
             FROM TRANSFER,
             INSERTED,
             DELETED
@@ -737,8 +744,8 @@ BEGIN
             (SELECT Sum(INSERTED.FromQty) FROM INSERTED
             WHERE INSERTED.Transferkey = TRANSFER.Transferkey)
             ),
-            EditDate = GETDATE(),   --tlting
-            EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),   --tlting
+            EditWho = dbo.fnc_GetUserName()
             FROM TRANSFER,DELETED,INSERTED
             WHERE TRANSFER.Transferkey IN (SELECT Distinct Transferkey FROM DELETED)
             AND TRANSFER.Transferkey = DELETED.Transferkey
@@ -778,8 +785,8 @@ BEGIN
 
          UPDATE TRANSFER
          SET  TRANSFER.OpenQty = TRANSFER.OpenQty - INSERTED.FromQty,
-               EditDate = GETDATE(),   --tlting
-               EditWho = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),   --tlting
+               EditWho = dbo.fnc_GetUserName()
          FROM TRANSFER,
          INSERTED,
          DELETED

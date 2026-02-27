@@ -39,6 +39,7 @@ GO
 /* Date         Author    Ver.  Purposes                                */  
 /* 18-May-2015  KTLow     1.1   SOS#336290 - Web Service ITRN (KT01)    */  
 /* 24-Jan-2017  TLTING01  1.2   SET ANSI NULLS Option                   */
+/* 12-Feb-2026  VNI056    1.3   FCR-11002   (VNI01)                     */
 /************************************************************************/  
   
 CREATE PROC isp_ITF_ntrAdjustment  
@@ -100,11 +101,14 @@ BEGIN
    BEGIN  
       IF (ISNULL(RTRIM(@c_TriggerName),'') <> 'ntrAdjustmentHeaderAdd')  
       BEGIN  
-         RETURN  
+        IF (ISNULL(RTRIM(@c_TriggerName),'') <> 'ntrAdjustmentDetailAdd')   --(VNI01)(start)
+        BEGIN
+            RETURN
+        END                                                                 --(VNI01)(end)
       END  
    END  
   
-   IF (ISNULL(RTRIM(@c_SourceTable),'') <> 'ADJUSTMENT')  
+   IF (ISNULL(RTRIM(@c_SourceTable),'') <> 'ADJUSTMENT' AND ISNULL(RTRIM(@c_SourceTable),'') <> 'ADJUSTMENTDETAIL')  --(VNI01)
    BEGIN  
       RETURN  
    END  
@@ -214,23 +218,42 @@ BEGIN
                END -- IF @c_TargetTable = 'TRANSMITLOG3'   
 
                --(KT01) - Start
-               IF @c_TargetTable = 'TRANSMITLOG2'   
-               BEGIN  
-                  EXEC ispGenTransmitLog2 @c_Tablename, @c_AdjustmentKey, '', @c_StorerKey, '' 
-                                          , @b_success OUTPUT  
-                                          , @n_Err OUTPUT  
-                                          , @c_ErrMsg OUTPUT  
-                       
-                  IF @b_success <> 1  
-                  BEGIN  
-                     SET @n_continue = 3  
-                     SET @n_Err = 68001  
-                     SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_Err,0)) +   
-                                     ': Insert into TRANSMITLOG2 Failed. (isp_ITF_ntrAdjustment) ( SQLSvr MESSAGE = ' +   
-                                     ISNULL(LTRIM(RTRIM(@c_ErrMsg)),'') + ' ) '  
-                     GOTO QUIT  
-                  END   
-               END -- IF @c_TargetTable = 'TRANSMITLOG2'  
+                IF @c_TargetTable = 'TRANSMITLOG2'      --(VNI01)(start)
+                BEGIN
+                    IF @c_ConfigKey = 'WSADJADDLOGC' AND
+                    EXISTS(SELECT TOP 1 1 FROM [DBO].[TRANSMITLOG2] WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key3 = @c_Storerkey AND TransmitFlag >= '5')
+                    BEGIN
+                        UPDATE [DBO].[TRANSMITLOG2] WITH (ROWLOCK)
+                        SET transmitflag = '0'
+                        WHERE tablename = @c_Tablename AND key1 = @c_AdjustmentKey AND key3 = @c_Storerkey AND TransmitFlag >= '5'
+
+                        IF @@ERROR <> 0
+                        BEGIN
+                            SELECT @n_continue = 3
+                            SELECT @n_err = 68001
+                            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_Err,0)) +
+                                        ': Update TRANSMITLOG2 Failed. (isp_ITF_ntrAdjustment) ( SQLSvr MESSAGE = ' +
+                                        ISNULL(LTRIM(RTRIM(@c_ErrMsg)),'') + ' ) '
+                            GOTO QUIT
+                        END
+                    END
+                ELSE
+                BEGIN
+                    EXEC ispGenTransmitLog2 @c_Tablename, @c_AdjustmentKey, '', @c_StorerKey, ''
+                                             , @b_success OUTPUT
+                                             , @n_Err OUTPUT
+                                             , @c_ErrMsg OUTPUT
+                    IF @b_success <> 1
+                    BEGIN
+                        SET @n_continue = 3
+                        SET @n_Err = 68001
+                        SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_Err,0)) +
+                                        ': Insert into TRANSMITLOG2 Failed. (isp_ITF_ntrAdjustment) ( SQLSvr MESSAGE = ' +
+                                        ISNULL(LTRIM(RTRIM(@c_ErrMsg)),'') + ' ) '
+                        GOTO QUIT
+                    END
+                END
+            END -- IF @c_TargetTable = 'TRANSMITLOG2'      --(VNI01)(end)
                --(KT01) - End               
             END
   

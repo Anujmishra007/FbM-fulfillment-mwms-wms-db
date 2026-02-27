@@ -6,7 +6,7 @@ GO
 
 /*********************************************************************************/
 /* Store procedure: rdtfnc_PickSKU                                               */
-/* Copyright      : LFLogistics                                                  */
+/* Copyright      : Maersk                                                       */
 /*                                                                               */
 /* Purpose: Pick SKU/UPC                                                         */
 /*                                                                               */
@@ -35,6 +35,15 @@ GO
 /* 2024-07-04   2.7  JHU151     FCR-537 @cDefaultQTY to NVARCHAR(10)             */
 /* 2024-07-08   2.8  JHU151     FCR-330 SSCC code generator                      */
 /* 2024-10-17   2.9  PXL009     FCR-759 ID and UCC Length Issue                  */
+/* 2025-04-29   3.0.0 NickT     UWP-33739 Add Extended Validation SP in step 1   */
+/* 2025-06-05   3.1.0 JACKC     FCR-4328 Add ExtScn to ST4 when short            */
+/* 2025-06-20   0.0.0 Jackc     !!!Cutover. Use V0 repo for work!!!              */
+/* 2025-04-29   3.5.0 NickT      UWP-33739 Add Extended Validation SP in step 1  */
+/* 2025-08-22   3.6   Ung        UWP-39875 Reset @cSuggLOC if PickZone changed   */
+/* 2025-08-22   3.7   Cuize      FCR-7251 Check Digit                            */
+/* 2025-09-18   3.8   Dennis     UWP-41326 Fix CheckDigit Bug                    */
+/* 2025-11-20   3.9   Jackc      FCR-8295 Merge 3.6 from v0 to v2                */
+/*********************************************************************************/
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
@@ -135,6 +144,9 @@ DECLARE
    @cSwapidSP           NVARCHAR(20), 
    @cExtendedScreenSP   NVARCHAR(20),
    @tExtScnData			VariableTable, --(JHU151)
+   @cLOCCheckDigitSP       NVARCHAR( 20), -- (Cuize)
+   @cCheckDigitLOC         NVARCHAR( 20), -- (Cuize)
+
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -170,6 +182,7 @@ DECLARE
 
 DECLARE 
    @cBarcode       NVARCHAR(60),
+   @cMobBarcode    NVARCHAR(2000),
    @cUPC           NVARCHAR(30),
    @cChkLottable01 NVARCHAR( 18), @cChkLottable02 NVARCHAR( 18), @cChkLottable03 NVARCHAR( 18), @dChkLottable04 DATETIME,      @dChkLottable05 DATETIME,
    @cChkLottable06 NVARCHAR( 30), @cChkLottable07 NVARCHAR( 30), @cChkLottable08 NVARCHAR( 30), @cChkLottable09 NVARCHAR( 30), @cChkLottable10 NVARCHAR( 30),
@@ -252,6 +265,9 @@ SELECT
    @cSwapidSP           = V_String40,
    @cExtendedScreenSP   = V_String41,
    @cUserDefine01       = V_String42,
+   @cMobBarcode         = V_Barcode,
+   @cLOCCheckDigitSP    = C_String1,
+
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02, @cFieldAttr02  = FieldAttr02,
@@ -315,7 +331,8 @@ BEGIN
    IF @nStep = 7  GOTO Step_ShortPick        -- Scn = 4696. Confrim Short Pick?
    IF @nStep = 8  GOTO Step_VerifyLottable   -- Scn = 3990. Verify lottable
    IF @nStep = 9  GOTO Step_VerifyID         -- Scn = 4697. Verify ID
-   IF @nStep = 10 GOTO Step_MultiSKU         -- Scn = 3570  Multi SKU screen
+   IF @nStep = 10 GOTO Step_MultiSKU         -- Scn = 3570  Multi SKU
+   IF @nStep = 99 GOTO Step_99               -- Extended Screen
 END
 RETURN -- Do nothing if incorrect step
 
@@ -363,6 +380,9 @@ BEGIN
    SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
       SET @cExtendedScreenSP = ''
+
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+
 
    -- Sign-In
    EXEC RDT.rdt_STD_EventLog
@@ -503,6 +523,63 @@ BEGIN
             SET @nErrNo = 101958
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storer
             GOTO PickSlipNo_Fail
+         END
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cPickZone, @cSuggLOC, @cLOC, @cDropID, @cSKU, ' +  --WC01       
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @nTaskQTY, @nQTY, @cToLOC, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile       INT,           ' +
+               '@nFunc         INT,           ' +
+               '@cLangCode     NVARCHAR( 3),  ' +
+               '@nStep         INT,           ' +
+               '@nInputKey     INT,           ' +
+               '@cFacility     NVARCHAR( 5),  ' +
+               '@cStorerKey    NVARCHAR( 15), ' +
+               '@cPickSlipNo   NVARCHAR( 10), ' +
+               '@cPickZone     NVARCHAR( 10), ' + --WC01  
+               '@cSuggLOC NVARCHAR( 10), ' +
+               '@cLOC          NVARCHAR( 10), ' +
+               '@cDropID       NVARCHAR( 20), ' +
+               '@cSKU          NVARCHAR( 20), ' +
+               '@cLottable01   NVARCHAR( 18), ' +
+               '@cLottable02   NVARCHAR( 18), ' +
+               '@cLottable03   NVARCHAR( 18), ' +
+               '@dLottable04   DATETIME,      ' +
+               '@dLottable05   DATETIME,      ' +
+               '@cLottable06   NVARCHAR( 30), ' +
+               '@cLottable07   NVARCHAR( 30), ' +
+               '@cLottable08   NVARCHAR( 30), ' +
+               '@cLottable09   NVARCHAR( 30), ' +
+               '@cLottable10   NVARCHAR( 30), ' +
+               '@cLottable11   NVARCHAR( 30), ' +
+               '@cLottable12   NVARCHAR( 30), ' +
+               '@dLottable13   DATETIME,      ' +
+               '@dLottable14   DATETIME,      ' +
+               '@dLottable15   DATETIME,      ' +
+               '@nTaskQTY      INT,           ' +
+               '@nQTY          INT,           ' +
+               '@cToLOC        NVARCHAR( 10), ' +
+               '@cOption       NVARCHAR( 1),  ' +
+               '@nErrNo        INT           OUTPUT, ' +
+               '@cErrMsg       NVARCHAR( 20) OUTPUT  '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cPickZone, @cSuggLOC, @cLOC, @cDropID, @cSKU,         
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @nTaskQTY, @nPQTY, @cToLOC, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
          END
       END
 
@@ -791,7 +868,26 @@ BEGIN
             END
          END
       END
+
+      -- Reset suggest LOC, if PickZone changed
+      IF @cOutField05 <> @cPickZone AND @cSuggLOC <> ''
+         SET @cSuggLOC = ''
       SET @cOutField05 = @cPickZone
+
+      IF @cLOC <> ''
+      BEGIN
+         SET @cCheckDigitLOC = @cInField03
+         IF @cLOCCheckDigitSP = '1'
+         BEGIN
+            EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+                 @cCheckDigitLOC    OUTPUT,
+                 @nErrNo      OUTPUT,
+                 @cErrMsg     OUTPUT
+            IF @nErrNo <> 0
+               GOTO LOC_Fail
+            SET @cLOC = @cCheckDigitLOC
+         END
+      END
 
       -- Validate blank
       IF @cLOC = ''
@@ -811,6 +907,8 @@ BEGIN
 
             -- Remain in current screen
             SET @cOutField02 = @cSuggLOC
+            EXEC rdt.rdtSetFocusField @nMobile, 3 -- LOC
+            
             GOTO Quit
          END
          ELSE
@@ -930,7 +1028,10 @@ BEGIN
             GOTO LOC_Fail
          END
       END
-      SET @cOutField03 = @cLOC
+      IF @cLOCCheckDigitSP = '1'
+         SET @cOutField03 = @cInField03
+      ELSE
+         SET @cOutField03 = @cLOC
 
       -- Check DropID format
       IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'DROPID', @cDropID) = 0
@@ -1073,7 +1174,8 @@ BEGIN
       SET @cOutField01 = @cLOC
       SET @cOutField02 = @cDropID
       SET @cOutField03 = @cSKU
-      SET @cOutField04 = '' --@cSKU
+      SET @cOutField04 = '' 
+      SET @cMobBarcode = '' --@cSKU Barcode
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField20 = '' -- ExtendedInfo
@@ -1210,12 +1312,18 @@ Step_SKU:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
+
+      --V3.8 start
       -- Screen mapping
-      SET @cBarcode = @cInField04
-      SET @cUPC = LEFT( @cInField04, 30)
+      --SET @cBarcode = @cInField04
+      --SET @cUPC = LEFT( @cInField04, 30)
+      DECLARE @cUPCBarcode NVARCHAR(2000)
+      SET @cUPCBarcode = LEFT(@cMobBarcode, 2000)
+      SET @cUPC = LEFT(@cMobBarcode, 30)
+      --V3.8 end
 
       -- Skip task
-      IF @cBarcode = '' OR @cBarcode IS NULL
+      IF @cUPCBarcode = '' OR @cUPCBarcode IS NULL
       BEGIN
          -- Prepare next screen var
          SET @cOutField01 = '' -- Option
@@ -1238,7 +1346,7 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cUPCBarcode,
                @cUPC        = @cUPC           OUTPUT,
                @cLottable01 = @cChkLottable01 OUTPUT,
                @cLottable02 = @cChkLottable02 OUTPUT,
@@ -1262,7 +1370,7 @@ BEGIN
             BEGIN
 
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,@cLoc,@cDropid,@cpickslipno,@cBarcode,@cFieldName, ' +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,@cLoc,@cDropid,@cpickslipno,@cUPCBarcode,@cFieldName, ' +
                   ' @cUPC         OUTPUT,@cSKu         OUTPUT,  @nQTY OUTPUT,' +
                   ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
                   ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
@@ -1280,7 +1388,7 @@ BEGIN
                   ' @cLOC         NVARCHAR( 10),   ' +
                   ' @cDropid      NVARCHAR( 20),   ' +
                   ' @cpickslipno  NVARCHAR( 20),   ' +
-                  ' @cBarcode     NVARCHAR( 60),   ' +
+                  ' @cUPCBarcode  NVARCHAR(2000),  ' +
                   ' @cFieldName   NVARCHAR( 10),   ' +
                   ' @cUPC         NVARCHAR( 20)  OUTPUT, ' +
                   ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
@@ -1305,7 +1413,7 @@ BEGIN
                   ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey,@cFacility,@cLoc,@cDropid,@cpickslipno, @cBarcode, 'SKU', --(yeekung05)
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey,@cFacility,@cLoc,@cDropid,@cpickslipno, @cUPCBarcode, 'SKU', --(yeekung05)
                   @cUPC           OUTPUT, @cSKU           OUTPUT, @cDefaultQTY       OUTPUT,
                   @cChkLottable01 OUTPUT, @cChkLottable02 OUTPUT, @cChkLottable03 OUTPUT, @dChkLottable04 OUTPUT, @dChkLottable05 OUTPUT,
                   @cChkLottable06 OUTPUT, @cChkLottable07 OUTPUT, @cChkLottable08 OUTPUT, @cChkLottable09 OUTPUT, @cChkLottable10 OUTPUT,
@@ -1571,7 +1679,7 @@ BEGIN
             '@nStep         INT,           ' +
             '@nAfterStep    INT,           ' +
             '@nInputKey     INT,           ' +
-    '@cFacility     NVARCHAR( 5),  ' +
+            '@cFacility     NVARCHAR( 5),  ' +
             '@cStorerKey    NVARCHAR( 15), ' +
             '@cPickSlipNo   NVARCHAR( 10), ' +
             '@cPickZone     NVARCHAR( 10), ' +
@@ -1633,7 +1741,7 @@ BEGIN
             '@nStep         INT,           ' +
             '@nAfterStep    INT,           ' +
             '@nInputKey     INT,           ' +
-    '@cFacility     NVARCHAR( 5),  ' +
+            '@cFacility     NVARCHAR( 5),  ' +
             '@cStorerKey    NVARCHAR( 15), ' +
             '@cPickSlipNo   NVARCHAR( 10), ' +
             '@cPickZone     NVARCHAR( 10), ' +
@@ -1676,6 +1784,11 @@ BEGIN
       END
    END
 
+   SKU_Fail:
+   BEGIN
+      SET @cOutField04 = '' -- SKU
+   END
+
    IF @cExtendedScreenSP = '0'
    BEGIN
       SET @cExtendedScreenSP = ''
@@ -1685,11 +1798,6 @@ BEGIN
       GOTO Step_99
    END
    GOTO Quit
-
-   SKU_Fail:
-   BEGIN
-      SET @cOutField04 = '' -- SKU
-   END
 END
 GOTO Quit
 
@@ -1833,6 +1941,14 @@ BEGIN
          SET @nStep = @nStep_ShortPick
 
          SET @cOutField01 = '' -- Option
+
+         --V3.1.0 start
+         IF @cExtendedScreenSP <> ''
+         BEGIN
+            GOTO STEP_99
+         END
+         --V3.1.0 end
+
        GOTO Quit
       END
 
@@ -1974,7 +2090,8 @@ BEGIN
       SET @cOutField01 = @cLOC
       SET @cOutField02 = @cDropID
       SET @cOutField03 = @cSKU
-      SET @cOutField04 = '' --@cSKU
+      SET @cOutField04 = ''
+      SET @cMobBarcode = '' --@cSKU
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField20 = '' -- ExtendedInfo
@@ -2066,6 +2183,18 @@ BEGIN
          SET @nErrNo = 101987
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ToLOC
          GOTO Quit
+      END
+
+      SET @cCheckDigitLOC = @cInField01
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+              @cCheckDigitLOC    OUTPUT,
+              @nErrNo      OUTPUT,
+              @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+         SET @cToLOC = @cCheckDigitLOC
       END
 
       -- Get the location
@@ -2325,7 +2454,8 @@ BEGIN
    SET @cOutField01 = @cLOC
    SET @cOutField02 = @cDropID
    SET @cOutField03 = @cSKU
-   SET @cOutField04 = '' --@cSKU
+   SET @cOutField04 = '' 
+   SET @cMobBarcode = '' --@cSKU barcode
    SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
    SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
    SET @cOutField20 = '' -- ExtendedInfo
@@ -2737,7 +2867,8 @@ BEGIN
       SET @cOutField01 = @cLOC
       SET @cOutField02 = @cDropID
       SET @cOutField03 = @cSKU
-      SET @cOutField04 = '' --@cSKU
+      SET @cOutField04 = ''
+      SET @cMobBarcode = '' --SKU Barcode
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField20 = '' -- ExtendedInfo
@@ -3039,6 +3170,7 @@ BEGIN
       SET @cOutField02 = @cDropID
       SET @cOutField03 = @cSKU
       SET @cOutField04 = '' --@cSKU
+      SET @cMobBarcode = '' --@SKU
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField20 = '' -- ExtendedInfo
@@ -3260,7 +3392,8 @@ BEGIN
    SET @cOutField01 = @cLOC
    SET @cOutField02 = @cDropID
    SET @cOutField03 = @cSKU
-   SET @cOutField04 = @cUPC
+   --SET @cOutField04 = @cUPC
+   SET @cMobBarcode = @cUPC --V3.8
    SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
    SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20) -- SKU desc 2
    SET @cOutField20 = '' -- ExtendedInfo
@@ -3279,7 +3412,10 @@ BEGIN
    IF @cExtendedScreenSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-      BEGIN      
+      BEGIN
+         DECLARE @OrignStep INT
+         SET @OrignStep = @nStep
+
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtendedScreenSP, 
@@ -3313,6 +3449,20 @@ BEGIN
          @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
          @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @cExtendedScreenSP in ( 'rdt_830ExtScn02','rdt_830ExtScn03') and @OrignStep = 99
+         BEGIN
+            SET  @cSuggLOC=  @cUDF01
+            SET  @cSuggID =  @cUDF02
+            SET  @cSKU =  @cUDF03
+            SET  @nTaskQTY=  @cUDF04
+            SET  @cLottableCode =  @cUDF05
+            SET  @cSKUDescr  =  @cUDF06
+            SET  @cMUOM_Desc =  @cUDF07
+            SET  @cPUOM_Desc =  @cUDF08
+            SET  @nPUOM_Div  =  @cUDF09
+            SET  @cPPK =  @cUDF10
+         END
 
          IF @nErrNo <> 0
             GOTO Step_99_Fail
@@ -3410,6 +3560,9 @@ BEGIN
       V_string40  = @cSwapidSP,   
       V_String41  = @cExtendedScreenSP,
       V_String42  = @cUserDefine01,
+      V_Barcode   = @cMobBarcode,
+      C_String1  = @cLOCCheckDigitSP, -- (Cuize)
+
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

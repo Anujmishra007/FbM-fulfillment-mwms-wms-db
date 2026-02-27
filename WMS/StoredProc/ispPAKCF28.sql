@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 07-Dec-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 10-Oct-2025  SSA01   1.1  UWP-42248 -Enhanced session management        */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPAKCF28]
 (
@@ -126,8 +127,8 @@ BEGIN
             SET [Weight] = ISNULL(@n_Weight, 0.00)
               , [Cube] = ISNULL(@n_Cube, 0.00)
               , TrafficCop = NULL
-              , EditDate = GETDATE()
-              , EditWho = SUSER_SNAME()
+              , EditDate = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho = dbo.fnc_GetUserName()                 --(SSA01)
             WHERE PickSlipNo = @c_PickSlipNo AND CartonNo = @n_CartonNo
 
             SELECT @n_Err = @@ERROR

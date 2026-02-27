@@ -22,6 +22,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Rev   Purposes                                  */
 /* 18-05-2022   Shong   1.1   Using Try-Catch when insert AutoAllocBatch*/
+/* 10-10-2025   SSA01   1.2   UWP-42248 -Enhanced session management    */
+/*                              and cleanup.                            */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UpdateAutoAllocBatch_Status] (
     @n_AllocBatchNo BIGINT,
@@ -54,8 +56,8 @@ BEGIN
         	      Duration,        	TotalOrderCnt,    [Priority],
         	      UDF01,        	   UDF02,        	   UDF03,
         	      UDF04,        	   UDF05,        	   @c_Status,
-        	      AddWho,        	AddDate,        	SUSER_SNAME(),
-        	      GETDATE(),       	TrafficCop,      	ArchiveCop
+        	      AddWho,        	AddDate,        	dbo.fnc_GetUserName(),          --(SSA01)
+        	      dbo.fnc_GetDate(),       	TrafficCop,      	ArchiveCop            --(SSA01)
               FROM AutoAllocBatch AS aab -- WITH(NOLOCK)
               WHERE aab.AllocBatchNo = @n_AllocBatchNo  
               
@@ -83,8 +85,8 @@ BEGIN
    BEGIN  
       UPDATE AutoAllocBatch    
          SET [Status] = @c_Status,   
-             EditDate = GETDATE(), 
-             EditWho  = SUSER_SNAME()   
+             EditDate = dbo.fnc_GetDate(),    --(SSA01)
+             EditWho  = dbo.fnc_GetUserName()           --(SSA01)
       WHERE AllocBatchNo = @n_AllocBatchNo                         
    END  
    

@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date         Rev  Author   Purposes                                  */
 /* 2023-01-05   1.0  Ung      WMS-21419 Created base on rdt_523ExtPA46  */
+/* 2025-04-23   1.1  NLT013   UWP-32244 Extended Menu No range          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_513SuggestLOC17] (
@@ -81,7 +82,7 @@ BEGIN
       WHERE ListName = 'SEPPAZONE'
          AND Code = @cBUSR4
          AND StorerKey = @cStorerKey
-         AND Code2 = CAST( @nFunc AS NVARCHAR(4))
+         AND Code2 = CAST( @nFunc AS NVARCHAR(11))
 
       -- Get L2, L3, L4
       DECLARE @cLottable02 NVARCHAR( 18)

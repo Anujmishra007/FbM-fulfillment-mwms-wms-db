@@ -25,6 +25,8 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 23/03/2022   ML       1.1  Add NULL to Temp Table                     */
+/* 10/10/2025   SSA01    1.2  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_put_to_store_label_01_rdt] (
@@ -113,7 +115,7 @@ BEGIN
          BEGIN
             UPDATE dbo.PICKDETAIL
                SET DropID = @cDropIDNew
-                 , EditWho = CASE WHEN ISNULL(@as_username,'')<>'' THEN RTRIM(@as_username) ELSE SUSER_SNAME() END
+                 , EditWho = CASE WHEN ISNULL(@as_username,'')<>'' THEN RTRIM(@as_username) ELSE dbo.fnc_GetUserName() END  --(SSA01)
                  , Trafficcop = NULL
              WHERE Storerkey = @as_storerkey
                AND PickdetailKey = @cPickdetailKey

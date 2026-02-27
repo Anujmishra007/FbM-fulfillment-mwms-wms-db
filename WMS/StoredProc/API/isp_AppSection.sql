@@ -6,12 +6,21 @@ GO
 
 /******************************************************************************/
 /* Store procedure: isp_AppSection                                            */
-/* Copyright      : LFLogistics                                               */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-03-13   1.0  Chermaine  Created                                       */
 /* 2021-08-11   1.1  Chermaine  TPS-623 Fix Multiple user line (cc01)         */
 /* 2021-09-05   1.2  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc02)            */
+/* 2024-02-19   1.3  YeeKung    TPS-839 Add Defaultstorer/facility (yeekung02)*/
+/* 2024-03-25   1.4  YeeKung    TPS-899 add max timeout (yeekung01)           */
+/* 2024-12-31   1.5  YeeKung    TPS-995 Change error message (yeekung03)      */ 
+/* 2025-02-20   1.6  yeekung    UWP-27764 remove checking on web (yeekung04)  */
+/* 2025-03-26   1.7  yeekung    UWP-31832 Update and block if use same workstation*/
+/*                              (yeekung05)                                   */
+/* 2025-04-25   2.1  GCH225     Enhanced the whole logic with support V0 & V2 */
+/* 2025-07-22   2.2  GCH225     UWP-38184 Enhanced the lsp_SetUser logic      */
+/* 2025-07-24   2.3  GCH225     UWP-38019 New Shared Workstation Flow         */
 /******************************************************************************/
 
 --App,DeviceID,UserID,ScanNo
@@ -24,132 +33,211 @@ CREATE OR ALTER PROC [API].[isp_AppSection] (
    @n_LogOut   INT = 0  OUTPUT
 )
 AS
-
-SET NOCOUNT ON
-SET QUOTED_IDENTIFIER OFF
-SET ANSI_NULLS OFF
-SET CONCAT_NULL_YIELDS_NULL OFF
-
-DECLARE
-	@cStorerKey    NVARCHAR( 30),
-	@cFacility     NVARCHAR( 5),
-	@cLangCode     NVARCHAR( 3),
-	@cAppName      NVARCHAR( 30),
-	@cDeviceID     NVARCHAR( 50),
-	@cUserID       NVARCHAR( 128),
-   @cScanNo       NVARCHAR( 30),
-   @cType         NVARCHAR( 30),
-   @timeOut       INT,
-   @dNow          DATETIME,
-   @c_UserName    NVARCHAR( 128),
-   @cSCEUserName  NVARCHAR( 128)
-
-SET @dNow = GETDATE()
-
-DECLARE @errMsg TABLE (
-    nErrNo    INT,
-    cErrMsg   NVARCHAR( 1024)
-)
-
---Decode Json Format
---'[{"StorerKey":"NIKESG","Facility":"","AppName":"TouchPad","DeviceID":"Device2","UserID":"chermainecheng","ScanNo":"","cType":"Login"}]
-SELECT @cStorerKey = StorerKey, @cFacility = Facility, @cAppName = AppName, @cDeviceID = DeviceID,  @cUserID=UserID, @cScanNo=ScanNo, @cType = cType, @cLangCode = LangCode
-FROM OPENJSON(@json)
-WITH (
-	   StorerKey   NVARCHAR( 30),
-	   Facility    NVARCHAR( 15),
-	   AppName     NVARCHAR( 30),
-	   DeviceID    NVARCHAR( 50),
-	   UserID      NVARCHAR( 128),
-      ScanNo      NVARCHAR( 30),
-      cType       NVARCHAR( 30),
-      LangCode    NVARCHAR( 3)
-)
-
-SET @cSCEUserName = @cUserID
---SELECT @cStorerKey, @cFacility, @cAppName, @cDeviceID,  @cUserID, @cScanNo, @cType
-
---convert login
-SET @n_Err = 0
-EXEC [WM].[lsp_SetUser] @c_UserName = @cUserID OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-
-EXECUTE AS LOGIN = @cUserID
-
-IF @n_Err <> 0
 BEGIN
-   --INSERT INTO @errMsg(nErrNo,cErrMsg)
-   SET @b_Success = 0
-   SET @n_Err = @n_Err
---   SET @c_ErrMsg = @c_ErrMsg
-   GOTO EXIT_SP
-END
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE
+	   @cStorerKey          NVARCHAR( 30),
+	   @cFacility           NVARCHAR( 5),
+	   @cLangCode           NVARCHAR( 3),
+	   @cAppName            NVARCHAR( 30),
+	   @cDeviceID           NVARCHAR( 50),
+	   @cUserID             NVARCHAR( 128),
+      @cScanNo             NVARCHAR( 30),
+      @cType               NVARCHAR( 30),
+      @timeOut             INT,
+      @dNow                DATETIME,
+      @c_UserName          NVARCHAR( 128),
+      @cWorkStation        NVARCHAR( 30),
+      @nWebFlag            INT,
+      @cSelWorkStation     NVARCHAR( 30),
+      @cClrDeviceID        NVARCHAR(10),
+      @nOutputCount        INT,
+      @cSQL                NVARCHAR(1000),
+      @cSQLParam           NVARCHAR(1000),
+      @b_ExecuteAs         BIT
+
+   SET @dNow = GETDATE()
+   SET @nWebFlag = 0
+   SET @cSelWorkStation = ''
+   SET @cClrDeviceID = '0'
+   SET @b_ExecuteAs = 0
+
+   DECLARE @errMsg TABLE (
+       nErrNo    INT,
+       cErrMsg   NVARCHAR( 1024)
+   )
+
+   --Decode Json Format
+   --'[{"StorerKey":"NIKESG","Facility":"","AppName":"TouchPad","DeviceID":"Device2","UserID":"chermainecheng","ScanNo":"","cType":"Login"}]
+   SELECT @cStorerKey = StorerKey, @cFacility = Facility, @cAppName = AppName, @cDeviceID = DeviceID
+   ,  @cUserID=UserID, @cScanNo=ScanNo, @cType = cType, @cLangCode = LangCode,@cWorkStation= WorkStation
+   FROM OPENJSON(@json)
+   WITH (
+	      StorerKey   NVARCHAR( 30),
+	      Facility    NVARCHAR( 15),
+	      AppName     NVARCHAR( 30),
+	      DeviceID    NVARCHAR( 50),
+	      UserID      NVARCHAR( 128),
+         ScanNo      NVARCHAR( 30),
+         cType       NVARCHAR( 30),
+         LangCode    NVARCHAR( 3),
+         WorkStation NVARCHAR( 30)
+   )
+
+   SET @c_UserName = @cUserID
+
+   SET @n_Err = 0
+   
+   SET @cSQL = 'EXEC WM.lsp_SetUser @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT';
+
+   SET @cSQLParam =  N'@c_UserName NVARCHAR(128) OUTPUT,' +
+                     N'@n_Err INT OUTPUT, ' + 
+                     N'@c_ErrMsg NVARCHAR(125) OUTPUT'
+   --convert login
+   SELECT @nOutputCount=COUNT(1) FROM sys.parameters p (NOLOCK)
+            JOIN sys.objects o (NOLOCK) 
+               ON p.object_id = o.object_id
+            WHERE o.name = 'lsp_SetUser'
+            AND p.is_output = 1
+   IF @nOutputCount = 4 
+   BEGIN
+      SET @cSQL = @cSQL + ', @b_ExecuteAs OUTPUT '
+      SET @cSQLParam = @cSQLParam + ', @b_ExecuteAs BIT OUTPUT'
+
+      EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT, @b_ExecuteAs OUTPUT;
+   END
+   ELSE
+   BEGIN
+      EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
+   END
+   
+   IF @n_Err <> 0
+   BEGIN
+      --INSERT INTO @errMsg(nErrNo,cErrMsg)
+      SET @b_Success = 0
+      SET @n_Err = @n_Err
+      SET @c_ErrMsg = @c_ErrMsg
+      GOTO EXIT_SP
+   END
+
+   IF @nOutputCount = 4
+   BEGIN
+      IF @b_ExecuteAs = 1
+         GOTO ExecuteAs
+      ELSE
+      BEGIN
+         IF SESSION_CONTEXT(N'mwms_user_name') IS NULL
+         BEGIN
+            SET @b_Success = 0
+            SET @n_Err = 1000807
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No Session context found. Function : isp_AppSection'
+            GOTO EXIT_SP
+         END            
+      END
+   END
+   ELSE
+   BEGIN
+      IF @c_UserName LIKE '%' + @cUserID + '%'
+      BEGIN
+ExecuteAs:
+         EXECUTE AS LOGIN = @c_UserName
+         SET @cUserID = @c_UserName
+      END
+   END
+
+   --SELECT @c_UserName AS c_UserName
+   --SELECT @cUserID AS cUserID
+   --select SUSER_SNAME () AS sname
+
+   --Data Validate : Check ScanNo blank
+   IF  @cAppName = '' OR @cDeviceID = '' OR @cUserID = ''
+   BEGIN
+      SET @b_Success = 0
+      SET @n_Err = 1000801
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Insufficient parameter for application process execution. Function : isp_AppSection'
+      GOTO EXIT_SP
+   END
 
 
+   --AppendDeviceID
+   IF @cDeviceID = 'Web'
+   BEGIN
+      SET @cDeviceID = @cDeviceID + @cUserID
+      SET @nWebFlag = 1
 
---SELECT @c_UserName AS c_UserName
---SELECT @cUserID AS cUserID
---select SUSER_SNAME () AS sname
+      SET @cSelWorkStation = @cWorkStation
+      
+      IF ISNULL(@cSelWorkStation, '') = ''
+      BEGIN
+         SELECT @cSelWorkStation = ISNULL(Workstation,'') 
+         FROM Api.AppWorkstation (NOLOCK)
+         WHERE DeviceID = @cDeviceID
+      END
 
---Data Validate : Check ScanNo blank
-IF  @cAppName = '' OR @cDeviceID = ''  OR @cSCEUserName = ''
-BEGIN
-   SET @b_Success = 0
-   SET @n_Err = 175601
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Insufficient parameter for application process execution. Function : isp_AppSection'
+      SELECT @cClrDeviceID = ISNULL(SValue,'0') 
+      FROM StorerConfig (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND ConfigKey = 'TPS-ClrDeviceID'
+   END
 
-   GOTO EXIT_SP
-END
-
---get StorerConfig
-
-EXECUTE dbo.nspGetRight @cFacility
-                        , @cStorerKey         -- Storer
-                        , ''                   -- Sku
-                        , 'TPSectionTime'          -- ConfigKey
-                        , @b_success   OUTPUT
-                        , @timeOut     OUTPUT
-                        , @n_err       OUTPUT
-                        , @c_errmsg    OUTPUT
+   --get StorerConfig
+   EXECUTE dbo.nspGetRight @cFacility
+      , @cStorerKey         -- Storer
+      , ''                   -- Sku
+      , 'TPSectionTime'          -- ConfigKey
+      , @b_success   OUTPUT
+      , @timeOut     OUTPUT
+      , @n_err       OUTPUT
+      , @c_errmsg    OUTPUT
 
    IF @b_success <> 1
    BEGIN
       SET @b_Success = 0
-      SET @n_Err = 175602
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Error in executing nspGetRight. Function : isp_AppSection'
+      SET @n_Err = 1000802
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Error in executing nspGetRight. Function : isp_AppSection'
       SET @n_LogOut = 0
 
       GOTO EXIT_SP
    END
   --SELECT @timeOut
 
+	IF @timeOut = 0  
+		SET @timeOut = 99999  
 
-
---type: login
-IF @cType = 'LogIn'
-BEGIN
+   --type: login
+   IF @cType = 'LogIn'
+   BEGIN
 	--1a. DeviceID not in db
 	IF NOT EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE deviceID = @cDeviceID)
 	BEGIN
-		--SELECT  '1a'
-	   --User lock by others device: user not yet expired
-		IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE UserID = @cSCEUserName AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL))
+      --SELECT  '1a'
+      --User lock by others device: user not yet expired
+      IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE UserID = @cUserID AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL))
       BEGIN
-      	--SELECT  '1ab'
-      	SET @b_Success = 0
-         SET @n_Err = 175603
-         SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'User login in another device. Please logout from previous device before login in this device. Function : isp_AppSection'
+         --SELECT  '1ab'
+         SET @b_Success = 0
+         SET @n_Err = 1000803
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'User login in another device. Please logout from previous device before login in this device. Function : isp_AppSection'
          SET @n_LogOut = 1
 
          GOTO EXIT_SP
       END
       ELSE
       BEGIN
-      	--SELECT  '1aa'
-		   INSERT INTO API.AppSection (APPName,DeviceID,UserID,SectionTime,ScanNo,AddWho,AddDate,EditWho,EditDate)
-		   VALUES (@cAppName,@cDeviceID,@cSCEUserName,@dNow,@cScanNo,SUSER_SNAME (),@dNow,SUSER_SNAME (),@dNow)
+      --SELECT  '1aa'
+         IF @cScanNo <> '' AND EXISTS(SELECT 1 FROM API.AppSection WITH (NOLOCK) WHERE ScanNo = @cScanNo AND UserID <> @cUserID)
+         BEGIN
+            GOTO SCANNO_LOCKBYWHO_SP
+         END
+         INSERT INTO API.AppSection (APPName,DeviceID,UserID,SectionTime,ScanNo,AddWho,AddDate,EditWho,EditDate)
+         VALUES (@cAppName,@cDeviceID,@cUserID,@dNow,@cScanNo,@cUserID,@dNow,@cUserID,@dNow)
       END
 
-		GOTO SUCCESS_SP
+      GOTO SUCCESS_SP
 	END
 	ELSE
 	--1b. DeviceID in db
@@ -162,80 +250,100 @@ BEGIN
    -- 2a. Device expired
    IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE deviceID = @cDeviceID AND (DATEADD(s,@timeOut,SectionTime) < @dNow OR SectionTime IS NULL))
    BEGIN
-   	--SELECT  '2a'
-   	GOTO CHECK_USER_SP
+      --SELECT  '2a'
+      DELETE FROM API.AppSection
+      WHERE deviceID = @cDeviceID
+      AND (DATEADD(s,@timeOut,SectionTime) < @dNow OR SectionTime IS NULL)
+      GOTO CHECK_USER_SP
    END
    ELSE
    --2b. Device still using
    BEGIN
-   	--SELECT  '2b'
-   	GOTO USER_SP
+      --SELECT  '2b'
+      GOTO USER_SP
    END
 
    SCANNO_SP:
    --3a. No ScanNo - can direct update
-	IF @cScanNo = ''
-	BEGIN
-		--SELECT  '3a'
-		UPDATE API.AppSection
-		SET userID = @cSCEUserName,
-			SectionTime = @dNow,
-			editWho = SUSER_SNAME (),
-			editDate = @dNow
-		WHERE deviceID = @cDeviceID
+   IF @cScanNo = ''
+   BEGIN
+      --SELECT  '3a'
+      UPDATE API.AppSection WITH (ROWLOCK)
+      SET SectionTime = @dNow,
+         editWho = @cUserID,
+         editDate = @dNow
+      WHERE deviceID = @cDeviceID
+         AND userID = @cUserID
 
-		GOTO SUCCESS_SP
-	END
-	ELSE
-	--3b. got ScanNo
-	BEGIN
-		--SELECT  '3b'
+      GOTO SUCCESS_SP
+   END
+   ELSE
+   --3b. got ScanNo
+   BEGIN
+      --SELECT  '3b'
       GOTO SCANNO_LOCK_SP
-	END
+   END
 
    SCANNO_LOCK_SP:
    --4a pickslip locked - not yet expired
    IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE ScanNo = @cScanNo AND (DATEADD(s,@timeOut,SectionTime) > @dNow))
    BEGIN
-   	--SELECT  '4a'
-   	GOTO SCANNO_LOCKBYWHO_SP
+      --SELECT  '4a'
+      GOTO SCANNO_LOCKBYWHO_SP
    END
    ELSE
    --4b pickslip No locked
    BEGIN
-   	--SELECT  '4b'
-   	UPDATE API.AppSection
-		SET userID = @cSCEUserName,
-			SectionTime = @dNow,
-			ScanNo = @cScanNo,
-			EditWho = SUSER_SNAME (),
-			EditDate = @dNow
-		WHERE deviceID = @cDeviceID
+      --SELECT  '4b'
+      UPDATE API.AppSection WITH (ROWLOCK)
+      SET SectionTime = @dNow,
+         ScanNo = @cScanNo,
+         EditWho = @cUserID,
+         EditDate = @dNow
+      WHERE deviceID = @cDeviceID
+         AND userID = @cUserID
 
-		GOTO SUCCESS_SP
+      IF @cSelWorkStation <> '' 
+      AND EXISTS (SELECT 1
+                  FROM API.AppWorkstation (NOLOCK)
+                  WHERE deviceid = @cDeviceID
+                  AND (DefaultStorerkey <> @cStorerKey
+                  OR DefaultFacility <> @cFacility)
+                  AND DefaultStorerKey <> 'SHARE')
+      BEGIN
+         UPDATE API.AppWorkstation WITH (ROWLOCK)
+         SET DefaultStorerkey = @cStorerKey,
+            DefaultFacility = @cFacility,
+            EditWho = @cUserID,
+            EditDate = @dNow
+         WHERE deviceID = @cDeviceID
+            AND WorkStation = @cSelWorkStation
+      END
+
+      GOTO SUCCESS_SP
    END
 
    SCANNO_LOCKBYWHO_SP:
    --5a pickslip locked by user himself
-   IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE ScanNo = @cScanNo AND UserID = @cSCEUserName)
+   IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE ScanNo = @cScanNo AND UserID = @cUserID)
    BEGIN
-   	--SELECT  '5a'
-   	UPDATE API.AppSection
-		SET SectionTime = @dNow,
-			ScanNo = @cScanNo,
-			EditWho = SUSER_SNAME (),
-			EditDate = @dNow
-		WHERE deviceID = @cDeviceID
+      --SELECT  '5a'
+      UPDATE API.AppSection WITH (ROWLOCK)
+      SET SectionTime = @dNow,
+         EditWho = @cUserID,
+         EditDate = @dNow
+      WHERE deviceID = @cDeviceID
+         AND userID = @cUserID
 
-		GOTO SUCCESS_SP
+      GOTO SUCCESS_SP
    END
    ELSE
    --5b. locked by others user
    BEGIN
-   	--SELECT  '5b'
-   	SET @b_Success = 0
-      SET @n_Err = 175604
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'The scanned document ID is process by another user. Please use another document ID. Function : isp_AppSection'
+      --SELECT  '5b'
+      SET @b_Success = 0
+      SET @n_Err = 1000804
+      SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err, @cLangCode, 'DSP')--'The scanned document ID is process by another user. Please use another document ID. Function : isp_AppSection'
       SET @n_LogOut = 0
 
       GOTO EXIT_SP
@@ -243,44 +351,55 @@ BEGIN
 
    USER_SP:
    --6a device locked: by same user himself
-   IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE DeviceID = @cDeviceID AND UserID = @cSCEUserName AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL))
+   IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE DeviceID = @cDeviceID AND UserID = @cUserID AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL))
    BEGIN
-   	--SELECT  '6a'
-   	GOTO SCANNO_SP
+      --SELECT  '6a'
+      GOTO SCANNO_SP
    END
    ELSE
-   --6b device locked: by others user
+   --6b device locked: by others user for windows only
    BEGIN
-   	--SELECT  '6b'
-   	SET @b_Success = 0
-      SET @n_Err = 175605
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Other user login to this device. Please ensure no other user login in this device before proceed to login. Function : isp_AppSection'
-      SET @n_LogOut = 1
+      IF @nWebFlag <> 1
+      BEGIN
+         --SELECT  '6b'
+         SET @b_Success = 0
+         SET @n_Err = 1000805
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Other user login to this device. Please ensure no other user login in this device before proceed to login. Function : isp_AppSection'
+         SET @n_LogOut = 1
 
-      GOTO EXIT_SP
+         GOTO EXIT_SP
+      END
+      ELSE
+      BEGIN
+         GOTO SCANNO_SP
+      END
    END
 
    CHECK_USER_SP:
    --7a. User lock by others device: user not yet expired
    -- IF User no proper logout, username still in section, remove user from expired secion (cc01)
-   IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE UserID = @cSCEUserName AND (DATEADD(s,@timeOut,SectionTime) < @dNow OR SectionTime IS NULL))
+   IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE UserID = @cUserID AND (DATEADD(s,@timeOut,SectionTime) < @dNow OR SectionTime IS NULL))
    BEGIN
-   	UPDATE API.AppSection
-	   SET userID = '',
-		   SectionTime = Null,
-		   ScanNo = '',
-		   EditWho = SUSER_SNAME (),
-		   EditDate = @dNow
-	   WHERE UserID = @cSCEUserName
-	   AND (DATEADD(s,@timeOut,SectionTime) < @dNow OR SectionTime IS NULL)
+      DELETE FROM API.AppSection
+      WHERE UserID = @cUserID
+      AND (DATEADD(s,@timeOut,SectionTime) < @dNow OR SectionTime IS NULL)
+
+      --UPDATE API.AppSection WITH (ROWLOCK)
+      --SET userID = '',
+      --   SectionTime = Null,
+      --   ScanNo = '',
+      --   EditWho = SUSER_SNAME (),
+      --   EditDate = @dNow
+      --WHERE UserID = @cUserID
+      --AND (DATEADD(s,@timeOut,SectionTime) < @dNow OR SectionTime IS NULL)
    END
 
-   IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE UserID = @cSCEUserName AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL))
+   IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE UserID = @cUserID AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL))
    BEGIN
-   	--SELECT  '7a'
-   	SET @b_Success = 0
-      SET @n_Err = 175606
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'User found login in another device. Please logout from previous device before proceed to login in this device. Function : isp_AppSection'
+      --SELECT  '7a'
+      SET @b_Success = 0
+      SET @n_Err = 1000806
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'User found login in another device. Please logout from previous device before proceed to login in this device. Function : isp_AppSection'
       SET @n_LogOut = 1
 
       GOTO EXIT_SP
@@ -288,48 +407,71 @@ BEGIN
    ELSE
    --7b user locked by others device
    BEGIN
-   	--SELECT  '7b'
-   	GOTO SCANNO_SP
+      --SELECT  '7b'
+      GOTO SCANNO_SP
    END
- END
+   END
 
---type: logout
-IF @cType = 'LogOut'
-BEGIN
-	IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE DeviceID = @cDeviceID)
-	UPDATE API.AppSection
-	SET userID = '',
-		SectionTime = Null,
-		ScanNo = '',
-		EditWho = SUSER_SNAME (),
-		EditDate = @dNow
-	WHERE deviceID = @cDeviceID
+   --type: logout
+   IF @cType = 'LogOut'
+   BEGIN
+	   IF EXISTS ( SELECT TOP 1 1 
+                  FROM API.AppSection WITH (NOLOCK) 
+                  WHERE DeviceID = @cDeviceID 
+                  AND userID = @cUserID)
+      DELETE FROM API.AppSection 
+      WHERE deviceID = @cDeviceID
+      AND userID = @cUserID
 
-	GOTO SUCCESS_SP
+      IF @nWebFlag = 1 
+      AND @cSelWorkStation <> ''
+      AND (@cClrDeviceID = '1' OR 
+      EXISTS (SELECT 1 
+         FROM Api.AppWorkstation (NOLOCK) 
+         WHERE Workstation = @cSelWorkStation 
+         AND DefaultStorerKey = 'SHARE')
+      )
+      BEGIN
+         UPDATE Api.AppWorkstation WITH(ROWLOCK)
+         SET DeviceID = ''
+         WHERE Workstation = @cSelWorkStation
+      END
+
+	   GOTO SUCCESS_SP
+   END
+
+   --type: unlock
+   IF @cType = 'Unlock'
+   BEGIN
+	   IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) 
+                  WHERE DeviceID = @cDeviceID 
+                     and userID = @cUserID)
+      BEGIN
+	      UPDATE API.AppSection WITH (ROWLOCK)
+	      SET ScanNo = '',
+         SectionTime = @dNow,
+	      EditWho = @cUserID,
+	      EditDate = @dNow
+	      WHERE deviceID = @cDeviceID
+	         AND userID = @cUserID
+
+	      GOTO SUCCESS_SP
+      END
+   END
+
+   SUCCESS_SP:
+      SET @b_Success = 1
+	   SET @jResult = (SELECT @dNow AS SectionTime, @timeOut AS ConfigInSec FOR JSON PATH)
+	   GOTO EXIT_SP
+
+
+   EXIT_SP:
+      IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+      BEGIN
+         EXEC [WM].[lsp_RevertUser]
+      END
+      REVERT
 END
-
---type: unlock
-IF @cType = 'Unlock'
-BEGIN
-	IF EXISTS (SELECT TOP 1 1 FROM API.AppSection WITH (NOLOCK) WHERE DeviceID = @cDeviceID and userID = @cSCEUserName)
-	UPDATE API.AppSection
-	SET ScanNo = '',
-	EditWho = SUSER_SNAME (),
-	EditDate = @dNow
-	WHERE deviceID = @cDeviceID
-	and userID = @cSCEUserName
-
-	GOTO SUCCESS_SP
-END
-
-SUCCESS_SP:
-   SET @b_Success = 1
-	SET @jResult = (SELECT @dNow AS SectionTime, @timeOut AS ConfigInSec FOR JSON PATH)
-	GOTO EXIT_SP
-
-
-EXIT_SP:
-   REVERT
 GO
 
 

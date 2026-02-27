@@ -4,46 +4,55 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/*****************************************************************************/
-/* Store procedure: rdtfnc_TM_CycleCount                                     */
-/* Copyright      : MAERSK                                                   */
-/*                                                                           */
-/* Purpose: SOS#227151  -TM Cycle Count                                      */
-/*                     - Called By rdtfnc_TaskManager                        */
-/*                                                                           */
-/* Modifications log:                                                        */
-/*                                                                           */
-/* Date       Rev  Author   Purposes                                         */
-/* 2011-11-08 1.0  ChewKP   Created                                          */
-/* 2012-10-30 1.1  James    SOS257258 - Indicate a TM CC supervisor count by */
-/*                          putting '(s)' besides suggested loc (james01)    */
-/* 2013-09-26 1.2  James    Pallet ID is required for LOC with loseid = 0    */
-/*                          Put pallet ID check SP (james02)                 */
-/* 2015-04-06 1.3  ChewKP   SOS#333693 - After Input Reason Code Goto Step 6 */
-/*                          (ChewKP01)                                       */
-/* 2014-06-25 1.4  James    Bug fix (james03)                                */
-/* 2015-05-25 1.5  James    SOS316401 - Add PI pickmethod (james04)          */
-/* 2015-06-09 1.6  James    If UCC config not turn on then bypass option     */
-/*                          screen and goto count by sku (james05)           */
-/* 2016-09-30 1.7  Ung      Performance tuning                               */
-/* 2018-04-25 1.8  James    WMS4083-Add ExtendedUpdateSP (james06)           */
-/* 2018-10-19 1.9  TungGH   Performance                                      */
-/* 2019-04-29 2.0  TungGH   WMS8136-Add ExtendedUpdateSP @ STEP 4 (james07)  */
-/* 2019-06-13 2.1  Shong    Performance Tuning (SWT01)                       */
-/* 2019-06-14 2.2  James    Performance Tuning (james08)                     */
-/* 2019-12-03 2.3  James    WMS-11350 Add output areakey nsptmtm01 (james09) */
-/* 2020-01-06 2.4  James    WMS-11550 Add ExtendedInfoSP (james10)           */
-/* 2021-04-26 2.5  James    WMS-16634 Direct Go screen 2 TMCC SKU (james11)  */
-/* 2021-05-07 2.6  James    WMS-16965 Add empty loc default opt (james12)    */
-/* 2021-06-02 2.7  James    WMS-16634 Add update loc.lastcyclecount (james13)*/
-/* 2023-09-09 2.8  James    WMS-23249 Add ID count (james14)                 */
-/*                          Add BypassScanIDSP config                        */
-/* 2023-11-17 2.9  James    WMS-23429 Sort task by logicalloc, loc (james14) */
-/* 2024-04-19 3.0  James    WMS-25276 Skip scn 3 based on Loc setup(james16) */
-/* 2024-11-27 3.1  JHU151   UWP-27583.Fn1768 St1 TTL QTY is not cleared when */
-/*                                       scanning a new loc                  */
-/* 2025-02-11 3.2  JCH507   FCR-1917 Add ext upd entry                       */
-/*****************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdtfnc_TM_CycleCount                                         */
+/* Copyright      : MAERSK                                                       */
+/*                                                                               */
+/* Purpose: SOS#227151  -TM Cycle Count                                          */
+/*                     - Called By rdtfnc_TaskManager                            */
+/*                                                                               */
+/* Modifications log:                                                            */
+/*                                                                               */
+/* Date       Rev    Author   Purposes                                           */
+/* 2011-11-08 1.0    ChewKP   Created                                            */
+/* 2012-10-30 1.1    James    SOS257258 - Indicate a TM CC supervisor count by   */
+/*                            putting '(s)' besides suggested loc (james01)      */
+/* 2013-09-26 1.2    James    Pallet ID is required for LOC with loseid = 0      */
+/*                            Put pallet ID check SP (james02)                   */
+/* 2015-04-06 1.3    ChewKP   SOS#333693 - After Input Reason Code Goto Step 6   */
+/*                            (ChewKP01)                                         */
+/* 2014-06-25 1.4    James    Bug fix (james03)                                  */
+/* 2015-05-25 1.5    James    SOS316401 - Add PI pickmethod (james04)            */
+/* 2015-06-09 1.6    James    If UCC config not turn on then bypass option       */
+/*                            screen and goto count by sku (james05)             */
+/* 2016-09-30 1.7    Ung      Performance tuning                                 */
+/* 2018-04-25 1.8    James    WMS4083-Add ExtendedUpdateSP (james06)             */
+/* 2018-10-19 1.9    TungGH   Performance                                        */
+/* 2019-04-29 2.0    TungGH   WMS8136-Add ExtendedUpdateSP @ STEP 4 (james07)    */
+/* 2019-06-13 2.1    Shong    Performance Tuning (SWT01)                         */
+/* 2019-06-14 2.2    James    Performance Tuning (james08)                       */
+/* 2019-12-03 2.3    James    WMS-11350 Add output areakey nsptmtm01 (james09)   */
+/* 2020-01-06 2.4    James    WMS-11550 Add ExtendedInfoSP (james10)             */
+/* 2021-04-26 2.5    James    WMS-16634 Direct Go screen 2 TMCC SKU (james11)    */
+/* 2021-05-07 2.6    James    WMS-16965 Add empty loc default opt (james12)      */
+/* 2021-06-02 2.7    James    WMS-16634 Add update loc.lastcyclecount (james13   */
+/* 2023-09-09 2.8    James    WMS-23249 Add ID count (james14)                   */
+/*                            Add BypassScanIDSP config                          */
+/* 2023-11-17 2.9    James    WMS-23429 Sort task by logicalloc, loc (james14)   */
+/* 2024-04-19 3.0    James    WMS-25276 Skip scn 3 based on Loc setup(james16)   */
+/* 2024-11-27 3.1    JHU151   UWP-27583.Fn1768 St1 TTL QTY is not cleared when   */
+/*                                         scanning a new loc                    */
+/* 2025-02-11 3.2    JCH507   FCR-1917 Add ext upd entry                         */
+/* 2025-05-19 4.2.0  JACKC      UWP-34563 Count SKU task genrerates cc detaill   */ 
+/*                               for all SKUs on the loc                         */
+/* 2025-06-17 4.3.0  NickT    FCR-4971 Add ExtScn in Step 3                      */
+/* 2025-07-16 4.4.0  James    FCR-6059 Change @nFromScn @nFromStep rdtMobRec     */
+/*                            variable mapping (james17)                         */
+/* 2025-06-17 4.5.0  NickT    UWP-37598 Update TaskDetail.EndTime when CC done   */
+/* 2025-08-12 0.0.0  JackC    !!!Cutover. Use V0 repo for work!!!                */
+/* 2024-01-13 4.6.0  NickT    UWP-46877 Add ExtScn in Step 4                     */
+/* 2026-02-18 4.7.0  NYE018   FCR-10365 add loc check digit                      */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
    @nMobile    INT,
@@ -63,6 +72,7 @@ DECLARE
 -- Define a variable
 DECLARE
    @nFunc               INT,
+   @nCurrentFunc        INT,
    @nScn                INT,
    @nStep               INT,
    @cLangCode           NVARCHAR(3),
@@ -164,6 +174,9 @@ DECLARE
    @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
    @tExtScnData			VariableTable, --(JHU151)
 
+   @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10365
+   @cCheckDigitLOC      NVARCHAR( 20), -- FCR-10365
+
    @cRemoveTaskFromUserQueue  NVARCHAR( 10),
    @cTaskStatus               NVARCHAR( 10),
    @nQtyOnLoc           INT,
@@ -220,6 +233,7 @@ DECLARE @cStorerConfig_UCC  NVARCHAR( 1)     -- (james05)
 -- Getting Mobile information
 SELECT
    @nFunc            = Func,
+   @nCurrentFunc     = Func,
    @nScn             = Scn,
    @nStep            = Step,
    @nInputKey        = InputKey,
@@ -276,9 +290,10 @@ SELECT
 
    @nUCCQty          = V_Integer1,
    @nRowID           = V_Integer2,
+   @nFromScn         = V_Integer3,
+   @nFromStep        = V_Integer4,
 
-   @nFromScn         = V_String30,
-   @nFromStep        = V_String31,
+
    @cAreakey         = V_String32,
    @cTTMStrategykey  = V_String33,
    @cTTMTasktype     = V_String34,
@@ -287,6 +302,8 @@ SELECT
    @cRefKey03        = V_String37,
    @cRefKey04        = V_String38,
    @cRefKey05        = V_String39,
+
+   @cLOCCheckDigitSP = V_String40, -- FCR-10365
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -357,6 +374,8 @@ BEGIN
       SET @nPrevStep = 0
       SET @nPrevScreen  = 0
 
+      SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-10365
+
       /****************************
        VALIDATION
       ****************************/
@@ -370,6 +389,23 @@ BEGIN
 
       SET @cOverrideLOC = ''
       SET @cOverrideLOC = rdt.RDTGetConfig( @nFunc, 'OverrideLOC', @cStorerkey)
+
+      -- FCR-10365
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_1_Fail
+         END
+         SET @cLoc = @cCheckDigitLOC
+      END
+      -- FCR-10365
 
       IF @cLoc <> @cSuggFromLoc
       BEGIN
@@ -595,6 +631,7 @@ BEGIN
               ,@c_Loc            = @cSuggFromLoc
               ,@c_Facility       = @cFacility
               ,@c_PickMethod     = @cPickMethod
+              ,@c_SKU            = @cSuggSKU --V4.2.0
               ,@c_CCOptions      = '2'
               ,@c_SourceKey      = @cCCKey
 
@@ -644,7 +681,7 @@ BEGIN
             SET @cOutField02 = @cID
             SET @cOutField03 = ''
 
-      SET @cOutField04 = ''
+            SET @cOutField04 = ''
             SET @cOutField05 = ''
 
             SET @cFieldAttr04 = 'O'
@@ -1544,6 +1581,7 @@ BEGIN
            ,@c_Loc            = @cSuggFromLoc
            ,@c_Facility       = @cFacility
            ,@c_PickMethod     = @cPickMethod
+           ,@c_SKU            = @cSuggSKU --V4.2.0
            ,@c_CCOptions      = '2'
            ,@c_SourceKey      = @cCCKey
 
@@ -1814,7 +1852,7 @@ BEGIN
          SET @nScn = 2930
          SET @nStep = 1
 
-         GOTO QUIT
+         GOTO Step_3_ExtScn
       END
       ELSE IF @cOptions = '2'
       BEGIN
@@ -1839,6 +1877,7 @@ BEGIN
            ,@c_Loc            = @cSuggFromLoc
            ,@c_Facility       = @cFacility
            ,@c_PickMethod     = @cPickMethod
+           ,@c_SKU            = @cSuggSKU  --V4.2.0
            ,@c_CCOptions      = '2'
            ,@c_SourceKey      = @cCCKey
 
@@ -2605,8 +2644,9 @@ BEGIN
       SET @nStep = @nStep - 1
    END
 
+   Step_3_ExtScn:
    SET @nAction = 3 --Prepare output fields
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nCurrentFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
    BEGIN
       SET @cExtendedScreenSP = ''
@@ -2665,9 +2705,10 @@ BEGIN
          -- Update TaskDetail Status = '9'
          Update dbo.TaskDetail
          SET Status = '9'
-               ,EditDate = GetDate()
-               ,EditWho  = @cUserName
-               ,TrafficCop = NULL
+            ,EndTime = GetDate()
+            ,EditDate = GetDate()
+            ,EditWho  = @cUserName
+            ,TrafficCop = NULL
          WHERE TaskDetailKey = @cTaskDetailKey
 
          IF @@Error <> 0
@@ -2731,7 +2772,7 @@ BEGIN
          SET @nScn = @nScn + 2
          SET @nStep = @nStep + 2
 
-         GOTO QUIT
+         GOTO Step_4_ExtScn
       END
 
       IF @cOptions = '2'
@@ -2842,6 +2883,19 @@ BEGIN
       END
 
    END
+
+   Step_4_ExtScn:
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nCurrentFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   
+   IF @cExtendedScreenSP <> ''
+   Begin
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_4_Fail:
@@ -3576,7 +3630,7 @@ GOTO Quit
 
 Step_99:
 BEGIN
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nCurrentFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
    BEGIN
       SET @cExtendedScreenSP = ''
@@ -3585,6 +3639,12 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
+
+         DELETE FROM @tExtScnData
+
+         INSERT INTO @tExtScnData (Variable, Value) 
+         VALUES
+            ('@cOptions', @cOptions)
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtendedScreenSP, 
@@ -3690,9 +3750,9 @@ BEGIN
 
       V_Integer1 = @nUCCQty,
       V_Integer2 = @nRowID,
+      V_Integer3 = @nFromScn,
+      V_Integer4 = @nFromStep,
 
-      V_String30 = @nFromScn,
-      V_String31 = @nFromStep,
       V_String32 = @cAreakey,
       V_String33 = @cTTMStrategykey,
       V_String34 = @cTTMTasktype,
@@ -3701,6 +3761,8 @@ BEGIN
       V_String37 = @cRefKey03,
       V_String38 = @cRefKey04,
       V_String39 = @cRefKey05,
+
+      V_String40 = @cLOCCheckDigitSP, -- FCR-10365
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

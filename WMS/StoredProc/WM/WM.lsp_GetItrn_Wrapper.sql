@@ -41,6 +41,9 @@ GO
 /* 2023-06-14  SPChin   1.6   JSM-156017 - Bug Fixed                    */
 /* 2023-03-14  Wan05    1.7   LFWM-3954 - Philippines All Customer LFSCE*/
 /*                            WM Inventory Transaction CR               */
+/* 2025-06-23  SSA01    1.8   UWP-36401 - Removed NOT NULL to PalletType*/
+/* 2025-10-06  SSA02    1.9   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_GetItrn_Wrapper]
    @c_WhereClause       NVARCHAR(MAX)                 --Contain WHERE for eg. WHERE ITRN.Storerkey = ''NIKEPH''
@@ -87,21 +90,25 @@ BEGIN
 
    BEGIN TRY
       SET @n_Err = 0
-   
+    -- (SSA02) - START
+      DECLARE @b_ExecuteAs BIT = 0
       IF SUSER_SNAME() <> @c_UserName
       BEGIN
          EXEC [WM].[lsp_SetUser]
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
          
          IF @n_Err <> 0
          BEGIN
             GOTO EXIT_SP
          END
                   
-         EXECUTE AS LOGIN = @c_UserName
+         IF @b_ExecuteAs = 1
+            EXECUTE AS LOGIN = @c_UserName
       END
+      -- (SSA02) - END
    
       IF OBJECT_ID('tempdb..#TMP_ITRN','u') IS NOT NULL
       BEGIN
@@ -164,7 +171,7 @@ BEGIN
       ,  CaseQty              FLOAT          NOT NULL DEFAULT (0.00)                --(Wan05)
       ,  InnerPackQty         FLOAT          NOT NULL DEFAULT (0.00)                --(Wan05)
       ,  Rowfocusindicatorcol CHAR(1)        NOT NULL DEFAULT ('')
-      ,  PalletType           NVARCHAR(30)   NOT NULL
+      ,  PalletType           NVARCHAR(10)   NULL  DEFAULT ('')                     --(SSA01)
       )
 
       CREATE INDEX IDX_TRNX ON #TMP_ITRN (TxnSourceType, TxnKey)
@@ -765,7 +772,14 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-   REVERT
+    --(SSA02) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA02) - END
 END -- procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_GetItrn_Wrapper] TO nSQL

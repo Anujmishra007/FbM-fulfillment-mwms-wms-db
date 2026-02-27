@@ -32,6 +32,8 @@ GO
 /* 12-Jan-2021  1.1  TLTING01 Bug fix                                   */  
 /* 19-Jan-2021  1.2  TLTING02 Lottable03label default ''                */  
 /*                                                                      */
+/* 2025-10-10   1.3  SSA01   UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 
@@ -261,8 +263,8 @@ BEGIN
          Price            = @c_Price,  
          BUSR7            = @c_BUSR7,  
          PackQTYIndicator = @c_PackQTYIndicator,  
-         Editdate         = GETDATE(),  
-         Editwho          = 'U#'+SUSER_SNAME(),  
+         Editdate         = dbo.fnc_GetDate(),   --(SSA01)
+         Editwho          = 'U#'+dbo.fnc_GetUserName(),      --(SSA01)
          TrafficCop       = NULL  
          WHERE  Storerkey = @c_NewStorerkey AND SKU = @c_SKU  
       IF @@ERROR <> 0    
@@ -368,8 +370,8 @@ BEGIN
       , DisableABCCalc            
       , ABCPeriod               
       , 'NIKE'          -- LottableCode            
-      , 'A#'+SUSER_SNAME()  
-      , 'A#'+SUSER_SNAME()  
+      , 'A#'+dbo.fnc_GetUserName()       --(SSA01)
+      , 'A#'+dbo.fnc_GetUserName()       --(SSA01)
       FROM #SKU_New A  
        WHERE NOT EXISTS ( SELECT 1 FROM SKU (NOLOCK)   
                   WHERE  SKU.Storerkey = A.Storerkey AND SKU.SKU = A.SKU )  

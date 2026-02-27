@@ -41,6 +41,7 @@ GO
 /* 2023-05-26  Wan08    2.1   LFWM-4297 - PROD - CN WaveParm_Sort by LOC*/
 /* 2023-06-23  Wan09    2.2   LFWM-4176 - CN UAT  Split wave into loads */
 /*                            based on customized SP                    */
+/* 2025-05-06  USH022-01 2.3   ORDERDETAIL Added into GROUP-FCR-3956    */
 /************************************************************************/
 CREATE OR ALTER VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
@@ -191,10 +192,10 @@ SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'GROUP'
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
 FROM INFORMATION_SCHEMA.COLUMNS Col
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC', 'ORDERDETAIL')         --USH022-01
 AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
 AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
-AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
+AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate', 'ORDERDETAIL.ADDDATE')--USH022-01
 UNION ALL                                                                        --(Wan05)
 SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'EDIT'

@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2023-08-01 1.0  James      WMS-23133. Created                        */
+/* 2025-07-29 1.1.0 NickT     FCR-4885 Add missed parameter @nAfterStep */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtUpd01] (
@@ -19,6 +20,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1768ExtUpd01] (
    @nFunc           INT,   
    @cLangCode       NVARCHAR( 3), 
    @nStep           INT, 
+   @nAfterStep      INT,
    @nInputKey       INT, 
    @cStorerKey      NVARCHAR( 15), 
    @cTaskDetailKey  NVARCHAR( 10), 

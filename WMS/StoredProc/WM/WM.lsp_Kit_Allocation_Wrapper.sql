@@ -1,95 +1,99 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Kit_Allocation_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Kit_Allocation_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_Kit_Allocation_Wrapper                          */  
-/* Creation Date: 2021-11-23                                             */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
+
+/*************************************************************************/
+/* Stored Procedure: lsp_Kit_Allocation_Wrapper                          */
+/* Creation Date: 2021-11-23                                             */
+/* Copyright: LFL                                                        */
+/* Written by: Wan                                                       */
+/*                                                                       */
 /* Purpose: LFWM-3162 - UAT - TW  Missing Allocation Function from       */
-/*        : Kitting Module                                               */  
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/* Version: 1.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */ 
+/*        : Kitting Module                                               */
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/* Version: 1.1 (SWT01)                                                 */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date        Author   Ver   Purposes                                   */
 /* 2021-11-23  Wan      1.0   Created.                                   */
 /* 2021-11-23  Wan      1.0   DevOps Script Combine                      */
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_Kit_Allocation_Wrapper]  
-      @c_Kitkey               NVARCHAR(10)  
+/* 2025-01-09  SWT01    1.1   Enhanced session management                */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_Kit_Allocation_Wrapper]
+      @c_Kitkey               NVARCHAR(10)
    ,  @c_AllocateStrategykey  NVARCHAR(20)   = ''
-   ,  @b_Success              INT            = 1   OUTPUT   
+   ,  @b_Success              INT            = 1   OUTPUT
    ,  @n_Err                  INT            = 0   OUTPUT
    ,  @c_Errmsg               NVARCHAR(255)  = ''  OUTPUT
    ,  @c_UserName             NVARCHAR(128)  = ''
-AS  
-BEGIN  
+   ,  @n_ErrGroupKey          INT = 0           OUTPUT
+AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_Continue     INT = 1
-         , @n_StartTCnt    INT = @@TRANCOUNT 
-                 
+   DECLARE @b_ExecuteAs    BIT = 0 -- (SWT01)
+         , @n_Continue     INT = 1
+         , @n_StartTCnt    INT = @@TRANCOUNT
+
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
-   SET @n_Err = 0 
+   SET @n_Err = 0
 
+   -- Enhanced session management (SWT01)
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
-      EXEC [WM].[lsp_SetUser] 
+      EXEC [WM].[lsp_SetUser]
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-    
-      EXECUTE AS LOGIN = @c_UserName
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
-   
+   -- End enhanced session management (SWT01)
+
    BEGIN TRAN
 
    BEGIN TRY
       EXEC dbo.isp_Kit_Allocation
-         @c_Kitkey               = @c_kitkey              
-      ,  @c_AllocateStrategykey  = @c_AllocateStrategykey      
-      ,  @b_Success              = @b_Success   OUTPUT 
+         @c_Kitkey               = @c_kitkey
+      ,  @c_AllocateStrategykey  = @c_AllocateStrategykey
+      ,  @b_Success              = @b_Success   OUTPUT
       ,  @n_Err                  = @n_Err       OUTPUT
       ,  @c_Errmsg               = @c_Errmsg    OUTPUT
+      ,  @n_ErrGroupKey          = @n_ErrGroupKey OUTPUT
 
       IF @b_Success = 0
       BEGIN
-         SET @n_Continue = 3        
+         SET @n_Continue = 3
          SET @n_err = 560151
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
                         + ': Error Executing isp_Kit_Allocation. (lsp_Kit_Allocation_Wrapper)'
                         + '( ' + @c_ErrMsg + ' )'
          GOTO EXIT_SP
       END
-      
-      IF @c_ErrMsg = ''
+
+      IF @n_ErrGroupKey = 0
       BEGIN
          SET @c_Errmsg = 'Allocation Completed'
       END
    END TRY
-   
+
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE() + '. (lsp_Kit_Allocation_Wrapper)'
@@ -97,14 +101,18 @@ BEGIN
    END CATCH
 
    EXIT_SP:
-      
-   IF (XACT_STATE()) = -1  
+
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
+
+   IF (XACT_STATE()) = -1
    BEGIN
-      SET @n_Continue = 3 
+      SET @n_Continue = 3
       ROLLBACK TRAN
-   END  
-   
-   IF @n_Continue = 3   
+   END
+
+   IF @n_Continue = 3
    BEGIN
       SET @b_Success = 0
       IF @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt
@@ -134,10 +142,7 @@ BEGIN
    BEGIN
       BEGIN TRAN
    END
-   REVERT
-END  
+END
 GO
 GRANT EXECUTE ON [WM].[lsp_Kit_Allocation_Wrapper] TO nSQL 
 GO
-
-

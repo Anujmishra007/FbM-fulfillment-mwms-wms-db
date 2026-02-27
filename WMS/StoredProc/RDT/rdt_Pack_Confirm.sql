@@ -25,6 +25,7 @@ GO
 /*                             RDTStdEventLog (ZG01)                    */
 /* 17-02-2022 2.0  Ung         WMS-18900 Add force use standard logic   */
 /* 24-11-2023 2.1  Ung         WMS-24060 Add PackByFromDropID           */
+/* 12-11-2025 2.2  NickT       UWP-43907 Merge code from V0             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_Pack_Confirm] (
@@ -262,12 +263,21 @@ BEGIN
    BEGIN
       -- Get LabelLine
       SET @cLabelLine = ''
-      SELECT @cLabelLine = LabelLine
-      FROM dbo.PackDetail WITH (NOLOCK) 
-      WHERE PickSlipNo = @cPickSlipNo 
-         AND CartonNo = @nCartonNo
-         AND LabelNo = @cLabelNo 
-         AND SKU = @cSKU
+      IF @cPackByFromDropID = '1'
+         SELECT @cLabelLine = LabelLine
+         FROM dbo.PackDetail WITH (NOLOCK) 
+         WHERE PickSlipNo = @cPickSlipNo 
+            AND CartonNo = @nCartonNo
+            AND LabelNo = @cLabelNo
+            AND DropID = @cDropID
+            AND SKU = @cSKU
+      ELSE
+         SELECT @cLabelLine = LabelLine
+         FROM dbo.PackDetail WITH (NOLOCK) 
+         WHERE PickSlipNo = @cPickSlipNo 
+            AND CartonNo = @nCartonNo
+            AND LabelNo = @cLabelNo 
+            AND SKU = @cSKU
       
       IF @cLabelLine = ''
          SELECT @cLabelLine = LabelLine
@@ -313,6 +323,7 @@ BEGIN
       UPDATE dbo.PackDetail WITH (ROWLOCK) SET   
          SKU = @cSKU, 
          QTY = QTY + @nQTY, 
+         DropID = CASE WHEN @cPackByFromDropID = '1' THEN @cDropID ELSE DropID END, -- For repack, that not reset PackDetail.DropID
          EditWho = 'rdt.' + SUSER_SNAME(), 
          EditDate = GETDATE(), 
          ArchiveCop = NULL

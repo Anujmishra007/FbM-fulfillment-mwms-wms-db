@@ -27,6 +27,7 @@ GO
 /* 22-Mar-2023  NJOW01  1.2   WMS-21989 CN Yonex. Update serialno.sku and  */
 /*                            UCC.Sku from UPC.Sku                         */
 /* 23-Oct-2023  NJOW02  1.3   Performance turning                          */
+/* 10-Oct-2025  SSA01   1.4   UWP-42248 -Enhanced session management       */
 /***************************************************************************/                                                                                                                    
 CREATE OR ALTER PROC [dbo].[ispPAKCF12]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -113,8 +114,8 @@ BEGIN
       	 UPDATE UCC WITH (ROWLOCK)
       	 SET UCC.Sku = U.Sku,
       	     UCC.TrafficCop = NULL,
-             UCC.EditDate = GETDATE(),
-             UCC.EditWho = SUSER_SNAME()
+             UCC.EditDate = dbo.fnc_GetDate(),    --(SSA01)
+             UCC.EditWho = dbo.fnc_GetUserName()      --(SSA01)
       	 FROM UCC
       	 CROSS APPLY (SELECT TOP 1 UPC.Sku
       	              FROM SERIALNO SR (NOLOCK) 
@@ -216,8 +217,8 @@ BEGIN
                ,CartonNo = 0                                
                ,LabelLine = ''                              
                ,TrafficCop = NULL                           
-               ,EditDate = GETDATE()                
-               ,EditWho = SUSER_SNAME()            
+               ,EditDate = dbo.fnc_GetDate()    --(SSA01)
+               ,EditWho = dbo.fnc_GetUserName()      --(SSA01)
             WHERE SerialNokey = @c_SerialNoKey
 
             SET @n_Err = @@ERROR
@@ -334,8 +335,8 @@ BEGIN
       	       ,SERIALNO.Labelline = @c_LabelLine
       	       ,SERIALNO.Status = '6'
       	       ,SERIALNO.TrafficCop = NULL
-               ,SERIALNO.EditDate = GETDATE()   --WL01
-               ,SERIALNO.EditWho = SUSER_SNAME()   --WL01
+               ,SERIALNO.EditDate = dbo.fnc_GetDate()    --(SSA01)   --WL01
+               ,SERIALNO.EditWho = dbo.fnc_GetUserName()   --WL01,(SSA01)
                ,SERIALNO.Sku = CASE WHEN UPC.Sku IS NOT NULL THEN UPC.Sku ELSE SERIALNO.Sku END               
             FROM SERIALNO
             LEFT JOIN UPC (NOLOCK) ON SERIALNO.Userdefine02 = UPC.Upc AND SERIALNO.Storerkey = UPC.Storerkey
@@ -351,8 +352,8 @@ BEGIN
       	       ,Labelline = @c_LabelLine
       	       ,Status = '6'
       	       ,TrafficCop = NULL
-               ,EditDate = GETDATE()   --WL01
-               ,EditWho = SUSER_SNAME()   --WL01
+               ,EditDate = dbo.fnc_GetDate()    --(SSA01)  --WL01
+               ,EditWho = dbo.fnc_GetUserName()   --WL01,(SSA01)
       	    WHERE SerialNokey = @c_SerialNokey
       	 END
 

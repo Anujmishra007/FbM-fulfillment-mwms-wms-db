@@ -15,6 +15,7 @@ GO
 /* 14-06-2024  1.1    JACKC       FCR-236 transmitlog2 requirement change  */
 /* 27-11-2024  1.2    TLE109      FCR-1128 Finalize close pallet           */
 /* 27-12-2024  1.2.1  JCH507      FCR-1128 Fix finalize flag upd logic     */
+/* 21-07-2025  1.3    Dennis      FCR-6157 Finalize close pallet Doc=R     */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_898ExtUpd06
@@ -101,6 +102,43 @@ BEGIN
                      -- Send new transmitlog2 per FCR-236 v1.4
                      EXEC ispGenTransmitLog2 
                            @c_TableName      = 'WSRCTPDETLOG', 
+                           @c_Key1           = @cReceiptkey,
+                           @c_Key2           = @cToID, 
+                           @c_Key3           = @cStorerkey, 
+                           @c_TransmitBatch  = '', 
+                           @b_Success        = @b_Success   OUTPUT,
+                           @n_err            = @nErrNo      OUTPUT,
+                           @c_errmsg         = @cErrMsg     OUTPUT               
+
+                     IF @b_Success <> 1
+                     BEGIN
+                        SET @nErrNo = 215351
+                        SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- Add TransmitLog2 Fail
+                        GOTO Quit
+                     END
+                  END
+                  ELSE IF @cDOCTYPE = 'R'
+                  BEGIN
+                     UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET  
+                        QTYReceived = BeforeReceivedQTY,  
+                        FinalizeFlag = 'Y',
+                        UserDefine02 = '',
+                        EditDate = GETDATE(),  
+                        EditWho = SUSER_SNAME()    
+                     FROM dbo.ReceiptDetail
+                     INNER JOIN dbo.UCC WITH(NOLOCK) ON UCC.UCCNo = ReceiptDetail.UserDefine02 AND UCC.StorerKey = ReceiptDetail.StorerKey
+                     WHERE ReceiptDetail.StorerKey = @cStorerKey AND ReceiptDetail.ReceiptKey = @cReceiptKey 
+                        AND ReceiptDetail.FinalizeFlag = 'N'
+                        AND ReceiptDetail.ToId = @cToID --V1.2.1
+                     IF @@ERROR <> 0
+                     BEGIN  
+                        SET @nErrNo = 215353  
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --215352^Finalize Fail
+                        GOTO Quit
+                     END
+
+                     EXEC ispGenTransmitLog2 
+                           @c_TableName      = 'WSRCTPLOG', 
                            @c_Key1           = @cReceiptkey,
                            @c_Key2           = @cToID, 
                            @c_Key3           = @cStorerkey, 

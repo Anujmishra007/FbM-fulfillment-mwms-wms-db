@@ -1,34 +1,34 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_GenUCCLabelNo' AND type = 'P')
-   DROP PROC isp_GenUCCLabelNo
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-/************************************************************************/
-/* Stored Procedure: isp_GenUCCLabelNo                                  */
-/* Creation Date: 04-Aug-2009                                           */
-/* Copyright: IDS                                                       */
-/* Written by: NJOW                                                     */
-/*                                                                      */
-/* Purpose: SOS#141877 - Generate UCC Label No                          */
-/*                                                                      */
-/* Called By: isp_AutoPackLoad                                          */ 
-/*                                                                      */
-/* Parameters:                                                          */
-/*                                                                      */
-/* PVCS Version: 1.0	                                                  */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author    Ver.  Purposes                                */
-/************************************************************************/
+/**************************************************************************/
+/* Stored Procedure: isp_GenUCCLabelNo                                    */
+/* Creation Date: 04-Aug-2009                                             */
+/* Copyright: IDS                                                         */
+/* Written by: NJOW                                                       */
+/*                                                                        */
+/* Purpose: SOS#141877 - Generate UCC Label No                            */
+/*                                                                        */
+/* Called By: isp_AutoPackLoad                                            */ 
+/*                                                                        */
+/* Parameters:                                                            */
+/*                                                                        */
+/* PVCS Version: 1.0	                                                    */
+/*                                                                        */
+/* Version: 5.4                                                           */
+/*                                                                        */
+/* Data Modifications:                                                    */
+/*                                                                        */
+/* Updates:                                                               */
+/* Date         Author    Ver.  Purposes                                  */
+/* 04-Jun-2024  NJOW01    1.0   WMS-25578 When susr1 len is 7-9 adjust the*/
+/*                              running# len to for making the labelno    */
+/*                              len to 19 plus check digit become len 20  */
+/* 09-Sep-2025  AK01      1.1   FCR-7708 SSCC_Generation_Enhancement      */
+/**************************************************************************/
 
-CREATE PROC isp_GenUCCLabelNo (
+CREATE OR ALTER PROC isp_GenUCCLabelNo (
    @cStorerKey NVARCHAR( 15),
    @cLabelNo   NVARCHAR( 20) OUTPUT, 
    @b_success  int OUTPUT,
@@ -58,45 +58,88 @@ BEGIN
    @nOddCnt        INT,
    @nEvenCnt       INT,
    @nOdd           INT,
-   @nEven          INT
+   @nEven          INT,
+   @n_RunNoLen     INT = 9,  --NJOW01
+   @c_SSCCDynSerialByCompPrefix NVARCHAR(10) = 'N',  --NJOW01
+   @c_Option5      NVARCHAR(1000), --NJOW01
+   @c_NoAI         NVARCHAR(1) = 'N'    --AK01
 
 	 SELECT @b_success = 1, @c_errmsg='', @n_err=0 
 
    IF EXISTS (SELECT 1 FROM StorerConfig WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND ConfigKey = 'GenUCCLabelNoConfig'
-         AND SValue = '1')
+              WHERE StorerKey = @cStorerKey
+              AND ConfigKey = 'GenUCCLabelNoConfig'
+              AND SValue = '1')
    BEGIN
-     SET @cIdentifier = '00'
-	   SET @cPacktype = '0'  
+     SET @cIdentifier = '00'   --SSCC AI
+	   SET @cPacktype = '0'      --SSCC Ext. Digit
      SET @cLabelNo = ''
 
-     SELECT @cSUSR1 = ISNULL(SUSR1, '0')
+     SELECT @cSUSR1 = ISNULL(SUSR1, '0')   --SSCC company prefix
 	   FROM Storer WITH (NOLOCK)
 	   WHERE Storerkey = @cStorerkey
 	   AND Type = '1'
+	   
+	   --NJOW01 S
+     SELECT @c_Option5 = SC.Option5
+     FROM dbo.fnc_GetRight2('', @cStorerkey,'','GenUCCLabelNoConfig') AS SC	   
+     
+     --AK01 S
+      SELECT @cPackType = dbo.fnc_GetParamValueFromString ('@c_PackType', @c_option5, @cPackType)
+      SELECT @c_NoAI = dbo.fnc_GetParamValueFromString ('@c_NoAI', @c_option5, @c_NoAI)
+      
+      IF @c_NoAI = 'Y'
+      BEGIN
+         SET @cIdentifier = ''
+      END
+      --AK01 E
 
-	   IF LEN(@cSUSR1) >= 9 
+     SELECT @c_SSCCDynSerialByCompPrefix = dbo.fnc_GetParamValueFromString ('@c_SSCCDynSerialByCompPrefix', @c_option5, @c_SSCCDynSerialByCompPrefix)
+     --NJOW01 E     
+
+	   IF LEN(@cSUSR1) >= 9 AND @c_SSCCDynSerialByCompPrefix <> 'Y' --NJOW01
      BEGIN
   	    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60201   
 	      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Invalid part barcode. (isp_GenUCCLabelNo)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
 	      SELECT @b_success = 0
 		    GOTO Quit
      END 
+     
+     --NJOW01 S
+     IF LEN(@cSUSR1) BETWEEN 7 AND 10  AND @c_SSCCDynSerialByCompPrefix = 'Y' --AK01
+     BEGIN
+     	   --AK01 S
+         --SET @n_RunNoLen = 9 - (LEN(@cSUSR1) - 7)
+         SET @n_RunNoLen = 16 - LEN(@cSUSR1)
+         --AK01 E
 
-	   EXEC isp_getucckey
-			@cStorerkey,
-			9,
-			@c_nCounter OUTPUT ,
-			@b_success  OUTPUT,
-			@n_err      OUTPUT,
-			@c_errmsg   OUTPUT,
-			0,
-			1
-
-	   IF LEN(@cSUSR1) <> 8 
-         SELECT @cSUSR1 = RIGHT('0000000' + CAST(@cSUSR1 AS NVARCHAR( 7)), 7)
-
+	      EXEC isp_getucckey
+			   @cStorerkey,
+			   @n_RunNoLen,     --SSCC serial reference (running number)
+			   @c_nCounter OUTPUT ,
+			   @b_success  OUTPUT,
+			   @n_err      OUTPUT,
+			   @c_errmsg   OUTPUT,
+			   0,
+			   1        	
+     END --NJOW01 E
+     ELSE
+     BEGIN
+     	  --Original logic
+	      EXEC isp_getucckey
+			   @cStorerkey,
+			   9,
+			   @c_nCounter OUTPUT ,
+			   @b_success  OUTPUT,
+			   @n_err      OUTPUT,
+			   @c_errmsg   OUTPUT,
+			   0,
+			   1
+        
+	      IF LEN(@cSUSR1) <> 8 
+            SELECT @cSUSR1 = RIGHT('0000000' + CAST(@cSUSR1 AS NVARCHAR( 7)), 7)     	
+     END
+                 
 	   SET @cLabelNo = @cIdentifier + @cPacktype + RTRIM(@cSUSR1) + RTRIM(@c_nCounter) --+ @nCheckDigit
 
 	   SET @nOdd = 1
@@ -130,7 +173,7 @@ BEGIN
 
 	   SET @nAdd = @nTotalCnt + @nTotalEvenCnt
 	   SET @nRemain = @nAdd % 10
-	   SET @nCheckDigit = 10 - @nRemain
+	   SET @nCheckDigit = 10 - @nRemain  --SSCC check digit
 
 	   IF @nCheckDigit = 10 
 			  SET @nCheckDigit = 0

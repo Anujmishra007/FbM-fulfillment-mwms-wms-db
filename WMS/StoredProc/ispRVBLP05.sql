@@ -25,7 +25,8 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/* Date         Author   Ver  Purposes                                   */
+/* 10-Oct-2025  SSA01    1.0  UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRVBLP05]      
@@ -209,8 +210,8 @@ CREATE PROCEDURE [dbo].[ispRVBLP05]
          UPDATE ORDERS WITH (ROWLOCK)
          SET SOStatus = '0',
              TrafficCop = NULL,
-             EditWho = SUSER_SNAME(),
-             EditDate = GETDATE()
+             EditWho = dbo.fnc_GetUserName(),      --(SSA01)
+             EditDate = dbo.fnc_GetDate()   --(SSA01)
          WHERE Loadkey = @c_Loadkey
          AND SOStatus = 'TSRELEASED'
       END          

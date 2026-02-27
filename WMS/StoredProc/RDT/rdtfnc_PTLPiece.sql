@@ -24,6 +24,8 @@ GO
 /* 2022-12-15 1.9  Ung        WMS-21056 Allow multi sorter, if not use light  */
 /* 2022-11-30 2.0  Ung        WMS-21170 Add DynamicSlot that need carton ID   */
 /* 2024-11-01 2.1  JHU151     FCR-650 sorting for inbound                     */
+/* 2025-06-23 0.0  JackC      !!!Cutover. Use V0 repo for work!!!             */
+/* 2025-11-03 2.2  NickT      FCR-8553 Add ExtScnSP for Step4                 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PTLPiece (
@@ -99,6 +101,7 @@ DECLARE
    @cCustomCartonIDSP      NVARCHAR( 20),
    @cExtendedScreenSP      NVARCHAR( 20), --(JHU151)
    @tExtScnData			   VariableTable, --(JHU151)
+   @cCartID                NVARCHAR( 10), -- (Cuize)
    @cUPC                   NVARCHAR( 30), 
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
@@ -179,7 +182,8 @@ SELECT
    @cMultiSKUBarcode    = V_String26, 
    @cCustomCartonIDSP   = V_String27, 
    @cExtendedScreenSP   = V_String28,
-   @cUPC                = V_String41, 
+   @cUPC                = V_String41,
+   @cCartID             = V_String42,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01, 
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02, 
@@ -470,6 +474,15 @@ BEGIN
       SET @cOutField01 = ''
       SET @cOutField02 = ''
    END
+
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0
+         GOTO Step_99
+      END
+   END
 END
 GOTO QUIT
 
@@ -585,10 +598,13 @@ BEGIN
       END
    END
 
-   IF @cExtendedScreenSP = 'rdt_803ExtScn01'
+   IF @cExtendedScreenSP <> ''
    BEGIN
-      SET @nAction = 0
-      GOTO Step_99
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0
+         GOTO Step_99
+      END
    END
 END
 GOTO QUIT
@@ -1054,8 +1070,6 @@ BEGIN
          -- Go to station screen
          SET @nScn = @nScn - 3
          SET @nStep = @nStep - 3
-         
-         GOTO Quit
       END
       
       IF @cOption = '9' -- No
@@ -1098,6 +1112,14 @@ BEGIN
    
       -- Go to assign screen
       SET @nStep = @nStep - 2
+   END
+
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
    END
 END
 GOTO QUIT
@@ -1521,7 +1543,29 @@ BEGIN
             SET @cLastPos = @cUDF05
             SET @cSKU = @cUDF06
          END
+         ELSE IF @cExtendedScreenSP = 'rdt_803ExtScn02'
+         BEGIN
+            -- Unassign station confirmed
+            IF ISNULL(@cUDF01, '') = 'Unassign Confirmed'
+            BEGIN
+               IF @nScn = 4593 AND @nStep = 4 
+               BEGIN
+                  SET @nInputKey = 1
 
+                  UPDATE RDTMOBREC WITH (ROWLOCK) SET
+                     Step   = @nStep,
+                     Scn    = @nScn
+                  WHERE Mobile = @nMobile
+
+                  GOTO Step_4
+               END
+            END
+         END
+         ELSE IF @cExtendedScreenSP = 'rdt_803ExtScn03'
+         BEGIN
+            SET @cCartID = @cUDF07
+            SET @cStation = @cUDF08
+         END
          GOTO Quit
       END
    END -- Ext scn sp <> ''
@@ -1569,7 +1613,9 @@ BEGIN
       V_String26 = @cMultiSKUBarcode, 
       V_String27 = @cCustomCartonIDSP, 
       V_String28 = @cExtendedScreenSP,
-      V_String41 = @cUPC, 
+      V_String41 = @cUPC,
+      V_String42 = @cCartID,
+
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01, 
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02, 

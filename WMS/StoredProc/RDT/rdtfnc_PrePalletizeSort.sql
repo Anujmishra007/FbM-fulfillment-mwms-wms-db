@@ -34,6 +34,11 @@ GO
 /* 2024-11-06   2.1.0 XLL045  FCR-1066  Add cPosition                   */
 /*                            Check UserDefine02 in UCC                 */
 /*                            Upd beforereceivedqty                     */
+/* 2025-06-18   0.0.0 Jackc   !!!Cutover. Use V0 repor for work!!!      */
+/* 2025-11-28   2.2.0 NickT   FCR-9027 Add ExtScnSP                     */
+/* 2024-02-07   2.3  James    WMS-23878 Enhance packinfo (james07)      */
+/* 2024-03-19   2.4  James    WMS-24851 Add ExtUpdSP at step2 (james08) */
+/* 2024-05-08   2.5  James    WMS-25413-Add ExtValSP at step8 (james09) */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_PrePalletizeSort] (    
@@ -125,6 +130,9 @@ DECLARE
    @cUserDefine05       NVARCHAR( 60),    --(cc02)  
    @cClsPltCond         NVARCHAR( 1),     --(cc02)  
    @cCond               NVARCHAR( 10),    --(cc02)  
+   @cExtendedScnSP      NVARCHAR( 20),
+   @tExtScnData         VariableTable,
+   @nAction             INT,
     
    @cLottable01         NVARCHAR( 18),    
    @cLottable02         NVARCHAR( 18),    
@@ -171,6 +179,10 @@ DECLARE
    @cWeight             NVARCHAR( 10),
    @cRefNo              NVARCHAR( 20),
    @cDefaultCartonType  NVARCHAR( 20),
+   @cTCartonType        NVARCHAR( 10),
+   @cTCube              NVARCHAR( 10),
+   @cTWeight            NVARCHAR( 10),
+   @cTRefNo             NVARCHAR( 20),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),    
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),    
@@ -186,7 +198,18 @@ DECLARE
    @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),    
    @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),    
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),    
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)    
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1),
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
     
 -- Getting Mobile information    
 SELECT    
@@ -280,6 +303,11 @@ SELECT
    @cCapturePackInfoSP     = V_String40,
    @cPackInfo              = V_String41,
    @cDefaultCartonType     = V_String42,
+   @cExtendedScnSP         = V_String43,
+   @cCartonType            = V_String44,
+   @cCube                  = V_String44,
+   @cWeight                = V_String45,
+   @cRefNo                 = V_String46,
    
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,    
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,    
@@ -350,6 +378,7 @@ BEGIN
    IF @nStep = 10 GOTO Step_EndSort    -- Scn = 5668. End Sort    
    IF @nStep = 11 GOTO Step_Msg        -- Scn = 5669. Msg    
    IF @nStep = 14 GOTO Step_PackInfo   -- Scn = 6310. PackInfo    
+   IF @nStep = 99 GOTO Step_99  -- Extend Screen
 END    
     
 RETURN -- Do nothing if incorrect step    
@@ -386,6 +415,10 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerkey)    
    IF @cExtendedUpdateSP IN ('0', '')    
       SET @cExtendedUpdateSP = ''    
+
+   SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerkey)
+   IF @cExtendedScnSP = '0'
+      SET @cExtendedScnSP = ''
  
     
    SET @cPalletizeAllowAddNewUCC = rdt.RDTGetConfig( @nFunc, 'PalletizeAllowAddNewUCC', @cStorerkey)    
@@ -418,6 +451,8 @@ BEGIN
    SET @cDefaultCartonType=rdt.RDTGetConfig( @nFunc, 'DefaultCartonType', @cStorerKey)
    IF @cDefaultCartonType = '0'
       SET @cDefaultCartonType = ''
+
+   SET @cCartonType = ''
 
    -- Prep next screen var    
    SET @cOutField01 = '' -- ASN    
@@ -792,6 +827,11 @@ BEGIN
                GOTO Step_UCC_Fail                
          END    
       END    
+
+      -- Handling transaction    
+      SET @nTranCount = @@TRANCOUNT    
+      BEGIN TRAN  -- Begin our own transaction    
+      SAVE TRAN Step_UCC -- For rollback or commit only our own transaction    
     
       SET @nErrNo = 0    
       SET @cSuggID = ''    
@@ -831,7 +871,61 @@ BEGIN
          @cErrMsg       = @cErrMsg        OUTPUT     
     
       IF @nErrNo <> 0    
+      BEGIN
+         ROLLBACK TRAN Step_UCC
+         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+            COMMIT TRAN
          GOTO Step_UCC_Fail    
+      END     
+    
+      -- Extended validate    
+      IF @cExtendedUpdateSP <> ''    
+      BEGIN    
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')    
+         BEGIN    
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +    
+               ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtUpdateVar, ' +    
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+            SET @cSQLParam =    
+               ' @nMobile        INT,           ' +    
+               ' @nFunc          INT,           ' +    
+               ' @cLangCode      NVARCHAR( 3),  ' +    
+               ' @nStep          INT,           ' +    
+               ' @nAfterStep     INT,           ' +    
+               ' @nInputKey      INT,           ' +    
+               ' @cFacility      NVARCHAR( 5),  ' +     
+               ' @cStorerKey     NVARCHAR( 15), ' +    
+               ' @cReceiptKey    NVARCHAR( 10), ' +    
+               ' @cLane          NVARCHAR( 10), ' +    
+               ' @cUCC           NVARCHAR( 20), ' +    
+               ' @cToID          NVARCHAR( 18), ' +    
+               ' @cSKU           NVARCHAR( 20), ' +    
+               ' @nQty           INT,           ' +    
+               ' @cOption        NVARCHAR( 1),  ' +                   
+               ' @cPosition      NVARCHAR( 20), ' +    
+               ' @tExtUpdateVar  VariableTable READONLY, ' +     
+               ' @nErrNo         INT           OUTPUT,   ' +    
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT    '    
+    
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,      
+               @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtUpdateVar,    
+               @nErrNo OUTPUT, @cErrMsg OUTPUT    
+    
+            IF @nErrNo <> 0    
+            BEGIN    
+               ROLLBACK TRAN Step_UCC    
+               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started    
+                  COMMIT TRAN    
+               GOTO Step_UCC_Fail    
+            END                
+         END    
+      END    
+
+      COMMIT TRAN Step_UCC    
+      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started    
+         COMMIT TRAN 
     
      IF @cExtendedInfoSP <> '' AND     
          EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')    
@@ -918,13 +1012,13 @@ BEGIN
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cLane, @cUCC, @cSKU,
-               @nErrNo      OUTPUT,
-               @cErrMsg     OUTPUT,
-               @cPackInfo   OUTPUT,
-               @cWeight     OUTPUT,
-               @cCube       OUTPUT,
-               @cRefNo      OUTPUT,
-               @cCartonType OUTPUT
+               @nErrNo        OUTPUT,
+               @cErrMsg       OUTPUT,
+               @cPackInfo     OUTPUT,
+               @cTWeight      OUTPUT,
+               @cTCube        OUTPUT,
+               @cTRefNo       OUTPUT,
+               @cTCartonType  OUTPUT
          END
          ELSE
             -- Setup is non SP
@@ -936,14 +1030,15 @@ BEGIN
       BEGIN
          SET @nScn = @nScn_PackInfo
          SET @nStep = @nStep_PackInfo
+         
          -- Get PackInfo
-         SET @cCartonType = ''
-         SET @cWeight = ''
-         SET @cCube = ''
-         SET @cRefNo = ''
+         SET @cCartonType = CASE WHEN @cTCartonType <> '' THEN @cTCartonType ELSE '' END
+         SET @cWeight = CASE WHEN @cTWeight <> '' THEN @cTWeight ELSE '' END
+         SET @cCube = CASE WHEN @cTCube <> '' THEN @cTCube ELSE '' END
+         SET @cRefNo = CASE WHEN @cTRefNo <> '' THEN @cTRefNo ELSE '' END
 
          -- Prepare LOC screen var
-         SET @cOutField01 = CASE WHEN ISNULL(@cCartonType ,'') ='' AND ISNULL(@cDefaultCartonType,'')<>''  THEN @cDefaultCartonType ELSE @cCartonType end
+         SET @cOutField01 = CASE WHEN ISNULL(@cCartonType ,'') = '' AND ISNULL(@cDefaultCartonType,'') <>''  THEN @cDefaultCartonType ELSE @cCartonType end
          SET @cOutField02 = @cWeight
          SET @cOutField03 = @cCube
          SET @cOutField04 = @cRefNo
@@ -1005,6 +1100,13 @@ BEGIN
       SET @nScn  = @nScn_ASNLane    
       SET @nStep = @nStep_ASNLane    
    END    
+
+   IF @cExtendedScnSP <> '' 
+      AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit    
     
    Step_UCC_Fail:    
@@ -1392,7 +1494,14 @@ BEGIN
                 
       SET @nScn  = @nScn_UCC    
       SET @nStep = @nStep_UCC    
-   END    
+   END
+
+   IF @cExtendedScnSP <> '' 
+      AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit    
     
    Step_TOID_Fail:    
@@ -2277,6 +2386,46 @@ BEGIN
             END    
          END    
       END          
+
+      -- (james09)
+      IF @cExtendedValidateSP <> ''    
+      BEGIN    
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')    
+         BEGIN    
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +    
+               ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtValidVar, ' +    
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+            SET @cSQLParam =    
+               ' @nMobile        INT,           ' +    
+               ' @nFunc          INT,           ' +    
+               ' @cLangCode      NVARCHAR( 3),  ' +    
+               ' @nStep          INT,           ' +    
+               ' @nAfterStep     INT,           ' +    
+               ' @nInputKey      INT,           ' +    
+               ' @cFacility      NVARCHAR( 5),  ' +     
+               ' @cStorerKey     NVARCHAR( 15), ' +    
+               ' @cReceiptKey    NVARCHAR( 10), ' +    
+               ' @cLane          NVARCHAR( 10), ' +    
+               ' @cUCC           NVARCHAR( 20), ' +    
+               ' @cToID          NVARCHAR( 18), ' +    
+               ' @cSKU           NVARCHAR( 20), ' +    
+               ' @nQty           INT,           ' +    
+               ' @cOption        NVARCHAR( 1),  ' +                   
+               ' @cPosition      NVARCHAR( 20), ' +    
+               ' @tExtValidVar   VariableTable READONLY, ' +     
+               ' @nErrNo         INT           OUTPUT,   ' +    
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT    '    
+    
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,      
+               @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtValidVar,    
+               @nErrNo OUTPUT, @cErrMsg OUTPUT    
+    
+            IF @nErrNo <> 0    
+               GOTO Step_Qty_Fail                
+         END    
+      END          
     
       -- Handling transaction    
       SET @nTranCount = @@TRANCOUNT    
@@ -2397,6 +2546,140 @@ BEGIN
     
       IF @nErrNo <> 0    
          GOTO Step_QTY_Fail    
+     IF @cExtendedInfoSP <> '' AND     
+         EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')    
+      BEGIN    
+         SET @cExtendedInfo = ''    
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +         
+              ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +    
+              ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtInfoVar, ' +    
+              ' @cExtendedInfo OUTPUT '             
+         SET @cSQLParam =        
+            ' @nMobile        INT,           ' +    
+            ' @nFunc          INT,           ' +    
+            ' @cLangCode      NVARCHAR( 3),  ' +    
+            ' @nStep          INT,           ' +    
+            ' @nAfterStep     INT,           ' +    
+            ' @nInputKey      INT,           ' +    
+            ' @cFacility      NVARCHAR( 5),  ' +     
+            ' @cStorerKey     NVARCHAR( 15), ' +    
+            ' @cReceiptKey    NVARCHAR( 10), ' +    
+            ' @cLane          NVARCHAR( 10), ' +    
+            ' @cUCC           NVARCHAR( 20), ' +    
+            ' @cToID          NVARCHAR( 18), ' +    
+            ' @cSKU           NVARCHAR( 20), ' +    
+            ' @nQty           INT,           ' +    
+            ' @cOption        NVARCHAR( 1),  ' +                   
+            ' @cPosition      NVARCHAR( 20), ' +    
+            ' @tExtInfoVar    VariableTable READONLY, ' +     
+            ' @cExtendedInfo  NVARCHAR( 20) OUTPUT    '    
+    
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+            @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,    
+            @cReceiptKey, @cLane, @cUCC, @cSuggID, @cSKU, @nQty, @cOption, @cPosition, @tExtInfoVar,    
+            @cExtendedInfo OUTPUT     
+      END    
+
+      -- EventLog --(cc01)    
+      EXEC RDT.rdt_STD_EventLog    
+         @cActionType = '4',    
+         @cUserID     = @cUserName,    
+         @nMobileNo   = @nMobile,    
+         @nFunctionID = @nFunc,    
+         @cFacility   = @cFacility,    
+         @cStorerKey  = @cStorerKey,    
+         @nStep       = @nStep,    
+         @cUCC        = @cUCC,    
+         @cReceiptKey = @cReceiptKey,    
+         @cLane       = @cLane       
+
+      -- Custom PackInfo field setup
+      SET @cPackInfo = ''
+      IF @cCapturePackInfoSP <> ''
+      BEGIN
+         -- Custom SP to get PackInfo setup
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cCapturePackInfoSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cCapturePackInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cLane, @cUCC, @cSKU, ' +
+               ' @nErrNo      OUTPUT, ' +
+               ' @cErrMsg     OUTPUT, ' +
+               ' @cPackInfo   OUTPUT, ' +
+               ' @cWeight     OUTPUT, ' +
+               ' @cCube       OUTPUT, ' +
+               ' @cRefNo      OUTPUT, ' +
+               ' @cCartonType OUTPUT'
+            SET @cSQLParam =
+               '@nMobile     INT,           ' +
+               '@nFunc       INT,           ' +
+               '@cLangCode   NVARCHAR( 3),  ' +
+               '@nStep       INT,           ' +
+               '@nInputKey   INT,           ' +
+               '@cFacility   NVARCHAR( 5),  ' +
+               '@cStorerKey  NVARCHAR( 15), ' +
+               '@cReceiptKey NVARCHAR( 10), ' +
+               '@cLane       NVARCHAR( 10), ' +
+               '@cUCC        NVARCHAR( 20), ' +
+               '@cSKU        NVARCHAR( 20), ' +
+               '@nErrNo      INT           OUTPUT, ' +
+               '@cErrMsg     NVARCHAR( 20) OUTPUT, ' +
+               '@cPackInfo   NVARCHAR( 3)  OUTPUT, ' +
+               '@cWeight     NVARCHAR( 10) OUTPUT, ' +
+               '@cCube       NVARCHAR( 10) OUTPUT, ' +
+               '@cRefNo      NVARCHAR( 20) OUTPUT, ' +
+               '@cCartonType NVARCHAR( 10) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cLane, @cUCC, @cSKU,
+               @nErrNo        OUTPUT,
+               @cErrMsg       OUTPUT,
+               @cPackInfo     OUTPUT,
+               @cTWeight      OUTPUT,
+               @cTCube        OUTPUT,
+               @cTRefNo       OUTPUT,
+               @cTCartonType  OUTPUT
+         END
+         ELSE
+            -- Setup is non SP
+            SET @cPackInfo = @cCapturePackInfoSP
+      END
+
+      -- Capture pack info
+      IF @cPackInfo <> ''
+      BEGIN
+         SET @nScn = @nScn_PackInfo
+         SET @nStep = @nStep_PackInfo
+         
+         -- Get PackInfo
+         SET @cCartonType = CASE WHEN @cTCartonType <> '' THEN @cTCartonType ELSE '' END
+         SET @cWeight = CASE WHEN @cTWeight <> '' THEN @cTWeight ELSE '' END
+         SET @cCube = CASE WHEN @cTCube <> '' THEN @cTCube ELSE '' END
+         SET @cRefNo = CASE WHEN @cTRefNo <> '' THEN @cTRefNo ELSE '' END
+
+         -- Prepare LOC screen var
+         SET @cOutField01 = CASE WHEN ISNULL(@cCartonType ,'') = '' AND ISNULL(@cDefaultCartonType,'') <>''  THEN @cDefaultCartonType ELSE @cCartonType end
+         SET @cOutField02 = @cWeight
+         SET @cOutField03 = @cCube
+         SET @cOutField04 = @cRefNo
+
+         -- Enable disable field
+         SET @cFieldAttr01 = CASE WHEN CHARINDEX( 'T', @cPackInfo) = 0 THEN 'O' ELSE '' END
+         SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cPackInfo) = 0 THEN 'O' ELSE '' END
+         SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cPackInfo) = 0 THEN 'O' ELSE '' END
+         SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cPackInfo) = 0 THEN 'O' ELSE '' END
+ 
+         -- Position cursor
+         IF @cFieldAttr01 = '' AND @cOutField01 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE
+         IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE
+         IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE
+         IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE 
+
+         -- Go to next screen
+         SET @nScn = @nScn_PackInfo
+         SET @nStep = @nStep_PackInfo
+
+         GOTO Quit
+      END
     
       -- Prep next screen var    
       SET @cOutField01 = @cUCC    
@@ -2404,10 +2687,7 @@ BEGIN
       SET @cOutField03 = @cSuggID    
       SET @cOutField04 = ''    
       SET @cOutField15 = @cExtendedInfo    
-        
-      INSERT INTO traceInfo (TRACEname,timein,col1,col2,col3,col4,col5)  
-      VALUES('cc',GETDATE(),@cSuggID,@cPosition,@cUCC,@cSKU,@cLane)  
-          
+
       --INC1250618    
       SET @nFromScn  = @nScn_Qty         
       SET @nFromStep = @nStep_Qty     
@@ -3067,6 +3347,59 @@ BEGIN
 END
 GOTO Quit
 
+Step_99:
+BEGIN
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtendedScnSP,
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         GOTO Quit
+      END
+   END
+
+   Step_99_Fail:
+      GOTO Quit
+END
+
+
 /********************************************************************************    
 Quit. Update back to I/O table, ready to be pick up by JBOSS    
 ********************************************************************************/    
@@ -3158,6 +3491,11 @@ BEGIN
       V_String40 = @cCapturePackInfoSP,
       V_String41 = @cPackInfo,
       V_String42 = @cDefaultCartonType,
+      V_String43 = @cExtendedScnSP,
+      V_String44 = @cCartonType,
+      V_String45 = @cCube,
+      V_String46 = @cWeight,
+      V_String47 = @cRefNo,
    
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,    
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,    

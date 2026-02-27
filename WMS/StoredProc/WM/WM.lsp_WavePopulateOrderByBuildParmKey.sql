@@ -1,47 +1,48 @@
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO
+GO   
 
-/************************************************************************/
-/* Store Procedure: lsp_WavePopulateOrderByBuildParmKey                 */
-/* Creation Date: 02-Feb-2024                                           */
-/* Copyright: Maersk                                                    */
-/* Written by: WLChooi                                                  */
-/*                                                                      */
+/************************************************************************/                                                                                  
+/* Store Procedure: lsp_WavePopulateOrderByBuildParmKey                 */                                                                                  
+/* Creation Date: 02-Feb-2024                                           */                                                                                  
+/* Copyright: Maersk                                                    */                                                                                  
+/* Written by: WLChooi                                                  */                                                                                  
+/*                                                                      */                                                                                  
 /* Purpose: LFWM-4602 - SCE| PROD| SG| Wave Control - Populate Orders - */
 /*                      Top Up Orders With Same Parameter               */
-/*                                                                      */
-/* Called By: SCE                                                       */
-/*          :                                                           */
-/* GitHub Version: 1.0                                                  */
-/*                                                                      */
-/* Version: 8.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Ver.  Purposes                                  */
+/*                                                                      */                                                                                  
+/* Called By: SCE                                                       */                                                                                  
+/*          :                                                           */                                                                                  
+/* GitHub Version: 1.0                                                  */                                                                                  
+/*                                                                      */                                                                                  
+/* Version: 8.0                                                         */                                                                                  
+/*                                                                      */                                                                                  
+/* Data Modifications:                                                  */                                                                                  
+/*                                                                      */                                                                                  
+/* Updates:                                                             */                                                                                  
+/* Date        Author   Ver.  Purposes                                  */  
 /* 02-Feb-2024 WLChooi  1.0   DevOps Combine Script                     */
-/************************************************************************/
-CREATE OR ALTER PROC [WM].[lsp_WavePopulateOrderByBuildParmKey]
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
+/************************************************************************/                                                                                  
+CREATE OR ALTER PROC [WM].[lsp_WavePopulateOrderByBuildParmKey]                                                                                                                     
       @c_WaveKey           NVARCHAR(10)
-   ,  @c_BuildParmKey      NVARCHAR(10)
-   ,  @c_Facility          NVARCHAR(5)
+   ,  @c_BuildParmKey      NVARCHAR(10) 
+   ,  @c_Facility          NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey         NVARCHAR(15)
-   ,  @b_Success           INT = 1           OUTPUT
-   ,  @n_err               INT = 0           OUTPUT
-   ,  @c_ErrMsg            NVARCHAR(255)= '' OUTPUT
-   ,  @c_UserName          NVARCHAR(128)= ''
-   ,  @b_debug             INT          = 0
-AS
-BEGIN
-   SET NOCOUNT ON
-   SET ANSI_NULLS OFF
-   SET QUOTED_IDENTIFIER OFF
-   SET CONCAT_NULL_YIELDS_NULL OFF
+   ,  @b_Success           INT = 1           OUTPUT  
+   ,  @n_err               INT = 0           OUTPUT                                                                                                             
+   ,  @c_ErrMsg            NVARCHAR(255)= '' OUTPUT               
+   ,  @c_UserName          NVARCHAR(128)= ''      
+   ,  @b_debug             INT          = 0 
+AS  
+BEGIN                                                                                                                                                        
+   SET NOCOUNT ON                                                                                                                                           
+   SET ANSI_NULLS OFF                                                                                                                                       
+   SET QUOTED_IDENTIFIER OFF                                                                                                                                
+   SET CONCAT_NULL_YIELDS_NULL OFF       
 
-   DECLARE  @n_StartTCnt         INT = @@TRANCOUNT
+   DECLARE  @n_StartTCnt         INT = @@TRANCOUNT  
          ,  @n_Continue          INT = 1
          ,  @n_PickslipCnt       INT = 0
          ,  @c_SQLBuildWave      NVARCHAR(MAX)
@@ -54,23 +55,27 @@ BEGIN
 
    SET @b_Success = 1
    SET @n_Err     = 0
+               
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-   SET @n_Err = 0
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
 
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser]
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-
-      IF @n_Err <> 0
-      BEGIN
-         GOTO EXIT_SP
-      END
-
-      EXECUTE AS LOGIN = @c_UserName
-   END
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
 
    BEGIN TRY
       --Validation
@@ -99,8 +104,8 @@ BEGIN
          --Check if @c_BuildDateField has value
          SELECT @c_ParmGroup = ISNULL(RTRIM(BP.ParmGroup),'')
          FROM BUILDPARM BP WITH (NOLOCK)
-         WHERE BP.BuildParmKey = @c_BuildParmKey
-
+         WHERE BP.BuildParmKey = @c_BuildParmKey                                                                                                                                            
+         
          SELECT @c_BuildDateField = ISNULL(CFG.BuildDateField,'')
          FROM BUILDPARMGROUPCFG CFG WITH (NOLOCK)
          WHERE ParmGroup = @c_ParmGroup
@@ -111,9 +116,9 @@ BEGIN
                  , @dt_Date_To = IIF(ISDATE(BWL.UDF04) = 1, BWL.UDF04, NULL)
             FROM dbo.BUILDWAVEDETAILLOG BWDL (NOLOCK)
             JOIN dbo.BUILDWAVELOG BWL (NOLOCK) ON BWL.BatchNo = BWDL.BatchNo
-            WHERE BWDL.Wavekey = @c_WaveKey
+            WHERE BWDL.Wavekey = @c_WaveKey 
          END
-
+         
          --Check if Pickslipno has been generated
          --Discrete
          SET @n_PickslipCnt = 0
@@ -121,7 +126,7 @@ BEGIN
          FROM WAVEDETAIL WD (NOLOCK)
          JOIN PICKHEADER PH (NOLOCK) ON PH.OrderKey = WD.OrderKey
          WHERE WD.WaveKey = @c_WaveKey
-
+         
          IF ISNULL(@n_PickslipCnt, 0) = 0
          BEGIN
             --Conso
@@ -133,7 +138,7 @@ BEGIN
             JOIN PICKHEADER PH (NOLOCK) ON PH.ExternOrderKey = LPD.LoadKey
             WHERE WD.WaveKey = @c_WaveKey
          END
-
+         
          IF ISNULL(@n_PickslipCnt, 0) > 0
          BEGIN
             SET @n_continue = 3
@@ -166,12 +171,12 @@ BEGIN
          PRINT @c_SQLBuildWave
       END
 
-      IF @b_Success = 0
-      BEGIN
-         SET @n_Continue = 3
+      IF @b_Success = 0   
+      BEGIN        
+         SET @n_Continue = 3  
       END
    END TRY
-
+   
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
@@ -179,11 +184,11 @@ BEGIN
    END CATCH
 
 EXIT_SP:
-   IF (XACT_STATE()) = -1
+   IF (XACT_STATE()) = -1  
    BEGIN
       ROLLBACK TRAN
-   END
-
+   END  
+   
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -209,13 +214,14 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-
+   
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
-   END
-   REVERT
+   END 
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_WavePopulateOrderByBuildParmKey] TO [nSQL]
-GO
+GO  

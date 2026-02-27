@@ -14,6 +14,7 @@ GO
 /* 2022-03-25 1.0  yeekung  wms-18959 Created                                          */
 /* 2023-04-25 1.1  yeekung  WMS-22395 Add storerconfig altref (yeekung01)              */
 /* 2024-06-13 1.2  NLT013   FCR-242 Reset output fields before go back to first screen */
+/* 2025-10-17 1.3  yeekung   FCR-8146 Add FieldAttribute    (yeekung02)                */      
 /***************************************************************************************/
               
 CREATE OR ALTER PROC rdt.rdt_AT_GateIn (              
@@ -41,8 +42,19 @@ CREATE OR ALTER PROC rdt.rdt_AT_GateIn (
    @cOutField07  NVARCHAR( 20) OUTPUT,            
    @cOutField08  NVARCHAR( 20) OUTPUT,            
    @cOutField09  NVARCHAR( 20) OUTPUT,            
-   @cOutField10  NVARCHAR( 20) OUTPUT,           
+   @cOutField10  NVARCHAR( 20) OUTPUT,                 
    @cOutField11  NVARCHAR( 20) OUTPUT,  
+   @cFieldAttr01  NVARCHAR( 1) OUTPUT,           
+   @cFieldAttr02  NVARCHAR( 1) OUTPUT,              
+   @cFieldAttr03  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr04  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr05  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr06  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr07  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr08  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr09  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr10  NVARCHAR( 1) OUTPUT,           
+   @cFieldAttr11  NVARCHAR( 1) OUTPUT,
    @cExtendedinfo NVARCHAR(20)  OUTPUT,           
    @nErrNo        INT           OUTPUT,           
    @cErrMsg       NVARCHAR( 20) OUTPUT                    
@@ -252,6 +264,9 @@ AS
          SET  @cOutField11= CASE WHEN @cActivityStatus = '1' THEN 'GATE In' 
                                  WHEN @cActivityStatus = '9' THEN 'GATE OUT' END
 
+         SET @cFieldAttr08 = 'O'     
+         SET @cFieldAttr10 = 'O'
+
          SET @nStep= @nStep+1
          SET @nScn= @nScn+1
       END
@@ -435,6 +450,9 @@ AS
 
          SET  @cOutField11= CASE WHEN @cActivityStatus = '1' THEN 'GATE In' 
                               WHEN @cActivityStatus = '9' THEN 'GATE OUT' END
+
+         SET @nScn = @nScn - 1
+         SET @nStep = @nStep - 1
       END
 
       GOTO QUIT

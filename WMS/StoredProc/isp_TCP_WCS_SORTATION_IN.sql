@@ -32,6 +32,8 @@ GO
 /* 07-04-2012   SHong     1.2   Trigger Agile Rate Request              */
 /* 03-09-2012   Leong     1.3   SOS# 254851 - Standardize in progress   */
 /*                                   update for table TCPSOCKET_INLOG   */
+/* 10-10-2025   SSA01     1.4   UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_TCP_WCS_SORTATION_IN]
@@ -317,8 +319,8 @@ BEGIN
    UPDATE dbo.TCPSocket_INLog WITH (ROWLOCK)
    SET STATUS   = @c_Status
      , ErrMsg   = @c_ErrMsg
-     , Editdate = GETDATE()
-     , EditWho  = SUSER_SNAME()
+     , Editdate = dbo.fnc_GetDate()    --(SSA01)
+     , EditWho  = dbo.fnc_GetUserName()     --(SSA01)
    WHERE SerialNo = @n_SerialNo
 
    WHILE @@TRANCOUNT > @n_StartTCnt -- Commit until the level we started

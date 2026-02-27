@@ -36,6 +36,7 @@ GO
 /* 27-Apr-2023 Wan01    1.2   LFWM-4157 -Philippines All Customer LF SCE*/
 /*                            WM Dock Door Booking CR                   */
 /*                            DevOps Combine Script                     */
+/* 06-Oct-2025 AK01     1.3   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER ntrBooking_OutUpdate
@@ -96,8 +97,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE BOOKING_OUT with (ROWLOCK)
-      SET EditWho = sUser_sName(),
-          EditDate = GetDate()
+      SET EditWho = dbo.fnc_GetUserName(),
+          EditDate = dbo.fnc_GetDate()
       FROM BOOKING_OUT 
       JOIN INSERTED ON BOOKING_OUT.BookingNo = INSERTED.BookingNo
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -126,8 +127,8 @@ BEGIN
       WHILE @@FETCH_STATUS <> -1 AND @n_continue = 1
       BEGIN 
          UPDATE dbo.TMS_Shipment with (ROWLOCK)
-         SET EditWho  = sUser_sName() 
-           , EditDate = GetDate()
+         SET EditWho  = dbo.fnc_GetUserName() 
+           , EditDate = dbo.fnc_GetDate()
            , ShipmentPlannedStartDate = @dt_BookingDate                             -- (Wan01) v1.2
          WHERE Rowref = @n_RowRef_TMS
          
@@ -178,3 +179,4 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+

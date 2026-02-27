@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspAL_SG07]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspAL_SG07]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.2                                                    */    
 /*                                                                      */    
 /* Version: 7.0                                                         */    
 /*                                                                      */    
@@ -28,9 +24,10 @@ GO
 /* Date         Author  Ver.  Purposes                                  */  
 /* 21-JUL-2021  FUN01   1.1   Align with nspOrderProcessing setting to  */  
 /* fix 'Could not complete cursor operation' error                      */ 
-/* 21-JUL-2021  CSCHONG 1.1   WMS-17436 revised logic (CS01)            */ 
+/* 21-JUL-2021  CSCHONG 1.1   WMS-17436 revised logic (CS01)            */
+/* 25-Jun-2025  WLChooi 1.2   UWP-36187-Support Multi Facilities(WL01)  */
 /************************************************************************/    
-CREATE  PROC [dbo].[nspAL_SG07]        
+CREATE OR ALTER PROC [dbo].[nspAL_SG07]        
    @c_Orderkey    NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -144,7 +141,7 @@ BEGIN
    AND Long = 'nspAL_SG07'
    AND Code = 'UOM2BYCONSIGNEE'
    AND Short <> 'N'
-   AND (Code2 = @c_Facility OR ISNULL(Code2,'') = '')
+   AND (Code2 IN (SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) OR ISNULL(Code2,'') = '')   --WL01
 
    IF @c_UOM = '2'
    BEGIN      
@@ -185,19 +182,19 @@ BEGIN
    AND Long = 'nspAL_SG07'
    AND Code = 'SORTBYQTY'
    AND Short <> 'N'
-   AND (Code2 = @c_Facility OR ISNULL(Code2,'') = '')
+   AND (Code2 IN (SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) OR ISNULL(Code2,'') = '')   --WL01
    
    IF @c_SortByQty = 'SORTBYQTY'
    BEGIN
       --SET @c_SORTUOM1 = ' ORDER BY CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC ' --CS01
-      SET @c_SORTUOM1 = ' ORDER BY CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC  '
-      SET @c_SORTNOTUOM1 = ' ORDER BY 4, LA.Lottable05, LOC.LogicalLocation, LOC.LOC '
+      SET @c_SORTUOM1 = ' ORDER BY F.FacSort, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC  '   --WL01
+      SET @c_SORTNOTUOM1 = ' ORDER BY F.FacSort, 4, LA.Lottable05, LOC.LogicalLocation, LOC.LOC '   --WL01
    END
    ELSE
    BEGIN 
       --SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lot, LOC.LogicalLocation, LOC.LOC '   --CS01
-      SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4, LA.Lot, LOC.LogicalLocation, LOC.LOC '          --CS01
-      SET @c_SORTNOTUOM1 = ' ORDER BY LA.Lottable05, 4, LOC.LogicalLocation, LOC.LOC '
+      SET @c_SORTUOM1 = ' ORDER BY F.FacSort, LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4, LA.Lot, LOC.LogicalLocation, LOC.LOC '          --CS01   --WL01
+      SET @c_SORTNOTUOM1 = ' ORDER BY F.FacSort, LA.Lottable05, 4, LOC.LogicalLocation, LOC.LOC '   --WL01
    END 
      
    SELECT TOP 1 @n_RestrictDays = CASE WHEN (CON.Susr1 = 'DCNM1' OR CON.Susr2 = 'DCNM1' OR CON.Susr3 = 'DCNM1' OR CON.Susr4 = 'DCNM1' OR CON.Susr5 = 'DCNM1') AND
@@ -258,12 +255,13 @@ BEGIN
       JOIN SKU (NOLOCK) ON LOTxLOCxID.Storerkey = SKU.Storerkey AND LOTxLOCxID.Sku = SKU.Sku
       JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey 
       JOIN SKUXLOC SL (NOLOCK) ON (LOTxLOCxID.Storerkey = SL.Storerkey AND LOTxLOCxID.Sku = SL.Sku AND LOTxLOCxID.Loc = SL.Loc)
+      JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility   --WL01
       LEFT JOIN (SELECT TD.FromLot, TD.FromLoc, TD.FromID, SUM(TD.FromQty) AS FromQty
                  FROM TRANSFER T (NOLOCK)
                  JOIN TRANSFERDETAIL TD (NOLOCK) ON T.Transferkey = TD.Transferkey
                  WHERE TD.Status <> ''9''
-                 AND TD.FromStorerkey = ''' + RTRIM(@c_StorerKey) + ''' ' +
-               ' AND TD.FromSku = ''' + RTRIM(@c_Sku) + ''' ' +
+                 AND TD.FromStorerkey = @c_StorerKey ' +   --WL01
+               ' AND TD.FromSku = @c_Sku ' +   --WL01
                ' GROUP BY TD.FromLot, TD.FromLoc, TD.FromID) AS TRFLLI ON LOTXLOCXID.Lot = TRFLLI.FromLot 
                                                                           AND LOTXLOCXID.Loc = TRFLLI.FromLoc 
                                                                           AND LOTXLOCXID.ID = TRFLLI.FromID             
@@ -272,7 +270,7 @@ BEGIN
       AND LOC.Status <> ''HOLD''
       AND LOT.Status <> ''HOLD''
       AND ID.Status <> ''HOLD''
-      AND LOC.Facility = @c_Facility
+      /*AND LOC.Facility = @c_Facility   --WL01*/
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) > 0
       AND LOTxLOCxID.STORERKEY = @c_StorerKey
       AND LOTxLOCxID.SKU = @c_SKU 

@@ -48,7 +48,8 @@ GO
 /* 2022-03-18  Wan10    1.8   JSM-57583 - Tune performance by subtracting*/
 /*                            largest possible Qty to reduce API load   */
 /* 2022-07-29  BeeTin   1.9   JSM-76147 -excess qty w/multi sku in      */      
-/*                            one carton  1 DN                          */  
+/*                            one carton  1 DN                          */
+/* 2025-10-10  SSA01    2.0   UWP-42248 -Enhanced session management    */
 /************************************************************************/   
 CREATE PROC ispRLWAV20_PACK
            @c_Wavekey            NVARCHAR(10)
@@ -1777,8 +1778,8 @@ BEGIN
                   ,Qty = CASE WHEN @n_Status = 0 THEN Qty ELSE @n_Qty END
                   ,PickSlipNo = @c_PickSlipNo
                   ,Trafficcop = NULL
-                  ,EditWho    = SUSER_SNAME()
-                  ,EditDate   = GETDATE()
+                  ,EditWho    = dbo.fnc_GetUserName()                 --(SSA01)
+                  ,EditDate   = dbo.fnc_GetDate()    --(SSA01)
             WHERE PickDetailKey = @c_PickDetailkey
 
             SET @n_err = @@ERROR

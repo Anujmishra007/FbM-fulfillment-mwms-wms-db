@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrIDS_VEHICLEUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrIDS_VEHICLEUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -26,9 +24,10 @@ GO
 /* Modifications:                                                       */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 28-Oct-2013  TLTING   1.1  Review Editdate column update             */
+/* 06-Oct-2025  AK01     1.2  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName       */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrIDS_VEHICLEUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrIDS_VEHICLEUpdate]  
 ON  [dbo].[IDS_VEHICLE]   
 FOR UPDATE  
 AS  
@@ -57,8 +56,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate) 
    BEGIN  
       UPDATE IDS_VEHICLE with (ROWLOCK) 
-         SET EditDate = GETDATE(),  
-             EditWho = SUSER_SNAME()
+         SET EditDate = dbo.fnc_GetDate(),  
+             EditWho = dbo.fnc_GetUserName()
         FROM IDS_VEHICLE, INSERTED  
        WHERE IDS_VEHICLE.VehicleNumber = INSERTED.VehicleNumber
 
@@ -102,3 +101,4 @@ BEGIN
       RETURN  
    END  
 END  
+

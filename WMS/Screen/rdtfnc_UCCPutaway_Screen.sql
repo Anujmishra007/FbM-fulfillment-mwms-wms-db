@@ -4,7 +4,7 @@
 DELETE rdt.RDTScn WHERE Scn = 926 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 926, 'ENG',
     @cLine01 = 'UCC:'
-   ,@cLine02 = '%20i01'
+   ,@cLine02 = '%200iV_Barcode'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 521

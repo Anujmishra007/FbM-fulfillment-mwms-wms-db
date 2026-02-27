@@ -1,8 +1,7 @@
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Store Procedure:  nspPRIDS20                                         */
 /* Creation Date: -                                                     */
@@ -16,7 +15,7 @@ GO
 /*                                                                      */
 /* Called By:  nspPreallocateOrderProcessing                            */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -30,6 +29,7 @@ GO
 /*                            -Match LOC.HostWHCode at Preallocate      */
 /* 2024-07-05  Wan03    1.3   UWP-21429-Mattel Overallocation Enhancement*/
 /*                            - Minus QtyReplen when find stock         */
+/* 25-Jun-2025 WLChooi  1.4   UWP-36187-Support Multi Facilities(WL01)  */
 /************************************************************************/
 
 CREATE OR ALTER PROC nspPRIDS20
@@ -242,6 +242,7 @@ ELSE
       + 'INNER JOIN LOTXLOCXID (NOLOCK) ON LOT.LOT = LOTXLOCXID.LOT '
       + 'INNER JOIN LOC (NOLOCK) ON LOTXLOCXID.LOC = LOC.LOC '
       + 'INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOTXLOCXID.Lot = LOTATTRIBUTE.Lot '
+      + 'JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility '   --WL01
       + 'LEFT OUTER JOIN (SELECT p.Lot, ORDERS.Facility, QtyPreallocated = SUM(p.Qty) '
       + '                  FROM   PreallocatePickDetail p (NOLOCK), ORDERS (NOLOCK) '
       + '                  WHERE  p.Orderkey = ORDERS.Orderkey '
@@ -250,7 +251,7 @@ ELSE
       + '                  GROUP BY p.Lot, ORDERS.Facility) P ON LOTXLOCXID.Lot = p.Lot AND p.Facility = LOC.Facility '
       + 'WHERE LOT.STORERKEY = @c_storerkey '
       + 'AND LOT.SKU = @c_Sku '
-      + 'AND LOC.Facility = @c_facility '
+      --+ 'AND LOC.Facility = @c_facility '   --WL01
       + @c_Condition + ' '
       + @c_CLKCondition + ' '                                                       --(Wan02)
       + 'AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND LOC.LOCATIONFLAG = ''NONE'' '
@@ -279,9 +280,6 @@ ELSE
 END
 GO
 
-GO
-SET ANSI_NULLS OFF
+GRANT EXECUTE ON [dbo].[nspPRIDS20] TO nSQL 
 GO
 
-GRANT EXECUTE ON nspPRIDS20 to nSQL
-GO

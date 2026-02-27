@@ -1,6 +1,4 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_1836ExtValid01]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_1836ExtValid01]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -14,9 +12,10 @@ GO
 /*                                                                      */  
 /* Date         Author    Ver.  Purposes                                */  
 /* 2020-07-29   YeeKung   1.0   WMS-14059 Created                       */  
+/* 2025-05-28   YeeKung   1.1   Change ErrorNo (yeekung01)              */
 /************************************************************************/  
   
-CREATE PROCEDURE [RDT].[rdt_1836ExtValid01]  
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1836ExtValid01]  
    @nMobile         INT,  
    @nFunc           INT,  
    @cLangCode       NVARCHAR( 3),  
@@ -66,7 +65,7 @@ BEGIN
                SET @nErrNo = -1   
                --SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail  
 
-               SET @cErrMsg1 = rdt.rdtgetmessage( 155951, @cLangCode, 'DSP') -- UpdTaskdetFail  
+               SET @cErrMsg1 = rdt.rdtgetmessage( 239201, @cLangCode, 'DSP') -- UpdTaskdetFail  
                SET @cErrMsg2 = @cToLoc
                EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,   
                   @cErrMsg1, @cErrMsg2
