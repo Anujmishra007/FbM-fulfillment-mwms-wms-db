@@ -10,7 +10,7 @@
 /* 2026-02-26  1.0.1   PPA374    Adding completed tasks into a dashboard table   */
 /*********************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_1812ClosePLT_JCB] (
+CREATE OR ALTER PROC [rdt].[rdt_1812ClosePLT_JCB] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR(3),
