@@ -50,11 +50,12 @@ BEGIN
    DECLARE @CUR_UCC              CURSOR         --(TK01)
          , @n_UCC_RowRef         INT            --(TK01)
          , @c_LogTraceInfo       NVARCHAR(10)   --(TK02)
-         , @n_CountBfore         INT            --(TK02)
-         , @n_CountAfter         INT            --(TK02)
+         , @n_TtlCount           INT            --(TK02)
+         , @n_UpdCount           INT            --(TK02)
+         , @n_RowCount           INT            --(TK02)
          , @d_Trace_StartTime    DATETIME       --(TK02)
          , @d_Trace_EndTime      DATETIME       --(TK02)
-         , @c_Step               NVARCHAR(10)   --(TK02)
+         , @c_Step               NVARCHAR(20)   --(TK02)
 
    SET @b_Success             = 1
    SET @n_Err                 = 0
@@ -63,8 +64,9 @@ BEGIN
    SET @n_Continue            = 1
    SET @n_StartTCount         = @@TRANCOUNT
    SET @c_LogTraceInfo        = ''           --(TK02)
-   SET @n_CountBfore          = -1           --(TK02)
-   SET @n_CountAfter          = 0            --(TK02)
+   SET @n_TtlCount            = -1           --(TK02)
+   SET @n_UpdCount            = 0            --(TK02)
+   SET @n_RowCount            = 0            --(TK02)
    SET @d_Trace_StartTime     = GETDATE()    --(TK02)
    SET @d_Trace_EndTime       = GETDATE()    --(TK02)
    SET @c_Step                = ''           --(TK02)
@@ -138,7 +140,7 @@ BEGIN
       --(TK02)
       IF @c_LogTraceInfo = '1'
       BEGIN
-         SELECT @n_CountBfore = COUNT(U.UCC_RowRef), @d_Trace_StartTime = GETDATE(), @c_Step = 'With_PDKey' 
+         SELECT @n_TtlCount = COUNT(U.UCC_RowRef), @d_Trace_StartTime = GETDATE(), @c_Step = 'With_PDKey' 
          FROM   UCC U (NOLOCK)
          WHERE  U.Storerkey = @c_Storerkey
          AND    U.Status > '2' AND U.Status < '6'
@@ -161,7 +163,7 @@ BEGIN
       --(TK02)
       IF @c_LogTraceInfo = '1'
       BEGIN
-         SELECT @n_CountBfore = COUNT(U.UCC_RowRef), @d_Trace_StartTime = GETDATE(), @c_Step = 'With_#D_PICKDETAIL' 
+         SELECT @n_TtlCount = COUNT(U.UCC_RowRef), @d_Trace_StartTime = GETDATE(), @c_Step = 'With_#D_PICKDETAIL' 
          FROM   UCC U (NOLOCK)
          WHERE  U.Storerkey = @c_Storerkey
          AND    U.Status > '2' AND U.Status < '6'
@@ -188,6 +190,8 @@ BEGIN
            , WaveKey = ''
          WHERE  UCC_RowRef = @n_UCC_RowRef
 
+         SET @n_RowCount = @@ROWCOUNT
+
          IF @@ERROR <> 0
          BEGIN
             SET @n_Continue = 3
@@ -196,10 +200,9 @@ BEGIN
                          +': Update UCC Table Failed. (ispUAUCC01)'
                          +'(' + ERROR_MESSAGE() + ')' 
          END
-         ELSE
+         ELSE IF @n_RowCount > 0
          BEGIN
-            IF @@ROWCOUNT > 0
-               SET @n_CountAfter = @n_CountAfter + 1
+            SET @n_UpdCount = @n_UpdCount + 1
          END
 
          FETCH NEXT FROM @CUR_UCC INTO @n_UCC_RowRef
@@ -224,8 +227,8 @@ BEGIN
          , @c_Step1     = @c_Storerkey 
          , @c_Step2     = @c_Pickdetailkey  
          , @c_Step3     = @c_Step 
-         , @c_Step4     = @n_CountBfore
-         , @c_Step5     = @n_CountAfter
+         , @c_Step4     = @n_TtlCount
+         , @c_Step5     = @n_UpdCount
          , @c_Col1      = ''
          , @c_Col2      = ''  
          , @c_Col3      = ''  
