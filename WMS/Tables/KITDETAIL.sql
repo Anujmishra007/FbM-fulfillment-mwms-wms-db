@@ -146,6 +146,19 @@ IF NOT EXISTS (SELECT *
                     EXEC sp_addextendedproperty N'MS_Description', 'Pallet Type', 'SCHEMA', N'dbo', 'TABLE',
                          N'KITDETAIL', 'COLUMN', N'PalletType'
                 END
+
+
+            IF NOT EXISTS (SELECT *
+                           FROM sys.columns
+                           WHERE Name = 'UCCNo'
+                             AND Object_ID = Object_ID('KITDETAIL'))
+                BEGIN
+                    ALTER TABLE KITDETAIL
+                    ADD [UCCNo] [nvarchar] (20) NULL CONSTRAINT [DF_KITDETAIL_UCCNo] DEFAULT ('');
+                    EXEC sp_addextendedproperty N'MS_Description', 'UCCNo', 'SCHEMA', N'dbo', 'TABLE',
+                         N'KITDETAIL', 'COLUMN', N'UCCNo'
+                END
+
        END
 
  GRANT SELECT ON  [dbo].[KITDETAIL] TO [JReportRole]

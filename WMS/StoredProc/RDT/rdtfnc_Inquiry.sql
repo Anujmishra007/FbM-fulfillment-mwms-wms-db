@@ -69,6 +69,7 @@ GO
 /* 2019-08-30 4.4  James      WMS-10415 Remove Qty hold and replace with*/
 /*                            Pendingmovein (james12)                   */
 /* 2024-11-27 5.0.0 LJQ006    FCR-1292.Created                          */
+/* 2025-08-21 0.0.0 Jackc     !!!Cutover. Use V0 repo for work!!!       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inquiry] (

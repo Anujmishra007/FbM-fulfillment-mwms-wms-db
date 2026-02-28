@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrRefKeyLookupUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrRefKeyLookupUpdate]
-GO
+
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET CONCAT_NULL_YIELDS_NULL OFF
@@ -38,9 +36,10 @@ GO
 /* 25 May 2012  TLTING02  DM integrity - add update editdate B4         */
 /*                        TrafficCop                                    */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */  
+/* 06-Oct-2025  AK01      UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrRefKeyLookupUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrRefKeyLookupUpdate]
 ON  [dbo].[RefKeyLookup] FOR UPDATE
 AS
 BEGIN
@@ -73,8 +72,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE RefKeyLookup
-		SET EditDate = GETDATE(),
-		    EditWho = SUSER_SNAME()
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho = dbo.fnc_GetUserName()
 		FROM RefKeyLookup (NOLOCK), INSERTED (NOLOCK)
 		WHERE RefKeyLookup.Pickdetailkey = INSERTED.Pickdetailkey
 		SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -119,3 +118,4 @@ END
 
 
 go
+

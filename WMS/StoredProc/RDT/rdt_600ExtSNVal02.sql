@@ -10,6 +10,7 @@ GO
 /*                                                                            */  
 /* Date        Rev  Author       Purposes                                     */  
 /* 10-03-2025  1.0  yeekung      UWP-31293 Created                            */  
+/* 22-07-2025  1.1  Ung          UWP-37921 Add SerialNoUniqueAtStorerLevel    */
 /******************************************************************************/  
   
 CREATE OR ALTER  PROCEDURE rdt.rdt_600ExtSNVal02  
@@ -61,28 +62,33 @@ BEGIN
         
       -- Normal ASN/ Cross Dock  
       IF @cASNType IN ('A','X')  
-      BEGIN  
-         -- Check SNO received  
-         IF EXISTS( SELECT TOP 1 1  
-            FROM ReceiptSerialNo WITH (NOLOCK)  
-            WHERE StorerKey = @cStorerKey  
-               AND SerialNo = @cSerialNo)  
-         BEGIN  
-            SET @nErrNo = 234651  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO received  
-            GOTO Quit  
-         END  
-           
-         -- Check SNO received  
-         IF EXISTS( SELECT TOP 1 1  
-            FROM SerialNo WITH (NOLOCK)  
-            WHERE StorerKey = @cStorerKey  
-               AND SKU = @cSKU  
-               AND SerialNo = @cSerialNo)  
-         BEGIN  
-            SET @nErrNo = 234652  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO received  
-            GOTO Quit  
+      BEGIN
+         IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'SerialNoUniqueAtStorerLevel') = '1'
+         BEGIN
+            -- Check SNO received  
+            IF EXISTS( SELECT TOP 1 1  
+               FROM ReceiptSerialNo WITH (NOLOCK)  
+               WHERE StorerKey = @cStorerKey  
+                  AND SerialNo = @cSerialNo)  
+            BEGIN  
+               SET @nErrNo = 234651  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO received  
+               GOTO Quit  
+            END  
+         END
+         ELSE
+         BEGIN
+            -- Check SNO received  
+            IF EXISTS( SELECT TOP 1 1  
+               FROM SerialNo WITH (NOLOCK)  
+               WHERE StorerKey = @cStorerKey  
+                  AND SKU = @cSKU  
+                  AND SerialNo = @cSerialNo)  
+            BEGIN  
+               SET @nErrNo = 234652  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO received  
+               GOTO Quit  
+            END
          END  
   
          -- Storer config 'Allow_OverReceipt'    

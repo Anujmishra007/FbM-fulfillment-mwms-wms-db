@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrPalletMgmtDetailAdd' AND type = 'TR')
-   DROP TRIGGER ntrPalletMgmtDetailAdd
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -29,8 +26,9 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 01-Jun-2021  NJOW01  1.0   WMS-16767 TH user of to-storer is not allowed*/
 /*                            to insert                                    */
+/* 06-OCT-2025  AK01    1.1   UWP-42143 Data Audit                         */
 /***************************************************************************/
-CREATE TRIGGER ntrPalletMgmtDetailAdd ON PALLETMGMTDETAIL
+CREATE OR ALTER TRIGGER ntrPalletMgmtDetailAdd ON PALLETMGMTDETAIL
 FOR INSERT
 AS
 BEGIN
@@ -205,6 +203,28 @@ BEGIN
       END
    END   
    --NJOW01 E
+   
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PALLETMGMTDETAIL
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM PALLETMGMTDETAIL
+      JOIN INSERTED ON PALLETMGMTDETAIL.PMKey = INSERTED.PMKey
+      AND PALLETMGMTDETAIL.PMLinenumber = INSERTED.PMLinenumber
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63190  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PALLETMGMTDETAIL. (ntrPALLETMGMTDETAILAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
    
 QUIT:
    /* #INCLUDE <TRRDA2.SQL> */    

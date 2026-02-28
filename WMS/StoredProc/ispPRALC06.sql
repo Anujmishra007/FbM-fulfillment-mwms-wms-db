@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-07-07  Wan      1.0   Created.                                  */
 /* 2021-10-06  Wan      1.0   DevOps Combine Script                     */
+/* 2025-10-10  SSA01    1.1  UWP-42248 -Enhanced session management     */
 /************************************************************************/
 CREATE PROC dbo.[ispPRALC06]
    @c_OrderKey        NVARCHAR(10)    
@@ -1216,8 +1217,8 @@ BEGIN
                         
                         UPDATE u WITH (ROWLOCK)
                            SET [Status] = '3'
-                           ,   EditDate = GETDATE()
-                           ,   EditWho = SUSER_SNAME()
+                           ,   EditDate = dbo.fnc_GetDate()    --(SSA01)
+                           ,   EditWho = dbo.fnc_GetUserName()            --(SSA01)
                            ,   TrafficCop = NULL
                         FROM dbo.UCC u
                         JOIN upd_ucc upd ON u.UCC_RowRef = upd.UCC_RowRef

@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ASNReleasePATask_Wrapper]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_ASNReleasePATask_Wrapper]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -24,9 +21,11 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */ 
+/* 2025-04-30   AYD      1.1  UWP-31046 - FCR-2403 -                    */
+/*                            ASN Release Putaway Task                  */ 
 /************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_ASNReleasePATask_Wrapper]  
+CREATE OR ALTER PROCEDURE [dbo].[isp_ASNReleasePATask_Wrapper]  
    @c_ReceiptKey NVARCHAR(10),    
    @b_Success    INT      OUTPUT,
    @n_Err        INT      OUTPUT, 
@@ -67,15 +66,6 @@ BEGIN
                      + ': ASN#: ' + RTRIM(@c_ReceiptKey) + ' has been cancelled. (isp_ASNReleasePATask_Wrapper)'  
        GOTO QUIT_SP
    END
-
---   IF @c_ASNStatus = '9'   
---   BEGIN
---       SET @n_continue = 3  
---       SET @n_Err = 31212 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
---       SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
---                     + ': ASN#: ' + RTRIM(@c_ReceiptKey) + ' has been closed. (isp_ASNReleasePATask_Wrapper)'  
---       GOTO QUIT_SP
---   END
    
    IF NOT EXISTS (SELECT 1  
                   FROM RECEIPTDETAIL WITH (NOLOCK)
@@ -94,16 +84,13 @@ BEGIN
    WHERE  StorerKey = @c_StorerKey
    AND    ConfigKey = 'ASNReleasePATask_SP'  
 
+   -- AYD START: FCR-2403
    IF ISNULL(RTRIM(@c_SPCode),'') = ''
-   BEGIN       
-       SET @n_continue = 3  
-       SET @n_Err = 31214 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-       SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
-                     + ': Please Setup Stored Procedure Name into Storer Configuration(ASNReleasePATask_SP) for '
-                     + RTRIM(@c_StorerKey)+ '. (isp_ASNReleasePATask_Wrapper)'  
-       GOTO QUIT_SP
+   BEGIN
+       SET @c_SPCode = 'mspPARLSTD'
    END
-   
+   -- AYD END: FCR-2403
+
    IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_SPCode) AND type = 'P')
    BEGIN
        SET @n_continue = 3  
@@ -113,7 +100,6 @@ BEGIN
                      + '). (isp_ASNReleasePATask_Wrapper)'  
        GOTO QUIT_SP
    END
-
    
    SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_ReceiptKey, @b_Success OUTPUT, @n_Err OUTPUT,' +
                 ' @c_ErrMsg OUTPUT '

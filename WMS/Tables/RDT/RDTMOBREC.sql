@@ -1,8 +1,7 @@
-IF NOT EXISTS (SELECT 1
-FROM sys.tables
-WHERE name = 'RDTMOBREC' AND type = 'U')
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[RDTMOBREC]') AND type in (N'U'))
 BEGIN
-   CREATE TABLE [RDT].[RDTMOBREC]
+
+ CREATE TABLE [RDT].[RDTMOBREC]
    (
    [Mobile] [int] NOT NULL,
    [Func] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Func] DEFAULT ((0)),
@@ -217,6 +216,24 @@ BEGIN
    [FieldAttr20] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr20] DEFAULT (''),
    [V_DropID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_DropID] DEFAULT (''),
    [V_SerialNo] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_SerialNo] DEFAULT (''),
+   [ScreenFormat] [nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_ScreenFormat] DEFAULT (''),
+   [V_EventNo1] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo1] DEFAULT ((0)),
+   [V_EventNo2] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo2] DEFAULT ((0)),
+   [V_EventNo3] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo3] DEFAULT ((0)),
+   [V_EventNo4] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo4] DEFAULT ((0)),
+   [V_EventNo5] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo5] DEFAULT ((0)),
+   [V_FromID] [nvarchar](18)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_FromID] DEFAULT (''),
+   [V_FromLOC] [nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_FromLOC] DEFAULT (''),
+   [V_MUOMDesc] [nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_MUOMDesc] DEFAULT (''),
+   [V_PUOMDesc] [nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_PUOMDesc] DEFAULT (''),
+   [V_SKUDesc1] [nvarchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_SKUDesc1] DEFAULT (''),
+   [V_SKUDesc2] [nvarchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_SKUDesc2] DEFAULT (''),
+   [V_TaskMQTY] [nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_TaskMQTY] DEFAULT (''),
+   [V_TaskPQTY] [nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_TaskPQTY] DEFAULT (''),
+   [V_ToID] [nvarchar](18)		COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_ToID] DEFAULT (''),
+   [V_ToLOC] [nvarchar](10)	COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_ToLOC] DEFAULT (''),
+   [V_UOMDiv] [nvarchar](10)	COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_UOMDiv] DEFAULT (''),
+   [V_UOMRatio] [nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_UOMRatio] DEFAULT (''),
    [C_String1] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String1] DEFAULT (''),
    [C_String2] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String2] DEFAULT (''),
    [C_String3] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String3] DEFAULT (''),
@@ -256,186 +273,820 @@ BEGIN
    [C_DateTime2] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime2] DEFAULT (NULL),
    [C_DateTime3] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime3] DEFAULT (NULL),
    [C_DateTime4] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime4] DEFAULT (NULL),
-   [C_DateTime5] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime5] DEFAULT (NULL)
+   [C_DateTime5] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime5] DEFAULT (NULL),
+   [V_String52] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String52] DEFAULT (''),
+   [V_String53] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String53] DEFAULT (''),
+   [V_String54] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String54] DEFAULT (''),
+   [V_String55] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String55] DEFAULT (''),
+   [V_String56] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String56] DEFAULT (''),
+   [V_String57] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String57] DEFAULT (''),
+   [V_String58] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String58] DEFAULT (''),
+   [V_String59] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String59] DEFAULT (''),
+   [V_String60] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String60] DEFAULT (''),
+   [V_String61] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String61] DEFAULT (''),
+   [V_String62] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String62] DEFAULT (''),
+   [V_String63] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String63] DEFAULT (''),
+   [V_String64] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String64] DEFAULT (''),
+   [V_String65] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String65] DEFAULT (''),
+   [V_String66] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String66] DEFAULT (''),
+   [V_String67] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String67] DEFAULT (''),
+   [V_String68] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String68] DEFAULT (''),
+   [V_String69] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String69] DEFAULT (''),
+   [V_String70] [nvarchar](60)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String70] DEFAULT ('')
    ) ON [PRIMARY]
 
    ALTER TABLE [RDT].[RDTMOBREC] ADD CONSTRAINT [PK_RDTMOBREC] PRIMARY KEY CLUSTERED ([Mobile]) WITH (FILLFACTOR=90) ON [PRIMARY]
+
+   IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[RDT].[RDTMOBREC]') AND name = N'IX_rdtMobRec_Username')
    CREATE NONCLUSTERED INDEX [IX_rdtMobRec_Username] ON [RDT].[RDTMOBREC] ([UserName]) ON [PRIMARY]
 
    GRANT DELETE ON  [RDT].[RDTMOBREC] TO [NSQL]
    GRANT INSERT ON  [RDT].[RDTMOBREC] TO [NSQL]
    GRANT SELECT ON  [RDT].[RDTMOBREC] TO [NSQL]
    GRANT UPDATE ON  [RDT].[RDTMOBREC] TO [NSQL]
+
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Cartonno'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store Carton No', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Cartonno'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_DropID'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store DropID Value', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_DropID'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_FromScn'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store current screen no before go to next screen', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromScn'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_FromStep'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store current step no before go to next step', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromStep'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer1'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer1'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer10'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer10'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer11'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer11'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer12'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer12'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer13'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer13'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer14'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer14'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer15'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer15'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer2'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer2'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer3'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer3'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer4'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer4'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer5'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer5'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer6'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer6'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer7'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer7'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer8'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer8'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_Integer9'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer9'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_MQTY'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store qty in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_MQTY'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_MTaskQty'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store task qty in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_MTaskQty'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_PQTY'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store qty in prefered uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PQTY'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_PTaskQty'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store task qty in prefered uom ', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PTaskQty'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_PUOM_Div'))
    EXEC sp_addextendedproperty N'MS_Description', N'Store prefered uom configuration', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PUOM_Div'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_SerialNo'))
    EXEC sp_addextendedproperty N'MS_Description', 'Serial no', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_SerialNo'
-   EXEC sp_addextendedproperty N'MS_Description', N'Store task qty', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_TaskQTY'
-   EXEC sp_addextendedproperty N'MS_Description', 'WaveKey for RDT session', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_WaveKey'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_TaskQTY'))
+  EXEC sp_addextendedproperty N'MS_Description', N'Store task qty', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_TaskQTY'
+
+ IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'RDTMOBREC', N'COLUMN',N'V_WaveKey'))
+  EXEC sp_addextendedproperty N'MS_Description', 'WaveKey for RDT session', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_WaveKey'
+
+
 END
 ELSE
 BEGIN
+
+
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String1')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String1 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String1 DEFAULT('')
+   END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String2')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String2 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String2 DEFAULT('')
 
+   END
+
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String3')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String3 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String3 DEFAULT('')
+   END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String4')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String4 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String4 DEFAULT('')
 
+   END
+
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String5')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String5 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String5 DEFAULT('')
 
+   END
+
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String6')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String6 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String6 DEFAULT('')
+	END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String7')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String7 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String7 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String8')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String8 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String8 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String9')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String9 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String9 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String10')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String10 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String10 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String11')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String11 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String11 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String12')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String12 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String12 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String13')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String13 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String13 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String14')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String14 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String14 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String15')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String15 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String15 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String16')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String16 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String16 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String17')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String17 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String17 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String18')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String18 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String18 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String19')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String19 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String19 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String20')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String20 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String20 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String21')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String21 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String21 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String22')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String22 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String22 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String23')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String23 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String23 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String24')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String24 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String24 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String25')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String25 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String25 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String26')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String26 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String26 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String27')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String27 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String27 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String28')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String28 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String28 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String29')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String29 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String29 DEFAULT('')
+	  END
 
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String30')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD C_String30 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String30 DEFAULT('')
+	  END
 
    -- rdtMobRec.C_Integer1
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer1')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_Integer1 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer1 DEFAULT (0) WITH VALUES
+	  END
 
    -- rdtMobRec.C_Integer2
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer2')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_Integer2 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer2 DEFAULT (0) WITH VALUES
 
+	END
    -- rdtMobRec.C_Integer3
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer3')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_Integer3 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer3 DEFAULT (0) WITH VALUES
+	  END
 
    -- rdtMobRec.C_Integer4
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer4')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_Integer4 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer4 DEFAULT (0) WITH VALUES
+	  END
 
    -- rdtMobRec.C_Integer5
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer5')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_Integer5 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer5 DEFAULT (0) WITH VALUES
+	  END
 
    -- rdtMobRec.C_DateTime1
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime1')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_DateTime1 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime1 DEFAULT (NULL) WITH VALUES
+	  END
 
    -- rdtMobRec.C_DateTime2
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime2')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_DateTime2 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime2 DEFAULT (NULL) WITH VALUES
+	  END
 
    -- rdtMobRec.C_DateTime3
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime3')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_DateTime3 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime3 DEFAULT (NULL) WITH VALUES
+	  END
 
    -- rdtMobRec.C_DateTime4
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime4')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_DateTime4 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime4 DEFAULT (NULL) WITH VALUES
+
+	END
 
    -- rdtMobRec.C_DateTime5
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime5')
+   BEGIN
       ALTER TABLE rdt.rdtMobRec ADD C_DateTime5 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime5 DEFAULT (NULL) WITH VALUES
+
+	END
 
    -- rdtMobRec.V_String51
    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'V_String51')
+   BEGIN
       ALTER TABLE RDT.RDTMOBREC ADD V_String51 NVARCHAR(60)  NULL CONSTRAINT DF_RDTMOBREC_V_String51 DEFAULT('')
+	END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String52' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String52 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String52] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String53' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String53 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String53] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String54' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String54 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String54] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String55' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String55 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String55] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String56' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String56 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String56] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String57' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String57 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String57] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String58' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String58 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String58] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String59' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String59 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String59] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String60' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String60 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String60] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String61' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String61 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String61] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String62' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String62 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String62] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String63' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String63 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String63] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String64' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String64 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String64] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String65' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String65 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String65] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String66' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String66 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String66] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String67' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String67 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String67] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String68' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String68 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String68] DEFAULT ('');
+				
+			END
+
+			
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String69' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String69 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String69] DEFAULT ('');
+				
+			END
+
+						
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_String70' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD  V_String70 [nvarchar](60)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_String70] DEFAULT ('');
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'ScreenFormat' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD ScreenFormat [nvarchar](10) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_ScreenFormat] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'ScreenFormat', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'ScreenFormat'
+				
+			END
+
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_EventNo1' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_EventNo1 [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo1] DEFAULT ((0));
+				EXEC sp_addextendedproperty N'MS_Description', 'V_EventNo1', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_EventNo1'
+				
+			END
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_EventNo2' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_EventNo2 [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo2] DEFAULT ((0));
+				EXEC sp_addextendedproperty N'MS_Description', 'V_EventNo2', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_EventNo2'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_EventNo3' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_EventNo3 [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo3] DEFAULT ((0));
+				EXEC sp_addextendedproperty N'MS_Description', 'V_EventNo3', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_EventNo3'
+				
+			END
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_EventNo4' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_EventNo4 [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo4] DEFAULT ((0));
+				EXEC sp_addextendedproperty N'MS_Description', 'V_EventNo4', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_EventNo4'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_EventNo5' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_EventNo5 [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_V_EventNo5] DEFAULT ((0));
+				EXEC sp_addextendedproperty N'MS_Description', 'V_EventNo5', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_EventNo5'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_FromID' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_FromID [nvarchar](18) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_FromID] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store current ID before go to next step', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromID'
+				
+			END
+
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_FromLOC' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_FromLOC [nvarchar](10) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_FromLOC] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store current location before go to next step', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromLOC'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_MUOMDesc' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_MUOMDesc [nvarchar](10) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_MUOMDesc] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store description in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_MUOMDesc'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_PUOMDesc' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_PUOMDesc [nvarchar](10) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_PUOMDesc] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store description in preffered uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PUOMDesc'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_SKUDesc1' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_SKUDesc1 [nvarchar](20) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_SKUDesc1] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store SKU description', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_SKUDesc1'
+				
+			END
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_SKUDesc2' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_SKUDesc2 [nvarchar](20) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_SKUDesc2] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store SKU description', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_SKUDesc2'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_TaskMQTY' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_TaskMQTY [nvarchar](10) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_TaskMQTY] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store task qty in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_TaskMQTY'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_TaskPQTY' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_TaskPQTY [nvarchar](10) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_TaskPQTY] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store qty in prefered uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_TaskPQTY'
+				
+			END
+
+
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_ToID' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_ToID [nvarchar](18)	 NOT NULL CONSTRAINT [DF_RDTMOBREC_V_ToID] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store destination ID', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_ToID'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_ToLOC' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_ToLOC [nvarchar](10) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_ToLOC] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store destination Location', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_ToLOC'
+				
+			END
+
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_UOMDiv' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_UOMDiv [nvarchar](10) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_UOMDiv] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store uom configuration', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_UOMDiv'
+				
+			END
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'V_UOMRatio' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+			BEGIN
+
+				ALTER TABLE [RDT].[RDTMOBREC] ADD V_UOMRatio [nvarchar](10) NOT NULL CONSTRAINT [DF_RDTMOBREC_V_UOMRatio] DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'Store uom ratio', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_UOMRatio'
+				
+			END
+
+
+-- ALTER COLUMN
+
+
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String1' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String1 nvarchar(250) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String2' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String2 nvarchar(250) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String3' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String3 nvarchar(250) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String4' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String4 nvarchar(250) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String5' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String5 nvarchar(250) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String6' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String6 nvarchar(250) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String7' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String7 nvarchar(250) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String8' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String8 nvarchar(250) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String9' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String9 nvarchar(250) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'C_String10' AND Object_ID = Object_ID('RDT.RDTMOBREC') and max_length < 500)
+   BEGIN
+      alter table rdt.RDTMOBREC
+      Alter column  C_String10  nvarchar(250) NULL
+    END
 
 END
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-SET ANSI_NULLS ON
-GO
+
+--END
+--GO
+--SET QUOTED_IDENTIFIER ON
+--GO
+--SET ANSI_NULLS ON
+--GO
 
 --FCR-2435 Comment out the trigger creation.The trigger generation are in the independent scripts. by JCH507
 /*

@@ -27,3 +27,4 @@ execute rdt.rdtAddMsg 208323, 10, '208323INS RefKeyFail', 'us_english', 838
 execute rdt.rdtAddMsg 208324, 10, '208324UPD PKDtl Fail', 'us_english', 838
 execute rdt.rdtAddMsg 208325, 10, '208325UPD PKDtl Fail', 'us_english', 838
 execute rdt.rdtAddMsg 208326, 10, '208326Offset error  ', 'us_english', 838
+execute rdt.rdtAddMsg 208327, 10, '208327PickDetail NotFound', 'us_english', 838

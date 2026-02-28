@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /*********************************************************************************/
 /* Trigger: ntrPackUpdate                                                        */
 /* Creation Date:                                                                */
@@ -36,6 +41,7 @@
 /* 02-Oct-2020  TLTING02 		1.10 EXCEPT replace UPDATE() -actual value changed */
 /* 04-Mar-2022  TLTING   		1.11 WMS-19029 prevent bulk update or delete       */
 /* 2022-04-12   kelvinongcy	1.12 amend way for control user run batch (kocy01)	*/ 
+/* 06-Oct-2025  AK01                    1.13 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /*********************************************************************************/
   
 CREATE OR ALTER TRIGGER [dbo].[ntrPackUpdate]  
@@ -93,8 +99,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 )  AND NOT UPDATE(EditDate)  
    BEGIN  
       UPDATE PACK WITH (ROWLOCK)  
-      SET EditDate = GETDATE(),  
-          EditWho = SUSER_SNAME(),  
+      SET EditDate = dbo.fnc_GetDate(),  
+          EditWho = dbo.fnc_GetUserName(),  
           TrafficCop = NULL  
       FROM PACK, INSERTED
       WHERE PACK.PackKey = INSERTED.PackKey  
@@ -113,7 +119,7 @@ BEGIN
    --IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
    --    AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
    IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
-        AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
+        AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = dbo.fnc_GetUserName())
    BEGIN      
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67408   -- Should Be Set To The SQL Err message but I don't know how to do so.
@@ -225,7 +231,7 @@ BEGIN
                 DELETED.PackUOM2, DELETED.InnerPack, INSERTED.PackUOM2, INSERTED.InnerPack,   
                 DELETED.PackUOM3, DELETED.Qty,       INSERTED.PackUOM3, INSERTED.Qty,   
                 DELETED.PackUOM4, DELETED.Pallet,    INSERTED.PackUOM4, INSERTED.Pallet,   
-                GETDATE(), SUSER_SNAME()   
+                dbo.fnc_GetDate(), dbo.fnc_GetUserName()   
                ,DELETED.LengthUOM1, INSERTED.LengthUOM1, DELETED.WidthUOM1, INSERTED.WidthUOM1,   
                 DELETED.HeightUOM1, INSERTED.HeightUOM1, DELETED.CubeUOM1,   
 					dbo.fnc_CalculateCube(INSERTED.LengthUOM1, INSERTED.WidthUOM1, INSERTED.HeightUOM1,'','','')   
@@ -380,3 +386,4 @@ GO
 ALTER TABLE [dbo].[PACK] ENABLE TRIGGER [ntrPackUpdate]
 GO
  
+

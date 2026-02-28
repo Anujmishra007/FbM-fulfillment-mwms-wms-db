@@ -22,7 +22,8 @@ GO
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */    
-/* 2024-04-17  Wan      1.0   UWP-18534-Mettel-Add consolidated picking  */                                         
+/* 2024-04-17  Wan      1.0   UWP-18534-Mettel-Add consolidated picking  */
+/* 10-Oct-2025 SSA01    1.1  UWP-42248 -Enhanced session management      */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV01]        
  @c_wavekey      NVARCHAR(10) 
@@ -190,8 +191,8 @@ BEGIN
       UPDATE WAVE   
          SET TMReleaseFlag = 'N'                
           ,  TrafficCop = NULL                  
-          ,  EditWho = SUSER_SNAME()            
-          ,  EditDate= GETDATE()                 
+          ,  EditWho = dbo.fnc_GetUserName()             --(SSA01)
+          ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
       WHERE WAVEKEY = @c_wavekey                
       SELECT @n_err = @@ERROR    
       IF @n_err <> 0    
@@ -221,8 +222,8 @@ BEGIN
          UPDATE ORDERS WITH (ROWLOCK)  
          SET SOStatus = '0',  
             TrafficCop = NULL,  
-            EditWho = SUSER_SNAME(),  
-            EditDate = GETDATE()  
+            EditWho = dbo.fnc_GetUserName(),           --(SSA01)
+            EditDate = dbo.fnc_GetDate()   --(SSA01)
          WHERE Userdefine09 = @c_Wavekey  
          AND SOStatus = 'TSRELEASED'  
       END            

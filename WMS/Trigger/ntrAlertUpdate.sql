@@ -1,6 +1,6 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrAlertUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrAlertUpdate]
-GO
+--IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrAlertUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+--    DROP TRIGGER [dbo].[ntrAlertUpdate]
+--GO
 
 SET ANSI_NULLS OFF
 GO
@@ -33,9 +33,10 @@ GO
 /* Date         Author    Ver.  Purposes                                         */
 /* 07-Nov-2012  NJOW01    1.0   257259-Auto delete releted TM CC task when       */
 /*                              manually close alert.                            */
+/* 06-Oct-2025  AK01      1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName       */
 /*********************************************************************************/  
 
-CREATE TRIGGER [dbo].[ntrAlertUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrAlertUpdate]
 ON  [dbo].[ALERT]
 FOR UPDATE
 AS
@@ -72,8 +73,8 @@ BEGIN -- main
    	            AND INSERTED.Status = '9')
    	  BEGIN
    	  	 UPDATE ALERT WITH (ROWLOCK)
-   	  	 SET ALERT.Notifyid = SUSER_SNAME(),
-   	  	     ALERT.Resolvedate = GETDATE(),
+   	  	 SET ALERT.Notifyid = dbo.fnc_GetUserName(),
+   	  	     ALERT.Resolvedate = dbo.fnc_GetDate(),
    	  	     ALERT.TrafficCop = NULL
    	  	 FROM ALERT JOIN INSERTED ON ALERT.Alertkey = INSERTED.Alertkey
 
@@ -121,3 +122,4 @@ BEGIN -- main
     RETURN
    END
 END -- main
+

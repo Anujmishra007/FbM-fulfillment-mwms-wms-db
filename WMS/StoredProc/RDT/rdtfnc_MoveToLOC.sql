@@ -14,6 +14,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2022-01-03 1.0  Ung      WMS-18656 created                                 */
+/* 2025-05-30 0.0  JACKC    !!!Cutover. Use V0 for development!!!             */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_MoveToLOC] (

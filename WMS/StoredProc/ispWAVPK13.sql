@@ -29,6 +29,7 @@ GO
 /* 2022-02-07   WLChooi  1.5  DevOps Combine Script                     */
 /* 2022-02-07   WLChooi  1.5  WMS-18862 - Limit Max SKU Per CTN (WL05)  */
 /* 2022-02-22   WLChooi  1.6  JSM-53092 - Bug Fix (WL06)                */
+/* 2025-10-10   SSA01    1.7  UWP-42248 -Enhanced session management    */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[ispWAVPK13]  
@@ -445,7 +446,7 @@ BEGIN
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)  
             VALUES  
                (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,  
-                @n_Qty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())
+                @n_Qty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(),dbo.fnc_GetUserName(), dbo.fnc_GetDate())       --(SSA01)
   
             SET @n_err = @@ERROR  
   
@@ -772,7 +773,7 @@ NEXT_LOOP:
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)  
             VALUES  
                (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,  
-                @n_Qty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())
+                @n_Qty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate())         --(SSA01)
   
             SET @n_err = @@ERROR  
   

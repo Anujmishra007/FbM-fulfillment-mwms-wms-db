@@ -23,6 +23,9 @@ GO
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2022-04-22  Wan01    1.0   Created.                                  */
 /* 2022-04-22  Wan01    1.0   DevOps Combine Script.                    */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
+/* 2025-10-10  AK01     1.2   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ORD_ITF_Alloc_Wrapper]                                                                                                                     
       @c_Orderkey             NVARCHAR(250)  = '' 
@@ -80,20 +83,21 @@ BEGIN
    
    SET @n_Err = 0 
  
-   IF SUSER_SNAME() <> @c_UserName
+    -- Start enhanced session management (SWT01)
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName        
    BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
 
    BEGIN TRAN  
      
@@ -179,8 +183,8 @@ BEGIN
       BEGIN
          UPDATE dbo.ORDERS WITH (ROWLOCK) 
             SET SOStatus = '2'
-               ,EditWho = SUSER_SNAME()
-               ,EditDate= GETDATE()          
+               ,EditWho = dbo.fnc_GetUserName()
+               ,EditDate= dbo.fnc_GetDate()          
                ,Trafficcop = NULL 
          WHERE OrderKey = @c_Orderkey
          AND SOStatus < '2'
@@ -303,7 +307,8 @@ EXIT_SP:
       BEGIN TRAN 
    END
          
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01) 
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_ORD_ITF_Alloc_Wrapper] TO nSQL 

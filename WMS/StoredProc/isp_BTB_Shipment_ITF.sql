@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-06-16  Wan01    1.1   WMS-13409 - SG - Logitech - Back to Back  */
 /*                            Declaration for Form DE                   */
+/* 2025-10-10  SSA01    1.2  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC isp_BTB_Shipment_ITF
            @c_BTB_ShipmentKey    NVARCHAR(10)
@@ -113,8 +115,8 @@ BEGIN
       --(Wan01) - START
       UPDATE BTB_SHIPMENT
          SET [Status] = '9'
-         ,  EditWho = SUSER_SNAME()
-         ,  EditDate= GETDATE()
+         ,  EditWho = dbo.fnc_GetUserName()            --(SSA01)
+         ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
          ,  Trafficcop = NULL
       WHERE BTB_ShipmentKey = @c_BTB_ShipmentKey
 

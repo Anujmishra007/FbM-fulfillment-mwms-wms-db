@@ -29,7 +29,8 @@ GO
 /* 27-03-2013   ChewKP        Revise (ChewKP01)                         */      
 /* 08-04-2014   Shong         Only For Carton Pick Only                 */    
 /* 28-10-2014   Shong         Comment Last Aisle                        */ 
-/* 05-03-2015   ChewKP    Update TaskDetail EndTime,Editdate (ChewKP01) */ 
+/* 05-03-2015   ChewKP    Update TaskDetail EndTime,Editdate (ChewKP01) */
+/* 10-10-2025   SSA01         UWP-42248 -Enhanced session management    */
 /************************************************************************/        
         
 CREATE PROC    [dbo].[nspTTMVNPK]        
@@ -519,9 +520,9 @@ BEGIN
             SET    STATUS     = '3'        
                   ,UserKey    = @c_UserID      
                   ,ReasonKey  = ''        
-                  ,EditDate   = GetDate()
-                  ,StartTime  = GetDate() -- (ChewKP01)           
-                  ,EditWho    = sUSER_sNAME()       
+                  ,EditDate   = dbo.fnc_GetDate()   --(SSA01)
+                  ,StartTime  = dbo.fnc_GetDate()   --(SSA01) -- (ChewKP01)
+                  ,EditWho    = dbo.fnc_GetUserName()           --(SSA01)
                   ,TrafficCop = NULL                   
             FROM dbo.TaskDetail TD                         
             INNER JOIN dbo.Loc Loc WITH (NOLOCK) ON Loc.Loc = TD.FromLoc    

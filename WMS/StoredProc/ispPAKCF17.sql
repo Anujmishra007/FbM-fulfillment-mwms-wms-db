@@ -28,6 +28,7 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 12-Oct-2021  WLChooi 1.0   DevOps Combine Script                        */
 /* 20-Oct-2021  WLChooi 1.1   WMS-18128 - Insert PackSerialNo Table (WL01) */
+/* 10-Oct-2025  SSA01   1.2  UWP-42248 -Enhanced session management        */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPAKCF17]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -296,8 +297,8 @@ BEGIN
               , Pickslipno      = @c_Pickslipno
               , [Status]        = '6'
               , TrafficCop      = NULL
-              , EditDate        = GETDATE()
-              , EditWho         = SUSER_SNAME()
+              , EditDate        = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho         = dbo.fnc_GetUserName()      --(SSA01)
             WHERE SerialNokey = @c_SerialNokey
       
             SET @n_Err = @@ERROR
@@ -381,8 +382,8 @@ BEGIN
                SET CartonNo      = @n_CartonNo
                  , LabelLine     = @c_LabelLine
                  , TrafficCop    = NULL
-                 , EditDate      = GETDATE()
-                 , EditWho       = SUSER_SNAME()
+                 , EditDate      = dbo.fnc_GetDate()    --(SSA01)
+                 , EditWho       = dbo.fnc_GetUserName()           --(SSA01)
                WHERE SerialNokey = @c_SerialNokey
       
                SET @n_Err = @@ERROR

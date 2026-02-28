@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtfnc_SKUStyle_Inquiry]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtfnc_SKUStyle_Inquiry]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -14,9 +10,10 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author     Purposes                                 */
 /* 23-05-2019  1.0  Ung        WMS-9078 Created                         */
+/* 03-12-2025  1.1  NickT      UWP-45068 User new screen id             */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_SKUStyle_Inquiry] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_SKUStyle_Inquiry] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT
@@ -228,9 +225,9 @@ DECLARE
    @nStep_Lottables INT,  @nScn_Lottables INT
 
 SELECT
-   @nStep_SKU       = 1,  @nScn_Style     = 5140,
-   @nStep_Result    = 2,  @nScn_Result    = 5141,
-   @nStep_Lottables = 3,  @nScn_Lottables = 5142
+   @nStep_SKU       = 1,  @nScn_Style     = 6730,
+   @nStep_Result    = 2,  @nScn_Result    = 6731,
+   @nStep_Lottables = 3,  @nScn_Lottables = 6732
 
 IF @nFunc = 724 -- SKU style inquiry
 BEGIN
@@ -280,7 +277,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Step 1. Scn = 5140. Style screen
+Step 1. Scn = 6730. Style screen
    Style (field01)
 ********************************************************************************/
 Step_SKU:
@@ -513,7 +510,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Step 2. Scn = 5141. Result screen
+Step 2. Scn = 6731. Result screen
    Counter    (field01)
    SKU        (field02)
    Desc1      (field03
@@ -681,7 +678,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Step 3. Scn = 5142. Result screen
+Step 3. Scn = 6732. Result screen
    LOTTABLE01 (field01)
    LOTTABLE02 (field02)
    LOTTABLE03 (field03)

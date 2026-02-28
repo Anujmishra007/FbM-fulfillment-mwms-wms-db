@@ -2,17 +2,26 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/******************************************************************************/  
-/* Store procedure: isp_ResetCarton                                           */  
-/* Copyright      : LFLogistics                                               */  
-/*                                                                            */  
-/* Date         Rev  Author     Purposes                                      */  
-/* 2020-03-30   1.0  Chermaine  Created                                       */  
-/* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)            */ 
-/* 2022-05-20   1.2  yeekung    WMS-19688 Update packheader to 0 (yeekung01)  */ 
-/******************************************************************************/  
+/*********************************************************************************/  
+/* Store procedure: isp_ResetCarton                                              */  
+/* Copyright      : Maersk                                                       */  
+/*                                                                               */  
+/* Date         Rev  Author     Purposes                                         */  
+/* 2020-03-30   1.0  Chermaine  Created                                          */  
+/* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)               */ 
+/* 2022-05-20   1.2  yeekung    WMS-19688 Update packheader to 0 (yeekung01)     */ 
+/* 2023-12-29   1.3  yeekung    TPS-839 fix reset all (yeekung02)                */
+/* 2024-01-16   1.4  yeekung    UWP-29216 Fix Serialno (yeekung03)               */
+/*                              Fine Tune SerialNo Update                        */
+/* 2025-01-28   1.5  YeeKung    UWP-29489 Change API Username (yeekung04)        */
+/* 2025-04-24   1.6  YeeKung    UWP-31100 Fix UCC Status not reset (yeekung05)   */
+/* 2025-04-21   1.7  YeeKung    UWP-32889 remove orderkey (yeekung06)            */
+/* 2025-05-23   1.8  GCH225     UWP-34807 FixUpdate SerialNo (Gh01)              */
+/* 2025-07-22   1.9  GCH225     UWP-38184 Enhanced the lsp_SetUser logic         */
+/* 2025-07-24   2.0  GCH225     UWP-38194 Bug fix the UCC Logic                  */
+/*********************************************************************************/  
   
-CREATE OR ALTER PROC [API].[isp_ResetCarton] (  
+CREATE OR ALTER  PROC [API].[isp_ResetCarton] (  
    @json       NVARCHAR( MAX),  
    @jResult    NVARCHAR( MAX) ='' OUTPUT,  
    @b_Success  INT = 1  OUTPUT,  
@@ -35,9 +44,10 @@ DECLARE
    @cSerialno        NVARCHAR(30),  
   
    @cStorerKey       NVARCHAR( 15),  
- @cFacility        NVARCHAR( 5),  
- @nFunc            INT,  
- @cUserName        NVARCHAR( 128),  
+   @cFacility        NVARCHAR( 5),  
+   @nFunc            INT,  
+   @cUserName        NVARCHAR( 128),  
+   @c_UserName       NVARCHAR( 128),
    @cScanNo          NVARCHAR( 50),  
    @cDropID          NVARCHAR( 50),  
    @cPickSlipNo      NVARCHAR( 30),  
@@ -60,7 +70,13 @@ DECLARE
    @cUCCNo           NVARCHAR( 20),
    @cExtResetCartonSP   NVARCHAR(20),
    @cSQL             NVARCHAR(4000),
-   @cSQLParam        NVARCHAR(4000)
+   @cSQLParam        NVARCHAR(4000),
+   @cSerialNoKey     NVARCHAR( 20)
+
+   DECLARE @nOutputCount INT
+   DECLARE @b_ExecuteAs BIT 
+
+   SET @b_ExecuteAs = 0
 
    --CREATE TABLE #ResetCartonList (  
    DECLARE @ResetCartonList TABLE (  
@@ -87,7 +103,7 @@ DECLARE
       StorerKey   NVARCHAR( 30),  
       Facility    NVARCHAR( 30),  
       Func        NVARCHAR( 5),  
-      UserName    NVARCHAR( 15),  
+      UserName    NVARCHAR( 128),  
       LangCode    NVARCHAR( 3),  
       ScanNo      NVARCHAR( 30),  
       CartonNo    INT,  
@@ -96,29 +112,28 @@ DECLARE
       ResetCarton NVARCHAR( max) as JSON,  
       ResetAll    NVARCHAR( 1)  
    )  
-  
-   
+
    SELECT @cExtResetCartonSP = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE StorerKey =@cStorerkey AND configKey = 'TPS-ExtResetCtnSP'
 
-   IF ISNULL(@cExtResetCartonSP,'') <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtResetCartonSP AND type = 'P')
-      BEGIN
-         SET @cSQL = 'EXEC API.' + RTRIM( @cExtResetCartonSP) +
+    IF ISNULL(@cExtResetCartonSP,'') <> ''
+    BEGIN
+        IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtResetCartonSP AND type = 'P')
+        BEGIN
+            SET @cSQL = 'EXEC API.' + RTRIM( @cExtResetCartonSP) +
             ' @json, @jResult OUTPUT, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '
-         SET @cSQLParam =
+            SET @cSQLParam =
             ' @json          NVARCHAR( MAX),  ' +
             ' @jResult       NVARCHAR( MAX) OUTPUT, ' +
             ' @b_Success     INT = 1        OUTPUT, ' +
             ' @n_Err         INT = 0        OUTPUT, ' +
             ' @c_ErrMsg      NVARCHAR( 255) OUTPUT '
 
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @json, @jResult OUTPUT, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
 
-         GOTO QUIT
-      END
-   END
+            GOTO QUIT
+        END
+    END
    ELSE
    BEGIN
       --INSERT INTO #ResetCartonList  
@@ -129,12 +144,33 @@ DECLARE
             SKU             NVARCHAR( 20)    '$.SKU'  
       )  
   
-      --convert login  
-      SET @n_Err = 0  
-      EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT  
-  
-      EXECUTE AS LOGIN = @cUserName  
-  
+      SET @c_UserName = @cUserName
+
+      SET @n_Err = 0
+
+      SET @cSQL = 'EXEC WM.lsp_SetUser @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT';
+
+      SET @cSQLParam =  N'@c_UserName NVARCHAR(128) OUTPUT,' +
+				       N'@n_Err INT OUTPUT, ' + 
+				       N'@c_ErrMsg NVARCHAR(125) OUTPUT'
+      --convert login
+      SELECT @nOutputCount=COUNT(1) FROM sys.parameters p (NOLOCK)
+		      JOIN sys.objects o (NOLOCK) 
+		         ON p.object_id = o.object_id
+		      WHERE o.name = 'lsp_SetUser'
+		      AND p.is_output = 1
+      IF @nOutputCount = 4 
+      BEGIN
+        SET @cSQL = @cSQL + ', @b_ExecuteAs OUTPUT '
+        SET @cSQLParam = @cSQLParam + ', @b_ExecuteAs BIT OUTPUT'
+
+        EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT, @b_ExecuteAs OUTPUT;
+      END
+      ELSE
+      BEGIN
+        EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
+      END
+
       IF @n_Err <> 0  
       BEGIN  
          --INSERT INTO @errMsg(nErrNo,cErrMsg)  
@@ -143,18 +179,42 @@ DECLARE
       --   SET @c_ErrMsg = @c_ErrMsg  
          GOTO ROLLBACKTRAN  
       END  
-  
+
+      IF @nOutputCount = 4
+      BEGIN
+        IF @b_ExecuteAs = 1
+	       GOTO ExecuteAs
+        ELSE
+        BEGIN
+	       IF SESSION_CONTEXT(N'mwms_user_name') IS NULL
+	       BEGIN
+		      SET @b_Success = 0
+		      SET @n_Err = 1000722
+		      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No Session context found. Function : isp_ResetCarton'
+		      GOTO ROLLBACKTRAN
+	       END            
+        END
+      END
+      ELSE
+      BEGIN
+        IF @c_UserName LIKE '%' + @cUserName + '%'
+        BEGIN
+      ExecuteAs:
+	       EXECUTE AS LOGIN = @c_UserName
+	       SET @cUserName = @c_UserName
+        END
+      END      
   
       --check pickslipNo  
       EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT  
   
       IF @n_Err <>0  
       BEGIN  
-       SET @jResult = ''  
-       SET @b_Success = 0  
+         SET @jResult = ''  
+         SET @b_Success = 0  
          SET @n_Err = @n_Err  
          SET @c_ErrMsg = @c_ErrMsg  
-  
+
          GOTO ROLLBACKTRAN  
       END  
 
@@ -241,27 +301,28 @@ DECLARE
                   --reset the qty : update packInfo  
                   IF @nSkuToReset < @nSkuCount  
                   BEGIN  
-                     SELECT @nQty = SUM(Qty),@nWeight = SUM(Qty)*ISNULL(SUM(sku.WEIGHT),0),@nCube = SUM(Qty)*SUM(sku.CUBE)  
-                     FROM packDetail PD WITH (NOLOCK)  
+                     SELECT @nQty = SUM(Qty),
+                            @nWeight = SUM(Qty)*ISNULL(SUM(sku.WEIGHT),0),
+                            @nCube = SUM(Qty)*SUM(sku.CUBE)  
+                     FROM PackDetail PD WITH (NOLOCK)  
                      JOIN SKU sku WITH (NOLOCK) ON sku.sku = PD.sku AND SKU.StorerKey = PD.StorerKey  
                      WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey  
   
-                     UPDATE packInfo WITH (ROWLOCK)  
-                     SET Qty = @nQty,  
-                     WEIGHT = @nWeight,  
-                     CUBE = @nCube,  
-                     EditDate = GETDATE(),  
-                     EditWho = SUSER_NAME(),  
-                     TrafficCop = NULL  
-                     WHERE cartonNo = @nCartonNo  
-                     AND PickSlipNo = @cPickSlipNo  
+                     UPDATE PackInfo WITH (ROWLOCK)  
+                     SET    Qty = @nQty,  
+                            WEIGHT = @nWeight,  
+                            CUBE = @nCube,  
+                            EditDate = GETDATE(),  
+                            EditWho = @cUserName,  
+                            TrafficCop = NULL  
+                     WHERE CartonNo = @nCartonNo  
+                        AND PickSlipNo = @cPickSlipNo  
   
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0  
-                        SET @n_Err = 175630  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to update PackInfo. Function : isp_ResetCarton'  
-  
+                        SET @n_Err = 1000701  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to update PackInfo. Function : isp_ResetCarton'  
                         GOTO RollBackTran  
                      END  
   
@@ -269,220 +330,214 @@ DECLARE
                   --delete packInfo  
                   ELSE IF @nSkuToReset = @nSkuCount  
                   BEGIN  
-                     SELECT @cUCCNo =UCCNO FROM PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo  
 
-                     DELETE PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo 
-                  
-                     UPDATE UCC
-                     SET status='3'
-                     WHERE UCCNO = @cUCCNo
-                        AND Status in ('1','2','3','4','6')
+                     SELECT @cUCCNo = UCCNo
+                     FROM PackInfo  (NOLOCK)
+                     WHERE cartonNo = @nCartonNo 
+                        AND PickSlipNo = @cPickSlipNo   
 
-
+                     IF @cUCCNo <> ''
+                     BEGIN
+                        UPDATE UCC
+                        SET   status='3',
+                              EditDate = GETDATE(),  
+                              EditWho = @cUserName
+                        WHERE UCCNO = @cUCCNo
+                           AND Status in ('1','2','3','4','6')
   
-                     IF @@ERROR <> 0  
-                     BEGIN  
-                        SET @b_Success = 0  
-                        SET @n_Err = 175631  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackInfo. Function : isp_ResetCarton'  
-  
-                        GOTO RollBackTran  
-                     END  
+                        IF @@ERROR <> 0  
+                        BEGIN  
+                           SET @b_Success = 0  
+                           SET @n_Err = 1000703  
+                           SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to update UCCNo. Function : isp_ResetCarton'  
+                           GOTO RollBackTran  
+                        END 
+                     END
                   END  
 
                   --delete sku  
-                  DELETE packDetail WHERE cartonNo = @nCartonNo AND pickslipNo = @cPickSlipNo AND sku = @cSKU  
+                  DELETE PackDetail 
+                  WHERE CartonNo = @nCartonNo 
+                    AND PickSlipNo = @cPickSlipNo 
+                    AND SKU = @cSKU  
   
                   IF @@ERROR <> 0  
                   BEGIN  
                      SET @b_Success = 0  
-                     SET @n_Err = 175629  
-                     SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
+                     SET @n_Err = 1000704  
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
                      GOTO RollBackTran  
                   END 
                END  
   
-               IF EXISTS(SELECT 1 FROM packserialno (NOLOCK)    
-                           WHERE pickslipno=@cpickslipNo    
-                           AND storerkey=@cStorerKey    
-                           AND sku=@csku)    
+               IF EXISTS(SELECT 1 FROM PackSerialNo (NOLOCK)    
+                           WHERE PickSlipNo = @cPickSlipNo    
+                              AND Storerkey = @cStorerKey    
+                              AND SKU = @cSKU
+                              AND CartonNo = @nCartonno)    
                BEGIN    
-                  SELECT @cSerialno=serialno  
-                  FROM packserialno (nolock)  
-                  WHERE pickslipno=@cpickslipNo    
-                  AND storerkey=@cStorerKey    
-                  AND sku=@csku  
+
+                  DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+                  SELECT  serialno  
+                  FROM PackSerialNo (nolock)  
+                  WHERE PickSlipNo = @cPickSlipNo    
+                     AND Storerkey = @cStorerKey    
+                     AND SKU = @cSKU
+                     AND CartonNo = @nCartonno
+
+                    
+                  OPEN CurSN;  
+                  FETCH NEXT FROM CurSN INTO @cSerialno  
+                  WHILE @@FETCH_STATUS = 0  
+                  BEGIN 
   
-                  DELETE packserialno  
-                  WHERE pickslipno=@cpickslipNo    
-                     AND storerkey=@cStorerKey    
-                     AND sku=@csku  
+                     DELETE PackSerialNo  
+                     WHERE PickSlipNo = @cPickSlipNo    
+                       AND Storerkey = @cStorerKey    
+                       AND SerialNo = @cSerialno 
   
-                  IF @@ERROR <> 0  
-                  BEGIN  
-                     SET @b_Success = 0  
-                     SET @n_Err = 175629  
-                     SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
-                     GOTO RollBackTran  
-                  END  
-  
-                  IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
-                        WHERE Storerkey = @cStorerKey          
-                        AND SKU = @cSKU      
-                        AND SerialNo = @cSerialno   
-                        AND STATUS IN( '1','6'))    
-                  BEGIN    
-                     UPDATE SerialNo WITH (ROWLOCK)  
-                     SET   STATUS='1',  
-                           ORDERKEY='',
-                           OrderLineNumber=''
-                     WHERE Storerkey = @cStorerKey  
-                     AND SKU = @cSKU      
-                     AND SerialNo = @cSerialno   
-                     AND STATUS  IN( '1','6'  )
-                 
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0  
-                        SET @n_Err = 175629  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
+                        SET @n_Err = 1000705  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackSerialNo. Function : isp_ResetCarton'  
                         GOTO RollBackTran  
                      END  
-                  END    
-               END    
   
+                     IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
+                           WHERE Storerkey = @cStorerKey          
+                           AND SKU = @cSKU      
+                           AND SerialNo = @cSerialno   
+                           AND STATUS IN ('1','6'))    
+                     BEGIN    
+
+                        SELECT @cSerialNoKey = SerialNoKey 
+                        FROM SerialNo WITH (NOLOCK)      
+                        WHERE Storerkey = @cStorerKey          
+                           AND SKU = @cSKU      
+                           AND SerialNo = @cSerialno   
+                           AND STATUS IN ('1','6')    
+
+                        UPDATE SerialNo WITH (ROWLOCK)  
+                        SET   STATUS = '1',  
+                              ORDERKEY = '',
+                              OrderLineNumber = '',
+                              ID  = '',
+                              PickSlipNo = '',
+                              CartonNo = '',
+                              LabelLine = '',
+                              UCCNo  = '',
+                              EditDate = GETDATE(),  
+                              EditWho = @cUserName 
+                        WHERE SerialNoKey = @cSerialNoKey
+                 
+                         IF @@ERROR <> 0  
+                        BEGIN  
+                           SET @b_Success = 0  
+                           SET @n_Err = 1000706  
+                           SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Update SerialNO Fail. Function : isp_ResetCarton'  
+                           GOTO RollBackTran  
+                        END  
+                     END    
+                     FETCH NEXT FROM CurSN INTO @cSerialno  
+                  END
+                  CLOSE CurSN  
+                  DEALLOCATE CurSN  
+               END 
                FETCH NEXT FROM curSKU INTO @cSKU  
-               END  
+            END  
             CLOSE curSKU  
             DEALLOCATE curSKU  
 
             IF EXISTS(SELECT 1 FROM PACKHEADER (NOLOCK)
-                     WHERE PICKSLIPNO=@cPickSlipNo
-                     AND STATUS='9'
-                     AND StorerKey = @cStorerKey)
+                     WHERE PickSlipNo = @cPickSlipNo
+                        AND STATUS = '9'
+                        AND StorerKey = @cStorerKey)
             BEGIN
-                 UPDATE PACKHEADER WITH (ROWLOCK)
-                 SET STATUS=0
-                 WHERE PICKSLIPNO=@cPickSlipNo
+               UPDATE PACKHEADER WITH (ROWLOCK)
+               SET STATUS = 0
+               WHERE PICKSLIPNO = @cPickSlipNo
               
-                 IF @@ERROR <> 0  
-                  BEGIN  
-                     SET @b_Success = 0  
-                     SET @n_Err = 175629  
-                     SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
-                     GOTO RollBackTran  
-                  END  
-            END
-
-         END  
-         ELSE  
-         -- no SKU to reset: reset all  
-         BEGIN  
-
-               
-            SELECT @cSKU = SKU  FROM packDetail WITH (NOLOCK) WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo  
-
-            IF EXISTS(SELECT 1 FROM packserialno (NOLOCK)    
-               WHERE pickslipno=@cpickslipNo    
-               AND storerkey=@cStorerKey    
-               AND sku=@csku)    
-            BEGIN    
-               SELECT @cSerialno=serialno  
-               FROM packserialno (nolock)  
-               WHERE pickslipno=@cpickslipNo    
-               AND storerkey=@cStorerKey    
-               AND sku=@csku  
-  
-               DELETE packserialno  
-               WHERE pickslipno=@cpickslipNo    
-                  AND storerkey=@cStorerKey    
-                  AND sku=@csku  
-  
                IF @@ERROR <> 0  
                BEGIN  
                   SET @b_Success = 0  
-                  SET @n_Err = 175629  
-                  SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
+                  SET @n_Err = 1000707  
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Update packheader Fail. Function : isp_ResetCarton'  
                   GOTO RollBackTran  
                END  
-  
-               IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
-                     WHERE Storerkey = @cStorerKey          
-                     AND SKU = @cSKU      
-                     AND SerialNo = @cSerialno   
-                     AND STATUS IN( '1','6'))    
-               BEGIN    
-                  UPDATE SerialNo WITH (ROWLOCK)  
-                  SET   STATUS='1',  
-                        ORDERKEY='',
-                        OrderLineNumber='',
-                        ID  = ''
-                  WHERE Storerkey = @cStorerKey  
-                  AND SKU = @cSKU      
-                  AND SerialNo = @cSerialno   
-                  AND STATUS  IN( '1','6'  )
-                 
-                  IF @@ERROR <> 0  
-                  BEGIN  
-                     SET @b_Success = 0  
-                     SET @n_Err = 175629  
-                     SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
-                     GOTO RollBackTran  
-                  END  
-               END    
-            END  
-         
-            IF ISNULL(@cOrderkey,'')=''
-               SELECT @cOrderkey = orderkey
-               FROM Pickheader (nolock)
-               Where pickheaderkey = @cPickslipno
+            END
+         END  
+         ELSE  
+         -- no SKU to reset: reset all  
+         BEGIN    
+            SELECT @cSKU = SKU  
+            FROM PackDetail WITH (NOLOCK) 
+            WHERE CartonNo = @nCartonNo 
+               AND PickSlipNo = @cPickSlipNo  
 
-            IF EXISTS (SELECT 1
-                        FROM serialno (nolock)
-                        where Orderkey = @cOrderkey
-                           AND OrderLineNumber = ''
-                           AND STATUS IN( '1',  '6') 
-                           AND storerkey = @cstorerkey  )
-            BEGIN
+            IF EXISTS( SELECT 1 FROM PackSerialNo (NOLOCK)    
+                        WHERE PickSlipNO = @cPickSlipNo    
+                            AND Storerkey = @cStorerKey    
+                            AND SKU = @cSKU) 
+            BEGIN    
+
                DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
-               SELECT serialno  
-               FROM serialno (nolock)  
-               WHERE Orderkey = @cOrderkey
-                  AND STATUS IN( '1',  '6') 
-                  AND storerkey = @cstorerkey   
-  
+               SELECT  serialno  
+               FROM PackSerialNo (nolock)  
+               WHERE PickSlipNo = @cPickSlipNo    
+                  AND Storerkey = @cStorerKey    
+                  AND SKU = @cSKU
+                  AND CartonNo = @nCartonno
+                   
                OPEN CurSN;  
                FETCH NEXT FROM CurSN INTO @cSerialno  
                WHILE @@FETCH_STATUS = 0  
                BEGIN 
-                  IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
-                     WHERE StorerKey = @cStorerKey              
-                     AND SerialNo = @cSerialno
-                     AND ISNULL(ORDERKEY,'')<>''
-                     AND STATUS IN( '1','6'))
+  
+                  DELETE PackSerialNo  
+                  WHERE PickSlipNo = @cPickSlipNo    
+                     AND Storerkey = @cStorerKey    
+                     AND SerialNo = @cSerialno 
+  
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @b_Success = 0  
+                     SET @n_Err = 1000708  
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackSerialNo. Function : isp_ResetCarton'  
+                     GOTO RollBackTran  
+                  END  
+  
+                  IF EXISTS(   SELECT 1 FROM SerialNo WITH (NOLOCK)      
+                               WHERE Storerkey = @cStorerKey          
+                                   AND SKU = @cSKU      
+                                   AND SerialNo = @cSerialno   
+                                   AND STATUS IN( '1','6'))    
                   BEGIN    
+                     SELECT @cSerialNoKey = SerialNoKey 
+                     FROM SerialNo WITH (NOLOCK)      
+                     WHERE Storerkey = @cStorerKey          
+                        AND SKU = @cSKU      
+                        AND SerialNo = @cSerialno   
+                        AND STATUS IN ('1','6') 
+
                      UPDATE SerialNo WITH (ROWLOCK)  
                      SET   STATUS='1',  
                            ORDERKEY='',
-                           OrderLineNumber = '',
-                           ID  = ''
-                     WHERE storerkey = @cstorerkey    
-                        AND SerialNo = @cSerialno   
-                        AND STATUS IN( '1',  '6') 
-                        AND ISNULL(ORDERKEY,'')<>''
+                           OrderLineNumber='',
+                           ID  = '',
+                           PickSlipNo = '',
+                           CartonNo = '',
+                           LabelLine = '',
+                           UCCNo  = '',
+                           EditDate = GETDATE(),  
+                           EditWho = @cUserName 
+                     WHERE SerialNoKey = @cSerialNoKey
                  
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0  
-                        SET @n_Err = 175629  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
+                        SET @n_Err = 1000709  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Update SerialNo Fail. Function : isp_ResetCarton'  
                         GOTO RollBackTran  
                      END  
                   END    
@@ -490,40 +545,108 @@ DECLARE
                END
                CLOSE CurSN  
                DEALLOCATE CurSN  
+            END  
+   
+            --IF ISNULL(@cOrderkey,'')=''
+            --   SELECT @cOrderkey = OrderKey
+            --   FROM PickHeader (nolock)
+            --   Where PickHeaderKey = @cPickslipno
 
-            END
+            --IF EXISTS (SELECT 1
+            --            FROM SerialNO (nolock)
+            --            where Orderkey = @cOrderkey
+            --               AND OrderLineNumber = ''
+            --               AND STATUS IN ( '1',  '6') 
+            --               AND Storerkey = @cStorerKey  )
+            --BEGIN
+            --   DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+            --   SELECT SerialNO  
+            --   FROM SerialNO (nolock)  
+            --   WHERE Orderkey = @cOrderkey
+            --      AND STATUS IN ('1',  '6') 
+            --      AND Storerkey = @cStorerKey   
+  
+            --   OPEN CurSN;  
+            --   FETCH NEXT FROM CurSN INTO @cSerialno  
+            --   WHILE @@FETCH_STATUS = 0  
+            --   BEGIN 
+            --      IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
+            --                WHERE StorerKey = @cStorerKey              
+            --                    AND SerialNo = @cSerialno
+            --                    AND ISNULL(ORDERKEY,'') <> ''
+            --                    AND STATUS IN ('1','6'))
+            --      BEGIN    
 
+            --         SELECT @cSerialNoKey = SerialNoKey 
+            --         FROM SerialNo WITH (NOLOCK)      
+            --         WHERE Storerkey = @cStorerKey            
+            --            AND SerialNo = @cSerialno   
 
+            --         UPDATE SerialNo WITH (ROWLOCK)  
+            --         SET   STATUS='1',  
+            --               ORDERKEY='',
+            --               OrderLineNumber = '',
+            --               ID  = '',
+            --               PickSlipNo = '',
+            --               CartonNo = '',
+            --               LabelLine = '',
+            --               UCCNo  = '',
+            --               EditDate = GETDATE(),  
+            --               EditWho = @cUserName 
+            --         WHERE SerialNoKey = @cSerialNoKey
+                 
+            --         IF @@ERROR <> 0  
+            --         BEGIN  
+            --            SET @b_Success = 0  
+            --            SET @n_Err = 1000710  
+            --            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Update SerialNo Fail. Function : isp_ResetCarton'  
+            --            GOTO RollBackTran  
+            --         END  
+            --      END    
+            --      FETCH NEXT FROM CurSN INTO @cSerialno  
+            --   END
+            --   CLOSE CurSN  
+            --   DEALLOCATE CurSN  
+
+            --END
 
             --delete packDetail  
-            DELETE packDetail WHERE cartonNo = @nCartonNo AND pickslipNo = @cPickSlipNo  
-  
-            IF @@ERROR <> 0  
-            BEGIN  
-               SET @b_Success = 0  
-               SET @n_Err = 175632  
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
-               GOTO RollBackTran  
-            END  
-  
-            SELECT @cUCCNo =UCCNO FROM PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo  
+            
+            SELECT @cUCCNo = UCCNo
+            FROM PackInfo  (NOLOCK)
+            WHERE cartonNo = @nCartonNo 
+               AND PickSlipNo = @cPickSlipNo   
 
-            DELETE PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo 
-                  
-            UPDATE UCC
-            SET status='3'
-            WHERE UCCNO = @cUCCNo
-               AND Status in ('1','2','3','4','6')
+            DELETE PackDetail 
+            WHERE CartonNo = @nCartonNo 
+               AND PickSlipNo = @cPickSlipNo  
+               AND StorerKey = @cStorerKey  
   
             IF @@ERROR <> 0  
             BEGIN  
                SET @b_Success = 0  
-               SET @n_Err = 175633  
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to update PackInfo. Function : isp_ResetCarton'  
-  
+               SET @n_Err = 1000711  
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
                GOTO RollBackTran  
             END  
+
+            IF @cUCCNo <> ''
+            BEGIN
+               UPDATE UCC WITH (ROWLOCK)
+               SET Status = '3',
+                  EditDate = GETDATE(),  
+                  EditWho = @cUserName 
+               WHERE UCCNO = @cUCCNo
+                  AND Status in ('1','2','3','4','6')
+  
+               IF @@ERROR <> 0  
+               BEGIN  
+                  SET @b_Success = 0  
+                  SET @n_Err = 1000713  
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to update UCC. Function : isp_ResetCarton'  
+                  GOTO RollBackTran  
+               END  
+            END
          END  
       END  
   
@@ -532,187 +655,194 @@ DECLARE
       BEGIN  
          IF EXISTS (SELECT 1 FROM packHeader WITH (NOLOCK) WHERE pickslipNo = @cPickSlipNo AND storerKey = @cStorerKey AND STATUS = '9')  
          BEGIN  
-         SET @b_Success = 0  
-            SET @n_Err = 175634  
-            SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Packed Pickslip not able to reset. Function : isp_ResetCarton'  
-  
+            SET @b_Success = 0  
+            SET @n_Err = 1000714  
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Packed Pickslip not able to reset. Function : isp_ResetCarton'  
             GOTO RollBackTran  
          END  
-         ELSE  
-         BEGIN  
-                    
-            IF EXISTS(SELECT 1 FROM packserialno (NOLOCK)    
-                        WHERE pickslipno=@cpickslipNo    
-                        AND storerkey=@cStorerKey)    
-            BEGIN    
-               DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
-               SELECT serialno  
-               FROM packserialno (nolock)  
-               WHERE pickslipno=@cpickslipNo    
-               AND storerkey=@cStorerKey   
+         
+         IF EXISTS(  SELECT 1 FROM PackSerialNo (NOLOCK)    
+                        WHERE PickSlipNo = @cPickSlipNo  
+                           AND StorerKey = @cStorerKey)    
+         BEGIN    
+            DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+            SELECT SerialNo  
+            FROM PackSerialNo (NOLOCK)  
+            WHERE PickSlipNo = @cPickSlipNo    
+               AND StorerKey = @cStorerKey   
   
-               OPEN CurSN;  
-               FETCH NEXT FROM CurSN INTO @cSerialno  
-               WHILE @@FETCH_STATUS = 0  
-               BEGIN 
-                  IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
-                     WHERE StorerKey = @cStorerKey              
-                     AND SerialNo = @cSerialno
-                     AND ISNULL(ORDERKEY,'')<>''
-                     AND STATUS IN( '1','6'))
-                  BEGIN    
-                     UPDATE SerialNo WITH (ROWLOCK)  
-                     SET   STATUS='1',  
-                           ORDERKEY='',
-                           OrderLineNumber = '',
-                           ID  = ''
-                     WHERE storerkey = @cstorerkey    
-                        AND SerialNo = @cSerialno   
-                        AND STATUS IN( '1',  '6') 
-                        AND ISNULL(ORDERKEY,'')<>''
+            OPEN CurSN;  
+            FETCH NEXT FROM CurSN INTO @cSerialno  
+            WHILE @@FETCH_STATUS = 0  
+            BEGIN 
+               IF EXISTS(  SELECT 1 FROM SerialNo WITH (NOLOCK)      
+                           WHERE StorerKey = @cStorerKey              
+                              AND SerialNo = @cSerialno)
+               BEGIN    
+                  SELECT @cSerialNoKey = SerialNoKey 
+                  FROM SerialNo WITH (NOLOCK)      
+                  WHERE Storerkey = @cStorerKey            
+                     AND SerialNo = @cSerialno   
+
+                  UPDATE SerialNo WITH (ROWLOCK)  
+                  SET   STATUS='1',  
+                        ORDERKEY='',
+                        OrderLineNumber = '',
+                        ID  = '',
+                        PickSlipNo = '',
+                        CartonNo = '',
+                        LabelLine = '',
+                        UCCNo  = '',
+                        EditDate = GETDATE(),  
+                        EditWho = @cUserName 
+                  WHERE SerialNoKey = @cSerialNoKey
                  
-                     IF @@ERROR <> 0  
-                     BEGIN  
-                        SET @b_Success = 0  
-                        SET @n_Err = 175629  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
-                        GOTO RollBackTran  
-                     END  
-                  END    
-                  FETCH NEXT FROM CurSN INTO @cSerialno  
-               END
-               CLOSE CurSN  
-               DEALLOCATE CurSN  
-   
-  
-               DELETE packserialno  
-               WHERE pickslipno=@cpickslipNo    
-                  AND storerkey=@cStorerKey     
-  
-               IF @@ERROR <> 0  
-               BEGIN  
-                  SET @b_Success = 0  
-                  SET @n_Err = 175629  
-                  SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
-                  GOTO RollBackTran  
-               END  
-
-
-            END    
-
-            IF ISNULL(@cOrderkey,'')=''
-               SELECT @cOrderkey = orderkey
-               FROM Pickheader (nolock)
-               Where pickheaderkey = @cPickslipno
-
-            IF EXISTS (SELECT 1
-                        FROM serialno (nolock)
-                        where Orderkey = @cOrderkey
-                        AND STATUS IN( '1',  '6') 
-                        AND storerkey = @cstorerkey  )
-            BEGIN
-               DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
-               SELECT serialno  
-               FROM serialno (nolock)  
-               WHERE Orderkey = @cOrderkey
-                  AND STATUS IN( '1',  '6') 
-                  AND storerkey = @cstorerkey   
-  
-               OPEN CurSN;  
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @b_Success = 0  
+                     SET @n_Err = 1000715  
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Update SerialNO Fail. Function : isp_ResetCarton'  
+                     GOTO RollBackTran  
+                  END  
+               END    
                FETCH NEXT FROM CurSN INTO @cSerialno  
-               WHILE @@FETCH_STATUS = 0  
-               BEGIN 
-                  IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
-                     WHERE StorerKey = @cStorerKey              
-                     AND SerialNo = @cSerialno
-                     AND ISNULL(ORDERKEY,'')<>''
-                     AND STATUS IN( '1','6'))
-                  BEGIN    
-                     UPDATE SerialNo WITH (ROWLOCK)  
-                     SET   STATUS='1',  
-                           ORDERKEY='',
-                           OrderLineNumber = '',
-                           ID  = ''
-                     WHERE storerkey = @cstorerkey    
-                        AND SerialNo = @cSerialno   
-                        AND STATUS IN( '1',  '6') 
-                        AND ISNULL(ORDERKEY,'')<>''
-                 
-                     IF @@ERROR <> 0  
-                     BEGIN  
-                        SET @b_Success = 0  
-                        SET @n_Err = 175629  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
-                        GOTO RollBackTran  
-                     END  
-                  END    
-                  FETCH NEXT FROM CurSN INTO @cSerialno  
-               END
-               CLOSE CurSN  
-               DEALLOCATE CurSN  
-
             END
+            CLOSE CurSN  
+            DEALLOCATE CurSN  
 
-            SELECT @cUCCNo =UCCNO FROM PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo  
+            DELETE packserialno  
+            WHERE pickslipno=@cpickslipNo    
+               AND storerkey=@cStorerKey     
+  
+            IF @@ERROR <> 0  
+            BEGIN  
+               SET @b_Success = 0  
+               SET @n_Err = 1000716 
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackSerialNo. Function : isp_ResetCarton'  
+               GOTO RollBackTran  
+            END  
+         END    
 
-            DELETE PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo 
-                  
-            UPDATE UCC
-            SET status='3'
+         --IF ISNULL(@cOrderkey,'')=''
+         --   SELECT @cOrderkey = Orderkey
+         --   FROM Pickheader (nolock)
+         --   Where PickHeaderKey = @cPickslipno
+
+         --IF EXISTS (SELECT 1
+         --            FROM SerialNo (nolock)
+         --            WHERE Orderkey = @cOrderkey
+         --               AND STATUS IN ('1',  '6') 
+         --               AND StorerKey = StorerKey  )
+         --BEGIN
+         --   DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+         --   SELECT SerialNo  
+         --   FROM SerialNo (nolock)  
+         --   WHERE Orderkey = @cOrderkey
+         --      AND STATUS IN ('1',  '6') 
+         --      AND StorerKey = StorerKey   
+  
+         --   OPEN CurSN;  
+         --   FETCH NEXT FROM CurSN INTO @cSerialno  
+         --   WHILE @@FETCH_STATUS = 0  
+         --   BEGIN 
+         --      IF EXISTS(  SELECT 1 FROM SerialNo WITH (NOLOCK)      
+         --                  WHERE StorerKey = @cStorerKey              
+         --                     AND SerialNo = @cSerialno
+         --                     AND ISNULL(ORDERKEY,'')<>''
+         --                     AND STATUS IN( '1','6'))
+         --      BEGIN   
+         --         SELECT @cSerialNoKey = SerialNoKey 
+         --         FROM SerialNo WITH (NOLOCK)      
+         --         WHERE Storerkey = @cStorerKey            
+         --            AND SerialNo = @cSerialno   
+
+         --         UPDATE SerialNo WITH (ROWLOCK)  
+         --         SET   STATUS='1',  
+         --               ORDERKEY='',
+         --               OrderLineNumber = '',
+         --               ID  = '',
+         --               PickSlipNo = '',
+         --               CartonNo = '',
+         --               LabelLine = '',
+         --               UCCNo  = '',
+         --               EditDate = GETDATE(),  
+         --               EditWho = @cUserName 
+         --         WHERE SerialNoKey = @cSerialNoKey
+                 
+         --         IF @@ERROR <> 0  
+         --         BEGIN  
+         --            SET @b_Success = 0  
+         --            SET @n_Err = 1000717  
+         --            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Update SerialNo Fail. Function : isp_ResetCarton'  
+         --            GOTO RollBackTran  
+         --         END  
+         --      END    
+         --      FETCH NEXT FROM CurSN INTO @cSerialno  
+         --   END
+         --   CLOSE CurSN  
+         --   DEALLOCATE CurSN  
+         --END
+   
+         DECLARE CurUCC CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+         SELECT UCCNo  
+         FROM PackInfo (NOLOCK)  
+         WHERE PickSlipNo = @cPickSlipNo  
+  
+         OPEN CurUCC;  
+         FETCH NEXT FROM CurUCC INTO @cUCCNo  
+         WHILE @@FETCH_STATUS = 0  
+         BEGIN 
+            UPDATE UCC WITH (ROWLOCK)
+            SET Status = '3',
+               EditDate = GETDATE(),  
+               EditWho = @cUserName 
             WHERE UCCNO = @cUCCNo
                AND Status in ('1','2','3','4','6')
-  
-
-            --delete packDetail  
-            DELETE packDetail WHERE pickslipNo = @cPickSlipNo  
-  
-            IF @@ERROR <> 0  
-            BEGIN  
-               SET @b_Success = 0  
-               SET @n_Err = 175635  
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
-  
-               GOTO RollBackTran  
-            END  
-  
+               AND StorerKey = @cStorerKey
 
             IF @@ERROR <> 0  
             BEGIN  
                SET @b_Success = 0  
-               SET @n_Err = 175636  
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to update PackInfo. Function : isp_ResetCarton'  
-  
+               SET @n_Err = 1000718  
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to update UCC. Function : isp_ResetCarton
                GOTO RollBackTran  
             END  
+   
+            FETCH NEXT FROM CurUCC INTO @cUCCNo  
+         END
+         CLOSE CurUCC  
+         DEALLOCATE CurUCC  
 
-
-
-            IF EXISTS(SELECT 1 FROM PACKHEADER (NOLOCK)
-            WHERE PICKSLIPNO=@cPickSlipNo
-               AND STATUS='9'
-               AND StorerKey = @cStorerKey)
-            BEGIN
-                 UPDATE PACKHEADER WITH (ROWLOCK)
-                 SET STATUS=0
-                 WHERE PICKSLIPNO=@cPickSlipNo
-              
-               IF @@ERROR <> 0  
-               BEGIN  
-                  SET @b_Success = 0  
-                  SET @n_Err = 175629  
-                  SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+         --delete packDetail  
+         DELETE packDetail 
+         WHERE pickslipNo = @cPickSlipNo  
   
-                  GOTO RollBackTran  
-               END  
-            END
-
-         
+         IF @@ERROR <> 0  
+         BEGIN  
+            SET @b_Success = 0  
+            SET @n_Err = 1000720  
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+            GOTO RollBackTran  
          END  
-  
-  
+
+
+         IF EXISTS(SELECT 1 FROM PACKHEADER (NOLOCK)
+         WHERE PICKSLIPNO=@cPickSlipNo
+            AND STATUS='9'
+            AND StorerKey = @cStorerKey)
+         BEGIN
+               UPDATE PACKHEADER WITH (ROWLOCK)
+               SET STATUS = 0
+               WHERE PICKSLIPNO = @cPickSlipNo
+              
+            IF @@ERROR <> 0  
+            BEGIN  
+               SET @b_Success = 0  
+               SET @n_Err = 1000721  
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Update packheader Fail. Function : isp_ResetCarton'  
+               GOTO RollBackTran  
+            END  
+         END
       END  
       --COMMIT TRAN isp_ResetCarton  
       SET @b_Success = 1  
@@ -726,8 +856,14 @@ DECLARE
   
    Quit:  
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
-         COMMIT TRAN isp_ResetCarton  
+         COMMIT TRAN isp_ResetCarton 
+         
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
 END  
+  
 GO
 
 SET QUOTED_IDENTIFIER OFF

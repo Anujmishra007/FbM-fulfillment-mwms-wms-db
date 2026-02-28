@@ -31,7 +31,9 @@ GO
 /*                            nested issue  --rmt01                          */
 /* 2023-12-26  Calvin   1.5   JSM-199728 Set Rowcount to EXEC (CLVN01)       */
 /* 2025-02-28  SG01     1.6   UWP-30341 - Add check for CCDetail Transaction */
-/*************************************************************************/     
+/* 2025-10-06  SSA01    1.2   UWP-42142 -Enhanced session management         */
+/*                             and cleanup.                                  */
+/*****************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_GenCountSheet_Wrapper]    
    @c_StockTakeKey         NVARCHAR(10)  
 ,  @c_GenType              CHAR(1)      = 'N'   -- B:Blank, N:Normal, U:UCC  
@@ -51,7 +53,8 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF  
   
    DECLARE @n_Continue        INT = 1  
-         , @n_StartTCnt       INT = @@TRANCOUNT  
+         , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0     --(SSA01)
   
          , @n_Count           INT = 0   
          , @c_CCSheetNo_Min   NVARCHAR(10) = ''  
@@ -68,21 +71,25 @@ BEGIN
   
    SET @n_Err = 0   
   
-   --(mingle01) - START     
+   --(mingle01) - START
+   --(SSA01) - START
    IF SUSER_SNAME() <> @c_UserName  
    BEGIN  
       EXEC [WM].[lsp_SetUser]   
                @c_UserName = @c_UserName  OUTPUT  
             ,  @n_Err      = @n_Err       OUTPUT  
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT  
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
     
       IF @n_Err <> 0   
       BEGIN  
          GOTO EXIT_SP  
       END  
   
-      EXECUTE AS LOGIN = @c_UserName  
-   END  
+     IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   --(SSA01) - END
    --(mingle01) - END  
   
    BEGIN TRAN     --(Wan01)  
@@ -338,7 +345,14 @@ EXIT_SP:
       SET @n_WarningNo = 0  
    END  
   
-   REVERT        
+    --(SSA01) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA01) - END
 END    
 
 GO

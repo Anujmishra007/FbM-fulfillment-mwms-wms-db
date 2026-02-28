@@ -29,6 +29,7 @@ GO
 /* 2019-08-29  NJOW01   1.2   Fix-Skip checking for PackSerialNoCapture */
 /* 2020-02-27  WLChooi  1.3   WMS-10615 - Add PACKNoCheckSerialNoCapture*/
 /*                            to skip check on PackSerialNo table (WL01)*/
+/* 2025-10-10  SSA01    1.4   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC [dbo].[ispPackConfirmSerialNo] 
             @c_PickSlipNo  NVARCHAR(10)               
@@ -193,8 +194,8 @@ BEGIN
          -- Update SerialNo status
          UPDATE dbo.SerialNo WITH (ROWLOCK) SET
             Status = '6', -- 6=Pack
-            EditDate = GETDATE(),  
-            EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+            EditWho = dbo.fnc_GetUserName()           --(SSA01)
          WHERE SerialNoKey = @c_SerialNoKey
 
          IF @@ERROR <> 0

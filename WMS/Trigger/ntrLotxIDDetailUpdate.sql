@@ -7,6 +7,8 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
+/* 09-Oct-2025  SPC040  1.0   Replace SUSER_SNAME with fnc_GetUserName  */
+
 CREATE TRIGGER ntrLotxIDDetailUpdate
  ON  LotxIDDetail
  FOR UPDATE
@@ -119,8 +121,8 @@ CREATE TRIGGER ntrLotxIDDetailUpdate
  THEN (LOT.Netwgt + INSERTED.Wgt - DELETED.Wgt) ELSE 0 END ),
  GrossWgt = (CASE WHEN (Lot.GrossWgt + INSERTED.Wgt - DELETED.Wgt) > 0
  THEN (LOT.Grosswgt + INSERTED.Wgt - DELETED.Wgt) ELSE 0 END ),
-      EditDate = GETDATE(),        --tlting
-      EditWho = SUSER_SNAME()
+      EditDate = dbo.fnc_GetDate(),        --tlting
+      EditWho = dbo.fnc_GetUserName()
  FROM DELETED, INSERTED
  WHERE INSERTED.LotxIdDetailKey = DELETED.LotxIdDetailKey
  AND INSERTED.LOT = LOT.Lot
@@ -168,8 +170,8 @@ CREATE TRIGGER ntrLotxIDDetailUpdate
  and (GrossWgtPicked  + Inserted.Wgt - DELETED.Wgt) <= 0
  THEN 0
  ELSE GrossWgtPicked END ),
-      EditDate = GETDATE(),   --tlting
-      EditWho = SUSER_SNAME()
+      EditDate = dbo.fnc_GetDate(),   --tlting
+      EditWho = dbo.fnc_GetUserName()
  FROM INSERTED, DELETED, PICKDETAIL
  WHERE INSERTED.LotxIdDetailKey = DELETED.LotxIdDetailKey
  AND INSERTED.Lot = LOT.Lot

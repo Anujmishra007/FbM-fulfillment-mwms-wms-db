@@ -14,6 +14,7 @@ GO
 /* 2024-08-06 1.0  Cuize    FCR-674. Created                            */
 /* 2024-10-01 1.1  NLT013   FCR-939 Unlock original destination loc     */
 /*                          if it is overwritten                        */
+/* 2025-11-10 1.2  Cuize    UWP-43760 Performance Issue Fix             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_941ReplenMove03] (
@@ -563,6 +564,7 @@ END
       WHERE PD.Storerkey = @cStorerKey
       AND   PD.[Status] = '0'
       AND   RPL.ReplenishmentKey = @cReplenKey
+      Order by PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
 
       OPEN @curUpdPD
       FETCH NEXT FROM @curUpdPD INTO @cPickDetailKey

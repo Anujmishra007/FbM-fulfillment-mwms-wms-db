@@ -1,6 +1,6 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrABCAnalysisUpdate' AND type = 'TR')
-   DROP TRIGGER ntrABCAnalysisUpdate
-GO
+--IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrABCAnalysisUpdate' AND type = 'TR')
+--   DROP TRIGGER ntrABCAnalysisUpdate
+--GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -29,9 +29,10 @@ GO
 /* Date        Author   Ver   Purposes                                     */
 /* 14-APR-2017 Wan01    1.0   WMS-1615 - CN&SG Logitech ABC function for   */
 /*                            Cycle Count                                  */
+/* 06-Oct-2025 AK01     1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName       */
 /***************************************************************************/
 
-CREATE TRIGGER ntrABCAnalysisUpdate ON ABCAnalysis
+CREATE OR ALTER TRIGGER ntrABCAnalysisUpdate ON ABCAnalysis
 FOR UPDATE
 AS
 BEGIN
@@ -92,8 +93,8 @@ BEGIN
    IF NOT UPDATE(EditDate) 
    BEGIN
       UPDATE ABCANALYSIS WITH (ROWLOCK)
-      SET EditWho = SUSER_SNAME()
-         ,EditDate = GETDATE()
+      SET EditWho = dbo.fnc_GetUserName()
+         ,EditDate = dbo.fnc_GetDate()
          ,TrafficCop = NULL
       FROM ABCANALYSIS
       JOIN INSERTED ON (ABCANALYSIS.Serialkey = INSERTED.Serialkey)
@@ -429,4 +430,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

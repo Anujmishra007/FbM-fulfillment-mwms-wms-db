@@ -21,6 +21,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 2023-09-27   Wan       1.0 Initial Creation & DevOps Combine Script  */
+/* 2025-10-10   SSA01     1.1  UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE OR ALTER PROC isp_PostWaveBuildLoad03 
    @c_Facility           NVARCHAR(5)
@@ -86,8 +88,8 @@ BEGIN
          UPDATE dbo.ORDERS WITH (ROWLOCK)
          SET SectionKey = 'Y'
             ,TrafficCop = NULL
-            ,EditWho = SUSER_SNAME()
-            ,EditDate = GETDATE()
+            ,EditWho = dbo.fnc_GetUserName()      --(SSA01)
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01)
          WHERE LoadKey = @c_Loadkey
       
          IF @@ERROR <> 0 
@@ -113,8 +115,8 @@ BEGIN
          SET Load_Userdef1 = @c_Load_Userdef1
             ,Userdefine02 = CONVERT(NVARCHAR(10), @n_Cnt)
             ,TrafficCop = NULL
-            ,EditWho = SUSER_SNAME()
-            ,EditDate = GETDATE()
+            ,EditWho = dbo.fnc_GetUserName()       --(SSA01)
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01)
          WHERE LoadKey = @c_Loadkey
       
          IF @@ERROR <> 0 

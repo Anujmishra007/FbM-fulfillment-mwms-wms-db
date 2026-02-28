@@ -29,7 +29,9 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date        Author         Purposes                                  */  
+/* Date        Author   Ver    Purposes                                 */
+/* 10-OCT-2025 SSA01    1.5    UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_HM_OrderType_Indicator_Update] ( 
 	@c_StorerKey  NVARCHAR(15), 
@@ -387,8 +389,8 @@ NEXT_ORDERS:
          SET M_Address2 = @c_ReplenType, 
              M_Address3 =  @c_ReplenishmentGroup, 
              TrafficCop = NULL, 
-             EditDate = GETDATE(),
-             EditWho = SUSER_SNAME()
+             EditDate = dbo.fnc_GetDate(),   --(SSA01)
+             EditWho = dbo.fnc_GetUserName()     --(SSA01)
       WHERE OrderKey = @c_OrderKey 
          	                     
       SET @n_OrderCount = @n_OrderCount + 1

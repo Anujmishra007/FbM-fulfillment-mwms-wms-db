@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspALSTD04]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspALSTD04]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -29,10 +26,11 @@ GO
 /* 11-Aug-2005	 MaryVong		Remove SET ANSI WARNINGS which caused     */
 /*										error in DX											*/
 /* 26-Apr-2015  TLTING01 1.1  Add Other Parameter default value         */ 
-/*                                                                      */
+/* 20-Nov-2024  WLChooi  1.2  DevOps Combine Script                     */
+/* 20-Nov-2024  WLChooi  1.2  WMS-26556-Support Multi Facilities(WL01)  */
 /************************************************************************/
 
-CREATE PROC    nspALSTD04
+CREATE OR ALTER PROC nspALSTD04
 @c_lot NVARCHAR(10) ,
 @c_uom NVARCHAR(10) ,
 @c_HostWHCode NVARCHAR(10),
@@ -43,30 +41,24 @@ CREATE PROC    nspALSTD04
 AS
 BEGIN
    SET NOCOUNT ON 
-    
-   
 
    DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY
    FOR SELECT LOTxLOCxID.LOC,LOTxLOCxID.ID,
    QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED),'1'
-   FROM LOTxLOCxID (NOLOCK), LOC (NOLOCK), ID (NOLOCK)
+   FROM LOTxLOCxID (NOLOCK)
+   JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   --WL01
+   JOIN ID (NOLOCK) ON LOTxLOCxID.Id = ID.ID   --WL01
+   CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   --WL01
    WHERE LOTxLOCxID.Lot = @c_lot
-   AND LOTxLOCxID.Loc = LOC.LOC
-   AND LOTxLOCxID.Id = ID.ID
-   AND LOC.Facility = @c_Facility
+   --AND LOC.Facility = @c_Facility   --WL01
+   AND LOC.Facility = F.Facility   --WL01
    AND LOC.Locationflag <>"HOLD"
    AND LOC.Locationflag <> "DAMAGE"
    AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_uombase
    AND LOC.Status <> "HOLD"
    AND ID.STATUS <> "HOLD"
-   ORDER BY LOC.LOC
+   ORDER BY F.FacSort, LOC.LOC   --WL01
 END
-
 GO
-
-GO
-SET ANSI_NULLS OFF
-GO
-
 GRANT EXECUTE ON nspALSTD04 TO nSQL
 GO

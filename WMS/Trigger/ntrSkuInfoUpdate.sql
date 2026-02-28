@@ -1,6 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrSkuInfoUpdate' AND type = 'TR')
-   DROP TRIGGER ntrSkuInfoUpdate
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -33,9 +31,10 @@ GO
 /*                            FBR#290176 - Insert TransmitLog3.Key2 = "0"  */
 /*                            for trigger point "UPDSINFLOG" - (YokeBeen01)*/
 /* 28-Oct-2013  TLTING   1.2  Review Editdate column update                */
+/* 06-Oct-2025 AK01      1.3  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /***************************************************************************/
 
-CREATE TRIGGER ntrSkuInfoUpdate ON SkuInfo
+CREATE OR ALTER TRIGGER ntrSkuInfoUpdate ON SkuInfo
 FOR UPDATE
 AS
 BEGIN
@@ -84,8 +83,8 @@ BEGIN
    IF ( @n_Continue=1 OR @n_Continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE SkuInfo
-      SET    EditDate = GetDate(),
-             EditWho  = SUSER_SNAME()
+      SET    EditDate = dbo.fnc_GetDate(),
+             EditWho  = dbo.fnc_GetUserName()
       FROM   INSERTED
       WHERE  SkuInfo.StorerKey = INSERTED.StorerKey
       AND    SkuInfo.SKU = INSERTED.SKU
@@ -273,4 +272,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 

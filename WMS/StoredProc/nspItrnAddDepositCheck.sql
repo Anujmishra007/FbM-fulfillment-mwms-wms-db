@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.7                                                    */
+/* PVCS Version: 2.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -47,6 +47,10 @@ GO
 /*                            or 'hold'                                 */
 /* 17-JUL-2024  Wan03     1.9 LFWM-4446 - RG[GIT] Serial Number Solution*/
 /*                            - Transfer by Serial Number               */
+/* 10-Oct-2025  SSA01     2.0 UWP-42248 -Enhanced session management    */
+/* 10-Oct-2025  Michael   2.1 FCR-8380- Add SerialNoUpdateLotLocID(ML01)*/
+/* 05-Nov-2025  SSA02     2.2 UWP-43625- updated sequence of update Lot */
+/*                            table to avoid deadlock                   */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -118,6 +122,7 @@ BEGIN
          , @c_SerialNokey              NVARCHAR(10) = ''                            --(Wan03)
          , @c_Lot_SN                   NVARCHAR(10) = ''                            --(Wan03)
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = '0'                           --(Wan03)
+         , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML01
 
    DECLARE @b_addid int
    SELECT @b_addid = 0
@@ -390,7 +395,7 @@ BEGIN
       
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
-         DECLARE @n_rcnt int, @n_curcasecnt int, @n_curinnerpack int, @n_curqty int, @c_curstatus NVARCHAR(10),
+         DECLARE @n_LotRcnt int, @n_rcnt int, @n_curcasecnt int, @n_curinnerpack int, @n_curqty int, @c_curstatus NVARCHAR(10),
                  @n_curpallet int, @f_curcube float, @f_curgrosswgt float, @f_curnetwgt float,
                  @f_curotherunit1 float, @f_curotherunit2 float
 
@@ -405,8 +410,8 @@ BEGIN
               , @f_curotherunit2 = otherunit2
          FROM LOT WITH (NOLOCK) WHERE LOT = @c_Lot
 
-         SELECT @n_rcnt = @@ROWCOUNT
-         IF @n_rcnt = 0
+         SELECT @n_LotRcnt = @@ROWCOUNT
+         IF @n_LotRcnt = 0
          BEGIN
             INSERT INTO LOT (LOT,CASECNT,INNERPACK,QTY, PALLET,[CUBE],GROSSWGT,NETWGT,OTHERUNIT1,OTHERUNIT2,STORERKEY,SKU)
             VALUES (@c_Lot,@n_casecnt, @n_innerpack, @n_Qty, @n_pallet, @f_cube, @f_grosswgt, @f_netwgt, @f_otherunit1, @f_otherunit2, @c_storerkey,@c_sku )
@@ -419,41 +424,7 @@ BEGIN
                SELECT @c_ErrMsg='NSQL '+CONVERT(char(5), @n_err) + ': Insert Failed On Table LOT. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
             END
          END
-
-         IF @n_rcnt = 1 AND (@n_continue = 1 OR @n_continue = 2)
-         BEGIN
-            UPDATE LOT SET CASECNT    = CASECNT + @n_casecnt
-                         , INNERPACK  = INNERPACK + @n_innerpack
-                         , QTY        = QTY + @n_Qty
-                         , PALLET     = PALLET + @n_pallet
-                         , [CUBE]       = [CUBE] + @f_cube
-                         , GROSSWGT   = GROSSWGT + @f_grosswgt
-                         , NETWGT     = NETWGT + @f_netwgt
-                         , OTHERUNIT1 = OTHERUNIT1 + @f_otherunit1
-                         , OTHERUNIT2 = OTHERUNIT2 + @f_otherunit2
-            WHERE LOT = @c_Lot
-
-            SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-            IF @n_err <> 0
-            BEGIN
-               SELECT @n_continue = 3
-               SELECT @n_err = 61844
-               SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update Failed On Table LOT. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
-            END
-            ELSE IF @n_cnt = 0
-            BEGIN
-               SELECT @n_continue = 3
-               SELECT @n_err = 61845
-               SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawlCheck)'
-            END
-         END
-         IF (@n_rcnt <> 1 AND @n_rcnt <> 0) AND (@n_continue = 1 OR @n_continue = 2)
-         BEGIN
-            SELECT @n_continue = 3
-            SELECT @n_err = 61846
-            SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
-         END
-      END
+     END
 
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
@@ -577,6 +548,24 @@ BEGIN
             SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
          END
       END
+      -- SSA04 start --
+       IF @n_continue=1 or @n_continue=2
+       BEGIN
+          IF ISNULL(RTRIM(@c_toid), '') <> ''
+          BEGIN
+             UPDATE PALLET with (ROWLOCK) SET PalletType = @c_PalletType
+             WHERE PalletKey = @c_toid
+             /* Check SQL Error Message */
+            SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+            IF @n_err <> 0
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 62084
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Pallet. (nspItrnAddDepositCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
+            END
+          END
+       END
+       -- SSA04 End --
 
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
@@ -808,8 +797,8 @@ BEGIN
                BEGIN
                   UPDATE ChannelInv WITH (ROWLOCK)
                      SET Qty = Qty + @n_qty, 
-                         EditDate = GETDATE(),
-                         EditWho  = SUSER_SNAME() 
+                         EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                         EditWho  = dbo.fnc_GetUserName()          --(SSA01)
                   WHERE Channel_ID = @n_Channel_ID 
                   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT                
   
@@ -842,8 +831,8 @@ BEGIN
              Lottable05 = @d_Lottable05,
              Status     = @c_Status, 
              Channel_ID = @n_Channel_ID, -- (SWT02) 
-             EditDate = GETDATE(),
-             EditWho = SUSER_SNAME() 
+             EditDate = dbo.fnc_GetDate(),    --(SSA01)
+             EditWho = dbo.fnc_GetUserName()          --(SSA01)
          WHERE ItrnKey = @c_itrnkey
 
          SELECT @n_err = @@ERROR
@@ -854,6 +843,44 @@ BEGIN
             SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update Failed On Table Itrn. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
          END
       END
+      --(SSA02) Start --
+      IF @n_continue = 1 OR @n_continue = 2
+      BEGIN
+          IF @n_LotRcnt = 1
+             BEGIN
+                UPDATE LOT SET CASECNT    = CASECNT + @n_casecnt
+                             , INNERPACK  = INNERPACK + @n_innerpack
+                             , QTY        = QTY + @n_Qty
+                             , PALLET     = PALLET + @n_pallet
+                             , [CUBE]       = [CUBE] + @f_cube
+                             , GROSSWGT   = GROSSWGT + @f_grosswgt
+                             , NETWGT     = NETWGT + @f_netwgt
+                             , OTHERUNIT1 = OTHERUNIT1 + @f_otherunit1
+                             , OTHERUNIT2 = OTHERUNIT2 + @f_otherunit2
+                WHERE LOT = @c_Lot
+
+                SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+                IF @n_err <> 0
+                BEGIN
+                   SELECT @n_continue = 3
+                   SELECT @n_err = 61844
+                   SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update Failed On Table LOT. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
+                END
+                ELSE IF @n_cnt = 0
+                BEGIN
+                   SELECT @n_continue = 3
+                   SELECT @n_err = 61845
+                   SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawlCheck)'
+                END
+             END
+             IF (@n_LotRcnt <> 1 AND @n_LotRcnt <> 0) AND (@n_continue = 1 OR @n_continue = 2)
+             BEGIN
+                SELECT @n_continue = 3
+                SELECT @n_err = 61846
+                SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
+             END
+      END
+      --(SSA02) End --
       
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
@@ -882,7 +909,8 @@ BEGIN
             --BEGIN
                --IF EXISTS( SELECT 1 FROM ID WITH (NOLOCK) WHERE Id = @c_toid AND Status <> 'OK')  --(Wan05)
                --           OR EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND    --(Wan05)
-               IF EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND                 --(Wan05)
+               IF EXISTS(SELECT 1 FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> 'OK')          --(SSA02)
+               OR EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND                 --(Wan05)
                           (Status <> 'OK' OR Locationflag = 'HOLD' OR Locationflag = 'DAMAGE'))
                BEGIN
                   UPDATE LOT SET Qtyonhold = Qtyonhold + @n_Qty
@@ -1009,8 +1037,8 @@ BEGIN
                   UPDATE ReceiptDetail
                      SET ToLot      = @c_Lot,
                          TrafficCop = NULL, 
-                         EditDate = GETDATE(),
-                         EditWho = SUSER_SNAME(), 
+                         EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                         EditWho = dbo.fnc_GetUserName(),          --(SSA01),
                          Channel_ID = @n_Channel_ID -- (SWT02)
                   WHERE ReceiptKey  = @c_ReceiptKey
                   AND ReceiptLineNumber = @c_ReceiptLineNumber 
@@ -1032,8 +1060,8 @@ BEGIN
                BEGIN
                   UPDATE ReceiptDetail
                      SET TrafficCop = NULL, 
-                        EditDate = GETDATE(),
-                        EditWho = SUSER_SNAME(), 
+                        EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                        EditWho = dbo.fnc_GetUserName(),          --(SSA01)
                         Channel_ID = @n_Channel_ID  
                   WHERE ReceiptKey  = @c_ReceiptKey
                   AND ReceiptLineNumber = @c_ReceiptLineNumber 
@@ -1123,6 +1151,9 @@ BEGIN
       SET @c_ASNFizUpdLotToSerialNo = '0'
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
 
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                             --ML01
+      FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML01
+
       IF @c_SourceType LIKE 'ntrTransferDetail%'
       BEGIN
          SET @c_SerialNo = ''
@@ -1148,11 +1179,15 @@ BEGIN
          IF @c_SerialNokey <> ''
          BEGIN
             UPDATE dbo.SerialNo WITH (ROWLOCK)
-            SET Lot      = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' AND @c_Lot_SN <> @c_Lot
+            SET Lot      = CASE WHEN (@c_ASNFizUpdLotToSerialNo = '1'
+                                   OR @c_SerialNoUpdateLotLocID = '1')   --ML01
+                                  AND @c_Lot_SN <> @c_Lot
                                 THEN @c_Lot ELSE Lot END
                ,ID       = CASE WHEN ID <> @c_ToID THEN @c_ToID ELSE ID END
-               ,EditWho  = SUSER_SNAME()
-               ,EditDate = GETDATE()
+               ,Loc      = CASE WHEN @c_SerialNoUpdateLotLocID = '1' AND Loc <> @c_ToLoc   --ML01
+                                THEN @c_ToLoc ELSE Loc END                                 --ML01
+               ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
+               ,EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE SerialNoKey = @c_SerialNoKey
 
             SET @n_err = @@ERROR

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_KioskASRSTrfTaskCfm_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_KioskASRSTrfTaskCfm_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -13,7 +8,7 @@ GO
 /* Copyright: LFL                                                        */  
 /* Written by: Wan                                                       */  
 /*                                                                       */  
-/* Purpose: LFWM-572 - Stored Procedures for Release 2 Feature¨C GTM Kiosk*/
+/* Purpose: LFWM-572 - Stored Procedures for Release 2 Featureï¿½C GTM Kiosk*/
 /*                                                                       */  
 /* Called By:                                                            */  
 /*                                                                       */  
@@ -25,9 +20,11 @@ GO
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
 /* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
-/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-10-06   SSA01    1.2   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_KioskASRSTrfTaskCfm_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_KioskASRSTrfTaskCfm_Wrapper]
    @c_Jobkey               NVARCHAR(10)
 ,  @c_TaskDetailkey        NVARCHAR(10)  
 ,  @c_TransferKey          NVARCHAR(10)
@@ -58,6 +55,7 @@ BEGIN
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0 -- (SSA01)
 
          , @n_Qty             INT
          , @n_QtyToTrf        INT
@@ -68,12 +66,14 @@ BEGIN
    SET @n_Err = 0 
 
    --(mingle01) - START
+   -- Enhanced session management (SSA01)
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                
       IF @n_Err <> 0 
 
@@ -81,8 +81,10 @@ BEGIN
          GOTO EXIT_SP
       END 
 
-       EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1 -- (SSA01)
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- End enhanced session management (SSA01)
    --(mingle01) - END
 
    --(mingle01) - START
@@ -243,7 +245,9 @@ EXIT_SP:
       BEGIN TRAN
    END
 
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SSA01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_KioskASRSTrfTaskCfm_Wrapper] TO nSQL 

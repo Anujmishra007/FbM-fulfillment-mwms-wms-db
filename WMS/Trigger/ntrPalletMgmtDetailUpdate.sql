@@ -1,6 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrPalletMgmtDetailUpdate' AND type = 'TR')
-   DROP TRIGGER ntrPalletMgmtDetailUpdate
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -29,8 +27,9 @@ GO
 /* Date         Author  Ver   Purposes                                     */                
 /* 01-Jun-2021  NJOW01  1.0   WMS-16767 TH user of to-storer is not allowed*/
 /*                            to amend                                     */
+/* 06-Oct-2025  AK01    1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /***************************************************************************/
-CREATE TRIGGER ntrPalletMgmtDetailUpdate ON PALLETMGMTDETAIL
+CREATE OR ALTER TRIGGER ntrPalletMgmtDetailUpdate ON PALLETMGMTDETAIL
 FOR UPDATE
 AS
 BEGIN
@@ -80,8 +79,8 @@ BEGIN
    IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE PALLETMGMTDETAIL WITH (ROWLOCK)
-      SET EditDate = GETDATE() 
-         ,EditWho  = SUSER_SNAME() 
+      SET EditDate = dbo.fnc_GetDate() 
+         ,EditWho  = dbo.fnc_GetUserName() 
          ,TrafficCop = NULL
       FROM PALLETMGMTDETAIL
       JOIN DELETED  ON (DELETED.PMKey = PALLETMGMTDETAIL.PMKey)
@@ -201,7 +200,7 @@ BEGIN
          SET ANSI_NULLS ON
          SET ANSI_WARNINGS ON
                
-         SET @c_username = SUSER_SNAME()
+         SET @c_username = dbo.fnc_GetUserName()
          
          EXEC isp_GetUserRestriction
             @c_username = @c_username  
@@ -316,11 +315,11 @@ BEGIN
             ,@c_SourceKey
             ,'ntrPalletMgmtDetailUpdate'
             ,-ABS(@n_Qty)
-            ,GETDATE()
-            ,SUSER_NAME()
-            ,GETDATE()
-            ,SUSER_NAME()
-            ,GETDATE()
+            ,dbo.fnc_GetDate()
+            ,dbo.fnc_GetUserName()
+            ,dbo.fnc_GetDate()
+            ,dbo.fnc_GetUserName()
+            ,dbo.fnc_GetDate()
            )
          SET @n_err = @@ERROR
 
@@ -383,11 +382,11 @@ BEGIN
             ,@c_SourceKey
             ,'ntrPalletMgmtDetailUpdate'
             ,@n_Qty
-            ,GETDATE()
-            ,SUSER_NAME()
-            ,GETDATE()
-            ,SUSER_NAME()
-            ,GETDATE()
+            ,dbo.fnc_GetDate()
+            ,dbo.fnc_GetUserName()
+            ,dbo.fnc_GetDate()
+            ,dbo.fnc_GetUserName()
+            ,dbo.fnc_GetDate()
            )
          SET @n_err = @@ERROR
 
@@ -458,4 +457,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
+
 

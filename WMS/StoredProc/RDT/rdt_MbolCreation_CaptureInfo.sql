@@ -10,6 +10,7 @@ GO
 /* Date       Rev  Author  Purposes                                        */
 /* 2021-08-09 1.0  James   WMS-17621. Created                              */
 /* 2022-08-03 1.1  James   WMS-20213 Add custom lookup field (james02)     */
+/* 2025-11-25 1.2  NickT   FCR-8525 Fix issues for CaptureInfoSP           */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_MbolCreation_CaptureInfo](
@@ -74,7 +75,7 @@ BEGIN
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cCaptureInfoSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,  ' +
-            ' @cMBOLKey, @cOrderKey, @cLoadKeyKey, @cRefNo1, @cRefNo2, @cRefNo3, ' + 
+            ' @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, ' + 
             ' @cData1, @cData2, @cData3, @cData4, @cData5, ' + 
             ' @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, ' +   
             ' @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, ' +   
@@ -104,7 +105,9 @@ BEGIN
             ' @cMBOLKey    NVARCHAR( 10), ' +
             ' @cOrderKey   NVARCHAR( 10), ' +
             ' @cLoadKey    NVARCHAR( 10), ' +
-            ' @cRefNo      NVARCHAR( 20), ' +
+            ' @cRefNo1      NVARCHAR( 20),' +
+            ' @cRefNo2      NVARCHAR( 20),' +
+            ' @cRefNo3      NVARCHAR( 20),' +
             ' @cData1      NVARCHAR( 60), ' +
             ' @cData2      NVARCHAR( 60), ' +
             ' @cData3      NVARCHAR( 60), ' +

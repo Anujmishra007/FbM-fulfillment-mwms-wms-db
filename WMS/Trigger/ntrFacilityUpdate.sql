@@ -30,6 +30,7 @@ GO
 /* 08-May-2023  WLChooi       1.4  WMS-22471 - not allow update SiteID to blank  */
 /*                                 (WL01)                                        */
 /* 08-May-2023  WLChooi       1.4  DevOps Combine Script                         */
+/* 06-Oct-2025  AK01                    1.5  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /*********************************************************************************/  
   
 CREATE OR ALTER TRIGGER [dbo].[ntrFacilityUpdate]  
@@ -74,8 +75,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
    BEGIN  
       UPDATE Facility WITH (ROWLOCK) 
-      SET EditDate = GETDATE(),  
-          EditWho = SUSER_SNAME()
+      SET EditDate = dbo.fnc_GetDate(),  
+          EditWho = dbo.fnc_GetUserName()
       FROM Facility, INSERTED
       WHERE Facility.Facility = INSERTED.Facility  
  
@@ -144,5 +145,6 @@ GO
 
 ALTER TABLE [dbo].[FACILITY] ENABLE TRIGGER [ntrFacilityUpdate]
 GO
+
 
 

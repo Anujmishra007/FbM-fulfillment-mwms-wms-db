@@ -27,6 +27,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 02-JUL-2020 Wan01    1.1   WMS-13254 - [CN]Logitech_Tote ID          */
 /*                            Packing_pallet serialno_CR                */
+/* 10-OCT-2025 SSA01    1.2   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC isp_UnpackByLabel_DropID 
             @c_LabelNo        NVARCHAR(20)
@@ -175,8 +177,8 @@ BEGIN
          BEGIN
             UPDATE SERIALNO WITH (ROWLOCK)
             SET ExternStatus = 'CANC'
-              , EditWho = SUSER_SNAME()
-              , EditDate = GETDATE()
+              , EditWho = dbo.fnc_GetUserName()     --(SSA01)
+              , EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE SerialNoKey = @c_SerialNoKey
 
             IF @@ERROR <> 0
@@ -234,8 +236,8 @@ BEGIN
             BEGIN
                UPDATE TRACKINGID
                   SET PickMethod = 'Loose'
-                     ,EditWho    = SUSER_SNAME()
-                     ,EditDate   = GETDATE()
+                     ,EditWho    = dbo.fnc_GetUserName()      --(SSA01)
+                     ,EditDate   = dbo.fnc_GetDate()    --(SSA01)
                      ,TrafficCop = NULL
                WHERE TrackingIDKey = @n_TrackingIDKey
                AND   Status  = '9'

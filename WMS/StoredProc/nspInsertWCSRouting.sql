@@ -54,6 +54,7 @@ GO
 /* 2016-10-13 3.4  James    WMS493-Enhancement on routing (james05)          */
 /* 2017-04-05 3.5  James    WMS1349-Get current task type and stamp into     */
 /*                          wcsrouting for TM piece picking (james06)        */
+/* 2025-10-10 3.6  SSA01    UWP-42248 -Enhanced session management           */
 /*****************************************************************************/            
 CREATE PROC [dbo].[nspInsertWCSRouting]            
 @c_StorerKey     NVARCHAR(15) ,            
@@ -1116,8 +1117,8 @@ BEGIN
          -- Update WCSRouting.Status = '5' When Delete          
          UPDATE WCSRouting WITH (ROWLOCK)        
          SET    STATUS = '5', 
-         EditDate = GETDATE(), 
-         EditWho =SUSER_SNAME()        
+         EditDate = dbo.fnc_GetDate(),    --(SSA01)
+         EditWho = dbo.fnc_GetUserName()             --(SSA01)
          WHERE  WCSkey = @c_curWCSkey          
 
           SELECT @n_ErrNo = @@ERROR            
@@ -1339,8 +1340,8 @@ END-- D (ChewKP02) End
          -- Update WCSRouting.Status = '5' When Delete          
          UPDATE WCSRouting WITH (ROWLOCK)        
          SET    STATUS = '5', 
-         EditDate = GETDATE(), 
-         EditWho =SUSER_SNAME()        
+         EditDate = dbo.fnc_GetDate(),    --(SSA01)
+         EditWho = dbo.fnc_GetUserName()            --(SSa01)
          WHERE  WCSkey = @c_curWCSkey          
 
           SELECT @n_ErrNo = @@ERROR           
@@ -1706,8 +1707,8 @@ END-- D (ChewKP02) End
          -- Update WCSRouting.Status = '5' When Delete          
          UPDATE WCSRouting WITH (ROWLOCK)        
          SET    STATUS = '5', 
-         EditDate = GETDATE(), 
-         EditWho =SUSER_SNAME()        
+         EditDate = dbo.fnc_GetDate(),    --(SSA01)
+         EditWho = dbo.fnc_GetUserName()          --(SSA01)
          WHERE  WCSkey = @c_curWCSkey          
 
          SELECT @n_ErrNo = @@ERROR            

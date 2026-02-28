@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrUploadC4PODetailUpdate]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrUploadC4PODetailUpdate]
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -27,9 +25,10 @@ GO
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
 /* 11-Apr-2014  Leong     1.0   SOS308367 - Created.                    */
+/* 06-Oct-2025  AK01      1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
 
-CREATE TRIGGER ntrUploadC4PODetailUpdate
+CREATE OR ALTER TRIGGER ntrUploadC4PODetailUpdate
 ON  UploadC4PODetail
 FOR UPDATE
 AS
@@ -55,8 +54,8 @@ BEGIN
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       UPDATE UploadC4PODetail
-         SET EditDate = GETDATE()
-           , EditWho  = SUSER_SNAME()
+         SET EditDate = dbo.fnc_GetDate()
+           , EditWho  = dbo.fnc_GetUserName()
       FROM UploadC4PODetail
       JOIN INSERTED
         ON UploadC4PODetail.POKey = INSERTED.POKey

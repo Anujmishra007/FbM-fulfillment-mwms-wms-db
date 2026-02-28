@@ -23,6 +23,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 13-Dec-2022  ChongCS  1.0   DevOps Combine Script                    */
 /* 11-Jan-2022  WLChooi  1.1   WMS-21531 - Add new logic (WL01)         */
+/* 10-Oct-2025  SSA01    1.2   UWP-42248 -Enhanced session management   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispPKD06]
@@ -86,8 +87,8 @@ BEGIN
             UPDATE dbo.UCC
             SET [Status] = '3'
               , TrafficCop = NULL
-              , EditWho = SUSER_SNAME()
-              , EditDate = GETDATE()
+              , EditWho = dbo.fnc_GetUserName()            --(SSA01)
+              , EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE UCCNo = @c_Dropid AND Storerkey = @c_Storerkey
 
 

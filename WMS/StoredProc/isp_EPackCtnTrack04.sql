@@ -28,7 +28,9 @@ GO
 /* Updates:                                                             */        
 /* Date        Author   Ver   Purposes                                  */        
 /* 2020-03-25  Wan01    1.1   Ikea Fixed Issue - Duplicate Tracking#    */
-/* 2021-04-09  Wan02    1.2   WMS-16026 - PB-Standardize TrackingNo     */          
+/* 2021-04-09  Wan02    1.2   WMS-16026 - PB-Standardize TrackingNo     */
+/* 2025-10-10  SSA01    1.3  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                             */
 /************************************************************************/        
 CREATE PROC [dbo].[isp_EPackCtnTrack04]        
          @c_PickSlipNo  NVARCHAR(10)         
@@ -160,8 +162,8 @@ BEGIN
       UPDATE PACKINFO WITH (ROWLOCK)        
       SET TrackingNo = @c_CTNTrackNo              
          ,TrafficCop = NULL        
-         ,EditWho = SUSER_SNAME()        
-         ,EditDate= GETDATE()        
+         ,EditWho = dbo.fnc_GetUserName()        --(SSA01)
+         ,EditDate= dbo.fnc_GetDate()   --(SSA01)
       WHERE PickSlipNo = @c_PickSlipNo        
       AND CartonNo = @n_CartonNo        
         

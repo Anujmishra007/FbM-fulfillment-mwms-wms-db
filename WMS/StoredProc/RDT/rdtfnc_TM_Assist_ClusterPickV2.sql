@@ -1792,7 +1792,7 @@ BEGIN
          
          UPDATE dbo.TaskDetail SET
             DropID = @cCartonID,
-            StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 1)) + '-' + @cCartonType,
+            StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 5)) + '-' + @cCartonType,
             EditWho = @cUserName,
             EditDate = GETDATE()
          WHERE TaskDetailKey = @cLockTaskKey
@@ -1834,7 +1834,7 @@ BEGIN
          BEGIN      
             UPDATE dbo.TaskDetail SET
                DropID = @cCartonID,
-               StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 1)) + '-' + @cCartonType,
+               StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 5)) + '-' + @cCartonType,
                EditWho = @cUserName,
                EditDate = GETDATE()
             WHERE TaskDetailKey = @cLockTaskKey

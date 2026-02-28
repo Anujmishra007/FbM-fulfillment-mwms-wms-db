@@ -41,6 +41,8 @@ GO
 /* 2021-12-21  Wan04    1.7   LFWM-3210 - SCE UAT SG ASN Should Not     */
 /*                            Populate Same POKey+POLinenumber          */
 /* 2024-12-04  Wan05    1.7   UWP-27816 - Populate All for PO Line      */
+/* 2025-07-02  AYD01    1.8   FCR-3833: populate UnitPrice from PODetail*/
+/* 2025-05-26  SWT01    1.9   Setting Session Context for user name     */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_ASN_PopulatePODs_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)

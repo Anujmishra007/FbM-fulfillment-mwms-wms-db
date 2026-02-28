@@ -1,0 +1,149 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+/***************************************************************************/
+/* Stored Procedure: isp_XDock_Wrapper_JCB                                 */
+/* Creation Date: 2024-07-15                                               */
+/* Copyright: Maersk                                                       */
+/* Written by:                                                             */
+/*                                                                         */
+/* Purpose: Create XD SO orders split by BU fro JCB                        */
+/*        :                                                                */
+/*                                                                         */
+/* Called By:                                                              */
+/*                                                                         */
+/* PVCS Version: 1.0                                                       */
+/*                                                                         */
+/* Version: V2                                                             */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Updates:                                                                */
+/* Date        Author   Ver   Purposes                                     */
+/* 2025-08-11  SKE140   1.0   Customized the XDCock for JCB                */
+/***************************************************************************/
+
+CREATE PROC [dbo].[isp_XDock_Wrapper_JCB]
+@c_ReceiptKey NVARCHAR(30),
+@c_Facility NVARCHAR(5),
+@c_StorerKey NVARCHAR(15),
+@c_Atomic NVARCHAR(1) = 'Y', -- 'Y' = one txn for all; 'N' = per order
+@b_Success INT OUTPUT,
+@n_Err INT OUTPUT,
+@c_ErrMsg NVARCHAR(250) OUTPUT
+AS
+BEGIN
+SET NOCOUNT ON;
+
+DECLARE @OrderKey NVARCHAR(10);
+DECLARE @anyFailed BIT = 0;
+
+SET @c_StorerKey = 'JCB';
+SET @c_Facility = 'EMG03';
+
+-- Validate input
+IF @c_ReceiptKey IS NULL OR LTRIM(RTRIM(@c_ReceiptKey)) = ''
+BEGIN
+    SET @b_Success = 0;
+    SET @n_Err = 50001;
+    SET @c_ErrMsg = 'c_ReceiptKey is required.';
+    RETURN;
+END
+
+-- Temp table holding all OrderKeys to process
+IF OBJECT_ID('tempdb..#OrdersToProcess') IS NOT NULL
+    DROP TABLE #OrdersToProcess;
+
+CREATE TABLE #OrdersToProcess
+(
+    OrderKey NVARCHAR(10) NOT NULL PRIMARY KEY
+);
+
+-- Collect distinct OrderKeys where ORDERDETAIL.Lottable02 = receipt
+INSERT INTO #OrdersToProcess(OrderKey)
+SELECT DISTINCT od.OrderKey
+FROM ORDERDETAIL od WITH (NOLOCK)
+JOIN ORDERS o WITH (NOLOCK) ON o.OrderKey = od.OrderKey
+WHERE od.Lottable02 = @c_ReceiptKey
+  AND o.Facility = @c_Facility
+  AND o.StorerKey = @c_StorerKey
+  AND o.Status < '9'
+  AND o.SOStatus <> 'CANC';
+
+IF NOT EXISTS (SELECT 1 FROM #OrdersToProcess)
+BEGIN
+    SET @b_Success = 0;
+    SET @n_Err = 50002;
+    SET @c_ErrMsg = 'No active orders found for the specified receipt.';
+    RETURN;
+END
+
+BEGIN TRY
+    IF @c_Atomic = 'Y'
+        BEGIN TRAN;
+
+    DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
+        SELECT otp.OrderKey
+        FROM #OrdersToProcess otp
+        ORDER BY otp.OrderKey;
+
+    OPEN cur;
+    FETCH NEXT FROM cur INTO @OrderKey;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        DECLARE @b_Success_i INT = 0, @n_Err_i INT = 0, @c_ErrMsg_i NVARCHAR(250) = N'';
+
+        EXEC dbo.isp_XDock_DirectIDAlloc_JCB
+             @c_OrderKey = @OrderKey,
+             @b_Success  = @b_Success_i OUTPUT,
+             @n_Err      = @n_Err_i     OUTPUT,
+             @c_ErrMsg   = @c_ErrMsg_i  OUTPUT;
+
+        IF @b_Success_i <> 1
+        BEGIN
+            SET @anyFailed = 1;
+            IF @c_Atomic = 'Y'
+            BEGIN
+                IF XACT_STATE() <> 0 ROLLBACK TRAN;
+                SET @b_Success = 0;
+                SET @n_Err = @n_Err_i;
+                SET @c_ErrMsg = CONCAT('Order ', @OrderKey, ' failed: ', ISNULL(@c_ErrMsg_i, ''));
+                CLOSE cur; DEALLOCATE cur;
+                RETURN;
+            END
+        END
+
+        FETCH NEXT FROM cur INTO @OrderKey;
+    END
+
+    CLOSE cur; DEALLOCATE cur;
+
+    IF @c_Atomic = 'Y'
+    BEGIN
+        IF @anyFailed = 1
+        BEGIN
+            IF XACT_STATE() <> 0 ROLLBACK TRAN;
+            SET @b_Success = 0;
+            SET @n_Err = 50004;
+            SET @c_ErrMsg = 'One or more orders failed during atomic allocation.';
+            RETURN;
+        END
+        ELSE
+            COMMIT TRAN;
+    END
+
+    SET @b_Success = CASE WHEN @anyFailed = 1 THEN 0 ELSE 1 END;
+    SET @n_Err = CASE WHEN @anyFailed = 1 THEN 50005 ELSE 0 END;
+    SET @c_ErrMsg = CASE WHEN @anyFailed = 1 THEN 'Some orders failed in best-effort mode.' ELSE '' END;
+END TRY
+BEGIN CATCH
+    IF XACT_STATE() <> 0 ROLLBACK TRAN;
+    SET @b_Success = 0;
+    SET @n_Err = ERROR_NUMBER();
+    SET @c_ErrMsg = CONCAT('Wrapper exception: ', ERROR_MESSAGE());
+END CATCH
+END
+GO

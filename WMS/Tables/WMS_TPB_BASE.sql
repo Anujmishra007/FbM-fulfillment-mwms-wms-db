@@ -1,3 +1,5 @@
+IF NOT EXISTS ( SELECT * FROM sys.objects where object_id = OBJECT_ID (N'[dbo].[WMS_TPB_BASE]') AND TYPE IN ('N','U'))
+BEGIN
 CREATE TABLE [dbo].[WMS_TPB_BASE]
 (
 [SEQ] [bigint] NOT NULL IDENTITY(1, 1),
@@ -199,414 +201,459 @@ CREATE TABLE [dbo].[WMS_TPB_BASE]
 [R_LINE_PRICE] [numeric] (20, 6) NULL CONSTRAINT [DF_WMS_TPB_BASE_R_LINE_PRICE] DEFAULT ((0)),
 [R_LINE_TOTAL] [numeric] (20, 6) NULL CONSTRAINT [DF_WMS_TPB_BASE_R_LINE_TOTAL] DEFAULT ((0)),
 [ArchiveCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DBID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WMS_TPB_BASE_DBID] DEFAULT (db_name())
+[DBID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WMS_TPB_BASE_DBID] DEFAULT (db_name()),
+[BILLABLE_Capacity01] [numeric](10, 2) NOT NULL CONSTRAINT [DF_WMS_TPB_BASE_BILLABLE_Capacity01]  DEFAULT ((0)),
+[BILLABLE_Capacity02] [numeric](10, 2) NOT NULL CONSTRAINT [DF_WMS_TPB_BASE_BILLABLE_Capacity02]  DEFAULT ((0)),
+[BILLABLE_REFERENCEKEY] [nvarchar](50)  COLLATE SQL_Latin1_General_CP1_CI_AS NULL  CONSTRAINT [DF_WMS_TPB_BASE_BILLABLE_REFERENCEKEY]  DEFAULT ('')
 ) ON [PRIMARY]
-GO
+
 ALTER TABLE [dbo].[WMS_TPB_BASE] ADD CONSTRAINT [PK_WMS_TPB_BASE_SEQ] PRIMARY KEY CLUSTERED ([SEQ]) WITH (FILLFACTOR=80, PAD_INDEX=ON) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [IDX_WMS_TPB_BASE_01] ON [dbo].[WMS_TPB_BASE] ([BatchNo], [CODE], [DOCUMENT_ID]) WITH (FILLFACTOR=80, PAD_INDEX=ON) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [IDX_WMS_TPB_BASE_02] ON [dbo].[WMS_TPB_BASE] ([BatchNo], [STATUS]) WITH (FILLFACTOR=80, PAD_INDEX=ON) ON [PRIMARY]
-GO
+
 GRANT DELETE ON  [dbo].[WMS_TPB_BASE] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[WMS_TPB_BASE] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[WMS_TPB_BASE] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[WMS_TPB_BASE] TO [NSQL]
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'AddDate', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'ADD_DATE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'AddWho', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'ADD_WHO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'QtyReceived/Pack.Casecnt', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_CARTON'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'QtyReceived*STDCUBE', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_CBM'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'ContainerQty', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_CONTAINER'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'EditDate', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_DATE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Upon Request', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_DROP'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_NO_OF_LOC'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Count distinct(ToID)', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_PALLET'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'QtyReceived', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_QUANTITY'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'GrossWgt', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_WEIGHT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CARTON_UOM'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CASE_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CBM_UOM'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'StorerKey', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CLIENT_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'ExternPOKey', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CLIENT_PO_NO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'ExternBASENumber', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CLIENT_REF'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'ExternLineNo', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CLIENT_REF_LINE_NO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'HostWHCode', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CLIENT_SITE_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BASE', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CODE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Source Query Config ID', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CONFIG_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'ContainerKey', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CONTAINER_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'ContainerType', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'CONTAINER_TYPE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'System Country (3 Char ISO)', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'COUNTRY'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine01', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine02', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine03', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine04', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine05', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine06', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine07', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine08', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine09', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine10', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'D_USD_10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BASEGroup', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOC_GROUPING_1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOC_GROUPING_2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOC_PRE_STATUS'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOC_REASON'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'WMS', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOC_SOURCE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'ASNStatus', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOC_STATUS'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'RECType', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOC_SUB_TYPE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'DocType (A = ASN, R = Return)', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOC_TYPE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BASEKey', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOCUMENT_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BASELineNumber', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DOCUMENT_LINE_NO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'DROP_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'EditDate', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'EDIT_DATE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'EditWho', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'EDIT_WHO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine01', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine02', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine03', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine04', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine05', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine06', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine07', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine08', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine09', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine10', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine11', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_11'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine12', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_12'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine13', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_13'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine14', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_14'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine15', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_15'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine16', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_16'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine17', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_17'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine18', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_18'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine19', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_19'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine20', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'FT_USD_20'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine01', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine02', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine03', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine04', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine05', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine06', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine07', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine08', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine09', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UserDefine10', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'H_USD_10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Creation Date & Time', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'INSERT_DATE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOAD_PLAN_NO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOC'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOCATION_TYPE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable01', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable02', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable03', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable04', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable05', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable06', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable07', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable08', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable09', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable10', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable11', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_11'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable12', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_12'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable13', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_13'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable14', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_14'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable15', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOT_LOTTABLE_15'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable01', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable02', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable03', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable04', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable05', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable06', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable07', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable08', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable09', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable10', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable11', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_11'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable12', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_12'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable13', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_13'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable14', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_14'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Lottable15', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LOTTABLE_15'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LP_DELIVERY_ZONE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'LP_TRF_ROOM'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'MBOL_NO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'WarehouseReference', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'OTHER_REFERENCE_1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'WarehouseReference', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'OTHER_REFERENCE_2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'PALLET_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'PCS_PICK_METHOD'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'PICK_METHOD'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'PICK_SLIP_NO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'POKey', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'PO_NO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'PRIORITY'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'UOM', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'QTY_UOM'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'R_CC_WMS_QTY'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'R_LABEL_COUNT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'R_LINE_PRICE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'R_LINE_TOTAL'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'R_SERVICE_PROVIDER'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'R_SHIPMENT_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'R_SKU_COUNT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'DateReceived', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'REFERENCE_DATE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Generated Running ID', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SEQ'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SellerCompany', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SHIP_FROM_COMPANY'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SellerCountry', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SHIP_FROM_COUNTRY'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SellerName', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SHIP_FROM_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SHIP_TO_COMPANY'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SHIP_TO_COUNTRY'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SHIP_TO_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SITE_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR1', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR10', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR2', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR3', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR3'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR4', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR4'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR5', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR5'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR6', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR6'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR7', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR7'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR8', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR8'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'BUSR9', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_BUSR9'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'CASECNT', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_CASECNT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'CLASS', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_CLASS'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Color', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_COLOR'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'DESCR', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_DESCRIPTION'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SKUGROUP', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_GROUP'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'HazardousFlag', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_HAZARDOUSFLAG'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SKU', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'ItemClass', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_ITEM_CLASS'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Measurement', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_MEASUREMENT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'OVAS', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_OVAS'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'PrePackIndicator', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_PREPACKINDICATOR'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'ProductModel', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_PRODUCTMODEL'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Size', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_SIZE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'STDCUBE', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_STDCUBE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'STDGROSSWGT', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_STDGROSSWGT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'STDNETWGT', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_STDNETWGT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Style', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_STYLE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR1', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_SUSR1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR2', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_SUSR2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR3', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_SUSR3'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR4', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_SUSR4'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR5', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_SUSR5'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'TemperatureFlag', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_TEMPERATUREFLAG'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'IVAS', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'SKU_VAS'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'0 = New; 1 = Processing, 9 = Processed, 5 = Error, W = Work In progress', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'STATUS'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'CustomerGroupCode', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'STR_CLIENT_GROUP'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'MarketSegment', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'STR_SEGMENT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR1', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'STR_SUSR1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR2', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'STR_SUSR2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR3', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'STR_SUSR3'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR4', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'STR_SUSR4'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'SUSR5', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'STR_SUSR5'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'TO_CLIENT_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'TO_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'TO_LOC'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'TO_LOT'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'TO_SITE_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'TPB_UPLOADED_DATE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'TPB_UPLOADED_STATUS'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'A = ACTIVITIES', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'TRANSACTION_TYPE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Update Date & Time', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'UPDATE_DATE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'VehicleDate', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'VEHICLE_DATE'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'VehicleNumber', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'VEHICLE_NO'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'VesselKey', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'VESSEL_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'VoyageKey', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'VOYAGE_ID'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'', 'SCHEMA', N'dbo', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'WEIGHT_UOM'
-GO
+
+
+END 
+
+ELSE 
+BEGIN 
+
+ IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'BILLABLE_Capacity01' AND Object_ID = Object_ID('[dbo].[WMS_TPB_BASE]'))
+			BEGIN
+
+				ALTER TABLE [dbo].[WMS_TPB_BASE] ADD BILLABLE_Capacity01 [numeric](10, 2) NOT NULL CONSTRAINT [DF_WMS_TPB_BASE_BILLABLE_Capacity01]  DEFAULT ((0));
+				EXEC sp_addextendedproperty N'MS_Description', 'BILLABLE_Capacity01', 'SCHEMA', N'DBO', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_Capacity01'
+				
+			END
+
+
+ IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'BILLABLE_Capacity02' AND Object_ID = Object_ID('[dbo].[WMS_TPB_BASE]'))
+			BEGIN
+
+				ALTER TABLE [dbo].[WMS_TPB_BASE] ADD BILLABLE_Capacity02 [numeric](10, 2) NOT NULL CONSTRAINT [DF_WMS_TPB_BASE_BILLABLE_Capacity02]  DEFAULT ((0));
+				EXEC sp_addextendedproperty N'MS_Description', 'BILLABLE_Capacity02', 'SCHEMA', N'DBO', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_Capacity02'
+				
+			END
+
+
+ IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'BILLABLE_REFERENCEKEY' AND Object_ID = Object_ID('[dbo].[WMS_TPB_BASE]'))
+			BEGIN
+
+				ALTER TABLE [dbo].[WMS_TPB_BASE] ADD [BILLABLE_REFERENCEKEY] [nvarchar](50) NULL CONSTRAINT [DF_WMS_TPB_BASE_BILLABLE_REFERENCEKEY]  DEFAULT ('');
+				EXEC sp_addextendedproperty N'MS_Description', 'BILLABLE_REFERENCEKEY', 'SCHEMA', N'DBO', 'TABLE', N'WMS_TPB_BASE', 'COLUMN', N'BILLABLE_REFERENCEKEY'
+				
+			END
+
+
+
+END
+

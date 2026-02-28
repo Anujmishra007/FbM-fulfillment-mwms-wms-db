@@ -22,7 +22,9 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author  Ver   Purposes                                  */
+/* 2025-10-10   SSA01   1.0   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[isp_EPackVas_Update] 
       @c_Orderkey          NVARCHAR(10) 
@@ -125,8 +127,8 @@ BEGIN
 
       UPDATE ORDERDETAILREF WITH (ROWLOCK)
          SET PackCnt  = PackCnt + @n_QtyToUpdate
-            ,EditWho  = SUSER_SNAME()
-            ,EditDate = GETDATE()
+            ,EditWho  = dbo.fnc_GetUserName()      --(SSA01)
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01)
             ,TrafficCop = NULL
       WHERE RowRef = @n_RowRef
 

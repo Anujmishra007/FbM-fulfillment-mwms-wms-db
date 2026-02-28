@@ -29,7 +29,9 @@ GO
 /* 2021-11-16  WLChooi  1.5   WMS-18202-Storerconfig filter by facility */  
 /*                            (WL02)                                    */  
 /* 2021-11-16  WLChooi  1.5   DevOps Combine Script                     */  
-/* 2022-12-11  KuanYee  1.6   AddOn cartontype & Weight validation(KY01)*/  
+/* 2022-12-11  KuanYee  1.6   AddOn cartontype & Weight validation(KY01)*/
+/* 2025-10-10  SSA01    1.7   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/      
 CREATE OR ALTER PROC isp_ECOM_PackSaveEnd      
            @c_PickSlipNo         NVARCHAR(10)      
@@ -132,8 +134,8 @@ BEGIN
             UPDATE PACKINFO       
             SET TrackingNo = @c_TrackingNo_ORD                    --(Wan03)    
                ,Trafficcop = NULL                                 --(Wan03)  
-               ,EditWho   = SUSER_SNAME()                         --(Wan03)  
-               ,EditDate   = GETDATE()                            --(Wan03)  
+               ,EditWho   = dbo.fnc_GetUserName()                        --(Wan03)  (SSA01)
+               ,EditDate   = dbo.fnc_GetDate()   --(SSA01)                         --(Wan03)
             WHERE PickSlipNo = @c_PickSlipNo      
             AND CartonNo = @n_CartonNo      
             AND (TrackingNo = '' OR TrackingNo IS NULL)           --(Wan03)  

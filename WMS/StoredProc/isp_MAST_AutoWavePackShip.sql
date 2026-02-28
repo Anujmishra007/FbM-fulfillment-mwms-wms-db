@@ -22,6 +22,8 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 02-Jun-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 10-OCT-2025  SSA01   1.1   UWP-42248 -Enhanced session management       */
+/*                             and cleanup.                                */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[isp_MAST_AutoWavePackShip]    
 (
@@ -309,8 +311,8 @@ BEGIN
          UPDATE LoadPlan WITH (ROWLOCK)                                                                                                                           
          SET [Status]   = @c_Status,                                                                  
              Trafficcop = NULL, 
-             EditDate = GETDATE(),
-             EditWho = SUSER_SNAME()                                                                                                                                    
+             EditDate = dbo.fnc_GetDate(),   --(SSA01)
+             EditWho = dbo.fnc_GetUserName()      --(SSA01)
          WHERE LoadKey = @c_GetLoadkey  
 
          IF @n_Err <> 0
@@ -473,7 +475,7 @@ BEGIN
 
                INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)    
                SELECT @c_GetPickslipno, 1, @c_GetLabelNo, RIGHT('00000' + CAST(@n_LabelLineCNT AS NVARCHAR(5)), 5), @c_StorerKey, @c_GetSKU,   
-                      @n_GetQty, SUSER_SNAME(), GETDATE(), SUSER_SNAME(), GETDATE()   
+                      @n_GetQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate()       --(SSA01)
 
                IF @@ERROR <> 0
                BEGIN 
@@ -749,8 +751,8 @@ QUIT_SP:
             UPDATE ORDERS
             SET Notes      = 'HOLD',
                 TrafficCop = NULL,
-                EditWho    = SUSER_SNAME(),
-                EditDate   = GETDATE()
+                EditWho    = dbo.fnc_GetUserName(),    --(SSA01)
+                EditDate   = dbo.fnc_GetDate()   --(SSA01)
             WHERE OrderKey = @c_GetOrderkey
          END
                                             
@@ -783,8 +785,8 @@ QUIT_SP:
             UPDATE ORDERS WITH (ROWLOCK)
             SET Notes      = 'EMAIL FAILED',
                 TrafficCop = NULL,
-                EditWho    = SUSER_SNAME(),
-                EditDate   = GETDATE()
+                EditWho    = dbo.fnc_GetUserName(),     --(SSA01)
+                EditDate   = dbo.fnc_GetDate()   --(SSA01)
             WHERE OrderKey = @c_GetOrderkey                          
          END  
       END

@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrXDockDetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-	DROP TRIGGER [dbo].[ntrXDockDetailUpdate]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -12,8 +10,10 @@ GO
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
 /* 30-Jul-2014  CSCHONG    Add Lottable06-15 (CS01)                     */
 /* 08-FEb-2018  SWT02      Channel Management                           */
+/* 06-Oct-2025  AK01       UWP-42143 - Replace SUSER_SNAME with         */
+/*                           fnc_GetUserName                            */
 /************************************************************************/
-CREATE TRIGGER ntrXDockDetailUpdate
+CREATE OR ALTER TRIGGER ntrXDockDetailUpdate
 ON XDOCKDETAIL
 FOR UPDATE
 AS
@@ -120,8 +120,8 @@ BEGIN
     
     BEGIN
         UPDATE XDOCKDETAIL
-        SET    EditDate = GETDATE()
-              ,EditWho = SUSER_SNAME()
+        SET    EditDate = dbo.fnc_GetDate()
+              ,EditWho = dbo.fnc_GetUserName()
         FROM   XDOCKDETAIL
               ,DELETED
               ,INSERTED
@@ -463,8 +463,8 @@ BEGIN
                   ,XDOCK.ExpectedTotalCube = XDOCK.ExpectedTotalCube+(INSERTED.ExpectedCube- DELETED.ExpectedCube)
                   ,XDOCK.ReceivedTotalCube = XDOCK.ReceivedTotalCube+(INSERTED.ReceivedCube- DELETED.ReceivedCube)
                   ,XDOCK.ShippedTotalCube = XDOCK.ShippedTotalCube+(INSERTED.ShippedCube- DELETED.ShippedCube)
-                  ,EditDate = GETDATE()   --tlting
-                  ,EditWho = SUSER_SNAME()
+                  ,EditDate = dbo.fnc_GetDate()   --tlting
+                  ,EditWho = dbo.fnc_GetUserName()
             FROM   XDOCK
                   ,INSERTED
                   ,DELETED
@@ -534,8 +534,8 @@ BEGIN
                        FROM   XDOCKDETAIL
                        WHERE  XDOCKDETAIL.XDOCKkey = XDOCK.XDOCKkey
                    )
-                  ,EditDate = GETDATE()   --tlting
-                  ,EditWho = SUSER_SNAME()
+                  ,EditDate = dbo.fnc_GetDate()   --tlting
+                  ,EditWho = dbo.fnc_GetUserName()
             FROM   XDOCK
                   ,INSERTED
             WHERE  XDOCK.XDOCKkey IN (SELECT DISTINCT XDOCKkey
@@ -614,4 +614,5 @@ BEGIN
         RETURN
     END
 END
+
 

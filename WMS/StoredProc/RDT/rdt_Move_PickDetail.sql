@@ -115,7 +115,8 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
             AND ID = @cID
             AND Status BETWEEN @cPDStatusStart AND @cPDStatusEnd
             AND Status <> '4'
-            AND QTY > 0         
+            AND QTY > 0
+         Order by OrderKey, OrderLineNumber, PickDetailKey
       OPEN @curPD
       FETCH NEXT FROM @curPD INTO @cPickDetailKey
       WHILE @@FETCH_STATUS = 0
@@ -157,6 +158,7 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
                   AND Status <> '4'
                   AND QTY > 0
                   AND TaskDetailKey = @cTaskDetailKey
+               Order by OrderKey, OrderLineNumber, PickDetailKey
 
          ELSE IF @cCaseID <> ''
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -169,6 +171,7 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
                   AND Status <> '4'
                   AND QTY > 0
                   AND CaseID = @cCaseID
+               Order by OrderKey, OrderLineNumber, PickDetailKey
 
          ELSE IF @cDropID <> ''
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -181,6 +184,7 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
                   AND Status <> '4'
                   AND QTY > 0
                   AND DropID = @cDropID
+               Order by OrderKey, OrderLineNumber, PickDetailKey
 
          ELSE IF @cDropID = ''
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -193,6 +197,7 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
                   AND Status <> '4'
                   AND QTY > 0
                   AND DropID = @cUCC
+               Order by OrderKey, OrderLineNumber, PickDetailKey
       END
       
       -- Move by SKU
@@ -210,6 +215,7 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
                   AND Status <> '4'
                   AND QTY > 0
                   AND TaskDetailKey = @cTaskDetailKey
+               Order by OrderKey, OrderLineNumber, PickDetailKey
          
          ELSE IF @cOrderKey <> ''
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -222,6 +228,7 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
                   AND Status <> '4'
                   AND QTY > 0
                   AND OrderKey = @cOrderKey
+               Order by OrderKey, OrderLineNumber, PickDetailKey
 
          ELSE IF @cCaseID <> ''
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -234,6 +241,7 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
                   AND Status <> '4'
                   AND QTY > 0
                   AND CaseID = @cCaseID
+               Order by OrderKey, OrderLineNumber, PickDetailKey
 
          ELSE IF @cDropID <> ''
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -246,6 +254,7 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
                   AND Status <> '4'
                   AND QTY > 0
                   AND DropID = @cDropID
+               Order by OrderKey, OrderLineNumber, PickDetailKey
          
          ELSE
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -257,6 +266,7 @@ CREATE  PROCEDURE [RDT].[rdt_Move_PickDetail] (
                   AND Status BETWEEN @cPDStatusStart AND @cPDStatusEnd
                   AND Status <> '4'
                   AND QTY > 0
+               Order by OrderKey, OrderLineNumber, PickDetailKey
       END
       
       -- Loop affected PickDetail

@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrTransferDetailDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrTransferDetailDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
    DROP TRIGGER [dbo].[ntrTransferDetailDelete]
 GO
 
@@ -35,6 +35,7 @@ GO
 /*                            Release Task.(Wan02)                         */  
 /* 13-OCT-2015  YTWan   1.4   SOS#345583 - cn_update tranfer header (Wan03)*/
 /* 23-FEB-2021  Wan04   1.5   WMS-16391 - [CN] ANFQHW_WMS_Transfer Finalize_CR */
+/* 09-Oct-2025  SPC040  1.6   Replace SUSER_SNAME with fnc_GetUserName     */
 /***************************************************************************/
 CREATE TRIGGER ntrTransferDetailDelete
 ON TRANSFERDETAIL
@@ -385,8 +386,8 @@ BEGIN
          BEGIN
             UPDATE TRANSFER
             SET  TRANSFER.OpenQty = TRANSFER.OpenQty - DELETED.FromQty,
-            EditDate = GETDATE(),  -- SOS102519
-            EditWho = SUSER_SNAME(), -- SOS102519
+            EditDate = dbo.fnc_GetDate(),  -- SOS102519
+            EditWho = dbo.fnc_GetUserName(), -- SOS102519
             Trafficcop = Null        -- SOS102519
             FROM TRANSFER,
             DELETED
@@ -404,8 +405,8 @@ BEGIN
             (Select Sum(DELETED.FromQty) From DELETED
             Where DELETED.Transferkey = TRANSFER.Transferkey)
             ),
-            EditDate = GETDATE(),  -- SOS102519
-            EditWho = SUSER_SNAME(), -- SOS102519
+            EditDate = dbo.fnc_GetDate(),  -- SOS102519
+            EditWho = dbo.fnc_GetUserName(), -- SOS102519
             Trafficcop = Null        -- SOS102519
             FROM TRANSFER,DELETED
             WHERE TRANSFER.Transferkey IN (SELECT Distinct Transferkey From DELETED)
@@ -435,8 +436,8 @@ BEGIN
             BEGIN
                UPDATE TRANSFER
                SET  TRANSFER.OpenQty = TRANSFER.OpenQty - DELETED.FromQty 
-                  , EditDate = GETDATE()  
-                  , EditWho = SUSER_SNAME()  
+                  , EditDate = dbo.fnc_GetDate()  
+                  , EditWho = dbo.fnc_GetUserName()  
                FROM TRANSFER 
                JOIN DELETED ON (TRANSFER.TransferKey = DELETED.TransferKey)
                AND EXISTS ( SELECT 1 
@@ -452,8 +453,8 @@ BEGIN
                (SELECT SUM(DELETED.FromQty) FROM DELETED
                 WHERE DELETED.Transferkey = TRANSFER.Transferkey)
                )
-               , EditDate = GETDATE()  
-               , EditWho = SUSER_SNAME() 
+               , EditDate = dbo.fnc_GetDate()  
+               , EditWho = dbo.fnc_GetUserName() 
                FROM TRANSFER
                JOIN DELETED ON (TRANSFER.TransferKey = DELETED.TransferKey)
                WHERE TRANSFER.Transferkey IN (SELECT DISTINCT Transferkey FROM DELETED)

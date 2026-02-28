@@ -28,7 +28,8 @@ GO
 /*                            DBBULK's PickZone to find PackStation     */
 /*                            regardless if there is Home Loc setup.    */
 /* 2022-10-06  Wan03    1.3   WMS-20898 - THA-adidas-Assign Wave priority*/
-/*                            to Taskdetail (RPF, RPT,CPK,ASTCPK)       */  
+/*                            to Taskdetail (RPF, RPT,CPK,ASTCPK)       */
+/* 2025-10-10  SSA01    1.4  UWP-42248 -Enhanced session management     */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_CPK]  
    @c_Wavekey     NVARCHAR(10)      
@@ -504,8 +505,8 @@ BEGIN
    UPDATE p WITH (ROWLOCK)  
       SET p.TaskDetailKey = up.TaskDetailkey  
          ,p.TrafficCop = NULL  
-         ,p.EditWho = SUSER_SNAME()  
-         ,p.EditDate= GETDATE()  
+         ,p.EditWho = dbo.fnc_GetUserName()        --(SSA01)
+         ,p.EditDate= dbo.fnc_GetDate()    --(SSA01)
    FROM UPD_PD AS up        
    JOIN dbo.PICKDETAIL AS p ON p.PickDetailKey = up.PickDetailKey  
    WHERE (p.TaskDetailKey = '' OR p.TaskDetailKey IS NULL)  

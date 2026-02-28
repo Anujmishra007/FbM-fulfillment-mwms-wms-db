@@ -24,6 +24,7 @@ GO
 /* 2023-05-15  Wan01    1.1   LFWM-4033 - CN UAT  Shipment order reverse*/
 /*                            combined order display error&Batch reverse*/
 /*                            Devops Conbine Script                     */
+/* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_SORVCombineORD_Wrapper] 
       @c_OrderKeys            NVARCHAR(MAX)              -- Orderkey Seperated by | --(Wan01)           
@@ -69,21 +70,26 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
                
-   SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
    
    BEGIN TRY
       IF OBJECT_ID('tempdb..#FROMORD','U') IS NOT NULL                              --(Wan01) - START
@@ -380,7 +386,7 @@ BEGIN
       
       IF @n_Continue = 1 AND @n_BackEndProcess = 0                                  --(Wan01)
       BEGIN
-         SET @c_errmsg = 'Reverse Combine Order SuccessFully.'
+         SET @c_errmsg = 'Combine Order SuccessFully.'
 
          EXEC [WM].[lsp_WriteError_List] 
             @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
@@ -442,7 +448,8 @@ BEGIN
       BEGIN TRAN 
    END
 
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_SORVCombineORD_Wrapper] TO nSQL 

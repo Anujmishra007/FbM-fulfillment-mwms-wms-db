@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_1812CreateTask02]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_1812CreateTask02]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,9 +11,10 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 03-06-2024 1.0  NLT013     UWP-17667 Created                         */
+/* 28-07-2025 1.1  Dennis     Fill out FP1 Task Info                    */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_1812CreateTask02] (
+CREATE OR ALTER PROC [rdt].[rdt_1812CreateTask02] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -282,14 +279,14 @@ BEGIN
                TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, TransitLOC, 
                PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop)
             VALUES (
-               @cNewTaskDetailKey, 'FPK1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, 0, @cToLOCAreaKey, @cFinalLOC,
+               @cNewTaskDetailKey, 'FPK1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, 0, @cToLOCAreaKey, @cFinalLOC,
                'FP', @cStorerKey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL)
          ELSE
             INSERT INTO TaskDetail (
                TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, 
                PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop)
             VALUES (
-               @cNewTaskDetailKey, 'FPK1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, 0, @cToLOCAreaKey, 
+               @cNewTaskDetailKey, 'FPK1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, 0, @cToLOCAreaKey, 
                'FP', @cStorerKey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL)
          IF @@ERROR <> 0
          BEGIN

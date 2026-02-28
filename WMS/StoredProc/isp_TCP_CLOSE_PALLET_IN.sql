@@ -48,6 +48,8 @@ GO
 /* 27-JUL-2012  ChewKP    2.3   SOS#249595 Update LoadPlanDetail for    */
 /*                              Weight and Cube (ChewKP06)              */
 /* 10-OCT-2013  YTWan     1.2   SOS#291410-Change INT to FLOAT - (Wan01)*/
+/* 10-OCT-2025 SSA01      2.4   UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_TCP_CLOSE_PALLET_IN]
@@ -333,7 +335,7 @@ BEGIN
                UPDATE DROPID WITH (ROWLOCK)
                   SET LoadKey    = @c_LoadKey,
                       TrafficCop = NULL,
-                      EditDate = GETDATE(),
+                      EditDate = dbo.fnc_GetDate(),    --(SSA01)
                       EditWho = 'WCS'
                WHERE Dropid = @c_LPNNo
                IF @@ERROR <> 0
@@ -563,7 +565,7 @@ BEGIN
                UPDATE LoadPlanDetail SET  
                   Weight = @nTotWeight,   
                   Cube = @nTotCube, 
-                  EditDate = GETDATE(), 
+                  EditDate = dbo.fnc_GetDate(),   --(SSA01)
                   TrafficCop = NULL   
                WHERE LoadKey = @cLoadKey  
                  AND OrderKey = @cOrderKey  
@@ -586,7 +588,7 @@ BEGIN
                   UPDATE MBOLDetail SET  
                   Weight = @nTotWeight,   
                   Cube = @nTotCube, 
-                  EditDate = GETDATE(), 
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
                   TrafficCop = NULL   
                WHERE LoadKey = @cLoadKey  
                  AND OrderKey = @cOrderKey  
@@ -680,8 +682,8 @@ BEGIN
    UPDATE dbo.TCPSocket_INLog WITH (ROWLOCK)
    SET STATUS   = @c_Status
      , ErrMsg   = @c_ErrMsg
-     , Editdate = GETDATE()
-     , EditWho  = SUSER_SNAME()
+     , Editdate = dbo.fnc_GetDate()    --(SSA01)
+     , EditWho  = dbo.fnc_GetUserName()         --(SSA01)
    WHERE SerialNo = @n_SerialNo
 
    WHILE @@TRANCOUNT > @n_StartTCnt -- Commit until the level we started

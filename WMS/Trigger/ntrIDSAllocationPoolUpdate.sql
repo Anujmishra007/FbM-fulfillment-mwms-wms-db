@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrIDSAllocationPoolUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrIDSAllocationPoolUpdate]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -8,8 +5,9 @@ SET ANSI_NULLS OFF
 GO
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
 /* 28-Oct-2013  TLTING    Review Editdate column update                 */
+/* 06-Oct-2025  AK01   1.0 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 
-CREATE TRIGGER ntrIDSAllocationPoolUpdate ON [dbo].[IDSAllocationPool] 
+CREATE OR ALTER TRIGGER ntrIDSAllocationPoolUpdate ON [dbo].[IDSAllocationPool] 
  FOR UPDATE
  AS
  BEGIN
@@ -37,8 +35,8 @@ CREATE TRIGGER ntrIDSAllocationPoolUpdate ON [dbo].[IDSAllocationPool]
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
    BEGIN   	
        UPDATE IDSAllocationPool with (ROWLOCK)
-             SET EditWho = SUSER_SNAME(),
-                 EditDate = GetDate()
+             SET EditWho = dbo.fnc_GetUserName(),
+                 EditDate = dbo.fnc_GetDate()
        FROM INSERTED
        WHERE INSERTED.AllocPoolID = IDSAllocationPool.AllocPoolID
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
@@ -89,4 +87,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 
