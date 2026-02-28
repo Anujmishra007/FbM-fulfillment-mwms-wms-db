@@ -10,7 +10,7 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
-/* 2026-02-26   ELB012    1.0   RITM8670783 - Created                   */
+/* 2026-02-26   ELB012    1.0   UWP-49560 RITM8670783 - Created         */
 /************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_1812ExtVal06]
@@ -39,20 +39,20 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-			IF EXISTS(SELECT 1 FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile <> @nMobile AND o_Field02 = @cDropID AND Func = @nFunc)
-			BEGIN
-			   SET @nErrNo = 70076
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --70076^Tote in Use
+            IF EXISTS(SELECT 1 FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile <> @nMobile AND O_Field02 = @cDropID AND Func = @nFunc)
+            BEGIN
+               SET @nErrNo = 260301
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote in Use
                GOTO Quit
-			END
+            END
             -- Get storer
             DECLARE @cStorerKey NVARCHAR(15)
-            SELECT @cStorerKey = StorerKey FROM TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
-            
+            SELECT @cStorerKey = StorerKey FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
+
             -- Check duplicate
-            IF EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND Status <= '5')
+            IF EXISTS( SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND Status <= '5')
             BEGIN
-               SET @nErrNo = 51752
+               SET @nErrNo = 260302
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID used
                EXEC rdt.rdtSetFocusField @nMobile, 4 -- DropID
                GOTO Quit
@@ -61,10 +61,8 @@ BEGIN
       END
    END
    GOTO Quit
-
 Quit:
 END
-
 
 GO
 SET QUOTED_IDENTIFIER OFF
