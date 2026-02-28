@@ -101,9 +101,9 @@ BEGIN
                         )
                      )
             BEGIN
-            SET @nErrNo = 260252
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ORDER NOT FOUND 
-            GOTO QUIT
+               SET @nErrNo = 260252
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ORDER NOT FOUND 
+               GOTO QUIT
             END
 
             -- DocType = 'E'/'B2C'
@@ -151,9 +151,9 @@ BEGIN
                               WHERE PD.Status = '3' AND PD.ID = @cFromID))  --PSJ036 REV1.1
                   BEGIN
                      IF @cToLOC = @cB2BVas
-                        BEGIN
-                           GOTO QUIT
-                        END
+                     BEGIN
+                        GOTO QUIT
+                     END
                      ELSE
                      BEGIN
                         SET @nErrNo = 260255
