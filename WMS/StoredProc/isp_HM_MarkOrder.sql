@@ -28,6 +28,8 @@ GO
 /* Date         Author  Ver     Purposes                                		 */
 /* 2020/07/09   kocy    V1.0    https://jiralfl.atlassian.net/browse/WMS-13511 */
 /* 2020/11/01   Josh    V1.1    Performance tune                               */
+/* 2025/10/10   SSA01   V1.2    UWP-42248 -Enhanced session management         */
+/*                              and cleanup.                                   */
 /*******************************************************************************/
     
 CREATE PROC [dbo].[isp_HM_MarkOrder]    
@@ -312,8 +314,8 @@ BEGIN
          UPDATE dbo.ORDERS WITH (ROWLOCK)    
          SET M_Address1 = 'P',    
              TrafficCop = NULL,    
-             EditDate = GETDATE(),    
-             EditWho = SUSER_SNAME()    
+             EditDate = dbo.fnc_GetDate(),   --(SSA01)
+             EditWho = dbo.fnc_GetUserName()        --(SSA01)
          WHERE OrderKey = @Orderkey    
          AND Status = '0';    
     

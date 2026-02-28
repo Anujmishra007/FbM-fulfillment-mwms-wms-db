@@ -50,6 +50,7 @@ GO
 /*                              WMS-3154 ADD ExtendedValidate at ID screen    */
 /*                              Change ExtendedInfo to use rdt schema         */
 /* 2018-10-16   3.4  TungGH     Performance                                   */
+/* 2025-12-17   3.5  NickT      FCR-9545 Add ExntendedValidation in Step 3    */
 /******************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_Return](
@@ -318,6 +319,7 @@ SELECT
    @cSUSR1           = V_String37,
    @cDefaultUOM      = V_String39,
    @cDecodeLabelNo   = V_String40,
+   @cExtendedValidateSP = V_String41,
    @cZone            = V_OrderKey,  -- (james03)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
@@ -421,6 +423,10 @@ BEGIN
    SET @cSkipLottable02 = rdt.RDTGetConfig( @nFunc, 'SkipLottable02', @cStorerKey)
    SET @cSkipLottable03 = rdt.RDTGetConfig( @nFunc, 'SkipLottable03', @cStorerKey)
    SET @cSkipLottable04 = rdt.RDTGetConfig( @nFunc, 'SkipLottable04', @cStorerKey)
+
+   SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
+   IF @cExtendedValidateSP = '0'
+      SET @cExtendedValidateSP = ''
 
    -- Init var
    SET @nPQTY = 0
@@ -1612,6 +1618,50 @@ BEGIN
          END
      END
 
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cZone, @cReceiptKey, @cPOKey, @cSKU, @nQTY,
+                 @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cConditionCode, @cSubReason, @cToLOC, @cToID, 
+                 @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+            SET @cSQLParam =
+               '@nMobile         INT, ' +
+               '@nFunc           INT, ' +
+               '@cLangCode       NVARCHAR( 3), ' +
+               '@nStep           INT, ' +
+               '@nInputKey       INT, ' +
+               '@cFacility       NVARCHAR( 5),  ' + 
+               '@cStorerKey      NVARCHAR( 15), ' + 
+               '@cZone           NVARCHAR( 10), ' +
+               '@cReceiptKey     NVARCHAR( 10), ' +
+               '@cPOKey          NVARCHAR( 10), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTY            INT, ' +
+               '@cLottable01     NVARCHAR( 18), ' +
+               '@cLottable02     NVARCHAR( 18), ' +
+               '@cLottable03     NVARCHAR( 18), ' +
+               '@dLottable04     DATETIME, ' +
+               '@cConditionCode  NVARCHAR( 10), ' +
+               '@cSubReason      NVARCHAR( 10), ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@cToID           NVARCHAR( 18), ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cZone, @cReceiptKey, @cPOKey, @cSKU, @nQTY,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cConditionCode, @cSubReason, @cLOC, @cID, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO QTYCD_Fail
+         END
+      END
+
      -- If any one of the Lottablelabels being set, will got to Screen_Lottables
      SET @cLotFlag = 'N'
 
@@ -1630,13 +1680,13 @@ BEGIN
          SET @cOutField09 = ''
          SET @cOutField10 = ''
          SET @cInField08 = ''
-/*
-         SET @cLottable01 = ''
-         SET @cLottable02 = ''
-         SET @cLottable03 = ''
-         SET @dLottable04 = 0
-         SET @dLottable05 = 0
-*/
+         /*
+                  SET @cLottable01 = ''
+                  SET @cLottable02 = ''
+                  SET @cLottable03 = ''
+                  SET @dLottable04 = 0
+                  SET @dLottable05 = 0
+         */
          SET @cFieldAttr01 = ''
          SET @cFieldAttr02 = ''
          SET @cFieldAttr03 = ''
@@ -1779,12 +1829,12 @@ BEGIN
          IF @cSkipLottable03 = '1' SELECT @cFieldAttr06 = 'O', @cInField03 = '', @cLottable03 = ''
          IF @cSkipLottable04 = '1' SELECT @cFieldAttr08 = 'O', @cInField04 = '', @dLottable04 = 0
          -- Initiate labels
---        SELECT
---           @cOutField01 = 'Lottable01:',
---           @cOutField03 = 'Lottable02:',
---           @cOutField05 = 'Lottable03:',
---     @cOutField07 = 'Lottable04:',
---           @cOutField09 = 'Lottable05:'
+         --        SELECT
+         --           @cOutField01 = 'Lottable01:',
+         --           @cOutField03 = 'Lottable02:',
+         --           @cOutField05 = 'Lottable03:',
+         --     @cOutField07 = 'Lottable04:',
+         --           @cOutField09 = 'Lottable05:'
 
         -- Populate labels and lottables
         IF @cLottable01Label = '' OR @cLottable01Label IS NULL
@@ -1950,16 +2000,16 @@ BEGIN
             @cLottable03   = @cLottable03,
             @dLottable04   = @dLottable04,
             @dLottable05   = @dLottable05,
---            @cLottable06   = '',              --(CS01)
---            @cLottable07   = '',              --(CS01)
---            @cLottable08   = '',              --(CS01)
---            @cLottable09   = '',              --(CS01)
---            @cLottable10   = '',              --(CS01)
---            @cLottable11   = '',              --(CS01)
---            @cLottable12   = '',              --(CS01)
---            @dLottable13   = NULL,            --(CS01)
---            @dLottable14   = NULL,            --(CS01)
---            @dLottable15   = NULL,            --(CS01)
+            --            @cLottable06   = '',              --(CS01)
+            --            @cLottable07   = '',              --(CS01)
+            --            @cLottable08   = '',              --(CS01)
+            --            @cLottable09   = '',              --(CS01)
+            --            @cLottable10   = '',              --(CS01)
+            --            @cLottable11   = '',              --(CS01)
+            --            @cLottable12   = '',              --(CS01)
+            --            @dLottable13   = NULL,            --(CS01)
+            --            @dLottable14   = NULL,            --(CS01)
+            --            @dLottable15   = NULL,            --(CS01)
             @nNOPOFlag     = @nNOPOFlag,
             @cConditionCode = @cTempConditionCode,
             @cSubReasonCode = @cSubReason
@@ -2059,7 +2109,7 @@ BEGIN
             SET @nStep = @nStep_MsgSuccess
             GOTO Quit
         END
-      -- (ChewKP01) End --
+         -- (ChewKP01) End --
       END
 
       -- (james01)
@@ -2159,7 +2209,7 @@ BEGIN
             SET @cOutField07 = '' -- @nPrefUOM_Div
             SET @cOutField08 = '' -- @cPrefUOM_Desc
             SET @cOutField10 = '' -- @nActPQTY
-    -- Disable pref QTY field
+            -- Disable pref QTY field
             SET @cFieldAttr10 = 'O' -- (Vicky02)
             SET @cInField10 = '' -- (james02)
          END
@@ -4242,10 +4292,6 @@ BEGIN
          END
       END -- ID <> ''
 
-      SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
-      IF @cExtendedValidateSP = '0'
-         SET @cExtendedValidateSP = ''
-
       -- Extended validate
       IF @cExtendedValidateSP <> ''
       BEGIN
@@ -5466,6 +5512,7 @@ BEGIN
       V_String37     = @cSUSR1,
       V_String39     = @cDefaultUOM,
       V_String40     = @cDecodeLabelNo,
+      V_String41     = @cExtendedValidateSP,
       V_OrderKey     = @cZone,         -- (james03)
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,

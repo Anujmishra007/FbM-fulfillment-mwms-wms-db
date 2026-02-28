@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrPTLTranUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrPTLTranUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
     DROP TRIGGER [dbo].[ntrPTLTranUpdate]
 GO
 
@@ -32,6 +32,7 @@ GO
 /* Updates:                                                                      */  
 /* Date         Author    Ver.  Purposes                                         */  
 /* 28-Oct-2013  TLTING    1.1  Review Editdate column update                     */
+/* 09-Oct-2025  SPC040    1.2  Replace SUSER_SNAME with fnc_GetUserName          */
 /*********************************************************************************/    
   
 CREATE TRIGGER [dbo].[ntrPTLTranUpdate]  
@@ -65,8 +66,8 @@ BEGIN -- main
    IF (@n_continue = 1 or @n_continue = 2) AND NOT UPDATE(EditDate)    
    BEGIN  
      UPDATE PTLTran WITH (ROWLOCK)  
-     SET PTLTran.EditWho = SUSER_SNAME(),  
-         PTLTran.EditDate = GETDATE()  
+     SET PTLTran.EditWho = dbo.fnc_GetUserName(),  
+         PTLTran.EditDate = dbo.fnc_GetDate()  
      FROM PTLTran JOIN INSERTED ON PTLTran.PTLKey = INSERTED.PTLKey  
        SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
        IF @n_err <> 0  

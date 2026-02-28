@@ -126,7 +126,9 @@ GO
 /* 18-Jul-2024  Wan11    4.8  UWP-22202-Mattel Overallocation           */
 /*                            Get OverQtyLeftToFulfill from Sub SP      */
 /*                            Do Not Overallocate to partial fulfill DPP*/
-/* 22-Jan-2025  NJOW23   4.9  WMS-24396 - Fix @c_DynUOMQty condition    */           
+/* 22-Jan-2025  NJOW23   4.9  WMS-24396 - Fix @c_DynUOMQty condition    */
+/* 21-Feb-2025  WLChooi  5.0  WMS-26556 Support multi facilities (WL02) */
+/* 10-Oct-2025  SSA01    5.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/  
 
 CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
@@ -135,8 +137,8 @@ CREATE OR ALTER PROC [dbo].[nspOrderProcessing]
    , @c_docarton     NVARCHAR(1)  
    , @c_doroute      NVARCHAR(1)  
    , @c_tblprefix    NVARCHAR(10)  
-   , @b_Success      Int        OUTPUT  
-   , @n_err          Int        OUTPUT  
+   , @b_Success      INT        OUTPUT  
+   , @n_err          INT        OUTPUT  
    , @c_errmsg       NVARCHAR(250)  OUTPUT  
    , @c_extendparms  NVARCHAR(250) = ''   --(Wan02)
    , @c_StrategykeyParm NVARCHAR(10) = '' --NJOW14       
@@ -280,7 +282,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @n_err = 63500  
-         SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": Invalid Parameters Passed (nspOrderProcessing)"  
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Invalid Parameters Passed (nspOrderProcessing)"  
       END  
    END -- @n_continue =1 or @n_continue = 2  
   
@@ -331,9 +333,9 @@ BEGIN
       @c_ChannelInventoryMgmt  output,  
       @n_Err        output,  
       @c_ErrMsg     output  
-      If @b_success <> 1  
+      IF @b_success <> 1  
       BEGIN  
-         Select @n_continue = 3, @c_ErrMsg = 'nspOrderProcessing:' + ISNULL(RTRIM(@c_ErrMsg),'')  
+         SELECT @n_continue = 3, @c_ErrMsg = 'nspOrderProcessing:' + ISNULL(RTRIM(@c_ErrMsg),'')  
       END  
    END               
 
@@ -546,10 +548,10 @@ BEGIN
          [PickMethod] [nvarchar](1) NULL DEFAULT (' '),  
          [RunKey] [nvarchar](10) NULL DEFAULT (' '),  
          [EffectiveDate] [datetime] NULL DEFAULT (getdate()),  
-         [AddDate] [datetime] NULL DEFAULT (getdate()),  
-         [AddWho] [nvarchar](128) NULL DEFAULT (suser_sname()),    -- ZG01
-         [EditDate] [datetime] NULL DEFAULT (getdate()),  
-         [EditWho] [nvarchar](128) NULL DEFAULT (suser_sname()),   -- ZG01
+         [AddDate] [datetime] NULL DEFAULT (getdate()),    --(SSA01)
+         [AddWho] [nvarchar](128) NULL DEFAULT (suser_sname()),    -- ZG01 (SSA01)
+         [EditDate] [datetime] NULL DEFAULT (getdate()),    --(SSA01)
+         [EditWho] [nvarchar](128) NULL DEFAULT (suser_sname()),   -- ZG01 (SSA01)
          [TrafficCop] [nvarchar](1) NULL,  
          [ArchiveCop] [nvarchar](1) NULL,  
          [CARTONGROUP] NVARCHAR(10) NULL,  
@@ -563,7 +565,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(Char(250),@n_err), @n_err = 63529   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-         SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": Creation of Temp Table #op_cartonlines Failed.(nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Creation of Temp Table #op_cartonlines Failed.(nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
       END  
    END  
    
@@ -633,9 +635,9 @@ BEGIN
                PickMethod = '',     
                Runkey = '',             
                effectivedate = GETDATE(),  
-               adddate = GETDATE(),  
+               adddate = dbo.fnc_GetDate(),    --(SSA01)
                addwho = '',  
-               editdate = GETDATE(),  
+               editdate = dbo.fnc_GetDate(),    --(SSA01)
                editwho = '',                       
                CARTONGROUP = ISNULL(SKU.CartonGroup, ''),  
                StrategyKey = ISNULL(STRATEGY.AllocateStrategyKey, ''),  
@@ -795,10 +797,10 @@ BEGIN
             BEGIN  
                SELECT @n_continue = 3  
                SELECT @n_err = 63505  
-               SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": No Orders To Process. (nspOrderProcessing)"  
+               SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": No Orders To Process. (nspOrderProcessing)"  
             END  
   
-            IF @n_continue = 1 or @n_continue = 2  
+            IF @n_continue = 1 OR @n_continue = 2  
             BEGIN  
                IF ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  --NJOW05  
                BEGIN  
@@ -823,9 +825,9 @@ BEGIN
                      PickMethod = '',           
                      Runkey = '',       
                      effectivedate = GETDATE(),  
-                     adddate = GETDATE(),  
+                     adddate = dbo.fnc_GetDate(),    --(SSA01)
                      addwho = '',  
-                     editdate = GETDATE(),  
+                     editdate = dbo.fnc_GetDate(),    --(SSA01)
                      editwho = '',                       
                      CARTONGROUP = ISNULL(SKU.CartonGroup, ''),  
                      StrategyKey = ISNULL(STRATEGY.AllocateStrategyKey, ''),  
@@ -957,10 +959,10 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(Char(250),@n_err), @n_err = 63510   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-         SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": Creation Of OPORDERLINES Temp Table Failed (nspOrderProcessing)"   
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Creation Of OPORDERLINES Temp Table Failed (nspOrderProcessing)"   
                         + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
       END  
-      IF @n_continue = 1 or @n_continue = 2  
+      IF @n_continue = 1 OR @n_continue = 2  
       BEGIN  
          SELECT @n_cnt = COUNT(*) FROM #OPORDERLINES  
          IF @n_cnt = 0  
@@ -970,7 +972,7 @@ BEGIN
             SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": No Order Lines To Process. (nspOrderProcessing)"  
             EXECUTE nsp_logerror @n_err, @c_errmsg, "nspOrderProcessing"  
          END  
-         ELSE IF (@b_debug = 1 or @b_debug = 2)  
+         ELSE IF (@b_debug = 1 OR @b_debug = 2)  
          BEGIN  
             PRINT 'Number of Order Lines Pre-Allocated: ' + CAST(@n_cnt AS NVARCHAR(5))  
          END  
@@ -1060,7 +1062,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
        SELECT @n_err = 63512  
-         SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": Incomplete OrderSELECTion Parameters! (nspOrderProcessing)"  
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Incomplete OrderSELECTion Parameters! (nspOrderProcessing)"  
       END  
    END -- @n_continue = 1 or @n_continue = 2  
   
@@ -1209,7 +1211,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(Char(250),@n_err), @n_err = 63513   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-         SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": Creation Of Temp Table Failed (nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Creation Of Temp Table Failed (nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
       END  
    END -- @n_continue = 1 or @n_continue = 2  
   
@@ -1227,7 +1229,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(Char(250),@n_err), @n_err = 63528   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-         SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": Creation Of #OP_PICKLOCTYPE Temp Table Failed (nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Creation Of #OP_PICKLOCTYPE Temp Table Failed (nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
       END  
    END  
    IF ( @n_continue = 1 or @n_continue = 2 )  
@@ -1242,7 +1244,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(Char(250),@n_err), @n_err = 63528   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-         SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": Creation Of #OP_OVERPICKLOCS Temp Table Failed (nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Creation Of #OP_OVERPICKLOCS Temp Table Failed (nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
       END  
    END  
    IF ( @n_continue = 1 or @n_continue = 2 )  
@@ -1257,7 +1259,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(Char(250),@n_err), @n_err = 63528   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-         SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": Creation Of #OP_PICKLOCS Temp Table Failed (nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Creation Of #OP_PICKLOCS Temp Table Failed (nspOrderProcessing)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "  
       END  
    END  
    -- END -- @c_AllowOverAllocations = '1'  
@@ -1284,7 +1286,7 @@ BEGIN
    END
    --NJOW20 End  
   
-   IF @n_continue = 1 or @n_continue = 2  
+   IF @n_continue = 1 OR @n_continue = 2  
    BEGIN  
       DECLARE @c_aStorerKey NVARCHAR(15), @c_aSKU NVARCHAR(20), @c_Aorderkey NVARCHAR(10),  
             @c_Aorderlinenumber NVARCHAR(5), @c_aUOM NVARCHAR(10), @n_aUOMQty Int , -- (ChewKP01)  
@@ -1372,7 +1374,7 @@ BEGIN
   
       OPEN C_OPORDERLINES  
   
-      WHILE (1 = 1) and (@n_continue = 1 or @n_continue = 2)  
+      WHILE (1 = 1) AND (@n_continue = 1 OR @n_continue = 2)  
       BEGIN  
          SET @n_Channel_ID = 0 --SWT01  
            
@@ -1418,7 +1420,7 @@ BEGIN
          BEGIN  
             BREAK  
          END  
-         ELSE IF ( @b_debug = 1 or @b_debug = 2 )  
+         ELSE IF ( @b_debug = 1 OR @b_debug = 2 )  
          BEGIN  
             PRINT ''  
             PRINT ''  
@@ -1603,7 +1605,7 @@ BEGIN
                   BEGIN  
                      IF @c_authority = '1'  
                      BEGIN  
-                        INSERT INTO #Tmp_SuperOrder_UOM values ('3')  
+                        INSERT INTO #Tmp_SuperOrder_UOM VALUES ('3')  
                      END  
                   END  
   
@@ -1624,7 +1626,7 @@ BEGIN
                   BEGIN  
                      IF @c_authority = '1'  
                      BEGIN  
-                        INSERT INTO #Tmp_SuperOrder_UOM values ('7')  
+                        INSERT INTO #Tmp_SuperOrder_UOM VALUES ('7')  
                      END  
                   END  
   
@@ -1657,7 +1659,7 @@ BEGIN
          END -- @n_continue = 1 or @n_continue = 2  
   
          LOOPPICKSTRATEGY:  
-         WHILE (@n_continue = 1 or @n_continue = 2) and @n_NumberOfRetries <= 7 and @c_aUOM <= 9 and @n_aQtyLeftToFulfill > 0  
+         WHILE (@n_continue = 1 OR @n_continue = 2) AND @n_NumberOfRetries <= 7 AND @c_aUOM <= 9 AND @n_aQtyLeftToFulfill > 0  
          BEGIN  
             IF @c_SuperFlag = 'Y'  
             BEGIN  
@@ -2359,7 +2361,8 @@ BEGIN
                            FROM LOTxLOCxID  LLI WITH (NOLOCK)   
                            JOIN LOC         LOC WITH (NOLOCK) ON (LLI.Loc = LOC.LOC)  
                            WHERE LLI.Lot =  @c_aLOT    
-                           AND   LOC.Facility = @c_AFacility   
+                           --AND   LOC.Facility = @c_AFacility   --WL02   
+                           AND   LOC.Facility IN ( SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_aStorerKey, @c_aFacility) )   --WL02
   
                            IF @n_FacLotAvailQty < @n_cQtyAvailable  
                            BEGIN   
@@ -3396,8 +3399,8 @@ BEGIN
       IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_OrderKey)) IS NOT NULL  
       BEGIN  
          UPDATE ORDERS  
-            SET EditDate = GetDate(),  
-                EditWho  = Suser_Sname()  
+            SET EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                EditWho  = dbo.fnc_GetUserName()         --(SSA01)
           WHERE OrderKey = @c_OrderKey  
   
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
@@ -3415,7 +3418,7 @@ BEGIN
          IF @c_tblprefix = 'MAS'  
          BEGIN -- Mass Allocation  
             UPDATE ORDERS  
-               SET EditDate = GetDate()  
+               SET EditDate = dbo.fnc_GetDate()    --(SSA01)
               FROM #OPORDERLINES  
              WHERE #OPORDERLINES.Orderkey = ORDERS.Orderkey  
   
@@ -3456,7 +3459,7 @@ BEGIN
             WHILE (@@FETCH_STATUS <> -1) AND @n_continue <> 3  
             BEGIN  
                UPDATE ORDERS  
-                  SET EditDate = GetDate()  
+                  SET EditDate = dbo.fnc_GetDate()    --(SSA01)
                 WHERE ORDERS.OrderKey = @c_loadorderkey  
   
                SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
@@ -3472,7 +3475,7 @@ BEGIN
             DEALLOCATE order_cur  
             -- Force to trigger Status update  
             UPDATE Loadplan  
-               SET EditDate = GetDate(),  
+               SET EditDate = dbo.fnc_GetDate(),    --(SSA01)
                    EditWho = 'AllocateGuy'  
              WHERE LoadKey = @c_oskey  
          END -- LoadPlan Allocation  

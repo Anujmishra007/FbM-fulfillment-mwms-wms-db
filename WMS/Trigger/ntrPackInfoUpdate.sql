@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrPackInfoUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrPackInfoUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -36,9 +33,11 @@ GO
 /* Updates:                                                             */
 /* 24-May-2012  TLTING01      DM Integrity issue - Update editdate for  */
 /*                            status < '9'                              */
+/* 06-Oct-2025  AK01     1.1  UWP-42143 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName                           */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrPackInfoUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrPackInfoUpdate]
 ON  [dbo].[PackInfo] FOR UPDATE
 AS
 BEGIN
@@ -73,8 +72,8 @@ BEGIN
 	IF @n_continue = 1 or @n_continue=2
 	BEGIN
 		UPDATE PackInfo
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
           TrafficCop = NULL
 		FROM PackInfo (NOLOCK), INSERTED (NOLOCK)
       WHERE PackInfo.PickSlipNo = INSERTED.PickSlipNo
@@ -170,4 +169,5 @@ BEGIN
 END
 
 GO
+
 

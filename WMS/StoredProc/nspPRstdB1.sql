@@ -12,7 +12,7 @@ GO
 /*                                                                      */      
 /* Called By:                                                           */      
 /*                                                                      */      
-/* PVCS Version: 1.1                                                    */      
+/* PVCS Version: 1.9                                                    */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -31,9 +31,11 @@ GO
 /* 15-Dec-2021 NJOW06   1.7   WMS-18573 Lottable07 filtring condition   */
 /* 15-Dec-2021 NJOW06   1.7   DEVOPS combine script                     */
 /* 21-Mar-2024 USH022   1.7   ORDERKey datatype changed                 */
+/* 12-Jan-2024 NJOW07   1.8   WMS-24373 get lottable03 from codelkup    */
+/* 20-Nov-2024 WLChooi  1.9   WMS-26556-Support Multi Facilities(WL01)  */
 /************************************************************************/  
 
-CREATE OR ALTER PROC  nspPRstdB1  -- Rename from IDSSG:nspPRstd01
+CREATE OR ALTER PROC [dbo].[nspPRstdB1]  -- Rename from IDSSG:nspPRstd01
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
 @c_lot NVARCHAR(10) ,
@@ -66,7 +68,7 @@ DECLARE @n_StorerMinShelfLife int
       , @n_ConMinShelfLife    INT --NJOW01
       , @c_Orderkey           NVARCHAR(20) --USH022 --INT --NJOW01
       , @c_Strategykey        NVARCHAR(10) --NJOW01
-      , @n_SkuOGShelfLife       INT --NJOW03
+      , @n_SkuOGShelfLife     INT --NJOW03
 
 SELECT @c_Orderkey = LEFT(@c_OtherParms,10) --NJOW01
 
@@ -120,6 +122,13 @@ BEGIN
       SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable02 = N''' + RTRIM(@c_Lottable02) + '''' 
    END   
 
+   --NJOW07
+   SELECT TOP 1 @c_Lottable03 = CASE WHEN CL1.Code IS NOT NULL THEN                                                 
+                                     O.Userdefine04 ELSE @c_lottable03 END         
+   FROM ORDERS O (NOLOCK)       
+   OUTER APPLY (SELECT TOP 1 CL.Code FROM CODELKUP CL (NOLOCK) WHERE O.Storerkey = CL.Storerkey AND CL.Listname IN('MDMALLOC') AND CL.Code = 'ALLOBYLTBL' AND O.Userdefine04 = CL.Code2 AND ISNULL(O.Userdefine04,'') <> '') CL1
+   WHERE O.Orderkey = @c_Orderkey            
+    
    IF RTRIM(@c_Lottable03) <> '' AND @c_Lottable03 IS NOT NULL
    BEGIN
       SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable03 = N''' + RTRIM(@c_Lottable03) + '''' 
@@ -230,26 +239,32 @@ BEGIN
    SET @c_SQLStatement = N'DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR' 
                      + ' SELECT LOT.STORERKEY,LOT.SKU,LOT.LOT  ,'
                      + ' QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED - QTYONHOLD)'
-                     + ' FROM LOT (Nolock), Lotattribute (Nolock), LOTXLOCXID (NOLOCK), LOC (NOLOCK), SKU (NOLOCK)' 
-                     + ' WHERE LOT.LOT = LOTATTRIBUTE.LOT'  
-                     + ' AND LOTXLOCXID.Lot = LOT.LOT'
-                     + ' AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT'
-                     + ' AND LOTXLOCXID.LOC = LOC.LOC'
-                     + ' AND LOTXLOCXID.Storerkey = SKU.Storerkey'
-                     +'  AND LOTXLOCXID.Sku = SKU.Sku'
-                     + ' AND LOC.Facility = ''' + @c_facility + ''''
-                     + ' AND LOT.STORERKEY = ''' + @c_storerkey + '''' 
-                     + ' AND LOT.SKU = ''' + @c_sku + '''' 
+                     + ' FROM LOT (NOLOCK) '
+                     + ' JOIN Lotattribute (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT '   --WL01
+                     + ' JOIN LOTXLOCXID (NOLOCK) ON LOTXLOCXID.Lot = LOT.LOT AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT '   --WL01
+                     + ' JOIN LOC (NOLOCK) ON LOTXLOCXID.LOC = LOC.LOC '   --WL01
+                     + ' JOIN SKU (NOLOCK) ON LOTXLOCXID.Storerkey = SKU.Storerkey AND LOTXLOCXID.Sku = SKU.Sku '   --WL01
+                     + ' JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility '   --WL01
+                     + ' WHERE LOT.STORERKEY = @c_Storerkey '   --WL01
+                     + ' AND LOT.SKU = @c_Sku '   --WL01
+                     --+ ' AND LOC.Facility = ''' + @c_facility + ''''   --WL01
                      + ' AND LOT.STATUS = "OK"'
                      + ' AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED - QTYONHOLD) > 0'
                      + @c_Condition
                      -- AND DateAdd(Day, @n_StorerMinShelfLife, Lotattribute.Lottable04) > GetDate()' 
-                     + ' ORDER BY Lotattribute.Lottable04, Lotattribute.Lottable05'
-                     
-   EXEC (@c_SQLStatement)
+                     + ' ORDER BY F.FacSort, Lotattribute.Lottable04, Lotattribute.Lottable05'   --WL01
+           
+   --WL01 S
+   --EXEC (@c_SQLStatement) 
+   EXEC sp_executesql @c_SQLStatement
+                    , N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5)' 
+                    , @c_Storerkey
+                    , @c_Sku
+                    , @c_Facility
+   --WL01 E
    --(Wan01) - END                     
 END
 END
-GO 
-GRANT EXECUTE ON nspPRstdB1 to nSQL
+GO
+GRANT EXECUTE ON [dbo].[nspPRstdB1] TO [NSQL]
 GO

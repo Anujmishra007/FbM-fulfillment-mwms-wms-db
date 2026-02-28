@@ -25,6 +25,7 @@ GO
 /* 26-Jan-2022  WLChooi  1.0   DevOps Combine Script                     */
 /* 29-Apr-2022  WLChooi  1.1   Bug Fix - Fix TaskType = FCP for non PTL  */
 /*                             (WL01)                                    */
+/* 10-Oct-2025  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /*************************************************************************/ 
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRVWAV49]      
@@ -151,8 +152,8 @@ BEGIN
       UPDATE WAVE 
       SET TMReleaseFlag = 'N'      
        ,  TrafficCop = NULL        
-       ,  EditWho = SUSER_SNAME()  
-       ,  EditDate= GETDATE() 
+       ,  EditWho = dbo.fnc_GetUserName()          --(SSA01)
+       ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
       WHERE WAVEKEY = @c_wavekey  
 
       SELECT @n_err = @@ERROR
@@ -183,8 +184,8 @@ BEGIN
          UPDATE ORDERS WITH (ROWLOCK)
          SET SOStatus = '0',
              TrafficCop = NULL,
-             EditWho = SUSER_SNAME(),
-             EditDate = GETDATE()
+             EditWho = dbo.fnc_GetUserName(),          --(SSA01)
+             EditDate = dbo.fnc_GetDate()   --(SSA01)
          WHERE Userdefine09 = @c_Wavekey
          AND SOStatus = 'TSRELEASED'
       END          

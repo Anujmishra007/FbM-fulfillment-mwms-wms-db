@@ -80,5 +80,13 @@ execute rdt.rdtAddMsg 172053, 10, '172053 Invalid Range',   'us_english',@nFunc
 execute rdt.rdtAddMsg 172054, 10, '172054 Invalid Range',   'us_english',@nFunc
 execute rdt.rdtAddMsg 172055, 10, '172055 InvalidFormat',   'us_english',@nFunc
 
+--FCR-1626
+execute rdt.rdtAddMsg 172056, 10, '172056 Need Length',   'us_english',@nFunc
+execute rdt.rdtAddMsg 172057, 10, '172057 InvalidRange',   'us_english',@nFunc
+execute rdt.rdtAddMsg 172058, 10, '172058 Need Width  ',   'us_english',@nFunc
+execute rdt.rdtAddMsg 172059, 10, '172059 InvalidRange ',   'us_english',@nFunc
+execute rdt.rdtAddMsg 172060, 10, '172060 Need Height  ',   'us_english',@nFunc
+execute rdt.rdtAddMsg 172061, 10, '172061 InvalidRange ',   'us_english',@nFunc
+
 select * from rdt.rdtMsg (nolock) where message_id between 90451 and 90500
 select * from rdt.rdtMsg (nolock) where message_id between 172051 and 172100

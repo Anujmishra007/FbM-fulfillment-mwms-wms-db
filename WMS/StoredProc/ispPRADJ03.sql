@@ -26,7 +26,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
+/* Date         Author   Ver  Purposes                                  */
+/* 10-Oct-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC ispPRADJ03 
             @c_AdjustmentKey  NVARCHAR(10)
@@ -307,8 +308,8 @@ BEGIN
          UPDATE dbo.ADJUSTMENTDETAIL WITH (ROWLOCK)
          SET Channel    = 'ADIDAS'
            , TrafficCop = NULL
-           , EditDate   = GETDATE()
-           , EditWho    = SUSER_SNAME()
+           , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho    = dbo.fnc_GetUserName()          --(SSA01)
          WHERE AdjustmentKey = @c_AdjustmentKey
          AND AdjustmentLineNumber = @c_AdjLineNumber
 
@@ -345,8 +346,8 @@ BEGIN
             UPDATE dbo.ADJUSTMENTDETAIL WITH (ROWLOCK)
             SET Channel    = 'ADIDAS'
               , TrafficCop = NULL
-              , EditDate   = GETDATE()
-              , EditWho    = SUSER_SNAME()
+              , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho    = dbo.fnc_GetUserName()         --(SSA01)
             WHERE AdjustmentKey = @c_AdjustmentKey
             AND AdjustmentLineNumber = @c_AdjLineNumber
             
@@ -373,8 +374,8 @@ BEGIN
             UPDATE dbo.ADJUSTMENTDETAIL WITH (ROWLOCK)
             SET Channel    = 'ADIDAS'
               , TrafficCop = NULL
-              , EditDate   = GETDATE()
-              , EditWho    = SUSER_SNAME()
+              , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho    = dbo.fnc_GetUserName()         --(SSA01)
               , ArchiveCop = NULL
               , Qty        = (@n_B2B_AvailQty * -1)   --Make it negative value
             WHERE AdjustmentKey = @c_AdjustmentKey
@@ -414,8 +415,8 @@ BEGIN
             UPDATE dbo.ADJUSTMENTDETAIL WITH (ROWLOCK)
             SET Channel    = 'aCommerce'
               , TrafficCop = NULL
-              , EditDate   = GETDATE()
-              , EditWho    = SUSER_SNAME()
+              , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho    = dbo.fnc_GetUserName()           --(SSA01)
               , ReasonCode = 'SEL'
             WHERE AdjustmentKey = @c_AdjustmentKey
             AND AdjustmentLineNumber = @c_AdjLineNumber

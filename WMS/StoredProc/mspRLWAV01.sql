@@ -49,6 +49,7 @@ GO
 /*                            (WL03)                                      */
 /* 2025-02-19  Calvin   2.0   FCR-3026 Mattel Allow Multiple Replen Tasks */
 /*                            per SKU (CLVN01)                            */
+/* 2025-10-10  SSA02    2.1   UWP-42248 -Enhanced session management      */
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -229,10 +230,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),  
          [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),  
          [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),  
-         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),  
-         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),  
-         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),  
-         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),  
+         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),                     --(SSA02)
+         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),             --(SSA02)
+         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),                    --(SSA02)
+         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),            --(SSA02)
          [TrafficCop] [nvarchar](1) NULL,  
          [ArchiveCop] [nvarchar](1) NULL,  
          [OptimizeCop] [nvarchar](1) NULL,  

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV20]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV20]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -55,8 +50,9 @@ GO
 /* 2021-09-24  Wan04    2.1   DevOps Combine Script                     */
 /* 2021-05-12  Wan04    2.1   WMS-16805-NIKE-PH Cartonization Enhancement*/
 /* 2021-10-28  Wan05    2.1   WMS-16805 CR 2.0 - Add Validation         */
+/* 2025-10-10  SSA01    2.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/  
-CREATE PROC [dbo].[ispRLWAV20]  
+CREATE OR ALTER PROC [dbo].[ispRLWAV20]
         @c_wavekey      NVARCHAR(10)    
        ,@b_Success      INT            OUTPUT    
        ,@n_err          INT            OUTPUT    
@@ -1608,8 +1604,8 @@ BEGIN
                ,Wavekey       = @c_Wavekey_PD--@c_Wavekey   --(Wan10)  
                ,PickSlipNo    = @c_PickSlipNo  
                ,TrafficCop    = NULL  
-               ,EditWho = SUSER_SNAME()  
-               ,EditDate= GETDATE()  
+               ,EditWho = dbo.fnc_GetUserName()            --(SSA01)
+               ,EditDate= dbo.fnc_GetDate()    --(SSA01)
             WHERE PickDetailkey = @c_PickDetailKey  
   
             SET @n_err = @@ERROR  
@@ -2245,8 +2241,8 @@ BEGIN
     --SET STATUS = '1' -- Released        --(Wan01)   
     SET TMReleaseFlag = 'Y'               --(Wan01)  
       ,Trafficcop = NULL  
-      ,EditWho = SUSER_SNAME()  
-      ,EditDate= GETDATE()  
+      ,EditWho = dbo.fnc_GetUserName()    --(SSA01)
+      ,EditDate= dbo.fnc_GetDate()    --(SSA01)
    WHERE Wavekey = @c_Wavekey   
      
    SET @n_err = @@ERROR  

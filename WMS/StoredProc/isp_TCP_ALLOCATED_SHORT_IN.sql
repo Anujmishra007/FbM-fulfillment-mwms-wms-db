@@ -40,6 +40,8 @@ GO
 /*                              update for table TCPSOCKET_INLOG        */
 /* 07-Sep-2012  Leong     1.6   SOS# 255550 - Insert RefKeyLookUp with  */
 /*                              EditWho                                 */
+/* 10-OCT-2025  SSA01      1.7   UWP-42248 -Enhanced session management */
+/*                             and cleanup.                             */
 /************************************************************************/    
 CREATE PROCEDURE [dbo].[isp_TCP_ALLOCATED_SHORT_IN]     
                 @c_MessageNum  NVARCHAR(10)    
@@ -272,7 +274,7 @@ BEGIN
      IF NOT EXISTS (SELECT 1 FROM dbo.RefKeyLookup (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey)       
      BEGIN                    
          INSERT INTO dbo.RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey, EditWho) -- SOS# 255550
-         VALUES (@c_PickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_Loadkey, 'TCP01a.' + sUser_sName())
+         VALUES (@c_PickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_Loadkey, 'TCP01a.' + dbo.fnc_GetUserName())      --(SSA01)
          IF @@ERROR <> 0  
          BEGIN  
             SET @n_Continue = 3    
@@ -365,7 +367,7 @@ BEGIN
          BEGIN                    
             -- Insert into   
             INSERT INTO dbo.RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey, EditWho) -- SOS# 255550
-            VALUES (@c_NewPickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_Loadkey, 'TCP01b.' + sUser_sName())
+            VALUES (@c_NewPickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_Loadkey, 'TCP01b.' + dbo.fnc_GetUserName())       --(SSA01)
             IF @@ERROR <> 0  
             BEGIN  
                SET @n_Continue = 3    
@@ -380,7 +382,7 @@ BEGIN
          BEGIN                    
             -- Insert into   
             INSERT INTO dbo.RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey, EditWho) -- SOS# 255550
-            VALUES (@c_PickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_Loadkey, 'TCP01c.' + sUser_sName())
+            VALUES (@c_PickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_Loadkey, 'TCP01c.' + dbo.fnc_GetUserName())      --(SSA01)
             IF @@ERROR <> 0  
             BEGIN  
                SET @n_Continue = 3    
@@ -583,8 +585,8 @@ BEGIN
    UPDATE dbo.TCPSocket_INLog WITH (ROWLOCK)    
    SET STATUS   = @c_Status    
      , ErrMsg   = @c_ErrMsg    
-     , Editdate = GETDATE()    
-     , EditWho  = SUSER_SNAME()    
+     , Editdate = dbo.fnc_GetDate()    --(SSA01)
+     , EditWho  = dbo.fnc_GetUserName()         --(SSA01)
    WHERE SerialNo = @n_SerialNo    
        
    WHILE @@TRANCOUNT > @n_StartTCnt -- Commit until the level we started      

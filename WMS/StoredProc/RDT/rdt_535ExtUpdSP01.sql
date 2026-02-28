@@ -1,23 +1,21 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdt_535ExtUpdSP01') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_535ExtUpdSP01
+SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO  
+
 /************************************************************************/    
 /* Store procedure: rdt_535ExtUpdSP01                                   */    
-/* Copyright      : IDS                                                 */    
+/* Copyright      : MAERSK                                              */    
 /*                                                                      */    
 /* Purpose: ANF Update UCC Logic                                        */    
 /*                                                                      */    
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2014-04-16  1.0  ChewKP   Created                                    */    
+/* 2025-12-08  1.1  James    UWP-45189 Bug fix on split ucc (james01)   */
 /************************************************************************/    
     
-CREATE PROC [RDT].[rdt_535ExtUpdSP01] (    
+CREATE OR ALTER PROC [RDT].[rdt_535ExtUpdSP01] (    
    @nMobile    INT,             
    @nFunc      INT,             
    @cLangCode  NVARCHAR( 3),    
@@ -26,7 +24,7 @@ CREATE PROC [RDT].[rdt_535ExtUpdSP01] (
    @cFromUCC   NVARCHAR( 20),   
    @cToUCc     NVARCHAR( 20),   
    @cSKU       NVARCHAR( 20),   
-   @cQty       NVARCHAR( 5),    
+   @nQty       INT,    
    @nErrNo     INT OUTPUT,   
    @cErrMsg    NVARCHAR( 20) OUTPUT  
 ) AS    
@@ -39,10 +37,13 @@ BEGIN
    DECLARE  @cUCC NVARCHAR(20)   
           , @cDropLoc NVARCHAR(10)  
           , @cLoadKey NVARCHAR(10)  
-          , @nQTY     INT  
           , @nTranCount INT  
-  
-   SET @nQty = @cQty   
+          , @cUserName  NVARCHAR( 18)
+
+   SELECT @cUserName = UserName
+   FROM RDT.RDTMOBREC WITH (NOLOCK)
+   WHERE Mobile = @nMobile
+
    SET @nErrNo   = 0    
    SET @cErrMsg  = ''   
   
@@ -84,11 +85,11 @@ BEGIN
            ,[Userdefined08]  
            ,[Userdefined09]  
            ,[Userdefined10] )   
-      SELECT [UCCNo]  
+      SELECT @cToUCC AS [UCCNo]  
            ,[Storerkey]  
            ,[ExternKey]  
            ,[SKU]  
-           ,@nQty  
+           ,@nQty AS Qty 
            ,[Sourcekey]  
            ,[Sourcetype]  
            ,[Userdefined01]  
@@ -129,8 +130,10 @@ BEGIN
    END  
    ELSE  
    BEGIN  
-      UPDATE dbo.UCC WITH (ROWLOCK)  
-      SET Qty = Qty + @nQty   
+      UPDATE dbo.UCC WITH (ROWLOCK) SET 
+         Qty = Qty + @nQty,
+         EditWho = @cUserName,
+         EditDate = GETDATE()
       WHERE UCCNo = @cToUCC  
       AND SKU = @cSKU  
       AND StorerKey = @cStorerKey  
@@ -143,8 +146,10 @@ BEGIN
       END  
    END  
      
-   UPDATE dbo.UCC WITH (ROWLOCK)  
-   SET Qty = Qty - @nQty   
+   UPDATE dbo.UCC WITH (ROWLOCK) SET 
+         Qty = Qty - @nQty,
+         EditWho = @cUserName,
+         EditDate = GETDATE()
    WHERE UCCNo = @cFromUCC  
    AND SKU = @cSKU  
    AND StorerKey = @cStorerKey  
@@ -173,5 +178,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-
-GRANT EXECUTE ON rdt.rdt_535ExtUpdSP01 TO NSQL
+GRANT EXECUTE ON RDT.rdt_535ExtUpdSP01 TO NSQL
+GO

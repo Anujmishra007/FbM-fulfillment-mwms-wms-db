@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 31-Mar-2022  NJOW    1.0   DevOps Combine Script                        */
+/* 10-Oct-2025  SSA01   1.1  UWP-42248 -Enhanced session management        */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPRREC26]  
 (     @c_Receiptkey        NVARCHAR(10)  
@@ -69,8 +70,8 @@ BEGIN
          SET ID = @c_ToID
            , ToID = ''
            , TrafficCop = NULL
-           , EditDate   = GETDATE()
-           , EditWho    = SUSER_SNAME()
+           , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho    = dbo.fnc_GetUserName()          --(SSA01)
          WHERE ReceiptKey = @c_Receiptkey
          AND ReceiptLineNumber = @c_ReceiptLineNumber
 

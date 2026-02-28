@@ -1,12 +1,11 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrInventoryHoldUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrInventoryHoldUpdate]
+SET ANSI_NULLS OFF
 GO
-
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/  
 /* Trigger:  ntrInventoryHoldUpdate                                     */  
 /* Creation Date: 2011-4-11                                             */  
-/* Copyright: IDS                                                       */  
+/* Copyright: MAERSK                                                    */  
 /* Written by: KHLim                                                    */  
 /*                                                                      */  
 /* Purpose:                                                             */  
@@ -34,8 +33,11 @@ GO
 /* 2011-06-06   KHLim     1.0   SET WhoOff = WhoOn                      */  
 /* 2011-06-24   KHLim01   1.0   add UPDATE(TrafficCop) to allow bypass  */  
 /* 2015-09-11   MCTang    1.1   ADD INVHCHGLOG (MC01)                   */ 
+/* 2025-08-08   Michael   1.2   FCR-6025-Add InventoryHold TLOG2 (ML01) */
+/* 2025-09-25   Michael   1.3   FCR-7829 Inventory UCC-level HOLD (ML02)*/
+/* 2026-02-26   Michael   1.4   FCR-10889-TLog2 Trigger enhancemnt(ML03)*/
 /************************************************************************/  
-CREATE TRIGGER [dbo].[ntrInventoryHoldUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrInventoryHoldUpdate]  
 ON  [dbo].[INVENTORYHOLD]  
 FOR UPDATE   
 AS   
@@ -47,6 +49,16 @@ END
    SET ANSI_NULLS OFF  
    SET QUOTED_IDENTIFIER OFF   
    SET CONCAT_NULL_YIELDS_NULL OFF   
+
+/* (ML03) New OPTION5 Parameters for StorerCOnfig.Configkey 'INVENTORY HOLD - INTERFACE2'
+   TRANSMITLOG2.TableName = 'InventoryHold'
+   OPTION5:
+      @c_HoldFlag          = 0,1              Only gen Transmitlog2 if Hold = specific value2 (0 or 1) (default gen for Hold and Unhold)
+      @c_HoldStatus        = Sts1,Sts2,...    Only gen Transmitlog2 if Status = specific values (default gen for all Status)
+      @c_HoldStatusExclude = Sts3,Sts4,...    Only gen Transmitlog2 if Status <> specific values (default gen for all Status)
+      @c_HoldMethod        = LOT,LOC,ID,UCC   Only gen Transmitlog2 if Hold Method is specific methos (default gen for all methods)
+      @c_TLogKey2PfxHold   = Y/N              Append Hold prefix (H_ or U_) or not (default not append prefix)
+*/
   
 DECLARE @b_Success     int       -- Populated by calls to stored procedures - was the proc successful?  
       , @n_err         int       -- Error number returned by stored procedure or this trigger  
@@ -63,8 +75,23 @@ DECLARE @b_Success     int       -- Populated by calls to stored procedures - wa
       , @c_TransmitLogKey     NVARCHAR(10) 
       , @c_StorerKey          NVARCHAR(15)
       , @c_Lot                NVARCHAR(10) 
+      , @c_Loc                NVARCHAR(10)   --ML01
       , @c_ID                 NVARCHAR(18)
-      , @c_DelStatus          NVARCHAR(5)
+      , @c_DelStatus          NVARCHAR(10)
+      , @c_InsStatus          NVARCHAR(10)    --ML01
+      , @c_Hold               NVARCHAR(1)    --ML01
+      , @c_authority          NVARCHAR(30)   --ML01
+      , @c_UCCNo              NVARCHAR(20)   --ML02
+      --ML03-S
+      , @c_Option5            NVARCHAR(4000)
+      , @c_HoldFlag           NVARCHAR(30)
+      , @c_HoldStatus         NVARCHAR(4000)
+      , @c_HoldStatusExclude  NVARCHAR(4000)
+      , @c_HoldMethod         NVARCHAR(30)
+      , @c_TLogKey2PfxHold    NVARCHAR(30)
+      , @c_Key2               NVARCHAR(30)
+      , @b_GenTLog2           INT
+      --ML03-E
   
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT, @b_debug = 0  
   
@@ -98,6 +125,170 @@ BEGIN
                           + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '   
       END  
    END  
+
+   --ML01-S
+   IF @n_Continue IN (1,2)
+   BEGIN
+      DECLARE INVHOLD_CUR CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+      SELECT InventoryHoldKey  
+      FROM   INSERTED  
+
+      OPEN INVHOLD_CUR  
+      FETCH NEXT FROM INVHOLD_CUR INTO @c_InventoryHoldKey
+      
+      WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM INSERTED, DELETED  
+                    WHERE INSERTED.InventoryHoldKey = DELETED.InventoryHoldKey  
+                    AND   INSERTED.Hold <> DELETED.Hold
+                    AND   INSERTED.InventoryHoldKey = @c_InventoryHoldKey)  
+         BEGIN
+            SELECT @c_StorerKey = '', @c_Lot = '', @c_Loc = '', @c_ID = '', @c_Hold = '', @c_InsStatus = ''
+                 , @c_UCCNo = ''   --ML02
+
+            SELECT @c_StorerKey = ISNULL(INSERTED.Storerkey, '')
+                 , @c_Lot = ISNULL(INSERTED.LOT, '')
+                 , @c_Loc = ISNULL(INSERTED.LOC, '')
+                 , @c_ID = ISNULL(INSERTED.ID, '')
+                 , @c_UCCNo = ISNULL(INSERTED.UCCNo, '')   --ML02
+                 , @c_Hold = ISNULL(INSERTED.Hold,'')
+                 , @c_InsStatus = ISNULL(INSERTED.Status,'')
+            FROM   INSERTED
+            WHERE  InventoryHoldKey = @c_InventoryHoldKey
+
+            IF ISNULL(@c_StorerKey,'') = '' AND @c_Lot <> ''
+            BEGIN
+               SELECT TOP 1 @c_StorerKey = ISNULL(Storerkey, '')
+               FROM LOT WITH(NOLOCK)
+               WHERE LOT = @c_Lot
+            END
+            IF ISNULL(@c_StorerKey,'') = '' AND @c_ID <> ''
+            BEGIN
+               SELECT TOP 1 @c_StorerKey = ISNULL(Storerkey, '')
+               FROM LOTXLOCXID WITH(NOLOCK)
+               WHERE ID = @c_ID
+            END
+            IF ISNULL(@c_StorerKey,'') = '' AND @c_Loc <> ''
+            BEGIN
+               SELECT TOP 1 @c_StorerKey = ISNULL(Storerkey, '')
+               FROM LOTXLOCXID WITH(NOLOCK)
+               WHERE LOC = @c_Loc
+            END
+
+            EXECUTE nspGetRight
+                 NULL          -- Facility
+               , @c_StorerKey  -- Storer
+               , NULL          -- Sku
+               , 'INVENTORY HOLD - INTERFACE2'   -- ConfigKey
+               , @b_success    OUTPUT
+               , @c_authority  OUTPUT
+               , @n_err        OUTPUT
+               , @c_errmsg     OUTPUT
+               , @c_Option5 = @c_Option5 OUTPUT   --ML03
+
+            IF @b_success <> 1
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 70002
+               SELECT @c_errmsg = 'ntrInventoryHoldUpdate: ' + dbo.fnc_RTrim(@c_errmsg)
+               BREAK
+            END
+      
+            IF @c_authority = '1'
+            BEGIN
+               IF @c_StorerKey <> '' AND (dbo.fnc_RTrim(@c_Loc) <> '' OR dbo.fnc_RTrim(@c_Lot) <> '' OR  dbo.fnc_RTrim(@c_ID) <> '')
+                  OR (@c_StorerKey <> '' AND dbo.fnc_RTrim(@c_UCCNo) <> '')   --ML02
+               BEGIN
+                  --ML03-S
+                  SELECT @c_HoldFlag   = ''
+                       , @c_HoldStatus = ''
+                       , @c_HoldStatusExclude = ''
+                       , @c_HoldMethod = ''
+                       , @b_GenTLog2   = 1
+
+                  SELECT @c_HoldFlag          = dbo.fnc_GetParamValueFromString('@c_HoldFlag'         , @c_Option5, @c_HoldFlag         )   -- 0,1
+                       , @c_HoldStatus        = dbo.fnc_GetParamValueFromString('@c_HoldStatus'       , @c_Option5, @c_HoldStatus       )   -- Sts1,Sts2
+                       , @c_HoldStatusExclude = dbo.fnc_GetParamValueFromString('@c_HoldStatusExclude', @c_Option5, @c_HoldStatusExclude)   -- Sts3,Sts4,...
+                       , @c_HoldMethod        = dbo.fnc_GetParamValueFromString('@c_HoldMethod'       , @c_Option5, @c_HoldMethod       )   -- LOT,LOC,ID,UCC
+
+                  IF @b_GenTLog2 = 1 AND ISNULL(@c_HoldFlag,'')<>''
+                  BEGIN
+                     IF NOT EXISTS(SELECT TOP 1 1 FROM STRING_SPLIT(@c_HoldFlag,',') WHERE value<>'' AND TRIM(value)=@c_hold)
+                        SET @b_GenTLog2 = 0
+                  END
+
+                  IF @b_GenTLog2 = 1 AND ISNULL(@c_HoldStatus,'')<>''
+                  BEGIN
+                     IF NOT EXISTS(SELECT TOP 1 1 FROM STRING_SPLIT(@c_HoldStatus,',') WHERE value<>'' AND TRIM(value)=@c_InsStatus)
+                        SET @b_GenTLog2 = 0
+                  END
+
+                  IF @b_GenTLog2 = 1 AND ISNULL(@c_HoldStatusExclude,'')<>''
+                  BEGIN
+                     IF EXISTS(SELECT TOP 1 1 FROM STRING_SPLIT(@c_HoldStatusExclude,',') WHERE value<>'' AND TRIM(value)=@c_InsStatus)
+                        SET @b_GenTLog2 = 0
+                  END
+
+                  IF @b_GenTLog2 = 1 AND ISNULL(@c_HoldMethod,'')<>''
+                  BEGIN
+                     SET @c_HoldMethod = (SELECT DISTINCT ','+UPPER(TRIM(value)) FROM STRING_SPLIT(@c_HoldMethod,',') ORDER BY 1 FOR XML PATH('')) + ','
+                     IF NOT (ISNULL(@c_LOT  ,'')<>'' AND @c_HoldMethod LIKE '%,LOT,%') AND
+                        NOT (ISNULL(@c_loc  ,'')<>'' AND @c_HoldMethod LIKE '%,LOC,%') AND
+                        NOT (ISNULL(@c_ID   ,'')<>'' AND @c_HoldMethod LIKE '%,ID,%' ) AND
+                        NOT (ISNULL(@c_UCCNo,'')<>'' AND @c_HoldMethod LIKE '%,UCC,%')
+                        SET @b_GenTLog2 = 0
+                  END
+
+                  IF @b_GenTLog2 = 1
+                  BEGIN
+                     SET @c_Key2 = @c_InsStatus
+                     SET @c_TLogKey2PfxHold = ''
+                     SET @c_TLogKey2PfxHold = dbo.fnc_GetParamValueFromString('@c_TLogKey2PfxHold', @c_Option5, @c_TLogKey2PfxHold)   -- Y/N
+
+                     IF ISNULL(@c_TLogKey2PfxHold,'')='Y'
+                     BEGIN
+                        SET @c_Key2 = CASE WHEN @c_hold='1' THEN 'H_' ELSE 'U_' END + @c_Key2
+                     END
+                  --ML03-E
+
+                     EXECUTE nspg_getkey
+                          'TransmitlogKey2'
+                        , 10
+                        , @c_transmitlogkey OUTPUT
+                        , @b_success OUTPUT
+                        , @n_err OUTPUT
+                        , @c_errmsg OUTPUT
+                     IF NOT @b_success=1
+                     BEGIN
+                        SELECT @n_continue=3
+                        SELECT @n_err = 70003
+                        SELECT @c_errmsg = 'ntrInventoryHoldUpdate: ' + dbo.fnc_RTrim(@c_errmsg)
+                     END
+                     ELSE
+                     BEGIN
+                        INSERT TRANSMITLOG2 (Transmitlogkey, tablename, key1, key2, key3, transmitflag)
+--ML03                        VALUES (@c_transmitlogkey, 'InventoryHold', @c_InventoryHoldKey, @c_InsStatus, @c_StorerKey, '0')
+                        VALUES (@c_transmitlogkey, 'InventoryHold', @c_InventoryHoldKey, @c_Key2, @c_StorerKey, '0')   --ML03
+                        SELECT @n_err= @@Error
+                        IF NOT @n_err=0
+                        BEGIN
+                           SELECT @n_continue=3
+                           SELECT @n_err = 70004
+                           SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))
+                                            + ': Unable insert TRANSMITLOG2 Table. (ntrInventoryHoldUpdate)'
+                                            + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+                        END
+                     END
+                  END  --ML03
+               END
+            END --IF @c_StorerKey <> '' 
+         END
+         FETCH NEXT FROM INVHOLD_CUR INTO @c_InventoryHoldKey
+      END -- while orderkey  
+      CLOSE INVHOLD_CUR  
+      DEALLOCATE INVHOLD_CUR
+   END
+   --ML01-E
 END  
   
 --(MC01) - S
@@ -220,3 +411,4 @@ BEGIN
    END  
    RETURN  
 END  
+GO

@@ -8,6 +8,7 @@ AS
 SELECT *
 FROM [CCDetail] (NOLOCK)
 GO
+
 GRANT DELETE ON  [dbo].[V_CCDetail] TO [NSQL]
 GO
 GRANT INSERT ON  [dbo].[V_CCDetail] TO [NSQL]

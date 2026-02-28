@@ -99,6 +99,7 @@ BEGIN
    DECLARE
 	   @cPaperPrinter  NVARCHAR( 10),  --(cc01)
       @cLabelPrinter  NVARCHAR( 10),  --(cc01)
+      @cMax           NVARCHAR(MAX),
       @cReceiptKey          NVARCHAR(10),
       @cReceiptLineNumber   NVARCHAR( 5),
       @cPOKey               NVARCHAR(10),
@@ -197,6 +198,7 @@ BEGIN
       @cUCC          = V_UCC,
       @cUOM          = V_UOM,
       @cDesc         = V_SkuDescr,
+      @cMax          = V_Max,
 
       @cLottable01   = V_Lottable01,
       @cLottable02   = V_Lottable02,
@@ -289,7 +291,7 @@ BEGIN
             IF @nInputKey = 1      -- ENTER
             BEGIN
                --screen mapping
-               SET @cUCC = @cInField01
+               SET @cUCC = LEFT(@cMax, 20)
 
                -- Check UCC blank
                IF @cUCC = ''

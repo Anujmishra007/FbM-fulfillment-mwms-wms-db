@@ -30,6 +30,7 @@ GO
 /* 04-Aug-2014  James   1.0   Modified from nspTTMDPK1                  */
 /* 27-Nov-2015  James   1.1   Deadlock tuning (james01)                 */
 /* 22-Sep-2015  James   1.2   Only fetch task with qty > 0 (james01)    */
+/* 10-Oct-2025   SSA01   1.3  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC    [dbo].[nspTTMDPK2]
                @c_UserID           NVARCHAR(18)
@@ -239,8 +240,8 @@ BEGIN
             STATUS = '0'
            ,USERKEY = ''
            ,REASONKEY = ''
-           ,EditDate = GetDate()     
-           ,EditWho  = sUSER_sNAME()   
+           ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+           ,EditWho  = dbo.fnc_GetUserName()       --(SSA01)
            ,TrafficCop = NULL                
          WHERE TaskDetailKey = @c_UpdTaskDetailKey
  

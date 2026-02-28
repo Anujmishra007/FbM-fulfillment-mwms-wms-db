@@ -1,11 +1,9 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'rdt.rdt_840CapturePack01') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_840CapturePack01
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
 /************************************************************************/
 /* Store procedure: rdt_840CapturePack01                                */
 /* Purpose: If sales order then disable capture pack info               */
@@ -16,9 +14,11 @@ GO
 /* Date        Rev  Author     Purposes                                 */
 /* 2019-02-11  1.0  James      WMS-7181. Created                        */
 /* 2019-09-07  1.1  James      Change Long -> UDF01 (james01)           */
+/* 2020-04-30  1.2  James      WMS-12757 Allow multi carton (james01)   */
+/* 2024-12-17  1.3  James      FCR-1625 Add new params (james01)        */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_840CapturePack01 (
+CREATE OR ALTER PROC [RDT].[rdt_840CapturePack01] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -30,20 +30,25 @@ CREATE PROC rdt.rdt_840CapturePack01 (
    @cTrackNo         NVARCHAR( 20),
    @cSKU             NVARCHAR( 20),
    @nCartonNo        INT,
-   @cCapturePackInfo NVARCHAR( 10) OUTPUT, 
+   @cCartonType      NVARCHAR( 10) OUTPUT,
+   @fCartonWeight    FLOAT         OUTPUT,
+   @fCartonCube      FLOAT         OUTPUT, 
+   @fCartonLength    FLOAT         OUTPUT, 
+   @fCartonWidth     FLOAT         OUTPUT, 
+   @fCartonHeight    FLOAT         OUTPUT, 
+   @cCapturePackInfo NVARCHAR( 10) OUTPUT,
    @nErrNo           INT           OUTPUT,
-   @cErrMsg          NVARCHAR( 20) OUTPUT 
-)
+   @cErrMsg          NVARCHAR( 20) OUTPUT )
 AS
 
-   SET NOCOUNT ON  
-   SET ANSI_NULLS OFF  
-   SET QUOTED_IDENTIFIER OFF  
-   SET CONCAT_NULL_YIELDS_NULL OFF  
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    IF @nStep = 3
    BEGIN
-      IF @nInputKey = 1
+      IF @nInputKey IN ( 1, 0)
       BEGIN
          IF EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)
                      JOIN dbo.Orders O WITH (NOLOCK) ON (C.Code = O.Userdefine03 AND C.StorerKey = O.StorerKey)
@@ -61,9 +66,5 @@ AS
 
    Quit:
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON rdt.rdt_840CapturePack01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_840CapturePack01] TO [NSQL]
 GO

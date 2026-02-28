@@ -32,6 +32,7 @@ GO
 /* 22-May-2015  James   1.4   Revamp error msg (james02)                */
 /* 22-Sep-2016  Ung     1.5   Performance tuning                        */
 /* 24-Sep-2018  James   1.6   WMS7751-Remove OD.loadkey (james03)       */
+/* 10-Oct-2025  SSA01   1.7   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE PROC    [dbo].[nspTTMPK04]
@@ -214,8 +215,8 @@ BEGIN
         SET    STATUS = '0'
               ,USERKEY = ''
               ,REASONKEY = ''
-              ,EditDate = GetDate()     -- (SHONG02)
-              ,EditWho  = sUSER_sNAME()
+              ,EditDate = dbo.fnc_GetDate()   --(SSA01)    -- (SHONG02)
+              ,EditWho  = dbo.fnc_GetUserName()           --(SSA01)
               ,TrafficCop = NULL
         WHERE  USERKEY = @c_UserID
                AND STATUS = '3' -- (Vicky02)
@@ -697,8 +698,8 @@ BEGIN
          SET  TD.STATUS = '3'
              ,TD.UserKey = @c_UserID
              ,TD.ReasonKey = ''
-             ,TD.EditDate = GetDate()
-             ,TD.EditWho  = sUSER_sNAME()
+             ,TD.EditDate = dbo.fnc_GetDate()   --(SSA01)
+             ,TD.EditWho  = dbo.fnc_GetUserName()           --(SSA01)
              ,TD.TrafficCop = NULL
          FROM dbo.TaskDetail TD
          JOIN dbo.LOC LOC WITH (NOLOCK) ON (TD.FROMLOC = LOC.LOC)

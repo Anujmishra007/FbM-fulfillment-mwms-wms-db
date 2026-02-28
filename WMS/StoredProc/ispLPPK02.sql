@@ -27,6 +27,8 @@ GO
 /*                            type.                                     */
 /* 24-Mar-2014  TLTING   1.1  SQL2012 Bug                               */
 /* 07-Apr-2014  Audrey   1.1  SOS308047 - Bug fixed.                    */
+/* 10-Oct-2025  SSA01    1.2  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROC ispLPPK02
@@ -285,7 +287,7 @@ BEGIN
                         (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, Sku, Qty, AddWho, AddDate, EditWho, EditDate, Refno2)
                      VALUES
                         (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cComponentSku,
-                         @nPackQty * @nComponentQty, SUSER_SNAME(), GETDATE(), SUSER_SNAME(), GETDATE(), @cCartonType)
+                         @nPackQty * @nComponentQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), @cCartonType)            --(SSA01)
 
                      IF @@ERROR <> 0
                      BEGIN
@@ -310,7 +312,7 @@ BEGIN
                      (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, Sku, Qty, AddWho, AddDate, EditWho, EditDate, Refno2)
                   VALUES
                      (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cSku,
-                      @nPackQty, SUSER_SNAME(), GETDATE(), SUSER_SNAME(), GETDATE(), @cCartonType)
+                      @nPackQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), @cCartonType)           --(SSA01)
 
                   IF @@ERROR <> 0
                   BEGIN

@@ -13,7 +13,7 @@ GO
 /* Called By:                                                             */  
 /*                                                                        */  
 /*                                                                        */  
-/* Version: 1.3                                                           */  
+/* Version: 1.5                                                           */  
 /*                                                                        */  
 /* Data Modifications:                                                    */  
 /*                                                                        */  
@@ -25,6 +25,7 @@ GO
 /*                            Trafficcop IS NOT NULL                      */
 /* 2024-08-12   Wan02    1.4  LFWM-4446 - RG[GIT] Serial Number Solution  */
 /*                            - Transfer by Serial Number                 */
+/* 2025-10-10   Michael  1.5  FCR-8380- Add SerialNoUpdateLotLocID (ML01) */
 /**************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_Validate_TransferDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -193,6 +194,7 @@ BEGIN
          ,  @c_ToStorerkey          NVARCHAR(15) = ''
          ,  @c_ToSku                NVARCHAR(20) = ''
          ,  @c_ToLot                NVARCHAR(10) = ''                               --(Wan02)
+         ,  @c_FromLoc              NVARCHAR(10) = ''   --ML01
          ,  @c_ToLoc                NVARCHAR(10) = ''
          ,  @c_Userdefine02         NVARCHAR(20) = ''
          ,  @c_UCCNo                NVARCHAR(20) = ''
@@ -256,6 +258,7 @@ BEGIN
          ,  @c_CheckTrfQtyDiff      NVARCHAR(30) = ''
          ,  @c_UCCTracking          NVARCHAR(30) = ''
          ,  @c_ASNFizUpdLotToSerialNo  NVARCHAR(10)=''      --(Wan02)
+         ,  @c_SerialNoUpdateLotLocID  NVARCHAR(10)=''      --ML01
 
       IF EXISTS ( SELECT 1                                                          --(Wan01) - START
                  FROM tempdb.INFORMATION_SCHEMA.COLUMNS c 
@@ -284,6 +287,7 @@ BEGIN
          ,  @c_ToSku           = RTRIM(TFD.ToSku)
          ,  @c_FromLot         = TFD.FromLot                                        --(Wan02)
          ,  @c_ToLot           = TFD.ToLot                                          --(Wan02)
+         ,  @c_FromLoc         = ISNULL(TFD.FromLoc,'')   --ML01
          ,  @c_ToLoc           = ISNULL(TFD.ToLoc,'')
          ,  @c_FromID          = TFD.FromID                                         --(Wan02)
          ,  @c_ToID            = TFD.ToID                                           --(Wan02)
@@ -617,7 +621,12 @@ BEGIN
          SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                            --(Wan05)
          FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr  --(Wan05)
 
-         IF @c_ASNFizUpdLotToSerialNo = '1' AND @c_ToSerialNo = '' AND  --SerialNo Tracking
+         SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                                 --ML01
+         FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML01
+
+         IF (@c_ASNFizUpdLotToSerialNo = '1'
+          OR @c_SerialNoUpdateLotLocID = '1')   --ML01
+         AND @c_ToSerialNo = '' AND  --SerialNo Tracking
             @c_SerialNoCapture IN ('1','2')
          BEGIN
             SET @n_Continue = 3
@@ -630,7 +639,14 @@ BEGIN
 
          IF @c_ToSerialNo <> ''
          BEGIN
-            IF @c_ASNFizUpdLotToSerialNo = '1' AND (@c_FromID = '' OR @c_ToID = '')
+            IF (@c_ASNFizUpdLotToSerialNo = '1'
+             OR @c_SerialNoUpdateLotLocID = '1')   --ML01
+            AND (@c_FromID = '' OR @c_ToID = '')
+               --ML01-S
+               AND NOT ( @c_SerialNoUpdateLotLocID = '1'
+                  AND (@c_FromID = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@c_FromLoc AND (LoseID='1' OR LoseUCC='1')))
+                  AND (@c_ToID   = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@c_ToLoc   AND (LoseID='1' OR LoseUCC='1'))) )
+               --ML01-E
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 557512
@@ -666,11 +682,13 @@ BEGIN
             IF @c_FromSerialNo <> @c_ToSerialNo OR
                @c_FromSku <> @c_ToSku OR
                @c_FromID <> @c_ToID                                                 --2024-09-25
+               OR (@c_SerialNoUpdateLotLocID = '1' AND @c_FromLoc <> @c_ToLoc)   --ML01
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 557515
                SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
                               + ': Serialno transfer are required same From & To Sku'
+                              + CASE WHEN @c_SerialNoUpdateLotLocID = '1' THEN ', Loc' ELSE '' END    --ML01
                               + ', ID And Serialno'                                 --2024-09-25
                               + '. To SerialNo: ' + @c_ToSerialNo
                            + '. (lsp_Validate_TransferDetail_Std) |' + @c_ToSerialNo

@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPalletHeaderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPalletHeaderUpdate]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -41,9 +39,10 @@ GO
 /*                              Comment off unnecessary code (MC02)      */
 /* 28-Oct-2013  TLTING    1.3   Review Editdate column update            */
 /* 12-Dec-2018  NJOW01    1.4   WMS-7187 allow supervisor to reverse status*/
+/* 06-Oct-2025  AK01      1.5   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /*************************************************************************/
 
-CREATE TRIGGER ntrPalletHeaderUpdate
+CREATE OR ALTER TRIGGER ntrPalletHeaderUpdate
 ON  Pallet
 FOR UPDATE
 AS
@@ -108,7 +107,7 @@ BEGIN
          SET @c_issupervisor = 'N'
          IF UPDATE(Status)
          BEGIN
-            SET @c_username = SUSER_SNAME()
+            SET @c_username = dbo.fnc_GetUserName()
             EXEC isp_CheckSupervisorRole
                  @c_username  = @c_username
                 ,@c_Flag     = @c_issupervisor OUTPUT
@@ -384,8 +383,8 @@ BEGIN
       UPDATE PALLETDETAIL
       SET Status = '9'
           , Trafficcop = null,   --(MC02)
-          EditDate = GETDATE(),   --tlting
-          EditWho = SUSER_SNAME()
+          EditDate = dbo.fnc_GetDate(),   --tlting
+          EditWho = dbo.fnc_GetUserName()
       FROM PALLETDETAIL, INSERTED
       WHERE PALLETDETAIL.PalletKey = INSERTED.PalletKey
       AND NOT PALLETDETAIL.Status = '9'
@@ -409,8 +408,8 @@ BEGIN
       END
 
       UPDATE PALLET
-      SET  EditDate = GETDATE(),
-           EditWho = SUSER_SNAME()
+      SET  EditDate = dbo.fnc_GetDate(),
+           EditWho = dbo.fnc_GetUserName()
       FROM PALLET, INSERTED
       WHERE PALLET.PalletKey = INSERTED.PalletKey
 
@@ -459,4 +458,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

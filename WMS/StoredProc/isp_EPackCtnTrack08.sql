@@ -27,6 +27,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2025-10-10   SSA01   1.1   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC [dbo].[isp_EPackCtnTrack08]
          @c_PickSlipNo  NVARCHAR(10) 
@@ -144,8 +146,8 @@ BEGIN
       UPDATE PACKINFO WITH (ROWLOCK)
       SET TrackingNo = @c_CTNTrackNo     
          ,TrafficCop = NULL
-         ,EditWho = SUSER_SNAME()
-         ,EditDate= GETDATE()
+         ,EditWho = dbo.fnc_GetUserName()      --(SSA01)
+         ,EditDate= dbo.fnc_GetDate()   --(SSA01)
       WHERE PickSlipNo = @c_PickSlipNo
       AND CartonNo = @n_CartonNo
 

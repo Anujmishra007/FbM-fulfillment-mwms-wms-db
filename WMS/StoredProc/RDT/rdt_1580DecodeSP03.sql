@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2023-06-28  James     1.0   WMS-22739. Created                             */
+/* 2025-12-12  CYU027    1.1   UWP-44416. Created                             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_1580DecodeSP03 (
@@ -44,7 +45,7 @@ BEGIN
 
    DECLARE @nRcvQty     INT = 0
    DECLARE @nExpQty     INT = 0
-   
+
    IF @nStep = 5 -- SKU/QTY
    BEGIN
       IF @nInputKey = 1 -- ENTER
@@ -59,7 +60,9 @@ BEGIN
          	ELSE
          	BEGIN
          	   SET @cSKU = SUBSTRING( @cBarcode, 1, CHARINDEX( ':', @cBarcode) - 1)
-         	   SET @cLottable01 = SUBSTRING( @cBarcode,  CHARINDEX( ':', @cBarcode) + 1, LEN( @cBarcode))
+               SET @cLottable01 = SUBSTRING( @cBarcode,  CHARINDEX( ':', @cBarcode) + 1, LEN( @cBarcode))
+
+
          	END
          	
             IF NOT EXISTS ( SELECT 1 
@@ -70,7 +73,7 @@ BEGIN
                             AND   FinalizeFlag <> 'Y')
             BEGIN
                SET @nErrNo = 203251  
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Not In ASN  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Not In ASN
                GOTO Quit              	
             END
 
@@ -89,6 +92,22 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Over Rcv  
                GOTO Quit              	
             END
+
+            --ispDecfLot1PAGEIND will concat this lottable01
+            IF NOT EXISTS(
+               SELECT 1 FROM dbo.CodeLkUp WITH (NOLOCK)
+               WHERE ListName = 'LOTTABLE01'
+                 AND Storerkey = @cStorerKey
+                 AND Long = 'ispDecfLot1PAGEIND'
+            )
+            BEGIN
+               SET @cLottable01 = SUBSTRING( @cBarcode,  CHARINDEX( ':', @cBarcode) + 1, LEN( @cBarcode))
+            END
+            ELSE
+            BEGIN
+               SET @cLottable01 = @cBarcode
+            END
+
             
             SET @cLottable01 = CASE WHEN @cLottable01 = '' THEN 'DUMMY' ELSE @cLottable01 END
          END

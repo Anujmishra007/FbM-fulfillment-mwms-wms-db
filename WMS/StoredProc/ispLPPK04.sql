@@ -29,6 +29,8 @@ GO
 /* 19-Jun-2012  NJOW02   1.1  246185 - Include Weight measurement       */
 /* 13 Nov 2013  TLTING   1.1  Blocking Tune                             */
 /* 24-Mar-2014  TLTING   1.2  SQL2012 Bug                               */
+/* 10-OCT-2025  SSA01    1.3  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROC ispLPPK04   
@@ -363,7 +365,7 @@ BEGIN
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno, Refno2, UPC)    
             VALUES     
                (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cSKU,   
-                @nPackQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(),@cLoc, @cLot, @cCartonType)
+                @nPackQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), @cLoc, @cLot, @cCartonType)             --(SSA01)
             
             IF @@ERROR <> 0
             BEGIN

@@ -26,6 +26,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 2025-10-10   SSA01   1.0  UWP-42248 -Enhanced session management        */
+/*                             and cleanup.                                */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispASNFZ22]  
 (     @c_Receiptkey  NVARCHAR(10)   
@@ -74,8 +76,8 @@ BEGIN
          UPDATE ORDERS WITH (ROWLOCK)
          SET ECOM_PRESALE_FLAG = ''
            , TrafficCop = NULL
-           , EditDate = GETDATE()
-           , EditWho = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()   --(SSA01)
+           , EditWho = dbo.fnc_GetUserName()          --(SSA01)
          WHERE Storerkey = @c_Storerkey AND ExternOrderKey = @c_ExternOrderkey
          
          SELECT @n_Err = @@ERROR

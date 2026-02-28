@@ -13,7 +13,7 @@ BEGIN
     [EffectiveDate] [datetime] NULL CONSTRAINT [DF_KIT_EffectiveDate] DEFAULT (getdate()),
     [ReasonCode] [nvarchar] (10) NULL,
     [CustomerRefNo] [nvarchar] (10) NULL,
-    [Remarks] [nvarchar] (200) NULL,
+    [Remarks] [nvarchar] (500) NULL,
     [AddDate] [datetime] NOT NULL CONSTRAINT [DF_KIT_AddDate] DEFAULT (getdate()),
     [AddWho] [nvarchar] (128) NOT NULL CONSTRAINT [DF_KIT_AddWho] DEFAULT (suser_sname()),
     [EditDate] [datetime] NOT NULL CONSTRAINT [DF_KIT_EditDate] DEFAULT (getdate()),
@@ -40,12 +40,11 @@ BEGIN
     [USRDEF12] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF12] DEFAULT (''),
     [USRDEF13] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF13] DEFAULT (''),
     [USRDEF14] [datetime] NULL,
-    [USRDEF15] [datetime] NULL
+    [USRDEF15] [datetime] NULL,
+    [ExternStatus] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_ExternStatus] DEFAULT (''),
     ) ON [PRIMARY]
 
     ALTER TABLE [dbo].[KIT] ADD CONSTRAINT [PK_KIT] PRIMARY KEY CLUSTERED ([KITKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-
-    GRANT SELECT ON  [dbo].[KIT] TO [JReportRole]
 
     GRANT DELETE ON  [dbo].[KIT] TO [NSQL]
 
@@ -118,6 +117,8 @@ BEGIN
     EXEC sp_addextendedproperty N'MS_Description', 'User defined field 14', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF14'
 
     EXEC sp_addextendedproperty N'MS_Description', 'User defined field 15', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF15'
+
+    EXEC sp_addextendedproperty N'MS_Description', 'Extern Status', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'ExternStatus'
 END
 ELSE
 BEGIN
@@ -168,4 +169,66 @@ BEGIN
         ALTER TABLE KIT ADD USRDEF15 DATETIME;
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF15', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF15'
     END
+
+    IF NOT EXISTS (SELECT 1
+                   FROM sys.columns
+                   WHERE Name = 'ExternStatus' AND Object_ID = Object_ID('KIT'))
+    BEGIN
+        ALTER TABLE KIT ADD ExternStatus NVARCHAR(30) NULL CONSTRAINT [DF_KIT_ExternStatus]  DEFAULT (' ');
+        EXEC sp_addextendedproperty N'MS_Description', N'ExternStatus', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'ExternStatus'
+    END
+
+	--ALTER COLUMN 
+		IF EXISTS ( SELECT 1 FROM sys.columns sc              
+					   JOIN sys.tables so ON so.object_id = sc.object_id
+					   WHERE sc.name = 'USRDEF14'
+					   AND so.name = 'KIT'
+					   AND sc.Max_length <> 8
+		   )
+		   BEGIN
+			  DECLARE @c_ConstraintName NVARCHAR(100) = ''
+			  SELECT @c_ConstraintName = default_constraints.name
+			  FROM sys.all_columns
+			  INNER JOIN sys.tables ON all_columns.object_id = tables.object_id
+			  INNER JOIN sys.schemas ON tables.schema_id = schemas.schema_id
+			  INNER JOIN sys.default_constraints ON all_columns.default_object_id = default_constraints.object_id
+			  WHERE  schemas.name = 'dbo'
+			  AND tables.name = 'KIT'
+			  AND all_columns.name = 'USRDEF14'
+
+			  EXEC ( N'ALTER TABLE dbo.KIT DROP CONSTRAINT ' + @c_ConstraintName );
+			  ALTER TABLE dbo.KIT ALTER COLUMN USRDEF14 DATETIME NULL;
+			  ALTER TABLE dbo.KIT ADD CONSTRAINT [DF_KIT_USRDEF14] DEFAULT (' ') FOR USRDEF14;
+		   END
+
+		IF EXISTS ( SELECT 1 FROM sys.columns sc              
+					   JOIN sys.tables so ON so.object_id = sc.object_id
+					   WHERE sc.name = 'USRDEF15'
+					   AND so.name = 'KIT'
+					   AND sc.Max_length <> 8
+		   )
+		   BEGIN
+			  DECLARE @c_ConstraintNames NVARCHAR(100) = ''
+			  SELECT @c_ConstraintNames = default_constraints.name
+			  FROM sys.all_columns
+			  INNER JOIN sys.tables ON all_columns.object_id = tables.object_id
+			  INNER JOIN sys.schemas ON tables.schema_id = schemas.schema_id
+			  INNER JOIN sys.default_constraints ON all_columns.default_object_id = default_constraints.object_id
+			  WHERE  schemas.name = 'dbo'
+			  AND tables.name = 'KIT'
+			  AND all_columns.name = 'USRDEF15'
+
+			  EXEC ( N'ALTER TABLE dbo.KIT DROP CONSTRAINT ' + @c_ConstraintNames );
+			  ALTER TABLE dbo.KIT ALTER COLUMN USRDEF15 DATETIME NULL;
+			  ALTER TABLE dbo.KIT ADD CONSTRAINT [DF_KIT_USRDEF15] DEFAULT (' ') FOR USRDEF15;
+		   END
+
+		-- ALTER COLUMN Remarks TO NVARCHAR(500)
+    IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Remarks' AND object_id = OBJECT_ID ('[dbo].[KIT]') AND max_length <> 1000)
+        BEGIN
+          ALTER TABLE [dbo].[KIT]
+          ALTER COLUMN [Remarks] [nvarchar](500) NULL;
+        END
 END
+
+

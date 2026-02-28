@@ -1,3 +1,6 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtSTDEventLog]') AND type in (N'U'))
+BEGIN
+
 CREATE TABLE [RDT].[rdtSTDEventLog]
 (
 [EventNum] [int] NOT NULL IDENTITY(1, 1),
@@ -103,46 +106,137 @@ CREATE TABLE [RDT].[rdtSTDEventLog]
 [CartonID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSTDEventLog_CartonID] DEFAULT (''),
 [Barcode] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSTDEventLog_Barcode] DEFAULT (''),
 [ContainerKey] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSTDEventLog_ContainerKey] DEFAULT (''),
-[CartonNo] [int] NULL CONSTRAINT [DF_rdtSTDEventLog_CartonNo] DEFAULT ((0))
+[CartonNo] [int] NULL CONSTRAINT [DF_rdtSTDEventLog_CartonNo] DEFAULT ((0)),
+[Cube] [float] NULL CONSTRAINT [DF_RDTSTDEventLog_Cube]  DEFAULT ((0)),
+[TrackNo] [nvarchar](20) NOT NULL CONSTRAINT [DF_RDTSTDEventLog_TrackNo]  DEFAULT ('') 
 ) ON [PRIMARY]
-GO
+
+
 ALTER TABLE [RDT].[rdtSTDEventLog] ADD CONSTRAINT [PK_rdtSTDEventLog] PRIMARY KEY CLUSTERED ([EventNum]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [idx_rdtSTDEventLog] ON [RDT].[rdtSTDEventLog] ([Facility], [StorerKey], [EventType], [FunctionID], [MobileNo], [UserID]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [idx_rdtSTDEventLog_Func] ON [RDT].[rdtSTDEventLog] ([FunctionID], [Facility], [StorerKey], [ActionType], [MobileNo]) INCLUDE ([RefNo1], [RefNo2], [RefNo3]) ON [PRIMARY]
-GO
-GRANT SELECT ON  [RDT].[rdtSTDEventLog] TO [JReportRole]
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[RDT].[rdtSTDEventLog]') AND name = N'idx_rdtSTDEventLog')
+CREATE NONCLUSTERED INDEX [idx_rdtSTDEventLog] ON [RDT].[rdtSTDEventLog]
+(
+	[Facility] ASC,
+	[StorerKey] ASC,
+	[EventType] ASC,
+	[FunctionID] ASC,
+	[MobileNo] ASC,
+	[UserID] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[RDT].[rdtSTDEventLog]') AND name = N'idx_rdtSTDEventLog_Func')
+CREATE NONCLUSTERED INDEX [idx_rdtSTDEventLog_Func] ON [RDT].[rdtSTDEventLog]
+(
+	[FunctionID] ASC,
+	[Facility] ASC,
+	[StorerKey] ASC,
+	[ActionType] ASC,
+	[MobileNo] ASC
+)
+INCLUDE([RefNo1],[RefNo2],[RefNo3]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+
+
+--GRANT SELECT ON  [RDT].[rdtSTDEventLog] TO [JReportRole]
+
 GRANT DELETE ON  [RDT].[rdtSTDEventLog] TO [NSQL]
-GO
+
 GRANT INSERT ON  [RDT].[rdtSTDEventLog] TO [NSQL]
-GO
+
 GRANT SELECT ON  [RDT].[rdtSTDEventLog] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [RDT].[rdtSTDEventLog] TO [NSQL]
-GO
+
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'Barcode'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Barcode', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'Barcode'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'CartonID'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Carton ID', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'CartonID'
-GO
+END 
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'CartonNo'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Carton No', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'CartonNo'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'ContainerKey'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Container Key', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'ContainerKey'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'CountNo'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Count No', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'CountNo'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'Height'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Height', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'Height'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'Length'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Length', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'Length'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'OptionDefinition'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Option Definition', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'OptionDefinition'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'ReplenishmentGroup'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Replenishment Group', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'ReplenishmentGroup'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'TransType'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Trans Type', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'TransType'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'WaveKey'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', N'WaveKey of the record that event is logged', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'WaveKey'
-GO
+END
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtSTDEventLog', N'COLUMN',N'Width'))
+BEGIN
 EXEC sp_addextendedproperty N'MS_Description', 'Width', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'Width'
-GO
+END
+
+END
+
+ELSE 
+BEGIN 
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'Cube' AND Object_ID = Object_ID('RDT.rdtSTDEventLog'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtSTDEventLog] ADD Cube [float] NULL CONSTRAINT [DF_RDTSTDEventLog_Cube]  DEFAULT ((0));
+				EXEC sp_addextendedproperty N'MS_Description', 'Cube', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'Cube'
+				
+			END
+
+
+
+		 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'TrackNo' AND Object_ID = Object_ID('RDT.rdtSTDEventLog'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtSTDEventLog] ADD TrackNo [nvarchar](20) NOT NULL CONSTRAINT [DF_RDTSTDEventLog_TrackNo]  DEFAULT ('') ;
+				EXEC sp_addextendedproperty N'MS_Description', 'TrackNo', 'SCHEMA', N'RDT', 'TABLE', N'rdtSTDEventLog', 'COLUMN', N'TrackNo'
+				
+			END
+
+
+END
+

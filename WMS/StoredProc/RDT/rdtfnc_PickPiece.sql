@@ -6,74 +6,86 @@ GO
 
 
 
-/******************************************************************************/
-/* Store procedure: rdtfnc_PickPiece                                          */
-/* Copyright      : Maersk                                                    */
-/*                                                                            */
-/* Date         Rev  Author      Purposes                                     */
-/* 2016-11-09   1.0  Ung         SOS368792 Created                            */
-/* 2016-07-26   1.1  Ung         SOS374283 Add DropID, confirm LOC            */
-/*                               Remove message screen                        */
-/* 2018-03-06   1.2  ChewKP      WMS-4093 Add Close DropID Option (ChewKP01)  */
-/* 2018-06-14   1.3  James       WMS-5407 Modify rdt_decode (james02)         */
-/* 2018-08-28   1.4  ChewKP      Bug Fixes (ChewKP02)                         */
-/* 2018-09-06   1.5  Ung         WMS-6238 Further fixes for ver 1.4           */
-/* 2018-10-29   1.6  Gan         Performance tuning                           */
-/* 2018-05-21   1.7  James       WMS-5057 Add dynamic lottable (james01)      */
-/* 2018-09-06   1.8  ChewKP      WMS-4542 Add Default PickZone, ExtendInfoSP  */
-/*                               config, Implement ExtendedValidateSP         */
-/*                               on Step 2 (ChewKP04)                         */
-/* 2018-10-11   1.9  ChewKP      WMS-5156 Add ExtendedUpdateSP Scn2 (ChewKP05)*/
-/* 2019-06-14   2.0  James       WMS9209 Rearrange display @ scn3 (james02)   */
-/*                               Extend @cPickZone variable                   */
-/*                               Add ABORT screen                             */
-/* 2019-07-10   2.1  James       INC0764433 - Add missing lottable display    */
-/*                               Bug fix on @cSuggSKU usage for ExtSP(james03)*/
-/* 2019-08-21   2.2  James       WMS-10241 Add ExtendedInfoSP @step3 (james04)*/
-/* 2019-09-04   2.3  YeeKung     WMS-10357 Add Balance SKU qty (yeekung01)    */
-/* 2020-01-02   2.4  YeeKung     Fix Bugs (yeekung02)                         */
-/* 2020-01-21   2.5  James       WMS-11654 Revamp short pick option (james05) */
-/* 2020-03-31   2.6  James       WMS-12707 Add config determine Pickzone      */
-/*                               is mandatory (james06)                       */
-/* 2020-08-13   2.7  YeeKung     WMS-14630 Add CartonID screen (yeekung03)    */
-/* 2020-09-10   2.8  Pakyuen     INC1286925 - Changed to nvarchar(6)          */
-/* 2021-01-08   2.9  James       WMS-15993 Enhance BalPickLater (james07)     */
-/* 2021-01-20   3.0  James       WMS-15754 Add Option Skip Loc (james08)      */
-/*                               Add config to remove usage of keyword 99     */
-/* 2021-03-30   3.1  LZG         INC1461882 - Reduced Qty when scan (ZG01)    */
-/* 2020-10-12   3.2  James       WMS-14522 Add ExtendedSKUInfo (james08)      */
-/* 2021-04-30   3.3  Chermaine   WMS-16868 Add Config to skip confirm op2 (cc01)*/
-/* 2021-11-09   3.4  James       WMS-18174 Clear variable b4 gettask (james09)*/
-/* 2021-11-09   3.5  James       WMS-18293 Allow MultiSKUBarcode (james10)    */
-/* 2022-03-07   3.6  YeeKung     WMS-19062 Add extendedinfo step 1(yeekung04) */
-/* 2022-03-21   3.7  YeeKung     WMS-19113 Fix step5 (yeekung03)              */
-/* 2022-07-21   3.8  Ung         Fix scan wrong SKU but clear lottable field  */
-/* 2022-09-20   3.9  James       WMS-20756 Change rdt_GetSKU output           */
-/*                               UPC Qty (james24)                            */
-/* 2022-10-20   4.0  YeeKung     WMS-21027 Add eventlog (yeekung05)           */
-/* 2021-03-30   4.1  James       WMS-16553 Add ExtValidSP in step 1 (james09) */
-/* 2022-04-16   4.2  YeeKung     WMS-19311 Add Data capture (yeekung04)       */
-/* 2023-02-20   4.3  YeeKung     JSM-131064 Bug fix for -1 qty (yeekung06)    */
-/* 2021-09-23   4.4  James       WMS-18004 Add ExtendedInfoSP to step 1       */
-/*                               Add ExtendedValidateSP to step 5 (james09)   */
-/* 2023-04-17   4.5  James       Fix missing Packdata param (james10)         */
-/*                               Removed duplicate ExtendedInfosp @ step1     */
-/* 2022-12-09   4.6  Ung         WMS-21244 Add ExtendedInfoSP step2 ESC       */
-/* 2023-04-04   4.7  YeeKung     JSM-140598 bal pick later swap  (yeekun07)   */
-/* 2023-05-17   4.8  YeeKung     Fix Extended sp Step (yeekung08)             */
-/* 2023-04-10   4.9  James       WMS-22147 Add V_Barcode to sku step for      */
-/*                               sku input (james11)                          */
-/* 2023-06-19   5.0  YeeKung     WMS-22439 Add Extendedinfo to Scereen 1      */
-/*                               (yeekung08)                                  */
-/* 2023-05-22   5.1  Ung         WMS-22578 Remove rdt_Decode error for SKU    */
-/* 2023-07-25   5.2  Ung         WMS-23002 Add serial no                      */
-/* 2023-10-23   5.3  Ung         WMS-23569 Fix VerifyID screen ESC            */
-/*                               Allow blank if no suggest ID                 */
-/* 2023-12-07   5.4  Tony        WMS-24315 Trigger msg to WCS                 */
-/* 2024-04-28   5.5  Dennis      UWP-18232 Dropid Restriction                 */
-/* 2024-08-14   5.6  Dennis      FCR-540 TO LOC Scn                           */
-/* 2024-09-23   5.7  CYU027      FCR-809 PUMA SKU IMAGE widget                */
-/******************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdtfnc_PickPiece                                             */
+/* Copyright      : Maersk                                                       */
+/*                                                                               */
+/* Date         Rev     Author      Purposes                                     */
+/* 2016-11-09   1.0     Ung         SOS368792 Created                            */
+/* 2016-07-26   1.1     Ung         SOS374283 Add DropID, confirm LOC            */
+/*                                  Remove message screen                        */
+/* 2018-03-06   1.2     ChewKP      WMS-4093 Add Close DropID Option (ChewKP01)  */
+/* 2018-06-14   1.3     James       WMS-5407 Modify rdt_decode (james02)         */
+/* 2018-08-28   1.4     ChewKP      Bug Fixes (ChewKP02)                         */
+/* 2018-09-06   1.5     Ung         WMS-6238 Further fixes for ver 1.4           */
+/* 2018-10-29   1.6     Gan         Performance tuning                           */
+/* 2018-05-21   1.7     James       WMS-5057 Add dynamic lottable (james01)      */
+/* 2018-09-06   1.8     ChewKP      WMS-4542 Add Default PickZone, ExtendInfoSP  */
+/*                                  config, Implement ExtendedValidateSP         */
+/*                                  on Step 2 (ChewKP04)                         */
+/* 2018-10-11   1.9     ChewKP      WMS-5156 Add ExtendedUpdateSP Scn2 (ChewKP05)*/
+/* 2019-06-14   2.0     James       WMS9209 Rearrange display @ scn3 (james02)   */
+/*                                  Extend @cPickZone variable                   */
+/*                                  Add ABORT screen                             */
+/* 2019-07-10   2.1     James       INC0764433 - Add missing lottable display    */
+/*                                  Bug fix on @cSuggSKU usage for ExtSP(james03)*/
+/* 2019-08-21   2.2     James       WMS-10241 Add ExtendedInfoSP @step3 (james04)*/
+/* 2019-09-04   2.3     YeeKung     WMS-10357 Add Balance SKU qty (yeekung01)    */
+/* 2020-01-02   2.4     YeeKung     Fix Bugs (yeekung02)                         */
+/* 2020-01-21   2.5     James       WMS-11654 Revamp short pick option (james05) */
+/* 2020-03-31   2.6     James       WMS-12707 Add config determine Pickzone      */
+/*                                  is mandatory (james06)                       */
+/* 2020-08-13   2.7     YeeKung     WMS-14630 Add CartonID screen (yeekung03)    */
+/* 2020-09-10   2.8     Pakyuen     INC1286925 - Changed to nvarchar(6)          */
+/* 2021-01-08   2.9     James       WMS-15993 Enhance BalPickLater (james07)     */
+/* 2021-01-20   3.0     James       WMS-15754 Add Option Skip Loc (james08)      */
+/*                                  Add config to remove usage of keyword 99     */
+/* 2021-03-30   3.1     LZG         INC1461882 - Reduced Qty when scan (ZG01)    */
+/* 2020-10-12   3.2     James       WMS-14522 Add ExtendedSKUInfo (james08)      */
+/* 2021-04-30   3.3     Chermaine   WMS-16868 Add Config to skip confirm op2 (cc01)*/
+/* 2021-11-09   3.4     James       WMS-18174 Clear variable b4 gettask (james09)*/
+/* 2021-11-09   3.5     James       WMS-18293 Allow MultiSKUBarcode (james10)    */
+/* 2022-03-07   3.6     YeeKung     WMS-19062 Add extendedinfo step 1(yeekung04) */
+/* 2022-03-21   3.7     YeeKung     WMS-19113 Fix step5 (yeekung03)              */
+/* 2022-07-21   3.8     Ung         Fix scan wrong SKU but clear lottable field  */
+/* 2022-09-20   3.9     James       WMS-20756 Change rdt_GetSKU output           */
+/*                                  UPC Qty (james24)                            */
+/* 2022-10-20   4.0     YeeKung     WMS-21027 Add eventlog (yeekung05)           */
+/* 2021-03-30   4.1     James       WMS-16553 Add ExtValidSP in step 1 (james09) */
+/* 2022-04-16   4.2     YeeKung     WMS-19311 Add Data capture (yeekung04)       */
+/* 2023-02-20   4.3     YeeKung     JSM-131064 Bug fix for -1 qty (yeekung06)    */
+/* 2021-09-23   4.4     James       WMS-18004 Add ExtendedInfoSP to step 1       */
+/*                                  Add ExtendedValidateSP to step 5 (james09)   */
+/* 2023-04-17   4.5     James       Fix missing Packdata param (james10)         */
+/*                                  Removed duplicate ExtendedInfosp @ step1     */
+/* 2022-12-09   4.6     Ung         WMS-21244 Add ExtendedInfoSP step2 ESC       */
+/* 2023-04-04   4.7     YeeKung     JSM-140598 bal pick later swap  (yeekun07)   */
+/* 2023-05-17   4.8     YeeKung     Fix Extended sp Step (yeekung08)             */
+/* 2023-04-10   4.9     James       WMS-22147 Add V_Barcode to sku step for      */
+/*                                  sku input (james11)                          */
+/* 2023-06-19   5.0     YeeKung     WMS-22439 Add Extendedinfo to Scereen 1      */
+/*                                  (yeekung08)                                  */
+/* 2023-05-22   5.1     Ung         WMS-22578 Remove rdt_Decode error for SKU    */
+/* 2023-07-25   5.2     Ung         WMS-23002 Add serial no                      */
+/* 2023-10-23   5.3     Ung         WMS-23569 Fix VerifyID screen ESC            */
+/*                                  Allow blank if no suggest ID                 */
+/* 2023-12-07   5.4     Tony        WMS-24315 Trigger msg to WCS                 */
+/* 2024-04-28   5.5     Dennis      UWP-18232 Dropid Restriction                 */
+/* 2024-08-14   5.6     Dennis      FCR-540 TO LOC Scn                           */
+/* 2024-09-23   5.7     CYU027      FCR-809 PUMA SKU IMAGE widget                */
+/* 2025-03-31   5.8.0   Dennis      FCR-2705 ExtScn04                            */
+/* 2025-01-23   5.9.0   CYU027      FCR-540 Fix issues， SerinaNo                */
+/* 2025-05-20   6.0.0   Jackc       UWP-34683 Add extupd to step4                */
+/* 2025-01-23   6.1.0   CYU027      FCR-540 Fix issues， SerinaNo                */
+/* 2025-09-09   6.2.0   Jackc       uwp-40901 Fix next scn value at st7          */
+/* 2025-09-22   6.2.1   PPA374      Adding ExtUpd to step 2 inputkey 0           */
+/* 2025-09-30   6.3.0   NickT       FCR-6584 Set @cDefaultSKU = '0' in Step0     */
+/* 2025-10-17   6.3.1   NickT       FCR-6584 Fix issue: jump to wrong step       */
+/* 2025-09-22   6.4.0   PPA374      UWP-41253 Adding ExtUpd to step 2 inputkey 0 */
+/* 2026-01-04   6.5.0   NickT       FCR-9040 Add ExtScnSP in some steps          */
+/* 2026-02-02   6.6.0   Jackc       FCR-10041 ExtScn07 special jump logic        */
+/* 2026-02-16   6.7.0  NYE018       FCR-10366 add loc check digit                */
+/*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
    @nMobile    INT,
@@ -196,6 +208,11 @@ DECLARE
    @nOri_Step           INT,
    @cToLOC              NVARCHAR( 10),
    @nPre_Step           INT,
+
+   @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10366
+   @cCheckDigitLOC      NVARCHAR( 20), -- FCR-10366
+   @cShowLocOn04        NVARCHAR( 1),  -- FCR-10366
+
 
    @cLottable01 NVARCHAR( 18),      @cLottable02 NVARCHAR( 18),      @cLottable03 NVARCHAR( 18),
    @dLottable04 DATETIME,           @dLottable05 DATETIME,           @cLottable06 NVARCHAR( 30),
@@ -325,6 +342,9 @@ SELECT
    @cSKUDataCapture     = V_String45,
    @cExtScnSP           = V_String46,  
 
+   @cLOCCheckDigitSP    = V_String47, -- FCR-10366
+   @cShowLocOn04        = V_String48, -- FCR-10366
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
@@ -401,6 +421,7 @@ Step_0. Func = 839
 ********************************************************************************/
 Step_0:
 BEGIN
+   SET @cDefaultSKU = '0'
    -- Get storer configure
    SET @cAllowSkipLOC = rdt.rdtGetConfig( @nFunc, 'AllowSkipLOC', @cStorerKey)
    SET @cConfirmLOC = rdt.rdtGetConfig( @nFunc, 'ConfirmLOC', @cStorerKey)
@@ -461,6 +482,11 @@ BEGIN
    IF @cDataCaptureSP = '0'
       SET @cDataCaptureSP = ''
    SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+
+   SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-10366
+
+   SET @cShowLocOn04 = rdt.RDTGetConfig(@nFunc, 'ShowLocOn04', @cStorerKey)  -- FCR-10366
+
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -589,7 +615,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO
             GOTO Step_1_Fail
          END
-/*
+         /*
          -- Check order shipped
          IF EXISTS( SELECT TOP 1 1
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
@@ -601,7 +627,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order picked
             GOTO Step_1_Fail
          END
-*/
+         */
          -- Check diff storer
          IF EXISTS( SELECT TOP 1 1
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
@@ -625,7 +651,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO
             GOTO Step_1_Fail
          END
-/*
+         /*
          -- Check order picked
          IF EXISTS( SELECT 1
             FROM Orders O WITH (NOLOCK)
@@ -637,7 +663,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order picked
           GOTO Step_1_Fail
          END
-*/
+         */
          -- Check diff storer
          IF EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND StorerKey <> @cStorerKey)
          BEGIN
@@ -884,6 +910,14 @@ BEGIN
          END
       END
    END
+
+   --Jump point
+   IF @cExtScnSP <> '' 
+      AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_1_Fail:
@@ -1094,11 +1128,12 @@ BEGIN
          ,@cErrMsg          OUTPUT
          ,@cSuggID          OUTPUT  --(yeekung02)
          ,@cSKUSerialNoCapture OUTPUT
-      IF @nErrNo <> 0
-         GOTO Step_2_Fail
 
-      SET @cCurrLOC = ''
-      SET @cCurrSKU = ''
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
+
+         SET @cCurrLOC = ''
+         SET @cCurrSKU = ''
       END
       ELSE
       BEGIN
@@ -1140,7 +1175,7 @@ BEGIN
          SET @nScn = @nScn_ConfirmLOC
          SET @nStep = @nStep_ConfirmLOC
       END
-      ELSE IF @cScanCIDSCN='1'
+      ELSE IF @cScanCIDSCN = '1'
       BEGIN
          -- Prepare next screen var
          SET @cOutField01 = @cSuggLOC
@@ -1319,6 +1354,69 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Step_2_Fail
 
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, @cOption, @cLottableCode, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @cPackData1,@cPackData2,@cPackData3, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile         INT                      ' +
+               ',@nFunc           INT                      ' +
+               ',@cLangCode       NVARCHAR( 3)             ' +
+               ',@nStep           INT                      ' +
+               ',@nInputKey       INT                      ' +
+               ',@cFacility       NVARCHAR( 5)             ' +
+               ',@cStorerKey      NVARCHAR( 15)            ' +
+               ',@cPickSlipNo     NVARCHAR( 10)            ' +
+               ',@cPickZone       NVARCHAR( 10)            ' +
+               ',@cDropID         NVARCHAR( 20)            ' +
+               ',@cLOC            NVARCHAR( 10)            ' +
+               ',@cSKU            NVARCHAR( 20)            ' +
+               ',@nQTY            INT                      ' +
+               ',@cOption         NVARCHAR( 1)             ' +
+               ',@cLottableCode   NVARCHAR( 30)            ' +
+               ',@cLottable01     NVARCHAR( 18)            ' +
+               ',@cLottable02     NVARCHAR( 18)            ' +
+               ',@cLottable03     NVARCHAR( 18)            ' +
+               ',@dLottable04     DATETIME                 ' +
+               ',@dLottable05     DATETIME                 ' +
+               ',@cLottable06     NVARCHAR( 30)            ' +
+               ',@cLottable07     NVARCHAR( 30)            ' +
+               ',@cLottable08     NVARCHAR( 30)            ' +
+               ',@cLottable09     NVARCHAR( 30)            ' +
+               ',@cLottable10     NVARCHAR( 30)            ' +
+               ',@cLottable11     NVARCHAR( 30)            ' +
+               ',@cLottable12     NVARCHAR( 30)            ' +
+               ',@dLottable13     DATETIME                 ' +
+               ',@dLottable14     DATETIME                 ' +
+               ',@dLottable15     DATETIME                 ' +
+               ',@cPackData1      NVARCHAR( 30)            ' +
+               ',@cPackData2      NVARCHAR( 30)            ' +
+               ',@cPackData3      NVARCHAR( 30)            ' +
+               ',@nErrNo          INT           OUTPUT     ' +
+               ',@cErrMsg         NVARCHAR(250) OUTPUT     '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 2, @nInputKey, @cFacility, @cStorerKey,
+               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @cOption, @cLottableCode,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @cPackData1,@cPackData2,@cPackData3,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+         END
+      END
+
       -- Prepare prev screen var
       SET @cOutField01 = '' -- PickSlipNo
       SET @cOutField13 = ''
@@ -1381,6 +1479,33 @@ BEGIN
    --Jump point
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      IF @cExtScnSP = 'rdt_839ExtScn02'
+      BEGIN
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cPickSlipNo',     @cPickSlipNo)
+         SET @nPre_Step = @nStep_PickZone
+         SET @nAction = 0
+      END
+      
+      IF @cExtScnSP = 'rdt_839ExtScn05'
+      BEGIN
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cPickSlipNo',     @cPickSlipNo)
+         SET @nPre_Step = @nStep_PickZone
+         SET @nAction = 0
+      END
+
+      IF @cExtScnSP = 'rdt_839ExtScn06'
+      BEGIN
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cPickSlipNo',     @cPickSlipNo),
+            ('@cSuggLoc',        @cSuggLOC),
+            ('@cSuggID',         @cSuggID),
+            ('@cSuggSKU',        @cSuggSKU),
+            ('@nSuggQty',        CAST(@nSuggQTY AS NVARCHAR(10)) )
+         SET @nPre_Step = @nStep_PickZone
+         SET @nAction = 0
+      END
       GOTO Step_99
    END
 
@@ -2065,6 +2190,12 @@ BEGIN
 
          SET @nScn = @nScn_ShortPick
          SET @nStep = @nStep_ShortPick
+
+         IF @cExtScnSP <> ''
+         BEGIN
+            SET @nPre_Step = '' -- clear pre step
+            GOTO STEP_99
+         END
          GOTO QUIT
       END
 
@@ -2642,9 +2773,20 @@ BEGIN
          IF @cExtScnSP = 'rdt_839ExtScn02' AND @nPre_Step = @nStep99
             GOTO Quit
 
+         IF @cExtScnSP = 'rdt_839ExtScn05' AND @nPre_Step = @nStep99
+            GOTO Quit
+
          DELETE FROM @tExtScnData
 
          IF @cExtScnSP = 'rdt_839ExtScn02'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES    
+            ('@cPickSlipNo',     @cPickSlipNo)
+            SET @nPre_Step = @nStep_SKUQTY
+            SET @nAction = 0
+         END
+         
+         IF @cExtScnSP = 'rdt_839ExtScn05'
          BEGIN
             INSERT INTO @tExtScnData (Variable, Value) VALUES    
             ('@cPickSlipNo',     @cPickSlipNo)
@@ -2784,9 +2926,9 @@ BEGIN
 
          -- (james08)
         IF @cExtSkuInfoSP <> ''
-         BEGIN
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtSkuInfoSP AND type = 'P')
         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtSkuInfoSP AND type = 'P')
+            BEGIN
                SET @cExtDescr1 = ''
                SET @cExtDescr2 = ''
 
@@ -2817,7 +2959,7 @@ BEGIN
                   @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nQTY,
                   @cExtDescr1 OUTPUT, @cExtDescr2 OUTPUT
             END
-         END
+        END
 
          -- Prepare SKU QTY screen var
          SET @cOutField01 = @cSuggLOC
@@ -2899,6 +3041,73 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Quit
 
+          --V6.0.0 start
+         IF @cExtendedUpdateSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                  ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, @cOption, @cLottableCode, ' +
+                  ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+                  ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+                  ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+                  ' @cPackData1,@cPackData2,@cPackData3, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  ' @nMobile         INT                      ' +
+                  ',@nFunc           INT                      ' +
+                  ',@cLangCode       NVARCHAR( 3)             ' +
+                  ',@nStep           INT                      ' +
+                  ',@nInputKey       INT                      ' +
+                  ',@cFacility       NVARCHAR( 5)             ' +
+                  ',@cStorerKey      NVARCHAR( 15)            ' +
+                  ',@cPickSlipNo     NVARCHAR( 10)            ' +
+                  ',@cPickZone       NVARCHAR( 10)            ' +
+                  ',@cDropID         NVARCHAR( 20)            ' +
+                  ',@cLOC            NVARCHAR( 10)            ' +
+                  ',@cSKU            NVARCHAR( 20)            ' +
+                  ',@nQTY            INT                      ' +
+                  ',@cOption         NVARCHAR( 1)             ' +
+                  ',@cLottableCode   NVARCHAR( 30)            ' +
+                  ',@cLottable01     NVARCHAR( 18)            ' +
+                  ',@cLottable02     NVARCHAR( 18)            ' +
+                  ',@cLottable03     NVARCHAR( 18)            ' +
+                  ',@dLottable04     DATETIME                 ' +
+                  ',@dLottable05     DATETIME                 ' +
+                  ',@cLottable06     NVARCHAR( 30)            ' +
+                  ',@cLottable07     NVARCHAR( 30)            ' +
+                  ',@cLottable08     NVARCHAR( 30)            ' +
+                  ',@cLottable09     NVARCHAR( 30)            ' +
+                  ',@cLottable10     NVARCHAR( 30)            ' +
+                  ',@cLottable11     NVARCHAR( 30)            ' +
+                  ',@cLottable12     NVARCHAR( 30)            ' +
+                  ',@dLottable13     DATETIME                 ' +
+                  ',@dLottable14     DATETIME                 ' +
+                  ',@dLottable15     DATETIME                 ' +
+                  ',@cPackData1      NVARCHAR( 30)            ' +
+                  ',@cPackData2      NVARCHAR( 30)            ' +
+                  ',@cPackData3      NVARCHAR( 30)            ' +
+                  ',@nErrNo          INT           OUTPUT     ' +
+                  ',@cErrMsg         NVARCHAR(250) OUTPUT     '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, 4, @nInputKey, @cFacility, @cStorerKey, --(yeekung08)
+                  @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @cOption, @cLottableCode,
+                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+                  @cPackData1,@cPackData2,@cPackData3,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+               BEGIN
+                  GOTO Quit
+               END
+            END
+         END
+         --V6.0.0 end
+
          -- Prepare next screen var
          SET @cOutField01 = '' -- PickSlipNo
 
@@ -2963,6 +3172,9 @@ BEGIN
       BEGIN
          IF @cExtScnSP = 'rdt_839ExtScn02' AND @nPre_Step = @nStep99
             GOTO Quit
+         
+         IF @cExtScnSP = 'rdt_839ExtScn05' AND @nPre_Step = @nStep99
+            GOTO Quit
 
          DELETE FROM @tExtScnData
 
@@ -2978,6 +3190,14 @@ BEGIN
          BEGIN
             INSERT INTO @tExtScnData (Variable, Value) VALUES
                ('@cSuggSKU',     @cSuggSKU)
+         END
+
+         IF @cExtScnSP = 'rdt_839ExtScn05'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES    
+            ('@cPickSlipNo',     @cPickSlipNo)
+            SET @nPre_Step = 4
+            SET @nAction = 0
          END
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
@@ -3255,9 +3475,11 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
 
-      IF @cOption = '1'  -- Short
+      STEP_5_NextTask: --v5.8.0
+      IF @cOption = '1' -- Short
       BEGIN
-        -- Get task in current LOC
+         STEP_5_Short: -- v5.8.0
+         -- Get task in current LOC
          SET @cSKUValidated = '0'
          SET @nActQTY = 0
          EXEC rdt.rdt_PickPiece_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXTSKU'
@@ -3388,6 +3610,15 @@ BEGIN
          ELSE
          BEGIN
             -- Go to no more task in loc screen
+
+            -- FCR-10366 
+            IF @cShowLocOn04 = '1'
+            BEGIN
+               SET @cOutField01 = @cSuggLOC  -- Regular LOC
+            END
+            ELSE
+               SET @cOutField01 = ''  -- Don't show LOC
+            -- FCR-10366
             SET @nScn = @nScn_NoMoreTask
             SET @nStep = @nStep_NoMoreTask
          END
@@ -3742,7 +3973,12 @@ BEGIN
          --Extended Screen
          IF @cExtScnSP <> ''
          BEGIN
+            --(Sync reallo) Skip extscn logic because it jump back to step5_nexttask or step5_shortextscn04 labels
+            -- after execut rdt_839ExtScn04/07. There is new option screen replace the this one. 
+
+            --IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P') --V5.8.0
             IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+               AND @cExtScnSP NOT IN ('rdt_839ExtScn04','rdt_839ExtScn07') --V5.8.0
             BEGIN
                DELETE FROM @tExtScnData
 
@@ -3754,7 +3990,21 @@ BEGIN
                   SET @nPre_Step = 5
                   SET @nAction = 0
                END
-               
+
+               IF @cExtScnSP = 'rdt_839ExtScn03'
+               BEGIN
+                  SET @nAction = 0
+               END
+
+               IF @cExtScnSP = 'rdt_839ExtScn05'
+               BEGIN
+                  INSERT INTO @tExtScnData (Variable, Value) VALUES    
+                  ('@cPickSlipNo',     @cPickSlipNo),
+                  ('@cOption',     @cOption)
+                  SET @nPre_Step = 5
+                  SET @nAction = 0
+               END
+
                EXECUTE [RDT].[rdt_ExtScnEntry] 
                   @cExtScnSP, 
                   @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
@@ -4107,6 +4357,17 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      IF @cExtScnSP = 'rdt_839ExtScn03'
+      BEGIN
+         SET @nAction = 0
+      END
+      ELSE IF @cExtScnSP IN ('rdt_839ExtScn04','rdt_839ExtScn07') --V5.8.0
+      BEGIN
+         --(Sync reallo) Skip extscn logic because it jump back to step5_nexttask or step5_shortextscn04 labels
+            -- after execut rdt_839ExtScn04/07. There is new option screen replace the this one. 
+         GOTO Quit
+      END
+      SET @nPre_Step = 5
       GOTO Step_99
    END
 
@@ -4292,6 +4553,14 @@ BEGIN
          ELSE
          BEGIN
             -- Go to no more task in loc screen
+             -- FCR-10366 
+            IF @cShowLocOn04 = '1'
+            BEGIN
+               SET @cOutField01 = @cSuggLOC  -- Regular LOC
+            END
+            ELSE
+               SET @cOutField01 = ''  -- Don't show LOC
+            -- FCR-10366
             SET @nScn = @nScn_NoMoreTask
             SET @nStep = @nStep_NoMoreTask
          END
@@ -4387,6 +4656,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = 6
       GOTO Step_99
    END
 
@@ -4414,6 +4684,23 @@ BEGIN
 
       -- Screen mapping
       SET @cActLOC = @cInField02
+
+      -- FCR-10366
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_7_Fail
+         END
+         SET @cActLOC = @cCheckDigitLOC
+      END
+      -- FCR-10366
 
       -- Validate blank
       IF @cActLOC = ''
@@ -4478,9 +4765,15 @@ BEGIN
          SET @cOutField04 = @cSuggID --(yeekung02)
          SET @cOutField05 = ''
 
+         --V4.1.0 start
          -- Go to confirm LOC screen
-         SET @nScn = @nScn_ConfirmLOC
-         SET @nStep = @nStep_ConfirmLOC
+         --SET @nScn = @nScn_ConfirmLOC
+         --SET @nStep = @nStep_ConfirmLOC
+         
+         -- Go to verify ID screen
+         SET @nScn = @nScn_VerifyID
+         SET @nStep = @nStep_VerifyID
+         --V4.1.0
       END
       ELSE
       BEGIN
@@ -4683,6 +4976,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = 7
       GOTO Step_99
    END
 
@@ -4849,7 +5143,7 @@ BEGIN
             -- Go to verify ID screen
             SET @nScn = @nScn_VerifyID
             SET @nStep = @nStep_VerifyID
-            GOTO QUIT
+            GOTO Step_8_ExtScn
          END
          ELSE IF @cConfirmLOC = '1'
          BEGIN
@@ -4861,7 +5155,7 @@ BEGIN
             -- Go to confirm LOC screen
             SET @nScn = @nScn_ConfirmLOC
             SET @nStep = @nStep_ConfirmLOC
-            GOTO QUIT
+            GOTO Step_8_ExtScn
          END
 
          -- Prepare LOC screen var
@@ -4943,8 +5237,10 @@ BEGIN
       SET @nStep = @nStep_SKUQTY
    END
 
+   Step_8_ExtScn:
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = ''
       GOTO Step_99
    END
 
@@ -5182,6 +5478,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = 9
       GOTO Step_99
    END
 
@@ -5366,6 +5663,7 @@ END
 
 IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
 BEGIN
+   SET @nPre_Step = 10
    GOTO Step_99
 END
 
@@ -5844,6 +6142,14 @@ BEGIN
             INSERT INTO @tExtScnData (Variable, Value) VALUES
                ('@cSuggSKU',     @cSuggSKU)
          END
+
+         IF @cExtScnSP = 'rdt_839ExtScn05'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES    
+            ('@cPickSlipNo',     @cPickSlipNo)
+            SET @nPre_Step = 11
+            SET @nAction = 0
+         END
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP, 
@@ -5988,6 +6294,7 @@ BEGIN
          --Jump point
          IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
          BEGIN
+            SET @nPre_Step = 12
             GOTO Step_99
          END
 
@@ -6120,6 +6427,7 @@ BEGIN
          --Jump point
          IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
          BEGIN
+            SET @nPre_Step = 12
             GOTO Step_99
          END
 
@@ -6393,6 +6701,14 @@ BEGIN
                ('@cSuggSKU',     @cSuggSKU)
          END
 
+         IF @cExtScnSP = 'rdt_839ExtScn05'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES    
+            ('@cPickSlipNo',     @cPickSlipNo)
+            SET @nPre_Step = 12
+            SET @nAction = 0
+         END
+
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP, 
             @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
@@ -6494,6 +6810,8 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
          SET @nAction = 1
+         SET @nOri_Scn = @nScn
+         SET @nOri_Step = @nStep
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES
           ('@cSuggSKU',     @cSuggSKU)
@@ -6572,12 +6890,98 @@ BEGIN
             END
          END
          
+         IF @cExtScnSP = 'rdt_839ExtScn04' --v5.8.0
+         BEGIN
+            IF @nOri_Scn = 6524 AND @nOri_Step = 99
+            BEGIN
+               SET @cOption = @cUDF01
+
+               IF @cOption <> '9'
+                  GOTO STEP_5_NextTask
+               ELSE
+                  GOTO STEP_5_Short
+            END
+         END
+
+         IF @cExtScnSP = 'rdt_839ExtScn05'
+         BEGIN
+            IF @nPre_Step = @nStep_SKUQTY OR @nPre_Step = @nStep_SerialNo OR @nPre_Step = @nStep_DataCapture 
+            BEGIN
+                -- Prepare next screen var
+               SET @cOutField01 = '' -- PickSlipNo
+
+               -- Go to PickSlipNo screen
+               SET @nScn = @nScn_PickSlipNo
+               SET @nStep = @nStep_PickSlipNo
+               GOTO Quit
+            END
+            ELSE IF @nPre_Step = @nStep_NoMoreTask
+            BEGIN
+               SET @nPre_Step = @nStep99
+               GOTO Step_4
+            END
+            ELSE IF @nPre_Step = @nStep_ShortPick
+            BEGIN
+               -- Get task in current LOC
+               SET @cSKUValidated = '0'
+               SET @nActQTY = 0
+               SET @cCurrLOC = @cSuggLOC
+               SET @cCurrSKU = @cSuggSKU
+
+               -- Goto PickZone Screen
+               SET @cOutField01 = @cPickSlipNo
+               SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
+               SET @cOutField03 = ''
+               SET @cOutField15 = ''
+
+               SET @nScn = @nScn_PickZone
+               SET @nStep = @nStep_PickZone
+
+               EXEC rdt.rdtSetFocusField @nMobile, 3 -- DropID
+            END
+         END
+
+         IF @cExtScnSP = 'rdt_839ExtScn06'
+         BEGIN
+            IF @cUDF01 = 'GOTO STEP5'
+            BEGIN
+               GOTO Step_5
+            END
+            ELSE IF @cUDF01 = 'GOTO STEP_5_Short'
+            BEGIN
+               GOTO STEP_5_Short
+            END
+            ELSE IF @cUDF01 = 'No Need Update RDTMOBREC'
+               RETURN
+         END
+
+         IF @cExtScnSP = 'rdt_839ExtScn07' --Sync short reallo
+         BEGIN
+            IF @nOri_Scn = 6823 AND @nOri_Step = 99 AND @nInputKey = 1
+            BEGIN
+               SET @cOption = @cUDF01
+
+               IF @cOption <> '9'
+                  GOTO STEP_5_NextTask
+               ELSE
+                  GOTO STEP_5_Short
+            END
+
+            IF @nOri_Scn = 6823 AND @nOri_Step = 99 AND @nInputKey = 0
+            BEGIN
+               SET @cOption = @cUDF01
+               SET @cBarcode = @cUDF02
+
+               GOTO Quit
+            END
+         END
          GOTO Quit
       END
    END -- Ext scn sp <> ''
 
    Step_99_Fail:
       GOTO Quit
+
 END
 GOTO Quit
 /********************************************************************************
@@ -6673,6 +7077,9 @@ BEGIN
       V_String45     = @cSKUDataCapture,
       V_String46     = @cExtScnSP,  
 
+      V_String47     = @cLOCCheckDigitSP, -- FCR-10366
+      V_String48     = @cShowLocOn04, -- FCR-10366
+
       I_Field01 = '',  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = '',  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
       I_Field03 = '',  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
@@ -6691,6 +7098,14 @@ BEGIN
 
    WHERE Mobile = @nMobile
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON RDT.rdtfnc_PickPiece TO NSQL
 GO
 
 

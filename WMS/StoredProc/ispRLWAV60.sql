@@ -23,6 +23,7 @@ GO
 /* Date         Author   Ver.  Purposes                                  */  
 /* 19-MAY-2023  NJOW     1.0   DevOps Combine Script                     */
 /* 22-AUG-2023  NJOW01   1.1   WMS-23496 Change pickmethod to PP         */
+/* 10-Oct-2025  SSA01    1.2  UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV60]      
@@ -157,10 +158,10 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV60]
          [PickMethod] [NVARCHAR](1) NOT NULL DEFAULT (' '),
          [WaveKey] [NVARCHAR](10) NOT NULL DEFAULT (' '),
          [EffectiveDate] [datetime] NOT NULL DEFAULT (GETDATE()),
-         [AddDate] [datetime] NOT NULL DEFAULT (GETDATE()),
-         [AddWho] [NVARCHAR](128) NOT NULL DEFAULT (SUSER_SNAME()),
-         [EditDate] [datetime] NOT NULL DEFAULT (GETDATE()),
-         [EditWho] [NVARCHAR](128) NOT NULL DEFAULT (SUSER_SNAME()),
+         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),  --(SSA01)
+         [AddWho] [NVARCHAR](128) NOT NULL DEFAULT (suser_sname()),            --(SSA01)
+         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),  --(SSA01)
+         [EditWho] [NVARCHAR](128) NOT NULL DEFAULT (suser_sname()),           --(SSA01)
          [TrafficCop] [NVARCHAR](1) NULL,
          [ArchiveCop] [NVARCHAR](1) NULL,
          [OptimizeCop] [NVARCHAR](1) NULL,
@@ -443,8 +444,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV60]
       UPDATE WAVE 
       SET TMReleaseFlag = 'Y'     
        ,  TrafficCop = NULL       
-       ,  EditWho = SUSER_SNAME() 
-       ,  EditDate= GETDATE()     
+       ,  EditWho = dbo.fnc_GetUserName()              --(SSA01)
+       ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
       WHERE WAVEKEY = @c_wavekey  
 
       SELECT @n_err = @@ERROR  

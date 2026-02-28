@@ -11,6 +11,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 2022-07-18   1.0  YeeKung    WMS-20061 Created (yeekung01)                 */
 /* 2023-09-12   1.1  YeeKung    TPS-773/TPS-740 New print (yeekung3)          */
+/* 2024-11-06   1.2  YeeKung    TPS-989 Add Facility (yeekung03)              */
 /******************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPS_ExtPrint02] (
@@ -57,10 +58,8 @@ DECLARE
    @cCube            NVARCHAR(10),
    @cLottableVal     NVARCHAR(20),
    @cSerialNoKey     NVARCHAR(60),
-   @cErrMsg          NVARCHAR(128),
    @nQty             INT,
    @bsuccess         INT,
-   @nErrNo           INT,
    @nTranCount       INT
 
 DECLARE @CloseCtnList TABLE (
@@ -104,7 +103,6 @@ DECLARE @cConsignee     NVARCHAR(15)
 DECLARE @cReportType    nvarchar(20)
 DECLARE @cLabelPrinter  NVARCHAR ( 30)
 DECLARE @cPaperPrinter  NVARCHAR ( 30)
-DECLARE @nJobID         INT
 DECLARE @nRC            INT
 DECLARE @cSQL           NVARCHAR ( MAX)
 DECLARE @cSQLParam      NVARCHAR ( MAX)
@@ -155,8 +153,8 @@ BEGIN
          IF ISNULL(@cLabelPrinter,'') = ''
          BEGIN
             SET @b_Success = 0
-            SET @n_Err = 175743
-            SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_TPS_ExtPrint02'
+            SET @n_Err = 1002301
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_TPS_ExtPrint02'
             GOTO Quit
          END
          ELSE
@@ -170,17 +168,6 @@ BEGIN
             ELSE
                SET @cReportType='UCCLABEL02'
 
-            --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-            --   @cReportType, -- Report type
-            --   @tShipLabel, -- Report params
-            --   'API.isp_TPS_ExtPrint02', --source Type
-            --   @n_Err      OUTPUT,
-            --   @c_ErrMsg   OUTPUT,
-            --   '1', --noOfCopy
-            --   '', --@cPrintCommand
-            --   @nJobID     OUTPUT,
-            --   @cUsername
-
             
             SELECT @c_ReportID = WMR.reportid,
                      @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END
@@ -189,6 +176,7 @@ BEGIN
             WHERE Storerkey = @cStorerkey
                AND reporttype = @cReportType
                AND ModuleID ='TPPack'
+               AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
 
             EXEC  [WM].[lsp_WM_Print_Report]
                @c_ModuleID = @c_ModuleID           
@@ -211,7 +199,6 @@ BEGIN
             , @c_JobIDs      = @cLabelJobID         OUTPUT    
             , @c_AutoPrint  = 'N'     
 
-            set @cLabelJobID = @nJobID
          END
 		END
 		IF @cPrintPackList = 'Y'
@@ -224,8 +211,8 @@ BEGIN
             IF ISNULL(@cPaperPrinter,'') = ''
             BEGIN
                SET @b_Success = 0
-               SET @n_Err = 175744
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_TPS_ExtPrint02'
+               SET @n_Err = 1002302
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_TPS_ExtPrint02'
                GOTO Quit
             END
             ELSE
@@ -238,6 +225,7 @@ BEGIN
                   AND reporttype = 'TPPACKLIST'
                   AND ModuleID ='TPPack'
                   AND ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation
+                  AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
 
                EXEC  [WM].[lsp_WM_Print_Report]
                   @c_ModuleID = @c_ModuleID           
@@ -260,7 +248,6 @@ BEGIN
                , @c_JobIDs      = @cLabelJobID         OUTPUT    
                , @c_AutoPrint  = 'N'     
 
-               set @cLabelJobID = @nJobID
             END
          END
       END

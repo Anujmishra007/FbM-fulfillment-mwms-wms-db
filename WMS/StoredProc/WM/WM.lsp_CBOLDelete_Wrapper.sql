@@ -18,6 +18,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
+/* 2025-09-02  SWT01    1.1   Enhanced session management and cleanup.    */
 /***************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_CBOLDelete_Wrapper] 
 	   @n_Cbolkey                 BIGINT = 0
@@ -37,6 +38,7 @@ BEGIN
 
    DECLARE @n_Continue                 INT = 1
          , @n_StartTCnt                INT = @@TRANCOUNT
+         , @b_ExecuteAs                BIT = 0
          , @c_TableName                NVARCHAR(50)   = 'MBOL'
          , @c_SourceType               NVARCHAR(50)   = 'lsp_CBOLDelete_Wrapper'
          , @c_Refkey1                  NVARCHAR(20)   = ''                   
@@ -68,14 +70,17 @@ BEGIN
    SET @n_Err = 0
    IF SUSER_SNAME() <> @c_UserName      
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
       IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+      BEGIN
+         EXECUTE AS LOGIN = @c_UserName
+      END
    END                                   
 
    DECLARE
@@ -296,7 +301,10 @@ BEGIN
       BEGIN TRAN
    END
    
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_CBOLDelete_Wrapper] TO [nSQL]

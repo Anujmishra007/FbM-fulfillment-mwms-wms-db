@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_DuplicateReceiptLine]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [WM].[lsp_DuplicateReceiptLine]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -35,8 +30,13 @@ GO
 /*                            original line will change to 0 after using*/
 /*                            Duplicate Line' in ASNReceipt module      */
 /* 30-Nov-2021 Wan03    1.4   DevOps Combine Script                     */
+/* 2024-01-12  Wan04    1.5   LFWM-4606 - PROD & UAT - TW DGE - SCE ASN */
+/*                            Duplicate Line QtyExpected Issue          */
+/* 2025-05-26  SWT01    1.6   Setting Session Context for user name     */
+/* 10-Oct-2025 AK01     1.7   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
-CREATE PROCEDURE [WM].[lsp_DuplicateReceiptLine]
+CREATE OR ALTER PROCEDURE [WM].[lsp_DuplicateReceiptLine]
     @c_ReceiptKey             NVARCHAR(10)
    ,@c_OriginalLineNumber     NVARCHAR(5)
    ,@c_NewLineNumber          NVARCHAR(5) OUTPUT
@@ -70,17 +70,26 @@ BEGIN
 
    SET @n_Err = 0
 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
 
-      IF @n_Err <> 0
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
+      IF @n_Err <> 0 
       BEGIN
-      GOTO EXIT_SP
+         GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   --(Wan01) - END
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT01) - END
 
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
       SELECT @n_QtyExpected = RD.QtyExpected
@@ -182,8 +191,8 @@ BEGIN
             UPDATE RECEIPTDETAIL
                SET QtyExpected = @n_BeforeReceivedQty                         --(Wan03)--CASE WHEN BeforeReceivedQty > 0 THEN BeforeReceivedQty ELSE 0 END 
                   --,TrafficCop =  NULL                                       --(ZG01)
-                  , EditWho  = SUSER_SNAME()
-                  , EditDate = GETDATE()
+                  , EditWho  = dbo.fnc_GetUserName()
+                  , EditDate = dbo.fnc_GetDate()
             WHERE ReceiptKey = @c_ReceiptKey
             AND   ReceiptLineNumber = @c_OriginalLineNumber
          END                                    --(Wan03) - END
@@ -220,7 +229,8 @@ BEGIN
          Lottable07,          Lottable08,             Lottable09,
          Lottable10,          Lottable11,             Lottable12,
          Lottable13,          Lottable14,             Lottable15,
-         AddWho,              EditWho
+         AddWho,              EditWho,                Notes,
+         Notes2
          )
          SELECT
          @c_ReceiptKey,       @c_NewLineNumber,      ExternReceiptKey,
@@ -238,7 +248,7 @@ BEGIN
          GrossWgt,            NetWgt,                 OtherUnit1,
          OtherUnit2,          UnitPrice,              ExtendedPrice,
          TariffKey,           FreeGoodQtyExpected,    FreeGoodQtyReceived,
-         SubReasonCode='',    FinalizeFlag='N',       DuplicateFrom='',
+         SubReasonCode='',    FinalizeFlag='N',       @c_OriginalLineNumber,        --(Wan04) fixed issue Duplicatefrom is empty value           
          BeforeReceivedQty=0, PutawayLoc='',          ExportStatus,
          SplitPalletFlag,     POLineNumber,           LoadKey='',
          ExternPoKey,         UserDefine01,           UserDefine02,
@@ -248,7 +258,8 @@ BEGIN
          Lottable07,          Lottable08,             Lottable09,
          Lottable10,          Lottable11,             Lottable12,
          Lottable13,          Lottable14,             Lottable15,
-         @c_UserName,         @c_UserName
+         @c_UserName,         @c_UserName,            Notes,
+         Notes2
          FROM RECEIPTDETAIL AS r WITH(NOLOCK)
          WHERE r.ReceiptKey = @c_ReceiptKey
          AND   r.ReceiptLineNumber = @c_OriginalLineNumber
@@ -274,7 +285,10 @@ BEGIN
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
 
    EXIT_SP:
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_DuplicateReceiptLine] TO nSQL

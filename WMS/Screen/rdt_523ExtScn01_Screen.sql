@@ -1,0 +1,56 @@
+ 
+   
+-- 6820 = QTY
+DELETE rdt.RDTScn WHERE Scn = 6820 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6820, 'ENG'
+   ,@cLine01 = 'SKU:'
+   ,@cLine02 = '%20d01'
+   ,@cLine03 = '%20d02'
+   ,@cLine04 = '%20d03'
+   ,@cLine05 = 'LOTTABLES:     %20d09'
+   ,@cLine06 = '1 %20d04'
+   ,@cLine07 = '2 %20d05'
+   ,@cLine08 = '3 %20d06'
+   ,@cLine09 = '4 %20d07'
+   ,@cLine10 = '%20d15'
+   ,@cLine11 = '%20d08' 
+   ,@cLine12 = N'QTY PWY: %06d11 %06d12' 
+   ,@cLine13 = N'QTY ACT: %06i13^DT:INT %06i14^DT:INT'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6","7","8","9"],"3":["10","11","12"],"4":["13"]}'
+   ,@nFunc = 523
+
+--6821 = Qty Confirm   
+DELETE rdt.RDTScn WHERE Scn = 6821 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6821, 'ENG'
+   ,@cLine01 = 'INPUT QTY > PREALLOC QTY'
+   ,@cLine02 = 'Do you want to continue'
+   ,@cLine03 = 'the move?'
+   ,@cLine04 = ''
+   ,@cLine05 = '1 = YES'
+   ,@cLine06 = '2 = NO'
+   ,@cLine07 = ''
+   ,@cLine08 = 'OPTION: %01i01'
+   ,@cLine09 = ''
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["5","6"],"3":["8"]}'
+   ,@nFunc = 523
+
+-- 6822 = loc confirm screen
+DELETE rdt.RDTScn WHERE Scn = 6822 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6822, 'ENG'
+   ,@cLine01 = 'LOC NOT MATCH'
+   ,@cLine02 = 'PROCEED?'
+   ,@cLine03 = ''
+   ,@cLine04 = 'SUGGESTED LOC:'
+   ,@cLine05 = '%20d02'
+   ,@cLine06 = ''
+   ,@cLine07 = 'SCANNED LOC:'
+   ,@cLine08 = '%20d03'
+   ,@cLine09 = ''
+   ,@cLine10 = '1 = YES'
+   ,@cLine11 = '2 = NO'
+   ,@cLine12 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["4","5","6","7","8"],"3":["9","10","11","12"]}'
+   ,@nFunc = 523

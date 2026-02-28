@@ -25,6 +25,7 @@ GO
 /* 2022-04-21  Wan02    1.0   LFWM-3485 - [CN] UAT Carters -Wave Control*/
 /*                            - Allocation issue                        */
 /* 2022-06-01  LZG      1.1   Remove BEGIN TRAN to reduce blocking(ZG01)*/
+/* 2025-05-26  SWT01    1.2   Setting Session Context for user name     */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_AllocationProcessing_Wrapper]
       @c_AllocCmd             NVARCHAR(4000) = ''
@@ -49,20 +50,26 @@ BEGIN
 
    SET @n_Err = 0
 
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser]
+   BEGIN 
+
+      EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-
-      IF @n_Err <> 0
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
+      IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SWT01) - END  
 
    --BEGIN TRAN      -- ZG01
 
@@ -114,7 +121,10 @@ EXIT_SP:
       BEGIN TRAN
    END
 
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_AllocationProcessing_Wrapper] TO nSQL

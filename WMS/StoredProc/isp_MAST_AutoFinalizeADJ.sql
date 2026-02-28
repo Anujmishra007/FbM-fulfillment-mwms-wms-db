@@ -22,6 +22,8 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 02-Jun-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 10-OCT-2025  SSA01   1.1   UWP-42248 -Enhanced session management       */
+/*                             and cleanup.                                */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[isp_MAST_AutoFinalizeADJ]    
 (
@@ -118,8 +120,8 @@ BEGIN
             UPDATE ADJUSTMENT WITH (ROWLOCK)
             SET FinalizedFlag = 'Y',
                 TrafficCop = NULL,
-                EditWho    = SUSER_SNAME(),
-                EditDate   = GETDATE()
+                EditWho    = dbo.fnc_GetUserName(),        --(SSA01)
+                EditDate   = dbo.fnc_GetDate()   --(SSA01)
             WHERE AdjustmentKey = @c_GetADJkey
          
             IF @n_err <> 0  
@@ -184,8 +186,8 @@ QUIT_SP:
             UPDATE dbo.ADJUSTMENT
             SET UserDefine10 = 'HOLD',
                 TrafficCop = NULL,
-                EditWho    = SUSER_SNAME(),
-                EditDate   = GETDATE()
+                EditWho    = dbo.fnc_GetUserName(),     --(SSA01)
+                EditDate   = dbo.fnc_GetDate()   --(SSA01)
             WHERE AdjustmentKey = @c_GetADJkey
          END
                                             
@@ -218,8 +220,8 @@ QUIT_SP:
             UPDATE dbo.ADJUSTMENT
             SET UserDefine10 = 'EMAIL FAILED',
                 TrafficCop = NULL,
-                EditWho    = SUSER_SNAME(),
-                EditDate   = GETDATE()
+                EditWho    = dbo.fnc_GetUserName(),    --(SSA01)
+                EditDate   = dbo.fnc_GetDate()   --(SSA01)
             WHERE AdjustmentKey = @c_GetADJkey
          END  
       END

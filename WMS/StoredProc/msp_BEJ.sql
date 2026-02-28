@@ -20,6 +20,11 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-10-08  Wan      1.0   Created.                                  */
+/* 2025-05-09  Wan01    1.1   FCR-3958 - JCB Picking Task               */
+/*                            Fix Error add default debug parameter at  */
+/*                            Sub SP                                    */
+/* 2025-07-25  AK01     1.2   FCR-6532 - Add support for time-based job */
+/*                            scheduling using Notes2 config            */
 /************************************************************************/
 CREATE OR ALTER PROC msp_BEJ
    @c_jobname   NVARCHAR(30) = 'BEJ-STD-01'
@@ -40,6 +45,14 @@ BEGIN
          , @c_Facility        NVARCHAR(30)   = ''
          , @c_StoredProc      NVARCHAR(100)  = ''
          , @c_OtherConfig     NVARCHAR(4000) = ''
+         
+         --AK01 START
+         , @dt_LastRunDTime   NVARCHAR(30)   = ''
+         , @c_JobSchedConfig  NVARCHAR(4000) = ''
+         , @c_IntervalType    NVARCHAR(50)   = ''
+         , @t_OccurAt         TIME           = ''
+         --AK01 END
+
          , @c_SQL             NVARCHAR(500)  = ''
          , @c_PName           NVARCHAR(30)   = '' 
 
@@ -75,7 +88,8 @@ BEGIN
          ,UDF01 = IIF(ISNUMERIC(cl.UDF01)=0,'9',cl.UDF01) 
          ,UDF02
          ,UDF03 = IIF(ISNUMERIC(cl.UDF03)=0,60,cl.UDF03)
-         ,UDF04 = CONVERT(NVARCHAR(25),IIF(ISDATE(cl.UDF04)=0,DATEADD(ss,-1*cl.UDF03,GETDATE()),cl.UDF04),121)
+         --,UDF04 = CONVERT(NVARCHAR(25),IIF(ISDATE(cl.UDF04)=0,DATEADD(ss,-1*cl.UDF03,GETDATE()),cl.UDF04),121)
+         ,UDF04 = CONVERT(NVARCHAR(25),IIF(ISDATE(cl.UDF04)=0, DATEADD(MONTH, -1 ,GETDATE()),cl.UDF04),121)       
          ,UDF05
          ,Notes = ISNULL(cl.Notes,''), Notes2 = ISNULL(cl.Notes2,'')
    FROM   CODELKUP cl WITH (NOLOCK)
@@ -90,6 +104,8 @@ BEGIN
          ,cl.Storerkey
          ,cl.code2
          ,cl.Notes
+         ,CONVERT(DATETIME, cl.UDF04)     --AK01
+         ,ISNULL(RTRIM(cl.Notes2), '')    --AK01
    FROM   #TMP_BEJCL cl
    WHERE  cl.ListName = 'BEJ'
    AND    cl.Code     = @c_Jobname
@@ -104,7 +120,9 @@ BEGIN
    
    FETCH NEXT FROM @CUR_JOB INTO @c_Code, @c_StoredProc
                               ,  @c_Storerkey, @c_Facility
-                              ,  @c_OtherConfig                              
+                              ,  @c_OtherConfig
+                              ,  @dt_LastRunDTime                       --AK01   
+                              ,  @c_JobSchedConfig                      --AK01                   
    WHILE @@FETCH_STATUS <> -1
    BEGIN 
       IF NOT EXISTS (SELECT 1 FROM sys.objects (NOLOCK) 
@@ -114,41 +132,75 @@ BEGIN
          GOTO NEXT_JOB
       END
 
-      BEGIN TRY
-        SET @c_SQL = 'EXEC '  + @c_StoredProc
+      --AK01 START
+      IF @c_JobSchedConfig <> ''
+      BEGIN
+         SET @c_IntervalType = dbo.fnc_GetParamValueFromString('@IntervalType', @c_JobSchedConfig, '')
 
-         SET @CUR_PARMS = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-         SELECT PARAMETER_NAME   
-         FROM [INFORMATION_SCHEMA].[PARAMETERS]     
-         WHERE SPECIFIC_NAME = @c_StoredProc     
-         ORDER BY ORDINAL_POSITION    
-    
-         OPEN @CUR_PARMS    
-         FETCH NEXT FROM @CUR_PARMS INTO @c_PName 
-         WHILE @@FETCH_STATUS <> -1    
-         BEGIN 
-            IF @c_SQL <> 'EXEC ' + @c_StoredProc 
+         IF @c_IntervalType = 'SpecificTime'
+         BEGIN
+            SET @t_OccurAt = TRY_CAST(dbo.fnc_GetParamValueFromString('@OccurAt', @c_JobSchedConfig, '') AS TIME)
+            IF @t_OccurAt IS NOT NULL
             BEGIN
-               SET @c_SQL = @c_SQL + ','
+               IF NOT (CONVERT(TIME, GETDATE()) >= @t_OccurAt
+                  AND CAST(@dt_LastRunDTime AS DATE) < CAST(GETDATE() AS DATE))
+               BEGIN
+                  GOTO NEXT_JOB
+               END
             END
-
-
-            SET @c_SQL = @c_SQL + ' '      
-                       + CASE WHEN @c_PName IN ('@c_Facility', '@c_StorerKey', '@c_OtherConfig')   
-                              THEN @c_PName + '=' + @c_PName    
-                              END
-            FETCH NEXT FROM @CUR_PARMS INTO @c_PName                              
          END
-         CLOSE @CUR_PARMS
-         DEALLOCATE @CUR_PARMS
 
-         EXEC sp_ExecuteSQL @c_SQL
-                           ,N'@c_Storerkey   NVARCHAR(15)
-                             ,@c_Facility    NVARCHAR(30)
-                             ,@c_OtherConfig NVARCHAR(4000)'
-                           ,@c_Storerkey
-                           ,@c_Facility
-                           ,@c_OtherConfig    
+         -- Future development notes:
+         -- For @IntervalType=SpecificDay: Run if today matches one of the days listed in @Days (e.g., Mon,Wed,Fri).
+         -- For @IntervalType=TimeRange, Run if current time is within @StartTime and @EndTime, and last run time (@UDF04) exceeds the defined interval (@UDF03).
+      END
+      --AK01 END
+
+      BEGIN TRY
+        --SET @c_SQL = 'EXEC '  + @c_StoredProc                                     --(Wan01) - START
+
+        -- SET @CUR_PARMS = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
+        -- SELECT PARAMETER_NAME   
+        -- FROM [INFORMATION_SCHEMA].[PARAMETERS]     
+        -- WHERE SPECIFIC_NAME = @c_StoredProc     
+        -- ORDER BY ORDINAL_POSITION    
+    
+        -- OPEN @CUR_PARMS    
+        -- FETCH NEXT FROM @CUR_PARMS INTO @c_PName 
+        -- WHILE @@FETCH_STATUS <> -1    
+        -- BEGIN 
+        --    IF @c_SQL <> 'EXEC ' + @c_StoredProc 
+        --    BEGIN
+        --       SET @c_SQL = @c_SQL + ','
+        --    END
+
+        --    SET @c_SQL = @c_SQL + ' '      
+        --               + CASE WHEN @c_PName IN ('@c_Facility', '@c_StorerKey', '@c_OtherConfig')   
+        --                      THEN @c_PName + '=' + @c_PName    
+        --                      END
+        --    FETCH NEXT FROM @CUR_PARMS INTO @c_PName                              
+        -- END
+        -- CLOSE @CUR_PARMS
+        -- DEALLOCATE @CUR_PARMS
+
+         SELECT @c_SQL = STRING_AGG (p.PARAMETER_NAME  + '=' + p.PARAMETER_NAME,',')
+         WITHIN GROUP (ORDER BY p.ORDINAL_POSITION ASC)
+         FROM [INFORMATION_SCHEMA].[PARAMETERS] p  
+         WHERE p.SPECIFIC_NAME = @c_StoredProc  
+         AND p.PARAMETER_NAME IN ('@c_Facility', '@c_StorerKey', '@c_OtherConfig')
+
+         IF @c_SQL IS NOT NULL
+         BEGIN
+            SET @c_SQL = 'EXEC '  + @c_StoredProc + ' ' + @c_SQL
+
+            EXEC sp_ExecuteSQL @c_SQL
+                              ,N'@c_Storerkey   NVARCHAR(15)
+                              ,@c_Facility    NVARCHAR(30)
+                              ,@c_OtherConfig NVARCHAR(4000)'
+                              ,@c_Storerkey
+                              ,@c_Facility
+                              ,@c_OtherConfig  
+         END                                                                        --(Wan01) - END                
       END TRY
       BEGIN CATCH
          SET @n_Continue = 3
@@ -176,6 +228,8 @@ BEGIN
       FETCH NEXT FROM @CUR_JOB INTO @c_Code, @c_StoredProc
                                  ,  @c_Storerkey, @c_Facility
                                  ,  @c_OtherConfig
+                                 ,  @dt_LastRunDTime                       --AK01 
+                                 ,  @c_JobSchedConfig                      --AK01   
    END
    CLOSE @CUR_JOB
    DEALLOCATE @CUR_JOB  

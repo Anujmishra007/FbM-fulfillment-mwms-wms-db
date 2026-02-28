@@ -52,4 +52,8 @@ execute rdt.rdtAddMsg 100248, 10, '100248Invalid SN    ', 'us_english', 838, 0, 
 execute rdt.rdtAddMsg 100249, 10, '100249SN Not Packed ', 'us_english', 838, 0, '100249Serial number cannot Be packed'
 execute rdt.rdtAddMsg 100250, 10, '100250Serial Confirm', 'us_english', 838
 
+--UWP-43907
+execute rdt.rdtAddMsg 100251, 10, '100251Need ToDropID ', 'us_english', 838
+execute rdt.rdtAddMsg 100252, 10, '100252Bad ToDropID  ', 'us_english', 838
+
 SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID BETWEEN 100201 and 100250 AND lang_code = 'ENG'

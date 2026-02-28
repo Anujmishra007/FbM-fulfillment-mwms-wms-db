@@ -28,6 +28,7 @@ GO
 /*                          (WL01)                                      */
 /* 21/01/2022  NJOW02  1.3  WMS-18786 Change sorting                    */
 /* 21/01/2022  NJOW02  1.3  DEVOPS combine script                       */
+/* 20-Nov-2024 WLChooi 1.4  WMS-26556-Support Multi Facilities(WL02)    */
 /************************************************************************/
 CREATE OR ALTER PROC nspPR_SG07 (
    @c_storerkey NVARCHAR(15) ,
@@ -149,6 +150,7 @@ BEGIN
       JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID) 
       JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
       JOIN LOTATTRIBUTE (NOLOCK) ON LOT.Lot = LOTATTRIBUTE.Lot
+      JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility   --WL02
       OUTER APPLY (SELECT TOP 1 PD.ID FROM PICKDETAIL PD (NOLOCK)  --Get pallet allready allocated by current order
                    WHERE PD.Id = LOTxLOCxID.ID
                    AND PD.Storerkey = LOTxLOCxID.Storerkey
@@ -170,7 +172,7 @@ BEGIN
       AND LOC.Locationflag <> 'HOLD'
       AND LOC.Locationflag <> 'DAMAGE'
       AND LOC.Status <> 'HOLD'
-      AND LOC.Facility = @c_Facility
+      --AND LOC.Facility = @c_Facility   --WL02
       AND ID.STATUS <> 'HOLD'
       AND LOT.STATUS <> 'HOLD' 
       AND LOTxLOCxID.ID <> ''
@@ -441,9 +443,9 @@ BEGIN
    
 	 --NJOW01
 	 IF @c_Storerkey = 'PRSG'
-	    SET @c_SortBy = 'ORDER BY CASE WHEN ISNULL(MIN(LOTATTRIBUTE.Lottable08),'''') <> '''' THEN 1 ELSE 2 END, MIN(LOTATTRIBUTE.Lottable08), MIN(LOTATTRIBUTE.Lottable05), QTYAVAILABLE, MIN(LOTATTRIBUTE.Lot)'  --NJOW02
+	    SET @c_SortBy = 'ORDER BY F.FacSort, CASE WHEN ISNULL(MIN(LOTATTRIBUTE.Lottable08),'''') <> '''' THEN 1 ELSE 2 END, MIN(LOTATTRIBUTE.Lottable08), MIN(LOTATTRIBUTE.Lottable05), QTYAVAILABLE, MIN(LOTATTRIBUTE.Lot)'  --NJOW02   --WL02
 	 ELSE
-	    SET @c_SortBy = 'ORDER BY MIN(LOTATTRIBUTE.Lottable05), QTYAVAILABLE, MIN(LOTATTRIBUTE.Lot)'  --NJOW02
+	    SET @c_SortBy = 'ORDER BY F.FacSort, MIN(LOTATTRIBUTE.Lottable05), QTYAVAILABLE, MIN(LOTATTRIBUTE.Lot)'  --NJOW02   --WL02
 	          	 
 	 IF @c_CaseNoMixLot26 = 'Y'
 	 BEGIN	 	     	 	  
@@ -455,14 +457,16 @@ BEGIN
             " JOIN LOTxLOCxID (NOLOCK) ON (LOTxLOCxID.LOT = LOT.LOT AND LOTxLOCxID.LOT = LOTATTRIBUTE.LOT) " +    
             " JOIN LOC (NOLOCK) ON (LOTxLOCxID.LOC = LOC.LOC) " +    
             " JOIN ID (NOLOCK) ON (LOTxLOCxID.ID = ID.ID) " +        
+            " JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility " +   --WL02
             " LEFT OUTER JOIN (SELECT LA.Lottable02, LA.Lottable06, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) " +    
             "                FROM   PreallocatePickdetail P (NOLOCK) " +
             "                JOIN   LOTATTRIBUTE LA (NOLOCK) ON P.Lot = LA.Lot " +
             "                JOIN   ORDERS (NOLOCK) ON P.Orderkey = ORDERS.Orderkey " +  
-            "                JOIN   ORDERDETAIL (NOLOCK) ON ORDERS.Orderkey = ORDERDETAIL.Orderkey AND P.OrderLineNumber = ORDERDETAIL.OrderLineNumber " +  
+            "                JOIN   ORDERDETAIL (NOLOCK) ON ORDERS.Orderkey = ORDERDETAIL.Orderkey AND P.OrderLineNumber = ORDERDETAIL.OrderLineNumber " +
+            "                JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON ORDERS.Facility = F.Facility " +   --WL02
             "                WHERE  P.Storerkey = @c_storerkey " +     
             "                AND    P.SKU = @c_SKU " +
-            "                AND    ORDERS.FACILITY = @c_facility " +   
+            --"              AND    ORDERS.FACILITY = @c_facility " +   --WL02   
             "                AND    P.qty > 0 " +    
             "                GROUP BY LA.Lottable02, LA.Lottable06, ORDERS.Facility) P ON LOTATTRIBUTE.Lottable02 = P.Lottable02 AND LOTATTRIBUTE.Lottable06 = P.Lottable06 AND P.Facility = LOC.Facility " +   
             " WHERE LOT.STORERKEY = @c_storerkey " +   
@@ -470,9 +474,9 @@ BEGIN
             " AND LOT.STATUS = 'OK'  " +   
             " AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK' " +     
             " AND LOC.LocationFlag = 'NONE' " +  
-            " AND LOC.Facility = @c_facility "  +
+            --" AND LOC.Facility = @c_facility "  +   --WL02
             ISNULL(RTRIM(@c_Condition),'')  + 
-            " GROUP By LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable06 " +
+            " GROUP By LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable06, F.FacSort " +   --WL02
             " HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) >= @n_Casecnt " +
             @c_SortBy --NJOW01
 		        --" ORDER BY MIN(LOTATTRIBUTE.Lottable05), MIN(LOTATTRIBUTE.Lot) " 		     
@@ -503,13 +507,15 @@ BEGIN
                " JOIN LOTxLOCxID (NOLOCK) ON (LOTxLOCxID.LOT = LOT.LOT AND LOTxLOCxID.LOT = LOTATTRIBUTE.LOT) " +    
                " JOIN LOC (NOLOCK) ON (LOTxLOCxID.LOC = LOC.LOC) " +    
                " JOIN ID (NOLOCK) ON (LOTxLOCxID.ID = ID.ID) " +        
+               " JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility " +   --WL02
                " LEFT OUTER JOIN (SELECT P.lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) " +    
                "                FROM   PreallocatePickdetail P (NOLOCK) " +
                "                JOIN   ORDERS (NOLOCK) ON P.Orderkey = ORDERS.Orderkey " +  
                "                JOIN   ORDERDETAIL (NOLOCK) ON ORDERS.Orderkey = ORDERDETAIL.Orderkey AND P.OrderLineNumber = ORDERDETAIL.OrderLineNumber " +  
+               "                JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON ORDERS.Facility = F.Facility " +   --WL02
                "                WHERE  P.Storerkey = @c_storerkey " +     
                "                AND    P.SKU = @c_SKU " +
-               "                AND    ORDERS.FACILITY = @c_facility " +   
+               --"                AND    ORDERS.FACILITY = @c_facility " +   --WL02   
                "                AND    P.qty > 0 " +    
                "                GROUP BY p.Lot, ORDERS.Facility) P ON LOTxLOCxID.Lot = P.Lot AND P.Facility = LOC.Facility " +   
                " WHERE LOT.STORERKEY = @c_storerkey " +   
@@ -517,14 +523,14 @@ BEGIN
                " AND LOT.STATUS = 'OK'  " +   
                " AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK' " +     
                " AND LOC.LocationFlag = 'NONE' " +  
-               " AND LOC.Facility = @c_facility "  +
+               --" AND LOC.Facility = @c_facility "  +   --WL02
                " AND LOTATTRIBUTE.Lottable02 = @c_lottable02 "  +
                " AND LOTATTRIBUTE.Lottable06 = @c_lottable06 "  +
                CASE WHEN @c_PRFULLCS = 'Y' THEN  --NJOW02
                   " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED >= @n_Casecnt "
                ELSE " " END +                            
                ISNULL(RTRIM(@c_Condition),'')  + 
-               " GROUP By LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable04, LOTATTRIBUTE.Lottable08 " +
+               " GROUP By LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable04, LOTATTRIBUTE.Lottable08, F.FacSort " +   --WL02
                --" GROUP By LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable04, LOTxLOCxID.LOC, LOTxLOCxID.QTY " +
                " HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) > 0 " +
                @c_SortBy --NJOW01
@@ -631,7 +637,7 @@ BEGIN
 	    END   
       
    	  IF @c_Storerkey = 'PRHK'
-	       SET @c_SortBy = 'ORDER BY CASE WHEN TI.ID IS NOT NULL THEN TI.Seq ELSE ''3'' END, CASE WHEN TI.ID IS NOT NULL THEN CONVERT(NVARCHAR, TI.Lottable05,112) ELSE ''ZZZZZZZZZZ'' END, LOTATTRIBUTE.Lottable05, QTYAVAILABLE, LOT.Lot'   --NJOW02
+	       SET @c_SortBy = 'ORDER BY F.FacSort, CASE WHEN TI.ID IS NOT NULL THEN TI.Seq ELSE ''3'' END, CASE WHEN TI.ID IS NOT NULL THEN CONVERT(NVARCHAR, TI.Lottable05,112) ELSE ''ZZZZZZZZZZ'' END, LOTATTRIBUTE.Lottable05, QTYAVAILABLE, LOT.Lot'   --NJOW02   --WL02
       
       SELECT @c_SQLStatement = " DECLARE CURSOR_AVAILABLELOT CURSOR FAST_FORWARD READ_ONLY FOR " +
             " SELECT LOT.LOT, " +
@@ -645,14 +651,16 @@ BEGIN
             " JOIN LOTxLOCxID (NOLOCK) ON (LOTxLOCxID.LOT = LOT.LOT AND LOTxLOCxID.LOT = LOTATTRIBUTE.LOT) " +    
             " JOIN LOC (NOLOCK) ON (LOTxLOCxID.LOC = LOC.LOC) " +    
             " JOIN ID (NOLOCK) ON (LOTxLOCxID.ID = ID.ID) " +        
+            " JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility " +   --WL02
             " LEFT OUTER JOIN #TMP_ID TI ON LOTXLOCXID.ID = TI.ID " +
             " LEFT OUTER JOIN (SELECT P.lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) " +    
             "                FROM   PreallocatePickdetail P (NOLOCK) " +
             "                JOIN   ORDERS (NOLOCK) ON P.Orderkey = ORDERS.Orderkey " +  
             "                JOIN   ORDERDETAIL (NOLOCK) ON ORDERS.Orderkey = ORDERDETAIL.Orderkey AND P.OrderLineNumber = ORDERDETAIL.OrderLineNumber " +  
+            "                JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON ORDERS.Facility = F.Facility " +   --WL02
             "                WHERE  P.Storerkey = @c_storerkey " +     
             "                AND    P.SKU = @c_SKU " + 
-            "                AND    ORDERS.FACILITY = @c_facility " +   
+            --"                AND    ORDERS.FACILITY = @c_facility " +   --WL02   
             "                AND    P.qty > 0 " +    
             "                GROUP BY p.Lot, ORDERS.Facility) P ON LOTxLOCxID.Lot = P.Lot AND P.Facility = LOC.Facility " +   
             " WHERE LOT.STORERKEY = @c_storerkey " +   
@@ -660,12 +668,12 @@ BEGIN
             " AND LOT.STATUS = 'OK'  " +   
             " AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK' " +     
             " AND LOC.LocationFlag = 'NONE' " +  
-            " AND LOC.Facility = @c_facility "  +
+            --" AND LOC.Facility = @c_facility "  +   --WL02
              CASE WHEN @c_PRFULLCS = 'Y' THEN  --NJOW02
                 " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED >= @n_Casecnt "
              ELSE " " END +             
             ISNULL(RTRIM(@c_Condition),'')  + 
-            " GROUP By LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable04, CASE WHEN TI.ID IS NOT NULL THEN TI.Seq ELSE '3' END, CASE WHEN TI.ID IS NOT NULL THEN CONVERT(NVARCHAR, TI.Lottable05,112) ELSE 'ZZZZZZZZZZ' END " +
+            " GROUP By LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable04, CASE WHEN TI.ID IS NOT NULL THEN TI.Seq ELSE '3' END, CASE WHEN TI.ID IS NOT NULL THEN CONVERT(NVARCHAR, TI.Lottable05,112) ELSE 'ZZZZZZZZZZ' END, F.FacSort " +   --WL02
             " HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) >= @n_UOMBase "  +
             @c_SortBy --NJOW01                   
   
@@ -725,16 +733,5 @@ BEGIN
    END
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF
-GO
-
 GRANT EXECUTE on nspPR_SG07 to nSQL
-
 GO
-
-
-
-

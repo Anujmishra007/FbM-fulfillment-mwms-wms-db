@@ -1,30 +1,28 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_598RcvCfm01]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_598RcvCfm01]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_598RcvCfm01                                           */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Purpose: Receive across multiple ASN                                       */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2016-09-02 1.0  Ung        SOS375564 Created                               */
+/* 2025-07-14 1.1  YeeKung    FCR-5719  Add new params                        */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_598RcvCfm01 (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_598RcvCfm01] (
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
    @cStorerKey     NVARCHAR( 15),
    @cFacility      NVARCHAR( 5),
-   @cRefNo         NVARCHAR( 20), 
-   @cColumnName    NVARCHAR( 20), 
+   @cRefNo         NVARCHAR( 20),
+   @cColumnName    NVARCHAR( 20),
    @cToLOC         NVARCHAR( 10),
    @cToID          NVARCHAR( 18), -- Blank = receive to blank ToID
    @cSKUCode       NVARCHAR( 20), -- SKU code. Not SKU barcode
@@ -53,9 +51,13 @@ CREATE PROCEDURE rdt.rdt_598RcvCfm01 (
    @cConditionCode NVARCHAR( 10),
    @cSubreasonCode NVARCHAR( 10),
    @nErrNo         INT                    OUTPUT,
-   @cErrMsg        NVARCHAR( 20)          OUTPUT, 
+   @cErrMsg        NVARCHAR( 20)          OUTPUT,
    @cReceiptKeyOutput NVARCHAR( 10)       OUTPUT,
-   @cReceiptLineNumberOutput NVARCHAR( 5) OUTPUT, 
+   @cReceiptLineNumberOutput NVARCHAR( 5) OUTPUT,
+   @cSerialNo      NVARCHAR( 30) = '',     
+   @nSerialQTY     INT = 0,     
+   @nBulkSNO       INT = 0,     
+   @nBulkSNOQTY    INT = 0,  
    @cDebug         NVARCHAR( 1) = '0'
 ) AS
 
@@ -99,7 +101,7 @@ BEGIN
 
       -- Get receipt info
       SELECT @cExternReceiptKey = ExternReceiptKey FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey
-         
+
       EXEC rdt.rdt_Receive_V7
          @nFunc         = @nFunc,
          @nMobile       = @nMobile,
@@ -136,11 +138,11 @@ BEGIN
          @dLottable15   = @dLottable15,
          @nNOPOFlag     = 1,
          @cConditionCode = @cConditionCode,
-         @cSubreasonCode = '', 
+         @cSubreasonCode = '',
          @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT
       IF @nErrNo <> 0
          GOTO RollBackTran
-         
+
       SET @cReceiptKeyOutput = @cReceiptKey
       SET @nQTY_Bal = @nQTY_Bal - @nQTY
       IF @nQTY_Bal = 0
@@ -158,18 +160,12 @@ BEGIN
 END
 GOTO Quit
 
-RollBackTran:  
-   ROLLBACK TRAN rdt_598RcvCfm01 
-Fail:  
-Quit:  
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
-      COMMIT TRAN  
+RollBackTran:
+   ROLLBACK TRAN rdt_598RcvCfm01
+Fail:
+Quit:
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+      COMMIT TRAN
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXEC ON RDT.rdt_598RcvCfm01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_598RcvCfm01] TO [NSQL]
 GO

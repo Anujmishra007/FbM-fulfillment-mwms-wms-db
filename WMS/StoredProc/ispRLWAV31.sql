@@ -24,7 +24,8 @@ GO
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                             */
 /* 28-12-2020  NJOW01   1.2   WMS-15891 add logic cater for new brand       */
 /* 07-04-2021  NJOW02   1.3   Fix error control and transaction             */
-/* 10-11-2023  IVAN01   1.4   INC2195917 Bug Fix                            */  
+/* 10-11-2023  IVAN01   1.4   INC2195917 Bug Fix                            */
+/* 10-10-2025  SSA01    1.5   UWP-42248 -Enhanced session management        */
 /****************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV31]      
@@ -298,10 +299,10 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV31]
           [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
           [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
           [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),    --(SSA01)
+          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),     --(SSA01)
+          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),    --(SSA01)
+          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),    --(SSA01)
           [TrafficCop] [nvarchar](1) NULL,
           [ArchiveCop] [nvarchar](1) NULL,
           [OptimizeCop] [nvarchar](1) NULL,
@@ -817,7 +818,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV31]
             	    
                      INSERT INTO PACKDETAIL(PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)    
                      VALUES     (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,   
-                                 @n_QtyPack, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())            	
+                                 @n_QtyPack, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate())           --(SSA01)
                      
                      SET @n_err = @@ERROR
                      
@@ -883,8 +884,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV31]
           --SET STATUS = '1' -- Released        --(Wan01) 
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               --(Wan01) 
+           ,  EditWho = dbo.fnc_GetUserName()           --(Wan01)(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)            --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

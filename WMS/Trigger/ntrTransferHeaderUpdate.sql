@@ -1,4 +1,4 @@
-SET QUOTED_IDENTIFIER OFF
+﻿SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
@@ -59,6 +59,7 @@ GO
 /*                              TRFLOG transmitlog by config            */
 /* 01-Mar-2022  NJOW01    1.7   DEVOPS combine script                   */
 /* 07-Apr-2022  CLVN01    1.8   JSM-61467 Fix Missed Deployment         */
+/* 09-Oct-2025  SPC040    1.9   Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
 
 CREATE  OR ALTER TRIGGER ntrTransferHeaderUpdate
@@ -131,8 +132,8 @@ BEGIN
           AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE TRANSFER
-      SET EditDate = GETDATE(),
-      EditWho     = Suser_Sname(),
+      SET EditDate = dbo.fnc_GetDate(),
+      EditWho     = dbo.fnc_GetUserName(),
       TrafficCop  = NULL
       FROM TRANSFER, INSERTED, DELETED
       WHERE TRANSFER.TransferKey = INSERTED.TransferKey
@@ -174,8 +175,8 @@ BEGIN
 
             UPDATE TRANSFERDETAIL WITH (ROWLOCK)
             SET Trafficcop = NULL
-               ,EditDate   = GETDATE()
-               ,EditWho    = SUSER_NAME()
+               ,EditDate   = dbo.fnc_GetDate()
+               ,EditWho    = dbo.fnc_GetUserName()
                ,Status     = 'CANC'
             FROM INSERTED
             JOIN DELETED ON (INSERTED.TransferKey = DELETED.TransferKey)
@@ -316,8 +317,8 @@ BEGIN
       IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
       BEGIN
          UPDATE TRANSFER
-            SET EditDate = GETDATE(),
-                EditWho = SUSER_SNAME(),
+            SET EditDate = dbo.fnc_GetDate(),
+                EditWho = dbo.fnc_GetUserName(),
                 TrafficCop = NULL
            FROM TRANSFER WITH (NOLOCK),
                 INSERTED

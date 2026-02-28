@@ -1,16 +1,41 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrKitHeaderDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   drop trigger [dbo].[ntrKitHeaderDelete]
-GO
-
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
 
-/* 14-Jul-2011  KHLim02    1.2   GetRight for Delete log                */
-/* 22-May-2012  TLTING02 Data integrity - insert dellog 4 status < '9'  */
-
-CREATE TRIGGER [dbo].[ntrKitHeaderDelete]
+/*****************************************************************************/
+/* Trigger: ntrKitHeaderDelete                                               */
+/* Creation Date:                                                            */
+/* Copyright: MAERSK                                                         */
+/* Written by:                                                               */
+/*                                                                           */
+/* Purpose:  KIT Header DELETE Transaction                                   */
+/*                                                                           */
+/* Input Parameters:                                                         */
+/*                                                                           */
+/* Output Parameters:                                                        */
+/*                                                                           */
+/* Return Status:                                                            */
+/*                                                                           */
+/* Usage:                                                                    */
+/*                                                                           */
+/* Local Variables:                                                          */
+/*                                                                           */
+/* Called By: When insert new records                                        */
+/*                                                                           */
+/* Github Version: 1.3                                                       */
+/*                                                                           */
+/* Version: 6.0                                                              */
+/*                                                                           */
+/* Data Modifications:                                                       */
+/*                                                                           */
+/* Updates:                                                                  */
+/* Date         Author   Ver. Purposes                                       */
+/* 14-Jul-2011  KHLim02  1.2  GetRight for Delete log                        */
+/* 22-May-2012  TLTING02      Data integrity - insert dellog 4 status < '9'  */
+/* 03-Apr-2025  WLChooi  1.3  UWP-32362 Log DocStatusTrack (WL01)            */
+/*****************************************************************************/
+CREATE OR ALTER TRIGGER [dbo].[ntrKitHeaderDelete]
 ON [dbo].[KIT]
 FOR DELETE
 AS
@@ -31,6 +56,7 @@ BEGIN
            @n_starttcnt     int,       -- Holds the current transaction count
            @n_cnt           int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
           ,@c_authority     NVARCHAR(1)  -- KHLim02
+          ,@n_RowRef        BIGINT       --WL01
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 
    IF (select count(*) from DELETED) =
@@ -85,7 +111,48 @@ BEGIN
          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Details Detected. Delete Rejected. (ntrKitHeaderDelete)"
       END
    END
- 
+
+   --WL01 S
+   IF @n_continue = 1 or @n_continue = 2
+   BEGIN
+      SET @b_Success = 1
+      DECLARE CUR_DST CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DST.RowRef
+      FROM DELETED D
+      JOIN dbo.DocStatusTrack DST (NOLOCK) ON DST.DocumentNo = D.KITKey AND DST.Storerkey = D.StorerKey
+      WHERE DST.TableName = 'KITEXTNSTS'
+      AND DST.Key1 < '9'
+      AND DST.Key2 = ''
+
+      OPEN CUR_DST
+
+      FETCH NEXT FROM CUR_DST INTO @n_RowRef
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         BEGIN TRY
+            DELETE FROM dbo.DocStatusTrack
+            WHERE RowRef = @n_RowRef
+         END TRY
+         BEGIN CATCH
+            SELECT @n_continue = 3
+            SELECT @n_err = 69802
+            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_err) + ': Failed to DELETE DocStatusTrack. (nspKitHeaderDelete)'
+                             + ' ( ' + ' SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '
+         END CATCH
+
+         FETCH NEXT FROM CUR_DST INTO @n_RowRef
+      END
+      CLOSE CUR_DST
+      DEALLOCATE CUR_DST
+   END
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_DST') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_DST
+      DEALLOCATE CUR_DST
+   END
+   --WL01 E
 
       /* #INCLUDE <TRTHD2.SQL> */
    IF @n_continue=3  -- Error Occured - Process And Return

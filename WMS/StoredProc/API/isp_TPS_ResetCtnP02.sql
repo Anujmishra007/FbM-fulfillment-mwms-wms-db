@@ -1,0 +1,775 @@
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
+/******************************************************************************/
+/* Store procedure: isp_TPS_ResetCtnP02                                       */
+/* Copyright      : Maersk                                                    */
+/*                                                                            */
+/* Date         Rev  Author     Purposes                                      */
+/* 2024-05-20   1.0  YeeKung    TPS-906 Created                               */
+/* 2025-01-28   1.1  YeeKung    UWP-29489 Change API Username (yeekung01)     */
+/* 2025-04-24   1.2  YeeKung    UWP-31100 Fix UCC Status not reset (yeekung02)*/
+/* 2025-07-22   1.3  GCH225     UWP-38184 Enhanced the lsp_SetUser logic      */ 
+/* 2025-07-24   1.4  GCH225     UWP-38194 Bug fix the UCC Logic               */
+/******************************************************************************/
+
+CREATE  OR ALTER PROC [API].[isp_TPS_ResetCtnP02] (
+	@json       NVARCHAR( MAX),
+   @jResult    NVARCHAR( MAX) OUTPUT,
+   @b_Success  INT = 1        OUTPUT,
+   @n_Err      INT = 0        OUTPUT,
+   @c_ErrMsg   NVARCHAR( 255) = ''  OUTPUT
+)
+AS
+
+SET NOCOUNT ON
+SET QUOTED_IDENTIFIER OFF
+SET ANSI_NULLS OFF
+SET CONCAT_NULL_YIELDS_NULL OFF
+BEGIN
+	DECLARE  
+  
+   @nMobile          INT,  
+   @nStep            INT,  
+   @cLangCode        NVARCHAR( 3),  
+   @nInputKey        INT,  
+   @cSerialno        NVARCHAR(30),  
+  
+   @cStorerKey       NVARCHAR( 15),  
+   @cFacility        NVARCHAR( 5),  
+   @nFunc            INT,  
+   @cUserName        NVARCHAR( 128), 
+   @c_UserName       NVARCHAR( 128),
+   @cScanNo          NVARCHAR( 50),  
+   @cDropID          NVARCHAR( 50),  
+   @cPickSlipNo      NVARCHAR( 30),  
+   @nCartonNo        INT,  
+   @cCartonID        NVARCHAR( 20),  
+   @cType            NVARCHAR( 30),  
+   @nQTY             INT,  
+   @cSKU             NVARCHAR( 20),  
+   @nWeight          FLOAT,  
+   @nCube            FLOAT,  
+   @cResetCartonJson NVARCHAR( MAX),  
+   @cResetAll        NVARCHAR( 1),  
+   @cLoadKey         NVARCHAR( 10),  
+   @cOrderKey        NVARCHAR( 10),  
+   @nTranCount       INT,  
+   @cSQLWhere        NVARCHAR( 250),  
+   @cSQLUpdate       NVARCHAR( 500),  
+   @cScanNoType      NVARCHAR( 30),  
+   @cZone            NVARCHAR( 18),
+   @cUCCNo           NVARCHAR( 20),
+   @cExtResetCartonSP   NVARCHAR(20),
+   @cSQL             NVARCHAR(4000),
+   @cSQLParam        NVARCHAR(4000),
+   @cUCCtoUPC           NVARCHAR( 20),
+   @cUCCtoDropID        NVARCHAR( 20)
+
+   DECLARE @nOutputCount INT
+   DECLARE @b_ExecuteAs BIT 
+
+   SET @b_ExecuteAs = 0
+
+   --CREATE TABLE #ResetCartonList (  
+   DECLARE @ResetCartonList TABLE (  
+      SKU   NVARCHAR( 20)  
+   )
+
+   DECLARE @tempUCCList TABLE (
+      UCCNo NVARCHAR(20) NOT NULL
+   )
+
+   SET @nTranCount = @@TRANCOUNT  
+   BEGIN TRAN  
+   SAVE TRAN isp_TPS_ResetCtnP02 
+
+   SELECT @cStorerKey = StorerKey, @cFacility = Facility,@nFunc = Func,@cUserName = UserName,@cLangCode = LangCode,@cScanNo = ScanNo,@nCartonNo = CartonNo, @ctype = cType, @cResetCartonJson=ResetCarton, @cResetAll = ResetAll  
+      FROM OPENJSON(@json)  
+      WITH (  
+       StorerKey   NVARCHAR( 30),  
+       Facility    NVARCHAR( 30),  
+         Func        NVARCHAR( 5),  
+         UserName    NVARCHAR( 15),  
+         LangCode    NVARCHAR( 3),  
+         ScanNo      NVARCHAR( 30),  
+         CartonNo    INT,  
+         CartonID    NVARCHAR( 20),  
+         cType       NVARCHAR( 30),  
+         ResetCarton NVARCHAR( max) as JSON,  
+         ResetAll    NVARCHAR( 1)  
+      )  
+  
+      SELECT @cStorerKey AS StorerKey, @cFacility AS Facility,@nFunc AS Func,@cUserName AS UserName,@cScanNo AS ScanNo,@nCartonNo AS CartonNo, @cResetAll as ResetAll  
+  
+      --INSERT INTO #ResetCartonList  
+      INSERT INTO @ResetCartonList  
+      SELECT *  
+      FROM OPENJSON(@cResetCartonJson)  
+      WITH (  
+            SKU             NVARCHAR( 20)    '$.SKU'  
+      )  
+  
+      --convert login  
+      SET @c_UserName = @cUserName
+
+      SET @n_Err = 0
+
+      SET @cSQL = 'EXEC WM.lsp_SetUser @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT';
+
+      SET @cSQLParam =  N'@c_UserName NVARCHAR(128) OUTPUT,' +
+				       N'@n_Err INT OUTPUT, ' + 
+				       N'@c_ErrMsg NVARCHAR(125) OUTPUT'
+      --convert login
+      SELECT @nOutputCount=COUNT(1) FROM sys.parameters p (NOLOCK)
+		      JOIN sys.objects o (NOLOCK) 
+		         ON p.object_id = o.object_id
+		      WHERE o.name = 'lsp_SetUser'
+		      AND p.is_output = 1
+      IF @nOutputCount = 4 
+      BEGIN
+        SET @cSQL = @cSQL + ', @b_ExecuteAs OUTPUT '
+        SET @cSQLParam = @cSQLParam + ', @b_ExecuteAs BIT OUTPUT'
+
+        EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT, @b_ExecuteAs OUTPUT;
+      END
+      ELSE
+      BEGIN
+        EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
+      END
+
+      IF @n_Err <> 0  
+      BEGIN  
+         --INSERT INTO @errMsg(nErrNo,cErrMsg)  
+         SET @b_Success = 0  
+         SET @n_Err = @n_Err  
+      --   SET @c_ErrMsg = @c_ErrMsg  
+         GOTO ROLLBACKTRAN  
+      END  
+
+      IF @nOutputCount = 4
+      BEGIN
+        IF @b_ExecuteAs = 1
+	       GOTO ExecuteAs
+        ELSE
+        BEGIN
+	       IF SESSION_CONTEXT(N'mwms_user_name') IS NULL
+	       BEGIN
+		      SET @b_Success = 0
+		      SET @n_Err = 1002014
+		      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No Session context found. Function : isp_TPS_ResetCtnP02'
+		      GOTO ROLLBACKTRAN
+	       END            
+        END
+      END
+      ELSE
+      BEGIN
+         IF @c_UserName LIKE '%' + @cUserName + '%'
+         BEGIN
+ExecuteAs:
+	       EXECUTE AS LOGIN = @c_UserName
+	       SET @cUserName = @c_UserName
+         END
+      END
+  
+      SELECT @cUCCtoUPC =Svalue FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'PACKUPD_UCCTOUPC' 
+      SELECT @cUCCtoDropID =SValue FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'PACKUPD_UCCTODROPID' 
+
+      --check pickslipNo  
+      EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT  
+  
+      IF @n_Err <>0  
+      BEGIN  
+       SET @jResult = ''  
+       SET @b_Success = 0  
+         SET @n_Err = @n_Err  
+         SET @c_ErrMsg = @c_ErrMsg  
+  
+         GOTO ROLLBACKTRAN  
+      END  
+
+      --Decode pickslipNo Json Format  
+      SELECT @cScanNoType = ScanNoType, @cpickslipNo = PickslipNo, @cDropID = DropID,  @cOrderKey=ISNULL(OrderKey,''), @cLoadKey = LoadKey, @cZone = Zone--, @EcomSingle = EcomSingle  
+      --, @cDynamicRightName1 = DynamicRightName1, @cDynamicRightValue1 = DynamicRightValue1  
+      --,@pickSkuDetailJson = PickSkuDetail  
+      FROM OPENJSON(@jResult)  
+      WITH (  
+          ScanNoType        NVARCHAR( 30),  
+          PickslipNo        NVARCHAR( 30),  
+            DropID            NVARCHAR( 30),  
+            OrderKey          NVARCHAR( 10),  
+            LoadKey           NVARCHAR( 10),  
+            Zone              NVARCHAR( 18),  
+            EcomSingle        NVARCHAR( 1),  
+            DynamicRightName1    NVARCHAR( 30),  
+            DynamicRightValue1   NVARCHAR( 30),  
+            PickSkuDetail     NVARCHAR( MAX) as json  
+      )  
+      SELECT @cScanNoType as ScanNoType, @cpickslipNo as PickslipNo, @cDropID as DropID,  @cOrderKey as OrderKey, @cLoadKey as LoadKey, @cZone as Zone--, @EcomSingle as EcomSingle  
+
+  
+      SELECT @cPickSlipNo AS pickslipno  
+      --SELECT * FROM @ResetCartonList 
+
+ 
+      --reset 1 carton  
+      IF @cResetAll <> '1'  
+      BEGIN  
+       -- if hav SKU  
+         IF EXISTS (SELECT TOP 1 1 FROM @ResetCartonList)  
+         BEGIN  
+            DECLARE @nSkuCount   INT  
+            DECLARE @nSkuToReset INT  
+  
+            SELECT @nSkuCount = COUNT(SKU) FROM packDetail WITH (NOLOCK) WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo  
+            SELECT @nSkuToReset = COUNT(*) FROM @ResetCartonList  
+  
+          --  IF @nSkuToReset > @nSkuCount  
+          --  BEGIN  
+          --   SET @b_Success = 0  
+          --     SET @n_Err = 100351  
+          --     SET @c_ErrMsg = 'Reset error'  
+  
+          --     GOTO RollBackTran  
+          --  END  
+
+  
+            DECLARE curSKU CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+            select SKU FROM @ResetCartonList  
+  
+            OPEN curSKU;  
+            FETCH NEXT FROM curSKU INTO @cSKU  
+            WHILE @@FETCH_STATUS = 0  
+            BEGIN  
+  
+               --SELECT @nCartonNo,@cPickSlipNo,@cStorerKey,@cSKU  
+               IF EXISTS (SELECT TOP 1 1 FROM packDetail PD WITH (NOLOCK) WHERE PD.cartonNo = @nCartonNo AND PD.pickslipNo = @cPickSlipNo AND StorerKey = @cStorerKey AND SKU = @cSKU)  
+               BEGIN  
+                  SELECT @cUCCNo = CASE WHEN @cUCCtoUPC = 1 then ISNULL(UPC,'')
+                                          WHEN @cUCCtoDropID = 1 then  ISNULL(IIF(ISNULL(@cDropID,'') = '', DropID, @cDropID),'')
+                                          END
+                  FROM PackDetail  (NOLOCK)
+                  WHERE cartonNo = @nCartonNo 
+                     AND PickSlipNo = @cPickSlipNo  
+
+                 --delete sku  
+                  DELETE packDetail WHERE cartonNo = @nCartonNo AND pickslipNo = @cPickSlipNo AND sku = @cSKU  
+  
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @b_Success = 0  
+                     SET @n_Err = 1002013  
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_TPS_ResetCtnP02'  
+  
+                     GOTO RollBackTran  
+                  END  
+  
+                  --reset the qty : update packInfo  
+                  IF @nSkuToReset < @nSkuCount  
+                  BEGIN  
+                     SELECT @nQty = SUM(Qty),@nWeight = SUM(Qty)*ISNULL(SUM(sku.WEIGHT),0),@nCube = SUM(Qty)*SUM(sku.CUBE)  
+                     FROM packDetail PD WITH (NOLOCK)  
+                     JOIN SKU sku WITH (NOLOCK) ON sku.sku = PD.sku AND SKU.StorerKey = PD.StorerKey  
+                     WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey  
+  
+                     UPDATE packInfo WITH (ROWLOCK)  
+                     SET Qty = @nQty,  
+                     WEIGHT = @nWeight,  
+                     CUBE = @nCube,  
+                     EditDate = GETDATE(),  
+                     EditWho = @cUserName,  
+                     TrafficCop = NULL  
+                     WHERE cartonNo = @nCartonNo  
+                     AND PickSlipNo = @cPickSlipNo  
+  
+                     IF @@ERROR <> 0  
+                     BEGIN  
+                        SET @b_Success = 0  
+                        SET @n_Err = 1002001  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to update PackInfo. Function : isp_TPS_ResetCtnP02'  
+  
+                        GOTO RollBackTran  
+                     END  
+                  END  
+                  --delete packInfo  
+                  ELSE IF @nSkuToReset = @nSkuCount  
+                  BEGIN  
+                     IF @cUCCNo <> ''
+                     BEGIN
+                        UPDATE UCC
+                        SET   status='3',
+                              EditDate = GETDATE(),  
+                              EditWho = @cUserName
+                        WHERE UCCNO = @cUCCNo
+                           AND Status in ('1','2','3','4','6')
+  
+                        IF @@ERROR <> 0  
+                        BEGIN  
+                           SET @b_Success = 0  
+                           SET @n_Err = 1002002  
+                           SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update UCC. Function : isp_TPS_ResetCtnP02
+  
+                           GOTO RollBackTran  
+                        END  
+                     END
+                  END  
+               END  
+  
+               IF EXISTS(SELECT 1 FROM serialno (NOLOCK)    
+                           WHERE pickslipno=@cpickslipno    
+                              AND cartonNo = @nCartonNo    
+                              AND storerkey=@cStorerKey)    
+               BEGIN    
+                  DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+                  SELECT serialno  
+                  FROM serialno (nolock)  
+                  WHERE pickslipno=@cpickslipno    
+                     AND cartonNo = @nCartonNo    
+                     AND storerkey=@cStorerKey 
+                     AND Status <'6'
+  
+                  OPEN CurSN;  
+                  FETCH NEXT FROM CurSN INTO @cSerialno  
+                  WHILE @@FETCH_STATUS = 0  
+                  BEGIN 
+
+							IF EXISTS (SELECT 1 
+											FROM StorerConfig (nolock)
+											WHERE storerkey = @cStorerKey
+												AND configkey='ADAllowInsertExistingSerialNo'
+												AND Option1 ='')
+							BEGIN
+								DELETE SerialNo
+								WHERE Storerkey = @cStorerKey    
+								AND SerialNo = @cSerialno  
+							END
+							ELSE
+							BEGIN
+   
+								UPDATE SerialNo WITH (ROWLOCK)  
+								SET   STATUS='1',  
+										ORDERKEY='',
+										OrderLineNumber='',
+										LabelLine = '',
+										CartonNo = '',
+										pickslipno = '', 
+										EditDate = GETDATE(),  
+										EditWho = @cUserName
+								WHERE Storerkey = @cStorerKey    
+								AND SerialNo = @cSerialno   
+							END
+
+                 
+                     IF @@ERROR <> 0  
+                     BEGIN  
+                        SET @b_Success = 0  
+                        SET @n_Err = 1002003  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP02'  
+  
+                        GOTO RollBackTran  
+                     END 
+                     FETCH NEXT FROM CurSN INTO @cSerialno  
+
+                  END    
+                  CLOSE CurSN  
+                  DEALLOCATE CurSN  
+               END    
+  
+               FETCH NEXT FROM curSKU INTO @cSKU  
+            END  
+            CLOSE curSKU  
+            DEALLOCATE curSKU  
+
+         END  
+         ELSE  
+         -- no SKU to reset: reset all  
+         BEGIN  
+            SELECT @cSKU = SKU  FROM packDetail WITH (NOLOCK) WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo  
+
+            IF EXISTS (  SELECT 1  
+                        FROM serialno (nolock)  
+                        WHERE pickslipno=@cpickslipno    
+                           AND cartonNo = @nCartonNo    
+                           AND storerkey=@cStorerKey 
+                           AND Status <'6')
+            BEGIN
+               DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+               SELECT serialno  
+               FROM serialno (nolock)  
+               WHERE pickslipno=@cpickslipno    
+                  AND cartonNo = @nCartonNo    
+                  AND storerkey=@cStorerKey 
+                  AND Status <'6'
+  
+               OPEN CurSN;  
+               FETCH NEXT FROM CurSN INTO @cSerialno  
+               WHILE @@FETCH_STATUS = 0  
+               BEGIN 
+   
+						IF EXISTS (SELECT 1 
+										FROM StorerConfig (nolock)
+										WHERE storerkey = @cStorerKey
+											AND configkey='ADAllowInsertExistingSerialNo'
+											AND Option1 ='')
+						BEGIN
+							DELETE SerialNo
+							WHERE Storerkey = @cStorerKey    
+							AND SerialNo = @cSerialno  
+						END
+						ELSE
+						BEGIN
+   
+							UPDATE SerialNo WITH (ROWLOCK)  
+							SET   STATUS='1',  
+									ORDERKEY='',
+									OrderLineNumber='',
+									LabelLine = '',
+									CartonNo = '',
+									pickslipno = '',
+                           EditDate = GETDATE(),  
+                           EditWho = @cUserName
+							WHERE Storerkey = @cStorerKey    
+							AND SerialNo = @cSerialno   
+						END 
+                 
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @b_Success = 0  
+                     SET @n_Err = 1002004  
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP02  
+  
+                     GOTO RollBackTran  
+                  END  
+
+                  FETCH NEXT FROM CurSN INTO @cSerialno  
+               END 
+               CLOSE CurSN  
+               DEALLOCATE CurSN  
+            END
+            ELSE
+            BEGIN
+         
+               IF ISNULL(@cOrderkey,'')=''
+                  SELECT @cOrderkey = orderkey
+                  FROM Pickheader (nolock)
+                  Where pickheaderkey = @cPickslipno
+
+               IF EXISTS (SELECT 1
+                           FROM serialno (nolock)
+                           where Orderkey = @cOrderkey
+                              AND STATUS IN( '1',  '6') 
+                              AND storerkey = @cstorerkey  )
+               BEGIN
+                  DECLARE CurSN2 CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+                  SELECT serialno  
+                  FROM serialno (nolock)  
+                  WHERE Orderkey = @cOrderkey
+                     AND STATUS IN( '1',  '6') 
+                     AND storerkey = @cstorerkey   
+  
+                  OPEN CurSN2;  
+                  FETCH NEXT FROM CurSN2 INTO @cSerialno  
+                  WHILE @@FETCH_STATUS = 0  
+                  BEGIN 
+                     IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
+                        WHERE StorerKey = @cStorerKey              
+                        AND SerialNo = @cSerialno
+                        AND ISNULL(ORDERKEY,'')<>''
+                        AND STATUS IN( '1','6'))
+                     BEGIN    
+								IF EXISTS (SELECT 1 
+												FROM StorerConfig (nolock)
+												WHERE storerkey = @cStorerKey
+													AND configkey='ADAllowInsertExistingSerialNo'
+													AND Option1 ='')
+								BEGIN
+									DELETE SerialNo
+									WHERE Storerkey = @cStorerKey    
+									AND SerialNo = @cSerialno  
+								END
+								ELSE
+								BEGIN
+   
+									UPDATE SerialNo WITH (ROWLOCK)  
+									SET   STATUS='1',  
+											ORDERKEY='',
+											OrderLineNumber='',
+											LabelLine = '',
+											CartonNo = '',
+											pickslipno = '',  
+                                 EditDate = GETDATE(),  
+                                 EditWho = @cUserName
+									WHERE Storerkey = @cStorerKey    
+									AND SerialNo = @cSerialno   
+								END
+                 
+                        IF @@ERROR <> 0  
+                        BEGIN  
+                           SET @b_Success = 0  
+                           SET @n_Err = 1002005  
+                           SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP02'  
+  
+                           GOTO RollBackTran  
+                        END  
+                     END    
+                     FETCH NEXT FROM CurSN2 INTO @cSerialno  
+                  END
+                  CLOSE CurSN2  
+                  DEALLOCATE CurSN2  
+               END
+            END
+
+            SELECT @cUCCNo = CASE  WHEN @cUCCtoUPC = 1 then ISNULL(UPC,'')
+                                 WHEN @cUCCtoDropID = 1 then  ISNULL(IIF(ISNULL(@cDropID,'') = '', DropID, @cDropID),'')
+                           END
+            FROM PackDetail  (NOLOCK)
+            WHERE cartonNo = @nCartonNo 
+               AND PickSlipNo = @cPickSlipNo
+
+            --delete packDetail  
+            DELETE packDetail WHERE cartonNo = @nCartonNo AND pickslipNo = @cPickSlipNo  
+  
+            IF @@ERROR <> 0  
+            BEGIN  
+               SET @b_Success = 0  
+               SET @n_Err = 1002006  
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_TPS_ResetCtnP02'  
+  
+               GOTO RollBackTran  
+            END   
+            
+            IF @cUCCNo <> ''
+            BEGIN
+               UPDATE UCC
+               SET   status='3',
+                     EditDate = GETDATE(),  
+                     EditWho = @cUserName
+               WHERE UCCNO = @cUCCNo
+                  AND Status in ('1','2','3','4','6')
+  
+               IF @@ERROR <> 0  
+               BEGIN  
+                  SET @b_Success = 0  
+                  SET @n_Err = 1002007  
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update UCC. Function : isp_TPS_ResetCtnP02
+  
+                  GOTO RollBackTran  
+               END  
+            END
+         END  
+      END  
+  
+      --reset all carton  
+      IF @cResetAll = '1'  
+      BEGIN  
+         IF EXISTS (SELECT 1 FROM packHeader WITH (NOLOCK) WHERE pickslipNo = @cPickSlipNo AND storerKey = @cStorerKey AND STATUS = '9')  
+         BEGIN  
+         SET @b_Success = 0  
+            SET @n_Err = 1002008  
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Packed Pickslip not able to reset. Function : isp_TPS_ResetCtnP02'  
+  
+            GOTO RollBackTran  
+         END  
+         ELSE  
+         BEGIN  
+                    
+            DECLARE CurSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+            SELECT serialno  
+            FROM serialno (nolock)  
+            WHERE pickslipno=@cpickslipno    
+               AND storerkey=@cStorerKey 
+               AND Status <'6'
+  
+            OPEN CurSN;  
+            FETCH NEXT FROM CurSN INTO @cSerialno  
+            WHILE @@FETCH_STATUS = 0  
+            BEGIN 
+   
+					IF EXISTS (SELECT 1 
+									FROM StorerConfig (nolock)
+									WHERE storerkey = @cStorerKey
+										AND configkey='ADAllowInsertExistingSerialNo'
+										AND Option1 ='')
+					BEGIN
+						DELETE SerialNo
+						WHERE Storerkey = @cStorerKey    
+						AND SerialNo = @cSerialno  
+					END
+					ELSE
+					BEGIN
+   
+						UPDATE SerialNo WITH (ROWLOCK)  
+						SET   STATUS='1',  
+								ORDERKEY='',
+								OrderLineNumber='',
+								LabelLine = '',
+								CartonNo = '',
+                        pickslipno = '',  
+                        EditDate = GETDATE(),  
+                        EditWho = @cUserName
+						WHERE Storerkey = @cStorerKey    
+						AND SerialNo = @cSerialno   
+					END
+
+               IF @@ERROR <> 0  
+               BEGIN  
+                  SET @b_Success = 0  
+                  SET @n_Err = 1002009  
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP02  
+  
+                  GOTO RollBackTran  
+               END  
+               FETCH NEXT FROM CurSN INTO @cSerialno  
+            END  
+            CLOSE CurSN  
+            DEALLOCATE CurSN  
+
+            IF ISNULL(@cOrderkey,'')=''
+               SELECT @cOrderkey = orderkey
+               FROM Pickheader (nolock)
+               Where pickheaderkey = @cPickslipno
+
+            IF EXISTS (SELECT 1
+                        FROM serialno (nolock)
+                        where Orderkey = @cOrderkey
+                        AND STATUS IN( '1',  '6') 
+                        AND storerkey = @cstorerkey  )
+            BEGIN
+               DECLARE CurSN2 CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+               SELECT serialno  
+               FROM serialno (nolock)  
+               WHERE Orderkey = @cOrderkey
+                  AND STATUS IN( '1',  '6') 
+                  AND storerkey = @cstorerkey   
+  
+               OPEN CurSN2;  
+               FETCH NEXT FROM CurSN2 INTO @cSerialno  
+               WHILE @@FETCH_STATUS = 0  
+               BEGIN 
+                  IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
+                     WHERE StorerKey = @cStorerKey              
+                     AND SerialNo = @cSerialno
+                     AND ISNULL(ORDERKEY,'')<>''
+                     AND STATUS IN( '1','6'))
+                  BEGIN    
+							IF EXISTS (SELECT 1 
+											FROM StorerConfig (nolock)
+											WHERE storerkey = @cStorerKey
+												AND configkey='ADAllowInsertExistingSerialNo'
+												AND Option1 ='')
+							BEGIN
+								DELETE SerialNo
+								WHERE Storerkey = @cStorerKey    
+								AND SerialNo = @cSerialno  
+							END
+							ELSE
+							BEGIN
+   
+								UPDATE SerialNo WITH (ROWLOCK)  
+								SET   STATUS='1',  
+										ORDERKEY='',
+										OrderLineNumber='',
+										LabelLine = '',
+										CartonNo = '',
+										pickslipno = '',  
+                              EditDate = GETDATE(),  
+                              EditWho = @cUserName
+								WHERE Storerkey = @cStorerKey    
+								AND SerialNo = @cSerialno   
+							END
+                 
+                     IF @@ERROR <> 0  
+                     BEGIN  
+                        SET @b_Success = 0  
+                        SET @n_Err = 1002010  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP02'  
+  
+                        GOTO RollBackTran  
+                     END  
+                  END    
+                  FETCH NEXT FROM CurSN2 INTO @cSerialno  
+               END
+               CLOSE CurSN2  
+               DEALLOCATE CurSN2  
+            END
+
+            IF @cUCCtoUPC = 1
+            BEGIN
+               INSERT INTO @tempUCCList (UCCNo)
+               SELECT UPC
+               FROM PackDetail  (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+               AND UPC IS NOT NULL AND UPC <> ''
+            END
+            ELSE IF @cUCCtoDropID = 1
+            BEGIN
+               INSERT INTO @tempUCCList (UCCNo)
+               SELECT DropID
+               FROM PackDetail  (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+               AND DropID IS NOT NULL AND DropID <> ''
+            END
+
+            IF EXISTS (SELECT 1 FROM @tempUCCList)
+            BEGIN
+               UPDATE UCC
+               SET   status='3',  
+                     EditDate = GETDATE(),  
+                     EditWho = @cUserName
+               WHERE UCCNO IN (SELECT UCCNo FROM @tempUCCList)
+                  AND Status in ('1','2','3','4','6')
+
+               IF @@ERROR <> 0  
+               BEGIN  
+                  SET @b_Success = 0  
+                  SET @n_Err = 1002012  
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--Unable to Update UCC. Function : isp_TPS_ResetCtnP02
+  
+                  GOTO RollBackTran  
+               END  
+            END  
+
+            --delete packDetail  
+            DELETE packDetail WHERE pickslipNo = @cPickSlipNo  
+  
+            IF @@ERROR <> 0  
+            BEGIN  
+               SET @b_Success = 0  
+               SET @n_Err = 1002011  
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_TPS_ResetCtnP02'  
+  
+               GOTO RollBackTran  
+            END    
+         END  
+      END  
+
+      --COMMIT TRAN isp_TPS_ResetCtnP02  
+      SET @b_Success = 1  
+      SET @jResult = '[{Success}]'  
+      GOTO Quit  
+
+
+    RollBackTran:  
+      --Revert  
+      ROLLBACK TRAN isp_TPS_ResetCtnP02  
+  
+   Quit:  
+      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
+         COMMIT TRAN isp_TPS_ResetCtnP02  
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON api.isp_TPS_ResetCtnP02 TO NSQL
+GO

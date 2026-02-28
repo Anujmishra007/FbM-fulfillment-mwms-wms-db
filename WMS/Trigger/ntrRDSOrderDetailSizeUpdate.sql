@@ -1,13 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrRDSOrderDetailSizeUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrRDSOrderDetailSizeUpdate]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-
-
 /************************************************************************/
 /* Trigger: ntrRDSOrderDetailSizeUpdate                                 */
 /* Creation Date:  25-May-2012                                          */
@@ -36,9 +31,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 06-Oct-2025  AK01   1.0    UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrRDSOrderDetailSizeUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrRDSOrderDetailSizeUpdate]
 ON [dbo].[rdsOrderDetailSize]
 FOR UPDATE
 AS 
@@ -68,8 +64,8 @@ BEGIN
 	IF @n_continue = 1 or @n_continue=2
 	BEGIN
 		UPDATE rdsOrderDetailSize
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL	
 		FROM rdsOrderDetailSize, INSERTED (NOLOCK)
 		WHERE rdsOrderDetailSize.rdsOrderNo     = INSERTED.rdsOrderNo
@@ -109,4 +105,5 @@ BEGIN
 	END
 END
 GO
+
 

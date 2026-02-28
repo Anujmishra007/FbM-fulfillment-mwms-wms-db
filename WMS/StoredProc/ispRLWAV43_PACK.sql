@@ -47,6 +47,7 @@ GO
 /*                            Logic (Customize)                         */
 /* 2022-10-18  Wan13    2.3   Fixed. @n_Status_FC not initialize for new*/
 /*                            orderkey                                  */
+/* 2025-10-10  SSA01    2.4   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
@@ -2017,8 +2018,8 @@ BEGIN
                      ,p.Qty    = CASE WHEN @n_Status = 0 THEN p.Qty ELSE @n_Qty END
                      ,p.PickSlipNo = CASE WHEN @c_DocType = 'N' THEN @c_PickSlipNo ELSE p.PickSlipNo END
                      ,p.Trafficcop = NULL
-                     ,p.EditWho    = SUSER_SNAME()
-                     ,p.EditDate   = GETDATE()
+                     ,p.EditWho    = dbo.fnc_GetUserName()         --(SSA01)
+                     ,p.EditDate   = dbo.fnc_GetDate()    --(SSA01)
                FROM dbo.PICKDETAIL AS p
                WHERE p.PickDetailKey = @c_PickDetailkey
 

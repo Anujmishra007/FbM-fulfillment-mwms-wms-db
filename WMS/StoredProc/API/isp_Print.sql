@@ -119,8 +119,8 @@ BEGIN
 
       IF @@ERROR <> 0
       BEGIN
-         SELECT @nErrNo = 175951
-         SELECT @cErrMsg=rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Fail Insert to Table RDT.RDTMOBREC. Function : fncPrint'
+         SELECT @nErrNo = 1002801
+         SELECT @cErrMsg=API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Fail Insert to Table RDT.RDTMOBREC. Function : isp_Print'
          GOTO Quit
       END
    END
@@ -139,8 +139,8 @@ BEGIN
 
       IF @@ERROR <> 0
       BEGIN
-         SELECT @nErrNo = 175952
-         SELECT @cErrMsg=rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Fail Update to Table RDT.RDTMOBREC. Function : fncPrint'
+         SELECT @nErrNo = 1002802
+         SELECT @cErrMsg=API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Fail Update to Table RDT.RDTMOBREC. Function : isp_Print'
          GOTO Quit
       END
    END
@@ -174,8 +174,8 @@ BEGIN
    -- Check report
    IF @@ROWCOUNT = 0
    BEGIN
-      SET @nErrNo = 175953
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'ReportNotSetup. Function : fncPrint'
+      SET @nErrNo = 1002803
+      SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'ReportNotSetup. Function : isp_Print'
       GOTO Quit
    END
 
@@ -187,8 +187,8 @@ BEGIN
    BEGIN
       IF @cLabelPrinter = ''
       BEGIN
-         SET @nErrNo = 175954
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'NoLabelPrinter. Function : fncPrint'
+         SET @nErrNo = 1002804
+         SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_Print'
          GOTO Quit
       END
       SET @cPrinter = @cLabelPrinter
@@ -197,8 +197,8 @@ BEGIN
    BEGIN
       IF @cPaperPrinter = ''
       BEGIN
-         SET @nErrNo = 175955
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'NoPaperPrinter. Function : fncPrint'
+         SET @nErrNo = 1002805
+         SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_Print'
          GOTO Quit
       END
       SET @cPrinter = @cPaperPrinter
@@ -230,8 +230,8 @@ BEGIN
          -- Check no default printer
          IF @cPrinterInGroup = ''
          BEGIN
-            SET @nErrNo = 175956
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'NoDefPrnInGRP. Function : fncPrint'
+            SET @nErrNo = 1002806
+            SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--' No Default Printer Found. Function : isp_Print'
             GOTO Quit
          END
       END
@@ -248,8 +248,8 @@ BEGIN
    -- Check printer
    IF @@ROWCOUNT = 0
    BEGIN
-      SET @nErrNo = 175957
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'PrinterNoSetup. Please contact Touch Pack Super User. Function : fncPrint'
+      SET @nErrNo = 1002807
+      SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'PrinterNoSetup. Please contact Touch Pack Super User. Function : isp_Print'
       GOTO Quit
    END
 
@@ -281,8 +281,8 @@ BEGIN
                SELECT @cValue = Value FROM @tReportParam WHERE Variable = @cParam
                IF @@ROWCOUNT <> 1
                BEGIN
-                  SET @nErrNo = 175958
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'ParamNotMatch. Please contact Touch Pack Super User. Function : fncPrint'
+                  SET @nErrNo = 1002808
+                  SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'ParamNotMatch. Please contact Touch Pack Super User. Function : isp_Print'
                   GOTO Quit
                END
             END
@@ -359,8 +359,8 @@ BEGIN
    END
    ELSE
    BEGIN
-      SET @nErrNo = 175959
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Bad ProcessSP. Function : fncPrint'
+      SET @nErrNo = 1002809
+      SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Bad ProcessSP. Function : isp_Print'
       GOTO Quit
    END
 
@@ -384,8 +384,8 @@ BEGIN
       -- Check valid
       IF @@ROWCOUNT = 0 OR @cIPAddress = '' OR @cPortNo = ''
       BEGIN
-         SET @nErrNo = 175960
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SpoolNot Setup. Please contact Touch Pack Super User. Function : fncPrint'
+         SET @nErrNo = 1002810
+         SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'SpoolNot Setup. Please contact Touch Pack Super User. Function : isp_Print'
          GOTO Quit
       END
 
@@ -408,8 +408,8 @@ BEGIN
          SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
          IF @nErrNo <> 0
          BEGIN
-            SET @nErrNo = 175961
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'INS PrnJobFail. Please contact Touch Pack Super User. Function : fncPrint'
+            SET @nErrNo = 1002811
+            SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'INS PrnJobFail. Please contact Touch Pack Super User. Function : isp_Print'
          END
 
          SET @cJobID = CAST( @nJobID AS NVARCHAR( 10))
@@ -424,8 +424,8 @@ BEGIN
          SELECT @nQueueID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
          IF @nErrNo <> 0
          BEGIN
-            SET @nErrNo = 175962
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'INS QTaskFail. Please contact Touch Pack Super User. Function : fncPrint'
+            SET @nErrNo = 1002812
+            SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'INS QTaskFail. Please contact Touch Pack Super User. Function : isp_Print'
             GOTO Quit
          END
 
@@ -473,8 +473,8 @@ BEGIN
                -- @cErrMsg      = @cErrMsg  OUTPUT
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 175963
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'UPD QTask Fail. Please contact Touch Pack Super User. Function : fncPrint'
+               SET @nErrNo = 1002813
+               SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'UPD QTask Fail. Please contact Touch Pack Super User. Function : isp_Print'
             END
 
             UPDATE rdt.rdtPrintJob SET
@@ -484,8 +484,8 @@ BEGIN
             WHERE JobID = @nJobID
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 175964
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'UPD PrnJobFail. Please contact Touch Pack Super User. Function : fncPrint'
+               SET @nErrNo = 1002814
+               SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'UPD PrnJobFail. Please contact Touch Pack Super User. Function : isp_Print'
             END
 
             GOTO Quit
@@ -509,8 +509,8 @@ BEGIN
       -- Check valid
       IF @@ROWCOUNT = 0 OR @cIPAddress = '' OR @cPortNo = ''
       BEGIN
-         SET @nErrNo = 175965
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SpoolNot Setup. Please contact Touch Pack Super User. Function : fncPrint'
+         SET @nErrNo = 1002815
+         SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'SpoolNot Setup. Please contact Touch Pack Super User. Function : isp_Print'
          GOTO Quit
       END
 
@@ -529,8 +529,8 @@ BEGIN
          SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
          IF @nErrNo <> 0
          BEGIN
-            SET @nErrNo = 175966
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Error Code : INS PrnJobFail. Function : fncPrint'
+            SET @nErrNo = 1002816
+            SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Error Code : INS PrnJobFail. Function : isp_Print'
          END
 
          SET @cJobID = CAST( @nJobID AS NVARCHAR( 10))
@@ -557,8 +557,8 @@ BEGIN
             WHERE JobID = @nJobID
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 175967
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'UPD PrnJobFail. Please contact Touch Pack Super User. Function : fncPrint'
+               SET @nErrNo = 1002817
+               SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'UPD PrnJobFail. Please contact Touch Pack Super User. Function : isp_Print'
             END
 
             GOTO Quit
@@ -598,8 +598,8 @@ BEGIN
 
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 175968
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'INS PrnJobFail. Function : fncPrint'
+         SET @nErrNo = 1002818
+         SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'INS PrnJobFail. Function : isp_Print'
       END
 
       -- Call bartender
@@ -630,8 +630,8 @@ BEGIN
 
       IF @nErrNo <> 0
       BEGIN
-         SET @nErrNo = 175969
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'BarTender Fail. Function : fncPrint'
+         SET @nErrNo = 1002819
+         SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'BarTender Fail. Function : isp_Print'
          GOTO Quit
       END
    END
@@ -681,8 +681,8 @@ BEGIN
       WHERE Mobile = @nMobile
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 175970
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'DirectPrn Fail. Function : fncPrint'
+         SET @nErrNo = 1002820
+         SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'DirectPrn Fail. Function : isp_Print'
          GOTO Quit
       END
 
@@ -703,8 +703,8 @@ BEGIN
       -- Check datawindow
       IF ISNULL( @cDataWindow, '') = ''
       BEGIN
-         SET @nErrNo = 175971
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'DW not setup. Function : fncPrint'
+         SET @nErrNo = 1002821
+         SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'DW not setup. Function : isp_Print'
          GOTO Quit
       END
 
@@ -728,8 +728,8 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 175972
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'INS PrnJobFail. Function : fncPrint'
+            SET @nErrNo = 1002822
+            SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'INS PrnJobFail. Function : isp_Print'
          END
          SET @i = @i + 1
       END
@@ -751,8 +751,8 @@ BEGIN
 
          IF @nErrNo <> 0
          BEGIN
-            SET @nErrNo = 175973
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'INS PrnLogFail. Function : fncPrint'
+            SET @nErrNo = 1002823
+            SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'INS PrnLogFail. Function : isp_Print'
          END
       END
    END

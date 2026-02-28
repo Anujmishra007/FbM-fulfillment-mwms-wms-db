@@ -18,6 +18,7 @@ GO
 /* 2025-01-03 1.0.1  JCH507     FCR-1157 Unlock/Relock finalloc (ASTMV)       */
 /* 2025-01-07 1.0.2  JCH507     FCR-1157 Return if no task in the list        */
 /* 2025-01-17 1.0.3  JCH507     FCR-1157 V1.2 Add LocType='DYNAMICPK'         */
+/* 2025-09-17 1.1.0  NickT      FCR-7730 No need create ASTMV task            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764CreateTask13] (
@@ -272,104 +273,106 @@ BEGIN
       --Generate ASTMV task
       IF @cFinalLocType = 'PND' AND @cFinalLocCategory = 'Induction'
       BEGIN
-
-         IF @bDebugFlag = 1
-         BEGIN
-               SELECT 'Go throgh task list (ASTMV)'
-               SELECT 'Check if there is any RFPUTAWAY task'
-         END
-
-         --v1.0.1 start
-         -- Unlock the final loc if there is rfputaway record
-         IF EXISTS (SELECT 1 FROM dbo.RFPUTAWAY WITH (NOLOCK)
-                     WHERE TaskDetailKey = @cTaskDetailKey
-                  )
-         BEGIN
-            IF @bDebugFlag = 1
-               SELECT 'Unlock Task', @cTaskDetailKey
+         -- No need to generate ASTMV task, it is anbandoned
+         GOTO Quit
             
-            EXEC rdt.rdt_Putaway_PendingMoveIn 
-               @cUserName = ''
-               ,@cType = 'UNLOCK'
-               ,@cFromLoc = ''
-               ,@cFromID = ''
-               ,@cSuggestedLOC = ''
-               ,@cStorerKey = @cStorerKey
-               ,@nErrNo = @nErrNo OUTPUT
-               ,@cErrMsg = @cErrmsg OUTPUT
-               ,@cSKU = ''
-               ,@nPutawayQTY    = 0
-               ,@cFromLOT       = ''
-               ,@cTaskDetailKey = @cTaskDetailKey
-               ,@nFunc = @nFunc
-               ,@nPABookingKey = 0
-            IF @nErrNo <> 0
-            BEGIN
-               GOTO RollBackTran
-            END
-         END --unlock final loc
-         --v1.0.1 end
+         -- IF @bDebugFlag = 1
+         -- BEGIN
+         --       SELECT 'Go throgh task list (ASTMV)'
+         --       SELECT 'Check if there is any RFPUTAWAY task'
+         -- END
 
-         -- One pallet has muliple RPF tasks, only create one ASTMV task for each pallet
-         IF NOT EXISTS (SELECT 1 FROM @tNewTask 
-                        WHERE TaskType = 'ASTMV'
-                           AND Storerkey = @cStorerKey
-                           AND FromLOC = @cToLOC
-                           AND ToLOC = @cFinalLOC
-                           AND FromID = @cToID
-                        )
-         BEGIN
-            SET @nSuccess = 1
+         -- --v1.0.1 start
+         -- -- Unlock the final loc if there is rfputaway record
+         -- IF EXISTS (SELECT 1 FROM dbo.RFPUTAWAY WITH (NOLOCK)
+         --             WHERE TaskDetailKey = @cTaskDetailKey
+         --          )
+         -- BEGIN
+         --    IF @bDebugFlag = 1
+         --       SELECT 'Unlock Task', @cTaskDetailKey
+            
+         --    EXEC rdt.rdt_Putaway_PendingMoveIn 
+         --       @cUserName = ''
+         --       ,@cType = 'UNLOCK'
+         --       ,@cFromLoc = ''
+         --       ,@cFromID = ''
+         --       ,@cSuggestedLOC = ''
+         --       ,@cStorerKey = @cStorerKey
+         --       ,@nErrNo = @nErrNo OUTPUT
+         --       ,@cErrMsg = @cErrmsg OUTPUT
+         --       ,@cSKU = ''
+         --       ,@nPutawayQTY    = 0
+         --       ,@cFromLOT       = ''
+         --       ,@cTaskDetailKey = @cTaskDetailKey
+         --       ,@nFunc = @nFunc
+         --       ,@nPABookingKey = 0
+         --    IF @nErrNo <> 0
+         --    BEGIN
+         --       GOTO RollBackTran
+         --    END
+         -- END --unlock final loc
+         -- --v1.0.1 end
 
-            EXECUTE dbo.nspg_getkey
-               'TASKDETAILKEY'
-               , 10
-               , @cNewTaskDetailKey OUTPUT
-               , @nSuccess          OUTPUT
-               , @nErrNo            OUTPUT
-               , @cErrMsg           OUTPUT
-            IF @nSuccess <> 1
-            BEGIN
-               SET @nErrNo = 230102
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
-               GOTO RollBackTran
-            END
+         -- -- One pallet has muliple RPF tasks, only create one ASTMV task for each pallet
+         -- IF NOT EXISTS (SELECT 1 FROM @tNewTask 
+         --                WHERE TaskType = 'ASTMV'
+         --                   AND Storerkey = @cStorerKey
+         --                   AND FromLOC = @cToLOC
+         --                   AND ToLOC = @cFinalLOC
+         --                   AND FromID = @cToID
+         --                )
+         -- BEGIN
+         --    SET @nSuccess = 1
 
-            IF @bDebugFlag = 1
-               SELECT 'Insert new ASTMV task to list', @cNewTaskDetailKey
+         --    EXECUTE dbo.nspg_getkey
+         --       'TASKDETAILKEY'
+         --       , 10
+         --       , @cNewTaskDetailKey OUTPUT
+         --       , @nSuccess          OUTPUT
+         --       , @nErrNo            OUTPUT
+         --       , @cErrMsg           OUTPUT
+         --    IF @nSuccess <> 1
+         --    BEGIN
+         --       SET @nErrNo = 230102
+         --       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
+         --       GOTO RollBackTran
+         --    END
 
-            INSERT INTO @tNewTask 
-               (TaskDetailKey, TaskType, StorerKey, SKU, LOT, UOM, UOMQty, QTY, FromLOC,LogicalFromLOC, FromID, ToLOC, LogicalToLOC, 
-                  ToID, CaseID,TransitCount, PickMethod, RefTaskKey, WaveKey,Priority, SourcePriority, SourceKey, 
-                  SystemQTY,OrderKey,LoadKey)
-            VALUES
-               (@cNewTaskDetailKey, 'ASTMV', @cStorerKey, '', '', '', 0, 0, @cToLOC, @cLogicalToLOC, @cToID, @cFinalLOC, @cFinalLogicalLoc, 
-                  @cToID, '', @nTransitCount+1, 'FP', @cRefTaskKey, @cWaveKey, @cPriority, @cSourcePriority, @cListKey,
-                  @nSystemQTY,@cOrderKey,@cLoadKey)
+         --    IF @bDebugFlag = 1
+         --       SELECT 'Insert new ASTMV task to list', @cNewTaskDetailKey
 
-            --v1.0.1 start
-            IF @bDebugFlag = 1
-               SELECT 'relock final loc'
+         --    INSERT INTO @tNewTask 
+         --       (TaskDetailKey, TaskType, StorerKey, SKU, LOT, UOM, UOMQty, QTY, FromLOC,LogicalFromLOC, FromID, ToLOC, LogicalToLOC, 
+         --          ToID, CaseID,TransitCount, PickMethod, RefTaskKey, WaveKey,Priority, SourcePriority, SourceKey, 
+         --          SystemQTY,OrderKey,LoadKey)
+         --    VALUES
+         --       (@cNewTaskDetailKey, 'ASTMV', @cStorerKey, '', '', '', 0, 0, @cToLOC, @cLogicalToLOC, @cToID, @cFinalLOC, @cFinalLogicalLoc, 
+         --          @cToID, '', @nTransitCount+1, 'FP', @cRefTaskKey, @cWaveKey, @cPriority, @cSourcePriority, @cListKey,
+         --          @nSystemQTY,@cOrderKey,@cLoadKey)
 
-            EXEC rdt.rdt_Putaway_PendingMoveIn 
-               @cUserName = ''
-               ,@cType = 'LOCK'
-               ,@cFromLoc = @cToLOC
-               ,@cFromID = @cToID
-               ,@cSuggestedLOC = @cFinalLOC
-               ,@cStorerKey = @cStorerKey
-               ,@nErrNo = @nErrNo OUTPUT
-               ,@cErrMsg = @cErrmsg OUTPUT
-               ,@cTaskDetailKey = @cNewTaskDetailKey
-               ,@nFunc = @nFunc
-               ,@nPABookingKey = @nPABookingKey OUTPUT
-               ,@cMoveQTYAlloc = '1'
-            IF @nErrNo <> 0
-            BEGIN
-               GOTO RollBackTran
-            END
-            --V1.0.1 end
-         END --generate ASTMV
+         --    --v1.0.1 start
+         --    IF @bDebugFlag = 1
+         --       SELECT 'relock final loc'
+
+         --    EXEC rdt.rdt_Putaway_PendingMoveIn 
+         --       @cUserName = ''
+         --       ,@cType = 'LOCK'
+         --       ,@cFromLoc = @cToLOC
+         --       ,@cFromID = @cToID
+         --       ,@cSuggestedLOC = @cFinalLOC
+         --       ,@cStorerKey = @cStorerKey
+         --       ,@nErrNo = @nErrNo OUTPUT
+         --       ,@cErrMsg = @cErrmsg OUTPUT
+         --       ,@cTaskDetailKey = @cNewTaskDetailKey
+         --       ,@nFunc = @nFunc
+         --       ,@nPABookingKey = @nPABookingKey OUTPUT
+         --       ,@cMoveQTYAlloc = '1'
+         --    IF @nErrNo <> 0
+         --    BEGIN
+         --       GOTO RollBackTran
+         --    END
+         --    --V1.0.1 end
+         -- END --generate ASTMV
       END --ASTMV
       ELSE IF (@cSLLocType = 'PICK' OR @cFinalLocType = 'DYNAMICPK') AND @cFinalLocCategory = 'Shelving' --v1.0.3
       BEGIN

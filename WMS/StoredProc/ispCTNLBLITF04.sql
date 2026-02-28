@@ -28,6 +28,8 @@ GO
 /* 26-OCT-2021 CSCHONG  1.0   Devops Scripts combine                    */
 /* 15-NOV-2021 CSCHONG  1.1   WMS-18355 revised logic (CS01)            */
 /* 22-Nov-2021 CSCHONG  1.2   WMs-18355 remove update pickdetail (CS02) */
+/* 10-OCT-2025 SSA01    1.3   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/  
 CREATE  PROCEDURE [dbo].[ispCTNLBLITF04]  
       @c_Pickslipno   NVARCHAR(10)       
@@ -257,8 +259,8 @@ BEGIN
           UPDATE PACKINFO WITH (ROWLOCK)  
           SET TrackingNo = @c_ExtOrderkey
          ,TrafficCop = NULL  
-         ,EditWho = SUSER_SNAME()  
-         ,EditDate= GETDATE()  
+         ,EditWho = dbo.fnc_GetUserName()       --(SSA01)
+         ,EditDate= dbo.fnc_GetDate()   --(SSA01)
          WHERE PickSlipNo = @c_PickSlipNo  
          AND CartonNo = @n_CartonNo  
 
@@ -275,8 +277,8 @@ BEGIN
          UPDATE PackDetail WITH (ROWLOCK)  
           --SET labelno = @c_ExtOrderkey, refno = @c_ExtOrderkey    --CS02
           SET  refno = @c_ExtOrderkey
-         ,EditWho = SUSER_SNAME()  
-         ,EditDate= GETDATE()  
+         ,EditWho = dbo.fnc_GetUserName()      --(SSA01)
+         ,EditDate= dbo.fnc_GetDate()   --(SSA01)
          WHERE PickSlipNo = @c_PickSlipNo  
          AND CartonNo = @n_CartonNo  
 

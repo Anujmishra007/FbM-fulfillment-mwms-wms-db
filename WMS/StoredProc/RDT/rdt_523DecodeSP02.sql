@@ -5,14 +5,16 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_523DecodeSP02                                   */
-/* Copyright      : LF logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: decode IT69 label and return sku, lottable01-04             */
 /*                                                                      */
 /* Modifications log:                                                   */
 /* Date        Rev  Author      Purposes                                */
 /* 2022-12-06  1.0  James       WMS-21272 Created                       */ 
-/* 2024-10-24  1.1  ShaoAn      Extended parameter definition           */ 
+/* 2024-10-24  1.1  ShaoAn      Extended parameter definition           */
+/* 2025-02-25  1.2  Ung         WMS-25502 Add ID param output           */ 
+/* 2025-10-16  1.3  Ung         FCR-8112 Add serial no                  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP02
@@ -30,6 +32,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP02
    @cLOC              NVARCHAR( 10)  OUTPUT, 
    @cSKU              NVARCHAR( 20)  OUTPUT, 
    @nQTY              INT            OUTPUT, 
+   @cSerialNo         NVARCHAR( 30)  OUTPUT, 
    @cLottable01       NVARCHAR( 18)  OUTPUT, 
    @cLottable02       NVARCHAR( 18)  OUTPUT, 
    @cLottable03       NVARCHAR( 18)  OUTPUT, 

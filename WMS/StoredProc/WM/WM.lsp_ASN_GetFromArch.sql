@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
 /* 2022-10-26  Created  1.0   Created & DevOps Combine Script           */
+/* 2025-09-02  SWT01    1.1   Enhanced session management and cleanup.  */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_ASN_GetFromArch]
    @c_WhereClause          NVARCHAR(MAX)
@@ -39,6 +40,7 @@ BEGIN
 
    DECLARE  @n_StartTCnt               INT = @@TRANCOUNT
          ,  @n_Continue                INT = 1
+         ,  @b_ExecuteAs               BIT = 0
 
    SET @b_Success = 1
    SET @n_Err     = 0
@@ -46,7 +48,7 @@ BEGIN
    SET @n_Err = 0
    IF SUSER_SNAME() <> @c_UserName        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT, @n_Err = @n_Err OUTPUT
       , @c_ErrMsg = @c_ErrMsg OUTPUT
 
       IF @n_Err <> 0
@@ -54,7 +56,10 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+      BEGIN
+         EXECUTE AS LOGIN = @c_UserName
+      END
    END                                
 
    BEGIN TRY
@@ -115,7 +120,12 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN
    END
-   REVERT
+   
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+      EXEC [WM].[lsp_ResetUser]
+   END
 END
 GO
 GRANT EXECUTE ON  [WM].[lsp_ASN_GetFromArch] TO [NSQL]

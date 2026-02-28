@@ -1,3 +1,5 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtCSAudit]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [RDT].[rdtCSAudit]
 (
 [RowRef] [int] NOT NULL IDENTITY(1, 1),
@@ -32,24 +34,37 @@ CREATE TABLE [RDT].[rdtCSAudit]
 [AdjustDate] [datetime] NULL,
 [BatchID] [int] NOT NULL
 ) ON [PRIMARY]
-GO
+
 ALTER TABLE [RDT].[rdtCSAudit] WITH NOCHECK ADD CONSTRAINT [CK_RDTCSAudit_01] CHECK (([Status]='0' OR [Status]='5' OR [Status]='9'))
-GO
+
 ALTER TABLE [RDT].[rdtCSAudit] ADD CONSTRAINT [PKRDTCSAudit] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [Idx_RDTCSAudit_BatchID] ON [RDT].[rdtCSAudit] ([BatchID]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [Idx_RDTCSAudit_GroupID] ON [RDT].[rdtCSAudit] ([GroupID]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [Idx_RDTCSAudit_PalletID_CaseID_SKU] ON [RDT].[rdtCSAudit] ([PalletID], [CaseID], [SKU]) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [Idx_RDTCSAudit_StorerKey_Workstation_ConsigneeKey_Status] ON [RDT].[rdtCSAudit] ([StorerKey], [Workstation], [ConsigneeKey], [Status]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 GRANT DELETE ON  [RDT].[rdtCSAudit] TO [NSQL]
-GO
+
 GRANT INSERT ON  [RDT].[rdtCSAudit] TO [NSQL]
-GO
+
 GRANT SELECT ON  [RDT].[rdtCSAudit] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [RDT].[rdtCSAudit] TO [NSQL]
-GO
+
+END
+
+ELSE 
+BEGIN
+
+--ALTER COLUMN
+
+		IF EXISTS( SELECT 1 
+				FROM SYS.columns WHERE NAME ='CASEID' AND object_id = OBJECT_ID('[RDT].[rdtCSAudit]') and max_length <>40)
+		ALTER TABLE [RDT].[rdtCSAudit]
+		ALTER COLUMN [CaseID] [nvarchar] (20)  NULL;
+
+END

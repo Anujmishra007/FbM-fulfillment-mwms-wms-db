@@ -21,6 +21,7 @@ GO
 /* Date        Author   Rev   Purposes                                  */ 
 /* 2024-08-05  Wan01    1.1   LFWM-4397 - RG [GIT] Serial Number Solution*/
 /*                            - Adjustment by Serial Number             */
+/* 2025-10-21  Michael  1.2   FCR-8377- Update Loc to ItrnSerialNo(ML01)*/
 /************************************************************************/  
 CREATE OR ALTER PROCEDURE dbo.ispITrnSerialNoAdjustment (
      @c_ItrnKey      NVARCHAR(10) = ''                                              --(Wan01)
@@ -136,6 +137,24 @@ BEGIN
          FROM LOTATTRIBUTE la (NOLOCK)
          WHERE la.Lot = @c_lot
       END
+
+      --ML01-S
+      SELECT @c_Loc = ISNULL(ToLoc,'')
+      FROM ITRN (NOLOCK)
+      WHERE ItrnKey = @c_ItrnKey
+
+      IF @@ROWCOUNT = 0
+      BEGIN
+         IF ISNULL(@c_ID,'')<>''
+         BEGIN
+            SELECT TOP 1 @c_Loc = ISNULL(Loc,'')
+            FROM LOTxLOCxID (NOLOCK)
+            WHERE Storerkey = @c_StorerKey
+              AND Sku = @c_Sku
+              AND ID = @c_ID
+         END
+      END
+      --ML01-E
 
       INSERT INTO ITrnSerialNo (ITrnKey, TranType, StorerKey, SKU, SerialNo, QTY, SourceKey, SourceType
                                ,Lot, Loc, ID

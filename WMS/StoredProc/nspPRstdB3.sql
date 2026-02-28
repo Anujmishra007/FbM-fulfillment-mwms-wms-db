@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRstdB3]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPRstdB3]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -16,7 +13,7 @@ GO
 /*                                                                      */      
 /* Called By:                                                           */      
 /*                                                                      */      
-/* PVCS Version: 1.1                                                    */      
+/* PVCS Version: 1.2                                                    */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -26,17 +23,19 @@ GO
 /* Date         Author  Ver   Purposes                                  */  
 /* 18-AUG-2015 YTWan    1.1   SOS#350432 - Project Merlion - Allocation */
 /*                            Strategy (Wan01)                          */  
+/* 20-Nov-2024  WLChooi 1.2   DevOps Combine Script                     */
+/* 20-Nov-2024  WLChooi 1.2   WMS-26556-Support Multi Facilities(WL01)  */
 /************************************************************************/
 
-CREATE PROC  nspPRstdB3  -- Rename From IDSSG:nspPRstd03
+CREATE OR ALTER PROC [dbo].[nspPRstdB3]  -- Rename From IDSSG:nspPRstd03
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
 @c_lot NVARCHAR(10) ,
 @c_lottable01 NVARCHAR(18) ,
 @c_lottable02 NVARCHAR(18) ,
 @c_lottable03 NVARCHAR(18) ,
-@d_lottable04 datetime ,
-@d_lottable05 datetime ,
+@d_lottable04 DATETIME ,
+@d_lottable05 DATETIME ,
 @c_lottable06 NVARCHAR(30) ,  --(Wan01)  
 @c_lottable07 NVARCHAR(30) ,  --(Wan01)  
 @c_lottable08 NVARCHAR(30) ,  --(Wan01)
@@ -49,8 +48,8 @@ CREATE PROC  nspPRstdB3  -- Rename From IDSSG:nspPRstd03
 @d_lottable15 DATETIME ,      --(Wan01)
 @c_uom NVARCHAR(10) , 
 @c_facility NVARCHAR(10)  ,  -- added By Ricky for IDSV5
-@n_uombase int ,
-@n_qtylefttofulfill int,
+@n_uombase INT ,
+@n_qtylefttofulfill INT,
 @c_OtherParms NVARCHAR(200) = ''  --Orderinfo4PreAllocation   
 AS
 BEGIN 
@@ -151,27 +150,30 @@ BEGIN
    SET @c_SQLStatement= N'DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR'
                       + ' SELECT LOT.STORERKEY,LOT.SKU,LOT.LOT  ,'
                       + ' QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED - QTYONHOLD)'
-                      + ' FROM LOT (NOLOCK), LOTATTRIBUTE (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK)' 
-                      + ' WHERE LOT.LOT = LOTATTRIBUTE.LOT' 
-                      + ' AND LOTXLOCXID.Lot = LOT.LOT'
-                      + ' AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT'
-                      + ' AND LOTXLOCXID.LOC = LOC.LOC'
-                      + ' AND LOC.Facility = ''' + @c_facility + ''''
-                      + ' AND LOT.STORERKEY = ''' + @c_storerkey + '''' 
-                      + ' AND LOT.SKU = ''' + @c_sku + '''' 
+                      + ' FROM LOT (NOLOCK) '   --WL01
+                      + ' JOIN LOTATTRIBUTE (NOLOCK) ON LOT.Lot = LOTATTRIBUTE.Lot '   --WL01
+                      + ' JOIN LOTxLOCxID (NOLOCK) ON LOTxLOCxID.Lot = LOT.Lot AND LOTxLOCxID.Lot = LOTATTRIBUTE.Lot '   --WL01
+                      + ' JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc '   --WL01
+                      + ' JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility '   --WL01
+                      + ' WHERE LOT.STORERKEY = @c_Storerkey '   --WL01
+                      --+ ' AND LOC.Facility = ''' + @c_facility + ''''   --WL01
+                      + ' AND LOT.SKU = @c_Sku '   --WL01
                       + ' AND LOT.STATUS = "OK"'
                       + ' AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED - QTYONHOLD) > 0'
                       + @c_Condition
-                      + ' ORDER BY LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE05'
-   EXEC (@c_SQLStatement)                     
+                      + ' ORDER BY F.FacSort, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE05'   --WL01
+   
+   --WL01 S
+   --EXEC (@c_SQLStatement) 
+   EXEC sp_executesql @c_SQLStatement
+                    , N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5)' 
+                    , @c_Storerkey
+                    , @c_Sku
+                    , @c_Facility
+   --WL01 E
    --(Wan01) - END         
    END
 END
 GO
- 
-GO
-SET ANSI_NULLS OFF 
-GO
-
-GRANT EXECUTE ON nspPRstdB3 to nSQL
+GRANT EXECUTE ON [dbo].[nspPRstdB3] TO [NSQL]
 GO

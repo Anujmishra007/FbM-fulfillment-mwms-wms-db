@@ -11,6 +11,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 2021-09-22   1.0  Chermaine  TPS-616 Created                               */
 /* 2023-06-23   1.1  YeeKung    TPS-734 Add Duplicate sNo Valid (yeekung01)   */
+/* 2024-02-20   1.2  YeeKung    TPS-888 Add SKU decode and QTY (yeekung02)    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPS_DecodeSP01] (
@@ -79,7 +80,7 @@ BEGIN
                   WHERE SerialNo = @cBarcode
                   AND storerKey = @cStorerKey )
       BEGIN
-         SET @jResult = (SELECT '' AS SKU
+         SET @jResult = (SELECT @cBarcode AS SKU, 1 AS QTY --yeekung02
          FOR JSON PATH,INCLUDE_NULL_VALUES)
       END
       ELSE IF NOT EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)
@@ -109,7 +110,7 @@ BEGIN
             WHERE SerialNo = @cBarcode
             AND storerKey = @cStorerKey )
       BEGIN
-         SET @jResult = (SELECT '' AS SKU
+         SET @jResult = (SELECT @cBarcode AS SKU, 1 AS QTY --yeekung02
          FOR JSON PATH,INCLUDE_NULL_VALUES)
       END
 
