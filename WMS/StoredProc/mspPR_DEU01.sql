@@ -40,7 +40,10 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Purposes                                      */
+/* Date               Author             Purposes
+/* 02/04/26         Suryakanta         FCR-10743
+/*
+*/
 /************************************************************************/
 
 CREATE OR ALTER [dbo].[mspPR_DEU01]
