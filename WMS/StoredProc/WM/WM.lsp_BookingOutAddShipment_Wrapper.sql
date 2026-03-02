@@ -48,7 +48,6 @@ BEGIN
    DECLARE @t_Shipment     TABLE
          (  RowRef         INT             PRIMARY KEY
          ,  ShipmentGID    NVARCHAR(50)    NOT NULL DEFAULT('')
-         ,  BookingNo      INT             NOT NULL  -- YGO050
          )
 
    SET @b_Success = 1
