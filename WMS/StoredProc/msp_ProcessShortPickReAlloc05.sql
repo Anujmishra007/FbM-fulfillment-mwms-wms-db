@@ -56,6 +56,7 @@ BEGIN
          , @n_SkipNumber               INT = 0
          , @c_RCMConfigSP              NVARCHAR(60) = ''
          , @c_WVRCMConfigCode          NVARCHAR(30) = ''
+         , @n_SkipProcess              INT = 0
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -412,8 +413,24 @@ BEGIN
       END
    END
 
-   -- Confirm Replenishment via RCMConfig
+   -- If nothing new allocated, skip replenishment and Wave release
    IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
+      IF NOT EXISTS ( SELECT 1
+                      FROM #PickDetail_WIP P
+                      WHERE P.Storerkey = @c_StorerKey
+                      AND   P.Sku = @c_SKU
+                      AND   P.[Status] < '4' 
+                      AND NOT EXISTS ( SELECT 1
+                                        FROM #T_PICKDETAIL_CURRENT T
+                                        WHERE T.Pickdetailkey = P.PickDetailKey ) )
+      BEGIN
+         SET @n_SkipProcess = 1
+      END
+   END
+
+   -- Confirm Replenishment via RCMConfig
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       SET @c_WVRCMConfigCode = 'CFMREPL'
 
@@ -506,7 +523,7 @@ BEGIN
       USING (
          SELECT PD.PickSlipNo
               , PD.CartonNo
-              , PackDetailQty = PD.Qty
+              , PackDetailQty = IIF(PD.Qty > 0, PD.Qty, PD.ExpQty)
               , CaseIDQty = T_CaseID.Qty
          FROM PACKDETAIL PD (NOLOCK)
          JOIN #T_Packdetail T_Pack ON PD.PickSlipNo = T_Pack.PickSlipNo AND PD.CartonNo = T_Pack.CartonNo
@@ -548,7 +565,7 @@ BEGIN
    END
 
    -- Update to PICKDETAIL first before redo Pre-cartonization
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
@@ -566,7 +583,7 @@ BEGIN
    END
 
    --Wave Release - Redo Pre-cartonization
-   IF (@n_Continue = 1 OR @n_Continue = 2)           
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0           
    BEGIN
       BEGIN TRY
          EXEC dbo.isp_ReleaseWave_Wrapper @c_WaveKey = @c_WaveKey -- nvarchar(10)
@@ -582,7 +599,7 @@ BEGIN
    END
 
    -- Re-initialize #PICKDETAIL_WIP after redo Pre-cartonization
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       --Initialize Pickdetail work in progress staging table   
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
@@ -601,7 +618,7 @@ BEGIN
    END
 
    -- Update TaskDetail Message02 for reallocated tasks
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       -- Insert new taskdetailkeys into temp table after wave releasing
       INSERT INTO #TMP_TASK_NEW (Taskdetailkey)
@@ -629,7 +646,7 @@ BEGIN
    END
 
    --Update pickdetail_WIP work in progress staging table back to pickdetail 
-   IF (@n_Continue = 1 or @n_Continue = 2)
+   IF (@n_Continue = 1 or @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
