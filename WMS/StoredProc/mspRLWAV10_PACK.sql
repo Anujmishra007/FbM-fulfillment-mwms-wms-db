@@ -27,7 +27,8 @@ GO
 /* 23-Feb-2026 WLChooi  1.3   FCR-11069 Fix Incorrect CartonType (WL01)  */
 /* 25-Feb-2026 WLChooi  1.4   FCR-11069 Fix Incorrect CartonType (WL02)  */
 /* 27-Feb-2026 WLChooi  1.5   FCR-11069 Fix Incorrect CartonType (WL03)  */
-/* 27-Feb-2026 WLChooi  1.6   FCR-11069 Fix VAS Qty (WL04)               */
+/* 27-Feb-2026 WLChooi  1.6   FCR-11204 Fix VAS Qty (WL04)               */
+/* 02-Mar-2026 WLChooi  1.6   FCR-11204 VAS API Check (WL05)             */
 /*************************************************************************/      
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -1409,7 +1410,7 @@ BEGIN
 
                   IF @c_VAS = 'PA' AND @n_SkuAccessQty = 0
                   BEGIN
-                     SET @b_API = 0
+                     --SET @b_API = 0   --WL05
                      SET @n_QtyToPack_PI = @n_Qty_PI
                      IF @n_Qty_PI > @n_VASQty_PI
                      BEGIN
