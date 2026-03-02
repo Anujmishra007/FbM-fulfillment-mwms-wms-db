@@ -4,9 +4,9 @@ SET ANSI_NULLS OFF
 GO
 /************************************************************************/
 /* Store Procedure:  nspPR_CH03                                         */
-/* Creation Date:                                                       */
+/* Creation Date: 02/03/26                                                      */
 /* Copyright: IDS                                                       */
-/* Written by:                                                          */
+/* Written by:  Suryakanta Sahoo                                                        */
 /*                                                                      */
 /* Purpose:  Pre-Allocation Strategy of IDSCN - NIKE                    */
 /*                                                                      */
@@ -40,10 +40,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date               Author             Purposes
-/* 02/04/26         Suryakanta         FCR-10743
-/*
-*/
+/*   Date              Author          Purposes                         */
+/*   02/03/26        Suryakanta        FCR-10743                        */
 /************************************************************************/
 
 CREATE OR ALTER [dbo].[mspPR_DEU01]
