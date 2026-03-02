@@ -77,8 +77,8 @@ BEGIN
 
 BEGIN TRAN
 BEGIN TRY
-INSERT INTO @t_Shipment (RowRef, ShipmentGID, BookingNo)  -- YGO050
-SELECT ts.Rowref, ts.ShipmentGID, @n_BookingNo             -- YGO050
+INSERT INTO @t_Shipment (RowRef, ShipmentGID )  -- YGO050
+SELECT ts.Rowref, ts.ShipmentGID             -- YGO050
 FROM STRING_SPLIT(@c_ShipmentGIDs,'|') AS ss
          JOIN dbo.TMS_Shipment AS ts WITH (NOLOCK) ON ts.ShipmentGID = ss.[value]
 WHERE (ts.BookingNo = 0 OR ts.BookingNo IS NULL)
@@ -114,34 +114,20 @@ BEGIN
 END
 END
    --YGO050 - START
-      -- Cursor to update RECEIPT.Appointment_No based on @t_Shipment entries
-      DECLARE @cur_ShipmentGID NVARCHAR(50), @cur_BookingNo INT
-      DECLARE curShip CURSOR LOCAL FAST_FORWARD FOR
-SELECT ShipmentGID, BookingNo
-FROM @t_Shipment
+      -- Update RECEIPT.Appointment_No for outbound booking using WHERE IN statement instead of cursor
+      UPDATE dbo.RECEIPT WITH (ROWLOCK)
+      SET Appointment_No = ts.BookingNo
+      FROM @t_Shipment AS ts
+      WHERE dbo.RECEIPT.ExternReceiptKey = ts.ShipmentGID
 
-    OPEN curShip
-      FETCH NEXT FROM curShip INTO @cur_ShipmentGID, @cur_BookingNo
-    WHILE @@FETCH_STATUS = 0
-BEGIN
-UPDATE dbo.RECEIPT WITH (ROWLOCK)
-SET Appointment_No = @cur_BookingNo
-WHERE ExternReceiptKey = @cur_ShipmentGID
-
-    IF @@ERROR <> 0
-BEGIN
+      IF @@ERROR <> 0
+      BEGIN
             SET @n_Continue = 3
             SET @n_Err = 560453
             SET @c_ErrMsg = 'MSQL' + CONVERT(CHAR(6),@n_Err) + ': Update RECEIPT fail. (lsp_BookingOutAddShipment_Wrapper)'
-            CLOSE curShip
-            DEALLOCATE curShip
             GOTO EXIT_SP
-END
-
-FETCH NEXT FROM curShip INTO @cur_ShipmentGID, @cur_BookingNo
-END
-CLOSE curShip
-    DEALLOCATE curShip     --YGO050 - END
+      END
+--YGO050 - END
 END TRY
 
 BEGIN CATCH

@@ -51,7 +51,6 @@ BEGIN
    DECLARE @t_Shipment     TABLE 
          (  RowRef         INT         PRIMARY KEY
          ,  ShipmentGID    NVARCHAR(50)   NOT NULL DEFAULT('')
-         ,  BookingNo      INT            NOT NULL  --YGO050
          )
 
    SET @b_Success = 1
@@ -82,8 +81,8 @@ BEGIN
 
     BEGIN TRAN
     BEGIN TRY
-        INSERT INTO @t_Shipment (RowRef, ShipmentGID, BookingNo)   --YGO050
-        SELECT ts.Rowref, ts.ShipmentGID, @n_BookingNo             --YGO050
+        INSERT INTO @t_Shipment (RowRef, ShipmentGID)   --YGO050
+        SELECT ts.Rowref, ts.ShipmentGID              --YGO050
         FROM STRING_SPLIT(@c_ShipmentGIDs,'|') AS ss
         JOIN dbo.TMS_Shipment AS ts WITH (NOLOCK) ON ts.ShipmentGID = ss.[value]
         WHERE ts.BookingNo IN (0, NULL)
@@ -172,33 +171,18 @@ BEGIN
       END
      -- (SSA01) End --
 --YGO050 - START
-      -- Update RECEIPT.Appointment_No for inbound booking using cursor over @t_Shipment
-      DECLARE @cur_ShipmentGID NVARCHAR(50), @cur_BookingNo INT
-      DECLARE curShipIn CURSOR LOCAL FAST_FORWARD FOR
-SELECT ShipmentGID, BookingNo FROM @t_Shipment
+      -- Update RECEIPT.Appointment_No for inbound booking using WHERE IN statement instead of cursor
+      UPDATE dbo.RECEIPT WITH (ROWLOCK)
+      SET Appointment_No = @n_BookingNo
+      WHERE ExternReceiptKey IN (SELECT ShipmentGID FROM @t_Shipment)
 
-    OPEN curShipIn
-      FETCH NEXT FROM curShipIn INTO @cur_ShipmentGID, @cur_BookingNo
-    WHILE @@FETCH_STATUS = 0
-BEGIN
-UPDATE dbo.RECEIPT WITH (ROWLOCK)
-SET Appointment_No = @cur_BookingNo
-WHERE ExternReceiptKey = @cur_ShipmentGID
-
-    IF @@ERROR <> 0
-BEGIN
+      IF @@ERROR <> 0
+      BEGIN
             SET @n_Continue = 3
             SET @n_Err = 562003
             SET @c_ErrMsg = 'MSQL' + CONVERT(CHAR(6),@n_Err) + ': Update RECEIPT fail. (lsp_BookingInAddShipment_Wrapper)'
-            CLOSE curShipIn
-            DEALLOCATE curShipIn
             GOTO EXIT_SP
-END
-
-FETCH NEXT FROM curShipIn INTO @cur_ShipmentGID, @cur_BookingNo
-END
-CLOSE curShipIn
-    DEALLOCATE curShipIn
+      END
 --YGO050 - END
 END TRY
 
