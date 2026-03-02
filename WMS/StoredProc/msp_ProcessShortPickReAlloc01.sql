@@ -270,7 +270,6 @@ BEGIN
       --WL04 S
       SET @c_PickCondition_SQL = 'AND PICKDETAIL.Storerkey = ' + QUOTENAME(TRIM(ISNULL(@c_Storerkey, '')), '''')
                                + ' AND PICKDETAIL.SKU = ' + QUOTENAME(TRIM(ISNULL(@c_SKU, '')), '''')
-                               + ' AND PICKDETAIL.DropID = ' + QUOTENAME(TRIM(ISNULL(@c_UCCNo, '')), '''')
       --WL04 E
    END
 

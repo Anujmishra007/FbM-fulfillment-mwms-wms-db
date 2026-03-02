@@ -16,36 +16,36 @@ SELECT @jobId = j.job_id FROM msdb..sysjobs j where j.name = N'BEJ - mWMS BuildA
 IF @jobId IS NULL
 BEGIN
    EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'BEJ - mWMS BuildAutoInvReplen(GLO)',
-		   @enabled=1, 
-		   @notify_level_eventlog=2, 
-		   @notify_level_email=0, 
-		   @notify_level_netsend=0, 
-		   @notify_level_page=0, 
-		   @delete_level=0, 
-		   @description=N'No description available.', 
-		   @category_name=N'[Uncategorized (Local)]', 
+		   @enabled=1,
+		   @notify_level_eventlog=2,
+		   @notify_level_email=0,
+		   @notify_level_netsend=0,
+		   @notify_level_page=0,
+		   @delete_level=0,
+		   @description=N'No description available.',
+		   @category_name=N'[Uncategorized (Local)]',
 		   @owner_login_name=N'databoss', @job_id = @jobId OUTPUT
    IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
 END
 
-/****** Object:  Step [Backend Build Wave]    Script Date: 5/14/2024 9:35:34 AM ******/
+/****** Object:  Step [Backend Build Auto Inv Replen]    Script Date: 5/14/2024 9:35:34 AM ******/
 IF NOT EXISTS (SELECT 1 from msdb..sysjobsteps js
                JOIN msdb..sysjobs j on j.job_id = js.job_id
                WHERE js.command LIKE '%msp_BEJ%''BEJ-BuildAutoInvReplen''%'
                AND database_name = 'GLOWMS'
                AND j.job_id = @jobId
               )
-BEGIN  
-   EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Storer Build Wave at Codelkup', 
-		   @step_id=1, 
-		   @cmdexec_success_code=0, 
-		   @on_success_action=1, 
-		   @on_success_step_id=0, 
-		   @on_fail_action=2, 
-		   @on_fail_step_id=0, 
-		   @retry_attempts=0, 
-		   @retry_interval=1, 
-		   @os_run_priority=0, @subsystem=N'TSQL', 
+BEGIN
+   EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Storer Build Auto Inv Replen at Codelkup',
+		   @step_id=1,
+		   @cmdexec_success_code=0,
+		   @on_success_action=1,
+		   @on_success_step_id=0,
+		   @on_fail_action=2,
+		   @on_fail_step_id=0,
+		   @retry_attempts=0,
+		   @retry_interval=1,
+		   @os_run_priority=0, @subsystem=N'TSQL',
 		   @command=N'SET ANSI_DEFAULTS OFF
    EXEC msp_BEJ ''BEJ-BuildAutoInvReplen''',
 		   @database_name=N'GLOWMS',
@@ -83,5 +83,4 @@ QuitWithRollback:
     IF (@@TRANCOUNT > 0) ROLLBACK TRANSACTION
 EndSave:
 GO
-
 
