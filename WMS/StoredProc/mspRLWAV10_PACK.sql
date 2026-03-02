@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.4                                                          */    
+/* Version: 1.6                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -26,6 +26,9 @@ GO
 /*                            PackInfor.CartonStatus=ORDERAUDIT(ush022-2)*/
 /* 23-Feb-2026 WLChooi  1.3   FCR-11069 Fix Incorrect CartonType (WL01)  */
 /* 25-Feb-2026 WLChooi  1.4   FCR-11069 Fix Incorrect CartonType (WL02)  */
+/* 27-Feb-2026 WLChooi  1.5   FCR-11069 Fix Incorrect CartonType (WL03)  */
+/* 27-Feb-2026 WLChooi  1.6   FCR-11204 Fix VAS Qty (WL04)               */
+/* 02-Mar-2026 WLChooi  1.6   FCR-11204 VAS API Check (WL05)             */
 /*************************************************************************/      
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -980,8 +983,8 @@ BEGIN
                ,  pcz.PackQtyIndicator
                ,  pcz.IsVAS
                ,  pcz.VAS
-               ,  VASQty   = SUM(pcz.VASQty)
-               ,  VASQty_PI= SUM(pcz.VASQty_PI)
+               ,  VASQty   = MAX(pcz.VASQty)   --WL04
+               ,  VASQty_PI= MAX(pcz.VASQty_PI)   --WL04
          FROM #PRECTN AS pcz
          WHERE pcz.PackGrpNo = @n_PackGrpNo
          AND   pcz.UOM >= '6'
@@ -1303,7 +1306,7 @@ BEGIN
                         AND   pcz.UOM         >= '6'
                         AND   pcz.SkuAccessQty = @n_SkuAccessQty
                         AND   pcz.Status       = '0'
-                        AND   pcz.RowID       >= @n_RowID_pcz
+                        AND   pcz.RowID        > @n_RowID_pcz   --WL03
 
                         GOTO CTZ_API
                         CZN_CHECKED:
@@ -1368,6 +1371,7 @@ BEGIN
                            WHERE cd.Orderkey = @c_Orderkey
                            AND   cd.CartonSeqNo = @n_CartonSeqNo
                            AND   cd.[Status] = '0'
+                           AND   cd.IsApi = 1   --WL03
                         END
 
                         GOTO CLOSE_CTN
@@ -1406,7 +1410,7 @@ BEGIN
 
                   IF @c_VAS = 'PA' AND @n_SkuAccessQty = 0
                   BEGIN
-                     SET @b_API = 0
+                     --SET @b_API = 0   --WL05
                      SET @n_QtyToPack_PI = @n_Qty_PI
                      IF @n_Qty_PI > @n_VASQty_PI
                      BEGIN
@@ -1524,7 +1528,7 @@ BEGIN
                               SET @n_Continue = 3
                               BREAK
                            END
-
+                           
                            IF @n_Continue = 1
                            BEGIN
                               SET @c_IsCompletePack = ''
@@ -1605,7 +1609,7 @@ BEGIN
                               AND   pcz.Storerkey= @c_Storerkey
                               AND   pcz.Sku      = @c_Sku
                               AND   pcz.[Status] = '0'
-                              AND   pcz.RowID   >= @n_RowID_pcz
+                              AND   pcz.RowID   > @n_RowID_pcz   --WL03
                               ORDER BY pcz.RowID
 
                               SET @n_RowCount = @@ROWCOUNT
@@ -1739,7 +1743,7 @@ BEGIN
                      BEGIN
                         IF @n_GetSmaller = 1
                         BEGIN
-                           IF @b_API = 0
+                           IF NOT EXISTS ( SELECT 1 FROM #OptimizeItemToPack)   --WL03
                            BEGIN
                               SELECT TOP 1
                                    @c_CartonType   = cz.CartonType
