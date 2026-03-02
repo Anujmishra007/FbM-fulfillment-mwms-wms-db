@@ -75,6 +75,7 @@ GO
 /*                         parameter                                       */
 /* 2025-10-29 5.7  Dennis  FCR-8472 Decoded SP                             */ 
 /* 2025-10-29 5.8  Dennis  FCR-9273 ExtScn04                               */ 
+/* 2026-03-02 5.9  NickT   FCR-10628 Add extended info at step 9, 13       */ 
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -3637,6 +3638,57 @@ BEGIN
       SET @nStep = @nStep - 1
    END
 
+   Step_9_Quit:
+   BEGIN
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            SET @cOutField15 = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               '  @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
+               ' ,@cUCC, @cSKU, @nQTY, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, @cOption, @cExtendedInfo OUTPUT ' +
+               ' ,@nErrNo   OUTPUT ' +
+               ' ,@cErrMsg  OUTPUT '
+            SET @cSQLParam = +
+               '  @nMobile       INT           ' +
+               ' ,@nFunc         INT           ' +
+               ' ,@cLangCode     NVARCHAR(  3) ' +
+               ' ,@nStep         INT           ' +
+               ' ,@nAfterStep    INT           ' +
+               ' ,@nInputKey     INT           ' +
+               ' ,@cReceiptKey   NVARCHAR( 10) ' +
+               ' ,@cPOKey        NVARCHAR( 10) ' +
+               ' ,@cLOC          NVARCHAR( 10) ' +
+               ' ,@cToID         NVARCHAR( 18) ' +
+               ' ,@cLottable01   NVARCHAR( 18) ' +
+               ' ,@cLottable02   NVARCHAR( 18) ' +
+               ' ,@cLottable03   NVARCHAR( 18) ' +
+               ' ,@dLottable04   DATETIME      ' +
+               ' ,@cUCC          NVARCHAR( 20) ' +
+               ' ,@cSKU          NVARCHAR( 20) ' +
+               ' ,@nQTY          INT           ' +
+               ' ,@cParam1       NVARCHAR( 20) ' +
+               ' ,@cParam2       NVARCHAR( 20) ' +
+               ' ,@cParam3       NVARCHAR( 20) ' +
+               ' ,@cParam4       NVARCHAR( 20) ' +
+               ' ,@cParam5       NVARCHAR( 20) ' +
+               ' ,@cOption       NVARCHAR( 1)  ' +
+               ' ,@cExtendedInfo NVARCHAR(20)  OUTPUT ' +
+               ' ,@nErrNo        INT           OUTPUT ' +
+               ' ,@cErrMsg       NVARCHAR( 20) OUTPUT '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                @nMobile, @nFunc, @cLangCode, 9, @nStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04
+               ,@cUCC, @cSKU, @nQTY, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, @cOption, @cExtendedInfo OUTPUT
+               ,@nErrNo   OUTPUT
+               ,@cErrMsg  OUTPUT
+
+            SET @cOutField15 = @cExtendedInfo
+         END
+      END
+   END
+
    IF @cExtScnSP <> ''
    BEGIN
       GOTO Step_99
@@ -4609,6 +4661,58 @@ BEGIN
    SELECT @cFieldAttr10 = ''
    SELECT @cFieldAttr11 = ''
    SELECT @cFieldAttr12 = ''
+
+   Step_13_Quit:
+   BEGIN
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            SET @cOutField15 = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               '  @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
+               ' ,@cUCC, @cSKU, @nQTY, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, @cOption, @cExtendedInfo OUTPUT ' +
+               ' ,@nErrNo   OUTPUT ' +
+               ' ,@cErrMsg  OUTPUT '
+            SET @cSQLParam = +
+               '  @nMobile       INT           ' +
+               ' ,@nFunc         INT           ' +
+               ' ,@cLangCode     NVARCHAR(  3) ' +
+               ' ,@nStep         INT           ' +
+               ' ,@nAfterStep    INT           ' +
+               ' ,@nInputKey     INT           ' +
+               ' ,@cReceiptKey   NVARCHAR( 10) ' +
+               ' ,@cPOKey        NVARCHAR( 10) ' +
+               ' ,@cLOC          NVARCHAR( 10) ' +
+               ' ,@cToID         NVARCHAR( 18) ' +
+               ' ,@cLottable01   NVARCHAR( 18) ' +
+               ' ,@cLottable02   NVARCHAR( 18) ' +
+               ' ,@cLottable03   NVARCHAR( 18) ' +
+               ' ,@dLottable04   DATETIME      ' +
+               ' ,@cUCC          NVARCHAR( 20) ' +
+               ' ,@cSKU          NVARCHAR( 20) ' +
+               ' ,@nQTY          INT           ' +
+               ' ,@cParam1       NVARCHAR( 20) ' +
+               ' ,@cParam2       NVARCHAR( 20) ' +
+               ' ,@cParam3       NVARCHAR( 20) ' +
+               ' ,@cParam4       NVARCHAR( 20) ' +
+               ' ,@cParam5       NVARCHAR( 20) ' +
+               ' ,@cOption       NVARCHAR( 1)  ' +
+               ' ,@cExtendedInfo NVARCHAR(20)  OUTPUT ' +
+               ' ,@nErrNo        INT           OUTPUT ' +
+               ' ,@cErrMsg       NVARCHAR( 20) OUTPUT '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                @nMobile, @nFunc, @cLangCode, 13, @nStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04
+               ,@cUCC, @cSKU, @nQTY, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, @cOption, @cExtendedInfo OUTPUT
+               ,@nErrNo   OUTPUT
+               ,@cErrMsg  OUTPUT
+
+            SET @cOutField15 = @cExtendedInfo
+         END
+      END
+   END
+
 END
 GOTO Quit
 
@@ -4677,22 +4781,17 @@ BEGIN
          IF @cExtScnSP = 'rdt_898ExtScn02' AND @nInputKey = 1
          BEGIN
             IF @nStepBak = 99
-            BEGIN
-               SET @cUCC = @cUDF01
-               SET @nQTY = CAST(@cUDF02 AS INT)
-               SET @nCaseCntQty = CAST(@cUDF03 AS INT)
-               SET @nCnt = CAST(@cUDF04 AS INT)
-               SET @cReceiveAllowAddNewUCC = @cUDF05
-            END
+               BEGIN
+                  SET @cUCC = @cUDF01
+                  SET @nQTY = CAST(@cUDF02 AS INT)
+                  SET @nCaseCntQty = CAST(@cUDF03 AS INT)
+                  SET @nCnt = CAST(@cUDF04 AS INT)
+                  SET @cReceiveAllowAddNewUCC = @cUDF05
+               END
             ELSE IF @nStepBak = 10
-            BEGIN
-               SET @cCartonCnt = @cUDF01
-            END
-
-            IF @nScn = 1305 -- ucc scan
-            BEGIN
-               SET @cMax = ''
-            END
+               BEGIN
+                  SET @cCartonCnt = @cUDF01
+               END
          END
          IF @cExtScnSP = 'rdt_898ExtScn03'
          BEGIN
