@@ -15,6 +15,7 @@ GO
 /* Modifications log:                                                     */
 /* Date        Rev    Author   Purposes                                   */
 /* 2025-08-27  1.0.0  NickT    FCR-7160 Validation to stop UR to QI loc   */
+/* 2026-02-05  1.1.0  Cuize    FCR-9028 Validations                       */
 /**************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1721ExtValid02] (
@@ -43,7 +44,12 @@ BEGIN
             DECLARE 
                @cFromLOC               NVARCHAR( 10),
                @cFromLocHOSTWHCODE     NVARCHAR( 10),
-               @cToLocHOSTWHCODE       NVARCHAR( 10)
+               @cToLocHOSTWHCODE       NVARCHAR( 10),
+               @cToLocZone             NVARCHAR( 10),
+               @cToLocFac              NVARCHAR( 6)
+
+
+
 
             SELECT TOP 1 @cFromLOC = Loc
             FROM dbo.PalletDetail WITH (NOLOCK)
@@ -53,9 +59,26 @@ BEGIN
             FROM dbo.LOC WITH(NOLOCK)
             WHERE LOC = @cFromLOC
 
-            SELECT @cToLocHOSTWHCODE = HOSTWHCODE
+            SELECT @cToLocHOSTWHCODE = HOSTWHCODE,
+                   @cToLocZone = putawayzone,
+                   @cToLocFac = Facility
             FROM dbo.LOC WITH(NOLOCK)
             WHERE LOC = @cToLOC
+
+            IF @cToLocZone <> 'OBSTG'
+            BEGIN
+               SET @nErrNo = 245452
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToLoc is QI
+               GOTO Quit
+            END
+
+            IF @cToLocFac <> @cFacility
+            BEGIN
+               SET @nErrNo = 245453
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Diff facility
+               GOTO Quit
+            END
+
             
             IF @cFromLocHOSTWHCODE = 'UR' AND @cToLocHOSTWHCODE = 'QI'
             BEGIN
