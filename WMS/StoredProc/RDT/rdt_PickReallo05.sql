@@ -8,6 +8,7 @@
 /*                                                                      */
 /* Date       Rev    Author   Purposes                                  */
 /* 2026-02-03 1.0.0  JCH507   FCR-10041 Re-allocation if short happens  */
+/* 2026-02-24 1.0.1  JCH507   FCR-10041 Exclude locxsku hold loc        */
 /*                                                                      */
 /************************************************************************/
 
@@ -54,7 +55,7 @@ BEGIN
       @cUserName           NVARCHAR(128),
       @cLottable01         NVARCHAR(10),
       @nPickDetailQty      INT,
-      @cTotalShortQty      INT,
+      @nTotalShortQty      INT,
       @cWaveKey            NVARCHAR(10),
       @cLoadKey            NVARCHAR(10), 
       @cShortUCCNo         NVARCHAR(20),
@@ -62,7 +63,7 @@ BEGIN
       @cShortUCCStatus     NVARCHAR(1),
       
       @nBal_Qty            INT,
-      @cAllocatedQty       INT,
+      @nAllocatedQty       INT,
       @cAllocatedLot       NVARCHAR(10),
       @cAllocatedID        NVARCHAR(18),
 
@@ -237,14 +238,14 @@ BEGIN
    END
 
    SELECT 
-      @cTotalShortQty = SUM(QTY)
+      @nTotalShortQty = SUM(QTY)
    FROM @tShortPickDetails t
 
    IF @nDebugFlag = 1
    BEGIN
       SELECT 'Get short pickdetail info'
       SELECT * FROM @tShortPickDetails
-      SELECT @cTotalShortQty AS TotalShortQty
+      SELECT @nTotalShortQty AS TotalShortQty
    END
 
    IF @cType = 'SKU' --Fnc839
@@ -265,14 +266,20 @@ BEGIN
       JOIN dbo.LOC LOC WITH (NOLOCK)
          ON LLI.Loc = LOC.Loc
          AND LOC.Facility = @cFacility
+      LEFT JOIN dbo.InventoryHold IH WITH (NOLOCK)
+         ON LLI.StorerKey = IH.StorerKey
+         AND LLI.ID = IH.ID 
+         AND IH.Hold = '1'
       WHERE LLI.StorerKey = @cStorerKey
          AND LOC.LocationFlag = 'None'
          AND LOC.Status = 'OK'
+         AND LOC.LoseID = '1'
          AND LLI.SKU = @cSKU
          AND LLI.Loc <> @cLOC
+         AND NOT (LLI.ID LIKE 'HSL-%' AND IH.ID IS NOT NULL) --v1.0.1 SKU on this Loc not hold
       GROUP BY LOC.Loc, LLI.Loc
-      HAVING SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) >= @cTotalShortQty
-      ORDER BY 
+      HAVING SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) >= @nTotalShortQty
+      ORDER BY
          CASE WHEN MAX(LOC.PickZone) = @cPickZone THEN 0 ELSE 1 END,
          MAX(LOC.LogicalLocation),
          LOC.Loc;

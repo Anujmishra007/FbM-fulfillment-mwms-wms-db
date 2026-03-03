@@ -59,9 +59,9 @@ BEGIN
          , @cLabelPrinter        NVARCHAR(10)
          , @cPaperPrinter        NVARCHAR(10)
          , @oPrintConfigJson     NVARCHAR(MAX)
-         , @cSKU                 NVARCHAR(100)
          , @bIsAutoPrint         BIT
          , @nCopy                INT
+         , @cSKU                 NVARCHAR(20)
 
 
    SET @b_Success             = 0  
@@ -86,9 +86,9 @@ BEGIN
    SET @cLabelPrinter         = ''
    SET @cPaperPrinter         = ''
    SET @oPrintConfigJson      = ''
-   SET @cSKU                  = ''
    SET @bIsAutoPrint          = 0
    SET @nCopy                 = 1
+   SET @cSKU                  = ''
 
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
@@ -143,9 +143,9 @@ BEGIN
                                     WHEN oPrintConfigJson IN ('{}', '[]') THEN ''
                                     ELSE oPrintConfigJson
                                 END
-         , @cSKU   = cSKU
-         , @bIsAutoPrint       = bIsAutoPrint
-         , @nCopy              = nCopy
+         , @bIsAutoPrint      = bIsAutoPrint
+         , @nCopy             = nCopy
+         , @cSKU              = cSKU
    FROM OPENJSON(@c_RequestString)
    WITH (
 	      cType                NVARCHAR(30)
@@ -164,13 +164,10 @@ BEGIN
        , bPrintLabelFlag      BIT
        , cLabelPrinter        NVARCHAR(30)  
        , cPaperPrinter        NVARCHAR(30)
-       , cSKU                 NVARCHAR(100)
-       , bIsSKUScan            BIT
-       , bIsAutoPrint          BIT
-       --, nQueueID             INT
-       , cPaperPrinter        NVARCHAR(30)  
        , oPrintConfigJson     NVARCHAR(MAX) AS JSON
+       , bIsAutoPrint         BIT
        , nCopy                INT
+       , cSKU                 NVARCHAR(20)
    )
 
    IF @cPickSlipNo = ''
@@ -208,8 +205,9 @@ BEGIN
    , @cLabelPrinter        = @cLabelPrinter
    , @cPaperPrinter        = @cPaperPrinter
    , @oPrintConfigJson     = @oPrintConfigJson
-   , @cSku                 = @cSKU
    , @bIsAutoPrint         = @bIsAutoPrint
+   , @nCopy                = @nCopy
+   , @cSKU                 = @cSKU
    , @cPrintLabelJobIDs    = @cPrintLabelJobIDs OUTPUT
    , @cPrintPaperJobIDs    = @cPrintPaperJobIDs OUTPUT
    , @b_Success            = @b_Success         OUTPUT

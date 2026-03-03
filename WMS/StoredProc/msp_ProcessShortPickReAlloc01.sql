@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.2                                                  */
+/* GitHub Version: 1.4                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,10 @@ GO
 /* 11-Feb-2026 WLChooi  1.1   UWP-48731 Add Error Logging (WL01)        */
 /* 13-Feb-2026 WLChooi  1.2   UWP-48732 Split Pickdetail add Notes for  */
 /*                            tracing purpose (WL02)                    */
+/* 23-Feb-2026 WLChooi  1.3   UWP-48530 Insert RPF Task if the UCC of   */
+/*                            the task has already completed (WL03)     */
+/* 27-Feb-2026 WLChooi  1.4   UWP-48732 Init #PICKDETAIL_WIP with       */
+/*                            condition (WL04)                          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -112,6 +116,7 @@ BEGIN
          , @n_SkipNumber               INT = 0
          , @n_QtyLeftToFulFill         INT = 0
          , @CUR_SHORT                  CURSOR
+         , @c_PickCondition_SQL        NVARCHAR(MAX) = ''   --WL04
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -261,6 +266,11 @@ BEGIN
          SET @n_SkipNumber = ISNULL(@n_SkipNumber, 0) + 1
          SET @c_Message02 = 'SKIP' + CAST(@n_SkipNumber AS NVARCHAR(10))
       END
+
+      --WL04 S
+      SET @c_PickCondition_SQL = 'AND PICKDETAIL.Storerkey = ' + QUOTENAME(TRIM(ISNULL(@c_Storerkey, '')), '''')
+                               + ' AND PICKDETAIL.SKU = ' + QUOTENAME(TRIM(ISNULL(@c_SKU, '')), '''')
+      --WL04 E
    END
 
    --Get Storerconfig setup
@@ -515,7 +525,7 @@ BEGIN
       --Initialize Pickdetail work in progress staging table   
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
+                                  , @c_PickCondition_SQL = @c_PickCondition_SQL   --WL04
                                   , @c_Action = 'I' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
                                   , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
                                   , @b_Success = @b_Success OUTPUT
@@ -1286,7 +1296,8 @@ BEGIN
                             WHERE WaveKey = @c_WaveKey
                             AND TaskType = 'RPF'
                             AND Caseid = CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END
-                            AND FromLoc = @c_FromLoc)
+                            AND FromLoc = @c_FromLoc
+                            AND [Status] <> '9' )   --WL03
                   BEGIN
                      SET @b_InsertTask = 0
                   END
@@ -1454,7 +1465,7 @@ BEGIN
    BEGIN
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
+                                  , @c_PickCondition_SQL = @c_PickCondition_SQL   --WL04
                                   , @c_Action = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
                                   , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
                                   , @b_Success = @b_Success OUTPUT

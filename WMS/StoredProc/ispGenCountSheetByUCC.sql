@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[ispGenCountSheetByUCC]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-    DROP PROCEDURE ispGenCountSheetByUCC
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -62,9 +59,10 @@ GO
 /* 21-Jan-2021  WLChooi    WMS-15985 - Generate No. Of Loc by Count     */
 /*                         Sheet (WL01)                                 */
 /* 03-Mar-2021  WLChooi    WMS-15985 - Fix LocPerPage Logic (WL02)      */
+/* 27-Feb-2026  Michael    UWP-49445-Fix UCC Qty for incl QtyAlloc(ML01)*/
 /************************************************************************/
 
-CREATE PROC ispGenCountSheetByUCC (
+CREATE OR ALTER PROC ispGenCountSheetByUCC (
     @c_StockTakeKey NVARCHAR(10)
 )
 AS
@@ -561,7 +559,8 @@ BEGIN
                                 + 'AND LOTxLOCxID.Lot = UCC.Lot '
                                 + 'AND LOTxLOCxID.Loc = UCC.Loc '
                                 + 'AND LOTxLOCxID.Id = UCC.Id '
-                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + 'AND UCC.Status BETWEEN "1" AND ' + CASE WHEN @c_ExcludeQtyAllocated = 'Y' THEN '"2" ' ELSE '"3" ' END   --ML01
                                 --+ 'AND UCC.Status < "4" '
                                 --          + 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '             WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -633,7 +632,8 @@ BEGIN
                                 + '         AND LOTxLOCxID.Lot = UCC.Lot '
                                 + '         AND LOTxLOCxID.Loc = UCC.Loc '
                                 + '         AND LOTxLOCxID.Id = UCC.Id '
-                                + '         AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + '         AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + 'AND UCC.Status BETWEEN "1" AND ' + CASE WHEN @c_ExcludeQtyAllocated = 'Y' THEN '"2" ' ELSE '"3" ' END   --ML01
                                 --+ '         AND UCC.Status < "4" '
                                 --          + '         AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '                      WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -822,7 +822,8 @@ BEGIN
                                 + 'AND LOTxLOCxID.Lot = UCC.Lot '
                                 + 'AND LOTxLOCxID.Loc = UCC.Loc '
                                 + 'AND LOTxLOCxID.Id = UCC.Id '
-                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + 'AND UCC.Status BETWEEN "1" AND ' + CASE WHEN @c_ExcludeQtyAllocated = 'Y' THEN '"2" ' ELSE '"3" ' END   --ML01
                                 --+ 'AND UCC.Status < "4" '
                                 --          + 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '             WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -895,7 +896,8 @@ BEGIN
                                 + '            AND LOTxLOCxID.Lot = UCC.Lot '
                                 + '            AND LOTxLOCxID.Loc = UCC.Loc '
                                 + '            AND LOTxLOCxID.Id = UCC.Id '
-                                + '            AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + '            AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + 'AND UCC.Status BETWEEN "1" AND ' + CASE WHEN @c_ExcludeQtyAllocated = 'Y' THEN '"2" ' ELSE '"3" ' END   --ML01
                                 --+ '            AND UCC.Status < "4" '
                                 --          + '            AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '                         WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -1084,7 +1086,8 @@ BEGIN
                                 + 'AND LOTxLOCxID.Lot = UCC.Lot '
                                 + 'AND LOTxLOCxID.Loc = UCC.Loc '
                                 + 'AND LOTxLOCxID.Id = UCC.Id '
-                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + 'AND UCC.Status BETWEEN "1" AND ' + CASE WHEN @c_ExcludeQtyAllocated = 'Y' THEN '"2" ' ELSE '"3" ' END   --ML01
                                 --+ 'AND UCC.Status < "4" '
                                 --          + 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '             WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -1147,7 +1150,8 @@ BEGIN
                                 + '            AND LOTxLOCxID.Lot = UCC.Lot '
                                 + '            AND LOTxLOCxID.Loc = UCC.Loc '
                                 + '            AND LOTxLOCxID.Id = UCC.Id '
-                                + '            AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + '            AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + 'AND UCC.Status BETWEEN "1" AND ' + CASE WHEN @c_ExcludeQtyAllocated = 'Y' THEN '"2" ' ELSE '"3" ' END   --ML01
                                 --+ '            AND UCC.Status < "4" '
                                 --          + '            AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '                         WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -1325,7 +1329,8 @@ BEGIN
                                 + 'AND LOTxLOCxID.Lot = UCC.Lot '
                                 + 'AND LOTxLOCxID.Loc = UCC.Loc '
                                 + 'AND LOTxLOCxID.Id = UCC.Id '
-                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + 'AND UCC.Status BETWEEN "1" AND "3" '   --ML01
                                 --+ 'AND UCC.Status < "4" '
                                 --          + 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '             WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -1380,7 +1385,8 @@ BEGIN
                                 + '         AND LOTxLOCxID.Lot = UCC.Lot '
                                 + '         AND LOTxLOCxID.Loc = UCC.Loc '
                                 + '         AND LOTxLOCxID.Id = UCC.Id '
-                                + '         AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + '         AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + '         AND UCC.Status BETWEEN "1" AND "3" '   --ML01
                                 --+ '         AND UCC.Status < "4" '
                                 --          + '         AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '                      WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -1552,7 +1558,8 @@ BEGIN
                                 + 'AND LOTxLOCxID.Lot = UCC.Lot '
                                 + 'AND LOTxLOCxID.Loc = UCC.Loc '
                                 + 'AND LOTxLOCxID.Id = UCC.Id '
-                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + 'AND UCC.Status BETWEEN "1" AND "3" '   --ML01
                                 --+ 'AND UCC.Status < "4" '
                                 --          + 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '             WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -1607,7 +1614,8 @@ BEGIN
                                 + '            AND LOTxLOCxID.Lot = UCC.Lot '
                                 + '            AND LOTxLOCxID.Loc = UCC.Loc '
                                 + '            AND LOTxLOCxID.Id = UCC.Id '
-                                + '            AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + '            AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + '            AND UCC.Status BETWEEN "1" AND "3" '  --ML01
                                 --+ '            AND UCC.Status < "4" '
                                 --          + '            AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '                         WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -1780,7 +1788,8 @@ BEGIN
                                 + 'AND LOTxLOCxID.Lot = UCC.Lot '
                                 + 'AND LOTxLOCxID.Loc = UCC.Loc '
                                 + 'AND LOTxLOCxID.Id = UCC.Id '
-                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + 'AND UCC.Status BETWEEN "1" AND "3" '   --ML01
                                 --+ 'AND UCC.Status < "4" '
                                 --          + 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '             WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '
@@ -1826,7 +1835,8 @@ BEGIN
                                 + '            AND LOTxLOCxID.Lot = UCC.Lot '
                                 + '            AND LOTxLOCxID.Loc = UCC.Loc '
                                 + '            AND LOTxLOCxID.Id = UCC.Id '
-                                + '            AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+--ML01                                + '            AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
+                                + '            AND UCC.Status BETWEEN "1" AND "3" '   --ML01
                                 --+ '            AND UCC.Status < "4" '
                                 --          + '            AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 '
                                 --          + '                         WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN 2 ELSE 1 END '

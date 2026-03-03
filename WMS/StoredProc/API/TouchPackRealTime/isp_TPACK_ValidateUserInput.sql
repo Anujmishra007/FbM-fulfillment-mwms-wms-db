@@ -18,6 +18,7 @@ GO
 /* 2026-01-15   1.5  JWF011     UWP-42902: Fix MaxSKUCarton Rule                 */
 /* 2026-01-21   2.0  GCH225     UWP-45700: Update WoWkOrdUDef1 to SKU            */
 /* 2026-02-04   2.1  JWF011     UWP-48247: Add Recartonization check rule        */
+/* 2026-02-24   2.2  GCH225     UWP-49353: Fix for Scan SKU into new Carton      */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -89,6 +90,8 @@ BEGIN
          , @cCartonStatus        NVARCHAR(20)
          , @cInProgressBy        NVARCHAR(256)
          , @bIsUCCPack           BIT
+         , @nTtlQty              INT
+         , @nTtlExpQty           INT
 
    DECLARE @cVASCodeUDF2         NVARCHAR(60)   = ''
          , @cVASCodeUDF3         NVARCHAR(60)   = ''
@@ -136,7 +139,8 @@ BEGIN
    SET @cCartonStatus         = ''
    SET @cInProgressBy         = ''
    SET @bIsUCCPack            = 0
-
+   SET @nTtlQty               = 0
+   SET @nTtlExpQty            = 0
 
    --Check is the carton under inprogress status or closed status.
    IF @nCartonNo > 0 
@@ -663,16 +667,16 @@ SKIP_VALIDATE:
                AND ConfigKey = 'TPS-RecartonBlocked'
                AND SValue = '1'
    )
+   AND @nCartonNo = 0
    BEGIN
-      IF EXISTS(  SELECT 1
-                  FROM PACKDETAIL (NOLOCK)
-                  WHERE PickSlipNo = @cPickSlipNo
-                  AND CartonNo = @nCartonNo
-                  AND ExpQty > 0
-                  AND ExpQty = QTY 
-      )
-      AND @nCartonNo = 0
-      AND NOT EXISTS (  SELECT 1
+      
+      SELECT  @nTtlQty = SUM(QTY)
+            , @nTtlExpQty = SUM(ExpQty) 
+      FROM PACKDETAIL (NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+      AND ExpQty > 0
+      
+      IF NOT EXISTS (  SELECT 1
                         FROM WorkOrderDetail WOD (NOLOCK)
                         JOIN CODELKUP CL (NOLOCK)
                         ON CL.Code = WOD.Type
@@ -687,11 +691,18 @@ SKIP_VALIDATE:
                         )
       )
       BEGIN
+         IF @nTtlQty = @nTtlExpQty
+         BEGIN
+            SET @n_ErrNo = 11527 --'Not Allow Recartonization'
+         END
+         ELSE
+         BEGIN
+            SET @n_ErrNo = 11528 --'Not allow to pack into a new carton. Please pack into the original pre carton.'
+         END
          SET @n_Continue  = 3
-         SET @n_ErrNo = 11527
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not Allow Recartonization'
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')
          GOTO EXIT_SP
-      END
+      END  
    END
    -- Recartonization Check Rule (END)
 
