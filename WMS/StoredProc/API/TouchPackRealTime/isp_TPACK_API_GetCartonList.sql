@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-09-11   1.0  GCH225     Created                                          */
+/* 2026-03-03   1.1  JWF011     UWP-49326: Display CartonStatus 'PendAudit'      */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetCartonList] (
@@ -234,7 +235,7 @@ BEGIN
                                        FROM (
                                           SELECT  PKI.CartonNo AS nCartonNo
                                                 , MAX(PD.LabelNo) AS cLabelNo
-                                                , IIF(PKI.CartonStatus IN ('INPROGRESS','HOLD','CLOSED'), UPPER(PKI.CartonStatus), 'CLOSED') AS cCartonStatus
+                                                , IIF(PKI.CartonStatus IN ('INPROGRESS','HOLD','CLOSED','PendAudit'), UPPER(PKI.CartonStatus), 'CLOSED') AS cCartonStatus
                                                 , IIF(ISNULL(PKI.UCCNo,'') <> '', 'Yes','No') AS cIsUCC
                                                 , COUNT(DISTINCT PD.SKU) AS nSKUCount
                                                 , PKI.Qty AS nPackedQty
@@ -267,6 +268,7 @@ BEGIN
                                                    WHEN 'INPROGRESS' THEN 1
                                                    WHEN 'HOLD' THEN 2
                                                    WHEN 'CLOSED' THEN 3
+                                                   WHEN 'PendAudit' THEN 3
                                                   ELSE 99
                                                 END
                                               , X.nCartonNo DESC
