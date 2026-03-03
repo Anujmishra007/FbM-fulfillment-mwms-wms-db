@@ -26,7 +26,6 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /*25-02-2026    VNI01    1.1  UWP-48073 :skip conversion and return direct */
 /*                            multiplication IF ALL UOM parms are empty */
-/*26-02-2026    VNI02    1.2  UWP-49505 : Decimal point round off       */
 /************************************************************************/
 
 CREATE FUNCTION [dbo].[fnc_CalculateCube] (@nLength Float, @nWidth Float, @nHeight Float, @cDimUOM NVARCHAR(30), @cVolUOM NVARCHAR(30), @cStorerkey NVARCHAR(15) )  
@@ -36,12 +35,7 @@ BEGIN
    DECLARE @nCube Float
           ,@cSvalue NVARCHAR(10)
 
-                                                                                        --VNI01(START)
-   IF ISNULL(@cDimUOM,'') = '' AND ISNULL(@cVolUOM,'') = '' AND ISNULL(@cStorerkey,'') = ''
-   BEGIN
-       RETURN CONVERT(Float, ROUND(ISNULL(@nLength * @nWidth * @nHeight, 0), 4))      --VNI02
-   END
-                                                                                        --VNI01(END)
+
    IF ISNULL(@cStorerkey,'') <> '' AND ISNULL(@cDimUOM,'') = ''  
    BEGIN
       SELECT TOP 1 @cDimUOM = SValue
