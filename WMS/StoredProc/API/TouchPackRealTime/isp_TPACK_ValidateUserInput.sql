@@ -465,7 +465,7 @@ BEGIN
             IF NOT EXISTS( SELECT 1 
                            FROM STORERCONFIG (NOLOCK) 
                            WHERE StorerKey = @cStorerKey 
-                           AND ConfigKey = 'TPS-DecodeSP' 
+                           AND ConfigKey = 'TPS-PackDecode' 
             )
             BEGIN
                SET @n_Continue  = 3
@@ -676,7 +676,8 @@ SKIP_VALIDATE:
       WHERE PickSlipNo = @cPickSlipNo
       AND ExpQty > 0
       
-      IF NOT EXISTS (  SELECT 1
+      IF @nTtlExpQty > 0
+      AND NOT EXISTS (  SELECT 1
                         FROM WorkOrderDetail WOD (NOLOCK)
                         JOIN CODELKUP CL (NOLOCK)
                         ON CL.Code = WOD.Type
