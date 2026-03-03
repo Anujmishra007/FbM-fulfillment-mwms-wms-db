@@ -57,6 +57,7 @@ BEGIN
          , @c_RCMConfigSP              NVARCHAR(60) = ''
          , @c_WVRCMConfigCode          NVARCHAR(30) = ''
          , @n_SkipProcess              INT = 0
+         , @c_PickCondition_SQL        NVARCHAR(MAX) = ''
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -210,6 +211,9 @@ BEGIN
          SET @n_SkipNumber = ISNULL(@n_SkipNumber, 0) + 1
          SET @c_Message02 = 'SKIP' + CAST(@n_SkipNumber AS NVARCHAR(10))
       END
+
+      SET @c_PickCondition_SQL = 'AND PICKDETAIL.Storerkey = ' + QUOTENAME(TRIM(ISNULL(@c_Storerkey, '')), '''')
+                               + ' AND PICKDETAIL.SKU = ' + QUOTENAME(TRIM(ISNULL(@c_SKU, '')), '''')
    END
 
    --Get Storerconfig setup
@@ -400,7 +404,7 @@ BEGIN
       --Initialize Pickdetail work in progress staging table   
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
+                                  , @c_PickCondition_SQL = @c_PickCondition_SQL
                                   , @c_Action = 'I' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
                                   , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
                                   , @b_Success = @b_Success OUTPUT
@@ -421,6 +425,9 @@ BEGIN
                       WHERE P.Storerkey = @c_StorerKey
                       AND   P.Sku = @c_SKU
                       AND   P.[Status] < '4' 
+                      AND   EXISTS ( SELECT 1 
+                                     FROM #T_ShortOrders T
+                                     WHERE T.OrderKey = P.OrderKey )
                       AND NOT EXISTS ( SELECT 1
                                         FROM #T_PICKDETAIL_CURRENT T
                                         WHERE T.Pickdetailkey = P.PickDetailKey ) )
@@ -569,7 +576,7 @@ BEGIN
    BEGIN
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
+                                  , @c_PickCondition_SQL = @c_PickCondition_SQL
                                   , @c_Action = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
                                   , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
                                   , @b_Success = @b_Success OUTPUT
