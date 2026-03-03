@@ -463,14 +463,15 @@ BEGIN
                                             AND(TD.[Status] <> 'X')                 
       LEFT JOIN CODELKUP CLK WITH (NOLOCK) ON CLK.LISTNAME = 'CSCUK01OPY'            
                                             AND CAST(CLK.Code AS INTEGER) = CAST(O.Priority AS INTEGER)            
-      WHERE  WD.Wavekey = @c_Wavekey              
+      WHERE  WD.Wavekey = @c_Wavekey        
+      AND PD.Status < '4'
       --AND    TD.TaskDetailKey IS NULL  
       AND NOT EXISTS ( SELECT 1                          /*JH06 Start*/
                        FROM TASKDETAIL T (NOLOCK)
                        WHERE T.Storerkey = PD.Storerkey
                        AND T.CaseID = PD.DropID
                        AND T.UOM = PD.UOM
-                       AND T.FromLoc = PD.Loc
+                       --AND T.FromLoc = PD.Loc
                        AND T.[Status] NOT IN ('9', 'X')
                        AND T.Wavekey = @c_Wavekey)  /*JH06 End*/
       GROUP BY LOC.Facility              
