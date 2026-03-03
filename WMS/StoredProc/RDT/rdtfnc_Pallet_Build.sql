@@ -35,6 +35,7 @@ GO
 /* 2023-12-03 2.7  YeeKung  UWP-11635 Fix Bug   (yeekung06)                   */
 /* 2024-12-02 3.0.0 LJQ006  FCR-1406. Created                                 */
 /* 2026-02-16 4.0.0 NYE018  FCR-10366 add loc check digit                     */
+/* 2026-03-01 4.0.1 Dennis  DefaultLoc init value should be ''                */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_Pallet_Build](
@@ -266,6 +267,7 @@ BEGIN
    IF @nStep = 6 GOTO Step_6   -- Scn = 2325   Print Label ? 
    IF @nStep = 7 GOTO Step_7   -- Scn = 2326   Reopen the Pallet 
    IF @nStep = 8 GOTO Step_8   -- Scn = 2327   Capture Pallet Info
+   IF @nStep = 99 GOTO Step_99 -- Scn = ExtScnSP
 END
 
 RETURN -- Do nothing if incorrect step
@@ -425,6 +427,11 @@ BEGIN
       -- Go to DropID screen
       SET @nScn  = 2320
       SET @nStep = 1
+   END
+   IF @cExtScnSP <> '' 
+      AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
    END
 END
 GOTO Quit
@@ -673,6 +680,10 @@ BEGIN
          SET @nScn  = @nMenu
          SET @nStep = 0
       END
+   END
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
    END
    GOTO Quit
 
@@ -1388,6 +1399,10 @@ BEGIN
       SET @nScn = @nScn - 3
       SET @nStep = @nStep - 3
    END
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
    GOTO Quit
 
    Step_4_Fail:
@@ -1506,6 +1521,11 @@ BEGIN
    SET @cFieldAttr06 = ''
    SET @cFieldAttr08 = ''
    SET @cFieldAttr10 = ''
+   
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
 END
 GOTO Quit
 
@@ -1891,6 +1911,9 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
+         DECLARE @nStepBackup INT, @nScnBackup INT
+         SET @nStepBackup = @nStep
+         SET @nScnBackup = @nScn
 
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES    
@@ -1930,6 +1953,28 @@ BEGIN
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
          IF @nErrNo <> 0
             GOTO Step_99_Fail
+         
+         IF @cExtScnSP = 'rdt_1641ExtScn02'
+         BEGIN
+            IF @nScnBackup = 6825 AND @nInputKey = 0 AND @nStep <> 5
+            BEGIN
+               -- EventLog - Sign Out Function
+               EXEC RDT.rdt_STD_EventLog
+               @cActionType = '9', -- Sign Out function
+               @cUserID     = @cUserName,
+               @nMobileNo   = @nMobile,
+               @nFunctionID = @nFunc,
+               @cFacility   = @cFacility,
+               @cStorerKey  = @cStorerkey
+
+               SET @cOutField01 = ''
+
+               -- Back to menu
+               SET @nFunc = @nMenu
+               SET @nScn  = @nMenu
+               SET @nStep = 0
+            END
+         END
       END
    END
 
