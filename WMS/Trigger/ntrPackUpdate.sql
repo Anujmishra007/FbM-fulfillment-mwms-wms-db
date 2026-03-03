@@ -271,7 +271,7 @@ BEGIN
            , @n_Decimal    = TRY_PARSE(UDF02 AS INT)
             FROM CODELKUP (NOLOCK)
             WHERE LISTNAME='PKCUBEFCT'
-            AND UDF01 <> ''
+            AND SHORT = 'Y'
             AND master.dbo.RegExIsMatch(Long, @c_PackKey, 0) = 1
             ORDER BY Code
 
