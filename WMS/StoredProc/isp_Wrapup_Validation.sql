@@ -18,7 +18,7 @@ GO
 /*                                                                        */    
 /* Called By: n_cst_busobj.ue_wrapup                                      */    
 /*                                                                        */    
-/* PVCS Version: 2.1                                                      */    
+/* PVCS Version: 2.2                                                      */    
 /*                                                                        */    
 /* Version: 7.0                                                           */    
 /*                                                                        */    
@@ -44,6 +44,7 @@ GO
 /* 09-Mar-2023  NJOW05   1.9  LFWM-3608 Performance tuning for XML reading*/
 /* 20-Aug-2025  WLChooi  2.0  FCR-6862 Pack Mgmt Input Validation (WL01)  */ 
 /* 27-Aug-2025  Michael  2.1  FCR-7196 TaskDetail Input Validation (ML01) */
+/* 27-Feb-2026  Wan06    2.2  UWP-48565 - PreSave Validation exec SP issue*/
 /**************************************************************************/  
 CREATE OR ALTER PROCEDURE [dbo].[isp_Wrapup_Validation]    
       @c_Window            NVARCHAR(60) = ''  
@@ -66,6 +67,7 @@ BEGIN
    DECLARE @c_SQL             NVARCHAR(MAX)  
          , @c_SQLSchema       NVARCHAR(MAX)  
          , @c_SQLData         NVARCHAR(MAX)  
+         , @c_SQLParms        NVARCHAR(1000)                                        --(Wan06)  
   
          , @c_TableColumns    NVARCHAR(MAX)  
          , @c_ColumnName      NVARCHAR(128)  
@@ -108,6 +110,7 @@ BEGIN
          , @c_Pickslipno         NVARCHAR(10) = ''  --WL01
          , @b_IsConso            BIT = 0            --WL01
   
+
    SET @n_err        = 0  
    SET @b_Success   = 1  
    SET @c_errmsg     = ''  
@@ -219,7 +222,7 @@ BEGIN
       END  
    END  
    ELSE IF @c_XMLToTemp = 'Y'  --NJOW05
-   BEGIN           	
+   BEGIN             
       SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)  
       SET @x_XMLData = CONVERT(XML, @c_XMLDataString)  
 
@@ -519,17 +522,17 @@ BEGIN
       --NJOW04 S
       IF @c_UpdateTable = 'INVENTORYHOLD' AND @c_ValidateBy = 'Storer'  
       BEGIN
-      	 SET @c_Storerkey = ''
-      	 SET @c_Sku = ''
-      	 
-      	 --NJOW05 change to Dynamic SQL
-      	 SET @c_SQL = N'
-      	     SELECT TOP 1 @c_Storerkey = Storerkey,
-      	                  @c_Sku = Sku,
-      	                  @c_Lot = Lot,
-      	                  @c_Loc = Loc,
-      	                  @c_ID = ID
-      	     FROM #VALDN'
+          SET @c_Storerkey = ''
+          SET @c_Sku = ''
+          
+          --NJOW05 change to Dynamic SQL
+          SET @c_SQL = N'
+              SELECT TOP 1 @c_Storerkey = Storerkey,
+                           @c_Sku = Sku,
+                           @c_Lot = Lot,
+                           @c_Loc = Loc,
+                           @c_ID = ID
+              FROM #VALDN'
 
          EXEC sp_executeSQl @c_SQL  
                          , N'@c_Storerkey NVARCHAR(15) OUTPUT, @c_Sku NVARCHAR(20) OUTPUT, @c_Lot NVARCHAR(10) OUTPUT, @c_Loc NVARCHAR(10) OUTPUT, @c_ID NVARCHAR(18) OUTPUT'  
@@ -537,52 +540,52 @@ BEGIN
                          , @c_Sku OUTPUT
                          , @c_Lot OUTPUT
                          , @c_Loc OUTPUT
-                         , @c_ID  OUTPUT	 
-      	 
-      	 IF ISNULL(@c_Storerkey,'') = ''
-      	 BEGIN
-      	    IF ISNULL(@c_Lot,'') <> ''
-      	    BEGIN
-      	       SELECT @c_Storerkey = Storerkey,
-      	              @c_Sku = Sku
-      	       FROM LOT (NOLOCK)  
-      	       WHERE Lot = @c_Lot
-      	    END       
-      	    ELSE IF ISNULL(@c_ID,'') <> ''
-      	    BEGIN
-      	    	 SELECT TOP 1 @c_Storerkey = Storerkey
-      	    	 FROM LOTXLOCXID (NOLOCK)
-      	    	 WHERE ID = @c_ID
-      	    	 AND Qty > 0
-      	    	 ORDER BY Editdate DESC      	    	       	    	       	    	 
-      	    END
-      	    ELSE IF ISNULL(@c_Loc,'') <> ''
-      	    BEGIN
-      	    	 SELECT TOP 1 @c_Storerkey = Storerkey
-      	    	 FROM LOTXLOCXID (NOLOCK)
-      	    	 WHERE Loc = @c_Loc
-      	    	 --AND Qty > 0
-      	    	 ORDER BY Editdate DESC
-      	    END      	      
-      	    
-      	    IF ISNULL(@c_Storerkey,'') = ''
-      	    BEGIN 
-      	       GOTO QUIT_SP
-      	    END        
-      	    ELSE
-      	    BEGIN
-      	    	 --NJOW05 change to Dynamic SQL
-               SET @c_SQL = N'      	       	    	
-      	           UPDATE #VALDN
-      	           SET Storerkey = @c_Storerkey,
-      	           Sku = CASE WHEN ISNULL(@c_Sku,'') <> '' THEN @c_Sku ELSE Sku END'
+                         , @c_ID  OUTPUT   
+          
+          IF ISNULL(@c_Storerkey,'') = ''
+          BEGIN
+             IF ISNULL(@c_Lot,'') <> ''
+             BEGIN
+                SELECT @c_Storerkey = Storerkey,
+                       @c_Sku = Sku
+                FROM LOT (NOLOCK)  
+                WHERE Lot = @c_Lot
+             END       
+             ELSE IF ISNULL(@c_ID,'') <> ''
+             BEGIN
+                SELECT TOP 1 @c_Storerkey = Storerkey
+                FROM LOTXLOCXID (NOLOCK)
+                WHERE ID = @c_ID
+                AND Qty > 0
+                ORDER BY Editdate DESC                                            
+             END
+             ELSE IF ISNULL(@c_Loc,'') <> ''
+             BEGIN
+                SELECT TOP 1 @c_Storerkey = Storerkey
+                FROM LOTXLOCXID (NOLOCK)
+                WHERE Loc = @c_Loc
+                --AND Qty > 0
+                ORDER BY Editdate DESC
+             END              
+             
+             IF ISNULL(@c_Storerkey,'') = ''
+             BEGIN 
+                GOTO QUIT_SP
+             END        
+             ELSE
+             BEGIN
+                --NJOW05 change to Dynamic SQL
+               SET @c_SQL = N'                        
+                    UPDATE #VALDN
+                    SET Storerkey = @c_Storerkey,
+                    Sku = CASE WHEN ISNULL(@c_Sku,'') <> '' THEN @c_Sku ELSE Sku END'
 
                EXEC sp_executeSQl @c_SQL  
                          , N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20)'  
                          , @c_Storerkey 
-                         , @c_Sku       	           
-      	    END
-      	 END
+                         , @c_Sku                    
+             END
+          END
       END 
       --NJOW04 E
   
@@ -797,7 +800,6 @@ BEGIN
    CLOSE CUR_CHK_CONDITION  
    DEALLOCATE CUR_CHK_CONDITION   
   
-  
    IF @b_InValid = 1  
       GOTO QUIT_SP  
   
@@ -814,98 +816,122 @@ BEGIN
    FETCH NEXT FROM CUR_CHK_SPCONDITION INTO @c_TableName, @c_Description, @c_SPName   
   
    WHILE @@FETCH_STATUS <> -1  
-   BEGIN  
+   BEGIN 
+      --(Wan06) - START 
+      --Redesign/enhance logic since unable to exec any SPs and original logic is incorrect
+      -- PE: Standard naming convention for eg: isp_VALDN_<TableName>_XX
+      -- TCO SP to add countryCode & Storerkey follow TCO standard naming convention
+      IF @c_SPName NOT Like '%sp_VALDN_' + @c_UpdateTable + '_%'
+      BEGIN
+         GOTO NEXT_SP_RULE  
+      END
+
+      IF EXISTS ( SELECT 1 FROM sys.objects (NOLOCK) 
+                  WHERE Object_ID(@c_SPName) = object_id 
+                  AND [Type] = 'P')    
+      BEGIN      
+         --IF NOT EXISTS (SELECT 1    
+         --               FROM [INFORMATION_SCHEMA].[PARAMETERS] WITH (NOLOCK)  
+         --               WHERE SPECIFIC_NAME = @c_SPName  
+         --               AND PARAMETER_NAME = '@x_XMLSchema'  
+         --               AND PARAMETER_NAME = '@x_XMLData'  
+         --             )  
+         --BEGIN  
+         --   GOTO NEXT_SP_RULE  
+         --END 
   
-      IF EXISTS (SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = RTRIM(@c_SPName) AND type = 'P')    
-      BEGIN   
-  
-         IF NOT EXISTS (SELECT 1    
-                        FROM [INFORMATION_SCHEMA].[PARAMETERS] WITH (NOLOCK)  
-                        WHERE SPECIFIC_NAME = @c_SPName  
-                        AND PARAMETER_NAME = '@x_XMLSchema'  
-                        AND PARAMETER_NAME = '@x_XMLData'  
-                      )  
-         BEGIN  
-            GOTO NEXT_SP_RULE  
-         END  
-  
-         SET @n_Cnt = 0   
-         SET @c_PrimaryKey1 = ''  
-         SET @c_PrimaryKey2= ''  
-         SET @c_PrimaryKey3= ''  
-  
-         SET @c_SQL = 'EXEC ' + @c_SPName  
-  
-         DECLARE CUR_PRIMARYKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT Column_Name  
-         FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WITH (NOLOCK)  
-         WHERE OBJECTPROPERTY(OBJECT_ID(constraint_name), 'IsPrimaryKey') = 1  
-         AND Table_name = @c_UpdateTable  
-         AND Table_Schema = 'dbo'  
-         ORDER BY ORDINAL_POSITION  
+         --SET @n_Cnt = 0   
+         --SET @c_PrimaryKey1 = ''  
+         --SET @c_PrimaryKey2 = ''  
+         --SET @c_PrimaryKey3 = '' 
+         
+         SET @c_SQL = 'EXEC ' + @c_SPName  + ' @c_Window = @c_Window 
+                                             , @c_UpdateTable = @c_UpdateTable
+                                             , @b_Success = @b_Success OUTPUT
+                                             , @n_Err = @n_Err OUTPUT
+                                             , @c_ErrMsg = @c_ErrMsg OUTPUT' 
+
+         SET @c_SQLParms = N'@c_Window NVARCHAR(60)
+                           , @c_UpdateTable NVARCHAR(30)
+                           , @b_Success INT OUTPUT
+                           , @n_Err INT OUTPUT
+                           , @c_ErrMsg NVARCHAR(255) OUTPUT'
+
+         EXEC sp_executesql @c_SQL 
+                     , @c_SQLParms
+                     , @c_Window
+                     , @c_UpdateTable
+                     , @b_Success      OUTPUT
+                     , @n_Err          OUTPUT
+                     , @c_ErrMsg       OUTPUT 
+
+         --DECLARE CUR_PRIMARYKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         --SELECT Column_Name  
+         --FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WITH (NOLOCK)  
+         --WHERE OBJECTPROPERTY(OBJECT_ID(constraint_name), 'IsPrimaryKey') = 1  
+         --AND Table_name = @c_UpdateTable  
+         --AND Table_Schema = 'dbo'  
+         --ORDER BY ORDINAL_POSITION  
      
-         OPEN CUR_PRIMARYKEY  
+         --OPEN CUR_PRIMARYKEY  
   
-         FETCH NEXT FROM CUR_PRIMARYKEY INTO @c_ColumnName  
+         --FETCH NEXT FROM CUR_PRIMARYKEY INTO @c_ColumnName  
   
-         WHILE @@FETCH_STATUS <> -1  
-         BEGIN  
+         --WHILE @@FETCH_STATUS <> -1  
+         --BEGIN  
+         --   IF EXISTS ( SELECT 1    
+         --               FROM [INFORMATION_SCHEMA].[PARAMETERS] WITH (NOLOCK)  
+         --               WHERE SPECIFIC_NAME = @c_SPName  
+         --               --AND PARAMETER_NAME = '@x_XMLSchema'                       --(Wan06)
+         --               AND PARAMETER_NAME = '@c_' + @c_ColumnName  
+         --             )  
+         --   BEGIN  
+         --      GOTO NEXT_SP_RULE  
+         --   END  
   
-            IF EXISTS ( SELECT 1    
-                        FROM [INFORMATION_SCHEMA].[PARAMETERS] WITH (NOLOCK)  
-                        WHERE SPECIFIC_NAME = @c_SPName  
-                        AND PARAMETER_NAME = '@x_XMLSchema'  
-                        AND PARAMETER_NAME = '@c_' + @c_ColumnName  
-                      )  
-            BEGIN  
-               GOTO NEXT_SP_RULE  
-            END  
-  
-            SET @n_Cnt = @n_Cnt + 1  
-            SET @c_SQL = N'SELECT @c_PrimaryKey' + CONVERT(CHAR(1), @n_Cnt) + ' = ' + @c_ColumnName  
-                       + ' FROM #VALDN '  
+         --   SET @n_Cnt = @n_Cnt + 1  
+         --   SET @c_SQL = N'SELECT @c_PrimaryKey' + CONVERT(CHAR(1), @n_Cnt) + ' = ' + @c_ColumnName  
+         --              + ' FROM #VALDN '  
               
-            EXEC sp_executesql @c_SQL   
-               , N'@c_PrimaryKey1 NVARCHAR(30)  OUTPUT   
-                  ,@c_PrimaryKey2 NVARCHAR(30)  OUTPUT  
-                  ,@c_PrimaryKey3 NVARCHAR(30)  OUTPUT'  
-                  ,@c_PrimaryKey1   OUTPUT     
-                  ,@c_PrimaryKey2   OUTPUT   
-                  ,@c_PrimaryKey3   OUTPUT   
+         --   EXEC sp_executesql @c_SQL   
+         --      , N'@c_PrimaryKey1 NVARCHAR(30)  OUTPUT   
+         --         ,@c_PrimaryKey2 NVARCHAR(30)  OUTPUT  
+         --         ,@c_PrimaryKey3 NVARCHAR(30)  OUTPUT'
+         --         ,@c_PrimaryKey1   OUTPUT     
+         --         ,@c_PrimaryKey2   OUTPUT   
+         --         ,@c_PrimaryKey3   OUTPUT 
+              
   
-            FETCH NEXT FROM CUR_PRIMARYKEY INTO @c_ColumnName  
-         END  
-         CLOSE CUR_PRIMARYKEY  
-         DEALLOCATE CUR_PRIMARYKEY  
+         --   FETCH NEXT FROM CUR_PRIMARYKEY INTO @c_ColumnName  
+         --END  
+         --CLOSE CUR_PRIMARYKEY  
+         --DEALLOCATE CUR_PRIMARYKEY  
      
-         SET @c_SQL = 'EXEC ' + @c_SPName + ' @c_PrimaryKey1, @c_PrimaryKey2, @c_PrimaryKey3   
-                     , @x_XMLSchema, @x_XMLData  
-                     , @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '        
+           
+         --SET @c_SQL = 'EXEC ' + @c_SPName + ' @c_PrimaryKey1, @c_PrimaryKey2, @c_PrimaryKey3 = @c_PrimaryKey3  
+         --            , @b_Success OUTPUT , @n_ErrOUTPUT , @c_ErrMsg  OUTPUT'        
         
-         EXEC sp_executesql @c_SQL       
-            , N'@c_PrimaryKey1 NVARCHAR(30)     
-              , @c_PrimaryKey2 NVARCHAR(30)  
-              , @c_PrimaryKey3 NVARCHAR(30)   
-              , @x_XMLSchema   XML  
-              , @x_XMLData     XML  
-              , @b_Success     INT OUTPUT  
-              , @n_Err         INT OUTPUT  
-              , @c_ErrMsg      NVARCHAR(250) OUTPUT'   
-            , @c_PrimaryKey1       
-            , @c_PrimaryKey2     
-            , @c_PrimaryKey3  
-            , @x_XMLSchema  
-            , @x_XMLData     
-            , @b_Success   OUTPUT        
-            , @n_Err       OUTPUT        
-            , @c_ErrMsg    OUTPUT      
-  
-         IF @b_Success <> 1  
-         BEGIN   
-            SET @b_InValid = 1        
-            GOTO QUIT_SP  
-         END   
+         --EXEC sp_executesql @c_SQL       
+         --   , N'@c_PrimaryKey1 NVARCHAR(30)     
+         --     , @c_PrimaryKey2 NVARCHAR(30)  
+         --     , @c_PrimaryKey3 NVARCHAR(30)  
+         --     , @b_Success     INT OUTPUT  
+         --     , @n_Err         INT OUTPUT  
+         --     , @c_ErrMsg      NVARCHAR(250) OUTPUT'   
+         --   , @c_PrimaryKey1       
+         --   , @c_PrimaryKey2     
+         --   , @c_PrimaryKey3
+         --   , @b_Success   OUTPUT        
+         --   , @n_Err       OUTPUT        
+         --   , @c_ErrMsg    OUTPUT      
+
+         --IF @b_Success <> 1  
+         --BEGIN   
+         --   SET @b_InValid = 1        
+         --   GOTO QUIT_SP  
+         --END  
       END  
+      --(Wan06) - END 
       NEXT_SP_RULE:   
       FETCH NEXT FROM CUR_CHK_SPCONDITION INTO @c_TableName, @c_Description, @c_SPName  
    END   
