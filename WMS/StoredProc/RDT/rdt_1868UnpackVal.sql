@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date         Rev   Author      Purposes                              */
 /* 2024-11-05   1.0   TLE109      FCR-917 Serial Unpack and Unpick      */
+/* 2026-02-19   1.1   NYE018      FCR-10102  Fix the @cSQLParam         */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_1868UnpackVal (
@@ -64,8 +65,8 @@ BEGIN
       ' @cStorerKey     NVARCHAR( 15), ' +
       ' @cSerialNo      NVARCHAR( 100),' +
       ' @cPickSlipNo    NVARCHAR( 20), ' + 
-      ' @nErrNo         INT,           ' +
-      ' @cErrMsg        NVARCHAR( 20)  ' 
+      ' @nErrNo         INT OUTPUT,           ' +
+      ' @cErrMsg        NVARCHAR( 20) OUTPUT ' 
 
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
          @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,

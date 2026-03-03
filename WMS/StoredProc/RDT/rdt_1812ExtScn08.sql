@@ -242,7 +242,7 @@ BEGIN
          IF @nStep = 6 SET @nScn = 4025  -- Scn = 4025 To LOC
          IF @nStep = 7 SET @nScn = 4026   -- Scn = 4026 Pallet is close. Next task / Exit
          IF @nStep = 8 SET @nScn = 4027   -- Scn = 4027 Short pick / Close pallet
-         IF @nStep = 9 SET @nScn = 4100   -- Scn = 2100 Reason code
+         IF @nStep = 9 SET @nScn = 2109   -- Scn = 2100 Reason code
       END
       SET @nAfterScn = @nScn
       IF @nScn = 4020 -- DropID Scan Screen

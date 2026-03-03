@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 28-Jan-2025 WLChooi  1.0   Initial Version                           */
+/* 02-Feb-2026 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc03] (    
@@ -60,6 +60,7 @@ BEGIN
          , @n_ByUCC                    INT = 1   -- @n_ByUCC = 1 - UCC   @n_ByUCC = 0 - LOC
          , @CUR_UNALLOC                CURSOR
          , @c_UCCNo                    NVARCHAR(20) = ''
+         , @n_ShortReplen              INT = 0
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -158,10 +159,6 @@ BEGIN
       (
          Taskdetailkey NVARCHAR(10) PRIMARY KEY
       )
-
-      CREATE TABLE #T_PICKDETAIL_CURRENT (
-            Pickdetailkey NVARCHAR(18) PRIMARY KEY
-      )
    END
 
    IF @b_debug = 0 AND @n_Continue IN (1,2)
@@ -182,11 +179,15 @@ BEGIN
       JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
       WHERE W.WaveKey = @c_Wavekey
 
-      -- If @c_Taskdetailkey is blank, assume UCC based - call from msp_ProcessShortReplenReAlloc01
-      -- Else check if Taskdetail.CaseID exists as UCCNo in UCC table
-      IF ISNULL(@c_Taskdetailkey, '') = ''
+      -- Call from msp_ProcessShortReplenReAlloc01
+      IF EXISTS ( SELECT 1
+                  FROM TASKDETAIL TD (NOLOCK)
+                  WHERE TD.Taskdetailkey = @c_Taskdetailkey
+                  AND TD.TaskType = 'RPF'
+                  AND TD.FinalLOC = @c_Loc ) AND ISNULL(@c_Loc, '') <> ''
       BEGIN
-         SET @n_ByUCC = 1
+         SET @n_ByUCC = 0
+         SET @n_ShortReplen = 1
       END
       ELSE IF EXISTS ( SELECT 1
                        FROM TASKDETAIL (NOLOCK)
@@ -238,7 +239,7 @@ BEGIN
 
    --Validation
    --RDT update Status = '4'， QtyMoved, Qty no change
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_ShortReplen = 0
    BEGIN
       IF @n_ByUCC = 1
       BEGIN
@@ -322,17 +323,6 @@ BEGIN
          GROUP BY PD.OrderKey
       END
 
-      INSERT INTO #T_PICKDETAIL_CURRENT (Pickdetailkey)
-      SELECT PD.Pickdetailkey
-      FROM PICKDETAIL PD WITH (NOLOCK)
-      WHERE PD.Storerkey = @c_StorerKey
-      AND   PD.Sku = @c_SKU
-      AND   PD.[Status] < '4'
-      AND   EXISTS ( SELECT 1 
-                     FROM #T_ShortOrders T
-                     WHERE T.OrderKey = PD.OrderKey )
-      GROUP BY PD.Pickdetailkey
-
       -- Get current taskdetail for the SKU
       INSERT INTO #TMP_TASK_CURRENT (Taskdetailkey)
       SELECT TD.Taskdetailkey
@@ -344,13 +334,8 @@ BEGIN
    END
 
    --Unallocate
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_ShortReplen = 0
    BEGIN
-      IF @b_debug = 0
-      BEGIN
-         BEGIN TRAN
-      END
-
       SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT T.Pickdetailkey
       FROM #TMP_SHORTED T
@@ -376,14 +361,6 @@ BEGIN
       END
       CLOSE @CUR_UNALLOC
       DEALLOCATE @CUR_UNALLOC
-
-      IF @b_debug = 0 AND @n_Continue IN (1,2)
-      BEGIN
-         WHILE @@TRANCOUNT > 0
-         BEGIN
-            COMMIT TRAN
-         END
-      END
    END
 
    --Reallocate
@@ -459,11 +436,6 @@ BEGIN
       FROM PACKDETAIL PD (NOLOCK)
       JOIN #T_CaseID T ON PD.LabelNo = T.CaseID AND PD.StorerKey = T.Storerkey AND PD.SKU = T.SKU
 
-      IF @b_debug = 0
-      BEGIN
-         BEGIN TRAN
-      END
-
       -- Update or Delete Packdetail based on quantity comparison
       -- If T_CaseID.Qty = T_Packdetail.Qty, delete; else update Qty = T_Packdetail.Qty - T_CaseID.Qty
       MERGE PACKDETAIL AS TGT
@@ -484,26 +456,6 @@ BEGIN
          DELETE
       WHEN MATCHED AND SRC.PackDetailQty <> SRC.CaseIDQty THEN
          UPDATE SET ExpQty = SRC.PackDetailQty - SRC.CaseIDQty;
-
-      -- Update or Delete Packinfo based on qty comparison
-      -- Delete Packinfo where qty match
-      -- Delete only, trigger will update the qty accordingly
-      --DELETE PIF
-      --FROM PACKINFO PIF
-      --JOIN PACKDETAIL PD (NOLOCK) ON PIF.PickSlipNo = PD.PickSlipNo AND PIF.CartonNo = PD.CartonNo
-      --JOIN #T_Packdetail T_Pack ON PIF.PickSlipNo = T_Pack.PickSlipNo AND PIF.CartonNo = T_Pack.CartonNo
-      --JOIN #T_CaseID T_CaseID ON PD.LabelNo = T_CaseID.CaseID 
-      --                        AND PD.StorerKey = T_CaseID.Storerkey 
-      --                        AND PD.SKU = T_CaseID.SKU
-      --WHERE PD.ExpQty = T_CaseID.Qty
-
-      IF @b_debug = 0 AND @n_Continue IN (1,2) 
-      BEGIN
-         WHILE @@TRANCOUNT > 0
-         BEGIN
-            COMMIT TRAN
-         END
-      END
       
       -- Clear CaseID
       IF @n_ByUCC = 1
@@ -562,6 +514,35 @@ BEGIN
       END
    END
 
+   -- Delete Shorted Pickdetail
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_ShortReplen = 0
+   BEGIN
+      SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT T.Pickdetailkey
+      FROM #TMP_SHORTED T
+      ORDER BY T.Pickdetailkey
+
+      OPEN @CUR_UNALLOC
+
+      FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+      BEGIN
+         BEGIN TRY
+            DELETE FROM PICKDETAIL
+            WHERE PickDetailKey = @c_PickDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @c_ErrMsg = ERROR_MESSAGE()
+         END CATCH
+
+         FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
+      END
+      CLOSE @CUR_UNALLOC
+      DEALLOCATE @CUR_UNALLOC
+   END
+
    -- Redo Pre-cartonization
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
@@ -596,168 +577,6 @@ BEGIN
       END
    END
 
-   --Compare Pickdetail Line
-   IF (@n_Continue = 1 OR @n_Continue = 2)
-   BEGIN
-      IF @b_debug = 0
-      BEGIN
-         BEGIN TRAN
-      END
-
-      -- ReAllocStatus
-      -- 0 - Not Allocated after shorted
-      -- 1 - Partial Allocated after shorted
-      -- 2 - Fully Allocated after shorted
-      IF @n_ByUCC = 1
-      BEGIN
-         SET @CUR_UpdatePick = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         WITH AllPick AS (
-            SELECT OrderKey = PD.OrderKey
-                 , ReAllocStatus = CASE WHEN SUM(PD.Qty) = 0 THEN '0' ELSE '1' END
-                 , QtyInDiff = ABS(MAX(PW.QtyMoved) - SUM(PD.Qty))
-            FROM #PickDetail_WIP PD (NOLOCK)
-            JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
-            CROSS APPLY ( SELECT QtyMoved = SUM(P.QtyMoved)
-                          FROM #PickDetail_WIP P
-                          WHERE P.OrderKey = PD.OrderKey
-                          AND P.WaveKey = PD.WaveKey
-                          AND P.Storerkey = PD.Storerkey
-                          AND P.SKU = PD.Sku
-                          AND P.[Status] = '4'
-                          AND P.DropID = @c_UCCNo ) AS PW
-            WHERE PD.[Status] <= '4'
-            AND PD.WaveKey = @c_Wavekey
-            AND PD.Storerkey  = @c_StorerKey
-            AND PD.SKU = @c_SKU
-            -- To exclude those allocated line before reallocation
-            AND NOT EXISTS ( SELECT 1
-                             FROM #T_PICKDETAIL_CURRENT T
-                             WHERE T.Pickdetailkey = PD.PickDetailKey )
-            GROUP BY PD.OrderKey
-            HAVING SUM(PD.Qty) < MAX(PW.QtyMoved)   --Only check Not/Partial allocated after reallocation
-         ), ShortPick AS (
-            SELECT Orderkey = PD.Orderkey
-                 , Pickdetailkey = PD.PickDetailKey
-            FROM #PickDetail_WIP PD (NOLOCK)
-            JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
-            WHERE PD.[Status] IN ('4')
-            AND PD.WaveKey = @c_Wavekey
-            AND PD.DropID = @c_UCCNo
-            AND PD.Storerkey  = @c_StorerKey
-            AND PD.SKU = @c_SKU
-            GROUP BY PD.PickDetailKey, PD.OrderKey
-         )
-         SELECT AP.OrderKey
-              , AP.ReAllocStatus
-              , SP.Pickdetailkey
-              , AP.QtyInDiff
-         FROM ShortPick SP
-         JOIN AllPick AP ON AP.OrderKey = SP.OrderKey
-      END
-      ELSE
-      BEGIN
-         SET @CUR_UpdatePick = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         WITH AllPick AS (
-            SELECT OrderKey = PD.OrderKey
-                 , ReAllocStatus = CASE WHEN SUM(PD.Qty) = 0 THEN '0' ELSE '1' END
-                 , QtyInDiff = ABS(MAX(PW.QtyMoved) - SUM(PD.Qty))
-            FROM #PickDetail_WIP PD (NOLOCK)
-            JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
-            CROSS APPLY ( SELECT QtyMoved = SUM(P.QtyMoved)
-                          FROM #PickDetail_WIP P
-                          WHERE P.OrderKey = PD.OrderKey
-                          AND P.WaveKey = PD.WaveKey
-                          AND P.Storerkey = PD.Storerkey
-                          AND P.SKU = PD.Sku
-                          AND P.[Status] = '4'
-                          AND P.Loc = @c_Loc ) AS PW
-            WHERE PD.[Status] <= '4'
-            AND PD.WaveKey = @c_Wavekey
-            AND PD.Storerkey  = @c_StorerKey
-            AND PD.SKU = @c_SKU
-            -- To exclude those allocated line before reallocation
-            AND NOT EXISTS ( SELECT 1
-                             FROM #T_PICKDETAIL_CURRENT T
-                             WHERE T.Pickdetailkey = PD.PickDetailKey )
-            GROUP BY PD.OrderKey
-            HAVING SUM(PD.Qty) < MAX(PW.QtyMoved)   --Only check Not/Partial allocated after reallocation
-         ), ShortPick AS (
-            SELECT Orderkey = PD.Orderkey
-                 , Pickdetailkey = PD.PickDetailKey
-            FROM #PickDetail_WIP PD (NOLOCK)
-            JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
-            WHERE PD.[Status] IN ('4')
-            AND PD.WaveKey = @c_Wavekey
-            AND PD.Loc = @c_Loc
-            AND PD.Storerkey  = @c_StorerKey
-            AND PD.SKU = @c_SKU
-            GROUP BY PD.PickDetailKey, PD.OrderKey
-         )
-         SELECT AP.OrderKey
-              , AP.ReAllocStatus
-              , SP.Pickdetailkey
-              , AP.QtyInDiff
-         FROM ShortPick SP
-         JOIN AllPick AP ON AP.OrderKey = SP.OrderKey
-      END
-
-      OPEN @CUR_UpdatePick
-
-      FETCH NEXT FROM @CUR_UpdatePick INTO @c_Orderkey, @c_ReAllocStatus, @c_PickDetailKey, @n_QtyInDiff
-
-      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
-      BEGIN
-         BEGIN TRY
-            UPDATE dbo.PICKDETAIL
-            SET QtyMoved = @n_QtyInDiff
-              , TrafficCop = NULL
-            WHERE PickDetailKey = @c_PickDetailKey
-         END TRY
-         BEGIN CATCH
-            SET @n_Continue = 3
-            SET @c_ErrMsg = ERROR_MESSAGE()
-            GOTO QUIT_SP
-         END CATCH
-
-         --Trigger ITF
-         IF @n_Continue IN (1,2)
-         BEGIN
-            BEGIN TRY
-               EXEC dbo.ispGenTransmitLog2 @c_TableName = N'WSSOAlloUpd' -- nvarchar(30)
-                                         , @c_Key1 = @c_Orderkey -- nvarchar(10)
-                                         , @c_Key2 = @c_PickDetailKey -- nvarchar(30)
-                                         , @c_Key3 = @c_Storerkey -- nvarchar(20)
-                                         , @c_TransmitBatch = N'' -- nvarchar(30)
-                                         , @b_Success = @b_Success OUTPUT -- int
-                                         , @n_err = @n_Err OUTPUT -- int
-                                         , @c_errmsg = @c_Errmsg OUTPUT -- nvarchar(250)
-            END TRY
-            BEGIN CATCH
-               SET @n_Continue = 3
-               SET @c_ErrMsg = ERROR_MESSAGE()
-               GOTO QUIT_SP
-            END CATCH
-         END
-
-         --Update the temp #PickDetail_WIP table
-         UPDATE #PickDetail_WIP
-         SET QtyMoved = @n_QtyInDiff
-         WHERE PickDetailKey = @c_PickDetailKey
-
-         FETCH NEXT FROM @CUR_UpdatePick INTO @c_Orderkey, @c_ReAllocStatus, @c_PickDetailKey, @n_QtyInDiff
-      END
-      CLOSE @CUR_UpdatePick
-      DEALLOCATE @CUR_UpdatePick
-
-      IF @b_debug = 0 AND @n_Continue IN (1,2) 
-      BEGIN
-         WHILE @@TRANCOUNT > 0
-         BEGIN
-            COMMIT TRAN
-         END
-      END
-   END
-
    --Wave Release - Create task
    IF (@n_Continue = 1 OR @n_Continue = 2)           
    BEGIN
@@ -766,7 +585,7 @@ BEGIN
                                         , @b_Success = @b_Success OUTPUT -- int
                                         , @n_Err = @n_Err OUTPUT -- int
                                         , @c_Errmsg = @c_Errmsg OUTPUT -- nvarchar(255)
-       
+     
       END TRY
       BEGIN CATCH
          SET @n_Continue = 3
@@ -850,6 +669,12 @@ BEGIN
 
    IF OBJECT_ID('tempdb..#TMP_SHORTED ','u') IS NOT NULL 
       DROP TABLE #TMP_SHORTED
+
+   IF OBJECT_ID('tempdb..#TMP_TASK_CURRENT ','u') IS NOT NULL 
+      DROP TABLE #TMP_TASK_CURRENT
+
+   IF OBJECT_ID('tempdb..#TMP_TASK_NEW ','u') IS NOT NULL 
+      DROP TABLE #TMP_TASK_NEW
       
    IF (XACT_STATE()) = -1 
    BEGIN
@@ -876,6 +701,9 @@ BEGIN
             COMMIT TRAN
          END
       END
+      EXECUTE dbo.nsp_logerror @n_Err, @c_ErrMsg, 'msp_ProcessShortPickReAlloc03'
+      RAISERROR(@c_ErrMsg, 16, 1) WITH SETERROR -- SQL2012
+
       RETURN
    END
    ELSE

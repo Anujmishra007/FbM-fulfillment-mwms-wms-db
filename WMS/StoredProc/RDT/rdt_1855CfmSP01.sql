@@ -23,7 +23,8 @@ GO
 /* 2025-04-28   1.1.4  Dennis   FCR-3925  Udpate TD,PD CaseID                 */
 /* 2025-04-29   1.1.5  JackC    FCR-3925  Clear groupkey value when generating*/ 
 /*                               1st short task                               */
-/* 2025-11-10   1.1.6  Dennis   UWP-43759 Enhancement                         */ 
+/* 2025-11-10   1.2.0  Dennis   UWP-43759 Enhancement                         */ 
+/* 2026-01-30   1.3.0  NickT    FCR-8408 Use original Case and DropID for short*/ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1855CfmSP01 (  
@@ -84,6 +85,8 @@ BEGIN
    DECLARE @nLoopIndex INT = -1   
    DECLARE @cOriginDropId  NVARCHAR( 20)
    DECLARE @cTempCaseID    NVARCHAR( 20)=''
+   DECLARE @cAllocateStrategyKey    NVARCHAR( 10)
+   DECLARE @cOriginalCaseID         NVARCHAR( 20)
    DECLARE @tTempTasks TABLE (
       RowIndex         INT       NOT NULL IDENTITY (1, 1),
       TaskDetaiLKey    NVARCHAR( 10) NULL,
@@ -267,6 +270,7 @@ BEGIN
       FROM dbo.PickHeader WITH (NOLOCK)  
       WHERE PickHeaderKey = @cPickSlipNo  
 
+
       -- Cross dock PickSlip  
       IF @cZone IN ('XD', 'LB', 'LP')  
          SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -386,7 +390,14 @@ BEGIN
          IF @nDebugFlag = 1
             SELECT 'Loop PickDetail, Current PickDetai: ', @cPickDetailKey AS PickDetailKey, @nQty_PD AS QtyPD
 
-         SELECT @cOriginDropId = DropID FROM DBO.PickDetail (NOLOCK) WHERE PickDetailKey = @cPickDetailKey
+         SELECT @cOriginDropId = PD.DropID,
+            @cOriginalCaseID = PD.CaseID,
+            @cAllocateStrategyKey = ISNULL(SG.AllocateStrategyKey, '')
+         FROM DBO.PickDetail PD WITH(NOLOCK)
+         INNER JOIN dbo.SKU WITH(NOLOCK) ON PD.StorerKey = SKU.StorerKey AND PD.SKU = SKU.SKU
+         LEFT JOIN dbo.STRATEGY SG WITH(NOLOCK) ON SKU.StrategyKey = SG.StrategyKey
+         WHERE PickDetailKey = @cPickDetailKey
+
          -- Exact match  
          IF @nQTY_PD = @nQTY_Bal  
          BEGIN
@@ -540,7 +551,7 @@ BEGIN
                            END
 
                            INSERT INTO TaskDetail (
-                              TaskDetailKey, TaskType, Status, UserKey, PickMethod, TransitCount, AreaKey, SourceType, FromLOC, FromID, ToLOC, ToID, 
+                              TaskDetailKey, TaskType, Status, UserKey, PickMethod, TransitCount, AreaKey, SourceType, FromLOC, FromID, ToLOC, ToID,
                               StorerKey, SKU, LOT, UOM,UOMQty, QTY, ListKey, SourceKey, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop, FinalLoc,ReasonKey
                               ,DeviceID,DropID,CaseID)
                            SELECT
@@ -560,7 +571,7 @@ BEGIN
                                  SET 
                                     ReasonKey = 'SKIP', --v1.1.1
                                     DropID = '', --v1.1.3
-                                    CaseID = @cTempCaseID, --v1.1.4
+                                    CaseID = IIF (@cAllocateStrategyKey NOT IN ('CTSUCC02', 'CTSUCC05'), @cTempCaseID, @cOriginalCaseID ), --v1.1.4
                                     EditDate = GETDATE(), 
                                     EditWho  = SUSER_SNAME()
                               WHERE TaskDetailKey = @cNewTaskDetailKey 
@@ -576,8 +587,8 @@ BEGIN
                               UPDATE dbo.PickDetail WITH (ROWLOCK)
                                  SET 
                                     TaskDetailKey = @cNewTaskDetailKey,
-                                    CASEID = @cTempCaseID,--V1.1.4
-                                    DropID = @cTempCaseID,--V1.1.5
+                                    CASEID = IIF (@cAllocateStrategyKey NOT IN ('CTSUCC02', 'CTSUCC05'), @cTempCaseID, @cOriginalCaseID), --V1.1.4
+                                    DropID = IIF (@cAllocateStrategyKey NOT IN ('CTSUCC02', 'CTSUCC05'), @cTempCaseID, @cOriginalCaseID), --V1.1.5
                                     EditDate = GETDATE(), 
                                     EditWho  = SUSER_SNAME(),
                                     TrafficCop = NULL
@@ -588,7 +599,6 @@ BEGIN
                               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                               GOTO RollBackTran
                            END CATCH
-
                         END
                         ELSE
                         BEGIN
@@ -618,8 +628,10 @@ BEGIN
                            BEGIN TRY
                               UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                                  TaskDetailKey = @cShortTaskDetailKey,
-                                 CASEID = @cTempCaseID, --V1.1.4
-                                 DropID = @cTempCaseID --V1.1.5
+                                 CASEID = IIF (@cAllocateStrategyKey NOT IN ('CTSUCC02', 'CTSUCC05'), @cTempCaseID, @cOriginalCaseID), --V1.1.4
+                                 DropID = IIF (@cAllocateStrategyKey NOT IN ('CTSUCC02', 'CTSUCC05'), @cTempCaseID, @cOriginalCaseID), --V1.1.5
+                                 EditDate = GETDATE(), 
+                                 EditWho  = SUSER_SNAME()
                               WHERE PickDetailKey = @cPickDetailKey
                            END TRY
                            BEGIN CATCH
@@ -1055,13 +1067,13 @@ BEGIN
                         END
 
                         INSERT INTO dbo.TaskDetail (
-                           TaskDetailKey, TaskType, Status, UserKey, PickMethod, TransitCount, AreaKey, SourceType, FromLOC, FromID, ToLOC, ToID, 
+                           TaskDetailKey, TaskType, Status, UserKey, PickMethod, TransitCount, AreaKey, SourceType, FromLOC, FromID, ToLOC, ToID,
                            StorerKey, SKU, LOT, UOM,UOMQty, QTY, ListKey, SourceKey, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop, FinalLoc,ReasonKey
                            ,DeviceID,DropID,CaseID)
                         SELECT
                            @cNewTaskDetailKey, TaskType, 
                            'X', --STATUS
-                           '', PickMethod, 1, AreaKey, SourceType, FROMLOC, FROMID, TOLOC, ToID, 
+                           '', PickMethod, 1, AreaKey, SourceType, FROMLOC, FROMID, TOLOC, ToID,
                            StorerKey, SKU, LOT, UOM,@nQTY_PD - @nQTY_Bal, @nQTY_PD - @nQTY_Bal, ListKey, TaskDetailKey, WaveKey, LoadKey, Priority, SourcePriority, NULL, FinalLoc,
                            --'SKIP' --REASON CODE
                            '' --v1.1.1 TaskDetailAdd trigger not allow insert task with reasonkey
@@ -1073,7 +1085,9 @@ BEGIN
                         UPDATE dbo.TaskDetail WITH (ROWLOCK) 
                            SET ReasonKey = 'SKIP', --v1.1.1
                               DropID = '', --v1.1.3
-                              CaseID = @cTempCaseID --v1.1.4
+                              CaseID = IIF (@cAllocateStrategyKey NOT IN ('CTSUCC02', 'CTSUCC05'), @cTempCaseID, @cOriginalCaseID), --v1.1.4
+                              EditWho = @cUserName,
+                              EditDate = GetDate()
                         WHERE TaskDetailKey = @cNewTaskDetailKey 
                      END
                      ELSE
@@ -1108,8 +1122,8 @@ BEGIN
                         UOMQty = Qty, --V1.1.1 
                         TaskDetailKey = @cNewTaskDetailKey,
                         --DropID = '', --v1.1.3
-                        CaseID = @cTempCaseID, --v1.1.4
-                        DropID = @cTempCaseID, --v1.1.5
+                        CaseID = IIF (@cAllocateStrategyKey NOT IN ('CTSUCC02', 'CTSUCC05'), @cTempCaseID, @cOriginalCaseID), --v1.1.4
+                        DropID = IIF (@cAllocateStrategyKey NOT IN ('CTSUCC02', 'CTSUCC05'), @cTempCaseID, @cOriginalCaseID), --v1.1.5
                         EditDate = GETDATE(), 
                         EditWho  = SUSER_SNAME(),
                         TrafficCop = NULL

@@ -6611,6 +6611,10 @@ BEGIN
                BEGIN
                   SET @cInField01 = @cDefaultPrintLabelOption --Option
                   SET @nInputKey = 1 -- ENTER
+                  UPDATE RDT.RDTMOBREC WITH (ROWLOCK) SET
+                     Step   = 5,
+                     Scn    = 4654
+                  WHERE Mobile = @nMobile
                   GOTO Step_5
                END
             END

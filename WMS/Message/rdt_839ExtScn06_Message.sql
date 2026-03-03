@@ -37,5 +37,15 @@ EXECUTE rdt.rdtAddMsg 255532, 10, '255532 UpdRPLFail',         'us_english', 839
 EXECUTE rdt.rdtAddMsg 255533, 10, '255533 DelRPLFail',         'us_english', 839, 0, '255533 Delete rdtPickLog failed'
 EXECUTE rdt.rdtAddMsg 255534, 10, '255534 ExcSPFail',          'us_english', 839, 0, '255534 Exec Reallocate SP failed'
 EXECUTE rdt.rdtAddMsg 255535, 10, '255535 RunQCmdFail',        'us_english', 839, 0, '255535 Submit QCommanderTask failed'
+EXECUTE rdt.rdtAddMsg 255536, 10, '255536 UpdSNFail',          'us_english', 839, 0, '255536 Update SerialNo failed'
+EXECUTE rdt.rdtAddMsg 255537, 10, '255537 UpdSNFail',          'us_english', 839, 0, '255537 Update SerialNo failed'
+EXECUTE rdt.rdtAddMsg 255538, 10, '255538 UpdSNFail',          'us_english', 839, 0, '255538 Update SerialNo failed'
+EXECUTE rdt.rdtAddMsg 255539, 10, '255539 UpdSNFail',          'us_english', 839, 0, '255539 Update SerialNo failed'
+EXECUTE rdt.rdtAddMsg 255540, 10, '255540 OptionReq',          'us_english', 839, 0, '255540 Option required'
+EXECUTE rdt.rdtAddMsg 255541, 10, '255541 InvOption',          'us_english', 839, 0, '255541 Invalid Option'
+EXECUTE rdt.rdtAddMsg 255542, 10, '255542 DelPickSerialNoFail','us_english', 839, 0, '255542 Delete PickSerialNo failed'
+EXECUTE rdt.rdtAddMsg 255543, 10, '255543 UpdSNFail',          'us_english', 839, 0, '255543 Update SerialNo failedd'
+
+
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 255501 AND 255550

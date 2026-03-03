@@ -352,7 +352,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET
-                  Status = '5',
+                  Status = '6',
                   OrderKey = @cLoopOrderKey,
                   OrderLineNumber = @cLoopOrderKeyLineNumber,
                   EditDate = GETDATE(),
@@ -442,12 +442,10 @@ BEGIN
             END CATCH
 
             -- Mark UCC as 6
-         
-
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET
-                  Status = '5',
+                  Status = '6',
                   OrderKey = @cLoopOrderKey,
                   OrderLineNumber = @cLoopOrderKeyLineNumber,
                   EditDate = GETDATE(),
@@ -488,6 +486,7 @@ BEGIN
       
    DECLARE 
       @nBreakWholeLoop        INT = 0,
+      @cPieceSN               NVARCHAR( 50),
       @cPieceLot              NVARCHAR( 10),
       @cPieceLotLoc           NVARCHAR( 10),
       @cPieceLotId            NVARCHAR( 18),
@@ -527,7 +526,6 @@ BEGIN
       -- Piece short confirm
       IF @cStatus = '4'
       BEGIN
-         
          -- I. IF @nPickedQty = 0, then just update the qty to 0
          IF @nPickedQty = 0
          BEGIN
@@ -696,11 +694,11 @@ BEGIN
                @cPieceLotUCC = UCC.UCCNo,
                @cPieceLotLoc = UCC.Loc,
                @cPieceLotDropId = RPL.DropID,
+               @cPieceSN = SN.SerialNo,
                @nRowRef = RowRef
             FROM RDT.rdtPickLog RPL WITH(NOLOCK)
             INNER JOIN dbo.SerialNo SN WITH(NOLOCK) ON SN.StorerKey = @cStorerKey AND RPL.Remarks = SN.SerialNo
-            INNER JOIN dbo.MasterSerialNo MSN WITH(NOLOCK) ON MSN.StorerKey = @cStorerKey AND MSN.UnitType = 'BB' AND SN.SerialNo = MSN.SerialNo AND ISNULL(MSN.ParentSerialNo, '') <> ''
-            INNER JOIN dbo.UCC WITH(NOLOCK) ON UCC.StorerKey = @cStorerKey AND MSN.ParentSerialNo = UCC.UCCNo
+            INNER JOIN dbo.UCC WITH(NOLOCK) ON UCC.StorerKey = @cStorerKey AND SN.UCCNo = UCC.UCCNo
             WHERE RPL.PickDetailKey = @cPickDetailKey
                AND RPL.PickSlipNo = @cPickSlipNo
                AND RPL.Mobile = @nMobile
@@ -712,7 +710,29 @@ BEGIN
 
             IF @@ROWCOUNT = 0
             BEGIN
-               BREAK
+               SELECT TOP 1 
+                  @cPieceLot = SN.Lot,
+                  @cPieceLotId = SN.ID,
+                  @cPieceLotUCC = SN.UCCNo,
+                  @cPieceLotLoc = SN.Loc,
+                  @cPieceLotDropId = RPL.DropID,
+                  @cPieceSN = SN.SerialNo,
+                  @nRowRef = RowRef
+               FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+               INNER JOIN dbo.SerialNo SN WITH(NOLOCK) ON SN.StorerKey = @cStorerKey AND RPL.Remarks = SN.SerialNo
+               WHERE RPL.PickDetailKey = @cPickDetailKey
+                  AND RPL.PickSlipNo = @cPickSlipNo
+                  AND RPL.Mobile = @nMobile
+                  AND RPL.AddWho = @cUserName
+                  AND RPL.PickMethod = 'Pick-P'
+                  AND ISNULL(RPL.Remarks, '') <> ''
+                  AND ISNULL(RPL.Status, '') <> '9'
+               ORDER BY IIF(SN.LOT = @cSuggestedPieceLOT, 1, 2)
+
+               IF @@ROWCOUNT = 0
+                  BREAK
+
+               SET @cPieceLotUCC = ISNULL(@cPieceLotUCC, '')
             END
 
             -- Loc/id/lot/ucc does not match, create new pick details
@@ -794,6 +814,29 @@ BEGIN
             BEGIN
                SET @nIDLotMatchedQty = @nIDLotMatchedQty + 1
             END
+
+            BEGIN TRY
+               UPDATE dbo.SerialNo WITH(ROWLOCK)
+               SET UCCNo = '',
+                  UserDefine01 = '5'
+               WHERE SerialNo = @cPieceSN
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 255644
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update SerialNo failed
+               GOTO RollBackTran
+            END CATCH
+
+            BEGIN TRY
+               UPDATE dbo.UCC WITH(ROWLOCK)
+               SET Status = '6'
+               WHERE UCCNo = @cPieceLotUCC
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 255646
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update UCC failed
+               GOTO RollBackTran
+            END CATCH
 
             BEGIN TRY
                UPDATE RDT.rdtPickLog WITH(ROWLOCK)
@@ -881,6 +924,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET Status = @cPickConfirmStatus,
+                  DropID = @cPieceLotDropId,
                   EditWho = @cUserName,
                   EditDate = GETDATE()
                WHERE PickDetailKey = @cPickDetailKey
@@ -947,9 +991,11 @@ BEGIN
             
             BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK)
-               SET Status = CASE WHEN Notes = 'Picked'  THEN @cPickConfirmStatus
+               SET 
+                  Status = CASE WHEN Notes = 'Picked' THEN @cPickConfirmStatus
                                  ELSE Status
-                              END
+                              END,
+                  DropID = @cPieceLotDropId
                WHERE PickDetailKey = @cPickDetailKey
             END TRY
             BEGIN CATCH
@@ -969,6 +1015,7 @@ BEGIN
       WHERE RPL.PickSlipNo = @cPickSlipNo
          AND RPL.Mobile = @nMobile
          AND RPL.AddWho = @cUserName
+         AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
       --    AND ISNULL(RPL.Status, '') IN( '4', '9')
 
       -- For normal confirm, delete all pick log records

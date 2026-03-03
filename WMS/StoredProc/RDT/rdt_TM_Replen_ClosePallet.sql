@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_TM_Replen_ClosePallet]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_TM_Replen_ClosePallet]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -33,10 +29,11 @@ GO
 /* 23-Jan-2024 2.2  James     WMS-24300 Cancel booking even there is no    */
 /*                            booking (james04)                            */
 /* 02-Oct-2025 2.3  NickT     FCR-7730 Add @cScannedToLoc                  */
+/* 29-Jan-2026 2.4  NickT     FCR-10467 Remove debug code                  */
 /***************************************************************************/
 
 
-CREATE PROC [RDT].[rdt_TM_Replen_ClosePallet] (
+CREATE OR ALTER PROC [RDT].[rdt_TM_Replen_ClosePallet] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR(3),
@@ -583,20 +580,6 @@ BEGIN
       @cErrMsg OUTPUT
    IF @nErrNo <> 0
       GOTO RollBackTran
-
--- Debug code
-IF EXISTS( SELECT TOP 1 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND LocationCategory = 'PND_OUT')
-BEGIN
-   IF @cStorerKey = '18405'
-   BEGIN
-      IF NOT EXISTS( SELECT TOP 1 1 FROM TaskDetail WITH (NOLOCK) WHERE ListKey = @cListKey AND ListKey <> '' AND TaskType = 'RP1')
-      BEGIN
-         SET @nErrNo = 78507
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No RP1 created
-         GOTO RollBackTran
-      END
-   END
-END
 
    COMMIT TRAN rdt_TM_Replen_ClosePallet -- Only commit change made here
    GOTO Quit

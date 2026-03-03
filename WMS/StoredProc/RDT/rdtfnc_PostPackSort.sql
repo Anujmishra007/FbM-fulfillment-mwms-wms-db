@@ -24,6 +24,7 @@ GO
 /* 2022-01-13   1.5  James    WMS-18506 Add ExtUpdSP to close plt (james04)*/
 /* 2025-11-20   1.6  Dennis   UWP-44482 Fix Bugs                           */
 /* 2026-01-07   1.7  NYE018   FCR-9508 added the extended screen and print */
+/* 2026-01-22   1.8  Dennis   FCR-10136 Add ExtScn SP                      */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPackSort](
@@ -263,9 +264,14 @@ BEGIN
       @cStorerKey      = @cStorerKey,
       @nStep           = @nStep
 
-      -- Go to next screen
-      SET @nScn = @nScn_FromCarton
-      SET @nStep = @nStep_FromCarton
+   -- Go to next screen
+   SET @nScn = @nScn_FromCarton
+   SET @nStep = @nStep_FromCarton
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      GOTO Step_ExtendedScreen
+   END
 END
 GOTO Quit
 
@@ -665,6 +671,11 @@ BEGIN
       SET @cFieldAttr08 = ''
       SET @cFieldAttr09 = ''
       SET @cFieldAttr10 = ''
+   END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      GOTO Step_ExtendedScreen
    END
    GOTO Quit
 
@@ -1159,6 +1170,9 @@ BEGIN
          SET @cOutField03 = ''
          SET @cOutField04 = ''
 
+         DECLARE @nStepBak INT,@nScnBak INT
+         SELECT @nStepBak = @nStep, @nScnBak = @nScn
+
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES
          ('@cOption',   @cInField01),
@@ -1207,7 +1221,22 @@ BEGIN
 
          IF @nErrNo <> 0
             GOTO Quit
-            
+         
+         IF @cExtScnSP = 'rdt_1837ExtScn02' 
+         BEGIN
+            IF @nScnBak = 5590 
+            BEGIN
+               IF @nInputKey = 0
+                  GOTO Step_FromCarton
+               ELSE
+               BEGIN
+                  SET @cCartonID = @cUDF01
+                  SET @cLoadKey  = @cUDF02
+                  SET @cPPS_Loc = @cUDF03
+                  SET @cPalletID = @cUDF04
+               END
+            END
+         END
       END
    END
    GOTO Quit

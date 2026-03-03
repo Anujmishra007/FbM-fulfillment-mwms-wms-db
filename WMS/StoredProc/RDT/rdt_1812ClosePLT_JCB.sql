@@ -7,6 +7,7 @@
 /*                                                                               */
 /* Date        Rev     Author    Purposes                                        */
 /* 2025-09-05  1.0.0   Dennis    FCR-3959 Created                                */
+/* 2026-02-26  1.0.1   PPA374    Adding completed tasks into a dashboard table   */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ClosePLT_JCB] (
@@ -503,6 +504,30 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
          GOTO RollBackTran
       END
+
+	  IF OBJECT_ID('dbo.JCB_TD', 'U') IS NOT NULL
+	  BEGIN
+         -- Delete specific TaskDetailKey / StorerKey rows
+         DELETE FROM dbo.JCB_TD
+         WHERE TaskDetailKey = @cTaskDetailKey
+            AND StorerKey = @cStorerKey;
+
+         -- Delete rows older than 30 days
+         DELETE FROM dbo.JCB_TD
+         WHERE EndTime < DATEADD(DAY, -32, GETDATE());
+
+		 -- Insert new row from TaskDetail
+		 INSERT INTO dbo.JCB_TD
+		 SELECT 
+		    [TaskDetailKey] ,[TaskType] ,[Storerkey] ,[Sku] ,[Lot] ,[UOM] ,[UOMQty] ,[Qty] ,[FromLoc] ,[LogicalFromLoc] ,[FromID]
+            ,[ToLoc] ,[LogicalToLoc] ,[ToID] ,[Caseid] ,[PickMethod] ,[Status] ,[StatusMsg] ,[Priority] ,[SourcePriority] ,[Holdkey] 
+		    ,[UserKey] ,[UserPosition] ,[UserKeyOverRide] ,[StartTime] ,[EndTime] ,[SourceType] ,[SourceKey] ,[PickDetailKey] ,[OrderKey]
+            ,[OrderLineNumber] ,[ListKey] ,[WaveKey] ,[ReasonKey] ,[Message01] ,[Message02] ,[Message03] ,[AddDate] ,[AddWho] ,[EditDate]
+            ,[EditWho] ,[TrafficCop] ,[ArchiveCop] ,[SystemQty] ,[RefTaskKey] ,[LoadKey] ,[AreaKey] ,[DropID] ,[TransitCount] ,[TransitLOC]
+            ,[FinalLOC] ,[FinalID] ,[Groupkey] ,[PendingMoveIn] ,[QtyReplen] ,[DeviceID]
+		 FROM dbo.TaskDetail WHERE TaskDetailKey = @cTaskDetailKey AND StorerKey = @cStorerKey
+	  END
+
       FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLOC, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey
    END
 

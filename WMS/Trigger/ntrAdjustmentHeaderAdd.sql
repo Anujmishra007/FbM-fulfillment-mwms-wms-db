@@ -71,6 +71,8 @@ GO
 /* 09-Oct-2025  SPC040    1.7  Replace SUSER_SNAME with fnc_GetUserName     */
 /* 31-Dec-2025  VNI056    1.8    FCR-9732 Add Interface Trigger pts. for    */
 /*                                   custom trigger config                  */
+/* 11-Feb-2026  VNI056    1.9   FCR-10961 =>add config key for transmitlog  */
+/* 12-Feb-2026  VNI056    2.0   FCR-11002                                   */
 /****************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
@@ -123,7 +125,7 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
 
    SET @c_AdjStatusControl = 0   --(Wan01)
    SET @c_FinalizedFlag    = ''  --(Wan01)
-
+   DECLARE @b_ColumnsUpdated VARBINARY(1000) = COLUMNS_UPDATED()   --VER 2.0
    /* #INCLUDE <TRAHA1.SQL> */
    
    -- To Skip all the trigger process when Insert the history records from Archive as user request
@@ -740,7 +742,7 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
       DECLARE Cur_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT INS.AdjustmentKey, INS.StorerKey FROM INSERTED INS
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = INS.StorerKey
-      WHERE  ITC.SourceTable = 'ADJUSTMENT'
+      WHERE  ITC.Configkey = 'WSADJADDLOGC' AND ITC.SourceTable = 'ADJUSTMENT'  --[ver 2.0]
       AND    ITC.sValue      = '1'
 
       OPEN Cur_TriggerPoints
@@ -748,11 +750,12 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-         EXECUTE dbo.isp_ITF_ntrAdjustmentWithStorer
+         EXECUTE dbo.isp_ITF_ntrAdjustment                       --[ver 2.0]
                 @c_TriggerName    = 'ntrAdjustmentHeaderAdd'
               , @c_SourceTable    = 'ADJUSTMENT'
-              , @c_Storerkey      = @c_Storerkey
+              --, @c_Storerkey      = @c_Storerkey           --[ver 2.0]
               , @c_AdjustmentKey  = @c_AdjustmentKey
+              , @b_ColumnsUpdated = @b_ColumnsUpdated        --Ver 2.0
               , @b_Success        = @b_Success   OUTPUT
               , @n_err            = @n_err       OUTPUT
               , @c_errmsg         = @c_errmsg    OUTPUT

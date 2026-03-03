@@ -17,6 +17,7 @@ GO
 /* 30-May-2019  1.2  YeeKung    WMS9150. Add Stackability Field   (yeekung01)          */
 /* 27-Aug-2024  1.3  JHU151     FCR-720. Capture Pallet Info 825 mod                   */
 /* 18-Sep-2025  1.4  Dennis     FCR-8079.Add Step 99                                   */
+/* 12-Feb-2026  1.5  SSR259     FCR-9672 Add screen 4 (Confirmation screen)            */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_Capture_PalletInfo(
@@ -92,8 +93,9 @@ DECLARE
    @cCaptureWidth    NVARCHAR( 1),
    @cCaptureHeight   NVARCHAR( 1),
    @cCaptureWeight   NVARCHAR( 1),
-   @cCaptureStack    NVARCHAR( 1),      
-   @cCaptureInfo     NVARCHAR(10),   --(yeekung01)  
+   @cCaptureStack    NVARCHAR( 1),
+   @cCaptureInfo     NVARCHAR(10),   --(yeekung01)
+   @cDisableDefValScn   NVARCHAR( 1),  -- FCR-9672
 
    @tExtScnData			VariableTable,
 
@@ -140,6 +142,8 @@ DECLARE
    @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
    @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
+-- FCR-9672: C_String1 is used by rdt_825ExtScn03 for saved PalletKey
+
 -- Getting Mobile information
 SELECT
    @nFunc            = Func,
@@ -167,11 +171,12 @@ SELECT
    @cCaptureWidth    = V_String11,
    @cCaptureHeight   = V_String12,
    @cCaptureWeight   = V_String13,
-   @cCaptureStack       = V_String14,      
-   @cDefaultStack       = V_String15, --(yeekung01)        
-   @cCaptureInfo        = V_String16, --(yeekung01)        
-   @cStackability       = V_String17,  --(yeekung01)        
-        
+   @cCaptureStack       = V_String14,
+   @cDefaultStack       = V_String15, --(yeekung01)
+   @cCaptureInfo        = V_String16, --(yeekung01)
+   @cStackability       = V_String17,  --(yeekung01)
+   @cDisableDefValScn   = V_String18,  -- FCR-9672
+
    @cExtendedValidateSP = V_String21,
    @cExtendedUpdateSP   = V_String22,
    @cExtendedInfoSP     = V_String23,
@@ -227,8 +232,10 @@ BEGIN
    SET @cCaptureHeight = rdt.RDTGetConfig( @nFunc, 'CaptureHeight', @cStorerKey)        
    SET @cCaptureWeight = rdt.RDTGetConfig( @nFunc, 'CaptureWeight', @cStorerKey)        
    SET @cCreateNewPallet = rdt.RDTGetConfig( @nFunc, 'CreateNewPallet', @cStorerKey)      
-   SET @cCaptureStack =  rdt.RDTGetConfig( @nFunc, 'CaptureStack', @cStorerKey)      
-  
+   SET @cCaptureStack =  rdt.RDTGetConfig( @nFunc, 'CaptureStack', @cStorerKey)
+
+   SET @cDisableDefValScn = rdt.RDTGetConfig( @nFunc, 'DisableDefValScn', @cStorerKey)  -- FCR-9672
+
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
@@ -277,12 +284,26 @@ BEGIN
       SET @cFieldAttr06 = ''      
    END       
               
-   -- Disable field        
-   SET @cFieldAttr01 = CASE WHEN @cCaptureLength = '1' THEN '' ELSE 'O' END        
-   SET @cFieldAttr02 = CASE WHEN @cCaptureWidth  = '1' THEN '' ELSE 'O' END        
-   SET @cFieldAttr03 = CASE WHEN @cCaptureHeight = '1' THEN '' ELSE 'O' END        
-   SET @cFieldAttr04 = CASE WHEN @cCaptureWeight = '1' THEN '' ELSE 'O' END        
-   SET @cFieldAttr06 = CASE WHEN @cCaptureStack  = '1' THEN '' ELSE 'O' END  
+   -- Disable field
+   SET @cFieldAttr01 = CASE WHEN @cCaptureLength = '1' THEN '' ELSE 'O' END
+   SET @cFieldAttr02 = CASE WHEN @cCaptureWidth  = '1' THEN '' ELSE 'O' END
+   SET @cFieldAttr03 = CASE WHEN @cCaptureHeight = '1' THEN '' ELSE 'O' END
+   SET @cFieldAttr04 = CASE WHEN @cCaptureWeight = '1' THEN '' ELSE 'O' END
+   SET @cFieldAttr06 = CASE WHEN @cCaptureStack  = '1' THEN '' ELSE 'O' END
+
+   -- FCR-9672: Skip Screen 1 (Default Values) if DisableDefValScn = '1'
+   IF @cDisableDefValScn = '1'
+   BEGIN
+      -- Skip to Screen 2 (PalletKey)
+      SET @nScn = 5111
+      SET @nStep = 2
+
+      -- Prepare next screen var
+      SET @cOutField01 = ''   -- PalletKey
+
+      -- Enable field
+      SELECT @cFieldAttr01 = '', @cFieldAttr02 = '', @cFieldAttr03 = '', @cFieldAttr04 = '', @cFieldAttr06 = ''
+   END
 END
 GOTO Quit
 
@@ -435,7 +456,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 8111. PalletKey screen
+Scn = 5111. PalletKey screen
    PalletKey   (field01, input)
 ********************************************************************************/
 Step_2:
@@ -541,43 +562,55 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-      -- Prepare prev screen var
-      SET @cOutField01 = @cDefaultLength -- Length
-      SET @cOutField02 = @cDefaultWidth -- Width
-      SET @cOutField03 = @cDefaultHeight -- Height
-      SET @cOutField04 = @cDefaultWeight -- Weight
-     	SET @cOutField05 = @cCaptureInfo -- CaptureInfo         
-      SET @cOutField06 = @cDefaultStack -- Stack 
+      -- FCR-9672: If Screen 1 is disabled, go to menu instead of Screen 1
+      IF @cDisableDefValScn = '1'
+      BEGIN
+         -- Back to menu
+         SET @nFunc = @nMenu
+         SET @nScn  = @nMenu
+         SET @nStep = 0
+         SET @cOutField01 = ''
+      END
+      ELSE
+      BEGIN
+         -- Prepare prev screen var
+         SET @cOutField01 = @cDefaultLength -- Length
+         SET @cOutField02 = @cDefaultWidth -- Width
+         SET @cOutField03 = @cDefaultHeight -- Height
+         SET @cOutField04 = @cDefaultWeight -- Weight
+         SET @cOutField05 = @cCaptureInfo -- CaptureInfo
+         SET @cOutField06 = @cDefaultStack -- Stack
 
-      SET @cLength = ''
-      SET @cWidth = ''
-      SET @cHeight = ''
-      SET @cWeight = ''
+         SET @cLength = ''
+         SET @cWidth = ''
+         SET @cHeight = ''
+         SET @cWeight = ''
 
-      -- Enable field
-      SELECT 
-         @cFieldAttr01 = '', @cFieldAttr02 = '', @cFieldAttr03 = '', 
-         @cFieldAttr04 = '', @cFieldAttr05 = '', @cFieldAttr06 = '', 
-         @cFieldAttr07 = '', @cFieldAttr08 = '', @cFieldAttr09 = '', 
-         @cFieldAttr10 = '', @cFieldAttr11 = '', @cFieldAttr12 = '', 
-         @cFieldAttr13 = '', @cFieldAttr14 = '', @cFieldAttr15 = ''
-      
-      -- Disable field
-      SET @cFieldAttr01 = CASE WHEN @cCaptureLength = '1' THEN '' ELSE 'O' END
-      SET @cFieldAttr02 = CASE WHEN @cCaptureWidth = '1' THEN '' ELSE 'O' END
-      SET @cFieldAttr03 = CASE WHEN @cCaptureHeight = '1' THEN '' ELSE 'O' END
-      SET @cFieldAttr04 = CASE WHEN @cCaptureWeight = '1' THEN '' ELSE 'O' END
-      SET @cFieldAttr06 = CASE WHEN @cCaptureStack  = '1' THEN '' ELSE 'O' END         
-        
-      IF @cFieldAttr06 = '' EXEC rdt.rdtSetFocusField @nMobile, 6 
-      IF @cFieldAttr04 = '' EXEC rdt.rdtSetFocusField @nMobile, 4
-      IF @cFieldAttr03 = '' EXEC rdt.rdtSetFocusField @nMobile, 3
-      IF @cFieldAttr02 = '' EXEC rdt.rdtSetFocusField @nMobile, 2
-      IF @cFieldAttr01 = '' EXEC rdt.rdtSetFocusField @nMobile, 1
+         -- Enable field
+         SELECT
+            @cFieldAttr01 = '', @cFieldAttr02 = '', @cFieldAttr03 = '',
+            @cFieldAttr04 = '', @cFieldAttr05 = '', @cFieldAttr06 = '',
+            @cFieldAttr07 = '', @cFieldAttr08 = '', @cFieldAttr09 = '',
+            @cFieldAttr10 = '', @cFieldAttr11 = '', @cFieldAttr12 = '',
+            @cFieldAttr13 = '', @cFieldAttr14 = '', @cFieldAttr15 = ''
 
-      -- Go to prev screen
-      SET @nScn  = @nScn - 1
-      SET @nStep = @nStep - 1
+         -- Disable field
+         SET @cFieldAttr01 = CASE WHEN @cCaptureLength = '1' THEN '' ELSE 'O' END
+         SET @cFieldAttr02 = CASE WHEN @cCaptureWidth = '1' THEN '' ELSE 'O' END
+         SET @cFieldAttr03 = CASE WHEN @cCaptureHeight = '1' THEN '' ELSE 'O' END
+         SET @cFieldAttr04 = CASE WHEN @cCaptureWeight = '1' THEN '' ELSE 'O' END
+         SET @cFieldAttr06 = CASE WHEN @cCaptureStack  = '1' THEN '' ELSE 'O' END
+
+         IF @cFieldAttr06 = '' EXEC rdt.rdtSetFocusField @nMobile, 6
+         IF @cFieldAttr04 = '' EXEC rdt.rdtSetFocusField @nMobile, 4
+         IF @cFieldAttr03 = '' EXEC rdt.rdtSetFocusField @nMobile, 3
+         IF @cFieldAttr02 = '' EXEC rdt.rdtSetFocusField @nMobile, 2
+         IF @cFieldAttr01 = '' EXEC rdt.rdtSetFocusField @nMobile, 1
+
+         -- Go to prev screen
+         SET @nScn  = @nScn - 1
+         SET @nStep = @nStep - 1
+      END
    END
 
    IF @cExtScnSP <> ''
@@ -662,21 +695,21 @@ BEGIN
          GOTO Quit
       END
       
-      IF ISNULL( @cStackability, '') <> '' AND  @cStackability NOT IN ('1','0')      
-      BEGIN        
-         SET @nErrNo = 118811        
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Weight        
-         SET @cOutField07 = ''        
-         EXEC rdt.rdtSetFocusField @nMobile, 7        
-         GOTO Quit        
-      END      
-      
-      UPDATE dbo.Pallet WITH (ROWLOCK) SET 
+      IF ISNULL( @cStackability, '') <> '' AND  @cStackability NOT IN ('1','0')
+      BEGIN
+         SET @nErrNo = 118811
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Weight
+         SET @cOutField07 = ''
+         EXEC rdt.rdtSetFocusField @nMobile, 7
+         GOTO Quit
+      END
+
+      UPDATE dbo.Pallet WITH (ROWLOCK) SET
          Length = @cLength,
          Width = @cWidth,
          Height = @cHeight,
-         GrossWgt = @cWeight,      
-         PalletType = CASE WHEN  @cStackability = '1' THEN 'YES' ELSE 'NO' END 
+         GrossWgt = @cWeight,
+         PalletType = CASE WHEN  @cStackability = '1' THEN 'YES' ELSE 'NO' END
       WHERE PalletKey = @cPalletKey
       AND   StorerKey = @cStorerKey
       AND   [Status] < '9'
@@ -722,6 +755,7 @@ BEGIN
          END
       END
 
+
       SET @cPalletKey = ''
 
       -- Enable field
@@ -759,6 +793,16 @@ BEGIN
       SET @nScn  = @nScn - 1
       SET @nStep = @nStep - 1
    END
+
+   -- FCR-9672: If ExtScnSP is configured, go to Step_99
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
 END
 GOTO Quit
 
@@ -857,10 +901,11 @@ BEGIN
       V_String11 	= @cCaptureWidth,
       V_String12 	= @cCaptureHeight,
       V_String13 	= @cCaptureWeight,
-      V_String14  = @cCaptureStack,   --(yeekung01)        
-      V_String15  = @cDefaultStack,   --(yeekung01)      
-      V_String16  = @cCaptureInfo,    --(yeekung01)      
-      V_String17  = @cStackability,   --(yeekung01) 
+      V_String14  = @cCaptureStack,   --(yeekung01)
+      V_String15  = @cDefaultStack,   --(yeekung01)
+      V_String16  = @cCaptureInfo,    --(yeekung01)
+      V_String17  = @cStackability,   --(yeekung01)
+      V_String18  = @cDisableDefValScn,  -- FCR-9672
 
       V_String21   = @cExtendedValidateSP, 
       V_String22   = @cExtendedUpdateSP, 

@@ -1,3 +1,4 @@
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +18,9 @@ GO
 /* Modifications log:                                                   */  
 /* Date         Rev  Author      Purposes                               */  
 /* 03-Dec-2025  1.0  SKE140      Created for ToLOC validation           */  
-/* 15-Dec-2025  1.1  PPA374      Adding check against case in tasks     */  
+/* 15-Dec-2025  1.1  PPA374      Adding check against case in tasks     */
+/* 06-Feb-2026  1.2  PPA374      UWP-48485                              */
+/* 19-Feb-2026  1.3  PPA374      Not allowing blank ID for storage loc  */
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_629ExtValJCB]  
@@ -185,7 +188,8 @@ BEGIN
             LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK)  
                ON L.Loc = LLI.Loc  
                AND LLI.StorerKey = @cStorerKey  
-               AND L.Facility = @cFacility  
+               AND L.Facility = @cFacility
+               AND LLI.ID <> @cToID  
             WHERE L.Loc = @cToLOC  
               AND (LLI.Qty + ISNULL(LLI.PendingMoveIN, 0) > 0 OR LLI.Loc IS NULL)  
               AND L.Facility = @cFacility  
@@ -221,13 +225,20 @@ BEGIN
             GOTO QUIT;  
          END  
   
+         IF EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE Facility = @cFacility AND LOC = @cToLOC AND ISNULL(LoseId,0) = '0')
+		 AND ISNULL(@cToID,'') = ''
+         BEGIN  
+            SET @nErrNo = 218266  
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'); -- 'Need ID for this loc'  
+            GOTO QUIT;  
+         END  
       END  
    END  
   
 QUIT:  
    RETURN;  
 END
-	
+
 GO
 GRANT EXECUTE ON rdt.rdt_629ExtValJCB TO NSQL
 GO

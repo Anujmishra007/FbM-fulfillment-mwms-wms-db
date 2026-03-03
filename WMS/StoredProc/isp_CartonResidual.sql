@@ -51,7 +51,8 @@ BEGIN
          , @c_SourceType     NVARCHAR(30) = 'isp_CartonResidual'
 
    SELECT @n_Continue = 1, @b_Success = 1, @n_starttcnt=@@TRANCOUNT, @c_ErrMsg ='', @n_Err =0
-
+  IF @@TRANCOUNT = 0
+      BEGIN TRAN
 	IF (@n_Continue = 1 OR @n_Continue = 2)
 	BEGIN
 	 SET @c_Lot = ''
@@ -90,6 +91,8 @@ BEGIN
 			    SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Invalid ResidualQty. (isp_CartonResidual)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
 
        END
+       IF @n_continue IN (1, 2)
+       BEGIN
        IF EXISTS(SELECT 1 FROM UCC WITH (NOLOCK)
                WHERE StorerKey = @c_StorerKey AND Status = '6' AND UCCNo = @c_InboundCartonID)
         BEGIN
@@ -115,7 +118,7 @@ BEGIN
               SELECT @c_ErrMsg = CONVERT(CHAR(250),@n_Err), @n_Err = 30103
               SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Unable to find UCC No with status 6. (isp_CartonResidual)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
         END
-
+       END
        IF @n_continue IN (1, 2)
        BEGIN
 		   EXEC nspItrnAddMove @n_ItrnSysId = 0,

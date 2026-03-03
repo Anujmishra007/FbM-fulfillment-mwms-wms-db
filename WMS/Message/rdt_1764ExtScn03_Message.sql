@@ -10,6 +10,8 @@ execute rdt.rdtAddMsg 256204, 10, '256204 UpdTaskFail',     'us_english', 1764, 
 execute rdt.rdtAddMsg 256205, 10, '256205 DelRFLogFail',    'us_english', 1764, 0, '256205 Delete RFLog fail'
 execute rdt.rdtAddMsg 256206, 10, '256206 RelloRetryEmpty', 'us_english', 1764, 0, '256206 RealloNumberofRetry config is not enabled'
 execute rdt.rdtAddMsg 256207, 10, '256207 InvRelloRetry',   'us_english', 1764, 0, '256207 RealloNumberofRetry must be numeric'
+execute rdt.rdtAddMsg 256208, 10, '256208 InvalidOption',   'us_english', 1764, 0, '256208 Option 9 is disabled'
+execute rdt.rdtAddMsg 256209, 10, '256209 InvalidOption',   'us_english', 1764, 0, '256209 Option 9 is disabled'
 
 
 
