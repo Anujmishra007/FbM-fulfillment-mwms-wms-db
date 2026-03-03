@@ -261,7 +261,7 @@ BEGIN
       OPEN CUR_PACKKEY
       FETCH NEXT FROM CUR_PACKKEY INTO @c_PackKey
 
-      WHILE @@FETCH_STATUS = 0 AND @nContinue IN (1,2)
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
             SET @n_ConvFactor = 1
             SET @n_Decimal = 10
