@@ -267,6 +267,7 @@ BEGIN
       BEGIN
             SET @n_ConvFactor = 1
             SET @n_Decimal = 10
+            SET @b_CodeLkup_PKCUBEFCT = 0
 
             SELECT TOP 1
              @n_ConvFactor = TRY_PARSE(UDF01 AS FLOAT)
