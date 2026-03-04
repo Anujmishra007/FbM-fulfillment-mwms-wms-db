@@ -205,7 +205,7 @@ BEGIN
          IF @cWODSKU = @cSKU OR @cWODSKU = ''
          BEGIN
             SET @cFinalSKU = COALESCE(@cWODSKU, @cSKU)
-
+           
             INSERT INTO @VASReports ( ReportID
                                     , ReportLineNo
                                     , PrintSource
@@ -226,6 +226,7 @@ BEGIN
                , @cSKU          = @cFinalSKU
                , @cUDF01_WK     = @cUDF01_WK
                , @cUDF04_WK     = @cUDF04_WK
+               , @cReportType   = 'TPVAS'
                , @cLangCode     = @cLangCode
                , @b_Success     = @b_Success       OUTPUT
                , @n_ErrNo       = @n_ErrNo         OUTPUT
@@ -235,6 +236,42 @@ BEGIN
             BEGIN  
                SET @n_Continue = 3 
                GOTO EXIT_SP  
+            END
+
+            -- UDF04 empty is for any other reports, UDF04 = 'PRICELB' is for SKU label report only
+            IF @cUDF04_WK = '' 
+            BEGIN
+               INSERT INTO @VASReports ( ReportID
+                                       , ReportLineNo
+                                       , PrintSource
+                                       , DefaultPrinterID
+                                       , IsPaperPrinter
+                                       , KeyFieldName1
+                                       , KeyFieldName2
+                                       , KeyFieldName3
+                                       , KeyFieldName4
+                                       , IsSKUReport)
+               EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
+                  @cWODType        = @cWODType
+                  , @cStorerKey    = @cStorerKey
+                  , @cFacility     = @cFacility
+                  , @cOrderKey     = @cOrderKey
+                  , @cPickSlipNo   = @cPickSlipNo
+                  , @nCartonNo     = @nCartonNo
+                  , @cSKU          = @cFinalSKU
+                  , @cUDF01_WK     = @cUDF01_WK
+                  , @cUDF04_WK     = @cUDF04_WK
+                  , @cReportType   = 'TPVASCarton'
+                  , @cLangCode     = @cLangCode
+                  , @b_Success     = @b_Success       OUTPUT
+                  , @n_ErrNo       = @n_ErrNo         OUTPUT
+                  , @c_ErrMsg      = @c_ErrMsg        OUTPUT
+
+               IF @n_ErrNo <> 0   
+               BEGIN  
+                  SET @n_Continue = 3 
+                  GOTO EXIT_SP  
+               END
             END
          END
          FETCH NEXT FROM sku_cursor INTO @cWODSKU
@@ -249,39 +286,6 @@ BEGIN
    -- if is Carton level or SKU is not provided, print carton label;
    IF @bIsCartonLevel = 1 OR @cSKU = '' 
    BEGIN
-      INSERT INTO @VASReports ( ReportID
-                              , ReportLineNo
-                              , PrintSource
-                              , DefaultPrinterID
-                              , IsPaperPrinter
-                              , KeyFieldName1
-                              , KeyFieldName2
-                              , KeyFieldName3
-                              , KeyFieldName4
-                              , IsSKUReport)
-                        SELECT  WMR.ReportID
-                              , WMRD.ReportLineNo
-                              , IIF(WMRD.PrintType = 'LOGIREPORT', 'JReport', 'WMReport') AS PrintSource
-                              , ISNULL(WMRD.DefaultPrinterID, '') AS DefaultPrinterID
-                              , WMRD.IsPaperPrinter
-                              , ISNULL(WMR.KeyFieldName1, '') AS KeyFieldName1
-                              , ISNULL(WMR.KeyFieldName2, '') AS KeyFieldName2
-                              , ISNULL(WMR.KeyFieldName3, '') AS KeyFieldName3
-                              , ISNULL(WMR.KeyFieldName4, '') AS KeyFieldName4
-                              , 0 AS IsSKUReport
-                        FROM WMREPORTDETAIL WMRD (NOLOCK)
-                        JOIN WMREPORT WMR (NOLOCK) 
-                        ON WMR.ReportID = WMRD.ReportID 
-                        WHERE WMR.ModuleID = @cModuleID
-                        AND WMR.ReportType='TPVASCarton'
-                        AND WMRD.StorerKey = @cStorerKey
-                        AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
-                        AND NOT EXISTS (  SELECT 1 
-                                          FROM @VASReports VR 
-                                          WHERE VR.ReportID = WMRD.ReportID 
-                                          AND VR.ReportLineNo = WMRD.ReportLineNo
-                                       )
-   
       IF NOT EXISTS (SELECT 1 
                      FROM @VASReports
                      WHERE IsSKUReport = 0

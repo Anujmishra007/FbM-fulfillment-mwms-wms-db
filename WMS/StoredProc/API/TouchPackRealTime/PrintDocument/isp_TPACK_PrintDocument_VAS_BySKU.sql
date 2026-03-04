@@ -25,6 +25,7 @@ CREATE OR ALTER PROC [API].[isp_TPACK_PrintDocument_VAS_BySKU] (
    , @cSKU                 NVARCHAR(50)   = ''
    , @cUDF01_WK            NVARCHAR(60)   = ''
    , @cUDF04_WK            NVARCHAR(60)   = ''
+   , @cReportType          NVARCHAR(20)   = ''
    , @cLangCode            NVARCHAR(3)    = ''
    , @b_Success            INT            = 0   OUTPUT  
    , @n_ErrNo              INT            = 0   OUTPUT
@@ -116,7 +117,7 @@ BEGIN
    WHERE WMR.ModuleID = @cModuleID
    AND WMRD.StorerKey = @cStorerKey
    AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
-   AND WMR.ReportType='TPVAS'
+   AND WMR.ReportType = @cReportType
    AND WMR.ReportID = @ReportID
    AND WMRD.ReportLineNo = @ReportLine
 
