@@ -19,6 +19,7 @@ GO
 /* 2026-01-21   2.0  GCH225     UWP-45700: Update WoWkOrdUDef1 to SKU            */
 /* 2026-02-04   2.1  JWF011     UWP-48247: Add Recartonization check rule        */
 /* 2026-02-24   2.2  GCH225     UWP-49353: Fix for Scan SKU into new Carton      */
+/* 2026-03-03   2.3  GCH225     UWP-49786: Fix for Block Recartonization         */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -465,7 +466,7 @@ BEGIN
             IF NOT EXISTS( SELECT 1 
                            FROM STORERCONFIG (NOLOCK) 
                            WHERE StorerKey = @cStorerKey 
-                           AND ConfigKey = 'TPS-DecodeSP' 
+                           AND ConfigKey = 'TPS-PackDecode' 
             )
             BEGIN
                SET @n_Continue  = 3
@@ -676,7 +677,8 @@ SKIP_VALIDATE:
       WHERE PickSlipNo = @cPickSlipNo
       AND ExpQty > 0
       
-      IF NOT EXISTS (  SELECT 1
+      IF @nTtlExpQty > 0
+      AND NOT EXISTS (  SELECT 1
                         FROM WorkOrderDetail WOD (NOLOCK)
                         JOIN CODELKUP CL (NOLOCK)
                         ON CL.Code = WOD.Type
