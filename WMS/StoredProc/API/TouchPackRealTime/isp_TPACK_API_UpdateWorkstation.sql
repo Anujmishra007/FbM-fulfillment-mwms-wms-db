@@ -48,6 +48,7 @@ BEGIN
       @cCurWorkstation     NVARCHAR(30),
       @cInUseDeviceID      NVARCHAR(50),
       @cDeviceID           NVARCHAR( 50),
+      @cTempDeviceID       NVARCHAR( 50),
       @nWebFlag            INT
 
    SET @cInUseDeviceID = '';
@@ -172,13 +173,16 @@ BEGIN
 	   END
    END	
 
+   SELECT TOP 1 @cTempDeviceID = ISNULL(deviceID, '')
+   FROM API.AppWorkstation (NOLOCK) 
+   WHERE Workstation = @cWorkstation
 
    --update new deviceID
-   IF EXISTS (SELECT TOP 1 1 FROM api.AppWorkstation WHERE Workstation = @cWorkstation AND deviceID =@cDeviceID)
+   IF @cTempDeviceID = @cDeviceID
    BEGIN
       GOTO PROCEED
    END
-   ELSE
+   ELSE IF NOT(@cTempDeviceID = '')
    BEGIN
       SET @b_Success = 0
       SET @n_ErrNo = 10656

@@ -149,7 +149,7 @@ BEGIN
 
    SET @c_ResponseString = ISNULL ((JSON_QUERY(CASE WHEN ISJSON(@cResponseJson) = 1
                                                       THEN @cResponseJson
-                                                      ELSE '{}'
+                                                      ELSE '{"VASs":[]}'
                                                       END)
                                     ),'')
 

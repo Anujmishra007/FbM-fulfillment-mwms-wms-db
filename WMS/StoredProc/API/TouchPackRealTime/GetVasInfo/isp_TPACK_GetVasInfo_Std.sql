@@ -118,7 +118,7 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @bIsDiscrete = 1 AND @cLoadKey = ''
+   IF @bIsDiscrete = 1 AND @cOrderKey <> ''
    BEGIN
       INSERT INTO @OrderList (OrderKey)
       VALUES (@cOrderKey)
