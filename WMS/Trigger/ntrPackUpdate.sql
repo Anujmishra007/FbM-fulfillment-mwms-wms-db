@@ -302,9 +302,11 @@ BEGIN
                             PACK.CubeUOM1 = dbo.fnc_CalculateCube(INSERTED.LengthUOM1, INSERTED.WidthUOM1, INSERTED.HeightUOM1,'','',''),  --NJOW01
                             PACK.CubeUOM2 = dbo.fnc_CalculateCube(INSERTED.LengthUOM2, INSERTED.WidthUOM2, INSERTED.HeightUOM2,'','',''),  --NJOW01
                             PACK.CubeUOM3 = dbo.fnc_CalculateCube(INSERTED.LengthUOM3, INSERTED.WidthUOM3, INSERTED.HeightUOM3,'','',''),  --NJOW01
-                            PACK.CubeUOM4 = dbo.fnc_CalculateCube(INSERTED.LengthUOM4, INSERTED.WidthUOM4, INSERTED.HeightUOM4,'','','')   --NJOW01
-                FROM PACK WITH (NOLOCK)
-                JOIN INSERTED ON (PACK.PACKKEY = INSERTED.PACKKEY)
+                            PACK.CubeUOM4 = dbo.fnc_CalculateCube(INSERTED.LengthUOM4, INSERTED.WidthUOM4, INSERTED.HeightUOM4,'','',''),  --NJOW01
+                            TrafficCop = NULL
+                FROM PACK, INSERTED
+                WHERE PACK.PACKKEY = INSERTED.PACKKEY
+                AND PACK.PACKKEY = @c_PackKey
             END
 
             SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
