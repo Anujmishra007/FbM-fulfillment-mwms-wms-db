@@ -4,14 +4,14 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /*****************************************************************************/
-/* Stored Procedure: isp_Bartender_MLPN_CabsCaseID_Label_List_RPrint		     */
+/* Stored Procedure: isp_Bartender_MLPN_CabsCaseID_Label_List_RPrint		 */
 /* Creation Date: 15-01-2026                                                 */
 /* Copyright: MAERSK                                                         */
 /* Written by: AGM046                                                        */
 /*                                                                           */
-/* Purpose: 	 													                       */
+/* Purpose: 	 													         */
 /*                                                                           */
-/* Called By: EMG03_JCB_Cabs_Kitting_Detail_Label_001.btw		  	           */ 
+/* Called By: EMG03_JCB_Cabs_Kitting_Detail_Label_001.btw		  	         */ 
 /*                                                                           */
 /* PVCS Version: 1.0                                                         */
 /*                                                                           */
