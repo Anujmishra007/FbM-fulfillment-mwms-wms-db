@@ -417,7 +417,8 @@ BEGIN
                   BEGIN TRY
                      UPDATE dbo.SerialNo WITH(ROWLOCK)
                      SET UserDefine01 = '0'
-                     WHERE UCCNo = ISNULL(@cRemarks, '')
+                     WHERE UCCNo = ISNULL(@cRemarks, 'EmptyUCC')
+                        AND StorerKey = @cStorerKey
                   END TRY
                   BEGIN CATCH
                      SET @nErrNo = 255537
@@ -1989,7 +1990,8 @@ BEGIN
                      BEGIN TRY
                         UPDATE dbo.SerialNo WITH(ROWLOCK)
                         SET UserDefine01 = '3'
-                        WHERE SerialNo = @cScannedSN
+                        WHERE SerialNo = ISNULL(@cScannedSN, 'EMPTYSN')
+                           AND StorerKey = @cStorerKey
                      END TRY
                      BEGIN CATCH
                         SET @nErrNo = 255536
@@ -3583,7 +3585,8 @@ BEGIN
                         BEGIN TRY
                            UPDATE dbo.SerialNo WITH(ROWLOCK)
                            SET UserDefine01 = '0'
-                           WHERE SerialNo = @cRemarks
+                           WHERE SerialNo = ISNULL(@cRemarks, 'EMPTYSN')
+                              AND StorerKey = @cStorerKey
                         END TRY
                         BEGIN CATCH
                            SET @nErrNo = 255538
@@ -3606,7 +3609,8 @@ BEGIN
                         BEGIN TRY
                            UPDATE dbo.SerialNo WITH(ROWLOCK)
                            SET UserDefine01 = '0'
-                           WHERE SerialNo = @cRemarks
+                           WHERE SerialNo = ISNULL(@cRemarks, 'EMPTYSN')
+                              AND StorerKey = @cStorerKey
                         END TRY
                         BEGIN CATCH
                            SET @nErrNo = 255539
@@ -4320,7 +4324,8 @@ BEGIN
                      BEGIN TRY
                         UPDATE dbo.SerialNo WITH(ROWLOCK)
                         SET UserDefine01 = '0'
-                        WHERE SerialNo = @cRemarks
+                        WHERE SerialNo = ISNULL(@cRemarks, 'EMPTYSN')
+                           AND StorerKey = @cStorerKey
                      END TRY
                      BEGIN CATCH
                         SET @nErrNo = 255543
