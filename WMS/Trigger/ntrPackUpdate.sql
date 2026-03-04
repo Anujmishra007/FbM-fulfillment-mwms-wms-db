@@ -71,6 +71,7 @@ BEGIN
          , @c_authority  NVARCHAR(1)  = ''  --WL01             , @C_TEST NVARCHAR(100)    
          ,  @n_ConvFactor FLOAT            --VNI01
          , @n_Decimal  INT                --VNI01
+         , @b_CodeLkup_PKCUBEFCT INT      --VNI01
    -- (YokeBeen01) - Start  
    DECLARE @c_Storerkey NVARCHAR(15)   
          , @c_Sku NVARCHAR(20)   
@@ -254,6 +255,7 @@ BEGIN
          UPDATE(LengthUOM2) OR UPDATE(WidthUOM2) OR UPDATE(HeightUOM2) OR  
          UPDATE(LengthUOM3) OR UPDATE(WidthUOM3) OR UPDATE(HeightUOM3) OR  
          UPDATE(LengthUOM4) OR UPDATE(WidthUOM4) OR UPDATE(HeightUOM4) */
+         --VNI01(START)
       DECLARE CUR_PACKKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT Packkey
       FROM INSERTED
@@ -265,10 +267,12 @@ BEGIN
       BEGIN
             SET @n_ConvFactor = 1
             SET @n_Decimal = 10
+            SET @b_CodeLkup_PKCUBEFCT = 0
 
             SELECT TOP 1
              @n_ConvFactor = TRY_PARSE(UDF01 AS FLOAT)
            , @n_Decimal    = TRY_PARSE(UDF02 AS INT)
+           , @b_CodeLkup_PKCUBEFCT = 1
             FROM CODELKUP (NOLOCK)
             WHERE LISTNAME='PKCUBEFCT'
             AND SHORT = 'Y'
@@ -281,15 +285,30 @@ BEGIN
             IF ISNULL(@n_Decimal,0)=0
             SET @n_Decimal = 10
 
-            UPDATE PACK SET
-                PACK.CubeUOM1 = ROUND(ISNULL(INSERTED.LengthUOM1 * INSERTED.WidthUOM1 * INSERTED.HeightUOM1 * @n_ConvFactor, 0), @n_Decimal),
-                PACK.CubeUOM2 = ROUND(ISNULL(INSERTED.LengthUOM2 * INSERTED.WidthUOM2 * INSERTED.HeightUOM2 * @n_ConvFactor, 0), @n_Decimal),
-                PACK.CubeUOM3 = ROUND(ISNULL(INSERTED.LengthUOM3 * INSERTED.WidthUOM3 * INSERTED.HeightUOM3 * @n_ConvFactor, 0), @n_Decimal),
-                PACK.CubeUOM4 = ROUND(ISNULL(INSERTED.LengthUOM4 * INSERTED.WidthUOM4 * INSERTED.HeightUOM4 * @n_ConvFactor, 0), @n_Decimal),
-                TrafficCop = NULL
-            FROM PACK, INSERTED
-            WHERE PACK.PACKKEY = INSERTED.PACKKEY
-            AND PACK.PACKKEY = @c_PackKey
+            IF @b_CodeLkup_PKCUBEFCT = 1
+            BEGIN
+                UPDATE PACK SET
+                    PACK.CubeUOM1 = ROUND(ISNULL(INSERTED.LengthUOM1 * INSERTED.WidthUOM1 * INSERTED.HeightUOM1 * @n_ConvFactor, 0), @n_Decimal),
+                    PACK.CubeUOM2 = ROUND(ISNULL(INSERTED.LengthUOM2 * INSERTED.WidthUOM2 * INSERTED.HeightUOM2 * @n_ConvFactor, 0), @n_Decimal),
+                    PACK.CubeUOM3 = ROUND(ISNULL(INSERTED.LengthUOM3 * INSERTED.WidthUOM3 * INSERTED.HeightUOM3 * @n_ConvFactor, 0), @n_Decimal),
+                    PACK.CubeUOM4 = ROUND(ISNULL(INSERTED.LengthUOM4 * INSERTED.WidthUOM4 * INSERTED.HeightUOM4 * @n_ConvFactor, 0), @n_Decimal),
+                    TrafficCop = NULL
+                FROM PACK, INSERTED
+                WHERE PACK.PACKKEY = INSERTED.PACKKEY
+                AND PACK.PACKKEY = @c_PackKey
+            END
+            ELSE
+            BEGIN
+                UPDATE PACK SET
+                            PACK.CubeUOM1 = dbo.fnc_CalculateCube(INSERTED.LengthUOM1, INSERTED.WidthUOM1, INSERTED.HeightUOM1,'','',''),  --NJOW01
+                            PACK.CubeUOM2 = dbo.fnc_CalculateCube(INSERTED.LengthUOM2, INSERTED.WidthUOM2, INSERTED.HeightUOM2,'','',''),  --NJOW01
+                            PACK.CubeUOM3 = dbo.fnc_CalculateCube(INSERTED.LengthUOM3, INSERTED.WidthUOM3, INSERTED.HeightUOM3,'','',''),  --NJOW01
+                            PACK.CubeUOM4 = dbo.fnc_CalculateCube(INSERTED.LengthUOM4, INSERTED.WidthUOM4, INSERTED.HeightUOM4,'','',''),  --NJOW01
+                            TrafficCop = NULL
+                FROM PACK, INSERTED
+                WHERE PACK.PACKKEY = INSERTED.PACKKEY
+                AND PACK.PACKKEY = @c_PackKey
+            END
 
             SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
             IF @n_err <> 0
@@ -304,17 +323,8 @@ BEGIN
     CLOSE CUR_PACKKEY
     DEALLOCATE CUR_PACKKEY
 
---       BEGIN
---          UPDATE PACK SET
---                 PACK.CubeUOM1 = dbo.fnc_CalculateCube(INSERTED.LengthUOM1, INSERTED.WidthUOM1, INSERTED.HeightUOM1,'','',''),  --NJOW01
---                 PACK.CubeUOM2 = dbo.fnc_CalculateCube(INSERTED.LengthUOM2, INSERTED.WidthUOM2, INSERTED.HeightUOM2,'','',''),  --NJOW01
---                 PACK.CubeUOM3 = dbo.fnc_CalculateCube(INSERTED.LengthUOM3, INSERTED.WidthUOM3, INSERTED.HeightUOM3,'','',''),  --NJOW01
---                 PACK.CubeUOM4 = dbo.fnc_CalculateCube(INSERTED.LengthUOM4, INSERTED.WidthUOM4, INSERTED.HeightUOM4,'','','')   --NJOW01
---            FROM PACK WITH (NOLOCK)
---            JOIN INSERTED ON (PACK.PACKKEY = INSERTED.PACKKEY)
---       END
    END  
-  
+  --VNI01(END)
    SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
    IF @n_err <> 0  
    BEGIN  
