@@ -1314,7 +1314,8 @@ BEGIN
                                 + 'LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, MIN(LOTATTRIBUTE.Lottable05) as Lottable05, '
                                 + 'LOTATTRIBUTE.Lottable06, LOTATTRIBUTE.Lottable07, LOTATTRIBUTE.Lottable08, LOTATTRIBUTE.Lottable09, LOTATTRIBUTE.Lottable10,'
                                 + 'LOTATTRIBUTE.Lottable11, LOTATTRIBUTE.Lottable12, LOTATTRIBUTE.Lottable13, LOTATTRIBUTE.Lottable14, LOTATTRIBUTE.Lottable15,'
-                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) END, '
+--ML01                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) END, '
+                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty) END, '   --ML01
                                 + 'LOC.PutawayZone,LOC.LocLevel,Aisle = LOC.locAisle,LOC.Facility, '
                                 + 'LOC.CCLogicalLoc, '
                                 --          + 'CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" '
@@ -1361,6 +1362,7 @@ BEGIN
                                 + 'LOC.LOSEUCC, '  --(Wan01)
                                 --          + 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" ELSE ISNULL(UCC.UccNo,"") END '
                                 + 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.UccNo,"") ELSE "" END ' -- (james02)
+                                + 'HAVING CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty) END > 0 '   --ML01
                                 + 'Order By LOTxLOCxID.loc,LOTxLOCxID.id,LOTxLOCxID.StorerKey, LOTxLOCxID.sku '
                         END
                     ELSE
@@ -1370,7 +1372,8 @@ BEGIN
                                 + 'LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, MIN(LOTATTRIBUTE.Lottable05) as Lottable05, '
                                 + 'LOTATTRIBUTE.Lottable06, LOTATTRIBUTE.Lottable07, LOTATTRIBUTE.Lottable08, LOTATTRIBUTE.Lottable09, LOTATTRIBUTE.Lottable10,'
                                 + 'LOTATTRIBUTE.Lottable11, LOTATTRIBUTE.Lottable12, LOTATTRIBUTE.Lottable13, LOTATTRIBUTE.Lottable14, LOTATTRIBUTE.Lottable15,'
-                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) END, '
+--ML01                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) END, '
+                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty) END, '   --ML01
                                 + 'LOC.PutawayZone,LOC.LocLevel,Aisle = LOC.locAisle,LOC.Facility, '
                                 + 'LOC.CCLogicalLoc, '
                                 --          + 'CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" '
@@ -1529,6 +1532,7 @@ BEGIN
                                 + 'LOC.LOSEUCC, '  --(Wan01)
                                 --                            + 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" ELSE ISNULL(UCC.UccNo,"") END '
                                 + 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.UccNo,"") ELSE "" END '    -- (james02)
+                                + 'HAVING CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty) END > 0 '   --ML01
                                 + 'Order BY LOTxLOCxID.loc,LOTxLOCxID.id,LOTxLOCxID.StorerKey, LOTxLOCxID.sku '
 
                             SELECT @c_sql = @c_sql + ' ' + @c_sqlWhere + ' ' + @c_sqlOther + ' ' + @c_sqlGroup
@@ -1543,7 +1547,8 @@ BEGIN
                                 + 'LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, MAX(LOTATTRIBUTE.Lottable05) as Lottable05, '
                                 + 'LOTATTRIBUTE.Lottable06, LOTATTRIBUTE.Lottable07, LOTATTRIBUTE.Lottable08, LOTATTRIBUTE.Lottable09, LOTATTRIBUTE.Lottable10,'
                                 + 'LOTATTRIBUTE.Lottable11, LOTATTRIBUTE.Lottable12, LOTATTRIBUTE.Lottable13, LOTATTRIBUTE.Lottable14, LOTATTRIBUTE.Lottable15,'
-                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) END, '
+--ML01                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) END, '
+                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty) END, '   --ML01
                                 + 'LOC.PutawayZone,LOC.LocLevel,Aisle = LOC.locAisle,LOC.Facility, '
                                 + 'LOC.CCLogicalLoc, '
                                 --          + 'CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" '
@@ -1590,6 +1595,7 @@ BEGIN
                                 + 'LOC.LOSEUCC, '  --(Wan01)
                                 --          + 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" ELSE ISNULL(UCC.UccNo,"") END '
                                 + 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.UccNo,"") ELSE "" END '    -- (james02)
+                                + 'HAVING CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty) END > 0 '   --ML01
                                 + 'Order By LOTxLOCxID.loc,LOTxLOCxID.id,LOTxLOCxID.StorerKey, LOTxLOCxID.sku '
                             -- Start : SOS66279
                         END
@@ -1600,7 +1606,8 @@ BEGIN
                                 + 'LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, MAX(LOTATTRIBUTE.Lottable05) as Lottable05, '
                                 + 'LOTATTRIBUTE.Lottable06, LOTATTRIBUTE.Lottable07, LOTATTRIBUTE.Lottable08, LOTATTRIBUTE.Lottable09, LOTATTRIBUTE.Lottable10,'
                                 + 'LOTATTRIBUTE.Lottable11, LOTATTRIBUTE.Lottable12, LOTATTRIBUTE.Lottable13, LOTATTRIBUTE.Lottable14, LOTATTRIBUTE.Lottable15,'
-                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) END, '
+--ML01                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) END, '
+                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty) END, '   --ML01
                                 + 'LOC.PutawayZone,LOC.LocLevel,Aisle = LOC.locAisle,LOC.Facility, '
                                 + 'LOC.CCLogicalLoc, '
                                 --          + 'CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" '
@@ -1759,6 +1766,7 @@ BEGIN
                                 + 'LOC.LOSEUCC, '  --(Wan01)
                                 --                            + 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" ELSE ISNULL(UCC.UccNo,"") END '
                                 + 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.UccNo,"") ELSE "" END '    -- (james02)
+                                + 'HAVING CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty) END > 0 '   --ML01
                                 + 'Order By LOTxLOCxID.loc,LOTxLOCxID.id,LOTxLOCxID.StorerKey, LOTxLOCxID.sku '
 
                             SELECT @c_sql = @c_sql + ' ' + @c_sqlWhere + ' ' + @c_sqlOther + ' ' + @c_sqlGroup
@@ -1773,7 +1781,8 @@ BEGIN
                                 + 'LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05,'
                                 + 'LOTATTRIBUTE.Lottable06, LOTATTRIBUTE.Lottable07, LOTATTRIBUTE.Lottable08, LOTATTRIBUTE.Lottable09, LOTATTRIBUTE.Lottable10,'
                                 + 'LOTATTRIBUTE.Lottable11, LOTATTRIBUTE.Lottable12, LOTATTRIBUTE.Lottable13, LOTATTRIBUTE.Lottable14, LOTATTRIBUTE.Lottable15,'
-                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked END, '
+--ML01                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked END, '
+                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty END, '   --ML01
                                 + 'LOC.PutawayZone,LOC.LocLevel,Aisle = LOC.locAisle,LOC.Facility, '
                                 + 'LOC.CCLogicalLoc, '
                                 --          + 'CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" '
@@ -1798,6 +1807,7 @@ BEGIN
                                 + 'AND LOTxLOCxID.Sku = SKU.Sku '
                                 + 'JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot '
                                 + 'WHERE LOTxLOCxID.Qty > 0 '
+                                + 'AND CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty END > 0 '   --ML01
                                 + 'AND   LOC.Facility = N''' + ISNULL(RTRIM(@c_Facility), '') + ''' '
                                 + ISNULL(RTRIM(@c_StorerSQL), '') + ' ' + ISNULL(RTRIM(@c_StorerSQL2), '') + ' '
                                 + ISNULL(RTRIM(@c_ZoneSQL), '') + ' ' + ISNULL(RTRIM(@c_ZoneSQL2), '') + ' '
@@ -1821,7 +1831,8 @@ BEGIN
                                 + 'LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05,'
                                 + 'LOTATTRIBUTE.Lottable06, LOTATTRIBUTE.Lottable07, LOTATTRIBUTE.Lottable08, LOTATTRIBUTE.Lottable09, LOTATTRIBUTE.Lottable10,'
                                 + 'LOTATTRIBUTE.Lottable11, LOTATTRIBUTE.Lottable12, LOTATTRIBUTE.Lottable13, LOTATTRIBUTE.Lottable14, LOTATTRIBUTE.Lottable15,'
-                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked END, '
+--ML01                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked END, '
+                                + 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty END, '   --ML01
                                 + 'LOC.PutawayZone,LOC.LocLevel,Aisle = LOC.locAisle,LOC.Facility, '
                                 + 'LOC.CCLogicalLoc, '
                                 --          + 'CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" '
@@ -1967,6 +1978,7 @@ BEGIN
                             --(Wan06) - END
                             SELECT @c_SQLWhere = ' '
                                 + 'WHERE LOTxLOCxID.Qty > 0 '
+                                + 'AND CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty END > 0 '   --ML01
                                 + 'AND   LOC.Facility = N''' + ISNULL(RTRIM(@c_Facility), '') + ''' '
                                 + ISNULL(RTRIM(@c_StorerSQL), '') + ' ' + ISNULL(RTRIM(@c_StorerSQL2), '') + ' '
                                 + RTRIM(@c_StrategySQL) + ' '                                        --(Wan04)
