@@ -2993,24 +2993,32 @@ BEGIN
                BEGIN
                   IF @nActQTY < @nSuggQTY
                   BEGIN
-                     SET @nAfterStep = 99
-                     SET @nAfterScn = 6774
-                     
+                     IF EXISTS(SELECT 1
+                              FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+                              WHERE RPL.PickSlipNo = @cPickSlipNo
+                                 AND RPL.Mobile = @nMobile
+                                 AND RPL.AddWho = @cUserName
+                                 AND RPL.Loc = @cSuggLOC
+                                 AND PickMethod IN ('GetTask-P', 'GetTask-U')
+                                 AND Status = '0')
+                     BEGIN
+                        SET @nAfterStep = 99
+                        SET @nAfterScn = 6774
 
-                      -- Prepare SKU QTY screen var
-                     SET @cOutField01 = @cSuggLOC
-                     SET @cOutField02 = @cSuggSKU
-                     SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
-                     SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
-                     SET @cOutField05 = '' -- SKU/UPC
-                     SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
-                     SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
-                                             WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
-                                             ELSE '' END -- QTY
+                        -- Prepare SKU QTY screen var
+                        SET @cOutField01 = @cSuggLOC
+                        SET @cOutField02 = @cSuggSKU
+                        SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
+                        SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
+                        SET @cOutField05 = '' -- SKU/UPC
+                        SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                        SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
+                                                WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
+                                                ELSE '' END -- QTY
 
-                     SET @cOutField13 = LTRIM(CAST((@nBalQty - @nActQTY) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6)) 
-
-                     GOTO UPD_RDTMOBREC
+                        SET @cOutField13 = LTRIM(CAST((@nBalQty - @nActQTY) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6)) 
+                        GOTO UPD_RDTMOBREC
+                     END
                   END
                END
 
