@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.6                                                          */    
+/* Version: 1.7                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -29,6 +29,7 @@ GO
 /* 27-Feb-2026 WLChooi  1.5   FCR-11069 Fix Incorrect CartonType (WL03)  */
 /* 27-Feb-2026 WLChooi  1.6   FCR-11204 Fix VAS Qty (WL04)               */
 /* 02-Mar-2026 WLChooi  1.6   FCR-11204 VAS API Check (WL05)             */
+/* 04-Mar-2026 WLChooi  1.7   FCR-11069 Fix Last Carton Closure (WL06)   */
 /*************************************************************************/      
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -1971,6 +1972,7 @@ BEGIN
                   END
                END
 
+               NEXT_CLOSE_CTN:   --WL06
                UPDATE cd
                SET CartonType   = @c_CartonType
                   ,CartonCube   = @n_CartonCube
@@ -1980,7 +1982,6 @@ BEGIN
                WHERE cd.OrderKey = @c_Orderkey
                AND   cd.CartonSeqNo = @n_CartonSeqNo
 
-               NEXT_CLOSE_CTN:
                FETCH NEXT FROM @cur_CLOSECTN INTO @c_Orderkey, @n_CartonSeqNo, @b_API, @n_TotalCBM, @n_TotalWgt, @n_RowID_cz
             END
             CLOSE @cur_CLOSECTN
