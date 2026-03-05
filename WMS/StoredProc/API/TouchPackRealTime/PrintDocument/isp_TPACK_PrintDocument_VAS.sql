@@ -245,6 +245,16 @@ BEGIN
          -- UDF04 empty is for any other reports, UDF04 = 'PRICELB' is for SKU label report only
          IF @cUDF04_WK = '' 
          BEGIN
+            SET @cFinalSKU = COALESCE(@cWODSKU, @cSKU)
+            IF @cFinalSKU = ''
+            BEGIN
+               SELECT TOP 1 @cFinalSKU = SKU
+               FROM PACKDETAIL PD (NOLOCK)
+               WHERE PD.PickSlipNo = @cPickSlipNo
+               AND PD.CartonNo = @nCartonNo
+               AND PD.SKU <> ''
+            END
+           
             INSERT INTO @VASReports ( ReportID
                                     , ReportLineNo
                                     , PrintSource
@@ -267,7 +277,7 @@ BEGIN
                , @cUDF04_WK     = @cUDF04_WK
                , @bPrintLabelFlag = @bPrintLabelFlag
                , @bPrintPaperFlag = @bPrintPaperFlag
-               , @cReportType   = 'TPVASCarton'
+               , @cReportType   = 'TPVAS'
                , @cLangCode     = @cLangCode
                , @b_Success     = @b_Success       OUTPUT
                , @n_ErrNo       = @n_ErrNo         OUTPUT
@@ -277,6 +287,44 @@ BEGIN
             BEGIN
                SET @n_Continue = 3 
                GOTO EXIT_SP  
+            END
+
+            -- UDF04 empty is for any other reports, UDF04 = 'PRICELB' is for SKU label report only
+            IF @cUDF04_WK = '' 
+            BEGIN
+               INSERT INTO @VASReports ( ReportID
+                                       , ReportLineNo
+                                       , PrintSource
+                                       , DefaultPrinterID
+                                       , IsPaperPrinter
+                                       , KeyFieldName1
+                                       , KeyFieldName2
+                                       , KeyFieldName3
+                                       , KeyFieldName4
+                                       , IsSKUReport)
+               EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
+                  @cWODType        = @cWODType
+                  , @cStorerKey    = @cStorerKey
+                  , @cFacility     = @cFacility
+                  , @cOrderKey     = @cOrderKey
+                  , @cPickSlipNo   = @cPickSlipNo
+                  , @nCartonNo     = @nCartonNo
+                  , @cSKU          = @cFinalSKU
+                  , @cUDF01_WK     = @cUDF01_WK
+                  , @cUDF04_WK     = @cUDF04_WK
+                  , @bPrintLabelFlag = @bPrintLabelFlag
+                  , @bPrintPaperFlag = @bPrintPaperFlag
+                  , @cReportType   = 'TPVASCarton'
+                  , @cLangCode     = @cLangCode
+                  , @b_Success     = @b_Success       OUTPUT
+                  , @n_ErrNo       = @n_ErrNo         OUTPUT
+                  , @c_ErrMsg      = @c_ErrMsg        OUTPUT
+
+               IF @n_ErrNo <> 0
+               BEGIN
+                  SET @n_Continue = 3 
+                  GOTO EXIT_SP  
+               END
             END
          END
       END
@@ -296,6 +344,8 @@ BEGIN
       ) 
       BEGIN
          SET @nContinuePrint = 1
+		 GOTO EXIT_SP
+
       END
    END
    
