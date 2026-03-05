@@ -59,7 +59,7 @@ BEGIN
       DataCheck NVARCHAR(100),
       CaseID NVARCHAR(100),
       SKU NVARCHAR(100),
-	  DescSKU NVARCHAR(100),
+	  DescSKU NVARCHAR(100),  --1.1
       QTY NVARCHAR(100)
    );
 
@@ -84,7 +84,7 @@ BEGIN
          '' AS DataCheck,
          @c_Sparm01, -- CASEID
          pd.SKU,
-		 sku.descr,
+		 sku.descr,  --1.1
          SUM(pd.Qty) AS TotalQty
       FROM dbo.PICKDETAIL pd WITH (NOLOCK)
       INNER JOIN dbo.ORDERS orm WITH (NOLOCK)
@@ -128,7 +128,7 @@ BEGIN
          pd.ID,
          pd.DropID,
          pd.SKU,
-		 sku.descr; -- new;
+		 sku.descr; --1.1;
 
    -- Output table declaration: BarTender expects many generic columns
    DECLARE @Result TABLE
@@ -192,43 +192,43 @@ BEGIN
             @c_LPN = CaseID,
             --
 			@c_SKU01    = CASE WHEN @counter % @pageSize = 0 THEN SKU     END,					
-			@c_SKUDSC01 = CASE WHEN @counter % @pageSize = 0 THEN DescSKU END,
+			@c_SKUDSC01 = CASE WHEN @counter % @pageSize = 0 THEN DescSKU END,   --1.1
 			@c_SKUQTY01 = CASE WHEN @counter % @pageSize = 0 THEN QTY     END,
 			--
 			@c_SKU02    = CASE WHEN @counter % @pageSize = 1 THEN SKU     END,
-			@c_SKUDSC02 = CASE WHEN @counter % @pageSize = 1 THEN DescSKU END,
+			@c_SKUDSC02 = CASE WHEN @counter % @pageSize = 1 THEN DescSKU END,   --1.1
 			@c_SKUQTY02 = CASE WHEN @counter % @pageSize = 1 THEN QTY     END,
 			--
 			@c_SKU03    = CASE WHEN @counter % @pageSize = 2 THEN SKU     END,
-			@c_SKUDSC03 = CASE WHEN @counter % @pageSize = 2 THEN DescSKU END,
+			@c_SKUDSC03 = CASE WHEN @counter % @pageSize = 2 THEN DescSKU END,   --1.1
 			@c_SKUQTY03 = CASE WHEN @counter % @pageSize = 2 THEN QTY     END,
 			--
 			@c_SKU04    = CASE WHEN @counter % @pageSize = 3 THEN SKU     END,
-			@c_SKUDSC04 = CASE WHEN @counter % @pageSize = 3 THEN DescSKU END,
+			@c_SKUDSC04 = CASE WHEN @counter % @pageSize = 3 THEN DescSKU END,   --1.1
 			@c_SKUQTY04 = CASE WHEN @counter % @pageSize = 3 THEN QTY     END,
 			--
 			@c_SKU05    = CASE WHEN @counter % @pageSize = 4 THEN SKU     END,
-			@c_SKUDSC05 = CASE WHEN @counter % @pageSize = 4 THEN DescSKU END,
+			@c_SKUDSC05 = CASE WHEN @counter % @pageSize = 4 THEN DescSKU END,   --1.1
 			@c_SKUQTY05 = CASE WHEN @counter % @pageSize = 4 THEN QTY     END,
 			--
 			@c_SKU06    = CASE WHEN @counter % @pageSize = 5 THEN SKU     END,
-			@c_SKUDSC06 = CASE WHEN @counter % @pageSize = 5 THEN DescSKU END,
+			@c_SKUDSC06 = CASE WHEN @counter % @pageSize = 5 THEN DescSKU END,   --1.1
 			@c_SKUQTY06 = CASE WHEN @counter % @pageSize = 5 THEN QTY     END,
 			--
 			@c_SKU07    = CASE WHEN @counter % @pageSize = 6 THEN SKU     END,
-			@c_SKUDSC07 = CASE WHEN @counter % @pageSize = 6 THEN DescSKU END,
+			@c_SKUDSC07 = CASE WHEN @counter % @pageSize = 6 THEN DescSKU END,   --1.1
 			@c_SKUQTY07 = CASE WHEN @counter % @pageSize = 6 THEN QTY     END,
 			--
 			@c_SKU08    = CASE WHEN @counter % @pageSize = 7 THEN SKU     END,
-			@c_SKUDSC08 = CASE WHEN @counter % @pageSize = 7 THEN DescSKU END,
+			@c_SKUDSC08 = CASE WHEN @counter % @pageSize = 7 THEN DescSKU END,   --1.1
 			@c_SKUQTY08 = CASE WHEN @counter % @pageSize = 7 THEN QTY     END,
 			--
 			@c_SKU09    = CASE WHEN @counter % @pageSize = 8 THEN SKU     END,
-			@c_SKUDSC09 = CASE WHEN @counter % @pageSize = 8 THEN DescSKU END,
+			@c_SKUDSC09 = CASE WHEN @counter % @pageSize = 8 THEN DescSKU END,   --1.1
 			@c_SKUQTY09 = CASE WHEN @counter % @pageSize = 8 THEN QTY     END,
 			--
 			@c_SKU10    = CASE WHEN @counter % @pageSize = 9 THEN SKU     END,
-			@c_SKUDSC10 = CASE WHEN @counter % @pageSize = 9 THEN DescSKU END,
+			@c_SKUDSC10 = CASE WHEN @counter % @pageSize = 9 THEN DescSKU END,   --1.1
 			@c_SKUQTY10 = CASE WHEN @counter % @pageSize = 9 THEN QTY     END
 			--
          FROM @tempTable
