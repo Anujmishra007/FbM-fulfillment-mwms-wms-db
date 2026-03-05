@@ -1167,9 +1167,6 @@ BEGIN
          DECLARE @nStepBak INT,@nScnBak INT
          SELECT @nStepBak = @nStep, @nScnBak = @nScn
 
-         DECLARE @nStepBak INT,@nScnBak INT
-         SELECT @nStepBak = @nStep, @nScnBak = @nScn
-
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES
          ('@cOption',   @cInField01),
