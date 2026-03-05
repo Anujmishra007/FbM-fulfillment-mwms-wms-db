@@ -184,7 +184,7 @@ BEGIN
                      FROM PACKDETAIL PD (NOLOCK)
                      WHERE 
                      --PD.SKU = WOD.SKU
-                     AND PD.PickSlipNo = @cPickSlipNo
+                     PD.PickSlipNo = @cPickSlipNo
                      AND PD.CartonNo = @nCartonNo
                   )
       AND CLK.UDF04 <> 'PRICELB'
