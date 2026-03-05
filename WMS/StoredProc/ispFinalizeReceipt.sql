@@ -2206,7 +2206,7 @@ BEGIN
 
       --(SSA02) - START: Add Inventory Hold based on UserDefine02 field in ReceiptDetail
       DECLARE Cur_ReceiptDetail CURSOR FAST_FORWARD READ_ONLY FOR
-      SELECT RD.StorerKey, RD.ToID, RD.SKU, RD.Lottable08, RD.Lottable09, RD.UserDefine02, CL.CODE
+      SELECT RD.StorerKey, RD.ToID, RD.SKU, RD.Lottable09, CL.CODE
       FROM  Receipt R WITH (NOLOCK)
       JOIN ReceiptDetail RD (NOLOCK) ON RD.ReceiptKey = R.ReceiptKey
       JOIN SKU SKU (NOLOCK) ON (RD.STORERKEY = SKU.STORERKEY AND RD.SKU = SKU.SKU)
@@ -2222,18 +2222,15 @@ BEGIN
       ORDER BY RD.ReceiptLineNumber
       OPEN Cur_ReceiptDetail
 
-       FETCH NEXT FROM Cur_ReceiptDetail INTO @c_StorerKey, @c_ToId, @c_SKU, @c_Lottable08, @c_Lottable09, @c_UserDefine02, @c_ReceiptHoldCode
+       FETCH NEXT FROM Cur_ReceiptDetail INTO @c_StorerKey, @c_ToId, @c_SKU, @c_Lottable09, @c_ReceiptHoldCode
        WHILE @@FETCH_STATUS <> -1 AND ( @n_continue = 1 or @n_continue = 2)
        BEGIN
             IF NOT EXISTS (SELECT 1 FROM InventoryHold WITH (NOLOCK)
                WHERE StorerKey = @c_storerkey
-                  AND SKU = @c_sku
-                  AND Lottable08 = @c_Lottable08
-                  AND Lottable09 = @c_Lottable09
                   AND ID = @c_ToId)
             BEGIN
                SELECT @b_success = 1
-               SET @c_Reason = 'AUTO HOLD on RECEIPT for KCBInspection REASON = ' + ISNULL(RTRIM(@c_ReceiptHoldCode), '')
+               SET @c_Reason = ISNULL(RTRIM(@c_Lottable09), '')
 
                EXEC nspInventoryHoldWrapper
                   '',               -- lot
@@ -2248,8 +2245,8 @@ BEGIN
                   NULL,             -- lottable05
                   '',               --lottable06
                   '',               --lottable07
-                  @c_Lottable08,    --lottable08
-                  @c_Lottable09,    --lottable09
+                  '',               --lottable08
+                  '',               --lottable09
                   '',               --lottable10
                   '',               --lottable11
                   '',               --lottable12
@@ -2270,7 +2267,7 @@ BEGIN
                END
             END
 
-            FETCH NEXT FROM Cur_ReceiptDetail INTO @c_StorerKey, @c_ToId, @c_SKU, @c_Lottable08, @c_Lottable09,@c_UserDefine02,@c_ReceiptHoldCode
+            FETCH NEXT FROM Cur_ReceiptDetail INTO @c_StorerKey, @c_ToId, @c_SKU, @c_Lottable09,@c_ReceiptHoldCode
          END -- @@FETCH_STATUS <> -1
 
          CLOSE Cur_ReceiptDetail

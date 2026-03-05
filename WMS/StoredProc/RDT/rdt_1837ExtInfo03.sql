@@ -59,14 +59,21 @@ BEGIN
          IF NOT EXISTS ( 
             SELECT 1 FROM dbo.PICKDETAIL PD WITH (NOLOCK)
             JOIN dbo.LOC LOC WITH (NOLOCK) ON ( PD.LOC = LOC.LOC)
-            JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON ( LPD.OrderKey = PD.OrderKey)
-            JOIN dbo.ORDERS O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey AND O.StorerKey = PD.StorerKey AND O.ConsigneeKey = @cConsigneeKey
+            JOIN dbo.ORDERS O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey AND O.StorerKey = PD.StorerKey AND O.ConsigneeKey = @cConsigneeKey AND O.LoadKey = @cLoadKey
             WHERE PD.StorerKey = @cStorerKey
             AND   PD.Status = '5'
             AND   PD.QTY > 0
-            AND   LPD.LoadKey = @cLoadKey
             AND   LOC.Facility = @cFacility
-            AND   LOC.LocationCategory <> 'PPS')
+            AND   LOC.LocationCategory <> 'PPS'
+         ) AND NOT EXISTS ( 
+            SELECT 1 FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( PD.LOC = LOC.LOC)
+            JOIN dbo.ORDERS O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey AND O.StorerKey = PD.StorerKey AND O.ConsigneeKey = @cConsigneeKey AND O.LoadKey = @cLoadKey
+            WHERE PD.StorerKey = @cStorerKey
+            AND   PD.Status = '0'
+            AND   PD.QTY > 0
+            AND   LOC.Facility = @cFacility
+         )
          BEGIN
             SET @cErrMsg01 = ''
             SET @cErrMsg02 = ''
@@ -92,7 +99,16 @@ BEGIN
             AND   PD.Status = '5'
             AND   PD.QTY > 0
             AND   LOC.Facility = @cFacility
-            AND   LOC.LocationCategory <> 'PPS')
+            AND   LOC.LocationCategory <> 'PPS'
+         ) AND NOT EXISTS ( 
+            SELECT 1 FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( PD.LOC = LOC.LOC)
+            JOIN dbo.ORDERS O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey AND O.StorerKey = PD.StorerKey AND O.USERDEFINE09 = @cWAVEKey
+            WHERE PD.StorerKey = @cStorerKey
+            AND   PD.Status = '0'
+            AND   PD.QTY > 0
+            AND   LOC.Facility = @cFacility
+         )
          BEGIN
             SET @cErrMsg01 = ''
             SET @cErrMsg02 = ''
