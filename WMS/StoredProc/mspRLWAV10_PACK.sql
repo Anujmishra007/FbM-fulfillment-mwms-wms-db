@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.9                                                          */    
+/* Version: 2.0                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -33,6 +33,8 @@ GO
 /* 05-Mar-2026 WLChooi  1.8   FCR-11365 Fix floating-point error (WL07)  */    
 /* 05-Mar-2026 WLChooi  1.9   FCR-11365 Fix wrong CartonType when closing*/
 /*                            (WL08)                                     */
+/* 05-Mar-2026 WLChooi  2.0   FCR-11378 Stamp CaseID to DropID for Loose */
+/*                            (WL09)                                     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -2386,7 +2388,7 @@ BEGIN
                               , cd.Qty
                               , pd.QtyMoved
                               , pd.[Status]
-                              , pd.DropID
+                              , IIF((ISNULL(U.UCCNo, '') = '' OR ISNULL(pd.DropID, '') = '') AND pd.UOM >= '6', @c_LabelNo, pd.DropID)   --WL09
                               , pd.Loc
                               , pd.ID
                               , pd.PackKey
@@ -2409,6 +2411,9 @@ BEGIN
                               , pd.Channel_ID
                         FROM #CartonDetail AS cd
                         JOIN PickDetail AS pd (NOLOCK) ON pd.PickDetailKey = cd.RefPickKey
+                        LEFT JOIN UCC U (NOLOCK) ON U.UCCNo = pd.DropID          --WL09
+                                                AND U.Storerkey = pd.Storerkey   --WL09
+                                                AND U.SKU = pd.SKU               --WL09
                         WHERE cd.RowID = @n_RowID_cd
 
                         SET @n_err = @@ERROR
@@ -2438,6 +2443,7 @@ BEGIN
                               ,pd.Trafficcop = NULL
                               ,pd.EditWho    = SUSER_SNAME()
                               ,pd.EditDate   = GETDATE()
+                              ,pd.DropID     = IIF(ISNULL(pd.DropID, '') = '' AND pd.UOM >= '6', @c_LabelNo, pd.DropID)   --WL09
                         FROM #CartonDetail AS cd
                         JOIN PickDetail AS pd ON pd.PickDetailKey = cd.RefPickkey
                         WHERE cd.RowID = @n_RowID_cd
