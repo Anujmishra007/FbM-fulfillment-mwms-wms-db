@@ -15,7 +15,7 @@ GO
 /* 2026-03-05   3.0  GCH225     UWP-50005 Fix Continue Print Logic               */
 /*********************************************************************************/
 
-CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_VAS] (
+CREATE OR ALTER PROC [API].[isp_TPACK_PrintDocument_VAS] (
      @cType                NVARCHAR(30)      = ''
    , @bIsDiscrete          BIT               = 0
    , @bIsCustom            BIT               = 0
@@ -91,7 +91,7 @@ BEGIN
    -- DECLARE @cTypeFromWOD      NVARCHAR(30)
    --       , @cUDF01Value       NVARCHAR(MAX)
 
-   SET @nContinuePrint     = 0
+   
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
    SET @c_ErrMsg           = '' 
@@ -119,6 +119,7 @@ BEGIN
    SET @cFinalSKU          = ''
    SET @cUDF01_WK          = ''
    SET @cUDF04_WK          = ''
+   SET @nContinuePrint     = 0
 
     -- Get PRICELB configuration from CodeLkup based on WorkOrder type
 
@@ -148,7 +149,7 @@ BEGIN
       FROM WORKORDERDETAIL WOD (NOLOCK)
       INNER JOIN CODELKUP CLK (NOLOCK)
       ON CLK.Code = WOD.[Type]
-      AND CLK.StorerKey = WOD.StorerKey
+      AND CLK.StorerKey = @cStorerKey
       WHERE EXISTS ( SELECT 1
                      FROM WORKORDER WO (NOLOCK)
                      WHERE WO.ExternWorkOrderKey = @cOrderKey
@@ -158,6 +159,7 @@ BEGIN
                      AND WO.WorkOrderKey = WOD.WorkOrderKey
                      )
       AND CLK.UDF04 = 'PRICELB'
+      AND CLK.LISTName = 'WKORDTYPE'
    END
    ELSE
    BEGIN
@@ -169,7 +171,7 @@ BEGIN
       FROM WORKORDERDETAIL WOD (NOLOCK)
       INNER JOIN CODELKUP CLK (NOLOCK)
       ON CLK.Code = WOD.[Type]
-      AND CLK.StorerKey = WOD.StorerKey
+      AND CLK.StorerKey = @cStorerKey
       WHERE EXISTS ( SELECT 1
                      FROM WORKORDER WO (NOLOCK)
                      WHERE WO.ExternWorkOrderKey = @cOrderKey
@@ -180,11 +182,13 @@ BEGIN
                      )
       AND EXISTS ( SELECT 1
                      FROM PACKDETAIL PD (NOLOCK)
-                     WHERE PD.SKU = WOD.SKU
+                     WHERE 
+                     --PD.SKU = WOD.SKU
                      AND PD.PickSlipNo = @cPickSlipNo
                      AND PD.CartonNo = @nCartonNo
                   )
-      AND CLK.UDF04 IN ('PRICELB', '')
+      AND CLK.UDF04 <> 'PRICELB'
+      AND CLK.LISTName = 'WKORDTYPE'
    END
 
    OPEN sku_cursor
@@ -197,7 +201,13 @@ BEGIN
       IF @cWODSKU = @cSKU OR @cWODSKU = ''
       BEGIN
          SET @cFinalSKU = COALESCE(@cWODSKU, @cSKU)
-         
+         IF @cFinalSKU = ''
+         BEGIN
+            SELECT TOP 1 @cFinalSKU = SKU
+            FROM PACKDETAIL (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo 
+            AND CartonNo = @nCartonNo
+         END
          INSERT INTO @VASReports ( ReportID
                                  , ReportLineNo
                                  , PrintSource
@@ -218,6 +228,8 @@ BEGIN
             , @cSKU          = @cFinalSKU
             , @cUDF01_WK     = @cUDF01_WK
             , @cUDF04_WK     = @cUDF04_WK
+            , @bPrintLabelFlag = @bPrintLabelFlag
+            , @bPrintPaperFlag = @bPrintPaperFlag
             , @cReportType   = 'TPVAS'
             , @cLangCode     = @cLangCode
             , @b_Success     = @b_Success       OUTPUT
@@ -225,7 +237,7 @@ BEGIN
             , @c_ErrMsg      = @c_ErrMsg        OUTPUT
 
          IF @n_ErrNo <> 0   
-         BEGIN  
+         BEGIN
             SET @n_Continue = 3 
             GOTO EXIT_SP  
          END
@@ -253,14 +265,16 @@ BEGIN
                , @cSKU          = @cFinalSKU
                , @cUDF01_WK     = @cUDF01_WK
                , @cUDF04_WK     = @cUDF04_WK
+               , @bPrintLabelFlag = @bPrintLabelFlag
+               , @bPrintPaperFlag = @bPrintPaperFlag
                , @cReportType   = 'TPVASCarton'
                , @cLangCode     = @cLangCode
                , @b_Success     = @b_Success       OUTPUT
                , @n_ErrNo       = @n_ErrNo         OUTPUT
                , @c_ErrMsg      = @c_ErrMsg        OUTPUT
 
-            IF @n_ErrNo <> 0   
-            BEGIN  
+            IF @n_ErrNo <> 0
+            BEGIN
                SET @n_Continue = 3 
                GOTO EXIT_SP  
             END

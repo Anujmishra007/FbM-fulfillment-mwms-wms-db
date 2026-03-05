@@ -666,7 +666,7 @@ BEGIN
                AND WMR.ModuleID = @cModuleID
                WHERE WMRD.StorerKey = @cStorerKey  
                AND WMR.ReportType = @cReportType
-               AND RTP.PrinterGroup = @cLabelPrinter  
+               AND RTP.PrinterGroup = @cPaperPrinter  
                -- UWP-43135 End
                AND WMRD.ReportLineNo = @cReportLineNo -- 1.2
 
