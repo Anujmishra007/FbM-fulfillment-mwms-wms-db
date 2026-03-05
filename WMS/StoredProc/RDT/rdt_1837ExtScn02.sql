@@ -293,7 +293,7 @@ BEGIN
                      ' FROM dbo.PickDetail WITH (NOLOCK) ' + 
                      ' WHERE StorerKey = @cStorerKey ' + 
                         ' AND Status = ''' + @cPickConfirmStatus + '''' +  
-                        ' AND QTY > 0 AND ISNULL(ID,'''')=''''' + 
+                        ' AND QTY > 0 AND LOC = ''CONVEYOR''' + 
                         ' AND ' + RTRIM( @cPickDetailCartonID) + ' = @cCartonID ' +
                         ' ORDER BY 1 ' +
                         ' SET @nRowCount = @@ROWCOUNT '
@@ -358,9 +358,21 @@ BEGIN
                   END
                   ELSE IF @cDocType = 'N' --B2B
                   BEGIN
-                     IF EXISTS ( SELECT 1 FROM PICKDETAIL PD (NOLOCK) 
-                     WHERE PD.CaseID = @cCartonID AND PD.StorerKey = @cStorerKey
-                     AND EXISTS(SELECT 1 FROM PICKDETAIL PD1 WHERE PD1.STATUS = '4' AND PD1.OrderKey = PD.OrderKey AND PD1.StorerKey = PD.StorerKey))
+                     IF EXISTS (
+                        SELECT 1 FROM PICKDETAIL PD (NOLOCK)
+                        WHERE PD.StorerKey = @cStorerKey
+                        AND (
+                           (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
+                           OR 
+                           (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
+                        )
+                        AND EXISTS (
+                           SELECT 1 FROM PICKDETAIL PD1 
+                           WHERE PD1.STATUS = '4' 
+                           AND PD1.OrderKey = PD.OrderKey 
+                           AND PD1.StorerKey = PD.StorerKey
+                        )
+                     )
                      BEGIN
                         IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey)
                         BEGIN
@@ -381,7 +393,11 @@ BEGIN
                            SELECT @cPPS_Loc = LOC FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey
                         END
                      END
-                     ELSE IF EXISTS ( SELECT 1 FROM PICKDETAIL WHERE CASEID = @cCartonID AND STATUS < '4' AND StorerKey = @cStorerKey)
+                     ELSE IF EXISTS ( SELECT 1 FROM PICKDETAIL PD WHERE (
+                           (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
+                           OR 
+                           (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
+                        ) AND STATUS < '4' AND StorerKey = @cStorerKey)
                      BEGIN
                         SET @nErrNo = 256951
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Picking Not Complete
@@ -452,7 +468,21 @@ BEGIN
                   END
                   ELSE IF @cDocType = 'N' --B2B
                   BEGIN
-                     IF EXISTS ( SELECT 1 FROM PICKDETAIL WHERE CASEID = @cCartonID AND STATUS = '4' AND StorerKey = @cStorerKey)
+                     IF EXISTS (
+                        SELECT 1 FROM PICKDETAIL PD (NOLOCK)
+                        WHERE PD.StorerKey = @cStorerKey
+                        AND (
+                           (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
+                           OR 
+                           (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
+                        )
+                        AND EXISTS (
+                           SELECT 1 FROM PICKDETAIL PD1 
+                           WHERE PD1.STATUS = '4' 
+                           AND PD1.OrderKey = PD.OrderKey 
+                           AND PD1.StorerKey = PD.StorerKey
+                        )
+                     )
                      BEGIN
                         IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey)
                         BEGIN
@@ -765,7 +795,21 @@ BEGIN
                END
                ELSE IF @cDocType = 'N' --B2B
                BEGIN
-                  IF EXISTS ( SELECT 1 FROM PICKDETAIL WHERE CASEID = @cCartonID AND STATUS = '4' AND StorerKey = @cStorerKey)
+                  IF EXISTS (
+                     SELECT 1 FROM PICKDETAIL PD (NOLOCK)
+                     WHERE PD.StorerKey = @cStorerKey
+                     AND (
+                        (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
+                        OR 
+                        (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
+                     )
+                     AND EXISTS (
+                        SELECT 1 FROM PICKDETAIL PD1 
+                        WHERE PD1.STATUS = '4' 
+                        AND PD1.OrderKey = PD.OrderKey 
+                        AND PD1.StorerKey = PD.StorerKey
+                     )
+                  )
                   BEGIN
                      IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey)
                      BEGIN
@@ -910,6 +954,11 @@ BEGIN
                IF @cOption = '1'  -- Yes
                BEGIN
                   SELECT @cPPS_LOC = LOC FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE @cPalletID = ID AND [Status] = '1'
+                  SELECT TOP 1 @cWaveKey = O.USERDEFINE09 FROM ORDERS O WITH (NOLOCK)
+                  JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey
+                  WHERE PD.ID = @cPalletID AND PD.StorerKey = @cStorerKey
+                  ORDER BY PD.EditDate DESC
+
                   --HOSPITAL PALLET
                   IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE @cPalletID = ID AND [Status] = '1' AND LoadKey = 'HOSPITAL')
                   BEGIN 
@@ -953,7 +1002,7 @@ BEGIN
                         Priority, TrafficCop)
                      VALUES (
                         @cNewTaskDetailKey, 'ASTMV', '0', '', @cPPS_Loc, @cPPS_Loc, @cPalletID, @cToLoc, @cToLoc, @cPalletID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', '', 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END
                   --B2B PALLET TO VAS:
@@ -1000,7 +1049,7 @@ BEGIN
                         Priority, TrafficCop)
                      VALUES (
                         @cNewTaskDetailKey, 'ASTMV', '0', '', @cPPS_Loc, @cPPS_Loc, @cPalletID, @cToLoc, @cToLoc, @cPalletID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', '', 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END
                   --B2B PALLET TO MARSHALLING LANE
@@ -1039,7 +1088,7 @@ BEGIN
                         Priority, TrafficCop)
                      VALUES (
                         @cNewTaskDetailKey, 'ASTMV', '0', '', @cPPS_Loc, @cPPS_Loc, @cPalletID, @cToLoc, @cToLoc, @cPalletID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', '', 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END
                   ELSE
@@ -1130,11 +1179,11 @@ BEGIN
                      INSERT dbo.TASKDETAIL 
                      ( TaskDetailKey, TaskType, Storerkey, Sku, UOM, UOMQty, Qty, SystemQty, Lot,
                      FromLoc, FromID, ToLoc, ToID, SourceType,SourceKey, Priority, SourcePriority,
-                     Status, LogicalFromLoc, LogicalToLoc, PickMethod, LoadKey)  
+                     Status, LogicalFromLoc, LogicalToLoc, PickMethod, LoadKey,WAVEKEY)  
                      VALUES  
                      ( @cTaskdetailkey, 'ASTMV', @cStorerkey, '', '', 0, 0, 0, '', 
                      @cPPS_Loc, @cPalletID, @cToLoc, @cPalletID, 'rdt_1837ExtScn02', '', '5', '9',
-                     '0', @cPPS_Loc, @cToLoc, 'FP', @cLoadKey)
+                     '0', @cPPS_Loc, @cToLoc, 'FP', @cLoadKey,@cWaveKey)
                            
                      IF @@ERROR <> 0  
                      BEGIN
