@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                  */
 /* Date         Author   Ver  Purposes                                       */
 /* 15-01-2026   AGM046   1.0                                                 */
+/* 04-04-2026   AGM046   1.2  Added Description column to the existing logic */
 /*****************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_Bartender_MLPN_CabsCaseID_Label_List_RPrint] (  
    @c_Sparm01 NVARCHAR(250),	-- DropID                   
