@@ -465,6 +465,7 @@ BEGIN
                                             AND CAST(CLK.Code AS INTEGER) = CAST(O.Priority AS INTEGER)            
       WHERE  WD.Wavekey = @c_Wavekey        
       AND PD.Status < '4'
+      AND LOC.LocationType <> 'PND'
       --AND    TD.TaskDetailKey IS NULL  
       AND NOT EXISTS ( SELECT 1                          /*JH06 Start*/
                        FROM TASKDETAIL T (NOLOCK)
