@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.2                                                          */    
+/* Version: 1.4                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -22,6 +22,10 @@ GO
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
 /* 25-Feb-2026 WLChooi  1.1   FCR-11138 Add ASTCPK TaskType (WL01)       */
 /* 23-Feb-2026 WLChooi  1.2   FCR-11090 Fix CPK Task Status (WL02)       */
+/* 05-Mar-2026 WLChooi  1.3   FCR-11338 Hold the task if the same caseID */
+/*                            has been put on hold (WL03)                */
+/* 05-Mar-2026 WLChooi  1.4   FCR-10124 Modify B2C Groupkey & Pickmethod */
+/*                            mapping (WL04)                             */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -436,6 +440,7 @@ BEGIN
                 tw.RowID  
               , rno = DENSE_RANK() OVER (ORDER BY tw.AreaKey, tw.PickLocLevel, tw.CaseID) 
           FROM #TASKDETAIL_WIP tw
+          WHERE tw.DocType <> 'E'   --WL04
       )
       UPDATE tw
          SET GroupKey =  ((rno - 1) / @n_CasesPerCart) 
@@ -481,6 +486,7 @@ BEGIN
                                                       ,  tw.CaseID
                                                ) 
           FROM #TASKDETAIL_WIP tw
+          WHERE tw.DocType <> 'E'   --WL04
       )
       UPDATE tw
          SET PickMethod = CSP.PickMethod  
@@ -491,18 +497,25 @@ BEGIN
       SET [Status] = IIF(RefTaskKey > '', 'H', '0')
       FROM #TASKDETAIL_WIP tw
 
-      --WL02
-      -- If available open RPF/ASTTPA task within the Wavekey, set CPK task to H
+      --WL02: If open RPF/ASTTPA task within Wavekey, set CPK to H
+      --WL03: If one CaseID is on-hold, hold other tasks with same CaseID
       UPDATE tw
       SET [Status] = 'H'
       FROM #TASKDETAIL_WIP tw
       WHERE [Status] = '0'
-      AND EXISTS ( SELECT 1
-                   FROM TASKDETAIL TD (NOLOCK)
-                   WHERE TD.Wavekey = @c_Wavekey
-                   AND TD.TaskType IN ('RPF', 'ASTTPA')
-                   AND TD.[Status] NOT IN ('X', '9')
-                  )
+      AND ( EXISTS ( SELECT 1
+                     FROM TASKDETAIL TD (NOLOCK)
+                     WHERE TD.Wavekey = @c_Wavekey
+                     AND TD.TaskType IN ('RPF', 'ASTTPA')
+                     AND TD.[Status] NOT IN ('X', '9')
+                   )
+            OR EXISTS ( SELECT 1
+                        FROM #TASKDETAIL_WIP TD
+                        WHERE TD.CaseID = tw.CaseID
+                        AND TD.Storerkey = tw.Storerkey
+                        AND TD.[Status] = 'H'
+                      )
+          )
    END
 
    IF @n_Continue = 1
@@ -565,6 +578,10 @@ BEGIN
          SET @c_SourceKey = @c_Wavekey
          SET @c_LinkTaskToPick_SQL = ' AND PICKDETAIL.UOM = @c_UOM'
                                    + ' AND PICKDETAIL.CaseID = @c_CaseID'
+         
+         --WL04
+         IF ISNULL(@c_PickMethod, '') = ''
+            SET @c_PickMethod = '?'
 
          --IF  @c_Groupkey_P <> @c_Groupkey
          --BEGIN
