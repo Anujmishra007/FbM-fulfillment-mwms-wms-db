@@ -82,7 +82,7 @@ BEGIN
       ,  @c_LoadKey              NVARCHAR(10)   = ''         
       ,  @c_AreaKey              NVARCHAR(10)   = ''     
       ,  @c_DropID               NVARCHAR(20)   = ''         
-      ,  @n_TransitCount         INT            = ''         
+      ,  @n_TransitCount         INT            = 0         
       ,  @c_TransitLOC           NVARCHAR(10)   = ''         
       ,  @c_FinalLOC             NVARCHAR(10)   = ''         
       ,  @c_FinalID              NVARCHAR(10)   = ''         
@@ -106,6 +106,7 @@ BEGIN
       ,  @c_DocType              NVARCHAR(10)   = ''   --WL01
       ,  @c_Facility             NVARCHAR(5)    = ''
       ,  @c_Option5              NVARCHAR(MAX)  = ''
+      ,  @n_BatchGrpKey          INT            = 0
       
       ,  @CUR_TW                 CURSOR
  
@@ -311,7 +312,7 @@ BEGIN
          ,  FromID
          ,  RefTaskKey
          ,  CartonPerLoc
-         ,  CartonCube
+         ,  SkuPerCarton
          ,  DocType   --WL01
          )
       SELECT 
@@ -437,9 +438,34 @@ BEGIN
           FROM #TASKDETAIL_WIP tw
       )
       UPDATE tw
-         SET GroupKey =  ((rno - 1) / @n_CasesPerCart) + 1  
+         SET GroupKey =  ((rno - 1) / @n_CasesPerCart) 
       FROM NOC
       JOIN #TASKDETAIL_WIP tw ON tw.RowID = NOC.RowID
+
+      --------------------------------------------------------------------  
+      -- Assign Actual Groupkey
+      --------------------------------------------------------------------
+      SET @n_BatchGrpKey = 0
+      SELECT @n_BatchGrpKey = COUNT(DISTINCT GroupKey)
+      FROM #TASKDETAIL_WIP tw
+
+      IF @n_BatchGrpKey > 0
+      BEGIN
+         EXEC dbo.nspg_GetKey @KeyName = N'GroupKey' -- nvarchar(18)
+                            , @fieldlength = 10 -- int
+                            , @keystring = @c_GroupKey_New  OUTPUT -- nvarchar(25)
+                            , @b_Success = @b_Success       OUTPUT -- int
+                            , @n_err = @n_err               OUTPUT -- int
+                            , @c_errmsg = @c_errmsg         OUTPUT -- nvarchar(250)
+                            , @n_batch = @n_BatchGrpKey -- int
+
+         IF @b_Success = 1 AND ISNULL(TRIM(@c_GroupKey_New), '') <> ''
+         BEGIN
+            UPDATE #TASKDETAIL_WIP
+            SET Groupkey = RIGHT(REPLICATE('0', 10) + CAST(CAST(TRIM(@c_GroupKey_New) AS INT) + CAST(GroupKey AS INT) AS NVARCHAR(10)), 10)
+            WHERE Groupkey > ''
+         END
+      END
 
       --------------------------------------------------------------------  
       -- Calculate Carton Position in the Cart By Small to Large Sequence  
@@ -540,22 +566,22 @@ BEGIN
          SET @c_LinkTaskToPick_SQL = ' AND PICKDETAIL.UOM = @c_UOM'
                                    + ' AND PICKDETAIL.CaseID = @c_CaseID'
 
-         IF  @c_Groupkey_P <> @c_Groupkey
-         BEGIN
-            SET @c_GroupKey_New = ''
-            EXECUTE nspg_getkey    
-                    @KeyName   = 'GroupKey'    
-                  , @fieldlength = 10       
-                  , @KeyString   = @c_GroupKey_New    OUTPUT    
-                  , @b_success   = @b_success         OUTPUT    
-                  , @n_err       = @n_err             OUTPUT    
-                  , @c_errmsg    = @c_errmsg          OUTPUT  
-                   
-            IF @b_success = 0   
-            BEGIN    
-               SET @n_Continue = 3  
-            END    
-         END
+         --IF  @c_Groupkey_P <> @c_Groupkey
+         --BEGIN
+         --   SET @c_GroupKey_New = ''
+         --   EXECUTE nspg_getkey    
+         --           @KeyName   = 'GroupKey'    
+         --         , @fieldlength = 10       
+         --         , @KeyString   = @c_GroupKey_New    OUTPUT    
+         --         , @b_success   = @b_success         OUTPUT    
+         --         , @n_err       = @n_err             OUTPUT    
+         --         , @c_errmsg    = @c_errmsg          OUTPUT  
+         --          
+         --   IF @b_success = 0   
+         --   BEGIN    
+         --      SET @n_Continue = 3  
+         --   END    
+         --END
 
          IF @n_Continue = 1
          BEGIN
@@ -605,11 +631,11 @@ BEGIN
             ,  @c_LoadKey             = @c_Loadkey           
             ,  @c_AreaKey             = ''            
             ,  @c_DropID              = ''     
-            ,  @n_TransitCount        = ''         
+            ,  @n_TransitCount        = 0         
             ,  @c_TransitLOC          = ''         
             ,  @c_FinalLOC            = ''         
             ,  @c_FinalID             = ''         
-            ,  @c_Groupkey            = @c_Groupkey_New   
+            ,  @c_Groupkey            = @c_Groupkey
             ,  @n_PendingMoveIn       = 0        
             ,  @n_QtyReplen           = 0     
             ,  @c_CallSource          = 'WAVE' 
