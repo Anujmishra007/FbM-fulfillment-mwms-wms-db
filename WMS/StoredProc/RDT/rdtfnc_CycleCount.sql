@@ -151,7 +151,6 @@ GO
 /*                           barcode type (james33)                     */
 /* 18-Sep-2025 6.8  James    FCR-2614 Fix uom conversion issue (james34)*/
 /*                           Add decodesp to add new ucc step           */
-/* 03-Mar-2026 6.9  NYE018   FCR-9688 added check to remain lotts on 19 */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -9652,14 +9651,11 @@ BEGIN
       -- (Vicky03) - End
 
       -- Initialize Lottables
-      IF @cDecodeSp <> 'rdt_610DecodeSP06'  -- Except decodeSP06 which will return lottable value in different outfield FCR-9688
-      BEGIN
-         SET @cLottable01 = ''
-         SET @cLottable02 = ''
-         SET @cLottable03 = ''
-         SET @dLottable04 = NULL
-         SET @dLottable05 = NULL
-      END -- FCR-9688
+      SET @cLottable01 = ''
+      SET @cLottable02 = ''
+      SET @cLottable03 = ''
+      SET @dLottable04 = NULL
+      SET @dLottable05 = NULL
 
       SET @cFieldAttr01 = ''
       SET @cFieldAttr02 = ''
