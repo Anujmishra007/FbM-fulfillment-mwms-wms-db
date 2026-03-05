@@ -190,6 +190,23 @@ BEGIN
       GOTO EXIT_SP 
    END
 
+   IF EXISTS ( SELECT TOP 1 1 
+               FROM api.AppWorkstation (NOLOCK) 
+               WHERE Workstation = @cWorkstation 
+               AND DeviceID = @cDeviceID
+               )
+   AND EXISTS( SELECT TOP 1 1 
+               FROM api.AppWorkstation (NOLOCK) 
+               WHERE Workstation = @cWorkstation 
+               AND DeviceID = ''
+   )
+   BEGIN
+      SET @b_Success = 0
+      SET @n_ErrNo = 10658
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Current DeviceID already assigned to the workstation.
+      GOTO EXIT_SP 
+   END
+   
    UPDATE api.AppWorkstation WITH (ROWLOCK)
    SET DeviceID = @cDeviceID
    WHERE Workstation = @cWorkstation

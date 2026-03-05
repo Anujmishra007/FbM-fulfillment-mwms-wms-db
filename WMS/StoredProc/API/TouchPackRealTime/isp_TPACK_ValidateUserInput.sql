@@ -490,19 +490,24 @@ BEGIN
                , @cStorerKey        = @cStorerKey        
                , @cFacility         = @cFacility      
                , @cInputValue1      = @cInputValue1
+               , @cInputValue2      = @cInputValue2   OUTPUT
+               , @cInputValue3      = @cInputValue3   OUTPUT
                , @c_UserID          = @c_UserID
                , @cLangCode         = @cLangCode
-               , @cSKU              = @cSKU        OUTPUT
-               , @nQty              = @nQty        OUTPUT
-               , @b_Success         = @b_Success   OUTPUT
-               , @n_ErrNo           = @n_ErrNo     OUTPUT
-               , @c_ErrMsg          = @c_ErrMsg    OUTPUT
+               , @cSKU              = @cSKU           OUTPUT
+               , @nQty              = @nQty           OUTPUT
+               , @b_Success         = @b_Success      OUTPUT
+               , @n_ErrNo           = @n_ErrNo        OUTPUT
+               , @c_ErrMsg          = @c_ErrMsg       OUTPUT
 
             IF @b_Success = 0
             BEGIN
                SET @n_Continue  = 3    
                GOTO EXIT_SP
             END
+
+            INSERT INTO @oSKUList (SKU)
+            VALUES (@cSKU)
          END
       END
    END
@@ -585,7 +590,7 @@ VALIDATE_SKU:
 
    --Check Multi SKU Selection
    EXEC [API].[isp_TPACK_CheckMultiSKUSelection]
-         @cType             = @cType            
+        @cType             = @cType            
       , @bIsDiscrete       = @bIsDiscrete      
       , @bIsCustom         = @bIsCustom        
       , @cPickSlipNo       = @cPickSlipNo       

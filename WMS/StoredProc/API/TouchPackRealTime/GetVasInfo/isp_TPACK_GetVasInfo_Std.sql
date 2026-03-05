@@ -199,6 +199,46 @@ BEGIN
                   ORDER BY CASE WOD.ExternLineNo WHEN '0H' THEN 0 ELSE 1 END
                             , WOD.WorkOrderLineNumber     
    
+   INSERT INTO @VASInfo ( cSKU
+                        , cCode
+                        , cDescr
+                        , fPrice
+                        , cType
+                        , cPrintDocID
+                        , bIsMandatory
+                        , cStatus
+                        , bShowFlag
+                        , cExternLineNo
+                        )
+                  SELECT  COALESCE(NULLIF(WOD.Sku,''), @cSKU)
+                        , WOD.[Type]
+                        , CLK.[Description]
+                        , WOD.Price
+                        , 'print'
+                        , CLK.UDF01
+                        , @c_Option1
+                        , WOD.[Status]
+                        , 0
+                        , ''
+                  FROM WORKORDERDETAIL WOD (NOLOCK)
+                  LEFT JOIN CODELKUP CLK (NOLOCK)
+                  ON WOD.[Type] = CLK.Code
+                  WHERE CLK.LISTNAME = 'WKOrdType'
+                  AND CLK.Short <> 'Y'  -- Not equal to Y means required to show VAS.
+                  AND CLK.UDF04 = 'PRICELB' -- Get the VAS info with Price for label printing, no matter it's mandatory or not, showflag is 0 as it won't display in VAS list but only used for label printing.
+                  AND CLK.UDF01 <> '' -- Only get the VAS with print doc ID for label printing.
+                  AND EXISTS (SELECT 1
+                              FROM WORKORDER WO (NOLOCK)
+                              WHERE EXISTS ( SELECT 1 
+                                             FROM @OrderList t
+                                             WHERE t.OrderKey = WO.ExternWorkOrderKey
+                                             )
+                              AND StorerKey = @cStorerKey
+                              AND Facility = @cFacility
+                              AND WO.[Type] IN('PACK', 'VAS')
+                              AND WO.WorkOrderKey = WOD.WorkOrderKey
+                              )
+
    IF @cSKU <> '' -- for SKU Level VAS Display
    BEGIN
       IF @bShowOrderHeaderVAS = 0
@@ -228,6 +268,22 @@ BEGIN
       WHERE cSKU = ''
       AND cExternLineNo <> '0H'
    END
+
+   ;WITH CTE AS
+   (
+      SELECT ROW_NUMBER() OVER(
+                              PARTITION BY  cSKU
+                                          , cCode
+                                          , cDescr
+                                          , cType
+                                          , cPrintDocID 
+                              ORDER BY nRowRef
+                              ) AS rn
+      FROM @VASInfo
+      WHERE cType = 'print'
+   )
+   DELETE FROM CTE
+   WHERE rn > 1
 
    SET @cResponseJson = ISNULL ((SELECT  nRowRef     
                                        , cSKU        

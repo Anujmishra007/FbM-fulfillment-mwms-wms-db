@@ -19,6 +19,7 @@ GO
 /* 2026-01-23   5.0  GCH225     UWP-47567: Handle Open Carton to change WOD Status  */
 /* 2026-02-26   5.1  GCH225     UWP-49355: Fix Update ExpQty to Qty in PackDetail   */
 /* 2026-03-04   5.2  GCH225     UWP-49845: Fix Update ExpQty to Qty in PackDetail   */
+/* 2026-03-05   5.3  GCH225     UWP-50008: Fix Update WOD Status for Conso Pick     */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtCtnPostUpd_Std] (
@@ -462,7 +463,7 @@ BEGIN
                AND sValue IN ('1', '3')
    )
    BEGIN
-      IF @bIsDiscrete = 1 AND @cLoadKey = ''
+      IF @bIsDiscrete = 1 AND @cOrderKey <> ''
       BEGIN
          INSERT INTO @OrderList (OrderKey)
          VALUES (@cOrderKey)
