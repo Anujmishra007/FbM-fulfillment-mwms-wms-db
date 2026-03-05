@@ -70,7 +70,7 @@ BEGIN
         DataCheck NVARCHAR(100),
         DropID NVARCHAR(100),
         SKU NVARCHAR(100),
-		DescSKU NVARCHAR(100),
+		DescSKU NVARCHAR(100),  --1.2 
         QTY NVARCHAR(100)
     );
 
@@ -95,7 +95,7 @@ BEGIN
 		  ELSE pd.DropID
 		  END AS PickOrDropId,
 		  pd.SKU,
-		  sku.descr,
+		  sku.descr, --1.2 
 		  SUM(pd.Qty) AS TotalQty
 		 --
     FROM dbo.PICKDETAIL pd WITH (NOLOCK)
@@ -144,7 +144,7 @@ BEGIN
 	  pd.ID,
 	  pd.DropID,
 	  pd.SKU,
-	  sku.descr; -- new
+	  sku.descr; -- --1.2 
 
     -- Output table declaration: BarTender expects many generic columns
     DECLARE @Result TABLE
@@ -208,43 +208,43 @@ BEGIN
 					@c_LPN = DropID,
 					--
 					@c_SKU01    = CASE WHEN @counter % @pageSize = 0 THEN SKU     END,					
-					@c_SKUDSC01 = CASE WHEN @counter % @pageSize = 0 THEN DescSKU END,
+					@c_SKUDSC01 = CASE WHEN @counter % @pageSize = 0 THEN DescSKU END,  --1.2 
 					@c_SKUQTY01 = CASE WHEN @counter % @pageSize = 0 THEN QTY     END,
 					--
 					@c_SKU02    = CASE WHEN @counter % @pageSize = 1 THEN SKU     END,
-					@c_SKUDSC02 = CASE WHEN @counter % @pageSize = 1 THEN DescSKU END,
+					@c_SKUDSC02 = CASE WHEN @counter % @pageSize = 1 THEN DescSKU END, --1.2 
 					@c_SKUQTY02 = CASE WHEN @counter % @pageSize = 1 THEN QTY     END,
 					--
 					@c_SKU03    = CASE WHEN @counter % @pageSize = 2 THEN SKU     END,
-					@c_SKUDSC03 = CASE WHEN @counter % @pageSize = 2 THEN DescSKU END,
+					@c_SKUDSC03 = CASE WHEN @counter % @pageSize = 2 THEN DescSKU END, --1.2 
 					@c_SKUQTY03 = CASE WHEN @counter % @pageSize = 2 THEN QTY     END,
 					--
 					@c_SKU04    = CASE WHEN @counter % @pageSize = 3 THEN SKU     END,
-					@c_SKUDSC04 = CASE WHEN @counter % @pageSize = 3 THEN DescSKU END,
+					@c_SKUDSC04 = CASE WHEN @counter % @pageSize = 3 THEN DescSKU END, --1.2 
 					@c_SKUQTY04 = CASE WHEN @counter % @pageSize = 3 THEN QTY     END,
 					--
 					@c_SKU05    = CASE WHEN @counter % @pageSize = 4 THEN SKU     END,
-					@c_SKUDSC05 = CASE WHEN @counter % @pageSize = 4 THEN DescSKU END,
+					@c_SKUDSC05 = CASE WHEN @counter % @pageSize = 4 THEN DescSKU END, --1.2 
 					@c_SKUQTY05 = CASE WHEN @counter % @pageSize = 4 THEN QTY     END,
 					--
 					@c_SKU06    = CASE WHEN @counter % @pageSize = 5 THEN SKU     END,
-					@c_SKUDSC06 = CASE WHEN @counter % @pageSize = 5 THEN DescSKU END,
+					@c_SKUDSC06 = CASE WHEN @counter % @pageSize = 5 THEN DescSKU END, --1.2 
 					@c_SKUQTY06 = CASE WHEN @counter % @pageSize = 5 THEN QTY     END,
 					--
 					@c_SKU07    = CASE WHEN @counter % @pageSize = 6 THEN SKU     END,
-					@c_SKUDSC07 = CASE WHEN @counter % @pageSize = 6 THEN DescSKU END,
+					@c_SKUDSC07 = CASE WHEN @counter % @pageSize = 6 THEN DescSKU END, --1.2 
 					@c_SKUQTY07 = CASE WHEN @counter % @pageSize = 6 THEN QTY     END,
 					--
 					@c_SKU08    = CASE WHEN @counter % @pageSize = 7 THEN SKU     END,
-					@c_SKUDSC08 = CASE WHEN @counter % @pageSize = 7 THEN DescSKU END,
+					@c_SKUDSC08 = CASE WHEN @counter % @pageSize = 7 THEN DescSKU END, --1.2 
 					@c_SKUQTY08 = CASE WHEN @counter % @pageSize = 7 THEN QTY     END,
 					--
 					@c_SKU09    = CASE WHEN @counter % @pageSize = 8 THEN SKU     END,
-					@c_SKUDSC09 = CASE WHEN @counter % @pageSize = 8 THEN DescSKU END,
+					@c_SKUDSC09 = CASE WHEN @counter % @pageSize = 8 THEN DescSKU END, --1.2 
 					@c_SKUQTY09 = CASE WHEN @counter % @pageSize = 8 THEN QTY     END,
 					--
 					@c_SKU10    = CASE WHEN @counter % @pageSize = 9 THEN SKU     END,
-					@c_SKUDSC10 = CASE WHEN @counter % @pageSize = 9 THEN DescSKU END,
+					@c_SKUDSC10 = CASE WHEN @counter % @pageSize = 9 THEN DescSKU END, --1.2 
 					@c_SKUQTY10 = CASE WHEN @counter % @pageSize = 9 THEN QTY     END
 					--
 			   FROM @tempTable WHERE ID = @counter;
@@ -258,7 +258,7 @@ BEGIN
 				-- Update page with SKU/QTY values
 				UPDATE @Result
 				SET 
-					Col12 = ISNULL(@c_SKU01, Col12),   Col32 = ISNULL(@c_SKUDSC01, Col32),  Col13 = ISNULL(@c_SKUQTY01, Col13),
+					Col12 = ISNULL(@c_SKU01, Col12),   Col32 = ISNULL(@c_SKUDSC01, Col32),  Col13 = ISNULL(@c_SKUQTY01, Col13), 
 					Col14 = ISNULL(@c_SKU02, Col14),   Col33 = ISNULL(@c_SKUDSC02, Col33),  Col15 = ISNULL(@c_SKUQTY02, Col15),
 					Col16 = ISNULL(@c_SKU03, Col16),   Col34 = ISNULL(@c_SKUDSC03, Col34),  Col17 = ISNULL(@c_SKUQTY03, Col17),
 					Col18 = ISNULL(@c_SKU04, Col18),   Col35 = ISNULL(@c_SKUDSC04, Col35),  Col19 = ISNULL(@c_SKUQTY04, Col19),
