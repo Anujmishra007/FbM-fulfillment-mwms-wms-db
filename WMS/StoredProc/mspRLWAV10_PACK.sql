@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.0                                                          */    
+/* Version: 2.1                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -35,6 +35,8 @@ GO
 /*                            (WL08)                                     */
 /* 05-Mar-2026 WLChooi  2.0   FCR-11378 Stamp CaseID to DropID for Loose */
 /*                            (WL09)                                     */
+/* 06-Mar-2026 WLChooi  2.1   FCR-11402 Truncate #OptimizeItemToPack     */
+/*                            after carton close (WL10)                  */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -1069,7 +1071,10 @@ BEGIN
                IF @c_DocType <> 'E'
                BEGIN
                   --WL08 S
-                  IF EXISTS ( SELECT 1 FROM #CartonDetail AS cd WHERE cd.Orderkey = @c_Orderkey AND cd.[Status] = '0' )
+                  IF EXISTS ( SELECT 1 FROM #CartonDetail AS cd 
+                              WHERE cd.Orderkey = @c_Orderkey
+                              AND   cd.CartonSeqNo = @n_CartonSeqNo   --WL10
+                              AND   cd.[Status] = '0' )
                   BEGIN
                      TRUNCATE TABLE #CTNZ_P
                      INSERT INTO #CTNZ_P (RowID, CartonizationGroup, CartonType, [Cube], MaxWeight, CartonLength, CartonWidth, CartonHeight, Dim1, Dim2, Dim3, CartonDefault)
@@ -1918,6 +1923,10 @@ BEGIN
                         --WL08
                         IF EXISTS ( SELECT 1 FROM #CTNZ_P )
                            TRUNCATE TABLE #CTNZ_P
+
+                        --WL10
+                        IF EXISTS ( SELECT 1 FROM #OptimizeItemToPack )
+                           TRUNCATE TABLE #OptimizeItemToPack
                      END
                   END
                END
@@ -2479,7 +2488,7 @@ BEGIN
                -----------------------------------------------------
                -- Gen Label#,Stamp CaseID and Split PickDetail - END
                -----------------------------------------------------
-               IF @n_debug >= 1
+               IF @n_debug = 9
                BEGIN
                   SELECT @c_PickSlipNo
                         ,CartonNo   = cd.CartonSeqNo
