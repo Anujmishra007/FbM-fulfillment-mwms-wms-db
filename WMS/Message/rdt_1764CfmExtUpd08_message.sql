@@ -15,5 +15,6 @@ execute rdt.rdtAddMsg 256308, 10, '256308 QcmdFail',        'us_english', 1764, 
 execute rdt.rdtAddMsg 256309, 10, '256309 GenQcmdFail',     'us_english', 1764 
 execute rdt.rdtAddMsg 256310, 10, '256310 InvSPName',       'us_english', 1764, 0, '256310 Invalid SP in Qcmd config' 
 execute rdt.rdtAddMsg 256311, 10, '256311 UpdLLIFail',      'us_english', 1764, 0, '256311 Update Inventory Fail'
+execute rdt.rdtAddMsg 256312, 10, '256312 UpdPkdFail',      'us_english', 1764, 0, '256312 Update PickDetail Fail'
 
 select * from rdt.rdtmsg with (nolock) where message_id between 256301 and 256350
