@@ -7,9 +7,8 @@
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date         Author    Ver.    Purposes                              */
-/* 2026-01-13   Jackc     1.0.0   FCR-10031 Created                     */
-/* 2026-03-04   Jackc     1.0.1   FCR-10031 V1.5 Update PKD to 5        */
+/* Date         Author    Ver.  Purposes                                */
+/* 2026-01-13   Jackc     1.0   FCR-10031 Created                       */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd08
@@ -28,21 +27,27 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @nDebugFlag     INT = 0
-   DECLARE @cUserName      NVARCHAR(128)
+   DECLARE @CUsername      NVARCHAR(128)
 
    DECLARE @bSuccess                INT
    DECLARE @nQTY                    INT
    DECLARE @nQTY_RPL                INT
    DECLARE @nOrgTaskQty             INT
+   DECLARE @nSystemQTY              INT
    DECLARE @nOrgSystemQTY           INT
+   DECLARE @nNewSystemQTY           INT
    DECLARE @nPickQTY                INT
    DECLARE @nShortQTY               INT
+   DECLARE @nQTYReplen              INT
+   DECLARE @nQtyExpected            INT
    DECLARE @cReasonCode             NVARCHAR(10)
    DECLARE @cTMTaskType             NVARCHAR(10)
    DECLARE @cPickMethod             NVARCHAR(10)
    DECLARE @cLOT                    NVARCHAR(10)
    DECLARE @cFromLOC                NVARCHAR(10)
    DECLARE @cToLoc                  NVARCHAR(10)
+   DECLARE @cPickFromLoc            NVARCHAR(10)
+   DECLARE @cLoseID                 NVARCHAR(1)
    DECLARE @cTaskFromID             NVARCHAR(18)
    DECLARE @cTaskToID               NVARCHAR(18)
    DECLARE @cStorerKey              NVARCHAR(15)
@@ -52,15 +57,13 @@ BEGIN
    DECLARE @cUCCNo                  NVARCHAR(20)
    DECLARE @cTaskUOM                NVARCHAR(5)
    DECLARE @cRealloFlag             NVARCHAR(1)
-   DECLARE @cUpdPKDFlag             NVARCHAR(1)
+   DECLARE @cUpdPKDFlag            NVARCHAR(1)
    DECLARE @cTaskMsg02              NVARCHAR(20)
    DECLARE @cRealloNumberofRetry    NVARCHAR(5)
    DECLARE @nRealloNumberofRetry    INT
-   DECLARE @nRealloCounter          INT
-   DECLARE @nOrderCnt               INT
-   DECLARE @cFinalLOCPAZone         NVARCHAR(10) = ''
+   DECLARE @nRealloConter           INT
 
-   DECLARE
+   DECLARE 
       @cAPP_DB_Name              NVARCHAR(20),
       @cDataStream               VARCHAR(10),
       @nThreadPerAcct            INT,
@@ -71,9 +74,12 @@ BEGIN
       @cPORT                     NVARCHAR(5),
       @cIniFilePath              NVARCHAR(200),
       @cCmdType                  NVARCHAR(10),
-      @cExecStatements           NVARCHAR(MAX)
+      @cQcmdTaskType             NVARCHAR(1),
+      @c_TransmitlogKey          NVARCHAR(10),
+      @cExecStatements           NVARCHAR(MAX),
+      @cExecArguments            NVARCHAR(MAX)
 
-   DECLARE
+   DECLARE 
       @cErrMsg1      NVARCHAR(125),
       @cErrMsg2      NVARCHAR(125),
       @cErrMsg3      NVARCHAR(125)
@@ -130,15 +136,32 @@ BEGIN
       RETURN
 
    --not short
-   --V1.0.1
-   --IF ISNULL(@cReasonCode, '') = ''
-      --RETURN
+   IF ISNULL(@cReasonCode, '') = ''
+      RETURN
 
    IF @cTMTaskType <> 'RPF'
       RETURN
 
    SET @cRealloFlag = '1'
    SET @cUpdPKDFlag = '1'
+
+   IF @cReasonCode = ''
+   BEGIN
+      --not short do not trigger reallo and update pkd
+      SET @cRealloFlag = '0'
+      SET @cUpdPKDFlag = '0'
+
+      IF @nDebugFlag = 1
+         SELECT 'ReasonCode Empty', @cRealloFlag AS RealloFalg, @cUpdPKDFlag AS UpdPKDFlag
+
+      IF @nDebugFlag = 2
+      BEGIN
+         INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
+            Col1, Col2, Col3, Col4, Col5)
+         VALUES ('1764CfmUpd08', GETDATE(), @CUsername, CAST(@nmobile AS NVARCHAR(10)),
+            @cTaskDetailKey, @cRealloFlag, @cUpdPKDFlag, '', 'RsnCodeEmpty')
+      END
+   END
 
    --Get related pickdetail
    INSERT INTO @tPickDetailList (PickDetailKey)
@@ -154,7 +177,7 @@ BEGIN
       SELECT * FROM @tPickDetailList
    END
 
-   IF NOT EXISTS (SELECT 1 FROM @tPickDetailList) -- rpf with out PKD data
+   IF NOT EXISTS (SELECT 1 FROM @tPickDetailList)
    BEGIN
       SET @cRealloFlag = '0' -- If not pkd rpf, not to trigger reallo
       SET @cUpdPKDFlag = '0' -- if rpf only, not to update pkd
@@ -166,41 +189,10 @@ BEGIN
       BEGIN
          INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
             Col1, Col2, Col3, Col4, Col5)
-         VALUES ('1764CfmUpd08', GETDATE(), @cUserName, CAST(@nMobile AS NVARCHAR(10)),
+         VALUES ('1764CfmUpd08', GETDATE(), @CUsername, CAST(@nmobile AS NVARCHAR(10)),
             @cTaskDetailKey, @cRealloFlag, @cUpdPKDFlag, '', 'NoPickDetl')
       END
    END -- PickDetail not found
-
-   --V.1.0.1 start
-   IF @cReasonCode = '' AND @nQty <> 0 -- normal picking
-   BEGIN
-      SET @cRealloFlag = '0'  --Not short, no need reallocation
-
-      SELECT @nPickQty = ISNULL(SUM(Qty), 0), @nOrderCnt = ISNULL(COUNT(DISTINCT OrderKey), 0)
-      FROM dbo.PickDetail WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND DropID = @cUCCNo
-
-      SELECT @cFinalLOCPAZone = PutawayZone FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cFinalLOC
-
-      IF @nPickQty = @nQTY AND @nOrderCnt = 1 AND @cFinalLOCPAZone IN ('CSCPACK', 'CSCCNVYR')
-         SET @cUpdPKDFlag = '1'
-      ELSE
-         SET @cUpdPKDFlag = '0'
-
-      IF @nDebugFlag = 1
-         SELECT 'Normal picking', @cRealloFlag AS RealloFalg, @cUpdPKDFlag AS UpdPKDFlag,
-            @cUCCNo AS UCC, @nPickQTY AS UCCPickQty, @cFinalLOCPAZone AS FinalPAZone
-      
-      IF @nDebugFlag = 2 AND @cUpdPKDFlag = '0'
-      BEGIN
-         INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
-            Col1, Col2, Col3, Col4, Col5)
-         VALUES ('1764CfmUpd08', GETDATE(), @cUserName, CAST(@nMobile AS NVARCHAR(10)),
-            @cTaskDetailKey, @cRealloFlag, @cUpdPKDFlag, '', 'RsnCodeEmpty')
-      END
-   END
-   --V.1.0.1 end
 
    IF @cUpdPKDFlag = '1' -- update pkd
    BEGIN
@@ -217,7 +209,7 @@ BEGIN
             SELECT
                '1764CfmUpd08',
                GETDATE(),
-               @cUserName,
+               @CUsername,
                CAST(@nMobile AS NVARCHAR(10)),
                @cTaskDetailKey,
                PKD.PickDetailKey,
@@ -247,44 +239,6 @@ BEGIN
 
          --No need to handle task, reallo will do
       END -- full short
-      ELSE IF @cReasonCode = '' --Normal picking, set pkd to 5
-      BEGIN
-         IF @nDebugFlag = 1
-            SELECT 'Normal picking, set pkd to 5'
-
-         IF @nDebugFlag = 2
-         BEGIN
-            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
-               Col1, Col2, Col3, Col4, Col5)
-            SELECT
-               '1764CfmUpd08',
-               GETDATE(),
-               @cUserName,
-               CAST(@nMobile AS NVARCHAR(10)),
-               @cTaskDetailKey,
-               PKD.PickDetailKey,
-               @cUCCNo,
-               '',
-               'SetPKDtoPick'
-            FROM dbo.PickDetail PKD
-            JOIN @tPickDetailList PTL
-               ON PKD.PickDetailKey = PTL.PickDetailKey
-         END
-
-         BEGIN TRY
-            UPDATE PKD WITH (ROWLOCK)
-            SET
-               PKD.Status = '5'
-            FROM dbo.PickDetail PKD
-            JOIN @tPickDetailList PTL
-               ON PKD.PickDetailKey = PTL.PickDetailKey
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo = 256312
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKD Fail
-            GOTO RollBackTran
-         END CATCH
-      END--Normal Picking
       ELSE
       BEGIN
          IF @nDebugFlag = 1
@@ -294,7 +248,7 @@ BEGIN
          BEGIN
             INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
                Col1, Col2, Col3, Col4, Col5)
-            VALUES ('1764CfmUpd08', GETDATE(), @cUserName, CAST(@nMobile AS NVARCHAR(10)),
+            VALUES ('1764CfmUpd08', GETDATE(), @CUsername, CAST(@nmobile AS NVARCHAR(10)),
                @cTaskDetailKey, CAST (@nQty AS NVARCHAR(4)), '', '', 'PartialShort')
          END
 
@@ -323,13 +277,13 @@ BEGIN
    --RealloNumberOfRetry check
    SET @cRealloNumberofRetry = rdt.RDTGetConfig( @nFunc, 'RealloNumberofRetry', @cStorerKey)
    IF LEN(@cTaskMsg02) > 4 AND LEFT(@cTaskMsg02,4) = 'SKIP'
-      SET @nRealloCounter = ISNULL(TRY_CAST( RIGHT(@cTaskMsg02, LEN(@cTaskMsg02) - 4 ) AS INT), -1)
+      SET @nRealloConter = ISNULL(TRY_CAST( RIGHT(@cTaskMsg02, LEN(@cTaskMsg02) - 4 ) AS INT), -1)
    ELSE
-      SET @nRealloCounter = 0
+      SET @nRealloConter = 0
 
    SET @nRealloNumberofRetry = ISNULL(TRY_CAST( @cRealloNumberofRetry AS INT), 0)
 
-   IF @nRealloCounter < 0 OR @nRealloCounter > @nRealloNumberofRetry
+   IF @nRealloConter < 0 OR @nRealloConter > @nRealloNumberofRetry
    BEGIN
       SET @cRealloFlag = '0'
 
@@ -363,14 +317,14 @@ BEGIN
          GOTO RollBackTran
       END
 
-      IF ISNULL(@cWaveKey, '') = '' --wavekey is required
+      IF ISNULL(@cWaveKey, '') = '' AND @cRealloFlag <> '1' --wavekey is required when FCP exists
       BEGIN
          SET @nErrNo = 256306
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
          GOTO RollBackTran
       END
 
-      SELECT
+      SELECT 
          @cAPP_DB_Name         = APP_DB_Name,
          @cDataStream          = DataStream,
          @nThreadPerAcct       = ThreadPerAcct,
@@ -380,6 +334,7 @@ BEGIN
          @cPORT                = PORT,
          @cIniFilePath         = IniFilePath,
          @cCmdType             = CmdType,
+         @cQcmdTaskType        = TaskType,
          @cExecStatements      = StoredProcName
       FROM dbo.QCmd_TransmitlogConfig WITH (NOLOCK)
       WHERE TableName = '1764ShortPickReallo'
@@ -459,7 +414,7 @@ BEGIN
    IF @cReasonCode <> '' -- Short
    BEGIN
       IF @nDebugFlag = 1
-         SELECT 'Update FromLoc QtyReplen', @cLOT AS Lot, @cFromLoc AS LOC, @cTaskFromID AS FromID
+         SELECT 'Update FromLoc QtyRelen', @cLot AS Lot, @cFromLoc AS LOC, @cTaskFromID AS FromID
 
       BEGIN TRY
          UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET

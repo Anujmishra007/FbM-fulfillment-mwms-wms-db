@@ -318,6 +318,22 @@ BEGIN
                GOTO RollBackTran
             END
 
+            IF @bIsASTMV = 1
+            BEGIN
+               BEGIN TRY
+                  UPDATE PickDetail WITH (ROWLOCK)
+                  SET
+                     Status = '5'
+                  WHERE Storerkey = @cStorerkey
+				         AND DropID = @cCaseID
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 256508
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKD Fail
+                  GOTO RollBackTran
+               END CATCH
+            END
+
             SET @cNewTaskDetailKey = ''
             FETCH NEXT FROM @curRPLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty, @cTaskWaveKey
          END
@@ -409,6 +425,22 @@ BEGIN
                SET @nErrNo = 256507
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
                GOTO RollBackTran
+            END
+
+            IF @bIsASTMV2 = 1
+            BEGIN
+               BEGIN TRY
+                  UPDATE PickDetail WITH (ROWLOCK)
+                  SET
+                     Status = '5'
+                  WHERE Storerkey = @cStorerkey
+				         AND DropID = @cCaseID
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 256509
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKD Fail
+                  GOTO RollBackTran
+               END CATCH
             END
 
             SET @cNewTaskDetailKey = ''
