@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.4                                                          */    
+/* Version: 1.6                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -26,6 +26,9 @@ GO
 /*                            has been put on hold (WL03)                */
 /* 05-Mar-2026 WLChooi  1.4   FCR-10124 Modify B2C Groupkey & Pickmethod */
 /*                            mapping (WL04)                             */
+/* 06-Mar-2026 WLChooi  1.5   FCR-10124 Fix missing Taskdetailkey in     */
+/*                            Pickdetail for ASTCPK (WL05)               */
+/* 06-Mar-2026 WLChooi  1.6   FCR-10124 Add Pickmethod for B2C (WL06)    */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -196,6 +199,7 @@ BEGIN
          ,  CartonCube        FLOAT          NOT NULL DEFAULT(0.00) 
          ,  SortNo            INT            NOT NULL DEFAULT(0)
          ,  DocType           NVARCHAR(10)   NOT NULL DEFAULT('')   --WL01
+         ,  ECOM_SINGLE_Flag  NVARCHAR(1)    NOT NULL DEFAULT('')   --WL06
          ) 
 
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NULL
@@ -318,6 +322,7 @@ BEGIN
          ,  CartonPerLoc
          ,  SkuPerCarton
          ,  DocType   --WL01
+         ,  ECOM_SINGLE_Flag   --WL06
          )
       SELECT 
             pw.Wavekey             
@@ -337,6 +342,7 @@ BEGIN
          ,  p1.CartonPerLoc
          ,  p2.SkuPerCarton
          ,  O.DocType   --WL01
+         ,  ISNULL(O.ECOM_SINGLE_Flag, '')   --WL06
       FROM #PICKDETAIL_WIP AS pw
       JOIN LOC l (NOLOCK) ON l.loc = pw.Toloc
       JOIN  (  SELECT pw1.ToLoc  
@@ -366,6 +372,7 @@ BEGIN
          ,  p1.CartonPerLoc
          ,  p2.SkuPerCarton
          ,  O.DocType   --WL01
+         ,  ISNULL(O.ECOM_SINGLE_Flag, '')   --WL06
 
       --------------------------------------------------------------------  
       -- Update Task Priority Base on ORDERS.Priority 
@@ -495,6 +502,9 @@ BEGIN
 
       UPDATE tw
       SET [Status] = IIF(RefTaskKey > '', 'H', '0')
+        , PickMethod = CASE WHEN tw.DocType = 'E' AND tw.ECOM_Single_Flag = 'M' THEN 'B2C-Multis'   --WL06  
+                            WHEN tw.DocType = 'E' AND tw.ECOM_Single_Flag = 'S' THEN 'B2C-Single'   --WL06   
+                            ELSE PickMethod END                                                     --WL06
       FROM #TASKDETAIL_WIP tw
 
       --WL02: If open RPF/ASTTPA task within Wavekey, set CPK to H
@@ -577,8 +587,8 @@ BEGIN
          SET @c_TaskType  = IIF(@c_DocType = 'E', 'ASTCPK', 'CPK')   --WL01
          SET @c_SourceKey = @c_Wavekey
          SET @c_LinkTaskToPick_SQL = ' AND PICKDETAIL.UOM = @c_UOM'
-                                   + ' AND PICKDETAIL.CaseID = @c_CaseID'
-         
+                                   + IIF(@c_TaskType = 'CPK', ' AND PICKDETAIL.CaseID = @c_CaseID', '')   --WL05
+
          --WL04
          IF ISNULL(@c_PickMethod, '') = ''
             SET @c_PickMethod = '?'
