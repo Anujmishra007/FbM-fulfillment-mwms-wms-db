@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.4                                                          */    
+/* Version: 1.5                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -26,6 +26,8 @@ GO
 /*                            has been put on hold (WL03)                */
 /* 05-Mar-2026 WLChooi  1.4   FCR-10124 Modify B2C Groupkey & Pickmethod */
 /*                            mapping (WL04)                             */
+/* 06-Mar-2026 WLChooi  1.5   FCR-10124 Fix missing Taskdetailkey in     */
+/*                            Pickdetail for ASTCPK (WL05)               */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -577,8 +579,8 @@ BEGIN
          SET @c_TaskType  = IIF(@c_DocType = 'E', 'ASTCPK', 'CPK')   --WL01
          SET @c_SourceKey = @c_Wavekey
          SET @c_LinkTaskToPick_SQL = ' AND PICKDETAIL.UOM = @c_UOM'
-                                   + ' AND PICKDETAIL.CaseID = @c_CaseID'
-         
+                                   + IIF(@c_TaskType = 'CPK', ' AND PICKDETAIL.CaseID = @c_CaseID', '')   --WL05
+
          --WL04
          IF ISNULL(@c_PickMethod, '') = ''
             SET @c_PickMethod = '?'
