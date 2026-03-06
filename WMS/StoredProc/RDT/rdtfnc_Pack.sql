@@ -106,6 +106,7 @@ GO
 /* 2025-11-11   7.9 Jackc       FCR-8675 Extend SKU, UCC barcode length                         */
 /* 2025-11-12   8.0 NickT       UWP-43907 Merge code from V0                                    */
 /* 2025-12-08   8.1 Dennis      FCR-8931 AddExtScnSP on Step 8                                  */
+/* 2026-02-18   8.2 SSR259      FCR-10629 Add ExtScnSP logic in Step_99                         */ 
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -2472,6 +2473,29 @@ BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 8
                   GOTO Quit
                END
+               -- Handle rdt_838ExtScn08 jump commands from Screen 3
+               IF @cExtendedScreenSP = 'rdt_838ExtScn08'
+               BEGIN
+                  IF @cUDF01 = 'JumpTo_Step_1'
+                  BEGIN
+                     SET @nScn = 4650
+                     SET @nStep = 1
+                     GOTO Quit
+                  END
+                  ELSE IF @cUDF01 = 'JumpTo_Step_4'
+                  BEGIN
+                     SET @nScn = 4653
+                     SET @nStep = 4
+                     GOTO Quit
+                  END
+                  ELSE IF @cUDF01 = 'JumpTo_Step_5'
+                  BEGIN
+                     SET @nScn = 4654
+                     SET @nStep = 5
+                     GOTO Quit
+                  END
+               END
+
             END
          END       
       END
@@ -6466,6 +6490,13 @@ BEGIN
          ('@cSKU',            @cUPC),
          ('@cJumpType',       @cJumpType)
 
+         -- FCR-10629: Pass original step info for rdt_838ExtScn08
+         IF @cExtendedScreenSP = 'rdt_838ExtScn08' AND @cJumpType = 'Back' AND @nScn = 4651
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES ('@cFromStep', '4')
+         END
+
+
          DECLARE  @nPreSCn       INT,
                   @nPreStep      INT,
                   @nPreInputKey  INT
@@ -6619,10 +6650,30 @@ BEGIN
                END
             END
          END
-         GOTO Quit
+         ELSE IF @cExtendedScreenSP = 'rdt_838ExtScn08'
+         BEGIN
+            IF @cUDF01 = 'JumpTo_Step_1'
+            BEGIN
+               SET @nScn = 4650
+               SET @nStep = 1
+               GOTO Quit
+            END
+            ELSE IF @cUDF01 = 'JumpTo_Step_4'
+            BEGIN
+               SET @nScn = 4653
+               SET @nStep = 4
+               GOTO Quit
+            END
+            ELSE IF @cUDF01 = 'JumpTo_Step_5'
+            BEGIN
+               SET @nScn = 4654
+               SET @nStep = 5
+               GOTO Quit
+            END
+            GOTO Quit
+         END
       END
-   END -- Ext scn sp <> ''
-
+   END 
    Step_99_Fail:
       GOTO Quit
 END -- End step99
