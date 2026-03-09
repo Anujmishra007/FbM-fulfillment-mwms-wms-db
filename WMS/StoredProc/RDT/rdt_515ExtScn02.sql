@@ -6,14 +6,15 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/************************************************************************/  
-/* Store procedure: rdt_515ExtScn02                                     */  
-/*                                                                      */  
-/* Modifications log:                                                   */  
-/*                                                                      */  
-/* Date       Rev  Author     Purposes                                  */  
-/* 2026-01-19 1.0  JACKC      FCR-9660. Created                         */  
-/************************************************************************/  
+/*********************************************************************************/  
+/* Store procedure: rdt_515ExtScn02                                              */  
+/*                                                                               */  
+/* Modifications log:                                                            */  
+/*                                                                               */  
+/* Date       Rev    Author     Purposes                                         */  
+/* 2026-01-19 1.0.0  JACKC      FCR-9660. Created                                */ 
+/* 2026-03-19 1.0.1  JACKC      FCR-9660. Add UDF02 to toLoc confirm condition   */  
+/*********************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_515ExtScn02] (
    @nMobile      INT,           
@@ -760,6 +761,7 @@ BEGIN
 
                IF NOT EXISTS ( SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) 
                                  WHERE ListName = 'VORZONE'
+                                    AND UDF02 = '1' --V1.0.1
                                     AND StorerKey = @cStorerKey
                                     AND Code = @cToLocPAZone)
                AND @nPreAlloQty > 0
