@@ -9,8 +9,9 @@ GO
 /*                                                                      */
 /* Purpose: DAIMLER TRUCK AG                                            */
 /*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2026-02-05 1.0  Jackc    FCR-9755-Create                             */
+/* Date       Rev    Author   Purposes                                  */
+/* 2026-02-05 1.0.0  Jackc    FCR-9755-Create                           */
+/* 2026-03-09 1.0.1  Jackc    FCR-9755 Update listname                  */
 /*                                                                      */
 /************************************************************************/
 
@@ -161,7 +162,7 @@ BEGIN
                      ON cd.CODE = lc.PUTAWAYZONE 
                      AND cd.CODE2 = lc.Facility 
                      AND cd.StorerKey = lli.StorerKey 
-                     AND cd.LISTNAME = 'VORZONE'
+                     AND cd.LISTNAME = '1819ZONE' --V1.0.1
                   WHERE lc.LOC = lli.LOC
                )
             GROUP BY lli.Lot
