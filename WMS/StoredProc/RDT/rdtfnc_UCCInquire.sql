@@ -319,21 +319,26 @@ BEGIN
          WHERE UCCNo = @cUCC
          AND   StorerKey = @cStorerKey
 
-         IF @@ROWCOUNT = 0
+         SET @nRowCount = @@ROWCOUNT
+
+         IF @nRowCount = 0
          BEGIN
             SET @nErrNo = 106102
             SET @cErrMsg = rdt.rdtgetmessage( 106102, @cLangCode, 'DSP') --'Invalid UCC'
             GOTO Step_1_Fail
          END
-         ELSE  --@@ROWCOUNT > 1
+         ELSE IF @nRowCount = 1  -- Valid UCC with single SKU (FCR-9907)
+         BEGIN
+            SET @nMultiSKU = 0
+         END
+         ELSE  --@nRowCount > 1
          BEGIN
             SELECT @nQTY = ISNULL( SUM( Qty), 0)
             FROM dbo.UCC WITH (NOLOCK)
             WHERE UCCNo = @cUCC
             AND   StorerKey = @cStorerKey
 
-            IF @@ROWCOUNT > 1  -- FCR-9907: Handle multi-SKU case
-               SET @nMultiSKU = 1
+            SET @nMultiSKU = 1
          END
       END
       
