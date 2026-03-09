@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.1                                                          */    
+/* Version: 2.2                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -37,6 +37,7 @@ GO
 /*                            (WL09)                                     */
 /* 06-Mar-2026 WLChooi  2.1   FCR-11402 Truncate #OptimizeItemToPack     */
 /*                            after carton close (WL10)                  */
+/* 09-Mar-2026 WLChooi  2.2   FCR-11459 Fix API Infinite Loop (WL11)     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -939,7 +940,7 @@ BEGIN
                         AND   cl1.Storerkey = pcz.Storerkey
                         AND   cl1.UDF01 > ''
                         AND   cz.[Cube] >= cs.TotalPackCube
-                        ORDER BY cz.RowID   --WL02
+                        ORDER BY cz.RowID DESC   --WL02   --WL11
                      ) czb
          --WL02
          OUTER APPLY (  SELECT TOP 1
@@ -960,7 +961,7 @@ BEGIN
                         AND   cl1.Storerkey = pcz.Storerkey
                         AND   cl1.UDF01 > ''
                         AND   cz.[Cube] >= cs.TotalPackCube
-                        ORDER BY cz.RowID
+                        ORDER BY cz.RowID DESC   --WL11
                      ) cze
          OUTER APPLY (  SELECT TOP 1
                               cz.CartonizationGroup
@@ -969,7 +970,7 @@ BEGIN
                            ,  cz.MaxWeight
                         FROM @t_CTNZ AS cz
                         WHERE cz.[Cube] >= cs.TotalPackCube
-                        ORDER BY cz.RowID
+                        ORDER BY cz.RowID DESC   --WL11
                       ) czs
          WHERE pcz.PackGrpNo = @n_PackGrpNo
          AND   pcz.UOM = '2'
@@ -1576,6 +1577,11 @@ BEGIN
                               SELECT @c_IsCompletePack = orn.IsCompletePack
                               FROM @t_OptimizeResult AS orn
 
+                              --WL11
+                              -- Cannot fit even 1 qty, it returns nothing
+                              IF NOT EXISTS ( SELECT 1 FROM @t_OptimizeResult )
+                                 SET @c_IsCompletePack = 'false'
+
                               IF @b_CZN_Check IN (1,2)
                               BEGIN
                                  BREAK
@@ -2048,6 +2054,11 @@ BEGIN
                            SET @c_IsCompletePack = ''
                            SELECT @c_IsCompletePack = orn.IsCompletePack
                            FROM @t_OptimizeResult AS orn
+
+                           --WL11
+                           -- Cannot fit even 1 qty, it returns nothing
+                           IF NOT EXISTS ( SELECT 1 FROM @t_OptimizeResult )
+                              SET @c_IsCompletePack = 'false'
 
                            BREAK
                         END
