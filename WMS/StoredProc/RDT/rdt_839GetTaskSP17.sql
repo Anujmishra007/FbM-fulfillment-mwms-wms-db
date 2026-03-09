@@ -2724,6 +2724,7 @@ BEGIN
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
+                  AND PD.UOM = '6'
                   AND PD.Status <> '4'
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
@@ -2753,6 +2754,7 @@ BEGIN
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
+                  AND PD.UOM = '6'
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
@@ -2851,6 +2853,7 @@ BEGIN
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
+                  AND PD.UOM = '6'
                   AND PD.Status <> '4'
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
@@ -2881,6 +2884,7 @@ BEGIN
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
+                  AND PD.UOM = '6'
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
