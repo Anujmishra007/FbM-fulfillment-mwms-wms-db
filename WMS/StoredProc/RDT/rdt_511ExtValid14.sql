@@ -3,19 +3,20 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/*************************************************************************************/
-/* Store procedure: rdt_511ExtValid14                                                */
-/* Purpose: Move By ID Extended Validate                                             */
-/*                                                                                   */
-/* Called from: rdtfnc_Move_ID                                                       */
-/*                                                                                   */
-/* Modifications log:                                                                */
-/*                                                                                   */
-/* Date        Rev  Author     Purposes                                              */
-/* 2025-12-12  1.0  PSJ036     UWP-48075 - validate correct TOLOC                    */
-/* 2026-02-25  1.1  PSJ036     UWP-49554 INC9014812 - Adjust Suggest loc             */
-/* 2026-02-25  1.2  PSJ036     UWP-49554 RITM8667192 - MovebyID to correct PTW location*/
-/*************************************************************************************/
+/************************************************************************************************************/
+/* Store procedure: rdt_511ExtValid14                                                                       */
+/* Purpose: Move By ID Extended Validate                                                                    */
+/*                                                                                                          */
+/* Called from: rdtfnc_Move_ID                                                                              */
+/*                                                                                                          */
+/* Modifications log:                                                                                       */
+/*                                                                                                          */
+/* Date        Rev  Author     Purposes                                                                     */
+/* 2025-12-12  1.0  PSJ036     UWP-48075 - validate correct TOLOC                                           */
+/* 2026-02-25  1.1  PSJ036     UWP-49554 INC9014812 - Adjust Suggest loc                                    */
+/* 2026-02-25  1.2  PSJ036     UWP-49554 RITM8667192 - MovebyID to correct PTW location                     */
+/* 2026-03-05  1.3  PSJ036     UWP-50166 INC9037843 - validate Storerkey and Status in Pickdetail.          */
+/************************************************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdt_511ExtValid14] (
    @nMobile          INT,
@@ -97,7 +98,7 @@ BEGIN
                WHERE STORERKEY = @cStorerKey
                AND OrderKey = ( SELECT TOP 1 OrderKey 
                            FROM dbo.PICKDETAIL WITH (NOLOCK)
-                           WHERE ID = @cFromID 
+                           WHERE ID = @cFromID AND STORERKEY = @cStorerKey AND Status = '3'  --PSJ036 REV1.3
                         )
                      )
             BEGIN
@@ -112,13 +113,13 @@ BEGIN
             -- SingleFlag = 'M'/'MULTI'
 
             SELECT TOP 1 @cDocType          = ISNULL(DocType,''),
-                        @cOrderSingleFlag = ISNULL(ECOM_SINGLE_Flag,''),
-                     @cPTWMulti         = ISNULL(USERDEFINE04,'')  --PSJ036 REV1.2
+                         @cOrderSingleFlag  = ISNULL(ECOM_SINGLE_Flag,''),
+                         @cPTWMulti         = ISNULL(USERDEFINE04,'')  --PSJ036 REV1.2
             FROM dbo.ORDERS WITH (NOLOCK) 
             WHERE STORERKEY = @cStorerKey
             AND OrderKey = ( SELECT TOP 1 OrderKey 
                         FROM dbo.PICKDETAIL WITH (NOLOCK)
-                        WHERE ID = @cFromID and Status = '3'   --PSJ036 REV1.1
+                        WHERE ID = @cFromID AND STORERKEY = @cStorerKey AND Status = '3'   --PSJ036 REV1.1 REV 1.3
                   )
             -- B2C ORDER
             IF @cDocType = 'E' and @cFromLOC = 'ONESTEIRA'
@@ -148,7 +149,7 @@ BEGIN
                            AND ORDERS.OrderKey IN (
                               SELECT DISTINCT PD.OrderKey 
                               FROM dbo.PICKDETAIL AS PD WITH (NOLOCK) 
-                              WHERE PD.Status = '3' AND PD.ID = @cFromID))  --PSJ036 REV1.1
+                              WHERE PD.Status = '3' AND PD.STORERKEY = @cStorerKey AND PD.ID = @cFromID))  --PSJ036 REV1.1 REV1.3
                   BEGIN
                      IF @cToLOC = @cB2BVas
                      BEGIN
