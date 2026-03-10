@@ -20,7 +20,7 @@ GO
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
-/* 10-Mar-2026 WLChooi  1.1   FCR-XXXXX Update UOM to 6 for PU VAS (WL01)*/
+/* 10-Mar-2026 WLChooi  1.1   FCR-11514 Update UOM to 6 for PU VAS (WL01)*/
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_DATA]        
    @c_Wavekey     NVARCHAR(10)
