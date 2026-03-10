@@ -335,6 +335,12 @@ BEGIN
 
                   IF @cDocType = 'E' --B2C
                   BEGIN
+                     IF ISNULL(@cWaveKey ,'') = ''
+                     BEGIN
+                        SET @nErrNo = 256956
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Wavekey
+                        GOTO QUIT
+                     END
                      IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE WAVEKEY = @cWAVEKey)
                      BEGIN
                         SELECT TOP 1 @cPPS_Loc = Loc
@@ -405,6 +411,12 @@ BEGIN
                      END
                      ELSE
                      BEGIN -- ALL 5
+                        IF ISNULL(@cLoadKey ,'') = '' OR ISNULL(@cConsigneeKey ,'') = ''
+                        BEGIN
+                           SET @nErrNo = 256957
+                           SET @cErrMsg = rdt.rdtgetmessageLong( @nErrNo, @cLangCode, 'DSP') --Invalid LoadKeyOrConsigneeKey
+                           GOTO QUIT
+                        END
                         IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = @cLoadKey AND ConsigneeKey = @cConsigneeKey)
                         BEGIN
                            SELECT TOP 1 @cPPS_Loc = Loc
