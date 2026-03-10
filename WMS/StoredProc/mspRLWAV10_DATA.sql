@@ -20,6 +20,7 @@ GO
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 10-Mar-2026 WLChooi  1.1   FCR-XXXXX Update UOM to 6 for PU VAS (WL01)*/
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_DATA]        
    @c_Wavekey     NVARCHAR(10)
@@ -75,6 +76,21 @@ BEGIN
    ,  @b_Success = @b_Success OUTPUT
    ,  @n_Err     = @n_err     OUTPUT
    ,  @c_ErrMsg  = @c_errmsg  OUTPUT
+
+   --WL01 S
+   IF @n_Continue = 1
+   BEGIN
+      UPDATE #PickDetail_WIP 
+      SET UOM = '6'
+        , PickMethod = '3'
+      FROM #PickDetail_WIP pd
+      JOIN dbo.WorkOrderDetail wod (NOLOCK) ON wod.ExternWorkOrderKey = pd.Orderkey
+                                           AND wod.ExternLineNo = pd.OrderLineNumber
+      WHERE pd.UOM = '2'
+      AND wod.[Type] IN ( 'PU' )
+      AND wod.Qty > 0
+   END
+   --WL01 E
  
    IF @b_Success <> 1
    BEGIN
