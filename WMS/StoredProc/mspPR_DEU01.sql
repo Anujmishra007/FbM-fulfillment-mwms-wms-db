@@ -5,7 +5,7 @@ GO
 /************************************************************************/
 /* Store Procedure:  nspPR_CH03                                         */
 /* Creation Date: 02/03/26                                              */
-/* Copyright: IDS                                                       */
+/* Copyright: MAERSK                                                       */
 /* Written by:  Suryakanta Sahoo                                        */
 /*                                                                      */
 /* Purpose:  FCR-10743 Pre-Allocation Strategy                          */
