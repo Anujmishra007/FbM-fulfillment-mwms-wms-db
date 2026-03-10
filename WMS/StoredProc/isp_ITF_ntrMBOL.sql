@@ -288,10 +288,11 @@ BEGIN
                         END
                         CLOSE CUR_TRANSMITLOG
                         DEALLOCATE CUR_TRANSMITLOG
+
+                        IF @n_continue = 3
+                           GOTO QUIT
+                        GOTO GET_NEXT_Record
                      END
-                     IF @n_continue = 3
-                        GOTO QUIT
-                     GOTO GET_NEXT_Record
                   END
                END
                --ML01-E
