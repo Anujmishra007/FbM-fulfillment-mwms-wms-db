@@ -3,9 +3,9 @@ GO
 SET ANSI_NULLS OFF
 GO
 /************************************************************************/
-/* Store Procedure:  mspPR_DEU01                                         */
+/* Store Procedure:  mspPR_DEU01                                        */
 /* Creation Date: 02/03/26                                              */
-/* Copyright: MAERSK                                                       */
+/* Copyright: MAERSK                                                    */
 /* Written by:  Suryakanta Sahoo                                        */
 /*                                                                      */
 /* Purpose:  FCR-10743 Pre-Allocation Strategy                          */
