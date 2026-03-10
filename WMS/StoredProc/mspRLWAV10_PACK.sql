@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.4                                                          */    
+/* Version: 2.5                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -40,6 +40,7 @@ GO
 /* 09-Mar-2026 WLChooi  2.2   FCR-11459 Fix API Infinite Loop (WL11)     */
 /* 10-Mar-2026 WLChooi  2.3   FCR-11471 Fix CartonGroup NULL issue (WL12)*/
 /* 10-Mar-2026 WLChooi  2.4   FCR-11471 Fix VAS Packinfo Qty (WL13)      */
+/* 10-Mar-2026 WLChooi  2.5   FCR-11511 Generate PICKHEADER for B2C(WL14)*/
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -487,6 +488,28 @@ BEGIN
          SELECT @c_PackECOM = dbo.fnc_GetParamValueFromString('@c_PackECOM', @c_Option5, @c_PackECOM)
       END
    END
+
+   --WL14 S
+   IF @n_Continue = 1
+   BEGIN
+      EXEC [dbo].[isp_CreatePickSlip]
+          @c_Orderkey              = ''
+         ,@c_Wavekey               = @c_Wavekey
+         ,@c_PickslipType          = '3'
+         ,@c_ConsolidateByLoad     = 'N'
+         ,@c_Refkeylookup          = 'N'
+         ,@c_LinkPickSlipToPick    = 'Y'
+         ,@c_AutoScanIn            = 'N'
+         ,@b_Success               = @b_Success  OUTPUT
+         ,@n_Err                   = @n_Err      OUTPUT
+         ,@c_ErrMsg                = @c_ErrMsg   OUTPUT
+
+      IF @b_Success = 0
+      BEGIN
+         SET @n_Continue = 3
+      END
+   END
+   --WL14 E
 
    IF @n_Continue = 1
    BEGIN
@@ -2234,23 +2257,25 @@ BEGIN
                         AND cd.[Status] = '9'
                       )
             BEGIN
-               EXEC [dbo].[isp_CreatePickSlip]
-                   @c_Orderkey              = @c_Orderkey
-                  ,@c_Wavekey               = @c_Wavekey
-                  ,@c_PickslipType          = '3'
-                  ,@c_ConsolidateByLoad     = 'N'
-                  ,@c_Refkeylookup          = 'N'
-                  ,@c_LinkPickSlipToPick    = 'Y'
-                  ,@c_AutoScanIn            = 'N'
-                  ,@b_Success               = @b_Success  OUTPUT
-                  ,@n_Err                   = @n_Err      OUTPUT
-                  ,@c_ErrMsg                = @c_ErrMsg   OUTPUT
+               --WL14 S
+               --EXEC [dbo].[isp_CreatePickSlip]
+               --    @c_Orderkey              = @c_Orderkey
+               --   ,@c_Wavekey               = @c_Wavekey
+               --   ,@c_PickslipType          = '3'
+               --   ,@c_ConsolidateByLoad     = 'N'
+               --   ,@c_Refkeylookup          = 'N'
+               --   ,@c_LinkPickSlipToPick    = 'Y'
+               --   ,@c_AutoScanIn            = 'N'
+               --   ,@b_Success               = @b_Success  OUTPUT
+               --   ,@n_Err                   = @n_Err      OUTPUT
+               --   ,@c_ErrMsg                = @c_ErrMsg   OUTPUT
 
-               IF @b_Success = 0
-               BEGIN
-                  SET @n_Continue = 3
-                  GOTO PACK_END
-               END
+               --IF @b_Success = 0
+               --BEGIN
+               --   SET @n_Continue = 3
+               --   GOTO PACK_END
+               --END
+               --WL14 E
 
                SET @c_PickSlipNo = ''
                SELECT @c_PickSlipNo = p.PickHeaderKey
@@ -2677,7 +2702,7 @@ BEGIN
                      ,  cz.CartonLength
                      ,  cz.CartonWidth
                      ,  cz.CartonHeight
-                     ,  cd.IsVAS   --WL13
+                     ,  cd.IsVas   --WL13
                      ,  cd.UOM     --WL13
                      ,  CASE WHEN cd.UOM = '2' THEN cd.LabelNo ELSE '' END
                      ,  cd.[Audit]
