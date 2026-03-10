@@ -2677,6 +2677,8 @@ BEGIN
                      ,  cz.CartonLength
                      ,  cz.CartonWidth
                      ,  cz.CartonHeight
+                     ,  cd.IsVAS   --WL13
+                     ,  cd.UOM     --WL13
                      ,  CASE WHEN cd.UOM = '2' THEN cd.LabelNo ELSE '' END
                      ,  cd.[Audit]
 
