@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.2                                                          */    
+/* Version: 2.3                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -38,6 +38,7 @@ GO
 /* 06-Mar-2026 WLChooi  2.1   FCR-11402 Truncate #OptimizeItemToPack     */
 /*                            after carton close (WL10)                  */
 /* 09-Mar-2026 WLChooi  2.2   FCR-11459 Fix API Infinite Loop (WL11)     */
+/* 10-Mar-2026 WLChooi  2.3   FCR-11471 Fix CartonGroup NULL issue (WL12)*/
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -891,11 +892,11 @@ BEGIN
             ,  pcz.OrderKey
             ,  pcz.OrderGroup                                              --(ush022-2)
             ,  pcz.DocType                                                 --(ush022-2)
-            ,  CartonGroup = COALESCE(czb.CartonizationGroup,cze.CartonizationGroup,czs.CartonizationGroup)    --WL02
-            ,  CartonType  = COALESCE(czb.CartonType,cze.CartonType,czs.CartonType)                            --WL02
+            ,  CartonGroup = COALESCE(czb.CartonizationGroup,cze.CartonizationGroup,czs.CartonizationGroup,czm.CartonizationGroup)    --WL02   --WL12
+            ,  CartonType  = COALESCE(czb.CartonType,cze.CartonType,czs.CartonType,czm.CartonType)                                    --WL02   --WL12
             ,  CartonSeqNo = DENSE_RANK() OVER (ORDER BY pcz.DropID)
-            ,  CartonCube  = COALESCE(czb.[Cube],cze.[Cube],czs.[Cube])                                        --WL02
-            ,  CartonWeight= COALESCE(czb.MaxWeight,cze.MaxWeight,czs.MaxWeight)                               --WL02
+            ,  CartonCube  = COALESCE(czb.[Cube],cze.[Cube],czs.[Cube],czm.[Cube])                                                    --WL02   --WL12
+            ,  CartonWeight= COALESCE(czb.MaxWeight,cze.MaxWeight,czs.MaxWeight,czm.MaxWeight)                                        --WL02   --WL12
             ,  LabelNo = ''
             ,  pcz.Storerkey
             ,  pcz.Sku
@@ -972,6 +973,15 @@ BEGIN
                         WHERE cz.[Cube] >= cs.TotalPackCube
                         ORDER BY cz.RowID DESC   --WL11
                       ) czs
+         --WL12
+         OUTER APPLY (  SELECT TOP 1
+                              cz.CartonizationGroup
+                           ,  cz.CartonType
+                           ,  cz.[Cube]
+                           ,  cz.MaxWeight
+                        FROM @t_CTNZ AS cz
+                        ORDER BY cz.RowID
+                      ) czm
          WHERE pcz.PackGrpNo = @n_PackGrpNo
          AND   pcz.UOM = '2'
          ORDER BY pcz.RowID

@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.2                                                          */    
+/* Version: 1.3                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -22,6 +22,8 @@ GO
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
 /* 20-Feb-2026 WLChooi  1.1   FCR-11076 Added CPK filter (WL01)          */
 /* 26-Feb-2026 WLChooi  1.2   FCR-11158 Added ASTCPK Task (WL02)         */
+/* 10-Mar-2026 WLChooi  1.3   FCR-11471 Clear pickdetail column value &  */
+/*                            Userdefine02 (WL03)                        */
 /*************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV10]
       @c_Wavekey      NVARCHAR(10)
@@ -184,6 +186,9 @@ BEGIN
       UPDATE PICKDETAIL WITH (ROWLOCK)
       SET PICKDETAIL.TaskdetailKey = ''
         , PICKDETAIL.CaseID = ''
+        , PICKDETAIL.Pickslipno  = ''   --WL03
+        , PICKDETAIL.CartonGroup = ''   --WL03
+        , PICKDETAIL.CartonType  = ''   --WL03
         , TrafficCop = NULL
         , EditWho  = SUSER_SNAME()
         , EditDate = GETDATE()
@@ -208,6 +213,7 @@ BEGIN
    BEGIN
       UPDATE WAVE WITH (ROWLOCK)
          SET TMReleaseFlag = 'N'
+          ,  UserDefine02 = ''   --WL03
           ,  TrafficCop = NULL
           ,  EditWho  = SUSER_SNAME()
           ,  EditDate = GETDATE()

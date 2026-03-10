@@ -13,13 +13,14 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.0                                                          */    
+/* Version: 1.1                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 10-Mar-2026 WLChooi  1.1   FCR-11471 Update Userdefine02 (WL01)       */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10]        
    @c_Wavekey     NVARCHAR(10)
@@ -221,6 +222,7 @@ BEGIN
    BEGIN
       UPDATE WAVE WITH (ROWLOCK)
          SET TMReleaseFlag = 'Y'
+          ,  UserDefine02 = 'WaveReleased'   --WL01
           ,  TrafficCop = NULL
           ,  EditWho  = SUSER_SNAME()
           ,  EditDate = GETDATE()
