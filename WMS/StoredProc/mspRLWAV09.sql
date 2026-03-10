@@ -13,13 +13,14 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          : Duplicate and Modify from Mattel mspRLWAV01                 */    
-/* PVCS Version: 1.0                                                      */    
+/* PVCS Version: 1.1                                                      */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-02-04  Wan      1.0   Fixed, CR v3.6                              */   
+/* 2026-02-04  Wan      1.0   Fixed, CR v3.6                              */ 
+/* 2026-02-25  Wan01    1.1   UWP-49319 - ONBR Conso Task Not Working     */  
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV09]        
    @c_Wavekey     NVARCHAR(10)    
@@ -952,7 +953,7 @@ BEGIN
             
             IF @c_Groupkey > '' AND @n_DropIDVol > 0.00 AND @n_VolumeLeftToFulFill > 0    --CR v3.4 - START
             BEGIN
-               IF  @n_DropIDVol < @n_VolumeLeftToFulFill + @n_Cube 
+               IF @n_VolumeLeftToFulFill < @n_Cube                                        --(Wan01)
                BEGIN
                   SET @c_Groupkey = ''
                END              
@@ -984,6 +985,7 @@ BEGIN
                
                IF @n_Continue IN (1,2) 
                BEGIN
+                  SET @n_QtyToTake = 0                                              --(Wan01)
                   SET @n_MaxQtyPerGroup = FLOOR((@n_VolumeLeftTofulfill/@n_Cube)*@n_PackUOMQty)
                   IF @n_MaxQtyPerGroup > 0
                   BEGIN

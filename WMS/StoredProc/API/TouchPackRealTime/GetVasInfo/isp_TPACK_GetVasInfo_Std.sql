@@ -18,6 +18,8 @@ GO
 /* 2026-01-21   5.0  GCH225     UWP-45700 Update WoWkOrdUDef1 to SKU                    */
 /* 2026-01-26   6.0  GCH225     UWP-47606 Fix 0H display first scan in exists carton    */
 /* 2026-01-28   7.0  GCH225     UWP-47815 Fix Codelkup Short Show VAS issue             */
+/* 2026-02-12   8.0  GCH225     UWP-48885 Fix 0H Header flag for PreCartonize case      */
+/* 2026-02-27   8.1  JWF011     UWP-49173 Fix Order Header VAS display 2 times          */
 /****************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_GetVasInfo_Std] (
@@ -116,18 +118,25 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @bIsDiscrete = 1 AND @cLoadKey = ''
+   IF @bIsDiscrete = 1 AND @cOrderKey <> ''
    BEGIN
       INSERT INTO @OrderList (OrderKey)
       VALUES (@cOrderKey)
 
-      IF @nCartonNo = 0 
+      IF (@nCartonNo = 0 
       OR (@nCartonNo > 0 
          AND NOT EXISTS(SELECT 1 
                         FROM PACKINFO (NOLOCK)
                         WHERE PickSlipNo = @cPickSlipNo
                         AND CartonNo = @nCartonNo
                        )
+      )) OR (@nCartonNo = 1
+            AND ( SELECT SUM(PD.Qty) 
+                  FROM PACKDETAIL PD (NOLOCK)
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND PD.CartonNo = @nCartonNo
+                  AND PD.ExpQty > 0
+            ) = 0
       )
       BEGIN
          SET @bShowOrderHeaderVAS = 1

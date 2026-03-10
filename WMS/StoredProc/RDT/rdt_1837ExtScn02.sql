@@ -113,6 +113,9 @@ BEGIN
    @cNewTaskDetailKey   NVARCHAR( 10),
    @cPriority           NVARCHAR( 10),
    @cCheckOrderMustPickComplete  NVARCHAR( 1)
+   DECLARE @cErrMsg01        NVARCHAR( 20),
+           @cErrMsg02        NVARCHAR( 20),
+           @cErrMsg03        NVARCHAR( 20)
    DECLARE 
    @cSQL           NVARCHAR(MAX), 
    @cSQLParam      NVARCHAR(MAX)
@@ -133,8 +136,6 @@ BEGIN
    SELECT 
       @nMOBRECStep     = Step,
       @nMOBRECScn      = Scn,
-      @cCartonID      = V_String4,
-      @cPalletID      = V_String5,
       @cLoadKey       = V_LoadKey,
       @cPPS_Loc       = V_Loc,
    
@@ -212,7 +213,7 @@ BEGIN
                      ,@cOrderKey OUTPUT
                      ,@nRowCount OUTPUT
 
-                  SELECT @cReportType = CASE WHEN O.UserDefine03 = 'CPL' THEN CL1.UDF01 ELSE CL2.UDF03 END
+                  SELECT @cReportType = CASE WHEN O.UserDefine03 <> 'CPL' THEN CL1.UDF01 ELSE CL2.UDF03 END
                   FROM ORDERS O (NOLOCK) 
                   LEFT JOIN CODELKUP CL1 (NOLOCK) ON O.UserDefine03 = CL1.Code AND CL1.ListName = 'CSPACKSLIP' AND CL1.StorerKey = @cStorerKey
                   LEFT JOIN CODELKUP CL2 (NOLOCK) ON O.BillToKey = CL2.Code2 AND CL2.ListName = 'CSCCUSTMAT' AND CL2.StorerKey = @cStorerKey                 
@@ -222,7 +223,8 @@ BEGIN
                   DELETE FROM @tReportParam
                   INSERT INTO @tReportParam (Variable, Value)
                   VALUES
-                     ( '@cOrderKey', @cOrderKey)
+                     ( '@cStorerKey', @cStorerKey),
+                     ( '@cLabelNo', @cCartonID)
 
                   -- Print label
                   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
@@ -291,7 +293,7 @@ BEGIN
                      ' FROM dbo.PickDetail WITH (NOLOCK) ' + 
                      ' WHERE StorerKey = @cStorerKey ' + 
                         ' AND Status = ''' + @cPickConfirmStatus + '''' +  
-                        ' AND QTY > 0 ' + 
+                        ' AND QTY > 0 AND LOC = ''CONVEYOR''' + 
                         ' AND ' + RTRIM( @cPickDetailCartonID) + ' = @cCartonID ' +
                         ' ORDER BY 1 ' +
                         ' SET @nRowCount = @@ROWCOUNT '
@@ -340,6 +342,7 @@ BEGIN
                         WHERE Facility = @cFacility
                         AND   LocationCategory = 'PPS'
                         AND   [Status] = 'OK'
+                        AND   LocationType <> 'PPSH'
                         AND NOT EXISTS (
                            SELECT 1 FROM rdt.rdtSortLaneLocLog SL WITH (NOLOCK) 
                            WHERE LOC.LOC = SL.LOC
@@ -355,7 +358,21 @@ BEGIN
                   END
                   ELSE IF @cDocType = 'N' --B2B
                   BEGIN
-                     IF EXISTS ( SELECT 1 FROM PICKDETAIL WHERE DROPID = @cCartonID AND STATUS = '4' AND StorerKey = @cStorerKey)
+                     IF EXISTS (
+                        SELECT 1 FROM PICKDETAIL PD (NOLOCK)
+                        WHERE PD.StorerKey = @cStorerKey
+                        AND (
+                           (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
+                           OR 
+                           (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
+                        )
+                        AND EXISTS (
+                           SELECT 1 FROM PICKDETAIL PD1 
+                           WHERE PD1.STATUS = '4' 
+                           AND PD1.OrderKey = PD.OrderKey 
+                           AND PD1.StorerKey = PD.StorerKey
+                        )
+                     )
                      BEGIN
                         IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey)
                         BEGIN
@@ -364,6 +381,7 @@ BEGIN
                            WHERE Facility = @cFacility
                            AND   LocationCategory = 'PPS'
                            AND   [Status] = 'OK'
+                           AND   LocationType = 'PPSH'
                            AND NOT EXISTS (
                               SELECT 1 FROM rdt.rdtSortLaneLocLog SL WITH (NOLOCK) 
                               WHERE LOC.LOC = SL.LOC
@@ -375,7 +393,11 @@ BEGIN
                            SELECT @cPPS_Loc = LOC FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey
                         END
                      END
-                     ELSE IF EXISTS ( SELECT 1 FROM PICKDETAIL WHERE DROPID = @cCartonID AND STATUS < '4' AND StorerKey = @cStorerKey)
+                     ELSE IF EXISTS ( SELECT 1 FROM PICKDETAIL PD WHERE (
+                           (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
+                           OR 
+                           (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
+                        ) AND STATUS < '4' AND StorerKey = @cStorerKey)
                      BEGIN
                         SET @nErrNo = 256951
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Picking Not Complete
@@ -390,6 +412,7 @@ BEGIN
                            WHERE Facility = @cFacility
                            AND   LocationCategory = 'PPS'
                            AND   [Status] = 'OK'
+                           AND   LocationType <> 'PPSH'
                            AND NOT EXISTS (
                               SELECT 1 FROM rdt.rdtSortLaneLocLog SL WITH (NOLOCK) 
                               WHERE LOC.LOC = SL.LOC
@@ -408,6 +431,103 @@ BEGIN
                      SET @nErrNo = 256952
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PPSLOCNOTFOUND
                      GOTO QUIT
+                  END
+
+                  IF EXISTS ( SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) 
+                     WHERE LOC = @cPPS_Loc
+                     AND   Lane = ''
+                     AND   [Status] = '9')
+                  BEGIN
+                     DELETE FROM rdt.rdtSortLaneLocLog WITH (ROWLOCK)
+                     WHERE LOC = @cPPS_Loc
+                     AND   Lane = ''
+                     AND   [Status] = '9'
+                  END
+
+                  IF @cDocType = 'E' --B2C
+                  BEGIN
+                     IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE WAVEKEY = @cWAVEKey)
+                     BEGIN
+                        INSERT INTO rdt.rdtSortLaneLocLog 
+                        ( Lane, LOC, ID, OrderKey, ConsigneeKey, Status, AddWho, AddDate, EditWho, EditDate, WAVEKEY)
+                        VALUES
+                        ( '', @cPPS_Loc, '', '', '', '1', @cUserName, GETDATE(), @cUserName, GETDATE(), @cWAVEKey)
+                     END
+                     ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE WAVEKEY = @cWAVEKey AND Status = '9')
+                     BEGIN
+                        UPDATE rdt.rdtSortLaneLocLog WITH (ROWLOCK) SET 
+                           Status = '1',
+                           Id = '',
+                           EditWho = @cUserName,
+                           EditDate = GETDATE()
+                        WHERE LOC = @cPPS_Loc
+                        AND   Lane = ''
+                        AND   [Status] = '9' 
+                        AND   WAVEKEY = @cWAVEKey
+                     END
+                  END
+                  ELSE IF @cDocType = 'N' --B2B
+                  BEGIN
+                     IF EXISTS (
+                        SELECT 1 FROM PICKDETAIL PD (NOLOCK)
+                        WHERE PD.StorerKey = @cStorerKey
+                        AND (
+                           (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
+                           OR 
+                           (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
+                        )
+                        AND EXISTS (
+                           SELECT 1 FROM PICKDETAIL PD1 
+                           WHERE PD1.STATUS = '4' 
+                           AND PD1.OrderKey = PD.OrderKey 
+                           AND PD1.StorerKey = PD.StorerKey
+                        )
+                     )
+                     BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey)
+                        BEGIN
+                           INSERT INTO rdt.rdtSortLaneLocLog 
+                           ( Lane, LOC, ID, ConsigneeKey, Status, AddWho, AddDate, EditWho, EditDate, LoadKey,OrderKey)
+                           VALUES
+                           ( '', @cPPS_Loc, '',  '', '1', @cUserName, GETDATE(), @cUserName, GETDATE(), 'HOSPITAL',@cStorerKey)
+                        END
+                        ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE  LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey AND Status = '9')
+                        BEGIN
+                           UPDATE rdt.rdtSortLaneLocLog WITH (ROWLOCK) SET 
+                              Status = '1',
+                              Id = '',
+                              EditWho = @cUserName,
+                              EditDate = GETDATE()
+                           WHERE LOC = @cPPS_Loc
+                           AND   Lane = ''
+                           AND   [Status] = '9' 
+                           AND   LoadKey = 'HOSPITAL' 
+                           AND   OrderKey = @cStorerKey
+                        END
+                     END
+                     ELSE
+                     BEGIN -- ALL 5
+                        IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = @cLoadKey AND ConsigneeKey = @cConsigneeKey)
+                        BEGIN
+                           INSERT INTO rdt.rdtSortLaneLocLog 
+                           ( Lane, LOC, ID, OrderKey, ConsigneeKey, Status, AddWho, AddDate, EditWho, EditDate, LoadKey)
+                           VALUES
+                           ( '', @cPPS_Loc, '', '', @cConsigneeKey, '1', @cUserName, GETDATE(), @cUserName, GETDATE(), @cLoadKey)
+                        END
+                        ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = @cLoadKey AND ConsigneeKey = @cConsigneeKey AND Status = '9')
+                        BEGIN
+                           UPDATE rdt.rdtSortLaneLocLog WITH (ROWLOCK) SET 
+                              Status = '1',
+                              Id = '',
+                              EditWho = @cUserName,
+                              EditDate = GETDATE()
+                           WHERE LOC = @cPPS_Loc
+                           AND   Lane = ''
+                           AND   [Status] = '9' 
+                           AND   LoadKey = @cLoadKey 
+                           AND   ConsigneeKey = @cConsigneeKey
+                        END
+                     END
                   END
                END
 
@@ -504,8 +624,12 @@ BEGIN
                SET @cUDF03 = @cPPS_Loc
                SET @cUDF04 = @cPalletID
 
-               IF NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.STATUS <> '5' AND PD.StorerKey = @cStorerKey AND PD.OrderKey = @cOrderKey)
-               AND EXISTS (SELECT 1 FROM PACKHEADER (NOLOCK) WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey AND manifestprinted = '0') 
+               IF EXISTS ( SELECT 1 FROM PACKHEADER (NOLOCK) 
+                  WHERE OrderKey = @cOrderKey 
+                     AND StorerKey = @cStorerKey 
+                     AND ManifestPrinted <> '1'
+               ) AND NOT EXISTS (SELECT 1 FROM PICKDETAIL (NOLOCK) 
+               WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey AND Status < '5')
                BEGIN
                   SET @cOutField01 = @cOrderKey
                   SET @nAfterScn = 6818
@@ -529,8 +653,6 @@ BEGIN
                SET @cOutField03 = @cPPS_Loc
                SET @cOutField04 = ''
 
-               SET @cOutField04 = ''
-
                -- Go to next screen
                SET @nAfterScn = @nScn_ToPallet
                SET @nAfterStep = 99
@@ -541,10 +663,10 @@ BEGIN
                   BEGIN
                      DELETE FROM @tExtValidate
                      INSERT INTO @tExtValidate ( Variable, Value )
-                     VALUES ( '@nScn', @nAfterScn ),
-                            ( '@cDocType', @cDocType ),
+                     VALUES ( '@cDocType', @cDocType ),
                             ( '@cWAVEKey', @cWAVEKey ),
-                            ( '@cConsigneeKey', @cConsigneeKey )
+                            ( '@cConsigneeKey', @cConsigneeKey ),
+                            ( '@nScn', CONCAT(@nAfterScn,'') )
                      SET @cExtendedInfo = ''
                      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
                         ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' + 
@@ -602,14 +724,52 @@ BEGIN
                   GOTO QUIT  
                END
 
-               SELECT @cDocType = DocType,
-                  @cWAVEKey = USERDEFINE09,
-                  @cLoadKey = LoadKey,
-                  @cConsigneeKey = ConsigneeKey
-               FROM ORDERS O WITH (NOLOCK)
-               JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey
-               WHERE PD.DROPID = @cCartonID
-               AND   O.StorerKey = @cStorerKey
+               -- Check if pallet id has inventory but not in PPS
+               IF EXISTS ( SELECT 1 FROM dbo.LotxLocxID LLI WITH (NOLOCK) 
+                           JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC
+                           WHERE LOC.Facility = @cFacility
+                           AND   LOC.LocationCategory <> 'PPS'
+                           AND   LLI.ID = @cPalletID
+                           AND   QTY > 0)
+               OR EXISTS (SELECT 1 FROM TASKDETAIL 
+                           WHERE FromID = @cPalletID AND Status < '9'
+                           AND SourceType = 'rdt_1837ExtScn02')
+               BEGIN
+                  SET @nErrNo = 144308
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --ID In Use
+                  GOTO QUIT  
+               END
+
+               SET @cSQL = 
+                     ' SELECT @cDocType = DocType,
+                        @cWAVEKey = USERDEFINE09,
+                        @cLoadKey = LoadKey,
+                        @cConsigneeKey = ConsigneeKey
+                     FROM ORDERS O WITH (NOLOCK)
+                     JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey
+                     WHERE PD.' + RTRIM( @cPickDetailCartonID) + '= @cCartonID
+                     AND   O.StorerKey = @cStorerKey 
+                     
+                     SET @nRowCount = @@ROWCOUNT 
+                     '
+
+               SET @cSQLParam = 
+                  ' @cStorerKey  NVARCHAR( 15), ' + 
+                  ' @cCartonID   NVARCHAR( 20), ' + 
+                  ' @cDocType   NVARCHAR( 10)   OUTPUT, ' + 
+                  ' @cWAVEKey   NVARCHAR( 10)   OUTPUT, ' + 
+                  ' @cLoadKey   NVARCHAR( 10)   OUTPUT, ' + 
+                  ' @cConsigneeKey   NVARCHAR( 10)   OUTPUT, ' + 
+                  ' @nRowCount   INT            OUTPUT '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam
+                  ,@cStorerKey
+                  ,@cCartonID 
+                  ,@cDocType OUTPUT
+                  ,@cWAVEKey OUTPUT
+                  ,@cLoadKey OUTPUT
+                  ,@cConsigneeKey OUTPUT
+                  ,@nRowCount OUTPUT
 
                IF @cDocType = 'E' --B2C
                BEGIN
@@ -624,34 +784,32 @@ BEGIN
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --ID In Use
                         GOTO QUIT  
                      END
-                     INSERT INTO rdt.rdtSortLaneLocLog 
-                     ( Lane, LOC, ID, OrderKey, ConsigneeKey, Status, AddWho, AddDate, EditWho, EditDate, WAVEKEY)
-                     VALUES
-                     ( '', @cPPS_Loc, @cPalletID, '', '', '1', @cUserName, GETDATE(), @cUserName, GETDATE(), @cWAVEKey)
                   END
                   ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE WAVEKEY = @cWAVEKey AND ID = @cPalletID AND Status = '9')
-                  OR NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE WAVEKEY = @cWAVEKey AND ID = @cPalletID AND STATUS < '9' )
+                  OR EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE WAVEKEY = @cWAVEKey AND ID <> @cPalletID AND ID <> '' AND STATUS < '9' )
                   BEGIN
                      SET @nErrNo = 256953
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --Scan Another ID
                      GOTO QUIT
                   END
-                  ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE WAVEKEY = @cWAVEKey AND Status = '9')
-                  BEGIN
-                     UPDATE rdt.rdtSortLaneLocLog WITH (ROWLOCK) SET 
-                        Status = '1',
-                        Id = @cPalletID,
-                        EditWho = @cUserName,
-                        EditDate = GETDATE()
-                     WHERE LOC = @cPPS_Loc
-                     AND   Lane = ''
-                     AND   [Status] = '9' 
-                     AND   WAVEKEY = @cWAVEKey
-                  END
                END
                ELSE IF @cDocType = 'N' --B2B
                BEGIN
-                  IF EXISTS ( SELECT 1 FROM PICKDETAIL WHERE DROPID = @cCartonID AND STATUS = '4' AND StorerKey = @cStorerKey)
+                  IF EXISTS (
+                     SELECT 1 FROM PICKDETAIL PD (NOLOCK)
+                     WHERE PD.StorerKey = @cStorerKey
+                     AND (
+                        (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
+                        OR 
+                        (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
+                     )
+                     AND EXISTS (
+                        SELECT 1 FROM PICKDETAIL PD1 
+                        WHERE PD1.STATUS = '4' 
+                        AND PD1.OrderKey = PD.OrderKey 
+                        AND PD1.StorerKey = PD.StorerKey
+                     )
+                  )
                   BEGIN
                      IF NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey)
                      BEGIN
@@ -663,31 +821,13 @@ BEGIN
                            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --ID In Use
                            GOTO QUIT  
                         END
-
-                        INSERT INTO rdt.rdtSortLaneLocLog 
-                        ( Lane, LOC, ID, ConsigneeKey, Status, AddWho, AddDate, EditWho, EditDate, LoadKey,OrderKey)
-                        VALUES
-                        ( '', @cPPS_Loc, @cPalletID,  '', '1', @cUserName, GETDATE(), @cUserName, GETDATE(), 'HOSPITAL',@cStorerKey)
                      END
                      ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey AND STATUS = '9' AND ID = @cPalletID)
-                     OR NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE  LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey AND ID = @cPalletID AND STATUS < '9' )
+                     OR EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE  LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey AND ID <> @cPalletID AND ID <> '' AND STATUS < '9' )
                      BEGIN
                         SET @nErrNo = 256953
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --Scan Another ID
                         GOTO QUIT
-                     END
-                     ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE  LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey AND Status = '9')
-                     BEGIN
-                        UPDATE rdt.rdtSortLaneLocLog WITH (ROWLOCK) SET 
-                           Status = '1',
-                           Id = @cPalletID,
-                           EditWho = @cUserName,
-                           EditDate = GETDATE()
-                        WHERE LOC = @cPPS_Loc
-                        AND   Lane = ''
-                        AND   [Status] = '9' 
-                        AND   LoadKey = 'HOSPITAL' 
-                        AND   OrderKey = @cStorerKey
                      END
                   END
                   ELSE
@@ -702,31 +842,13 @@ BEGIN
                            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --ID In Use
                            GOTO QUIT  
                         END
-
-                        INSERT INTO rdt.rdtSortLaneLocLog 
-                        ( Lane, LOC, ID, OrderKey, ConsigneeKey, Status, AddWho, AddDate, EditWho, EditDate, LoadKey)
-                        VALUES
-                        ( '', @cPPS_Loc, @cPalletID, '', @cConsigneeKey, '1', @cUserName, GETDATE(), @cUserName, GETDATE(), @cLoadKey)
                      END
                      ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = @cLoadKey AND ConsigneeKey = @cConsigneeKey AND STATUS = '9' AND ID = @cPalletID)
-                     OR NOT EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = @cLoadKey AND ConsigneeKey = @cConsigneeKey AND ID = @cPalletID AND STATUS < '9' )
+                     OR EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = @cLoadKey AND ConsigneeKey = @cConsigneeKey AND ID <> @cPalletID AND ID <> '' AND STATUS < '9' )
                      BEGIN
                         SET @nErrNo = 256953
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --Scan Another ID
                         GOTO QUIT
-                     END
-                     ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = @cLoadKey AND ConsigneeKey = @cConsigneeKey AND Status = '9')
-                     BEGIN
-                        UPDATE rdt.rdtSortLaneLocLog WITH (ROWLOCK) SET 
-                           Status = '1',
-                           Id = @cPalletID,
-                           EditWho = @cUserName,
-                           EditDate = GETDATE()
-                        WHERE LOC = @cPPS_Loc
-                        AND   Lane = ''
-                        AND   [Status] = '9' 
-                        AND   LoadKey = @cLoadKey 
-                        AND   ConsigneeKey = @cConsigneeKey
                      END
                   END
                END
@@ -746,6 +868,54 @@ BEGIN
                   @tPostPackSortCfm    = @tPostPackSortCfm,    
                   @nErrNo              = @nErrNo            OUTPUT,    
                   @cErrMsg             = @cErrMsg           OUTPUT 
+               
+               IF @nErrNo <> 0
+                  GOTO QUIT
+
+               IF @cExtendedInfoSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+                  BEGIN
+                     DELETE FROM @tExtValidate
+                     INSERT INTO @tExtValidate ( Variable, Value )
+                     VALUES ( '@cDocType', @cDocType ),
+                            ( '@cWAVEKey', @cWAVEKey ),
+                            ( '@cConsigneeKey', @cConsigneeKey ),
+                            ( '@nScn', CONCAT(@nMOBRECScn,'') )
+                     SET @cExtendedInfo = ''
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' + 
+                        ' @cCartonID, @cPalletID, @cLoadKey, @cLoc, @cOption, @tExtValidate, ' +
+                        ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+                     SET @cSQLParam =
+                        ' @nMobile        INT,           ' +
+                        ' @nFunc          INT,           ' +
+                        ' @cLangCode      NVARCHAR( 3),  ' +
+                        ' @nStep          INT,           ' +
+                        ' @nInputKey      INT,           ' +
+                        ' @cFacility      NVARCHAR( 5),  ' +
+                        ' @cStorerKey     NVARCHAR( 15), ' +
+                        ' @cCartonID      NVARCHAR( 20), ' +
+                        ' @cPalletID      NVARCHAR( 20), ' +
+                        ' @cLoadKey       NVARCHAR( 10), ' +
+                        ' @cLoc           NVARCHAR( 10), ' +
+                        ' @cOption        NVARCHAR( 1), ' +
+                        ' @tExtValidate   VariableTable READONLY, ' + 
+                        ' @cExtendedInfo  NVARCHAR( 20) OUTPUT, ' +
+                        ' @nErrNo         INT           OUTPUT, ' +
+                        ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+                        @cCartonID, @cPalletID, @cLoadKey, @cPPS_Loc, @cOption, @tExtValidate, 
+                        @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                     IF @nErrNo <> 0
+                     BEGIN
+                        GOTO QUIT
+                     END
+                  END
+               END
             END
             -- Prepare next screen var
             SET @cOutField01 = '' 
@@ -783,17 +953,30 @@ BEGIN
 
                IF @cOption = '1'  -- Yes
                BEGIN
+                  SELECT @cPPS_LOC = LOC FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE @cPalletID = ID AND [Status] = '1'
+                  SELECT TOP 1 @cWaveKey = O.USERDEFINE09 FROM ORDERS O WITH (NOLOCK)
+                  JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey
+                  WHERE PD.ID = @cPalletID AND PD.StorerKey = @cStorerKey
+                  ORDER BY PD.EditDate DESC
+
                   --HOSPITAL PALLET
-                  IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE @cPalletID = ID AND [Status] = '9' AND LOC = @cPPS_LOC AND LoadKey = 'HOSPITAL')
+                  IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE @cPalletID = ID AND [Status] = '1' AND LoadKey = 'HOSPITAL')
                   BEGIN 
                      SELECT TOP 1 @cToLoc = LOC.LOC 
                      FROM LOC LOC (NOLOCK)
-                     LEFT JOIN LotxLocxID LLI (NOLOCK) ON LOC.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey
+                     LEFT JOIN LotxLocxID LLI (NOLOCK) ON LOC.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey AND (QTY - QtyPicked>0)
                      WHERE LOC.Facility = @cFacility
                      AND LOC.LocationType = 'QC'
                      GROUP BY LOC.LOC
                      HAVING COUNT(DISTINCT LLI.ID) < MAX(LOC.MaxPallet)
                      ORDER BY LOC.LOC
+
+                     IF ISNULL(@cToLoc,'') = ''
+                     BEGIN
+                        SET @nErrNo = 256955
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No QC Location
+                        GOTO QUIT
+                     END
 
                      -- Get new TaskDetailKeys      
                      SET @nSuccess = 1
@@ -819,7 +1002,7 @@ BEGIN
                         Priority, TrafficCop)
                      VALUES (
                         @cNewTaskDetailKey, 'ASTMV', '0', '', @cPPS_Loc, @cPPS_Loc, @cPalletID, @cToLoc, @cToLoc, @cPalletID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtSn02',  '', '', 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END
                   --B2B PALLET TO VAS:
@@ -866,7 +1049,7 @@ BEGIN
                         Priority, TrafficCop)
                      VALUES (
                         @cNewTaskDetailKey, 'ASTMV', '0', '', @cPPS_Loc, @cPPS_Loc, @cPalletID, @cToLoc, @cToLoc, @cPalletID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtSn02',  '', '', 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END
                   --B2B PALLET TO MARSHALLING LANE
@@ -905,7 +1088,7 @@ BEGIN
                         Priority, TrafficCop)
                      VALUES (
                         @cNewTaskDetailKey, 'ASTMV', '0', '', @cPPS_Loc, @cPPS_Loc, @cPalletID, @cToLoc, @cToLoc, @cPalletID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtSn02',  '', '', 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END
                   ELSE
@@ -921,7 +1104,7 @@ BEGIN
                      JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.ToLoc = LOC.Loc)
                      WHERE TD.LoadKey = @cLoadKey
                      AND   TD.[Status] < '9'
-                     AND   TD.TaskType = 'ASTPA'
+                     AND   TD.TaskType = 'ASTMV'
                      AND   TD.Storerkey = @cStorerKey
                      AND   TD.PickMethod = 'FP'
                      AND   LOC.LocationCategory = 'PACK&HOLD'
@@ -996,11 +1179,11 @@ BEGIN
                      INSERT dbo.TASKDETAIL 
                      ( TaskDetailKey, TaskType, Storerkey, Sku, UOM, UOMQty, Qty, SystemQty, Lot,
                      FromLoc, FromID, ToLoc, ToID, SourceType,SourceKey, Priority, SourcePriority,
-                     Status, LogicalFromLoc, LogicalToLoc, PickMethod, LoadKey)  
+                     Status, LogicalFromLoc, LogicalToLoc, PickMethod, LoadKey,WAVEKEY)  
                      VALUES  
-                     ( @cTaskdetailkey, 'ASTPA', @cStorerkey, '', '', 0, 0, 0, '', 
+                     ( @cTaskdetailkey, 'ASTMV', @cStorerkey, '', '', 0, 0, 0, '', 
                      @cPPS_Loc, @cPalletID, @cToLoc, @cPalletID, 'rdt_1837ExtScn02', '', '5', '9',
-                     '0', @cPPS_Loc, @cToLoc, 'FP', @cLoadKey)
+                     '0', @cPPS_Loc, @cToLoc, 'FP', @cLoadKey,@cWaveKey)
                            
                      IF @@ERROR <> 0  
                      BEGIN
@@ -1009,13 +1192,22 @@ BEGIN
                         GOTO QUIT
                      END       
                   END
+
                   UPDATE rdt.rdtSortLaneLocLog WITH (ROWLOCK) SET 
                      Status = '9'
-                  WHERE Loc = @cPPS_Loc
-                  AND   ID = @cPalletID
+                  WHERE ID = @cPalletID
                   AND   [Status] = '1'
                END
             END
+
+            SET @cErrMsg01 = ''
+            SET @cErrMsg02 = ''
+            SET @cErrMsg03 = ''
+            SET @cErrMsg01 = 'Pallet Closed'
+            SET @cErrMsg02 = 'Successfully'
+            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
+                  @cErrMsg01, @cErrMsg02, @cErrMsg03
+
             -- Prepare next screen var
             SET @cOutField01 = '' 
             SET @cOutField02 = '' 

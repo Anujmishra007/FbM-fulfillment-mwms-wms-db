@@ -51,6 +51,7 @@ GO
 /* 2025-06-17 4.5.0  NickT    UWP-37598 Update TaskDetail.EndTime when CC done   */
 /* 2025-08-12 0.0.0  JackC    !!!Cutover. Use V0 repo for work!!!                */
 /* 2024-01-13 4.6.0  NickT    UWP-46877 Add ExtScn in Step 4                     */
+/* 2026-02-18 4.7.0  NYE018   FCR-10365 add loc check digit                      */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
@@ -172,6 +173,9 @@ DECLARE
    @nAction             INT,
    @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
    @tExtScnData			VariableTable, --(JHU151)
+
+   @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10365
+   @cCheckDigitLOC      NVARCHAR( 20), -- FCR-10365
 
    @cRemoveTaskFromUserQueue  NVARCHAR( 10),
    @cTaskStatus               NVARCHAR( 10),
@@ -299,6 +303,8 @@ SELECT
    @cRefKey04        = V_String38,
    @cRefKey05        = V_String39,
 
+   @cLOCCheckDigitSP = V_String40, -- FCR-10365
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -368,6 +374,8 @@ BEGIN
       SET @nPrevStep = 0
       SET @nPrevScreen  = 0
 
+      SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-10365
+
       /****************************
        VALIDATION
       ****************************/
@@ -381,6 +389,23 @@ BEGIN
 
       SET @cOverrideLOC = ''
       SET @cOverrideLOC = rdt.RDTGetConfig( @nFunc, 'OverrideLOC', @cStorerkey)
+
+      -- FCR-10365
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_1_Fail
+         END
+         SET @cLoc = @cCheckDigitLOC
+      END
+      -- FCR-10365
 
       IF @cLoc <> @cSuggFromLoc
       BEGIN
@@ -3736,6 +3761,8 @@ BEGIN
       V_String37 = @cRefKey03,
       V_String38 = @cRefKey04,
       V_String39 = @cRefKey05,
+
+      V_String40 = @cLOCCheckDigitSP, -- FCR-10365
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

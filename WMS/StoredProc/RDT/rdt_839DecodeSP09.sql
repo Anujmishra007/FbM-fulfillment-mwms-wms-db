@@ -318,7 +318,7 @@ BEGIN
                   GOTO Quit
                END
 
-               IF @cSerialNoStatus IN ('3', '5')
+               IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE PickMethod = 'PickTask-P' AND Remarks = @cSerialNo)
                BEGIN
                   SET @nErrNo = 255475
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  SerialNo is scanned

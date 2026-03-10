@@ -10,7 +10,7 @@ execute rdt.rdtAddMsg 258203, 10, '258203PickZoneRequired', 'us_english', 839, 0
 execute rdt.rdtAddMsg 258204, 10, '258204LocRequired',      'us_english', 839, 0, '258204: SKU Required'
 execute rdt.rdtAddMsg 258205, 10, '258205PSNORequired',     'us_english', 839, 0, '258205: PSNO Required'
 execute rdt.rdtAddMsg 258206, 10, '258206LotRequired',      'us_english', 839, 0, '258206: Lot Required'
---execute rdt.rdtAddMsg 258207, 10, '258207NoRecordFound',    'us_english', 839, 0, '258207: Not short record found'
+execute rdt.rdtAddMsg 258207, 10, '258207NoRecordFound',    'us_english', 839, 0, '258207: Not short record found'
 --execute rdt.rdtAddMsg 258208, 10, '258208NoUCCFound',       'us_english', 839, 0, '258208: No enough UCC to reallocate'
 --execute rdt.rdtAddMsg 258209, 10, '258209UpdUCCFail',       'us_english', 839, 0, '258209: Update UCC failed'
 --execute rdt.rdtAddMsg 258210, 10, '258210UpdPKDFail',       'us_english', 839, 0, '258210: Update PickDetail failed'

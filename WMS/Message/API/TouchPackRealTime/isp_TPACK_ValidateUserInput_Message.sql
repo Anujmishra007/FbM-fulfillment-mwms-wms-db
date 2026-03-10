@@ -24,12 +24,10 @@ EXEC API.TouchPadAddMsg 11520, 10, 'Failed to Perform Packing. Current in progre
 
 EXEC API.TouchPadAddMsg 11521, 10, 'Pack UCC Failed. Current carton already been used for Non-UCC item.',    'us_english'
 EXEC API.TouchPadAddMsg 11522, 10, 'Failed to Perform Packing. Current Carton already been packed by UCC.',    'us_english'
-
 EXEC API.TouchPadAddMsg 11523, 10, 'QTY in a carton is more than VAS ExactQTY',    'us_english'
 EXEC API.TouchPadAddMsg 11524, 10, 'QTY in a carton is more than VAS MAXQTY',    'us_english'
 EXEC API.TouchPadAddMsg 11525, 10, 'Number of different SKU in a carton is more than VAS MaxSKUCarton',    'us_english'
 EXEC API.TouchPadAddMsg 11526, 10, 'Not allow to pack different SKU in a carton',    'us_english'
-
 EXEC API.TouchPadAddMsg 11527, 10, 'Not Allow Recartonization',    'us_english'
-
-EXEC API.TouchPadAddMsg 11528, 10, '',    'us_english'
+EXEC API.TouchPadAddMsg 11528, 10, 'Not allow to pack into a new carton. Please pack into the original pre carton.',    'us_english'
+EXEC API.TouchPadAddMsg 11529, 10, '',    'us_english'
