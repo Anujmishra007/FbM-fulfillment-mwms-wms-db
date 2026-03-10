@@ -75,7 +75,7 @@ BEGIN
       FROM @cADList J
       WHERE BangPos = 0
       OR QPos = 0
-      OR BangPos > QPos
+      OR QPos > BangPos
    
       IF @cInvalidQRCodeList <> ''
       BEGIN
@@ -99,6 +99,23 @@ BEGIN
          SET @n_Continue = 3
          SET @n_ErrNo = 14052
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')  + '(' + @cInvalidQRCodeList  + ')' --'Invalid QR Code, current SKU does not found in UPC table.' 
+         GOTO EXIT_SP
+      END
+
+      SELECT @cInvalidQRCodeList= ISNULL(STRING_AGG(J.cRawValue, ', '),'')
+      FROM @cADList J
+      WHERE EXISTS(SELECT 1 
+                   FROM PackSerialNo WITH (NOLOCK)
+                   WHERE PickSlipNo = @cPickSlipNo    
+                   AND StorerKey = @cStorerKey    
+                   AND SerialNo = J.DecodedSN 
+                   AND SKU = @cSKU)
+
+      IF @cInvalidQRCodeList <> ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_ErrNo = 14055
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')  + '(' + @cInvalidQRCodeList  + ')' --Invalid QR Code, current PackSerialNo already been used or exists in PackSerialNo Table.
          GOTO EXIT_SP
       END
 

@@ -14,6 +14,7 @@ GO
 /* Date        Rev    Author    Purposes                                */    
 /* 2025-06-11  1.0.0  Dennis    FCR-3959. Created                       */
 /* 2025-12-03  1.0.1  PPA374    Added same side VNA pick logic          */
+/* 2026-02-23  1.0.2  PPA374    Checking order for next task            */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1812GetTask08] (    
@@ -64,7 +65,8 @@ BEGIN
    @cLastLoc            NVARCHAR(10),
    @cLastSide           NVARCHAR(10),
    @cLastAisle          NVARCHAR(10),
-   @cLastCategory       NVARCHAR(20)
+   @cLastCategory       NVARCHAR(20),
+   @cOrderKey           NVARCHAR(10)
 
    SELECT @cStorerKey = StorerKey,
    @cTaskDetailKey  = V_TaskDetailKey,
@@ -76,6 +78,8 @@ BEGIN
 
    SELECT TOP 1 @cLastSide = Floor, @cLastAisle = LocAisle, @cLastCategory = LocationCategory FROM LOC WITH(NOLOCK) WHERE LOC = @cLastLoc
 
+   SELECT TOP 1 @cOrderKey = OrderKey FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
+
    SELECT TOP 1 @cNewTaskKey = TaskDetailKey
    FROM dbo.TaskDetail TD WITH (NOLOCK)    
    JOIN dbo.LOC WITH(NOLOCK) ON LOC.LOC = TD.FromLOC
@@ -85,6 +89,7 @@ BEGIN
    AND TD.Storerkey = @cStorerKey
    AND TD.Status = '3'
    AND TaskType IN ('FCP','FCP1')
+   AND OrderKey = @cOrderKey
    ORDER BY 
    IIF(LOC.LocAisle = ISNULL(@cLastAisle,'') AND ISNULL(@cLastCategory,'') = 'VNA',1,99),
    IIF(LOC.LocAisle = ISNULL(@cLastAisle,'') AND ISNULL(@cLastCategory,'') = 'VNA' AND ISNULL(@cLastSide,'') = LOC.Floor,1,99),
@@ -136,6 +141,9 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( 239660, @cLangCode, 'DSP') -- SO IS FULLY PICKED
    END
 
+Fail:    
+    
+END 
 Fail:    
     
 END 

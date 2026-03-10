@@ -10,6 +10,7 @@ GO
 /* Date         Rev  Author         Purposes                                                    */
 /* 2024-11-05   1.0  TLE109         FCR-917 Serial Unpack and Unpick                            */
 /* 2025-01-15   1.1  NYE018         FCR-9889 Added Decode QR logic                              */
+/* 2026-02-19   1.2  NYE018         FCR-10102 Added extended screen logic                       */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_SerialUnpackAndUnpick] (
@@ -65,6 +66,10 @@ DECLARE
    @cBarcode   NVARCHAR( MAX),
    -- FCR-9889
 
+   -- NEW VARIABLES FOR EXTENDED SCREEN - (NYE018 - FCR-10102)
+   @cExtScnSP           NVARCHAR( 20),
+   @tExtScnData         VariableTable,
+   -- END NEW VARIABLES - (NYE018 - FCR-10102)
 
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),   @cFieldAttr01 NVARCHAR( 1), @cLottable01  NVARCHAR( 18),
@@ -111,6 +116,8 @@ SELECT
    @cBarcode         = V_Barcode,     -- FCR-9889
    @cDecodeSP        = V_String10,    -- FCR-9889
 
+   @cExtScnSP        = V_String9, -- (NYE018 - FCR-10102)
+
    @cPickSlipNo      = V_PickSlipNo,
    @cUnPackType      = V_String1,
    @cToLOC           = V_Loc,
@@ -144,6 +151,7 @@ BEGIN
    IF @nStep = 3  GOTO Step_3  -- Scn = 6513. Unpack & Unpick location
    IF @nStep = 4  GOTO Step_4  -- Scn = 6514. Scan serial number
    IF @nStep = 5  GOTO Step_5  -- Scn = 6515. Complete
+   IF @nStep = 99 GOTO Step_ExtendedScreen -- Extended Screen Entry - (NYE018 - FCR-10102)
 END
 RETURN -- Do nothing if incorrect step
 
@@ -171,6 +179,11 @@ BEGIN
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerkey)
       IF @cDecodeSP IN ('0', '')
          SET @cDecodeSP = ''
+   
+   -- START CHANGE: Load ExtScnSP Config - (NYE018 - FCR-10102)
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtScnSP = '0' SET @cExtScnSP = ''
+   -- END CHANGE - (NYE018 - FCR-10102)
    
 END
 GOTO QUIT
@@ -263,6 +276,14 @@ BEGIN
 
       IF @cUnPackType = @cUNPACK_MODEL
       BEGIN
+
+         -- FCR-10102
+         IF @cExtScnSP <> ''
+         BEGIN
+            GOTO Step_ExtendedScreen
+         END
+         -- FCR-10102
+
          SET @nScn = @nScn + 2
          SET @nStep = @nStep + 2
          SET @cOutField02 = CAST( @nScannedNum AS NVARCHAR(10))
@@ -311,6 +332,7 @@ BEGIN
       END
 
       SET @cToLOC = @cToInLOC
+
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1  
 
@@ -321,8 +343,17 @@ BEGIN
    BEGIN
       SET @cToLOC = ''
       SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1    
+      SET @nStep = @nStep - 1  
+      GOTO Step_3_QUIT  
    END
+
+   -- FCR-10102
+   IF @cExtScnSP <> ''
+   BEGIN
+      GOTO Step_ExtendedScreen
+   END
+   -- FCR-10102
+
 END
 Step_3_QUIT:
    SET @cOutField01 = ''
@@ -404,7 +435,7 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            ROLLBACK TRAN tran_SerialUnpack
+            ROLLBACK TRAN 
             GOTO Step_4_QUIT
          END
 
@@ -414,13 +445,13 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            ROLLBACK TRAN tran_SerialUnpack
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
       
          
          SET @nScannedNum = @nScannedNum + 1
-         COMMIT TRAN tran_SerialUnpack
+         COMMIT TRAN
       END
       ELSE IF @cUnPackType = @cUNPACKANDUNPICK_MODEL  --unpack and unpick
       BEGIN
@@ -435,7 +466,7 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN 
             GOTO Step_4_QUIT
          END
 
@@ -459,7 +490,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 228264
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --228264^OrderKey Not Exists
-            ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
 
@@ -475,7 +506,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 228265 
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --228265^SKU Or PickDetailKey Not Exists
-            ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
 
@@ -485,7 +516,7 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
 
@@ -495,16 +526,22 @@ BEGIN
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            ROLLBACK TRAN tran_SerialUnpackAndUnpick
+            ROLLBACK TRAN
             GOTO Step_4_QUIT
          END
 
          SET @nScannedNum = @nScannedNum + 1
-         COMMIT TRAN tran_SerialUnpackAndUnpick
+         COMMIT TRAN
       END
    END
    ELSE
    BEGIN
+      -- FCR-10102 logic: Let Extended Screen handle the Back navigation
+      IF @cExtScnSP <> ''
+      BEGIN
+         GOTO Step_ExtendedScreen
+      END
+      -- End FCR-10102 logic
       IF @cUnPackType = @cUNPACK_MODEL 
       BEGIN
          SET @nScn = @nScn - 2
@@ -560,6 +597,69 @@ BEGIN
 END
 GOTO QUIT
 
+-- FCR-10102
+Step_ExtendedScreen:
+BEGIN
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         -- Clear output fields to prevent ghost data
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
+         SET @cOutField03 = ''
+         SET @cOutField04 = ''
+
+         DECLARE @nStepBak INT,@nScnBak INT
+         SELECT @nStepBak = @nStep, @nScnBak = @nScn
+
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+         ('@nScnBak', CAST(@nScnBak AS NVARCHAR(20))),
+         ('@nStepBak', CAST(@nStepBak AS NVARCHAR(20))),
+         ('@cOption',   @cInField01)
+
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+         @cExtScnSP, 
+         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nAction, 
+         @nScn     OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT, 
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
+   END
+   GOTO Quit
+END
+-- FCR-10102
+
 Quit:
 BEGIN
    UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET
@@ -574,6 +674,7 @@ BEGIN
       
       V_Barcode     = @cBarcode,  -- FCR-9889
       V_String10    = @cDecodeSP, -- FCR-9889
+      V_String9     = @cExtScnSP, -- (NYE018 - FCR-10102)
 
       V_PickSlipNo   = @cPickSlipNo,
       V_String1      = @cUnPackType,

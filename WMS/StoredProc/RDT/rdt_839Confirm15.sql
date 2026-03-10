@@ -820,6 +820,7 @@ BEGIN
                SET UCCNo = '',
                   UserDefine01 = '5'
                WHERE SerialNo = @cPieceSN
+                  AND StorerKey = @cStorerKey
             END TRY
             BEGIN CATCH
                SET @nErrNo = 255644

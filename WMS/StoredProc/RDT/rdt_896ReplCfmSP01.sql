@@ -13,6 +13,7 @@ GO
 /* Date       Rev    Author   Purposes                                  */
 /* 2025-03-17 1.0.0  JCH507   FCR-3287 Created                          */
 /* 2025-08-27 1.1.0  JCH507   UWP-40178 Check replen finalization result*/
+/* 2026-03-04 1.2.0  NickT    UWP-49524 Extend validation for ITRN      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_896ReplCfmSP01] (
@@ -186,7 +187,7 @@ BEGIN
       END CATCH
 
       --V1.1.0
-      IF NOT EXISTS (SELECT 1 FROM dbo.ITRN WITH (NOLOCK) WHERE SourceKey = @cReplenKey)
+      IF NOT EXISTS (SELECT 1 FROM dbo.ITRN WITH (NOLOCK) WHERE SourceKey = @cReplenKey AND Status = 'OK' )
       BEGIN
          SET @nErrNo = 235158
          SET @cErrMsg = 'Finalize Replen ' + @cReplenKey + ' fails'

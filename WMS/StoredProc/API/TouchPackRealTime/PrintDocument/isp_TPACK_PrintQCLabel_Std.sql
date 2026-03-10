@@ -33,6 +33,7 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintQCLabel_Std] (
    , @cPaperPrinter        NVARCHAR(30)      = ''
    , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
    , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
+   , @nContinuePrint       INT               = 0   OUTPUT
    , @b_Success            INT               = 0   OUTPUT  
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
@@ -71,11 +72,24 @@ BEGIN
          , @IsAggregate3      BIT = 0
          , @IsAggregate4      BIT = 0
 
+   SET @nContinuePrint     = 0
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
    SET @c_ErrMsg           = '' 
    SET @cSQL               = ''
    SET @cSQLParam          = ''
+   SET @cFieldName1        = ''
+   SET @cFieldName2        = ''
+   SET @cFieldName3        = ''
+   SET @cFieldName4        = ''
+   SET @cParams1           = ''
+   SET @cParams2           = ''
+   SET @cParams3           = ''
+   SET @cParams4           = ''
+   SET @IsAggregate1       = 0
+   SET @IsAggregate2       = 0
+   SET @IsAggregate3       = 0
+   SET @IsAggregate4       = 0
    SET @cModuleID          = 'TPPACK'
 
    IF @bPrintLabelFlag = 0

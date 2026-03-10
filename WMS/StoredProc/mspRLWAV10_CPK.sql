@@ -13,13 +13,22 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.0                                                          */    
+/* Version: 1.6                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 25-Feb-2026 WLChooi  1.1   FCR-11138 Add ASTCPK TaskType (WL01)       */
+/* 23-Feb-2026 WLChooi  1.2   FCR-11090 Fix CPK Task Status (WL02)       */
+/* 05-Mar-2026 WLChooi  1.3   FCR-11338 Hold the task if the same caseID */
+/*                            has been put on hold (WL03)                */
+/* 05-Mar-2026 WLChooi  1.4   FCR-10124 Modify B2C Groupkey & Pickmethod */
+/*                            mapping (WL04)                             */
+/* 06-Mar-2026 WLChooi  1.5   FCR-10124 Fix missing Taskdetailkey in     */
+/*                            Pickdetail for ASTCPK (WL05)               */
+/* 06-Mar-2026 WLChooi  1.6   FCR-10124 Add Pickmethod for B2C (WL06)    */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -37,7 +46,7 @@ BEGIN
    DECLARE    
          @n_StartTCnt            INT = @@TRANCOUNT  
       ,  @n_Continue             INT = 1 
-      ,  @n_CasesPerCart         INT = 4 
+      ,  @n_CasesPerCart         INT = 4
 
       ,  @c_TaskDetailKey        NVARCHAR(10)   = ''         
       ,  @c_TaskType             NVARCHAR(10)   = ''        
@@ -80,7 +89,7 @@ BEGIN
       ,  @c_LoadKey              NVARCHAR(10)   = ''         
       ,  @c_AreaKey              NVARCHAR(10)   = ''     
       ,  @c_DropID               NVARCHAR(20)   = ''         
-      ,  @n_TransitCount         INT            = ''         
+      ,  @n_TransitCount         INT            = 0         
       ,  @c_TransitLOC           NVARCHAR(10)   = ''         
       ,  @c_FinalLOC             NVARCHAR(10)   = ''         
       ,  @c_FinalID              NVARCHAR(10)   = ''         
@@ -100,7 +109,11 @@ BEGIN
       ,  @c_ZeroSystemQty        NVARCHAR(5)    = 'N'    
       ,  @c_MergedTaskPriority   NVARCHAR(10)   = '2'
       ,  @c_Groupkey_P           NVARCHAR(10)   = ''       
-      ,  @c_Groupkey_New         NVARCHAR(10)   = '' 
+      ,  @c_Groupkey_New         NVARCHAR(10)   = ''
+      ,  @c_DocType              NVARCHAR(10)   = ''   --WL01
+      ,  @c_Facility             NVARCHAR(5)    = ''
+      ,  @c_Option5              NVARCHAR(MAX)  = ''
+      ,  @n_BatchGrpKey          INT            = 0
       
       ,  @CUR_TW                 CURSOR
  
@@ -184,7 +197,9 @@ BEGIN
          ,  SkuPerCarton      INT            NOT NULL DEFAULT(0)  
          ,  CartonType        NVARCHAR(10)   NOT NULL DEFAULT('')   
          ,  CartonCube        FLOAT          NOT NULL DEFAULT(0.00) 
-         ,  SortNo            INT            NOT NULL DEFAULT(0)  
+         ,  SortNo            INT            NOT NULL DEFAULT(0)
+         ,  DocType           NVARCHAR(10)   NOT NULL DEFAULT('')   --WL01
+         ,  ECOM_SINGLE_Flag  NVARCHAR(1)    NOT NULL DEFAULT('')   --WL06
          ) 
 
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NULL
@@ -249,7 +264,21 @@ BEGIN
    IF @n_Continue = 1 
    BEGIN
       SELECT TOP 1 @c_Storerkey = pw.Storerkey
-      FROM #PickDetail_WIP AS pw 
+                 , @c_Facility = o.Facility
+      FROM #PickDetail_WIP AS pw
+      JOIN ORDERS o (NOLOCK) ON o.Orderkey = pw.OrderKey
+
+      -- Get optional configuration if available
+      SELECT @c_Option5 = ISNULL(fgr.Option5,'')
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
+
+      IF ISNULL(@c_Option5, '') <> ''
+      BEGIN
+         SELECT @n_CasesPerCart = TRY_CAST(dbo.fnc_GetParamValueFromString('@n_CasesPerCart', @c_Option5, @n_CasesPerCart) AS INT)
+
+         IF ISNULL(@n_CasesPerCart, 0) = 0
+            SET @n_CasesPerCart = 4
+      END
 
       INSERT INTO @TMP_CL (Listname, Code, Description, Short, Long                
                         ,  Notes, Notes2, Storerkey
@@ -291,7 +320,9 @@ BEGIN
          ,  FromID
          ,  RefTaskKey
          ,  CartonPerLoc
-         ,  CartonCube
+         ,  SkuPerCarton
+         ,  DocType   --WL01
+         ,  ECOM_SINGLE_Flag   --WL06
          )
       SELECT 
             pw.Wavekey             
@@ -310,6 +341,8 @@ BEGIN
          ,  RefTaskKey = pw.UpdateSource              --Picking Loc. Update at mspRLWAV10_Data 
          ,  p1.CartonPerLoc
          ,  p2.SkuPerCarton
+         ,  O.DocType   --WL01
+         ,  ISNULL(O.ECOM_SINGLE_Flag, '')   --WL06
       FROM #PICKDETAIL_WIP AS pw
       JOIN LOC l (NOLOCK) ON l.loc = pw.Toloc
       JOIN  (  SELECT pw1.ToLoc  
@@ -321,7 +354,8 @@ BEGIN
                   ,  SkuPerCarton = COUNT(DISTINCT pw2.Sku)  
                FROM #PICKDETAIL_WIP pw2
                GROUP BY pw2.CaseID
-            ) AS p2 ON p2.CaseID = pw.CaseID 
+            ) AS p2 ON p2.CaseID = pw.CaseID
+      JOIN ORDERS O (NOLOCK) ON O.Orderkey = pw.Orderkey   --WL01 
       WHERE pw.UOM >= '6'
       GROUP BY         
             pw.Wavekey             
@@ -337,6 +371,8 @@ BEGIN
          ,  l.LoseId         
          ,  p1.CartonPerLoc
          ,  p2.SkuPerCarton
+         ,  O.DocType   --WL01
+         ,  ISNULL(O.ECOM_SINGLE_Flag, '')   --WL06
 
       --------------------------------------------------------------------  
       -- Update Task Priority Base on ORDERS.Priority 
@@ -411,11 +447,37 @@ BEGIN
                 tw.RowID  
               , rno = DENSE_RANK() OVER (ORDER BY tw.AreaKey, tw.PickLocLevel, tw.CaseID) 
           FROM #TASKDETAIL_WIP tw
+          WHERE tw.DocType <> 'E'   --WL04
       )
       UPDATE tw
-         SET GroupKey =  ((rno - 1) / @n_CasesPerCart) + 1  
+         SET GroupKey =  ((rno - 1) / @n_CasesPerCart) 
       FROM NOC
       JOIN #TASKDETAIL_WIP tw ON tw.RowID = NOC.RowID
+
+      --------------------------------------------------------------------  
+      -- Assign Actual Groupkey
+      --------------------------------------------------------------------
+      SET @n_BatchGrpKey = 0
+      SELECT @n_BatchGrpKey = COUNT(DISTINCT GroupKey)
+      FROM #TASKDETAIL_WIP tw
+
+      IF @n_BatchGrpKey > 0
+      BEGIN
+         EXEC dbo.nspg_GetKey @KeyName = N'GroupKey' -- nvarchar(18)
+                            , @fieldlength = 10 -- int
+                            , @keystring = @c_GroupKey_New  OUTPUT -- nvarchar(25)
+                            , @b_Success = @b_Success       OUTPUT -- int
+                            , @n_err = @n_err               OUTPUT -- int
+                            , @c_errmsg = @c_errmsg         OUTPUT -- nvarchar(250)
+                            , @n_batch = @n_BatchGrpKey -- int
+
+         IF @b_Success = 1 AND ISNULL(TRIM(@c_GroupKey_New), '') <> ''
+         BEGIN
+            UPDATE #TASKDETAIL_WIP
+            SET Groupkey = RIGHT(REPLICATE('0', 10) + CAST(CAST(TRIM(@c_GroupKey_New) AS INT) + CAST(GroupKey AS INT) AS NVARCHAR(10)), 10)
+            WHERE Groupkey > ''
+         END
+      END
 
       --------------------------------------------------------------------  
       -- Calculate Carton Position in the Cart By Small to Large Sequence  
@@ -431,6 +493,7 @@ BEGIN
                                                       ,  tw.CaseID
                                                ) 
           FROM #TASKDETAIL_WIP tw
+          WHERE tw.DocType <> 'E'   --WL04
       )
       UPDATE tw
          SET PickMethod = CSP.PickMethod  
@@ -439,7 +502,30 @@ BEGIN
 
       UPDATE tw
       SET [Status] = IIF(RefTaskKey > '', 'H', '0')
+        , PickMethod = CASE WHEN tw.DocType = 'E' AND tw.ECOM_Single_Flag = 'M' THEN 'B2C-Multis'   --WL06  
+                            WHEN tw.DocType = 'E' AND tw.ECOM_Single_Flag = 'S' THEN 'B2C-Single'   --WL06   
+                            ELSE PickMethod END                                                     --WL06
       FROM #TASKDETAIL_WIP tw
+
+      --WL02: If open RPF/ASTTPA task within Wavekey, set CPK to H
+      --WL03: If one CaseID is on-hold, hold other tasks with same CaseID
+      UPDATE tw
+      SET [Status] = 'H'
+      FROM #TASKDETAIL_WIP tw
+      WHERE [Status] = '0'
+      AND ( EXISTS ( SELECT 1
+                     FROM TASKDETAIL TD (NOLOCK)
+                     WHERE TD.Wavekey = @c_Wavekey
+                     AND TD.TaskType IN ('RPF', 'ASTTPA')
+                     AND TD.[Status] NOT IN ('X', '9')
+                   )
+            OR EXISTS ( SELECT 1
+                        FROM #TASKDETAIL_WIP TD
+                        WHERE TD.CaseID = tw.CaseID
+                        AND TD.Storerkey = tw.Storerkey
+                        AND TD.[Status] = 'H'
+                      )
+          )
    END
 
    IF @n_Continue = 1
@@ -466,6 +552,7 @@ BEGIN
             ,tw.AreaKey
             ,tw.GroupKey
             ,tw.Status
+            ,tw.DocType   --WL01
       FROM #TASKDETAIL_WIP tw
       ORDER BY tw.SortNo
             ,  tw.GroupKey
@@ -492,31 +579,36 @@ BEGIN
                                  ,  @c_RefTaskKey
                                  ,  @c_AreaKey
                                  ,  @c_GroupKey
-                                 ,  @c_Status 
+                                 ,  @c_Status
+                                 ,  @c_DocType   --WL01
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN  
-         SET @c_TaskType  = 'CPK'
+         SET @c_TaskType  = IIF(@c_DocType = 'E', 'ASTCPK', 'CPK')   --WL01
          SET @c_SourceKey = @c_Wavekey
          SET @c_LinkTaskToPick_SQL = ' AND PICKDETAIL.UOM = @c_UOM'
-                                   + ' AND PICKDETAIL.CaseID = @c_CaseID'
+                                   + IIF(@c_TaskType = 'CPK', ' AND PICKDETAIL.CaseID = @c_CaseID', '')   --WL05
 
-         IF  @c_Groupkey_P <> @c_Groupkey
-         BEGIN
-            SET @c_GroupKey_New = ''
-            EXECUTE nspg_getkey    
-                    @KeyName   = 'GroupKey'    
-                  , @fieldlength = 10       
-                  , @KeyString   = @c_GroupKey_New    OUTPUT    
-                  , @b_success   = @b_success         OUTPUT    
-                  , @n_err       = @n_err             OUTPUT    
-                  , @c_errmsg    = @c_errmsg          OUTPUT  
-                   
-            IF @b_success = 0   
-            BEGIN    
-               SET @n_Continue = 3  
-            END    
-         END
+         --WL04
+         IF ISNULL(@c_PickMethod, '') = ''
+            SET @c_PickMethod = '?'
+
+         --IF  @c_Groupkey_P <> @c_Groupkey
+         --BEGIN
+         --   SET @c_GroupKey_New = ''
+         --   EXECUTE nspg_getkey    
+         --           @KeyName   = 'GroupKey'    
+         --         , @fieldlength = 10       
+         --         , @KeyString   = @c_GroupKey_New    OUTPUT    
+         --         , @b_success   = @b_success         OUTPUT    
+         --         , @n_err       = @n_err             OUTPUT    
+         --         , @c_errmsg    = @c_errmsg          OUTPUT  
+         --          
+         --   IF @b_success = 0   
+         --   BEGIN    
+         --      SET @n_Continue = 3  
+         --   END    
+         --END
 
          IF @n_Continue = 1
          BEGIN
@@ -566,11 +658,11 @@ BEGIN
             ,  @c_LoadKey             = @c_Loadkey           
             ,  @c_AreaKey             = ''            
             ,  @c_DropID              = ''     
-            ,  @n_TransitCount        = ''         
+            ,  @n_TransitCount        = 0         
             ,  @c_TransitLOC          = ''         
             ,  @c_FinalLOC            = ''         
             ,  @c_FinalID             = ''         
-            ,  @c_Groupkey            = @c_Groupkey_New   
+            ,  @c_Groupkey            = @c_Groupkey
             ,  @n_PendingMoveIn       = 0        
             ,  @n_QtyReplen           = 0     
             ,  @c_CallSource          = 'WAVE' 
@@ -617,7 +709,8 @@ BEGIN
                                     ,  @c_RefTaskKey
                                     ,  @c_AreaKey
                                     ,  @c_GroupKey
-                                    ,  @c_Status 
+                                    ,  @c_Status
+                                    ,  @c_DocType   --WL01 
       END  
       CLOSE @CUR_TW  
       DEALLOCATE @CUR_TW

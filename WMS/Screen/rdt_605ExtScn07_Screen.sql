@@ -1,0 +1,21 @@
+
+-- 6842 = ID detail screen
+DELETE rdt.RDTScn WHERE Scn = 6842 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6842, 'ENG'
+   ,@cLine01 = '%18d01'
+   ,@cLine02 = 'SKU:           %05d13'
+   ,@cLine03 = '%20d02'
+   ,@cLine04 = '%20d03'
+   ,@cLine05 = '%20d04'
+   ,@cLine06 = '%20d05'
+   ,@cLine07 = 'QTY: %07d06 %07d07'
+   ,@cLine08 = '%20d08'
+   ,@cLine09 = '%20d09'
+   ,@cLine10 = '%20d10'
+   ,@cLine11 = '%20d11'
+   ,@cLine12 = '%20d12'
+   ,@cLine13 = '1=RCVPL 2=NEXT 3=DMG %01i14'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5"],"3":["6","7"],"4":["8","9","10","11","12"],"5":["13"]}'
+   ,@nFunc = 605
+

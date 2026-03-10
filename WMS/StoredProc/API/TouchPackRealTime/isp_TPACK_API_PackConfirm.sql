@@ -275,31 +275,33 @@ BEGIN
                GOTO SKIP_POST_EXT_UPD
             END
             ELSE
-            BEGIN
+            BEGIN     
                IF EXISTS ( SELECT 1 
                            FROM STORERCONFIG (NOLOCK)
                            WHERE StorerKey = @cStorerKey
                            AND ConfigKey = 'TPS-skipCartonize'
-                           AND sValue = '0'
+                           AND sValue = '1'
                )
+               BEGIN
+                  UPDATE PACKINFO WITH (ROWLOCK)
+                  SET CartonStatus = 'CLOSED'
+                  WHERE PickSlipNo = @cPickSlipNo
+
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @n_Continue = 3  
+                     SET @n_ErrNo = 11912    
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Update the PackInfo CartonStatus.'  
+                     GOTO EXIT_SP  
+                  END   
+               END
+               ELSE
                BEGIN
                   SET @n_Continue = 3  
                   SET @n_ErrNo = 11913    
-                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Close All Carton. Please manually close all the hold carton with carton type selection.'  
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Close All Carton. Please manually close all the InProgress/Hold carton with carton type selection.'  
                   GOTO EXIT_SP  
                END
-
-               UPDATE PACKINFO WITH (ROWLOCK)
-               SET CartonStatus = 'CLOSED'
-               WHERE PickSlipNo = @cPickSlipNo
-
-               IF @@ERROR <> 0  
-               BEGIN  
-                  SET @n_Continue = 3  
-                  SET @n_ErrNo = 11912    
-                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Update the PackInfo CartonStatus.'  
-                  GOTO EXIT_SP  
-               END 
             END
          END
       END

@@ -67,13 +67,9 @@ BEGIN
             BEGIN
 
                 -- Retrieve context
-                SELECT @cPickDetailKey = PickDetailKey
+                SELECT @cOrderKey = OrderKey
                 FROM dbo.TaskDetail WITH(NOLOCK)
                 WHERE TaskDetailKey = @cTaskDetailKey
-
-                SELECT @cOrderKey = OrderKey
-                FROM dbo.PickDetail WITH(NOLOCK)
-                WHERE PickDetailKey = @cPickDetailKey
 
                 -- Retrieve Order info
                 SELECT @cDocType = DocType, @cEcomSingleFlag = ECOM_SINGLE_Flag

@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.0                                                  */
+/* GitHub Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 09-Jan-2026 WLChooi  1.0   Initial Version                           */
+/* 25-Feb-2026 WLChooi  1.1   UWP-49450 Clear Userdefine01 value (WL01) */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc05] (    
@@ -55,6 +56,8 @@ BEGIN
          , @n_SkipNumber               INT = 0
          , @c_RCMConfigSP              NVARCHAR(60) = ''
          , @c_WVRCMConfigCode          NVARCHAR(30) = ''
+         , @n_SkipProcess              INT = 0
+         , @c_PickCondition_SQL        NVARCHAR(MAX) = ''
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -134,6 +137,7 @@ BEGIN
             Storerkey   NVARCHAR(15)
           , CaseID      NVARCHAR(20)
           , SKU         NVARCHAR(20)
+          , Qty         INT
           , PRIMARY KEY (Storerkey, CaseID, SKU)
       )
 
@@ -207,6 +211,9 @@ BEGIN
          SET @n_SkipNumber = ISNULL(@n_SkipNumber, 0) + 1
          SET @c_Message02 = 'SKIP' + CAST(@n_SkipNumber AS NVARCHAR(10))
       END
+
+      SET @c_PickCondition_SQL = 'AND PICKDETAIL.Storerkey = ' + QUOTENAME(TRIM(ISNULL(@c_Storerkey, '')), '''')
+                               + ' AND PICKDETAIL.SKU = ' + QUOTENAME(TRIM(ISNULL(@c_SKU, '')), '''')
    END
 
    --Get Storerconfig setup
@@ -397,7 +404,7 @@ BEGIN
       --Initialize Pickdetail work in progress staging table   
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
+                                  , @c_PickCondition_SQL = @c_PickCondition_SQL
                                   , @c_Action = 'I' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
                                   , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
                                   , @b_Success = @b_Success OUTPUT
@@ -410,8 +417,27 @@ BEGIN
       END
    END
 
-   -- Confirm Replenishment via RCMConfig
+   -- If nothing new allocated, skip replenishment and Wave release
    IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
+      IF NOT EXISTS ( SELECT 1
+                      FROM #PickDetail_WIP P
+                      WHERE P.Storerkey = @c_StorerKey
+                      AND   P.Sku = @c_SKU
+                      AND   P.[Status] < '4' 
+                      AND   EXISTS ( SELECT 1 
+                                     FROM #T_ShortOrders T
+                                     WHERE T.OrderKey = P.OrderKey )
+                      AND NOT EXISTS ( SELECT 1
+                                        FROM #T_PICKDETAIL_CURRENT T
+                                        WHERE T.Pickdetailkey = P.PickDetailKey ) )
+      BEGIN
+         SET @n_SkipProcess = 1
+      END
+   END
+
+   -- Confirm Replenishment via RCMConfig
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       SET @c_WVRCMConfigCode = 'CFMREPL'
 
@@ -430,25 +456,44 @@ BEGIN
       BEGIN
          IF EXISTS (SELECT 1 FROM sys.objects (NOLOCK) WHERE OBJECT_ID(@c_RCMConfigSP) = object_id AND [Type] = 'P')
          BEGIN
+            --WL01 S
             BEGIN TRY   
-               SET @b_Success = 1
-                
-               EXEC @c_RCMConfigSP 
-                  @c_Wavekey        = @c_Wavekey
-               ,  @b_Success        = @b_Success   OUTPUT
-               ,  @n_Err            = @n_Err       OUTPUT  
-               ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT   
-               ,  @c_Code           = @c_WVRCMConfigCode        
-            
+               UPDATE dbo.WAVE
+               SET UserDefine01 = ''
+                 , EditDate = GETDATE()
+                 , EditWho = SUSER_SNAME()
+                 , TrafficCop = NULL    
+               WHERE WaveKey = @c_WaveKey   
             END TRY
             BEGIN CATCH
                SET @n_Continue = 3
+               SET @c_ErrMsg = ERROR_MESSAGE()
             END CATCH    
-            
-            IF @n_err <> 0 
+
+            IF @n_Continue IN (1, 2)
             BEGIN
-               SET @n_Continue = 3
+               BEGIN TRY   
+                  SET @b_Success = 1
+                
+                  EXEC @c_RCMConfigSP 
+                     @c_Wavekey        = @c_Wavekey
+                  ,  @b_Success        = @b_Success   OUTPUT
+                  ,  @n_Err            = @n_Err       OUTPUT  
+                  ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT   
+                  ,  @c_Code           = @c_WVRCMConfigCode        
+            
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+               END CATCH    
+            
+               IF @n_err <> 0 
+               BEGIN
+                  SET @n_Continue = 3
+               END
             END
+            --WL01 E
          END
       END
    END
@@ -457,8 +502,8 @@ BEGIN
    -- Clear Caseid for shorted lines
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      INSERT INTO #T_CaseID (CaseID, Storerkey, SKU)
-      SELECT SP.CaseID, SP.Storerkey, SP.SKU
+      INSERT INTO #T_CaseID (CaseID, Storerkey, SKU, Qty)
+      SELECT SP.CaseID, SP.Storerkey, SP.SKU, SUM(SP.QtyMoved)
       FROM #PickDetail_WIP SP
       JOIN #T_ShortOrders T ON SP.OrderKey = T.OrderKey
       WHERE SP.WaveKey = @c_Wavekey
@@ -467,6 +512,7 @@ BEGIN
       AND SP.Storerkey  = @c_StorerKey
       AND SP.SKU = @c_SKU
       AND (SP.CaseID IS NOT NULL AND SP.CaseID <> '')
+      GROUP BY SP.CaseID, SP.Storerkey, SP.SKU
 
       INSERT INTO #T_Packdetail (PickSlipNo, CartonNo)
       SELECT DISTINCT PD.PickSlipNo, PD.CartonNo
@@ -484,7 +530,7 @@ BEGIN
       USING (
          SELECT PD.PickSlipNo
               , PD.CartonNo
-              , PackDetailQty = PD.Qty
+              , PackDetailQty = IIF(PD.Qty > 0, PD.Qty, PD.ExpQty)
               , CaseIDQty = T_CaseID.Qty
          FROM PACKDETAIL PD (NOLOCK)
          JOIN #T_Packdetail T_Pack ON PD.PickSlipNo = T_Pack.PickSlipNo AND PD.CartonNo = T_Pack.CartonNo
@@ -526,11 +572,11 @@ BEGIN
    END
 
    -- Update to PICKDETAIL first before redo Pre-cartonization
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
+                                  , @c_PickCondition_SQL = @c_PickCondition_SQL
                                   , @c_Action = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
                                   , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
                                   , @b_Success = @b_Success OUTPUT
@@ -544,7 +590,7 @@ BEGIN
    END
 
    --Wave Release - Redo Pre-cartonization
-   IF (@n_Continue = 1 OR @n_Continue = 2)           
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0           
    BEGIN
       BEGIN TRY
          EXEC dbo.isp_ReleaseWave_Wrapper @c_WaveKey = @c_WaveKey -- nvarchar(10)
@@ -560,7 +606,7 @@ BEGIN
    END
 
    -- Re-initialize #PICKDETAIL_WIP after redo Pre-cartonization
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       --Initialize Pickdetail work in progress staging table   
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
@@ -579,7 +625,7 @@ BEGIN
    END
 
    -- Update TaskDetail Message02 for reallocated tasks
-   IF (@n_Continue = 1 OR @n_Continue = 2)
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       -- Insert new taskdetailkeys into temp table after wave releasing
       INSERT INTO #TMP_TASK_NEW (Taskdetailkey)
@@ -607,7 +653,7 @@ BEGIN
    END
 
    --Update pickdetail_WIP work in progress staging table back to pickdetail 
-   IF (@n_Continue = 1 or @n_Continue = 2)
+   IF (@n_Continue = 1 or @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
@@ -689,6 +735,8 @@ BEGIN
             COMMIT TRAN
          END
       END
+      EXECUTE dbo.nsp_LogError @n_Err, @c_Errmsg, 'msp_ProcessShortPickReAlloc05'
+      RAISERROR (@c_Errmsg, 16, 1) WITH SETERROR
       RETURN
    END
    ELSE

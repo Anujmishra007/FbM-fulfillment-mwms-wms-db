@@ -3,14 +3,15 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/  
-/* Store procedure: rdt_839ExtScn07                                     */
-/*                                                                      */  
-/* Purpose:       For GM                                                */  
-/*                                                                      */  
-/* Date        Rev   Author     Purposes                                */
-/* 2026-02-02  1.0.0 JCH507     FCR-10041 Short Pick Screen             */
-/************************************************************************/  
+/******************************************************************************/  
+/* Store procedure: rdt_839ExtScn07                                           */
+/*                                                                            */  
+/* Purpose:       For GM                                                      */  
+/*                                                                            */  
+/* Date        Rev   Author     Purposes                                      */
+/* 2026-02-02  1.0.0 JCH507     FCR-10041 Short Pick Screen                   */
+/* 2026-02-24  1.0.1 JCH507     FCR-10041 Add locxsku hold and CC gen logic   */
+/******************************************************************************/  
   
 CREATE OR ALTER PROC  [RDT].[rdt_839ExtScn07] (
    @nMobile          INT,           
@@ -91,6 +92,13 @@ BEGIN
       @cSuggID                NVARCHAR( 20),
       @cDisableQTYField       NVARCHAR( 1),
       @cBarcode               NVARCHAR( MAX),
+
+      --V1.0.1
+      @bSuccess               INT,
+      @cAreaKey               NVARCHAR(10),
+      @cCCKey                 NVARCHAR(10),
+      @cTaskDetailKeyCC       NVARCHAR(10),
+      --v1.0.1 end
 
       @nTranCount             INT,
 
@@ -422,6 +430,133 @@ BEGIN
                      END
                   END --Confirm logic
 
+                  --V1.0.1 start hold and create CC when pressing short
+                  IF @cOption IN ('1')
+                  BEGIN
+                     IF @nDebugFlag = 1
+                        SELECT 'Hold inventory when choose short', @cLoc AS Loc, @cSKU AS SKU
+
+                     BEGIN TRY
+                        EXEC dbo.nspInventoryHoldWrapper    
+                           @c_lot = ''   
+                           ,@c_Loc = @cLOC
+                           ,@c_ID  = ''    
+                           ,@c_StorerKey    = @cStorerKey    
+                           ,@c_SKU          = @cSKU    
+                           ,@c_Lottable01   = ''    
+                           ,@c_Lottable02   = ''    
+                           ,@c_Lottable03   = ''    
+                           ,@dt_Lottable04  = NULL    
+                           ,@dt_Lottable05  = NULL    
+                           ,@c_Lottable06   = ''    
+                           ,@c_Lottable07   = ''    
+                           ,@c_Lottable08   = ''    
+                           ,@c_Lottable09   = ''    
+                           ,@c_Lottable10   = ''    
+                           ,@c_Lottable11   = ''    
+                           ,@c_Lottable12   = ''    
+                           ,@dt_Lottable13  = NULL    
+                           ,@dt_Lottable14  = NULL    
+                           ,@dt_Lottable15  = NULL    
+                           ,@c_Status       = 'LOCSKUHOLD'   
+                           ,@c_Hold         = '1'  
+                           ,@b_success      = @bSuccess OUTPUT    
+                           ,@n_Err          = @nErrNo OUTPUT    
+                           ,@c_Errmsg       = @cErrMsg OUTPUT    
+                           ,@c_Remark       = ''
+
+                        IF @bSuccess <> '1' OR @nErrNo <> 0
+                        BEGIN
+                           ROLLBACK TRAN rdt_839ExtScn07_6823
+                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                              COMMIT TRAN
+                           GOTO Scn_6823_Fail
+                        END
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 257905
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Hold inv fail
+
+                        ROLLBACK TRAN rdt_839ExtScn07_6823
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+                        GOTO Scn_6823_Fail
+                     END CATCH
+
+                     IF NOT EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskType = 'CC' AND FromLoc= @cLoc AND SKU = @cSKU AND Status IN ('0','3'))
+                     BEGIN
+                        IF @nDebugFlag = 1
+                           SELECT 'Create CC'
+
+                        EXECUTE nspg_getkey
+                           'CCKey'
+                           , 10
+                           , @cCCKey OUTPUT
+                           , @bSuccess OUTPUT
+                           , @nErrNo    --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
+                           , @cErrMsg OUTPUT  
+
+                        IF @bSuccess <> 1
+                        BEGIN
+                           SET @nErrNo = 257906
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen CCkey fail
+
+                           ROLLBACK TRAN rdt_839ExtScn07_6823
+                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                              COMMIT TRAN
+                           GOTO Scn_6823_Fail
+                        END
+
+                        EXECUTE dbo.nspg_getkey
+                           'TaskDetailKey'
+                           , 10
+                           , @cTaskDetailKeyCC OUTPUT
+                           , @bSuccess OUTPUT
+                           , @nErrNo     
+                           , @cErrMsg OUTPUT
+
+                        IF @bSuccess <> 1
+                        BEGIN
+                           SET @nErrNo = 257907
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen TaskKey fail
+
+                           ROLLBACK TRAN rdt_839ExtScn07_6823
+                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                              COMMIT TRAN
+                           GOTO Scn_6823_Fail
+                        END
+
+                        SELECT @cAreaKey = AreaKey
+                        FROM dbo.LOC WITH (NOLOCK)
+                        JOIN dbo.AreaDetail AD WITH (NOLOCK)
+                           ON LOC.PutawayZone = AD.PutawayZone
+                        WHERE Facility = @cFacility
+                           AND Loc = @cLoc
+                        
+                        BEGIN TRY
+                           INSERT INTO dbo.TaskDetail
+                           (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,Qty,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                           ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+                           ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+                           ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty)
+                           SELECT  @cTaskDetailKeyCC,'CC',@cStorerKey,@cSKU,'','',0,0,@cLOC,'','','',''
+                           ,'','','SKU','0','','1','1','','','1',''
+                           ,GetDATE(),GetDATE(),'rdt_839ExtUpd09',@cCCKey,'','','','','',''
+                           ,'','','','','',@cAreaKey, '', 0
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 257908
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins task fail
+
+                           ROLLBACK TRAN rdt_839ExtScn07_6823
+                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                              COMMIT TRAN
+                           GOTO Scn_6823_Fail
+                        END CATCH
+                     END -- Task not exists
+                  END
+                  --V1.0.1 end
+
                   IF @cExtendedUpdateSP <> ''
                   BEGIN
                      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
@@ -563,7 +698,7 @@ BEGIN
                      END
 
                      SET @cRealloPickSlipNo = @cPickSlipNo
-                     SET @CRealloPickZone = @cPickZone
+                     SET @cRealloPickZone = @cPickZone
                      
                      EXECUTE [RDT].[rdt_PickReallo05] 
                         @nMobile = @nMobile
@@ -610,6 +745,133 @@ BEGIN
                      -- loc found, prompt message
                      IF ISNULL(@cRealloLoc, '') <> ''
                      BEGIN
+                        IF @nDebugFlag = 1
+                           SELECT 'RealloLoc found', @cRealloLOC AS RealloLoc
+
+                        --V1.0.1 start hold and create CC when re-allo success
+                        IF @nDebugFlag = 1
+                           SELECT 'Hold inventory when reallo success', @cLoc AS Loc, @cSKU AS SKU
+
+                        BEGIN TRY
+                           EXEC dbo.nspInventoryHoldWrapper    
+                              @c_lot = ''   
+                              ,@c_Loc = @cLOC
+                              ,@c_ID  = ''    
+                              ,@c_StorerKey    = @cStorerKey    
+                              ,@c_SKU          = @cSKU    
+                              ,@c_Lottable01   = ''    
+                              ,@c_Lottable02   = ''    
+                              ,@c_Lottable03   = ''    
+                              ,@dt_Lottable04  = NULL    
+                              ,@dt_Lottable05  = NULL    
+                              ,@c_Lottable06   = ''    
+                              ,@c_Lottable07   = ''    
+                              ,@c_Lottable08   = ''    
+                              ,@c_Lottable09   = ''    
+                              ,@c_Lottable10   = ''    
+                              ,@c_Lottable11   = ''    
+                              ,@c_Lottable12   = ''    
+                              ,@dt_Lottable13  = NULL    
+                              ,@dt_Lottable14  = NULL    
+                              ,@dt_Lottable15  = NULL    
+                              ,@c_Status       = 'LOCSKUHOLD'   
+                              ,@c_Hold         = '1'  
+                              ,@b_success      = @bSuccess OUTPUT    
+                              ,@n_Err          = @nErrNo OUTPUT    
+                              ,@c_Errmsg       = @cErrMsg OUTPUT    
+                              ,@c_Remark       = ''
+
+                           IF @bSuccess <> '1' OR @nErrNo <> 0
+                           BEGIN
+                              ROLLBACK TRAN rdt_839ExtScn07_6823
+                              WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                                 COMMIT TRAN
+                              GOTO Scn_6823_Fail
+                           END
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 257905
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Hold inv fail
+
+                           ROLLBACK TRAN rdt_839ExtScn07_6823
+                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                              COMMIT TRAN
+                           GOTO Scn_6823_Fail
+                        END CATCH
+
+                        IF NOT EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskType = 'CC' AND FromLoc= @cLoc AND SKU = @cSKU AND Status IN ('0','3'))
+                        BEGIN
+                           IF @nDebugFlag = 1
+                              SELECT 'Create CC'
+
+                           EXECUTE nspg_getkey
+                              'CCKey'
+                              , 10
+                              , @cCCKey OUTPUT
+                              , @bSuccess OUTPUT
+                              , @nErrNo    --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
+                              , @cErrMsg OUTPUT  
+
+                           IF @bSuccess <> 1
+                           BEGIN
+                              SET @nErrNo = 257906
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen CCkey fail
+
+                              ROLLBACK TRAN rdt_839ExtScn07_6823
+                              WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                                 COMMIT TRAN
+                              GOTO Scn_6823_Fail
+                           END
+
+                           EXECUTE dbo.nspg_getkey
+                              'TaskDetailKey'
+                              , 10
+                              , @cTaskDetailKeyCC OUTPUT
+                              , @bSuccess OUTPUT
+                              , @nErrNo     
+                              , @cErrMsg OUTPUT
+
+                           IF @bSuccess <> 1
+                           BEGIN
+                              SET @nErrNo = 257907
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen TaskKey fail
+
+                              ROLLBACK TRAN rdt_839ExtScn07_6823
+                              WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                                 COMMIT TRAN
+                              GOTO Scn_6823_Fail
+                           END
+
+                           SELECT @cAreaKey = AreaKey
+                           FROM dbo.LOC WITH (NOLOCK)
+                           JOIN dbo.AreaDetail AD WITH (NOLOCK)
+                              ON LOC.PutawayZone = AD.PutawayZone
+                           WHERE Facility = @cFacility
+                              AND Loc = @cLoc
+                           
+                           BEGIN TRY
+                              INSERT INTO dbo.TaskDetail
+                              (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,Qty,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                              ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+                              ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+                              ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty)
+                              SELECT  @cTaskDetailKeyCC,'CC',@cStorerKey,@cSKU,'','',0,0,@cLOC,'','','',''
+                              ,'','','SKU','0','','1','1','','','1',''
+                              ,GetDATE(),GetDATE(),'rdt_839ExtUpd09',@cCCKey,'','','','','',''
+                              ,'','','','','',@cAreaKey, '', 0
+                           END TRY
+                           BEGIN CATCH
+                              SET @nErrNo = 257909
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins task fail
+
+                              ROLLBACK TRAN rdt_839ExtScn07_6823
+                              WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                                 COMMIT TRAN
+                              GOTO Scn_6823_Fail
+                           END CATCH
+                        END -- Task not exists
+                        --V1.0.1 end
+
                         SET @cMsg01 = 'Alternate location '
                         SET @cMsg02 = 'found and is added '
                         SET @cMsg03 = 'to current pickslip'
@@ -631,6 +893,7 @@ BEGIN
                      ELSE -- Errno = -1
                      --No loc found
                      BEGIN
+                        --IF no realloc found, no need to hold. User will choose 1-short 
                         SET @cMsg01 = 'No alternate'
                         SET @cMsg02 = 'location found'
                         SET @cMsg03 = ''
@@ -702,6 +965,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON rdt.rdt_839ExtScn07 TO NSQL
+GRANT EXECUTE ON [RDT].[rdt_839ExtScn07] TO NSQL
 GO
  

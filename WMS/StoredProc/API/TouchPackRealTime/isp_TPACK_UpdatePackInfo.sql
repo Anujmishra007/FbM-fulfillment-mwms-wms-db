@@ -23,6 +23,8 @@ GO
 /* 2026-01-23   3.0  GCH225     UWP-47567: Handle Open Carton to change WOD Status  */
 /* 2026-02-03   3.1  JWF011     UWP-48096: Add AuditLog for Carton Type change      */
 /* 2026-02-04   3.2  JWF011     UWP-48244: Add Recartonization check rule           */
+/* 2026-02-13   3.3  GCH225     UWP-48895: Bug fix AuditLog Carton Type Change      */
+/* 2026-02-24   3.4  GCH225     UWP-49353: Fix for Hold status for specific cases   */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_UpdatePackInfo] (
@@ -121,7 +123,7 @@ BEGIN
    END
 
    -- Recartonization Check Rule
-   IF @cCartonStatus IN ('CLOSED', 'HOLD')
+   IF @cCartonStatus IN ('CLOSED')
    AND EXISTS( SELECT 1 
                FROM STORERCONFIG (NOLOCK)
                WHERE Storerkey = @cStorerKey
@@ -472,39 +474,41 @@ BEGIN
       END
    END
 
-   -- Add Audit Log for Carton Type change
    IF @cCartonStatus = 'CLOSED'
-      AND EXISTS (SELECT 1 
-                  FROM PACKINFO (NOLOCK)
-                  WHERE PickSlipNo = @cPickSlipNo
-                  AND CartonNo = @nCartonNo
-                  AND CartonType <> @cCartonType
-                  AND ISNULL(CartonType, '') <> ''
-                  )
    BEGIN
-      INSERT INTO PackInfo_AuditLog (
-           ActionType
-         , PickSlipNo
-         , CartonNo
-         , [Weight]
-         , [Cube]
-         , Qty
-         , AddDate
-         , AddWho
-         , EditDate
-         , EditWho
-         , TrafficCop
-         , ArchiveCop
-         , CartonType
-         , RefNo
-         , [Length]
-         , [Width]
-         , [Height]
-         , UCCNo
-         , CartonGID
-         , CartonStatus
-         , TrackingNo
-      )  SELECT 'UPDATE'
+      -- Add Audit Log for Carton Type change
+      SELECT 1 
+      FROM PACKINFO (NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+      AND CartonNo = @nCartonNo
+      AND CartonType <> @cCartonType
+      
+      IF @@ROWCOUNT = 1
+      BEGIN
+         INSERT INTO PackInfo_AuditLog (
+                 ActionType
+               , PickSlipNo
+               , CartonNo
+               , [Weight]
+               , [Cube]
+               , Qty
+               , AddDate
+               , AddWho
+               , EditDate
+               , EditWho
+               , TrafficCop
+               , ArchiveCop
+               , CartonType
+               , RefNo
+               , [Length]
+               , [Width]
+               , [Height]
+               , UCCNo
+               , CartonGID
+               , CartonStatus
+               , TrackingNo
+         )  
+         SELECT  'UPDATE'
                , PickSlipNo
                , CartonNo
                , [Weight]
@@ -528,14 +532,23 @@ BEGIN
          FROM PACKINFO (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_ErrNo = 11559
+            SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Insert Audit Log for Carton Type change.'
+            GOTO EXIT_SP
+         END
+      END
+      -- Add Audit Log for Carton Type change (END)
    END
-   -- Add Audit Log for Carton Type change (END)
 
    UPDATE PACKINFO WITH (ROWLOCK)
    SET  EditWho = @c_UserID
       , EditDate = GETDATE()
       , CartonStatus = @cCartonStatus
-      , CartonType = @cCartonType
+      , CartonType = IIF(@cCartonType = '', CartonType, @cCartonType)
       , [Weight] = IIF(@bWeightByCarton = 1
                      , (@fTtlWeight + @nCtnWeight)
                      , IIF(@fTtlWeight = 0

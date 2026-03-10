@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.0                                                          */    
+/* Version: 1.1                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -92,10 +92,9 @@ BEGIN
          SET pw.Taskdetailkey = ''
       FROM #PICKDETAIL_WIP AS pw
 
-      -- Get RPF FinalLoc to Pickdetail WIP ToLoc for Validation, Pre-Cartonization & Picking
-      -- UOM = 2, 1 order = 1 UCCNo to packstation
-      -- UOM = 6, RPF To DP,  Pick from DP
-      -- UOM = 7, RPF to DPP, Pick from DPP
+      -- Stamp RefTaskKey = Taskdetailkey of RPF/ASTPA task by DropID
+      -- Set CPK Task FromLoc from Taskdetail
+      -- Set CPK Task Status=H
       UPDATE pw
          SET pw.ToLoc = CASE WHEN pw.UOM = '2' THEN pw.Loc
                              WHEN td_rpf.TaskDetailKey IS NOT NULL THEN td_rpf.FinalLoc

@@ -12,7 +12,7 @@ GO
 /* 02/12/2025   PPA374    1.0   Not allowing to unallocate when consolidated */
 /* 15/01/2026   SKE140    2.0   Updating tasks with status 9 to 0 to delete  */
 /* 13/02/2026   PPA374    2.1   Adding child logic check to avoid deleting   */
-                                parent tasks that got no direct pick detail  */
+/*                              parent tasks that got no direct pick detail  */
 /*****************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_UnAllocate_ExtVal_JCB]

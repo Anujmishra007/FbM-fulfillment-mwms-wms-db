@@ -102,6 +102,7 @@ GO
 /* 2025-07-23 7.1.0  Jackc    FCR-5413 Mettel customized 855                   */
 /* 2025-08-27 7.2.0  Jackc    FCR-7348 Rework 4159 single unit order           */
 /* 2025-09-25 7.2.1  Jackc    FCR-7348 Show UPC on St3 when Single unit order  */
+/* 2026-02-28 7.3.0  NickT    UWP-49590 Go to quit printing Printing PackList  */
 /*******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -1692,6 +1693,8 @@ BEGIN
 
                IF @cExtendedScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
 	               GOTO Step_99
+
+               GOTO Quit
             END
          END
       END

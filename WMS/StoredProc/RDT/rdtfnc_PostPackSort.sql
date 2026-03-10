@@ -1164,12 +1164,6 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
-         -- Clear output fields to prevent ghost data
-         SET @cOutField01 = ''
-         SET @cOutField02 = ''
-         SET @cOutField03 = ''
-         SET @cOutField04 = ''
-
          DECLARE @nStepBak INT,@nScnBak INT
          SELECT @nStepBak = @nStep, @nScnBak = @nScn
 

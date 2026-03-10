@@ -17,6 +17,8 @@ GO
 /* 2026-01-20   4.0  GCH225     UWP-47142: Bug fix the WOD.Status Update            */
 /* 2026-01-21   4.1  GCH225     UWP-45700: Update WoWkOrdUDef1 to SKU               */
 /* 2026-01-23   5.0  GCH225     UWP-47567: Handle Open Carton to change WOD Status  */
+/* 2026-02-26   5.1  GCH225     UWP-49355: Fix Update ExpQty to Qty in PackDetail   */
+/* 2026-03-04   5.2  GCH225     UWP-49845: Fix Update ExpQty to Qty in PackDetail   */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtCtnPostUpd_Std] (
@@ -430,13 +432,18 @@ BEGIN
       END
       CLOSE CUR_PACKDET
       DEALLOCATE CUR_PACKDET
-
+      
       --Handle for Pre-Cartonization
       IF EXISTS ( SELECT 1 
                   FROM PACKDETAIL (NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo               
                   AND ExpQty > 0
-      )
+      ) AND (SELECT SUM(Qty)
+             FROM PACKDETAIL (NOLOCK) 
+             WHERE PickSlipNo = @cPickSlipNo
+             AND CartonNo = @nCartonNo
+             AND (@cDropID = '' OR DropID = @cDropID)
+            ) > 0
       BEGIN
          UPDATE PACKDETAIL WITH(ROWLOCK)
          SET ExpQty = Qty
@@ -444,7 +451,6 @@ BEGIN
            , EditWho = @c_UserID
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
-         AND ExpQty > 0
       END
    END
 
