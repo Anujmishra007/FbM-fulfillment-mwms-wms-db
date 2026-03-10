@@ -20,6 +20,7 @@ GO
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 10-Mar-2026 WLChooi  1.1   FCR-11471 Fix UOM 2 Pickdetail status(WL12)*/
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_DATA]        
    @c_Wavekey     NVARCHAR(10)
@@ -49,7 +50,8 @@ BEGIN
          , @c_SQLWhere           NVARCHAR(MAX) = ''                                    
   
    --@n_Err Start 62010
-   SET @c_PickCondition_SQL = 'PICKDETAIL.Status = ''0'' AND PICKDETAIL.Qty > 0'
+   --WL01
+   SET @c_PickCondition_SQL = '((PICKDETAIL.UOM >= ''6'' AND PICKDETAIL.Status = ''0'' AND PICKDETAIL.Qty > 0) OR (PICKDETAIL.UOM = ''2'' AND PICKDETAIL.Status < ''9'' AND PICKDETAIL.Qty > 0))'
 
    IF @n_debug = 5
    BEGIN
