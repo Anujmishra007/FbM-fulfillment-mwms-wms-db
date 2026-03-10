@@ -3,7 +3,7 @@ GO
 SET ANSI_NULLS OFF
 GO
 /************************************************************************/
-/* Store Procedure:  nspPR_CH03                                         */
+/* Store Procedure:  mspPR_DEU01                                         */
 /* Creation Date: 02/03/26                                              */
 /* Copyright: MAERSK                                                       */
 /* Written by:  Suryakanta Sahoo                                        */
@@ -210,62 +210,62 @@ EXEC ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR  ' +
             ' ORDER BY lotATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE05 ')
 
          IF @b_debug = 1
-BEGIN
-SELECT 'AND LOC.FACILITY = N''' + @c_facility + '''' + @c_LimitString1 + '"'
-END
-END
-ELSE
-BEGIN
+         BEGIN
+            SELECT 'AND LOC.FACILITY = N''' + @c_facility + '''' + @c_LimitString1 + '"'
+         END
+      END
+      ELSE
+      BEGIN
          IF @b_debug = 1
-SELECT 'Manual = Y and Lot is NULL'
+            SELECT 'Manual = Y and Lot is NULL'
 
-SELECT @c_LimitString = ''
+         SELECT @c_LimitString = ''
 
-           IF ISNULL(RTRIM(@c_lottable01), '') <> ''
-SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND Lottable01= N''' +
-                        dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable01)) + ''''
+         IF ISNULL(RTRIM(@c_lottable01), '') <> ''
+            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND Lottable01= N''' +
+               dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable01)) + ''''
 
-           IF ISNULL(RTRIM(@c_lottable02), '') <> ''
-SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable02= N''' +
-                        dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable02)) + ''''
+         IF ISNULL(RTRIM(@c_lottable02), '') <> ''
+            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable02= N''' +
+               dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable02)) + ''''
 
-           IF ISNULL(RTRIM(@c_lottable03), '') <> ''
-SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable03= N''' +
-                        dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable03)) + ''''
+         IF ISNULL(RTRIM(@c_lottable03), '') <> ''
+            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable03= N''' +
+               dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable03)) + ''''
 
-           IF ISNULL(RTRIM(@d_lottable04), '') <> '' AND
+         IF ISNULL(RTRIM(@d_lottable04), '') <> '' AND
             ISNULL(RTRIM(@d_lottable04), '') <> '1900-01-01'
-SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 = N''' +
-                        dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(CHAR(20), @d_lottable04))) + ''''
+            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 = N''' +
+               dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(CHAR(20), @d_lottable04))) + ''''
 
-           IF ISNULL(RTRIM(@d_lottable05), '') <> '' AND
+         IF ISNULL(RTRIM(@d_lottable05), '') <> '' AND
             ISNULL(RTRIM(@d_lottable05), '') <> '1900-01-01'
-SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable05= N''' +
-                        dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(CHAR(20), @d_lottable05))) + ''''
+            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable05= N''' +
+               dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(CHAR(20), @d_lottable05))) + ''''
 
-           IF LEFT(@c_lot, 1) = '*'
-BEGIN
-SELECT @n_shelflife = CONVERT(INT, SUBSTRING(@c_lot, 2, 9))
+         IF LEFT(@c_lot, 1) = '*'
+         BEGIN
+            SELECT @n_shelflife = CONVERT(INT, SUBSTRING(@c_lot, 2, 9))
 
-           IF @n_shelflife < 13
-BEGIN
-SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 > N''' +
-                        CONVERT(CHAR(15), DATEADD(MONTH, @n_shelflife, GETDATE()), 106) + ''''
-END
-ELSE
-BEGIN
-SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 > N''' +
-                        CONVERT(CHAR(15), DATEADD(DAY, @n_shelflife, GETDATE()), 106) + ''''
-END
-END
-
-         IF @b_debug = 1
-BEGIN
-SELECT '@c_limitstring', @c_limitstring
-END
+            IF @n_shelflife < 13
+            BEGIN
+               SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 > N''' +
+                  CONVERT(CHAR(15), DATEADD(MONTH, @n_shelflife, GETDATE()), 106) + ''''
+            END
+            ELSE
+            BEGIN
+               SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 > N''' +
+                  CONVERT(CHAR(15), DATEADD(DAY, @n_shelflife, GETDATE()), 106) + ''''
+            END
+         END
 
          IF @b_debug = 1
-BEGIN
+         BEGIN
+            SELECT '@c_limitstring', @c_limitstring
+         END
+
+         IF @b_debug = 1
+         BEGIN
             PRINT ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
                ' SELECT MIN(LOTXLOCXID.STORERKEY) , MIN(LOTXLOCXID.SKU), LOT.LOT, ' +
                ' QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated) ) ' +
@@ -293,12 +293,12 @@ BEGIN
                ' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked)- MIN(LOT.QtyPreAllocated) ) >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
                ' AND ((SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreAllocated)) % ' + CAST(@n_uombase AS NVARCHAR) + ') = 0 ' +
                ' ORDER BY SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ')
-END
+         END
 
-SELECT @c_StorerKey = dbo.fnc_RTrim(@c_StorerKey)
-SELECT @c_Sku = dbo.fnc_RTrim(@c_SKU)
+         SELECT @c_StorerKey = dbo.fnc_RTrim(@c_StorerKey)
+         SELECT @c_Sku = dbo.fnc_RTrim(@c_SKU)
 
-    EXEC ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
+         EXEC ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
             ' SELECT MIN(LOTXLOCXID.STORERKEY) , MIN(LOTXLOCXID.SKU), LOT.LOT, ' +
             ' QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated) ) ' +
             ' FROM LOT (NOLOCK) ' +
@@ -325,8 +325,8 @@ SELECT @c_Sku = dbo.fnc_RTrim(@c_SKU)
             ' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked)- MIN(LOT.QtyPreAllocated) )>= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
             ' AND ((SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreAllocated)) % ' + CAST(@n_uombase AS NVARCHAR) + ') = 0 ' +
             ' ORDER BY SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ')
-END
-END
+      END
+   END
 END
 GO
 GRANT EXECUTE ON mspPR_DEU01 TO nSQL
