@@ -5,16 +5,15 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_1868UnpickConfirm                               */
+/* Store procedure: rdt_1868UnpickCfm02                                 */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Date         Rev   Author      Purposes                              */
-/* 2024-11-05   1.0   TLE109      FCR-917 Serial Unpack and Unpick      */
-/* 2026-02-20   2.0   NYE018      UWP-48932 corrected the ErrNo & ErrMsg*/
+/* 2026-02-20   2.0   NYE018      UWP-48932 created for PAGE IND        */
 /************************************************************************/
 
 
-CREATE OR ALTER PROC rdt.rdt_1868UnpickConfirm (
+CREATE OR ALTER PROC rdt.rdt_1868UnpickCfm02 (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -41,61 +40,9 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE 
-   @cUnPickConfirmSP NVARCHAR( 20),
-   @nTranCount       INT,
-   @cSQL             NVARCHAR( MAX),
-   @cSQLParam        NVARCHAR( MAX) 
-
-   
+   @nTranCount       INT   
 
    SET @nTranCount = @@TRANCOUNT
-
-   SET @cUnPickConfirmSP = rdt.RDTGetConfig( @nFunc, 'UnPickConfirmSP', @cStorerKey)
-   IF @cUnPickConfirmSP = '0'
-   BEGIN
-      SET @cUnPickConfirmSP = ''
-   END
--------------------------------------------Customer---------------------------------------------
-
-   IF @cUnPickConfirmSP <> '' AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cUnPickConfirmSP AND type = 'P')
-   BEGIN
-      SET @cSQL = 'EXEC rdt.' + RTRIM( @cUnPickConfirmSP) +
-      ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-      ' @cSerialNo, @cPickSlipNo, @cOrderKey, @cPickDetailKey, @cSKU, @cToLOC, @cLoadKey, ' +
-      ' @nErrNo OUTPUT, @cErrMsg OUTPUT ' 
-
-      SET @cSQLParam = 
-      ' @nMobile        INT,           ' +
-      ' @nFunc          INT,           ' +
-      ' @cLangCode      NVARCHAR( 3),  ' +
-      ' @nStep          INT,           ' +
-      ' @nInputKey      INT,           ' +
-      ' @cFacility      NVARCHAR( 5),  ' +
-      ' @cStorerKey     NVARCHAR( 15), ' +
-      ' @cSerialNo      NVARCHAR( 100),' +
-      ' @cPickSlipNo    NVARCHAR( 20), ' + 
-      ' @cOrderKey      NVARCHAR( 20), ' +
-      ' @cPickDetailKey NVARCHAR( 20), ' +
-      ' @cSKU           NVARCHAR( 40), ' +
-      ' @cToLOC         NVARCHAR( 20), ' +
-      ' @cLoadKey       NVARCHAR( 20), ' +
-      ' @nErrNo         INT  OUTPUT,   ' +
-      ' @cErrMsg        NVARCHAR( 20)  OUTPUT  ' 
-
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-         @cSerialNo, @cPickslipNo, @cOrderKey, @cPickDetailKey, @cSKU, @cToLOC, @cLoadKey,
-         @nErrNo OUTPUT, @cErrMsg OUTPUT
-      IF @nErrNo <> 0
-      BEGIN
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-      END
-      GOTO Quit 
-   END
-
-
-
--------------------------------------------Standard---------------------------------------------
 
    DECLARE
    @nCartonNo      INT,
@@ -148,8 +95,8 @@ BEGIN
 
    IF @cFromLOC = ''
    BEGIN
-      SET @nErrNo = 228266
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --228266^From LOC Not Exists
+      SET @nErrNo = 259551
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --259551^From LOC Not Exists
       GOTO RollBackTran
    END
 
@@ -197,7 +144,7 @@ BEGIN
       @cLangCode   = @cLangCode,    
       @nErrNo      = @nErrNo  OUTPUT,    
       @cErrMsg     = @cErrMsg OUTPUT,
-      @cSourceType = 'rdt_1868UnpickConfirm',
+      @cSourceType = 'rdt_1868UnpickCfm02',
       @cStorerKey  = @cStorerKey,
       @cFacility   = @cFacility,    
       @cFromLOC    = @cFromLOC,    
@@ -215,21 +162,21 @@ BEGIN
    END
 
    -- OrderDetail's status should be 0,5 no need update to 1,2,3 
-   -- UPDATE dbo.OrderDetail WITH (ROWLOCK)
-   -- SET [Status] = CASE WHEN ( QtyAllocated > 0) AND ( QtyPicked > 0)  AND ( QtyAllocated <> QtyPicked) THEN '3' 
-   --    WHEN (OpenQty +FreeGoodQty) = (QtyAllocated+QtyPicked+ShippedQty) THEN '2' 
-   --    WHEN ((OpenQty + FreeGoodQty) <> QtyAllocated + QtyPicked) AND ( QtyAllocated + QtyPicked) > 0  AND ( ShippedQty = 0) THEN '1' 
-   --    WHEN ( QtyAllocated + ShippedQty + QtyPicked = 0) THEN '0' END, 
-   -- EditWho = SUSER_SNAME(),
-   -- EditDate = GETDATE(),
-   -- TrafficCop = NULL
-   -- WHERE OrderKey = @cOrderKey AND   OrderLineNumber = @cOrderLineNumber
-   -- SET @nErrNo = @@ERROR
-   -- IF @nErrNo <> 0
-   -- BEGIN
-   --    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-   --    GOTO RollBackTran
-   -- END
+   UPDATE dbo.OrderDetail WITH (ROWLOCK)
+   SET [Status] = CASE WHEN ( QtyAllocated > 0) AND ( QtyPicked > 0)  AND ( QtyAllocated <> QtyPicked) THEN '3' 
+      WHEN (OpenQty +FreeGoodQty) = (QtyAllocated+QtyPicked+ShippedQty) THEN '2' 
+      WHEN ((OpenQty + FreeGoodQty) <> QtyAllocated + QtyPicked) AND ( QtyAllocated + QtyPicked) > 0  AND ( ShippedQty = 0) THEN '1' 
+      WHEN ( QtyAllocated + ShippedQty + QtyPicked = 0) THEN '0' END, 
+   EditWho = SUSER_SNAME(),
+   EditDate = GETDATE(),
+   TrafficCop = NULL
+   WHERE OrderKey = @cOrderKey AND   OrderLineNumber = @cOrderLineNumber
+   SET @nErrNo = @@ERROR
+   IF @nErrNo <> 0
+   BEGIN
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+      GOTO RollBackTran
+   END
 
    COMMIT TRAN tran_SerialUnpick
    
@@ -250,5 +197,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_1868UnpickConfirm TO NSQL
+GRANT EXECUTE ON RDT.rdt_1868UnpickCfm02 TO NSQL
 GO
