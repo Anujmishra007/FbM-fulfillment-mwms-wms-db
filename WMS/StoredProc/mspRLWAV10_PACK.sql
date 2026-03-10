@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.3                                                          */    
+/* Version: 2.4                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -39,6 +39,7 @@ GO
 /*                            after carton close (WL10)                  */
 /* 09-Mar-2026 WLChooi  2.2   FCR-11459 Fix API Infinite Loop (WL11)     */
 /* 10-Mar-2026 WLChooi  2.3   FCR-11471 Fix CartonGroup NULL issue (WL12)*/
+/* 10-Mar-2026 WLChooi  2.4   FCR-11471 Fix VAS Packinfo Qty (WL13)      */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -2647,6 +2648,8 @@ BEGIN
                      ,[Cube]     = cz.[Cube]
                      ,Qty        = CASE WHEN cd.[Audit] = 1
                                         THEN 0
+                                        WHEN cd.IsVas = 1 AND cd.UOM >= '6'   --WL13
+                                        THEN 0                                --WL13
                                         ELSE ISNULL(SUM(cd.Qty),0) END
                      ,CartonType = cd.CartonType
                      ,[Length]   = cz.CartonLength
