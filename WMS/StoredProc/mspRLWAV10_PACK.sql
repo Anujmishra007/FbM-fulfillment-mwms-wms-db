@@ -1328,7 +1328,7 @@ BEGIN
             IF @b_NewCarton = 0 AND @b_IsVAS = 1 
             AND ((@c_Sku_P = @c_Sku) OR 
                  (@c_VAS = 'PA' AND @c_Sku_P <> @c_Sku) OR
-                 (@c_VAS = 'PU' AND @n_VASQty_PI > 0)
+                 (@n_VASQty_PI > 0)
                 )   --WL15
             BEGIN
                SET @b_NewCarton = 1
