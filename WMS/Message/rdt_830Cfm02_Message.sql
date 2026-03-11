@@ -17,3 +17,5 @@ execute rdt.rdtAddMsg 260812, 10, '260812UPDPackDtlFail', 'us_english', 830
 execute rdt.rdtAddMsg 260813, 10, '260813INSPackInfFail', 'us_english', 830
 execute rdt.rdtAddMsg 260814, 10, '260814UPDPackInfFail', 'us_english', 830
 execute rdt.rdtAddMsg 260815, 10, '260815UPD PKDtl Fail', 'us_english', 830
+
+SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 260801 AND 260850
