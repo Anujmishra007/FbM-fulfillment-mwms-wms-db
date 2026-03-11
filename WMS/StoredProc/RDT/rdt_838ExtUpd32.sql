@@ -51,18 +51,26 @@ BEGIN
     SET ANSI_NULLS OFF
     SET CONCAT_NULL_YIELDS_NULL OFF
 
+    DECLARE @cUsername NVARCHAR(30) = SUSER_SNAME()
+    DECLARE @nLabelLine INT = 0
+
     IF @nFunc = 838
     BEGIN
         -- Step 8: Copy UCC to PackDetail.RefNo
-        IF @nStep = 8 AND @cUCCNo <> '' AND @nCartonNo > 0
+        IF @nStep = 8 
         BEGIN
-            UPDATE dbo.PACKDETAIL
-            SET RefNo = @cUCCNo,
-                EditDate = GETDATE(),
-                EditWho = 'RDT'
-            WHERE PickSlipNo = @cPickSlipNo
-            AND CartonNo = @nCartonNo
-            AND StorerKey = @cStorerKey
+           IF @cUCCNo <> '' AND @nCartonNo > 0
+           BEGIN
+               UPDATE dbo.PACKDETAIL WITH (ROWLOCK)
+               SET RefNo = @cUCCNo,
+                   EditDate = GETDATE(),
+                   EditWho = @cUsername
+               WHERE PickSlipNo = @cPickSlipNo
+                    AND CartonNo = @nCartonNo
+                    AND StorerKey = @cStorerKey
+                    AND LabelNo = @cLabelNo
+                    AND LabelLine = @nLabelLine
+           END
         END
     END
 

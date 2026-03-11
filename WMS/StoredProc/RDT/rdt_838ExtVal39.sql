@@ -56,73 +56,69 @@ BEGIN
    IF @nFunc = 838
    BEGIN
       -- Step 1: Picking Complete Validation (Configurable)
-      IF @nStep = 1 AND @cPickSlipNo <> ''
+      IF @nStep = 1 
       BEGIN
-         SET @cPickCompleteValidation = rdt.RDTGetConfig(@nFunc, 'PickCompleteValidation', @cStorerKey)
-
-         IF @cPickCompleteValidation = '1'
+         IF @cPickSlipNo <> ''
          BEGIN
-            IF EXISTS (SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
-                       WHERE PickSlipNo = @cPickSlipNo
-                       AND Status NOT IN ('4','5'))
+            SET @cPickCompleteValidation = rdt.RDTGetConfig(@nFunc, 'PickCompleteValidation', @cStorerKey)
+
+            IF @cPickCompleteValidation = '1'
             BEGIN
-               SET @nErrNo = 259201
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-               GOTO Quit
+               IF EXISTS (SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
+                          WHERE PickSlipNo = @cPickSlipNo
+                          AND Status NOT IN ('4','5'))
+               BEGIN
+                  SET @nErrNo = 259201
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  GOTO Quit
+               END
             END
          END
       END
 
       -- Step 4: Option 1 RefNo Mandatory
-      IF (@nStep = 4 AND @cOption = '1' AND @nInputKey = 1)
+      IF @nStep = 4 
       BEGIN
-         IF ISNULL(@cRefNo, '') = ''
+         IF @cOption = '1' 
          BEGIN
-            SET @nErrNo = 259203
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-            GOTO Quit
+            IF @nInputKey = 1
+            BEGIN
+               IF ISNULL(@cRefNo, '') = ''
+               BEGIN
+                  SET @nErrNo = 259203
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  GOTO Quit
+               END
+            END
          END
       END
 
       -- Step 8: UCC UOM = 2 Validation
-      IF (@nStep = 8 AND @cUCCNo <> '')
+      IF @nStep = 8 
       BEGIN
-      
-         -- Retrieve actual valus from DB for debugging and validation
-         DECLARE @cCheckUOM NVARCHAR(20) = NULL
-         DECLARE @cCheckStatus NVARCHAR(10) = NULL
-         DECLARE @cCheckDropID NVARCHAR(50) = NULL
-
-         SELECT TOP 1 
-            @cCheckUOM = UOM, 
-            @cCheckStatus = Status,
-            @cCheckDropID = DropID
-         FROM dbo.PICKDETAIL WITH (NOLOCK)
-         WHERE DropID = @cUCCNo
-           AND PickSlipNo = @cPickSlipNo
-           AND StorerKey = @cStorerKey
-           
-         -- Check: Must exist, Match UOM=2, Match Status=5
-         IF (@cCheckDropID IS NULL OR @cCheckUOM <> '2' OR @cCheckStatus <> '5')
+         IF @cUCCNo <> ''
          BEGIN
-            SET @nErrNo = 259202
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Invalid PickDetail UOM
-            GOTO Quit
-         END
+            -- Retrieve actual valus from DB for validation
+            DECLARE @cCheckUOM NVARCHAR(20) = NULL
+            DECLARE @cCheckStatus NVARCHAR(10) = NULL
+            DECLARE @cCheckDropID NVARCHAR(50) = NULL
 
-         -- Check if this UCC exists as a case pick (UOM = 2) in PICKDETAIL
-         IF NOT EXISTS (
-            SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
+            SELECT TOP 1 
+               @cCheckUOM = UOM, 
+               @cCheckStatus = Status,
+               @cCheckDropID = DropID
+            FROM dbo.PICKDETAIL WITH (NOLOCK)
             WHERE DropID = @cUCCNo
-            AND PickSlipNo = @cPickSlipNo
-            AND StorerKey = @cStorerKey
-            AND UOM = '2'
-            AND Status = '5'
-         )
-         BEGIN
-            SET @nErrNo = 259202
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-            GOTO Quit
+              AND PickSlipNo = @cPickSlipNo
+              AND StorerKey = @cStorerKey
+              
+            -- Check: Must exist, Match UOM=2, Match Status=5
+            IF (@cCheckDropID IS NULL OR @cCheckUOM <> '2' OR @cCheckStatus <> '5')
+            BEGIN
+               SET @nErrNo = 259202
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Invalid PickDetail UOM
+               GOTO Quit
+            END
          END
       END
    END
