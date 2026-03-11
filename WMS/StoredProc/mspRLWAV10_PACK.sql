@@ -1327,12 +1327,13 @@ BEGIN
             -- VAS - Open new carton even same SKUs
             IF @b_NewCarton = 0 AND @b_IsVAS = 1 
             AND ((@c_Sku_P = @c_Sku) OR 
-                 (@c_VAS = 'PA' AND @c_Sku_P <> @c_Sku)
+                 (@c_VAS = 'PA' AND @c_Sku_P <> @c_Sku) OR
+                 (@c_VAS = 'PU' AND @n_VASQty_PI > 0)
                 )   --WL15
             BEGIN
                SET @b_NewCarton = 1
             END
-            
+
             SET @n_RowID_pcz = 0
             --SET @n_Qty_pd    = 0
             --SET @c_RefPickMode = ''
