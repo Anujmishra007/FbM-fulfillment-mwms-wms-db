@@ -29,30 +29,30 @@ CREATE OR ALTER PROC nspALSTD06
 @c_Facility NVARCHAR(5),
 @n_uombase int ,
 @n_qtylefttofulfill int,
-@c_OtherParms       NVARCHAR(200) = ''     
+@c_OtherParms       NVARCHAR(200) = ''
 AS
 BEGIN
-   SET NOCOUNT ON 
+   SET NOCOUNT ON
 
    DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY
    FOR SELECT LOTxLOCxID.LOC, LOTxLOCxID.ID,
-   QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), '1'
-   FROM LOTxLOCxID (NOLOCK)
-   JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   --WL01
-   JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey   --WL01
-                        AND LOTxLOCxID.Sku = SKUxLOC.Sku   --WL01
-                        AND LOTxLOCxID.Loc = SKUxLOC.Loc   --WL01
-   CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   --WL01
-   WHERE LOTxLOCxID.Lot = @c_lot
-   AND SKUxLOC.Locationtype ="PICK"
-   AND LOC.Locationflag <>"HOLD"
-   AND LOC.Locationflag <> "DAMAGE"
-   AND LOC.Status <> "HOLD"
-   --AND LOC.Facility = @c_Facility   --WL01
-   AND LOC.Facility = F.Facility   --WL01
-   -- Changed by June 17.Jul.03 SOS12446, sort by Logicalloc first
-   ORDER BY F.FacSort, LOC.LogicalLocation, LOC.LOC   --WL01
+              QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), '1'
+       FROM LOTxLOCxID (NOLOCK)
+                JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   --WL01
+                JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey   --WL01
+           AND LOTxLOCxID.Sku = SKUxLOC.Sku   --WL01
+           AND LOTxLOCxID.Loc = SKUxLOC.Loc   --WL01
+                              CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   --WL01
+       WHERE LOTxLOCxID.Lot = @c_lot
+         AND SKUxLOC.Locationtype ="PICK"
+         AND LOC.Locationflag <>"HOLD"
+         AND LOC.Locationflag <> "DAMAGE"
+         AND LOC.Status <> "HOLD"
+           --AND LOC.Facility = @c_Facility   --WL01
+         AND LOC.Facility = F.Facility   --WL01
+       -- Changed by June 17.Jul.03 SOS12446, sort by Logicalloc first
+       ORDER BY F.FacSort, LOC.LogicalLocation, LOC.LOC   --WL01
 END
-GO 
-GRANT EXECUTE ON nspALSTD06 TO NSQL 
+GO
+GRANT EXECUTE ON nspALSTD06 TO NSQL
 GO
