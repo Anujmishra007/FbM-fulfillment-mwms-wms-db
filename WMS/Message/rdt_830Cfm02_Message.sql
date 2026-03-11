@@ -1,6 +1,6 @@
 -- rdt_830Cfm02
 -- FCR-11251
-execute rdt.rdtDropMsg 260801, 102050
+execute rdt.rdtDropMsg 260801, 260850
 
 execute rdt.rdtAddMsg 260801, 10, '260801UPD PKDtl Fail', 'us_english', 830
 execute rdt.rdtAddMsg 260802, 10, '260802UPD PKDtl Fail', 'us_english', 830
