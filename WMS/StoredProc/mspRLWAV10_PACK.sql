@@ -1304,7 +1304,8 @@ BEGIN
             --WL02 S
             IF @n_debug = 3
             BEGIN
-               PRINT ' | SKU=' + ISNULL(@c_Sku, '')
+               PRINT ' | Orderkey=' + ISNULL(@c_Orderkey, '')
+                   + ' | SKU=' + ISNULL(@c_Sku, '')
                    + ' | StdCube=' + ISNULL(CAST(@n_StdCube AS NVARCHAR(30)), '')
                    + ' | StdGrossWgt=' + ISNULL(CAST(@n_StdGrossWgt AS NVARCHAR(30)), '')
                    + ' | CTNGroup_BTK=' + ISNULL(@c_CTNGroup_BTK, '')
@@ -1321,8 +1322,8 @@ BEGIN
             --WL02 E
 
             -- VAS - Open new carton even same SKUs
-            IF (@b_NewCarton = 0 AND @b_IsVAS = 1 AND @c_Sku_P = @c_Sku) 
-            OR (@b_NewCarton = 0 AND @b_IsVAS = 1 AND @c_VAS = 'PA' AND @c_Sku_P <> @c_Sku)   --WL15
+            IF @b_NewCarton = 0 AND @b_IsVAS = 1 
+            AND ((@c_Sku_P = @c_Sku) OR (@c_VAS = 'PA' AND @c_Sku_P <> @c_Sku))   --WL15
             BEGIN
                SET @b_NewCarton = 1
             END
