@@ -174,6 +174,7 @@ BEGIN
          , @c_Option5               NVARCHAR(4000) = ''     --WL01
          , @c_PackECOM              NVARCHAR(10)   = 'N'    --WL01
          , @c_OtherParms            NVARCHAR(MAX)  = ''     --WL02
+         , @c_VAS_P                 NVARCHAR(18)   = ''     --WL15
 
    DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
          , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
@@ -631,6 +632,8 @@ BEGIN
                  +  ', VASQty= ISNULL(WORKORDERDETAIL.VASQty,0)'
                  +  ', SkuAccessQty = CASE WHEN PICKDETAIL.UOM >= ''6'''
                  +                       ' AND  PICKSKU.SumSKUQty > @n_AccessQty'
+                 +                       ' THEN 0 '
+                 +                       ' WHEN PICKDETAIL.UOM = ''2'''
                  +                       ' THEN 0 ELSE 1 END'
                  +  ' FROM #PickDetail_WIP PICKDETAIL'
                  +  ' JOIN ORDERS (NOLOCK) ON ORDERS.Orderkey = PICKDETAIL.Orderkey'
@@ -641,7 +644,7 @@ BEGIN
                  +  ' CROSS APPLY (SELECT MIN(val) AS MinVal'
                  +                    ' , SUM(val) - MIN(val) - MAX(val) AS MidVal'
                  +                    ' , MAX(val) AS MaxVal'
-                 +               ' FROM (VALUES (SKU.Length), (SKU.Width), (SKU.Height)) AS x(val)'
+                 +               ' FROM (VALUES (PACK.LengthUOM3), (PACK.WidthUOM3), (PACK.HeightUOM3)) AS x(val)'
                  +               ') sds'
                  +  ' CROSS APPLY ( SELECT PackQtyIndicator = CASE WHEN SKU.PackQtyIndicator > 0'
                  +                                               ' THEN SKU.PackQtyIndicator ELSE 1 END'
@@ -1323,11 +1326,13 @@ BEGIN
 
             -- VAS - Open new carton even same SKUs
             IF @b_NewCarton = 0 AND @b_IsVAS = 1 
-            AND ((@c_Sku_P = @c_Sku) OR (@c_VAS = 'PA' AND @c_Sku_P <> @c_Sku))   --WL15
+            AND ((@c_Sku_P = @c_Sku) OR 
+                 (@c_VAS = 'PA' AND @c_Sku_P <> @c_Sku)
+                )   --WL15
             BEGIN
                SET @b_NewCarton = 1
             END
-
+            
             SET @n_RowID_pcz = 0
             --SET @n_Qty_pd    = 0
             --SET @c_RefPickMode = ''
@@ -1981,6 +1986,7 @@ BEGIN
             SET @c_ItemClass_P = @c_ItemClass
             SET @c_Size_P = @c_Size
             SET @c_Sku_P  = @c_Sku
+            SET @c_VAS_P  = @c_VAS   --WL15
             FETCH NEXT FROM @cur_PCKGRPS INTO   @n_RowID_pcz
                                              ,  @n_HardCTNGrpNo
                                              ,  @n_SortCTNGrpNo
