@@ -104,6 +104,9 @@ BEGIN
       GOTO RollBackTran
    END
 
+   DECLARE @cDropId NVARCHAR(30)
+   SELECT @cDropId = DropId FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND CaseID = @cLabelNo
+
    UPDATE dbo.PackDetail WITH(ROWLOCK)
    SET 
       Qty       = Qty-1,
@@ -177,6 +180,10 @@ BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 1
       GOTO RollBackTran
    END
+
+   UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropId = @cDropId
+   WHERE StorerKey = @cStorerKey AND CaseID = @cLabelNo
+
    COMMIT TRAN tran_SerialUnpack
    GOTO Quit
   
