@@ -514,9 +514,9 @@ BEGIN
                , [Weight]
                , [Cube]
                , Qty
-               , AddDate
+               , GETDATE()
                , AddWho
-               , EditDate
+               , GETDATE()
                , EditWho
                , TrafficCop
                , ArchiveCop
