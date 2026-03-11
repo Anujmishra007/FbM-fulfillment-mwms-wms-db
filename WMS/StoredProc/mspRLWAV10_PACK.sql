@@ -1321,7 +1321,8 @@ BEGIN
             --WL02 E
 
             -- VAS - Open new carton even same SKUs
-            IF @b_NewCarton = 0 AND @b_IsVAS = 1 AND @c_Sku_P  = @c_Sku
+            IF (@b_NewCarton = 0 AND @b_IsVAS = 1 AND @c_Sku_P = @c_Sku) 
+            OR (@b_NewCarton = 0 AND @b_IsVAS = 1 AND @c_VAS = 'PA' AND @c_Sku_P <> @c_Sku)   --WL15
             BEGIN
                SET @b_NewCarton = 1
             END
@@ -1339,7 +1340,7 @@ BEGIN
 
                IF @b_NewCarton = 0 AND @n_SkuAccessQty = 0
                BEGIN
-                  IF @c_VAS = 'PU'  AND @n_QtyLeftToFulFill_PI = 0   --WL15
+                  IF @n_VASQty_PI > 0 AND @n_QtyLeftToFulFill_PI = 0   --WL15
                   BEGIN
                      SET @b_NewCarton = 1
                   END
@@ -1479,13 +1480,13 @@ BEGIN
                      SET @n_CBMLeftToFulFill = @n_CartonCube
                      SET @n_WgtLeftToFulFill = @n_CartonWeight
 
-                     IF @c_VAS = 'PU' AND @n_SkuAccessQty = 0   --WL15
+                     IF @n_VASQty_PI > 0 AND @n_SkuAccessQty = 0   --WL15
                      BEGIN
                         SET @n_QtyLeftToFulFill_PI = @n_VASQty_PI
                      END
                   END
 
-                  IF @c_VAS = 'PU' AND @n_SkuAccessQty = 0   --WL15
+                  IF @n_VASQty_PI > 0 AND @n_SkuAccessQty = 0   --WL15
                   BEGIN
                      --SET @b_API = 0   --WL05
                      SET @n_QtyToPack_PI = @n_Qty_PI
@@ -1770,6 +1771,7 @@ BEGIN
                               ,  [Status]
                               ,  [RowRef_pcz]
                               ,  [IsApi]
+                              ,  [IsVAS]   --WL15
                               )
                            SELECT
                                  pcz.PickDetailKey
@@ -1803,6 +1805,7 @@ BEGIN
                               ,  [Status]   = '0'
                               ,  RowRef_pcz = pcz.RowID
                               ,  IsApi = @b_API
+                              ,  IsVAS = pcz.IsVAS   --WL15
                            FROM #PRECTN AS pcz
                            WHERE pcz.Pickdetailkey = @c_RefPickKey
                         END
