@@ -52,7 +52,7 @@ BEGIN
          , @n_TotalEvenCnt       INT = 0
          , @n_Add                INT = 0
          , @n_Remain             INT = 0
-         , @n_CharIndex          INT = 0
+         , @n_CharIndex          INT = 1
 
    SET @n_StartTCnt        = @@TRANCOUNT
    SET @n_Continue         = 1
