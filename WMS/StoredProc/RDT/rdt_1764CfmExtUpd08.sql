@@ -317,7 +317,7 @@ BEGIN
          GOTO RollBackTran
       END
 
-      IF ISNULL(@cWaveKey, '') = '' AND @cRealloFlag <> '1' --wavekey is required when FCP exists
+      IF ISNULL(@cWaveKey, '') = '' --wavekey is required when FCP exists
       BEGIN
          SET @nErrNo = 256306
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
