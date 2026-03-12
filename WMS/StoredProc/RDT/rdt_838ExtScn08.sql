@@ -104,6 +104,10 @@ BEGIN
     IF @cCapturePackInfoSP = '0'
         SET @cCapturePackInfoSP = ''
 
+    SET @cShipLabel = rdt.RDTGetConfig(@nFunc, 'ShipLabel', @cStorerKey)
+    SET @cCartonManifest = rdt.RDTGetConfig(@nFunc, 'CartonManifest', @cStorerKey)
+    SET @cPackList = rdt.RDTGetConfig( @nFunc, 'PackList', @cStorerKey)
+
     -- Calculate completion status
     DECLARE @nPickedQty INT = 0
     DECLARE @nPackedQty INT = 0
@@ -121,6 +125,8 @@ BEGIN
     IF (@nPickedQty > 0 AND @nPackedQty >= @nPickedQty)
         SET @bComplete = 1
 
+    INSERT INTO TRACEINFO  (TRACENAME, TIMEIN, STEP1, STEP2, STEP3, STEP4, STEP5, COL1, COL2, COL3, COL4, COL5)
+    VALUES ('rdt_838ExtScn08', GETDATE(), @nFunc, @nStep, @nScn, @nInputKey, @cOption, @cPickSlipNo, @nPickedQty, @nPackedQty, @bComplete, @cCapturePackInfoSP)
     IF @nFunc = 838
     BEGIN
 
@@ -132,38 +138,35 @@ BEGIN
         BEGIN
             IF @nScn = 4651
             BEGIN
-                IF @cFromStep = '4'
+                IF @nInputKey = 1
                 BEGIN
-                    IF @nInputKey = 1
+                    IF @bComplete = 1
                     BEGIN
-                        IF @bComplete = 1
+                        -- Check if ShipLabel/CartonManifest configured
+                        IF (@cShipLabel <> '' OR @cCartonManifest <> '')
                         BEGIN
-                            -- Check if ShipLabel/CartonManifest configured
-                            IF (@cShipLabel <> '' OR @cCartonManifest <> '')
-                            BEGIN
-                                SET @cUDF01     = 'JumpTo_Step_5'
-                                SET @nAfterScn  = 4654
-                                SET @nAfterStep = 5
-                                GOTO Quit
-                            END
-
-                            -- No print label -> completion message -> Screen 1
-                            SET @nErrNo     = 259252
-                            SET @cCompletionMsg = 'PSNO: ' + ISNULL(@cPickSlipNo, '')
-                            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
-        
-                            SET @cErrMsg    = ''
-                            SET @cUDF01     = 'JumpTo_Step_1'
-                            SET @nAfterScn  = 4650
-                            SET @nAfterStep = 1
-                            SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
-                            SET @cOutField02 = ''
-                            SET @cOutField03 = ''
+                            --SET @cUDF01     = 'JumpTo_Step_5'
+                            SET @nAfterScn  = 4654
+                            SET @nAfterStep = 5
                             GOTO Quit
                         END
-                        -- NOT Complete: continue to Screen 2
-                        RETURN
+
+                        -- No print label -> completion message -> Screen 1
+                        SET @nErrNo     = 259252
+                        SET @cCompletionMsg = 'PSNO: ' + ISNULL(@cPickSlipNo, '')
+                        EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
+    
+                        SET @cErrMsg    = ''
+                        --SET @cUDF01     = 'JumpTo_Step_1'
+                        SET @nAfterScn  = 4650
+                        SET @nAfterStep = 1
+                        SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
+                        SET @cOutField02 = ''
+                        SET @cOutField03 = ''
+                        GOTO Quit
                     END
+                    -- NOT Complete: continue to Screen 2
+                    RETURN
                 END
             END
         END
@@ -228,7 +231,7 @@ BEGIN
                             SET @cFieldAttr06 = CASE WHEN CHARINDEX('D', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
                             SET @cFieldAttr07 = CASE WHEN CHARINDEX('H', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
 
-                            SET @cUDF01     = 'JumpTo_Step_4'
+                            --SET @cUDF01     = 'JumpTo_Step_4'
                             SET @nAfterScn  = 4653
                             SET @nAfterStep = 4
                             GOTO Quit
@@ -237,7 +240,7 @@ BEGIN
                         -- If ShipLabel configured, go to Screen 5
                         IF (@cShipLabel <> '' OR @cCartonManifest <> '')
                         BEGIN
-                            SET @cUDF01     = 'JumpTo_Step_5'
+                            --SET @cUDF01     = 'JumpTo_Step_5'
                             SET @nAfterScn  = 4654
                             SET @nAfterStep = 5
                             GOTO Quit
@@ -252,7 +255,7 @@ BEGIN
                         SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
                         SET @cOutField02 = ''
                         SET @cOutField03 = ''
-                        SET @cUDF01     = 'JumpTo_Step_1'
+                        --SET @cUDF01     = 'JumpTo_Step_1'
                         SET @nAfterScn  = 4650
                         SET @nAfterStep = 1
                         GOTO Quit
@@ -277,7 +280,7 @@ BEGIN
                         -- Check if ShipLabel/CartonManifest configured
                         IF (@cShipLabel <> '' OR @cCartonManifest <> '')
                         BEGIN
-                            SET @cUDF01     = 'JumpTo_Step_5'
+                            --SET @cUDF01     = 'JumpTo_Step_5'
                             SET @nAfterScn  = 4654
                             SET @nAfterStep = 5
                             GOTO Quit
@@ -294,7 +297,7 @@ BEGIN
                         SET @cFieldAttr03 = ''  -- ToDropID - enabled
                         
                         SET @cErrMsg    = ''
-                        SET @cUDF01     = 'JumpTo_Step_1'
+                        --SET @cUDF01     = 'JumpTo_Step_1'
                         SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
                         SET @cOutField02 = ''
                         SET @cOutField03 = ''
@@ -343,7 +346,7 @@ BEGIN
                     EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
  
                     SET @cErrMsg    = ''
-                    SET @cUDF01     = 'JumpTo_Step_1'
+                    --SET @cUDF01     = 'JumpTo_Step_1'
                     SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
                     SET @cOutField02 = ''
                     SET @cOutField03 = ''
@@ -383,7 +386,7 @@ BEGIN
                             SET @cFieldAttr06 = CASE WHEN CHARINDEX('D', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
                             SET @cFieldAttr07 = CASE WHEN CHARINDEX('H', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
 
-                            SET @cUDF01     = 'JumpTo_Step_4'
+                            --SET @cUDF01     = 'JumpTo_Step_4'
                             SET @nAfterScn  = 4653
                             SET @nAfterStep = 4
                             GOTO Quit
@@ -392,7 +395,7 @@ BEGIN
                         -- Check if ShipLabel/CartonManifest configured
                         IF (@cShipLabel <> '' OR @cCartonManifest <> '')
                         BEGIN
-                            SET @cUDF01     = 'JumpTo_Step_5'
+                            --SET @cUDF01     = 'JumpTo_Step_5'
                             SET @nAfterScn  = 4654
                             SET @nAfterStep = 5
                             GOTO Quit
@@ -404,7 +407,7 @@ BEGIN
                         EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
     
                         SET @cErrMsg    = ''
-                        SET @cUDF01     = 'JumpTo_Step_1'
+                        --SET @cUDF01     = 'JumpTo_Step_1'
                         SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
                         SET @cOutField02 = ''
                         SET @cOutField03 = ''
@@ -422,15 +425,6 @@ BEGIN
     RETURN
 
 Quit:
-    -- Update ONLY field attributes directly (base SP will handle Scn/Step)
-    IF @cUDF01 = 'JumpTo_Step_1'
-    BEGIN
-        UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET
-            FieldAttr01 = '',  -- Enable PSNO input
-            FieldAttr02 = '',  -- Enable FromDropID input  
-            FieldAttr03 = ''   -- Enable ToDropID input
-        WHERE Mobile = @nMobile
-    END
 END
 GO
 

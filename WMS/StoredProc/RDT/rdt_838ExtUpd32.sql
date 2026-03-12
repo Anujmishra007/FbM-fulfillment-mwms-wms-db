@@ -51,8 +51,12 @@ BEGIN
     SET ANSI_NULLS OFF
     SET CONCAT_NULL_YIELDS_NULL OFF
 
-    DECLARE @cUsername NVARCHAR(30) = SUSER_SNAME()
-    DECLARE @nLabelLine INT = 0
+    DECLARE @cLabelLine NVARCHAR(5) = ''
+
+    SELECT @cLabelLine = ISNULL(V_String8, '')
+    FROM rdt.rdtMobRec WITH (NOLOCK)
+    WHERE Mobile = @nMobile
+
 
     IF @nFunc = 838
     BEGIN
@@ -64,12 +68,12 @@ BEGIN
                UPDATE dbo.PACKDETAIL WITH (ROWLOCK)
                SET RefNo = @cUCCNo,
                    EditDate = GETDATE(),
-                   EditWho = @cUsername
+                   EditWho = SUSER_SNAME()
                WHERE PickSlipNo = @cPickSlipNo
                     AND CartonNo = @nCartonNo
                     AND StorerKey = @cStorerKey
                     AND LabelNo = @cLabelNo
-                    AND LabelLine = @nLabelLine
+                    AND LabelLine = @cLabelLine
            END
         END
     END
