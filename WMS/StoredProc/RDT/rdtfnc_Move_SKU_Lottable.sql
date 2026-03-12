@@ -1289,53 +1289,56 @@ BEGIN
    END
 
    IF @cExtendedInfoSP <> ''  
-   BEGIN  
-      SET @nErrNo = 0  
-      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +       
-         ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +   
-         ' @cFromLOC, @cFromID, @cSKU, @nQTY_Move, @cToID, @cToLOC, ' +   
-         ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, ' +  
-         ' @cSearchLottable01, @cSearchLottable02, @cSearchLottable03, @dSearchLottable04, ' +  
-         ' @tExtInfo, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P') 
+      BEGIN 
+         SET @nErrNo = 0  
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +       
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +   
+            ' @cFromLOC, @cFromID, @cSKU, @nQTY_Move, @cToID, @cToLOC, ' +   
+            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, ' +  
+            ' @cSearchLottable01, @cSearchLottable02, @cSearchLottable03, @dSearchLottable04, ' +  
+            ' @tExtInfo, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '      
 
-      SET @cSQLParam =      
-         '@nMobile            INT,           ' +  
-         '@nFunc              INT,           ' +  
-         '@cLangCode          NVARCHAR( 3),  ' +  
-         '@nStep              INT,           ' +  
-         '@nInputKey          INT,           ' +  
-         '@cFacility          NVARCHAR( 5),  ' +  
-         '@cStorerkey         NVARCHAR( 15), ' +  
-         '@cFromLOC           NVARCHAR( 10), ' +  
-         '@cFromID            NVARCHAR( 18), ' +  
-         '@cSKU               NVARCHAR( 20), ' +  
-         '@nQTY_Move          INT, '           +  
-         '@cToID              NVARCHAR( 18), ' +  
-         '@cToLoc             NVARCHAR( 10), ' +   
-         '@cLottable01        NVARCHAR( 18), ' +   
-         '@cLottable02        NVARCHAR( 18), ' +   
-         '@cLottable03        NVARCHAR( 18), ' +   
-         '@dLottable04        DATETIME,      ' +   
-         '@cSearchLottable01  NVARCHAR( 18), ' +   
-         '@cSearchLottable02  NVARCHAR( 18), ' +   
-         '@cSearchLottable03  NVARCHAR( 18), ' +   
-         '@dSearchLottable04  DATETIME,      ' +    
-         '@tExtInfo           VariableTable READONLY, ' +
-         '@cExtendedInfo      NVARCHAR( 20) OUTPUT,  '  +    
-         '@nErrNo             INT           OUTPUT,  '  +  
-         '@cErrMsg            NVARCHAR( 20) OUTPUT   '   
-               
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,       
-         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey,   
-         @cFromLOC, @cFromID, @cSKU, @nQTY_Move, @cToID, @cToLOC,   
-         @cLottable01, @cLottable02, @cLottable03, @dLottable04,  
-         @cSearchLottable01, @cSearchLottable02, @cSearchLottable03, @dSearchLottable04,    
-         @tExtInfo, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         SET @cSQLParam =      
+            '@nMobile            INT,           ' +  
+            '@nFunc              INT,           ' +  
+            '@cLangCode          NVARCHAR( 3),  ' +  
+            '@nStep              INT,           ' +  
+            '@nInputKey          INT,           ' +  
+            '@cFacility          NVARCHAR( 5),  ' +  
+            '@cStorerkey         NVARCHAR( 15), ' +  
+            '@cFromLOC           NVARCHAR( 10), ' +  
+            '@cFromID            NVARCHAR( 18), ' +  
+            '@cSKU               NVARCHAR( 20), ' +  
+            '@nQTY_Move          INT, '           +  
+            '@cToID              NVARCHAR( 18), ' +  
+            '@cToLoc             NVARCHAR( 10), ' +   
+            '@cLottable01        NVARCHAR( 18), ' +   
+            '@cLottable02        NVARCHAR( 18), ' +   
+            '@cLottable03        NVARCHAR( 18), ' +   
+            '@dLottable04        DATETIME,      ' +   
+            '@cSearchLottable01  NVARCHAR( 18), ' +   
+            '@cSearchLottable02  NVARCHAR( 18), ' +   
+            '@cSearchLottable03  NVARCHAR( 18), ' +   
+            '@dSearchLottable04  DATETIME,      ' +    
+            '@tExtInfo           VariableTable READONLY, ' +
+            '@cExtendedInfo      NVARCHAR( 20) OUTPUT,  '  +    
+            '@nErrNo             INT           OUTPUT,  '  +  
+            '@cErrMsg            NVARCHAR( 20) OUTPUT   '   
+                  
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,       
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey,   
+            @cFromLOC, @cFromID, @cSKU, @nQTY_Move, @cToID, @cToLOC,   
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04,  
+            @cSearchLottable01, @cSearchLottable02, @cSearchLottable03, @dSearchLottable04,    
+            @tExtInfo, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-      IF @nErrNo <> 0  
-         GOTO Step_4_Fail
+         IF @nErrNo <> 0  
+            GOTO Step_4_Fail
 
-      SET @cOutField15 = @cExtendedInfo
+         SET @cOutField15 = @cExtendedInfo
+      END
    END  
   
    GOTO Quit
