@@ -3825,10 +3825,7 @@ BEGIN
 
             -- Go to statistic screen
             SET @nScn = @nScn - 2
-            SET @nStep = @nStep - 2  
-
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, STEP1, STEP2, STEP3, STEP4, STEP5, COL1, COL2, COL3, COL4, COL5)
-            VALUES ('PackInfo', GETDATE(), @nStep, 0, 0, 0, 0, @cPickSlipNo, @nScn, @nStep, @nInputKey, '')          
+            SET @nStep = @nStep - 2            
          END
          ELSE
          BEGIN

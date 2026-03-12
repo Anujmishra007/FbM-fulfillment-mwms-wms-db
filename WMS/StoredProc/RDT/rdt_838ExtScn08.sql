@@ -125,8 +125,6 @@ BEGIN
     IF (@nPickedQty > 0 AND @nPackedQty >= @nPickedQty)
         SET @bComplete = 1
 
-    INSERT INTO TRACEINFO  (TRACENAME, TIMEIN, STEP1, STEP2, STEP3, STEP4, STEP5, COL1, COL2, COL3, COL4, COL5)
-    VALUES ('rdt_838ExtScn08', GETDATE(), @nFunc, @nStep, @nScn, @nInputKey, @cOption, @cPickSlipNo, @nPickedQty, @nPackedQty, @bComplete, @cCapturePackInfoSP)
     IF @nFunc = 838
     BEGIN
 
