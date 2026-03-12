@@ -13,7 +13,7 @@ GO
 /*                                                                               */  
 /* Date       Rev    Author     Purposes                                         */  
 /* 2026-01-19 1.0.0  JACKC      FCR-9660. Created                                */ 
-/* 2026-03-19 1.0.1  JACKC      FCR-9660. Add UDF02 to toLoc confirm condition   */  
+/* 2026-02-19 1.0.1  JACKC      FCR-9660. Add UDF02 to toLoc confirm condition   */  
 /*********************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_515ExtScn02] (
@@ -1068,7 +1068,7 @@ BEGIN
                         BEGIN CATCH
                            SET @nErrNo = 256808
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins drop fail'
-                           GOTO RollBackTran_6817
+                           GOTO RollBackTran_6816
                         END CATCH
                      END
 
@@ -1082,14 +1082,14 @@ BEGIN
                         BEGIN CATCH
                            SET @nErrNo = 256809
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins dropdetail fail'
-                           GOTO RollBackTran_6817
+                           GOTO RollBackTran_6816
                         END CATCH
                      END
                      ELSE
                      BEGIN
                         SET @nErrNo = 256810
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Carton Type already exists'
-                        GOTO RollBackTran_6817
+                        GOTO RollBackTran_6816
                      END
                   END -- PrePackIndicator = 1
 
@@ -1185,7 +1185,7 @@ BEGIN
 
             RollBackTran_6816:
             BEGIN
-               ROLLBACK TRAN rdt_512ExtScn02_6817
+               ROLLBACK TRAN rdt_512ExtScn02_6816
                WHILE @@TRANCOUNT > @nTranCount
                   COMMIT TRAN
             END
