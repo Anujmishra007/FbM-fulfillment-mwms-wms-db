@@ -116,29 +116,24 @@ BEGIN
               )
    ORDER BY Facility
 
-   IF @bIsLastCarton = 1
+   SELECT  @c_FunID = SHORT
+   FROM CODELKUP (NOLOCK) 
+   WHERE LISTNAME = 'MDWCARRIER'
+   AND (Storerkey='ALL' or Storerkey=@cStorerKey) 
+
+   IF ISNULL(@c_FunID,'')  <> ''
    BEGIN
-      SELECT  @c_FunID = SHORT
-      FROM CODELKUP (NOLOCK) 
-      WHERE LISTNAME = 'MDWCARRIER'
-      AND (Storerkey='ALL' or Storerkey=@cStorerKey) 
-
-      IF ISNULL(@c_FunID,'')  <> ''
-      BEGIN
-         EXEC [dbo].[isp_Carrier_Middleware_Interface]            
-            @c_OrderKey      = @cOrderKey         
-            , @c_Mbolkey     = ''      
-            , @c_FunctionID  = @c_FunID          
-            , @n_CartonNo    = nCartonNo      
-            , @n_Step        = @nStep      
-            , @b_Success     = @b_Success OUTPUT            
-            , @n_Err         = @n_ErrNo   OUTPUT            
-            , @c_ErrMsg      = @c_ErrMsg  OUTPUT   
-      END 
-   END
-
-
-  
+      EXEC [dbo].[isp_Carrier_Middleware_Interface]            
+         @c_OrderKey      = @cOrderKey         
+         , @c_Mbolkey     = ''      
+         , @c_FunctionID  = @c_FunID          
+         , @n_CartonNo    = nCartonNo      
+         , @n_Step        = @nStep      
+         , @b_Success     = @b_Success OUTPUT            
+         , @n_Err         = @n_ErrNo   OUTPUT            
+         , @c_ErrMsg      = @c_ErrMsg  OUTPUT   
+   END 
+   
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
    BEGIN      
