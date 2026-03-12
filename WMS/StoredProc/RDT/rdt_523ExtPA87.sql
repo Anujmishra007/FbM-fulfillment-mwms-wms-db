@@ -116,9 +116,8 @@ BEGIN
          ,@nPABookingKey = @nPABookingKey OUTPUT
       IF @nErrNo <> 0
          GOTO RollBackTran
-
-      COMMIT TRAN rdt_523ExtPA87 -- Only commit change made here
    END
+   COMMIT TRAN rdt_523ExtPA87 -- Only commit change made here
    GOTO Quit
 
 RollBackTran:
