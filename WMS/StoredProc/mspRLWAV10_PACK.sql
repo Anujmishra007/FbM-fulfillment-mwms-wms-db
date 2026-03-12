@@ -42,6 +42,7 @@ GO
 /* 10-Mar-2026 WLChooi  2.4   FCR-11471 Fix VAS Packinfo Qty (WL13)      */
 /* 10-Mar-2026 WLChooi  2.5   FCR-11511 Generate PICKHEADER for B2C(WL14)*/
 /* 11-Mar-2026 WLChooi  2.6   FCR-11514 Fix VAS Incorrect Qty (WL15)     */
+/* 12-Mar-2026 WLChooi  2.7   FCR-11558 Fix VAS scenario (WL16)          */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -174,7 +175,7 @@ BEGIN
          , @c_Option5               NVARCHAR(4000) = ''     --WL01
          , @c_PackECOM              NVARCHAR(10)   = 'N'    --WL01
          , @c_OtherParms            NVARCHAR(MAX)  = ''     --WL02
-         , @c_VAS_P                 NVARCHAR(18)   = ''     --WL15
+         , @b_IsVAS_P               BIT            = 0      --WL15
 
    DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
          , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
@@ -1325,13 +1326,27 @@ BEGIN
             --WL02 E
 
             -- VAS - Open new carton even same SKUs
-            IF @b_NewCarton = 0 AND @b_IsVAS = 1 
-            AND ((@c_Sku_P = @c_Sku) OR 
-                 (@c_VAS = 'PA' AND @c_Sku_P <> @c_Sku) OR
-                 (@n_VASQty_PI > 0)
-                )   --WL15
+            -- PA - One SKU per Carton
+            -- PU - Per Pack Qty
+            -- PA + PU must work together -> @c_VAS = PA (not PU)
+            --WL15
+            IF @b_NewCarton = 0
             BEGIN
-               SET @b_NewCarton = 1
+               IF @b_IsVAS = 1
+               BEGIN
+                  -- PA + No Per Pack Qty + Different SKU --> New Carton
+                  -- PA + PU + Per Pack Qty --> New Carton
+                  IF (@c_VAS = 'PA' AND @n_VASQty_PI = 0 AND @c_Sku_P <> @c_Sku) OR
+                     (@c_VAS IN ('PA', 'PU') AND @n_VASQty_PI > 0)
+                  BEGIN
+                     SET @b_NewCarton = 1
+                  END
+               END
+
+               IF @b_IsVAS <> @b_IsVAS_P
+               BEGIN
+                  SET @b_NewCarton = 1
+               END
             END
 
             SET @n_RowID_pcz = 0
@@ -1493,16 +1508,7 @@ BEGIN
                      END
                   END
 
-                  IF @n_VASQty_PI > 0 AND @n_SkuAccessQty = 0   --WL15
-                  BEGIN
-                     --SET @b_API = 0   --WL05
-                     SET @n_QtyToPack_PI = @n_Qty_PI
-                     IF @n_Qty_PI > @n_VASQty_PI
-                     BEGIN
-                        SET @n_QtyToPack_PI = @n_VASQty_PI
-                     END
-                  END
-                  ELSE
+                  IF @n_Continue = 1
                   BEGIN
                      SET @n_QtyToPack_PI = 0
                      IF @b_API = 0 OR
@@ -1517,6 +1523,8 @@ BEGIN
                         SET @n_ItemWgt = 0.00
                         SET @n_ItemCBM = @n_StdCube*@n_Qty_PI
                         SET @n_ItemWgt = @n_StdGrossWgt*@n_Qty_PI
+                        SET @n_QtyCBM_PI = 0   --WL16
+                        SET @n_QtyWgt_PI = 0   --WL16
 
                         IF @n_StdCube > 0
                         BEGIN
@@ -1541,8 +1549,17 @@ BEGIN
                               SET @n_QtyWgt_PI = FLOOR(ROUND(@n_WgtLeftToFulFill / @n_StdGrossWgt, 6))   --WL07
                            END
                         END
-
-                        IF @n_QtyWgt_PI < @n_QtyCBM_PI
+                        
+                        --WL16
+                        IF @n_QtyWgt_PI = 0
+                        BEGIN
+                           SET @n_QtyToPack_PI = @n_QtyCBM_PI
+                        END
+                        ELSE IF @n_QtyCBM_PI = 0
+                        BEGIN
+                           SET @n_QtyToPack_PI = @n_QtyWgt_PI
+                        END
+                        ELSE IF @n_QtyWgt_PI < @n_QtyCBM_PI
                         BEGIN
                            SET @n_QtyToPack_PI = @n_QtyWgt_PI
                         END
@@ -1554,7 +1571,18 @@ BEGIN
                   END
 
                   SET @n_QtyToPack_PI = IIF(@n_QtyToPack_PI < 0, 0, @n_QtyToPack_PI)
-
+                  
+                  --WL16 S
+                  IF @n_VASQty_PI > 0 AND @n_SkuAccessQty = 0   --WL15
+                  BEGIN
+                     --SET @n_QtyToPack_PI = @n_Qty_PI
+                     IF @n_QtyToPack_PI > @n_VASQty_PI
+                     BEGIN
+                        SET @n_QtyToPack_PI = @n_VASQty_PI
+                     END
+                  END
+                  --WL16 E
+                  
                   IF @n_QtyToPack_PI = 0 AND @b_NewCarton = 0
                   BEGIN
                      SET @b_NewCarton = 1
@@ -1584,7 +1612,7 @@ BEGIN
                      IF @b_API = 1
                      BEGIN
                         INSERT INTO @t_ItemToPack (Storerkey, Sku, [Length], Width, Height, Qty)
-                        VALUES (@c_Storerkey, @c_Sku, @n_Length, @n_Width, @n_Height, @n_QtyToPack)
+                        VALUES (@c_Storerkey, @c_Sku, @n_Length, @n_Width, @n_Height, @n_QtyToPack)   --Maybe need to change to @n_Dim1_Ctn, @n_Dim2_Ctn, @n_Dim3_Ctn
 
                         TRUNCATE TABLE #OptimizeItemToPack;
                         INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
@@ -1987,7 +2015,7 @@ BEGIN
             SET @c_ItemClass_P = @c_ItemClass
             SET @c_Size_P = @c_Size
             SET @c_Sku_P  = @c_Sku
-            SET @c_VAS_P  = @c_VAS   --WL15
+            SET @b_IsVAS_P  = @b_IsVAS   --WL15
             FETCH NEXT FROM @cur_PCKGRPS INTO   @n_RowID_pcz
                                              ,  @n_HardCTNGrpNo
                                              ,  @n_SortCTNGrpNo
