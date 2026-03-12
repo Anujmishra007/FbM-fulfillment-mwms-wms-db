@@ -1552,16 +1552,7 @@ BEGIN
                            END
                         END
                         
-                        --WL16
-                        IF @n_StdGrossWgt = 0 AND @n_StdCube > 0   --WL18
-                        BEGIN
-                           SET @n_QtyToPack_PI = @n_QtyCBM_PI
-                        END
-                        ELSE IF @n_StdCube = 0 AND @n_StdGrossWgt > 0   --WL18
-                        BEGIN
-                           SET @n_QtyToPack_PI = @n_QtyWgt_PI
-                        END
-                        ELSE IF @n_QtyWgt_PI < @n_QtyCBM_PI
+                        IF @n_QtyWgt_PI < @n_QtyCBM_PI
                         BEGIN
                            SET @n_QtyToPack_PI = @n_QtyWgt_PI
                         END
