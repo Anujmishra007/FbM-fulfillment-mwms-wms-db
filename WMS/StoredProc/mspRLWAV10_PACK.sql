@@ -44,6 +44,7 @@ GO
 /* 11-Mar-2026 WLChooi  2.6   FCR-11514 Fix VAS Incorrect Qty (WL15)     */
 /* 12-Mar-2026 WLChooi  2.7   FCR-11558 Fix VAS scenario (WL16)          */
 /* 12-Mar-2026 WLChooi  2.8   FCR-11566 Remove VAS filter for audit(WL17)*/
+/* 12-Mar-2026 WLChooi  2.9   FCR-10124 Fix Inifinite Loop (WL18)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -1372,7 +1373,7 @@ BEGIN
                   -- If current open box already contains sku and next sku
                   -- to pack has different Sku.Itemclass
                   IF @b_IsVAS = 0 AND   --WL15
-                     @c_ItemClass <> @c_ItemClass_P
+                     @c_ItemClass <> @c_ItemClass_P AND @c_ItemClass_P > ''   --WL18
                   BEGIN
                      SET @n_ItemCBM_Sum = 0.00
                      SET @n_ItemWgt_Sum = 0.00
@@ -1407,7 +1408,7 @@ BEGIN
                         AND   pcz.UOM         >= '6'
                         AND   pcz.SkuAccessQty = @n_SkuAccessQty
                         AND   pcz.Status       = '0'
-                        AND   pcz.RowID        > @n_RowID_pcz   --WL03
+                        AND   pcz.RowID       >= @n_RowID_pcz
 
                         GOTO CTZ_API
                         CZN_CHECKED:
@@ -1552,11 +1553,11 @@ BEGIN
                         END
                         
                         --WL16
-                        IF @n_QtyWgt_PI = 0
+                        IF @n_StdGrossWgt = 0 AND @n_StdCube > 0   --WL18
                         BEGIN
                            SET @n_QtyToPack_PI = @n_QtyCBM_PI
                         END
-                        ELSE IF @n_QtyCBM_PI = 0
+                        ELSE IF @n_StdCube = 0 AND @n_StdGrossWgt > 0   --WL18
                         BEGIN
                            SET @n_QtyToPack_PI = @n_QtyWgt_PI
                         END
