@@ -4,22 +4,22 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/****************************************************************************/
-/* Store procedure: rdt_1764ExtScn01                                        */
-/* Copyright      : Maersk                                                  */
-/* Customer       : Granite Levis                                           */
-/*                                                                          */
-/*                                                                          */
-/* Date       Rev    Author   Purposes                                      */
-/* 2025-03-11 1.0    NLT013   UWP-31321 Create                              */
-/* 2025-05-21 1.1    NLT013   UWP-34785 Add new Exit Screen                 */
-/* 2025-07-11 1.2.0  NLT013   UWP-37578 Option issue                        */
-/* 2025-10-10 1.3.0  NickT    FCR-7928 Reallocate for short task            */
-/* 2025-10-10 1.3.1  NickT    FCR-7928 Do not clear ListKey                 */
-/* 2025-11-08 1.4.0  NLT013   UWP-43838 Skip InProgress/Completed Task      */
-/* 2025-11-08 1.4.1  NLT013   UWP-43838 Skip InProgress/Completed Task      */
-/* 2025-11-14 1.5.0  NLT013   UWP-43847 Fix issue: PickDetail status is not updated */
-/****************************************************************************/
+/************************************************************************************************/
+/* Store procedure: rdt_1764ExtScn01                                                            */
+/* Copyright      : Maersk                                                                      */
+/* Customer       : Granite Levis                                                               */
+/*                                                                                              */
+/*                                                                                              */
+/* Date       Rev    Author   Purposes                                                          */
+/* 2025-03-11 1.0    NLT013   UWP-31321 Create                                                  */
+/* 2025-05-21 1.1    NLT013   UWP-34785 Add new Exit Screen                                     */
+/* 2025-07-11 1.2.0  NLT013   UWP-37578 Option issue                                            */
+/* 2025-10-10 1.3.0  NickT    FCR-7928 Reallocate for short task                                */
+/* 2025-10-10 1.3.1  NickT    FCR-7928 Do not clear ListKey                                     */
+/* 2025-11-08 1.4.0  NLT013   UWP-43838 Skip InProgress/Completed Task                          */
+/* 2025-11-14 1.5.0  NLT013   UWP-43847 Fix issue: PickDetail status is not updated             */ 
+/* 2025-01-29 1.6.0  NLT013   UWP-47931 Fix issue: QCmd is not proceed in some scenarios        */
+/************************************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn01] (
    @nMobile          INT,
@@ -138,18 +138,18 @@ BEGIN
 
    SET @cUDF01  = ''
 
-   DECLARE @tPickDetail TABLE
-   (
-      RowIndex INT IDENTITY(1,1),
-      PickDetailKey NVARCHAR(18) PRIMARY KEY
-   )
+      DECLARE @tPickDetail TABLE
+      (
+         RowIndex INT IDENTITY(1,1),
+         PickDetailKey NVARCHAR(18)
+      )
 
-   DECLARE @tTaskDetail TABLE
-   (
-      RowIndex INT IDENTITY(1,1),
-      TaskDetailKey NVARCHAR(10) PRIMARY KEY
-   )
-
+      DECLARE @tTaskDetail TABLE
+      (
+         RowIndex INT IDENTITY(1,1),
+         TaskDetailKey NVARCHAR(10) PRIMARY KEY
+      )
+ 
    SELECT 
       @nCurrentStep        = Step,
       @nCurrentScn         = Scn,
@@ -428,6 +428,7 @@ BEGIN
                      UPDATE dbo.TaskDetail WITH(ROWLOCK)
                      SET ReasonKey = 'BADUCC',
                         Status = '9',
+                        Qty = 0,
                         EditWho  = SUSER_SNAME(), 
                         EditDate = GETDATE(),
                         TrafficCop = NULL
@@ -460,7 +461,7 @@ BEGIN
                SET 
                   ReasonKey = '',
                   Message01 = '',
-                  Message02 = '',
+                  --Message02 = '',
                   Message03 = '',
                   EditDate = GETDATE(),
                   EditWho  = SUSER_SNAME(),
@@ -529,6 +530,8 @@ BEGIN
                   UPDATE dbo.TaskDetail WITH (ROWLOCK)
                   SET 
                      ReasonKey = IIF( ReasonKey = 'BADUCC', ReasonKey, @cDefaultSkipReason),
+                     Status = '9',
+                     Qty = 0,
                      EditDate = GETDATE(),
                      EditWho  = SUSER_SNAME(),
                      TrafficCop = NULL
@@ -575,12 +578,62 @@ BEGIN
                   @cAlertMessage       NVARCHAR(255),
                   @bSuccess            INT
 
+               SELECT @cUCCNo = UCCNo
+               FROM dbo.TaskDetail TD WITH(NOLOCK)
+               INNER JOIN dbo.UCC WITH(NOLOCK) ON TD.StorerKey = UCC.StorerKey AND TD.CaseID = UCC.UCCNo
+               WHERE TD.StorerKey = @cStorerKey
+                  AND TD.TaskDetailKey = @cTaskDetailKey
+
+               IF ISNULL(@cUCCNo, '') <> ''
+               BEGIN
+                  -- Hold the UCC
+                  BEGIN TRY
+                     EXEC nspInventoryHoldWrapper
+                        @c_lot = ''
+                        ,@c_Loc = ''
+                        ,@c_ID = ''
+                        ,@c_StorerKey = @cStorerKey
+                        ,@c_SKU = ''
+                        ,@c_Lottable01 = ''
+                        ,@c_Lottable02 = ''
+                        ,@c_Lottable03 = ''
+                        ,@dt_Lottable04 = NULL
+                        ,@dt_Lottable05 = NULL
+                        ,@c_Lottable06 = ''
+                        ,@c_Lottable07 = ''
+                        ,@c_Lottable08 = ''
+                        ,@c_Lottable09 = ''
+                        ,@c_Lottable10 = ''
+                        ,@c_Lottable11 = ''
+                        ,@c_Lottable12 = ''
+                        ,@dt_Lottable13  = NULL
+                        ,@dt_Lottable14  = NULL
+                        ,@dt_Lottable15  = NULL
+                        ,@c_Status = 'HOLD'
+                        ,@c_Hold = 1
+                        ,@b_success = @bSuccess OUTPUT
+                        ,@n_Err = @nErrNo OUTPUT
+                        ,@c_Errmsg = @cErrMsg OUTPUT
+                        ,@c_Remark = ''
+                        ,@c_UCCNo = @cUCCNo
+
+                     IF @nErrNo <> 0
+                        GOTO RollBack_rdt_1764ExtScn01
+
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 234863
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Hold UCC Failed
+                     GOTO RollBack_rdt_1764ExtScn01
+                  END CATCH
+               END
+
                SET @cAlertMessage = 'Short Picked by ' + ISNULL(@cUserName, '')
                                     + ' TaskDetailKey: ' + ISNULL(@cTaskDetailKey, '')
                                     + ' TaskType: RPF'
                                     + ' CaseID: ' + ISNULL(@cCaseID, '')
                                     + ' Reason: ' + ISNULL(@cDefaultSkipReason, '')
-
+               
                -- Log Alert
                BEGIN TRY
                   EXEC nspLogAlert
@@ -652,12 +705,12 @@ BEGIN
                -- Submit task to QCommander
                BEGIN TRY
                   EXEC isp_QCmd_SubmitTaskToQCommander
-                       @cTaskType           = 'D'                  -- 'T' - TransmitlogKey, 'D' - Data Stream 
+                       @cTaskType           = 'O'                  -- -- D=By Datastream, T=Transmitlog, O=Others
                      , @cStorerKey          = @cStorerKey
                      , @cDataStream         = @cDataStream
                      , @cCmdType            = @cCmdType 
                      , @cCommand            = @cExecStatements
-                     , @cTransmitlogKey     = '' 
+                     , @cTransmitlogKey     = @cTaskDetailKey 
                      , @nThreadPerAcct      = @nThreadPerAcct 
                      , @nThreadPerStream    = @nThreadPerStream 
                      , @nMilisecondDelay    = @nMilisecondDelay  

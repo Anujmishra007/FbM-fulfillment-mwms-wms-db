@@ -374,14 +374,22 @@ BEGIN
          IF @c_ReplenFlag = 'W' OR @c_ReplenFlag = 'WHC' -- Wave Replen for Healthcare TH
          BEGIN
 			     --SET @n_ReplenQty = @n_QtyLocationLimit - @n_QtyLocationMinimum -  @n_Qty - @n_QtyPicked - @n_QtyAllocated
-			     IF @n_Qty - (@n_QtyPicked + @n_QtyAllocated) < 0
+			    /* IF @n_Qty - (@n_QtyPicked + @n_QtyAllocated) < 0
 			     BEGIN
 			        SET @n_ReplenQty = @n_QtyLocationLimit + ( (@n_Qty - (@n_QtyPicked + @n_QtyAllocated)) * -1 )
 			     END
 			     ELSE
 			      BEGIN
 			        SET @n_ReplenQty = @n_QtyLocationLimit - ( (@n_Qty - (@n_QtyPicked + @n_QtyAllocated)) )
-			      END
+			      END */
+               IF @n_Qty - (@n_QtyPicked ) < 0
+			     BEGIN
+			        SET @n_ReplenQty = @n_QtyLocationLimit + ( (@n_Qty - (@n_QtyPicked )) * -1 )
+			     END
+			     ELSE
+			      BEGIN
+			        SET @n_ReplenQty = @n_QtyLocationLimit - ( (@n_Qty - (@n_QtyPicked )) )
+			      END 
 
 			     IF @n_ReplenQty < 0
 			     BEGIN
@@ -599,13 +607,18 @@ BEGIN
                     AND LOC.Facility = @c_Facility
                     AND LOC.Status = 'OK'
                     AND ID.Status = 'OK'
+                    AND LOC.LocationCategory <> 'shelving'
                     AND (@c_LocationType='PICK' AND LOC.Locationtype='CASE'
                       OR @c_LocationType='CASE' AND LOC.Locationtype IN (SELECT LocationType From @t_Bulk_LocType))
                     AND (@c_LocationType='PICK' AND SL.Locationtype<>'PICK'
                       OR @c_LocationType='CASE' AND SL.Locationtype NOT IN ('CASE','PICK'))
                     AND (LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED) > 0
                     AND NOT (@c_LocationType='CASE' AND LLI.ID='')
-                  ORDER BY OnHandQty, LOC.LogicalLocation
+                  ORDER BY
+                  CASE WHEN LOC.LocationCategory <> 'shelving' THEN 0 ELSE 1 END,
+                  CASE WHEN LOC.LocationType = 'PICK' THEN 0 ELSE 1 END,
+                  CASE WHEN LOC.LocationType IN (SELECT LocationType From @t_Bulk_LocType) THEN 0 ELSE 1 END,
+                  OnHandQty, LOC.LogicalLocation
                ELSE
                --ML01-E
 			         DECLARE CUR_LOTxLOCxID_REPLEN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -624,13 +637,18 @@ BEGIN
                             LOC.Facility = @c_Facility AND
                             LOC.Status = 'OK' AND
                             ID.Status = 'OK' AND
+                            LOC.LocationCategory <> 'shelving' AND
                             --LOC.Locationtype NOT IN ('CASE','PICK') AND -- (SHONGxx)
 							LOC.Locationtype IN (SELECT LocationType From @t_Bulk_LocType) and
                             SL.Locationtype <> 'CASE' AND --- SOS#152090 ---
                             SL.Locationtype <> 'PICK' AND --- SOS#152090 ---
                             (LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED) > 0 AND
                             LOC.PUTAWAYZONE = CASE WHEN @c_ReplenFlag = 'FP+PARM2' THEN @c_Zone02 ELSE LOC.PUTAWAYZONE END   --WL01
-                   ORDER BY OnHandQty, LOC.LogicalLocation
+                   ORDER BY
+                   CASE WHEN LOC.LocationCategory <> 'shelving' THEN 0 ELSE 1 END,
+                   CASE WHEN LOC.LocationType = 'PICK' THEN 0 ELSE 1 END,
+                   CASE WHEN LOC.LocationType IN (SELECT LocationType From @t_Bulk_LocType) THEN 0 ELSE 1 END,
+                   OnHandQty, LOC.LogicalLocation
 
                 OPEN CUR_LOTxLOCxID_REPLEN
 

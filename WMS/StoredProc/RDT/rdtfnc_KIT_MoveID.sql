@@ -64,16 +64,16 @@ DECLARE
    @cToLOC              NVARCHAR( 10),
    @nTotalRec           INT,
    @nCurrentRec         INT,
-   @cToLOCLookupSP      NVARCHAR(20),  -- (ung01)
+   @cToLOCLookupSP      NVARCHAR(20),  
    @cExtendedUpdateSP   NVARCHAR(20),
-   @cChkStorerKey       NVARCHAR( 15), -- (james04)
-   @cExtendedValidateSP NVARCHAR( 20), -- (james05)
-   @cSQL                NVARCHAR(MAX), -- (james05)
-   @cSQLParam           NVARCHAR(MAX), -- (james05)
-   @cMoveQTYAlloc       NVARCHAR( 1),  -- (ChewKP04)
-   @cMoveQTYPick        NVARCHAR( 1),  -- (ChewKP04)
-   @nQTYPick            INT,           -- (james07)
-   @nQTYAlloc           INT,           -- (james07)
+   @cChkStorerKey       NVARCHAR( 15), 
+   @cExtendedValidateSP NVARCHAR( 20), 
+   @cSQL                NVARCHAR(MAX), 
+   @cSQLParam           NVARCHAR(MAX), 
+   @cMoveQTYAlloc       NVARCHAR( 1),  
+   @cMoveQTYPick        NVARCHAR( 1),  
+   @nQTYPick            INT,           
+   @nQTYAlloc           INT,           
    @cBarcode            NVARCHAR( 60),
    @cDecodeSP           NVARCHAR( 20),
    @cLottable01         NVARCHAR( 18),
@@ -91,10 +91,10 @@ DECLARE
    @dLottable13         DATETIME,
    @dLottable14         DATETIME,
    @dLottable15         DATETIME,
-   @cExtendedInfo       NVARCHAR( 20),    -- (james09)
-   @cExtendedInfoSP     NVARCHAR( 20),    -- (james09)
-   @cSuggestLocSP       NVARCHAR( 20),    -- (CYU027)
-   @cLOCLookupSP        NVARCHAR( 20),    -- (yeekung01)
+   @cExtendedInfo       NVARCHAR( 20),    
+   @cExtendedInfoSP     NVARCHAR( 20),   
+   @cSuggestLocSP       NVARCHAR( 20), 
+   @cLOCLookupSP        NVARCHAR( 20),   
    @cDefaultFromLOC     NVARCHAR( 1),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
@@ -536,6 +536,7 @@ BEGIN
          UPDATE dbo.KITDETAIL WITH (ROWLOCK)
          SET Loc = @cToLoc
          WHERE StorerKey = @cStorerKey
+            AND ID = @cFromID
             AND Type = 'T'
             AND Status <> '9'
       END TRY

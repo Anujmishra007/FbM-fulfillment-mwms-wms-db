@@ -159,8 +159,11 @@ BEGIN
    END
 
    --Hold from Loc
-   IF ISNULL(@cRCLocHoldKey, '') <> '' AND NOT EXISTS (SELECT 1 FROM INVENTORYHOLD WITH (NOLOCK) WHERE Loc = @cFromLOC AND Hold = '1')
+   IF NOT EXISTS (SELECT 1 FROM INVENTORYHOLD WITH (NOLOCK) WHERE Loc = @cFromLOC AND Hold = '1')
    BEGIN
+      IF ISNULL(@cRCLocHoldKey, '') = ''
+         SET @cRCLocHoldKey = 'HOLD'
+
       BEGIN TRY
          EXECUTE nspInventoryHold        
             ''          --lot

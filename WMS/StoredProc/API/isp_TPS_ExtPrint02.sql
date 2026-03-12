@@ -103,7 +103,6 @@ DECLARE @cConsignee     NVARCHAR(15)
 DECLARE @cReportType    nvarchar(20)
 DECLARE @cLabelPrinter  NVARCHAR ( 30)
 DECLARE @cPaperPrinter  NVARCHAR ( 30)
-DECLARE @nJobID         INT
 DECLARE @nRC            INT
 DECLARE @cSQL           NVARCHAR ( MAX)
 DECLARE @cSQLParam      NVARCHAR ( MAX)
@@ -169,17 +168,6 @@ BEGIN
             ELSE
                SET @cReportType='UCCLABEL02'
 
-            --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-            --   @cReportType, -- Report type
-            --   @tShipLabel, -- Report params
-            --   'API.isp_TPS_ExtPrint02', --source Type
-            --   @n_Err      OUTPUT,
-            --   @c_ErrMsg   OUTPUT,
-            --   '1', --noOfCopy
-            --   '', --@cPrintCommand
-            --   @nJobID     OUTPUT,
-            --   @cUsername
-
             
             SELECT @c_ReportID = WMR.reportid,
                      @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END
@@ -211,7 +199,6 @@ BEGIN
             , @c_JobIDs      = @cLabelJobID         OUTPUT    
             , @c_AutoPrint  = 'N'     
 
-            set @cLabelJobID = @nJobID
          END
 		END
 		IF @cPrintPackList = 'Y'
@@ -261,7 +248,6 @@ BEGIN
                , @c_JobIDs      = @cLabelJobID         OUTPUT    
                , @c_AutoPrint  = 'N'     
 
-               set @cLabelJobID = @nJobID
             END
          END
       END

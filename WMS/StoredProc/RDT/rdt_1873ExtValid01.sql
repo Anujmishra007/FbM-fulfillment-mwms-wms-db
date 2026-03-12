@@ -6,8 +6,9 @@
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date        Rev  Author     Purposes                                 */
-/* 2025-12-10  1.0  Jackc      FCR-7406 - Created                       */
+/* Date        Rev    Author     Purposes                               */
+/* 2025-12-10  1.0.0  Jackc      FCR-7406 - Created                     */
+/* 2025-01-22  1.0.1  Jackc      FCR-7406 Add MaxPallet Check           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1873ExtValid01] (
@@ -41,7 +42,8 @@ BEGIN
    DECLARE @nCount            INT
    DECLARE @cLocAisle         NVARCHAR(10)      
    DECLARE @cLocBay           NVARCHAR(10)         
-   DECLARE @nLocLevel         INT     
+   DECLARE @nLocLevel         INT
+   DECLARE @nMaxPallet        INT     
 
    DECLARE @tValidPAZone TABLE
    (
@@ -96,7 +98,8 @@ BEGIN
                @fLocWgtCapacity  = ISNULL(WeightCapacity,0),
                @cLocAisle        = ISNULL(LocAisle,''),
                @cLocBay          = ISNULL(LocBay,''),
-               @nLocLevel        = ISNULL(LocLevel,-1)
+               @nLocLevel        = ISNULL(LocLevel,-1),
+               @nMaxPallet       = ISNULL(MaxPallet, 0)
             FROM dbo.Loc WITH (NOLOCK)
             WHERE Loc = @cToLOC
 
@@ -169,6 +172,35 @@ BEGIN
                SET @nErrNo = 252954
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'Exceed Wgt capacity'
                GOTO Quit
+            END
+
+            --V1.0.1 Max pallet validation
+            IF @nMaxPallet > 0
+            BEGIN
+               SELECT @nCount = COUNT(DISTINCT Id)
+               FROM dbo.LotxLocxID WITH (NOLOCK)
+               WHERE Loc = @cToLOC
+                  AND ID <> ''
+               AND  ((Qty - QtyPicked) > 0 OR PendingMoveIn > 0)
+
+               IF @@ROWCOUNT = 0
+                  SET @nCount = 0
+
+               SELECT @nCOUNT = @nCOUNT + COUNT(DISTINCT ID)
+               FROM dbo.KITDETAIL WITH (NOLOCK)
+               WHERE Loc = @cToLOC
+                  AND Type = 'T'
+                  AND Status <> '9'
+
+               IF @@ROWCOUNT = 0
+                  SET @nCOUNT = 0
+
+               IF @nCount >= @nMaxPallet
+               BEGIN
+                  SET @nErrNo = 252958  -- OVER MAX PALLET
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO Quit
+               END
             END
 
             IF @cIDPltType = ''

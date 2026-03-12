@@ -13,12 +13,14 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          : Duplicate and Modify from Mattel mspRLWAV01                 */    
-/* PVCS Version: 1.0                                                      */    
+/* PVCS Version: 1.1                                                      */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
 /* Updates:                                                               */    
-/* Date        Author   Ver   Purposes                                    */    
+/* Date        Author   Ver   Purposes                                    */ 
+/* 2026-02-04  Wan      1.0   Fixed, CR v3.6                              */ 
+/* 2026-02-25  Wan01    1.1   UWP-49319 - ONBR Conso Task Not Working     */  
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV09]        
    @c_Wavekey     NVARCHAR(10)    
@@ -72,6 +74,7 @@ BEGIN
 
          , @c_Route                    NVARCHAR(10)   = ''
          , @c_DefaultLoc               NVARCHAR(10)   = ''
+         , @c_CustomToLoc              NVARCHAR(10)   = ''                          --2026-01-12
          , @dt_deliveryDate            DATETIME        
          , @c_DispatchCasePickMethod   NVARCHAR(10)   = ''
          , @c_TaskStatus               NVARCHAR(10)   = '0'                            
@@ -80,17 +83,24 @@ BEGIN
          , @c_LPLDLoc                  NVARCHAR(10)   = ''                           
          , @c_Areakey                  NVARCHAR(10)   = ''
          , @c_Orderkey_P               NVARCHAR(10)   = '' 
+         , @c_UOM_P                    NVARCHAR(10)   = '' 
          , @c_Areakey_P                NVARCHAR(10)   = '' 
          , @c_ToLoc_P                  NVARCHAR(10)   = '' 
 
+         , @n_QtyAllocated             INT   = 0                                    --2026-01-29
          , @n_Volume                   FLOAT = 0.00  
-         , @n_TTLVolume                FLOAT = 0.00           
+         , @n_TTLVolume                FLOAT = 0.00  
+         , @n_VolumeLeftToFulFill      FLOAT = 0.00                                 --CR v3.4    
+         , @n_Cube                     FLOAT = 0.00                                 --CR v3.4  
+                   
          , @n_CubeUOM1                 FLOAT = 0.00        
          , @n_CubeUOM3                 FLOAT = 0.00 
-         , @n_MaxSkuVol                FLOAT = 0.00    
-         , @n_QtyToRelease             INT = 0
-         , @n_UOMQtyToRelease          INT = 0
-         , @n_NoOfGroup                INT = 0
+         , @n_MaxSkuVol                FLOAT = 0.00 
+         , @n_MaxUCCVol                FLOAT = 0.00          
+         , @n_DropIDVol                FLOAT = 0.00  
+         , @n_PackUOMQty               INT = 0                                      --CR v3.4 
+         , @n_QtyleftToFulFill         INT = 0                                      --CR v3.4 
+         , @n_QtyToTake                INT = 0                                      --CR v3.4
          , @n_MaxQtyPerGroup           INT = 0
          , @n_Casecnt                  INT = 0
          , @c_UCCNo                    NVARCHAR(20) = ''  
@@ -102,6 +112,7 @@ BEGIN
          , @c_KeyName                  NVARCHAR(18)   = '' 
          , @c_Option5                  NVARCHAR(MAX)  = '' 
          , @c_MaxSkuVol                NVARCHAR(10)   = '' 
+         , @c_MaxUCCVol                NVARCHAR(10)   = '' 
 
          , @cur_waveord                CURSOR
          , @cur_WaveReplfr             CURSOR                                        
@@ -147,7 +158,8 @@ BEGIN
                      JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey  
                      LEFT JOIN TASKDETAIL TD (NOLOCK) ON  PD.Taskdetailkey = TD.Taskdetailkey 
                                                       AND TD.Sourcetype = @c_SourceType 
-                                                      AND TD.Tasktype IN ('FPK','FCP','FPP')  
+                                                      AND TD.Tasktype IN ('FPK','FCP','FPP') 
+                                                      AND TD.[Status] <> 'X'                                                       
                      WHERE WD.Wavekey = @c_Wavekey                     
                      AND PD.Status = '0'  
                      AND TD.Taskdetailkey IS NULL  
@@ -164,12 +176,19 @@ BEGIN
       SELECT @c_Option5 = fgr.Option5 
       FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
    
-      SELECT @c_MaxSkuVol = dbo.fnc_GetParamValueFromString('@n_MaxSkuVol', @c_Option5, @c_MaxSkuVol)
+      SELECT @c_MaxSkuVol = dbo.fnc_GetParamValueFromString('@n_MaxSkuVol', @c_Option5, @c_MaxSkuVol) 
+      SET @c_MaxUCCVol = '-1' --NOT UCC Pick, IF UCC Picking, Mandatory to setup value >=0
+      SELECT @c_MaxUCCVol = dbo.fnc_GetParamValueFromString('@n_MaxUCCVol', @c_Option5, @c_MaxUCCVol)
 
       IF ISNUMERIC(@c_MaxSkuVol) = 1
          SET @n_MaxSkuVol = CAST(@c_MaxSkuVol AS FLOAT)
       ELSE
          SET @n_MaxSkuVol = 0.00
+
+      IF ISNUMERIC(@c_MaxUCCVol) = 1
+         SET @n_MaxUCCVol = CAST(@c_MaxUCCVol AS FLOAT)
+      ELSE
+         SET @n_MaxUCCVol = -1.00
    END
          
    --Create pickdetail Work in progress temporary table  
@@ -240,7 +259,30 @@ BEGIN
       ,  [ToLoc]        [nvarchar](10) NOT NULL DEFAULT('')
       ,  [ToID]         [nvarchar](18) NOT NULL DEFAULT('')
       ,  [Taskdetailkey][nvarchar](10) NOT NULL DEFAULT ('') 
-      )       
+      )    
+      
+      IF OBJECT_ID('tempdb..#TMP_CL') IS NOT NULL  
+      BEGIN
+         DROP TABLE #TMP_CL
+      END
+
+      CREATE TABLE #TMP_CL
+      (  [RowID]                       INT               IDENTITY(1,1) PRIMARY KEY                   
+      ,  [LISTNAME]                    [nvarchar](10)    NULL     
+      ,  [Code]                        [nvarchar](30)    NULL  
+      ,  [Description]                 [nvarchar](250)   NULL  
+      ,  [Short]                       [nvarchar](10)    NULL  
+      ,  [Long]                        [nvarchar](250)   NULL  
+      ,  [Notes]                       [nvarchar](4000)  NULL  
+      ,  [Notes2]                      [nvarchar](4000)  NULL  
+      ,  [Storerkey]                   [nvarchar](50)    NOT NULL  
+      ,  [UDF01]                       [nvarchar](60)    NOT NULL  
+      ,  [UDF02]                       [nvarchar](60)    NOT NULL  
+      ,  [UDF03]                       [nvarchar](60)    NOT NULL  
+      ,  [UDF04]                       [nvarchar](60)    NOT NULL  
+      ,  [UDF05]                       [nvarchar](60)    NOT NULL  
+      ,  [code2]                       [nvarchar](30)    NOT NULL 
+      )
    END  
             
    IF @@TRANCOUNT = 0  
@@ -277,44 +319,62 @@ BEGIN
       END   
    END  
 
+   IF @n_Continue = 1 OR @n_Continue = 2  
+   BEGIN  
+      SET @c_Sku = ''
+      SELECT TOP 1 @c_Sku = S.Sku
+      FROM #PICKDETAIL_WIP PD 
+      JOIN SKU s (NOLOCK) ON  s.Storerkey = PD.Storerkey 
+                          AND s.Sku = PD.Sku
+      WHERE PD.UOM = '6'  
+      AND PD.Qty > 0  
+      AND PD.[Status] = '0'  
+      AND PD.TaskdetailKey = ''
+      AND s.StdCube = 0.00
+ 
+      IF @c_Sku > ''
+      BEGIN  
+         SET @n_Continue = 3    
+         SET @n_err = 83025   
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                      +': StdCube is not setup Sku: ' + @c_Sku
+                      +'. (mspRLWAV09)'         
+      END        
+   END
+   
    --Replenishment By UCCNo
    IF @n_Continue = 1 OR @n_Continue = 2  
    BEGIN  
       SET @cur_WaveReplto = CURSOR FAST_FORWARD READ_ONLY FOR 
-      SELECT PD.Storerkey, PD.Sku, PD.Loc
-         , PD.Lot                                    
-         , QtyNeed = SUM(pd.Qty)-(lli.Qty-lli.QtyPicked)-lli.PendingMoveIn-ISNULL(tdp.QtyAllocated,0)
-         , FinalLocPAZone = l.PutawayZone
-         , FinalLocLoseID = l.LoseId
-      FROM #PICKDETAIL_WIP PD (NOLOCK)
-      JOIN LOTATTRIBUTE la  (NOLOCK) ON pd.Lot = la.Lot
-      JOIN LOTxLOCxID   lli (NOLOCK) ON pd.Lot = lli.Lot 
-                                    AND pd.Loc = lli.loc
-                                    AND pd.ID  = lli.ID
-      JOIN LOC l (NOLOCK)  ON pd.loc = l.loc
-      LEFT OUTER JOIN TASKDETAIL tdr (NOLOCK) ON tdr.TaskType IN ('RPF','RP1')
-                                             AND tdr.Storerkey= pd.Storerkey
-                                             AND tdr.Sku   = pd.Sku
-                                             AND tdr.FinalLoc = pd.Loc
-                                             AND tdr.[Status] NOT IN ('9','X')
-      OUTER APPLY (SELECT QtyAllocated = SUM(td.Qty) 
-                   FROM TASKDETAIL td (NOLOCK) 
-                   WHERE td.TaskType= 'FCP'
-                   AND td.Storerkey = pd.Storerkey
-                   AND td.Sku       = pd.Sku
-                   AND td.fromLoc   = pd.Loc
-                   AND td.UOM       = '6'
-                   AND td.[Status] NOT IN ('9','X')
-                  ) tdp                   
-      WHERE PD.UOM = '6'
-      AND PD.Qty > 0
-      AND PD.[Status] = '0'
-      AND PD.TaskdetailKey = ''
-      AND tdr.Taskdetailkey IS NULL
-      GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                  
+      SELECT PD.Storerkey, PD.Sku, PD.Loc  
+         , PD.Lot                                      
+         , QtyNeed = SUM(pd.Qty)-(lli.Qty-lli.QtyPicked)-lli.PendingMoveIn+ISNULL(tdp.QtyAllocated,0) --2026-01-21  
+         , FinalLocPAZone = l.PutawayZone  
+         , FinalLocLoseID = l.LoseId  
+      FROM #PICKDETAIL_WIP PD (NOLOCK)  
+      JOIN LOTATTRIBUTE la  (NOLOCK) ON pd.Lot = la.Lot  
+      JOIN LOTxLOCxID   lli (NOLOCK) ON pd.Lot = lli.Lot   
+                                    AND pd.Loc = lli.loc  
+                                    AND pd.ID  = lli.ID  
+      JOIN LOC l (NOLOCK)  ON pd.loc = l.loc  
+      OUTER APPLY (SELECT QtyAllocated = SUM(td.Qty)   
+                   FROM TASKDETAIL td (NOLOCK)   
+                   WHERE td.TaskType= 'FCP'  
+                   AND td.Storerkey = pd.Storerkey  
+                   AND td.Sku       = pd.Sku  
+                   AND td.fromLoc   = pd.Loc 
+                   AND td.FromID    = pd.ID                                         --2026-01-29                    
+                   AND td.UOM       = '6'  
+                   AND td.[Status] NOT IN ('9','X')  
+                  ) tdp                     
+      WHERE PD.UOM = '6'  
+      AND PD.Qty > 0  
+      AND PD.[Status] = '0'  
+      AND PD.TaskdetailKey = '' 
+      GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                    
             ,  lli.Qty,lli.QtyPicked,lli.PendingMoveIn,ISNULL(tdp.QtyAllocated,0)
-            ,  l.PutawayZone, l.LoseId
-      HAVING (lli.Qty-lli.QtyPicked)+lli.PendingMoveIn-ISNULL(tdp.QtyAllocated,0)-SUM(pd.Qty) < 0  
+            ,  l.PutawayZone, l.LoseId  
+      HAVING (lli.Qty-lli.QtyPicked)+lli.PendingMoveIn-ISNULL(tdp.QtyAllocated,0)-SUM(pd.Qty) < 0    
       ORDER BY l.putawayZone, PD.Loc, PD.Lot        
  
       OPEN @cur_WaveReplto    
@@ -324,24 +384,6 @@ BEGIN
          
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)  
       BEGIN
-         IF EXISTS (SELECT 1                                                         
-                    FROM dbo.LOTxLOCxID l1 (NOLOCK) 
-                    WHERE l1.Storerkey = @c_Storerkey
-                    AND   l1.loc = @c_ToLoc
-                    AND   l1.Sku <> @c_Sku
-                    AND   (l1.QtyAllocated + (l1.QtyPicked-l1.Qty) > 0 
-                    OR     l1.PendingMoveIn > 0
-                          )
-                    )
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_Err = 83040
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
-                         +': Different Sku found in DPP location: ' + @c_ToLoc
-                         +'. (mspRLWAV09)' 
-            GOTO QUIT_SP
-         END    
-
          SELECT TOP 1 @c_ToLoc = l.Loc
          FROM LOC l (NOLOCK)
          WHERE l.Facility = @c_Facility
@@ -365,29 +407,29 @@ BEGIN
          JOIN SKUxLOC sl (NOLOCK) ON  lli.Storerkey = sl.Storerkey 
                                   AND lli.Sku = sl.Sku
                                   AND lli.Loc = sl.Loc
+         OUTER APPLY ( SELECT TOP 1 UCC.Status                                      --2025-01-27
+                       FROM UCC (NOLOCK) 
+                       WHERE UCC.Lot = lli.Lot
+                       AND UCC.Loc = lli.Loc
+                       AND UCC.ID  = lli.ID
+                       AND UCC.[Status] = '1'                                       --2025-01-27
+                       AND UCC.Qty > 0
+                       AND UCC.Qty <= lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen
+                      ) u                                   
          WHERE lli.Storerkey = @c_Storerkey
          AND   lli.Sku = @c_Sku
          AND   lli.Lot = @c_Lot      
          AND   lli.Loc <> @c_FinalLoc
-         AND   lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen >= @n_QtyNeed
-         AND   sl.LocationType NOT IN ('PICK','CASE')
+         AND   lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen > 0      --2026-02-04  
+         AND   LOC.LocationType NOT IN ('PICK','CASE','DYNPPICK')
          AND   LOT.[Status] = 'OK'
          AND   ID.[Status]  = 'OK'
          AND   LOC.[Status] = 'OK'
          AND   LOC.LocationFlag NOT IN ('DAMAGE','HOLD')
-         AND   LOC.LocationType = 'OTHER'
+         AND   LOC.LocationType = 'BULK'                    
          AND   LOC.Facility = @c_Facility
-         AND   LOC.LocLevel > 0
-         AND   EXISTS ( SELECT 1
-                        FROM UCC (NOLOCK) 
-                        WHERE UCC.Lot = lli.Lot
-                        AND UCC.Loc = lli.Loc
-                        AND UCC.ID  = lli.ID
-                        AND UCC.[Status] = '1'
-                        AND UCC.Qty > 0
-                        AND UCC.Qty <= lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen
-                      )
-         ORDER BY LOC.LogicalLocation
+         ORDER BY CASE WHEN u.Status = '1' THEN 1 ELSE 9 END                        --2026-01-27
+                , LOC.LogicalLocation  
                 , lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen DESC 
 
          OPEN @cur_WaveReplfr
@@ -409,7 +451,7 @@ BEGIN
                AND   UCC.ID  = @c_FromID
                AND   UCC.[Status] = '1'
                AND   UCC.Qty <= @n_QtyToReplen
-               AND   UCC.Qty >= @n_QtyNeed
+               --AND   UCC.Qty >= @n_QtyNeed                                        --2026-02-04  
                AND   NOT EXISTS (SELECT 1 
                                  FROM #TMP_RPFUCC tru
                                  WHERE tru.UCC_RowRef = UCC.UCC_RowRef
@@ -418,10 +460,15 @@ BEGIN
 
                IF @@ROWCOUNT = 0
                BEGIN
+                  SET @n_Continue = 3    
+                  SET @n_err   = 83030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                               +': No available UCC for Replenishment. Sku: ' + @c_Sku
+                               + '. (mspRLWAV09)' 
                   BREAK
                END
 
-               IF @n_UCCPerToteID = @n_MaxUCCPerToteID
+               IF @n_UCCPerToteID = @n_MaxUCCVol   --@n_MaxUCCPerToteID
                BEGIN
                   SET @n_UCCPerToteID = 0
                   SET @c_Groupkey = ''
@@ -429,7 +476,7 @@ BEGIN
                
                SET @n_QtyToReplen = @n_QtyToReplen - @n_Qty
                SET @n_QtyNeed = @n_QtyNeed - @n_Qty
-               SET @c_ToID    = @c_FromID
+               SET @c_ToID    = ''                                                  --2026-01-28 
                SET @c_FinalID = CASE WHEN @c_FinalLocLoseID = 1 THEN '' ELSE @c_FromID END
                SET @c_Taskdetailkey = '' 
 
@@ -481,6 +528,7 @@ BEGIN
 
                   UPDATE TaskDetail WITH (ROWLOCK)
                   SET GroupKey = @c_GroupKey
+                     ,TrafficCop = NULL                                             --2026-01-28           
                   WHERE TaskDetailkey = @c_Taskdetailkey
                   AND GroupKey = ''
 
@@ -497,13 +545,20 @@ BEGIN
                   VALUES (@n_UCC_RowRef, @c_UCCNo, @c_Storerkey, @c_Sku
                         , @c_Lot, @c_FinalLoc, @c_FinalID, @c_Taskdetailkey)
 
-                  UPDATE UCC WITH (ROWLOCK)
-                     SET [Status] = '3'
-                  WHERE UCC.UCC_RowRef = @n_UCC_RowRef
-
-                  IF @@ERROR <> 0
+                  --2026-01-28 Not to SET to '3' if Custom Trigger Add updated it
+                  IF EXISTS ( SELECT 1 FROM UCC (NOLOCK) 
+                              WHERE UCC.UCC_RowRef = @n_UCC_RowRef
+                              AND   UCC.[Status] = '1'
+                            )
                   BEGIN
-                     SET @n_Continue = 3
+                     UPDATE UCC WITH (ROWLOCK)
+                        SET [Status] = '3'
+                     WHERE UCC.UCC_RowRef = @n_UCC_RowRef
+
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @n_Continue = 3
+                     END
                   END
 
                   SET @n_UCCPerToteID = @n_UCCPerToteID + 1
@@ -515,6 +570,7 @@ BEGIN
          CLOSE @cur_WaveReplfr
          DEALLOCATE @cur_WaveReplfr
 
+         SET @c_FinalLocPAZone_P = @c_FinalLocPAZone                                --2026-01-27
          FETCH NEXT FROM @cur_WaveReplto INTO @c_Storerkey, @c_Sku, @c_FinalLoc, @c_Lot 
                                              ,@n_QtyNeed, @c_FinalLocPAZone, @c_FinalLocLoseID                          
       END
@@ -531,6 +587,32 @@ BEGIN
       AND CL.Storerkey = @c_Storerkey  
       AND CL.Code = 'DEFAULT'
 
+      INSERT INTO #TMP_CL (Listname, Code, Description, Short, Long                
+                          ,Notes, Notes2, Storerkey
+                          ,UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
+      SELECT CL.Listname   
+           , CL.Code   
+           , [Description] = ISNULL(CL.[Description],'')   
+           , Short = ISNULL(CL.Short,'')      
+           , Long  = ISNULL(CL.Long ,'')     
+           , Notes = ISNULL(CL.Notes,'')      
+           , Notes2= ISNULL(CL.Notes2,'')           
+           , CL.Storerkey  
+           , CL.UDF01   
+           , CL.UDF02   
+           , CL.UDF03   
+           , CL.UDF04   
+           , CL.UDF05   
+           , CL.Code2  
+      FROM CODELKUP CL (NOLOCK)  
+      WHERE CL.Listname IN ('ONBRMVOUT','ONBRAZONES')  
+      ORDER BY  CL.Listname, CL.Code 
+
+      IF @@ROWCOUNT > 0 
+      BEGIN
+         SET @c_CustomToLoc = 'ONBRMVOUT'
+      END
+      
       SELECT @c_Priority = CL.Short                                               
       FROM CODELKUP CL (NOLOCK)
       WHERE CL.Storerkey = @c_Storerkey
@@ -543,23 +625,30 @@ BEGIN
       SET @c_SQL =   
             N' SET @cur_pick = CURSOR FAST_FORWARD READ_ONLY FOR'    
           + ' SELECT PD.Storerkey, PD.Sku'
-          +       ' ,CASE WHEN @c_DispatchCasePickMethod =''1'''                          
-          +             ' THEN PD.Lot ELSE '''' END AS Lot'
+          --+       ' ,CASE WHEN @c_DispatchCasePickMethod =''1'''                          
+          --+             ' THEN PD.Lot ELSE '''' END AS Lot'
+          +        ' , PD.Lot'                                                      --CR v3.6 ONBR: 1 sku = 1 lot             
           +       ' ,PD.Loc, PD.ID, SUM(PD.Qty) AS Qty '    
           +       ' ,PD.UOM, SUM(PD.UOMQty) AS UOMQty'  
           +       ' ,PD.DropID'               
           +       ' ,O.Route'   
           +       ' ,CASE WHEN @c_DispatchCasePickMethod =''1'''                          
           +             ' THEN O.Orderkey ELSE '''' END AS Orderkey'    
-          +       ' ,TOLOC.Loc AS ToLoc'   
+          +       CASE WHEN @c_CustomToLoc > '' OR @c_DefaultLoc = ''  
+                       THEN ', ISNULL(TOLOC.Loc,'''') AS ToLoc' 
+                              ELSE ', '''' AS ToLoc' 
+                              END  
           +       ' ,@c_Priority AS Priority'                                            
           +       ' ,CASE WHEN @c_DispatchCasePickMethod =''1'''                        
           +             ' THEN CONVERT(NVARCHAR(8), O.DeliveryDate, 112) ELSE '''' END AS DeliveryDate'
           +       ' ,'''' AS Loadkey'                                                   
-          +       ' ,ISNULL(LPLD.Loc,'''')'    
+          +        CASE WHEN @c_CustomToLoc = '' 
+                        THEN ', ISNULL(LPLD.Loc,'''') AS LPLDLoc' 
+                        ELSE ', '''' AS LPLDLoc' 
+                        END      
           +       ' ,AD.Areakey'   
-          +       ' ,ISNULL(P.CubeUOM1, 0.00)'    
-          +       ' ,ISNULL(P.CubeUOM3, 0.00)'    
+          +        ' ,CubeUOM1 = S.StdCube*P.CaseCnt'                               --CR v3.4
+          +        ' ,CubeUOM3 = S.StdCube'                                         --CR v3.4
           +       ' ,LOC.LocLevel'   
           +       ' ,P.Casecnt'   
           + ' FROM WAVEDETAIL WD (NOLOCK)'  
@@ -570,19 +659,47 @@ BEGIN
           + ' JOIN AreaDetail AD (NOLOCK) ON LOC.PutawayZone = AD.PutawayZone'   
           + ' JOIN SKU S (NOLOCK) ON S.StorerKey = PD.Storerkey AND S.SKU = PD.Sku'
           + ' JOIN PACK P (NOLOCK) ON P.PackKey = S.PACKKey'
-          + ' LEFT JOIN STORERSODEFAULT SSO (NOLOCK) ON SSO.Storerkey = O.Consigneekey'
+          +  CASE WHEN @c_CustomToLoc = '' AND @c_DefaultLoc = ''  
+                  THEN    
+            ' LEFT JOIN STORERSODEFAULT SSO (NOLOCK) ON SSO.Storerkey = O.Consigneekey'
           + ' OUTER APPLY (SELECT TOP 1 TL.Loc FROM LOC TL (NOLOCK) WHERE TL.Putawayzone = SSO.Route) AS TOLOC'  
-          + ' OUTER APPLY (SELECT TOP 1 ISNULL(LPD.Loc, '''') AS Loc'  
+                  ELSE
+            ''    END
+          + CASE WHEN @c_CustomToLoc > ''
+                 THEN
+            ' CROSS APPLY (SELECT VAS = CASE WHEN o.Notes > '''' THEN 1'
+          +                                ' WHEN o.Notes2 > '''' THEN 1'
+          +                                ' WHEN (SELECT oif.Notes FROM ORDERINFO oif (NOLOCK)'
+          +                                      ' WHERE oif.Orderkey = o.Orderkey) > '''' THEN 1'
+          +                                ' ELSE 0 END'
+          +              ') AS ot'
+          + ' OUTER APPLY (SELECT TOP 1' 
+          +              ' LOC = CASE WHEN cl1.Short = ''1'' THEN cl2.UDF05'
+          +                         ' WHEN cl1.Short = ''2'' AND o.DocType = ''E'' AND o.Ecom_Single_Flag = ''S'' THEN cl2.UDF03'
+          +                         ' WHEN cl1.Short = ''2'' AND o.DocType = ''E'' AND o.Ecom_Single_Flag = ''M'' THEN cl2.UDF04'
+          +                         ' WHEN cl1.Short = ''2'' AND o.DocType = ''N'' AND ot.VAS = 0 THEN cl2.UDF01'
+          +                         ' WHEN cl1.Short = ''2'' AND o.DocType = ''N'' AND ot.VAS = 1 THEN cl2.UDF02'
+          +                         ' END'
+          +              ' FROM #TMP_CL cl1'  
+          +              ' JOIN #TMP_CL cl2 ON cl2.ListName = ''ONBRMVOUT'''
+          +                               ' AND cl2.Code = cl1.Code'
+          +              ' WHERE cl1.ListName = ''ONBRAZONES'''
+          +              ' AND   cl1.Code = LOC.PutawayZone'
+          +              ') AS TOLOC'
+                 ELSE  
+            ' OUTER APPLY (SELECT TOP 1 ISNULL(LPD.Loc, '''') AS Loc'  
           +              ' FROM LoadPlanLaneDetail LPD (NOLOCK)'        
           +              ' WHERE LPD.LoadKey = O.Loadkey) AS LPLD' 
+                 END
           + ' WHERE WD.Wavekey = @c_Wavekey'  
           + ' AND PD.Status = ''0'''
           + ' AND PD.Qty > 0'
           + ' AND PD.WIP_RefNo = @c_SourceType' 
           + ' AND PD.Taskdetailkey = '''''          
           + ' GROUP BY PD.Storerkey, PD.Sku'
-          +        ' , CASE WHEN @c_DispatchCasePickMethod =''1'''                       
-          +        '        THEN PD.Lot ELSE '''' END'
+          +        ' , PD.Lot'                                                      --CR v3.6 ONBR: 1 sku = 1 lot          
+          --+        ' , CASE WHEN @c_DispatchCasePickMethod =''1'''                       
+          --+        '        THEN PD.Lot ELSE '''' END'
           +        ' , PD.Loc, PD.ID, PD.UOM, O.Route'
           +        ' , PD.DropID'             
           +        ' , CASE WHEN @c_DispatchCasePickMethod =''1'''                        
@@ -592,11 +709,14 @@ BEGIN
           +        ' , CASE WHEN @c_DispatchCasePickMethod =''1'''                    
           +        '        THEN CONVERT(NVARCHAR(8), O.DeliveryDate, 112) ELSE '''' END'
           +        ' , LOC.LogicalLocation'
-          +        ' , TOLOC.Loc'                                                                
-          +        ' , ISNULL(LPLD.Loc,'''')'
+          --+ CASE WHEN @c_CustomToLoc > '' 
+          --       THEN ' , LOC.PutawayZone, ot.VAS' ELSE '' END    
+          + CASE WHEN @c_CustomToLoc > '' OR @c_DefaultLoc = ''  
+                 THEN ' , ISNULL(TOLOC.Loc,'''')' ELSE '' END
+          + CASE WHEN @c_CustomToLoc = '' 
+                 THEN ' , ISNULL(LPLD.Loc,'''')' ELSE '' END
           +        ' , AD.Areakey'
-          +        ' , ISNULL(P.CubeUOM1, 0.00)'
-          +        ' , ISNULL(P.CubeUOM3, 0.00)'
+          +        ' , S.StdCube'                                                   --CR v3.4
           +        ' , LOC.LocLevel'
           +        ' , P.Casecnt'
           + ' ORDER BY O.Route'                                                     
@@ -604,7 +724,9 @@ BEGIN
           +        '        THEN O.Consigneekey ELSE '''' END'                                       
           +        ' , CASE WHEN @c_DispatchCasePickMethod =''1'''  
           +        '        THEN O.Orderkey ELSE '''' END'
-          +        ' , ISNULL(LPLD.Loc,'''')'    
+          + CASE WHEN @c_CustomToLoc = '' 
+                 THEN ' , ISNULL(LPLD.Loc,'''')' ELSE ', ISNULL(TOLOC.Loc,'''')' END  
+          +        ' , CASE WHEN @n_MaxUCCVol >= 0 THEN PD.UOM ELSE '''' END'
           +        ' , AD.Areakey'   
           +        ' , Loc.LogicalLocation, PD.Loc;' 
           + CHAR(13) 
@@ -614,6 +736,7 @@ BEGIN
                       + ',@c_SourceType   NVARCHAR(30)'
                       + ',@c_DispatchCasePickMethod NVARCHAR(10)'
                       + ',@c_Priority     NVARCHAR(10)'
+                      + ',@n_MaxUCCVol    FLOAT'
                       + ',@cur_pick       CURSOR      OUTPUT'  
   
       EXEC sp_executesql @c_SQL   
@@ -622,6 +745,7 @@ BEGIN
          , @c_SourceType 
          , @c_DispatchCasePickMethod
          , @c_Priority  
+         , @n_MaxUCCVol         
          , @cur_pick OUTPUT
 
       FETCH NEXT FROM @cur_pick INTO  @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_FromID
@@ -639,7 +763,7 @@ BEGIN
          SET @c_ToID = @c_FromID
          SET @c_RefTaskkey  = ''
 
-         IF ISNULL(@c_DefaultLoc,'') <> ''  
+         IF @c_CustomToLoc = '' AND ISNULL(@c_DefaultLoc,'') <> '' 
            SET @c_ToLoc = @c_DefaultLoc  
 
          IF ISNULL(@c_LPLDLoc,'') <> ''  
@@ -648,7 +772,7 @@ BEGIN
          IF ISNULL(@c_Toloc,'') = ''  
          BEGIN           
             SET @n_Continue = 3    
-            SET @n_err = 83030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @n_err = 83040  -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid To Loc setup. (mspRLWAV09)' 
          END    
 
@@ -663,18 +787,102 @@ BEGIN
             WHERE trp.Storerkey = @c_Storerkey
             AND   trp.Sku       = @c_Sku
             AND   trp.ToLoc     = @c_FromLoc
+            AND   trp.ToID      = @c_FromID                                         --2026-01-29
             
+            IF @n_Cnt = 0                                                           --2026-01-29
+            BEGIN
+               SET @n_QtyAllocated = 0  
+
+               SET @c_SQL = N'SELECT @n_QtyAllocated = SUM(td.Qty)'
+                          +  ' FROM dbo.TaskDetail td (NOLOCK)'   
+                          +  ' WHERE td.Storerkey = @c_Storerkey'  
+                          +  ' AND   td.Sku       = @c_Sku'  
+                          +  ' AND   td.TaskType  IN (''FCP'')'  
+                          +  CASE WHEN @c_Lot = '' 
+                                  THEN '' 
+                                  ELSE ' AND td.Lot = @c_Lot'
+                                  END
+                          +  ' AND   td.FromLOC  = @c_FromLoc'  
+                          +  ' AND   td.FromID   = @c_FromID'     
+                          +  ' AND   td.UOM      = ''6'''            
+                          +  ' AND   td.SourceType= @c_SourceType'  
+                          +  ' AND   td.[Status] NOT IN (''X'',''9'')'
+                           + ' GROUP BY td.FromLOC, td.FromID '
+                          +  CASE WHEN @c_Lot = '' 
+                                  THEN '' 
+                                  ELSE ',td.Lot'
+                                  END
+                                  
+               SET @c_SQLParms = N'@c_Storerkey    NVARCHAR(15)' 
+                               + ',@c_Sku          NVARCHAR(20)'  
+                               + ',@c_Lot          NVARCHAR(10)'   
+                               + ',@c_FromLoc      NVARCHAR(10)'  
+                               + ',@c_FromID       NVARCHAR(18)'
+                               + ',@c_SourceType   NVARCHAR(30)'
+                               + ',@n_QtyAllocated INT  OUTPUT' 
+                               
+               EXEC sp_ExecuteSQL @c_SQL     
+                                 ,@c_SQLParms 
+                                 ,@c_Storerkey     
+                                 ,@c_Sku            
+                                 ,@c_Lot             
+                                 ,@c_FromLoc        
+                                 ,@c_FromID  
+                                 ,@c_SourceType 
+                                 ,@n_QtyAllocated  OUTPUT      
+
+               SET @n_QtyAllocated = @n_QtyAllocated + @n_Qty
+               
+               SET @c_SQL = N'SELECT @n_Cnt = 1'
+                          + ' FROM dbo.LOTxLOCxID lli (NOLOCK)'  
+                          + ' WHERE lli.Storerkey = @c_Storerkey'  
+                          + ' AND lli.Sku = @c_Sku'  
+                          + CASE WHEN @c_Lot = '' 
+                                 THEN ''
+                                 ELSE ' AND lli.Lot = @c_Lot'
+                                 END
+                          + ' AND   lli.LOC = @c_FromLoc'  
+                          + ' AND   lli.ID = @c_FromID'
+                          + ' GROUP BY lli.LOC, lli.ID '
+                          +  CASE WHEN @c_Lot = '' 
+                                  THEN '' 
+                                  ELSE ',lli.Lot'
+                                  END
+                          + ' HAVING SUM(lli.Qty - lli.QtyPicked - @n_QtyAllocated)< 0'                             
+
+               SET @c_SQLParms = N'@c_Storerkey    NVARCHAR(15)' 
+                               + ',@c_Sku          NVARCHAR(20)'  
+                               + ',@c_Lot          NVARCHAR(10)'   
+                               + ',@c_FromLoc      NVARCHAR(10)'  
+                               + ',@c_FromID       NVARCHAR(18)' 
+                               + ',@n_QtyAllocated INT' 
+                               + ',@n_Cnt          INT   OUTPUT'
+                                  
+               EXEC sp_ExecuteSQL @c_SQL     
+                                 ,@c_SQLParms 
+                                 ,@c_Storerkey     
+                                 ,@c_Sku            
+                                 ,@c_Lot             
+                                 ,@c_FromLoc        
+                                 ,@c_FromID        
+                                 ,@n_QtyAllocated
+                                 ,@n_Cnt           OUTPUT
+            END 
+                       
             IF @n_Cnt = 0
             BEGIN
+               -- FCP Reftaskkey = '' as picking from multiple RPF carton (if pickface's max carton limit > 1)
                SELECT TOP 1 @n_Cnt = 1
                FROM dbo.TaskDetail td (NOLOCK) 
                WHERE td.Storerkey = @c_Storerkey
                AND   td.Sku       = @c_Sku
-               AND   td.TaskType  = 'RPF'
-               AND   td.FinalLOC  = @c_FromLoc
+               AND   td.TaskType  IN ('RPF','ASTRPT')                               --2026-01-29
+                AND   td.FinalLOC  = @c_FromLoc
                AND   td.SourceType= @c_SourceType
-               AND   td.[Status] BETWEEN '0' AND '8'
-               ORDER BY td.TaskDetailKey DESC
+               AND   td.[Status] NOT IN ('9','X')                                   --2026-01-29
+               ORDER BY CASE WHEN td.TaskType = 'RPF' THEN 1                        --2026-01-29
+                             ELSE 9 END
+                    ,   td.TaskDetailKey DESC
             END
 
             IF @n_Cnt = 1
@@ -683,11 +891,13 @@ BEGIN
             END
          END                                                                            
 
-         IF @c_UOM IN ('2', '6') AND @n_LocLevel = 0
+         IF @c_UOM IN ('2', '6')  
          BEGIN
             SET @n_Volume = 0.00
+            SET @n_PackUOMQty= 1.00                                                 --CR v3.4            
             SET @c_TaskType = 'FCP'  
-            SET @c_PickMethod = 'PP'  
+            SET @c_PickMethod = 'PP'
+            SET @n_DropIDVol  = @n_MaxSkuVol
         
             IF @c_DispatchCasePickMethod = '1'
             BEGIN
@@ -700,25 +910,25 @@ BEGIN
             
             IF @c_UOM = '2' AND @c_UCCNo > ''
             BEGIN
-               SET @n_Volume = 1
+               SET @n_Volume     = 1          -- Max 14
+               SET @n_Cube       = 1                                                --CR v3.4
+               SET @n_PackUOMQty = 1.00                                             --CR v3.4
+               SET @n_DropIDVol  = @n_MaxUCCVol
             END
             ELSE IF @c_UOM = '2' AND @c_UCCNo = ''
             BEGIN
                IF @n_Casecnt > 0 
                BEGIN
-                  SET @n_Volume = @n_CubeUOM1 * (@n_Qty / @n_Casecnt) 
+                  SET @n_Volume     = @n_CubeUOM1 * (@n_Qty / @n_Casecnt) 
+                  SET @n_Cube       = @n_CubeUOM1                                   --CR v3.4
+                  SET @n_PackUOMQty = @n_Casecnt                                    --CR v3.4
                END
             END
             ELSE IF @c_UOM = '6'
             BEGIN
-               SET @n_Volume = @n_CubeUOM3 * @n_Qty      --EA
-            END
-
-            SET @n_TTLVolume = ISNULL(@n_TTLVolume, 0.00) + @n_Volume
-
-            IF @n_TTLVolume > @n_MaxSkuVol
-            BEGIN
-               SET @c_Groupkey = ''
+               SET @n_Volume     = @n_CubeUOM3 * @n_Qty      --EA
+               SET @n_Cube       = @n_CubeUOM3                                      --CR v3.4
+               SET @n_PackUOMQty = 1.00                                             --CR v3.4
             END
 
             IF @c_Orderkey_P <> @c_Orderkey
@@ -736,36 +946,31 @@ BEGIN
                SET @c_Groupkey = ''
             END
 
-            SET @n_NoOfGroup = 1
-            SET @n_MaxQtyPerGroup = 0
-            IF @c_Groupkey = ''
-            BEGIN
-               SET @n_TTLVolume = @n_Volume
-
-               IF @n_TTLVolume > @n_MaxSkuVol AND @c_UCCNo = ''  
-               BEGIN
-                  --Check if need how many groups
-                  IF @n_MaxSkuVol > 0 
-                  BEGIN
-                     SET @n_NoOfGroup = CEILING(@n_TTLVolume / @n_MaxSkuVol)
-                  END
- 
-                  IF (@c_UOM = '2' AND @n_CubeUOM1 > 0) OR (@c_UOM > '2' AND @n_CubeUOM3 > 0)
-                  BEGIN
-                     SET @n_MaxQtyPerGroup = FLOOR(CASE WHEN @c_UOM = '2' and @c_UCCNo = ''
-                                                        THEN (@n_MaxSkuVol / @n_CubeUOM1) * @n_Casecnt
-                                                        ELSE  @n_MaxSkuVol / @n_CubeUOM3
-                                                        END
-                                                  )
-                  END
-               END
+            IF @c_UCCNo > '' AND @c_UOM_P <> @c_UOM
+            BEGIN 
+               SET @c_Groupkey = ''
             END
+            
+            IF @c_Groupkey > '' AND @n_DropIDVol > 0.00 AND @n_VolumeLeftToFulFill > 0    --CR v3.4 - START
+            BEGIN
+               IF @n_VolumeLeftToFulFill < @n_Cube                                        --(Wan01)
+               BEGIN
+                  SET @c_Groupkey = ''
+               END              
+            END                                                                           --CR v3.4 - END
                  
-            SET @n_QtyToRelease = @n_Qty
-            WHILE @n_NoOfGroup > 0 AND @n_Continue IN (1,2) 
+            SET @n_QtyLeftTofulfill = @n_Qty                                              --CR v3.4 - START
+            
+            IF @c_UOM = '2' AND @c_UCCNo > '' 
+            BEGIN
+               SET @n_QtyLeftTofulfill = 1                                                
+            END   
+                     
+            WHILE @n_QtyLeftTofulfill > 0 AND @n_Continue IN (1,2)                        --CR v3.4  
             BEGIN
                IF @c_Groupkey = ''
                BEGIN
+                  SET @n_VolumeLeftTofulfill = @n_DropIDVol                               --CR v3.4
                   EXEC dbo.nspg_GetKey @KeyName = @c_KeyName
                                      , @fieldlength = 10
                                      , @keystring = @c_Groupkey   OUTPUT
@@ -780,20 +985,26 @@ BEGIN
                
                IF @n_Continue IN (1,2) 
                BEGIN
+                  SET @n_QtyToTake = 0                                              --(Wan01)
+                  SET @n_MaxQtyPerGroup = FLOOR((@n_VolumeLeftTofulfill/@n_Cube)*@n_PackUOMQty)
                   IF @n_MaxQtyPerGroup > 0
                   BEGIN
-                     IF @n_QtyToRelease > @n_MaxQtyPerGroup
+                     IF @n_QtyLeftTofulfill > @n_MaxQtyPerGroup
                      BEGIN
-                        SET @n_QtyToRelease = @n_QtyToRelease - @n_MaxQtyPerGroup
-                        SET @n_Qty = @n_MaxQtyPerGroup
+                        SET @n_QtyToTake = @n_MaxQtyPerGroup
                      END
                      ELSE
                      BEGIN
-                        SET @n_Qty = @n_QtyToRelease
-                        SET @n_QtyToRelease = 0
+                        SET @n_QtyToTake = @n_QtyLeftTofulfill
                      END
                   END
-
+                  
+                  IF @c_UCCNo = ''
+                  BEGIN
+                     SET @n_UOMQty = @n_QtyToTake
+                     SET @n_Qty    = @n_QtyToTake                                              
+                  END
+                  
                   EXEC isp_InsertTaskDetail     
                       @c_TaskType              = @c_TaskType               
                      ,@c_Storerkey             = @c_Storerkey  
@@ -833,11 +1044,21 @@ BEGIN
                   IF @b_Success <> 1   
                   BEGIN  
                      SET @n_Continue = 3  
-                     SET @n_NoOfGroup = 0
                   END  
 
-                  SET @n_NoOfGroup = @n_NoOfGroup - 1
-               END
+                  IF @n_QtyToTake < @n_MaxQtyPerGroup                                    --CR v3.4 - START
+                  BEGIN
+                     SET @n_TTLVolume = @n_QtyToTake * @n_Cube
+                     SET @n_VolumeLeftTofulfill = @n_VolumeLeftTofulfill - @n_TTLVolume
+                  END
+                  ELSE 
+                  BEGIN
+                     SET @n_TTLVolume = 0.00
+                     SET @n_VolumeLeftTofulfill = 0.00
+                     SET @c_Groupkey  = ''
+                  END
+                  SET @n_QtyLeftTofulfill = @n_QtyLeftTofulfill - @n_QtyToTake              
+               END                                                                  --CR v3.4 - END
             END
          END
 
@@ -896,11 +1117,13 @@ BEGIN
             ELSE  
             BEGIN  
                UPDATE TASKDETAIL WITH (ROWLOCK)  
-               SET Groupkey = @c_Taskdetailkey  
+               SET Groupkey = @c_Taskdetailkey 
+                  ,Trafficcop = NULL                                                --2026-01-28 
                WHERE TaskDetailKey = @c_Taskdetailkey    
             END  
          END  
-       
+
+         SET @c_UOM_P     = @c_UOM      
          SET @c_Orderkey_P= @c_Orderkey
          SET @c_Areakey_P = @c_Areakey
          SET @c_ToLoc_P   = @c_ToLoc
@@ -966,6 +1189,11 @@ QUIT_SP:
       DROP TABLE #TMP_RPFUCC  
    END
   
+   IF OBJECT_ID('tempdb..#TMP_CL') IS NOT NULL  
+   BEGIN
+      DROP TABLE #TMP_CL  
+   END
+
    IF @n_Continue=3  -- Error Occured - Process And Return    
    BEGIN    
       SET @b_success = 0    

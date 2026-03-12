@@ -13,6 +13,7 @@ GO
 /*                                                                               */
 /* Date       Rev  Author      Purposes                                          */
 /* 2025-11-13 1.0  Jackc       FCR-8974 Created                                  */
+/* 2026-02-03 1.1  Dennis      FCR-8931                                          */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtUpd27 (
@@ -72,13 +73,8 @@ BEGIN
                   SELECT 'Generate Transmit Log2', @cPickSlipNo AS PSNO, @cLabelNo AS LabelNo, @cPackDtlDropID AS PackToDropID
 
                SELECT TOP 1 @cOrderKey = PH.OrderKey
-               FROM dbo.PackDetail PD WITH (NOLOCK)
-               JOIN dbo.PackHeader PH WITH (NOLOCK)
-                  ON PD.StorerKey = PH.StorerKey
-                  AND PD.PickSlipNo = PH.PickSlipNo
-               WHERE PD.PickSlipNo = @cPickSlipNo
-                  AND PD.DropID = @cPackDtlDropID
-                  AND PD.LabelNo = @cLabelNo
+               FROM PickHeader PH WITH (NOLOCK)
+               WHERE PH.PickHeaderKey = @cPickSlipNo
 
                SET @nRowCount = @@ROWCOUNT
 

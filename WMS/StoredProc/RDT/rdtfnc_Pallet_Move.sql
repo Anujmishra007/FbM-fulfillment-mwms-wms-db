@@ -27,6 +27,7 @@ GO
 /* 2024-11-28 1.4   CYU027   FCR-1391 Levis                             */
 /* 2025-01-10 1.5.0 Dennis   UWP-28966 BugFix                           */
 /* 2025-08-27 1.6.0 NickT    FCR-7160 Add @nInputkey to valiation SP    */
+/* 2026-02-16 1.7.0 NYE018   FCR-10366 add loc check digit              */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Pallet_Move] (
@@ -74,6 +75,9 @@ DECLARE
    @cExtendedValidateSP    NVARCHAR( 20),
 
    @nTranCount       INT,
+
+   @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10366
+   @cCheckDigitLOC      NVARCHAR( 20), -- FCR-10366
    
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),
@@ -121,6 +125,8 @@ SELECT
    @cSuggestLoc         = V_String2,
    @cSuggestLocSP       = V_String3,
    @cExtendedValidateSP = V_String4,
+
+   @cLOCCheckDigitSP    = V_String5, -- FCR-10366
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -183,6 +189,8 @@ BEGIN
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorer)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
+   
+   SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorer)  -- FCR-10366
 
    -- Enable all fields
    SET @cFieldAttr01 = ''
@@ -319,6 +327,23 @@ IF @nInputKey = 1 -- ENTER
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need Final LOC
          GOTO Step_2_Fail
       END
+
+      -- FCR-10366
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_2_Fail
+         END
+         SET @cToLOC = @cCheckDigitLOC   
+      END
+      -- FCR-10366
 
       -- Check invalid from loc
       SELECT 
@@ -470,6 +495,8 @@ BEGIN
       V_String2  = @cSuggestLoc,
       V_String3  = @cSuggestLocSP,
       V_String4  = @cExtendedValidateSP,
+
+      V_String5  = @cLOCCheckDigitSP, -- FCR-10366
 
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,

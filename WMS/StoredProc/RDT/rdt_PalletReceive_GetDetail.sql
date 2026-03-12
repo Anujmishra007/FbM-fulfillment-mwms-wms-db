@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */
 /* 2015-09-04 1.0  Ung        SOS347636 Created                               */
 /* 2025-06-18 1.1  Cuize      FCR-4200 Add Customer SP                        */
+/* 2026-01-06 1.2  Jackc      FCR-9251 Add Fix get next line issue            */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_PalletReceive_GetDetail (
@@ -54,6 +55,7 @@ BEGIN
    DECLARE @cGetDetailSP  NVARCHAR( 20)
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
+   DECLARE @nRowCount      INT
 
 
    -- Get storer config
@@ -176,6 +178,7 @@ BEGIN
 
    -- Get 1st line
    IF @cSKU = ''
+   BEGIN
       SELECT TOP 1 
          @cSKU = SKU, 
          @nQTY = QTYExpected, 
@@ -184,7 +187,10 @@ BEGIN
       WHERE ReceiptKey = @cReceiptKey
          AND ToID = @cToID
          AND BeforeReceivedQTY = 0
-      ORDER BY SKU, ReceiptLineNumber 
+      ORDER BY SKU, ReceiptLineNumber
+      --v1.2
+      SET @nRowCount = @@ROWCOUNT
+   END 
    ELSE
    BEGIN
       -- Get same SKU, next line
@@ -198,10 +204,13 @@ BEGIN
          AND SKU = @cSKU
          AND BeforeReceivedQTY = 0
          AND ReceiptLineNumber > @cRDLineNo
-      ORDER BY ReceiptLineNumber 
+      ORDER BY ReceiptLineNumber
+      --V1.2
+      SET @nRowCount = @@ROWCOUNT 
 
       -- Get next SKU
-      IF @@ROWCOUNT = 0
+      IF @nRowCount = 0
+      BEGIN
          SELECT TOP 1 
             @cSKU = SKU, 
             @nQTY = QTYExpected, 
@@ -211,11 +220,14 @@ BEGIN
             AND ToID = @cToID
             AND SKU > @cSKU
             AND BeforeReceivedQTY = 0
-         ORDER BY SKU, ReceiptLineNumber 
+         ORDER BY SKU, ReceiptLineNumber
+         --V1.2
+         SET @nRowCount = @@ROWCOUNT
+      END 
    END
    
    -- No more record
-   IF @@ROWCOUNT = 0
+   IF @nRowCount = 0 --V1.2
    BEGIN
       SET @nErrNo = -1
       GOTO Quit 

@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 15-Dec-2025 WLChooi  1.0   Initial Version                           */
+/* 02-Feb-2026 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortReplenReAlloc01] (    
@@ -32,7 +32,8 @@ CREATE OR ALTER PROC [dbo].[msp_ProcessShortReplenReAlloc01] (
      , @b_Success          INT            = 0   OUTPUT
      , @n_Err              INT            = 0   OUTPUT
      , @c_ErrMsg           NVARCHAR(225)  = ''  OUTPUT
-     , @b_Debug            INT            = 0    
+     , @b_Debug            INT            = 0
+     , @c_OtherParms       NVARCHAR(MAX)  = ''
 ) AS    
 BEGIN    
    SET NOCOUNT ON    
@@ -57,6 +58,12 @@ BEGIN
          , @c_GetWavekey               NVARCHAR(10)
          , @c_FinalLoc                 NVARCHAR(10) = ''
          , @c_FinalID                  NVARCHAR(18) = ''
+         , @c_ReplenishStrategy        NVARCHAR(10) = 'Gen-UCC'
+         , @c_ReplenishCode            NVARCHAR(500)= ''
+         , @c_SQL                      NVARCHAR(MAX) = ''
+         , @c_SQLParms                 NVARCHAR(MAX) = ''
+         , @c_ReplenType               NVARCHAR(10) = 'R'
+         , @c_ReplenSPName             NVARCHAR(50) = ''
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -66,7 +73,7 @@ BEGIN
    
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      CREATE TABLE #TMP_PICK
+      CREATE TABLE #TMP_PICK_SHORT
       (
          Pickdetailkey  NVARCHAR(18) PRIMARY KEY
        , Wavekey        NVARCHAR(10)
@@ -132,6 +139,22 @@ BEGIN
       AND TD.TaskType = 'RPF'
 
       SET @n_DynReplen = ISNULL(@n_DynReplen, 0)
+
+      SELECT @c_ReplenishStrategy = dbo.fnc_GetParamValueFromString('@c_ReplenishStrategy', @c_OtherParms, @c_ReplenishStrategy)
+      SELECT @c_ReplenType = dbo.fnc_GetParamValueFromString('@c_ReplenType', @c_OtherParms, @c_ReplenType)
+      
+      IF ISNULL(@c_ReplenishStrategy, '') = ''
+         SET @c_ReplenishStrategy = 'Gen-UCC'
+      
+      IF ISNULL(@c_ReplenType, '') = ''
+         SET @c_ReplenType = 'R'
+
+      SELECT TOP 1 @c_ReplenishCode = ISNULL(TRIM(RSD.ReplenCode), '')
+      FROM REPLENISHSTRATEGYDETAIL RSD (NOLOCK)
+      WHERE RSD.ReplenishStrategykey = @c_ReplenishStrategy
+      AND (RSD.ReplenCode IS NOT NULL OR RSD.ReplenCode <> '')
+
+      SET @c_ReplenSPName = RTRIM(SUBSTRING(@c_ReplenishCode, 1, CHARINDEX('@',@c_ReplenishCode,1) - 1))
    END
 
    -- Prepare temp data
@@ -148,12 +171,12 @@ BEGIN
       FROM TASKDETAIL TD (NOLOCK)
       WHERE TD.Storerkey = @c_StorerKey
       AND TD.Sku = @c_SKU
-      AND TD.TaskType = 'FCP'
+      AND TD.TaskType IN ('ASTCPK','FCP')
       AND TD.FromLoc = @c_FinalLoc
       AND TD.FromID = @c_FinalID
       AND TD.[Status] IN ('0', 'H')
       
-      INSERT INTO #TMP_PICK (Pickdetailkey, Wavekey)
+      INSERT INTO #TMP_PICK_SHORT (Pickdetailkey, Wavekey)
       SELECT DISTINCT PD.Pickdetailkey, PD.Wavekey
       FROM PICKDETAIL PD (NOLOCK)
       WHERE PD.Storerkey = @c_StorerKey
@@ -171,7 +194,7 @@ BEGIN
          -- Update all FCP tasks to X
          IF (@n_Continue = 1 OR @n_Continue = 2)
          AND EXISTS ( SELECT 1
-                      FROM #TMP_PICK )
+                      FROM #TMP_PICK_SHORT )
          BEGIN
             BEGIN TRY
                UPDATE TD WITH (ROWLOCK)
@@ -209,14 +232,9 @@ BEGIN
          -- Unalloc Pickdetail
          IF (@n_Continue = 1 OR @n_Continue = 2)
          BEGIN
-            IF @b_debug = 0
-            BEGIN
-               BEGIN TRAN
-            END
-      
             SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT T.Pickdetailkey
-            FROM #TMP_PICK T
+            FROM #TMP_PICK_SHORT T
             ORDER BY T.Pickdetailkey
       
             OPEN @CUR_UNALLOC
@@ -239,14 +257,6 @@ BEGIN
             END
             CLOSE @CUR_UNALLOC
             DEALLOCATE @CUR_UNALLOC
-      
-            IF @b_debug = 0 AND @n_Continue IN (1,2)
-            BEGIN
-               WHILE @@TRANCOUNT > 0
-               BEGIN
-                  COMMIT TRAN
-               END
-            END
          END
       
          -- Call Short Pick Reallocate SP to pre-cartonize and release Wave
@@ -254,7 +264,7 @@ BEGIN
          BEGIN
             SET @CUR_ALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT DISTINCT T.Wavekey
-            FROM #TMP_PICK T
+            FROM #TMP_PICK_SHORT T
             ORDER BY T.Wavekey
       
             OPEN @CUR_ALLOC
@@ -266,8 +276,8 @@ BEGIN
                BEGIN TRY
                   EXEC dbo.msp_ProcessShortPickReAlloc03 @c_Wavekey = @c_GetWavekey -- nvarchar(10)
                                                        , @c_SKU = @c_SKU -- nvarchar(20)
-                                                       , @c_UCCNo = @c_UCCNo -- nvarchar(20)
-                                                       , @c_Taskdetailkey = N'' -- nvarchar(10)
+                                                       , @c_Loc = @c_FinalLoc -- nvarchar(20)
+                                                       , @c_Taskdetailkey = @c_Taskdetailkey -- nvarchar(10)
                                                        , @b_Success = @b_Success OUTPUT -- int
                                                        , @n_Err = @n_Err OUTPUT -- int
                                                        , @c_ErrMsg = @c_ErrMsg OUTPUT -- nvarchar(225)
@@ -288,40 +298,112 @@ BEGIN
             END
             CLOSE @CUR_ALLOC
             DEALLOCATE @CUR_ALLOC
+
+            -- Unalloc Pickdetail
+            IF (@n_Continue = 1 OR @n_Continue = 2)
+            BEGIN
+               SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT T.Pickdetailkey
+               FROM #TMP_PICK_SHORT T
+               ORDER BY T.Pickdetailkey
+         
+               OPEN @CUR_UNALLOC
+         
+               FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
+         
+               WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+               BEGIN
+                  BEGIN TRY
+                     DELETE PICKDETAIL
+                     WHERE PickDetailKey = @c_PickDetailKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @n_Continue = 3
+                     SET @c_ErrMsg = ERROR_MESSAGE()
+                  END CATCH
+         
+                  FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
+               END
+               CLOSE @CUR_UNALLOC
+               DEALLOCATE @CUR_UNALLOC
+            END
          END
       END
       ELSE IF @n_DynReplen <> 1   -- Normal Min-Max Replen - @n_DynReplen <> 1
       BEGIN
          IF ISNULL(@c_Storerkey, '') <> '' AND ISNULL(@c_Facility, '') <> ''
          BEGIN
-            BEGIN TRY
-               EXEC dbo.isp_GenReplenishmentTask_01 @c_Zone01 = @c_Facility -- nvarchar(10)
-                                                  , @c_Zone02 = N'ALL' -- nvarchar(10)
-                                                  , @c_Zone03 = N'' -- nvarchar(10)
-                                                  , @c_Zone04 = N'' -- nvarchar(10)
-                                                  , @c_Zone05 = N'' -- nvarchar(10)
-                                                  , @c_Zone06 = N'' -- nvarchar(10)
-                                                  , @c_Zone07 = N'' -- nvarchar(10)
-                                                  , @c_Zone08 = N'' -- nvarchar(10)
-                                                  , @c_Zone09 = N'' -- nvarchar(10)
-                                                  , @c_Zone10 = N'' -- nvarchar(10)
-                                                  , @c_Zone11 = N'' -- nvarchar(10)
-                                                  , @c_Zone12 = N'' -- nvarchar(10)
-                                                  , @c_ReplenFlag = 'N' -- nvarchar(10)
-                                                  , @c_StorerKey = @c_Storerkey -- nvarchar(15)
-                                                  , @c_ReplenType = N'T' -- nvarchar(10)
-            END TRY
-            BEGIN CATCH
-               SET @n_Continue = 3
-               SET @c_ErrMsg = ERROR_MESSAGE()
-            END CATCH
+            IF @n_Continue IN (1, 2)
+            AND EXISTS ( SELECT 1 
+                         FROM dbo.sysobjects 
+                         WHERE name = TRIM(@c_ReplenSPName)
+                         AND type = 'P' )
+            BEGIN
+               SET @c_SQL = ' EXEC ' + TRIM(@c_ReplenSPName) + ' @c_Zone01 = @c_Facility ' + CHAR(13)
+                          + '                                  , @c_Zone02 = N''ALL'' ' + CHAR(13)
+                          + '                                  , @c_Zone03 = N'''' ' + CHAR(13)
+                          + '                                  , @c_Zone04 = N'''' ' + CHAR(13)
+                          + '                                  , @c_Zone05 = N'''' ' + CHAR(13)
+                          + '                                  , @c_Zone06 = N'''' ' + CHAR(13)
+                          + '                                  , @c_Zone07 = N'''' ' + CHAR(13)
+                          + '                                  , @c_Zone08 = N'''' ' + CHAR(13)
+                          + '                                  , @c_Zone09 = N'''' ' + CHAR(13)
+                          + '                                  , @c_Zone10 = N'''' ' + CHAR(13)
+                          + '                                  , @c_Zone11 = N'''' ' + CHAR(13)
+                          + '                                  , @c_Zone12 = N'''' ' + CHAR(13)
+                          + '                                  , @c_ReplenFlag = ''N'' ' + CHAR(13)
+                          + '                                  , @c_StorerKey = @c_Storerkey '  + CHAR(13) 
+                          + '                                  , @c_ReplenType = @c_ReplenType '
+               
+               SET @c_SQLParms = '   @c_Storerkey     NVARCHAR(15) ' + CHAR(13)
+                               + ' , @c_Facility      NVARCHAR(5)  ' + CHAR(13)
+                               + ' , @c_ReplenType    NVARCHAR(10) '
+               BEGIN TRY
+                  EXEC sp_ExecuteSql @c_SQL
+                                   , @c_SQLParms
+                                   , @c_Storerkey
+                                   , @c_Facility
+                                   , @c_ReplenType
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+               END CATCH
+            END
+
+            IF @n_Continue IN (1, 2)
+            BEGIN
+               BEGIN TRY
+                  EXEC dbo.ispReleaseReplenTask_Wrapper @c_Facility = @c_Facility
+                                                      , @c_zone02 = N'ALL'
+                                                      , @c_zone03 = N''
+                                                      , @c_zone04 = N''
+                                                      , @c_zone05 = N''
+                                                      , @c_zone06 = N''
+                                                      , @c_zone07 = N''
+                                                      , @c_zone08 = N''
+                                                      , @c_zone09 = N''
+                                                      , @c_zone10 = N''
+                                                      , @c_zone11 = N''
+                                                      , @c_zone12 = N''
+                                                      , @c_Storerkey = @c_Storerkey
+                                                      , @b_success = @b_success OUTPUT -- int
+                                                      , @n_err = @n_err OUTPUT -- int
+                                                      , @c_errmsg = @c_errmsg OUTPUT -- nvarchar(250)
+
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+               END CATCH
+            END
          END
       END
    END
 
    QUIT_SP:
-   IF OBJECT_ID('tempdb..#TMP_PICK ','u') IS NOT NULL 
-      DROP TABLE #TMP_PICK
+   IF OBJECT_ID('tempdb..#TMP_PICK_SHORT ','u') IS NOT NULL 
+      DROP TABLE #TMP_PICK_SHORT
 
    IF OBJECT_ID('tempdb..#TMP_TASK_FCP ','u') IS NOT NULL 
       DROP TABLE #TMP_TASK_FCP

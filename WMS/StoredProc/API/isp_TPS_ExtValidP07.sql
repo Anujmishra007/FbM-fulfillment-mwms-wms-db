@@ -4,13 +4,14 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/******************************************************************************/
-/* Store procedure: isp_TPS_ExtValidP07                                        */
-/* Copyright      : LFLogistics                                               */
-/*                                                                            */
-/* Date         Rev  Author     Purposes                                      */
-/* 2024-12-13   1.0  yeekung   TPS-744 Created                               */
-/******************************************************************************/
+/************************************************************************************************/
+/* Store procedure: isp_TPS_ExtValidP07                                                         */
+/* Copyright      : Maersk                                                                      */
+/*                                                                                              */
+/* Date         Rev  Author     Purposes                                                        */
+/* 2024-12-13   1.0  yeekung   TPS-744 Created                                                  */
+/* 2025-08-26   1.0  GCH225    UWP-40086 Extra Validation prevent user scan retailSKU and etc   */
+/************************************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPS_ExtValidP07] (
 	@json       NVARCHAR( MAX),
@@ -79,13 +80,29 @@ BEGIN
    ELSE      
       SELECT @jResult = @cBarcode     
   
+   IF EXISTS ( SELECT 1 
+               FROM SKU (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+               AND (RetailSKU = @jResult
+               OR AltSKU = @jResult
+               OR ManufacturerSKU = @jResult
+               )
+   )
+   BEGIN
+      SET @n_Err = 1001651
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') -- 1001651 Invalid Scan. RetailSKU, AltSKU or ManufacturerSKU is not allow insert into SerialNo table. Function : isp_TPS_ExtValidP07
+
+      SET @jResult = (SELECT '' AS SKU
+      FOR JSON PATH,INCLUDE_NULL_VALUES )    
+      SET @b_Success = 0
+   END
 
    IF EXISTS (SELECT 1 FROM SerialNo WITH (NOLOCK)
          WHERE SerialNo = @jResult      
          AND storerKey = @cStorerKey )
    BEGIN
-      SET @n_Err = 1001651
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') -- 1001651 Duplicate SerialNO. Function : isp_TPS_DecodeSP09
+      SET @n_Err = 1001652
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') -- 1001652 Duplicate SerialNO. Function : isp_TPS_ExtValidP07
 
       SET @jResult = (SELECT '' AS SKU
       FOR JSON PATH,INCLUDE_NULL_VALUES )    

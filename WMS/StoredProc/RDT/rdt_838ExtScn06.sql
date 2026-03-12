@@ -198,6 +198,9 @@ BEGIN
       @cPackByFromDropID   NVARCHAR( 1),
       @cDefaultCursor      NVARCHAR( 2), --(v7.5)
       @nScan               INT
+   DECLARE @nWeight FLOAT
+   DECLARE @nCartonWeight FLOAT
+   DECLARE @fCube FLOAT
 
    SELECT 
       @nCurrentStep = Step,
@@ -313,11 +316,7 @@ BEGIN
          SET @cPickSlipNo = @cInField01
          SET @cFromDropID = @cInField02
 
-         SELECT @cOrderKey = ORDERKEY
-         FROM PickHeader (NOLOCK)
-         WHERE PickHeaderKey = @cPickSlipNo
-
-         SELECT TOP 1 @cMUOM = Uom
+         SELECT TOP 1 @cMUOM = Uom,@cOrderKey = Orderkey
          FROM PickDetail (NOLOCK)
          WHERE DropID = @cFromDropID
          AND StorerKey = @cStorerKey
@@ -329,30 +328,49 @@ BEGIN
          END
          ELSE IF @cMUOM = '6'
          BEGIN
-            SELECT @cOutField09 = '2' 
+            SELECT @cOutField09 = CASE WHEN DocType='N' THEN '1' WHEN DocType='E' THEN '2' END FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey
          END
       END
       IF @nCurrentStep = 8
       BEGIN
          IF @nStep = 4
          BEGIN
-            -- Print label
-            IF EXISTS( SELECT 1
-               FROM rdt.rdtReport WITH (NOLOCK)
-               WHERE ReportType = 'SHIPCLABEL'
-                  AND StorerKey = @cStorerKey
-                  AND (Function_ID = @nFunc OR Function_ID = 0))
-            BEGIN
-               SET @nAfterScn = 4654
-               SET @nAfterStep = 5
-               GOTO QUIT
-            END
+            SELECT @cOutField02 = SUM(PD.QTY * SKU.STDGROSSWGT)
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU)
+            WHERE PickSlipNo = @cPickSlipNo
+               AND CartonNo  = @nCartonNo
+            GROUP BY PD.PickSlipNo, PD.CartonNo
+
+            SELECT
+               @cOutField05 = LengthUOM1,
+               @cOutField06 = WidthUOM1,
+               @cOutField07 = HeightUOM1
+            FROM dbo.PackInfo PI WITH (NOLOCK)
+            JOIN dbo.UCC UCC (NOLOCK) ON UCC.UCCNo = PI.UCCNo AND UCC.StorerKey = @cStorerKey
+            JOIN dbo.SKU SKU (NOLOCK) ON SKU.SKU = UCC.SKU AND SKU.StorerKey = @cStorerKey
+            JOIN dbo.Pack P (NOLOCK) ON P.PackKey = SKU.PackKey
+            WHERE PI.PickSlipNo = @cPickSlipNo
+               AND PI.CartonNo  = @nCartonNo
+
+            SET @fCube = CAST(ISNULL(@cOutField05,0) as FLOAT) * CAST( ISNULL(@cOutField06,0) as FLOAT) * CAST( ISNULL(@cOutField07,0) as FLOAT)
+            SET @cOutField03 = rdt.rdtFormatFloat( @fCube)
+
+            SET @nAfterStep = 99
+            GOTO QUIT
          END
       END
       IF @nCurrentStep = 3
       BEGIN
          IF @nStep = 4
          BEGIN
+            SELECT @cOutField02 = SUM(PD.QTY * SKU.STDGROSSWGT)
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU)
+            WHERE PickSlipNo = @cPickSlipNo
+               AND CartonNo  = @nCartonNo
+            GROUP BY PD.PickSlipNo, PD.CartonNo
+
             SET @nAfterStep = 99
             GOTO QUIT
          END
@@ -375,7 +393,7 @@ BEGIN
             END
             ELSE IF @cMUOM = '6'
             BEGIN
-               SELECT @cOutField09 = '2' 
+               SELECT @cOutField09 = CASE WHEN DocType='N' THEN '1' WHEN DocType='E' THEN '2' END FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey
             END
          END
       END
@@ -498,7 +516,6 @@ BEGIN
                ELSE IF @cDefaultWeight IN ('2', '3')
                BEGIN
                   -- Weight (SKU only)
-                  DECLARE @nWeight FLOAT
                   SELECT @nWeight = ISNULL( SUM( SKU.STDGrossWGT * PD.QTY), 0)
                   FROM dbo.PackDetail PD WITH (NOLOCK)
                      JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU)
@@ -509,7 +526,6 @@ BEGIN
                   IF @cDefaultWeight = '3'
                   BEGIN
                      -- Get carton type info
-                     DECLARE @nCartonWeight FLOAT
                      SELECT @nCartonWeight = CartonWeight
                      FROM Cartonization C WITH (NOLOCK)
                         JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
@@ -711,7 +727,6 @@ BEGIN
                   END
                END
 
-               DECLARE @fCube FLOAT
                DECLARE @fWeight FLOAT
                DECLARE @fCartonQty FLOAT --(cc02)
                SET @fCube = CAST( @cCube AS FLOAT)
@@ -727,6 +742,15 @@ BEGIN
                -- PackInfo
                IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
                BEGIN
+                  SELECT @cLength = CartonLength, @cWidth = CartonWidth, @cHeight = CartonHeight
+                  FROM Cartonization C WITH (NOLOCK)
+                     JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
+                  WHERE S.StorerKey = @cStorerKey
+                     AND C.CartonType = @cCartonType
+
+                  SET @fCube = CAST(@cLength as FLOAT) * CAST( @cWidth as FLOAT) * CAST( @cHeight as FLOAT)
+                  SET @fCube = @fCube / 1000000
+
                   INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, Qty, Weight, Cube, CartonType, RefNo, Length, Width, Height)
                   VALUES (@cPickSlipNo, @nCartonNo, @fCartonQty, @fWeight, @fCube, @cCartonType, @cRefNo, @cLength, @cWidth, @cHeight)  --(cc02)/(james20)
                   IF @@ERROR <> 0
@@ -965,6 +989,7 @@ BEGIN
                   SET @nAfterStep = 8
                END
             END
+            GOTO QUIT
          END
          IF @nCurrentScn = 6708
          BEGIN
@@ -984,8 +1009,34 @@ BEGIN
                WHERE S.StorerKey = @cStorerKey
                   AND C.CartonType = @cCartonType
                
+               IF @cDefaultWeight IN ('2', '3')
+               BEGIN
+                  -- Weight (SKU only)
+                  SELECT @nWeight = ISNULL( SUM( SKU.STDGrossWGT * PD.QTY), 0)
+                  FROM dbo.PackDetail PD WITH (NOLOCK)
+                     JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU)
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                     AND PD.CartonNo = @nCartonNo
+
+                  -- Weight (SKU + carton)
+                  IF @cDefaultWeight = '3'
+                  BEGIN
+                     -- Get carton type info
+                     SELECT @nCartonWeight = CartonWeight
+                     FROM Cartonization C WITH (NOLOCK)
+                        JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
+                     WHERE S.StorerKey = @cStorerKey
+                        AND C.CartonType = @cCartonType
+
+                     SET @nWeight = @nWeight + @nCartonWeight
+                  END
+                  SET @cWeight = rdt.rdtFormatFloat( @nWeight)
+                  SET @fWeight = CAST( @cWeight AS FLOAT)
+               END
+               
                UPDATE dbo.PackInfo SET
                   CartonType = @cCartonType,
+                  Weight = @fWeight,
                   Length = @cLength,  
                   Width = @cWidth,     
                   Height = @cHeight

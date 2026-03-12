@@ -7,13 +7,8 @@ GO
 /* Store procedure: isp_TPS_ExtREPrint03                                      */
 /* Copyright      : Maersk                                                    */
 /*                                                                            */
-/* Date         Rev  Author     Purposes                                      */
-/* 2023-06-23   1.0  yeekung    TPS-759 Created                               */
-/* 2023-09-12   1.1  YeeKung    TPS-773/TPS-740 New print (yeekung3)          */
-/* 2024-02-09   1.2  YeeKung    TPS-821 Add reporttpe (yeekung03)             */ 
-/* 2024-11-06   1.3  YeeKung    TPS-989 Add Facility (yeekung03)              */
-/* 2024-12-01   1.4  YeeKung    TPS-954 add customize prinnt (yeekung03)      */
-/* 2025-04-22   2.1  GhChan     UWP-33066 FCR-4039 Fix Group By (Gh01)        */
+/* Date         Rev  Author     Purposes                                      */  
+/* 2025-06-23   1.0  GCH225     FCR-5588 Created                              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPS_ExtREPrint03] (
@@ -49,7 +44,6 @@ BEGIN
    DECLARE @cLabelPrinter  NVARCHAR ( 30)
    DECLARE @cPaperPrinter  NVARCHAR ( 30)
    DECLARE @cPrinter       NVARCHAR ( 20)
-   DECLARE @nJobID         INT
    DECLARE @cSQL           NVARCHAR ( MAX)
    DECLARE @cSQLParam      NVARCHAR ( MAX)
    DECLARE @cNewPaperPrinter NVARCHAR(20)
@@ -287,10 +281,10 @@ BEGIN
          , @c_ErrMsg       = @c_ErrMsg          OUTPUT  
          , @c_PrintSource  = @c_PrintSource          
          , @b_SCEPreView   = 0           
-         , @c_JobIDs       = @nJobID         OUTPUT      
+         , @c_JobIDs       = @c_JobIDs         OUTPUT      
          , @c_AutoPrint    = 'N'       
 
-         SET @cLabelJobID = @nJobID  
+         SET @cLabelJobID = @cLabelJobID + @c_JobIDs  
 
          FETCH NEXT FROM @cCurLabel INTO @cReportType  
       END  
@@ -322,8 +316,8 @@ BEGIN
       FETCH NEXT FROM @cCurOrderList INTO @cCurOrderkey  
       WHILE @@FETCH_STATUS = 0  
       BEGIN 
-         --Skip Print Packing List if all Pick Detail Status havent update to 5
-         IF EXISTS(SELECT 1 FROM PICKDETAIL (NOLOCK) WHERE OrderKey = @cOrderKey AND Status <> '5')
+         --Skip Print Packing List if all Pick Detail Status still below 5
+         IF EXISTS(SELECT 1 FROM PICKDETAIL (NOLOCK) WHERE OrderKey = @cOrderKey AND Status < '5')
          BEGIN
             --SET @b_Success = 0
             --SET @n_Err = 1002909  
@@ -510,10 +504,10 @@ BEGIN
             , @c_ErrMsg       = @c_ErrMsg          OUTPUT
             , @c_PrintSource  = @c_PrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs       = @nJobID         OUTPUT    
+            , @c_JobIDs       = @c_JobIDs         OUTPUT    
             , @c_AutoPrint    = 'N'   
-                  
-            SET @cPackingJobID = @nJobID 
+
+            SET @cPackingJobID = @cPackingJobID + @c_JobIDs
 
             FETCH NEXT FROM @cCurPaper INTO @cReportType
          END

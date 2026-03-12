@@ -28,6 +28,8 @@
 /* 24-JUN-2019 Wan08    1.9   Performance Tune                              */  
 /* 23-JAN-2024 Alex01   2.0   JIRA#PAC-300 - Display device position        */
 /* 30-JAN-2024 Alex02   2.1   Changed table resultset to json               */
+/* 23-JAN-2026 Sean01   2.2   Fix orders not show                           */
+/*                              when EpackForceMultiPackByOrd = 1           */
 /****************************************************************************/  
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackTaskOrders_M]  
             @b_Debug          INT            = 0
@@ -130,46 +132,47 @@ BEGIN
       GOTO DISPLAY_ORDERS  
    END  
    
-
+   -- Sean01 - START
    --(Wan08) - START  
-   IF @c_Orderkey <> ''  
-   BEGIN  
-      SELECT @c_Storerkey = Storerkey  
-            ,@c_Facility  = Facility  
-      FROM ORDERS WITH (NOLOCK)  
-      WHERE Orderkey = @c_Orderkey  
+   -- IF @c_Orderkey <> ''  
+   -- BEGIN  
+   --    SELECT @c_Storerkey = Storerkey  
+   --          ,@c_Facility  = Facility  
+   --    FROM ORDERS WITH (NOLOCK)  
+   --    WHERE Orderkey = @c_Orderkey  
   
-      SET @c_EpackForceMultiPackByOrd = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EpackForceMultiPackByOrd')  
+   --    SET @c_EpackForceMultiPackByOrd = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EpackForceMultiPackByOrd')  
   
-      IF @c_EpackForceMultiPackByOrd = '1' AND  
-         --@c_Storerkey = 'DOTERRA' AND  
-         EXISTS ( SELECT 1 FROM PACKTASKDETAIL PTD (NOLOCK)  
-                  WHERE Orderkey = @c_Orderkey  
-                  AND Status >= '3'  
-                  )  
-      BEGIN  
-         SELECT DISTINCT  
-               TaskBatchNo  = ISNULL(PTD.TaskBatchNo,'')  
-            ,  Orderkey     = ISNULL(PTD.Orderkey,'')  
-            ,  DeviceOrderkey = ISNULL(PTD.Orderkey,'')  
-            ,  Status         = ISNULL(PTD.Status,'')  
-            ,  InProgOrderkey = @c_Orderkey  
-            ,  Color = CASE  ISNULL(PTD.Status,'')  
-                        WHEN ''  THEN '#FFFFFF' --16777215     -- WHITE  
-                        WHEN 'X' THEN '#AAAAAA' --8421504      -- GREY (CANC, HOLD)  
-                        WHEN '9' THEN '#1BB52D' --32768        -- GREEN(0,128,0)    (PACKCONFIRM)  
-                        WHEN '3' THEN '#387CF0' --16711680     -- BLUE(0,0,255)     (Assigned Orderkey)  
-                        WHEN '2' THEN '#387CF0' --16711680     -- BLUE(0,0,255)     (Full Match without orderkey)  
-                        WHEN '1' THEN '#387CF0' --16711680     -- BLUE(0,0,255)     (Partial Match without orderkey)  
-                        WHEN '0' THEN '#FA381C' --255          -- RED (255,0,0)     (Open)  
-                        END  
-         FROM PACKTASKDETAIL PTD  WITH (NOLOCK)  
-         WHERE TaskBatchNo = @c_TaskBatchNo  
+   --    IF @c_EpackForceMultiPackByOrd = '1' AND  
+   --       --@c_Storerkey = 'DOTERRA' AND  
+   --       EXISTS ( SELECT 1 FROM PACKTASKDETAIL PTD (NOLOCK)  
+   --                WHERE Orderkey = @c_Orderkey  
+   --                AND Status >= '3'  
+   --                )  
+   --    BEGIN  
+   --       SELECT DISTINCT  
+   --             TaskBatchNo  = ISNULL(PTD.TaskBatchNo,'')  
+   --          ,  Orderkey     = ISNULL(PTD.Orderkey,'')  
+   --          ,  DeviceOrderkey = ISNULL(PTD.Orderkey,'')  
+   --          ,  Status         = ISNULL(PTD.Status,'')  
+   --          ,  InProgOrderkey = @c_Orderkey  
+   --          ,  Color = CASE  ISNULL(PTD.Status,'')  
+   --                      WHEN ''  THEN '#FFFFFF' --16777215     -- WHITE  
+   --                      WHEN 'X' THEN '#AAAAAA' --8421504      -- GREY (CANC, HOLD)  
+   --                      WHEN '9' THEN '#1BB52D' --32768        -- GREEN(0,128,0)    (PACKCONFIRM)  
+   --                      WHEN '3' THEN '#387CF0' --16711680     -- BLUE(0,0,255)     (Assigned Orderkey)  
+   --                      WHEN '2' THEN '#387CF0' --16711680     -- BLUE(0,0,255)     (Full Match without orderkey)  
+   --                      WHEN '1' THEN '#387CF0' --16711680     -- BLUE(0,0,255)     (Partial Match without orderkey)  
+   --                      WHEN '0' THEN '#FA381C' --255          -- RED (255,0,0)     (Open)  
+   --                      END  
+   --       FROM PACKTASKDETAIL PTD  WITH (NOLOCK)  
+   --       WHERE TaskBatchNo = @c_TaskBatchNo  
   
-         GOTO QUIT_SP  
-      END  
-   END  
+   --       GOTO QUIT_SP  
+   --    END  
+   -- END  
    --(Wan08) - END  
+   -- Sean01 - END
 
    --(Alex01) - BEGIN
    SELECT @c_Storerkey = Storerkey  

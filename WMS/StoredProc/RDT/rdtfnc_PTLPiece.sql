@@ -101,6 +101,7 @@ DECLARE
    @cCustomCartonIDSP      NVARCHAR( 20),
    @cExtendedScreenSP      NVARCHAR( 20), --(JHU151)
    @tExtScnData			   VariableTable, --(JHU151)
+   @cCartID                NVARCHAR( 10), -- (Cuize)
    @cUPC                   NVARCHAR( 30), 
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
@@ -181,7 +182,8 @@ SELECT
    @cMultiSKUBarcode    = V_String26, 
    @cCustomCartonIDSP   = V_String27, 
    @cExtendedScreenSP   = V_String28,
-   @cUPC                = V_String41, 
+   @cUPC                = V_String41,
+   @cCartID             = V_String42,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01, 
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02, 
@@ -471,6 +473,15 @@ BEGIN
       SET @nStep = 0
       SET @cOutField01 = ''
       SET @cOutField02 = ''
+   END
+
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0
+         GOTO Step_99
+      END
    END
 END
 GOTO QUIT
@@ -1550,7 +1561,11 @@ BEGIN
                END
             END
          END
-
+         ELSE IF @cExtendedScreenSP = 'rdt_803ExtScn03'
+         BEGIN
+            SET @cCartID = @cUDF07
+            SET @cStation = @cUDF08
+         END
          GOTO Quit
       END
    END -- Ext scn sp <> ''
@@ -1598,7 +1613,9 @@ BEGIN
       V_String26 = @cMultiSKUBarcode, 
       V_String27 = @cCustomCartonIDSP, 
       V_String28 = @cExtendedScreenSP,
-      V_String41 = @cUPC, 
+      V_String41 = @cUPC,
+      V_String42 = @cCartID,
+
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01, 
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02, 

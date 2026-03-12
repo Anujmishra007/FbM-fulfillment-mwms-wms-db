@@ -23,6 +23,7 @@ GO
 /* 2023-07-29 1.8  Ung      WMS-23069 Add serial no                     */
 /* 2024-08-30 1.9  Dennis   UWP-23768 Qty NULL Bug fix                  */
 /* 2025-07-28 2.0  NickT    !!!Cutover. Use V0 for development!!!       */
+/* 2026-02-16 2.1  Sreeja   FCR-10368 Check digit validaton             */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_MoveToID] (
@@ -92,6 +93,9 @@ DECLARE
    @cDecodeSP           NVARCHAR( 20),
    @cSKUValidated       NVARCHAR( 1), -- (james01)
    @cSerialNoCapture    NVARCHAR( 1),
+   
+   @cLOCCheckDigitSP    NVARCHAR( 20), -- (FCR 10368, Sreeja)
+   @cCheckDigitLOC      NVARCHAR( 20),  -- (FCR 10368, Sreeja)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -150,6 +154,8 @@ SELECT
    @cDecodeSP           = V_String20,
    @cSKUValidated       = V_String21,
    @cSerialNoCapture    = V_String22, 
+
+   @cLOCCheckDigitSP    = V_String23, -- (FCR 10368, Sreeja)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -229,6 +235,9 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
    IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
+
+   -- (FCR 10368, Sreeja)
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
 
     -- EventLog sign In
     EXEC RDT.rdt_STD_EventLog
@@ -362,6 +371,20 @@ BEGIN
          SET @nErrNo = 78904
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC needed
          GOTO Step_2_Fail
+      END
+
+      -- Check digit validation for LOC (FCR 10368, Sreeja)
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
+         SET @cFromLOC = @cCheckDigitLOC
       END
 
       -- Get LOC info
@@ -1043,6 +1066,20 @@ BEGIN
          GOTO Step_5_Fail
       END
 
+      -- Check digit (FCR-10368, Sreeja)
+      SET @cCheckDigitLOC = @cInField01
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+            GOTO Step_5_Fail
+         SET @cToLOC = @cCheckDigitLOC
+      END
+
       -- Get LOC info
       SELECT @cChkFacility = Facility
       FROM dbo.LOC WITH (NOLOCK)
@@ -1304,6 +1341,8 @@ BEGIN
       V_String20 = @cDecodeSP,
       V_String21 = @cSKUValidated,
       V_String22 = @cSerialNoCapture, 
+
+      V_String23 = @cLOCCheckDigitSP, -- FCR-10368 (Sreeja)
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

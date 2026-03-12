@@ -6,7 +6,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: isp_rePrint                                               */
-/* Copyright      : LFLogistics                                               */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-04-14   1.0  Chermaine  Created                                       */
@@ -21,8 +21,10 @@ GO
 /* 2024-02-09   1.9  YeeKung    TPS-821 Add reporttpe (yeekung05)             */  
 /* 2025-02-14   2.0  yeekung    TPS-995 Change Error Message (yeekung06)      */
 /* 2025-02-25   2.1  YeeKung    TPS-970 Fix Orderkey reprint (yeekung07)      */
-/* 2025-04-22   2.2  GhChan     UWP-33066 FCR-4039 Fix Group By (Gh01)        */
-/* 2025-04-23   2.2  GhChan     FCR-4207 Fix DynamicPrinter (Gh02)            */
+/* 2025-04-22   2.2  GCH225     UWP-33066 FCR-4039 Fix Group By (Gh01)        */
+/* 2025-04-23   2.3  GCH225     FCR-4207 Fix DynamicPrinter (Gh02)            */
+/* 2025-07-22   2.4  GCH225     UWP-38184 Enhanced the lsp_SetUser logic      */ 
+/* 2025-09-18   2.5  GCH225     FCR-7558 Support for ToteID Print             */ 
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_rePrint] (
@@ -55,7 +57,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 	   @cFacility        NVARCHAR( 5),
 	   @nFunc            NVARCHAR( 5),
 	   @cUserName        NVARCHAR( 128),
-	   @cOriUserName     NVARCHAR( 128),
+	   @c_UserName       NVARCHAR( 128),
       @cScanNo          NVARCHAR( 50),
       @cDropID          NVARCHAR( 50),
       @cPickSlipNo      NVARCHAR( 30),
@@ -84,14 +86,17 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       @curPD            CURSOR,
       @GetCartonID      NVARCHAR( MAX),
       @cShipLabel       NVARCHAR( 10),
-      @nJobID           INT,
       @cWorkstation     NVARCHAR( 30),
       @pickSkuDetailJson   NVARCHAR( MAX),
       @nPrintPackList      NVARCHAR( 1),
       @cSQL                NVARCHAR( MAX),
       @cSQLParam        NVARCHAR(MAX)
 
+   DECLARE @nOutputCount INT
+   DECLARE @b_ExecuteAs BIT
+   
    SET @nPrintPackList = 'N'
+   SET @b_ExecuteAs = 0
 
    --decode json
    select @cStorerKey = StorerKey, @cFacility = Facility,@nFunc = Func,@cUserName = UserName,@cLangCode = LangCode
@@ -115,21 +120,68 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
       --SELECT @cUserName AS cUserNameb4
    --SELECT @cStorerKey AS StorerKey, @cFacility AS Facility,@nFunc AS Func,@cUserName AS UserName,@cScanNo AS ScanNo,@nCartonNo AS CartonNo,@ctype AS ctype,@cWeight AS cWeight, @cCube AS cCube
-   SET @cOriUserName = @cUserName
-   --convert login
+   SET @c_UserName = @cUserName
+
    SET @n_Err = 0
-   EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-   EXECUTE AS LOGIN = @cUserName
+   SET @cSQL = 'EXEC WM.lsp_SetUser @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT';
 
-   IF @n_Err <> 0
+   SET @cSQLParam =  N'@c_UserName NVARCHAR(128) OUTPUT,' +
+				    N'@n_Err INT OUTPUT, ' + 
+				    N'@c_ErrMsg NVARCHAR(125) OUTPUT'
+   --convert login
+   SELECT @nOutputCount=COUNT(1) FROM sys.parameters p (NOLOCK)
+		   JOIN sys.objects o (NOLOCK) 
+		      ON p.object_id = o.object_id
+		   WHERE o.name = 'lsp_SetUser'
+		   AND p.is_output = 1
+   IF @nOutputCount = 4 
    BEGIN
-      --INSERT INTO @errMsg(nErrNo,cErrMsg)
-      SET @b_Success = 0
-      SET @n_Err = @n_Err
-   --   SET @c_ErrMsg = @c_ErrMsg
-      GOTO EXIT_SP
+     SET @cSQL = @cSQL + ', @b_ExecuteAs OUTPUT '
+     SET @cSQLParam = @cSQLParam + ', @b_ExecuteAs BIT OUTPUT'
+
+     EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT, @b_ExecuteAs OUTPUT;
    END
+   ELSE
+   BEGIN
+     EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
+   END
+
+      IF @n_Err <> 0
+      BEGIN
+         --INSERT INTO @errMsg(nErrNo,cErrMsg)
+         SET @b_Success = 0
+         SET @n_Err = @n_Err
+      --   SET @c_ErrMsg = @c_ErrMsg
+         GOTO EXIT_SP
+      END
+
+   IF @nOutputCount = 4
+   BEGIN
+     IF @b_ExecuteAs = 1
+	    GOTO ExecuteAs
+     ELSE
+     BEGIN
+	    IF SESSION_CONTEXT(N'mwms_user_name') IS NULL
+	    BEGIN
+		   SET @b_Success = 0
+		   SET @n_Err = 1001463
+		   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No Session context found. Function : isp_rePrint'
+		   GOTO EXIT_SP
+	    END            
+     END
+   END
+   ELSE
+   BEGIN
+     IF @c_UserName LIKE '%' + @cUserName + '%'
+     BEGIN
+   ExecuteAs:
+	    EXECUTE AS LOGIN = @c_UserName
+	    SET @cUserName = @c_UserName
+     END
+   END
+
+
    --SELECT @cUserName AS cUserName
    --SELECT SUSER_NAME() AS sname
 
@@ -141,7 +193,15 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 	   --b2b
       IF @cType <> 'pickslip' --(cc01)
       BEGIN
-         SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
+         SELECT @cPickSlipNo = ISNULL(PickSlipNo,'') FROM api.appSection WITH (NOLOCK) WHERE userID = @cUserName AND scanNo = @cScanNo
+
+         IF @cPickSlipNo = '' OR @@ROWCOUNT = 0
+         BEGIN
+            SELECT TOP 1 @cPickSlipNo = PickSlipNo 
+            FROM PACKDETAIL (NOLOCK) 
+            WHERE StorerKey = @cStorerKey
+            AND DropID = @cScanNo
+         END
       END
       ELSE IF LEFT (@cScanNo,1) <>'P'
       BEGIN
@@ -183,7 +243,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    DECLARE @groupByFields NVARCHAR(MAX) = ''
 
    -- Common params ofr printing
-   DECLARE @tShipLabel AS VariableTable
+   --DECLARE @tShipLabel AS VariableTable
 
    DECLARE   @c_ModuleID           NVARCHAR(30) ='TPPack'
             , @c_ReportID           NVARCHAR(10) 
@@ -485,9 +545,6 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      , @b_SCEPreView   = 0         
                      , @c_JobIDs      = @cLabelJobID         OUTPUT    
                      , @c_AutoPrint  = 'N'     
-             
-
-                     set @cLabelJobID = @nJobID
 
                      IF @n_Err <> 0
                      BEGIN
@@ -500,7 +557,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                END
             END
 
-            delete @tShipLabel
+            --delete @tShipLabel
 
             FETCH NEXT FROM @curPrint INTO @nCartonNo  
          END
@@ -514,7 +571,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 	         --b2b
 	         IF @cType <> 'pickslip' --(cc01)
 	         BEGIN
-		         SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
+		         SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cUserName AND scanNo = @cScanNo
 	         END
 	         ELSE
 	         BEGIN
@@ -734,9 +791,6 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      , @c_JobIDs      = @cLabelJobID         OUTPUT    
                      , @c_AutoPrint  = 'N'     
              
-
-                  set @cLabelJobID = @nJobID
-
                   IF @n_Err <> 0
                   BEGIN
                      SET @b_Success = 0
@@ -941,8 +995,6 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                   , @b_SCEPreView   = 0         
                   , @c_JobIDs      = @cPackingJobID         OUTPUT    
                   , @c_AutoPrint  = 'N'   
-                  
-                  SET @cPackingJobID = @nJobID  
 
                   IF @n_Err <> 0
                   BEGIN
@@ -967,6 +1019,10 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
 
 EXIT_SP:
+IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+BEGIN
+   EXEC [WM].[lsp_RevertUser]
+END
 REVERT
 
 END

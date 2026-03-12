@@ -22,6 +22,7 @@ GO
 /* 17-Jun-2025 1.5  Dennis    FCR-3959 Customize Confirm                */
 /* 09-Nov-2025 1.6  NickT     UWP-43838 Skip completed task             */
 /* 11-Nov-2025 1.7  NickT     UWP-43955 Fix Exception for USA Levis     */
+/* 07-Jan-2026 1.8  NickT     FCR-7928 Add ConfirmSP                    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_Replen_Confirm] (
@@ -57,15 +58,15 @@ BEGIN
    DECLARE @nNewSystemQTY     INT
    DECLARE @cStatus           NVARCHAR( 10)
    DECLARE @cSQL              NVARCHAR( MAX)
-   DECLARE @cSQLParam         NVARCHAR( MAX),
-   @cConfirmSP                NVARCHAR( 20)
+   DECLARE @cSQLParam         NVARCHAR( MAX)
+   DECLARE @cConfirmSP        NVARCHAR(20)
 
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
    SET @cNewTaskDetailKey = ''
 
-      -- Get storer config
+   -- Get storer config
    SET @cConfirmSP = rdt.rdtGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
    IF @cConfirmSP = '0'
       SET @cConfirmSP = ''
@@ -104,9 +105,6 @@ BEGIN
       END
    END
 
-   -- Handling transaction
-   DECLARE @nTranCount INT
-   SET @nTranCount = @@TRANCOUNT
    -- Get task info
    SET @nSystemQTY = 0
    SELECT 
@@ -127,10 +125,9 @@ BEGIN
    IF @cStatus IN ('5', '0', 'X')
       RETURN
 
-   IF @cReasonKey = '' AND @cStatus = '9'
-   BEGIN
-      RETURN
-   END
+   -- Handling transaction
+   DECLARE @nTranCount INT
+   SET @nTranCount = @@TRANCOUNT
 
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_TM_Replen_Confirm -- For rollback or commit only our own transaction

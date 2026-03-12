@@ -65,6 +65,7 @@ GO
 /*                               PickDetailTrigger_SP run after inv update */
 /* 02-DEC-2024  Wan05      1.25  UWP-23317 - [FCR-618 819] Unpick SerialNo */
 /* 12-Aug-2025  WLChooi    1.26  FCR-5700 Trigger ITF By Wave (WL01)       */
+/* 07-Jan-2026  AndyWu01   1.27  FCR-9658 Trigger ITF By Order (AndyWu01)  */ 
 /***************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailDelete]
 ON [dbo].[PICKDETAIL]
@@ -120,6 +121,7 @@ BEGIN
          , @cur_PSNDEL              CURSOR                                    --(Wan05)
          , @c_WaveKey               NVARCHAR(10)   --WL01
          , @CUR_TriggerPoints       CURSOR         --WL01
+		 , @c_OrderKey              NVARCHAR(10)   --AndyWu01
 
    -- TLTING01
    IF EXISTS ( SELECT 1 FROM DELETED WHERE [STATUS] < '9')
@@ -1397,6 +1399,7 @@ BEGIN
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = OH.StorerKey
       WHERE  ITC.SourceTable = 'PickDetail'
       AND    ITC.sValue      = '1'
+	  AND    ITC.ConfigKey   like 'WSLOGIRPWAVE%'  --AndyWu01
 
       OPEN @CUR_TriggerPoints
       FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
@@ -1429,6 +1432,7 @@ BEGIN
                                                AND STC.SValue = '1'
       WHERE  ITC.SourceTable = 'PickDetail'
       AND    ITC.sValue      = '1'
+	  AND    ITC.ConfigKey   like 'WSLOGIRPWAVE%'  --AndyWu01
 
       OPEN @CUR_TriggerPoints
       FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
@@ -1454,6 +1458,84 @@ BEGIN
    /* Interface Trigger Points Calling Process - (End)     */
    /********************************************************/
    --WL01 E
+
+   --AndyWu01 S
+   --Custom process - If allocated - trigger ITF by Orderkey
+   --Create standard WMS interface triggers for allocation and unallocation at pickdetailkey level
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (Start)   */
+   /********************************************************/
+   IF (@n_continue = 1 OR @n_continue = 2) 
+   BEGIN
+      SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT OH.Orderkey, DEL.PickDetailKey, OH.StorerKey
+      FROM   DELETED DEL
+      JOIN   Orders OH WITH (NOLOCK)            ON DEL.OrderKey = OH.OrderKey
+	  JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = OH.StorerKey
+      WHERE  ITC.SourceTable = 'PickDetail'
+      AND    ITC.sValue      = '1'
+	  AND    ITC.ConfigKey   like 'WSLOGIRPORORDER%'
+
+      OPEN @CUR_TriggerPoints
+      FETCH NEXT FROM @CUR_TriggerPoints INTO @c_OrderKey, @c_PickDetailKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Order
+                  @c_TriggerName    = 'ntrPickDetailDelete'
+                , @c_SourceTable    = 'PickDetail'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_OrderKey       = @c_OrderKey
+				, @c_PickDetailKey  = @c_PickDetailKey
+                , @b_ColumnsUpdated = NULL
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM @CUR_TriggerPoints INTO @c_OrderKey, @c_PickDetailKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE @CUR_TriggerPoints
+      DEALLOCATE @CUR_TriggerPoints
+
+      SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT OH.OrderKey, DEL.PickDetailKey, OH.StorerKey
+      FROM   DELETED DEL
+      JOIN   Orders OH WITH (NOLOCK)            ON DEL.OrderKey   = OH.OrderKey
+      JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = 'ALL'
+      JOIN   StorerConfig STC WITH (NOLOCK)     ON OH.StorerKey = STC.StorerKey 
+                                               AND STC.ConfigKey = ITC.ConfigKey 
+                                               AND STC.SValue = '1'
+      WHERE  ITC.SourceTable = 'PickDetail'
+      AND    ITC.sValue      = '1'
+	  AND    ITC.ConfigKey   like 'WSLOGIRPORORDER%'
+
+      OPEN @CUR_TriggerPoints
+      FETCH NEXT FROM @CUR_TriggerPoints INTO @c_OrderKey, @c_PickDetailKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Order
+                  @c_TriggerName    = 'ntrPickDetailDelete'
+                , @c_SourceTable    = 'PickDetail'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_OrderKey       = @c_OrderKey
+				, @c_PickDetailKey  = @c_PickDetailKey
+                , @b_ColumnsUpdated = NULL
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM @CUR_TriggerPoints INTO @c_OrderKey, @c_PickDetailKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE @CUR_TriggerPoints
+      DEALLOCATE @CUR_TriggerPoints
+   END -- IF @n_continue = 1 OR @n_continue = 2
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (End)     */
+   /********************************************************/
+   --AndyWu01 E
 
    IF @n_continue=3 -- Error Occured - Process And Return
    BEGIN

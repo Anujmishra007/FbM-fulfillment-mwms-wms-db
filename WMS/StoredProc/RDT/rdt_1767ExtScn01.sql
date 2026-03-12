@@ -12,9 +12,10 @@ GO
 /* Date       Rev    Author     Purposes                                  */
 /* 2024-06-13 1.0.0  NLT013     FCR-4971. Created                         */
 /* 2024-06-13 1.0.1  Dennis     FCR-4971. Fix Bug                         */
+/* 2026-01-15 1.0.2  James      FCR-7347. Fix Bug                         */
 /**************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_1767ExtScn01] (
+REATE OR ALTER PROC [RDT].[rdt_1767ExtScn01] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -91,9 +92,26 @@ BEGIN
    IF @nCurrentFunc = 1767 -- TM Cycle Count UCC
    BEGIN
       IF @nCurrentStep = 1 --Loc, ID screen
+      OR @nCurrentStep = 2 --Option screen
       BEGIN
          IF @nInputKey = 1 -- Enter
          BEGIN
+            -- Check valid ucc, user might scan wrong ucc, 
+            -- retrieve again ucc no from taskdetail and display sku on screen
+            IF NOT EXISTS (SELECT 1 
+                           FROM dbo.UCC WITH (NOLOCK)
+                           WHERE Storerkey = @cStorerKey
+                           AND   UCCNo = @cInField01 
+                           AND   [Status] <> '0' ) 
+            BEGIN
+               SELECT @cInField01 = RefNo
+               FROM dbo.CCDetail CCD WITH (NOLOCK)
+               JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( CCD.CCSheetNo = TD.TaskDetailKey AND CCD.Sku = TD.Sku)
+               WHERE CCD.Storerkey = @cStorerKey
+               AND   CCD.CCKey = @cCCKey
+               AND   CCD.CCSheetNo = @cTaskDetailKey
+            END
+
             SELECT TOP 1
                @cSKU = UCC.SKU,
                @cSKUDescr = SKU.DESCR

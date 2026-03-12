@@ -12,6 +12,7 @@ GO
 /*                                                                           */
 /* Date       Rev  Author   Purposes                                         */
 /* 2025-10-15 1.0  Cuize    FCR-7737 Copy From rdt_957ExtScn02 For UAE       */
+/* 2026-03-09 1.1  NYE018   FCR-10631 make ToLoc mandatory                   */
 /*****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn04] (
@@ -814,11 +815,14 @@ BEGIN
             END
             ELSE IF @nInputKey = 0
             BEGIN
-               SET @cOutField01 = @cPickSlipNo
-               SET @cOutField02 = ''
-               SET @cOutField03 = ''
-               SET @nAfterScn = 5291 --DropID scn
-               SET @nAfterStep = 2
+               SET @nErrNo = 249228  -- FCR-10631
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLocNeeded
+               GOTO Quit  -- FCR-10631
+               -- SET @cOutField01 = @cPickSlipNo
+               -- SET @cOutField02 = ''
+               -- SET @cOutField03 = ''
+               -- SET @nAfterScn = 5291 --DropID scn
+               -- SET @nAfterStep = 2
             END
             GOTO Quit
          END

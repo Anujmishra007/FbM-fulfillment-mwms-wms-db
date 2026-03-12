@@ -88,7 +88,9 @@ GO
 /* 2023-11-20 5.4  Ung      WMS-23730 Add Final ID                            */
 /* 2025-02-25 5.5  Ung      WMS-25502 Add DecodeSP with SP for screen 1       */
 /* 2025-10-16 5.6  Ung      FCR-8112 Add serial no                            */
-/*                          Add rdt format for ID                             */ 
+/*                          Add rdt format for ID                             */
+/* 2026-01-26 5.7  Jackc    FCR-9756 Add ExtScn                               */ 
+/* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                     */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
@@ -204,26 +206,46 @@ DECLARE
    @cSQLOrderBy         NVARCHAR( MAX),
    @nRowCount           INT,
 
-   @c_oFieled01 NVARCHAR(20),  @c_oFieled02 NVARCHAR(20),
-   @c_oFieled03 NVARCHAR(20),  @c_oFieled04 NVARCHAR(20),
-   @c_oFieled05 NVARCHAR(20),  @c_oFieled06 NVARCHAR(20),
-   @c_oFieled07 NVARCHAR(20),  @c_oFieled08 NVARCHAR(20),
-   @c_oFieled09 NVARCHAR(20),  @c_oFieled10 NVARCHAR(20),
-   @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),
-   @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),
-   @cInField03 NVARCHAR( 60),  @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1),
-   @cInField04 NVARCHAR( 60),  @cOutField04 NVARCHAR( 60),  @cFieldAttr04 NVARCHAR( 1),
-   @cInField05 NVARCHAR( 60),  @cOutField05 NVARCHAR( 60),  @cFieldAttr05 NVARCHAR( 1),
-   @cInField06 NVARCHAR( 60),  @cOutField06 NVARCHAR( 60),  @cFieldAttr06 NVARCHAR( 1),
-   @cInField07 NVARCHAR( 60),  @cOutField07 NVARCHAR( 60),  @cFieldAttr07 NVARCHAR( 1),
-   @cInField08 NVARCHAR( 60),  @cOutField08 NVARCHAR( 60),  @cFieldAttr08 NVARCHAR( 1),
-   @cInField09 NVARCHAR( 60),  @cOutField09 NVARCHAR( 60),  @cFieldAttr09 NVARCHAR( 1),
-   @cInField10 NVARCHAR( 60),  @cOutField10 NVARCHAR( 60),  @cFieldAttr10 NVARCHAR( 1),
-   @cInField11 NVARCHAR( 60),  @cOutField11 NVARCHAR( 60),  @cFieldAttr11 NVARCHAR( 1),
-   @cInField12 NVARCHAR( 60),  @cOutField12 NVARCHAR( 60),  @cFieldAttr12 NVARCHAR( 1),
-   @cInField13 NVARCHAR( 60),  @cOutField13 NVARCHAR( 60),  @cFieldAttr13 NVARCHAR( 1),
-   @cInField14 NVARCHAR( 60),  @cOutField14 NVARCHAR( 60),  @cFieldAttr14 NVARCHAR( 1),
-   @cInField15 NVARCHAR( 60),  @cOutField15 NVARCHAR( 60),  @cFieldAttr15 NVARCHAR( 1)
+   @cLOCCheckDigitSP    NVARCHAR( 20),
+   @cCheckDigitLOC      NVARCHAR( 20),
+
+   --(jackc01)
+   @cExtScnSP           NVARCHAR( 20),
+   @tExtScnData         VariableTable,
+   @nAction             INT,
+
+   @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
+   @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
+   @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
+   @c_oFieled07 NVARCHAR(20), @c_oFieled08 NVARCHAR(20),
+   @c_oFieled09 NVARCHAR(20), @c_oFieled10 NVARCHAR(20),
+   @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1), --@cLottable01  NVARCHAR( 18),
+   @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1), --@cLottable02  NVARCHAR( 18),
+   @cInField03 NVARCHAR( 60),  @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1), --@cLottable03  NVARCHAR( 18),
+   @cInField04 NVARCHAR( 60),  @cOutField04 NVARCHAR( 60),  @cFieldAttr04 NVARCHAR( 1), --@dLottable04  DATETIME,
+   @cInField05 NVARCHAR( 60),  @cOutField05 NVARCHAR( 60),  @cFieldAttr05 NVARCHAR( 1), @dLottable05  DATETIME,
+   @cInField06 NVARCHAR( 60),  @cOutField06 NVARCHAR( 60),  @cFieldAttr06 NVARCHAR( 1), @cLottable06  NVARCHAR( 30),
+   @cInField07 NVARCHAR( 60),  @cOutField07 NVARCHAR( 60),  @cFieldAttr07 NVARCHAR( 1), @cLottable07  NVARCHAR( 30),
+   @cInField08 NVARCHAR( 60),  @cOutField08 NVARCHAR( 60),  @cFieldAttr08 NVARCHAR( 1), @cLottable08  NVARCHAR( 30),
+   @cInField09 NVARCHAR( 60),  @cOutField09 NVARCHAR( 60),  @cFieldAttr09 NVARCHAR( 1), @cLottable09  NVARCHAR( 30),
+   @cInField10 NVARCHAR( 60),  @cOutField10 NVARCHAR( 60),  @cFieldAttr10 NVARCHAR( 1), @cLottable10  NVARCHAR( 30),
+   @cInField11 NVARCHAR( 60),  @cOutField11 NVARCHAR( 60),  @cFieldAttr11 NVARCHAR( 1), @cLottable11  NVARCHAR( 30),
+   @cInField12 NVARCHAR( 60),  @cOutField12 NVARCHAR( 60),  @cFieldAttr12 NVARCHAR( 1), @cLottable12  NVARCHAR( 30),
+   @cInField13 NVARCHAR( 60),  @cOutField13 NVARCHAR( 60),  @cFieldAttr13 NVARCHAR( 1), @dLottable13  DATETIME,
+   @cInField14 NVARCHAR( 60),  @cOutField14 NVARCHAR( 60),  @cFieldAttr14 NVARCHAR( 1), @dLottable14  DATETIME,
+   @cInField15 NVARCHAR( 60),  @cOutField15 NVARCHAR( 60),  @cFieldAttr15 NVARCHAR( 1), @dLottable15  DATETIME,
+
+   --(jackc01) ext scn
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Getting Mobile information
 SELECT
@@ -263,6 +285,7 @@ SELECT
    @cSKUBarcode   = V_String11,
    @cFlowThruQtyScn = V_String12,
    @cPieceScanSKU = V_String13,
+   @cExtScnSP     = V_String14,
 
    @nPUOM_Div     = V_PUOM_Div,
    @nPQTY         = V_PQTY,
@@ -276,6 +299,8 @@ SELECT
    @nTotalRec     = V_Integer6,
    @nPABookingKey = V_Integer7,
    @nPieceScanQTY = V_Integer8,
+   --C_Integer1 used in extscn (jackc01)
+   @cLOCCheckDigitSP    = C_String1,
 
    @cPASuggestSKU       = V_String20,
    @cPABySKUAndLOT      = V_String21,
@@ -317,7 +342,7 @@ SELECT
    @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14 = FieldAttr14,
    @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15 = FieldAttr15
 
-FROM rdt.rdtMobRec WITH (NOLOCK)
+FROM rdt.RDTMOBREC (NOLOCK)
 WHERE Mobile = @nMobile
 
 -- Redirect to respective screen
@@ -333,6 +358,7 @@ BEGIN
    IF @nStep = 7 GOTO Step_7   -- Scn  = 3570. Multi SKU
    IF @nStep = 8 GOTO Step_8   -- Scn  = 2887. TO ID
    IF @nStep = 9 GOTO Step_9   -- Scn  = 4831. Serial no (2D)
+   IF @nStep = 99 GOTO Step_99 -- Ext Scn
 END
 RETURN -- Do nothing if incorrect step
 
@@ -382,6 +408,13 @@ BEGIN
    SET @cSKUStatus = rdt.RDTGetConfig( @nFunc, 'SKUStatus', @cStorer)
    IF @cSKUStatus = '0'
       SET @cSKUStatus = ''
+
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorer)
+
+   --(jackc01)
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorer)
+   IF @cExtScnSP = '0'
+      SET @cExtScnSP = ''
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -536,7 +569,7 @@ BEGIN
          END
       END
 
-/*
+      /*
       -- Check both ID and UCC provided
       IF @cID <> '' AND @cUCC <> ''
       BEGIN
@@ -545,7 +578,7 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step_1_Fail
       END
-*/
+      */
       DECLARE @nCountLOC INT
       DECLARE @cFromLOC  NVARCHAR( 10)
 
@@ -634,6 +667,23 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need LOC
          EXEC rdt.rdtSetFocusField @nMobile, 3 -- LOC
          GOTO Step_1_Fail
+      END
+
+
+      SET @cCheckDigitLOC = @cInField03
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+      
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cOutField03 = ''
+            GOTO Step_1_Fail
+         END
+         SET @cLOC = @cCheckDigitLOC
       END
 
       -- (yeekung02) add loc prefix
@@ -1511,6 +1561,15 @@ BEGIN
             GOTO Step_3
          END
       END
+      
+      --(jackc01)
+      IF @cExtScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         BEGIN
+            GOTO Step_99
+         END
+      END
    END
    GOTO Quit
 
@@ -1892,7 +1951,7 @@ Step 4. Scn = 2883
 ********************************************************************************/
 Step_4:
 BEGIN
-  IF @nInputKey = 1 -- ENTER
+   IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
       SET @cFinalLOC = @cInField02
@@ -1903,6 +1962,18 @@ BEGIN
          SET @nErrNo = 73877
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need Final LOC
          GOTO Step_4_Fail
+      END
+    
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_4_Fail
+         SET @cFinalLOC = @cCheckDigitLOC
       END
 
       -- Loc prefix
@@ -1979,6 +2050,42 @@ BEGIN
             -- Go to LOC not match screen
             SET @nScn = @nScn + 2
             SET @nStep = @nStep + 2
+
+            -- (jackc01)
+            -- Extended info
+            IF @cExtendedInfoSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+               BEGIN
+                  SET @cExtendedInfo1 = ''
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cStorerkey, @cFacility, ' +
+                     ' @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT'
+                  SET @cSQLParam =
+                     '@nMobile         INT,           ' +
+                     '@nFunc           INT,           ' +
+                     '@cLangCode       NVARCHAR( 3),  ' +
+                     '@nStep           INT,           ' +
+                     '@nAfterStep      INT,           ' +
+                     '@nInputKey       INT,           ' +
+                     '@cStorerKey      NVARCHAR( 15), ' +
+                     '@cFacility       NVARCHAR( 5),  ' +
+                     '@cLOC            NVARCHAR( 10), ' +
+                     '@cID             NVARCHAR( 18), ' +
+                     '@cSKU            NVARCHAR( 20), ' +
+                     '@nQTY            INT,           ' +
+                     '@cSuggestedLOC   NVARCHAR( 10), ' +
+                     '@cFinalLOC       NVARCHAR( 10), ' +
+                     '@cOption         NVARCHAR( 1),  ' +
+                     '@cExtendedInfo1  NVARCHAR( 20) OUTPUT '
+
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, 4, @nStep, @nInputKey, @cStorer, @cFacility,
+                     @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT
+
+                  SET @cOutfield15 = @cExtendedInfo1
+               END
+            END
 
             GOTO Quit
          END
@@ -2177,6 +2284,42 @@ BEGIN
       -- Go to next screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
+
+      -- (jackc01)
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            SET @cExtendedInfo1 = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cStorerkey, @cFacility, ' +
+               ' @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nAfterStep      INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cLOC            NVARCHAR( 10), ' +
+               '@cID             NVARCHAR( 18), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cSuggestedLOC   NVARCHAR( 10), ' +
+               '@cFinalLOC       NVARCHAR( 10), ' +
+               '@cOption         NVARCHAR( 1),  ' +
+               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 4, @nStep, @nInputKey, @cStorer, @cFacility,
+               @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT
+
+            SET @cOutfield15 = @cExtendedInfo1
+         END
+      END
    END
 
    IF @nInputKey = 0 -- ESC
@@ -2297,6 +2440,15 @@ BEGIN
       SET @cOutField12 = CAST( @nMQTY_PWY AS NVARCHAR( 5))
       SET @cOutField13 = ''
       SET @cOutField14 = CASE WHEN @cDefaultQTY = '1' THEN '1' ELSE '' END
+   END
+
+   --(jackc01)
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
    END
    GOTO Quit
 
@@ -2629,6 +2781,42 @@ BEGIN
          -- Go to successful putaway screen
          SET @nScn = @nScn - 1
          SET @nStep = @nStep - 1
+
+         -- (jackc01)
+         -- Extended info
+         IF @cExtendedInfoSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+            BEGIN
+               SET @cExtendedInfo1 = ''
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cStorerkey, @cFacility, ' +
+                  ' @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT'
+               SET @cSQLParam =
+                  '@nMobile         INT,           ' +
+                  '@nFunc           INT,           ' +
+                  '@cLangCode       NVARCHAR( 3),  ' +
+                  '@nStep           INT,           ' +
+                  '@nAfterStep      INT,           ' +
+                  '@nInputKey       INT,           ' +
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cFacility       NVARCHAR( 5),  ' +
+                  '@cLOC            NVARCHAR( 10), ' +
+                  '@cID             NVARCHAR( 18), ' +
+                  '@cSKU            NVARCHAR( 20), ' +
+                  '@nQTY            INT,           ' +
+                  '@cSuggestedLOC   NVARCHAR( 10), ' +
+                  '@cFinalLOC       NVARCHAR( 10), ' +
+                  '@cOption         NVARCHAR( 1),  ' +
+                  '@cExtendedInfo1  NVARCHAR( 20) OUTPUT '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, 4, @nStep, @nInputKey, @cStorer, @cFacility,
+                  @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT
+
+               SET @cOutfield15 = @cExtendedInfo1
+            END
+         END
 
          GOTO Quit
       END
@@ -3040,6 +3228,115 @@ BEGIN
 END
 GOTO Quit
 
+--(jackc01)
+Step_99:
+BEGIN
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cSKU',   @cSKU),
+            ('@cLot',   @cLot)
+
+         DECLARE  @nPreScn       INT,
+                  @nPreInputKey  INT,
+                  @nPreStep      INT
+
+         SET @nPreScn      = @nScn
+         SET @nPreInputKey = @nInputKey
+         SET @nPreStep     = @nStep
+
+         EXECUTE [RDT].[rdt_ExtScnEntry]
+            @cExtScnSP,
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction,
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT,
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         IF @cExtScnSP = 'rdt_523ExtScn01'
+         BEGIN
+            IF @nInputKey = 1
+            BEGIN
+               IF @nPreScn = 6820 AND @nPreStep = 99 AND @nInputKey = 1 -- Enter from New Qty Scn
+               BEGIN
+                  --Export values to main SP
+                  SET @nPQTY_PWY       = ISNULL(TRY_CAST(@cUDF01 AS INT), 0)
+                  SET @nMQTY_PWY       = ISNULL(TRY_CAST(@cUDF02 AS INT), 0)
+                  SET @nQTY_PWY        = ISNULL(TRY_CAST(@cUDF03 AS INT), 0)
+                  SET @nQty            = ISNULL(TRY_CAST(@cUDF04 AS INT), 0)
+                  SET @nPABookingKey   = ISNULL(TRY_CAST(@cUDF05 AS INT), 0)
+                  SET @cSuggestedLOC   = @cUDF06
+                  SET @cQTY_Avail      = @cUDF07  
+                  SET @cQTY_Alloc      = @cUDF08  
+                  SET @cQTY_PMoveIn    = @cUDF09
+
+                  GOTO Quit
+               END
+            END
+         END
+
+         GOTO Quit
+      END
+   END
+
+   Step_99_Fail:
+   BEGIN
+      IF @cExtScnSP = 'rdt_523ExtScn01'
+      BEGIN
+         IF @nPreScn = 6820 AND @nPreStep = 99 AND @nInputKey = 1 -- Enter from New Qty Scn
+         BEGIN
+            IF @nErrNo IN (257209,257210) --No suggest loc,but continue the process
+            BEGIN
+               SET @nPQTY_PWY       = ISNULL(TRY_CAST(@cUDF01 AS INT), 0)
+               SET @nMQTY_PWY       = ISNULL(TRY_CAST(@cUDF02 AS INT), 0)
+               SET @nQTY_PWY        = ISNULL(TRY_CAST(@cUDF03 AS INT), 0)
+               SET @nQty            = ISNULL(TRY_CAST(@cUDF04 AS INT), 0)
+               SET @nPABookingKey   = ISNULL(TRY_CAST(@cUDF05 AS INT), 0)
+               SET @cSuggestedLOC   = @cUDF06
+               SET @cQTY_Avail      = @cUDF07  
+               SET @cQTY_Alloc      = @cUDF08  
+               SET @cQTY_PMoveIn    = @cUDF09
+            END
+            GOTO Quit
+         END
+      END
+
+      GOTO Quit
+   END
+END --st99
+GOTO Quit
+
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
@@ -3080,7 +3377,8 @@ BEGIN
       V_String9  = @cQTY_PMoveIn,
       V_String11 = @cSKUBarcode,
       V_String12 = @cFlowThruQtyScn,
-      V_String13 = @cPieceScanSKU,      
+      V_String13 = @cPieceScanSKU,
+      V_String14 = @cExtScnSP,      
 
       V_PUOM_Div = @nPUOM_Div ,
       V_PQTY     = @nPQTY,
@@ -3094,6 +3392,8 @@ BEGIN
       V_Integer6 = @nTotalRec,
       V_Integer7 = @nPABookingKey,
       V_Integer8 = @nPieceScanQTY,
+      --C_Integer1 used in extscn (jackc01)
+      C_String1  = @cLOCCheckDigitSP,
 
       V_String20 = @cPASuggestSKU,
       V_String21 = @cPABySKUAndLOT,

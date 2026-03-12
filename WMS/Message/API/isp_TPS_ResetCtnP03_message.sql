@@ -22,3 +22,4 @@ execute API.TouchPadAddMsg 1000266, 10, 'Unable to delete CartonTrack. Function 
 execute API.TouchPadAddMsg 1000267, 10, 'Unable to Delete PackInfo. Function : isp_TPS_ResetCtnP03',    'us_english'
 execute API.TouchPadAddMsg 1000268, 10, 'Unable to Update UCC. Function : isp_TPS_ResetCtnP03',    'us_english'
 execute API.TouchPadAddMsg 1000269, 10, 'Unable to Delete PackDetail. Function : isp_TPS_ResetCtnP03',    'us_english'
+execute API.TouchPadAddMsg 1000270, 10, 'No Session context found. Function : isp_TPS_ResetCtnP03',    'us_english'

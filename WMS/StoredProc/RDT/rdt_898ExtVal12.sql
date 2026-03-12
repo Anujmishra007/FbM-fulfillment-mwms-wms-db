@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date        Author   Ver.     Purposes                               */
 /* 2025-10-29  1.0      Dennis   FCR-8472 Created                       */
+/* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields*/  
 /************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal12]
@@ -45,6 +46,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE
+   @nScn                 INT,
    @cStorerKey           NVARCHAR( 15),
    @cFacility            NVARCHAR( 5),
    @cTempLottable01      NVARCHAR( 18), --input field lottable01 from lottable screen
@@ -64,6 +66,7 @@ BEGIN
 
    SELECT
       @cStorerKey  = [StorerKey],
+      @nScn        = scn,
       @cFacility   = [Facility],
       @cTempLottable01 = I_Field01,
       @cTempLottable02 = I_Field02,
@@ -79,7 +82,7 @@ BEGIN
                FROM [dbo].[Receipt] [R] WITH (NOLOCK)
                   INNER JOIN [dbo].[ReceiptDetail] [RD] WITH (NOLOCK) ON [R].[ReceiptKey]  = [RD].[ReceiptKey]
                WHERE [R].[Facility] = @cFacility AND [R].[StorerKey] = @cStorerKey
-                  AND [R].[ReceiptKey] = @cReceiptKey AND (@cPOKey=''NOPO'' OR [RD].[POKey] = @cPOKey)
+                  AND [R].[ReceiptKey] = @cReceiptKey AND (@cPOKey=''NOPO'' OR [RD].[POKey] = @cPOKey OR [RD].[POKey] = '''')
                   AND [RD].[ToId] = @cID
                ORDER BY [RD].[ReceiptLineNumber]
 
@@ -116,7 +119,7 @@ BEGIN
             GOTO Quit
          END
       END
-      IF @nStep = 5
+      IF @nStep = 99 AND @nScn = 1304
       BEGIN
       	IF @nInputKey = 1
       	BEGIN
@@ -204,7 +207,7 @@ BEGIN
                      FROM [dbo].[Receipt] [R] WITH (NOLOCK)
                         INNER JOIN [dbo].[ReceiptDetail] [RD] WITH (NOLOCK) ON [R].[ReceiptKey]  = [RD].[ReceiptKey]
                      WHERE [R].[Facility] = @cFacility AND [R].[StorerKey] = @cStorerKey
-                        AND [R].[ReceiptKey] = @cReceiptKey AND (@cPOKey=N'NOPO' OR [RD].[POKey] = @cPOKey)
+                        AND [R].[ReceiptKey] = @cReceiptKey AND (@cPOKey=N'NOPO' OR [RD].[POKey] = @cPOKey OR [RD].[POKey] = '')
                         AND [RD].[ToId] = @cToID
                      ORDER BY [RD].[ReceiptLineNumber]
                      

@@ -28,3 +28,5 @@ execute API.TouchPadAddMsg 1000074, 10, 'No records found in WMReport. Function 
 execute API.TouchPadAddMsg 1000075, 10, 'No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null. Function : isp_UCCPackConfirm',    'us_english'
 execute API.TouchPadAddMsg 1000076, 10, 'Label Printer setup not done. Please setup the Label Printer. Function : isp_UCCPackConfirm',    'us_english'
 execute API.TouchPadAddMsg 1000077, 10, 'Fail to UPDATE into UCCNO Function : isp_UCCPackConfirm',    'us_english'
+execute API.TouchPadAddMsg 1000078, 10, 'No Session context found. Function : isp_UCCPackConfirm',    'us_english'
+execute API.TouchPadAddMsg 1000079, 10, 'Invalid Post Extended Update SP Name Function : isp_UCCPackConfirm',    'us_english'

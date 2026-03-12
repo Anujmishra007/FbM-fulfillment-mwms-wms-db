@@ -300,7 +300,7 @@ BEGIN
          )
 
       -- 4. Update LOCs to have status 'OK' when there are no Holds
-      UPDATE dbo.LOC WITH(ROWLOCK)
+      /*UPDATE dbo.LOC WITH(ROWLOCK)
 	  SET Status = 'OK'
 	  WHERE Facility = @cFacility
 	     AND LOC IN ( 
@@ -311,6 +311,18 @@ BEGIN
             WHERE IH.Loc IS NULL
                AND L.Facility = @cFacility
                AND L.Status <> 'OK'
+         )*/
+
+      UPDATE L WITH (ROWLOCK)
+      SET Status = 'OK'
+      FROM dbo.Loc L
+      WHERE L.Facility = @cFacility
+         AND L.Status <> 'OK'
+         AND NOT EXISTS (
+            SELECT 1
+            FROM dbo.InventoryHold IH
+            WHERE IH.Loc = L.Loc
+               AND IH.Hold = '1'
          )
    END
 
@@ -330,7 +342,7 @@ BEGIN
 	  AND TD.FromID <> ''
 
    --Delete RFPutaway that got pending but no actual qty
-   DELETE FROM RFPUTAWAY
+   /*DELETE FROM RFPUTAWAY
    WHERE FromID IN (
       SELECT LLI1.ID
       FROM LOTxLOCxID LLI1 WITH (NOLOCK)
@@ -344,10 +356,29 @@ BEGIN
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI3.ID IS NULL
 		 AND LLI2.PendingMoveIN > 0
+   )*/
+
+   DELETE RF
+   FROM RFPUTAWAY RF
+   WHERE EXISTS (
+      SELECT 1
+      FROM LOTxLOCxID LLI
+      WHERE LLI.ID = RF.FromID
+         AND LLI.StorerKey = @cStorerKey
+         AND LLI.PendingMoveIN > 0
+		 AND RF.Id <> ''
    )
+   AND NOT EXISTS (
+      SELECT 1
+      FROM LOTxLOCxID LLI
+      WHERE LLI.ID = RF.FromID
+         AND LLI.StorerKey = @cStorerKey
+         AND LLI.Qty > 0
+		 AND RF.Id <> ''
+    )
 
    --Update pending qty that can no longer be done, to free up the location
-   UPDATE LOTxLOCxID WITH(ROWLOCK)
+   /*UPDATE LOTxLOCxID WITH(ROWLOCK)
    SET PendingMoveIN = 0
    WHERE ID IN (
       SELECT LLI1.ID
@@ -362,10 +393,29 @@ BEGIN
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI3.ID IS NULL
 		 AND LLI2.PendingMoveIN > 0
-   )
+   )*/
+
+   UPDATE LLI
+   SET PendingMoveIN = 0
+   FROM LOTxLOCxID LLI WITH (ROWLOCK)
+   WHERE LLI.StorerKey = @cStorerKey
+      AND LLI.PendingMoveIN > 0
+      AND EXISTS (
+         SELECT 1
+         FROM LOTxLOCxID LLI2 WITH (NOLOCK)
+         WHERE LLI2.ID = LLI.ID
+            AND LLI2.StorerKey = LLI.StorerKey
+      )
+      AND NOT EXISTS (
+         SELECT 1
+         FROM LOTxLOCxID LLI3 WITH (NOLOCK)
+         WHERE LLI3.ID = LLI.ID
+            AND LLI3.StorerKey = @cStorerKey
+            AND LLI3.Qty > 0
+      )
 
    --Delete RFPutaway that can no longer be done, to free up the location
-   DELETE FROM RFPUTAWAY
+   /*DELETE FROM RFPUTAWAY
    WHERE FromID IN (
       SELECT LLI1.ID
       FROM dbo.LOTxLOCxID LLI1 WITH(NOLOCK)
@@ -380,10 +430,22 @@ BEGIN
          AND L.LocationCategory NOT IN ('STAGE','PNDIN')
 		 AND L.Facility = @cFacility
 		 AND LLI2.Qty > 0
-   )
+   )*/
+
+   DELETE RF
+   FROM RFPUTAWAY RF
+   INNER JOIN LOTxLOCxID LLI WITH(NOLOCK)
+      ON LLI.ID = RF.FromID
+      AND LLI.StorerKey = @cStorerKey
+      AND LLI.PendingMoveIN > 0
+      AND LLI.Qty > 0
+   INNER JOIN LOC L WITH(NOLOCK)
+      ON L.Loc = LLI.Loc
+      AND L.Facility = @cFacility
+      AND L.LocationCategory NOT IN ('STAGE','PNDIN')
 
    --Update pending qty that can no longer be done, to free up the location
-   UPDATE LOTxLOCxID WITH(ROWLOCK)
+   /*UPDATE LOTxLOCxID WITH(ROWLOCK)
    SET PendingMoveIN = 0
    WHERE ID IN (
       SELECT LLI1.ID
@@ -399,7 +461,21 @@ BEGIN
          AND L.LocationCategory NOT IN ('STAGE','PNDIN')
 		 AND L.Facility = @cFacility
 		 AND LLI2.Qty > 0
-   )
+   )*/
+
+   UPDATE LLI1
+   SET PendingMoveIN = 0
+   FROM LOTxLOCxID LLI1 WITH(ROWLOCK)
+   INNER JOIN LOTxLOCxID LLI WITH(NOLOCK)
+      ON LLI1.ID = LLI.ID
+      AND LLI1.StorerKey = LLI.StorerKey
+      AND LLI.StorerKey = @cStorerKey
+      AND LLI.PendingMoveIN > 0
+      AND LLI.Qty > 0
+   INNER JOIN LOC L WITH(NOLOCK)
+      ON L.Loc = LLI.Loc
+      AND L.Facility = @cFacility
+      AND L.LocationCategory NOT IN ('STAGE','PNDIN')
 
    --Delete RFPUTAWAY that got tasks archived
    DELETE R
@@ -436,8 +512,8 @@ BEGIN
       SELECT 
 	     O.OrderKey,
 		 PD.PickDetailKey
-      FROM dbo.Orders O 
-	     INNER JOIN dbo.ORDERDETAIL OD 
+      FROM dbo.Orders O WITH(NOLOCK)
+	     INNER JOIN dbo.ORDERDETAIL OD WITH(NOLOCK)
 		 ON O.OrderKey=OD.OrderKey 
 		 INNER JOIN dbo.PICKDETAIL PD 
 		 ON OD.OrderLineNumber=PD.OrderLineNumber 
@@ -483,10 +559,9 @@ BEGIN
             END
          END CATCH
 
-         FETCH FROM CUR_PICK_LINES INTO @c_OrderKey, @c_PickDetailKey 
-	  END
+      FETCH FROM CUR_PICK_LINES INTO @c_OrderKey, @c_PickDetailKey 
+   END
 
-      CLOSE CUR_PICK_LINES
-      DEALLOCATE CUR_PICK_LINES
+   CLOSE CUR_PICK_LINES
+   DEALLOCATE CUR_PICK_LINES
 END
-

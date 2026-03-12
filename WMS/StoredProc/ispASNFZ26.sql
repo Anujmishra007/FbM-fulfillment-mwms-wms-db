@@ -70,7 +70,7 @@ BEGIN
    FROM RECEIPT R (NOLOCK)
    WHERE R.ReceiptKey = @c_Receiptkey
 
-   SELECT @c_CDLUUDF02 = UDF02
+   SELECT @c_CDLUUDF02 = UDF01
    FROM Codelkup (NOLOCK)
    WHERE StorerKey = @c_StorerKey
      AND ListName  = 'RECEIPTGRP'
@@ -128,7 +128,7 @@ BEGIN
          
             FETCH NEXT FROM CUR_Serial_REC INTO @c_Serialno, @c_SKU, @n_ChildQTY
          
-            IF @@FETCH_STATUS <> -1
+            WHILE @@FETCH_STATUS <> -1
             BEGIN
 
                IF NOT EXISTS(SELECT 1 FROM SerialNo (nolock) where StorerKey = @c_StorerKey AND SKU = @c_SKU AND SerialNo = @c_Serialno)
@@ -159,18 +159,19 @@ BEGIN
 			      BEGIN
 
 	                 SELECT TOP 1 @c_LOC = RD.ToLoc
-		                  , @c_ID = RD.ToID
+		                   , @c_ID = RD.ToID
 				      	   , @c_LOT = RD.ToLOT
                        FROM RECEIPT R (NOLOCK)
                        JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
                        WHERE R.ReceiptKey = @c_Receiptkey
+					   AND RD.SKU = @c_SKU
                        AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') <> '' THEN @c_ReceiptLineNumber ELSE RD.ReceiptLineNumber END
                      ORDER BY DateReceived DESC
 
                   END
 
-		          INSERT INTO SerialNo (SerialNoKey, Orderkey, OrderLineNumber, StorerKey, SKU, SerialNo, status, QTY, Loc, ID, Lot)
-                  SELECT @c_SerialNoKey, '', '', @c_StorerKey, SKU, SerialNo, '1', @n_ChildQTY, @c_LOC, @c_ID, @c_LOT
+		          INSERT INTO SerialNo (SerialNoKey, Orderkey, OrderLineNumber, StorerKey, SKU, SerialNo, status, QTY, Loc, ID, Lot, UCCNo)
+                  SELECT @c_SerialNoKey, '', '', @c_StorerKey, SKU, SerialNo, '1', @n_ChildQTY, @c_LOC, @c_ID, @c_LOT, @c_ParentUCC
 		            FROM MasterSerialno WITH (NOLOCK)
 			       WHERE SerialNo = @c_Serialno
 
@@ -209,6 +210,34 @@ BEGIN
             END
             CLOSE CUR_Serial_REC
             DEALLOCATE CUR_Serial_REC
+
+            --remove ParentSerialNo from SerialNo table
+            DELETE FROM SerialNo
+			WHERE StorerKey = @c_StorerKey
+              AND SerialNo  = @c_ParentUCC
+
+            SELECT @n_err = @@ERROR    
+            IF @@Error <> 0  
+            BEGIN  
+               SET @n_continue = 3  
+               SET @n_Err =  68011   
+               SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5), @n_err) + ': Failed to Delete SerialNo (ispASNFZ26)'  
+               GOTO QUIT_SP  
+            END
+
+            --remove ParentSerialNo from SerialNo table
+            DELETE FROM ITRNSERIALNO
+			WHERE StorerKey = @c_StorerKey
+              AND SerialNo  = @c_ParentUCC
+
+            SELECT @n_err = @@ERROR    
+            IF @@Error <> 0  
+            BEGIN  
+               SET @n_continue = 3  
+               SET @n_Err =  68011   
+               SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5), @n_err) + ': Failed to Delete ITRNSERIALNO (ispASNFZ26)'  
+               GOTO QUIT_SP  
+            END
 
             FETCH NEXT FROM CUR_REC INTO @c_ReceiptLineNumber2, @c_ParentUCC, @n_QTYReceived
          END

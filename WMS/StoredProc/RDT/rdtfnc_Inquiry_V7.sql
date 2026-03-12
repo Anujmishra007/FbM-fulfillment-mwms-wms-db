@@ -31,6 +31,7 @@ GO
 /*                             (yeekung03)                              */
 /* 13-Dec-2023 2.2  Ung        Fix QTY not group by lottables           */
 /* 23-Sep-2025 2.3  Dennis     FCR-7784 Step 99                         */
+/* 18-Feb-2026 2.4  NYE018     FCR-10365 add loc check digit            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inquiry_V7] (
@@ -151,6 +152,9 @@ DECLARE
    @cLOCLookUP   NVARCHAR(20),  --(yeekung01)
    @cExtScnSP    NVARCHAR( 20),
 
+   @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10365
+   @cCheckDigitLOC      NVARCHAR( 20), -- FCR-10365
+
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
    @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
@@ -267,6 +271,8 @@ SELECT
    @cSKUConfig             = V_String19,
    @cExtScnSP              = V_String20,
 
+   @cLOCCheckDigitSP       = V_String21, -- FCR-10365
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -370,6 +376,8 @@ BEGIN
    IF @cLOCLookUP = '0'
       SET @cLOCLookUP = ''
 
+   SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-10365
+
    -- Init screen
    SET @cOutField01 = ''
    SET @cOutField02 = ''
@@ -420,6 +428,24 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step_1_Fail
       END
+
+      -- FCR-10365
+      IF @cLOCCheckDigitSP = '1' AND @cInquiry_LOC <> ''
+      BEGIN
+         SET @cCheckDigitLOC = @cInField01
+
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_1_Fail
+         END
+         SET @cInquiry_LOC = @cCheckDigitLOC
+      END
+      -- FCR-10365
 
       SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
              @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',
@@ -2050,6 +2076,8 @@ BEGIN
       V_String18 = @cUserDefine05 ,
       V_String19 = @cSKUConfig,
       V_String20 = @cExtScnSP,
+
+      V_String21 = @cLOCCheckDigitSP, -- FCR-10365
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

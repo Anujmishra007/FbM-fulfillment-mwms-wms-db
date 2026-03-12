@@ -49,6 +49,9 @@ GO
 /* 2025-08-25 3.5.0  Dennis     FCR-3959 Extended Screen                         */
 /* 2025-11-24 3.6.0  NickT      UWP-44566 Reset QTY when get new task or on ToLoc*/
 /* 2025-12-18 3.7.0  NickT      UWP-45705 Fix issue: MQty is 1 while short pick  */
+/* 2026-01-05 3.8.0  PPA374     UWP-46338 Adding  extended update to step 4      */
+/* 2026-01-12 3.8.1  PPA374     UWP-47065 Adding Extended Validate in step 3     */
+/* 2026-01-20 3.9.0  Dennis     FCR-9664 ExtScn08                                */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -363,6 +366,7 @@ BEGIN
       @cSuggLOT     = LOT,
       @cSuggFromLOC = FromLOC,
       @cSuggToLOC   = ToLOC,
+      @cToLoc       = ToLOC,
       @cSuggSKU     = SKU,
       @nQTY_RPL     = QTY,
       @cPickMethod  = PickMethod,
@@ -1184,6 +1188,34 @@ BEGIN
          END
       END
 
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@cDropID         NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -1865,6 +1897,35 @@ BEGIN
          END
       END
 
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@cDropID         NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+               '@nAfterStep      INT            '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 5, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
@@ -1890,7 +1951,7 @@ BEGIN
             SET @cOutField10 = @cExtendedInfo1
          END
       END
-
+      
       -- SKU scanned, remain in current screen
       IF @cLabelNo <> ''
       BEGIN
@@ -3601,6 +3662,23 @@ BEGIN
             IF @nStepBak = 7
             BEGIN
                SET @cToLoc = ''
+            END
+         END
+         IF @cExtScnSP = 'rdt_1812ExtScn08'
+         BEGIN
+            IF @nStep = 3 AND ISNULL(@cSuggID, '') = ''
+            BEGIN
+               SET @cInField05 = ''
+               GOTO STEP_3
+            END
+            ELSE IF @nStep = 0
+            BEGIN
+               GOTO Step_0
+            END
+            ELSE IF @nStep = 6
+            BEGIN
+               SET @nFromScn = @nScnBak
+               SET @nFromStep = @nStepBak
             END
          END
       END

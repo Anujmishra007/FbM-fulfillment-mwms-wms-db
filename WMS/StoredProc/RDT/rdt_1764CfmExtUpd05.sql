@@ -194,6 +194,7 @@ BEGIN
    -- Split or short PickDetail
    IF @nQTY < @nSystemQTY
    BEGIN
+      -- Need reallocate if @cTaskDetailMessage02 <> 'SKIP1'
 
       --V1.0.1 start --fullshort
       IF @nQTY = 0 AND @nShortQTY > 0 AND @nShortQty = @nSystemQTY
@@ -233,6 +234,7 @@ BEGIN
                   SET Status = '4',
                      QtyMoved = IIF (@cTaskDetailMessage02 <> @cMaxRealloNumberofRetry AND @nCurrentStep = 8, Qty, QtyMoved), -- Only short happens on ShortPickScreen, need update QtyMoved
                      Qty = IIF (@cTaskDetailMessage02 <> @cMaxRealloNumberofRetry AND @nCurrentStep = 8, 0, Qty), -- Only short happens on ShortPickScreen, need update QtyMoved
+                     TaskManagerReasonKey = IIF (@cTaskDetailMessage02 = @cMaxRealloNumberofRetry, 'SHORT', TaskManagerReasonKey),
                      EditWho = SUSER_SNAME(),
                      EditDate = GETDATE(),
                      Trafficcop = NULL
@@ -263,6 +265,7 @@ BEGIN
             SELECT @nTryCounter = ISNULL(TRY_CAST( RIGHT(@cTaskDetailMessage02, LEN(@cTaskDetailMessage02) - 4 ) AS INT), 0)
          ELSE
             SET @nTryCounter = 0
+
          SELECT @nRealloNumberofRetry = ISNULL(TRY_CAST( @cRealloNumberofRetry AS INT), 99)
 
          IF @nTryCounter < @nRealloNumberofRetry

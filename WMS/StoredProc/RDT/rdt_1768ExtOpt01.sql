@@ -24,6 +24,7 @@ GO
 /* 2025-11-05 1.2.1 NickT      FCR-8158 If adjustment is closed, createa new one */
 /* 2025-11-08 1.2.2 NickT      FCR-8158 Create Adjust if variance less than tolerance */
 /* 2025-11-18 1.3.0 NickT      UWP-44224 QtyPicked should be considered          */
+/* 2026-01-14 1.4.0 Dennis     UWP-46669 Fix Bug                                 */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
@@ -298,6 +299,7 @@ BEGIN --(CLVN01)
                            WHERE StorerKey = @cStorerKey
                               AND Remarks IS NOT NULL
                               AND Remarks = @cSourceKey
+                              AND FinalizedFlag <> 'Y'
                         END
 
                         -- Insert adjustment details

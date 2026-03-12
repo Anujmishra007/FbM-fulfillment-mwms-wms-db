@@ -15,6 +15,7 @@ GO
 /* 2024-6-21   1.1   JackC    FCR-236.Upd retrieve UCC logic               */
 /* 2024-12-04  1.2   ShaoAn   FCR-1103.Upd Changes in UCC Receive          */
 /*                            to process for returns                       */
+/* 2026-01-02  2.0   VSA253   FCR-9162 VSA253. Check pallet closed         */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898UCCExtVal09]
@@ -58,6 +59,19 @@ BEGIN
       -- Get StorerKey
       SELECT @cStorerKey = StorerKey,@cDocType = DocType FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey 
 
+       -- FCR-9162 VSA253 check if pallet id is closed
+      IF @cDocType = 'A'
+      BEGIN
+         IF EXISTS (SELECT 1 FROM TransmitLog2 WITH (NOLOCK) WHERE TableName = 'WSRCTPDETLOG' 
+           AND Key1 = @cReceiptKey
+           AND Key2 = @cToID
+           AND Key3 = @cStorerKey)
+         BEGIN
+            SET @nErrNo = 215313
+            SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- UCC ID already received for ASN
+            GOTO Quit
+         END
+      END
 
       SET @cUSUCCValidation = rdt.RDTGetConfig( @nFunc, 'USUCCValidation', @cStorerKey)
       IF @cUSUCCValidation = '0'

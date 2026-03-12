@@ -4478,14 +4478,14 @@ BEGIN
 
       IF ISNULL(@cDecodeSP,'') <> ''
       BEGIN
-         IF @cDecodeSP = '1'  
-         BEGIN  
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode, 
-               @cUCCNo  = @cNewUCC OUTPUT,   
-               @nErrNo  = @nErrNo  OUTPUT,   
-               @cErrMsg = @cErrMsg OUTPUT,  
-               @cType   = 'UCCNo'  
-  
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
+               @cUCCNo  = @cNewUCC OUTPUT,
+               @nErrNo  = @nErrNo  OUTPUT,
+               @cErrMsg = @cErrMsg OUTPUT,
+               @cType   = 'UCCNo'
+
             -- Decode is optional, allow some barcode to pass thru
             SET @nErrNo = 0
          END
@@ -7007,7 +7007,7 @@ BEGIN
       -- If SKUCONFIG setup
       IF ISNULL(@cSKUDefaultUOM, '0') <> '0'
       BEGIN
-         IF NOT EXISTS (SELECT 1 
+         IF NOT EXISTS (SELECT 1
             FROM dbo.SKU S WITH (NOLOCK)
             JOIN dbo.Pack P WITH (NOLOCK) ON S.PackKey = P.PackKey
             WHERE S.StorerKey = @cStorer
@@ -8689,10 +8689,10 @@ BEGIN
      -- (james08)
       SET @nNewEachQTY = CASE WHEN @cNewEachQTY <> '' AND @cNewEachQTY IS NOT NULL THEN CAST( @cNewEachQTY AS FLOAT) ELSE 0 END
       SET @nNewCaseQTY = CASE WHEN @cNewCaseQTY <> '' AND @cNewCaseQTY IS NOT NULL THEN CAST( @cNewCaseQTY AS FLOAT) ELSE 0 END
-      
+
       IF ISNULL(@cSKUDefaultUOM, '0') <> '0'
       BEGIN
-         
+
          SELECT @c_PackKey = P.PackKey
          FROM dbo.Pack P WITH (NOLOCK)
          JOIN dbo.SKU S WITH (NOLOCK) ON P.PackKey = S.PackKey
@@ -15049,7 +15049,7 @@ BEGIN
       SET @cDisplayLot04 = CASE WHEN @nValidateLot04 = 1 THEN @cOutField10 ELSE '' END
 
 	-- DECLARE @cFromSKU NVARCHAR(20)
-	  
+
 
       SET @cValidateSKU = CASE WHEN @nValidateSKU = 1 THEN @cInField03 ELSE '' END
       SET @cValidateLot01 = CASE WHEN @nValidateLot01 = 1 THEN @cInField05 ELSE '' END
@@ -15813,7 +15813,7 @@ BEGIN
 --       V_String34     = @cNewLottable01,
 --       V_String35     = @cNewLottable02,
 --       V_String36     = @cNewLottable03,
-      
+
       V_String49     = @cNewLottable01,
       V_String50     = @cNewLottable02,
       V_String51     = @cNewLottable03,

@@ -14,7 +14,7 @@ GO
 /* 05-08-2025  2.0  PPA374     Adding hold and unhld for DoublPal             */
 /******************************************************************************/
 
-ALTER   PROC [RDT].[rdt_511ExtUpdJCB] (
+CREATE OR ALTER PROC [RDT].[rdt_511ExtUpdJCB] (
 @nMobile    INT,
 @nFunc      INT,
 @cLangCode  NVARCHAR( 3),

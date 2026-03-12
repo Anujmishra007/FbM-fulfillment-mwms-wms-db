@@ -31,6 +31,8 @@ BEGIN
 
    DECLARE @cMbolkey       NVARCHAR( 15)
 
+   SET @cSuggestLoc = ''
+
    -- Search for pallet that is in the same mbolkey
    -- with location that falls under the loc.putawayzone = ‘OBSTG’
 
@@ -40,25 +42,68 @@ BEGIN
    WHERE PD.PalletKey = @cID
    AND PD.Storerkey = @cStorer
 
-   -- Check MbolKey
-   IF ISNULL( @cMbolkey, '') = ''
-   BEGIN
-      SET @nErrNo = 229901
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MbolKeyNotFound
-      GOTO Quit
-   END
+--    -- Check MbolKey
+--    IF ISNULL( @cMbolkey, '') = ''
+--    BEGIN
+--       SET @nErrNo = 229901
+--       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MbolKeyNotFound
+--       GOTO Quit
+--    END
 
-   SELECT TOP 1 @cSuggestLoc = LLI.LOC FROM Palletdetail PD
-      INNER JOIN LOC L (NOLOCK ) ON (PD.loc = L.Loc AND L.putawayzone = 'OBSTG')
-      INNER JOIN LOTxLOCxID LLI ON (LLI.loc = PD.Loc and LLI.qty>0 and ISNULL(LLI.ID,'') <> '')
-   WHERE PD.UserDefine01 = @cMbolkey
-     AND PD.Storerkey = @cStorer
-     AND ISNULL(PD.Palletkey, '') <> ''
-     AND  PD.PalletKey <> @cID -- not self
-     AND PD.status < 9
-   GROUP BY LLI.LOC, L.MaxPallet
-   HAVING COUNT(DISTINCT(LLI.ID)) < L.MaxPallet
-   ORDER BY L.MaxPallet, LLI.loc
+   IF @cMBOLKey = ''
+   BEGIN
+
+
+
+      DECLARE @cUserDefine09 NVARCHAR(20)
+      DECLARE @cConsigneeKey NVARCHAR(15)
+
+
+      SELECT @cUserDefine09 = ORDERS.UserDefine09,
+             @cConsigneeKey = ORDERS.ConsigneeKey
+         FROM ORDERS WITH(NOLOCK)
+         JOIN palletdetail PD WITH(NOLOCK) ON PD.Orderkey = orders.OrderKey
+      WHERE PD.PalletKey = @cID AND PD.StorerKey = @cStorer
+
+      -- Check shipTo
+      IF ISNULL( @cUserDefine09, '') = '' OR ISNULL( @cConsigneeKey, '') = ''
+      BEGIN
+         SET @nErrNo = 229905
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NeedShipTO
+         GOTO Quit
+      END
+
+      SELECT TOP 1 @cSuggestLoc = LLI.LOC FROM Palletdetail PD
+         INNER JOIN ORDERS WITH (NOLOCK ) ON ORDERS.OrderKey = PD.Orderkey
+         INNER JOIN LOC L WITH (NOLOCK ) ON (PD.loc = L.Loc AND L.putawayzone = 'OBSTG')
+         INNER JOIN LOTxLOCxID LLI WITH (NOLOCK ) ON (LLI.loc = PD.Loc and LLI.qty>0 and ISNULL(LLI.ID,'') <> '')
+      WHERE ORDERS.UserDefine09 = @cUserDefine09
+        AND ORDERS.ConsigneeKey =@cConsigneeKey
+        AND PD.Storerkey = @cStorer
+        AND ISNULL(PD.Palletkey, '') <> ''
+        AND  PD.PalletKey <> @cID -- not self
+        AND PD.status < 9
+      GROUP BY LLI.LOC, L.MaxPallet
+      HAVING COUNT(DISTINCT(LLI.ID)) < L.MaxPallet
+      ORDER BY L.MaxPallet, LLI.loc
+
+
+   END
+   ELSE
+   BEGIN
+
+      SELECT TOP 1 @cSuggestLoc = LLI.LOC FROM Palletdetail PD
+         INNER JOIN LOC L WITH (NOLOCK ) ON (PD.loc = L.Loc AND L.putawayzone = 'OBSTG')
+         INNER JOIN LOTxLOCxID LLI WITH (NOLOCK ) ON (LLI.loc = PD.Loc and LLI.qty>0 and ISNULL(LLI.ID,'') <> '')
+      WHERE PD.UserDefine01 = @cMbolkey
+        AND PD.Storerkey = @cStorer
+        AND ISNULL(PD.Palletkey, '') <> ''
+        AND  PD.PalletKey <> @cID -- not self
+        AND PD.status < 9
+      GROUP BY LLI.LOC, L.MaxPallet
+      HAVING COUNT(DISTINCT(LLI.ID)) < L.MaxPallet
+      ORDER BY L.MaxPallet, LLI.loc
+   END
 
    Quit:
 

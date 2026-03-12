@@ -3,19 +3,21 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_869ConfirmSP01                                  */
-/* Copyright      : Maersk                                              */
-/* Customer       : USA Levis                                           */
-/*                                                                      */
-/* Purpose: Print GS1 label                                             */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev    Author   Purposes                                  */
-/* 2025-08-27 1.0.0  NickT    FCR-6730 Created                          */
-/* 2025-11-07 1.1.0  JackC    UWP-43820 Performance tuning              */
-/************************************************************************/
+/***************************************************************************************/
+/* Store procedure: rdt_869ConfirmSP01                                                 */
+/* Copyright      : Maersk                                                             */
+/* Customer       : USA Levis                                                          */
+/*                                                                                     */
+/* Purpose: Print GS1 label                                                            */
+/*                                                                                     */
+/* Modifications log:                                                                  */
+/*                                                                                     */
+/* Date       Rev    Author   Purposes                                                 */
+/* 2025-08-27 1.0.0  NickT    FCR-6730 Created                                         */
+/* 2025-11-07 1.1.0  JackC    UWP-43820 Commit tran per update to                      */
+/*                            improve deadlock                                         */
+/* 2026-01-15 1.2.0  NickT    FCR-7928 Only trigger WSSOAlloUpd for real short PKD     */
+/***************************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_869ConfirmSP01 (
    @nMobile    INT,
@@ -45,7 +47,9 @@ BEGIN
       @nLoopIndex       INT,
       @nRowCount        INT,
       @nTranCount       INT,
-      @bSuccess         INT
+      @bSuccess         INT,
+      @nQty             INT,
+      @cTaskManagerReasonKey NVARCHAR( 10)
 
    SELECT @cShipRef = C_String1,
          @cStorerKey = StorerKey
@@ -83,7 +87,7 @@ BEGIN
    IF @cOrderKey <> ''
    BEGIN
       INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey)
-      SELECT OrderKey, OrderLineNumber, PickDetailKey 
+      SELECT OrderKey, OrderLineNumber, PickDetailKey
       FROM dbo.PickDetail WITH (NOLOCK)
       WHERE OrderKey = @cOrderKey
          AND Status = '4'
@@ -227,6 +231,13 @@ BEGIN
       IF @nRowCount = 0
          BREAK
 
+      SELECT @nQty = Qty,
+         @cTaskManagerReasonKey = ISNULL(TaskManagerReasonKey, '')
+      FROM dbo.PickDetail WITH(NOLOCK)
+      WHERE PickDetailKey = @cPickDetailKey
+         AND StorerKey = @cStorerkey
+
+
       BEGIN TRAN  --v1.1
       SAVE TRAN rdt_869ConfirmSP01_Pick --v1.1
 
@@ -263,6 +274,7 @@ BEGIN
                         AND Key2 = @cPickDetailKey
                         AND Key3 = @cStorerkey
                         AND TableName = 'WSSOAlloUpd')
+         AND @nQty > 0 AND @cTaskManagerReasonKey <> 'SHORT'
       BEGIN
          BEGIN TRY
             EXECUTE ispGenTransmitLog2
@@ -324,13 +336,13 @@ BEGIN
       SET @cErrMsg1 = CAST(@nErrNo AS VARCHAR(10))
       SET @cErrMsg2 = @cErrMsg
       SET @cErrMsg3 = 'PickDtlKey: ' + @cPickDetailKey
-            EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
-                           @nErrNo = @nErrNo,
-                           @cErrMsg = @cErrMsg,
-                           @cLine01 = @cErrMsg1,
-                           @cLine02 = @cErrMsg2,
-                           @cLine03 = @cErrMsg3,
-                           @nDisplayMsg = 0
+      EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                     @nErrNo = @nErrNo,
+                     @cErrMsg = @cErrMsg,
+                     @cLine01 = @cErrMsg1,
+                     @cLine02 = @cErrMsg2,
+                     @cLine03 = @cErrMsg3,
+                     @nDisplayMsg = 0
       GOTO Quit
 
    Quit:

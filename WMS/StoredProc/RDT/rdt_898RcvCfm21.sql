@@ -704,7 +704,7 @@ BEGIN
    GOTO Fail
 END
 
-
+SELECT @cLottable01 = LOTTABLE01 FROM ReceiptDetail WHERE RECEIPTKEY = @cReceiptKey AND SKU = @cSKU AND StorerKey = @cStorerKey
 /*-------------------------------------------------------------------------------
 
                             StorerConfig Setup
@@ -2543,7 +2543,7 @@ BEGIN
       IF @@ERROR <> 0 
       BEGIN  
          SET @nErrNo = 60348  
-         SET @cErrMsg = @@ERROR-- rdt.rdtgetmessage( 60348, @cLangCode, 'DSP') --'Finalize fail'   -- (ChewKP03)
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Finalize fail'   -- (ChewKP03)
         GOTO RollBackTran  
       END
    END

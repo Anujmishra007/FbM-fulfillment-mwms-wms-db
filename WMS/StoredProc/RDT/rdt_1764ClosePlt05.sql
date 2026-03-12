@@ -65,7 +65,7 @@ BEGIN
    SET @nErrNo = 0
    SET @cErrMsg = ''
 
-   SELECT @cStorerKey = StorerKey
+   SELECT @cStorerKey = StorerKey,@cFacility = Facility
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -113,7 +113,7 @@ BEGIN
    -- Loop tasks
    DECLARE @curRPTask CURSOR
    SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-      SELECT TaskDetailKey, PickMethod, StorerKey, FromLOC, FromID, ToLOC, IIF(PickMethod = 'PP', CaseID, ToID)ToID, SKU, LOT, QTY, SystemQTY, WaveKey --PPA374 12/10/2025
+      SELECT TaskDetailKey, PickMethod, StorerKey, FromLOC, FromID, IIF( ISNULL(@cScannedToLoc,'')<>'',@cScannedToLoc ,ToLOC), IIF(PickMethod = 'PP', CaseID, ToID)ToID, SKU, LOT, QTY, SystemQTY, WaveKey --PPA374 12/10/2025
       FROM dbo.TaskDetail WITH (NOLOCK)
       WHERE ListKey = @cListKey
          AND UserKey = @cUserName
@@ -123,8 +123,6 @@ BEGIN
    FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLOC, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey
    WHILE @@FETCH_STATUS = 0
    BEGIN
-      SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
-
       -- Full pallet replenish
       IF @cPickMethod = 'FP'
       BEGIN
@@ -516,6 +514,26 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
       --END
+      
+      IF EXISTS (SELECT 1 FROM LOC WHERE LOC = @cScannedToLoc AND Facility = @cFacility AND LocationCategory = 'INTRANSIT')
+      BEGIN
+         -- Update Task
+         UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
+            FinalLOC = ToLoc,
+            TransitLOC = @cScannedToLoc,
+            ToLoc = @cScannedToLoc,
+            EndTime = GETDATE(),
+            EditDate = GETDATE(),
+            EditWho  = @cUserName,
+            Trafficcop = NULL
+         WHERE TaskDetailKey = @cTaskDetailKey
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 78504
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
+            GOTO RollBackTran
+         END
+      END
 
       -- Update Task
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET

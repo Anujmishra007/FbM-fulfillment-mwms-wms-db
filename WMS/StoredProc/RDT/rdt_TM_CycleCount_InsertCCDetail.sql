@@ -1,11 +1,10 @@
-USET ANSI_NULLS OFF
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /*****************************************************************************/
 /* Store procedure: rdt_TM_CycleCount_InsertCCDetail                         */
-/* Copyright      : IDS                                                      */
+/* Copyright      : MAERSK                                                   */
 /*                                                                           */
 /* Purpose:                                                                  */
 /*          Called By TM CycleCount                                          */
@@ -19,7 +18,7 @@ GO
 /*                          AdjReasonCode (james02)                          */
 /* 2025-11-12 1.3  James    FCR-7347 Add Refno into CCDetail if count task   */
 /*                          by sku (james03)                                 */
-/* 2025-12-16 1.4  James    temp bug fix (james04)                           */
+/* 2025-12-16 1.4  James    FCR-7347 Bug fix (james04)                       */
 /*****************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_TM_CycleCount_InsertCCDetail] (
       @nMobile          INT
@@ -74,7 +73,8 @@ BEGIN
       @c_AdjType           NVARCHAR(10),
       @c_AdjReasonCode     NVARCHAR(3),
       @n_Func              INT,
-      @c_TMCCSKUAddRefNo   NVARCHAR( 1)
+      @c_TMCCSKUAddRefNo   NVARCHAR( 1),
+      @curLOC              CURSOR
 
    SET @nTranCount         = @@TRANCOUNT
    BEGIN TRAN
@@ -124,10 +124,18 @@ BEGIN
 
    SET @c_CCKEy = @c_SourceKey
 
+   --(james04)
+   -- Retrieve sku
+   IF @c_PickMethod = 'SKU'
+      SELECT @c_SKU = Sku
+      FROM dbo.TaskDetail WITH (NOLOCK)
+      WHERE TaskDetailKey = @c_TaskDetailKey
+
    -- DELETE PREVIOUSLY GENERATE CCDetail
    IF EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
               WHERE CCKey = @c_SourceKey
-              AND Loc = @c_Loc)
+              AND Loc = @c_Loc
+              AND Sku = CASE WHEN @c_PickMethod = 'SKU' THEN @c_SKU ELSE Sku END)
    BEGIN
       GOTO QUIT
    END
@@ -146,15 +154,7 @@ BEGIN
       IF @c_PickMethod = 'SKU'
       BEGIN
          IF @c_TMCCSKUAddRefNo = '1'
-         BEGIN
-            --(james04)
-            -- Retrieve sku
-            SELECT @c_SKU = SKU
-            FROM dbo.TaskDetail WITH (NOLOCK)
-            WHERE TaskDetailKey = @c_TaskDetailKey
-
             EXEC ispRDTGenCountSheetByUCC @c_SourceKey , @c_Loc , @c_SKU, @c_TaskDetailKey
-         END
          ELSE
             EXEC ispRDTGenCountSheet @c_SourceKey , @c_Loc , @c_SKU, @c_TaskDetailKey
       END
@@ -170,7 +170,6 @@ BEGIN
 
 END -- Procedure
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON

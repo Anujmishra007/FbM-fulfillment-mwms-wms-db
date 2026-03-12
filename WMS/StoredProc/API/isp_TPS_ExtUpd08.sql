@@ -55,7 +55,8 @@ DECLARE
    @cSerialNoKey     NVARCHAR(60),     
    @cSerialNo        NVARCHAR(50),    
    @cADCode          NVARCHAR(60), 
-   @nTranCount       INT
+   @nTranCount       INT,  
+   @cCurOrderkey     NVARCHAR(20)
        
 DECLARE @CloseCtnList TABLE (    
    SKU             NVARCHAR( 20),    
@@ -67,7 +68,7 @@ DECLARE @CloseCtnList TABLE (
    ADCode          NVARCHAR(60)    
 )    
     
-SET @b_Success = '1'  
+SET @b_Success = 1 
 --INSERT INTO @CloseCtnList    
 --SELECT *    
 --FROM OPENJSON(@cCloseCartonJson)    
@@ -108,7 +109,24 @@ BEGIN
    SET @nTranCount = @@TRANCOUNT    
    BEGIN TRAN    
    SAVE TRAN isp_TPS_ExtUpd08     
-    
+   
+   SELECT @cCurOrderkey = Orderkey  
+   FROM PICKHEADER (NOLOCK)  
+   WHERE Pickheaderkey = @cpickslipNo  
+  
+   IF ISNULL( @cCurOrderkey,'') <>''  
+      SET @cOrderkey = @cCurOrderkey  
+
+   SET @cOrderKey = ISNULL(@cOrderKey,'')
+   SET @cLoadKey = ISNULL(@cLoadKey,'')
+   IF @cOrderKey = '' AND @cLoadKey = ''     
+   BEGIN
+      SET @b_Success = 0;
+      SET @n_Err = 1002762        
+      SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'OrderKey or LoadKey Not found, failed to proceed. Function : isp_TPS_ExtUpd08'        
+      GOTO RollBackTran       
+   END   
+
    IF NOT EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK) WHERE Listname = 'REQEXP'AND Code ='ADBARCODE' AND storerKey = @cStorerKey)    
    BEGIN 
       SET @b_Success = 0
@@ -131,11 +149,8 @@ BEGIN
 
       IF NOT EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE storerKey = @cStorerKey AND SKU = @cSKU AND susr4 = 'AD')    
       BEGIN    
-         SET @b_Success = 0
-         SET @n_Err = 1002752      
-         SET @c_ErrMsg = '(' + @cSKU + ')' + API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- Current SKU is not found with AD value in Susr4. Function : isp_TPS_ExtUpd08    
-         GOTO RollBackTran    
-      END
+         GOTO NEXTITEM
+      END  
 
       IF @cSkuBarcode <> ''    
       BEGIN    
@@ -208,22 +223,29 @@ BEGIN
          GOTO RollBackTran
       END
 
+      SELECT @cLabelLine = PD.LabelLine ,
+             @cDropID = CASE WHEN ISNULL(PD.DropID,'') = '' THEN RTRIM(ISNULL(@cDropID,'')) ELSE  RTRIM(ISNULL(PD.DropID,'')) END 
+      FROM dbo.Packheader PH WITH (NOLOCK)    
+         JOIN dbo.packdetail PD(nolock) ON PH.PickSlipNo=PD.PickSlipNo
+      WHERE PH.StorerKey = @cStorerKey      
+         AND PH.PickSlipNo = @cPickSlipNo
+         AND PD.Cartonno = @nCartonNo
+         AND PD.SKU = @cSKU
+
       SELECT @cPickDetailKey = PD.PickDetailKey
       FROM dbo.PickDetail PD WITH (NOLOCK)
          JOIN Orders O WITH (NOLOCK) ON PD.Orderkey = O.Orderkey AND PD.Storerkey = O.Storerkey
       WHERE PD.StorerKey = @cStorerKey
-         AND O.Loadkey = @cLoadKey
+         AND (@cOrderKey = '' OR O.OrderKey = @cOrderKey)
+         AND (@cLoadKey = '' OR O.LoadKey = @cLoadKey)
+         AND (@cDropID = '' OR PD.DropID = @cDropID)
          AND PD.SKU = @cSKU
-         AND PD.PickSlipNo = @cPickSlipNo
-      
-      SELECT @cLabelLine = PD.LabelLine  
-      FROM dbo.Packheader PH WITH (NOLOCK)    
-         JOIN dbo.packdetail PD(nolock) ON PH.PickSlipNo=PD.PickSlipNo
-      WHERE PD.StorerKey = @cStorerKey      
-         AND PH.Loadkey  = @cLoadKey      
-         AND PD.SKU = @cSKU
-         AND PD.PickSlipNo = @cPickSlipNo
-         AND PD.LabelNo = @cLabelNo
+         AND NOT EXISTS (  SELECT 1
+                              FROM PackSerialNo PSN (NOLOCK)
+                              WHERE PSN.PickDetailKey = PD.PickDetailKey
+                              GROUP BY PSN.PickDetailKey
+                              HAVING SUM(PSN.Qty) = PD.Qty
+                              )
 
       EXECUTE dbo.nspg_GetKey
                'SerialNo',
@@ -247,26 +269,28 @@ BEGIN
       BEGIN
          SET @b_Success = 0
          SET @n_Err = 1002760
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail Insert SerialNO Function : isp_TPS_ExtUpd04' 
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail Insert SerialNO Function : isp_TPS_ExtUpd08' 
          GOTO RollBackTran
       END
          
       INSERT INTO PackSerialNo(Pickslipno,cartonno,labelno,labelline,storerkey,sku,serialno,qty,PickDetailKey,Barcode,AddWho,AddDate,EditWho,EditDate)    
-      values(@cPickSlipNo,@nCartonNo,@cLabelNo,@cLabelLine,@cStorerKey,@cSKU,@cSerialNo,1,@cPickDetailKey,@cADCode,@cUserName,GETDATE(),@cUserName,GETDATE())    
+      values(@cPickSlipNo,@nCartonNo,@cLabelNo,@cLabelLine,@cStorerKey,@cSKU,@cSerialNo,1,ISNULL(@cPickDetailKey,''),@cADCode,@cUserName,GETDATE(),@cUserName,GETDATE())    
     
       IF @@ERROR <> 0
       BEGIN
          SET @b_Success = 0
          SET @n_Err = 1002761
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail Insert PackSerialNo Function : isp_TPS_ExtUpd04' 
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail Insert PackSerialNo Function : isp_TPS_ExtUpd08' 
          GOTO RollBackTran
       END  
 
+NEXTITEM:
       FETCH NEXT FROM @curSerialNo INTO @cSKU, @cSkuBarcode, @cADCode
    END
 
    CLOSE @curSerialNo;
    DEALLOCATE @curSerialNo;
+
    GOTO QUIT
    --IF ISNULL(@cOrderKey,'') <> ''    
    --BEGIN    

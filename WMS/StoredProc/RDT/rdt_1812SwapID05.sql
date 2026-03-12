@@ -9,6 +9,7 @@
 /* 2025-06-11  1.0.0   Jackc       FCR-3959 Created                     */
 /* 2025-10-10  1.0.1   Dennis      FCR-3959                             */
 /* 2025-12-16  1.0.2   PPA374      Added workaround for swap ID         */
+/* 2026-02-23  1.0.3   PPA374      Allowing to swap from other bulk loc */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812SwapID05]
    @nMobile           INT,
@@ -49,13 +50,15 @@ BEGIN
    DECLARE @cTaskLOT          NVARCHAR( 10)  
    DECLARE @cTaskFromLoc      NVARCHAR( 10)  
    DECLARE @cTaskFromID       NVARCHAR( 18)
-   DECLARE @cTaskFromLocCate NVARCHAR( 10)
+   DECLARE @cTaskFromLocCate  NVARCHAR( 10)
    DECLARE @cTaskPickMethod   NVARCHAR( 10)  
    DECLARE @nTaskQTY          INT  
    DECLARE @nQTY              INT
    DECLARE @cUserName         NVARCHAR(18)
    DECLARE @cLottable03       NVARCHAR(60)
    DECLARE @cOrderKeyToUpd    NVARCHAR(20)
+   DECLARE @cNewPutawayZone   NVARCHAR(20)
+   DECLARE @cTaskArea         NVARCHAR(20)
 
    SELECT @cLottable03 = O_Field01
    FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -91,7 +94,8 @@ BEGIN
       @cTaskPickMethod = TD.PickMethod,   
       @cUserName = USERKEY,
       --@nTaskQTY = SystemQty, FP task qty = 0
-      @cTaskFromLocCate = LOC.LocationCategory  
+      @cTaskFromLocCate = LOC.LocationCategory,  
+	  @cTaskArea = AreaKey
    FROM dbo.TaskDetail TD WITH (NOLOCK)
    JOIN dbo.LOC  WITH (NOLOCK)
       ON TD.FromLOC = LOC.LOC
@@ -233,16 +237,30 @@ BEGIN
       @nNewQTY = SUM(QTY),
       @nNewAvailableQty = SUM(Qty - QtyAllocated - QtyPicked - QtyReplen),
       @cNewLOC = LLI.LOC,
-      @cNewLocCate = LOC.LocationCategory
+      @cNewLocCate = LOC.LocationCategory,
+	  @cNewPutawayZone = PutawayZone
    FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
    JOIN dbo.LOC WITH (NOLOCK)
       ON LLI.Loc = LOC.LOC
    WHERE StorerKey = @cStorerKey
       AND ID = @cNewID
       AND QTY > 0
-   GROUP BY SKU, LLI.LOC, LOC.LocationCategory
+   GROUP BY SKU, LLI.LOC, LOC.LocationCategory, LOC.PutawayZone
 
-   IF @cNewLocCate <> @cTaskFromLocCate
+   --IF @cNewLocCate <> @cTaskFromLocCate
+   IF NOT EXISTS (
+      SELECT 1 
+	  FROM CODELKUP C WITH(NOLOCK)
+	  WHERE LISTNAME = 'JCBBKFRMLC'
+         AND StorerKey = @cStorerKey
+         AND Long = @cNewLocCate
+   )
+   OR NOT EXISTS (
+      SELECT 1 
+	  FROM AreaDetail WITH(NOLOCK)
+	  WHERE PutawayZone = @cNewPutawayZone
+	     AND AreaKey = @cTaskArea
+   )
    BEGIN
       SET @nErrNo = 239912
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cannot swap id from this loc
@@ -581,9 +599,9 @@ BEGIN
          SET  OriginalQty = UserDefine02, OpenQty = UserDefine02
       WHERE orderkey = @cOrderKeyToUpd
 
-	  UPDATE TaskDetail
-	  SET StatusMsg = 'Swapping'
-	  WHERE TaskDetailKey = @cTaskDetailKey
+      UPDATE TaskDetail
+      SET StatusMsg = 'Swapping'
+      WHERE TaskDetailKey = @cTaskDetailKey
 
    END TRY
    BEGIN CATCH
@@ -618,9 +636,9 @@ BEGIN
                   PickMethod, WaveKey, PickSlipNo, '0', GETDATE(), SUSER_SNAME(), @cPKDNotes, @cTaskDetailKey 
          FROM @tAllocation
 
-	  UPDATE TaskDetail
-	  SET StatusMsg = ''
-	  WHERE TaskDetailKey = @cTaskDetailKey
+      UPDATE TaskDetail
+      SET StatusMsg = ''
+      WHERE TaskDetailKey = @cTaskDetailKey
 
    END TRY
    BEGIN CATCH

@@ -12,6 +12,9 @@ GO
 /* Date        Rev     Author      Purposes                             */
 /* 2025-06-09  1.0.0   JACKC       FCR-3959                             */
 /* 2025-10-20  1.0.1   Dennis      FCR-3959                             */ 
+/* 2025-10-20  1.0.2   SOMA        Added ID Zero Weight validation      */ 
+/* 2026-02-12  1.0.3   PPA374      Adding 'INLOCKED' flag for picking   */
+/* 2026-02-17  1.0.4   PPA374      Only allowing to enter required qty  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtVal05]
@@ -33,7 +36,8 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    
-   DECLARE @nDebugFlag INT = 0
+   DECLARE @nDebugFlag   INT = 0
+   DECLARE @cSKUVerified NVARCHAR(20)
 
    DECLARE  @cSuggToLOC          NVARCHAR(10),
             @cSuggToLocCategory  NVARCHAR(10),
@@ -45,11 +49,11 @@ BEGIN
             @nToLocMaxPallet     INT,
             @cFacility           NVARCHAR(20),
             @cOrderKey           NVARCHAR(20),
-            @cCompany            NVARCHAR(20)
+            @cCompany            NVARCHAR(20),
+            @cVID                NVARCHAR(20); 
 
    --GET task info
    
-
    IF @nDebugFlag = 1
       SELECT 'Executing rdt_1812ExtVal05'
 
@@ -61,11 +65,41 @@ BEGIN
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskDetailKey
    
-   SELECT TOP 1 @cFacility = Facility FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
+   SELECT TOP 1 @cFacility = Facility, @cVID = V_ID, @cSKUVerified = ISNULL(V_String25,0) FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
    SELECT TOP 1 @cCompany = C_Company FROM dbo.ORDERS WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey
 
    IF @nFunc = 1812 -- PickSKU
    BEGIN
+      --Step 3 FromID validation--
+      IF @nStep = 3 --FromID
+      BEGIN
+         IF @nDebugFlag = 1
+            SELECT 'St3, FromID scn';
+
+         IF @nInputKey = 1
+         BEGIN
+            IF EXISTS(
+		    SELECT 1 
+			FROM SKU S WITH(NOLOCK) 
+			   INNER JOIN LOTxLOCxID LLI WITH(NOLOCK) 
+			      ON LLI.SKU = S.SKU 
+				  AND LLI.StorerKey = S.StorerKey
+			WHERE ISNULL(STDGROSSWGT,0) = 0 
+			   AND LLI.Qty > 0 
+			   AND LLI.StorerKey = @cStorerKey
+			   AND LLI.ID = @cVID
+			   AND ID <> ''
+			)
+
+            BEGIN
+               SET @nErrNo = 218264
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- '218264^ID got 0 weight SKU' 
+               GOTO Quit;
+            END
+         END
+      END
+      --Step 3  validation END--
+
       IF @nStep = 4 --SKU/Qty
       BEGIN
          IF @nDebugFlag = 1
@@ -77,7 +111,8 @@ BEGIN
             IF @nDebugFlag = 1
                SELECT @nQty AS Qty, @nTaskQty AS TaskQty
             
-            IF @nQty <> 0 AND @nQty <> @nTaskQTY
+            IF (@cSKUVerified <> '1' AND @nQty <> 0 AND @nQty <> @nTaskQTY)
+			OR (@cSKUVerified = '1' AND @nQty <> @nTaskQTY)
             BEGIN
                SET @nErrNo = 239651
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
@@ -112,7 +147,7 @@ BEGIN
                         ON L.LOC = C.Short
                         AND L.Facility = @cFacility
                         AND L.Status = 'OK'
-                        AND L.LocationFlag IN ('', 'NONE')
+                        AND L.LocationFlag IN ('', 'NONE', 'INLOCKED')
                   WHERE C.Short = @cToLOC
                  AND C.LISTNAME = 'JCBCOMPML'
             )
@@ -125,7 +160,7 @@ BEGIN
                            FROM dbo.LOC WITH (NOLOCK)
                            WHERE LOC = @cSuggToLOC
                      AND Facility = @cFacility
-                           AND (Status <> 'OK' OR LocationFlag NOT IN ('','NONE')) 
+                           AND (Status <> 'OK' OR LocationFlag NOT IN ('','NONE', 'INLOCKED')) 
                            )
                BEGIN--only allow to overwrithe when SuggToLoc is on hold
                   IF @nDebugFlag = 1
@@ -165,7 +200,7 @@ BEGIN
                           AND CL.LONG = @cOrdCompany
                           AND CL.Storerkey = @cStorerKey
                     AND L.Facility = @cFacility
-                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
+                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED'))
                      )
                      BEGIN
                         IF @nDebugFlag = 1
@@ -212,7 +247,7 @@ BEGIN
                              AND CL.LONG = @cOrdCompany
                              AND L.Status = 'OK'
                       AND L.Facility = @cFacility
-                             AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
+                             AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED')
                         ) -- ToLoc must be a marshalling lane of the same company and not on hold
                         BEGIN
                            SET @nErrNo = 239654
@@ -251,7 +286,7 @@ BEGIN
                           AND CL.Code = @cOrderType
                           AND L.Status = 'OK'
                     AND L.Facility = @cFacility
-                          AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
+                          AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE' OR L.LocationFlag = 'INLOCKED')
                      )
                      BEGIN-- All locations in these kitting location categories are on hold
                         IF @nDebugFlag = 1
@@ -298,7 +333,7 @@ BEGIN
                               AND CL.Code = @cOrderType
                               AND LOC.[Status] = 'OK'
                        AND LOC.Facility = @cFacility
-                              AND (LOC.LocationFlag = '' OR LOC.LocationFlag = 'NONE')
+                              AND (LOC.LocationFlag = '' OR LOC.LocationFlag = 'NONE' OR LOC.LocationFlag = 'INLOCKED')
                         )
                         BEGIN
                            SET @nErrNo = 239657
@@ -365,7 +400,7 @@ BEGIN
                      WHERE L1.Facility = @cFacility
                         AND L1.Loc = @cToLOC
                         AND (
-                              L1.LocationFlag NOT IN ('', 'NONE')
+                              L1.LocationFlag NOT IN ('', 'NONE', 'INLOCKED')
                               OR L1.Status <> 'OK'
                            )
                   )
@@ -379,7 +414,7 @@ BEGIN
                            AND C.ListName = 'JCBCOMPML'
                      WHERE L2.Facility = @cFacility
                         AND (
-                              L2.LocationFlag IN ('', 'NONE')
+                              L2.LocationFlag IN ('', 'NONE', 'INLOCKED')
                               AND L2.Status = 'OK'
                            )
                   )
@@ -405,5 +440,3 @@ GO
 
 GRANT EXECUTE ON rdt.rdt_1812ExtVal05 TO NSQL 
 GO   
-
-

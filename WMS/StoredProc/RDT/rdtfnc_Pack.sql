@@ -6598,7 +6598,7 @@ BEGIN
          END
          ELSE IF @cExtendedScreenSP = 'rdt_838ExtScn06'
          BEGIN
-            IF @nPreStep = 99 AND @nPreScn = 4053 AND @nScn = 6708
+            IF @nPreStep = 99 AND @nPreScn = 4653 AND @nScn = 6708
             BEGIN
                SET @cCartonType = @cUDF01
                SET @fCube = CAST (@cUDF02 AS FLOAT )
@@ -6611,6 +6611,10 @@ BEGIN
                BEGIN
                   SET @cInField01 = @cDefaultPrintLabelOption --Option
                   SET @nInputKey = 1 -- ENTER
+                  UPDATE RDT.RDTMOBREC WITH (ROWLOCK) SET
+                     Step   = 5,
+                     Scn    = 4654
+                  WHERE Mobile = @nMobile
                   GOTO Step_5
                END
             END

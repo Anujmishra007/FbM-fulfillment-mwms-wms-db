@@ -1,10 +1,10 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/     
-/* Copyright: IDS                                                             */     
+/* Copyright: MAERSK                                                          */     
 /* Purpose: SOS#306388 A&F Project                                            */     
 /*                                                                            */     
 /* Modifications log:                                                         */     
@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */     
 /* 2014-04-15 1.0  ChewKP     Created                                         */    
 /* 2022-12-20 1.1  James      WMS-21186 Misc enhancement (james01)            */
+/* 2025-12-08 1.2  James      UWP-45189 Bug fix on split ucc (james02)        */
 /******************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_SplitUCC] (    
@@ -815,7 +816,7 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')    
          BEGIN    
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +    
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFromUCC, @cToUCC, @cSKU, @cQty, @nErrNo OUTPUT, @cErrMsg OUTPUT'    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFromUCC, @cToUCC, @cSKU, @nQty, @nErrNo OUTPUT, @cErrMsg OUTPUT'    
             SET @cSQLParam =    
                '@nMobile    INT,           ' +    
                '@nFunc      INT,           ' +    
@@ -825,12 +826,12 @@ BEGIN
                '@cFromUCC   NVARCHAR( 20), ' +     
                '@cToUCc     NVARCHAR( 20), ' +    
                '@cSKU       NVARCHAR( 20), ' +    
-               '@cQty       NVARCHAR( 5),  ' +    
+               '@nQty       INT,  ' +    
                '@nErrNo     INT OUTPUT,    ' +    
                '@cErrMsg    NVARCHAR( 20) OUTPUT'    
     
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
-               @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFromUCC, @cToUCC, @cSKU, @cQty, @nErrNo OUTPUT, @cErrMsg OUTPUT    
+               @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFromUCC, @cToUCC, @cSKU, @nQTY, @nErrNo OUTPUT, @cErrMsg OUTPUT    
     
             IF @nErrNo <> 0    
             BEGIN
@@ -1262,6 +1263,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-
 GRANT EXECUTE ON RDT.rdtfnc_SplitUCC TO NSQL
 GO

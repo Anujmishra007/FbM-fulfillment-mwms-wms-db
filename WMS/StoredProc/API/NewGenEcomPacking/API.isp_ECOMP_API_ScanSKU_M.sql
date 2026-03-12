@@ -29,6 +29,7 @@
 /* 15-Jul-2025    Sean     #FCR-6199 - Packing SKU Decode               */
 /* 23-Jul-2025    Sean01     #UWP-38247 - Compatible with Login User    */
 /* 20-Aug-2025    Jiawen   #UWP-39649 - Add CCTV Configs                */
+/* 15-Sep-2025    JWF011   #UWP-41185 - Update OrderKey for CCTV Config */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU_M](
      @b_Debug           INT            = 0
@@ -130,6 +131,7 @@ BEGIN
          , @b_ScanQRInSKULabel            BIT            = 0         --Alex02
 
    DECLARE @c_EPACKConfigJSON             NVARCHAR(4000) = ''
+   DECLARE @n_OrderCount                  INT            = 0
 
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
@@ -606,7 +608,12 @@ BEGIN
 
       IF @c_OrderKey = ''
       BEGIN
-         SELECT TOP 1 @c_OrderKey = ISNULL(RTRIM(OrderKey), '')
+         SELECT
+            @n_OrderCount = COUNT(*),
+            @c_OrderKey = CASE
+                              WHEN COUNT(*) = 1 THEN MAX(ISNULL(RTRIM(OrderKey), ''))
+                              ELSE ''
+                          END
          FROM dbo.PackTaskDetail (NOLOCK) 
          WHERE TaskBatchNo = @c_TaskBatchID
          AND SKU = @c_SKU

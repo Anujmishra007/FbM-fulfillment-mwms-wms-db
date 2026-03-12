@@ -6,7 +6,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: isp_AppSection                                            */
-/* Copyright      : LFLogistics                                               */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-03-13   1.0  Chermaine  Created                                       */
@@ -18,7 +18,9 @@ GO
 /* 2025-02-20   1.6  yeekung    UWP-27764 remove checking on web (yeekung04)  */
 /* 2025-03-26   1.7  yeekung    UWP-31832 Update and block if use same workstation*/
 /*                              (yeekung05)                                   */
-/* 2025-04-25   2.1  GhChan     Enhanced the whole logic with support V0 & V2 */
+/* 2025-04-25   2.1  GCH225     Enhanced the whole logic with support V0 & V2 */
+/* 2025-07-22   2.2  GCH225     UWP-38184 Enhanced the lsp_SetUser logic      */
+/* 2025-07-24   2.3  GCH225     UWP-38019 New Shared Workstation Flow         */
 /******************************************************************************/
 
 --App,DeviceID,UserID,ScanNo
@@ -38,27 +40,31 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE
-	   @cStorerKey       NVARCHAR( 30),
-	   @cFacility        NVARCHAR( 5),
-	   @cLangCode        NVARCHAR( 3),
-	   @cAppName         NVARCHAR( 30),
-	   @cDeviceID        NVARCHAR( 50),
-	   @cUserID          NVARCHAR( 128),
-      @cScanNo          NVARCHAR( 30),
-      @cType            NVARCHAR( 30),
-      @timeOut          INT,
-      @dNow             DATETIME,
-      @c_UserName       NVARCHAR( 128),
-      @cDBUserName     NVARCHAR( 128),
-      @cWorkStation     NVARCHAR( 30),
-      @nWebFlag         INT,
-      @cSelWorkStation  NVARCHAR( 30),
-      @cClrDeviceID     NVARCHAR(10)
+	   @cStorerKey          NVARCHAR( 30),
+	   @cFacility           NVARCHAR( 5),
+	   @cLangCode           NVARCHAR( 3),
+	   @cAppName            NVARCHAR( 30),
+	   @cDeviceID           NVARCHAR( 50),
+	   @cUserID             NVARCHAR( 128),
+      @cScanNo             NVARCHAR( 30),
+      @cType               NVARCHAR( 30),
+      @timeOut             INT,
+      @dNow                DATETIME,
+      @c_UserName          NVARCHAR( 128),
+      @cWorkStation        NVARCHAR( 30),
+      @nWebFlag            INT,
+      @cSelWorkStation     NVARCHAR( 30),
+      @cClrDeviceID        NVARCHAR(10),
+      @nOutputCount        INT,
+      @cSQL                NVARCHAR(1000),
+      @cSQLParam           NVARCHAR(1000),
+      @b_ExecuteAs         BIT
 
    SET @dNow = GETDATE()
    SET @nWebFlag = 0
    SET @cSelWorkStation = ''
    SET @cClrDeviceID = '0'
+   SET @b_ExecuteAs = 0
 
    DECLARE @errMsg TABLE (
        nErrNo    INT,
@@ -67,7 +73,8 @@ BEGIN
 
    --Decode Json Format
    --'[{"StorerKey":"NIKESG","Facility":"","AppName":"TouchPad","DeviceID":"Device2","UserID":"chermainecheng","ScanNo":"","cType":"Login"}]
-   SELECT @cStorerKey = StorerKey, @cFacility = Facility, @cAppName = AppName, @cDeviceID = DeviceID,  @cUserID=UserID, @cScanNo=ScanNo, @cType = cType, @cLangCode = LangCode,@cWorkStation= WorkStation
+   SELECT @cStorerKey = StorerKey, @cFacility = Facility, @cAppName = AppName, @cDeviceID = DeviceID
+   ,  @cUserID=UserID, @cScanNo=ScanNo, @cType = cType, @cLangCode = LangCode,@cWorkStation= WorkStation
    FROM OPENJSON(@json)
    WITH (
 	      StorerKey   NVARCHAR( 30),
@@ -81,25 +88,65 @@ BEGIN
          WorkStation NVARCHAR( 30)
    )
 
-   SET @cDBUserName = @cUserID
+   SET @c_UserName = @cUserID
 
-   --convert login
    SET @n_Err = 0
-   EXEC [WM].[lsp_SetUser] @c_UserName = @cDBUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   
+   SET @cSQL = 'EXEC WM.lsp_SetUser @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT';
 
-   IF @cDBUserName Like '%' + @cUserID + '%'
+   SET @cSQLParam =  N'@c_UserName NVARCHAR(128) OUTPUT,' +
+                     N'@n_Err INT OUTPUT, ' + 
+                     N'@c_ErrMsg NVARCHAR(125) OUTPUT'
+   --convert login
+   SELECT @nOutputCount=COUNT(1) FROM sys.parameters p (NOLOCK)
+            JOIN sys.objects o (NOLOCK) 
+               ON p.object_id = o.object_id
+            WHERE o.name = 'lsp_SetUser'
+            AND p.is_output = 1
+   IF @nOutputCount = 4 
    BEGIN
-      EXECUTE AS LOGIN = @cDBUserName
-      SET @cUserID = @cDBUserName
-   END
+      SET @cSQL = @cSQL + ', @b_ExecuteAs OUTPUT '
+      SET @cSQLParam = @cSQLParam + ', @b_ExecuteAs BIT OUTPUT'
 
+      EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT, @b_ExecuteAs OUTPUT;
+   END
+   ELSE
+   BEGIN
+      EXEC sp_executesql @cSQL, @cSQLParam, @c_UserName OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
+   END
+   
    IF @n_Err <> 0
    BEGIN
       --INSERT INTO @errMsg(nErrNo,cErrMsg)
       SET @b_Success = 0
       SET @n_Err = @n_Err
-   --   SET @c_ErrMsg = @c_ErrMsg
+      SET @c_ErrMsg = @c_ErrMsg
       GOTO EXIT_SP
+   END
+
+   IF @nOutputCount = 4
+   BEGIN
+      IF @b_ExecuteAs = 1
+         GOTO ExecuteAs
+      ELSE
+      BEGIN
+         IF SESSION_CONTEXT(N'mwms_user_name') IS NULL
+         BEGIN
+            SET @b_Success = 0
+            SET @n_Err = 1000807
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No Session context found. Function : isp_AppSection'
+            GOTO EXIT_SP
+         END            
+      END
+   END
+   ELSE
+   BEGIN
+      IF @c_UserName LIKE '%' + @cUserID + '%'
+      BEGIN
+ExecuteAs:
+         EXECUTE AS LOGIN = @c_UserName
+         SET @cUserID = @c_UserName
+      END
    END
 
    --SELECT @c_UserName AS c_UserName
@@ -124,7 +171,7 @@ BEGIN
 
       SET @cSelWorkStation = @cWorkStation
       
-      IF ISNULL(@cWorkStation, '') = ''
+      IF ISNULL(@cSelWorkStation, '') = ''
       BEGIN
          SELECT @cSelWorkStation = ISNULL(Workstation,'') 
          FROM Api.AppWorkstation (NOLOCK)
@@ -133,7 +180,8 @@ BEGIN
 
       SELECT @cClrDeviceID = ISNULL(SValue,'0') 
       FROM StorerConfig (NOLOCK)
-      WHERE ConfigKey = 'TPS-ClrDeviceID'
+      WHERE StorerKey = @cStorerKey
+      AND ConfigKey = 'TPS-ClrDeviceID'
    END
 
    --get StorerConfig
@@ -181,6 +229,10 @@ BEGIN
       ELSE
       BEGIN
       --SELECT  '1aa'
+         IF @cScanNo <> '' AND EXISTS(SELECT 1 FROM API.AppSection WITH (NOLOCK) WHERE ScanNo = @cScanNo AND UserID <> @cUserID)
+         BEGIN
+            GOTO SCANNO_LOCKBYWHO_SP
+         END
          INSERT INTO API.AppSection (APPName,DeviceID,UserID,SectionTime,ScanNo,AddWho,AddDate,EditWho,EditDate)
          VALUES (@cAppName,@cDeviceID,@cUserID,@dNow,@cScanNo,@cUserID,@dNow,@cUserID,@dNow)
       END
@@ -223,39 +275,6 @@ BEGIN
       WHERE deviceID = @cDeviceID
          AND userID = @cUserID
 
-      --IF EXISTS ( SELECT 1
-      --            FROM API.AppWorkstation (NOLOCK)
-      --            WHERE EditWho = @cUserID
-      --               AND DeviceID = 'WEB')
-      --BEGIN
-      --   UPDATE API.AppWorkstation WITH (ROWLOCK)
-      --   SET   DeviceID = '',
-      --         EditDate = GETDATE()
-      --   WHERE   editwho = @cUserID
-
-      --END
-
-      --IF EXISTS ( SELECT 1
-      --            FROM API.AppWorkstation (NOLOCK)
-      --            WHERE EditWho <> @cUserID
-      --               AND DeviceID = 'WEB'
-      --               AND WorkStation = @cWorkStation)
-      --BEGIN
-      --   SET @b_Success = 0
-      --   SET @n_Err = 175603
-      --   SET @c_ErrMsg = 'Another User login in this workstation. Please use another workstation. Function : isp_AppSection'
-      --   SET @n_LogOut = 1
-
-      --   GOTO EXIT_SP
-
-      --END
-
-      --UPDATE API.AppWorkstation WITH (ROWLOCK)
-      --SET DeviceID = @cDeviceID,
-      --    EditWho = @cUserID,
-      --    EditDate = GETDATE()
-      --WHERE  WorkStation = @cWorkStation
-
       GOTO SUCCESS_SP
    END
    ELSE
@@ -284,12 +303,13 @@ BEGIN
       WHERE deviceID = @cDeviceID
          AND userID = @cUserID
 
-      IF EXISTS (SELECT 1
+      IF @cSelWorkStation <> '' 
+      AND EXISTS (SELECT 1
                   FROM API.AppWorkstation (NOLOCK)
                   WHERE deviceid = @cDeviceID
                   AND (DefaultStorerkey <> @cStorerKey
                   OR DefaultFacility <> @cFacility)
-         AND @cSelWorkStation <> '')
+                  AND DefaultStorerKey <> 'SHARE')
       BEGIN
          UPDATE API.AppWorkstation WITH (ROWLOCK)
          SET DefaultStorerkey = @cStorerKey,
@@ -405,20 +425,17 @@ BEGIN
 
       IF @nWebFlag = 1 
       AND @cSelWorkStation <> ''
-      AND @cClrDeviceID = '1'
+      AND (@cClrDeviceID = '1' OR 
+      EXISTS (SELECT 1 
+         FROM Api.AppWorkstation (NOLOCK) 
+         WHERE Workstation = @cSelWorkStation 
+         AND DefaultStorerKey = 'SHARE')
+      )
       BEGIN
          UPDATE Api.AppWorkstation WITH(ROWLOCK)
          SET DeviceID = ''
          WHERE Workstation = @cSelWorkStation
       END
-	   --UPDATE API.AppSection WITH (ROWLOCK)
-	   --SET userID = '',
-		  -- SectionTime = Null,
-		  -- ScanNo = '',
-		  -- EditWho = SUSER_SNAME (),
-		  -- EditDate = @dNow
-	   --WHERE deviceID = @cDeviceID
-    --     AND userID = @cUserID
 
 	   GOTO SUCCESS_SP
    END
@@ -449,6 +466,10 @@ BEGIN
 
 
    EXIT_SP:
+      IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+      BEGIN
+         EXEC [WM].[lsp_RevertUser]
+      END
       REVERT
 END
 GO

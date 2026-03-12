@@ -89,6 +89,7 @@ GO
 /* 10-JUL-2025  Wan08     UWP-37554 - Increases Variable Length         */
 /* 10-OCT-2025 SSA01      UWP-42248 -Enhanced session management        */
 /*                             and cleanup.                             */
+/*13-JAN-2026  SSA02      FCR-9773 - ASN - KCB Inspection Hold LPNs     */
 /************************************************************************/  
 
   
@@ -150,7 +151,9 @@ BEGIN
             @c_RCPTSTATStatus    NVARCHAR(1),  
             @c_busr5             NVARCHAR(30),  
             @c_ToLoc             NVARCHAR(10),  
-            @c_ReceiptHoldCode   NVARCHAR(10) --NJOW03  
+            @c_ReceiptHoldCode   NVARCHAR(10), --NJOW03
+            @c_ToId              NVARCHAR(18), -- (SSA02)
+            @c_UserDefine02      NVARCHAR(30)  -- (SSA02)
   
     DECLARE @c_debug  NVARCHAR(1)  
   
@@ -2200,6 +2203,75 @@ BEGIN
       CLOSE Cur_ReceiptDetail  
       DEALLOCATE Cur_ReceiptDetail  
       --WL02 End
+
+      --(SSA02) - START: Add Inventory Hold based on UserDefine02 field in ReceiptDetail
+      DECLARE Cur_ReceiptDetail CURSOR FAST_FORWARD READ_ONLY FOR
+      SELECT RD.StorerKey, RD.ToID, RD.SKU, RD.Lottable09, CL.CODE
+      FROM  Receipt R WITH (NOLOCK)
+      JOIN ReceiptDetail RD (NOLOCK) ON RD.ReceiptKey = R.ReceiptKey
+      JOIN SKU SKU (NOLOCK) ON (RD.STORERKEY = SKU.STORERKEY AND RD.SKU = SKU.SKU)
+      JOIN STORERCONFIG SC (NOLOCK) ON RD.Storerkey = SC.Storerkey AND SC.Configkey = 'MarkForKCBInspection'
+                                    AND SC.Svalue = '1' AND (ISNULL(SC.Facility,'') = '' OR SC.Facility = R.Facility)
+      JOIN CODELKUP CL (NOLOCK) ON (CL.CODE = 'KCB BLOCK' AND CL.ListName = 'INVHOLD' AND CL.Storerkey = RD.StorerKey
+       AND (ISNULL(CL.CODE2,'') = '' OR CL.CODE2 = R.Facility))
+      WHERE RD.ReceiptKey = @c_ReceiptKey
+         AND RD.QtyReceived > 0
+         AND RD.FinalizeFlag = 'Y'
+         AND ISNULL(RD.UserDefine02,'') <> '' AND RD.UserDefine02 <> 'N'
+         AND R.DocType = 'A'
+      ORDER BY RD.ReceiptLineNumber
+      OPEN Cur_ReceiptDetail
+
+       FETCH NEXT FROM Cur_ReceiptDetail INTO @c_StorerKey, @c_ToId, @c_SKU, @c_Lottable09, @c_ReceiptHoldCode
+       WHILE @@FETCH_STATUS <> -1 AND ( @n_continue = 1 or @n_continue = 2)
+       BEGIN
+            IF NOT EXISTS (SELECT 1 FROM InventoryHold WITH (NOLOCK)
+               WHERE StorerKey = @c_storerkey
+                  AND ID = @c_ToId)
+            BEGIN
+               SELECT @b_success = 1
+               SET @c_Reason = ISNULL(RTRIM(@c_Lottable09), '')
+
+               EXEC nspInventoryHoldWrapper
+                  '',               -- lot
+                  '',               -- loc
+                  @c_ToId,          -- id
+                  @c_StorerKey,     -- storerkey
+                  @c_SKU,           -- sku
+                  '',               -- lottable01
+                  '',               -- lottable02
+                  '',               -- lottable03
+                  NULL,             -- lottable04
+                  NULL,             -- lottable05
+                  '',               --lottable06
+                  '',               --lottable07
+                  '',               --lottable08
+                  '',               --lottable09
+                  '',               --lottable10
+                  '',               --lottable11
+                  '',               --lottable12
+                  NULL,             --lottable13
+                  NULL,             --lottable14
+                  NULL,             --lottable15
+                  @c_ReceiptHoldCode,  -- status
+                  '1',              -- hold
+                  @b_success OUTPUT,
+                  @n_err OUTPUT,
+                  @c_errmsg OUTPUT,
+                  @c_Reason   -- remark
+
+               IF @n_err <> 0
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Receipt Fail. (''ispFinalizeReceipt'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+               END
+            END
+
+            FETCH NEXT FROM Cur_ReceiptDetail INTO @c_StorerKey, @c_ToId, @c_SKU, @c_Lottable09,@c_ReceiptHoldCode
+         END -- @@FETCH_STATUS <> -1
+
+         CLOSE Cur_ReceiptDetail
+         DEALLOCATE Cur_ReceiptDetail
    END  
   
    -- TraceInfo (tlting01) - Start  
