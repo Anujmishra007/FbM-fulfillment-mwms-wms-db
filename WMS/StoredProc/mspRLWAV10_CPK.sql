@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.6                                                          */    
+/* Version: 1.7                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -29,6 +29,7 @@ GO
 /* 06-Mar-2026 WLChooi  1.5   FCR-10124 Fix missing Taskdetailkey in     */
 /*                            Pickdetail for ASTCPK (WL05)               */
 /* 06-Mar-2026 WLChooi  1.6   FCR-10124 Add Pickmethod for B2C (WL06)    */
+/* 12-Mar-2026 WLChooi  1.7   FCR-11585 Add Areakey (WL07)               */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -656,7 +657,7 @@ BEGIN
             ,  @n_SystemQty           = 0   
             ,  @c_RefTaskKey          = @c_RefTaskKey       
             ,  @c_LoadKey             = @c_Loadkey           
-            ,  @c_AreaKey             = ''            
+            ,  @c_AreaKey             = @c_Areakey   --WL07
             ,  @c_DropID              = ''     
             ,  @n_TransitCount        = 0         
             ,  @c_TransitLOC          = ''         
