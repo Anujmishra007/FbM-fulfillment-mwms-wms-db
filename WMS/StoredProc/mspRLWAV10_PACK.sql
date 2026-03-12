@@ -43,6 +43,7 @@ GO
 /* 10-Mar-2026 WLChooi  2.5   FCR-11511 Generate PICKHEADER for B2C(WL14)*/
 /* 11-Mar-2026 WLChooi  2.6   FCR-11514 Fix VAS Incorrect Qty (WL15)     */
 /* 12-Mar-2026 WLChooi  2.7   FCR-11558 Fix VAS scenario (WL16)          */
+/* 12-Mar-2026 WLChooi  2.8   FCR-11566 Remove VAS filter for audit(WL17)*/
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -2245,7 +2246,7 @@ BEGIN
             AND cl.Storerkey = @c_Storerkey
             )
             AND cd.[Status] = '9'
-            AND cd.IsVas = 0
+            --AND cd.IsVas = 0   --WL17
 
             IF @n_CartonNo_Cnt > 0
             BEGIN
@@ -2273,7 +2274,7 @@ BEGIN
                                              AND cl.Storerkey = @c_Storerkey                    --(ush022-2)
                               )
                               AND cd.[Status] = '9'
-                              AND cd.IsVas    = 0
+                              --AND cd.IsVas    = 0   --WL17
                               GROUP BY cd.OrderKey, cd.CartonSeqNo
                               ORDER BY cd.CartonSeqNo DESC
                            ) aud
