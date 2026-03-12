@@ -20,6 +20,7 @@ GO
 /* 2026-02-04   2.1  JWF011     UWP-48247: Add Recartonization check rule        */
 /* 2026-02-24   2.2  GCH225     UWP-49353: Fix for Scan SKU into new Carton      */
 /* 2026-03-03   2.3  GCH225     UWP-49786: Fix for Block Recartonization         */
+/* 2026-03-12   2.4  GCH225     UWP-XXXXX: Skip UCC Carton Check for PreCartonize*/
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -93,6 +94,7 @@ BEGIN
          , @bIsUCCPack           BIT
          , @nTtlQty              INT
          , @nTtlExpQty           INT
+         , @bIsPreCartonize      BIT
 
    DECLARE @cVASCodeUDF2         NVARCHAR(60)   = ''
          , @cVASCodeUDF3         NVARCHAR(60)   = ''
@@ -142,6 +144,7 @@ BEGIN
    SET @bIsUCCPack            = 0
    SET @nTtlQty               = 0
    SET @nTtlExpQty            = 0
+   SET @bIsPreCartonize       = 0
 
    --Check is the carton under inprogress status or closed status.
    IF @nCartonNo > 0 
@@ -166,6 +169,15 @@ BEGIN
          GOTO EXIT_SP
       END
 
+      IF EXISTS(SELECT 1
+                FROM PACKDETAIL (NOLOCK)
+                WHERE PickSlipNo = @cPickSlipNo
+                AND CartonNo = @nCartonNo
+                AND ExpQty > 0
+      )
+      BEGIN
+         SET @bIsPreCartonize = 1
+      END
       IF @cCartonStatus <> 'INPROGRESS' AND LEN(@cCartonStatus) > 0
       BEGIN
          INSERT INTO @oSKUList (SKU)
@@ -270,7 +282,8 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      IF @bIsUCCPack = 1
+      IF @bIsUCCPack = 1 
+      AND @bIsPreCartonize = 0
       BEGIN
          SET @n_Continue  = 3
          SET @n_ErrNo = 11522

@@ -201,6 +201,7 @@ BEGIN
       IF @cWODSKU = @cSKU OR @cWODSKU = ''
       BEGIN
          SET @cFinalSKU = COALESCE(@cWODSKU, @cSKU)
+         
          IF @cFinalSKU = ''
          BEGIN
             SELECT TOP 1 @cFinalSKU = SKU
@@ -208,6 +209,7 @@ BEGIN
             WHERE PickSlipNo = @cPickSlipNo 
             AND CartonNo = @nCartonNo
          END
+
          INSERT INTO @VASReports ( ReportID
                                  , ReportLineNo
                                  , PrintSource
@@ -246,6 +248,7 @@ BEGIN
          IF @cUDF04_WK = '' 
          BEGIN
             SET @cFinalSKU = COALESCE(@cWODSKU, @cSKU)
+            
             IF @cFinalSKU = ''
             BEGIN
                SELECT TOP 1 @cFinalSKU = SKU
