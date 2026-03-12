@@ -1259,6 +1259,10 @@ BEGIN
                   AND UCCNo = @c_UCCNo
             END
             --ML02-E
+
+            IF @c_CurrHold = '1' AND @c_Hold = '1'   --ML04
+               SET @c_CurrHold = '0'                 --ML04
+/* ML04-S
             IF @c_CurrHold <> @c_Hold
             BEGIN
                UPDATE INVENTORYHOLD WITH (ROWLOCK)
@@ -1269,6 +1273,7 @@ BEGIN
                AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
                AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
             END
+ ML04-E */
          END
          ELSE
          BEGIN
