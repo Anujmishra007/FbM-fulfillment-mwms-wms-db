@@ -7,5 +7,6 @@ execute rdt.rdtAddMsg 254052, 10, '254052^DecodeFailure',   'us_english',629, 0,
 execute rdt.rdtAddMsg 254053, 10, '254053^InvalidDate',     'us_english',629, 0, '254053: Invalid date format'
 execute rdt.rdtAddMsg 254054, 10, '254054^ConvDateFail',    'us_english',629, 0, '254054: Fail to convert date'
 execute rdt.rdtAddMsg 254055, 10, '254055^InvalidSKU',      'us_english',629, 0, '254055: Invalid SKU'
+execute rdt.rdtAddMsg 254056, 10, '254056^InvalidMFGDate',  'us_english',629, 0, '254056: Invalid MFG Date'
  
 select * from rdt.rdtmsg (nolock) where message_id between 254051 and 254100

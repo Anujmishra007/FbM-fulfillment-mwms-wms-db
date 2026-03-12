@@ -12,6 +12,9 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author      Purposes                                */
 /* 2025-12-15  1.0  BHA212     FCR-9582 Created                         */
+/* 2026-03-04  1.1  BHA212     FCR-9582 Fix date format DD/MM/YYYY      */
+/* 2026-03-05  1.2  BHA212     FCR-9582 Custom DD/MM/YYYY validation    */
+/*                             (rdtIsValidDate uses user date format)   */
 /************************************************************************/
  
 CREATE OR ALTER PROCEDURE [RDT].[rdt_629DecodeSP01] (
@@ -50,14 +53,20 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
  
    DECLARE @nDebugFlag  INT = 0
- 
+
    DECLARE
       @cTempSKU            NVARCHAR( 20)
       ,@cTempLottable01    NVARCHAR( 18)
       ,@cTempLottable02    NVARCHAR( 18)
       ,@cTempLottable04    NVARCHAR(100)
       ,@cTempLottable13    NVARCHAR(100)
-      ,@nRowCount    INT
+      ,@cConvertedDate     NVARCHAR(100)
+      ,@nRowCount          INT
+      -- DD/MM/YYYY validation variables
+      ,@nDD                INT
+      ,@nMM                INT
+      ,@nYYYY              INT
+      ,@nLastDayOfMonth    INT
  
     DECLARE @tDecodeList TABLE
    (
@@ -113,53 +122,145 @@ BEGIN
                 SET @cLottable01 = @cTempLottable01
                 SET @cLottable02 = @cTempLottable02
  
-                -- Validate and Convert Mfg Date (Lottable13)
+                -- Validate and Convert Mfg Date (Lottable13) - QR code format is DD/MM/YYYY
                 IF @cTempLottable13 <> ''
                 BEGIN
-                   IF rdt.rdtIsValidDate( @cTempLottable13) = 0
+                   -- Validate DD/MM/YYYY format (length must be 10)
+                   IF LEN(@cTempLottable13) <> 10 OR
+                      SUBSTRING(@cTempLottable13, 3, 1) <> '/' OR
+                      SUBSTRING(@cTempLottable13, 6, 1) <> '/'
                    BEGIN
                       SET @nErrNo = 254053 -- Error InvalidDate
                       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                       GOTO Quit
                    END
-                   ELSE
+
+                   -- Extract and validate DD, MM, YYYY
+                   BEGIN TRY
+                      SET @nDD = CAST(SUBSTRING(@cTempLottable13, 1, 2) AS INT)
+                      SET @nMM = CAST(SUBSTRING(@cTempLottable13, 4, 2) AS INT)
+                      SET @nYYYY = CAST(SUBSTRING(@cTempLottable13, 7, 4) AS INT)
+                   END TRY
+                   BEGIN CATCH
+                      SET @nErrNo = 254053 -- Error InvalidDate
+                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                      GOTO Quit
+                   END CATCH
+
+                   -- Validate ranges
+                   IF @nMM < 1 OR @nMM > 12 OR @nDD < 1 OR @nDD > 31 OR @nYYYY < 1900 OR @nYYYY > 9999
                    BEGIN
-                      BEGIN TRY
-                         SET @dLottable13 = rdt.rdtConvertToDate(@cTempLottable13)
-                      END TRY
-                      BEGIN CATCH
-                         SET @nErrNo = 254054 -- Error ConvDateFail
-                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                         GOTO Quit
-                      END CATCH
+                      SET @nErrNo = 254053 -- Error InvalidDate
+                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                      GOTO Quit
                    END
+
+                   -- Validate last day of month
+                   IF @nMM IN (1, 3, 5, 7, 8, 10, 12) SET @nLastDayOfMonth = 31
+                   ELSE IF @nMM IN (4, 6, 9, 11) SET @nLastDayOfMonth = 30
+                   ELSE IF @nMM = 2
+                   BEGIN
+                      IF (@nYYYY % 4 = 0 AND @nYYYY % 100 <> 0) OR (@nYYYY % 400 = 0)
+                         SET @nLastDayOfMonth = 29
+                      ELSE
+                         SET @nLastDayOfMonth = 28
+                   END
+
+                   IF @nDD > @nLastDayOfMonth
+                   BEGIN
+                      SET @nErrNo = 254053 -- Error InvalidDate
+                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                      GOTO Quit
+                   END
+
+                   -- Convert DD/MM/YYYY to DATETIME
+                   BEGIN TRY
+                      SET @dLottable13 = DATEFROMPARTS(@nYYYY, @nMM, @nDD)
+                   END TRY
+                   BEGIN CATCH
+                      SET @nErrNo = 254054 -- Error ConvDateFail
+                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                      GOTO Quit
+                   END CATCH
                 END
                 ELSE
-                   SET @dLottable13 = ISNULL(@cTempLottable13, '')
+                   SET @dLottable13 = NULL
  
-                -- Validate and Convert Exp Date (Lottable04)
+                -- Validate and Convert Exp Date (Lottable04) - QR code format is DD/MM/YYYY
                 IF @cTempLottable04 <> ''
                 BEGIN
-                   IF rdt.rdtIsValidDate( @cTempLottable04) = 0
+                   -- Validate DD/MM/YYYY format (length must be 10)
+                   IF LEN(@cTempLottable04) <> 10 OR
+                      SUBSTRING(@cTempLottable04, 3, 1) <> '/' OR
+                      SUBSTRING(@cTempLottable04, 6, 1) <> '/'
                    BEGIN
                       SET @nErrNo = 254053 -- Error InvalidDate
                       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                       GOTO Quit
                    END
-                   ELSE
+
+                   -- Extract and validate DD, MM, YYYY
+                   BEGIN TRY
+                      SET @nDD = CAST(SUBSTRING(@cTempLottable04, 1, 2) AS INT)
+                      SET @nMM = CAST(SUBSTRING(@cTempLottable04, 4, 2) AS INT)
+                      SET @nYYYY = CAST(SUBSTRING(@cTempLottable04, 7, 4) AS INT)
+                   END TRY
+                   BEGIN CATCH
+                      SET @nErrNo = 254053 -- Error InvalidDate
+                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                      GOTO Quit
+                   END CATCH
+
+                   -- Validate ranges
+                   IF @nMM < 1 OR @nMM > 12 OR @nDD < 1 OR @nDD > 31 OR @nYYYY < 1900 OR @nYYYY > 9999
                    BEGIN
-                      BEGIN TRY
-                         SET @dLottable04 = rdt.rdtConvertToDate(@cTempLottable04)
-                      END TRY
-                      BEGIN CATCH
-                         SET @nErrNo = 254054 -- Error ConvDateFail
-                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                         GOTO Quit
-                      END CATCH
+                      SET @nErrNo = 254053 -- Error InvalidDate
+                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                      GOTO Quit
                    END
+
+                   -- Validate last day of month
+                   IF @nMM IN (1, 3, 5, 7, 8, 10, 12) SET @nLastDayOfMonth = 31
+                   ELSE IF @nMM IN (4, 6, 9, 11) SET @nLastDayOfMonth = 30
+                   ELSE IF @nMM = 2
+                   BEGIN
+                      IF (@nYYYY % 4 = 0 AND @nYYYY % 100 <> 0) OR (@nYYYY % 400 = 0)
+                         SET @nLastDayOfMonth = 29
+                      ELSE
+                         SET @nLastDayOfMonth = 28
+                   END
+
+                   IF @nDD > @nLastDayOfMonth
+                   BEGIN
+                      SET @nErrNo = 254053 -- Error InvalidDate
+                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                      GOTO Quit
+                   END
+
+                   -- Convert DD/MM/YYYY to DATETIME
+                   BEGIN TRY
+                      SET @dLottable04 = DATEFROMPARTS(@nYYYY, @nMM, @nDD)
+                   END TRY
+                   BEGIN CATCH
+                      SET @nErrNo = 254054 -- Error ConvDateFail
+                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                      GOTO Quit
+                   END CATCH
                 END
                 ELSE
-                   SET @dLottable04 = ISNULL(@cTempLottable04, '')
+                   SET @dLottable04 = NULL
+               
+               -- Only compare dates if both are NOT NULL
+               IF @dLottable13 IS NOT NULL AND @dLottable04 IS NOT NULL
+               BEGIN
+                  IF @dLottable13 >= @dLottable04
+                  BEGIN
+                     SET @nErrNo = 254056 -- Invalid MFG Date
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END
+
             END
             ELSE
             BEGIN
