@@ -1549,8 +1549,17 @@ BEGIN
                               SET @n_QtyWgt_PI = FLOOR(ROUND(@n_WgtLeftToFulFill / @n_StdGrossWgt, 6))   --WL07
                            END
                         END
-
-                        IF @n_QtyWgt_PI < @n_QtyCBM_PI
+                        
+                        --WL16
+                        IF @n_QtyWgt_PI = 0
+                        BEGIN
+                           SET @n_QtyToPack_PI = @n_QtyCBM_PI
+                        END
+                        ELSE IF @n_QtyCBM_PI = 0
+                        BEGIN
+                           SET @n_QtyToPack_PI = @n_QtyWgt_PI
+                        END
+                        ELSE IF @n_QtyWgt_PI < @n_QtyCBM_PI
                         BEGIN
                            SET @n_QtyToPack_PI = @n_QtyWgt_PI
                         END
