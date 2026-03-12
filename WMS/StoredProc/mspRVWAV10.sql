@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.3                                                          */    
+/* Version: 1.4                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -24,6 +24,8 @@ GO
 /* 26-Feb-2026 WLChooi  1.2   FCR-11158 Added ASTCPK Task (WL02)         */
 /* 10-Mar-2026 WLChooi  1.3   FCR-11471 Clear pickdetail column value &  */
 /*                            Userdefine02 (WL03)                        */
+/* 12-Mar-2026 WLChooi  1.4   FCR-11568 Clear CaseID & DropID if matches */
+/*                            (WL04)                                     */
 /*************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV10]
       @c_Wavekey      NVARCHAR(10)
@@ -185,6 +187,9 @@ BEGIN
    BEGIN
       UPDATE PICKDETAIL WITH (ROWLOCK)
       SET PICKDETAIL.TaskdetailKey = ''
+        , PICKDETAIL.DropID = CASE WHEN PICKDETAIL.CaseID = PICKDETAIL.DropID AND PICKDETAIL.UOM >= '6'
+                                   THEN ''
+                                   ELSE PICKDETAIL.DropID END   --WL04
         , PICKDETAIL.CaseID = ''
         , PICKDETAIL.Pickslipno  = ''   --WL03
         , PICKDETAIL.CartonGroup = ''   --WL03
