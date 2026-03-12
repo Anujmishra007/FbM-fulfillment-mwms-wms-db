@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.6                                                          */    
+/* Version: 1.8                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -29,6 +29,8 @@ GO
 /* 06-Mar-2026 WLChooi  1.5   FCR-10124 Fix missing Taskdetailkey in     */
 /*                            Pickdetail for ASTCPK (WL05)               */
 /* 06-Mar-2026 WLChooi  1.6   FCR-10124 Add Pickmethod for B2C (WL06)    */
+/* 12-Mar-2026 WLChooi  1.7   FCR-11585 Add Areakey (WL07)               */
+/* 12-Mar-2026 WLChooi  1.8   FCR-11579 Fix missing taskdetailkey (WL08) */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -114,6 +116,8 @@ BEGIN
       ,  @c_Facility             NVARCHAR(5)    = ''
       ,  @c_Option5              NVARCHAR(MAX)  = ''
       ,  @n_BatchGrpKey          INT            = 0
+      ,  @c_OriginalFromLoc      NVARCHAR(10)   = ''   --WL08
+      ,  @c_TaskFromLoc          NVARCHAR(10)   = ''   --WL08
       
       ,  @CUR_TW                 CURSOR
  
@@ -200,6 +204,7 @@ BEGIN
          ,  SortNo            INT            NOT NULL DEFAULT(0)
          ,  DocType           NVARCHAR(10)   NOT NULL DEFAULT('')   --WL01
          ,  ECOM_SINGLE_Flag  NVARCHAR(1)    NOT NULL DEFAULT('')   --WL06
+         ,  OriginalFromLoc   NVARCHAR(10)   NOT NULL DEFAULT('')   --WL08
          ) 
 
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NULL
@@ -323,6 +328,7 @@ BEGIN
          ,  SkuPerCarton
          ,  DocType   --WL01
          ,  ECOM_SINGLE_Flag   --WL06
+         ,  OriginalFromLoc   --WL08
          )
       SELECT 
             pw.Wavekey             
@@ -343,6 +349,7 @@ BEGIN
          ,  p2.SkuPerCarton
          ,  O.DocType   --WL01
          ,  ISNULL(O.ECOM_SINGLE_Flag, '')   --WL06
+         ,  pw.Loc   --WL08
       FROM #PICKDETAIL_WIP AS pw
       JOIN LOC l (NOLOCK) ON l.loc = pw.Toloc
       JOIN  (  SELECT pw1.ToLoc  
@@ -373,6 +380,7 @@ BEGIN
          ,  p2.SkuPerCarton
          ,  O.DocType   --WL01
          ,  ISNULL(O.ECOM_SINGLE_Flag, '')   --WL06
+         ,  pw.Loc   --WL08
 
       --------------------------------------------------------------------  
       -- Update Task Priority Base on ORDERS.Priority 
@@ -553,6 +561,7 @@ BEGIN
             ,tw.GroupKey
             ,tw.Status
             ,tw.DocType   --WL01
+            ,tw.OriginalFromLoc   --WL08
       FROM #TASKDETAIL_WIP tw
       ORDER BY tw.SortNo
             ,  tw.GroupKey
@@ -581,6 +590,7 @@ BEGIN
                                  ,  @c_GroupKey
                                  ,  @c_Status
                                  ,  @c_DocType   --WL01
+                                 ,  @c_OriginalFromLoc   --WL08
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN  
@@ -614,6 +624,16 @@ BEGIN
          BEGIN
             SET @c_Taskdetailkey = ''
             SET @c_LogicalToLoc  = '?'
+            SET @c_TaskFromLoc = ''   --WL08
+
+            --WL08 S
+            SET @c_TaskFromLoc = @c_FromLoc
+
+            IF @c_OriginalFromLoc <> @c_FromLoc
+            BEGIN
+               SET @c_TaskFromLoc = @c_OriginalFromLoc
+            END
+            --WL08 E
 
             EXEC isp_InsertTaskDetail
                @c_TaskDetailKey       = @c_TaskDetailKey OUTPUT       
@@ -624,7 +644,7 @@ BEGIN
             ,  @c_UOM                 = @c_UOM           
             ,  @n_UOMQty              = @n_Qty        
             ,  @n_Qty                 = @n_Qty        
-            ,  @c_FromLoc             = @c_FromLoc        
+            ,  @c_FromLoc             = @c_TaskFromLoc   --WL08  
             ,  @c_LogicalFromLoc      = @c_LogicalFromLoc    
             ,  @c_FromID              = @c_FromID     
             ,  @c_ToLoc               = @c_ToLoc        
@@ -656,7 +676,7 @@ BEGIN
             ,  @n_SystemQty           = 0   
             ,  @c_RefTaskKey          = @c_RefTaskKey       
             ,  @c_LoadKey             = @c_Loadkey           
-            ,  @c_AreaKey             = ''            
+            ,  @c_AreaKey             = @c_Areakey   --WL07
             ,  @c_DropID              = ''     
             ,  @n_TransitCount        = 0         
             ,  @c_TransitLOC          = ''         
@@ -685,7 +705,16 @@ BEGIN
             IF @b_Success = 0 
             BEGIN
                SET @n_Continue = 3
-            END 
+            END
+
+            --WL08 S
+            IF @c_OriginalFromLoc <> @c_FromLoc
+            BEGIN
+               UPDATE TASKDETAIL
+               SET FromLoc = @c_FromLoc
+               WHERE Taskdetailkey = @c_TaskdetailKey
+            END
+            --WL08 E
          END
 
          SET @c_Groupkey_P = @c_Groupkey
@@ -710,7 +739,8 @@ BEGIN
                                     ,  @c_AreaKey
                                     ,  @c_GroupKey
                                     ,  @c_Status
-                                    ,  @c_DocType   --WL01 
+                                    ,  @c_DocType   --WL01
+                                    ,  @c_OriginalFromLoc   --WL08 
       END  
       CLOSE @CUR_TW  
       DEALLOCATE @CUR_TW
