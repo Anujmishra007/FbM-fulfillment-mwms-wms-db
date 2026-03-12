@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.5                                                          */    
+/* Version: 2.6                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -41,6 +41,7 @@ GO
 /* 10-Mar-2026 WLChooi  2.3   FCR-11471 Fix CartonGroup NULL issue (WL12)*/
 /* 10-Mar-2026 WLChooi  2.4   FCR-11471 Fix VAS Packinfo Qty (WL13)      */
 /* 10-Mar-2026 WLChooi  2.5   FCR-11511 Generate PICKHEADER for B2C(WL14)*/
+/* 11-Mar-2026 WLChooi  2.6   FCR-11514 Fix VAS Incorrect Qty (WL15)     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -173,6 +174,7 @@ BEGIN
          , @c_Option5               NVARCHAR(4000) = ''     --WL01
          , @c_PackECOM              NVARCHAR(10)   = 'N'    --WL01
          , @c_OtherParms            NVARCHAR(MAX)  = ''     --WL02
+         , @c_VAS_P                 NVARCHAR(18)   = ''     --WL15
 
    DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
          , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
@@ -630,6 +632,8 @@ BEGIN
                  +  ', VASQty= ISNULL(WORKORDERDETAIL.VASQty,0)'
                  +  ', SkuAccessQty = CASE WHEN PICKDETAIL.UOM >= ''6'''
                  +                       ' AND  PICKSKU.SumSKUQty > @n_AccessQty'
+                 +                       ' THEN 0 '
+                 +                       ' WHEN PICKDETAIL.UOM = ''2'''
                  +                       ' THEN 0 ELSE 1 END'
                  +  ' FROM #PickDetail_WIP PICKDETAIL'
                  +  ' JOIN ORDERS (NOLOCK) ON ORDERS.Orderkey = PICKDETAIL.Orderkey'
@@ -640,7 +644,7 @@ BEGIN
                  +  ' CROSS APPLY (SELECT MIN(val) AS MinVal'
                  +                    ' , SUM(val) - MIN(val) - MAX(val) AS MidVal'
                  +                    ' , MAX(val) AS MaxVal'
-                 +               ' FROM (VALUES (SKU.Length), (SKU.Width), (SKU.Height)) AS x(val)'
+                 +               ' FROM (VALUES (PACK.LengthUOM3), (PACK.WidthUOM3), (PACK.HeightUOM3)) AS x(val)'
                  +               ') sds'
                  +  ' CROSS APPLY ( SELECT PackQtyIndicator = CASE WHEN SKU.PackQtyIndicator > 0'
                  +                                               ' THEN SKU.PackQtyIndicator ELSE 1 END'
@@ -1303,7 +1307,8 @@ BEGIN
             --WL02 S
             IF @n_debug = 3
             BEGIN
-               PRINT ' | SKU=' + ISNULL(@c_Sku, '')
+               PRINT ' | Orderkey=' + ISNULL(@c_Orderkey, '')
+                   + ' | SKU=' + ISNULL(@c_Sku, '')
                    + ' | StdCube=' + ISNULL(CAST(@n_StdCube AS NVARCHAR(30)), '')
                    + ' | StdGrossWgt=' + ISNULL(CAST(@n_StdGrossWgt AS NVARCHAR(30)), '')
                    + ' | CTNGroup_BTK=' + ISNULL(@c_CTNGroup_BTK, '')
@@ -1320,7 +1325,11 @@ BEGIN
             --WL02 E
 
             -- VAS - Open new carton even same SKUs
-            IF @b_NewCarton = 0 AND @b_IsVAS = 1 AND @c_Sku_P  = @c_Sku
+            IF @b_NewCarton = 0 AND @b_IsVAS = 1 
+            AND ((@c_Sku_P = @c_Sku) OR 
+                 (@c_VAS = 'PA' AND @c_Sku_P <> @c_Sku) OR
+                 (@n_VASQty_PI > 0)
+                )   --WL15
             BEGIN
                SET @b_NewCarton = 1
             END
@@ -1338,7 +1347,7 @@ BEGIN
 
                IF @b_NewCarton = 0 AND @n_SkuAccessQty = 0
                BEGIN
-                  IF @c_VAS = 'PA'  AND @n_QtyLeftToFulFill_PI = 0
+                  IF @n_VASQty_PI > 0 AND @n_QtyLeftToFulFill_PI = 0   --WL15
                   BEGIN
                      SET @b_NewCarton = 1
                   END
@@ -1346,7 +1355,7 @@ BEGIN
                   -- Non-VAS
                   -- If current open box already contains sku and next sku
                   -- to pack has different Sku.Itemclass
-                  IF @c_VAS <> 'PA' AND
+                  IF @b_IsVAS = 0 AND   --WL15
                      @c_ItemClass <> @c_ItemClass_P
                   BEGIN
                      SET @n_ItemCBM_Sum = 0.00
@@ -1478,13 +1487,13 @@ BEGIN
                      SET @n_CBMLeftToFulFill = @n_CartonCube
                      SET @n_WgtLeftToFulFill = @n_CartonWeight
 
-                     IF @c_VAS = 'PA' AND @n_SkuAccessQty = 0
+                     IF @n_VASQty_PI > 0 AND @n_SkuAccessQty = 0   --WL15
                      BEGIN
                         SET @n_QtyLeftToFulFill_PI = @n_VASQty_PI
                      END
                   END
 
-                  IF @c_VAS = 'PA' AND @n_SkuAccessQty = 0
+                  IF @n_VASQty_PI > 0 AND @n_SkuAccessQty = 0   --WL15
                   BEGIN
                      --SET @b_API = 0   --WL05
                      SET @n_QtyToPack_PI = @n_Qty_PI
@@ -1769,6 +1778,7 @@ BEGIN
                               ,  [Status]
                               ,  [RowRef_pcz]
                               ,  [IsApi]
+                              ,  [IsVAS]   --WL15
                               )
                            SELECT
                                  pcz.PickDetailKey
@@ -1802,6 +1812,7 @@ BEGIN
                               ,  [Status]   = '0'
                               ,  RowRef_pcz = pcz.RowID
                               ,  IsApi = @b_API
+                              ,  IsVAS = pcz.IsVAS   --WL15
                            FROM #PRECTN AS pcz
                            WHERE pcz.Pickdetailkey = @c_RefPickKey
                         END
@@ -1976,6 +1987,7 @@ BEGIN
             SET @c_ItemClass_P = @c_ItemClass
             SET @c_Size_P = @c_Size
             SET @c_Sku_P  = @c_Sku
+            SET @c_VAS_P  = @c_VAS   --WL15
             FETCH NEXT FROM @cur_PCKGRPS INTO   @n_RowID_pcz
                                              ,  @n_HardCTNGrpNo
                                              ,  @n_SortCTNGrpNo
