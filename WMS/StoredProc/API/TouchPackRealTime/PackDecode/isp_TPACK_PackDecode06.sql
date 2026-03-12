@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-10-14   1.0  GCH225     Cloned from isp_TPS_DecodeSP06 (TPS-792)         */
+/* 2026-03-05   2.0  GCH225     UWP-49985: Support Decode InputValue 2 and 3     */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_PackDecode06] (
@@ -24,6 +25,8 @@ CREATE OR ALTER PROC [API].[isp_TPACK_PackDecode06] (
    , @cStorerKey        NVARCHAR(15)      = ''
    , @cFacility         NVARCHAR(5)       = ''
    , @cInputValue1      NVARCHAR(128)     = ''
+   , @cInputValue2      NVARCHAR(MAX)     = ''  OUTPUT
+   , @cInputValue3      NVARCHAR(128)     = ''  OUTPUT
    , @c_UserID          NVARCHAR(256)     = ''
    , @cLangCode         NVARCHAR(3)       = ''
    , @cSKU              NVARCHAR(20)      = ''  OUTPUT

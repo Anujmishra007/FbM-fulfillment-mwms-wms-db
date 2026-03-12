@@ -25,6 +25,8 @@ CREATE OR ALTER PROC [API].[isp_TPACK_PrintDocument_VAS_BySKU] (
    , @cSKU                 NVARCHAR(50)   = ''
    , @cUDF01_WK            NVARCHAR(60)   = ''
    , @cUDF04_WK            NVARCHAR(60)   = ''
+   , @bPrintLabelFlag      BIT            = 0
+   , @bPrintPaperFlag      BIT            = 0
    , @cReportType          NVARCHAR(20)   = ''
    , @cLangCode            NVARCHAR(3)    = ''
    , @b_Success            INT            = 0   OUTPUT  
@@ -95,31 +97,39 @@ BEGIN
 
    IF @ReportID = '' OR @ReportLine = ''
    BEGIN
-      SET @n_Continue = 3
-      SET @n_ErrNo = 1004
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Report ID or Line number is missing in Code Lookup
+      SET @n_Continue = 1
+      --SET @n_ErrNo = 1004
+      --SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Report ID or Line number is missing in Code Lookup
       GOTO EXIT_SP
    END
 
-   SELECT  WMR.ReportID
-         , WMRD.ReportLineNo
-         , IIF(WMRD.PrintType = 'LOGIREPORT', 'JReport', 'WMReport') AS PrintSource
-         , ISNULL(WMRD.DefaultPrinterID, '') AS DefaultPrinterID
-         , WMRD.IsPaperPrinter
-         , ISNULL(WMR.KeyFieldName1, '') AS KeyFieldName1
-         , ISNULL(WMR.KeyFieldName2, '') AS KeyFieldName2
-         , ISNULL(WMR.KeyFieldName3, '') AS KeyFieldName3
-         , ISNULL(WMR.KeyFieldName4, '') AS KeyFieldName4
-         , IIF(@cUDF04_WK = 'PRICELB', 1, 0) AS IsSKUPrint
-   FROM WMREPORTDETAIL WMRD (NOLOCK)
-   JOIN WMREPORT WMR (NOLOCK) 
-   ON WMR.ReportID = WMRD.ReportID 
-   WHERE WMR.ModuleID = @cModuleID
-   AND WMRD.StorerKey = @cStorerKey
-   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
-   AND WMR.ReportType = @cReportType
-   AND WMR.ReportID = @ReportID
-   AND WMRD.ReportLineNo = @ReportLine
+    IF @bPrintPaperFlag = 1 OR @bPrintLabelFlag = 1
+    BEGIN
+        SELECT  WMR.ReportID
+             , WMRD.ReportLineNo
+             , IIF(WMRD.PrintType = 'LOGIREPORT', 'JReport', 'WMReport') AS PrintSource
+             , ISNULL(WMRD.DefaultPrinterID, '') AS DefaultPrinterID
+             , WMRD.IsPaperPrinter
+             , ISNULL(WMR.KeyFieldName1, '') AS KeyFieldName1
+             , ISNULL(WMR.KeyFieldName2, '') AS KeyFieldName2
+             , ISNULL(WMR.KeyFieldName3, '') AS KeyFieldName3
+             , ISNULL(WMR.KeyFieldName4, '') AS KeyFieldName4
+             , IIF(@cUDF04_WK = 'PRICELB', 1, 0) AS IsSKUPrint
+        FROM WMREPORTDETAIL WMRD (NOLOCK)
+        JOIN WMREPORT WMR (NOLOCK) 
+        ON WMR.ReportID = WMRD.ReportID 
+        WHERE WMR.ModuleID = @cModuleID
+        AND WMRD.StorerKey = @cStorerKey
+        AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
+        AND WMR.ReportType = @cReportType
+        AND WMR.ReportID = @ReportID
+        AND WMRD.ReportLineNo = @ReportLine
+	    AND (
+               (@bPrintPaperFlag = 1 AND WMRD.IsPaperPrinter = 'Y')
+            OR (@bPrintLabelFlag = 1 AND WMRD.IsPaperPrinter <> 'Y')
+        )       
+    END
+   
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      

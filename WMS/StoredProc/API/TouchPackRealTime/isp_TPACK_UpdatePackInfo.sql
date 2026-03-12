@@ -80,6 +80,9 @@ BEGIN
          , @cWODSku              NVARCHAR(20)   = ''
          , @cWODExternLineNo     NVARCHAR(5)    = ''
          , @nOrderLinePickQTY    INT            = 0
+         , @cExtMeasurementSP    NVARCHAR(250)  = ''
+         , @cSQL                 NVARCHAR(MAX)  = ''
+         , @cSQLParam            NVARCHAR(MAX)  = ''
    
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
@@ -95,7 +98,9 @@ BEGIN
    SET @nTtlPackQty        = 0
    SET @nPrecedingCartonNo = 0
    SET @bOpenCartonFlag    = 0
-
+   SET @cExtMeasurementSP  = ''
+   SET @cSQL               = ''
+   SET @cSQLParam          = ''
    
    IF EXISTS ( SELECT 1 
                FROM PACKHEADER (NOLOCK)
@@ -199,18 +204,35 @@ BEGIN
       END
       ELSE
       BEGIN
-         SELECT @fTtlWeight = IIF((ISNULL(S.[Weight], 0) = 0), 0, ROUND((S.[Weight] * T.TtlQty), 4))
-              , @fTtlCube = IIF((ISNULL(S.[Cube], 0) = 0), 0, ROUND((S.[Cube] * T.TtlQty), 4))
-         FROM SKU S (NOLOCK)
-         INNER JOIN (
-         SELECT PD.SKU AS SKU, SUM(PD.Qty) AS TtlQty
-         FROM PACKDETAIL PD (NOLOCK)
-         WHERE PD.PickSlipNo = @cPickSlipNo
-         AND PD.CartonNo = @nCartonNo
-         GROUP BY PD.SKU
-         ) T
-         ON T.SKU = S.SKU
-         WHERE S.StorerKey = @cStorerKey
+         EXEC [API].[isp_TPACK_ExtMeasurement_Wrapper]
+           @cType         = @cType            
+         , @bIsDiscrete   = @bIsDiscrete      
+         , @bIsCustom     = @bIsCustom        
+         , @cPickSlipNo   = @cPickSlipNo       
+         , @cOrderKey     = @cOrderKey         
+         , @cLoadKey      = @cLoadKey          
+         , @cDropID       = @cDropID           
+         , @cStorerKey    = @cStorerKey        
+         , @cFacility     = @cFacility         
+         , @nCartonNo     = @nCartonNo
+         , @cCartonStatus = @cCartonStatus
+         , @cCartonType   = @cCartonType
+         , @fWeight       = @fWeight
+         , @fCube         = @fCube
+         , @cLabelNo      = @cLabelNo
+         , @c_UserID      = @c_UserID
+         , @cLangCode     = @cLangCode
+         , @fTtlWeight    = @fTtlWeight  OUTPUT
+         , @fTtlCube      = @fTtlCube    OUTPUT
+         , @b_Success     = @b_Success   OUTPUT
+         , @n_ErrNo       = @n_ErrNo     OUTPUT
+         , @c_ErrMsg      = @c_ErrMsg    OUTPUT
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3  
+            GOTO EXIT_SP
+         END
       END
 
       IF EXISTS ( SELECT 1 
