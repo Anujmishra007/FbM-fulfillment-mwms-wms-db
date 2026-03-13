@@ -20,6 +20,7 @@ GO
 /* 2026-02-26   5.1  GCH225     UWP-49355: Fix Update ExpQty to Qty in PackDetail   */
 /* 2026-03-04   5.2  GCH225     UWP-49845: Fix Update ExpQty to Qty in PackDetail   */
 /* 2026-03-05   5.3  GCH225     UWP-50008: Fix Update WOD Status for Conso Pick     */
+/* 2026-03-13   5.4  JWF011     UWP-50287: Fix Pre-Carton Logic                     */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtCtnPostUpd_Std] (
@@ -452,6 +453,7 @@ BEGIN
            , EditWho = @c_UserID
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
+         AND Qty > 0
       END
    END
 
