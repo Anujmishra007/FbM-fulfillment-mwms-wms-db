@@ -49,7 +49,6 @@ BEGIN
    SET @n_ErrNo         = 0  
    SET @c_ErrMsg        = ''  
 
-   --TPS-GetKeyPadInput
    SET @cConfigKey = 'TPS-PackDecode'
    SET @cConfigVal = ''
 
