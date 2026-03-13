@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.6                                                          */    
+/* Version: 3.1                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -45,6 +45,9 @@ GO
 /* 12-Mar-2026 WLChooi  2.7   FCR-11558 Fix VAS scenario (WL16)          */
 /* 12-Mar-2026 WLChooi  2.8   FCR-11566 Remove VAS filter for audit(WL17)*/
 /* 12-Mar-2026 WLChooi  2.9   FCR-10124 Fix Inifinite Loop (WL18)        */
+/* 12-Mar-2026 WLChooi  3.0   FCR-11584 & FCR-11586 UPS Shipperkey (WL19)*/
+/* 12-Mar-2026 WLChooi  3.1   FCR-11581 Footwear API Fix Height (WL20)   */
+/* 13-Mar-2026 WLChooi  3.2   FCR-11615 Fix Inifinite Loop (WL21)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -178,6 +181,13 @@ BEGIN
          , @c_PackECOM              NVARCHAR(10)   = 'N'    --WL01
          , @c_OtherParms            NVARCHAR(MAX)  = ''     --WL02
          , @b_IsVAS_P               BIT            = 0      --WL15
+         , @n_UPSCtnCnt             INT            = 0      --WL19
+         , @n_TTLCtn                INT            = 0      --WL19
+         , @c_UserDefine01          NVARCHAR(50)   = ''     --WL19
+         , @c_Shipperkey            NVARCHAR(15)   = ''     --WL19
+         , @c_Algorithm             NVARCHAR(10)   = ''     --WL20
+         , @n_RowID_pre             INT            = 0      --WL21
+         , @c_VAS_P                 NVARCHAR(10)   = ''     --WL21
 
    DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
          , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
@@ -343,6 +353,7 @@ BEGIN
          ,  Dim2        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
          ,  Dim3        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
          ,  Quantity    INT            NOT NULL DEFAULT(0)
+         ,  CZNCheck    INT            NOT NULL DEFAULT(0)   --WL21
          )
 
       IF OBJECT_ID('tempdb..#PRECTN') IS NOT NULL
@@ -387,6 +398,8 @@ BEGIN
       ,  [VASQty_PI]       [int]          NOT NULL DEFAULT (0)
       ,  [SkuAccessQty]    [int]          NOT NULL DEFAULT (0)
       ,  [Status]          [nvarchar](1)  NOT NULL DEFAULT ('0')
+      ,  [UserDefine01]    [nvarchar](50) NOT NULL DEFAULT ('')   --WL19
+      ,  [Shipperkey]      [nvarchar](15) NOT NULL DEFAULT ('')   --WL19
       )
 
       IF OBJECT_ID('tempdb..#CartonDetail') IS NOT NULL
@@ -459,6 +472,7 @@ BEGIN
 
       SET @c_PackType     = 'ORDERS.Orderkey'
       SET @c_HardCTNGroup = 'ORDERS.Orderkey, ISNULL(SKU.BUSR7,'''')'
+      SET @c_Algorithm    = 'HEIGHT'   --WL20
 
       SET @c_SortCTNGroup = @c_HardCTNGroup +
                           + ',CASE WHEN PICKDETAIL.UOM = ''2'' THEN 2 ELSE 6 END'
@@ -580,6 +594,7 @@ BEGIN
       WHERE CODELKUP.Listname IN (  'CSCUK01CFG', 'CSCUK01GCR',
                                     'CSCUK01PT', 'ORDERAUDIT'
                                  ,  'CSCORDTYPE', 'CSCAUDUOM'  -- (ush022)
+                                 ,  'SHIPERCODE'   --WL19
                                  )
       AND   CODELKUP.Storerkey = @c_Storerkey
       ORDER BY CODELKUP.Listname
@@ -588,6 +603,12 @@ BEGIN
       SELECT @n_AccessQty = CASE WHEN ISNUMERIC(cl.Short) = 1 THEN cl.Short ELSE 0 END
       FROM @TMP_CL AS cl
       WHERE cl.Listname = 'CSCUK01CFG'
+
+      --WL19
+      SELECT @n_UPSCtnCnt = CASE WHEN ISNUMERIC(cl.UDF03) = 1 THEN cl.UDF03 ELSE 0 END
+      FROM @TMP_CL AS cl
+      WHERE cl.Listname = 'SHIPERCODE'
+      AND cl.Code = 'UPS'
 
       -- Set optional configuration
       SET @c_SQLCond = ' WHERE (PICKDETAIL.CaseID = '''' OR PICKDETAIL.CaseID IS NULL)'
@@ -638,6 +659,8 @@ BEGIN
                  +                       ' THEN 0 '
                  +                       ' WHEN PICKDETAIL.UOM = ''2'''
                  +                       ' THEN 0 ELSE 1 END'
+                 +  ', UserDefine01 = ISNULL(ORDERS.UserDefine01, '''')'   --WL19
+                 +  ', Shipperkey = ISNULL(ORDERS.Shipperkey, '''')'   --WL19
                  +  ' FROM #PickDetail_WIP PICKDETAIL'
                  +  ' JOIN ORDERS (NOLOCK) ON ORDERS.Orderkey = PICKDETAIL.Orderkey'
                  +  ' JOIN SKU (NOLOCK) ON  SKU.Storerkey = PICKDETAIL.Storerkey'
@@ -683,6 +706,7 @@ BEGIN
                            ,  [PackQtyIndicator]
                            ,  [UOM], [Qty], [DropID]
                            ,  [IsVAS], [VAS], [VASQty], [SkuAccessQty]
+                           ,  [UserDefine01], [Shipperkey]   --WL19
                            )
       EXEC sp_ExecuteSQL @c_SQL
                         ,@c_SQLParms
@@ -713,13 +737,16 @@ BEGIN
          ,  pcz.BillToKey
          ,  pcz.Storerkey
          ,  pcz.PackGrpNo
+         ,  pcz.UserDefine01   --WL19
+         ,  pcz.Shipperkey     --WL19
       FROM #PRECTN AS pcz
       ORDER BY pcz.PackGrpNo
 
       OPEN @cur_PCKGRPH
 
       FETCH NEXT FROM @cur_PCKGRPH INTO @c_Orderkey, @c_DocType, @c_BillToKey, @c_Storerkey
-                                       ,@n_PackGrpNo
+                                      , @n_PackGrpNo
+                                      , @c_UserDefine01, @c_Shipperkey   --WL19
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
@@ -1336,10 +1363,13 @@ BEGIN
             BEGIN
                IF @b_IsVAS = 1
                BEGIN
-                  -- PA + No Per Pack Qty + Different SKU --> New Carton
+                  -- PA + No Per Pack Qty + Different SKU --> New Carton (only when prev line exists)
                   -- PA + PU + Per Pack Qty --> New Carton
-                  IF (@c_VAS = 'PA' AND @n_VASQty_PI = 0 AND @c_Sku_P <> @c_Sku) OR
-                     (@c_VAS IN ('PA', 'PU') AND @n_VASQty_PI > 0)
+                  -- PA (Prev) + Different SKU --> New Carton (only when prev line exists)
+                  --WL21
+                  IF (@c_VAS = 'PA' AND @n_VASQty_PI = 0 AND @c_Sku_P <> '' AND @c_Sku_P <> @c_Sku) OR
+                     (@c_VAS IN ('PA', 'PU') AND @n_VASQty_PI > 0) OR
+                     (@c_VAS_P = 'PA' AND @c_Sku_P <> '' AND @c_Sku_P <> @c_Sku)
                   BEGIN
                      SET @b_NewCarton = 1
                   END
@@ -1351,9 +1381,10 @@ BEGIN
                END
             END
 
-            SET @n_RowID_pcz = 0
+            --SET @n_RowID_pcz = 0   --WL21
             --SET @n_Qty_pd    = 0
             --SET @c_RefPickMode = ''
+            SET @n_RowID_pre = 0   --WL21
             WHILE @n_Qty > 0 AND @n_Continue = 1
             BEGIN
                SET @n_GetSmaller = 1
@@ -1399,8 +1430,8 @@ BEGIN
                      IF @b_NewCarton = 0 AND @b_API = 1
                      BEGIN
                         SET @b_CZN_Check = 1
-                        INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
-                        SELECT Storerkey, Sku, pcz.[Length], pcz.Width, pcz.Height, Qty_PI
+                        INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity, CZNCheck)   --WL21
+                        SELECT Storerkey, Sku, pcz.Dim1, pcz.Dim2, pcz.Dim3, Qty_PI, 1   --WL20   --WL21
                         FROM #PRECTN AS pcz
                         WHERE pcz.PackGrpNo    = @n_PackGrpNo
                         AND   pcz.HardCTNGrpNo = @n_HardCTNGrpNo
@@ -1416,6 +1447,13 @@ BEGIN
                         BEGIN
                            SET @b_NewCarton = 1
                         END
+                        --WL21 S
+                        ELSE
+                        BEGIN
+                           DELETE FROM #OptimizeItemToPack
+                           WHERE CZNCheck = 1
+                        END
+                        --WL21 E
                      END
                   END
 
@@ -1604,8 +1642,9 @@ BEGIN
 
                      IF @b_API = 1
                      BEGIN
+                        SET @b_CZN_Check = 0   --WL21
                         INSERT INTO @t_ItemToPack (Storerkey, Sku, [Length], Width, Height, Qty)
-                        VALUES (@c_Storerkey, @c_Sku, @n_Length, @n_Width, @n_Height, @n_QtyToPack)   --Maybe need to change to @n_Dim1_Ctn, @n_Dim2_Ctn, @n_Dim3_Ctn
+                        VALUES (@c_Storerkey, @c_Sku, @n_Dim1_Sku, @n_Dim2_Sku, @n_Dim3_Sku, @n_QtyToPack)   --WL20
 
                         TRUNCATE TABLE #OptimizeItemToPack;
                         INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
@@ -1623,7 +1662,7 @@ BEGIN
                            EXEC isp_SubmitToCartonizeAPI
                                 @c_CartonGroup = @c_CTNGroup
                               , @c_CartonType  = @c_CartonType
-                              , @c_Algorithm   = ''
+                              , @c_Algorithm   = @c_Algorithm   --WL20
                               , @b_Success     = @b_Success       OUTPUT
                               , @n_Err         = @n_Err           OUTPUT
                               , @c_ErrMsg      = @c_ErrMsg        OUTPUT
@@ -1710,7 +1749,7 @@ BEGIN
                               SET @c_RefPickMode = ''
                               SET @c_RefPickKey  = ''
                               SELECT TOP 1
-                                     @n_RowID_pcz = pcz.RowID
+                                     @n_RowID_pre = pcz.RowID   --WL21
                                     ,@c_RefPickKey= pcz.PickDetailKey
                                     ,@n_Qty_pd    = pcz.Qty
                               FROM #PRECTN AS pcz
@@ -1720,7 +1759,7 @@ BEGIN
                               AND   pcz.Storerkey= @c_Storerkey
                               AND   pcz.Sku      = @c_Sku
                               AND   pcz.[Status] = '0'
-                              AND   pcz.RowID   > @n_RowID_pcz   --WL03
+                              AND   pcz.RowID   > @n_RowID_pre   --WL03   --WL21
                               ORDER BY pcz.RowID
 
                               SET @n_RowCount = @@ROWCOUNT
@@ -2009,6 +2048,7 @@ BEGIN
             SET @c_Size_P = @c_Size
             SET @c_Sku_P  = @c_Sku
             SET @b_IsVAS_P  = @b_IsVAS   --WL15
+            SET @c_VAS_P = @c_VAS   --WL21
             FETCH NEXT FROM @cur_PCKGRPS INTO   @n_RowID_pcz
                                              ,  @n_HardCTNGrpNo
                                              ,  @n_SortCTNGrpNo
@@ -2871,8 +2911,58 @@ BEGIN
             END
          END
 
+         --WL19 S
+         POST_PACK:
+         SET @n_TTLCtn = 0
+
+         IF @c_DocType = 'N'
+         BEGIN
+            SELECT @n_TTLCtn = MAX(cd.CartonSeqNo)
+            FROM #CartonDetail cd
+            WHERE cd.Orderkey = @c_Orderkey
+
+            -- Update Shipperkey
+            IF ISNULL(@c_Shipperkey, '') <> 'UPS'
+            AND @n_TTLCtn < @n_UPSCtnCnt
+            BEGIN
+               BEGIN TRY
+                  UPDATE dbo.ORDERS
+                  SET ShipperKey = 'UPS'
+                  WHERE OrderKey = @c_Orderkey
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  GOTO QUIT_SP
+               END CATCH
+            END
+
+            -- Auto Pack Confirm
+            IF @c_UserDefine01 IN ('', 'N')
+            AND NOT EXISTS ( SELECT 1 
+                             FROM #CartonDetail cd
+                             WHERE cd.Orderkey = @c_Orderkey
+                             AND ((cd.IsVas = 1 AND cd.UOM >= '6') OR cd.[Audit] = 1)
+                           )
+            AND @n_TTLCtn > @n_UPSCtnCnt
+            BEGIN
+               BEGIN TRY
+                  UPDATE dbo.PackHeader
+                  SET [Status] = '9'
+                  WHERE PickSlipNo = @c_PickSlipNo
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  GOTO QUIT_SP
+               END CATCH
+            END
+         END
+         --WL19 E
+
          FETCH NEXT FROM @cur_PCKGRPH INTO @c_Orderkey, @c_DocType, @c_BillToKey, @c_Storerkey
-                                          ,@n_PackGrpNo
+                                         , @n_PackGrpNo
+                                         , @c_UserDefine01, @c_Shipperkey   --WL19
       END
       CLOSE @cur_PCKGRPH
       DEALLOCATE @cur_PCKGRPH
