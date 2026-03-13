@@ -127,13 +127,13 @@ BEGIN
          @c_OrderKey      = @cOrderKey         
          , @c_Mbolkey     = ''      
          , @c_FunctionID  = @c_FunID          
-         , @n_CartonNo    = nCartonNo      
+         , @n_CartonNo    = @nCartonNo      
          , @n_Step        = @nStep      
          , @b_Success     = @b_Success OUTPUT            
          , @n_Err         = @n_ErrNo   OUTPUT            
          , @c_ErrMsg      = @c_ErrMsg  OUTPUT   
    END 
-   
+
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
    BEGIN      
