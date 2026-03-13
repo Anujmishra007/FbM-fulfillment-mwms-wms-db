@@ -359,12 +359,12 @@ BEGIN
             , @c_KeyValue2    = @cParams2        
             , @c_KeyValue3    = @cParams3     
             , @c_KeyValue4    = @cParams4    
-            , @bSuccess       = @bSuccess         OUTPUT      
+            , @b_Success      = @bSuccess         OUTPUT      
             , @n_Err          = @nErrNo           OUTPUT
             , @c_ErrMsg       = @cErrMsg          OUTPUT
             , @c_PrintSource  = @cPrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs       = @ctempLabelJobIDs  OUTPUT    
+            , @c_JobIDs       = @ctempLabelJobIDs OUTPUT    
             , @c_AutoPrint    = 'N'     
             
       IF @nErrNo <> 0   
