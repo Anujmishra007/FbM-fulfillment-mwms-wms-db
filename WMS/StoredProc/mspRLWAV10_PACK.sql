@@ -45,6 +45,7 @@ GO
 /* 12-Mar-2026 WLChooi  2.7   FCR-11558 Fix VAS scenario (WL16)          */
 /* 12-Mar-2026 WLChooi  2.8   FCR-11566 Remove VAS filter for audit(WL17)*/
 /* 12-Mar-2026 WLChooi  2.9   FCR-10124 Fix Inifinite Loop (WL18)        */
+/* 13-Mar-2026 WLChooi  3.2   FCR-11615 Fix Inifinite Loop (WL21)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -178,6 +179,8 @@ BEGIN
          , @c_PackECOM              NVARCHAR(10)   = 'N'    --WL01
          , @c_OtherParms            NVARCHAR(MAX)  = ''     --WL02
          , @b_IsVAS_P               BIT            = 0      --WL15
+         , @n_RowID_pre             INT            = 0      --WL21
+         , @c_VAS_P                 NVARCHAR(10)   = ''     --WL21
 
    DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
          , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
@@ -343,6 +346,7 @@ BEGIN
          ,  Dim2        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
          ,  Dim3        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
          ,  Quantity    INT            NOT NULL DEFAULT(0)
+         ,  CZNCheck    INT            NOT NULL DEFAULT(0)   --WL21
          )
 
       IF OBJECT_ID('tempdb..#PRECTN') IS NOT NULL
@@ -1336,10 +1340,13 @@ BEGIN
             BEGIN
                IF @b_IsVAS = 1
                BEGIN
-                  -- PA + No Per Pack Qty + Different SKU --> New Carton
+                  -- PA + No Per Pack Qty + Different SKU --> New Carton (only when prev line exists)
                   -- PA + PU + Per Pack Qty --> New Carton
-                  IF (@c_VAS = 'PA' AND @n_VASQty_PI = 0 AND @c_Sku_P <> @c_Sku) OR
-                     (@c_VAS IN ('PA', 'PU') AND @n_VASQty_PI > 0)
+                  -- PA (Prev) + Different SKU --> New Carton (only when prev line exists)
+                  --WL21
+                  IF (@c_VAS = 'PA' AND @n_VASQty_PI = 0 AND @c_Sku_P <> '' AND @c_Sku_P <> @c_Sku) OR
+                     (@c_VAS IN ('PA', 'PU') AND @n_VASQty_PI > 0) OR
+                     (@c_VAS_P = 'PA' AND @c_Sku_P <> '' AND @c_Sku_P <> @c_Sku)
                   BEGIN
                      SET @b_NewCarton = 1
                   END
@@ -1351,9 +1358,10 @@ BEGIN
                END
             END
 
-            SET @n_RowID_pcz = 0
+            --SET @n_RowID_pcz = 0   --WL21
             --SET @n_Qty_pd    = 0
             --SET @c_RefPickMode = ''
+            SET @n_RowID_pre = 0   --WL21
             WHILE @n_Qty > 0 AND @n_Continue = 1
             BEGIN
                SET @n_GetSmaller = 1
@@ -1399,8 +1407,8 @@ BEGIN
                      IF @b_NewCarton = 0 AND @b_API = 1
                      BEGIN
                         SET @b_CZN_Check = 1
-                        INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
-                        SELECT Storerkey, Sku, pcz.[Length], pcz.Width, pcz.Height, Qty_PI
+                        INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity, CZNCheck)   --WL21
+                        SELECT Storerkey, Sku, pcz.[Length], pcz.Width, pcz.Height, Qty_PI, 1   --WL21
                         FROM #PRECTN AS pcz
                         WHERE pcz.PackGrpNo    = @n_PackGrpNo
                         AND   pcz.HardCTNGrpNo = @n_HardCTNGrpNo
@@ -1416,6 +1424,13 @@ BEGIN
                         BEGIN
                            SET @b_NewCarton = 1
                         END
+                        --WL21 S
+                        ELSE
+                        BEGIN
+                           DELETE FROM #OptimizeItemToPack
+                           WHERE CZNCheck = 1
+                        END
+                        --WL21 E
                      END
                   END
 
@@ -1604,6 +1619,7 @@ BEGIN
 
                      IF @b_API = 1
                      BEGIN
+                        SET @b_CZN_Check = 0   --WL21
                         INSERT INTO @t_ItemToPack (Storerkey, Sku, [Length], Width, Height, Qty)
                         VALUES (@c_Storerkey, @c_Sku, @n_Length, @n_Width, @n_Height, @n_QtyToPack)   --Maybe need to change to @n_Dim1_Ctn, @n_Dim2_Ctn, @n_Dim3_Ctn
 
@@ -1710,7 +1726,7 @@ BEGIN
                               SET @c_RefPickMode = ''
                               SET @c_RefPickKey  = ''
                               SELECT TOP 1
-                                     @n_RowID_pcz = pcz.RowID
+                                     @n_RowID_pre = pcz.RowID   --WL21
                                     ,@c_RefPickKey= pcz.PickDetailKey
                                     ,@n_Qty_pd    = pcz.Qty
                               FROM #PRECTN AS pcz
@@ -1720,7 +1736,7 @@ BEGIN
                               AND   pcz.Storerkey= @c_Storerkey
                               AND   pcz.Sku      = @c_Sku
                               AND   pcz.[Status] = '0'
-                              AND   pcz.RowID   > @n_RowID_pcz   --WL03
+                              AND   pcz.RowID   > @n_RowID_pre   --WL03   --WL21
                               ORDER BY pcz.RowID
 
                               SET @n_RowCount = @@ROWCOUNT
@@ -2009,6 +2025,7 @@ BEGIN
             SET @c_Size_P = @c_Size
             SET @c_Sku_P  = @c_Sku
             SET @b_IsVAS_P  = @b_IsVAS   --WL15
+            SET @c_VAS_P = @c_VAS   --WL21
             FETCH NEXT FROM @cur_PCKGRPS INTO   @n_RowID_pcz
                                              ,  @n_HardCTNGrpNo
                                              ,  @n_SortCTNGrpNo
