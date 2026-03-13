@@ -129,7 +129,7 @@ BEGIN
                   WHERE WMRD.StorerKey = @cStorerKey 
                   AND EXISTS(SELECT 1
                              FROM CODELKUP CLK (NOLOCK)
-                             WHERE CLK.LISTNAME = 'TPACK-ReportType'
+                             WHERE CLK.LISTNAME = 'TPRptType'
                              AND CLK.Code = WMR.ReportType
                              AND CLK.StorerKey = WMRD.StorerKey
                   )
@@ -152,7 +152,7 @@ BEGIN
                WHERE WMRD.StorerKey = @cStorerKey
                AND EXISTS( SELECT 1
                            FROM CODELKUP CLK (NOLOCK)
-                           WHERE CLK.LISTNAME = 'TPACK-ReportType'
+                           WHERE CLK.LISTNAME = 'TPRptType'
                            AND CLK.Code = WMR.ReportType
                            AND CLK.StorerKey = WMRD.StorerKey
                         )
@@ -183,7 +183,7 @@ BEGIN
    WHERE WMRD.StorerKey = @cStorerKey
    AND EXISTS( SELECT 1
                FROM CODELKUP CLK (NOLOCK)
-               WHERE CLK.LISTNAME = 'TPACK-ReportType'
+               WHERE CLK.LISTNAME = 'TPRptType'
                AND CLK.Code = WMR.ReportType
                AND CLK.StorerKey = WMRD.StorerKey
             )
@@ -313,7 +313,7 @@ BEGIN
             WHERE WMRD.StorerKey = @cStorerKey  
             AND EXISTS( SELECT 1
                         FROM CODELKUP CLK (NOLOCK)
-                        WHERE CLK.LISTNAME = 'TPACK-ReportType'
+                        WHERE CLK.LISTNAME = 'TPRptType'
                         AND CLK.Code = WMR.ReportType
                         AND CLK.StorerKey = WMRD.StorerKey
                      )

@@ -25,6 +25,7 @@ GO
 /* 2026-02-04   3.2  JWF011     UWP-48244: Add Recartonization check rule           */
 /* 2026-02-13   3.3  GCH225     UWP-48895: Bug fix AuditLog Carton Type Change      */
 /* 2026-02-24   3.4  GCH225     UWP-49353: Fix for Hold status for specific cases   */
+/* 2026-03-13   3.5  GCH225     FCR-11554: Add Extended Validate before Close Carton*/
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_UpdatePackInfo] (
@@ -127,51 +128,83 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   -- Recartonization Check Rule
-   IF @cCartonStatus IN ('CLOSED')
-   AND EXISTS( SELECT 1 
-               FROM STORERCONFIG (NOLOCK)
-               WHERE Storerkey = @cStorerKey
-               AND ConfigKey = 'TPS-RecartonBlocked'
-               AND SValue = '1'
-   )
-   BEGIN
-      IF EXISTS ( SELECT 1
-                  FROM PACKDETAIL (NOLOCK)
-                  WHERE PickSlipNo = @cPickSlipNo
-                  AND CartonNo = @nCartonNo
-                  AND ExpQty > 0
-                  AND ExpQty <> Qty
-      )
-      AND NOT EXISTS (  SELECT 1
-                        FROM WorkOrderDetail WOD (NOLOCK)
-                        JOIN CODELKUP CL (NOLOCK)
-                           ON CL.Code = WOD.Type
-                        WHERE WOD.ExternWorkOrderKey = @cOrderKey
-                        AND CL.Listname = 'WKORDType'
-                        AND CL.UDF02 IN ('ExactQTY', 'MAXQTY')
-                        AND WOD.QTY > 0
-                        AND EXISTS (SELECT 1 FROM PICKDETAIL PID (NOLOCK)
-                                    WHERE PID.OrderKey = @cOrderKey
-                                    AND PID.OrderLineNumber = WOD.ExternLineNo
-                        )
-                        AND EXISTS (SELECT 1 FROM PACKDETAIL PAD (NOLOCK)
-                                    WHERE PAD.PickSlipNo = @cPickSlipNo
-                                    AND PAD.CartonNo = @nCartonNo
-                                    AND PAD.SKU = WOD.Sku
-                        )
-      )
-      BEGIN
-         SET @n_Continue  = 3
-         SET @n_ErrNo = 11558
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not Allow Recartonization'
-         GOTO EXIT_SP
-      END
+   --Perform Extended Carton Pre Update for all the status
+   EXEC [API].[isp_TPACK_ExtCtnPreUpd_Wrapper]
+           @cType             = @cType            
+         , @bIsDiscrete       = @bIsDiscrete      
+         , @bIsCustom         = @bIsCustom        
+         , @cPickSlipNo       = @cPickSlipNo       
+         , @cOrderKey         = @cOrderKey
+         , @cLoadKey          = @cLoadKey          
+         , @cDropID           = @cDropID
+         , @cStorerKey        = @cStorerKey        
+         , @cFacility         = @cFacility   
+         , @nCartonNo         = @nCartonNo
+         , @cCartonStatus     = @cCartonStatus
+         , @cCartonType       = @cCartonType
+         , @fWeight           = @fWeight
+         , @fCube             = @fCube
+         , @cLabelNo          = @cLabelNo
+         , @c_UserID          = @c_UserID
+         , @cLangCode         = @cLangCode
+         , @bWeightInterface  = @bWeightInterface  OUTPUT
+         , @bPrintPaperFlag   = @bPrintPaperFlag   OUTPUT
+         , @bPrintLabelFlag   = @bPrintLabelFlag   OUTPUT
+         , @bIsLastCarton     = @bIsLastCarton     OUTPUT
+         , @b_Success         = @b_Success         OUTPUT
+         , @n_ErrNo           = @n_ErrNo           OUTPUT
+         , @c_ErrMsg          = @c_ErrMsg          OUTPUT
+   
+   IF @b_Success = 0
+   BEGIN    
+      SET @n_Continue = 3
+      GOTO EXIT_SP
    END
-   -- Recartonization Check Rule (END)
 
    IF @cCartonStatus = 'CLOSED'
    BEGIN
+      -- Recartonization Check Rule
+      IF EXISTS( SELECT 1 
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE Storerkey = @cStorerKey
+                  AND ConfigKey = 'TPS-RecartonBlocked'
+                  AND SValue = '1'
+      )
+      BEGIN
+         IF EXISTS ( SELECT 1
+                     FROM PACKDETAIL (NOLOCK)
+                     WHERE PickSlipNo = @cPickSlipNo
+                     AND CartonNo = @nCartonNo
+                     AND ExpQty > 0
+                     AND ExpQty <> Qty
+         )
+         AND NOT EXISTS (  SELECT 1
+                           FROM WorkOrderDetail WOD (NOLOCK)
+                           JOIN CODELKUP CL (NOLOCK)
+                              ON CL.Code = WOD.Type
+                           WHERE WOD.ExternWorkOrderKey = @cOrderKey
+                           AND CL.Listname = 'WKORDType'
+                           AND CL.UDF02 IN ('ExactQTY', 'MAXQTY')
+                           AND WOD.QTY > 0
+                           AND EXISTS (SELECT 1 FROM PICKDETAIL PID (NOLOCK)
+                                       WHERE PID.OrderKey = @cOrderKey
+                                       AND PID.OrderLineNumber = WOD.ExternLineNo
+                           )
+                           AND EXISTS (SELECT 1 FROM PACKDETAIL PAD (NOLOCK)
+                                       WHERE PAD.PickSlipNo = @cPickSlipNo
+                                       AND PAD.CartonNo = @nCartonNo
+                                       AND PAD.SKU = WOD.Sku
+                           )
+         )
+         BEGIN
+            SET @n_Continue  = 3
+            SET @n_ErrNo = 11558
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not Allow Recartonization'
+            GOTO EXIT_SP
+         END
+      END
+      -- Recartonization Check Rule (END)
+   
       IF EXISTS ( SELECT 1 
                   FROM STORERCONFIG WITH (NOLOCK) 
                   WHERE ConfigKey = 'TPS-CubeByCarton' 
