@@ -46,6 +46,8 @@ GO
 /*                         with new StorerCfg AllowMultiInventoryHoldRec*/
 /* 24-SEP-2025  MICHAEL   1.10  FCR-7829 Inventory UCC-level HOLD (ML02)*/
 /* 26-JAN-2026  MICHAEL   1.11  FCR-10040 Inv Hold by SKUxLOC (ML03)    */
+/* 12-MAR-2026  MICHAEL   1.12  UWP-48699 Fix issue of overwriting all  */
+/*                              Status if multi Inv Hold enabled (ML04) */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspInventoryHoldWrapper]
      @c_lot          NVARCHAR(10)
@@ -1259,6 +1261,10 @@ BEGIN
                   AND UCCNo = @c_UCCNo
             END
             --ML02-E
+
+            IF @c_CurrHold = '1' AND @c_Hold = '1'   --ML04
+               SET @c_CurrHold = '0'                 --ML04
+/* ML04-S
             IF @c_CurrHold <> @c_Hold
             BEGIN
                UPDATE INVENTORYHOLD WITH (ROWLOCK)
@@ -1269,6 +1275,7 @@ BEGIN
                AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
                AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
             END
+ ML04-E */
          END
          ELSE
          BEGIN
