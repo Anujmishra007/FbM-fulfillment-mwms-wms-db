@@ -13,6 +13,7 @@ GO
 /* 2025-08-01   1.0  GCH225     Created                                          */
 /* 2025-11-17   1.1  JWF011     UWP-43858: VAS Tote PreCartonize check rule      */
 /* 2026-02-05   2.0  GCH225     UWP-48237: Handle PenAudit status                */
+/* 2026-03-13   2.1  GCH225     FCR-11619: Fix No. of precartonize per pickslip  */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetPackTask] (
@@ -54,6 +55,7 @@ BEGIN
          , @cScanNo              NVARCHAR(20)
          , @cExtPackInfoJson     NVARCHAR(MAX)
          , @cPackTaskConfigJson  NVARCHAR(MAX)
+         , @nCartonNo            INT
 
    DECLARE @cCartonType          NVARCHAR(20)   = ''
          , @fWeight              FLOAT          = 0
@@ -68,6 +70,7 @@ BEGIN
    SET @cDropID            = ''
    SET @cOrderKey          = ''
    SET @cLoadKey           = ''
+   SET @nCartonNo          = 0
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
@@ -412,9 +415,10 @@ BEGIN
             GOTO EXIT_SP
          END
 
-         SELECT @cCartonType     = CartonType
+         SELECT TOP 1 @cCartonType     = CartonType
               , @fWeight         = [Weight]
               , @fCube           = [Cube]
+              , @nCartonNo       = CartonNo
          FROM PACKINFO (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonStatus IN ('', 'PenAudit')
@@ -423,8 +427,9 @@ BEGIN
          IF @@ROWCOUNT = 1
          AND (SELECT ISNULL(SUM(ExpQty), 0)
          FROM PACKDETAIL (NOLOCK) 
-         WHERE DropID = @cDropID) > 0
-
+         WHERE DropID = @cDropID
+         AND CartonNo = @nCartonNo
+         ) > 0
          BEGIN
             EXEC [API].[isp_TPACK_UpdatePackInfo]
                  @cType                = @cType            
@@ -436,7 +441,7 @@ BEGIN
                , @cDropID              = @cDropID           
                , @cStorerKey           = @cStorerKey        
                , @cFacility            = @cFacility         
-               , @nCartonNo            = 1
+               , @nCartonNo            = @nCartonNo
                , @cCartonStatus        = 'INPROGRESS'
                , @cCartonType          = @cCartonType
                , @fWeight              = @fWeight
