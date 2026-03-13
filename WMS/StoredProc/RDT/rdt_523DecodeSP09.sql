@@ -8,7 +8,7 @@ GO
 /* Store procedure: rdt_523DecodeSP09                                         */
 /* Copyright: Maersk                                                          */
 /*                                                                            */
-/* Purpose: QRCode Decode                                               */
+/* Purpose: QRCode Decode                                                     */
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2025-12-29  SSR259    1.0   FCR-9024 Created                               */
@@ -46,12 +46,10 @@ BEGIN
    DECLARE @nDebugFlag  INT = 0
  
    DECLARE
-      @cTempSKU            NVARCHAR( 20)
-      -- ,@cTempLottable01    NVARCHAR( 18)
-      -- ,@cTempLottable02    NVARCHAR( 18)
-      -- ,@cTempLottable03    NVARCHAR(100)
-      -- ,@cTempLottable04    NVARCHAR(100)
-      ,@nRowCount    INT
+      @cTempSKU            NVARCHAR( 20),
+      @cTempLottable01    NVARCHAR( 18),
+      @cTempLottable02    NVARCHAR( 18),
+      @cTempLottable04    NVARCHAR(100)
  
     DECLARE @tDecodeList TABLE
    (
@@ -66,45 +64,72 @@ BEGIN
       IF @nStep = 2 -- LOC/SKU
       BEGIN
          IF @nInputKey = 1 -- ENTER
-         BEGIN
+         BEGIN 
             -- Check if it is a QR code (contains &)
             -- Decode: extract SKU only (keep errors for bad format / parse)
 			
             IF CHARINDEX('&', @cBarcode) > 0
             BEGIN
-			
-                -- Expect exactly 4 ampersands for the QR format
-                IF (LEN(@cBarcode) - LEN(REPLACE(@cBarcode, '&',''))) <> 4
-                BEGIN
-                   SET @nErrNo = 254851 -- Error InvFormat
-                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                   SET @cSKU = '' 
-                   GOTO Quit
-                END
- 
-                BEGIN TRY
-                   INSERT INTO @tDecodeList
-                   SELECT [key]+1 AS ItemIndex, value AS Item
-                   FROM OPENJSON('["' + REPLACE(@cBarcode, '&', '","') + '"]');
-                END TRY
-                BEGIN CATCH
-                   SET @nErrNo = 254852 -- Error DecodeFailure
-                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                   SET @cSKU = '' 
-                   GOTO Quit
-                END CATCH
-		
-                -- Only read SKU (index 1) and attach to output
-                SELECT @cTempSKU = Item FROM @tDecodeList WHERE ItemIndex = 1;
- 
-                SET @cSKU = @cTempSKU;
+      
+               -- Expect exactly 4 ampersands for the QR format
+               IF (LEN(@cBarcode) - LEN(REPLACE(@cBarcode, '&',''))) <> 4
+               BEGIN
+                  SET @nErrNo = 254851 -- Error InvFormat
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  SET @cSKU = '' 
+                  GOTO Quit
+               END
+
+               BEGIN TRY
+                  INSERT INTO @tDecodeList
+                  SELECT [key]+1 AS ItemIndex, value AS Item
+                  FROM OPENJSON('["' + REPLACE(@cBarcode, '&', '","') + '"]');
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 254852 -- Error DecodeFailure
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  SET @cSKU = '' 
+                  GOTO Quit
+               END CATCH
+   
+               SELECT @cTempSKU        = Item FROM @tDecodeList WHERE ItemIndex = 1;
+               SELECT @cTempLottable01 = Item FROM @tDecodeList WHERE ItemIndex = 2;  -- Batch_No
+               SELECT @cTempLottable04 = Item FROM @tDecodeList WHERE ItemIndex = 4;  -- Expiry_Date
+               SELECT @cTempLottable02 = Item FROM @tDecodeList WHERE ItemIndex = 5;  -- Dept_Code
+
+               SET @cSKU = @cTempSKU;
+               SET @cLottable01 = @cTempLottable01;
+               SET @cLottable02 = @cTempLottable02;
+
+               IF @cTempLottable04 <> ''
+               BEGIN
+                  IF rdt.rdtIsValidDate(@cTempLottable04) = 0
+                  BEGIN
+                     SET @nErrNo = 254853  -- Invalid Expiry Date
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                     SET @cSKU = ''
+                     GOTO Quit
+                  END
+                  ELSE
+                  BEGIN
+                     BEGIN TRY
+                        SET @dLottable04 = rdt.rdtConvertToDate(@cTempLottable04)
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 254854  -- Date Conversion Error
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                        SET @cSKU = ''
+                        GOTO Quit
+                     END CATCH
+                  END
+               END
             END
             ELSE
             BEGIN
-                -- Barcode (no '&'): treat entire barcode as SKU
-                SET @cSKU = @cBarcode;
+               -- Barcode (no '&'): treat entire barcode as SKU
+               SET @cSKU = @cBarcode;
             END
- 
+
  
             -- SKU Validation (Common for both QR and Barcode)
             IF NOT EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
