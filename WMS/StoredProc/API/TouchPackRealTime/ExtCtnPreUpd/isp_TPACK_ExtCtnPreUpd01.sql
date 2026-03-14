@@ -62,7 +62,7 @@ BEGIN
                   OR O.ShipperKey IS NULL
                   OR NOT EXISTS (SELECT 1 
                                  FROM CODELKUP CLK (NOLOCK) 
-                                 WHERE CLK.LISTNAME = 'SHIPPERCODE'
+                                 WHERE CLK.LISTNAME = 'SHIPERCODE'
                                  AND CLK.StorerKey = @cStorerKey
                                  AND CLK.CODE = O.ShipperKey
                                  )
