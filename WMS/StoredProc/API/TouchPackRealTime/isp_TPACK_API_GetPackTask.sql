@@ -14,6 +14,7 @@ GO
 /* 2025-11-17   1.1  JWF011     UWP-43858: VAS Tote PreCartonize check rule      */
 /* 2026-02-05   2.0  GCH225     UWP-48237: Handle PenAudit status                */
 /* 2026-03-13   2.1  GCH225     FCR-11619: Fix No. of precartonize per pickslip  */
+/* 2026-03-14   2.2  GCH225     FCR-11632: Fix No. of precartonize per pickslip  */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetPackTask] (
@@ -56,6 +57,9 @@ BEGIN
          , @cExtPackInfoJson     NVARCHAR(MAX)
          , @cPackTaskConfigJson  NVARCHAR(MAX)
          , @nCartonNo            INT
+         , @nTtlExpQty           INT
+         , @nCartonNoCount       INT
+         , @nMaxCartonNo         INT
 
    DECLARE @cCartonType          NVARCHAR(20)   = ''
          , @fWeight              FLOAT          = 0
@@ -71,6 +75,9 @@ BEGIN
    SET @cOrderKey          = ''
    SET @cLoadKey           = ''
    SET @nCartonNo          = 0
+   SET @nTtlExpQty         = 0
+   SET @nCartonNoCount     = 0
+   SET @nMaxCartonNo       = 0
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
@@ -415,48 +422,61 @@ BEGIN
             GOTO EXIT_SP
          END
 
-         SELECT TOP 1 @cCartonType     = CartonType
-              , @fWeight         = [Weight]
-              , @fCube           = [Cube]
-              , @nCartonNo       = CartonNo
-         FROM PACKINFO (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo
-         AND CartonStatus IN ('', 'PenAudit')
-
-         -- VAS PreCartonize Check
-         IF @@ROWCOUNT = 1
-         AND (SELECT ISNULL(SUM(ExpQty), 0)
-         FROM PACKDETAIL (NOLOCK) 
-         WHERE DropID = @cDropID
-         AND CartonNo = @nCartonNo
-         ) > 0
+         IF EXISTS (SELECT 1
+                    FROM PACKINFO (NOLOCK)
+                    WHERE PickSlipNo = @cPickSlipNo
+                    AND CartonStatus IN ('', 'PENDAUDIT')
+         )
          BEGIN
-            EXEC [API].[isp_TPACK_UpdatePackInfo]
-                 @cType                = @cType            
-               , @bIsDiscrete          = @bIsDiscrete      
-               , @bIsCustom            = @bIsCustom        
-               , @cPickSlipNo          = @cPickSlipNo       
-               , @cOrderKey            = @cOrderKey         
-               , @cLoadKey             = @cLoadKey          
-               , @cDropID              = @cDropID           
-               , @cStorerKey           = @cStorerKey        
-               , @cFacility            = @cFacility         
-               , @nCartonNo            = @nCartonNo
-               , @cCartonStatus        = 'INPROGRESS'
-               , @cCartonType          = @cCartonType
-               , @fWeight              = @fWeight
-               , @fCube                = @fCube
-               , @cLabelNo             = ''
-               , @c_UserID             = @c_UserID
-               , @cLangCode            = @cLangCode
-               , @b_Success            = @b_Success         OUTPUT
-               , @n_ErrNo              = @n_ErrNo           OUTPUT
-               , @c_ErrMsg             = @c_ErrMsg          OUTPUT
+            SELECT @nTtlExpQty = ISNULL(SUM(ExpQty), 0)
+               , @nCartonNoCount = COUNT(DISTINCT CartonNo)
+               , @nMaxCartonNo = ISNULL(MAX(CartonNo), 0)
+            FROM PACKDETAIL (NOLOCK) 
+            WHERE PickSlipNo = @cPickSlipNo
+            AND DropID = @cDropID
+
             
-            IF @b_Success = 0
+            SELECT  @cCartonType = CartonType
+                  , @fWeight     = [Weight]
+                  , @fCube       = [Cube]
+                  , @nCartonNo    = CartonNo
+            FROM PACKINFO (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+            AND CartonNo = @nMaxCartonNo
+            AND CartonStatus IN ('', 'PENDAUDIT')
+
+            -- VAS PreCartonize Check
+            IF @@ROWCOUNT = 1
+            AND @nCartonNoCount = 1
+            AND @nTtlExpQty > 0
             BEGIN
-               SET @n_Continue = 3
-               GOTO EXIT_SP
+               EXEC [API].[isp_TPACK_UpdatePackInfo]
+                  @cType                = @cType            
+                  , @bIsDiscrete          = @bIsDiscrete      
+                  , @bIsCustom            = @bIsCustom        
+                  , @cPickSlipNo          = @cPickSlipNo       
+                  , @cOrderKey            = @cOrderKey         
+                  , @cLoadKey             = @cLoadKey          
+                  , @cDropID              = @cDropID           
+                  , @cStorerKey           = @cStorerKey        
+                  , @cFacility            = @cFacility         
+                  , @nCartonNo            = @nCartonNo
+                  , @cCartonStatus        = 'INPROGRESS'
+                  , @cCartonType          = @cCartonType
+                  , @fWeight              = @fWeight
+                  , @fCube                = @fCube
+                  , @cLabelNo             = ''
+                  , @c_UserID             = @c_UserID
+                  , @cLangCode            = @cLangCode
+                  , @b_Success            = @b_Success         OUTPUT
+                  , @n_ErrNo              = @n_ErrNo           OUTPUT
+                  , @c_ErrMsg             = @c_ErrMsg          OUTPUT
+               
+               IF @b_Success = 0
+               BEGIN
+                  SET @n_Continue = 3
+                  GOTO EXIT_SP
+               END
             END
          END
          -- VAS PreCartonize Check (END)
