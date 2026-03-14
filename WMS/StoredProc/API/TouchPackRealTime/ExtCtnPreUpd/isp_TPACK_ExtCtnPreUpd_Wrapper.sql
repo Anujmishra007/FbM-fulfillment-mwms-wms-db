@@ -11,6 +11,7 @@ GO
 /*                                                                                  */
 /* Date         Rev  Author     Purposes                                            */
 /* 2026-03-13   1.0  GCH225     FCR-11554: Created                                  */
+/* 2026-03-14   1.1  GCH225     FCR-11635: Updated parameter order                  */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtCtnPreUpd_Wrapper] (
@@ -154,11 +155,11 @@ BEGIN
                         + ', @cStorerKey         NVARCHAR(15)         ' + CHAR(13)
                         + ', @cFacility          NVARCHAR(5)          ' + CHAR(13)
                         + ', @nCartonNo          INT                  ' + CHAR(13)
+                        + ', @cCartonStatus      NVARCHAR(20)         ' + CHAR(13)
                         + ', @cCartonType        NVARCHAR(20)         ' + CHAR(13)
                         + ', @fWeight            FLOAT                ' + CHAR(13)
                         + ', @fCube              FLOAT                ' + CHAR(13)
                         + ', @cLabelNo           NVARCHAR(50)         ' + CHAR(13)
-                        + ', @cCartonStatus      NVARCHAR(20)         ' + CHAR(13)
                         + ', @c_UserID           NVARCHAR(256)        ' + CHAR(13)
                         + ', @cLangCode          NVARCHAR(3)          ' + CHAR(13)
                         + ', @bWeightInterface   BIT           OUTPUT ' + CHAR(13)
