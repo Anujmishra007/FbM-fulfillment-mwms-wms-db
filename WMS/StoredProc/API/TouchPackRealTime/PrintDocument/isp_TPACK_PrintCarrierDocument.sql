@@ -118,7 +118,9 @@ BEGIN
                               FROM API.AppSection S (NOLOCK) 
                               WHERE S.DeviceID = W.DeviceID
                               AND S.UserID = @cUserID
-                              AND S.ScanNo = @cPickSlipNo
+                              AND (S.ScanNo = @cPickSlipNo
+                                 OR S.ScanNo = @cOrderKey
+                                 )
                               )
                )
             
