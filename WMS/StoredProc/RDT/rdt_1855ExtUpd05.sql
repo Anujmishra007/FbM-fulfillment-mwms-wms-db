@@ -247,45 +247,58 @@ BEGIN
         BEGIN
             IF @nInputKey = 1 -- Enter
             BEGIN
-                -- Update PACKDETAIL.DropID with PICKDETAIL.DropID during pick confirmation
-                -- Link: PACKHEADER.OrderKey = PICKDETAIL.OrderKey
-                --       PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo
-                --       PACKDETAIL.LabelNo = PICKDETAIL.CaseID
+                -- Only update DropID if not a short pick ( IE TaskDetail.Status = 5 and PickDetail.Status = 5)
+                IF EXISTS (
+                    SELECT 1 
+                    FROM dbo.TaskDetail TD WITH(NOLOCK)
+                    INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
+                    WHERE TD.TaskDetailKey = @cTaskDetailKey 
+                    AND TD.Status = '5' 
+                    AND PD.Status = '5'
+                )
+                BEGIN
+                    -- Update PACKDETAIL.DropID with PICKDETAIL.DropID during pick confirmation
+                    -- Link: PACKHEADER.OrderKey = PICKDETAIL.OrderKey
+                    --       PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo
+                    --       PACKDETAIL.LabelNo = PICKDETAIL.CaseID
 
-                DECLARE @cDropID NVARCHAR(30)
-                DECLARE @cCaseID NVARCHAR(20)
+                    DECLARE @cDropID NVARCHAR(30)
+                    DECLARE @cCaseID NVARCHAR(20)
 
-                -- Get OrderKey, DropID, and CaseID from PickDetail
-                SELECT @cOrderKey = OrderKey, @cDropID = DropID, @cCaseID = CaseID
-                FROM dbo.PickDetail WITH(NOLOCK)
-                WHERE TaskDetailKey = @cTaskDetailKey AND Storerkey = @cStorerKey 
+                    -- Get OrderKey, DropID, and CaseID from PickDetail
+                    SELECT @cOrderKey = OrderKey, @cDropID = DropID, @cCaseID = CaseID
+                    FROM dbo.PickDetail WITH(NOLOCK)
+                    WHERE TaskDetailKey = @cTaskDetailKey AND Storerkey = @cStorerKey 
 
-                -- -- Get PickSlipNo from PackHeader using OrderKey
-                SELECT @cPickSlipNo = PickSlipNo
-                FROM dbo.PackHeader WITH(NOLOCK)
-                WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
+                    -- -- Get PickSlipNo from PackHeader using OrderKey
+                    SELECT @cPickSlipNo = PickSlipNo
+                    FROM dbo.PackHeader WITH(NOLOCK)
+                    WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
 
-                SET @nTranCount = @@TRANCOUNT
-                BEGIN TRAN  -- Begin transaction
-                SAVE TRAN rdt_1855ExtUpd05
+                    SET @nTranCount = @@TRANCOUNT
+                    BEGIN TRAN  -- Begin transaction
+                    SAVE TRAN rdt_1855ExtUpd05
 
-                BEGIN TRY
-                    UPDATE dbo.PackDetail WITH (ROWLOCK)
-                    SET DropID = @cDropID
-                    WHERE PickSlipNo = @cPickSlipNo AND LabelNo = @cCaseID
-                END TRY
-                BEGIN CATCH
-                    GOTO RollBackTrans
-                END CATCH
+                    BEGIN TRY
+                        UPDATE dbo.PackDetail WITH (ROWLOCK)
+                        SET DropID = @cDropID
+                        WHERE PickSlipNo = @cPickSlipNo AND LabelNo = @cCaseID
+                    END TRY
+                    BEGIN CATCH
+                        SET @nErrNo = 261401
+                        SET @nErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --261401^Error updating DropID in PackDetail
+                        GOTO RollBackTrans
+                    END CATCH
 
-                GOTO Commit_Trans
+                    GOTO Commit_Trans
 
-                RollBackTrans:
-                    ROLLBACK TRAN rdt_1855ExtUpd05 -- Only rollback change made here
-                Commit_Trans:
-                    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                        COMMIT TRAN
-                GOTO Quit
+                    RollBackTrans:
+                        ROLLBACK TRAN rdt_1855ExtUpd05 -- Only rollback change made here
+                    Commit_Trans:
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                            COMMIT TRAN
+                    GOTO Quit
+                END
             END -- Enter
         END -- IF @nStep = 6 OR 4
 
