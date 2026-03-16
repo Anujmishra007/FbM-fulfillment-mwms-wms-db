@@ -98,8 +98,6 @@ BEGIN
    IF @ReportID = '' OR @ReportLine = ''
    BEGIN
       SET @n_Continue = 1
-      --SET @n_ErrNo = 1004
-      --SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Report ID or Line number is missing in Code Lookup
       GOTO EXIT_SP
    END
 

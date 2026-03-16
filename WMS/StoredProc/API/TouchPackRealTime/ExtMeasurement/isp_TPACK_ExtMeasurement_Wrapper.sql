@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-03-12   1.0  GCH225     FCR-11552 Created                                */
+/* 2026-03-16   1.1  JWF011     FCR-11639 Add LWH                                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtMeasurement_Wrapper] (
@@ -33,6 +34,9 @@ CREATE OR ALTER PROC [API].[isp_TPACK_ExtMeasurement_Wrapper] (
    , @cLangCode            NVARCHAR(3)       = ''
    , @fTtlWeight           FLOAT             = 0   OUTPUT
    , @fTtlCube             FLOAT             = 0   OUTPUT
+   , @fTtlLength           FLOAT             = 0   OUTPUT
+   , @fTtlWidth            FLOAT             = 0   OUTPUT
+   , @fTtlHeight           FLOAT             = 0   OUTPUT
    , @b_Success            INT               = 0   OUTPUT
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
@@ -103,6 +107,9 @@ BEGIN
                   + ', @cLangCode           ' + CHAR(13)
                   + ', @fTtlWeight   OUTPUT ' + CHAR(13)
                   + ', @fTtlCube     OUTPUT ' + CHAR(13)
+                  + ', @fTtlLength   OUTPUT ' + CHAR(13)
+                  + ', @fTtlWidth    OUTPUT ' + CHAR(13)
+                  + ', @fTtlHeight   OUTPUT ' + CHAR(13)
                   + ', @b_Success    OUTPUT ' + CHAR(13)
                   + ', @n_ErrNo      OUTPUT ' + CHAR(13)
                   + ', @c_ErrMsg     OUTPUT ' + CHAR(13)
@@ -126,6 +133,9 @@ BEGIN
                      + ', @cLangCode     NVARCHAR(3)          ' + CHAR(13)
                      + ', @fTtlWeight    FLOAT         OUTPUT ' + CHAR(13)
                      + ', @fTtlCube      FLOAT         OUTPUT ' + CHAR(13)
+                     + ', @fTtlLength    FLOAT         OUTPUT ' + CHAR(13)
+                     + ', @fTtlWidth     FLOAT         OUTPUT ' + CHAR(13)
+                     + ', @fTtlHeight    FLOAT         OUTPUT ' + CHAR(13)
                      + ', @b_Success     INT           OUTPUT ' + CHAR(13)
                      + ', @n_ErrNo       INT           OUTPUT ' + CHAR(13)
                      + ', @c_ErrMsg      NVARCHAR(250) OUTPUT ' + CHAR(13)
@@ -151,6 +161,9 @@ BEGIN
                         , @cLangCode  
                         , @fTtlWeight   OUTPUT
                         , @fTtlCube     OUTPUT
+                        , @fTtlLength   OUTPUT
+                        , @fTtlWidth    OUTPUT
+                        , @fTtlHeight   OUTPUT
                         , @b_Success    OUTPUT
                         , @n_ErrNo      OUTPUT
                         , @c_ErrMsg     OUTPUT

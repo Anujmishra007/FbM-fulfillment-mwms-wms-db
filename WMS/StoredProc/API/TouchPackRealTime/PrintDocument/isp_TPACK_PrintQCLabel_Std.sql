@@ -95,7 +95,7 @@ BEGIN
    IF @bPrintLabelFlag = 0
    BEGIN
       SET @n_Continue = 3
-      SET @n_ErrNo = 19999
+      SET @n_ErrNo = 15351
       SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Invalid bPrintLabelFlag. Failed to perform print QC label.'
       GOTO EXIT_SP
    END
@@ -114,7 +114,7 @@ BEGIN
    )  
    BEGIN 
       SET @n_Continue = 3
-      SET @n_ErrNo = 11851
+      SET @n_ErrNo = 15352
       SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No records found in WMReport.'
       GOTO EXIT_SP
    END
@@ -133,7 +133,7 @@ BEGIN
    )
    BEGIN
       SET @n_Continue = 3
-      SET @n_ErrNo = 11852
+      SET @n_ErrNo = 15353
       SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
       GOTO EXIT_SP
    END
@@ -310,7 +310,7 @@ BEGIN
             IF @cPrinterInGroup = ''  
             BEGIN  
                SET @n_Continue = 3
-               SET @n_ErrNo = 11853    
+               SET @n_ErrNo = 15354    
                SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not found PrinterID in PrinterGroup.'  
                GOTO EXIT_SP  
             END

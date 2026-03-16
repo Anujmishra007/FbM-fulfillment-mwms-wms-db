@@ -26,6 +26,9 @@ GO
 /* 2026-02-13   3.3  GCH225     UWP-48895: Bug fix AuditLog Carton Type Change      */
 /* 2026-02-24   3.4  GCH225     UWP-49353: Fix for Hold status for specific cases   */
 /* 2026-03-13   3.5  GCH225     FCR-11554: Add Extended Validate before Close Carton*/
+/* 2026-03-16   3.6  GCH225     FCR-11595: New Insert logic UserSessionActivityLog  */
+/* 2026-03-16   3.6  GCH225     FCR-11632: Fix for AuditLog part when Status change */
+/* 2026-03-16   3.7  JWF011     FCR-11639: Update for ExtMeasurement                */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_UpdatePackInfo] (
@@ -74,6 +77,9 @@ BEGIN
          , @nTtlPackQty          INT
          , @nPrecedingCartonNo   INT
          , @bOpenCartonFlag      BIT
+         , @fTtlLength           FLOAT
+         , @fTtlWidth            FLOAT
+         , @fTtlHeight           FLOAT
 
    DECLARE @cVASCodeUDF2         NVARCHAR(60)   = ''
          , @cVASCodeUDF3         NVARCHAR(60)   = ''
@@ -102,6 +108,9 @@ BEGIN
    SET @cExtMeasurementSP  = ''
    SET @cSQL               = ''
    SET @cSQLParam          = ''
+   SET @fTtlLength         = 0
+   SET @fTtlWidth          = 0
+   SET @fTtlHeight         = 0
    
    IF EXISTS ( SELECT 1 
                FROM PACKHEADER (NOLOCK)
@@ -257,6 +266,9 @@ BEGIN
          , @cLangCode     = @cLangCode
          , @fTtlWeight    = @fTtlWeight  OUTPUT
          , @fTtlCube      = @fTtlCube    OUTPUT
+         , @fTtlLength    = @fTtlLength   OUTPUT
+         , @fTtlWidth     = @fTtlWidth   OUTPUT
+         , @fTtlHeight    = @fTtlHeight   OUTPUT
          , @b_Success     = @b_Success   OUTPUT
          , @n_ErrNo       = @n_ErrNo     OUTPUT
          , @c_ErrMsg      = @c_ErrMsg    OUTPUT
@@ -536,7 +548,9 @@ BEGIN
       FROM PACKINFO (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
       AND CartonNo = @nCartonNo
-      AND CartonType <> @cCartonType
+      AND (CartonType <> @cCartonType
+      OR (CartonStatus = 'PENDAUDIT' AND CartonStatus <> @cCartonStatus)
+      )
       
       IF @@ROWCOUNT = 1
       BEGIN
@@ -616,6 +630,15 @@ BEGIN
                      , [Cube]
                      , @fTtlCube)
                   )
+      , [Length] = IIF(@fTtlLength = 0
+                     , [Length]
+                     , @fTtlLength)
+      , [Width] = IIF(@fTtlWidth = 0
+                     , [Width]
+                     , @fTtlWidth)
+      , [Height] = IIF(@fTtlHeight = 0
+                     , [Height]
+                     , @fTtlHeight)
       , TrafficCop = NULL
    WHERE PickSlipNo = @cPickSlipNo
    AND CartonNo = @nCartonNo
@@ -654,6 +677,48 @@ BEGIN
       GOTO EXIT_SP
    END
 
+   INSERT INTO API.TPACK_UserSessionActivityLog 
+   (
+        PickSlipNo
+      , CartonNo
+      , LabelNo
+      , OrderKey
+      , LoadKey
+      , DropID
+      , StorerKey
+      , Facility
+      , Workstation
+      , LabelPrinter
+      , PaperPrinter
+      , AddWho
+      , AddDate
+      , EditWho
+      , EditDate
+   )
+   SELECT TOP 1 L.PickSlipNo
+      , L.CartonNo
+      , PD.LabelNo
+      , L.OrderKey
+      , L.LoadKey
+      , L.DropID
+      , L.StorerKey
+      , L.Facility 
+      , L.Workstation
+      , L.LabelPrinter
+      , L.PaperPrinter
+      , @c_UserID
+      , GETDATE()
+      , @c_UserID
+      , GETDATE()
+   FROM TPACK_UserSessionActivityLog L WITH (NOLOCK)
+   LEFT JOIN PACKDETAIL PD WITH (NOLOCK)
+   ON PD.PickSlipNo = L.PickSlipNo
+   AND PD.CartonNo = L.CartonNo
+   AND PD.StorerKey = L.StorerKey
+   WHERE L.PickSlipNo = @cPickSlipNo
+   AND L.CartonNo = @nCartonNo
+   AND L.StorerKey = @cStorerKey
+   ORDER BY 1 DESC
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
    BEGIN      
