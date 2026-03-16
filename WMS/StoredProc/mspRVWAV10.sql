@@ -212,7 +212,7 @@ BEGIN
 
             --WL05 S
             IF @c_DocType = 'N' AND @c_Shipperkey = 'UPS'
-            AND @n_TotalCtn < @n_UPSCtnCnt
+            AND @n_TotalCtn <= @n_UPSCtnCnt
             BEGIN
                BEGIN TRY
                   UPDATE dbo.ORDERS

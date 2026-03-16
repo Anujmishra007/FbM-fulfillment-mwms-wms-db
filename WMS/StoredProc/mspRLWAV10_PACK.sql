@@ -2975,7 +2975,7 @@ BEGIN
 
             -- Update Shipperkey
             IF ISNULL(@c_Shipperkey, '') <> 'UPS'
-            AND @n_TTLCtn < @n_UPSCtnCnt
+            AND @n_TTLCtn <= @n_UPSCtnCnt
             BEGIN
                BEGIN TRY
                   UPDATE dbo.ORDERS
