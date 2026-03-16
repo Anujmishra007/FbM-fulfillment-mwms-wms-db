@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-03-12   1.0  GCH225     FCR-11552 Created                                */
 /* 2026-03-14   1.1  JWF011     FCR-11435 Update Weight calculation              */
+/* 2026-03-16   1.2  JWF011     FCR-11639 Add LWH and update Cube                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtMeasurement01] (
@@ -34,6 +35,9 @@ CREATE OR ALTER PROC [API].[isp_TPACK_ExtMeasurement01] (
    , @cLangCode            NVARCHAR(3)       = ''
    , @fTtlWeight           FLOAT             = 0   OUTPUT
    , @fTtlCube             FLOAT             = 0   OUTPUT
+   , @fTtlLength           FLOAT             = 0   OUTPUT
+   , @fTtlWidth            FLOAT             = 0   OUTPUT
+   , @fTtlHeight           FLOAT             = 0   OUTPUT
    , @b_Success            INT               = 0   OUTPUT
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
@@ -53,7 +57,6 @@ BEGIN
    SET @c_ErrMsg        = ''
   
    SELECT  @fTtlWeight = SUM(IIF((ISNULL(S.STDGROSSWGT, 0) = 0), 0, ROUND((S.STDGROSSWGT * T.TtlQty), 4)))
-            , @fTtlCube = SUM(IIF((ISNULL(S.[Cube], 0) = 0), 0, ROUND((S.[Cube] * T.TtlQty), 4)))
       FROM SKU S (NOLOCK)
       INNER JOIN (
       SELECT PD.SKU AS SKU, SUM(PD.Qty) AS TtlQty
@@ -64,6 +67,14 @@ BEGIN
       ) T
       ON T.SKU = S.SKU
       WHERE S.StorerKey = @cStorerKey
+   
+   SELECT TOP 1 @fTtlLength = ISNULL(C.CartonLength, 0)
+              , @fTtlWidth = ISNULL(C.CartonWidth, 0)
+              , @fTtlHeight = ISNULL(C.CartonHeight,0)
+              , @fTtlCube = ISNULL(C.Cube, 0)
+   FROM Cartonization C (NOLOCK)
+   WHERE C.CartonType = @cCartonType
+   AND C.CartonizationGroup = @cStorerKey
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      

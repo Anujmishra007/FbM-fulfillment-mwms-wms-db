@@ -511,7 +511,7 @@ BEGIN
             IF @cPrinterInGroup = ''  
             BEGIN  
                SET @n_Continue = 3
-               SET @n_ErrNo = 14256    
+               SET @n_ErrNo = 14251    
                SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')
                GOTO EXIT_SP  
             END

@@ -62,6 +62,7 @@ BEGIN
          , @cConfigKey        NVARCHAR(30)
          , @cSPName           NVARCHAR(50)
          , @nContinuePrint    INT
+         , @bCartonLevelPrint BIT
 
 
    SET @b_Success          = 0  
@@ -74,6 +75,7 @@ BEGIN
    SET @cConfigKey         = ''
    SET @cSPName            = ''
    SET @nContinuePrint     = 1 -- Default to call the standard print SP if Extended Print SP is not configured or print config JSON is not provided.
+   SET @bCartonLevelPrint  = 0
 
    IF @oPrintConfigJson <> ''
    BEGIN
@@ -292,6 +294,8 @@ BEGIN
             SET @n_Continue = 3   
             GOTO EXIT_SP
          END
+         SET @bCartonLevelPrint = 1
+
       END  
    END
 
@@ -338,7 +342,7 @@ BEGIN
       END
    END
    
-   IF @nContinuePrint = 1
+   IF @nContinuePrint = 1 AND @bCartonLevelPrint = 0
    BEGIN
       EXEC [API].[isp_TPACK_PrintDocument_Std]
         @cType             = @cType            

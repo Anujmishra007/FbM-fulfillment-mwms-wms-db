@@ -3,19 +3,20 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
   
-/*********************************************************************************/
-/* Store procedure: isp_TPACK_API_GetPackTask                                    */
-/* Copyright      : Maersk                                                       */
-/*                                                                               */
-/* Purpose        : Get all the pack task info from pickdetail & packinfo        */
-/*                                                                               */
-/* Date         Rev  Author     Purposes                                         */
-/* 2025-08-01   1.0  GCH225     Created                                          */
-/* 2025-11-17   1.1  JWF011     UWP-43858: VAS Tote PreCartonize check rule      */
-/* 2026-02-05   2.0  GCH225     UWP-48237: Handle PenAudit status                */
-/* 2026-03-13   2.1  GCH225     FCR-11619: Fix No. of precartonize per pickslip  */
-/* 2026-03-14   2.2  GCH225     FCR-11632: Fix No. of precartonize per pickslip  */
-/*********************************************************************************/
+/************************************************************************************/
+/* Store procedure: isp_TPACK_API_GetPackTask                                       */
+/* Copyright      : Maersk                                                          */
+/*                                                                                  */
+/* Purpose        : Get all the pack task info from pickdetail & packinfo           */
+/*                                                                                  */
+/* Date         Rev  Author     Purposes                                            */
+/* 2025-08-01   1.0  GCH225     Created                                             */
+/* 2025-11-17   1.1  JWF011     UWP-43858: VAS Tote PreCartonize check rule         */
+/* 2026-02-05   2.0  GCH225     UWP-48237: Handle PenAudit status                   */
+/* 2026-03-13   2.1  GCH225     FCR-11619: Fix No. of precartonize per pickslip     */
+/* 2026-03-14   2.2  GCH225     FCR-11632: Fix No. of precartonize per pickslip     */
+/* 2026-03-16   2.3  GCH225     FCR-11595: New Insert logic UserSessionActivityLog  */
+/************************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetPackTask] (
      @b_Debug           INT            = 0  
@@ -60,6 +61,9 @@ BEGIN
          , @nTtlExpQty           INT
          , @nCartonNoCount       INT
          , @nMaxCartonNo         INT
+         , @cLabelPrinter        NVARCHAR(20)
+         , @cPaperPrinter        NVARCHAR(20)
+         , @cWorkstation         NVARCHAR(30)
 
    DECLARE @cCartonType          NVARCHAR(20)   = ''
          , @fWeight              FLOAT          = 0
@@ -78,7 +82,10 @@ BEGIN
    SET @nTtlExpQty         = 0
    SET @nCartonNoCount     = 0
    SET @nMaxCartonNo       = 0
-
+   SET @cLabelPrinter      = ''
+   SET @cPaperPrinter      = ''
+   SET @cWorkstation       = ''
+   
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
       , @c_DBUserName  = @DBUserName OUTPUT
@@ -553,6 +560,77 @@ BEGIN
       SET @n_Continue = 3   
       GOTO EXIT_SP
    END
+
+   SELECT TOP 1 @cLabelPrinter = PrinterID
+               ,@cWorkstation = Workstation
+   FROM API.AppPrinter P (NOLOCK)
+   WHERE PrinterType ='Label'
+   AND EXISTS ( SELECT 1 
+                  FROM API.AppWorkstation W (NOLOCK) 
+                  WHERE W.Workstation = P.Workstation
+                  AND EXISTS (SELECT 1 
+                              FROM API.AppSection S (NOLOCK) 
+                              WHERE S.DeviceID = W.DeviceID
+                              AND S.UserID = @c_UserID
+                              AND (S.ScanNo = @cPickSlipNo
+                                     OR S.ScanNo = @cOrderKey
+                                     OR S.ScanNo = @cDropID
+                                 )
+                              )
+               )
+
+   SELECT TOP 1 @cPaperPrinter = PrinterID
+   FROM API.AppPrinter P (NOLOCK)
+   WHERE PrinterType ='Paper'
+   AND EXISTS ( SELECT 1 
+                  FROM API.AppWorkstation W (NOLOCK) 
+                  WHERE W.Workstation = P.Workstation
+                  AND EXISTS (SELECT 1 
+                              FROM API.AppSection S (NOLOCK) 
+                              WHERE S.DeviceID = W.DeviceID
+                              AND S.UserID = @c_UserID
+                              AND (S.ScanNo = @cPickSlipNo
+                                     OR S.ScanNo = @cOrderKey
+                                     OR S.ScanNo = @cDropID
+                                 )
+                              )
+               )
+
+   INSERT INTO API.TPACK_UserSessionActivityLog 
+   (
+        PickSlipNo
+      , CartonNo
+      , LabelNo
+      , OrderKey
+      , LoadKey
+      , DropID
+      , StorerKey
+      , Facility
+      , Workstation
+      , LabelPrinter
+      , PaperPrinter
+      , AddWho
+      , AddDate
+      , EditWho
+      , EditDate
+   )
+   VALUES (
+        @cPickSlipNo
+      , @nCartonNo
+      , ''
+      , @cOrderKey
+      , @cLoadKey
+      , @cDropID
+      , @cStorerKey
+      , @cFacility 
+      , @cWorkstation
+      , @cLabelPrinter
+      , @cPaperPrinter
+      , @c_UserID
+      , GETDATE()
+      , @c_UserID
+      , GETDATE()
+   )
 
    SET @c_ResponseString = ISNULL ((SELECT  @cType                AS cType
                                           , @bIsDiscrete          AS bIsDiscrete
