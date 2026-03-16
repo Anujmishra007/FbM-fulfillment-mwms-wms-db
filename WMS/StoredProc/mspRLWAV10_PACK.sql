@@ -385,9 +385,9 @@ BEGIN
       ,  [StdCube]         [FLOAT]        NOT NULL DEFAULT (0.00)
       ,  [StdGrossWgt]     [FLOAT]        NOT NULL DEFAULT (0.00)
       ,  [Weight]          [REAL]         NOT NULL DEFAULT (0.00)
-      ,  Dim1              [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
-      ,  Dim2              [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
-      ,  Dim3              [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
+      ,  [Dim1]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
+      ,  [Dim2]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
+      ,  [Dim3]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
       ,  [PackQtyIndicator][int]          NOT NULL DEFAULT (0)
       ,  [UOM]             [nvarchar](10) NOT NULL DEFAULT (' ')
       ,  [Qty]             [int]          NOT NULL DEFAULT (0)
@@ -444,6 +444,9 @@ BEGIN
       ,  [RowRef_pcz]      [int]          NOT NULL DEFAULT (0)
       ,  [IsVAS]           [bit]          NOT NULL DEFAULT (0)
       ,  [IsApi]           [BIT]          NOT NULL DEFAULT (0)
+      ,  [Dim1]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)   --WL22
+      ,  [Dim2]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)   --WL22
+      ,  [Dim3]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)   --WL22
       )
       CREATE INDEX IDX_CartonSeqNo ON #CartonDetail (Orderkey, CartonSeqNo, RefPickKey)
 
@@ -959,6 +962,9 @@ BEGIN
             ,  [Notes]
             ,  [Status]
             ,  [IsApi]
+            ,  [Dim1]   --WL22
+            ,  [Dim2]   --WL22
+            ,  [Dim3]   --WL22
             )
          SELECT
                pcz.PickDetailKey
@@ -991,6 +997,9 @@ BEGIN
             ,  Notes      = ''
             ,  [Status]   = '9'
             ,  IsApi = 0
+            ,  pcz.[Length]   --WL22
+            ,  pcz.Width      --WL22
+            ,  pcz.Height     --WL22
          FROM #PRECTN AS pcz
          CROSS APPLY (  SELECT TotalPackCube = SUM(pcz1.StdCube*pcz1.Qty_PI)
                         FROM #PRECTN AS pcz1
@@ -1531,7 +1540,7 @@ BEGIN
                                         FROM #OptimizeItemToPack )
                         BEGIN
                            INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
-                           SELECT Storerkey, Sku, cd.[Length], cd.Width, cd.Height, cd.Qty
+                           SELECT Storerkey, Sku, cd.Dim1, cd.Dim2, cd.Dim3, cd.Qty   --WL22
                            FROM #CartonDetail AS cd
                            WHERE cd.Orderkey = @c_Orderkey
                            AND   cd.CartonSeqNo = @n_CartonSeqNo
@@ -1864,6 +1873,9 @@ BEGIN
                               ,  [RowRef_pcz]
                               ,  [IsApi]
                               ,  [IsVAS]   --WL15
+                              ,  [Dim1]    --WL22
+                              ,  [Dim2]    --WL22
+                              ,  [Dim3]    --WL22
                               )
                            SELECT
                                  pcz.PickDetailKey
@@ -1898,6 +1910,9 @@ BEGIN
                               ,  RowRef_pcz = pcz.RowID
                               ,  IsApi = @b_API
                               ,  IsVAS = pcz.IsVAS   --WL15
+                              ,  pcz.Dim1   --WL22
+                              ,  pcz.Dim2   --WL22
+                              ,  pcz.Dim3   --WL22
                            FROM #PRECTN AS pcz
                            WHERE pcz.Pickdetailkey = @c_RefPickKey
                         END
