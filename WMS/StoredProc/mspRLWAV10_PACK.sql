@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 3.3                                                          */    
+/* Version: 3.5                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -50,6 +50,7 @@ GO
 /* 13-Mar-2026 WLChooi  3.2   FCR-11615 Fix Inifinite Loop (WL21)        */
 /* 16-Mar-2026 WLChooi  3.3   FCR-11586 Fix ECOM & Packing mapping (WL22)*/
 /* 16-Mar-2026 WLChooi  3.4   FCR-11586 Fix AutoPackCfm condition (WL23) */
+/* 16-Mar-2026 WLChooi  3.5   FCR-11586 Fix DropID linkage (WL24)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -2599,7 +2600,9 @@ BEGIN
                         UPDATE cd
                            SET cd.PickDetailKey = @c_PickDetailKey
                              , cd.LabelNo       = @c_LabelNo
+                             , cd.DropID        = ISNULL(pd.DropID, '')   --WL24
                         FROM #CartonDetail AS cd
+                        JOIN PickDetail AS pd (NOLOCK) ON pd.PickDetailKey = @c_PickDetailKey   --WL24
                         WHERE cd.RowID = @n_RowID_cd
                         AND   cd.[Status] = '9'
                      END
@@ -2628,6 +2631,15 @@ BEGIN
                                         +': Update PICKDETAIL Failed. (mspRLWAV10_PACK)'
                            GOTO PACK_END
                         END
+
+                        --WL24 S
+                        UPDATE cd
+                           SET cd.DropID = ISNULL(pd.DropID, '')
+                        FROM #CartonDetail AS cd
+                        JOIN PickDetail AS pd (NOLOCK) ON pd.PickDetailKey = cd.RefPickkey
+                        WHERE cd.RowID = @n_RowID_cd
+                        AND   cd.[Status] = '9'
+                        --WL24 E
                      END
 
                      FETCH NEXT FROM @cur_SPLPD INTO  @n_RowID_cd
