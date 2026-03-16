@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.4                                                          */    
+/* Version: 1.5                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -26,6 +26,7 @@ GO
 /*                            Userdefine02 (WL03)                        */
 /* 12-Mar-2026 WLChooi  1.4   FCR-11568 Clear CaseID & DropID if matches */
 /*                            (WL04)                                     */
+/* 16-Mar-2026 WLChooi  1.5   FCR-11584 Clear Shipperkey (WL05)          */
 /*************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV10]
       @c_Wavekey      NVARCHAR(10)
@@ -48,9 +49,17 @@ BEGIN
    SET @n_debug = @n_Err
    SELECT @n_starttcnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 0, @n_Err = 0, @c_Errmsg = '', @n_cnt = 0
 
-   DECLARE @c_Taskdetailkey   NVARCHAR(10) = ''
-         , @c_Pickslipno      NVARCHAR(10) = ''
-         , @c_CartonNo        NVARCHAR(5) = ''
+   DECLARE @c_Taskdetailkey   NVARCHAR(10)   = ''
+         , @c_Pickslipno      NVARCHAR(10)   = ''
+         , @c_CartonNo        NVARCHAR(5)    = ''
+         --WL05 S
+         , @n_TotalCtn        INT            = 0 
+         , @n_UPSCtnCnt       INT            = 0 
+         , @c_Storerkey       NVARCHAR(15)   = ''
+         , @c_DocType         NVARCHAR(10)   = ''
+         , @c_GetOrderkey     NVARCHAR(10)   = ''
+         , @c_Shipperkey      NVARCHAR(15)   = ''
+         --WL05 E
  
    -- Reject if wave not yet release
    IF @n_Continue = 1 OR @n_Continue = 2
@@ -91,6 +100,22 @@ BEGIN
          BEGIN TRAN
    END
 
+   --WL05 S
+   IF @n_Continue = 1 OR @n_Continue = 2
+   BEGIN
+      SELECT TOP 1 @c_Storerkey = OH.Storerkey
+      FROM WAVEDETAIL WD (NOLOCK)
+      JOIN ORDERS OH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+      WHERE WD.Wavekey = @c_Wavekey
+
+      SELECT @n_UPSCtnCnt = CASE WHEN ISNUMERIC(cl.UDF03) = 1 THEN cl.UDF03 ELSE 0 END
+      FROM CODELKUP cl (NOLOCK)
+      WHERE cl.Listname = 'SHIPERCODE'
+      AND cl.Code = 'UPS'
+      AND cl.Storerkey = @c_Storerkey
+   END
+   --WL05 E
+
    -- Delete Taskdetail
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
@@ -127,18 +152,28 @@ BEGIN
    END
 
    --Delete Packing Info
+   --Clear Shipperkey
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       DECLARE CUR_PACK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT PD.Pickslipno, PD.CartonNo
+           , PT.TotalCtn, OH.Orderkey, OH.DocType, OH.Shipperkey   --WL05
       FROM WAVEDETAIL WD WITH (NOLOCK)
       JOIN PACKHEADER PH WITH (NOLOCK) ON WD.OrderKey = PH.OrderKey
       JOIN PACKDETAIL PD WITH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+      --WL05 S
+      JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
+      CROSS APPLY ( SELECT TotalCtn = COUNT(DISTINCT PACKDETAIL.CartonNo)
+                    FROM PACKDETAIL (NOLOCK)
+                    WHERE PACKDETAIL.Pickslipno = PH.Pickslipno ) PT
+      --WL05 E
       WHERE WD.WaveKey = @c_Wavekey
+      ORDER BY PD.Pickslipno, PD.CartonNo   --WL05
 
       OPEN CUR_PACK
 
       FETCH NEXT FROM CUR_PACK INTO @c_Pickslipno, @c_CartonNo
+                                  , @n_TotalCtn, @c_GetOrderkey, @c_DocType, @c_Shipperkey   --WL05
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -174,9 +209,27 @@ BEGIN
                                 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_Errmsg) + ' ) '
                GOTO QUIT_SP
             END
+
+            --WL05 S
+            IF @c_DocType = 'N' AND @c_Shipperkey = 'UPS'
+            AND @n_TotalCtn < @n_UPSCtnCnt
+            BEGIN
+               BEGIN TRY
+                  UPDATE dbo.ORDERS
+                  SET ShipperKey = ''
+                  WHERE OrderKey = @c_GetOrderkey
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  GOTO QUIT_SP
+               END CATCH
+            END
+            --WL05 E
          END
          
          FETCH NEXT FROM CUR_PACK INTO @c_Pickslipno, @c_CartonNo
+                                     , @n_TotalCtn, @c_GetOrderkey, @c_DocType, @c_Shipperkey   --WL05
       END
       CLOSE CUR_PACK
       DEALLOCATE CUR_PACK

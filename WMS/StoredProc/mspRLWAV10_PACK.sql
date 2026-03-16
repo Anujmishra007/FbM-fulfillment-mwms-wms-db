@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 3.1                                                          */    
+/* Version: 3.3                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -48,6 +48,7 @@ GO
 /* 12-Mar-2026 WLChooi  3.0   FCR-11584 & FCR-11586 UPS Shipperkey (WL19)*/
 /* 12-Mar-2026 WLChooi  3.1   FCR-11581 Footwear API Fix Height (WL20)   */
 /* 13-Mar-2026 WLChooi  3.2   FCR-11615 Fix Inifinite Loop (WL21)        */
+/* 16-Mar-2026 WLChooi  3.3   FCR-11586 Fix ECOM & Packing mapping (WL22)*/
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -188,6 +189,7 @@ BEGIN
          , @c_Algorithm             NVARCHAR(10)   = ''     --WL20
          , @n_RowID_pre             INT            = 0      --WL21
          , @c_VAS_P                 NVARCHAR(10)   = ''     --WL21
+         , @b_AutoPackCFM           BIT            = 0      --WL22
 
    DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
          , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
@@ -908,6 +910,19 @@ BEGIN
                   ORDER BY cz.RowID
                END
             END
+
+            --WL22 S
+            IF @n_RowCount > 0
+            BEGIN
+               SELECT TOP 1
+                        @c_CartonType_Max = cz.CartonType
+                     ,  @n_CartonCube_Max = cz.[Cube]
+                     ,  @n_CartonWeight_Max = cz.MaxWeight
+               FROM #CTNZ AS cz
+               WHERE CartonDefault = 0
+               ORDER BY cz.RowID
+            END
+            --WL22 E
          END
          ------------------------
          -- UOM = '2'
@@ -1136,8 +1151,18 @@ BEGIN
             BEGIN
                SET @b_NewCarton = 1
 
+               --WL22 S
+               IF @c_DocType = 'E'
+               BEGIN
+                  SELECT @b_API = IIF(ISNUMERIC(cl1.UDF02) = 1, cl1.UDF02, 0)
+                  FROM @TMP_CL cl1
+                  WHERE cl1.ListName = 'CSCUK01PT'
+                  AND   cl1.Code     = @c_BUSR7
+                  AND   cl1.Storerkey= @c_Storerkey
+               END
+               --WL22 E
                -- B2B
-               IF @c_DocType <> 'E'
+               ELSE --IF @c_DocType <> 'E'
                BEGIN
                   --WL08 S
                   IF EXISTS ( SELECT 1 FROM #CartonDetail AS cd 
@@ -2680,6 +2705,7 @@ BEGIN
                   ,  Sku
                   ,  Qty
                   ,  ExpQty
+                  ,  DropID   --WL22
                   )
                SELECT PickSlipNo = @c_PickSlipNo
                      ,CartonNo = cd.CartonSeqNo + @n_CartonNo_Last
@@ -2696,12 +2722,17 @@ BEGIN
                                     THEN 0
                                     WHEN cd.[Audit] = 1
                                     THEN 0
+                                    WHEN cd.DocType = 'E'   --WL22
+                                    THEN 0                  --WL22
                                     ELSE SUM(cd.Qty) END
                      ,ExpQty = CASE WHEN cd.IsVas = 1 AND cd.UOM >= '6'
                                     THEN SUM(cd.Qty)
                                     WHEN cd.[Audit] = 1
                                     THEN SUM(cd.Qty)
+                                    WHEN cd.DocType = 'E'   --WL22
+                                    THEN SUM(cd.Qty)        --WL22
                                     ELSE 0 END
+                     ,cd.DropID   --WL22
                FROM #CartonDetail AS cd
                WHERE cd.Orderkey = @c_Orderkey
                AND cd.CartonType > ''
@@ -2713,6 +2744,8 @@ BEGIN
                      ,  cd.IsVAS
                      ,  cd.UOM
                      ,  cd.[Audit]
+                     ,  cd.DropID    --WL22
+                     ,  cd.DocType   --WL22
                ORDER BY cd.CartonSeqNo
                      ,  cd.Storerkey
                      ,  cd.Sku
@@ -2748,6 +2781,8 @@ BEGIN
                                         THEN 0
                                         WHEN cd.IsVas = 1 AND cd.UOM >= '6'   --WL13
                                         THEN 0                                --WL13
+                                        WHEN cd.DocType = 'E'   --WL22
+                                        THEN 0                  --WL22
                                         ELSE ISNULL(SUM(cd.Qty),0) END
                      ,CartonType = cd.CartonType
                      ,[Length]   = cz.CartonLength
@@ -2779,6 +2814,7 @@ BEGIN
                      ,  cd.UOM     --WL13
                      ,  CASE WHEN cd.UOM = '2' THEN cd.LabelNo ELSE '' END
                      ,  cd.[Audit]
+                     ,  cd.DocType   --WL22
 
                SET @n_err = @@ERROR
                IF @n_err <> 0
@@ -2914,6 +2950,7 @@ BEGIN
          --WL19 S
          POST_PACK:
          SET @n_TTLCtn = 0
+         SET @b_AutoPackCFM = 0   --WL22
 
          IF @c_DocType = 'N'
          BEGIN
@@ -2946,19 +2983,26 @@ BEGIN
                            )
             AND @n_TTLCtn > @n_UPSCtnCnt
             BEGIN
-               BEGIN TRY
-                  UPDATE dbo.PackHeader
-                  SET [Status] = '9'
-                  WHERE PickSlipNo = @c_PickSlipNo
-               END TRY
-               BEGIN CATCH
-                  SET @n_Continue = 3
-                  SET @c_ErrMsg = ERROR_MESSAGE()
-                  GOTO QUIT_SP
-               END CATCH
+               SET @b_AutoPackCFM = 1   --WL22
             END
          END
          --WL19 E
+
+         --WL22 S
+         IF @b_AutoPackCFM = 1
+         BEGIN
+            BEGIN TRY
+               UPDATE dbo.PackHeader
+               SET [Status] = '9'
+               WHERE PickSlipNo = @c_PickSlipNo
+            END TRY
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               GOTO QUIT_SP
+            END CATCH
+         END
+         --WL22 E
 
          FETCH NEXT FROM @cur_PCKGRPH INTO @c_Orderkey, @c_DocType, @c_BillToKey, @c_Storerkey
                                          , @n_PackGrpNo
