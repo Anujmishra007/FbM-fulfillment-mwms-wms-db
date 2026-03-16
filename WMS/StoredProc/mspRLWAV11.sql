@@ -70,6 +70,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          , @n_TaskQty                  INT            = 0          
          , @n_PickQty                  INT            = 0          
          , @c_EcomSingleFlag           NVARCHAR(1)    = ''
+         , @c_OrderLineNumber          NVARCHAR(20)   = '' 
          , @c_SQL                      NVARCHAR(MAX)  = ''            
          , @c_SQLParams                NVARCHAR(2000) = ''               
 
