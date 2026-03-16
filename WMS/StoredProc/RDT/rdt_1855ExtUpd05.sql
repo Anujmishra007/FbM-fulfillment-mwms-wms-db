@@ -265,30 +265,40 @@ BEGIN
                     DECLARE @cDropID NVARCHAR(30)
                     DECLARE @cCaseID NVARCHAR(20)
 
-                    -- Get OrderKey, DropID, and CaseID from PickDetail
-                    SELECT @cOrderKey = OrderKey, @cDropID = DropID, @cCaseID = CaseID
-                    FROM dbo.PickDetail WITH(NOLOCK)
-                    WHERE TaskDetailKey = @cTaskDetailKey AND Storerkey = @cStorerKey 
+                    -- Cursor to iterate over all PickDetails for this TaskDetailKey
+                    DECLARE curPickDetails CURSOR LOCAL FAST_FORWARD FOR
+                        SELECT OrderKey, DropID, CaseID
+                        FROM dbo.PickDetail WITH(NOLOCK)
+                        WHERE TaskDetailKey = @cTaskDetailKey AND StorerKey = @cStorerKey AND Status = '5'
 
-                    -- -- Get PickSlipNo from PackHeader using OrderKey
-                    SELECT @cPickSlipNo = PickSlipNo
-                    FROM dbo.PackHeader WITH(NOLOCK)
-                    WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
+                    OPEN curPickDetails
+                    FETCH NEXT FROM curPickDetails INTO @cOrderKey, @cDropID, @cCaseID
 
-                    SET @nTranCount = @@TRANCOUNT
-                    BEGIN TRAN  -- Begin transaction
-                    SAVE TRAN rdt_1855ExtUpd05
+                    WHILE @@FETCH_STATUS = 0
+                    BEGIN
+                        -- Get PickSlipNo from PackHeader using OrderKey
+                        SELECT @cPickSlipNo = PickSlipNo
+                        FROM dbo.PackHeader WITH(NOLOCK)
+                        WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
 
-                    BEGIN TRY
-                        UPDATE dbo.PackDetail WITH (ROWLOCK)
-                        SET DropID = @cDropID
-                        WHERE PickSlipNo = @cPickSlipNo AND LabelNo = @cCaseID
-                    END TRY
-                    BEGIN CATCH
-                        SET @nErrNo = 261401
-                        SET @nErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --261401^Error updating DropID in PackDetail
-                        GOTO RollBackTrans
-                    END CATCH
+                        BEGIN TRY
+                            UPDATE dbo.PackDetail WITH (ROWLOCK)
+                            SET DropID = @cDropID
+                            WHERE PickSlipNo = @cPickSlipNo AND LabelNo = @cCaseID
+                        END TRY
+                        BEGIN CATCH
+                            CLOSE curPickDetails
+                            DEALLOCATE curPickDetails
+                            SET @nErrNo = 261401
+                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --261401^Error updating DropID in PackDetail
+                            GOTO RollBackTrans
+                        END CATCH
+
+                        FETCH NEXT FROM curPickDetails INTO @cOrderKey, @cDropID, @cCaseID
+                    END
+
+                    CLOSE curPickDetails
+                    DEALLOCATE curPickDetails
 
                     GOTO Commit_Trans
 
