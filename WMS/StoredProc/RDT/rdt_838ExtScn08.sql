@@ -69,30 +69,29 @@ BEGIN
     SET @cUDF02     = ''
 
     -- Read variables from @tExtScnData
-    DECLARE @cFromStep      NVARCHAR(10) = ''
     DECLARE @cJumpType      NVARCHAR(10) = ''
-    DECLARE @cOption        NVARCHAR(5)  = ''
-
-    SELECT @cFromStep = ISNULL(Value, '') FROM @tExtScnData WHERE Variable = '@cFromStep'
-    SELECT @cJumpType = ISNULL(Value, '') FROM @tExtScnData WHERE Variable = '@cJumpType'
-    SELECT @cOption   = ISNULL(Value, '') FROM @tExtScnData WHERE Variable = '@cOption'
+    SELECT  @cJumpType = ISNULL(Value, '') FROM @tExtScnData WHERE Variable = '@cJumpType'
 
     -- Read from rdtMobRec
     DECLARE @cPickSlipNo         NVARCHAR(10) = ''
     DECLARE @cShowPickSlipNo     NVARCHAR(5)  = ''
     DECLARE @cCapturePackInfoSP  NVARCHAR(20) = ''
-    DECLARE @cPackInfo           NVARCHAR(20) = ''
     DECLARE @cShipLabel          NVARCHAR(20) = ''
     DECLARE @cCartonManifest     NVARCHAR(20) = ''
-    DECLARE @nCartonNo           INT          = 0
-    DECLARE @cUCCNo              NVARCHAR(20) = ''
+    DECLARE @cCompletionMsg      NVARCHAR(200) = ''
     DECLARE @cPackList           NVARCHAR(20) = ''
 
     -- Completion check variables
+    DECLARE @nPickedQty INT = 0
+    DECLARE @nPackedQty INT = 0
+    DECLARE @bComplete  BIT = 0
+    DECLARE @cOrderKey  NVARCHAR(10) = ''
+    DECLARE @cLoadKey   NVARCHAR(10) = ''
+    DECLARE @cZone      NVARCHAR(18) = ''
 
     SELECT
         @cPickSlipNo        = ISNULL(V_PickSlipNo, ''),
-        @cUCCNo             = ISNULL(V_String19, '')
+        @cShowPickSlipNo    = ISNULL(V_String15, '')
     FROM rdt.rdtMobRec WITH (NOLOCK)
     WHERE Mobile = @nMobile
 
@@ -101,28 +100,28 @@ BEGIN
         SET @cCapturePackInfoSP = ''
 
     SET @cShipLabel = rdt.RDTGetConfig(@nFunc, 'ShipLabel', @cStorerKey)
+    IF @cShipLabel = '0'
+        SET @cShipLabel = ''
+
     SET @cCartonManifest = rdt.RDTGetConfig(@nFunc, 'CartonManifest', @cStorerKey)
+    IF @cCartonManifest = '0'
+        SET @cCartonManifest = ''
 
-    -- Calculate completion status
-    DECLARE @nPickedQty INT = 0
-    DECLARE @nPackedQty INT = 0
-
-    SELECT @nPickedQty = ISNULL(SUM(QTY), 0)
     SET @cPackList = rdt.RDTGetConfig(@nFunc, 'PackList', @cStorerKey)
     IF @cPackList = '0'
         SET @cPackList = ''
 
-    SELECT @nPackedQty = ISNULL(SUM(QTY), 0)
-    FROM dbo.PackDetail WITH (NOLOCK)
     IF @nStep IN (2, 3, 4, 6, 8)
     BEGIN
         -- Get PickHeader info
         SELECT TOP 1
             @cOrderKey = ISNULL(OrderKey, ''),
+            @cLoadKey  = ISNULL(ExternOrderKey, ''),
             @cZone     = ISNULL(Zone, '')
         FROM dbo.PickHeader WITH (NOLOCK)
         WHERE PickHeaderKey = @cPickSlipNo
 
+        -- Get PackDetail total (always by PickSlipNo)
         SELECT @nPackedQty = ISNULL(SUM(QTY), 0)
         FROM dbo.PackDetail WITH (NOLOCK)
         WHERE PickSlipNo = @cPickSlipNo
@@ -130,9 +129,47 @@ BEGIN
         -- Get PickDetail total based on PickHeader type
         -- Cross dock PickSlip
         IF @cZone IN ('XD', 'LB', 'LP')
+        BEGIN
+            SELECT @nPickedQty = ISNULL(SUM(PD.QTY), 0)
+            FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+            WHERE RKL.PickSlipNo = @cPickSlipNo
+                AND PD.Status <= '5'
+                AND PD.Status <> '4'
+        END
+        -- Discrete PickSlip (has OrderKey)
+        ELSE IF @cOrderKey <> ''
+        BEGIN
+            SELECT @nPickedQty = ISNULL(SUM(PD.QTY), 0)
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+            WHERE PD.OrderKey = @cOrderKey
+                AND PD.Status <= '5'
+                AND PD.Status <> '4'
+        END
+        -- Conso PickSlip (has LoadKey)
+        ELSE IF @cLoadKey <> ''
+        BEGIN
+            SELECT @nPickedQty = ISNULL(SUM(PD.QTY), 0)
+            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            WHERE LPD.LoadKey = @cLoadKey
+                AND PD.Status <= '5'
+                AND PD.Status <> '4'
+        END
+        -- Custom PickSlip (default)
+        ELSE
+        BEGIN
+            SELECT @nPickedQty = ISNULL(SUM(PD.QTY), 0)
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+            WHERE PD.PickSlipNo = @cPickSlipNo
+                AND PD.Status <= '5'
+                AND PD.Status <> '4'
+        END
 
-    IF (@nPickedQty > 0 AND @nPackedQty >= @nPickedQty)
-        SET @bComplete = 1
+        -- Check completion
+        IF (@nPickedQty > 0 AND @nPackedQty = @nPickedQty)
+            SET @bComplete = 1
+    END
 
     IF @nFunc = 838
     BEGIN
@@ -152,7 +189,7 @@ BEGIN
                         -- Check if ShipLabel/CartonManifest configured
                         IF (@cShipLabel <> '' OR @cCartonManifest <> '')
                         BEGIN
-                            --SET @cUDF01     = 'JumpTo_Step_5'
+                            SET @cOutField01 = ''
                             SET @nAfterScn  = 4654
                             SET @nAfterStep = 5
                             GOTO Quit
@@ -190,10 +227,6 @@ BEGIN
                         -- If CapturePackInfoSP configured, go to Screen 4 first
                         IF @cCapturePackInfoSP <> ''
                         BEGIN
-
-                            DECLARE @cHeight      NVARCHAR(20) = ''
-                                @cWidth      = rdt.rdtFormatFloat([Width]),
-                                @cHeight     = rdt.rdtFormatFloat([Height])
                             -- Set output field values to EMPTY (user should enter fresh values)
                             SET @cOutField01 = ''
                             SET @cOutField02 = ''
@@ -227,7 +260,6 @@ BEGIN
                         END
 
                         -- Nothing configured -> completion message -> Screen 1
-                        SET @nErrNo     = 259252
                         SET @cCompletionMsg = 'PSNO: ' + ISNULL(@cPickSlipNo, '')
                         EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
     
@@ -235,7 +267,6 @@ BEGIN
                         SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
                         SET @cOutField02 = ''
                         SET @cOutField03 = ''
-                        --SET @cUDF01     = 'JumpTo_Step_1'
                         SET @nAfterScn  = 4650
                         SET @nAfterStep = 1
                         GOTO Quit
@@ -293,8 +324,6 @@ BEGIN
                     SET @cFieldAttr06 = CASE WHEN CHARINDEX('D', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
                     SET @cFieldAttr07 = CASE WHEN CHARINDEX('H', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
 
-                        FieldAttr02 = @cFieldAttr02,
-                        FieldAttr03 = @cFieldAttr03,
                     RETURN
                 END
             END
