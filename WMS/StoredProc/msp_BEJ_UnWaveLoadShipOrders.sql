@@ -190,7 +190,7 @@ OPEN @CUR
                   ,IntermodalVehicle   = ''    --AlexK01
                WHERE OrderKey = @c_OrderKey
 
-               IF @b_Debug = 1
+               IF @b_Debug = 1                  --suryakanta.sahoo 2026-02-02 - FCR-10266
                BEGIN
                   PRINT 'BEHAVIOR A: Cleared OrderGroup, Door, Route, IntermodalVehicle for ' + @c_OrderKey
                END
@@ -198,13 +198,13 @@ OPEN @CUR
 
             -- Update Orders table - preserve order group and other fields
             -- BEHAVIOR B: Preserve fields when OrderGroup changed
-            IF @c_BehaviorType = 'B'
-            BEGIN
-               UPDATE dbo.Orders WITH (ROWLOCK)
-               SET [Status] = '9'
-               WHERE OrderKey = @c_OrderKey
+            IF @c_BehaviorType = 'B'                    --suryakanta.sahoo 2026-02-02 - FCR-10266
+            BEGIN                                       --suryakanta.sahoo 2026-02-02 - FCR-10266
+               UPDATE dbo.Orders WITH (ROWLOCK)         --suryakanta.sahoo 2026-02-02 - FCR-10266
+               SET [Status] = '9'                       --Preserve OrderGroup, Door, Route, IntermodalVehicle for Behavior B
+               WHERE OrderKey = @c_OrderKey             --suryakanta.sahoo 2026-02-02 - FCR-10266
 
-               IF @b_Debug = 1
+               IF @b_Debug = 1                          --suryakanta.sahoo 2026-02-02 - FCR-10266
                BEGIN
                   PRINT 'BEHAVIOR B: Preserved fields for ' + @c_OrderKey
                END
