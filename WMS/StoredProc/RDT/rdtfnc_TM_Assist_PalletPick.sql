@@ -18,6 +18,7 @@ GO
 /* Date       Rev  Author   Purposes                                    */
 /* 2017-11-15 1.0  Ung      WMS-3272 Created                            */
 /* 2022-08-24 1.1  LZG      JSM-90772 - Reset variable (ZG01)           */
+/* 2026-02-17 1.2  NYE018   UWP-52157 - Clear Outfield2 for prev screen  */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_TM_Assist_PalletPick] (
@@ -460,6 +461,7 @@ BEGIN
       SET @nStep = 1
 
       SET @cOutField01 = ''  -- From ID
+      SET @cOutField02 = ''  -- UWP-52157
       GOTO QUIT
    END
    GOTO Quit
@@ -616,6 +618,7 @@ BEGIN
       SET @nStep = 1
 
       SET @cOutField01 = ''  -- From ID
+      SET @cOutfield02 = ''  -- UWP-52157
       GOTO QUIT
    END
    GOTO Quit
@@ -866,6 +869,7 @@ BEGIN
       SET @nStep = 1
 
       SET @cOutField01 = ''  -- From ID
+      SET @cOutField02 = ''  -- UWP-52157
    END
 END
 GOTO Quit
