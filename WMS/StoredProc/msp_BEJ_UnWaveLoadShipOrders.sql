@@ -21,7 +21,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-07-31  AlexK    1.0   FCR-6833 - initial.                       */
 /* 2025-10-17  AlexK01  1.1   FCR-6833 - Change Request                 */
-/* 2026-02-02  suryakanta.sahoo  1.5   FCR-10266 - Change Request       */
+/* 2026-02-02  surya    1.5   FCR-10266 - Change Request                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_BEJ_UnWaveLoadShipOrders]
@@ -86,23 +86,23 @@ BEGIN
 
       UNION
       -- BEHAVIOR B: OrderGroup changed (one wave, multiple orders with different OrderGroup values) --suryakanta.sahoo 2026-02-02 - FCR-10266
-      SELECT ORD2.OrderKey ,'B' AS BehaviorType --suryakanta.sahoo 2026-02-02 - FCR-10266
-      FROM dbo.ORDERS ORD2 WITH (NOLOCK)        --suryakanta.sahoo 2026-02-02 - FCR-10266
-      WHERE ORD2.StorerKey = @c_StorerKey       --suryakanta.sahoo 2026-02-02 - FCR-10266
-        AND ORD2.UserDefine09 IN (              --suryakanta.sahoo 2026-02-02 - FCR-10266
-        SELECT UserDefine09                     --suryakanta.sahoo 2026-02-02 - FCR-10266
-        FROM dbo.ORDERS WITH (NOLOCK)           --suryakanta.sahoo 2026-02-02 - FCR-10266
-        WHERE Status = '0'                      --suryakanta.sahoo 2026-02-02 - FCR-10266
-        AND SOStatus = '0'                      --suryakanta.sahoo 2026-02-02 - FCR-10266
-        AND OrderGroup <> ''                    --suryakanta.sahoo 2026-02-02 - FCR-10266
-        AND StorerKey = @c_StorerKey            --suryakanta.sahoo 2026-02-02 - FCR-10266
-        GROUP BY UserDefine09                   --suryakanta.sahoo 2026-02-02 - FCR-10266
-        HAVING COUNT(DISTINCT OrderGroup) > 1   --suryakanta.sahoo 2026-02-02 - FCR-10266
+      SELECT ORD2.OrderKey ,'B' AS BehaviorType --suryakanta.sahoo 2026-02-02 - FCR-10266 (S)
+      FROM dbo.ORDERS ORD2 WITH (NOLOCK)
+      WHERE ORD2.StorerKey = @c_StorerKey
+        AND ORD2.UserDefine09 IN (
+        SELECT UserDefine09
+        FROM dbo.ORDERS WITH (NOLOCK)
+        WHERE Status = '0'
+        AND SOStatus = '0'
+        AND OrderGroup <> ''
+        AND StorerKey = @c_StorerKey
+        GROUP BY UserDefine09
+        HAVING COUNT(DISTINCT OrderGroup) <> 1   --suryakanta.sahoo 2026-02-02 - FCR-10266(E)
         )
     ORDER BY OrderKey
 
 OPEN @CUR
-      FETCH NEXT FROM @CUR INTO @c_OrderKey
+      FETCH NEXT FROM @CUR INTO @c_OrderKey , @c_BehaviorType  --suryakanta.sahoo 2026-02-02 - FCR-10266
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
          --Reset
@@ -198,17 +198,6 @@ OPEN @CUR
 
             -- Update Orders table - preserve order group and other fields
             -- BEHAVIOR B: Preserve fields when OrderGroup changed
-            IF @c_BehaviorType = 'B'                    --suryakanta.sahoo 2026-02-02 - FCR-10266
-            BEGIN                                       --suryakanta.sahoo 2026-02-02 - FCR-10266
-               UPDATE dbo.Orders WITH (ROWLOCK)         --suryakanta.sahoo 2026-02-02 - FCR-10266
-               SET [Status] = '9'                       --Preserve OrderGroup, Door, Route, IntermodalVehicle for Behavior B
-               WHERE OrderKey = @c_OrderKey             --suryakanta.sahoo 2026-02-02 - FCR-10266
-
-               IF @b_Debug = 1                          --suryakanta.sahoo 2026-02-02 - FCR-10266
-               BEGIN
-                  PRINT 'BEHAVIOR B: Preserved fields for ' + @c_OrderKey
-               END
-            END
 
 
     COMMIT TRAN
@@ -226,7 +215,7 @@ OPEN @CUR
 
          END CATCH
 
-         FETCH NEXT FROM @CUR INTO @c_OrderKey
+         FETCH NEXT FROM @CUR INTO @c_OrderKey , @c_BehaviorType           --suryakanta.sahoo 2026-02-02 - FCR-10266
       END
       CLOSE @CUR
       DEALLOCATE @CUR
