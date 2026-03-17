@@ -110,11 +110,13 @@ BEGIN
    AND ( SELECT ISNULL(COUNT(CartonNo), 0)
          FROM PACKINFO (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
+          AND CartonStatus = 'INPROGRESS'
        ) = 1
    BEGIN
       SELECT TOP 1 @cConfigVal = CartonType
       FROM PACKINFO (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
+      AND CartonStatus = 'INPROGRESS'
    END
    
    INSERT INTO @storer

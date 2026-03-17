@@ -238,7 +238,7 @@ BEGIN
             , @n_ErrNo       = @n_ErrNo         OUTPUT
             , @c_ErrMsg      = @c_ErrMsg        OUTPUT
 
-         IF @n_ErrNo <> 0   
+         IF @b_Success = 0 
          BEGIN
             SET @n_Continue = 3 
             GOTO EXIT_SP  
@@ -546,7 +546,8 @@ BEGIN
             , @b_SCEPreView   = 0         
             , @c_JobIDs       = @cJobIDs        OUTPUT    
             , @c_AutoPrint    = 'N'     
-      IF @n_ErrNo <> 0   
+            
+      IF @b_Success = 0 
       BEGIN  
          SET @n_Continue = 3 
          GOTO EXIT_SP  

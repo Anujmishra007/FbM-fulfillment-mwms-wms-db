@@ -329,7 +329,7 @@ BEGIN
                , @c_JobIDs       = @ctempLabelJobIDs  OUTPUT    
                , @c_AutoPrint    = 'N'     
             
-         IF @n_ErrNo <> 0   
+         IF @b_Success = 0 
          BEGIN  
             SET @n_Continue = 3 
             GOTO EXIT_SP  
@@ -606,7 +606,7 @@ BEGIN
                , @c_JobIDs       = @ctempPaperJobIDs    OUTPUT    
                , @c_AutoPrint    = 'N'     
       
-         IF @n_ErrNo <> 0   
+         IF @b_Success = 0 
          BEGIN  
             SET @n_Continue = 3  
             GOTO EXIT_SP  

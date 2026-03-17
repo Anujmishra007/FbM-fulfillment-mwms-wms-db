@@ -142,6 +142,18 @@ BEGIN
                                           ),'')
    END
 
+   --Added the default config if some of the configKey not setup
+   IF NOT EXISTS (SELECT 1 
+                  FROM OPENJSON(@cPackTaskConfigJson)
+                  WITH (configKey NVARCHAR(30) '$.configKey')
+                  WHERE configKey IN('TPS-AutoPack')
+   )
+   BEGIN
+         SET @cPackTaskConfigJson = JSON_MODIFY(@cPackTaskConfigJson, 'append $'
+                                       , JSON_QUERY('{"configKey":"TPS-AutoPack","configVal":"1","configOpt1":"","configOpt2":"","configOpt3":"","configOpt4":"","configOpt5":""}')
+         )
+   END
+   
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
    BEGIN      

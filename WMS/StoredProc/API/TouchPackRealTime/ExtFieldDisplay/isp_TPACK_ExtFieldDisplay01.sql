@@ -53,6 +53,7 @@ BEGIN
       SET @cExtFieldVal = (SELECT TOP 1 UPPER(CartonType)
                            FROM PACKINFO (NOLOCK)
                            WHERE PickSlipNo = @cPickSlipNo
+                           AND CartonStatus = 'INPROGRESS'
                           )
    END
 
