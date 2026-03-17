@@ -642,6 +642,10 @@ BEGIN
                      AND ManifestPrinted <> '1'
                ) AND NOT EXISTS (SELECT 1 FROM PICKDETAIL (NOLOCK) 
                WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey AND Status < '5')
+               AND EXISTS (SELECT 1 FROM ORDERS O (NOLOCK) 
+               JOIN CODELKUP CL (NOLOCK) ON O.UserDefine03 = CL.Code AND CL.ListName = 'CSPACKSLIP' AND CL.StorerKey = @cStorerKey 
+               WHERE O.OrderKey = @cOrderKey AND O.StorerKey = @cStorerKey 
+               )
                BEGIN
                   SET @cOutField01 = @cOrderKey
                   SET @nAfterScn = 6818
@@ -884,6 +888,41 @@ BEGIN
                IF @nErrNo <> 0
                   GOTO QUIT
 
+               IF @cExtendedUpdateSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+                  BEGIN
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' + 
+                        ' @cCartonID, @cPalletID, @cLoadKey, @cLoc, @cOption, @tExtUpdate, ' +
+                        ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+                     SET @cSQLParam =
+                        ' @nMobile        INT,           ' +
+                        ' @nFunc          INT,           ' +
+                        ' @cLangCode      NVARCHAR( 3),  ' +
+                        ' @nStep          INT,           ' +
+                        ' @nInputKey      INT,           ' +
+                        ' @cFacility      NVARCHAR( 5),  ' +
+                        ' @cStorerKey     NVARCHAR( 15), ' +
+                        ' @cCartonID      NVARCHAR( 20), ' +
+                        ' @cPalletID      NVARCHAR( 20), ' +
+                        ' @cLoadKey       NVARCHAR( 10), ' +
+                        ' @cLoc           NVARCHAR( 10), ' +
+                        ' @cOption        NVARCHAR( 1), ' +
+                        ' @tExtUpdate     VariableTable READONLY, ' + 
+                        ' @nErrNo         INT           OUTPUT, ' +
+                        ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+                        @cCartonID, @cPalletID, @cLoadKey, @cPPS_Loc, @cOption, @tExtUpdate, 
+                        @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                     IF @nErrNo <> 0 
+                        GOTO Quit
+                  END
+               END
+
                IF @cExtendedInfoSP <> ''
                BEGIN
                   IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
@@ -1026,6 +1065,10 @@ BEGIN
                   JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
                   JOIN PICKHEADER PH (NOLOCK) ON O.OrderKey = PH.OrderKey AND O.StorerKey = PH.StorerKey
                   JOIN PACKINFO PI (NOLOCK) ON PI.PickSlipNo = PH.PickHeaderKey AND CartonStatus = 'PENDAUDIT'
+                  WHERE PD.ID = @cPalletID AND PD.STATUS = '5' AND PD.StorerKey = @cStorerKey)
+                  OR --UPS Label
+                  EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) 
+                  JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey AND O.DocType = 'N' AND O.ShipperKey = 'UPS'
                   WHERE PD.ID = @cPalletID AND PD.STATUS = '5' AND PD.StorerKey = @cStorerKey)
                   BEGIN
                      SELECT TOP 1 @cToLoc = LOC.LOC 
