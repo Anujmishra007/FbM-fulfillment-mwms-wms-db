@@ -82,7 +82,7 @@ BEGIN
    SET @cLabelPrinter   = ''
    SET @cLangCode       = 'ENG'
 
-   SELECT  @cUserID = AddWho
+   SELECT TOP 1 @cUserID = AddWho
          , @cPickSlipNo = PickSlipNo
          , @nCartonNo = CartonNo
          , @cFacility = Facility
@@ -339,7 +339,7 @@ BEGIN
             , @c_JobIDs       = @ctempLabelJobIDs OUTPUT    
             , @c_AutoPrint    = 'N'     
             
-      IF @nErrNo <> 0   
+      IF @bSuccess = 0 
       BEGIN  
          SET @n_Continue = 3 
          GOTO EXIT_SP  
