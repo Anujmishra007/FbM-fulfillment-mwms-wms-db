@@ -96,11 +96,13 @@ BEGIN
       @nSuccess               INT,
       @nCurrentStep           INT,
       @nRowCount              INT,
+      @cDropID             NVARCHAR(20),
       @nCurrentScn            INT
 
    SELECT 
       @nCurrentStep = Step,
       @nCurrentScn = Scn,
+      @cDropID          = V_String1,
       @cDropLOC         = V_String5,
       @cPalletCriteria     = V_String11,
       @cParam1             = V_String12,
@@ -367,7 +369,12 @@ BEGIN
          BEGIN
             IF ISNULL(RTRIM(@cInField01), '') = '1'
             BEGIN
-               SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.ID
+               UPDATE PickDetail
+                  SET DROPID = @cDropID
+               WHERE DropID = @cScannedDropID
+                  AND StorerKey = @cStorerKey
+
+               SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.DropID
                FROM PickDetail PD (NOLOCK) 
                LEFT JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
                LEFT JOIN MBOL M WITH(NOLOCK) ON O.MBOLKey = M.MBOLKey
