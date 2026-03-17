@@ -86,16 +86,12 @@ BEGIN
     DECLARE @cCartonManifest     NVARCHAR(20) = ''
     DECLARE @nCartonNo           INT          = 0
     DECLARE @cUCCNo              NVARCHAR(20) = ''
-    DECLARE @cCompletionMsg      NVARCHAR(200) 
+    DECLARE @cPackList           NVARCHAR(20) = ''
+
+    -- Completion check variables
 
     SELECT
         @cPickSlipNo        = ISNULL(V_PickSlipNo, ''),
-        @cCapturePackInfoSP = ISNULL(V_String27, ''),
-        @cPackInfo          = ISNULL(V_String28, ''),
-        @cShipLabel         = ISNULL(V_String36, ''),
-        @cCartonManifest    = ISNULL(V_String37, ''),
-        @cShowPickSlipNo    = ISNULL(V_String15, ''),
-        @nCartonNo          = ISNULL(V_CartonNo, 0),
         @cUCCNo             = ISNULL(V_String19, '')
     FROM rdt.rdtMobRec WITH (NOLOCK)
     WHERE Mobile = @nMobile
@@ -106,21 +102,34 @@ BEGIN
 
     SET @cShipLabel = rdt.RDTGetConfig(@nFunc, 'ShipLabel', @cStorerKey)
     SET @cCartonManifest = rdt.RDTGetConfig(@nFunc, 'CartonManifest', @cStorerKey)
-    SET @cPackList = rdt.RDTGetConfig( @nFunc, 'PackList', @cStorerKey)
 
     -- Calculate completion status
     DECLARE @nPickedQty INT = 0
     DECLARE @nPackedQty INT = 0
-    DECLARE @bComplete  BIT = 0
 
     SELECT @nPickedQty = ISNULL(SUM(QTY), 0)
-    FROM dbo.PickDetail WITH (NOLOCK)
-    WHERE PickSlipNo = @cPickSlipNo
-      AND Status = '5'
+    SET @cPackList = rdt.RDTGetConfig(@nFunc, 'PackList', @cStorerKey)
+    IF @cPackList = '0'
+        SET @cPackList = ''
 
     SELECT @nPackedQty = ISNULL(SUM(QTY), 0)
     FROM dbo.PackDetail WITH (NOLOCK)
-    WHERE PickSlipNo = @cPickSlipNo
+    IF @nStep IN (2, 3, 4, 6, 8)
+    BEGIN
+        -- Get PickHeader info
+        SELECT TOP 1
+            @cOrderKey = ISNULL(OrderKey, ''),
+            @cZone     = ISNULL(Zone, '')
+        FROM dbo.PickHeader WITH (NOLOCK)
+        WHERE PickHeaderKey = @cPickSlipNo
+
+        SELECT @nPackedQty = ISNULL(SUM(QTY), 0)
+        FROM dbo.PackDetail WITH (NOLOCK)
+        WHERE PickSlipNo = @cPickSlipNo
+
+        -- Get PickDetail total based on PickHeader type
+        -- Cross dock PickSlip
+        IF @cZone IN ('XD', 'LB', 'LP')
 
     IF (@nPickedQty > 0 AND @nPackedQty >= @nPickedQty)
         SET @bComplete = 1
@@ -150,12 +159,10 @@ BEGIN
                         END
 
                         -- No print label -> completion message -> Screen 1
-                        SET @nErrNo     = 259252
                         SET @cCompletionMsg = 'PSNO: ' + ISNULL(@cPickSlipNo, '')
                         EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
     
                         SET @cErrMsg    = ''
-                        --SET @cUDF01     = 'JumpTo_Step_1'
                         SET @nAfterScn  = 4650
                         SET @nAfterStep = 1
                         SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
@@ -183,34 +190,10 @@ BEGIN
                         -- If CapturePackInfoSP configured, go to Screen 4 first
                         IF @cCapturePackInfoSP <> ''
                         BEGIN
-                            -- Get LAST packed carton number for this PickSlipNo
-                            DECLARE @nLastCartonNo INT = 0
-                            SELECT TOP 1 @nLastCartonNo = CartonNo
-                            FROM dbo.PackInfo WITH (NOLOCK)
-                            WHERE PickSlipNo = @cPickSlipNo
-                            ORDER BY CartonNo DESC
 
-                            -- Retrieve pack info from PackInfo table
-                            DECLARE @cCartonType  NVARCHAR(10) = ''
-                            DECLARE @cWeight      NVARCHAR(20) = ''
-                            DECLARE @cCube        NVARCHAR(20) = ''
-                            DECLARE @cRefNo       NVARCHAR(20) = ''
-                            DECLARE @cLength      NVARCHAR(20) = ''
-                            DECLARE @cWidth       NVARCHAR(20) = ''
                             DECLARE @cHeight      NVARCHAR(20) = ''
-
-                            SELECT
-                                @cCartonType = ISNULL(CartonType, ''),
-                                @cWeight     = rdt.rdtFormatFloat(Weight),
-                                @cCube       = rdt.rdtFormatFloat([Cube]),
-                                @cRefNo      = ISNULL(RefNo, ''),
-                                @cLength     = rdt.rdtFormatFloat([Length]),
                                 @cWidth      = rdt.rdtFormatFloat([Width]),
                                 @cHeight     = rdt.rdtFormatFloat([Height])
-                            FROM dbo.PackInfo WITH (NOLOCK)
-                            WHERE PickSlipNo = @cPickSlipNo
-                              AND CartonNo   = @nLastCartonNo
-
                             -- Set output field values to EMPTY (user should enter fresh values)
                             SET @cOutField01 = ''
                             SET @cOutField02 = ''
@@ -229,7 +212,6 @@ BEGIN
                             SET @cFieldAttr06 = CASE WHEN CHARINDEX('D', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
                             SET @cFieldAttr07 = CASE WHEN CHARINDEX('H', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
 
-                            --SET @cUDF01     = 'JumpTo_Step_4'
                             SET @nAfterScn  = 4653
                             SET @nAfterStep = 4
                             GOTO Quit
@@ -238,7 +220,7 @@ BEGIN
                         -- If ShipLabel configured, go to Screen 5
                         IF (@cShipLabel <> '' OR @cCartonManifest <> '')
                         BEGIN
-                            --SET @cUDF01     = 'JumpTo_Step_5'
+                            SET @cOutField01 = ''
                             SET @nAfterScn  = 4654
                             SET @nAfterStep = 5
                             GOTO Quit
@@ -278,14 +260,13 @@ BEGIN
                         -- Check if ShipLabel/CartonManifest configured
                         IF (@cShipLabel <> '' OR @cCartonManifest <> '')
                         BEGIN
-                            --SET @cUDF01     = 'JumpTo_Step_5'
+                            SET @cOutField01 = ''                      
                             SET @nAfterScn  = 4654
                             SET @nAfterStep = 5
                             GOTO Quit
                         END
 
                         -- No print label -> completion message -> Screen 1
-                        SET @nErrNo     = 259252
                         SET @cCompletionMsg = 'PSNO: ' + ISNULL(@cPickSlipNo, '')
                         EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
                         
@@ -295,7 +276,6 @@ BEGIN
                         SET @cFieldAttr03 = ''  -- ToDropID - enabled
                         
                         SET @cErrMsg    = ''
-                        --SET @cUDF01     = 'JumpTo_Step_1'
                         SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
                         SET @cOutField02 = ''
                         SET @cOutField03 = ''
@@ -313,17 +293,8 @@ BEGIN
                     SET @cFieldAttr06 = CASE WHEN CHARINDEX('D', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
                     SET @cFieldAttr07 = CASE WHEN CHARINDEX('H', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
 
-                    -- Update rdtMobRec directly with correct field attributes
-                    UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET
-                        FieldAttr01 = @cFieldAttr01,
                         FieldAttr02 = @cFieldAttr02,
                         FieldAttr03 = @cFieldAttr03,
-                        FieldAttr04 = @cFieldAttr04,
-                        FieldAttr05 = @cFieldAttr05,
-                        FieldAttr06 = @cFieldAttr06,
-                        FieldAttr07 = @cFieldAttr07
-                    WHERE Mobile = @nMobile
-
                     RETURN
                 END
             END
@@ -336,21 +307,21 @@ BEGIN
         BEGIN
             IF @nScn = 4655
             BEGIN
-                IF @bComplete = 1
+                IF @nInputKey = 1
                 BEGIN
-                    -- After print packing list, show completion
-                    SET @nErrNo     = 259252
-                    SET @cCompletionMsg = 'PSNO: ' + ISNULL(@cPickSlipNo, '')
-                    EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
- 
-                    SET @cErrMsg    = ''
-                    --SET @cUDF01     = 'JumpTo_Step_1'
-                    SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
-                    SET @cOutField02 = ''
-                    SET @cOutField03 = ''
-                    SET @nAfterScn  = 4650
-                    SET @nAfterStep = 1
-                    GOTO Quit
+                    IF @bComplete = 1
+                        -- After print packing list, show completion
+                        SET @cCompletionMsg = 'PSNO: ' + ISNULL(@cPickSlipNo, '')
+                        EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
+    
+                        SET @cErrMsg    = ''
+                        SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
+                        SET @cOutField02 = ''
+                        SET @cOutField03 = ''
+                        SET @nAfterScn  = 4650
+                        SET @nAfterStep = 1
+                        GOTO Quit
+                    END
                 END
             END
         END
@@ -384,7 +355,6 @@ BEGIN
                             SET @cFieldAttr06 = CASE WHEN CHARINDEX('D', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
                             SET @cFieldAttr07 = CASE WHEN CHARINDEX('H', @cCapturePackInfoSP) = 0 THEN 'O' ELSE '' END
 
-                            --SET @cUDF01     = 'JumpTo_Step_4'
                             SET @nAfterScn  = 4653
                             SET @nAfterStep = 4
                             GOTO Quit
@@ -393,19 +363,17 @@ BEGIN
                         -- Check if ShipLabel/CartonManifest configured
                         IF (@cShipLabel <> '' OR @cCartonManifest <> '')
                         BEGIN
-                            --SET @cUDF01     = 'JumpTo_Step_5'
+                            SET @cOutField01 = ''
                             SET @nAfterScn  = 4654
                             SET @nAfterStep = 5
                             GOTO Quit
                         END
 
                         -- No print label -> completion message -> Screen 1
-                        SET @nErrNo     = 259252
                         SET @cCompletionMsg = 'PSNO: ' + ISNULL(@cPickSlipNo, '')
                         EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', 'PACKING COMPLETED', @cCompletionMsg, 'Please press ESC to continue'
     
                         SET @cErrMsg    = ''
-                        --SET @cUDF01     = 'JumpTo_Step_1'
                         SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END
                         SET @cOutField02 = ''
                         SET @cOutField03 = ''
