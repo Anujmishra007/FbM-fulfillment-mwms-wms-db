@@ -52,6 +52,7 @@ BEGIN
     DECLARE @nExistingCount INT
     DECLARE @nSeqNum INT
     DECLARE @nTranCount INT
+    DECLARE @cPickSlipNo NVARCHAR(30)
 
     SET @nErrNo = 0
     SET @cErrMsg = ''
@@ -241,6 +242,76 @@ BEGIN
                 GOTO Quit 
             END -- IF @cOption = '1'
         END -- IF @nStep = 6
+
+        IF @nStep = 6 OR @nStep = 4 --  step 4 or 6 (confirmation)
+        BEGIN
+            IF @nInputKey = 1 -- Enter
+            BEGIN
+                -- Only update DropID if not a short pick ( IE TaskDetail.Status = 5 and PickDetail.Status = 5)
+                IF EXISTS (
+                    SELECT 1 
+                    FROM dbo.TaskDetail TD WITH(NOLOCK)
+                    INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
+                    WHERE TD.TaskDetailKey = @cTaskDetailKey 
+                    AND TD.Status = '5' 
+                    AND PD.Status = '5'
+                )
+                BEGIN
+                    -- Update PACKDETAIL.DropID with PICKDETAIL.DropID during pick confirmation
+                    -- Link: PACKHEADER.OrderKey = PICKDETAIL.OrderKey
+                    --       PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo
+                    --       PACKDETAIL.LabelNo = PICKDETAIL.CaseID
+
+                    DECLARE @cDropID NVARCHAR(30)
+                    DECLARE @cCaseID NVARCHAR(20)
+
+                    -- Cursor to iterate over all PickDetails for this TaskDetailKey
+                    DECLARE curPickDetails CURSOR LOCAL FAST_FORWARD FOR
+                        SELECT OrderKey, DropID, CaseID
+                        FROM dbo.PickDetail WITH(NOLOCK)
+                        WHERE TaskDetailKey = @cTaskDetailKey AND StorerKey = @cStorerKey AND Status = '5'
+
+                    OPEN curPickDetails
+                    FETCH NEXT FROM curPickDetails INTO @cOrderKey, @cDropID, @cCaseID
+
+                    WHILE @@FETCH_STATUS = 0
+                    BEGIN
+                        -- Get PickSlipNo from PackHeader using OrderKey
+                        SELECT @cPickSlipNo = PickSlipNo
+                        FROM dbo.PackHeader WITH(NOLOCK)
+                        WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
+
+                        BEGIN TRY
+                            UPDATE dbo.PackDetail WITH (ROWLOCK)
+                            SET DropID = @cDropID
+                            WHERE PickSlipNo = @cPickSlipNo AND LabelNo = @cCaseID
+                        END TRY
+                        BEGIN CATCH
+                            CLOSE curPickDetails
+                            DEALLOCATE curPickDetails
+                            SET @nErrNo = 261401
+                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --261401^Error updating DropID in PackDetail
+                            GOTO RollBackTrans
+                        END CATCH
+
+                        FETCH NEXT FROM curPickDetails INTO @cOrderKey, @cDropID, @cCaseID
+                    END
+
+                    CLOSE curPickDetails
+                    DEALLOCATE curPickDetails
+
+                    GOTO Commit_Trans
+
+                    RollBackTrans:
+                        ROLLBACK TRAN rdt_1855ExtUpd05 -- Only rollback change made here
+                    Commit_Trans:
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                            COMMIT TRAN
+                    GOTO Quit
+                END
+            END -- Enter
+        END -- IF @nStep = 6 OR 4
+
     END -- IF @nFunc = 1855
     Quit:
 
