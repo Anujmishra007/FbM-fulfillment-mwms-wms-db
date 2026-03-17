@@ -54,7 +54,8 @@ BEGIN
          , @c_MbolLineNumber        NVARCHAR(5)
          , @c_LoadKey               NVARCHAR(10)
          , @c_LoadLineNumber        NVARCHAR(5)
-         , @c_WaveKey               NVARCHAR(10)  --suryakanta.sahoo 2026-02-02 - FCR-10266
+         , @c_WaveKey               NVARCHAR(10)          --suryakanta.sahoo 2026-02-02 - FCR-10266
+         , @c_BehaviorType          VARCHAR(1)     = ''   --suryakanta.sahoo 2026-02-02 - FCR-10266
 
    IF RIGHT(ISNULL(TRIM(@c_OtherConfig),''),2) = '##'
    BEGIN
@@ -70,7 +71,8 @@ BEGIN
    IF @n_Continue = 1
    BEGIN
       SET @CUR = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT OrderKey
+      -- BEHAVIOR A: SOStatus changed to something other than 0 or 9
+      SELECT OrderKey ,'A' AS BehaviorType  --suryakanta.sahoo 2026-02-02 - FCR-10266
       FROM dbo.ORDERS ORD (NOLOCK)
       WHERE StorerKey = @c_StorerKey
       AND [Status] = '0'
@@ -82,8 +84,9 @@ BEGIN
       --AND SpecialHandling = 'B'
 	  AND SOStatus NOT IN ('0', '9')
 
-      UNION                                     --suryakanta.sahoo 2026-02-02 - FCR-10266
-      SELECT ORD2.OrderKey                      --suryakanta.sahoo 2026-02-02 - FCR-10266
+      UNION
+      -- BEHAVIOR B: OrderGroup changed (one wave, multiple orders with different OrderGroup values) --suryakanta.sahoo 2026-02-02 - FCR-10266
+      SELECT ORD2.OrderKey ,'B' AS BehaviorType --suryakanta.sahoo 2026-02-02 - FCR-10266
       FROM dbo.ORDERS ORD2 WITH (NOLOCK)        --suryakanta.sahoo 2026-02-02 - FCR-10266
       WHERE ORD2.StorerKey = @c_StorerKey       --suryakanta.sahoo 2026-02-02 - FCR-10266
         AND ORD2.UserDefine09 IN (              --suryakanta.sahoo 2026-02-02 - FCR-10266
@@ -94,7 +97,7 @@ BEGIN
         AND OrderGroup <> ''                    --suryakanta.sahoo 2026-02-02 - FCR-10266
         AND StorerKey = @c_StorerKey            --suryakanta.sahoo 2026-02-02 - FCR-10266
         GROUP BY UserDefine09                   --suryakanta.sahoo 2026-02-02 - FCR-10266
-        HAVING COUNT(DISTINCT OrderGroup) <> 1  --suryakanta.sahoo 2026-02-02 - FCR-10266
+        HAVING COUNT(DISTINCT OrderGroup) > 1   --suryakanta.sahoo 2026-02-02 - FCR-10266
         )
     ORDER BY OrderKey
 
@@ -118,13 +121,17 @@ OPEN @CUR
             FROM dbo.MBOLDetail (NOLOCK)
             WHERE OrderKey = @c_OrderKey
 
+            IF @b_Debug = 1
+            BEGIN
+               PRINT 'Processing OrderKey: ' + @c_OrderKey + ' MbolKey: ' + ISNULL(@c_MbolKey, 'NULL')
+            END
+
             IF ISNULL(@c_MbolKey, '') <> '' AND ISNULL(@c_MbolLineNumber, '') <> ''
             BEGIN
                DELETE FROM dbo.MBOLDetail
                WHERE MbolKey = @c_MbolKey
                AND MbolLineNumber = @c_MbolLineNumber
-               DELETE FROM dbo.MBOL
-               WHERE MbolKey = @c_MbolKey
+
                --Delete order from MOBL table containing Header details
                --suryakanta.sahoo 2026-02-02 - FCR-10266
                 IF NOT EXISTS ( SELECT 1 FROM dbo.MBOLDetail (NOLOCK) WHERE MbolKey = @c_MbolKey )
@@ -173,14 +180,38 @@ OPEN @CUR
                 END
             END
             --Remove OrderGroup from Orders.
-            UPDATE dbo.Orders WITH (ROWLOCK)
-            SET OrderGroup          = ''
-               ,Door                = ''    --AlexK01
-               ,[Route]             = ''    --AlexK01
-               ,IntermodalVehicle   = ''    --AlexK01
-            WHERE OrderKey = @c_OrderKey
+            -- BEHAVIOR A: Clear fields when SOStatus changed
+            IF @c_BehaviorType = 'A'
+            BEGIN
+               UPDATE dbo.Orders WITH (ROWLOCK)
+               SET OrderGroup          = ''
+                  ,Door                = ''    --AlexK01
+                  ,[Route]             = ''    --AlexK01
+                  ,IntermodalVehicle   = ''    --AlexK01
+               WHERE OrderKey = @c_OrderKey
 
-            COMMIT TRAN
+               IF @b_Debug = 1
+               BEGIN
+                  PRINT 'BEHAVIOR A: Cleared OrderGroup, Door, Route, IntermodalVehicle for ' + @c_OrderKey
+               END
+            END
+
+            -- Update Orders table - preserve order group and other fields
+            -- BEHAVIOR B: Preserve fields when OrderGroup changed
+            IF @c_BehaviorType = 'B'
+            BEGIN
+               UPDATE dbo.Orders WITH (ROWLOCK)
+               SET [Status] = '9'
+               WHERE OrderKey = @c_OrderKey
+
+               IF @b_Debug = 1
+               BEGIN
+                  PRINT 'BEHAVIOR B: Preserved fields for ' + @c_OrderKey
+               END
+            END
+
+
+    COMMIT TRAN
          END TRY
          BEGIN CATCH
             IF @@TRANCOUNT > 0
