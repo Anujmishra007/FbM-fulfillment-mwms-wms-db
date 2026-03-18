@@ -44,7 +44,7 @@ GO
 /*   02/03/26        Suryakanta        FCR-10743                        */
 /************************************************************************/
 
-CREATE OR ALTER [dbo].[mspPR_DEU01]
+CREATE OR ALTER PROCEDURE [dbo].[mspPR_DEU01]
    @c_storerkey NVARCHAR(15),
    @c_sku NVARCHAR(20),
    @c_lot NVARCHAR(10),
