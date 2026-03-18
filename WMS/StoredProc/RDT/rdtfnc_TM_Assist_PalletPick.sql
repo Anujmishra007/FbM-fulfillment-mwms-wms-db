@@ -424,6 +424,7 @@ BEGIN
          SET @nStep = 1
 
          SET @cOutField01 = ''  -- From ID
+         SET @cOutField02 = ''  -- UWP-52157 - Clear Outfield2 
 
          GOTO QUIT
       END
