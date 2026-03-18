@@ -11,4 +11,5 @@ EXECUTE rdt.rdtAddMsg 252857, 10, '252857Cannot find station', 'us_english', 803
 EXECUTE rdt.rdtAddMsg 252858, 10, '252858Cannot find Order', 'us_english', 803, 0, '252858Can not find SKU in DropID'
 EXECUTE rdt.rdtAddMsg 252859, 10, '252859DeviceIDEmpty', 'us_english', 803, 0, '252859DeviceID Can not be empty'
 EXECUTE rdt.rdtAddMsg 252860, 10, '252860CartIsNotEpty', 'us_english', 803, 0, '252860Cart is not empty'
+EXECUTE rdt.rdtAddMsg 252861, 10, '252861WaveNotComplete', 'us_english', 803, 0, '252861Wave Not Complete'
 
