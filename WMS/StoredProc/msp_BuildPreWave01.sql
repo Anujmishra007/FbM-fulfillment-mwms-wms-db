@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By: WM.lsp_BuildPreWave                                        */
 /*                                                                       */
-/* GitHub Version: 1.1                                                   */
+/* GitHub Version: 1.2                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -23,6 +23,7 @@ GO
 /* Date         Author  Ver.  Purposes                                   */
 /* 22-Oct-2025  WLChooi 1.0   Initial Version                            */
 /* 20-Jan-2026  WLChooi 1.1   FCR-8818 Enhance MPOC Logic (WL01)         */
+/* 17-Mar-2026  WLChooi 1.2   UWP-52265 Fix Orderinfo Notes NULL (WL02)  */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_BuildPreWave01]
    @c_BuildParmKey         NVARCHAR(10)
@@ -374,7 +375,7 @@ BEGIN
                     , 1
                     , ISNULL(TRIM(OH.BillToKey), '')     --WL01
                     , ISNULL(TRIM(OH.MarkforKey), '')    --WL01
-                    , OIF.Notes   --WL01
+                    , ISNULL(OIF.Notes, '')   --WL01   --WL02
       FROM #T_ORDERPOOL OP WITH (NOLOCK)
       JOIN ORDERS OH WITH (NOLOCK) ON OH.OrderKey = OP.Orderkey
       LEFT JOIN @T_MPOCPERMIT CL1 ON CL1.Code = OH.BillToKey
