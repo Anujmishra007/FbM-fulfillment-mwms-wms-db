@@ -3,7 +3,7 @@ GO
 SET ANSI_NULLS OFF
 GO
 /************************************************************************/
-/* Store Procedure:  mspPR_DEU01                                        */
+/* Store Procedure:  mspPRDEU1                                       */
 /* Creation Date: 02/03/26                                              */
 /* Copyright: MAERSK                                                    */
 /* Written by:  Suryakanta Sahoo                                        */
@@ -44,7 +44,7 @@ GO
 /*   02/03/26        Suryakanta        FCR-10743                        */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE [dbo].[mspPR_DEU01]
+CREATE OR ALTER PROCEDURE [dbo].[mspPRDEU1]
    @c_storerkey NVARCHAR(15),
    @c_sku NVARCHAR(20),
    @c_lot NVARCHAR(10),
@@ -331,5 +331,5 @@ BEGIN
    END
 END
 GO
-GRANT EXECUTE ON mspPR_DEU01 TO nSQL
+GRANT EXECUTE ON mspPRDEU1 TO nSQL
 GO
