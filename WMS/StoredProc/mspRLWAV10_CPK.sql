@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.9                                                          */    
+/* Version: 2.0                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -32,6 +32,7 @@ GO
 /* 12-Mar-2026 WLChooi  1.7   FCR-11585 Add Areakey (WL07)               */
 /* 12-Mar-2026 WLChooi  1.8   FCR-11579 Fix missing taskdetailkey (WL08) */
 /* 16-Mar-2026 WLChooi  1.9   FCR-11624 Fix TaskToPick linkage (WL09)    */
+/* 18-Mar-2026 WLChooi  2.0   FCR-11805 Conso task for ECOM (WL10)       */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -140,73 +141,73 @@ BEGIN
       , [code2]                  [NVARCHAR](30)    NOT NULL 
       )
 
-      IF OBJECT_ID('tempdb..#TASKDETAIL_WIP','U') IS NOT NULL  
-      BEGIN  
-         DROP TABLE #TASKDETAIL_WIP 
-      END
-
-      CREATE TABLE #TASKDETAIL_WIP    
-         (  RowID             INT            IDENTITY(1,1)     PRIMARY KEY  
-         ,  TaskDetailKey     NVARCHAR(10)   NOT NULL DEFAULT('') 
-         ,  TaskType          NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  Storerkey         NVARCHAR(15)   NOT NULL DEFAULT('')
-         ,  Sku               NVARCHAR(20)   NOT NULL DEFAULT('')
-         ,  Lot               NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  UOM               NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  UOMQty            INT            NOT NULL DEFAULT(0)  
-         ,  Qty               INT            NOT NULL DEFAULT(0)  
-         ,  FromLoc           NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  LogicalFromLoc    NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  FromID            NVARCHAR(18)   NOT NULL DEFAULT('')
-         ,  ToLoc             NVARCHAR(10)   NOT NULL DEFAULT('')   
-         ,  LogicalToLoc      NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  ToID              NVARCHAR(18)   NOT NULL DEFAULT('')
-         ,  CaseId            NVARCHAR(20)   NOT NULL DEFAULT('')
-         ,  PickMethod        NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  Status            NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  StatusMsg         NVARCHAR(255)  NOT NULL DEFAULT('')
-         ,  Priority          NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  SourcePriority    NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  Holdkey           NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  UserKey           NVARCHAR(18)   NOT NULL DEFAULT('')
-         ,  UserPosition      NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  UserKeyOverRide   NVARCHAR(18)   NOT NULL DEFAULT('')
-         ,  StartTime         DATETIME       NOT NULL DEFAULT(GETDATE())
-         ,  EndTime           DATETIME       NOT NULL DEFAULT(GETDATE())
-         ,  SourceType        NVARCHAR(30)   NOT NULL DEFAULT('')
-         ,  SourceKey         NVARCHAR(30)   NOT NULL DEFAULT('')
-         ,  PickDetailKey     NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  OrderKey          NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  OrderLineNumber   NVARCHAR(5)    NOT NULL DEFAULT('')
-         ,  ListKey           NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  WaveKey           NVARCHAR(10)   NOT NULL DEFAULT('')  
-         ,  ReasonKey         NVARCHAR(10)   NOT NULL DEFAULT('')  
-         ,  Message01         NVARCHAR(20)   NOT NULL DEFAULT('')  
-         ,  Message02         NVARCHAR(20)   NOT NULL DEFAULT('')  
-         ,  Message03         NVARCHAR(20)   NOT NULL DEFAULT('')  
-         ,  SystemQty         INT            NOT NULL DEFAULT(0)  
-         ,  RefTaskKey        NVARCHAR(10)   NOT NULL DEFAULT('')  
-         ,  LoadKey           NVARCHAR(10)   NOT NULL DEFAULT('')  
-         ,  AreaKey           NVARCHAR(10)   NOT NULL DEFAULT('')  
-         ,  DropID            NVARCHAR(20)   NOT NULL DEFAULT('')  
-         ,  TransitCount      INT            NOT NULL DEFAULT(0)     
-         ,  TransitLOC        NVARCHAR(10)   NOT NULL DEFAULT('')  
-         ,  FinalLOC          NVARCHAR(10)   NOT NULL DEFAULT('')  
-         ,  FinalID           NVARCHAR(18)   NOT NULL DEFAULT('')  
-         ,  Groupkey          NVARCHAR(10)   NOT NULL DEFAULT('')  
-         ,  PendingMoveIn     INT            NOT NULL DEFAULT(0)  
-         ,  QtyReplen         INT            NOT NULL DEFAULT(0)  
-         ,  DeviceID          NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  PickLocLevel      INT            NOT NULL DEFAULT(0)     
-         ,  CartonPerLoc      INT            NOT NULL DEFAULT(0)  
-         ,  SkuPerCarton      INT            NOT NULL DEFAULT(0)  
-         ,  CartonType        NVARCHAR(10)   NOT NULL DEFAULT('')   
-         ,  CartonCube        FLOAT          NOT NULL DEFAULT(0.00) 
-         ,  SortNo            INT            NOT NULL DEFAULT(0)
-         ,  DocType           NVARCHAR(10)   NOT NULL DEFAULT('')   --WL01
-         ,  ECOM_SINGLE_Flag  NVARCHAR(1)    NOT NULL DEFAULT('')   --WL06
-         ,  OriginalFromLoc   NVARCHAR(10)   NOT NULL DEFAULT('')   --WL08
-         ) 
+   IF OBJECT_ID('tempdb..#TASKDETAIL_WIP','U') IS NOT NULL  
+   BEGIN  
+      DROP TABLE #TASKDETAIL_WIP 
+   END
+   
+   CREATE TABLE #TASKDETAIL_WIP    
+      (  RowID             INT            IDENTITY(1,1)     PRIMARY KEY  
+      ,  TaskDetailKey     NVARCHAR(10)   NOT NULL DEFAULT('') 
+      ,  TaskType          NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Storerkey         NVARCHAR(15)   NOT NULL DEFAULT('')
+      ,  Sku               NVARCHAR(20)   NOT NULL DEFAULT('')
+      ,  Lot               NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  UOM               NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  UOMQty            INT            NOT NULL DEFAULT(0)  
+      ,  Qty               INT            NOT NULL DEFAULT(0)  
+      ,  FromLoc           NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  LogicalFromLoc    NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  FromID            NVARCHAR(18)   NOT NULL DEFAULT('')
+      ,  ToLoc             NVARCHAR(10)   NOT NULL DEFAULT('')   
+      ,  LogicalToLoc      NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  ToID              NVARCHAR(18)   NOT NULL DEFAULT('')
+      ,  CaseId            NVARCHAR(20)   NOT NULL DEFAULT('')
+      ,  PickMethod        NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Status            NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  StatusMsg         NVARCHAR(255)  NOT NULL DEFAULT('')
+      ,  Priority          NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  SourcePriority    NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Holdkey           NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  UserKey           NVARCHAR(18)   NOT NULL DEFAULT('')
+      ,  UserPosition      NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  UserKeyOverRide   NVARCHAR(18)   NOT NULL DEFAULT('')
+      ,  StartTime         DATETIME       NOT NULL DEFAULT(GETDATE())
+      ,  EndTime           DATETIME       NOT NULL DEFAULT(GETDATE())
+      ,  SourceType        NVARCHAR(30)   NOT NULL DEFAULT('')
+      ,  SourceKey         NVARCHAR(30)   NOT NULL DEFAULT('')
+      ,  PickDetailKey     NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  OrderKey          NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  OrderLineNumber   NVARCHAR(5)    NOT NULL DEFAULT('')
+      ,  ListKey           NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  WaveKey           NVARCHAR(10)   NOT NULL DEFAULT('')  
+      ,  ReasonKey         NVARCHAR(10)   NOT NULL DEFAULT('')  
+      ,  Message01         NVARCHAR(20)   NOT NULL DEFAULT('')  
+      ,  Message02         NVARCHAR(20)   NOT NULL DEFAULT('')  
+      ,  Message03         NVARCHAR(20)   NOT NULL DEFAULT('')  
+      ,  SystemQty         INT            NOT NULL DEFAULT(0)  
+      ,  RefTaskKey        NVARCHAR(10)   NOT NULL DEFAULT('')  
+      ,  LoadKey           NVARCHAR(10)   NOT NULL DEFAULT('')  
+      ,  AreaKey           NVARCHAR(10)   NOT NULL DEFAULT('')  
+      ,  DropID            NVARCHAR(20)   NOT NULL DEFAULT('')  
+      ,  TransitCount      INT            NOT NULL DEFAULT(0)     
+      ,  TransitLOC        NVARCHAR(10)   NOT NULL DEFAULT('')  
+      ,  FinalLOC          NVARCHAR(10)   NOT NULL DEFAULT('')  
+      ,  FinalID           NVARCHAR(18)   NOT NULL DEFAULT('')  
+      ,  Groupkey          NVARCHAR(10)   NOT NULL DEFAULT('')  
+      ,  PendingMoveIn     INT            NOT NULL DEFAULT(0)  
+      ,  QtyReplen         INT            NOT NULL DEFAULT(0)  
+      ,  DeviceID          NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  PickLocLevel      INT            NOT NULL DEFAULT(0)     
+      ,  CartonPerLoc      INT            NOT NULL DEFAULT(0)  
+      ,  SkuPerCarton      INT            NOT NULL DEFAULT(0)  
+      ,  CartonType        NVARCHAR(10)   NOT NULL DEFAULT('')   
+      ,  CartonCube        FLOAT          NOT NULL DEFAULT(0.00) 
+      ,  SortNo            INT            NOT NULL DEFAULT(0)
+      ,  DocType           NVARCHAR(10)   NOT NULL DEFAULT('')   --WL01
+      ,  ECOM_SINGLE_Flag  NVARCHAR(1)    NOT NULL DEFAULT('')   --WL06
+      ,  OriginalFromLoc   NVARCHAR(10)   NOT NULL DEFAULT('')   --WL08
+      ) 
 
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NULL
    BEGIN
@@ -267,6 +268,22 @@ BEGIN
       ,  @n_debug    = @n_debug  
    END
 
+   --WL10 S
+   IF OBJECT_ID('tempdb..#TMP_ORDER_DETAIL','U') IS NOT NULL  
+   BEGIN  
+      DROP TABLE #TMP_ORDER_DETAIL 
+   END
+
+   CREATE TABLE #TMP_ORDER_DETAIL
+   (
+      [Orderkey]           [NVARCHAR](10) NOT NULL PRIMARY KEY
+   ,  [Storerkey]          [NVARCHAR](15) NOT NULL DEFAULT ('')
+   ,  [DocType]            [NVARCHAR](1)  NOT NULL DEFAULT ('')
+   ,  [ECOM_SINGLE_Flag]   [NVARCHAR](1)  NOT NULL DEFAULT ('')
+   ,  [TaskPriority]       [NVARCHAR](10) NOT NULL DEFAULT ('')
+   )
+   --WL10 E
+
    IF @n_Continue = 1 
    BEGIN
       SELECT TOP 1 @c_Storerkey = pw.Storerkey
@@ -309,6 +326,24 @@ BEGIN
       ORDER BY CODELKUP.Listname
            ,   CODELKUP.Code 
 
+      --WL10 S
+      INSERT INTO #TMP_ORDER_DETAIL (Orderkey, Storerkey, DocType, ECOM_SINGLE_Flag, TaskPriority)
+      SELECT pw.Orderkey
+           , o.Storerkey
+           , ISNULL(o.DocType, '')
+           , ISNULL(o.ECOM_SINGLE_Flag, '')
+           , ISNULL(cl.Short,'')
+      FROM #PickDetail_WIP pw
+      JOIN ORDERS o (NOLOCK) ON o.Orderkey = pw.OrderKey
+      LEFT OUTER JOIN @TMP_CL cl ON  cl.LISTNAME = 'CSCUK01OPY'  
+                                 AND cl.Code = o.[Priority]
+                                 AND cl.Storerkey = o.Storerkey
+      GROUP BY pw.Orderkey
+             , o.Storerkey
+             , ISNULL(o.DocType, '')
+             , ISNULL(o.ECOM_SINGLE_Flag, '')
+             , ISNULL(cl.Short,'')
+      --WL10 E
       --------------------------------------------------------------------  
       -- INSERT #TASKDETAIL_WIP 
       --------------------------------------------------------------------  
@@ -330,10 +365,11 @@ BEGIN
          ,  DocType   --WL01
          ,  ECOM_SINGLE_Flag   --WL06
          ,  OriginalFromLoc   --WL08
+         ,  [Priority]   --WL10
          )
       SELECT 
             pw.Wavekey             
-         ,  pw.Orderkey            
+         ,  IIF(o.DocType = 'E', '', pw.Orderkey)   --WL10
          ,  pw.Storerkey           
          ,  pw.Sku    
          ,  pw.UOM               
@@ -348,9 +384,10 @@ BEGIN
          ,  RefTaskKey = pw.UpdateSource              --Picking Loc. Update at mspRLWAV10_Data 
          ,  p1.CartonPerLoc
          ,  p2.SkuPerCarton
-         ,  O.DocType   --WL01
-         ,  ISNULL(O.ECOM_SINGLE_Flag, '')   --WL06
+         ,  MAX(O.DocType)   --WL01   --WL10
+         ,  MAX(ISNULL(O.ECOM_SINGLE_Flag, ''))   --WL06   --WL10
          ,  pw.Loc   --WL08
+         ,  MIN(o.TaskPriority)   --WL10
       FROM #PICKDETAIL_WIP AS pw
       JOIN LOC l (NOLOCK) ON l.loc = pw.Toloc
       JOIN  (  SELECT pw1.ToLoc  
@@ -363,11 +400,11 @@ BEGIN
                FROM #PICKDETAIL_WIP pw2
                GROUP BY pw2.CaseID
             ) AS p2 ON p2.CaseID = pw.CaseID
-      JOIN ORDERS O (NOLOCK) ON O.Orderkey = pw.Orderkey   --WL01 
+      JOIN #TMP_ORDER_DETAIL O ON O.Orderkey = pw.Orderkey   --WL01   --WL10
       WHERE pw.UOM >= '6'
       GROUP BY         
             pw.Wavekey             
-         ,  pw.Orderkey            
+         ,  IIF(o.DocType = 'E', '', pw.Orderkey)   --WL10
          ,  pw.Storerkey           
          ,  pw.Sku    
          ,  pw.UOM               
@@ -379,20 +416,20 @@ BEGIN
          ,  l.LoseId         
          ,  p1.CartonPerLoc
          ,  p2.SkuPerCarton
-         ,  O.DocType   --WL01
-         ,  ISNULL(O.ECOM_SINGLE_Flag, '')   --WL06
          ,  pw.Loc   --WL08
 
+      --WL10 S
       --------------------------------------------------------------------  
       -- Update Task Priority Base on ORDERS.Priority 
       -------------------------------------------------------------------- 
-      UPDATE tw 
-         SET tw.Priority = ISNULL(cl.Short,'')
-      FROM #TASKDETAIL_WIP AS tw 
-      JOIN ORDERS o (NOLOCK) ON o.Orderkey = tw.Orderkey
-      LEFT OUTER JOIN @TMP_CL cl ON  cl.LISTNAME = 'CSCUK01OPY'  
-                                 AND cl.Code = o.Priority
-                                 AND cl.Storerkey = o.Storerkey
+      --UPDATE tw 
+      --   SET tw.Priority = ISNULL(cl.Short,'')
+      --FROM #TASKDETAIL_WIP AS tw 
+      --JOIN ORDERS o (NOLOCK) ON o.Orderkey = tw.Orderkey
+      --LEFT OUTER JOIN @TMP_CL cl ON  cl.LISTNAME = 'CSCUK01OPY'  
+      --                           AND cl.Code = o.Priority
+      --                           AND cl.Storerkey = o.Storerkey
+      --WL10 E
 
       --------------------------------------------------------------------  
       -- Update ToLoc Base on FromLoc Inform 
@@ -766,6 +803,13 @@ BEGIN
    BEGIN  
       DROP TABLE #TASKDETAIL_WIP 
    END
+
+   --WL10 S
+   IF OBJECT_ID('tempdb..#TMP_ORDER_DETAIL','U') IS NOT NULL  
+   BEGIN  
+      DROP TABLE #TMP_ORDER_DETAIL 
+   END
+   --WL10 E
 
    IF @n_Continue=3  -- Error Occured - Process And Return  
    BEGIN  
