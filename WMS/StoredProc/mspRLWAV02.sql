@@ -48,6 +48,7 @@ GO
 /*                              ON SECOND WAVE RELEASE(WORK WITH PPA374) */
 /* 2026-02-25  PPA374   2.1   Update logic to not fail allocation check  */
 /*                              on shipped orders                        */
+/* 2026-03-18  PPA374   2.2   ISNULL TaskDetail for manual allocation    */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -975,7 +976,7 @@ BEGIN
                       AND   td.FromID    > ''
                       ORDER BY 1 DESC                                               --2025-12-05
                   ) tdr
-      WHERE pd.TaskDetailKey = ''                                                   --2025-07-01  
+      WHERE ISNULL(pd.TaskDetailKey,'') = ''                                        --2025-07-01;  --PPA374 18/03/2026 to allow manual allocation to release
       AND tdr.RecCnt IN (0,NULL)                                                    --(Wan01) FCR-3958 CR V2.3  
       AND pd.Status < '5'                                                           --(Wan01) FCR-3958 CR V2.3 
       GROUP BY o.Orderkey
