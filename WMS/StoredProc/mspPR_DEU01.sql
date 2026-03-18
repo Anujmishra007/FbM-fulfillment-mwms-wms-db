@@ -44,7 +44,7 @@ GO
 /*   02/03/26        Suryakanta        FCR-10743                        */
 /************************************************************************/
 
-CREATE OR ALTER [dbo].[mspPR_DEU01]
+CREATE OR ALTER PROCEDURE [dbo].[mspPR_DEU01]
    @c_storerkey NVARCHAR(15),
    @c_sku NVARCHAR(20),
    @c_lot NVARCHAR(10),
@@ -72,7 +72,7 @@ BEGIN
    DECLARE @n_shelflife INT
    DECLARE @n_continue INT
    DECLARE @c_UOMBase NVARCHAR(10)
-
+   DECLARE @sql_query NVARCHAR(MAX)
    SELECT @c_UOMBase = @n_uombase
 
    IF @d_lottable04 = '1900-01-01'
@@ -186,7 +186,7 @@ BEGIN
             SELECT 'limitstring', @c_limitstring1
          END
 
-EXEC ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR  ' +
+     SET @sql_query = 'DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR  ' +
             'SELECT MIN(LOTXLOCXID.STORERKEY) , MIN(LOTXLOCXID.SKU), LOT.LOT,   ' +
             'QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated) )' +
             'FROM LOT (NOLOCK) , LOTATTRIBUTE (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK), ID (NOLOCK), SKU (NOLOCK), SKUxLOC (NOLOCK) ' +
@@ -207,8 +207,9 @@ EXEC ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR  ' +
             ' GROUP BY LOT.LOT ' +
             ' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked)- MIN(LOT.QtyPreAllocated) )>= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
             'AND ((SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreAllocated)) % ' + CAST(@n_uombase AS NVARCHAR) + ') = 0 ' +
-            ' ORDER BY lotATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE05 ')
+            ' ORDER BY lotATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE05 '
 
+    EXEC (@sql_query)
          IF @b_debug = 1
          BEGIN
             SELECT 'AND LOC.FACILITY = N''' + @c_facility + '''' + @c_LimitString1 + '"'
@@ -295,10 +296,10 @@ EXEC ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR  ' +
                ' ORDER BY SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ')
          END
 
-         SELECT @c_StorerKey = dbo.fnc_RTrim(@c_StorerKey)
-         SELECT @c_Sku = dbo.fnc_RTrim(@c_SKU)
+      SELECT @c_StorerKey = dbo.fnc_RTrim(@c_StorerKey)
+      SELECT @c_Sku = dbo.fnc_RTrim(@c_SKU)
 
-         EXEC ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
+      SET @sql_query = 'DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
             ' SELECT MIN(LOTXLOCXID.STORERKEY) , MIN(LOTXLOCXID.SKU), LOT.LOT, ' +
             ' QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated) ) ' +
             ' FROM LOT (NOLOCK) ' +
@@ -324,8 +325,9 @@ EXEC ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR  ' +
             ' GROUP BY LOT.LOT, SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ' +
             ' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked)- MIN(LOT.QtyPreAllocated) )>= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
             ' AND ((SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreAllocated)) % ' + CAST(@n_uombase AS NVARCHAR) + ') = 0 ' +
-            ' ORDER BY SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ')
-      END
+            ' ORDER BY SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 '
+     EXEC (@sql_query)
+     END
    END
 END
 GO
