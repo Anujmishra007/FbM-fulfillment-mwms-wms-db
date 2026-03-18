@@ -123,6 +123,7 @@ BEGIN
          AND TD.TaskType = 'ASTCPK'
          AND TD.Status = '3'
          AND TD.DropID <> ''
+         AND TD.DeviceID = @cCartId
          AND TD.UserKey = @cUserName
          AND TD.FromLoc = @cFromLoc
          AND LOC.Facility = @cFacility

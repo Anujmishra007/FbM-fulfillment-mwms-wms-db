@@ -223,7 +223,7 @@ BEGIN
             GOTO Step7_Commit
 
             Step7_RollBackTran:
-                  ROLLBACK TRAN rdt_1855ExtScn02_5927
+                  ROLLBACK TRAN rdt_1855ExtUpd06_Step7
             Step7_Commit:
                WHILE @@TRANCOUNT > @nTranCount
                   COMMIT TRAN

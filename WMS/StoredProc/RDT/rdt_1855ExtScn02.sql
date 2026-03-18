@@ -323,7 +323,7 @@ BEGIN
                            WHERE Storerkey = @cStorerKey
                               AND TaskType = 'ASTCPK'
                               AND Status = '3'
-                              AND DeviceID = @cCartonID
+                              AND DeviceID = @cCartID
                               AND UserKey <> @cUserName)
                BEGIN
                   SET @nErrNo = 260405
@@ -528,7 +528,11 @@ BEGIN
                BEGIN TRAN
                SAVE TRAN rdt_1855ExtScn02_6844
 
-               UPDATE rdt.RDTMOBREC WITH(ROWLOCK) SET C_String1 = @cWaveKey WHERE Mobile = @nMobile
+               UPDATE rdt.RDTMOBREC WITH(ROWLOCK) 
+               SET 
+                  C_String1 = @cWaveKey,
+                  V_String12 = @cGroupKey
+               WHERE Mobile = @nMobile
 
                SET @nLoopIndex = -1
                DECLARE @cLoopTaskDetailKey  NVARCHAR( 10) = ''
@@ -1055,7 +1059,7 @@ BEGIN
                EXEC rdt.rdtSetFocusField @nMobile, 8
                GOTO UPD_RDTMOBREC
             END
-            ELSE IF @nInputKey = 0 -- ENTER
+            ELSE IF @nInputKey = 0 -- ESC
             BEGIN
                -- Prepare next screen var
                SET @cOutField01 = ''

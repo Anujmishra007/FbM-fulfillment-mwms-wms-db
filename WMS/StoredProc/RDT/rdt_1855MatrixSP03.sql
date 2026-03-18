@@ -46,9 +46,11 @@ BEGIN
    DECLARE 
       @nCartLimit       INT,
       @nCount           INT,
-      @cWaveKey         NVARCHAR(10)
+      @cWaveKey         NVARCHAR(10),
+      @cGroupKey        NVARCHAR(10)
 
-   SELECT @cWaveKey = C_String1
+   SELECT @cWaveKey = C_String1,
+      @cGroupKey = V_String12
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
      
@@ -75,6 +77,7 @@ BEGIN
          AND TD.UserKey = SUSER_SNAME()
          AND TD.DeviceID = @cCartID
          AND TD.WaveKey = @cWaveKey
+         AND TD.GroupKey = @cGroupKey
 
       SET @cResult01 = 'B2C Multies'
       SET @cResult02 =  CAST(IIF(@nCartLimit > @nCount, @nCount, @nCartLimit) AS NVARCHAR(5)) + ' ToteID is needed'
