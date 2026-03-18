@@ -173,18 +173,6 @@ BEGIN
 
    IF @n_Continue = 1
    BEGIN
-      IF @c_Sku > ''  
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 63040
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
-                        + 'Sku LxWxH not setup. Sku: ' 
-                        + @c_Sku + ' . (mspRLWAV10_VLDN)'
-      END
-   END
-
-   IF @n_Continue = 1
-   BEGIN
       IF @c_Userdefine01 <> 'WaveReplenRelease'
       BEGIN
          SET @n_Continue = 3
