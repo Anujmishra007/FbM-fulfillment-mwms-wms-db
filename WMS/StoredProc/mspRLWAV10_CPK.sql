@@ -369,7 +369,7 @@ BEGIN
          )
       SELECT 
             pw.Wavekey             
-         ,  IIF(o.DocType = 'E', '', pw.Orderkey)   --WL10
+         ,  IIF(MAX(O.DocType) = 'E', '', pw.Orderkey)   --WL10
          ,  pw.Storerkey           
          ,  pw.Sku    
          ,  pw.UOM               
@@ -404,7 +404,6 @@ BEGIN
       WHERE pw.UOM >= '6'
       GROUP BY         
             pw.Wavekey             
-         ,  IIF(o.DocType = 'E', '', pw.Orderkey)   --WL10
          ,  pw.Storerkey           
          ,  pw.Sku    
          ,  pw.UOM               
