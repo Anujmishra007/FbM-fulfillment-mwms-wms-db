@@ -28,8 +28,9 @@ GO
 /* 2025-04-27   2.0.0   Dennis   UWP-31758 Skip confirm tote if full short       */
 /* 2025-04-27   2.0.1   Dennis   FCR-4243 Resume task                            */
 /* 2025-06-17   0.0.0   JACKC    !!!Cutover. Use V2 file in V0 for work!!!       */
-/*  ==========================================================================    */
-/* 2025-08-14   2.0.2   Cuize    FCR-7100 Goto STEP 99 for Mask SKU               */
+/*  ==========================================================================   */
+/* 2025-08-14   2.0.2   Cuize    FCR-7100 Goto STEP 99 for Mask SKU              */
+/* 2026-03-03   2.1.0   NickT    FCR-10824 Add @cExtendedScnSP='rdt_1855ExtScn02'*/
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](
@@ -985,7 +986,7 @@ BEGIN
       -- Prepare next screen var
       SET @cOutField01 = @cCartPickMethod
       SET @cOutField02 = @cCartID
-     SET @cOutField03 = @cResult01
+      SET @cOutField03 = @cResult01
       SET @cOutField04 = @cResult02
       SET @cOutField05 = @cResult03
       SET @cOutField06 = @cResult04
@@ -995,7 +996,7 @@ BEGIN
 
       SET @cFromLoc = ''
       SET @cCartonID = ''
-    SET @cSKU = ''
+      SET @cSKU = ''
       SET @nQTY = 0
 
       -- Go to next screen
@@ -1116,7 +1117,7 @@ BEGIN
             EXEC [RDT].[rdt_TM_Assist_ClusterPick_GetTask]
                @nMobile          = @nMobile,
                @nFunc            = @nFunc,
- @cLangCode        = @cLangCode,
+               @cLangCode        = @cLangCode,
                @nStep            = @nStep,
                @nInputKey        = @nInputKey,
                @cFacility        = @cFacility,
@@ -3458,7 +3459,8 @@ BEGIN
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES
             ('@cOption',   @cOption),
-            ('@cGroupKey', @cGroupKey)
+            ('@cGroupKey', @cGroupKey),
+            ('@cTaskDetailKey', @cTaskDetailKey)
 
          DECLARE  @nPreSCn       INT,
                   @nPreInputKey  INT
@@ -3562,6 +3564,17 @@ BEGIN
                GOTO Step_ConfirmTote
             END
          END -- rdt_1855ExtScn01
+         ELSE IF @cExtendedScnSP = 'rdt_1855ExtScn02'
+         BEGIN
+            IF ISNULL(@cExtScnUDF01, '') = 'NO UPD RDTMOBREC'
+               RETURN
+
+            IF ISNULL(@cExtScnUDF02, '') <> ''
+               SET @nPickedQty        = CAST(@cExtScnUDF02 AS INT)
+
+            IF ISNULL(@cExtScnUDF03, '') <> ''
+               SET @nSuggQty        = CAST(@cExtScnUDF03 AS INT)
+         END
 
          IF @nErrNo <> 0
             GOTO Step_99_Fail
@@ -3657,7 +3670,7 @@ BEGIN
       I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
       I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
       I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
-     I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
 
    WHERE Mobile = @nMobile
 END
