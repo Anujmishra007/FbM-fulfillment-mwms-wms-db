@@ -52,6 +52,7 @@ GO
 /* 2026-01-05 3.8.0  PPA374     UWP-46338 Adding  extended update to step 4      */
 /* 2026-01-12 3.8.1  PPA374     UWP-47065 Adding Extended Validate in step 3     */
 /* 2026-01-20 3.9.0  Dennis     FCR-9664 ExtScn08                                */
+/* 2026-03-18 4.0.0  NickT      UWP-52419 Empty @cToLoc after ToLoc screen       */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -366,7 +367,6 @@ BEGIN
       @cSuggLOT     = LOT,
       @cSuggFromLOC = FromLOC,
       @cSuggToLOC   = ToLOC,
-      @cToLoc       = ToLOC,
       @cSuggSKU     = SKU,
       @nQTY_RPL     = QTY,
       @cPickMethod  = PickMethod,
@@ -2752,6 +2752,7 @@ BEGIN
 
       -- Prepare next screen var
       SET @cOutField01 = @cToLOC
+      SET @cToLOC = ''
 
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
