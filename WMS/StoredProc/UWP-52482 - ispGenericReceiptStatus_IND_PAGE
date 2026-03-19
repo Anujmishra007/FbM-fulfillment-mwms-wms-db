@@ -1,0 +1,350 @@
+/************************************************************************/       
+/* Stored Procedure : ispGenericReceiptStatus_IND_PAGE                  */      
+/* Copyright      : Maersk                                              */      
+/*                                                                      */      
+/* Purpose        : Update the ASN status                               */      
+/*                                                                      */      
+/* Modifications log:                                                   */      
+/* Date        Rev  Author    Purpose                                   */      
+/* 26-11-2025  1.0  TCO-IBS   Created                                   */      
+/************************************************************************/       
+    
+CREATE PROCEDURE ispGenericReceiptStatus_IND_PAGE      
+AS      
+BEGIN      
+    SET NOCOUNT ON;      
+      
+    DECLARE @StorerKey    NVARCHAR(15);    
+    DECLARE @StorerConfig NVARCHAR(10) = '';    
+    DECLARE @Receiptkey   NVARCHAR(10);    
+    DECLARE @STRSQL       NVARCHAR(4000);    
+        
+    /*Requires storer config 'UPDATE RECEIPTDETAIL TOLOC' Svalue = '1' or storer config 'CopyReceiptkeyToLottable' if none is configured putaway status will not be updated*/    
+    /*Staging location type in location master should be 'IDZ'*/    
+    /*Cursor for all GENRCPTSTA StorerKeys*/     
+      
+    DECLARE curgenrecstatus CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
+        SELECT code      
+        FROM codelkup (nolock)    
+        WHERE listname = 'GENSTATUS' and UDF01='1';      
+    
+    BEGIN TRY
+
+        OPEN curgenrecstatus;      
+        FETCH NEXT FROM curgenrecstatus INTO @StorerKey;      
+
+        WHILE @@FETCH_STATUS = 0      
+        BEGIN      
+            /*Determine storer configuration whether to consider the receiptdetail.tolot or receiptdetail.lottable to get the putaway status*/    
+            SET @StorerConfig=''  
+            SET @Receiptkey=''  
+            SET @STRSQL=''  
+
+            IF EXISTS (SELECT 1 FROM storerconfig (nolock) WHERE storerkey = @StorerKey AND configkey = 'UPDATE RECEIPTDETAIL TOLOC')    
+            BEGIN    
+                SET @StorerConfig = 'LOT';    
+            END;    
+
+            IF EXISTS (SELECT 1 FROM storerconfig (nolock) WHERE storerkey = @StorerKey AND configkey = 'CopyReceiptkeyToLottable')      
+            BEGIN    
+                IF @StorerConfig = ''     
+                BEGIN     
+                    SET @StorerConfig = 'LOTRCPT';    
+
+                    SELECT @Receiptkey = CONCAT('Lottable', Svalue)    
+                    FROM storerconfig (nolock)    
+                    WHERE storerkey = @StorerKey     
+                      AND configkey = 'CopyReceiptkeyToLottable';    
+                END;    
+            END;    
+
+            /*Condition: ASNSTATUS = '0' (Open)*/    
+            ;WITH TargetASN AS      
+            (      
+                SELECT r.StorerKey, r.ReceiptKey      
+                FROM Receipt (NOLOCK) r      
+                INNER JOIN ReceiptDetail (NOLOCK) rd      
+                    ON r.StorerKey  = rd.StorerKey      
+                   AND r.ReceiptKey = rd.ReceiptKey      
+                WHERE r.StorerKey     = @StorerKey      
+                  AND rd.FinalizeFlag = 'N'      
+                  AND r.ASNSTATUS     <> '0'      
+                GROUP BY r.StorerKey, r.ReceiptKey      
+                HAVING SUM(rd.BeforeReceivedQty) = 0      
+            )      
+            UPDATE r      
+            SET r.ASNSTATUS = '0'      
+            FROM Receipt r      
+            INNER JOIN TargetASN t      
+                ON r.StorerKey  = t.StorerKey      
+               AND r.ReceiptKey = t.ReceiptKey; 
+
+            /*Condition: ASNSTATUS = '1' (In Receiving)*/    
+            ;WITH TargetASN AS      
+            (      
+                SELECT r.StorerKey, r.ReceiptKey      
+                FROM Receipt (NOLOCK) r      
+                INNER JOIN ReceiptDetail (NOLOCK) rd      
+                    ON r.StorerKey  = rd.StorerKey      
+                   AND r.ReceiptKey = rd.ReceiptKey      
+                WHERE r.StorerKey     = @StorerKey      
+                  AND rd.FinalizeFlag = 'N'      
+                  AND r.ASNSTATUS     <> '1'      
+                GROUP BY r.StorerKey, r.ReceiptKey      
+                HAVING SUM(rd.BeforeReceivedQty) < SUM(rd.QtyExpected)      
+                   AND SUM(rd.BeforeReceivedQty) > 0      
+            )      
+            UPDATE r      
+            SET r.ASNSTATUS = '1'      
+            FROM Receipt r      
+            INNER JOIN TargetASN t      
+                ON r.StorerKey  = t.StorerKey      
+               AND r.ReceiptKey = t.ReceiptKey;      
+
+            /*Condition: ASNSTATUS = 'REC' (Received)*/    
+            ;WITH TargetASN AS      
+            (      
+                SELECT r.StorerKey, r.ReceiptKey      
+                FROM Receipt (NOLOCK) r      
+                INNER JOIN ReceiptDetail (NOLOCK) rd      
+                    ON r.StorerKey  = rd.StorerKey      
+                   AND r.ReceiptKey = rd.ReceiptKey      
+                WHERE r.StorerKey     = @StorerKey      
+                  AND rd.FinalizeFlag = 'N'      
+                  AND r.ASNSTATUS     <> 'REC'      
+                GROUP BY r.StorerKey, r.ReceiptKey      
+                HAVING SUM(rd.BeforeReceivedQty) = SUM(rd.QtyExpected)      
+                   AND SUM(rd.BeforeReceivedQty) > 0      
+            )      
+            UPDATE r      
+            SET r.ASNSTATUS = 'REC'      
+            FROM Receipt r      
+            INNER JOIN TargetASN t      
+                ON r.StorerKey  = t.StorerKey      
+               AND r.ReceiptKey = t.ReceiptKey;      
+
+            /*Condition: ASNSTATUS = 'PFIN' (Partially Finalized)*/    
+            ;WITH TargetASN AS      
+            (      
+                SELECT r.StorerKey, r.ReceiptKey      
+                FROM Receipt (NOLOCK) r      
+                INNER JOIN ReceiptDetail (NOLOCK) rd      
+                    ON r.StorerKey  = rd.StorerKey      
+                   AND r.ReceiptKey = rd.ReceiptKey      
+                WHERE r.StorerKey = @StorerKey      
+                  AND r.ASNSTATUS = '1'      
+                  AND r.ASNSTATUS <> 'PFIN'      
+                GROUP BY r.StorerKey, r.ReceiptKey      
+                HAVING SUM(rd.QtyExpected)  > SUM(rd.QtyReceived)      
+                   AND SUM(rd.QtyReceived) > 0      
+            )      
+            UPDATE r      
+            SET r.ASNSTATUS = 'PFIN'      
+            FROM Receipt r      
+            INNER JOIN TargetASN t      
+                ON r.StorerKey  = t.StorerKey      
+               AND r.ReceiptKey = t.ReceiptKey;      
+
+
+            /*Condition: ASNSTATUS = 'FIN' (Finalized)*/    
+            ;WITH TargetASN AS      
+            (      
+                SELECT r.StorerKey, r.ReceiptKey      
+                FROM Receipt (NOLOCK) r      
+                WHERE r.StorerKey = @StorerKey      
+                  AND r.Status    = '9'      
+                  AND r.ASNSTATUS <> 'FIN'      
+            )      
+            UPDATE r      
+            SET r.ASNSTATUS = 'FIN'      
+            FROM Receipt r      
+            INNER JOIN TargetASN t      
+                ON r.StorerKey  = t.StorerKey      
+               AND r.ReceiptKey = t.ReceiptKey;      
+
+
+            /*Condition: LOT Mode*/    
+            IF @StorerConfig = 'LOT'    
+            BEGIN      
+                /* ASNSTATUS = 'IP' (Putaway In Progress)*/    
+                ;WITH TargetASN AS      
+                (      
+                    SELECT r.StorerKey, r.ReceiptKey      
+                    FROM Receipt (NOLOCK) r      
+                    INNER JOIN ReceiptDetail (NOLOCK) rd      
+                        ON r.StorerKey  = rd.StorerKey      
+                       AND r.ReceiptKey = rd.ReceiptKey      
+                    INNER JOIN LOTXLOCXID (NOLOCK) LT      
+                        ON rd.StorerKey = LT.StorerKey      
+                       AND rd.SKU       = LT.SKU      
+                       AND rd.ToLot     = LT.Lot      
+                       AND rd.ToID      = LT.ID      
+                    INNER JOIN LOC (NOLOCK) L       
+                        ON LT.Loc = L.Loc      
+                       AND L.LocationType = 'IDZ'      
+                    WHERE r.StorerKey = @StorerKey      
+                      AND r.ASNSTATUS IN ('PFIN','FIN')      
+                      AND r.ASNSTATUS <> 'IP'      
+                    GROUP BY r.StorerKey, r.ReceiptKey      
+                    HAVING SUM(rd.QtyReceived) > SUM(LT.Qty)      
+                       AND SUM(rd.QtyReceived) > 0      
+                )      
+                UPDATE r      
+                SET r.ASNSTATUS = 'IP'      
+                FROM Receipt r      
+                INNER JOIN TargetASN t      
+                    ON r.StorerKey  = t.StorerKey      
+                   AND r.ReceiptKey = t.ReceiptKey;      
+
+                /*ASNSTATUS = 'PC' (Putaway Completed)*/    
+                ;WITH TargetASN AS      
+                (      
+                    SELECT r.StorerKey, r.ReceiptKey      
+                    FROM Receipt (NOLOCK) r      
+                    INNER JOIN ReceiptDetail (NOLOCK) rd      
+                        ON r.StorerKey  = rd.StorerKey      
+                       AND r.ReceiptKey = rd.ReceiptKey      
+                    INNER JOIN LOTXLOCXID (NOLOCK) LT      
+                        ON rd.StorerKey = LT.StorerKey      
+                       AND rd.SKU       = LT.SKU      
+                       AND rd.ToLot     = LT.Lot      
+                       AND rd.ToID      = LT.ID      
+                    INNER JOIN LOC (NOLOCK) L       
+                        ON LT.Loc = L.Loc      
+                       AND L.LocationType = 'IDZ'      
+                    WHERE r.StorerKey = @StorerKey      
+                      AND r.ASNSTATUS IN ('PFIN','FIN','IP')      
+                      AND r.ASNSTATUS <> 'PC'      
+                    GROUP BY r.StorerKey, r.ReceiptKey      
+                    HAVING SUM(LT.Qty) = 0      
+                       AND SUM(rd.QtyReceived) > 0      
+                )      
+               UPDATE r      
+                SET r.ASNSTATUS = 'PC'      
+                FROM Receipt r      
+                INNER JOIN TargetASN t      
+                    ON r.StorerKey  = t.StorerKey      
+                   AND r.ReceiptKey = t.ReceiptKey;      
+            END;   -- LOT MODE    
+
+            /* Condition: LOTRCPT Mode (Dynamic SQL Mode)*/    
+            IF @StorerConfig = 'LOTRCPT'    
+            BEGIN      
+                /* ASNSTATUS = 'IP' (Putaway In Progress)*/    
+                SET @STRSQL = N'    
+                    ;WITH TargetASN AS (    
+                        SELECT r.StorerKey, r.ReceiptKey      
+                        FROM Receipt (NOLOCK) r      
+                        INNER JOIN ReceiptDetail (NOLOCK) rd      
+                            ON r.StorerKey  = rd.StorerKey      
+                           AND r.ReceiptKey = rd.ReceiptKey     
+                        INNER JOIN LOTATTRIBUTE (NOLOCK) LA    
+                            ON rd.storerkey = LA.storerkey     
+                           AND rd.sku = LA.sku    
+                           AND rd.' + @Receiptkey + ' = LA.' + @Receiptkey + '    
+                        INNER JOIN LOTXLOCXID (NOLOCK) LT      
+                            ON LA.StorerKey = LT.StorerKey      
+                           AND LA.SKU       = LT.SKU      
+                           AND LA.Lot       = LT.Lot      
+                           AND rd.ToID      = LT.ID      
+                        INNER JOIN LOC (NOLOCK) L       
+                            ON LT.Loc = L.Loc      
+                           AND L.LocationType = ''IDZ''      
+                        WHERE r.StorerKey = ''' + @StorerKey + '''     
+                          AND r.ASNSTATUS IN (''PFIN'',''FIN'')      
+                          AND r.ASNSTATUS <> ''IP''      
+                        GROUP BY r.StorerKey, r.ReceiptKey      
+                        HAVING SUM(rd.QtyReceived) > SUM(LT.Qty)      
+                           AND SUM(rd.QtyReceived) > 0    
+                    )    
+                    UPDATE r      
+                    SET r.ASNSTATUS = ''IP''    
+                    FROM Receipt r      
+                    INNER JOIN TargetASN t      
+                        ON r.StorerKey  = t.StorerKey      
+                       AND r.ReceiptKey = t.ReceiptKey;    
+                ';    
+
+                EXEC sp_executesql @STRSQL;  
+
+                /* ASNSTATUS = 'PC' (Putaway Completed)*/    
+                SET @STRSQL = N'    
+                    ;WITH TargetASN AS (    
+                        SELECT r.StorerKey, r.ReceiptKey      
+                        FROM Receipt (NOLOCK) r      
+                        INNER JOIN ReceiptDetail (NOLOCK) rd      
+                            ON r.StorerKey  = rd.StorerKey      
+                           AND r.ReceiptKey = rd.ReceiptKey    
+                        INNER JOIN LOTATTRIBUTE (NOLOCK) LA     
+                            ON rd.storerkey = LA.storerkey     
+                           AND rd.sku = LA.sku    
+                           AND rd.' + @Receiptkey + ' = LA.' + @Receiptkey + '    
+                        INNER JOIN LOTXLOCXID (NOLOCK) LT      
+                            ON LA.StorerKey = LT.StorerKey      
+                           AND LA.SKU       = LT.SKU      
+                           AND LA.Lot       = LT.Lot      
+                           AND rd.ToID      = LT.ID      
+                        INNER JOIN LOC (NOLOCK) L       
+                            ON LT.Loc = L.Loc      
+                           AND L.LocationType = ''IDZ''      
+                        WHERE r.StorerKey = ''' + @StorerKey + '''    
+                          AND r.ASNSTATUS IN (''PFIN'',''FIN'',''IP'')      
+                          AND r.ASNSTATUS <> ''PC''      
+                        GROUP BY r.StorerKey, r.ReceiptKey      
+                        HAVING SUM(LT.Qty) = 0      
+                           AND SUM(rd.QtyReceived) > 0    
+                    )    
+                    UPDATE r      
+                    SET r.ASNSTATUS = ''PC''      
+                    FROM Receipt r      
+                    INNER JOIN TargetASN t      
+                        ON r.StorerKey  = t.StorerKey      
+                       AND r.ReceiptKey = t.ReceiptKey;    
+                ';    
+
+                EXEC sp_executesql @STRSQL;    
+            END;  -- LOTRCPT MODE    
+
+            /* Move to next StorerKey */        
+            FETCH NEXT FROM curgenrecstatus INTO @StorerKey;      
+        END;     
+
+        CLOSE curgenrecstatus;      
+        DEALLOCATE curgenrecstatus;  
+    END TRY
+    BEGIN CATCH
+
+        /*Error Logging*/
+        INSERT INTO alert
+        (
+            ModuleName,
+            AlertMessage,
+            Activity,
+            StorerKey,
+            NotifyId
+        )
+        VALUES
+        (
+            OBJECT_NAME(@@PROCID),
+            Concat(ERROR_NUMBER(),
+            ERROR_SEVERITY(),
+            ERROR_STATE(),
+            ERROR_LINE(),
+            ERROR_MESSAGE()),
+            'SQL JOBS',
+            @StorerKey,
+            @Receiptkey
+        );
+
+        /*Cursor Safety Cleanup*/
+        IF CURSOR_STATUS('local', 'curgenrecstatus') >= -1
+        BEGIN
+            CLOSE curgenrecstatus;
+            DEALLOCATE curgenrecstatus;
+        END;
+
+        /*Re-throw error for SQL Agent / caller*/
+        THROW;
+    END CATCH;      
+END; 
+GO
