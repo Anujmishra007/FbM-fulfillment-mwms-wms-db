@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.0                                                          */    
+/* Version: 2.1                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -33,6 +33,8 @@ GO
 /* 12-Mar-2026 WLChooi  1.8   FCR-11579 Fix missing taskdetailkey (WL08) */
 /* 16-Mar-2026 WLChooi  1.9   FCR-11624 Fix TaskToPick linkage (WL09)    */
 /* 18-Mar-2026 WLChooi  2.0   FCR-11805 Conso task for ECOM (WL10)       */
+/* 19-Mar-2026 WLChooi  2.1   FCR-11805 Stamp CaseID=Taskdetailkey for   */
+/*                            B2C UOM 6 (WL11)                           */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -635,6 +637,7 @@ BEGIN
          SET @c_TaskType  = IIF(@c_DocType = 'E', 'ASTCPK', 'CPK')   --WL01
          SET @c_SourceKey = @c_Wavekey
          SET @c_LinkTaskToPick_SQL = ' AND PICKDETAIL.UOM = @c_UOM'
+                                   --+ IIF(@c_TaskType = 'CPK', ' AND PICKDETAIL.CaseID = @c_CaseID', '')   --WL05
                                    + ' AND PICKDETAIL.CaseID = @c_CaseID'   --WL09
 
          --WL04
@@ -745,14 +748,14 @@ BEGIN
                SET @n_Continue = 3
             END
 
+            --WL11 S
             --WL08 S
-            IF @c_OriginalFromLoc <> @c_FromLoc
-            BEGIN
-               UPDATE TASKDETAIL
-               SET FromLoc = @c_FromLoc
-               WHERE Taskdetailkey = @c_TaskdetailKey
-            END
+            UPDATE TASKDETAIL
+            SET FromLoc = IIF(@c_OriginalFromLoc <> @c_FromLoc, @c_FromLoc, FromLoc)
+              , CaseID = IIF(TaskType = 'ASTCPK' AND UOM >= '6', @c_TaskdetailKey, CaseID)
+            WHERE Taskdetailkey = @c_TaskdetailKey
             --WL08 E
+            --WL11 E
          END
 
          SET @c_Groupkey_P = @c_Groupkey
