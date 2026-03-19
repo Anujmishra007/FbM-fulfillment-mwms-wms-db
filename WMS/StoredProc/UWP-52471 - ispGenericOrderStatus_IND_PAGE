@@ -1,0 +1,289 @@
+/************************************************************************/
+/* Stored Procedure : ispGenericOrderStatus_IND_PAGE                    */
+/* Copyright       : Maersk                                             */
+/*                                                                      */
+/* Purpose         : Update the SO status                               */
+/*                                                                      */
+/* Modifications log:                                                   */
+/* Date        Rev  Author    Purpose                                   */
+/* 22-12-2025  1.0  TCO-IBS   Created                                   */
+/************************************************************************/
+
+CREATE PROCEDURE ispGenericOrderStatus_IND_PAGE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @StorerKey NVARCHAR(15);
+    DECLARE @Orderkey  NVARCHAR(10);
+
+    DECLARE curgenordstatus CURSOR LOCAL FAST_FORWARD READ_ONLY
+    FOR
+        SELECT code
+        FROM codelkup (NOLOCK)
+        WHERE listname = 'GENSTATUS'
+          AND UDF02    = '1';
+
+    BEGIN TRY
+        OPEN curgenordstatus;
+        FETCH NEXT FROM curgenordstatus INTO @StorerKey;
+
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+
+        /*SOSTATUS = '0' (Open)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.Orderkey
+            FROM Orders o (NOLOCK)
+            WHERE o.StorerKey = @StorerKey
+              AND o.status    = '0'
+              AND o.sostatus NOT IN ('0', '9', 'CANC')
+        )
+        UPDATE o
+        SET o.sostatus = '0'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        /*SOSTATUS = 'PA' (Partially Allocated)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.Orderkey
+            FROM Orders o (NOLOCK)
+            WHERE o.StorerKey = @StorerKey
+              AND o.status    = '1'
+              AND o.sostatus NOT IN ('PA', '9', 'CANC')
+        )
+        UPDATE o
+        SET o.sostatus = 'PA'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        /*SOSTATUS = 'FA' (Fully Allocated)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.Orderkey
+            FROM Orders o (NOLOCK)
+            WHERE o.StorerKey = @StorerKey
+              AND o.status    = '2'
+              AND o.sostatus NOT IN ('FA', '9', 'CANC')
+        )
+        UPDATE o
+        SET o.sostatus = 'FA'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        /*SOSTATUS = 'IPK' (In Picking)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.Orderkey
+            FROM Orders o (NOLOCK)
+            WHERE o.StorerKey = @StorerKey
+              AND o.status    = '3'
+              AND o.sostatus NOT IN ('IPK', '9', 'CANC')
+        )
+        UPDATE o
+        SET o.sostatus = 'IPK'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        /*SOSTATUS = 'PC' (Pick Complete)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.Orderkey
+            FROM Orders o (NOLOCK)
+            WHERE o.StorerKey = @StorerKey
+              AND o.status    = '5'
+              AND o.sostatus NOT IN ('PC', '9', 'CANC')
+        )
+        UPDATE o
+        SET o.sostatus = 'PC'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        /*SOSTATUS = 'IPKD' (In Packing)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.Orderkey
+            FROM Orders o
+            INNER JOIN pickdetail pd
+                ON o.StorerKey = pd.StorerKey
+               AND o.Orderkey  = pd.Orderkey
+            INNER JOIN packheader ph
+                ON o.StorerKey = ph.StorerKey
+               AND o.Orderkey  = ph.Orderkey
+            INNER JOIN
+            (
+                SELECT StorerKey,
+                       PickSlipNo,
+                       SUM(ISNULL(qty, 0)) AS qty
+                FROM packdetail
+                GROUP BY StorerKey, PickSlipNo
+            ) pcd
+                ON ph.StorerKey  = pcd.StorerKey
+               AND ph.PickSlipNo = pcd.PickSlipNo
+            WHERE o.StorerKey = @StorerKey
+              AND o.status    = '5'
+              AND o.sostatus  = 'PC'
+              AND o.sostatus NOT IN ('IPKD', '9', 'CANC')
+            GROUP BY o.StorerKey, o.Orderkey, pcd.qty
+            HAVING SUM(ISNULL(pd.qty, 0)) > pcd.qty
+        )
+        UPDATE o
+        SET o.sostatus = 'IPKD'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        /*SOSTATUS = 'PKD' (Packed)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.Orderkey
+            FROM Orders o
+            INNER JOIN packheader ph
+                ON o.StorerKey = ph.StorerKey
+               AND o.Orderkey  = ph.Orderkey
+            WHERE o.StorerKey = @StorerKey
+              AND o.status    = '5'
+              AND o.sostatus  IN ('IPKD','MBL')
+              AND ph.status   = '9'
+              AND o.sostatus NOT IN ('PKD', '9', 'CANC')
+        )
+        UPDATE o
+        SET o.sostatus = 'PKD'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        /*SOSTATUS = 'MBL' (MBOL Generated)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.Orderkey
+            FROM Orders o
+            INNER JOIN packheader ph
+                ON o.StorerKey = ph.StorerKey
+               AND o.Orderkey  = ph.Orderkey
+            WHERE o.StorerKey = @StorerKey
+              AND o.status    = '5'
+              AND ph.status   = '9'
+              AND o.sostatus NOT IN ('MBL', '9', 'CANC')
+              AND o.mbolkey  <> ''
+        )
+        UPDATE o
+        SET o.sostatus = 'MBL'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        /*SOSTATUS = 'IL' (In Loading)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.OrderKey
+            FROM Orders o
+            INNER JOIN pickdetail pd
+                ON o.StorerKey = pd.StorerKey
+               AND o.OrderKey  = pd.OrderKey
+            LEFT JOIN rdt.rdtscantotruck sct
+                ON sct.MbolKey = o.MbolKey
+               AND pd.dropid   = sct.URNNo
+            WHERE o.StorerKey = @StorerKey
+              AND o.sostatus NOT IN ('IL', '9', 'CANC')
+            GROUP BY o.StorerKey, o.OrderKey
+            HAVING COUNT(pd.dropid) <> COUNT(ISNULL(sct.URNNo, 0))
+               AND COUNT(ISNULL(sct.URNNo, 0)) > 0
+        )
+        UPDATE o
+        SET o.sostatus = 'IL'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        /*SOSTATUS = 'LD' (Loaded)*/
+        ;WITH TargetORD AS
+        (
+            SELECT o.StorerKey,
+                   o.OrderKey
+            FROM Orders o
+            INNER JOIN pickdetail pd
+                ON o.StorerKey = pd.StorerKey
+               AND o.OrderKey  = pd.OrderKey
+            INNER JOIN rdt.rdtscantotruck sct
+                ON sct.MbolKey = o.MbolKey
+               AND pd.dropid   = sct.URNNo
+            WHERE o.StorerKey = @StorerKey
+              AND o.sostatus NOT IN ('LD', '9', 'CANC')
+            GROUP BY o.StorerKey, o.OrderKey
+            HAVING COUNT(pd.dropid) = COUNT(ISNULL(sct.URNNo, 0))
+        )
+        UPDATE o
+        SET o.sostatus = 'LD'
+        FROM Orders o
+        INNER JOIN TargetORD t
+            ON o.StorerKey = t.StorerKey
+           AND o.Orderkey  = t.Orderkey;
+
+        FETCH NEXT FROM curgenordstatus INTO @StorerKey;
+    END;
+
+    CLOSE curgenordstatus;
+    DEALLOCATE curgenordstatus;
+    END TRY
+    BEGIN CATCH
+        
+        /*Error Logging*/
+        INSERT INTO alert
+        (
+            ModuleName,
+            AlertMessage,
+            Activity,
+            StorerKey,
+            NotifyId
+        )
+        VALUES
+        (
+            OBJECT_NAME(@@PROCID),
+            Concat(ERROR_NUMBER(),
+            ERROR_SEVERITY(),
+            ERROR_STATE(),
+            ERROR_LINE(),
+            ERROR_MESSAGE()),
+            'SQL JOBS',
+            @StorerKey,
+            @Orderkey
+        );
+
+        /*Cursor Safety Cleanup*/
+        IF CURSOR_STATUS('local', 'curgenordstatus') >= -1
+        BEGIN
+            CLOSE curgenordstatus;
+            DEALLOCATE curgenordstatus;
+        END;
+
+        /*Re-throw error for SQL Agent / caller*/
+        THROW;
+    END CATCH;
+END;
+GO
