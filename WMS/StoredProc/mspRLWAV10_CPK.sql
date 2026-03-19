@@ -124,6 +124,8 @@ BEGIN
       ,  @c_TaskFromLoc          NVARCHAR(10)   = ''   --WL08
       
       ,  @CUR_TW                 CURSOR
+
+   DECLARE @c_ECOMCaseIDeqTaskDetkey NVARCHAR(10) = 'N'   --WL11
  
     DECLARE @TMP_CL              TABLE                                                                                
       ( [RowID]                  INT               IDENTITY(1,1) PRIMARY KEY                   
@@ -300,9 +302,14 @@ BEGIN
       IF ISNULL(@c_Option5, '') <> ''
       BEGIN
          SELECT @n_CasesPerCart = TRY_CAST(dbo.fnc_GetParamValueFromString('@n_CasesPerCart', @c_Option5, @n_CasesPerCart) AS INT)
-
+         SELECT @c_ECOMCaseIDeqTaskDetkey = dbo.fnc_GetParamValueFromString('@c_ECOMCaseIDeqTaskDetkey', @c_Option5, @c_ECOMCaseIDeqTaskDetkey)   --WL11
+         
          IF ISNULL(@n_CasesPerCart, 0) = 0
             SET @n_CasesPerCart = 4
+
+         --WL11
+         IF ISNULL(@c_ECOMCaseIDeqTaskDetkey, '') = ''
+            SET @c_ECOMCaseIDeqTaskDetkey = 'N'
       END
 
       INSERT INTO @TMP_CL (Listname, Code, Description, Short, Long                
@@ -752,7 +759,9 @@ BEGIN
             --WL08 S
             UPDATE TASKDETAIL
             SET FromLoc = IIF(@c_OriginalFromLoc <> @c_FromLoc, @c_FromLoc, FromLoc)
-              , CaseID = IIF(TaskType = 'ASTCPK' AND UOM >= '6', @c_TaskdetailKey, CaseID)
+              , CaseID = IIF(TaskType = 'ASTCPK' AND UOM >= '6' AND @c_ECOMCaseIDeqTaskDetkey = 'Y'
+                           , @c_TaskdetailKey
+                           , CaseID)
             WHERE Taskdetailkey = @c_TaskdetailKey
             --WL08 E
             --WL11 E
