@@ -220,7 +220,7 @@ BEGIN
    WHERE PutAwayStrategyKey = @c_paStrategyKey 
    AND   PutawayStrategyLineNumber = @c_paStrategyLineNumber 
 
-   IF @cpa_CheckRestrictions = 'N'
+   IF @cpa_CheckRestrictions <> 'Y'
    BEGIN 
       GOTO QUIT_FUNC
    END
