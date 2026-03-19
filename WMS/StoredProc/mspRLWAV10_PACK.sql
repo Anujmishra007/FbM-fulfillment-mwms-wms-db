@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 3.5                                                          */    
+/* Version: 3.6                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -51,6 +51,8 @@ GO
 /* 16-Mar-2026 WLChooi  3.3   FCR-11586 Fix ECOM & Packing mapping (WL22)*/
 /* 16-Mar-2026 WLChooi  3.4   FCR-11586 Fix AutoPackCfm condition (WL23) */
 /* 16-Mar-2026 WLChooi  3.5   FCR-11586 Fix DropID linkage (WL24)        */
+/* 19-Mar-2026 WLChooi  3.6   FCR-11586 Add new condition for Packdetail */
+/*                            QTY mapping (WL25)                         */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -192,6 +194,9 @@ BEGIN
          , @n_RowID_pre             INT            = 0      --WL21
          , @c_VAS_P                 NVARCHAR(10)   = ''     --WL21
          , @b_AutoPackCFM           BIT            = 0      --WL22
+         , @b_HasAnyVAS             BIT            = 0      --WL25
+         , @b_IsAudit               BIT            = 0      --WL25
+         , @n_SumQty                INT            = 0      --WL25
 
    DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
          , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
@@ -404,6 +409,7 @@ BEGIN
       ,  [Status]          [nvarchar](1)  NOT NULL DEFAULT ('0')
       ,  [UserDefine01]    [nvarchar](50) NOT NULL DEFAULT ('')   --WL19
       ,  [Shipperkey]      [nvarchar](15) NOT NULL DEFAULT ('')   --WL19
+      ,  [HasAnyVAS]       [bit]          NOT NULL DEFAULT (0)    --WL25
       )
 
       IF OBJECT_ID('tempdb..#CartonDetail') IS NOT NULL
@@ -668,6 +674,7 @@ BEGIN
                  +                       ' THEN 0 ELSE 1 END'
                  +  ', UserDefine01 = ISNULL(ORDERS.UserDefine01, '''')'   --WL19
                  +  ', Shipperkey = ISNULL(ORDERS.Shipperkey, '''')'   --WL19
+                 +  ', HasAnyVas = CASE WHEN WO.WorkOrderKey IS NULL THEN 0 ELSE 1 END'   --WL25
                  +  ' FROM #PickDetail_WIP PICKDETAIL'
                  +  ' JOIN ORDERS (NOLOCK) ON ORDERS.Orderkey = PICKDETAIL.Orderkey'
                  +  ' JOIN SKU (NOLOCK) ON  SKU.Storerkey = PICKDETAIL.Storerkey'
@@ -696,6 +703,13 @@ BEGIN
                  +                ' AND PD.Storerkey = PICKDETAIL.Storerkey'
                  +                ' AND PD.SKU = PICKDETAIL.SKU'
                  +              ' ) AS PICKSKU'
+                 --WL25 S
+                 +  ' OUTER APPLY ( SELECT WorkOrderkey = MIN(w.WorkOrderKey)'
+                 +                ' FROM WORKORDER w (NOLOCK)'
+                 +                ' WHERE w.ExternWorkOrderKey = PICKDETAIL.Orderkey'
+                 +                ' AND w.[Type] = ''VAS'''
+                 +              ' ) AS WO'
+                 --WL25 E
                  +  @c_SQLCond
                  +  ' ORDER BY PackGrpNo'
                  +         ' , HardCTNGrpNo'
@@ -714,6 +728,7 @@ BEGIN
                            ,  [UOM], [Qty], [DropID]
                            ,  [IsVAS], [VAS], [VASQty], [SkuAccessQty]
                            ,  [UserDefine01], [Shipperkey]   --WL19
+                           ,  [HasAnyVAS]   --WL25
                            )
       EXEC sp_ExecuteSQL @c_SQL
                         ,@c_SQLParms
@@ -746,6 +761,7 @@ BEGIN
          ,  pcz.PackGrpNo
          ,  pcz.UserDefine01   --WL19
          ,  pcz.Shipperkey     --WL19
+         ,  pcz.HasAnyVAS      --WL25
       FROM #PRECTN AS pcz
       ORDER BY pcz.PackGrpNo
 
@@ -754,6 +770,7 @@ BEGIN
       FETCH NEXT FROM @cur_PCKGRPH INTO @c_Orderkey, @c_DocType, @c_BillToKey, @c_Storerkey
                                       , @n_PackGrpNo
                                       , @c_UserDefine01, @c_Shipperkey   --WL19
+                                      , @b_HasAnyVAS   --WL25
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
@@ -2720,9 +2737,23 @@ BEGIN
 
                SET @n_CartonNo_Last = 0
                SELECT TOP 1 @n_CartonNo_Last = pd.CartonNo
-               FROM dbo.PackDetail pd
+               FROM dbo.PackDetail pd (NOLOCK)   --WL25
                WHERE pd.PickSlipNo = @c_PickSlipNo
                ORDER BY pd.CartonNo DESC
+
+               --WL25 S
+               SET @n_TTLCtn = 0
+               SET @b_IsAudit = 0
+               SET @n_SumQty = 0
+               SELECT @n_TTLCtn  = ISNULL(@n_CartonNo_Last, 0) 
+                                 + COUNT(DISTINCT cd.CartonSeqNo)
+                    , @b_IsAudit = CAST(ISNULL(MAX(cd.[Audit] * 1), 0) AS BIT)
+                    , @n_SumQty  = ISNULL(SUM(cd.Qty),0)
+               FROM #CartonDetail cd
+               WHERE cd.Orderkey = @c_Orderkey
+               AND cd.CartonType > ''
+               AND cd.[Status] = '9'
+               --WL25 E
 
                INSERT INTO dbo.PackDetail
                   (  PickSlipNo
@@ -2746,19 +2777,31 @@ BEGIN
                                       ,5)
                      ,cd.Storerkey
                      ,cd.Sku
-                     ,Qty    = CASE WHEN cd.IsVas = 1 AND cd.UOM >= '6'
-                                    THEN 0
-                                    WHEN cd.[Audit] = 1
+                     ,Qty    = CASE WHEN @b_IsAudit = 1   --WL25
                                     THEN 0
                                     WHEN cd.DocType = 'E'   --WL22
                                     THEN 0                  --WL22
+                                    --WL25 S
+                                    -- Any VAS 
+                                    WHEN @b_HasAnyVAS = 1 AND cd.DocType = 'N'
+                                    THEN 0
+                                    -- Total Carton <= 14
+                                    WHEN @n_TTLCtn <= @n_UPSCtnCnt AND cd.DocType = 'N'
+                                    THEN 0
+                                    --WL25 E
                                     ELSE SUM(cd.Qty) END
-                     ,ExpQty = CASE WHEN cd.IsVas = 1 AND cd.UOM >= '6'
-                                    THEN SUM(cd.Qty)
-                                    WHEN cd.[Audit] = 1
+                     ,ExpQty = CASE WHEN @b_IsAudit = 1   --WL25
                                     THEN SUM(cd.Qty)
                                     WHEN cd.DocType = 'E'   --WL22
                                     THEN SUM(cd.Qty)        --WL22
+                                    --WL25 S
+                                    -- Any VAS 
+                                    WHEN @b_HasAnyVAS = 1 AND cd.DocType = 'N'
+                                    THEN SUM(cd.Qty)
+                                    -- Total Carton <= 14
+                                    WHEN @n_TTLCtn <= @n_UPSCtnCnt AND cd.DocType = 'N'
+                                    THEN SUM(cd.Qty)
+                                    --WL25 E
                                     ELSE 0 END
                      ,cd.DropID   --WL22
                FROM #CartonDetail AS cd
@@ -2805,12 +2848,18 @@ BEGIN
                      ,CartonNo   = cd.CartonSeqNo  + @n_CartonNo_Last
                      ,[Weight]   = ISNULL(SUM((cd.Qty / cd.PackQtyIndicator) * cd.StdGrossWgt), 0.00)
                      ,[Cube]     = cz.[Cube]
-                     ,Qty        = CASE WHEN cd.[Audit] = 1
+                     ,Qty        = CASE WHEN @b_IsAudit = 1   --WL25
                                         THEN 0
-                                        WHEN cd.IsVas = 1 AND cd.UOM >= '6'   --WL13
-                                        THEN 0                                --WL13
                                         WHEN cd.DocType = 'E'   --WL22
                                         THEN 0                  --WL22
+                                        --WL25 S
+                                        -- Any VAS 
+                                        WHEN @b_HasAnyVAS = 1 AND cd.DocType = 'N'
+                                        THEN 0
+                                        -- Total Carton <= 14
+                                        WHEN @n_TTLCtn <= @n_UPSCtnCnt AND cd.DocType = 'N'
+                                        THEN 0
+                                        --WL25 E
                                         ELSE ISNULL(SUM(cd.Qty),0) END
                      ,CartonType = cd.CartonType
                      ,[Length]   = cz.CartonLength
@@ -2977,15 +3026,10 @@ BEGIN
 
          --WL19 S
          POST_PACK:
-         SET @n_TTLCtn = 0
          SET @b_AutoPackCFM = 0   --WL22
 
          IF @c_DocType = 'N'
          BEGIN
-            SELECT @n_TTLCtn = MAX(cd.CartonSeqNo)
-            FROM #CartonDetail cd
-            WHERE cd.Orderkey = @c_Orderkey
-
             -- Update Shipperkey
             IF ISNULL(@c_Shipperkey, '') <> 'UPS'
             AND @n_TTLCtn <= @n_UPSCtnCnt
@@ -3003,12 +3047,19 @@ BEGIN
             END
 
             -- Auto Pack Confirm
-            IF @c_UserDefine01 IN ('', 'N')
+            IF @b_HasAnyVAS = 0   --WL25
             AND NOT EXISTS ( SELECT 1 
                              FROM #CartonDetail cd
                              WHERE cd.Orderkey = @c_Orderkey
-                             AND (cd.IsVas = 1 OR cd.UOM >= '6' OR cd.[Audit] = 1)   --WL23
+                             AND (cd.IsVas = 1 OR cd.[Audit] = 1)   --WL23   --WL25
                            )
+            --WL25 S
+            AND EXISTS ( SELECT 1 
+                         FROM PACKDETAIL PD WITH (NOLOCK)
+                         WHERE PD.Pickslipno = @c_PickSlipNo
+                         HAVING SUM(PD.Qty) = @n_SumQty
+                       )
+            --WL25 E
             AND @n_TTLCtn > @n_UPSCtnCnt
             BEGIN
                SET @b_AutoPackCFM = 1   --WL22
@@ -3035,6 +3086,7 @@ BEGIN
          FETCH NEXT FROM @cur_PCKGRPH INTO @c_Orderkey, @c_DocType, @c_BillToKey, @c_Storerkey
                                          , @n_PackGrpNo
                                          , @c_UserDefine01, @c_Shipperkey   --WL19
+                                         , @b_HasAnyVAS   --WL25
       END
       CLOSE @cur_PCKGRPH
       DEALLOCATE @cur_PCKGRPH
