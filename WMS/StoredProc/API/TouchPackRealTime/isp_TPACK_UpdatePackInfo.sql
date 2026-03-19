@@ -29,6 +29,7 @@ GO
 /* 2026-03-16   3.6  GCH225     FCR-11595: New Insert logic UserSessionActivityLog  */
 /* 2026-03-16   3.6  GCH225     FCR-11632: Fix for AuditLog part when Status change */
 /* 2026-03-16   3.7  JWF011     FCR-11639: Update for ExtMeasurement                */
+/* 2026-03-19   3.8  JWF011     FCR-11818: Update TPACK_UserSessionActivityLog      */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_UpdatePackInfo] (
@@ -696,7 +697,7 @@ BEGIN
       , EditDate
    )
    SELECT TOP 1 L.PickSlipNo
-      , L.CartonNo
+      , PD.CartonNo
       , PD.LabelNo
       , L.OrderKey
       , L.LoadKey
@@ -710,13 +711,12 @@ BEGIN
       , GETDATE()
       , @c_UserID
       , GETDATE()
-   FROM TPACK_UserSessionActivityLog L WITH (NOLOCK)
+   FROM API.TPACK_UserSessionActivityLog L WITH (NOLOCK)
    LEFT JOIN PACKDETAIL PD WITH (NOLOCK)
    ON PD.PickSlipNo = L.PickSlipNo
-   AND PD.CartonNo = L.CartonNo
    AND PD.StorerKey = L.StorerKey
    WHERE L.PickSlipNo = @cPickSlipNo
-   AND L.CartonNo = @nCartonNo
+   AND PD.CartonNo = @nCartonNo
    AND L.StorerKey = @cStorerKey
    ORDER BY 1 DESC
 EXIT_SP:
