@@ -13,7 +13,7 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          : Duplicate and Modify from Mattel mspRLWAV01                 */    
-/* PVCS Version: 1.1                                                      */    
+/* PVCS Version: 1.2                                                      */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
@@ -21,6 +21,8 @@ GO
 /* Date        Author   Ver   Purposes                                    */ 
 /* 2026-02-04  Wan      1.0   Fixed, CR v3.6                              */ 
 /* 2026-02-25  Wan01    1.1   UWP-49319 - ONBR Conso Task Not Working     */  
+/* 2026-03-18  Wan02    1.2   UWP-52415 - INC9075034-Release Wave consume */
+/*                            DB Resources                                */
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV09]        
    @c_Wavekey     NVARCHAR(10)    
@@ -480,63 +482,87 @@ BEGIN
                SET @c_FinalID = CASE WHEN @c_FinalLocLoseID = 1 THEN '' ELSE @c_FromID END
                SET @c_Taskdetailkey = '' 
 
-               EXEC isp_InsertTaskDetail     
-                   @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT  
-                  ,@c_TaskType              = 'RPF'               
-                  ,@c_Storerkey             = @c_Storerkey  
-                  ,@c_Sku                   = @c_Sku  
-                  ,@c_Lot                   = @c_Lot   
-                  ,@c_UOM                   = '2'         
-                  ,@n_UOMQty                = @n_Qty       
-                  ,@n_Qty                   = @n_Qty        
-                  ,@c_FromLoc               = @c_Fromloc        
-                  ,@c_LogicalFromLoc        = @c_FromLoc   
-                  ,@c_FromID                = @c_FromID       
-                  ,@c_ToLoc                 = @c_ToLoc         
-                  ,@c_LogicalToLoc          = @c_ToLoc   
-                  ,@c_ToID                  = @c_ToID 
-                  ,@c_CaseID                = @c_UCCNo
-                  ,@c_PickMethod            = 'PP'  
-                  ,@c_Priority              = '5'       
-                  ,@c_SourcePriority        = '5'        
-                  ,@c_SourceType            = @c_SourceType        
-                  ,@c_SourceKey             = @c_Wavekey        
-                  ,@c_OrderKey              = '' 
-                  ,@c_FinalLoc              = @c_FinalLoc
-                  ,@c_FinalID               = @c_FinalID
-                  ,@c_Groupkey              = @c_Groupkey
-                  ,@n_PendingMoveIn         = @n_Qty
-                  ,@n_QtyReplen             = @n_Qty
-                  ,@c_Wavekey               = @c_Wavekey        
-                  ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
-                  ,@c_Message03             = ''  
-                  ,@c_LinkTaskToPick        = '' -- WIP=Update taskdetailkey to pickdetail_wip  
-                  ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
-                  ,@c_WIP_RefNo             = @c_SourceType  
-                  ,@b_Success               = @b_Success OUTPUT  
-                  ,@n_Err                   = @n_err OUTPUT   
-                  ,@c_ErrMsg                = @c_errmsg OUTPUT  
-                
-               IF @b_Success <> 1   
-               BEGIN  
+               --(Wan02) - START
+               SET @b_success = 1    
+               EXECUTE nspg_getkey   
+                     @KeyName    = 'TaskDetailKey'             
+                  ,  @fieldlength= 10    
+                  ,  @keystring  = @c_Taskdetailkey   OUTPUT  
+                  ,  @b_Success  = @b_Success         OUTPUT  
+                  ,  @n_err      = @n_err             OUTPUT  
+                  ,  @c_errmsg   = @c_errmsg          OUTPUT  
+
+               IF @b_Success <> 1    
+               BEGIN    
                   SET @n_Continue = 3    
-               END 
+               END  
 
-               IF @n_Continue = 1 AND @c_GroupKey = ''
+               IF @n_Continue = 1
                BEGIN
-                  SET @c_GroupKey = @c_Taskdetailkey
+                  IF @c_GroupKey = ''
+                  BEGIN
+                     SET @c_GroupKey = @c_Taskdetailkey 
+                  END
 
-                  UPDATE TaskDetail WITH (ROWLOCK)
-                  SET GroupKey = @c_GroupKey
-                     ,TrafficCop = NULL                                             --2026-01-28           
-                  WHERE TaskDetailkey = @c_Taskdetailkey
-                  AND GroupKey = ''
-
-                  IF @@ERROR <> 0  
+                  EXEC isp_InsertTaskDetail     
+                      @c_Taskdetailkey         = @c_Taskdetailkey --OUTPUT  
+                     ,@c_TaskType              = 'RPF'               
+                     ,@c_Storerkey             = @c_Storerkey  
+                     ,@c_Sku                   = @c_Sku  
+                     ,@c_Lot                   = @c_Lot   
+                     ,@c_UOM                   = '2'         
+                     ,@n_UOMQty                = @n_Qty       
+                     ,@n_Qty                   = @n_Qty        
+                     ,@c_FromLoc               = @c_Fromloc        
+                     ,@c_LogicalFromLoc        = @c_FromLoc   
+                     ,@c_FromID                = @c_FromID       
+                     ,@c_ToLoc                 = @c_ToLoc         
+                     ,@c_LogicalToLoc          = @c_ToLoc   
+                     ,@c_ToID                  = @c_ToID 
+                     ,@c_CaseID                = @c_UCCNo
+                     ,@c_PickMethod            = 'PP'  
+                     ,@c_Priority              = '5'       
+                     ,@c_SourcePriority        = '5'        
+                     ,@c_SourceType            = @c_SourceType        
+                     ,@c_SourceKey             = @c_Wavekey        
+                     ,@c_OrderKey              = '' 
+                     ,@c_FinalLoc              = @c_FinalLoc
+                     ,@c_FinalID               = @c_FinalID
+                     ,@c_Groupkey              = @c_Groupkey
+                     ,@n_PendingMoveIn         = @n_Qty
+                     ,@n_QtyReplen             = @n_Qty
+                     ,@c_Wavekey               = @c_Wavekey        
+                     ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
+                     ,@c_Message03             = ''  
+                     ,@c_LinkTaskToPick        = '' -- WIP=Update taskdetailkey to pickdetail_wip  
+                     ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
+                     ,@c_WIP_RefNo             = @c_SourceType  
+                     ,@b_Success               = @b_Success OUTPUT  
+                     ,@n_Err                   = @n_err OUTPUT   
+                     ,@c_ErrMsg                = @c_errmsg OUTPUT  
+                
+                  IF @b_Success <> 1   
                   BEGIN  
                      SET @n_Continue = 3    
                   END 
                END
+
+               --IF @n_Continue = 1 AND @c_GroupKey = ''
+               --BEGIN
+               --   SET @c_GroupKey = @c_Taskdetailkey
+               --
+               --   UPDATE TaskDetail WITH (ROWLOCK)
+               --   SET GroupKey = @c_GroupKey
+               --      ,TrafficCop = NULL                                             --2026-01-28           
+               --   WHERE TaskDetailkey = @c_Taskdetailkey
+               --   AND GroupKey = ''
+               --
+               --   IF @@ERROR <> 0  
+               --   BEGIN  
+               --      SET @n_Continue = 3    
+               --   END 
+               --END
+               --(Wan02) - END
 
                IF @n_Continue = 1
                BEGIN
@@ -877,7 +903,7 @@ BEGIN
                WHERE td.Storerkey = @c_Storerkey
                AND   td.Sku       = @c_Sku
                AND   td.TaskType  IN ('RPF','ASTRPT')                               --2026-01-29
-                AND   td.FinalLOC  = @c_FromLoc
+               AND   td.FinalLOC  = @c_FromLoc
                AND   td.SourceType= @c_SourceType
                AND   td.[Status] NOT IN ('9','X')                                   --2026-01-29
                ORDER BY CASE WHEN td.TaskType = 'RPF' THEN 1                        --2026-01-29
@@ -1077,50 +1103,70 @@ BEGIN
                SET @c_GroupKey = @c_Wavekey
                SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Userdefine09 = @c_Wavekey'    
             END                                                                    
-                
-            EXEC isp_InsertTaskDetail     
-                @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT  
-               ,@c_TaskType              = @c_TaskType               
-               ,@c_Storerkey             = @c_Storerkey  
-               ,@c_Sku                   = @c_Sku  
-               ,@c_Lot                   = @c_Lot   
-               ,@c_UOM                   = @c_UOM        
-               ,@n_UOMQty                = @n_UOMQty       
-               ,@n_Qty                   = @n_Qty        
-               ,@c_FromLoc               = @c_Fromloc        
-               ,@c_LogicalFromLoc        = @c_FromLoc   
-               ,@c_FromID                = @c_FromID       
-               ,@c_ToLoc                 = @c_ToLoc         
-               ,@c_LogicalToLoc          = @c_ToLoc   
-               ,@c_ToID                  = @c_ToID         
-               ,@c_PickMethod            = @c_PickMethod  
-               ,@c_Priority              = @c_Priority       
-               ,@c_SourcePriority        = '9'        
-               ,@c_SourceType            = @c_SourceType        
-               ,@c_SourceKey             = @c_Wavekey        
-               ,@c_OrderKey              = @c_Orderkey        
-               ,@c_Groupkey              = @c_Groupkey  
-               ,@c_Wavekey               = @c_Wavekey        
-               ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
-               ,@c_Message03             = ''  
-               ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
-               ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
-               ,@c_WIP_RefNo             = @c_SourceType  
-               ,@b_Success               = @b_Success OUTPUT  
-               ,@n_Err                   = @n_err OUTPUT   
-               ,@c_ErrMsg                = @c_errmsg OUTPUT          
-                
-            IF @b_Success <> 1   
-            BEGIN  
+               
+            --(Wan02) - START
+            SET @b_Success = 1    
+            EXECUTE nspg_getkey   
+                  @KeyName    = 'TaskDetailKey'             
+               ,  @fieldlength= 10    
+               ,  @keystring  = @c_Taskdetailkey   OUTPUT  
+               ,  @b_Success  = @b_Success         OUTPUT  
+               ,  @n_err      = @n_err             OUTPUT  
+               ,  @c_errmsg   = @c_errmsg          OUTPUT  
+
+            IF @b_Success <> 1    
+            BEGIN    
                SET @n_Continue = 3    
-            END               
-            ELSE  
-            BEGIN  
-               UPDATE TASKDETAIL WITH (ROWLOCK)  
-               SET Groupkey = @c_Taskdetailkey 
-                  ,Trafficcop = NULL                                                --2026-01-28 
-               WHERE TaskDetailKey = @c_Taskdetailkey    
             END  
+
+            IF @n_Continue = 1
+            BEGIN
+               SET @c_Groupkey = @c_Taskdetailkey
+               EXEC isp_InsertTaskDetail     
+                   @c_Taskdetailkey         = @c_Taskdetailkey --OUTPUT  
+                  ,@c_TaskType              = @c_TaskType               
+                  ,@c_Storerkey             = @c_Storerkey  
+                  ,@c_Sku                   = @c_Sku  
+                  ,@c_Lot                   = @c_Lot   
+                  ,@c_UOM                   = @c_UOM        
+                  ,@n_UOMQty                = @n_UOMQty       
+                  ,@n_Qty                   = @n_Qty        
+                  ,@c_FromLoc               = @c_Fromloc        
+                  ,@c_LogicalFromLoc        = @c_FromLoc   
+                  ,@c_FromID                = @c_FromID       
+                  ,@c_ToLoc                 = @c_ToLoc         
+                  ,@c_LogicalToLoc          = @c_ToLoc   
+                  ,@c_ToID                  = @c_ToID         
+                  ,@c_PickMethod            = @c_PickMethod  
+                  ,@c_Priority              = @c_Priority       
+                  ,@c_SourcePriority        = '9'        
+                  ,@c_SourceType            = @c_SourceType        
+                  ,@c_SourceKey             = @c_Wavekey        
+                  ,@c_OrderKey              = @c_Orderkey        
+                  ,@c_Groupkey              = @c_Groupkey  
+                  ,@c_Wavekey               = @c_Wavekey        
+                  ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
+                  ,@c_Message03             = ''  
+                  ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
+                  ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
+                  ,@c_WIP_RefNo             = @c_SourceType  
+                  ,@b_Success               = @b_Success OUTPUT  
+                  ,@n_Err                   = @n_err OUTPUT   
+                  ,@c_ErrMsg                = @c_errmsg OUTPUT          
+                
+               IF @b_Success <> 1   
+               BEGIN  
+                  SET @n_Continue = 3    
+               END               
+               --ELSE  
+               --BEGIN  
+               --   UPDATE TASKDETAIL WITH (ROWLOCK)  
+               --   SET Groupkey = @c_Taskdetailkey 
+               --      ,Trafficcop = NULL                                                --2026-01-28 
+               --   WHERE TaskDetailKey = @c_Taskdetailkey    
+               --END  
+            END
+            --Wan02 - END
          END  
 
          SET @c_UOM_P     = @c_UOM      
