@@ -53,6 +53,7 @@ GO
 /* 16-Mar-2026 WLChooi  3.5   FCR-11586 Fix DropID linkage (WL24)        */
 /* 19-Mar-2026 WLChooi  3.6   FCR-11586 Add new condition for Packdetail */
 /*                            QTY mapping (WL25)                         */
+/* 19-Mar-2026 WLChooi  3.7   FCR-11841 Fix algorithm (WL26)             */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -1484,7 +1485,7 @@ BEGIN
                      BEGIN
                         SET @b_CZN_Check = 1
                         INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity, CZNCheck)   --WL21
-                        SELECT Storerkey, Sku, pcz.Dim1, pcz.Dim2, pcz.Dim3, Qty_PI, 1   --WL20   --WL21
+                        SELECT Storerkey, Sku, pcz.[Height], pcz.[Width], pcz.[Length], Qty_PI, 1   --WL20   --WL21   --WL26
                         FROM #PRECTN AS pcz
                         WHERE pcz.PackGrpNo    = @n_PackGrpNo
                         AND   pcz.HardCTNGrpNo = @n_HardCTNGrpNo
@@ -1559,7 +1560,7 @@ BEGIN
                                         FROM #OptimizeItemToPack )
                         BEGIN
                            INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
-                           SELECT Storerkey, Sku, cd.Dim1, cd.Dim2, cd.Dim3, cd.Qty   --WL22
+                           SELECT Storerkey, Sku, cd.[Height], cd.[Width], cd.[Length], cd.Qty   --WL22   --WL26
                            FROM #CartonDetail AS cd
                            WHERE cd.Orderkey = @c_Orderkey
                            AND   cd.CartonSeqNo = @n_CartonSeqNo
@@ -1697,7 +1698,7 @@ BEGIN
                      BEGIN
                         SET @b_CZN_Check = 0   --WL21
                         INSERT INTO @t_ItemToPack (Storerkey, Sku, [Length], Width, Height, Qty)
-                        VALUES (@c_Storerkey, @c_Sku, @n_Dim1_Sku, @n_Dim2_Sku, @n_Dim3_Sku, @n_QtyToPack)   --WL20
+                        VALUES (@c_Storerkey, @c_Sku, @n_Height, @n_Width, @n_Length, @n_QtyToPack)   --WL20   --WL26
 
                         TRUNCATE TABLE #OptimizeItemToPack;
                         INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
@@ -2203,7 +2204,7 @@ BEGIN
                         EXEC isp_SubmitToCartonizeAPI
                              @c_CartonGroup = @c_CTNGroup
                            , @c_CartonType  = @c_CartonType
-                           , @c_Algorithm   = ''
+                           , @c_Algorithm   = @c_Algorithm   --WL26
                            , @b_Success     = @b_Success       OUTPUT
                            , @n_Err         = @n_Err           OUTPUT
                            , @c_ErrMsg      = @c_ErrMsg        OUTPUT
