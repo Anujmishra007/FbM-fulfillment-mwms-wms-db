@@ -2747,7 +2747,7 @@ BEGIN
                SET @n_SumQty = 0
                SELECT @n_TTLCtn  = ISNULL(@n_CartonNo_Last, 0) 
                                  + COUNT(DISTINCT cd.CartonSeqNo)
-                    , @b_IsAudit = MAX(cd.[Audit])
+                    , @b_IsAudit = CAST(ISNULL(MAX(cd.[Audit] * 1), 0) AS BIT)
                     , @n_SumQty  = ISNULL(SUM(cd.Qty),0)
                FROM #CartonDetail cd
                WHERE cd.Orderkey = @c_Orderkey
