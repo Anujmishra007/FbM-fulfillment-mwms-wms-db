@@ -66,6 +66,7 @@ BEGIN
    DECLARE
       @cReceiptKey       NVARCHAR( 10),
       @cDocType          NVARCHAR( 1),
+      @cOption           NVARCHAR( 5),
       @nCurrentStep      INT,
       @nOpenQty          INT
 
@@ -90,36 +91,47 @@ BEGIN
 
    IF @nFunc = 898
    BEGIN
-      IF @nCurrentStep IN (6, 10)
+      IF @nCurrentStep = 12  -- Close pallet?
       BEGIN
-         IF @nOpenQty = 0
+         IF @nInputKey = 1 -- Enter
          BEGIN
-            DECLARE
-               @cMsg01                 NVARCHAR(20) = '',
-               @cMsg02                 NVARCHAR(20) = '',
-               @cMsg03                 NVARCHAR(20) = '',
-               @cMsg04                 NVARCHAR(20) = '',
-               @cMsg05                 NVARCHAR(20) = '',
-               @cMsg06                 NVARCHAR(20) = '',
-               @cMsg07                 NVARCHAR(20) = '',
-               @cMsg08                 NVARCHAR(20) = '',
-               @cMsg09                 NVARCHAR(20) = ''
+            SET @cOption = @cInField01
 
-            SET @cMsg01 = 'ASN completely '
-            SET @cMsg02 = 'received.'
-            EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
-                  @nErrNo = @nErrNo,
-                  @cErrMsg = @cErrMsg,
-                  @cLine01 = @cMsg01,
-                  @cLine02 = @cMsg02,
-                  @cLine03 = @cMsg03,
-                  @cLine04 = @cMsg04,
-                  @cLine05 = @cMsg05,
-                  @cLine06 = @cMsg06,
-                  @cLine07 = @cMsg07,
-                  @cLine08 = @cMsg08,
-                  @cLine09 = @cMsg09,
-                  @nDisplayMsg = 0
+            IF @cOption IN ('2', '3') 
+            BEGIN
+               IF @nOpenQty = 0
+               BEGIN
+                  DECLARE
+                     @cMsg01                 NVARCHAR(20) = '',
+                     @cMsg02                 NVARCHAR(20) = '',
+                     @cMsg03                 NVARCHAR(20) = '',
+                     @cMsg04                 NVARCHAR(20) = '',
+                     @cMsg05                 NVARCHAR(20) = '',
+                     @cMsg06                 NVARCHAR(20) = '',
+                     @cMsg07                 NVARCHAR(20) = '',
+                     @cMsg08                 NVARCHAR(20) = '',
+                     @cMsg09                 NVARCHAR(20) = ''
+
+                  SET @cMsg01 = 'ASN completely '
+                  SET @cMsg02 = 'received.'
+                  EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                        @nErrNo = @nErrNo,
+                        @cErrMsg = @cErrMsg,
+                        @cLine01 = @cMsg01,
+                        @cLine02 = @cMsg02,
+                        @cLine03 = @cMsg03,
+                        @cLine04 = @cMsg04,
+                        @cLine05 = @cMsg05,
+                        @cLine06 = @cMsg06,
+                        @cLine07 = @cMsg07,
+                        @cLine08 = @cMsg08,
+                        @cLine09 = @cMsg09,
+                        @nDisplayMsg = 0
+
+                  SET @nAfterScn = 1300
+                  SET @nAfterStep = 1
+               END
+            END
          END
       END
    END
