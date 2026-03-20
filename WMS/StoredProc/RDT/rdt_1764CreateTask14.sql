@@ -16,6 +16,7 @@ GO
 /* Date       Rev    Author     Purposes                                      */
 /* 2025-06-11 1.0.0  Dennis     FCR-3959 Created                              */
 /* 2025-12-10 1.0.1  PPA374     Considering case replenishment                */
+/* 2026-03-04 1.0.2  Dennis     FCR-10220                                     */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764CreateTask14] (
@@ -230,9 +231,40 @@ BEGIN
          
          IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND LocationCategory = 'INTRANSIT' AND Facility = @cFacility) 
          BEGIN
-            UPDATE dbo.TaskDetail
-            SET STATUS = '3',UserKey = @cUserName
-            WHERE TaskDetailKey = @cNewTaskDetailKey
+            /*UPDATE dbo.TaskDetail
+            SET STATUS = '3',
+			UserKey = @cUserName, 
+			PickMethod = 'PP', 
+			FromID = ToID,
+			UserKeyOverRide = @cUserName
+            WHERE TaskDetailKey = @cNewTaskDetailKey*/
+
+			UPDATE td_new
+			SET td_new.STATUS = '3',
+				td_new.UserKey = @cUserName,
+				td_new.PickMethod = 'PP',
+				td_new.FromID = td_new.ToID,
+				td_new.UserKeyOverRide = @cUserName,
+				td_new.Message01 = src.MaxStatusMsg,
+				td_new.Message02 = ISNULL(CONVERT(NVARCHAR(20), TRY_CONVERT(datetime, srcTask.StatusMsg), 120),'')
+			FROM dbo.TaskDetail td_new
+			-- MAX StatusMsg for Message01
+			CROSS JOIN (
+				SELECT ISNULL(CONVERT(NVARCHAR(20), MAX(TRY_CONVERT(datetime, StatusMsg)), 120),'') AS MaxStatusMsg
+				FROM dbo.TaskDetail
+				WHERE FinalLoc = (
+					SELECT TOP 1 FinalLoc
+					FROM dbo.TaskDetail
+					WHERE TaskDetailKey = @cTaskDetailKey
+				)
+				  AND ISNULL(StatusMsg,'') <> ''
+				  AND UserKey = @cUserName
+				  AND EndTime >= DATEADD(HOUR, -24, GETDATE())
+			) src
+			-- source task for Message02
+			JOIN dbo.TaskDetail srcTask
+				ON srcTask.TaskDetailKey = @cTaskDetailKey
+			WHERE td_new.TaskDetailKey = @cNewTaskDetailKey
          END
 
          SET @cNewTaskDetailKey = ''

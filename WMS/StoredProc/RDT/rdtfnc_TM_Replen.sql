@@ -1584,6 +1584,14 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
    GOTO Quit
 
    Step_FromID_Fail:
@@ -3715,7 +3723,8 @@ BEGIN
 
          INSERT INTO @tExtScnData (Variable, Value) 
          VALUES
-            ('@cDropID',     @cDropID)
+            ('@cDropID',     @cDropID),
+            ('@cNextTaskDetailKey',@cNextTaskDetailKey)
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP,
@@ -3813,6 +3822,31 @@ BEGIN
                   GOTO Step_Exit
                END
             END  
+         END
+         ELSE IF @cExtScnSP = 'rdt_1764ExtScn02'
+         BEGIN
+            IF (@nPreviousStep IN (0,5,7) AND @nStep = 2)
+            OR (@nPreviousScn = 6620 AND @nStep = 2)
+            OR (@nPreviousStep = 5 AND @nStep IN (2,3,4))
+            BEGIN
+               SET @cDropID = @cUDF01
+            END
+            ELSE IF @nPreviousStep = 2 AND @nInputKey = 0
+            BEGIN
+               SET @nFromStep = 2
+               SET @nFromScn = @nPreviousScn
+            END
+            IF @nStep = 4 AND @cSuggFromLOC = 'INTRANSIT'
+            BEGIN
+               SET @nQTY = @nQTY_RPL
+               -- Prepare next screen var
+               SET @cOption = ''
+               SET @cOutField01 = CASE WHEN ISNULL(@cDefaultOption,'')  <> '' THEN @cDefaultOption ELSE '' END -- Option -- (ChewKP02)
+               SET @cOutField10 = '' -- ExtendedInfo
+
+               SET @nScn = @nScn_NextTask
+               SET @nStep = @nStep_NextTask
+            END
          END
       END
    END

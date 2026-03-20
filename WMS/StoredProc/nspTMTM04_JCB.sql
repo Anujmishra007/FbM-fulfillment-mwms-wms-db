@@ -18,7 +18,8 @@ GO
 /* 2026-01-05   2.2   PPA374    Changing aisle in use to C_String28             */
 /* 2026-01-09   2.3   PPA374    Adding Permission and In Progress errors        */
 /* 2026-02-12   2.4   PPA374    Adding 'INLOCKED' flag as an ok flag to pick    */
-/* 2026-02-13   2.5   PPA374    Adding "MHE not for source loc" errror message  */
+/* 2026-02-13   2.5   PPA374    Adding "MHE not for source loc" error message   */
+/* 2026-02-13   2.6   PPA374    Adding "Replen in progress" error               */
 /********************************************************************************/
 CREATE OR ALTER PROC    [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
@@ -289,79 +290,71 @@ BEGIN
     DECLARE @t_ProcessTaskType TABLE (TaskType NVARCHAR(10), NoOfTry INT)
 
     DECLARE @nWaitSecondsS INT
-	DECLARE @nWaitSecondsL INT
-	DECLARE @cStorerKey    NVARCHAR(20)
-	DECLARE @cFacility     NVARCHAR(20)
+   DECLARE @nWaitSecondsL INT
+   DECLARE @cStorerKey    NVARCHAR(20)
+   DECLARE @cFacility     NVARCHAR(20)
 
-	SELECT TOP 1 @nWaitSecondsS = Short, @nWaitSecondsL = Long FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBVNAWAIT'
+   SELECT TOP 1 @nWaitSecondsS = Short, @nWaitSecondsL = Long FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBVNAWAIT'
 
-	SELECT TOP 1 @cStorerKey = StorerKey, @cFacility = Facility FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid
+   SELECT TOP 1 @cStorerKey = StorerKey, @cFacility = Facility FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid
 
-    -- (james01)
-    IF @n_continue=1 OR @n_continue=2
-    BEGIN
-        Create TABLE #Aisle_InUsed ( Rowref INT identity(1,1) Primary Key,
+   -- (james01)
+   IF @n_continue=1 OR @n_continue=2
+   BEGIN
+      Create TABLE #Aisle_InUsed ( Rowref INT identity(1,1) Primary Key,
                LocAIsle NVARCHAR(10) ,UserKey NVARCHAR(18))
-        /*IF EXISTS (
-               SELECT 1
-               FROM   TaskManagerUser TMU WITH (NOLOCK)
-                      INNER JOIN EquipmentProfile EP WITH (NOLOCK)
-                           ON  (TMU.EquipmentProfileKey=EP.EquipmentProfileKey)
-               WHERE  TMU.Userkey = @c_userid
-                      AND TMU.EquipmentProfileKey = 'VNA'
-           )*/
-        BEGIN
-            INSERT INTO #Aisle_InUsed
-              (
-                LocAisle, UserKey
-              )
-			-- TaskDetail aisles
-            SELECT 
-               L.LocAisle,
-               IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) AS UserKey
-            FROM dbo.TaskDetail TD WITH(NOLOCK)
-               CROSS APPLY (VALUES
-                  (TD.FromLoc),
-                  (TD.ToLoc)
-               ) AS loc(L)
-               LEFT JOIN dbo.LOC L WITH(NOLOCK) ON loc.L = L.Loc AND L.LocationCategory = 'VNA' AND L.Facility = @cFacility
-            WHERE LocAisle IS NOT NULL
-               AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
-               AND TD.Status IN ('0','3')
-               AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @c_UserID
-	           AND TD.Storerkey = @cStorerKey
+      BEGIN
+         INSERT INTO #Aisle_InUsed
+         (
+            LocAisle, UserKey
+         )
+         -- TaskDetail aisles
+         SELECT 
+            L.LocAisle,
+            IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) AS UserKey
+         FROM dbo.TaskDetail TD WITH(NOLOCK)
+            CROSS APPLY (VALUES
+               (TD.FromLoc),
+               (TD.ToLoc)
+            ) AS loc(L)
+            LEFT JOIN dbo.LOC L WITH(NOLOCK) ON loc.L = L.Loc AND L.LocationCategory = 'VNA' AND L.Facility = @cFacility
+         WHERE LocAisle IS NOT NULL
+            AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
+            AND TD.Status IN ('0','3')
+            AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @c_UserID
+         AND TD.Storerkey = @cStorerKey
 
-            UNION ALL
+         UNION ALL
 
-            -- RDTMOBREC aisles
-            SELECT 
-               IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) AS LocAisle,
-               R.UserName AS UserKey
-            FROM RDT.RDTMOBREC R WITH(NOLOCK)
-               LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
-               LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.C_String28 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
-            WHERE R.StorerKey = @cStorerKey
-               AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
-               AND R.UserName <> @c_UserID
-               AND IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) <> ''
+         -- RDTMOBREC aisles
+         SELECT 
+            IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) AS LocAisle,
+            R.UserName AS UserKey
+         FROM RDT.RDTMOBREC R WITH(NOLOCK)
+            LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
+            LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.C_String28 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+         WHERE R.StorerKey = @cStorerKey
+            AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
+            AND R.UserName <> @c_UserID
+            AND IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) <> ''
 
-            /*SELECT L.LocAisle
-                  ,TD.UserKey
-            FROM   TaskDetail TD WITH (NOLOCK)
-            JOIN LOC L WITH (NOLOCK) ON  (TD.FromLOC=L.Loc)
-            JOIN TaskManagerUser TMU WITH (NOLOCK) ON  (TD.UserKey=TMU.UserKey)
-            JOIN EquipmentProfile EP WITH (NOLOCK) ON  (TMU.EquipmentProfileKey=EP.EquipmentProfileKey)
-            WHERE  TMU.EquipmentProfileKey = 'VNA'
-             AND TD.UserKey<>@c_userid
-             AND TD.Status = '3'
-            ORDER BY L.LocAisle*/
-        END
-    END
+         /*SELECT L.LocAisle
+               ,TD.UserKey
+         FROM   TaskDetail TD WITH (NOLOCK)
+         JOIN LOC L WITH (NOLOCK) ON  (TD.FromLOC=L.Loc)
+         JOIN TaskManagerUser TMU WITH (NOLOCK) ON  (TD.UserKey=TMU.UserKey)
+         JOIN EquipmentProfile EP WITH (NOLOCK) ON  (TMU.EquipmentProfileKey=EP.EquipmentProfileKey)
+         WHERE  TMU.EquipmentProfileKey = 'VNA'
+         AND TD.UserKey<>@c_userid
+         AND TD.Status = '3'
+         ORDER BY L.LocAisle*/
+      END
+   END
 
-    IF @b_debug=1
-    BEGIN
-        SELECT 'Strategykey = ',@c_Strategykey,'TTMStrategyKey = ',@c_TTMStrategyKey
-    END
+   IF @b_debug=1
+   BEGIN
+      SELECT 'Strategykey = ',@c_Strategykey,'TTMStrategyKey = ',@c_TTMStrategyKey
+   END
 
     IF @n_continue=1 OR @n_continue=2
     BEGIN
@@ -2160,31 +2153,31 @@ BEGIN
         SET ROWCOUNT 0
     END -- @n_continue = 1 or @n_continue = 2
 
-    IF @n_continue=1
-       OR @n_continue=2
-    BEGIN
-       IF EXISTS(
-               SELECT 1
-               FROM   TASKDETAIL WITH (NOLOCK)
-               WHERE  TaskDetailKey = @c_TaskDetailKey
-                      AND Userkey<>@c_userid
-                      AND STATUS = '3'
-           )
-       BEGIN
-            SELECT @n_continue = 3
-            SELECT @n_err = 63059--78603
-            SELECT @c_errmsg = CONVERT(NVARCHAR(5) ,@n_err)+' Task Taken!' -- (james02)
-       END
-   ELSE
-   BEGIN
-      -- Added By Shong on 9th Jul 2010
-      -- Return Correct Task Type
-      SELECT @c_TTMTaskType = Tasktype
-      FROM   TASKDETAIL WITH (NOLOCK)
-      WHERE  TaskDetailKey = @c_TaskDetailKey
+      IF @n_continue=1
+         OR @n_continue=2
+      BEGIN
+         IF EXISTS(
+                  SELECT 1
+                  FROM   TASKDETAIL WITH (NOLOCK)
+                  WHERE  TaskDetailKey = @c_TaskDetailKey
+                        AND Userkey<>@c_userid
+                        AND STATUS = '3'
+            )
+         BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 63059--78603
+               SELECT @c_errmsg = CONVERT(NVARCHAR(5) ,@n_err)+' Task Taken!' -- (james02)
+         END
+      ELSE
+      BEGIN
+         -- Added By Shong on 9th Jul 2010
+         -- Return Correct Task Type
+         SELECT @c_TTMTaskType = Tasktype
+         FROM   TASKDETAIL WITH (NOLOCK)
+         WHERE  TaskDetailKey = @c_TaskDetailKey
 
+      END
    END
-END
 
     IF @n_continue=1
        OR @n_continue=2
@@ -2196,10 +2189,10 @@ END
             SELECT @c_errmsg = CONVERT(NVARCHAR(5) ,@n_err)+' No Task!'
         END
 
-		IF @n_err = 63060
-		BEGIN
-		   -- Over max pallet
-		   IF EXISTS (
+      IF @n_err = 63060
+      BEGIN
+         -- Over max pallet
+         IF EXISTS (
               SELECT 1
               FROM dbo.TaskDetail TD WITH (NOLOCK)
                  INNER JOIN dbo.LOC L WITH (NOLOCK)
@@ -2208,7 +2201,7 @@ END
                     ON TD.ToLoc = LLI.Loc
                     AND LLI.StorerKey = @cStorerKey
                     AND LLI.Qty > 0
-					AND LLI.ID <> ''
+               AND LLI.ID <> ''
                  LEFT JOIN #Aisle_InUsed AI1
                     ON L.LocAisle = AI1.LocAisle
                     AND L.Facility = @cFacility
@@ -2220,13 +2213,13 @@ END
                  LEFT JOIN #Aisle_InUsed AI2
                     ON LF.LocAisle = AI2.LocAisle
               WHERE TD.AreaKey = @c_AreaKey01
-		         AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+               AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                  AND L.Facility = @cFacility
                  AND TD.StorerKey = @cStorerKey
                  AND (
-			        TD.Status = '0'
+                 TD.Status = '0'
                     OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
-			     )
+              )
                  AND AI1.LocAisle IS NULL   
                  AND AI2.LocAisle IS NULL   
               GROUP BY L.MaxPallet, L.Loc
@@ -2234,10 +2227,10 @@ END
            )
            AND @n_err = 63060
            BEGIN
-		      /*UPDATE TaskDetail 
-		      SET StatusMsg = 'OverMaxPallet'
-		      WHERE TaskDetailKey IN (
-		         SELECT TD.TaskDetailKey
+            /*UPDATE TaskDetail 
+            SET StatusMsg = 'OverMaxPallet'
+            WHERE TaskDetailKey IN (
+               SELECT TD.TaskDetailKey
                  FROM dbo.TaskDetail TD WITH (NOLOCK)
                     INNER JOIN dbo.LOC L WITH (NOLOCK)
                        ON TD.ToLoc = L.Loc
@@ -2246,25 +2239,25 @@ END
                        AND LLI.StorerKey = @cStorerKey
                        AND LLI.Qty > 0
                  WHERE TD.AreaKey = @c_AreaKey01
-		            AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                  AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                     AND L.Facility = @cFacility
                     AND TD.StorerKey = @cStorerKey
                     AND (
-			           TD.Status = '0'
+                    TD.Status = '0'
                        OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
-					) 
+               ) 
                  GROUP BY L.MaxPallet, L.Loc, TD.TaskDetailKey
                  HAVING IIF(L.MaxPallet = 0, 99999999, L.MaxPallet) <= COUNT(DISTINCT LLI.ID)
-		      )*/
+            )*/
 
               SELECT @n_continue = 3
               SELECT @n_err = 218254 --218254^OverMaxPallet 
               SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' OverMaxPallet'  
-		      GOTO QuitErrorCheck
+            GOTO QuitErrorCheck
            END
 
-		   --Loc on hold
-		   IF @n_err = '63060'
+         --Loc on hold
+         IF @n_err = '63060'
               AND EXISTS (
                  SELECT 1
                  FROM TaskDetail TD WITH (NOLOCK)
@@ -2272,8 +2265,8 @@ END
                        ON TD.ToLoc = L.Loc
                     INNER JOIN LOC L1 WITH (NOLOCK)
                        ON TD.FromLoc = L1.LOC
-					INNER JOIN LOC L2
-					   ON TD.FinalLOC = L2.LOC
+               INNER JOIN LOC L2
+                  ON TD.FinalLOC = L2.LOC
                     LEFT JOIN #Aisle_InUsed AI1
                        ON L.LocAisle = AI1.LocAisle
                        AND L.Facility = @cFacility
@@ -2285,24 +2278,24 @@ END
                     LEFT JOIN #Aisle_InUsed AI2
                        ON LF.LocAisle = AI2.LocAisle
                  WHERE TD.AreaKey = @c_AreaKey01
-			        AND L.Facility = @cFacility
-				    AND L1.Facility = @cFacility
-					AND L2.Facility = @cFacility
-			        AND TD.Storerkey = @cStorerKey
+                 AND L.Facility = @cFacility
+                AND L1.Facility = @cFacility
+               AND L2.Facility = @cFacility
+                 AND TD.Storerkey = @cStorerKey
                     AND TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                     AND (
                        TD.Status = '0'
                        OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                     )
                     AND (
-				       L.Status <> 'OK' 
-					   OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED') 
-					   OR L1.Status <> 'OK' 
-					   OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED')
-					   OR L2.Status <> 'OK' 
-					   OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED')
-				    )
-					AND AI1.LocAisle IS NULL   
+                   L.Status <> 'OK' 
+                  OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED') 
+                  OR L1.Status <> 'OK' 
+                  OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED')
+                  OR L2.Status <> 'OK' 
+                  OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED')
+                )
+               AND AI1.LocAisle IS NULL   
                     AND AI2.LocAisle IS NULL   
            )
            BEGIN
@@ -2346,10 +2339,10 @@ END
               SELECT @n_continue = 3
               SELECT @n_err = 218253 --Loc on hold or flag
               SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' Loc on hold or flag'
-			  GOTO QuitErrorCheck
+           GOTO QuitErrorCheck
            END
 
-		   -- Order on hold
+         -- Order on hold
            IF @n_err = 63060
               AND EXISTS (
                  SELECT 1
@@ -2359,8 +2352,8 @@ END
                        AND TD1.AreaKey = TD2.AreaKey
                        AND TD2.Status IN ('S','H')
                        AND TD1.Storerkey = TD2.Storerkey
-					INNER JOIN LOC L WITH(NOLOCK)
-					   ON TD1.ToLoc = L.Loc
+               INNER JOIN LOC L WITH(NOLOCK)
+                  ON TD1.ToLoc = L.Loc
                     LEFT JOIN #Aisle_InUsed AI1
                        ON L.LocAisle = AI1.LocAisle
                        AND L.Facility = @cFacility
@@ -2372,18 +2365,18 @@ END
                     LEFT JOIN #Aisle_InUsed AI2
                        ON LF.LocAisle = AI2.LocAisle
                  WHERE TD1.AreaKey = @c_AreaKey01
-				    AND L.Facility = @cFacility
+                AND L.Facility = @cFacility
                     AND TD1.TaskType IN ('FCP', 'FCP1')
                     AND TD1.PickMethod = 'PP'
                     AND TD1.Status = '0'
-				    AND TD1.Storerkey = @cStorerKey
-					AND AI1.LocAisle IS NULL   
+                AND TD1.Storerkey = @cStorerKey
+               AND AI1.LocAisle IS NULL   
                     AND AI2.LocAisle IS NULL  
               )
            BEGIN
-		      /*UPDATE TaskDetail
-		      SET StatusMsg = 'Order on hold' 
-		      WHERE TaskDetailKey IN (
+            /*UPDATE TaskDetail
+            SET StatusMsg = 'Order on hold' 
+            WHERE TaskDetailKey IN (
                  SELECT X.TaskDetailKey
                  FROM dbo.TaskDetail AS TD1 WITH (NOLOCK)
                     INNER JOIN dbo.TaskDetail AS TD2 WITH (NOLOCK)
@@ -2400,14 +2393,14 @@ END
                     AND TD1.PickMethod = 'PP'
                     AND TD1.Status = '0'
                     AND TD1.Storerkey = @cStorerKey
-		      )*/
+            )*/
               SELECT @n_continue = 3
               SELECT @n_err = 218252 --Order on hold
               SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' Order on hold'
-		      GOTO QuitErrorCheck
+            GOTO QuitErrorCheck
            END
 
-		   -- Order in progress
+         -- Order in progress
            IF @n_err = 63060
               AND EXISTS (
                  SELECT 1
@@ -2416,10 +2409,10 @@ END
                        ON  TD1.OrderKey = TD2.OrderKey
                        AND TD1.AreaKey = TD2.AreaKey
                        AND TD2.Status = '3'
-					   AND TD2.UserKey <> @c_userid
+                  AND TD2.UserKey <> @c_userid
                        AND TD1.Storerkey = TD2.Storerkey
-					INNER JOIN LOC L WITH(NOLOCK)
-					   ON TD1.ToLoc = L.Loc
+               INNER JOIN LOC L WITH(NOLOCK)
+                  ON TD1.ToLoc = L.Loc
                     LEFT JOIN #Aisle_InUsed AI1
                        ON L.LocAisle = AI1.LocAisle
                        AND L.Facility = @cFacility
@@ -2431,31 +2424,71 @@ END
                     LEFT JOIN #Aisle_InUsed AI2
                        ON LF.LocAisle = AI2.LocAisle
                  WHERE TD1.AreaKey = @c_AreaKey01
-				    AND L.Facility = @cFacility
+                AND L.Facility = @cFacility
                     AND TD1.TaskType IN ('FCP', 'FCP1')
                     AND TD1.PickMethod = 'PP'
                     AND TD1.Status = '0'
-				    AND TD1.Storerkey = @cStorerKey
-					AND AI1.LocAisle IS NULL   
+                AND TD1.Storerkey = @cStorerKey
+               AND AI1.LocAisle IS NULL   
                     AND AI2.LocAisle IS NULL  
               )
            BEGIN
               SELECT @n_continue = 3
               SELECT @n_err = 218262 --Order in progress
               SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' Order in progress'
-		      GOTO QuitErrorCheck
+            GOTO QuitErrorCheck
+           END
+
+         -- Replen in progress
+           IF @n_err = 63060
+              AND EXISTS (
+                 SELECT 1
+                 FROM dbo.TaskDetail AS TD1 WITH (NOLOCK)
+                    INNER JOIN dbo.TaskDetail AS TD2 WITH (NOLOCK)
+                       ON  TD1.FromLoc = TD2.FromLoc
+                       AND TD1.AreaKey = TD2.AreaKey
+                       AND TD2.Status = '3'
+                  AND TD2.UserKey <> @c_userid
+                       AND TD1.Storerkey = TD2.Storerkey
+               INNER JOIN LOC L WITH(NOLOCK)
+                  ON TD1.ToLoc = L.Loc
+                    LEFT JOIN #Aisle_InUsed AI1
+                       ON L.LocAisle = AI1.LocAisle
+                       AND L.Facility = @cFacility
+                       AND L.LocationCategory = 'VNA'
+                    LEFT JOIN dbo.LOC LF WITH (NOLOCK)
+                       ON TD1.FromLoc = LF.Loc
+                       AND LF.Facility = @cFacility
+                       AND LF.LocationCategory = 'VNA'
+                    LEFT JOIN #Aisle_InUsed AI2
+                       ON LF.LocAisle = AI2.LocAisle
+                 WHERE TD1.AreaKey = @c_AreaKey01
+                AND L.Facility = @cFacility
+                    AND TD1.TaskType IN ('RPF', 'RPF1', 'RP1')
+                    AND TD1.PickMethod = 'PP'
+                    AND TD1.Status = '0'
+                AND TD1.Storerkey = @cStorerKey
+               AND TD1.AreaKey = 'MOTHERSONS'
+               AND AI1.LocAisle IS NULL   
+                    AND AI2.LocAisle IS NULL  
+              )
+           BEGIN
+              SELECT @n_continue = 3
+              SELECT @n_err = 218268 --Replen in progress
+              SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' Replen in progress'
+            GOTO QuitErrorCheck
            END
         
-		   -- No pick details
-		   IF @n_err = 63060
+         -- No pick details
+         IF @n_err = 63060
            AND EXISTS (
               SELECT 1 
-		      FROM dbo.TaskDetail AS TD WITH (NOLOCK)
-		         LEFT JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
-			        ON TD.TaskDetailKey = PD.TaskDetailKey
-				    AND TD.StorerKey = PD.StorerKey
-				 INNER JOIN LOC L WITH(NOLOCK)
-				    ON TD.ToLoc = L.Loc
+            FROM dbo.TaskDetail AS TD WITH (NOLOCK)
+               LEFT JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
+                 ON TD.TaskDetailKey = PD.TaskDetailKey
+                AND TD.StorerKey = PD.StorerKey
+             INNER JOIN LOC L WITH(NOLOCK)
+                ON TD.ToLoc = L.Loc
                  LEFT JOIN #Aisle_InUsed AI1
                     ON L.LocAisle = AI1.LocAisle
                     AND L.Facility = @cFacility
@@ -2466,45 +2499,45 @@ END
                     AND LF.LocationCategory = 'VNA'
                  LEFT JOIN #Aisle_InUsed AI2
                     ON LF.LocAisle = AI2.LocAisle
-		      WHERE TD.AreaKey = @c_AreaKey01
+            WHERE TD.AreaKey = @c_AreaKey01
                  AND TD.TaskType IN ('FCP', 'FCP1')
-			     AND (
+              AND (
                     TD.Status = '0'
                     OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                  )
-			     AND TD.StorerKey = @cStorerKey
-			     AND PD.TaskDetailKey IS NULL
-			     AND AI1.LocAisle IS NULL   
+              AND TD.StorerKey = @cStorerKey
+              AND PD.TaskDetailKey IS NULL
+              AND AI1.LocAisle IS NULL   
                  AND AI2.LocAisle IS NULL 
-		   )
-		   BEGIN
-		      /*UPDATE TaskDetail
-		      SET StatusMsg = 'No Pick Detail'
-		      WHERE TaskDetailKey IN (
-		         SELECT TD.TaskDetailKey
-		         FROM dbo.TaskDetail AS TD WITH (NOLOCK)
-		            LEFT JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
-			           ON TD.TaskDetailKey = PD.TaskDetailKey
-				       AND TD.StorerKey = PD.StorerKey
-		         WHERE TD.AreaKey = @c_AreaKey01
+         )
+         BEGIN
+            /*UPDATE TaskDetail
+            SET StatusMsg = 'No Pick Detail'
+            WHERE TaskDetailKey IN (
+               SELECT TD.TaskDetailKey
+               FROM dbo.TaskDetail AS TD WITH (NOLOCK)
+                  LEFT JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
+                    ON TD.TaskDetailKey = PD.TaskDetailKey
+                   AND TD.StorerKey = PD.StorerKey
+               WHERE TD.AreaKey = @c_AreaKey01
                     AND TD.TaskType IN ('FCP', 'FCP1')
-			        AND (
+                 AND (
                        TD.Status = '0'
                        OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                     )
-			        AND TD.StorerKey = @cStorerKey
-			        AND PD.TaskDetailKey IS NULL
-		      )*/
+                 AND TD.StorerKey = @cStorerKey
+                 AND PD.TaskDetailKey IS NULL
+            )*/
 
               SELECT @n_continue = 3
               SELECT @n_err = 218258
               SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- '218258^No PickDetail'
-		      GOTO QuitErrorCheck
-		   END
+            GOTO QuitErrorCheck
+         END
 
-		   -- Aisle in use
-	       IF @n_err = 63060
-		      AND EXISTS (
+         -- Aisle in use
+          IF @n_err = 63060
+            AND EXISTS (
                  SELECT 1
                  FROM dbo.TaskDetail TD WITH (NOLOCK)
                     CROSS APPLY (VALUES (TD.FromLoc), (TD.ToLoc)) AS X(Loc)
@@ -2521,13 +2554,13 @@ END
                     AND (
                        TD.Status = '0'
                        OR (
-					      TD.Status = '3'
+                     TD.Status = '3'
                           AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
-					   )
+                  )
                     )
                     AND L.LocAisle IN (SELECT LocAisle FROM #Aisle_InUsed)
-	          )
-	       BEGIN
+             )
+          BEGIN
               /*UPDATE TD
               SET TD.StatusMsg = 'Aisle in use by ' + T1.UserKey
               FROM dbo.TaskDetail TD
@@ -2553,10 +2586,10 @@ END
               SELECT @n_continue = 3
               SELECT @n_err = 218255
               SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Aisle in use'
-		      GOTO QuitErrorCheck
-	       END
+            GOTO QuitErrorCheck
+          END
 
-		   -- Overwriting an error with MHE weight issue
+         -- Overwriting an error with MHE weight issue
            IF (
               /*EXISTS (
                  SELECT 1
@@ -2572,14 +2605,14 @@ END
                        TD.Status = '0'
                        OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                     )
-				    AND TD.FromID <> ''
+                AND TD.FromID <> ''
                     AND P.StorerKey = RM.StorerKey
                     AND TD.AreaKey = @c_AreaKey01
                     AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                     AND P.GrossWgt >= EP.MaximumWeight
               )
               OR */
-			     EXISTS (
+              EXISTS (
                  SELECT 1
                  FROM dbo.LOTxLOCxID AS LLI WITH (NOLOCK)
                     INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
@@ -2599,13 +2632,13 @@ END
                     )
                     AND TD.AreaKey = @c_AreaKey01
                     AND LLI.Qty > 0
-				    AND TD.FromID <> ''
+                AND TD.FromID <> ''
                     AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                  GROUP BY FromID, EP.MaximumWeight, TD.TaskDetailKey
                  HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
               )
-		      OR EXISTS (
-		         SELECT 1
+            OR EXISTS (
+               SELECT 1
                  FROM TaskDetail TD WITH (NOLOCK)
                     INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
                        ON RMR.UserName = @c_userid
@@ -2624,15 +2657,15 @@ END
                     AND TD.FromID = ''
                  GROUP BY TD.FromID, EP.MaximumWeight, TD.TaskDetailKey
                  HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
-		      )
+            )
          )
             AND @n_err = 63060
          BEGIN
-	        /*UPDATE TaskDetail
-		    SET StatusMsg = 'Over weight for ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid)
-		    WHERE TaskDetailKey IN
-		    (
-		       /*SELECT TaskDetailKey
+           /*UPDATE TaskDetail
+          SET StatusMsg = 'Over weight for ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid)
+          WHERE TaskDetailKey IN
+          (
+             /*SELECT TaskDetailKey
                FROM dbo.PALLET AS P WITH (NOLOCK)
                   INNER JOIN dbo.TaskDetail AS TD WITH (NOLOCK)
                      ON P.PalletKey = TD.FromID
@@ -2645,7 +2678,7 @@ END
                      TD.Status = '0'
                      OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                   )
-				  AND TD.FromID <> ''
+              AND TD.FromID <> ''
                   AND P.StorerKey = RM.StorerKey
                   AND TD.AreaKey = @c_AreaKey01
                   AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
@@ -2653,7 +2686,7 @@ END
 
                UNION ALL*/
               
-			   SELECT TaskDetailKey
+            SELECT TaskDetailKey
                FROM dbo.LOTxLOCxID AS LLI WITH (NOLOCK)
                   INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
                      ON RMR.UserName = @c_userid
@@ -2676,9 +2709,9 @@ END
                GROUP BY TD.FromID, EP.MaximumWeight, TD.TaskDetailKey
                HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
            
-		       UNION ALL
+             UNION ALL
 
-		       SELECT TaskDetailKey
+             SELECT TaskDetailKey
                FROM TaskDetail TD WITH (NOLOCK)
                   INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
                      ON RMR.UserName = @c_userid
@@ -2702,12 +2735,12 @@ END
             SELECT @n_continue = 3
             SELECT @n_err = 218245
             SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Tasks big for MHE'
-		    GOTO QuitErrorCheck
+          GOTO QuitErrorCheck
          END
 
-		 -- MHE not suitable for the target location
-		 IF @n_err = 63060
-		    AND EXISTS (
+       -- MHE not suitable for the target location
+       IF @n_err = 63060
+          AND EXISTS (
                SELECT 1 
                FROM dbo.TaskDetail TD WITH(NOLOCK)
                   INNER JOIN dbo.LOC L WITH(NOLOCK)
@@ -2722,23 +2755,23 @@ END
                      AND (
                         TD.Status = '0'
                         OR (
-						   TD.Status = '3'
+                     TD.Status = '3'
                            AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
-						)
-					 )
-					 AND L.Facility = @cFacility
-					 AND RM.UserName = @c_userid
-			)
+                  )
+                )
+                AND L.Facility = @cFacility
+                AND RM.UserName = @c_userid
+         )
          BEGIN
-	        SELECT @n_continue = 3
+           SELECT @n_continue = 3
             SELECT @n_err = 218261
             SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') --'218261^MHE not for ToLoc' --PPA374 11/12/2025
-		    GOTO QuitErrorCheck
-		 END
+          GOTO QuitErrorCheck
+       END
 
-		 -- MHE not suitable for the source location
-		 IF @n_err = 63060
-		    AND EXISTS (
+       -- MHE not suitable for the source location
+       IF @n_err = 63060
+          AND EXISTS (
                SELECT 1 
                FROM dbo.TaskDetail TD WITH(NOLOCK)
                   INNER JOIN dbo.LOC L WITH(NOLOCK)
@@ -2753,99 +2786,99 @@ END
                      AND (
                         TD.Status = '0'
                         OR (
-						   TD.Status = '3'
+                     TD.Status = '3'
                            AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
-						)
-					 )
-					 AND L.Facility = @cFacility
-					 AND RM.UserName = @c_userid
-			)
+                  )
+                )
+                AND L.Facility = @cFacility
+                AND RM.UserName = @c_userid
+         )
          BEGIN
-	        SELECT @n_continue = 3
+           SELECT @n_continue = 3
             SELECT @n_err = 218265
             SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') --'218265^MHE not for FromLoc' --PPA374 11/12/2025
-		    GOTO QuitErrorCheck
-		 END
+          GOTO QuitErrorCheck
+       END
 
-		 --No permission
-		 IF @n_err = 63060
-		    AND EXISTS (
-		       SELECT 1 
-			   FROM TaskDetail TD WITH(NOLOCK) 
-			   WHERE TD.AreaKey = @c_AreaKey01
-			      AND TD.StorerKey = @cStorerKey
-			      AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+       --No permission
+       IF @n_err = 63060
+          AND EXISTS (
+             SELECT 1 
+            FROM TaskDetail TD WITH(NOLOCK) 
+            WHERE TD.AreaKey = @c_AreaKey01
+               AND TD.StorerKey = @cStorerKey
+               AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                   AND (
                      TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
-                  )			
-				  AND NOT EXISTS(
-				     SELECT 1 FROM dbo.TaskManagerUserDetail TMUS WITH(NOLOCK) 
-					 WHERE TMUS.PermissionType = TD.TaskType 
-					    AND TMUS.UserKey = @c_userid 
-					    AND TMUS.Permission = '1' 
-					    AND AreaKey = @c_AreaKey01
-			      )
-			)
+                  )         
+              AND NOT EXISTS(
+                 SELECT 1 FROM dbo.TaskManagerUserDetail TMUS WITH(NOLOCK) 
+                WHERE TMUS.PermissionType = TD.TaskType 
+                   AND TMUS.UserKey = @c_userid 
+                   AND TMUS.Permission = '1' 
+                   AND AreaKey = @c_AreaKey01
+               )
+         )
          BEGIN
-	        SELECT @n_continue = 3
+           SELECT @n_continue = 3
             SELECT @n_err = 218263
             SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- '218263^No Permission'
-		    GOTO QuitErrorCheck		    
-		 END
+          GOTO QuitErrorCheck          
+       END
 
-	     --Any other task not captured above
-	     IF @n_err = 63060
-	        AND EXISTS (
-		       SELECT 1 
-			   FROM TaskDetail TD WITH(NOLOCK) 
-			   WHERE TD.AreaKey = @c_AreaKey01
-			      AND TD.StorerKey = @cStorerKey
-			      AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+        --Any other task not captured above
+        IF @n_err = 63060
+           AND EXISTS (
+             SELECT 1 
+            FROM TaskDetail TD WITH(NOLOCK) 
+            WHERE TD.AreaKey = @c_AreaKey01
+               AND TD.StorerKey = @cStorerKey
+               AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                   AND (
                      TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                   )
             )
          BEGIN
-	        /*UPDATE TaskDetail
-		    SET StatusMsg = 'Check task for issue'
-		    WHERE TaskDetailKey IN (
-		       SELECT TaskDetailKey
-			   FROM TaskDetail TD WITH(NOLOCK) 
-			   WHERE TD.AreaKey = @c_AreaKey01
-			      AND TD.StorerKey = @cStorerKey
-			      AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+           /*UPDATE TaskDetail
+          SET StatusMsg = 'Check task for issue'
+          WHERE TaskDetailKey IN (
+             SELECT TaskDetailKey
+            FROM TaskDetail TD WITH(NOLOCK) 
+            WHERE TD.AreaKey = @c_AreaKey01
+               AND TD.StorerKey = @cStorerKey
+               AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                   AND (
                      TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                   )
-		    )*/
-	        SELECT @n_continue = 3
+          )*/
+           SELECT @n_continue = 3
             SELECT @n_err = 218257
             SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- '218257^Other task issue'
-		    GOTO QuitErrorCheck
-	     END
-	  END
+          GOTO QuitErrorCheck
+        END
+     END
 
-	  QuitErrorCheck:
-	  --Update tasks for errors:
-	  IF @n_err IN ('218257','218245','218255','218258','218252','218253','218254','218261','218262','218265')
-	  BEGIN
+     QuitErrorCheck:
+     --Update tasks for errors:
+     IF @n_err IN ('218257','218245','218255','218258','218252','218253','218254','218261','218262','218265','218268')
+     BEGIN
 
-	  	  	UPDATE TaskDetail
-		    SET StatusMsg = 'Check task for issue'
-		    WHERE TaskDetailKey IN (
-		       SELECT TaskDetailKey
-			   FROM TaskDetail TD WITH(NOLOCK) 
-			   WHERE TD.AreaKey = @c_AreaKey01
-			      AND TD.StorerKey = @cStorerKey
-			      AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+             UPDATE TaskDetail
+          SET StatusMsg = 'Check task for issue'
+          WHERE TaskDetailKey IN (
+             SELECT TaskDetailKey
+            FROM TaskDetail TD WITH(NOLOCK) 
+            WHERE TD.AreaKey = @c_AreaKey01
+               AND TD.StorerKey = @cStorerKey
+               AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                   AND (
                      TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                   )
-		    )
+          )
 
-			UPDATE TaskDetail
-			SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for To Loc' --PPA374 11/12/2025
-			WHERE TaskDetailKey IN (
+         UPDATE TaskDetail
+         SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for To Loc' --PPA374 11/12/2025
+         WHERE TaskDetailKey IN (
                SELECT TaskDetailKey
                FROM dbo.TaskDetail TD WITH(NOLOCK)
                   INNER JOIN dbo.LOC L WITH(NOLOCK)
@@ -2860,17 +2893,17 @@ END
                      AND (
                         TD.Status = '0'
                         OR (
-						   TD.Status = '3'
+                     TD.Status = '3'
                            AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
-						)
-					 )
-					 AND L.Facility = @cFacility
-					 AND RM.UserName = @c_userid
-			)
+                  )
+                )
+                AND L.Facility = @cFacility
+                AND RM.UserName = @c_userid
+         )
 
-			UPDATE TaskDetail
-			SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for From Loc' --PPA374 13/02/2026
-			WHERE TaskDetailKey IN (
+         UPDATE TaskDetail
+         SET StatusMsg = 'MHE ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid) + ' not for From Loc' --PPA374 13/02/2026
+         WHERE TaskDetailKey IN (
                SELECT TaskDetailKey
                FROM dbo.TaskDetail TD WITH(NOLOCK)
                   INNER JOIN dbo.LOC L WITH(NOLOCK)
@@ -2885,47 +2918,47 @@ END
                      AND (
                         TD.Status = '0'
                         OR (
-						   TD.Status = '3'
+                     TD.Status = '3'
                            AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
-						)
-					 )
-					 AND L.Facility = @cFacility
-					 AND RM.UserName = @c_userid
-			)
+                  )
+                )
+                AND L.Facility = @cFacility
+                AND RM.UserName = @c_userid
+         )
 
-	        UPDATE TD
-	        SET TD.StatusMsg = 'Aisle in use by ' + T1.UserKey
-	        FROM dbo.TaskDetail TD
-	           INNER JOIN (
-	              SELECT DISTINCT TD.TaskDetailKey, AIU.UserKey
-	              FROM dbo.TaskDetail TD WITH (NOLOCK)
-	                 CROSS APPLY (VALUES (TD.FromLoc), (TD.ToLoc)) AS X(Loc)
-	                 INNER JOIN dbo.LOC L WITH (NOLOCK)
-	                    ON L.Loc = X.Loc
-	                    AND L.Facility = @cFacility
-	                 INNER JOIN #Aisle_InUsed AIU
-	                    ON AIU.LocAIsle = L.LocAisle
-	                 LEFT JOIN dbo.LOC L2 WITH (NOLOCK)
-	                    ON L2.Loc = TD.FromLoc
-	                    AND L2.LocationCategory = 'PND_OUT'
-	              WHERE TD.AreaKey = @c_AreaKey01
-	                 AND L2.Loc IS NULL
-	                 AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
-	                 AND TD.StorerKey = @cStorerKey
-	                 AND (
-	                    TD.Status = '0'
-	                    OR (
-						   TD.Status = '3'
-	                       AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
-						)
-	           )
-	        ) AS T1
-	        ON TD.TaskDetailKey = T1.TaskDetailKey
+           UPDATE TD
+           SET TD.StatusMsg = 'Aisle in use by ' + T1.UserKey
+           FROM dbo.TaskDetail TD
+              INNER JOIN (
+                 SELECT DISTINCT TD.TaskDetailKey, AIU.UserKey
+                 FROM dbo.TaskDetail TD WITH (NOLOCK)
+                    CROSS APPLY (VALUES (TD.FromLoc), (TD.ToLoc)) AS X(Loc)
+                    INNER JOIN dbo.LOC L WITH (NOLOCK)
+                       ON L.Loc = X.Loc
+                       AND L.Facility = @cFacility
+                    INNER JOIN #Aisle_InUsed AIU
+                       ON AIU.LocAIsle = L.LocAisle
+                    LEFT JOIN dbo.LOC L2 WITH (NOLOCK)
+                       ON L2.Loc = TD.FromLoc
+                       AND L2.LocationCategory = 'PND_OUT'
+                 WHERE TD.AreaKey = @c_AreaKey01
+                    AND L2.Loc IS NULL
+                    AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                    AND TD.StorerKey = @cStorerKey
+                    AND (
+                       TD.Status = '0'
+                       OR (
+                     TD.Status = '3'
+                          AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid)
+                  )
+              )
+           ) AS T1
+           ON TD.TaskDetailKey = T1.TaskDetailKey
 
-			UPDATE TaskDetail
-		    SET StatusMsg = 'Over weight for ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid)
-		    WHERE TaskDetailKey IN
-		    (			   SELECT TaskDetailKey
+         UPDATE TaskDetail
+          SET StatusMsg = 'Over weight for ' + (SELECT C_String30 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE UserName = @c_userid)
+          WHERE TaskDetailKey IN
+          (            SELECT TaskDetailKey
                FROM dbo.LOTxLOCxID AS LLI WITH (NOLOCK)
                   INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
                      ON RMR.UserName = @c_userid
@@ -2944,14 +2977,14 @@ END
                   )
                   AND TD.AreaKey = @c_AreaKey01
                   AND LLI.Qty > 0
-				  AND TD.FromID <> ''
+              AND TD.FromID <> ''
                   AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                GROUP BY TD.FromID, EP.MaximumWeight, TD.TaskDetailKey
                HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
            
-		       UNION ALL
+             UNION ALL
 
-		       SELECT TaskDetailKey
+             SELECT TaskDetailKey
                FROM TaskDetail TD WITH (NOLOCK)
                   INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
                      ON RMR.UserName = @c_userid
@@ -2972,34 +3005,57 @@ END
                HAVING SUM(TD.Qty * S.STDGROSSWGT) >= EP.MaximumWeight
             )
 
-			UPDATE TaskDetail
-		      SET StatusMsg = 'No Pick Detail'
-		      WHERE TaskDetailKey IN (
-		         SELECT TD.TaskDetailKey
-		         FROM dbo.TaskDetail AS TD WITH (NOLOCK)
-		            LEFT JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
-			           ON TD.TaskDetailKey = PD.TaskDetailKey
-				       AND TD.StorerKey = PD.StorerKey
-		         WHERE TD.AreaKey = @c_AreaKey01
+         UPDATE TaskDetail
+            SET StatusMsg = 'No Pick Detail'
+            WHERE TaskDetailKey IN (
+               SELECT TD.TaskDetailKey
+               FROM dbo.TaskDetail AS TD WITH (NOLOCK)
+                  LEFT JOIN dbo.PICKDETAIL PD WITH(NOLOCK)
+                    ON TD.TaskDetailKey = PD.TaskDetailKey
+                   AND TD.StorerKey = PD.StorerKey
+               WHERE TD.AreaKey = @c_AreaKey01
                     AND TD.TaskType IN ('FCP', 'FCP1')
-			        AND (
+                 AND (
                        TD.Status = '0'
                        OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
                     )
-			        AND TD.StorerKey = @cStorerKey
-			        AND PD.TaskDetailKey IS NULL
-		      )
+                 AND TD.StorerKey = @cStorerKey
+                 AND PD.TaskDetailKey IS NULL
+            )
 
-			  UPDATE TaskDetail
-		      SET StatusMsg = 'Order in progress' 
-		      WHERE TaskDetailKey IN (
+           UPDATE TaskDetail
+            SET StatusMsg = 'Replen in progress' 
+            WHERE TaskDetailKey IN (
+                 SELECT X.TaskDetailKey
+                 FROM dbo.TaskDetail AS TD1 WITH (NOLOCK)
+                    INNER JOIN dbo.TaskDetail AS TD2 WITH (NOLOCK)
+                       ON  TD1.FromLoc = TD2.FromLoc
+                       AND TD1.AreaKey = TD2.AreaKey
+                       AND TD2.Status = '3' 
+                  AND TD2.UserKey <> @c_userid
+                       AND TD1.Storerkey = TD2.Storerkey
+                    CROSS APPLY (
+                       VALUES (TD1.TaskDetailKey),
+                              (TD2.TaskDetailKey)
+                    ) AS X(TaskDetailKey)
+                 WHERE TD1.AreaKey = @c_AreaKey01
+                    AND TD1.TaskType IN ('RPF', 'RPF1', 'RP1')
+                    AND TD1.PickMethod = 'PP'
+                    AND TD1.Status = '0'
+               AND TD1.AreaKey = 'MOTHERSONS'
+                    AND TD1.Storerkey = @cStorerKey
+            )
+
+           UPDATE TaskDetail
+            SET StatusMsg = 'Order in progress' 
+            WHERE TaskDetailKey IN (
                  SELECT X.TaskDetailKey
                  FROM dbo.TaskDetail AS TD1 WITH (NOLOCK)
                     INNER JOIN dbo.TaskDetail AS TD2 WITH (NOLOCK)
                        ON  TD1.OrderKey = TD2.OrderKey
                        AND TD1.AreaKey = TD2.AreaKey
                        AND TD2.Status = '3' 
-					   AND TD2.UserKey <> @c_userid
+                  AND TD2.UserKey <> @c_userid
                        AND TD1.Storerkey = TD2.Storerkey
                     CROSS APPLY (
                        VALUES (TD1.TaskDetailKey),
@@ -3010,11 +3066,11 @@ END
                     AND TD1.PickMethod = 'PP'
                     AND TD1.Status = '0'
                     AND TD1.Storerkey = @cStorerKey
-		      )
+            )
 
-			  UPDATE TaskDetail
-		      SET StatusMsg = 'Order on hold' 
-		      WHERE TaskDetailKey IN (
+           UPDATE TaskDetail
+            SET StatusMsg = 'Order on hold' 
+            WHERE TaskDetailKey IN (
                  SELECT X.TaskDetailKey
                  FROM dbo.TaskDetail AS TD1 WITH (NOLOCK)
                     INNER JOIN dbo.TaskDetail AS TD2 WITH (NOLOCK)
@@ -3031,9 +3087,9 @@ END
                     AND TD1.PickMethod = 'PP'
                     AND TD1.Status = '0'
                     AND TD1.Storerkey = @cStorerKey
-		      )
+            )
 
-			  UPDATE TD
+           UPDATE TD
               SET TD.StatusMsg =
                  CASE 
                     WHEN 
@@ -3049,8 +3105,8 @@ END
                        (L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'Fromloc on hold or flag' 
 
-					WHEN 
-					   (L2.Status <> 'OK' OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
+               WHEN 
+                  (L2.Status <> 'OK' OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED'))
                        THEN 'FinalLoc on hold or flag'
                  END
               FROM TaskDetail TD
@@ -3060,8 +3116,8 @@ END
               INNER JOIN LOC L1 WITH (NOLOCK)
                  ON TD.FromLoc = L1.Loc
                  AND L1.Facility = @cFacility
-			  INNER JOIN LOC L2 WITH(NOLOCK)
-			     ON TD.FinalLOC = L2.Loc
+           INNER JOIN LOC L2 WITH(NOLOCK)
+              ON TD.FinalLOC = L2.Loc
                  AND L2.Facility = @cFacility
               WHERE TD.AreaKey = @c_AreaKey01
                 AND TD.Storerkey = @cStorerKey
@@ -3075,14 +3131,14 @@ END
                     OR L.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     OR L1.Status <> 'OK'
                     OR L1.LocationFlag NOT IN ('', 'NONE','INLOCKED')
-					OR L2.Status <> 'OK'
+               OR L2.Status <> 'OK'
                     OR L2.LocationFlag NOT IN ('', 'NONE','INLOCKED')
                     )
 
-			UPDATE TaskDetail 
-		      SET StatusMsg = 'OverMaxPallet'
-		      WHERE TaskDetailKey IN (
-		         SELECT TD.TaskDetailKey
+         UPDATE TaskDetail 
+            SET StatusMsg = 'OverMaxPallet'
+            WHERE TaskDetailKey IN (
+               SELECT TD.TaskDetailKey
                  FROM dbo.TaskDetail TD WITH (NOLOCK)
                     INNER JOIN dbo.LOC L WITH (NOLOCK)
                        ON TD.ToLoc = L.Loc
@@ -3090,22 +3146,22 @@ END
                        ON TD.ToLoc = LLI.Loc
                        AND LLI.StorerKey = @cStorerKey
                        AND LLI.Qty > 0
-					   AND LLI.ID <> ''
+                  AND LLI.ID <> ''
                  WHERE TD.AreaKey = @c_AreaKey01
-		            AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
+                  AND TD.TaskType IN ('FCP', 'FCP1', 'RPF', 'RPF1', 'RP1')
                     AND L.Facility = @cFacility
                     AND TD.StorerKey = @cStorerKey
                     AND (
-			           TD.Status = '0'
+                    TD.Status = '0'
                        OR (TD.Status = '3' AND (TD.UserKey = @c_userid OR TD.UserKeyOverRide = @c_userid))
-					) 
+               ) 
                  GROUP BY L.MaxPallet, L.Loc, TD.TaskDetailKey
                  HAVING IIF(L.MaxPallet = 0, 99999999, L.MaxPallet) <= COUNT(DISTINCT LLI.ID)
-		      )
+            )
 
-	  END
+     END
 
-	  --Check if MHE is for the area
+     --Check if MHE is for the area
         IF (
             SELECT COUNT(DISTINCT AD.PutawayZone) - COUNT(RM.C_String30) 
             FROM dbo.AreaDetail AD WITH(NOLOCK)

@@ -36,12 +36,16 @@ BEGIN
 
    DECLARE @cStorerKey              NVARCHAR( 15)
    DECLARE @cToLOC                  NVARCHAR( 10)
-   DECLARE @cFinalLOC               NVARCHAR(10)
-   DECLARE @cTaskStatus             NVARCHAR(10)
+   DECLARE @cFinalLOC               NVARCHAR( 10)
+   DECLARE @cTaskStatus             NVARCHAR( 10)
    DECLARE @cToLOCCat               NVARCHAR( 10)
    DECLARE @cFacilily               NVARCHAR( 5)
-   DECLARE @cInputKey               NVARCHAR(3)
+   DECLARE @cInputKey               NVARCHAR( 3)
+   DECLARE @cAreaKey                NVARCHAR( 20)
+   DECLARE @cPickMethod             NVARCHAR( 20)
+   DECLARE @cFromLoc                NVARCHAR( 20)
    DECLARE  @nDebugFlag  INT = 0,
+   @nScn             INT,
    @cUserName        NVARCHAR(128)
 
    SET @nTranCount = @@TRANCOUNT
@@ -49,27 +53,29 @@ BEGIN
    SELECT @cFacilily = Facility,
       @cUserName = UserName,
       @cStorerKey  = StorerKey,
+      @nScn =      Scn,
       @cInputKey = InputKey
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
+
+   SELECT TOP 1 @cAreaKey = AreaKey, @cPickMethod = PickMethod, @cFromLoc = FromLoc FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey
 
    -- TM Replen From
    IF @nFunc = 1764
    BEGIN
       IF @nStep = 2
-	  BEGIN
-	     IF @cInputKey = 1
-		 BEGIN
-	        UPDATE RDT.RDTMOBREC
-			SET C_String28 = V_LOC
-			WHERE Mobile = @nMobile
-			
-			UPDATE RDT.RDTMOBREC
-            SET C_DateTime1 = GETDATE()
+      BEGIN
+         IF @cInputKey = 1
+         BEGIN
+            UPDATE RDT.RDTMOBREC
+            SET C_String28 = V_LOC
             WHERE Mobile = @nMobile
-		 END
-	  END
-
+            
+            UPDATE RDT.RDTMOBREC
+               SET C_DateTime1 = GETDATE()
+               WHERE Mobile = @nMobile
+         END
+      END
       IF @nStep = 6
       BEGIN
          IF @cInputKey = 1
@@ -79,7 +85,6 @@ BEGIN
             WHERE Mobile = @nMobile
          END -- Input 1
       END -- Step 6
-      
       IF @nStep = 7 -- ExitTM, Next Task Scn
       BEGIN
          IF @cInputKey = 0
@@ -110,6 +115,25 @@ BEGIN
             END --Unlock Tasks
          END--inputkey = 0
       END --ST7
+      IF @nStep = 99
+      BEGIN
+         IF @nScn = 6620
+         BEGIN
+            IF @cInputKey = 1
+            BEGIN
+               IF @cPickMethod = 'PP' AND @cAreaKey = 'MOTHERSONS'
+               BEGIN
+                  UPDATE TaskDetail
+                  SET Status = '0'
+                  WHERE UserKey = @cUserName
+                     AND Status = '3'
+                  AND AreaKey = 'MOTHERSONS'
+                  AND FromLoc = @cFromLoc
+                  AND TaskType IN ('RPF','RPF1','RP1')
+               END
+            END
+         END
+      END
    END
 
    GOTO Quit

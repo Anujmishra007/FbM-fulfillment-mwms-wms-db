@@ -28,10 +28,19 @@ BEGIN
 
    DECLARE @nDebugFlag INT = 0
 
-   DECLARE @cCaseID NVARCHAR( 20)
+   DECLARE @cCaseID  NVARCHAR( 20)
+   DECLARE @cFromLoc NVARCHAR( 20)
+   DECLARE @cToLoc   NVARCHAR( 20)
+
+   SELECT TOP 1 @cFromLoc = FromLoc, @cToLoc = ToLoc FROM TaskDetail WHERE TaskDetailKey = @cTaskdetailKey AND FromLoc = 'INTRANSIT'
 
    IF @nFunc = 1764
    BEGIN
+      IF @cFromLoc = 'INTRANSIT'
+      BEGIN
+         SET @cExtendedInfo1 = 'To Loc: '+@cToLoc
+      END
+
       IF @nAfterStep = 4 --SKU/Qty Screen
       BEGIN
          SELECT @cCaseID = CaseID

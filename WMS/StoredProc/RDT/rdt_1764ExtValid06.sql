@@ -40,31 +40,76 @@ BEGIN
       @cSuggSKU            NVARCHAR(20),
       @nInputKey           INT,
       @nCurrentStep        INT,
-      @cUserName           NVARCHAR(128)
+      @cUserName           NVARCHAR(128),
+      @cSKUVerified        NVARCHAR(20),
+      @nQty                INT,
+      @nTaskQTY            INT,
+      @cAreaKey            NVARCHAR(20),
+      @cPickMethod         NVARCHAR(10),
+	  @cFromLoc            NVARCHAR(20)
 
-   SELECT 
-      @cFacility = Facility,
-      @cStorerKey = StorerKey,
-      @cUserName = UserName,
-      @nInputKey     = InputKey
+   SELECT TOP 1
+      @cFacility    = Facility,
+      @cStorerKey   = StorerKey,
+      @cUserName    = UserName,
+      @nInputKey    = InputKey,
+      @cSKUVerified = ISNULL(V_String25,0),
+      @nQty         = I_Field15
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
-   
+
+   SELECT TOP 1 @nTaskQTY = Qty, @cAreaKey = AreaKey, @cPickMethod = PickMethod FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey
+
    -- TM Replen From
    IF @nFunc = 1764
    BEGIN
+      IF @nStep = 4 -- Qty
+      BEGIN
+         IF @nInputKey = 1 --Enter
+         BEGIN
+            IF (@cSKUVerified <> '1' AND @nQty <> 0 AND @nQty <> @nTaskQTY)
+            OR (@cSKUVerified = '1' AND @nQty <> @nTaskQTY)
+               BEGIN
+                  SET @nErrNo = 218269
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO Quit
+               END
+         END
+      END
+
       IF @nStep = 6 -- ToLoc
       BEGIN
          SELECT
             @cSuggToLOC       = ToLOC,
-            @cSuggSKU         = SKU
+            @cSuggSKU         = SKU,
+			@cFromLoc         = FromLoc
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND TaskDetailKey = @cTaskDetailKey
 
          IF @cToLOC <> @cSuggToLOC 
          AND NOT EXISTS(SELECT 1 FROM LOC (NOLOCK) 
-         WHERE LOC = @cToLOC AND LocationCategory = 'INTRANSIT' AND Facility = @cFacility)
+         WHERE LOC = @cToLOC AND LocationCategory = 'INTRANSIT' AND Facility = @cFacility AND @cAreaKey = 'MOTHERSONS' AND @cPickMethod = 'PP')
+         BEGIN
+            SET @nErrNo = 180041
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Location
+            GOTO QUIT
+         END
+
+		 IF EXISTS(
+		    SELECT 1 FROM LOC (NOLOCK) 
+            WHERE LOC = @cToLOC 
+			   AND LocationCategory = 'INTRANSIT' 
+			   AND Facility = @cFacility 
+			   AND @cAreaKey = 'MOTHERSONS'
+	     )
+		 AND EXISTS(
+		    SELECT 1 FROM LOC (NOLOCK) 
+            WHERE LOC = @cFromLoc 
+			   AND LocationCategory = 'INTRANSIT' 
+			   AND Facility = @cFacility 
+			   AND @cAreaKey = 'MOTHERSONS'
+	     )
          BEGIN
             SET @nErrNo = 180041
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Location
@@ -72,10 +117,7 @@ BEGIN
          END
       END
    END
-
-
 Quit:
-
 END
 GO
 
