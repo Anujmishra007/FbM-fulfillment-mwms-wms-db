@@ -23,6 +23,7 @@ GO
 /* Date        Author   Ver.  Purposes                                  */
 /*25-02-2026   VNI056   1.0   UWP-49058 => CREATE PROC                  */
 /*10-03-2026   VNI056   1.1   ADD STORERCONFIG(VNI01)                   */
+/*19-03-2026   VNI056   1.2   UPDATE MBOL.DEPOTSTATUS (VNI02)           */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_GenerateExportCustoms]
       @c_WaveKey              NVARCHAR(10) = ''
@@ -202,13 +203,11 @@ BEGIN
                             ISNULL(LTRIM(RTRIM(@c_ErrMsg)),'') + ' ) '
             GOTO EXIT_SP
         END
-
-        UPDATE ORDERS
-        SET ORDERS.SOStatus = '51'
-        FROM ORDERS WITH (NOLOCK)
-		JOIN WAVEDETAIL WITH (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey
-        WHERE WAVEDETAIL.WaveKey = @c_WaveKey
-
+                                                                             --VNI02(START)
+        UPDATE MBOL WITH (ROWLOCK)
+        SET DepotStatus = 'CusSubmit'
+        WHERE MBOLKey = @c_MBolKey
+                                                                             --VNI02(END)
 --MAIN PROCESSING (END)
     END TRY
 
