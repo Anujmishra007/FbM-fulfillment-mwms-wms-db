@@ -25,8 +25,8 @@ GO
 /* 2025-03-26   2.3.0 NLT013     FCR-2704 Remove useless code and extend ExtScn data*/
 /* 2025-07-29   2.4.0 NickT      !!!Cutover, user V0 REPO for development!!!  */
 /* 2025-11-05   2.5.0 Jackc      FCR-8676 Extend Barcode length on UCC screen */
+/* 2026-03-19   2.6.0 NickT      FCR-10076 Add extend screen                  */
 /******************************************************************************/
-
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
    @nMobile    INT,
@@ -287,6 +287,11 @@ BEGIN
    -- Go to PickSlipNo screen
    SET @nScn = 5290
    SET @nStep = 1
+
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
 END
 GOTO Quit
 
@@ -1882,11 +1887,11 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Step_99_Fail
 
-         IF @cExtScnSP = 'rdt_957ExtScn02' AND @nOriginalScn = 6388 AND @nInputKey = 1
+         IF @cExtScnSP = 'rdt_957ExtScn02'
          BEGIN
-            IF ISNULL(@cUDF01, '') = 'SWAPUCC' AND ISNULL(@cUDF02, '') <> ''
+            IF ISNULL(@cUDF03, '') = 'NO UPD RDTMOBREC'
             BEGIN
-               SET @cDropID = @cUDF02
+               RETURN
             END
          END
 
