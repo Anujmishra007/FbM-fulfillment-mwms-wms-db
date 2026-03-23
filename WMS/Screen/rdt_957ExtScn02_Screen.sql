@@ -53,3 +53,25 @@ EXECUTE rdt.rdtAddScn 6410, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5"],"3":["8"]}'
    ,@nFunc = 957
+
+-- 6849 = WaveKey FCR-10076
+DELETE rdt.RDTScn WHERE Scn = 6849 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6849, 'ENG'
+   ,@cLine01 = 'WaveKey: %10i01'
+   ,@cLine02 = ''
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
+   ,@nFunc = 957
+
+-- 6860 = Pick zone screen
+DELETE rdt.RDTScn WHERE Scn = 6860 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6860, 'ENG'
+   ,@cLine01 = 'WaveKey: %10d01'
+   ,@cLine02 = ''
+   ,@cLine03 = 'PKZONE: %10i02'
+   ,@cLine04 = ''
+   ,@cLine05 = 'DROPID:'
+   ,@cLine06 = '%20i03'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3"],"3":["5","6"]}'
+   ,@nFunc = 957

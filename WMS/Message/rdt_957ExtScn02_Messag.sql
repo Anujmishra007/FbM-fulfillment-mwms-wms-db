@@ -27,4 +27,12 @@ execute rdt.rdtAddMsg 218921, 10, '218921 CdlookupErr',     'us_english', 957
 --FCR-7106
 execute rdt.rdtAddMsg 218922, 10, '218922 NotAllowSwap',    'us_english', 957, 0, '218922 Not allow to swap UCC'
 
+-- FCR-10076
+execute rdt.rdtAddMsg 218923, 10, '218923 WaveKeyNeeded',   'us_english', 957, 0, '218923 WaveKey is needed'
+execute rdt.rdtAddMsg 218924, 10, '218924 InvWaveKey',      'us_english', 957, 0, '218924 Invalid WaveKey'
+execute rdt.rdtAddMsg 218925, 10, '218925 InvWaveKey',      'us_english', 957, 0, '218925 Wave cannot be picked'
+execute rdt.rdtAddMsg 218926, 10, '218926 DiffStorer',      'us_english', 957, 0, '218926 Different StorerKey'
+execute rdt.rdtAddMsg 218927, 10, '218927 PickCompleted',   'us_english', 957, 0, '218927 Pick is completed'
+execute rdt.rdtAddMsg 218928, 10, '218928 NoTaskInZone',    'us_english', 957, 0, '218928 No pick task in the PickZone'
+
 SELECT * FROM RDT.RDTMSG WITH(NOLOCK) WHERE Message_ID BETWEEN 218901 AND 218950
