@@ -101,35 +101,42 @@ BEGIN
             BEGIN
                IF @nOpenQty = 0
                BEGIN
-                  DECLARE
-                     @cMsg01                 NVARCHAR(20) = '',
-                     @cMsg02                 NVARCHAR(20) = '',
-                     @cMsg03                 NVARCHAR(20) = '',
-                     @cMsg04                 NVARCHAR(20) = '',
-                     @cMsg05                 NVARCHAR(20) = '',
-                     @cMsg06                 NVARCHAR(20) = '',
-                     @cMsg07                 NVARCHAR(20) = '',
-                     @cMsg08                 NVARCHAR(20) = '',
-                     @cMsg09                 NVARCHAR(20) = ''
+                  IF NOT EXISTS(SELECT 1 FROM RDT.rdtMsgQueue WITH(NOLOCK) WHERE Mobile = @nMobile AND Line03 = @cReceiptKey)
+                  BEGIN
+                     DECLARE
+                        @cMsg01                 NVARCHAR(20) = '',
+                        @cMsg02                 NVARCHAR(20) = '',
+                        @cMsg03                 NVARCHAR(20) = '',
+                        @cMsg04                 NVARCHAR(20) = '',
+                        @cMsg05                 NVARCHAR(20) = '',
+                        @cMsg06                 NVARCHAR(20) = '',
+                        @cMsg07                 NVARCHAR(20) = '',
+                        @cMsg08                 NVARCHAR(20) = '',
+                        @cMsg09                 NVARCHAR(20) = ''
 
-                  SET @cMsg01 = 'ASN completely '
-                  SET @cMsg02 = 'received.'
-                  EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
-                        @nErrNo = @nErrNo,
-                        @cErrMsg = @cErrMsg,
-                        @cLine01 = @cMsg01,
-                        @cLine02 = @cMsg02,
-                        @cLine03 = @cMsg03,
-                        @cLine04 = @cMsg04,
-                        @cLine05 = @cMsg05,
-                        @cLine06 = @cMsg06,
-                        @cLine07 = @cMsg07,
-                        @cLine08 = @cMsg08,
-                        @cLine09 = @cMsg09,
-                        @nDisplayMsg = 0
+                     SET @cMsg01 = 'ASN completely '
+                     SET @cMsg02 = 'received.'
+                     SET @cMsg03 = @cReceiptKey
+                     EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                           @nErrNo = @nErrNo,
+                           @cErrMsg = @cErrMsg,
+                           @cLine01 = @cMsg01,
+                           @cLine02 = @cMsg02,
+                           @cLine03 = @cMsg03,
+                           @cLine04 = @cMsg04,
+                           @cLine05 = @cMsg05,
+                           @cLine06 = @cMsg06,
+                           @cLine07 = @cMsg07,
+                           @cLine08 = @cMsg08,
+                           @cLine09 = @cMsg09,
+                           @nDisplayMsg = 0
+                  END
 
                   SET @nAfterScn = 1300
                   SET @nAfterStep = 1
+
+                  SET @cOutField01 = ''
+                  SET @cOutField01 = ''
                END
             END
          END
