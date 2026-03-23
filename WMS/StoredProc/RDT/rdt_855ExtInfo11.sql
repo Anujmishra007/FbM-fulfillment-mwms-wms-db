@@ -54,52 +54,55 @@ BEGIN
    IF @nFunc = 855 -- PPA by DropID
    BEGIN
       -- Step 3 after scanning SKU - display Lottable01 in extended info
-      IF @nStep = 3 AND @nInputKey = 1 -- ENTER
+      IF @nStep = 3 
       BEGIN
-         -- Validate inputs
-         IF ISNULL(@cDropID, '') = '' OR ISNULL(@cSKU, '') = ''
-            GOTO Quit
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            -- Validate inputs
+            IF ISNULL(@cDropID, '') = '' OR ISNULL(@cSKU, '') = ''
+               GOTO Quit
 
-         -- PRIORITY 1: Get first Lottable01 NOT yet in RDTPPA (never counted)
-         SELECT TOP 1 @cLottable01 = LA.Lottable01
-         FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-         INNER JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK)
-            ON LLI.StorerKey = LA.StorerKey
-            AND LLI.SKU = LA.SKU
-            AND LLI.Lot = LA.Lot
-         WHERE LLI.StorerKey = @cStorerKey
-            AND LLI.ID = @cDropID
-            AND LLI.SKU = @cSKU
-            AND ISNULL(LA.Lottable01, '') <> ''
-            AND NOT EXISTS (
-               SELECT 1 FROM RDT.RDTPPA PPA WITH (NOLOCK)
+            -- PRIORITY 1: Get first Lottable01 NOT yet in RDTPPA (never counted)
+            SELECT TOP 1 @cLottable01 = LA.Lottable01
+            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+            INNER JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK)
+               ON LLI.StorerKey = LA.StorerKey
+               AND LLI.SKU = LA.SKU
+               AND LLI.Lot = LA.Lot
+            WHERE LLI.StorerKey = @cStorerKey
+               AND LLI.ID = @cDropID
+               AND LLI.SKU = @cSKU
+               AND ISNULL(LA.Lottable01, '') <> ''
+               AND NOT EXISTS (
+                  SELECT 1 FROM RDT.RDTPPA PPA WITH (NOLOCK)
+                  WHERE PPA.StorerKey = @cStorerKey
+                     AND PPA.DropID = @cDropID
+                     AND PPA.SKU = @cSKU
+                     AND PPA.Lottable01 = LA.Lottable01
+               )
+            ORDER BY LA.Lottable01
+
+            -- PRIORITY 2: If all lots have records, get lots where CQty < PQty (partially audited)
+            IF ISNULL(@cLottable01, '') = ''
+            BEGIN
+               SELECT TOP 1 @cLottable01 = PPA.Lottable01
+               FROM RDT.RDTPPA PPA WITH (NOLOCK)
                WHERE PPA.StorerKey = @cStorerKey
                   AND PPA.DropID = @cDropID
                   AND PPA.SKU = @cSKU
-                  AND PPA.Lottable01 = LA.Lottable01
-            )
-         ORDER BY LA.Lottable01
+                  AND ISNULL(PPA.Lottable01, '') <> ''
+                  AND ISNULL(PPA.CQty, 0) < ISNULL(PPA.PQty, 0)
+               ORDER BY PPA.Lottable01
+            END
 
-         -- PRIORITY 2: If all lots have records, get lots where CQty < PQty (partially audited)
-         IF ISNULL(@cLottable01, '') = ''
-         BEGIN
-            SELECT TOP 1 @cLottable01 = PPA.Lottable01
-            FROM RDT.RDTPPA PPA WITH (NOLOCK)
-            WHERE PPA.StorerKey = @cStorerKey
-               AND PPA.DropID = @cDropID
-               AND PPA.SKU = @cSKU
-               AND ISNULL(PPA.Lottable01, '') <> ''
-               AND ISNULL(PPA.CQty, 0) < ISNULL(PPA.PQty, 0)
-            ORDER BY PPA.Lottable01
+            -- Set extended info to display Lottable01
+            IF ISNULL(@cLottable01, '') <> ''
+            BEGIN
+               SET @cExtendedInfo = 'LOT01:' + LTRIM(RTRIM(SUBSTRING(@cLottable01, 1, 15)))
+            END
+
+            GOTO Quit
          END
-
-         -- Set extended info to display Lottable01
-         IF ISNULL(@cLottable01, '') <> ''
-         BEGIN
-            SET @cExtendedInfo = 'LOT01:' + LTRIM(RTRIM(SUBSTRING(@cLottable01, 1, 15)))
-         END
-
-         GOTO Quit
       END
 
       -- Step 4 ESC or Step 99 (returning from extended screens) - redisplay Lottable01 on screen 3
