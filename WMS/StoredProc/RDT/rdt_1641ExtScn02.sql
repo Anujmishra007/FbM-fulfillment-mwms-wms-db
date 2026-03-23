@@ -296,7 +296,7 @@ BEGIN
             BEGIN
                -- All UCC on this ip should be added
                INSERT INTO @tUccNo(UCC)
-               SELECT @cUCCNo = CASEID 
+               SELECT CASEID 
                FROM PickDetail (NOLOCK)
                WHERE ID = @cScannedDropID
                   AND StorerKey = @cStorerKey 
@@ -395,12 +395,7 @@ BEGIN
          BEGIN
             IF ISNULL(RTRIM(@cInField01), '') = '1'
             BEGIN
-               UPDATE PickDetail
-                  SET DROPID = @cDropID
-               WHERE DropID = @cScannedDropID
-                  AND StorerKey = @cStorerKey
-
-               SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.DropID
+               SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.ID
                FROM PickDetail PD (NOLOCK) 
                LEFT JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
                LEFT JOIN MBOL M WITH(NOLOCK) ON O.MBOLKey = M.MBOLKey

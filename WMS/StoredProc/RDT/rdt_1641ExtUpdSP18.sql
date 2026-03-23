@@ -91,6 +91,7 @@ BEGIN
             @nQTY        = @nQTY,  --(JH01) @nPackedQty,
             @cFromLOT    = @cLOT,
             @nFunc       = @nFunc,
+            @cCaseID     = @cUCCNo,
             @cSKU        = @cSKU
       END
    END
