@@ -7,7 +7,7 @@ GO
 /* Store procedure: rdt_600ExtScn01_PH                                  */
 /* Copyright      : Maersk WMS                                          */
 /*                                                                      */
-/* Purpose:       For Unilever                                          */
+/* Purpose:       NLRT2 customers                                       */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2026-03-05 1.0  MBI165   PHARMA                                      */
