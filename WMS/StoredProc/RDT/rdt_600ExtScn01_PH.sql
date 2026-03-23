@@ -233,7 +233,7 @@ BEGIN
                 BEGIN
                     IF ISNULL(@cPalletTypeSave,'') <> ''
                     BEGIN
-                        UPDATE RECEIPTDETAIL SET PalletType = @cPalletTypeSave
+                        UPDATE dbo.RECEIPTDETAIL SET PalletType = @cPalletTypeSave
                         WHERE ReceiptKey = @cReceiptKey
                         AND ReceiptLineNumber = @cReceiptLineNumber
                     END
