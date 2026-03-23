@@ -5,12 +5,13 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_600ExtScn01_PH                                  */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk WMS                                          */
 /*                                                                      */
 /* Purpose:       For Unilever                                          */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2026-03-05 1.0  MBI165   PHARMA                                      */
+/* 2026-03-23 1.1  SSR259   FCR-11294 Update Pallet Type                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_600ExtScn01_PH] (
