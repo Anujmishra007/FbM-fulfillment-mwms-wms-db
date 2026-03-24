@@ -578,7 +578,9 @@ BEGIN
                FROM #PARECEIPTDETAIL_WIP rd (NOLOCK)
                WHERE rd.GrpNo = @n_GrpNo
                AND NOT EXISTS (SELECT 1 FROM TaskDetail td (NOLOCK) 
-                               WHERE td.FromID = rd.ToID)
+                               WHERE td.FromID = rd.ToID
+                               AND td.[Status] <> 'X'                               --2026-03-24
+                              )
                GROUP BY rd.ReceiptKey
                      ,  rd.StorerKey
                      ,  rd.Sku
@@ -740,9 +742,6 @@ BEGIN
                END
                CLOSE @CUR_PAID
                DEALLOCATE @CUR_PAID
-
-               print '@n_LPNLeftToFulfill: ' + CAST (@n_LPNLeftToFulfill AS NVARCHAR)
-
             END
          END
 
