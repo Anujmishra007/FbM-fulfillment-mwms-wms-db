@@ -50,6 +50,7 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN ORDERS O (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey AND O.UserDefine03 <> '001'
             JOIN PACKHEADER PH WITH (NOLOCK) ON PD.StorerKey = PH.StorerKey AND PD.OrderKey = PH.OrderKey
+            JOIN CODELKUP CL (NOLOCK) ON O.UserDefine03 = CL.Code AND CL.ListName = 'CSPACKSLIP' AND CL.StorerKey = @cStorerKey 
             WHERE PD.StorerKey = @cStorerKey
                AND PD.DropID = @cLabelNo
                AND PH.ManifestPrinted = '0'
