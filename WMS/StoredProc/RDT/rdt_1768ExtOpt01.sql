@@ -25,6 +25,7 @@ GO
 /* 2025-11-08 1.2.2 NickT      FCR-8158 Create Adjust if variance less than tolerance */
 /* 2025-11-18 1.3.0 NickT      UWP-44224 QtyPicked should be considered          */
 /* 2026-01-14 1.4.0 Dennis     UWP-46669 Fix Bug                                 */
+/* 2026-03-24 1.5.0 NickT      UWP-52261 Mark CCDetail as Finalized              */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
@@ -363,6 +364,22 @@ BEGIN --(CLVN01)
                END
                CLOSE @curCCD
                DEALLOCATE @curCCD
+
+               BEGIN TRY
+                  UPDATE dbo.CCDetail WITH (ROWLOCK)
+                  SET 
+                     Status = IIF( SystemQty = Qty AND Qty = 0,'4', '2' ),
+                     FinalizeFlag = 'Y'
+                  WHERE StorerKey = @cStorerKey
+                     AND CCSheetNo = @cTaskDetailKey
+                     AND FinalizeFlag = 'N' 
+               END TRY
+               BEGIN CATCH
+                  SELECT @nSQLErrorNo = ERROR_NUMBER(), @cLogMsg = ERROR_MESSAGE()
+                  SET @nErrNo = 241513
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- SQL exception occured while updating CCDetail
+                  GOTO RollBackTran
+               END CATCH
             END
 
             IF @cTaskType = 'CCSUP'
@@ -515,6 +532,23 @@ BEGIN --(CLVN01)
                   END
                   CLOSE @curCCD
                   DEALLOCATE @curCCD
+
+                  BEGIN TRY
+                     UPDATE dbo.CCDetail WITH (ROWLOCK)
+                     SET 
+                        Status = IIF( SystemQty = Qty AND Qty = 0,'4', '2' ),
+                        FinalizeFlag = 'Y'
+                     WHERE StorerKey = @cStorerKey
+                        AND CCSheetNo = @cTaskDetailKey
+                        AND FinalizeFlag = 'N'
+                  END TRY
+                  BEGIN CATCH
+                     SELECT @nSQLErrorNo = ERROR_NUMBER(), @cLogMsg = ERROR_MESSAGE()
+                     SET @nErrNo = 241514
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- SQL exception occured while updating CCDetail
+                     GOTO RollBackTran
+                  END CATCH
+                  
                      /*
                      IF @cADJFinalize = '1' 
                         AND @cUserName <> 'jameswong' -- testing
