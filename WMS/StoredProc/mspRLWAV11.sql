@@ -427,7 +427,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
             END
 
             IF @c_DocType = 'E' AND @c_EcomSingleFlag = 'S'
-            AND EXISTS (SELECT 1 FROM TaskDetail td WHERE td.TaskType = @c_TaskType AND td.FromLoc = @c_FromLoc AND td.SKU = @c_Sku)
+            AND EXISTS (SELECT 1 FROM TaskDetail td 
+               WHERE td.Wavekey = @c_Wavekey AND td.TaskType = @c_TaskType 
+               AND td.FromLoc = @c_FromLoc AND td.SKU = @c_Sku)
             BEGIN
                UPDATE TaskDetail WITH (ROWLOCK)
                SET Qty = ISNULL(Qty, 0) + ISNULL(@n_Qty, 0)
