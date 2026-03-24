@@ -217,6 +217,12 @@ BEGIN
    IF @b_Success = 0
    BEGIN
       SET @n_Continue = 3  
+      
+      IF @n_ErrNo = 0
+      BEGIN
+         SET @n_ErrNo = 11753
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + @c_ErrMsg --'Print document failed.'
+      END
       GOTO EXIT_SP
    END
 
