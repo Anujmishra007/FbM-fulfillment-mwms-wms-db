@@ -39,8 +39,8 @@ CREATE OR ALTER PROC dbo.mspPutA01
 ,  @c_Packkey           NVARCHAR(10)   = ''
 ,  @n_PutawayCapacity   INT            = 0
 ,  @c_Final_ToLoc       NVARCHAR(10)   = ''  OUTPUT 
-,  @n_AvailablePASlot   INT            = ''  OUTPUT 
-,  @n_LPNLeftToFulfill  INT            = ''  OUTPUT
+,  @n_AvailablePASlot   INT            = 0   OUTPUT 
+,  @n_LPNLeftToFulfill  INT            = 0   OUTPUT
 ,  @c_ReceiptKey        NVARCHAR(10)   = ''
 ,  @c_ReceiptLineNumber NVARCHAR(5)    = ''
 ,  @c_Lottable01        NVARCHAR(18)   = ''
@@ -534,6 +534,8 @@ BEGIN
       SET @c_SQLSkipPAType = ''
       SET @c_Condition= ''
       SET @c_SortBy = ''
+      SET @c_SQLCond_PA = ''                                                        --2026-03-24
+      SET @c_SQLSelect_LA = ''                                                      --2026-03-24
       SET @c_SQLCond= ''
 
       SELECT TOP 1
@@ -580,10 +582,6 @@ BEGIN
       AND   cl.Storerkey = @c_Storerkey
       AND   cl.Code2 IN (@cpa_StrategyLineNo, '')
       ORDER BY cl.Code2 DESC
- 
---select @c_PAType '@c_PAType-0', @c_Storerkey '@c_Storerkey', @cpa_StrategyLineNo '@cpa_StrategyLineNo'
---, @n_Qty '@n_Qty', @n_pallet '@n_Pallet', @c_SortBy '@c_SortBy'
-
 
       IF @c_Lottable01 > '' OR CHARINDEX('01',@c_ForceMatchLA) > 1
       BEGIN
