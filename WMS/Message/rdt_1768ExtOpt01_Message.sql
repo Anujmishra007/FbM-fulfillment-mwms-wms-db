@@ -17,5 +17,9 @@ execute rdt.rdtAddMsg 241510, 10, '241510 GetKey Fail  ',   'us_english', 1768, 
 execute rdt.rdtAddMsg 241511, 10, '241511 SQL Exception',   'us_english', 1768, 0, '241511 SQL exception occured while inserting Adjustment'
 execute rdt.rdtAddMsg 241512, 10, '241512 SQL Exception',   'us_english', 1768, 0, '241512 SQL exception occured while inserting Adjustment Detail'
 
+-- UWP-52261
+execute rdt.rdtAddMsg 241513, 10, '241513 SQL Exception',   'us_english', 1768, 0, '241513 SQL exception occured while updating CCDetail'
+execute rdt.rdtAddMsg 241514, 10, '241514 SQL Exception',   'us_english', 1768, 0, '241514 SQL exception occured while updating CCDetail'
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 241501 AND 241550
 
