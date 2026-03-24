@@ -542,7 +542,7 @@ BEGIN
       END
    END
 
-   IF @cCartonStatus = 'CLOSED'
+   IF @cCartonStatus IN ('CLOSED', 'INPROGRESS')
    BEGIN
       -- Add Audit Log for Carton Type change
       SELECT 1 
