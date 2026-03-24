@@ -109,13 +109,13 @@ BEGIN
             QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen),''1''
         FROM LOTxLOCxID (NOLOCK)
         JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
-        JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
+        LEFT JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
         JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
         JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
         JOIN SKUXLOC SL (NOLOCK) ON (LOTxLOCxID.Storerkey = SL.Storerkey AND LOTxLOCxID.Sku = SL.Sku AND LOTxLOCxID.Loc = SL.Loc)
         WHERE LOC.Status <> ''HOLD''
         AND LOT.Status <> ''HOLD''
-        AND ID.Status <> ''HOLD''
+        AND (ISNULL(ID.Status, '''') = '''' OR ID.Status <> ''HOLD'')
         AND LOC.Facility = @c_Facility
         AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase
         AND (LOTxLOCxID.QtyAllocated + LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyExpected) = 0   --Exclude any pallet has been allocated by SO (even partially allocated)
@@ -130,12 +130,11 @@ BEGIN
                   AND KD.STORERKEY = LOTxLOCxID.STORERKEY
                   AND KD.SKU = LOTxLOCxID.SKU
                   AND KD.Lot = LOT.Lot
-                  AND KD.LOC = LOTxLOCxID.LOC
-                  AND KD.ID = LOTxLOCxID.ID)
+                  AND KD.LOC = LOTxLOCxID.LOC)
                   AND LOC.LocationFlag = ''NONE'' ' +
      CASE WHEN ISNULL(RTRIM(@c_LotFromKitDetail),'') = '' THEN ' AND LOTxLOCxID.LOT IS NOT NULL ' ELSE ' AND LOTxLOCxID.LOT = @c_LotFromKitDetail ' END +
      CASE WHEN ISNULL(RTRIM(@c_LocFromKitDetail),'') = '' THEN ' AND LOTxLOCxID.LOC IS NOT NULL ' ELSE ' AND LOTxLOCxID.LOC = @c_LocFromKitDetail ' END +
-     CASE WHEN ISNULL(RTRIM(@c_IDFromKitDetail),'') = ''  THEN ' AND LOTxLOCxID.ID IS NOT NULL ' ELSE ' AND LOTxLOCxID.ID = @c_IDFromKitDetail ' END +
+     CASE WHEN ISNULL(RTRIM(@c_IDFromKitDetail),'') = ''  THEN ' AND (LOTxLOCxID.ID IS NULL OR LOTxLOCxID.ID IS NOT NULL) ' ELSE ' AND LOTxLOCxID.ID = @c_IDFromKitDetail ' END +
      CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +
      CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END +
      CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END +
