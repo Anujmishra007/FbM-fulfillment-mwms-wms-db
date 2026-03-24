@@ -115,7 +115,7 @@ BEGIN
         JOIN SKUXLOC SL (NOLOCK) ON (LOTxLOCxID.Storerkey = SL.Storerkey AND LOTxLOCxID.Sku = SL.Sku AND LOTxLOCxID.Loc = SL.Loc)
         WHERE LOC.Status <> ''HOLD''
         AND LOT.Status <> ''HOLD''
-        AND ID.Status <> ''''HOLD''''
+        AND ID.Status <> ''HOLD''
         AND LOC.Facility = @c_Facility
         AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase
         AND LOTxLOCxID.STORERKEY = @c_StorerKey
