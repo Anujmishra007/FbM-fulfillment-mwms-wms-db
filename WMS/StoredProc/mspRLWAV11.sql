@@ -418,14 +418,13 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
 
          IF @n_Continue IN (1,2)
          BEGIN
-
             SET @c_Priority = '9'
             SET @c_GroupKey = ''
-            IF @c_TaskType = 'ATSCPK'
+            IF @c_TaskType = 'ASTCPK'
             BEGIN
                SET @c_GroupKey = @c_Wavekey
             END
-
+            
             IF @c_DocType = 'E' AND @c_EcomSingleFlag = 'S'
             AND EXISTS (SELECT 1 FROM TaskDetail td 
                WHERE td.Wavekey = @c_Wavekey AND td.TaskType = @c_TaskType 
