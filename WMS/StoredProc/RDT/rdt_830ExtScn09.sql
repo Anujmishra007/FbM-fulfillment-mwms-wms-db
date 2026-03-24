@@ -767,11 +767,6 @@ BEGIN
                FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
                WHILE @@FETCH_STATUS = 0
                BEGIN
-                  UPDATE PICKDETAIL WITH (ROWLOCK)
-                  SET QTYMoved = QTY,
-                     QTY = 0,
-                     TaskManagerReasonKey = @cReasonCode
-                  WHERE PickDetailKey = @cPickDetailKey
 
                   SELECT @cOrderKey = OrderKey,
                      @cLot = lot,
@@ -808,7 +803,7 @@ BEGIN
                      , @f_netwgt        = 0             -- float
                      , @f_otherunit1    = 0             -- float
                      , @f_otherunit2    = 0             -- float
-                     , @c_SourceKey     = ''            -- NVARCHAR(20)
+                     , @c_SourceKey     = @cPickDetailKey -- NVARCHAR(20)
                      , @c_SourceType    = 'RDT_PICK_SHORT'  -- NVARCHAR(30)
                      , @c_PackKey       = @cPackKey     -- NVARCHAR(10)
                      , @c_UOM           = @cPUOM         -- NVARCHAR(10)
@@ -826,6 +821,12 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO ROLLBACK_6847
                   END
+                  UPDATE PICKDETAIL WITH (ROWLOCK)
+                  SET QTYMoved = QTY,
+                     QTY = 0,
+                     TaskManagerReasonKey = @cReasonCode,
+                     LOC = @cShortLoc
+                  WHERE PickDetailKey = @cPickDetailKey
                   FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
                END
 
