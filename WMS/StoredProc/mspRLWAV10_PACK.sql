@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 3.6                                                          */    
+/* Version: 3.7                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -706,10 +706,16 @@ BEGIN
                  +              ' ) AS PICKSKU'
                  --WL25 S
                  +  ' OUTER APPLY ( SELECT WorkOrderkey = MIN(w.WorkOrderKey)'
-                 +                ' FROM WORKORDER w (NOLOCK)'
+                 +                ' FROM WORKORDERDETAIL w (NOLOCK)'
                  +                ' WHERE w.ExternWorkOrderKey = PICKDETAIL.Orderkey'
-                 +                ' AND w.[Type] = ''VAS'''
-                 +              ' ) AS WO'
+                 +                ' AND w.ExternLineNo = PICKDETAIL.OrderLineNumber'
+                 +                ' AND NOT EXISTS ( SELECT 1'
+                 +                '                  FROM CODELKUP c (NOLOCK)'
+                 +                '                  WHERE c.Listname = ''WKORDTYPE'''
+                 +                '                  AND c.Code = w.[Type]'
+                 +                '                  AND c.Storerkey = w.Storerkey'
+                 +                '                  AND c.UDF01 = ''N'')'
+                 +                ' ) AS WO'
                  --WL25 E
                  +  @c_SQLCond
                  +  ' ORDER BY PackGrpNo'
