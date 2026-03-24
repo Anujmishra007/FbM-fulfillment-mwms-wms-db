@@ -118,7 +118,6 @@ BEGIN
         AND (ISNULL(ID.Status, '''') = '''' OR ID.Status <> ''HOLD'')
         AND LOC.Facility = @c_Facility
         AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase
-        AND (LOTxLOCxID.QtyAllocated + LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyExpected) = 0   --Exclude any pallet has been allocated by SO (even partially allocated)
         AND LOTxLOCxID.STORERKEY = @c_StorerKey
         AND LOTxLOCxID.SKU = @c_SKU
         AND NOT EXISTS (SELECT 1
