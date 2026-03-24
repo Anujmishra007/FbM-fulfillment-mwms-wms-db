@@ -3450,7 +3450,7 @@ BEGIN
          @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
-         IF @cExtendedScreenSP in ( 'rdt_830ExtScn02','rdt_830ExtScn03') and @OrignStep = 99
+         IF @cExtendedScreenSP in ( 'rdt_830ExtScn02','rdt_830ExtScn03','rdt_830ExtScn09') and @OrignStep = 99
          BEGIN
             SET  @cSuggLOC=  @cUDF01
             SET  @cSuggID =  @cUDF02

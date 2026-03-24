@@ -3534,6 +3534,14 @@ BEGIN
          END
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN      
+         Goto Step_99
+      END
+   END
    GOTO Quit
 
    Step_9_Fail:

@@ -1975,6 +1975,8 @@ BEGIN
                SET @nScn  = @nMenu
                SET @nStep = 0
             END
+            IF @cExtendedInfoSP = ''
+               SET @cExtendedInfo1 = ''
          END
       END
    END

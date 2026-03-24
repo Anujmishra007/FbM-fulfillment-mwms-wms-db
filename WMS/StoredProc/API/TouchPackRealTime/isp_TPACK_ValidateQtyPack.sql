@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-07   1.0  GCH225     Created                                          */
+/* 2026-03-18   1.1  JWF011     UWP-52263: Add config to check UPC QTY           */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ValidateQtyPack] (
@@ -73,25 +74,33 @@ BEGIN
 
    IF @cScanType = 'upc'
    BEGIN
-      IF EXISTS ( SELECT 1
-                  FROM PACKDETAIL(NOLOCK)
-                  WHERE StorerKey = @cStorerKey 
-                  AND SKU = @cSKU
-                  AND PickSlipNo = @cPickSlipNo
-                  AND UPC = @cInputValue1
-                  HAVING COALESCE(SUM(Qty), 0) 
-                  + @nQty > (SELECT Qty 
-                             FROM UPC (NOLOCK)
-                             WHERE StorerKey = @cStorerKey
-                             AND SKU = @cSKU
-                             AND UPC = @cInputValue1 
-                            ) 
+      IF EXISTS( SELECT 1 
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE Storerkey = @cStorerKey
+                  AND ConfigKey = 'TPS-CheckUPCQTY'
+                  AND SValue = '1'
       )
       BEGIN
-         SET @n_Continue  = 3
-         SET @n_ErrNo = 11451
-         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Exceed Total Pack Qty versus UPC Qty.'
-         GOTO EXIT_SP
+         IF EXISTS ( SELECT 1
+                     FROM PACKDETAIL(NOLOCK)
+                     WHERE StorerKey = @cStorerKey 
+                     AND SKU = @cSKU
+                     AND PickSlipNo = @cPickSlipNo
+                     AND UPC = @cInputValue1
+                     HAVING COALESCE(SUM(Qty), 0) 
+                     + @nQty > (SELECT Qty 
+                              FROM UPC (NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                              AND SKU = @cSKU
+                              AND UPC = @cInputValue1 
+                              ) 
+         )
+         BEGIN
+            SET @n_Continue  = 3
+            SET @n_ErrNo = 11451
+            SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Exceed Total Pack Qty versus UPC Qty.'
+            GOTO EXIT_SP
+         END
       END
    END
 

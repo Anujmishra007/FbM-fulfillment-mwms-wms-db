@@ -202,7 +202,6 @@ BEGIN
 
                   IF EXISTS(SELECT 1 FROM LOTxLOCxID LLI (NOLOCK)
                        WHERE LLI.STORERKEY =  @c_StorerKey
-                       AND LLI.Sku = @c_Sku
                        AND LLI.Loc = @c_DynamicPickLoc
                       )
                   BEGIN
@@ -218,7 +217,6 @@ BEGIN
                        AND LOC.Facility = @c_Facility
                        AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) = 0
                        AND LLI.STORERKEY =  @c_StorerKey
-                       AND LLI.Sku = @c_Sku
                        AND LLI.Loc = @c_DynamicPickLoc
                        AND LOC.LocationType = @c_DynamicPickLocType
                        GROUP BY LLI.Storerkey, LLI.sku)
@@ -384,7 +382,7 @@ BEGIN
              ,@c_PickMethod            = '?TASKQTY' --?TASKQTY=(Qty available - taskqty)
              ,@c_Priority              = @c_Priority
              ,@c_SourcePriority        = @c_Priority
-             ,@c_SourceType            = 'isp_VIVORPL01'
+             ,@c_SourceType            = 'mspSKURPL01'
              ,@c_SourceKey             = @c_Replenishmentkey
              ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey
              ,@c_Groupkey              = @c_ReplGroup
