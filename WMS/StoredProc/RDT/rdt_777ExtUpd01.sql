@@ -65,39 +65,52 @@ BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
             DECLARE
+               @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),   @cFieldAttr03 NVARCHAR( 1),
                @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),   @cFieldAttr04 NVARCHAR( 1),
                @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),   @cFieldAttr05 NVARCHAR( 1),
                @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),   @cFieldAttr06 NVARCHAR( 1),
                @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),   @cFieldAttr07 NVARCHAR( 1),
                @cLength             NVARCHAR( 10),
                @cWidth              NVARCHAR( 10),
-               @cHeight             NVARCHAR( 10)
+               @cHeight             NVARCHAR( 10),
+               @fCartonLength       FLOAT,
+               @fCartonWidth        FLOAT,
+               @fCartonHeight       FLOAT,
+               @fCartonCube         FLOAT,
+               @fCube               FLOAT,
+               @fWeight             FLOAT,
+               @fLength             FLOAT,
+               @fWidth              FLOAT,
+               @fHeight             FLOAT
 
             SELECT 
+               @cFieldAttr03 = FieldAttr03,
                @cFieldAttr05 = FieldAttr05,
                @cFieldAttr06 = FieldAttr06,
                @cFieldAttr07 = FieldAttr07,
-               @cInField05 = I_Field05,   @cOutField05 = O_Field05,
-               @cInField06 = I_Field06,   @cOutField06 = O_Field06,
-               @cInField07 = I_Field07,   @cOutField07 = O_Field07
+               @cInField03 = I_Field03,
+               @cInField05 = I_Field05,
+               @cInField06 = I_Field06,
+               @cInField07 = I_Field07
             FROM RDT.RDTMOBREC WITH(NOLOCK)
             WHERE Mobile = @nMobile
 
-            SET @cLength         = CASE WHEN @cFieldAttr05 = '' THEN @cInField05 ELSE @cOutField05 END
-            SET @cWidth          = CASE WHEN @cFieldAttr06 = '' THEN @cInField06 ELSE @cOutField06 END
-            SET @cHeight         = CASE WHEN @cFieldAttr07 = '' THEN @cInField07 ELSE @cOutField07 END
+            SELECT 
+               @fCartonLength    = CartonLength,
+               @fCartonWidth     = CartonWidth,
+               @fCartonHeight    = CartonHeight,
+               @fCartonCube      = Cube
+            FROM Cartonization C WITH (NOLOCK)
+            INNER JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
+            WHERE S.StorerKey = @cStorerKey
+               AND C.CartonType = @cCartonType
 
-            DECLARE @fCube          FLOAT
-            DECLARE @fWeight        FLOAT
-            DECLARE @fLength        FLOAT
-            DECLARE @fWidth         FLOAT
-            DECLARE @fHeight        FLOAT
+            SET @fCube           = CASE WHEN @cFieldAttr03 = '' THEN ISNULL(TRY_CAST(@cInField03 AS FLOAT), 0) ELSE @fCartonCube END
+            SET @fLength         = CASE WHEN @cFieldAttr05 = '' THEN ISNULL(TRY_CAST(@cInField05 AS FLOAT), 0) ELSE @fCartonLength END
+            SET @fWidth          = CASE WHEN @cFieldAttr06 = '' THEN ISNULL(TRY_CAST(@cInField06 AS FLOAT), 0) ELSE @fCartonWidth END
+            SET @fHeight         = CASE WHEN @cFieldAttr07 = '' THEN ISNULL(TRY_CAST(@cInField07 AS FLOAT), 0) ELSE @fCartonHeight END
 
-            SET @fCube     = CAST( @cCube AS FLOAT)
-            SET @fWeight   = CAST( @cWeight AS FLOAT)
-            SET @fLength   = CAST( @cLength AS FLOAT)
-            SET @fWidth    = CAST( @cWidth AS FLOAT)
-            SET @fHeight   = CAST( @cHeight AS FLOAT)
+            SET @fWeight = ISNULL(TRY_CAST( @cWeight AS FLOAT), 0)
             
             DECLARE @curPackInfo CURSOR
 
