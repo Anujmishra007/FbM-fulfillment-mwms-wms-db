@@ -86,8 +86,10 @@ BEGIN
     FROM RECEIPT R (NOLOCK)
     JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
     JOIN LOTXLOCXID L (NOLOCK) ON L.Sku = RD.Sku AND L.Loc = RD.ToLoc AND L.ID = RD.ToID
+    LEFT JOIN TRANSFERDETAIL TD (NOLOCK) ON TD.LOTTABLE03 = R.ExternReceiptkey
     WHERE RD.Receiptkey = @c_Receiptkey
     AND L.Qty - L.QtyAllocated - L.QtyPicked > 0
+    AND TD.LOTTABLE03 IS NULL
     BEGIN TRY
 
     IF EXISTS (SELECT 1 FROM #ReceiptData)
