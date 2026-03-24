@@ -64,16 +64,20 @@ BEGIN
    BEGIN
       IF @nInputKey = 1
       BEGIN
+         SET @nTranCount = @@TRANCOUNT
+         BEGIN TRAN  -- Begin our own transaction
+         SAVE TRAN rdt_1641ExtUpdSP18 -- For rollback or commit only our own transaction
+
          UPDATE PICKDETAIL SET DROPID = @cDropID WHERE CASEID = @cUCCNo AND StorerKey = @cStorerKey 
 
          SELECT @cFromLOC = LOC,
             @cFromID = ID,
-            @nQTY = QTY,
-            @cLOT = LOT,
+            @nQTY = SUM(QTY),
             @cSKU = SKU
          FROM PickDetail (NOLOCK)
          WHERE CASEID = @cUCCNo
          AND StorerKey = @cStorerKey
+         GROUP BY LOC,ID,SKU
 
          EXECUTE rdt.rdt_Move
             @nMobile     = @nMobile,
@@ -89,10 +93,17 @@ BEGIN
             @cToID       = @cDropID,
             @nQTYPick    = @nQTY,  --(JH01) @nPackedQty,
             @nQTY        = @nQTY,  --(JH01) @nPackedQty,
-            @cFromLOT    = @cLOT,
+            @cFromLOT    = NULL,
             @nFunc       = @nFunc,
             @cCaseID     = @cUCCNo,
             @cSKU        = @cSKU
+         
+         IF @nErrNo <> 0
+         BEGIN
+            ROLLBACK TRAN
+            GOTO QUIT
+         END
+         COMMIT TRAN rdt_1641ExtUpdSP18
       END
    END
 

@@ -88,6 +88,7 @@ BEGIN
       @cMarShallLoc           NVARCHAR(10),
       @cDefaultLoc            NVARCHAR(20),
       @cPriority              NVARCHAR(1),  
+      @cWavekey               NVARCHAR(10),
       @cDefaultClosePalletOption NVARCHAR( 1),
       @cUCCNo              NVARCHAR(20),
       @cPltBuildNotInsDropID     NVARCHAR( 20), -- (james01)
@@ -202,6 +203,7 @@ BEGIN
                   AND DOCINFO.StorerKey = @cStorerKey
                   AND DOCINFO.TableName = 'ORDERS'   
                   AND DocInfo.Key3 = 'Z017'
+                  AND CHARINDEX('-', DOCINFO.Data) > 0
 
                SET @cScannedDropID = @cFromID
                SET @cOutField01 = @cFromID
@@ -395,7 +397,7 @@ BEGIN
          BEGIN
             IF ISNULL(RTRIM(@cInField01), '') = '1'
             BEGIN
-               SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.ID
+               SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.ID,@cWaveKey = O.USERDEFINE09
                FROM PickDetail PD (NOLOCK) 
                LEFT JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
                LEFT JOIN MBOL M WITH(NOLOCK) ON O.MBOLKey = M.MBOLKey
@@ -428,7 +430,7 @@ BEGIN
                         Priority, TrafficCop)
                      VALUES (
                         @cNewTaskDetailKey, 'ASTMV', '0', '', @cFromLOC, @cFromLOC, @cDropID, @cMarShallLoc, @cMarShallLoc, @cDropID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', '', 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END TRY
                   BEGIN CATCH
@@ -449,7 +451,7 @@ BEGIN
                         Priority, TrafficCop)
                      VALUES (
                         @cNewTaskDetailKey, 'ASTPA', '0', '', @cFromLOC, @cFromLOC, @cDropID, @cMarShallLoc, @cMarShallLoc, @cDropID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', '', 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END TRY
                   BEGIN CATCH
