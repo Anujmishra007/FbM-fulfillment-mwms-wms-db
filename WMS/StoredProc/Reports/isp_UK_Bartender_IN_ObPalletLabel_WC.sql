@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
  
 /******************************************************************************/    
-/* Copyright: LFL                                                             */    
+/* Copyright: MAERSK                                                          */    
 /* Purpose: isp_UK_Bartender_IN_ObPalletLabel_WC                              */    
 /*                                                                            */    
 /* Modifications log:                                                         */    
