@@ -82,7 +82,8 @@ BEGIN
     @cLott10              NVARCHAR( 30),
     @cSKUReceived         NVARCHAR( 20),
     @cDamagedCode         NVARCHAR(30),
-    @cExpiredCode         NVARCHAR(30)
+    @cExpiredCode         NVARCHAR(30),
+    @cIDFromMobRec        NVARCHAR(20) --FCR-11294
 
     SELECT
     @cLott10           = C_String1,
@@ -152,94 +153,110 @@ BEGIN
                 END
             
                 IF( @nStep = 2 )
-                BEGIN
-                IF ISNULL(rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey),'') = @cLOC
-                    GOTO QUIT
+                    BEGIN
+                    IF ISNULL(rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey),'') = @cLOC
+                        GOTO QUIT
 
-                SELECT
-                    @nCheckDigit = CheckDigitLengthForLocation
-                FROM dbo.FACILITY WITH (NOLOCK)
-                WHERE facility = @cFacility
+                    SELECT
+                        @nCheckDigit = CheckDigitLengthForLocation
+                    FROM dbo.FACILITY WITH (NOLOCK)
+                    WHERE facility = @cFacility
 
-                IF @nCheckDigit > 0
-                BEGIN
-                    SELECT @cActLoc = loc 
-                    FROM dbo.LOC WITH (NOLOCK)
-                    WHERE Facility = @cFacility AND CONCAT(LOC,LOCCHECKDIGIT) = @cLOC
-                    SET @nRowCount = @@ROWCOUNT
-                    IF @nRowCount > 1
+                    IF @nCheckDigit > 0
                     BEGIN
-                        SET @nErrNo = 261353
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --261353 Unique location not identified
-                        GOTO Quit
-                    END
-                    ELSE IF @nRowCount = 0
-                    BEGIN
-                        SET @nErrNo = 261354
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --261354 Loc Not Found
-                        GOTO Quit
-                    END
-                    SET @cLOC = @cActLoc
-                    GOTO QUIT
-                END
-            END
-    
-            IF( @nStep = 5 )
-            BEGIN
-                SET @cStorerConfig = ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidateLottable', @cStorerKey),'')
-                IF @cStorerConfig <> ''
-                BEGIN
-                    SELECT TOP 1 @nLotNum = TRY_CAST(value AS INT) FROM STRING_SPLIT(@cStorerConfig, ',')
-                    SELECT @cListName = value FROM STRING_SPLIT(@cStorerConfig, ',')
-                    SET @cLotValue = CASE
-                                        WHEN @nLotNum = 1  THEN @cLottable01 WHEN @nLotNum = 2  THEN @cLottable02 
-                                        WHEN @nLotNum = 3  THEN @cLottable03 WHEN @nLotNum = 6  THEN @cLottable06 
-                                        WHEN @nLotNum = 7  THEN @cLottable07 WHEN @nLotNum = 8  THEN @cLottable08 
-                                        WHEN @nLotNum = 9  THEN @cLottable09 WHEN @nLotNum = 10 THEN @cLottable10 
-                                        WHEN @nLotNum = 11 THEN @cLottable11 WHEN @nLotNum = 12 THEN @cLottable12
-                                        END 
-                    IF ISNULL(@cLotValue,'') = ''
-                    BEGIN
-                        GOTO Quit
-                    END
-                    SET @SQL = 'SELECT  @Result = COUNT(1)
-                        FROM dbo.CodeLKUP WITH (NOLOCK)
-                        WHERE ListName = '+CONCAT('''',@cListName,'''')+
-                        'AND Storerkey = '+CONCAT('''',@cStorerkey,'''')
-                    EXEC sp_executesql @SQL,N'@Result INT OUTPUT', @nSQLResult OUTPUT
-                    IF @nSQLResult = 0
-                    BEGIN
-                        SET @nErrNo = 261355
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'List not maintained'
-                        GOTO Quit
-                    END
-                    SET @SQL = 'SELECT  @Result = COUNT(1)
-                        FROM dbo.CodeLKUP WITH (NOLOCK)
-                        WHERE ListName = '+CONCAT('''',@cListName,'''')+
-                        'AND Storerkey = '+CONCAT('''',@cStorerkey,'''')+
-                        'AND Code ='+ CONCAT('''',@cLotValue,'''')
-                    EXEC sp_executesql @SQL,N'@Result INT OUTPUT', @nSQLResult OUTPUT
-                    IF @nSQLResult = 0
-                    BEGIN
-                        SET @nErrNo = 261356
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid Value'
-                        GOTO Quit
+                        SELECT @cActLoc = loc 
+                        FROM dbo.LOC WITH (NOLOCK)
+                        WHERE Facility = @cFacility AND CONCAT(LOC,LOCCHECKDIGIT) = @cLOC
+                        SET @nRowCount = @@ROWCOUNT
+                        IF @nRowCount > 1
+                        BEGIN
+                            SET @nErrNo = 261353
+                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --261353 Unique location not identified
+                            GOTO Quit
+                        END
+                        ELSE IF @nRowCount = 0
+                        BEGIN
+                            SET @nErrNo = 261354
+                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --261354 Loc Not Found
+                            GOTO Quit
+                        END
+                        SET @cLOC = @cActLoc
+                        GOTO QUIT
                     END
                 END
-            END
-
-            IF( @nStep = 6 )
-            BEGIN
-                IF (ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0')) <> '0' -- Capture pallet type
+        
+                IF( @nStep = 5 )
                 BEGIN
-                    IF ISNULL(@cPalletTypeSave,'') <> ''
+                    SET @cStorerConfig = ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidateLottable', @cStorerKey),'')
+                    IF @cStorerConfig <> ''
                     BEGIN
-                        UPDATE dbo.RECEIPTDETAIL SET PalletType = @cPalletTypeSave
-                        WHERE ReceiptKey = @cReceiptKey
-                        AND ReceiptLineNumber = @cReceiptLineNumber
+                        SELECT TOP 1 @nLotNum = TRY_CAST(value AS INT) FROM STRING_SPLIT(@cStorerConfig, ',')
+                        SELECT @cListName = value FROM STRING_SPLIT(@cStorerConfig, ',')
+                        SET @cLotValue = CASE
+                                            WHEN @nLotNum = 1  THEN @cLottable01 WHEN @nLotNum = 2  THEN @cLottable02 
+                                            WHEN @nLotNum = 3  THEN @cLottable03 WHEN @nLotNum = 6  THEN @cLottable06 
+                                            WHEN @nLotNum = 7  THEN @cLottable07 WHEN @nLotNum = 8  THEN @cLottable08 
+                                            WHEN @nLotNum = 9  THEN @cLottable09 WHEN @nLotNum = 10 THEN @cLottable10 
+                                            WHEN @nLotNum = 11 THEN @cLottable11 WHEN @nLotNum = 12 THEN @cLottable12
+                                            END 
+                        IF ISNULL(@cLotValue,'') = ''
+                        BEGIN
+                            GOTO Quit
+                        END
+                        SET @SQL = 'SELECT  @Result = COUNT(1)
+                            FROM dbo.CodeLKUP WITH (NOLOCK)
+                            WHERE ListName = '+CONCAT('''',@cListName,'''')+
+                            'AND Storerkey = '+CONCAT('''',@cStorerkey,'''')
+                        EXEC sp_executesql @SQL,N'@Result INT OUTPUT', @nSQLResult OUTPUT
+                        IF @nSQLResult = 0
+                        BEGIN
+                            SET @nErrNo = 261355
+                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'List not maintained'
+                            GOTO Quit
+                        END
+                        SET @SQL = 'SELECT  @Result = COUNT(1)
+                            FROM dbo.CodeLKUP WITH (NOLOCK)
+                            WHERE ListName = '+CONCAT('''',@cListName,'''')+
+                            'AND Storerkey = '+CONCAT('''',@cStorerkey,'''')+
+                            'AND Code ='+ CONCAT('''',@cLotValue,'''')
+                        EXEC sp_executesql @SQL,N'@Result INT OUTPUT', @nSQLResult OUTPUT
+                        IF @nSQLResult = 0
+                        BEGIN
+                            SET @nErrNo = 261356
+                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid Value'
+                            GOTO Quit
+                        END
                     END
                 END
-            END
+
+                IF( @nStep = 6 )
+                BEGIN
+                    IF (ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0')) <> '0' -- Capture pallet type
+                    BEGIN
+                        IF ISNULL(@cPalletTypeSave,'') <> ''
+                        BEGIN
+                            UPDATE dbo.RECEIPTDETAIL SET PalletType = @cPalletTypeSave
+                            WHERE ReceiptKey = @cReceiptKey
+                            AND ReceiptLineNumber = @cReceiptLineNumber
+
+                            -- FCR-11294: Also update ID table at Step 6
+                            IF (ISNULL(rdt.RDTGetConfig(@nFunc, 'UpdPltType', @cStorerKey), '0') = '1')
+                            BEGIN
+                                SELECT @cIDFromMobRec = V_ID
+                                FROM RDT.RDTMOBREC WITH (NOLOCK)
+                                WHERE Mobile = @nMobile
+                                
+                                IF ISNULL(@cIDFromMobRec, '') <> ''
+                                BEGIN
+                                    UPDATE dbo.ID WITH (ROWLOCK)
+                                    SET PalletType = @cPalletTypeSave,
+                                        EditDate = GETDATE()
+                                    WHERE ID = @cIDFromMobRec
+                                END
+                            END
+                        END
+                    END
+                END
             END -- closes IF @nInputKey = 1
         END -- closes IF @nFunc = 600
     END -- closes IF @nAction = 1
