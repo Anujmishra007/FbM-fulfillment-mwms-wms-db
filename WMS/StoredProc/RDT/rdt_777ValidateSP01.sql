@@ -260,6 +260,13 @@ BEGIN
                GOTO Quit
             END
 
+            IF NOT EXISTS(SELECT 1 FROM dbo.PickDetail WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey AND SKU = @cSKU AND Status = '5')
+            BEGIN
+               SET @nErrNo = 251756
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Order is not picked yet
+               GOTO Quit
+            END
+
             IF EXISTS(SELECT 1 FROM dbo.PickDetail WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                AND OrderKey = @cOrderKey

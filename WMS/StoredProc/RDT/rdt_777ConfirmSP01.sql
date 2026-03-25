@@ -803,7 +803,7 @@ BEGIN
          IF @nRowCount = 0 OR @InputQty <= 0
             BREAK
 
-         IF @nPickQTY > @nQTY
+         IF @nPickQTY > @InputQty
          BEGIN
             EXECUTE nspg_GetKey
                'PICKDETAILKEY'
@@ -859,9 +859,9 @@ BEGIN
                EditWho = SUSER_NAME(),
                TrafficCop = NULL
             WHERE PickDetailKey = @cPickDetailKey
-
-            SET @InputQty = @InputQty - @nPickQTY
          END
+
+         SET @InputQty = @InputQty - @nPickQTY
       END
 
       UPDATE dbo.PackInfo WITH(ROWLOCK)
