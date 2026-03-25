@@ -22,7 +22,7 @@ GO
 /* 2026-02-04  Wan      1.0   Fixed, CR v3.6                              */ 
 /* 2026-02-25  Wan01    1.1   UWP-49319 - ONBR Conso Task Not Working     */  
 /* 2026-03-18  Wan02    1.2   UWP-52415 - INC9075034-Release Wave consume */
-/*                            DB Resources                                */
+/*                            DB Resources due to infinity Loop with qty=0*/
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV09]        
    @c_Wavekey     NVARCHAR(10)    
@@ -97,6 +97,7 @@ BEGIN
                    
          , @n_CubeUOM1                 FLOAT = 0.00        
          , @n_CubeUOM3                 FLOAT = 0.00 
+         , @n_StdCube                  FLOAT = 0.00                                 --(Wan02)
          , @n_MaxSkuVol                FLOAT = 0.00 
          , @n_MaxUCCVol                FLOAT = 0.00          
          , @n_DropIDVol                FLOAT = 0.00  
@@ -192,7 +193,7 @@ BEGIN
       ELSE
          SET @n_MaxUCCVol = -1.00
    END
-         
+
    --Create pickdetail Work in progress temporary table  
    IF @n_Continue = 1 OR @n_Continue = 2  
    BEGIN 
@@ -341,7 +342,31 @@ BEGIN
          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
                       +': StdCube is not setup Sku: ' + @c_Sku
                       +'. (mspRLWAV09)'         
-      END        
+      END     
+      
+      SET @c_Sku = ''                                                               --Wan02 - START   
+      SET @n_StdCube = 0.00                                                                 
+      SELECT TOP 1 @c_Sku = S.Sku
+            , @n_StdCube  = s.StdCube 
+      FROM #PICKDETAIL_WIP PD 
+      JOIN SKU s (NOLOCK) ON  s.Storerkey = PD.Storerkey 
+                          AND s.Sku = PD.Sku
+      WHERE PD.UOM = '6'  
+      AND PD.Qty > 0  
+      AND PD.[Status] = '0'  
+      AND PD.TaskdetailKey = ''
+      AND s.StdCube > @n_MaxSkuVol
+ 
+      IF @c_Sku > ''
+      BEGIN  
+         SET @n_Continue = 3    
+         SET @n_err = 83026   
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                      +': StdCube is setup greater MaxSkuVol. Sku: ' + @c_Sku
+                      +', StdCube: ' + CONVERT(NVARCHAR(10), @n_StdCube)
+                      +', MaxSkuVol: ' + @c_MaxSkuVol
+                      +'. (mspRLWAV09)'         
+      END                                                                           --Wan02 - END
    END
    
    --Replenishment By UCCNo
@@ -997,22 +1022,23 @@ BEGIN
                IF @c_Groupkey = ''
                BEGIN
                   SET @n_VolumeLeftTofulfill = @n_DropIDVol                               --CR v3.4
-                  EXEC dbo.nspg_GetKey @KeyName = @c_KeyName
-                                     , @fieldlength = 10
-                                     , @keystring = @c_Groupkey   OUTPUT
-                                     , @b_Success = @b_Success    OUTPUT
-                                     , @n_err = @n_err            OUTPUT
-                                     , @c_errmsg = @c_errmsg      OUTPUT
-                  IF @b_Success = 0
-                  BEGIN
-                     SET @n_Continue = 3
-                  END
+                  --EXEC dbo.nspg_GetKey @KeyName = @c_KeyName                            --Wan02
+                  --                   , @fieldlength = 10
+                  --                   , @keystring = @c_Groupkey   OUTPUT
+                  --                   , @b_Success = @b_Success    OUTPUT
+                  --                   , @n_err = @n_err            OUTPUT
+                  --                   , @c_errmsg = @c_errmsg      OUTPUT
+                  --IF @b_Success = 0
+                  --BEGIN
+                  --   SET @n_Continue = 3
+                  --END
                END
                
                IF @n_Continue IN (1,2) 
                BEGIN
                   SET @n_QtyToTake = 0                                              --(Wan01)
                   SET @n_MaxQtyPerGroup = FLOOR((@n_VolumeLeftTofulfill/@n_Cube)*@n_PackUOMQty)
+                  
                   IF @n_MaxQtyPerGroup > 0
                   BEGIN
                      IF @n_QtyLeftTofulfill > @n_MaxQtyPerGroup
@@ -1031,59 +1057,92 @@ BEGIN
                      SET @n_Qty    = @n_QtyToTake                                              
                   END
                   
-                  EXEC isp_InsertTaskDetail     
-                      @c_TaskType              = @c_TaskType               
-                     ,@c_Storerkey             = @c_Storerkey  
-                     ,@c_Sku                   = @c_Sku  
-                     ,@c_Lot                   = @c_Lot   
-                     ,@c_UOM                   = @c_UOM        
-                     ,@n_UOMQty                = @n_UOMQty       
-                     ,@n_Qty                   = @n_Qty     
-                     ,@c_FromLoc               = @c_Fromloc        
-                     ,@c_LogicalFromLoc        = @c_FromLoc   
-                     ,@c_FromID                = @c_FromID       
-                     ,@c_ToLoc                 = @c_ToLoc         
-                     ,@c_LogicalToLoc          = @c_ToLoc   
-                     ,@c_ToID                  = @c_ToID   
-                     ,@c_CaseID                = @c_UCCNo
-                     ,@c_PickMethod            = @c_PickMethod  
-                     ,@c_Priority              = @c_Priority       
-                     ,@c_SourcePriority        = '9'        
-                     ,@c_SourceType            = @c_SourceType        
-                     ,@c_SourceKey             = @c_Wavekey        
-                     ,@c_OrderKey              = @c_Orderkey  
-                     ,@c_Wavekey               = @c_Wavekey  
-                     ,@c_Loadkey               = @c_Loadkey                               
-                     ,@c_Groupkey              = @c_Groupkey
-                     ,@c_RefTaskkey            = @c_RefTaskkey -- if FCP need RPF Qty from other wave, reftaskkey  =''
-                     ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
-                     ,@c_Message03             = ''  
-                     ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
-                     ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
-                     ,@c_SplitTaskByCase       ='N'   -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.  
-                     ,@c_WIP_RefNo             = @c_SourceType  
-                     ,@b_Success               = @b_Success OUTPUT  
-                     ,@n_Err                   = @n_err OUTPUT   
-                     ,@c_ErrMsg                = @c_errmsg OUTPUT 
-                     ,@c_Status                = @c_TaskStatus         
-                      
-                  IF @b_Success <> 1   
-                  BEGIN  
-                     SET @n_Continue = 3  
+                  SET @b_success = 1                                                --(Wan02) - START   
+                  SET @c_Taskdetailkey = ''
+                  EXECUTE nspg_getkey   
+                        @KeyName    = 'TaskDetailKey'             
+                     ,  @fieldlength= 10    
+                     ,  @keystring  = @c_Taskdetailkey   OUTPUT  
+                     ,  @b_Success  = @b_Success         OUTPUT  
+                     ,  @n_err      = @n_err             OUTPUT  
+                     ,  @c_errmsg   = @c_errmsg          OUTPUT  
+
+                  IF @b_Success <> 1    
+                  BEGIN    
+                     SET @n_Continue = 3    
                   END  
 
-                  IF @n_QtyToTake < @n_MaxQtyPerGroup                                    --CR v3.4 - START
+                  IF @n_Continue = 1
                   BEGIN
-                     SET @n_TTLVolume = @n_QtyToTake * @n_Cube
-                     SET @n_VolumeLeftTofulfill = @n_VolumeLeftTofulfill - @n_TTLVolume
-                  END
-                  ELSE 
-                  BEGIN
-                     SET @n_TTLVolume = 0.00
-                     SET @n_VolumeLeftTofulfill = 0.00
-                     SET @c_Groupkey  = ''
-                  END
-                  SET @n_QtyLeftTofulfill = @n_QtyLeftTofulfill - @n_QtyToTake              
+                     IF @c_GroupKey = ''
+                     BEGIN
+                        SET @c_GroupKey = @c_Taskdetailkey 
+                     END
+
+                     EXEC isp_InsertTaskDetail  
+                         @c_TaskdetailKey         = @c_Taskdetailkey 
+                        ,@c_TaskType              = @c_TaskType               
+                        ,@c_Storerkey             = @c_Storerkey  
+                        ,@c_Sku                   = @c_Sku  
+                        ,@c_Lot                   = @c_Lot   
+                        ,@c_UOM                   = @c_UOM        
+                        ,@n_UOMQty                = @n_UOMQty       
+                        ,@n_Qty                   = @n_Qty     
+                        ,@c_FromLoc               = @c_Fromloc        
+                        ,@c_LogicalFromLoc        = @c_FromLoc   
+                        ,@c_FromID                = @c_FromID       
+                        ,@c_ToLoc                 = @c_ToLoc         
+                        ,@c_LogicalToLoc          = @c_ToLoc   
+                        ,@c_ToID                  = @c_ToID   
+                        ,@c_CaseID                = @c_UCCNo
+                        ,@c_PickMethod            = @c_PickMethod  
+                        ,@c_Priority              = @c_Priority       
+                        ,@c_SourcePriority        = '9'        
+                        ,@c_SourceType            = @c_SourceType        
+                        ,@c_SourceKey             = @c_Wavekey        
+                        ,@c_OrderKey              = @c_Orderkey  
+                        ,@c_Wavekey               = @c_Wavekey  
+                        ,@c_Loadkey               = @c_Loadkey                               
+                        ,@c_Groupkey              = @c_Groupkey
+                        ,@c_RefTaskkey            = @c_RefTaskkey -- if FCP need RPF Qty from other wave, reftaskkey  =''
+                        ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
+                        ,@c_Message03             = ''  
+                        ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
+                        ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
+                        ,@c_SplitTaskByCase       ='N'   -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.  
+                        ,@c_WIP_RefNo             = @c_SourceType  
+                        ,@b_Success               = @b_Success OUTPUT  
+                        ,@n_Err                   = @n_err OUTPUT   
+                        ,@c_ErrMsg                = @c_errmsg OUTPUT 
+                        ,@c_Status                = @c_TaskStatus         
+                      
+                     IF @b_Success <> 1   
+                     BEGIN  
+                        SET @n_Continue = 3  
+                     END  
+
+                     IF @n_Continue = 1
+                     BEGIN
+                        IF @n_QtyToTake < @n_MaxQtyPerGroup                         --CR v3.4 - START
+                        BEGIN
+                           SET @n_TTLVolume = @n_QtyToTake * @n_Cube
+                           SET @n_VolumeLeftTofulfill = @n_VolumeLeftTofulfill - @n_TTLVolume
+                        END
+                        ELSE 
+                        BEGIN
+                           SET @n_TTLVolume = 0.00
+                           SET @n_VolumeLeftTofulfill = 0.00
+                           SET @c_Groupkey  = ''
+                        END
+                  
+                        SET @n_QtyLeftTofulfill = @n_QtyLeftTofulfill - @n_QtyToTake 
+                        -- Exceptional Handling if qtytotake = 0 with infinity loop
+                        IF @n_QtyToTake = 0                                               
+                        BEGIN
+                           SET @n_QtyLeftTofulfill = 0
+                        END
+                     END
+                  END                                                               --(Wan02) - END
                END                                                                  --CR v3.4 - END
             END
          END
