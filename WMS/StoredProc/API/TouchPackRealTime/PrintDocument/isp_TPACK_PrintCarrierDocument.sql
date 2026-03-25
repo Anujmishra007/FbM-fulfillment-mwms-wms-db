@@ -11,7 +11,8 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-02-23   1.0  GCH225     UWP-48263 Created                                */
-/* 2026-03-16   2.0  GCH225     FCR-11595: New Query logic UserSessionActivityLog */
+/* 2026-03-16   2.0  GCH225     FCR-11595: New Query logic UserSessionActivityLog*/
+/* 2026-03-25   2.1  GCH225     FCR-11991 Handle print carrier logic             */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintCarrierDocument] (
@@ -89,10 +90,10 @@ BEGIN
          , @cLabelPrinter = LabelPrinter
    FROM API.TPACK_UserSessionActivityLog (NOLOCK)
    WHERE StorerKey = @cStorerKey
-   AND LabelNo = @cLabelNo
+   AND (@cLabelNo = '' OR LabelNo = @cLabelNo)
    AND OrderKey = @cOrderKey
    AND CartonNo <> 0
-   ORDER BY 1 DESC
+   ORDER BY RowRefNo DESC
             
    IF NOT EXISTS (SELECT 1
                   FROM WMREPORT WMR (NOLOCK) 
@@ -215,7 +216,7 @@ BEGIN
                   + ' FROM PACKDETAIL (NOLOCK) '
                   + ' WHERE StorerKey = @cStorerKey '
                   + ' AND PickSlipNo = @cPickSlipNo '
-                  + ' AND CartonNo = @nCartonNo '
+                  + IIF(@cLabelNo <> '', ' AND CartonNo = @nCartonNo ', '')
 
       SET @groupByFields = ''
 
