@@ -3,23 +3,24 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/*********************************************************************************/
-/* Store procedure: rdtfnc_PalletReceive                                         */
-/* Copyright      : LFLogistics                                                  */
-/*                                                                               */
-/* Purpose: Mirgrated from normal receiving                                      */
-/*                                                                               */
-/* Date       Rev  Author   Purposes                                             */
-/* 2015-08-31 1.2  Ung      SOS351444 Created                                    */
-/* 2016-09-30 1.3  Ung      Performance tuning                                   */
-/* 2018-06-07 1.4  James    WMS5536 - Add rdt_decode sp (james01)                */
-/* 2018-10-05 1.5  TungGH   Performance                                          */
-/* 2020-07-29 1.6  YeeKung  WMS-14414 Add flowthrough (yeekung01)                */
-/* 2022-02-21 1.7  YeeKung  WMS-18676 fix extendevalidate (yeekung02)            */
-/* 2024-09-19 1.8  JHU151   FCR-752                                              */
-/* 2025-06-18 1.9  CYU027   FCR-4200                                             */
-/* 2025-12-31 2.0  JackC    FCR-9251 Add extscn entry to st22                    */
-/*********************************************************************************/
+/************************************************************************************/
+/* Store procedure: rdtfnc_PalletReceive                                            */
+/* Copyright      : LFLogistics                                                     */
+/*                                                                                  */
+/* Purpose: Mirgrated from normal receiving                                         */
+/*                                                                                  */
+/* Date       Rev    Author   Purposes                                              */
+/* 2015-08-31 1.2    Ung      SOS351444 Created                                     */
+/* 2016-09-30 1.3    Ung      Performance tuning                                    */
+/* 2018-06-07 1.4    James    WMS5536 - Add rdt_decode sp (james01)                 */
+/* 2018-10-05 1.5    TungGH   Performance                                           */
+/* 2020-07-29 1.6    YeeKung  WMS-14414 Add flowthrough (yeekung01)                 */
+/* 2022-02-21 1.7    YeeKung  WMS-18676 fix extendevalidate (yeekung02)             */
+/* 2024-09-19 1.8    JHU151   FCR-752                                               */
+/* 2025-06-18 1.9    CYU027   FCR-4200                                              */
+/* 2025-12-31 2.0    JackC    FCR-9251 Add extscn entry to st22                     */
+/* 2025-12-31 2.0.1  JackC    Add fromScn, toScn,toStep check for extscn04 at st99  */
+/************************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PalletReceive] (
    @nMobile    INT,
@@ -1172,13 +1173,12 @@ BEGIN
 
          IF @cExtendedScreenSP = 'rdt_605ExtScn04'
          BEGIN
-
-            SET @cToLOC = @cUDF01
-            SET @nCurrentScanned = CAST(@cUDF02 AS INT)
-
-
+            IF @nPreScn = 6621 AND @nScn = 4251 AND @nstep = 2 -- ToLoc screen to ID screen
+            BEGIN
+               SET @cToLOC = @cUDF01
+               SET @nCurrentScanned = TRY_CAST(@cUDF02 AS INT)
+            END
          END
-
 
          IF @cExtendedScreenSP IN ( 'rdt_605ExtScn01', 'rdt_605ExtScn03','rdt_605ExtScn05')
          BEGIN
