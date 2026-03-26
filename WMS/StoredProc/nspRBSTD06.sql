@@ -33,7 +33,7 @@ GO
 /* 25-MAR-2026  surya    2.0  Order-Driven Allocation + FIFO + Fulpalet */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE nspRBSTD06
+CREATE OR ALTER PROCEDURE [dbo].[nspRBSTD06]
 @c_lot NVARCHAR(10),
 @c_uom NVARCHAR(10),
 @c_HostWHCode NVARCHAR(10),
@@ -128,4 +128,5 @@ BEGIN
 
 END
 GO
+GRANT EXECUTE ON nspRBSTD06 TO nSQL
 GO
