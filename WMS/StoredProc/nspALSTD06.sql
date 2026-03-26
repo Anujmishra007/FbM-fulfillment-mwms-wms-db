@@ -21,7 +21,7 @@ GO
 /* Date         Author   Ver. Purposes                                  */
 /* 20-Nov-2024  WLChooi  1.1  DevOps Combine Script                     */
 /* 20-Nov-2024  WLChooi  1.1  WMS-26556-Support Multi Facilities(WL01)  */
-*/ 11-MAR-2026  surya    1.2  Reverse the eirlier chages
+/* 11-MAR-2026  surya    1.2  Reverse the eirlier chages                */
 /************************************************************************/
 CREATE OR ALTER PROC nspALSTD06
 @c_lot NVARCHAR(10) ,
