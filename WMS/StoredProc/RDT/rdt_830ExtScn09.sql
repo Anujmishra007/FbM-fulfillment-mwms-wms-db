@@ -824,8 +824,7 @@ BEGIN
                   UPDATE PICKDETAIL WITH (ROWLOCK)
                   SET QTYMoved = QTY,
                      QTY = 0,
-                     TaskManagerReasonKey = @cReasonCode,
-                     LOC = @cShortLoc
+                     TaskManagerReasonKey = @cReasonCode
                   WHERE PickDetailKey = @cPickDetailKey
                   FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
                END
@@ -876,7 +875,7 @@ BEGIN
                   SET @cExecStatements = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements)
                                  + ' @c_Wavekey = ''' + ISNULL(@cWaveKey,'') + ''''
                                  + ', @c_SKU = ''' + @cSKU + ''''
-                                 + ', @c_InputValue = ''' + @cShortLoc + ''''
+                                 + ', @c_InputValue = ''' + @cLoc + ''''
 
                   IF @nDebugFlag = 1
                      SELECT 'Start to submit Qcmd', @cExecStatements
