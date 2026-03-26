@@ -422,13 +422,13 @@ BEGIN
          SET @n_PendingMoveIn = 0
          SET @n_ChannelInvQty = 0
 
-         SELECT @n_PendingMoveIn = SUM(Qty)
+         SELECT @n_PendingMoveIn = ISNULL(SUM(Qty),0)
            FROM #TEMP_REPLENISHMENT RP
           WHERE Storerkey = @c_CurrentStorer
             AND Sku = @c_CurrentSKU
             AND ToLoc = @c_CurrentLOC
 
-         SELECT @n_ChannelInvQty = SUM(Qty)
+         SELECT @n_ChannelInvQty = ISNULL(SUM(Qty),0)
            FROM CHANNELINV WITH(NOLOCK)
           WHERE Facility = @c_Facility
             AND Storerkey = @c_CurrentStorer
