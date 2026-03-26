@@ -28,6 +28,9 @@
 /* 23-Jul-2025    Sean01     #UWP-38247 - Compatible with Login User    */
 /* 20-Aug-2025    Jiawen     #UWP-39649 - Add CCTV Configs              */
 /* 15-Sep-2025    JWF011   #UWP-41185 - Update OrderKey for CCTV Config */
+/* 07-Jan-2026    JWF011   #FCR-10065 - Add SKU to get CCTV configs     */
+/* 29-Jan-2026    Sean02   UWP-47754 - Merge the unified SP             */
+/* 24-Mar-2026    Sean03   #UWP-52654 - replace RevertUser with ResetUser*/
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU](
      @b_Debug           INT            = 0
@@ -227,7 +230,7 @@ BEGIN
       SET @n_sp_err        = 0
       SET @c_sp_errmsg     = ''
 
-      EXEC [dbo].[isp_Ecom_GetPackSku]
+      EXEC [API].[isp_ECOMP_GetPackSku] --Sean02
          @c_OrderKey    = @c_OrderKey   
       ,  @c_StorerKey   = @c_StorerKey  
       ,  @c_Sku         = @c_SKU             OUTPUT
@@ -386,7 +389,7 @@ BEGIN
       PRINT '@b_ScanQRInSKULabel = ' + CONVERT(NVARCHAR(2), @b_ScanQRInSKULabel)
    END
 
-   --Sean S
+   --Sean S -- Customized process for Insert/Update PackDetail
    SET @b_sp_Success = 1
    EXEC [API].[isp_ECOMP_SKUDecode_PostAction_Wrapper]
          @b_Debug          = @b_Debug
@@ -412,6 +415,7 @@ BEGIN
    END
    --Sean E
 
+   -- Standard process for Insert/Update PackDetail
    --Insert/Update PackDetail ONLY after Scan serial number/lottable.
    IF NOT (@c_IsSerialNoMandatory = '1' OR @c_IsLottableMandatory = '1') OR @b_ScanQRInSKULabel = 1
    BEGIN
@@ -495,6 +499,7 @@ BEGIN
       ,  @c_TaskBatchID     = @c_TaskBatchID 
       ,  @c_OrderKey        = @c_OrderKey    
       ,  @c_DropID          = @c_DropID      
+      ,  @c_SKU             = @c_SKU
       ,  @c_EPACKConfigJSON = @c_EPACKConfigJSON OUTPUT
    --CCTV Configs End
 
@@ -539,10 +544,8 @@ BEGIN
 
    QUIT:
 
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
+   IF @b_sp_ExecuteAs = 1 REVERT --Sean03
+   EXEC [WM].[lsp_ResetUser] --Sean03
 
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      

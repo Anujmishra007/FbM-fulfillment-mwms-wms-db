@@ -15,7 +15,7 @@
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date           Author   Purposes										*/
+/* Date           Author   Purposes                                     */
 /* 12-May-2023    Allen    #JIRA PAC-65 Initial                         */
 /* 10-Jul-2023    Allen    #JIRA PAC-7 Add CartonNo param      --(AL01) */
 /* 04-Sep-2023    Allen    #JIRA PAC-129 Add defalut printer   --(AL02) */
@@ -24,6 +24,8 @@
 /* 14-MAY-2024    Alex02   #JIRA PAC-341 LogiReport Printing            */
 /* 08-May-2025    Alex03   #FCR-3165 - Skip changing  @c_UserID         */
 /* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
+/* 06-Mar-2026    Sean02   #FCR-10057 - UA PACKLIST Pre-Print Check     */
+/* 24-Mar-2026    Sean03   #UWP-52654 - replace RevertUser with ResetUser*/
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_Auto_Print](
      @b_Debug           INT            = 0
@@ -109,6 +111,9 @@ BEGIN
 
          , @b_ReprintCtnLabel             BIT            = 0
          , @c_PrintSource                 NVARCHAR(10)   = 'WMReport'   --(Alex02)
+
+         , @c_ReportType                  NVARCHAR(30)   = ''
+         , @b_PrePrintSuccess             INT            = 1
 
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
@@ -209,6 +214,41 @@ BEGIN
          BEGIN
             GOTO NEXT_RECORD
          END
+
+         -- Sean02 #FCR-10057 UA PACKLIST Pre-Print Check Start
+         SET @c_ReportType     = ''
+         SET @b_PrePrintSuccess = 1
+
+         SELECT @c_ReportType = ISNULL(RTRIM(ReportType), '')
+         FROM dbo.WMReport (NOLOCK)
+         WHERE ReportID = @c_ReportID
+
+         EXEC [API].[isp_ECOMP_PrePrintCheck_Wrapper]
+              @c_StorerKey     = @c_StorerKey
+            , @c_Facility      = @c_Facility
+            , @c_PickSlipNo    = @c_PickSlipNo
+            , @c_ReportType    = @c_ReportType
+            , @b_Success       = @b_PrePrintSuccess  OUTPUT
+            , @n_Err           = @n_sp_err           OUTPUT
+            , @c_ErrMsg        = @c_sp_errmsg        OUTPUT
+
+         IF @b_Debug = 1
+         BEGIN
+            PRINT 'isp_ECOMP_PrePrintCheck_Wrapper result: ' + CONVERT(NVARCHAR(5), @b_PrePrintSuccess)
+         END
+
+         IF @b_PrePrintSuccess = 0       -- Error
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_ErrNo    = 51902
+            SET @c_ErrMsg   = CONVERT(CHAR(5), @n_ErrNo) + ': PrePrintCheck failed. \n ' + @c_sp_errmsg
+            GOTO QUIT
+         END
+         ELSE IF @b_PrePrintSuccess = 2  -- Not To Print, skip silently
+         BEGIN
+            GOTO NEXT_RECORD
+         END
+         -- Sean02 #FCR-10057 UA PACKLIST Pre-Print Check End  
 
          IF @n_TotalWMRDetail = 1
          BEGIN
@@ -379,10 +419,8 @@ BEGIN
 
    QUIT:
 
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
+   IF @b_sp_ExecuteAs = 1 REVERT --Sean03
+   EXEC [WM].[lsp_ResetUser] --Sean03
    
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      

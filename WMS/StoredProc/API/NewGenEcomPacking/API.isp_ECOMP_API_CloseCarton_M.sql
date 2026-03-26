@@ -21,6 +21,10 @@
 /* 07-Aug-2024     Alex01     #JIRA PAC-352 Bug fixes                   */
 /* 10-Sep-2024     Alex02     #PAC-353 - Bundle Packing validation      */
 /* 23-Jul-2025     Sean       #UWP-38247 - Compatible with Login User   */
+/* 30-Sep-2025     JWF01      #UWP-41759 - Add EPACK CCTV Config        */
+/* 15-Dec-2025    Sean02      FCR-8269 - tracking no refresh in the UI  */
+/* 12-Feb-2026    Sean03      FCR-8269 - fix not insert transmitlog2    */
+/* 24-Mar-2026    Sean04      UWP-52654 - replace RevertUser with ResetUser*/
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_CloseCarton_M](
      @b_Debug           INT            = 0
@@ -93,6 +97,8 @@ BEGIN
          , @c_EPD_LabelNo                 NVARCHAR(20)   = ''
          , @c_LabelLine                   NVARCHAR(5)    = ''
          , @n_PackSerialNoKey             BIGINT         = 0
+
+   DECLARE @c_EPACKCCTVConfigJSON         NVARCHAR(4000) = '' 
 
    DECLARE @t_CartonTypes AS TABLE (
       CartonizationKey  NVARCHAR(10)   NULL,
@@ -297,11 +303,57 @@ BEGIN
       AND CartonNo = @n_CartonNo
    END
 
+   -- Get EPACK CCTV Config Start
+   EXEC [API].[isp_ECOMP_GetEPackConfigs]
+      @c_StorerKey       = @c_StorerKey   
+   ,  @c_Facility        = @c_Facility    
+   ,  @c_UserId          = @c_UserID      
+   ,  @c_ComputerName    = @c_ComputerName
+   ,  @c_PackMode        = @c_OrderMode    
+   ,  @c_TaskBatchID     = '' 
+   ,  @c_OrderKey        = @c_OrderKey    
+   ,  @c_DropID          = ''      
+   ,  @c_EPACKConfigJSON = @c_EPACKCCTVConfigJSON OUTPUT
+
+   DECLARE @c_EPACKCCTVREFRESHTRACKNO     NVARCHAR(1)  = ''
+      , @c_EPACKCCTVJDONLINE           NVARCHAR(1)  = ''
+   
+   
+   IF @c_EPACKCCTVConfigJSON <> ''
+   BEGIN
+      SELECT @c_EPACKCCTVREFRESHTRACKNO = ISNULL(RTRIM([value]), '')
+      FROM OPENJSON (@c_EPACKCCTVConfigJSON)
+      WITH ( 
+            ConfigName NVARCHAR(60) '$.ConfigName',
+            [Value] NVARCHAR(120) '$.Value'
+      )
+      WHERE ConfigName = 'CCTV_Refresh_TrackNo'
+
+      SELECT @c_EPACKCCTVJDONLINE = ISNULL(RTRIM([value]), '')
+      FROM OPENJSON (@c_EPACKCCTVConfigJSON)
+      WITH ( 
+            ConfigName NVARCHAR(60) '$.ConfigName',
+            [Value] NVARCHAR(120) '$.Value'
+      )
+      WHERE ConfigName = 'CCTV_JD_Online'
+   END
+
+   DECLARE @b_CCTV_JD_Online INT = 0;
+   DECLARE @b_CCTVREFRESHTRACKNO INT = 0;
+
+   SET @b_CCTV_JD_Online = CASE WHEN @c_EPACKCCTVJDONLINE = '1' THEN 1 ELSE 0 END;
+   SET @b_CCTVREFRESHTRACKNO = CASE WHEN @c_EPACKCCTVREFRESHTRACKNO = '1' THEN 1 ELSE 0 END;
+
+   -- Get EPACK CCTV Config End
+
    --Get Current Carton Tracking Number / assign new tracking number
    EXEC [API].[isp_ECOMP_GetTrackingNumber]
             @b_Debug                   = @b_Debug
           , @c_PickSlipNo              = @c_PickSlipNo
           , @n_CartonNo                = @n_CartonNo
+          , @b_CCTV_JD_Online          = @b_CCTV_JD_Online -- Sean02
+          , @b_CCTVREFRESHTRACKNO      = @b_CCTVREFRESHTRACKNO -- Sean02
+          , @b_CloseCarton = 1
           , @b_Success                 = @b_sp_Success         OUTPUT
           , @n_ErrNo                   = @n_sp_err             OUTPUT
           , @c_ErrMsg                  = @c_sp_errmsg          OUTPUT
@@ -344,6 +396,9 @@ BEGIN
             @b_Debug                   = @b_Debug
           , @c_PickSlipNo              = @c_PickSlipNo
           , @n_CartonNo                = @n_NextCtnNo
+          , @b_CCTV_JD_Online          = @b_CCTV_JD_Online -- Sean02
+          , @b_CCTVREFRESHTRACKNO      = @b_CCTVREFRESHTRACKNO -- Sean02
+          , @b_FetchNextCarton = 1 -- Sean03
           , @b_Success                 = @b_sp_Success         OUTPUT
           , @n_ErrNo                   = @n_sp_err             OUTPUT
           , @c_ErrMsg                  = @c_sp_errmsg          OUTPUT
@@ -371,16 +426,6 @@ BEGIN
       , @b_SkipOrderOutput       = 0
       , @c_MultiPackResponse     = @c_MultiPackResponse OUTPUT
 
-   IF @b_Debug = 1
-   BEGIN
-      PRINT '@c_PickSlipNo: ' + @c_PickSlipNo
-      PRINT '@c_StorerKey: ' + @c_StorerKey
-      PRINT '@c_Facility: ' + @c_Facility
-      PRINT '@n_NextCtnNo: ' + CONVERT(NVARCHAR(2), @n_NextCtnNo)
-      PRINT '@c_NextCtnTrackingNo: ' + @c_NextCtnTrackingNo
-   END
-   
-
    SET @c_ResponseString = ISNULL(( 
                               SELECT (
                                        JSON_QUERY(
@@ -397,10 +442,8 @@ BEGIN
 
    QUIT:
 
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
+   IF @b_sp_ExecuteAs = 1 REVERT -- Sean04
+   EXEC [WM].[lsp_ResetUser] -- Sean04
 
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      

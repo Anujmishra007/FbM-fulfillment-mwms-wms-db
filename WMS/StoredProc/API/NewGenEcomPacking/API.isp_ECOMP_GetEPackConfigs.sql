@@ -26,6 +26,9 @@
 /* 20-Aug-2025    JWF011   #UWP-39059 - Add configs for CCTV logs       */
 /* 28-Aug-2025    JWF011   #UWP-40141 - Update EPACKCCTVORDERNO         */
 /* 15-Sep-2025    JWF011   #UWP-41185 - Update EPACKCCTVORDERNO         */
+/* 25-Sep-2025    JWF011   #UWP-41771 - Add configs for TrackNo         */
+/* 07-Jan-2026    JWF011   #FCR-10065 - Add CCTV API02 UDF Config       */
+/* 24-Feb-2026    JWF011   #FCR-10065 - Fix CCTV API02 UDF Config       */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetEPackConfigs](
      @c_StorerKey                      NVARCHAR(15)   = ''
@@ -36,6 +39,7 @@ CREATE OR ALTER PROC [API].[isp_ECOMP_GetEPackConfigs](
    , @c_TaskBatchID                    NVARCHAR(10)   = ''
    , @c_OrderKey                       NVARCHAR(10)   = ''
    , @c_DropID                         NVARCHAR(20)   = '' 
+   , @c_SKU                            NVARCHAR(500)  = ''
    , @c_EPACKConfigJSON                NVARCHAR(4000) = ''  OUTPUT
 )
 AS
@@ -63,6 +67,9 @@ BEGIN
          , @c_EPACKCCTVWM_TRACKNO      NVARCHAR(1)    = ''
          , @c_EPACKCCTVORDERNO         NVARCHAR(100)  = ''
 
+         , @c_CCTVREFRESHTRACKNO       NVARCHAR(1)  = ''
+         , @c_CCTVJDONLINE             NVARCHAR(1)  = ''
+
          , @b_sp_Success               INT
          , @n_sp_err                   INT
          , @c_sp_errmsg                NVARCHAR(250)  = ''
@@ -75,12 +82,25 @@ BEGIN
          , @c_EPACKCCTVLOCALLOGARCHIVETIME        NVARCHAR(3)  = ''
          , @c_EPACKCCTVLOCALLOGDELETETIME         NVARCHAR(3)  = ''
 
+         , @c_CCTV_API02_UDF01            NVARCHAR(100) = ''
+         , @c_CCTV_API02_UDF02            NVARCHAR(100) = ''
+         , @c_CCTV_API02_UDF03            NVARCHAR(100) = ''
+         , @c_CCTV_API02_UDF04            NVARCHAR(100) = ''
+         , @c_CCTV_API02_UDF_Code         NVARCHAR(5) = ''
+         , @c_CCTV_API02_UDF_Table        NVARCHAR(60)  = ''
+         , @c_CCTV_API02_UDF_Column       NVARCHAR(60)  = ''
+         , @c_CCTV_API02_UDF_Value        NVARCHAR(100)  = ''
 
    DECLARE @t_EPACKConfig  AS Table (
          ConfigName        NVARCHAR(60)      NULL
       ,  [Value]           NVARCHAR(120)     NULL
    )
 
+   DECLARE @CCTV_API02_UDFConfig TABLE (
+         Code           NVARCHAR(5)
+      ,  UDF_Table      NVARCHAR(60)
+      ,  UDF_Column     NVARCHAR(60)
+   )
 
    --EPACK CCTV Config - Begin
    SET @c_EPACKCCTV_IsEnabled = [API].[fnc_ECOMP_IsCCTVEnabled] ( @c_StorerKey, @c_Facility, @c_ComputerName, @c_UserId ) 
@@ -95,6 +115,8 @@ BEGIN
       SET @c_EPACKCCTVOFFSETSEC2 = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVOFFSETSEC2')
       SET @c_EPACKCCTVLOCALLOGARCHIVETIME = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVLOCALLOGARCHIVETIME')
       SET @c_EPACKCCTVLOCALLOGDELETETIME = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVLOCALLOGDELETETIME')
+      SET @c_CCTVREFRESHTRACKNO = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'CCTV_Refresh_TrackNo')
+      SET @c_CCTVJDONLINE = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'CCTV_JD_Online')
 
       SET @c_EPACKCCTVWM_CTNNO = CASE 
                                     WHEN EXISTS ( SELECT 1 FROM [dbo].[Codelkup] WITH (NOLOCK) 
@@ -160,6 +182,72 @@ BEGIN
       END
       -- EPACKCCTVORDERNO End
 
+      -- FCR-10065 CCTV API02 UDF
+      IF @c_SKU <> ''
+      BEGIN
+         INSERT INTO @CCTV_API02_UDFConfig (Code, UDF_Table, UDF_Column)
+         SELECT Code, ISNULL([UDF02], ''), ISNULL([UDF03], '')
+         FROM [dbo].[Codelkup] WITH (NOLOCK) 
+         WHERE ListName = 'CCTVAPI02' 
+            AND Code IN ('UDF01', 'UDF02', 'UDF03', 'UDF04')
+            AND StorerKey = @c_StorerKey
+            AND UDF01 = @c_Facility
+            AND Short = '1'
+
+         DECLARE UDF_CURSOR CURSOR FOR
+            SELECT Code, UDF_Table, UDF_Column FROM @CCTV_API02_UDFConfig
+         
+         OPEN UDF_CURSOR
+         FETCH NEXT FROM UDF_CURSOR INTO @c_CCTV_API02_UDF_Code, @c_CCTV_API02_UDF_Table, @c_CCTV_API02_UDF_Column
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            IF @c_CCTV_API02_UDF_Table <> '' AND @c_CCTV_API02_UDF_Column <> ''
+            BEGIN
+               IF @c_CCTV_API02_UDF_Table = 'SKU'
+               BEGIN
+                  SET @c_SQLQuery = 'SELECT '
+                              + '  @c_CCTV_API02_UDF_Value = ' + @c_CCTV_API02_UDF_Column
+                              + ' FROM [dbo].[SKU] WITH (NOLOCK) '
+                              + 'WHERE SKU = @c_SKU '
+                              + 'AND StorerKey = @c_StorerKey '
+
+                  SET @c_SQLParams = '@c_SKU NVARCHAR(500), '
+                                    + '@c_StorerKey NVARCHAR(15), '
+                                    + '@c_CCTV_API02_UDF_Value NVARCHAR(100) OUTPUT '
+
+                  EXEC sp_executesql @c_SQLQuery, @c_SQLParams, @c_SKU, @c_StorerKey, @c_CCTV_API02_UDF_Value OUTPUT
+               END
+               ELSE IF @c_CCTV_API02_UDF_Table = 'ORDERS'
+               BEGIN
+                  SET @c_SQLQuery = 'SELECT '
+                              + '  @c_CCTV_API02_UDF_Value = ' + @c_CCTV_API02_UDF_Column
+                              + ' FROM [dbo].[ORDERS] WITH (NOLOCK) '
+                              + 'WHERE OrderKey = @c_OrderKey '
+
+                  SET @c_SQLParams = '@c_OrderKey NVARCHAR(10), '
+                                    + '@c_CCTV_API02_UDF_Value NVARCHAR(100) OUTPUT '
+
+                  EXEC sp_executesql @c_SQLQuery, @c_SQLParams, @c_OrderKey, @c_CCTV_API02_UDF_Value OUTPUT
+               END
+
+               IF @c_CCTV_API02_UDF_Code = 'UDF01'
+                  SET @c_CCTV_API02_UDF01 = ISNULL(@c_CCTV_API02_UDF_Value, '')
+               ELSE IF @c_CCTV_API02_UDF_Code = 'UDF02'
+                  SET @c_CCTV_API02_UDF02 = ISNULL(@c_CCTV_API02_UDF_Value, '')
+               ELSE IF @c_CCTV_API02_UDF_Code = 'UDF03'
+                  SET @c_CCTV_API02_UDF03 = ISNULL(@c_CCTV_API02_UDF_Value, '')
+               ELSE IF @c_CCTV_API02_UDF_Code = 'UDF04'
+                  SET @c_CCTV_API02_UDF04 = ISNULL(@c_CCTV_API02_UDF_Value, '')
+
+            END
+            FETCH NEXT FROM UDF_CURSOR INTO @c_CCTV_API02_UDF_Code, @c_CCTV_API02_UDF_Table, @c_CCTV_API02_UDF_Column
+         END
+
+         CLOSE UDF_CURSOR
+         DEALLOCATE UDF_CURSOR
+      END
+      -- FCR-10065 CCTV API02 UDF (End)
+
       INSERT INTO @t_EPACKConfig (ConfigName, [Value]) 
       SELECT 'EPACKCCTVWMTYPE'     , @c_EPACKCCTVWMTYPE    
       UNION ALL 
@@ -182,6 +270,18 @@ BEGIN
       SELECT 'EPACKCCTVLOCALLOGARCHIVETIME'    , @c_EPACKCCTVLOCALLOGARCHIVETIME
       UNION ALL 
       SELECT 'EPACKCCTVLOCALLOGDELETETIME'    , @c_EPACKCCTVLOCALLOGDELETETIME
+      UNION ALL
+      SELECT 'CCTV_Refresh_TrackNo', @c_CCTVREFRESHTRACKNO
+      UNION ALL
+      SELECT 'CCTV_JD_Online'      , @c_CCTVJDONLINE
+      UNION ALL 
+      SELECT 'CCTV_API02_UDF01'    , @c_CCTV_API02_UDF01
+      UNION ALL 
+      SELECT 'CCTV_API02_UDF02'    , @c_CCTV_API02_UDF02
+      UNION ALL 
+      SELECT 'CCTV_API02_UDF03'    , @c_CCTV_API02_UDF03
+      UNION ALL
+      SELECT 'CCTV_API02_UDF04'    , @c_CCTV_API02_UDF04
 
       IF @c_PackMode = 'M'
       BEGIN

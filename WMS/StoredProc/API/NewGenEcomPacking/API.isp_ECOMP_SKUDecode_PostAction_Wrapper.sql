@@ -1,4 +1,3 @@
-
 /************************************************************************/              
 /* Store procedure: [API].[isp_ECOMP_SKUDecode_PostAction_Wrapper]      */              
 /* Creation Date: 4-Sep-2024                                            */
@@ -130,3 +129,6 @@ QUIT_SP:
    END
 
 END -- procedure
+GO
+GRANT EXECUTE ON [API].[isp_ECOMP_SKUDecode_PostAction_Wrapper] TO NSQL
+GO
