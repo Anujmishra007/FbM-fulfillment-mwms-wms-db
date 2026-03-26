@@ -20,6 +20,7 @@
 /* 12-May-2023    Allen     #JIRA PAC-65 Initial                        */
 /* 19-May-2023    Alex     Enhancement                                  */
 /* 22-May-2023    Alex     Rename sp to isp_ECOMP_API_GetReportParam    */
+/* 24-Mar-2026    Sean     UWP-52654 - remove not used code             */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_GetReportParam](  
@@ -129,21 +130,7 @@ BEGIN
    SET @b_Success                         = 0  
    SET @n_ErrNo                           = 0  
    SET @c_ErrMsg                          = ''  
-   SET @c_ResponseString                  = ''  
-  
-   --Change Login User  
-   --SET @n_sp_err = 0       
-   --EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT      
-         
-   --EXECUTE AS LOGIN = @c_UserID      
-         
-   --IF @n_sp_err <> 0       
-   --BEGIN        
-   --   SET @n_Continue = 3        
-   --   SET @n_ErrNo = @n_sp_err        
-   --   SET @c_ErrMsg = @c_sp_errmsg       
-   --   GOTO QUIT        
-   --END    
+   SET @c_ResponseString                  = ''   
      
    SELECT @c_StorerKey     = ISNULL(RTRIM(StorerKey      ), '')  
          ,@c_Facility      = ISNULL(RTRIM(Facility       ), '')  
@@ -312,11 +299,6 @@ BEGIN
                         ), '')
 
    QUIT:
-
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
      
    IF @n_Continue= 3  -- Error Occured - Process And Return        
    BEGIN        

@@ -18,6 +18,8 @@
 /* Updates:                                                             */
 /* Date           Author   Purposes	                                    */
 /* 13-Nov-2024    Alex     #PAC-363                                     */
+/* 06-Feb-2026    Cheong   #FCR-9926									*/
+/* 04-Mar-2026    Cheong   #FCR-9926 - add CAST data conversion			*/
 /************************************************************************/ 
 
 CREATE OR ALTER PROC [API].[isp_ECOMP_SYSSCT01]
@@ -56,6 +58,8 @@ BEGIN
          , @f_2ndCartonWeight       FLOAT                = 0
          , @f_2ndCubeCalc           FLOAT                = 0
 
+		 , @c_DefaultCartonType      NVARCHAR(10)         = ''
+         
          , @c_CartonType            NVARCHAR(10)         = ''
          , @f_CartonWeight          FLOAT                = 0
 
@@ -69,22 +73,23 @@ BEGIN
    SET @c_ErrMsg                    = ''  
    SET @c_CTS_Response              = '[]'
 
-   SELECT @f_TotalCube     = SUM(OD.OpenQty * ISNULL(S.STDCUBE, 0))
-        --, @f_MaxSKULength  = MAX(S.[Length])
-        --, @f_MaxSKUWidth   = MAX(S.[Width])
-        --, @f_MaxSKUHeight  = MAX(S.[Height])
+   SELECT @f_TotalCube     = SUM(OD.OpenQty * ISNULL(S.STDCUBE, 0) * (IIF(ISNUMERIC(SC.Data) = 1, CAST(SC.Data AS FLOAT), 1)))
    FROM [dbo].[OrderDetail] OD WITH (NOLOCK) 
-   JOIN [dbo].[SKU] S WITH (NOLOCK) 
+   INNER JOIN [dbo].[SKU] S WITH (NOLOCK) 
    ON (OD.StorerKey = S.StorerKey AND OD.SKU = S.SKU)
+   LEFT JOIN [dbo].[SKUConfig] SC WITH (NOLOCK) 
+   ON SC.StorerKey = S.StorerKey AND SC.SKU = S.Sku AND SC.ConfigType = 'CUBERATIO'
    WHERE OD.OrderKey = @c_OrderKey
 
    SELECT @f_MaxSKULength  = ISNULL(MAX(S.[Length]), 0)
         , @f_MaxSKUWidth   = ISNULL(MAX(S.[Width]), 0)
         , @f_MaxSKUHeight  = ISNULL(MAX(S.[Height]), 0)
-   FROM [dbo].[SKU] S WITH (NOLOCK) 
-   WHERE EXISTS ( SELECT 1 FROM [dbo].[OrderDetail] OD WITH (NOLOCK)
-      WHERE OD.OrderKey = @c_OrderKey AND OD.StorerKey = S.StorerKey AND OD.SKU = S.SKU )
-   AND S.Class IN ('FTW', 'POP')
+   FROM [dbo].[OrderDetail] OD WITH (NOLOCK)
+   INNER JOIN [dbo].[SKU] S WITH (NOLOCK) ON OD.StorerKey = S.StorerKey AND OD.SKU = S.SKU
+   LEFT JOIN [dbo].[SKUConfig] SC WITH (NOLOCK) 
+   ON SC.StorerKey = S.StorerKey AND SC.SKU = S.Sku AND SC.ConfigType = 'INBOX'
+   WHERE OD.OrderKey = @c_OrderKey
+   AND (S.Class IN ('FTW', 'POP') OR SC.Data = '1')
 
    SELECT @c_ORDSalesman = ISNULL(RTRIM(Salesman), '')
    FROM [dbo].[ORDERS] WITH (NOLOCK) 
@@ -92,6 +97,7 @@ BEGIN
 
    SELECT @c_1stCartonCodeList  = ISNULL(RTRIM([Short]), '')
          ,@c_2ndCartonCodeList = ISNULL(RTRIM([Long]), '')
+         ,@c_DefaultCartonType = ISNULL(RTRIM([UDF01]), '')
    FROM [dbo].[Codelkup] WITH (NOLOCK) 
    WHERE ListName = 'VFCTNCFG'
    AND Code = @c_ORDSalesman
@@ -102,6 +108,7 @@ BEGIN
       PRINT '@c_ORDSalesman = ' + @c_ORDSalesman
       PRINT '@c_1stCodelkupListName = ' + @c_1stCartonCodeList
       PRINT '@c_2ndCodelkupListName = ' + @c_2ndCartonCodeList
+      PRINT '@c_DefaultCartonType = ' + @c_DefaultCartonType
       PRINT '@f_TotalCube = ' + CONVERT(NVARCHAR(15), @f_TotalCube)
       PRINT '@f_MaxSKULength = ' + CONVERT(NVARCHAR(15),@f_MaxSKULength)
       PRINT '@f_MaxSKUWidth = ' + CONVERT(NVARCHAR(15),@f_MaxSKUWidth)
@@ -122,7 +129,7 @@ BEGIN
    FROM [dbo].[Cartonization] CTN WITH (NOLOCK) 
    INNER JOIN [dbo].[Codelkup] CDLK WITH (NOLOCK) 
    ON ( CDLK.ListName = @c_1stCartonCodeList AND CDLK.StorerKey = @c_Storerkey AND CDLK.[Short] = 1 AND CTN.CartonType = CDLK.Code )
-   WHERE CTN.[Cube] * (IIF(ISNUMERIC(CDLK.Long) = 1, CDLK.Long, 0)) >= @f_TotalCube
+   WHERE CTN.[Cube] * (IIF(ISNUMERIC(CDLK.Long) = 1, CAST(CDLK.Long AS FLOAT), 0)) >= @f_TotalCube
    AND CTN.CartonLength >= @f_MaxSKULength
    AND CTN.CartonWidth >= @f_MaxSKUWidth
    AND CTN.CartonHeight >= @f_MaxSKUHeight
@@ -137,11 +144,17 @@ BEGIN
       FROM [dbo].[Cartonization] CTN WITH (NOLOCK) 
       INNER JOIN [dbo].[Codelkup] CDLK WITH (NOLOCK) 
       ON ( CDLK.ListName = @c_2ndCartonCodeList AND CDLK.StorerKey = @c_Storerkey AND CDLK.[Short] = 1 AND CTN.CartonType = CDLK.Code )
-      WHERE CTN.[Cube] * (IIF(ISNUMERIC(CDLK.Long) = 1, CDLK.Long, 0)) >= @f_TotalCube
+      WHERE CTN.[Cube] * (IIF(ISNUMERIC(CDLK.Long) = 1, CAST(CDLK.Long AS FLOAT), 0)) >= @f_TotalCube
       AND CTN.CartonLength >= @f_MaxSKULength
       AND CTN.CartonWidth >= @f_MaxSKUWidth
       AND CTN.CartonHeight >= @f_MaxSKUHeight
       ORDER BY CTN.[Cube]
+   END
+
+   --default cartontype
+   IF ISNULL(@c_CartonType, '') = '' AND ISNULL(@c_DefaultCartonType, '') <> ''
+   BEGIN
+      SET @c_CartonType = @c_DefaultCartonType
    END
 
    IF ISNULL(@c_CartonType, '') <> ''

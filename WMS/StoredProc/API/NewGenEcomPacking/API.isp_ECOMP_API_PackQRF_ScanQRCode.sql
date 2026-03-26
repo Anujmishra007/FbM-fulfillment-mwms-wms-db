@@ -19,6 +19,8 @@
 /* Date           Author   Purposes										         */
 /* 15-Feb-2023    Alex     #JIRA PAC-4 Initial                          */
 /* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
+/* 24-Dec-2025    Sean02   FCR-8269 - tracking no refresh in the UI     */
+/* 24-Mar-2026    Sean03   #UWP-52654 - replace RevertUser with ResetUser*/
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_PackQRF_ScanQRCode](
      @b_Debug           INT            = 0
@@ -77,6 +79,8 @@ BEGIN
    DECLARE @c_AutoCartonType              NVARCHAR(10)   = ''
          , @c_AutoCartonGroup             NVARCHAR(10)   = ''
          , @f_AutoCartonWeight            INT            = 0
+   
+   DECLARE @c_EPACKCCTVConfigJSON         NVARCHAR(4000) = ''
 
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
@@ -223,6 +227,51 @@ BEGIN
          , @c_OrderKey              = @c_Orderkey    
          , @c_DropID                = @c_DropID
          , @c_MultiPackResponse     = @c_MultiPackResponse OUTPUT
+      
+      -- Sean02 Start
+      -- Get EPACK CCTV Config Start
+      EXEC [API].[isp_ECOMP_GetEPackConfigs]
+         @c_StorerKey       = @c_StorerKey   
+      ,  @c_Facility        = @c_Facility    
+      ,  @c_UserId          = @c_UserID      
+      ,  @c_ComputerName    = @c_ComputerName
+      ,  @c_PackMode        = @c_OrderMode    
+      ,  @c_TaskBatchID     = '' 
+      ,  @c_OrderKey        = @c_OrderKey    
+      ,  @c_DropID          = ''      
+      ,  @c_EPACKConfigJSON = @c_EPACKCCTVConfigJSON OUTPUT
+
+      DECLARE @c_EPACKCCTVREFRESHTRACKNO     NVARCHAR(1)  = ''
+         , @c_EPACKCCTVJDONLINE           NVARCHAR(1)  = ''
+      
+      
+      IF @c_EPACKCCTVConfigJSON <> ''
+      BEGIN
+         SELECT @c_EPACKCCTVREFRESHTRACKNO = ISNULL(RTRIM([value]), '')
+         FROM OPENJSON (@c_EPACKCCTVConfigJSON)
+         WITH ( 
+               ConfigName NVARCHAR(60) '$.ConfigName',
+               [Value] NVARCHAR(120) '$.Value'
+         )
+         WHERE ConfigName = 'CCTV_Refresh_TrackNo'
+
+         SELECT @c_EPACKCCTVJDONLINE = ISNULL(RTRIM([value]), '')
+         FROM OPENJSON (@c_EPACKCCTVConfigJSON)
+         WITH ( 
+               ConfigName NVARCHAR(60) '$.ConfigName',
+               [Value] NVARCHAR(120) '$.Value'
+         )
+         WHERE ConfigName = 'CCTV_JD_Online'
+      END
+
+      DECLARE @b_CCTV_JD_Online INT = 0;
+      DECLARE @b_CCTVREFRESHTRACKNO INT = 0;
+
+      SET @b_CCTV_JD_Online = CASE WHEN @c_EPACKCCTVJDONLINE = '1' THEN 1 ELSE 0 END;
+      SET @b_CCTVREFRESHTRACKNO = CASE WHEN @c_EPACKCCTVREFRESHTRACKNO = '1' THEN 1 ELSE 0 END;
+
+      -- Get EPACK CCTV Config End
+      -- Sean02 End
 
       SET @c_TrackingNumber = ''
 
@@ -231,6 +280,8 @@ BEGIN
             @b_Debug                   = @b_Debug
           , @c_PickSlipNo              = @c_PickSlipNo
           , @n_CartonNo                = @n_CartonNo
+          , @b_CCTV_JD_Online          = @b_CCTV_JD_Online -- Sean02
+          , @b_CCTVREFRESHTRACKNO      = @b_CCTVREFRESHTRACKNO -- Sean02
           , @b_Success                 = @b_sp_Success         OUTPUT
           , @n_ErrNo                   = @n_sp_err             OUTPUT
           , @c_ErrMsg                  = @c_sp_errmsg          OUTPUT
@@ -323,10 +374,8 @@ BEGIN
 
    QUIT:
  
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
+   IF @b_sp_ExecuteAs = 1 REVERT --Sean03
+   EXEC [WM].[lsp_ResetUser] --Sean03
 
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      

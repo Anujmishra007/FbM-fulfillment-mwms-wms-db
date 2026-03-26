@@ -18,6 +18,7 @@
 /* 11-OCT-2024    Alex     #JIRA PAC-354 Initial                        */
 /* 28-AUG-2025    Jiawen   #UWP-40141 Update REDO filename              */
 /* 15-OCT-2025    Jiawen   #UWP-42320 Update REPACK, REDO filename      */
+/* 16-DEC-2025    Jiawen   #FCR-9127 Update filename                    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_GENCCTVFileName] (
@@ -48,9 +49,6 @@ BEGIN
          , @c_FuncName                    NVARCHAR(20)   = ''
          , @c_TaskBatchNo                 NVARCHAR(20)   = ''
          , @c_OrderKey                    NVARCHAR(20)   = ''
-
-         , @c_OrderStatus                 NVARCHAR(10)   = ''
-         , @c_OrderSOStatus               NVARCHAR(10)   = ''
 
          , @c_FileName                    NVARCHAR(120)  = ''
          , @c_CurrentTimeStamp            NVARCHAR(12)   = (CONVERT(VARCHAR, GETDATE(), 112) + REPLACE(convert(varchar, getdate(), 108), ':', ''))
@@ -97,7 +95,7 @@ BEGIN
       OrderKey          NVARCHAR(20)       '$.OrderKey'
    )
 
-   IF @c_FuncName NOT IN ('REDO', 'PACKCONFIRM', 'PENDPACKEXIT')
+   IF @c_FuncName NOT IN ('REDO', 'PACKCONFIRM', 'PENDPACKEXIT', 'CANC')
    BEGIN
       SET @n_Continue = 3      
       SET @n_ErrNo = 81300      
@@ -105,14 +103,11 @@ BEGIN
       GOTO QUIT 
    END
 
-   IF @c_FuncName = 'PENDPACKEXIT'
+   IF @c_FuncName IN ('PENDPACKEXIT', 'CANC')
    BEGIN
-      SELECT @c_FileName = @c_FuncName + '_' + ISNULL(RTRIM(TaskBatchNo), '') + '_' + @c_CurrentTimeStamp + '.mp4'
-      FROM [dbo].[PackHeader] WITH (NOLOCK) 
-      WHERE PickSlipNo = @c_PickSlipNo
+      SET @c_FileName = 'HD_' + @c_CurrentTimeStamp + '.mp4'
    END
-
-   IF @c_FuncName = 'REDO'
+   ELSE IF @c_FuncName = 'REDO'
    BEGIN
       IF @c_TaskBatchNo <> '' AND @c_OrderKey = ''
       BEGIN
@@ -120,19 +115,7 @@ BEGIN
       END
       ELSE IF @c_OrderKey <> ''
       BEGIN
-         SELECT @c_OrderStatus = ISNULL(RTRIM(Status), '')
-               , @c_OrderSOStatus = ISNULL(RTRIM(SOStatus), '')
-         FROM [dbo].[Orders] WITH (NOLOCK) 
-         WHERE OrderKey = @c_OrderKey
-
-         IF @c_OrderStatus <> 'CANC' AND @c_OrderSOStatus <> 'PENDCANC'
-         BEGIN
-            SET @c_FileName = 'HD_' + ISNULL(RTRIM(@c_OrderKey), '') + '_' + @c_CurrentTimeStamp + '.mp4'
-         END
-         ELSE
-         BEGIN
-            SET @c_FileName = 'HD_' + ISNULL(RTRIM(@c_OrderKey), '') + '_' + @c_CurrentTimeStamp + '.mp4'
-         END
+         SET @c_FileName = 'HD_' + ISNULL(RTRIM(@c_OrderKey), '') + '_' + @c_CurrentTimeStamp + '.mp4'
       END
       ELSE
       BEGIN
@@ -141,8 +124,7 @@ BEGIN
          WHERE PickSlipNo = @c_PickSlipNo
       END
    END
-
-   IF @c_FuncName = 'PACKCONFIRM'
+   ELSE IF @c_FuncName = 'PACKCONFIRM'
    BEGIN 
       SELECT @c_FileName = ISNULL(RTRIM(TaskBatchNo), '') + '_' + @c_CurrentTimeStamp + '.mp4'
       FROM [dbo].[PackHeader] WITH (NOLOCK) 
