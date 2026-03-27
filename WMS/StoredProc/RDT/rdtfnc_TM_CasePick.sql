@@ -53,6 +53,7 @@ GO
 /* 2026-01-12 3.8.1  PPA374     UWP-47065 Adding Extended Validate in step 3     */
 /* 2026-01-20 3.9.0  Dennis     FCR-9664 ExtScn08                                */
 /* 2026-03-18 4.0.0  NickT      UWP-52419 Empty @cToLoc after ToLoc screen       */
+/* 2026-03-25 4.1.0  Jackc      FCR-11571 Add extscn09 logic under st99          */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -3689,6 +3690,18 @@ BEGIN
             BEGIN
                SET @nFromScn = @nScnBak
                SET @nFromStep = @nStepBak
+            END
+         END
+
+         IF @cExtScnSP = 'rdt_1812ExtScn09' --ONBR
+         BEGIN
+            IF @nScn = 4022 AND @nStep = 3 AND @cUDF01 = 'SKIPFromID'
+            BEGIN
+               --Skip from id screen, set fromID = ''
+               SET @nInputKey = 1
+               SET @cInField05 = ''
+
+               GOTO Step_3
             END
          END
       END
