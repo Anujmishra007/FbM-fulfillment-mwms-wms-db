@@ -4,21 +4,12 @@ SET QUOTED_IDENTIFIER ON
 GO
 /************************************************************************/
 /* Stored Procedure: ispRLREPVL                                         */
-/* Creation Date: 12/07/2017                                            */
-/* Copyright: LFL                                                       */
-/* Written by:                                                          */
 /*                                                                      */
 /* Purpose: Releases replenishment tasks and updates to loc as required */
 /*                                                                      */
-/* Called By:                                                           */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Config Change                                  */
-/* 02/05/2024   PPA374							                                    */
+/* 02/05/2024   PPA374	 Created    			                        */
 /* 29/08/2024   PPA374   Assigning replenishment priority based on BRD  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLREPVL]
