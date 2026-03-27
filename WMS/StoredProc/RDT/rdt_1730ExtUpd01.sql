@@ -42,12 +42,16 @@ BEGIN
       @bSuccess      INT,
       @nTranCount    INT,
       @nScn          INT,
+      @cFromLOC      NVARCHAR(10),
+      @cFromID       NVARCHAR(18),
       @cQCLineNo     NVARCHAR(5),
       @cIQCValidationRules NVARCHAR(30),
       @cPostFinalizeIQCSP NVARCHAR(30),
       @cSQL NVARCHAR(MAX)
 
-   SELECT @nScn = Scn
+   SELECT @nScn = Scn,
+      @cFromLOC = V_Loc, 
+      @cFromID = V_ID
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -72,6 +76,8 @@ BEGIN
             SELECT QC_Key, QCLineNo, OriginalQty, FinalizeFlag
             FROM dbo.InventoryQCDetail WITH (ROWLOCK)
             WHERE QC_KEY = @cQCKey
+               AND FromLoc = @cFromLOC
+               AND FromID = @cFromID
 
             BEGIN TRAN
             SAVE TRAN rdt_1730ExtUpd01
