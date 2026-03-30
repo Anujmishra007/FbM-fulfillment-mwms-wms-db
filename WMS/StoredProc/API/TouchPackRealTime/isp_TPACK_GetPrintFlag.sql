@@ -54,7 +54,7 @@ BEGIN
    SET @n_ErrNo               = 0  
    SET @c_ErrMsg              = '' 
    SET @c_FunID               = '996' -- Default for TouchPack Function ID
-   SET @cPrintCarrierLevel    = ''
+   SET @cPrintCarrierLevel    = 'CARTON' -- Default print level is carton level
 
    IF EXISTS(SELECT 1 
              FROM STORERCONFIG (NOLOCK)
@@ -120,7 +120,7 @@ BEGIN
               )
    ORDER BY Facility
 
-   SELECT @cPrintCarrierLevel = ISNULL(OPTION1, '')
+   SELECT @cPrintCarrierLevel = ISNULL(OPTION1, 'CARTON')
    FROM STORERCONFIG (NOLOCK)
    WHERE StorerKey = @cStorerKey
    AND ConfigKey = 'TPS-PrintCarrierFlag'
@@ -129,6 +129,20 @@ BEGIN
    IF (@cPrintCarrierLevel = 'ORDER' AND @bIsLastCarton = 1)
    OR @cPrintCarrierLevel = 'CARTON'
    BEGIN
+
+      IF NOT EXISTS (SELECT  1
+                     FROM CODELKUP (NOLOCK) 
+                     WHERE LISTNAME = 'MDWCARRIER'
+                     AND (Storerkey='ALL' OR Storerkey=@cStorerKey) 
+                     AND SHORT = @c_FunID
+      ) 
+      BEGIN
+         SET @n_Continue = 3  
+         SET @n_ErrNo = 12151
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Carrier middleware interface with function ID <996> is not configured for this storer.'
+         GOTO EXIT_SP
+      END
+
       EXEC [dbo].[isp_Carrier_Middleware_Interface]            
          @c_OrderKey      = @cOrderKey         
          , @c_Mbolkey     = ''      

@@ -101,22 +101,24 @@ BEGIN
    FROM STORERCONFIG (NOLOCK)  
    WHERE StorerKey = @cStorerKey
    AND ConfigKey = 'DefaultCartonType'
-     
-   IF @cType = 'toteid'
-   AND ( SELECT ISNULL(SUM(ExpQty), 0)
-         FROM PACKDETAIL (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo
-       ) > 0
-   AND ( SELECT ISNULL(COUNT(CartonNo), 0)
+   
+   IF @cType = 'toteid' AND @bIsDiscrete = 1
+   BEGIN
+      IF ( SELECT ISNULL(SUM(ExpQty), 0)
+            FROM PACKDETAIL (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+         ) > 0
+      AND ( SELECT ISNULL(COUNT(CartonNo), 0)
+            FROM PACKINFO (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+            AND CartonStatus = 'INPROGRESS'
+         ) = 1
+      BEGIN
+         SELECT TOP 1 @cConfigVal = CartonType
          FROM PACKINFO (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
-          AND CartonStatus = 'INPROGRESS'
-       ) = 1
-   BEGIN
-      SELECT TOP 1 @cConfigVal = CartonType
-      FROM PACKINFO (NOLOCK)
-      WHERE PickSlipNo = @cPickSlipNo
-      AND CartonStatus = 'INPROGRESS'
+         AND CartonStatus = 'INPROGRESS'
+      END
    END
    
    INSERT INTO @storer

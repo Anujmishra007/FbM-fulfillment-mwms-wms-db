@@ -62,7 +62,8 @@ BEGIN
          , @bIsAutoPrint         BIT
          , @nCopy                INT
          , @cSKU                 NVARCHAR(20)
-
+         , @cStayBehavior        NVARCHAR(20)
+         , @cTitle               NVARCHAR(100)
 
    SET @b_Success             = 0  
    SET @n_ErrNo               = 0  
@@ -89,6 +90,8 @@ BEGIN
    SET @bIsAutoPrint          = 0
    SET @nCopy                 = 1
    SET @cSKU                  = ''
+   SET @cStayBehavior         = 'STAY'
+   SET @cTitle                = ''
 
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
@@ -170,6 +173,48 @@ BEGIN
        , cSKU                 NVARCHAR(20)
    )
 
+   IF @cType = 'toteid' 
+   BEGIN
+      IF @cPickSlipNo = '' 
+      AND @cOrderKey = '' 
+      AND @cLoadKey = ''
+      BEGIN
+         SELECT TOP 1 @cPickSlipNo = L.PickSlipNo
+               , @cOrderKey = L.OrderKey
+         FROM API.TPACK_UserSessionActivityLog L (NOLOCK)
+         WHERE L.DropID = @cDropID
+         AND L.StorerKey = @cStorerKey
+         AND L.CartonNo = @nCartonNo
+         AND L.EditWho = @c_UserID
+         AND L.OrderKey IS NOT NULL AND L.OrderKey <> ''
+         AND EXISTS ( SELECT 1 
+                     FROM PACKINFO PIF (NOLOCK)
+                     WHERE PIF.PickSlipNo = L.PickSlipNo
+                     AND PIF.CartonNo = @nCartonNo
+                     AND PIF.CartonStatus = 'CLOSED'
+                     AND PIF.EditWho = L.EditWho
+                  )
+         AND EXISTS ( SELECT 1 
+                     FROM PACKHEADER PH (NOLOCK)
+                     WHERE PH.PickSlipNo = L.PickSlipNo
+                     AND PH.OrderKey = L.OrderKey
+                     AND PH.[Status] = '9'
+         )
+         ORDER BY RowRefNo DESC
+      END
+
+      IF EXISTS(SELECT 1
+                FROM ORDERS O (NOLOCK)
+                WHERE O.OrderKey = @cOrderKey
+                AND O.DocType = 'E'
+                AND O.ECOM_SINGLE_Flag = 'S'
+      ) AND @bIslastCarton = 1
+      BEGIN
+         SET @cStayBehavior = 'CLEAR'
+         SET @cTitle =  API.TouchPadGetMessage( 11754, @cLangCode, 'DSP') + ' (' + @cOrderKey + ') ' + API.TouchPadGetMessage( 11755, @cLangCode, 'DSP')
+      END
+   END
+   
    IF @cPickSlipNo = ''
    BEGIN
       SET @n_Continue = 3
@@ -226,9 +271,12 @@ BEGIN
       GOTO EXIT_SP
    END
 
+
    SET @c_ResponseString = ISNULL ((SELECT CAST(@b_Success AS BIT)   AS Success 
-                                         , @cPrintLabelJobIDs     AS PrintLabelJobIDs
-                                         , @cPrintPaperJobIDs     AS PrintPaperJobIDs
+                                         , @cPrintLabelJobIDs        AS PrintLabelJobIDs
+                                         , @cPrintPaperJobIDs        AS PrintPaperJobIDs
+                                         , @cStayBehavior            AS StayBehavior
+                                         , @cTitle                   AS Title
                                     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                            ),'')
 

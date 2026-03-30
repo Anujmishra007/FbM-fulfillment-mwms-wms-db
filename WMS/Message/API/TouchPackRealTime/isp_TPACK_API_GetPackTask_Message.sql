@@ -21,8 +21,9 @@ EXEC API.TouchPadAddMsg 10217, 10, 'Scanned ToteID is from a different storer. P
 EXEC API.TouchPadAddMsg 10218, 10, 'Scanned ToteID is from a different facility. Please use another valid ToteID.',    'us_english'
 EXEC API.TouchPadAddMsg 10219, 10, 'Scanned Consol PickSlip Order is from a different storer. Please use another valid Order No.',    'us_english'
 EXEC API.TouchPadAddMsg 10220, 10, 'Scanned Consol PickSlip Order is from a different facility. Please use another valid Order No.',    'us_english'
-EXEC API.TouchPadAddMsg 10221, 10, '',    'us_english'
-EXEC API.TouchPadAddMsg 10222, 10, '',    'us_english'
+EXEC API.TouchPadAddMsg 10221, 10, 'Scanned Consol ToteID is from a different storer. Please use another valid ToteID.',    'us_english'
+EXEC API.TouchPadAddMsg 10222, 10, 'Scanned Consol ToteID is from a different facility. Please use another valid ToteID.',    'us_english'
+EXEC API.TouchPadAddMsg 10223, 10, 'All orders associated with the scanned ToteID have already been closed. Revisiting the same ToteID is not allowed as it might be used for different orders.',    'us_english'
 
 
 

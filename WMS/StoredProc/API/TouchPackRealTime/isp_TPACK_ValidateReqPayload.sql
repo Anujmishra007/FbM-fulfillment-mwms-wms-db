@@ -12,6 +12,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-22   1.0  GCH225     Created                                          */
+/* 2026-02-03   1.2  Sean01     UWP-42468: ToteID for multi orders               */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateReqPayload] (
@@ -53,24 +54,27 @@ BEGIN
    SET @n_ErrNo               = 0  
    SET @c_ErrMsg              = ''  
 
-   IF @cPickSlipNo = ''
+   IF @cType <> 'toteid'
    BEGIN
-      SET @n_Continue  = 3
-      SET @n_ErrNo = 11651
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'@cPickSlipNo cannot be empty in pickslip cType.'
-      GOTO EXIT_SP
-   END
+      IF @cPickSlipNo = ''
+      BEGIN
+         SET @n_Continue  = 3
+         SET @n_ErrNo = 11651
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'@cPickSlipNo cannot be empty in pickslip cType.'
+         GOTO EXIT_SP
+      END
 
-   IF EXISTS ( SELECT 1 
-               FROM PACKHEADER (NOLOCK) 
-               WHERE PickSlipNo = @cPickSlipNo 
-               AND [Status] = '9'
-   )
-   BEGIN
-      SET @n_Continue  = 3
-      SET @n_ErrNo = 11652
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Current pickslip already pack confirm.'
-      GOTO EXIT_SP
+      IF EXISTS ( SELECT 1 
+                  FROM PACKHEADER (NOLOCK) 
+                  WHERE PickSlipNo = @cPickSlipNo 
+                  AND [Status] = '9'
+      )
+      BEGIN
+         SET @n_Continue  = 3
+         SET @n_ErrNo = 11652
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Current pickslip already pack confirm.'
+         GOTO EXIT_SP
+      END
    END
 
    IF @cType = 'order'
@@ -137,13 +141,13 @@ BEGIN
    END
    ELSE IF @cType = 'toteid'
    BEGIN
-      IF @bIsDiscrete <> 1
-      BEGIN
-         SET @n_Continue  = 3
-         SET @n_ErrNo = 11659
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Consolidated toteId is not allow with toteid cType.  '
-         GOTO EXIT_SP
-      END
+      -- IF @bIsDiscrete <> 1
+      -- BEGIN
+      --    SET @n_Continue  = 3
+      --    SET @n_ErrNo = 11659
+      --    SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Consolidated toteId is not allow with toteid cType.  '
+      --    GOTO EXIT_SP
+      -- END
 
       --IF @bIsCustom = 1
       --BEGIN
@@ -161,13 +165,13 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      IF @cOrderKey = ''
-      BEGIN
-         SET @n_Continue  = 3
-         SET @n_ErrNo = 11662
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'@cOrderKey cannot be empty in toteid cType.  '
-         GOTO EXIT_SP
-      END
+      -- IF @cOrderKey = ''
+      -- BEGIN
+      --    SET @n_Continue  = 3
+      --    SET @n_ErrNo = 11662
+      --    SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'@cOrderKey cannot be empty in toteid cType.  '
+      --    GOTO EXIT_SP
+      -- END
    END
    ELSE
    BEGIN

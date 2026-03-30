@@ -87,7 +87,7 @@ BEGIN
                   WHERE PickslipNo = @cPickslipNo
    )  
    BEGIN
-      IF @bIsDiscrete = 1 AND @bIsCustom = 0
+      IF @cOrderKey <> ''
       BEGIN
          SELECT @cRoute        = [Route]
               , @cConsigneeKey = ConsigneeKey
@@ -113,7 +113,7 @@ BEGIN
                       VALUES(  @cPickSlipNo
                              , @cStorerKey
                              , @cRoute
-                             , IIF (@bIsDiscrete = 1 AND @bIsCustom = 0, @cOrderKey, '')
+                             , @cOrderKey
                              , @cLoadKey
                              , @cLoadKey
                              , @cConsigneeKey

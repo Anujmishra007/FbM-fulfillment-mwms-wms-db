@@ -129,7 +129,7 @@ BEGIN
             FROM PACKINFO (NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo) = 1
       BEGIN
-         IF @bIsDiscrete = 1 AND @cLoadKey = ''
+         IF @cOrderKey <> ''
          BEGIN
             IF EXISTS ( SELECT 1 
                         FROM PICKDETAIL (NOLOCK)
@@ -144,7 +144,7 @@ BEGIN
                AND [Status] < '9'
             END
          END
-         ELSE
+         ELSE IF @cLoadKey <> ''
          BEGIN
             IF EXISTS ( SELECT 1 
                         FROM PICKDETAIL PD (NOLOCK)
@@ -171,7 +171,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF @bIsDiscrete = 1 AND @cLoadKey = ''
+         IF @cOrderKey <> ''
          BEGIN
             UPDATE PID WITH (ROWLOCK)  
             SET  CaseID = ''
@@ -185,7 +185,7 @@ BEGIN
                         AND PAD.CartonNo = @nCartonNo
                         AND PAD.LabelNo = PID.CaseID)
          END
-         ELSE
+         ELSE IF @cLoadKey <> ''
          BEGIN
             UPDATE PID WITH (ROWLOCK)  
             SET  CaseID = ''
@@ -465,12 +465,12 @@ BEGIN
                AND sValue IN ('1', '3')
    )
    BEGIN
-      IF @bIsDiscrete = 1 AND @cOrderKey <> ''
+      IF @cOrderKey <> ''
       BEGIN
          INSERT INTO @OrderList (OrderKey)
          VALUES (@cOrderKey)
       END
-      ELSE
+      ELSE IF @cLoadKey <> ''
       BEGIN
          INSERT INTO @OrderList (OrderKey)
          SELECT OrderKey

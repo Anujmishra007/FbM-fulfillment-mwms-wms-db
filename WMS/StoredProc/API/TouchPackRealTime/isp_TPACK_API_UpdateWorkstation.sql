@@ -228,9 +228,6 @@ PROCEED:
    END
 
 EXIT_SP:
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
-   REVERT
+   IF @b_sp_ExecuteAs = 1 REVERT
+   EXEC [WM].[lsp_ResetUser]
 END
