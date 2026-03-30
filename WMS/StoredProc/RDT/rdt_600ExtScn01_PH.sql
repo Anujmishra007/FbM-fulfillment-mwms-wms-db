@@ -253,13 +253,6 @@ BEGIN
                                         EditDate = GETDATE()
                                     WHERE ID = @cIDFromMobRec
                                 END
-                                
-                                UPDATE dbo.ITRN WITH (ROWLOCK)
-                                SET PalletType = @cPalletTypeSave,
-                                    EditDate = GETDATE()
-                                WHERE SourceKey = RTRIM(@cReceiptKey) + RTRIM(@cReceiptLineNumber)
-                                AND TranType = 'DP'
-                                AND SourceType IN ('ntrReceiptDetailAdd', 'ntrReceiptDetailUpdate')
                             END
                         END
                     END
