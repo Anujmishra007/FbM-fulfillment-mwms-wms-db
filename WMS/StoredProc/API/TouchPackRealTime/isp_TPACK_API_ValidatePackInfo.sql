@@ -12,6 +12,8 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-11-03   1.0  Sean       Real-time UWP-42803                              */
 /* 2025-12-17   1.1  Sean01     Calculate total Pack Qty from PACKDETAIL         */
+/* 2026-02-05   1.2  Sean02     UWP-42468: ToteID for multi orders               */
+/* 2026-03-19   1.3  Sean03     UWP-42468: ToteID for multi orders               */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_API_ValidatePackInfo] (
@@ -154,43 +156,66 @@ BEGIN
         [Status] NVARCHAR(10)
     )
 
-    IF @bIsDiscrete = 1  -- Discrete mode
+    IF @cType = 'pickslip' OR (@cType = 'order' AND @bIsCustom = 0)
+    BEGIN
+        IF @bIsDiscrete = 1
+        BEGIN
+            INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+            SELECT SUM(Qty), Sku, [Status] 
+            FROM PICKDETAIL (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+            AND OrderKey = @cOrderKey
+            GROUP BY Sku, [Status]
+        END
+        ELSE
+        BEGIN
+            IF @bIsCustom = 0
+            BEGIN
+                -- Normal consolidate mode
+                INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+                SELECT SUM(Qty), Sku, [Status] 
+                FROM PICKDETAIL PD (NOLOCK)
+                WHERE PD.StorerKey = @cStorerKey
+                AND EXISTS (SELECT 1 
+                            FROM LOADPLANDETAIL LPD (NOLOCK)
+                            WHERE LPD.OrderKey = PD.OrderKey
+                            AND LPD.LoadKey = @cLoadKey
+                )
+                GROUP BY Sku, [Status]
+            END
+            ELSE
+            BEGIN
+                -- Custom consolidate mode
+                INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+                SELECT SUM(Qty), Sku, [Status] 
+                FROM PICKDETAIL PD (NOLOCK)
+                WHERE PD.StorerKey = @cStorerKey
+                AND PD.PickSlipNo = @cPickSlipNo
+                GROUP BY Sku, [Status]
+            END
+        END
+    END
+    ELSE IF @cType = 'toteid'
+    BEGIN
+        INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+        SELECT SUM(Qty), Sku, [Status] 
+        FROM PICKDETAIL PD (NOLOCK)
+        WHERE PD.StorerKey = @cStorerKey
+        AND PD.DropID = @cDropID -- Sean03
+        AND NOT (
+            (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+            AND PD.[Status] = '9'
+        )
+        GROUP BY Sku, [Status]
+    END
+    ELSE IF @cType = 'order'
     BEGIN
         INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
         SELECT SUM(Qty), Sku, [Status] 
         FROM PICKDETAIL (NOLOCK)
         WHERE StorerKey = @cStorerKey
         AND OrderKey = @cOrderKey
-        AND (@cDropID = '' OR DropID = @cDropID)
         GROUP BY Sku, [Status]
-    END
-    ELSE  -- Consolidate mode
-    BEGIN
-        IF @bIsCustom = 0
-        BEGIN
-            -- Normal consolidate mode
-            INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
-            SELECT SUM(Qty), Sku, [Status] 
-            FROM PICKDETAIL PD (NOLOCK)
-            WHERE PD.StorerKey = @cStorerKey
-            AND EXISTS (SELECT 1 
-                        FROM LOADPLANDETAIL LPD (NOLOCK)
-                        WHERE LPD.OrderKey = PD.OrderKey
-                        AND LPD.LoadKey = @cLoadKey
-            )
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            GROUP BY Sku, [Status]
-        END
-        ELSE
-        BEGIN
-            -- Custom consolidate mode
-            INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
-            SELECT SUM(Qty), Sku, [Status] 
-            FROM PICKDETAIL PD (NOLOCK)
-            WHERE PD.StorerKey = @cStorerKey
-            AND PD.PickSlipNo = @cPickSlipNo
-            GROUP BY Sku, [Status]
-        END
     END
 
     -- Apply config-based filtering for Status '4' (Short Picked)
@@ -212,7 +237,7 @@ BEGIN
     -- Reference: GetPackInfoSummary 
     SELECT @nTtlPackQty = ISNULL(SUM(ISNULL(Qty, 0)), 0)
         FROM PACKDETAIL (NOLOCK)
-        WHERE PickSlipNo = @cPickSlipNo
+        WHERE (@cPickSlipNo = '' OR PickSlipNo = @cPickSlipNo)
         AND (@cDropID = '' OR DropID = @cDropID)
 
     -- (5) Compare results
@@ -258,7 +283,7 @@ BEGIN
                 PD.SKU,
                 SUM(ISNULL(PD.Qty, 0)) AS PackQty
             FROM PACKDETAIL PD (NOLOCK)
-            WHERE PD.PickSlipNo = @cPickSlipNo
+            WHERE (@cPickSlipNo = '' OR PD.PickSlipNo = @cPickSlipNo)
             AND (@cDropID = '' OR PD.DropID = @cDropID)
             GROUP BY PD.SKU
         ),
@@ -288,10 +313,8 @@ BEGIN
     END
 
 EXIT_SP:
-    IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-    BEGIN
-        EXEC [WM].[lsp_RevertUser]
-    END
+   IF @b_sp_ExecuteAs = 1 REVERT
+   EXEC [WM].[lsp_ResetUser]
 
     IF @n_Continue = 3  -- Error Occurred - Process And Return      
     BEGIN      

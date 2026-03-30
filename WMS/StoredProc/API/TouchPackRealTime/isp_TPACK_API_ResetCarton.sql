@@ -131,6 +131,27 @@ BEGIN
        , nCartonNo            INT
        , bResetAll            BIT
    )
+   
+   IF @cType = 'toteid' 
+   BEGIN
+      IF @nCartonNo <> 0
+      BEGIN
+         IF @cPickSlipNo = '' 
+         AND @cOrderKey = '' 
+         AND @cLoadKey = ''
+         BEGIN
+            SELECT @cPickSlipNo = PH.PickSlipNo
+                 , @cOrderKey = PH.OrderKey
+            FROM PACKHEADER PH (NOLOCK)
+            WHERE EXISTS ( SELECT 1 
+                           FROM PACKDETAIL PD (NOLOCK)
+                           WHERE PD.PickSlipNo = PH.PickSlipNo
+                           AND PD.DropID = @cDropID
+                           AND PD.CartonNo = @nCartonNo
+                        )
+         END
+      END
+   END
 
    IF @cPickSlipNo = ''
    BEGIN

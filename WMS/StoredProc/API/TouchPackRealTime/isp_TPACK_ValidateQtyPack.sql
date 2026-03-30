@@ -228,12 +228,15 @@ BEGIN
          INSERT INTO @PickQtyStatus (TtlPickedQty, [Status])
          SELECT SUM(Qty), [Status] 
          FROM PICKDETAIL PD (NOLOCK)
-         WHERE EXISTS ( SELECT 1 
+         WHERE (@cLoadKey = '' 
+            OR EXISTS ( SELECT 1 
                         FROM LOADPLANDETAIL LPD (NOLOCK)
                         WHERE LPD.OrderKey = PD.OrderKey
                         AND LPD.LoadKey = @cLoadKey
                         )
+            )
          AND (@cDropID = '' OR DropID = @cDropID)
+         AND (@cOrderKey = '' OR OrderKey = @cOrderKey)
          AND SKU = @cSKU
          AND [Status] < 9
          GROUP BY [Status]

@@ -139,7 +139,7 @@ BEGIN
                                           'PackCaptureNewLabelno'
                                           ))
                                           FOR JSON PATH
-                                          ),'')
+                                          ),'[]')
    END
 
    --Added the default config if some of the configKey not setup
