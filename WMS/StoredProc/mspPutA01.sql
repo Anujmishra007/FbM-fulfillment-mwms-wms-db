@@ -858,7 +858,7 @@ BEGIN
       IF @b_Debug = 1
       BEGIN
          PRINT '@c_PAType: ' + @c_PAType
-             + ',@c_SQL: ' + @c_PAType
+             + ',@c_SQL: ' + @c_SQL
       END
  
       IF @c_ToLoc > ''
