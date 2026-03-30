@@ -434,7 +434,7 @@ BEGIN
                      @cWaveKey = TD.WaveKey,
                      @cTaskDetailKey = TD.TaskDetailKey
                   FROM dbo.TaskDetail TD WITH (ROWLOCK)
-                  INNER JOIN dbo.ORDERS O WITH (NOLOCK) ON O.UserDefine09 IS NOT NULL AND TD.WaveKey = O.UserDefine09 AND O.Type = 'B2C' AND O.ECOM_SINGLE_Flag = 'S'
+                  INNER JOIN dbo.ORDERS O WITH (NOLOCK) ON O.UserDefine09 IS NOT NULL AND TD.WaveKey = O.UserDefine09 AND O.DocType = 'E' AND O.ECOM_SINGLE_Flag = 'S'
                   INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON TD.FromLoc = LOC.Loc
                   WHERE TD.Storerkey = @cStorerKey
                      AND TD.TaskType = 'ASTCPK'
@@ -466,7 +466,7 @@ BEGIN
                      @cWaveKey = TD.WaveKey,
                      @cTaskDetailKey = TD.TaskDetailKey
                   FROM dbo.TaskDetail TD WITH (ROWLOCK)
-                  INNER JOIN dbo.ORDERS O WITH (NOLOCK) ON TD.OrderKey = O.OrderKey AND O.Type = 'B2C' AND O.ECOM_SINGLE_Flag = 'M'
+                  INNER JOIN dbo.ORDERS O WITH (NOLOCK) ON TD.OrderKey = O.OrderKey AND O.DocType = 'E' AND O.ECOM_SINGLE_Flag = 'M'
                   INNER JOIN dbo.OrderDetail OD WITH(NOLOCK) ON TD.OrderKey= OD.OrderKey AND TD.SKU = OD.SKU
                   INNER JOIN dbo.LOC WITH (NOLOCK) ON TD.FromLoc = LOC.Loc
                   WHERE TD.Storerkey = @cStorerKey
