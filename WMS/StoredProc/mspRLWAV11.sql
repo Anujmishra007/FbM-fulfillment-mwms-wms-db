@@ -21,6 +21,7 @@ GO
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 2026-03-09  AYD      1.0   FCR-10825: Vivo - Wave Reverse SP          */
+/* 2026-03-30  AYD01    1.1   Handle duplicated TaskDetailKey.           */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
   @c_Wavekey      NVARCHAR(10)
@@ -65,6 +66,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          , @c_PickMethod               NVARCHAR(10)   = ''
          , @c_LinkTaskToPick_SQL       NVARCHAR(4000) = ''
          , @c_Taskdetailkey            NVARCHAR(10)   = ''
+         , @c_PickDetailKey            NVARCHAR(18)   = ''
          , @c_ReplenishmentKey         NVARCHAR(10)   = ''
          , @c_ReplenishmentGroup       NVARCHAR(10)   = ''
          , @n_TaskQty                  INT            = 0          
@@ -400,7 +402,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
 
          IF @c_DocType = 'E' AND @c_EcomSingleFlag = 'S'
          BEGIN
-            SELECT TOP 1 @c_TaskDetailkey = pdw.TaskDetailKey
+            SELECT TOP 1 
+            @c_TaskDetailkey = pdw.TaskDetailKey,
+            @c_PickDetailKey = pdw.PickDetailKey   --AYDO1
             FROM TASKDETAIL td (NOLOCK)
             JOIN #PICKDETAIL_WIP pdw (NOLOCK) 
                ON pdw.OrderKey = td.OrderKey 
@@ -412,7 +416,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          END 
          ELSE
          BEGIN
-            SELECT TOP 1 @c_TaskDetailkey = pdw.TaskDetailKey
+            SELECT TOP 1 
+            @c_TaskDetailkey = pdw.TaskDetailKey,
+            @c_PickDetailKey = pdw.PickDetailKey   --AYDO1
             FROM TASKDETAIL td (NOLOCK)
             JOIN #PICKDETAIL_WIP pdw (NOLOCK) 
                ON pdw.OrderKey = td.OrderKey 
@@ -423,6 +429,45 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
             AND td.OrderKey = @c_Orderkey
             AND td.OrderLineNumber = @c_OrderLineNumber
          END
+         --AYD01 START: Handle duplicated TaskDetailKey issue
+         IF EXISTS (SELECT 1 FROM TASKDETAIL td (NOLOCK) WHERE td.TaskDetailKey = @c_TaskDetailkey)
+         BEGIN
+            SELECT @b_success = 1  
+            EXECUTE nspg_getkey  
+               "TaskDetailKey"  
+               , 10  
+               , @c_taskdetailkey OUTPUT  
+               , @b_success OUTPUT  
+               , @n_err OUTPUT  
+               , @c_errmsg OUTPUT  
+            
+            IF @b_success <> 1  
+            BEGIN  
+               SELECT @n_continue = 3  
+               SET @n_Err = 83051
+               SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Generate TaskDetailKey Fail. (mspRLWAV11)'
+                              + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'
+               GOTO QUIT_SP
+            END
+
+            UPDATE #PICKDETAIL_WIP WITH (ROWLOCK)
+            SET TaskDetailKey = @c_TaskDetailkey
+            WHERE PickDetailKey = @c_PickDetailKey
+
+            UPDATE PICKDETAIL WITH (ROWLOCK)
+            SET TaskDetailKey = @c_TaskDetailkey
+            WHERE PickDetailKey = @c_PickDetailKey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 83050
+               SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Update TaskDetailKey Fail. (mspRLWAV11)'
+                              + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'
+               GOTO QUIT_SP
+            END
+         END
+         --AYD01 END
 
          IF @n_Continue IN (1,2)
          BEGIN
