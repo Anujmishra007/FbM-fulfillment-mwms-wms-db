@@ -15,7 +15,7 @@ SELECT @jobId = j.job_id FROM msdb..sysjobs j where j.name = N'BEJ - mWMS BuildA
 
 IF @jobId IS NULL
 BEGIN
-   EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'BEJ -  mWMS BuildAutoFinalizeCHTRF(GBR)',
+   EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'BEJ - mWMS BuildAutoFinalizeCHTRF(GBR)',
 		   @enabled=1,
 		   @notify_level_eventlog=2,
 		   @notify_level_email=0,
