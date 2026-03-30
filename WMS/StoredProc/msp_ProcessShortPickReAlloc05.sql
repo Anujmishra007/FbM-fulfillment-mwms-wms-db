@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.1                                                  */
+/* GitHub Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 09-Jan-2026 WLChooi  1.0   Initial Version                           */
 /* 25-Feb-2026 WLChooi  1.1   UWP-49450 Clear Userdefine01 value (WL01) */
+/* 30-Mar-2026 WLChooi  1.2   FCR-12094 Delete shorted PICKDETAIL line  */
+/*                            if reallocation succeed (WL02)            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc05] (    
@@ -58,6 +60,8 @@ BEGIN
          , @c_WVRCMConfigCode          NVARCHAR(30) = ''
          , @n_SkipProcess              INT = 0
          , @c_PickCondition_SQL        NVARCHAR(MAX) = ''
+         , @c_PickDetailKey            NVARCHAR(10)  = ''   --WL02
+         , @CUR_UNALLOC                CURSOR   --WL02
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -570,7 +574,7 @@ BEGIN
       FROM #PickDetail_WIP SP
       JOIN MatchingRows MR ON SP.PickDetailKey = MR.PickDetailKey
    END
-
+   
    -- Update to PICKDETAIL first before redo Pre-cartonization
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
@@ -588,7 +592,7 @@ BEGIN
          SET @n_Continue = 3
       END
    END
-
+   
    --Wave Release - Redo Pre-cartonization
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0           
    BEGIN
@@ -604,14 +608,14 @@ BEGIN
          SET @c_ErrMsg = ERROR_MESSAGE()
       END CATCH
    END
-
+   
    -- Re-initialize #PICKDETAIL_WIP after redo Pre-cartonization
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       --Initialize Pickdetail work in progress staging table   
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
+                                  , @c_PickCondition_SQL = @c_PickCondition_SQL
                                   , @c_Action = 'I' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
                                   , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
                                   , @b_Success = @b_Success OUTPUT
@@ -652,12 +656,47 @@ BEGIN
       END
    END
 
+   --WL02 S
+   -- Delete shorted pickdetail line if able to reallocate
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
+   BEGIN
+      SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT T.Pickdetailkey
+      FROM #T_ShortPick T
+      ORDER BY T.Pickdetailkey
+
+      OPEN @CUR_UNALLOC
+
+      FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+      BEGIN
+         BEGIN TRY
+            DELETE FROM PICKDETAIL
+            WHERE PickDetailKey = @c_PickDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @c_ErrMsg = ERROR_MESSAGE()
+         END CATCH
+
+         -- Delete from temp table as well
+         DELETE FROM #PICKDETAIL_WIP
+         WHERE PickDetailKey = @c_PickDetailKey
+
+         FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
+      END
+      CLOSE @CUR_UNALLOC
+      DEALLOCATE @CUR_UNALLOC
+   END
+   --WL02 E
+
    --Update pickdetail_WIP work in progress staging table back to pickdetail 
    IF (@n_Continue = 1 or @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
       EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
                                   , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
+                                  , @c_PickCondition_SQL = @c_PickCondition_SQL
                                   , @c_Action = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
                                   , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
                                   , @b_Success = @b_Success OUTPUT
