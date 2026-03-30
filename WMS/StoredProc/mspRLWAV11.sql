@@ -398,7 +398,19 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
                          +': To Loc not found. (mspRLWAV11)'
          END
 
-         IF @c_TaskType = 'ASTCPK'
+         IF @c_DocType = 'E' AND @c_EcomSingleFlag = 'S'
+         BEGIN
+            SELECT TOP 1 @c_TaskDetailkey = pdw.TaskDetailKey
+            FROM TASKDETAIL td (NOLOCK)
+            JOIN #PICKDETAIL_WIP pdw (NOLOCK) 
+               ON pdw.OrderKey = td.OrderKey 
+               AND pdw.StorerKey = td.Storerkey
+            WHERE td.WaveKey = @c_Wavekey
+            AND td.FromLoc = @c_FromLoc 
+            AND td.SKU = @c_Sku
+            AND ISNULL(TRIM(pdw.TaskDetailKey), '') <> ''
+         END 
+         ELSE
          BEGIN
             SELECT TOP 1 @c_TaskDetailkey = pdw.TaskDetailKey
             FROM TASKDETAIL td (NOLOCK)
@@ -410,10 +422,6 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
             AND td.Storerkey = @c_Storerkey
             AND td.OrderKey = @c_Orderkey
             AND td.OrderLineNumber = @c_OrderLineNumber
-         END 
-         ELSE
-         BEGIN
-            SET @c_TaskDetailkey = ''
          END
 
          IF @n_Continue IN (1,2)
