@@ -336,16 +336,39 @@ BEGIN
       END
       ELSE IF @cType = 'toteid'
       BEGIN
-         SELECT @nTtlPickQty=ISNULL(SUM(Qty), 0)
-         FROM PICKDETAIL (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-         AND DropID = @cDropID
-         AND [Status] <= '5'
+         IF @bIsDiscrete = 1
+         BEGIN
+            SELECT @nTtlPickQty=ISNULL(SUM(Qty), 0)
+            FROM PICKDETAIL (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+            AND (@cOrderKey = '' OR OrderKey = @cOrderKey)
+            AND DropID = @cDropID
+            AND [Status] <= '5'
 
-         SELECT @nTtlPackQty = ISNULL(SUM(Qty), 0)
-         FROM PACKDETAIL (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo
-         AND DropID = @cDropID
+            SELECT @nTtlPackQty = ISNULL(SUM(Qty), 0)
+            FROM PACKDETAIL (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+            AND DropID = @cDropID
+         END
+         ELSE
+         BEGIN
+            SELECT @nTtlPickQty=ISNULL(SUM(Qty), 0)
+            FROM PICKDETAIL (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+            AND DropID = @cDropID
+            AND OrderKey = @cOrderKey
+            AND [Status] <= '5'
+
+            SELECT @nTtlPackQty = ISNULL(SUM(PD.Qty), 0)
+            FROM PACKDETAIL PD (NOLOCK)
+            WHERE PD.PickSlipNo = @cPickSlipNo
+            AND PD.DropID = @cDropID
+            AND EXISTS ( SELECT 1
+                         FROM PACKHEADER PH (NOLOCK)
+                         WHERE PH.PickSlipNo = PD.PickSlipNo
+                         AND PH.OrderKey = @cOrderKey
+            )
+         END
       END
       ELSE IF @cType = 'order'
       BEGIN
@@ -388,7 +411,7 @@ BEGIN
             AND [Status] <= '5'
       )) 
       OR 
-      (@bIsDiscrete = 0
+      (@bIsDiscrete = 0 AND @cLoadKey <> ''
       AND ( SELECT ISNULL(SUM(Qty), 0)
             FROM PACKINFO (NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo
@@ -399,6 +422,18 @@ BEGIN
                            WHERE LPD.OrderKey = PD.OrderKey
                            AND LPD.LoadKey = @cLoadKey
                            )
+            AND PD.[Status] <= '5'
+      )) 
+      OR 
+      (@bIsDiscrete = 0 AND @cLoadKey = ''
+      AND ( SELECT ISNULL(SUM(Qty), 0)
+            FROM PACKINFO (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+      ) = ( SELECT ISNULL(SUM(Qty), 0)
+            FROM PICKDETAIL PD (NOLOCK)
+            WHERE PD.StorerKey = @cStorerKey
+            AND PD.DropID = @cDropID
+            AND PD.OrderKey = @cOrderKey
             AND PD.[Status] <= '5'
       )) 
       BEGIN
@@ -707,10 +742,10 @@ BEGIN
       , L.Workstation
       , L.LabelPrinter
       , L.PaperPrinter
-      , @c_UserID
-      , GETDATE()
-      , @c_UserID
-      , GETDATE()
+      , dbo.fnc_GetUserName()
+      , dbo.fnc_GetDate()
+      , dbo.fnc_GetUserName()
+      , dbo.fnc_GetDate()
    FROM API.TPACK_UserSessionActivityLog L WITH (NOLOCK)
    LEFT JOIN PACKDETAIL PD WITH (NOLOCK)
    ON PD.PickSlipNo = L.PickSlipNo

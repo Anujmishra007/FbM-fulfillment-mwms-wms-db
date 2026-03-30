@@ -118,7 +118,7 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @bIsDiscrete = 1 AND @cOrderKey <> ''
+   IF @cOrderKey <> ''
    BEGIN
       INSERT INTO @OrderList (OrderKey)
       VALUES (@cOrderKey)
@@ -151,7 +151,7 @@ BEGIN
       --   SET @bShowOrderHeaderVAS = 1
       --END
    END
-   ELSE
+   ELSE IF @cLoadKey <> ''
    BEGIN
       INSERT INTO @OrderList (OrderKey)
       SELECT OrderKey

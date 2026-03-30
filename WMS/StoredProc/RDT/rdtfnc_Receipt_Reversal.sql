@@ -859,7 +859,10 @@ BEGIN
      
    ReceiptReversal_Cfm:    
       WHILE @@TRANCOUNT > @nTranCount    
-         COMMIT TRAN    
+         COMMIT TRAN
+
+      IF @nErrNo <> 0
+         GOTO Step_4_Fail
         
       -- Prep next screen var  
       SET @cReceiptKey = ''  

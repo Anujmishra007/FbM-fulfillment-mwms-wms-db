@@ -293,7 +293,7 @@ BEGIN
                      ' FROM dbo.PickDetail WITH (NOLOCK) ' + 
                      ' WHERE StorerKey = @cStorerKey ' + 
                         ' AND Status = ''' + @cPickConfirmStatus + '''' +  
-                        ' AND QTY > 0 AND LOC = ''CONVEYOR''' + 
+                        ' AND QTY > 0 AND LOC IN( ''CONVEYOR'',''CSCQC'')' + 
                         ' AND ' + RTRIM( @cPickDetailCartonID) + ' = @cCartonID ' +
                         ' ORDER BY 1 ' +
                         ' SET @nRowCount = @@ROWCOUNT '
@@ -1005,7 +1005,7 @@ BEGIN
                IF @cOption = '1'  -- Yes
                BEGIN
                   SELECT @cPPS_LOC = LOC FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE @cPalletID = ID AND [Status] = '1'
-                  SELECT TOP 1 @cWaveKey = O.USERDEFINE09 FROM ORDERS O WITH (NOLOCK)
+                  SELECT TOP 1 @cWaveKey = O.USERDEFINE09,@cDocType = O.DocType FROM ORDERS O WITH (NOLOCK)
                   JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey
                   WHERE PD.ID = @cPalletID AND PD.StorerKey = @cStorerKey
                   ORDER BY PD.EditDate DESC
@@ -1017,7 +1017,7 @@ BEGIN
                      FROM LOC LOC (NOLOCK)
                      LEFT JOIN LotxLocxID LLI (NOLOCK) ON LOC.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey AND (QTY - QtyPicked>0)
                      WHERE LOC.Facility = @cFacility
-                     AND LOC.LocationType = 'QC'
+                     AND LOC.LocationType = 'HOSP'
                      GROUP BY LOC.LOC
                      HAVING COUNT(DISTINCT LLI.ID) < MAX(LOC.MaxPallet)
                      ORDER BY LOC.LOC
@@ -1109,7 +1109,7 @@ BEGIN
                   END
                   --B2B PALLET TO MARSHALLING LANE
                   ELSE IF EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) 
-                  JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
+                  JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey AND O.DocType <> 'E'
                   JOIN MBOL M (NOLOCK) ON O.MBOLKey = M.MBOLKey
                   WHERE PD.ID = @cPalletID AND PD.STATUS = '5' AND PD.StorerKey = @cStorerKey AND M.PlaceOfLoading <> '')
                   BEGIN
@@ -1146,7 +1146,9 @@ BEGIN
                         0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1837ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END
-                  ELSE
+                  ELSE IF EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK) 
+                  JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey AND O.DocType <> 'E'
+                  WHERE PD.ID = @cPalletID AND PD.STATUS = '5' AND PD.StorerKey = @cStorerKey)
                   --B2B PALLET TO PACK & HOLD LOCATION:
                   BEGIN
                      SELECT @cLoadKey = LoadKey

@@ -31,6 +31,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2026-03-05  Wan      1.0   Created                                   */
+/* 2026-03-27  Wan      1.0   Fixed                                     */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspPARL02]
    @c_ReceiptKey  NVARCHAR(10) = ''
@@ -52,9 +53,10 @@ BEGIN
          , @c_Storerkey          NVARCHAR(15)   = ''
          , @c_ASNStatus          NVARCHAR(10)   = ''
 
+         , @b_ManualBreak        BIT            = 1                                 --2027-03-27
          , @n_RowCount           INT            = 0 
          , @n_GrpNo              INT            = 0 
-         , @n_LPNLeftToFulfill    INT           = 0 
+         , @n_LPNLeftToFulfill   INT            = 0 
          , @n_NoOfTasks          INT            = 0
 
          , @c_ReceiptLineNumber  NVARCHAR(5)    = ''
@@ -561,12 +563,14 @@ BEGIN
 
             IF @b_Debug = 1
             BEGIN
-               PRINT '@c_ToLoc: ' + @c_ToLoc
+               PRINT 'mspPARL02: '
+               + '@c_ToLoc: ' + @c_ToLoc
                +   ', @n_AvailablePASlot: ' + CAST (@n_AvailablePASlot AS NVARCHAR)
             END
 
             IF @n_Continue = 1
             BEGIN
+               SET @b_ManualBreak = 1                                               --2026-03-27
                SET @c_ReceiptLineNumber = ''
                SET @CUR_PAID = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                SELECT   rd.ReceiptKey
@@ -579,6 +583,8 @@ BEGIN
                WHERE rd.GrpNo = @n_GrpNo
                AND NOT EXISTS (SELECT 1 FROM TaskDetail td (NOLOCK) 
                                WHERE td.FromID = rd.ToID
+                               AND td.Tasktype = @c_TaskType                        --2026-03-27
+                               AND td.Sourcekey= rd.Receiptkey                      --2026-03-27
                                AND td.[Status] <> 'X'                               --2026-03-24
                               )
                GROUP BY rd.ReceiptKey
@@ -598,6 +604,7 @@ BEGIN
 
                WHILE @@FETCH_STATUS <> -1 AND @n_AvailablePASlot > 0 AND @n_Continue = 1
                BEGIN
+                  SET @b_ManualBreak = 0                                            --2026-03-27
                   SET @n_PendingMoveIn = 0
 
                   IF @c_ToLoc > '' 
@@ -659,6 +666,7 @@ BEGIN
                         @c_FromLoc='+@c_FromLoc+', 
                         @c_FromID='+@c_FromID+', 
                         @n_QtyReceived='+CAST(@n_QtyReceived AS VARCHAR(10))
+                        +', @n_PendingMoveIn:' + CAST(@n_PendingMoveIn AS VARCHAR(10))                        
                      END
 
                      INSERT INTO dbo.TASKDETAIL
@@ -742,6 +750,11 @@ BEGIN
                END
                CLOSE @CUR_PAID
                DEALLOCATE @CUR_PAID
+
+               IF @b_ManualBreak = 1                                                --2027-03-27
+               BEGIN
+                  SET @n_LPNLeftToFulfill = 0
+               END
             END
          END
 

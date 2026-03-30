@@ -52,8 +52,8 @@ GO
 /* 2026-01-05 3.8.0  PPA374     UWP-46338 Adding  extended update to step 4      */
 /* 2026-01-12 3.8.1  PPA374     UWP-47065 Adding Extended Validate in step 3     */
 /* 2026-01-20 3.9.0  Dennis     FCR-9664 ExtScn08                                */
-/* 2026-03-18 4.0.0  NickT      UWP-52419 Empty @cToLoc after ToLoc screen       */
-/* 2026-03-25 4.1.0  Jackc      FCR-11571 Add extscn09 logic under st99          */
+/* 2026-03-25 4.0.0  Jackc      FCR-11571 Add extscn09 logic under st99          */
+/* 2026-03-30 4.1.0  NickT      UWP-52419 Empty @cToLoc after ToLoc screen       */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -358,6 +358,7 @@ BEGIN
    SET @cTaskDetailKey  = @cOutField06
    SET @cAreaKey        = @cOutField07
    SET @cTTMStrategyKey = @cOutField08
+   SET @cToLOC = ''
 
    -- Get task info
    DECLARE @nTransit INT
@@ -2754,7 +2755,6 @@ BEGIN
 
       -- Prepare next screen var
       SET @cOutField01 = @cToLOC
-      SET @cToLOC = ''
 
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
@@ -2947,6 +2947,7 @@ BEGIN
          SET @cOutField08 = @cTTMStrategykey
          SET @cOutField09 = ''
          SET @nFromStep = '0'
+         SET @cToLOC = ''
       END
 
       DECLARE @nToFunc INT
@@ -3695,14 +3696,24 @@ BEGIN
 
          IF @cExtScnSP = 'rdt_1812ExtScn09' --ONBR
          BEGIN
-            IF @nScn = 4022 AND @nStep = 3 AND @cUDF01 = 'SKIPFromID'
+            IF @cUDF01 = 'SKIPFromID'
             BEGIN
-               --Skip from id screen, set fromID = ''
-               SET @nInputKey = 1
-               SET @cInField05 = ''
-
-               GOTO Step_3
-            END
+               IF @nScn = 4022 AND @nStep = 3 
+               BEGIN
+                  IF @nInputKey = 1
+                  BEGIN
+                     --Skip from id screen, set fromID = ''
+                     SET @nInputKey = 1
+                     SET @cInField05 = ''
+                     GOTO Step_3
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nInputKey = 0
+                     GOTO Step_3
+                  END
+               END --FromID scn
+            END--Skip FromID scn
          END
       END
    END

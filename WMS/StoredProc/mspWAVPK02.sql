@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
-/* Stored Procedure: ispWAVPK19                                         */
+/* Stored Procedure: mspWAVPK02                                         */
 /* Creation Date: 15-Sep-2025                                           */
 /* Copyright: Maersk                                                    */
 /* Written by: AYD                                                      */
@@ -22,8 +22,9 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 15-Sep-2025  AYD      1.0  Created procedure                         */
+/* 30-Mar-2026  AYD      1.1  Rename to mspWAVPK02 (was ispWAVPK19)     */
 /************************************************************************/
-CREATE OR ALTER PROC [dbo].[ispWAVPK19]
+CREATE OR ALTER PROC [dbo].[mspWAVPK02]
    @c_Wavekey   NVARCHAR(10),
    @b_Success   INT      OUTPUT,
    @n_Err       INT      OUTPUT,
@@ -74,7 +75,7 @@ BEGIN
       BEGIN
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38010
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Found Short Pick with Qty > 0 (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Found Short Pick with Qty > 0 (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          GOTO QUIT_SP
       END
 
@@ -85,7 +86,7 @@ BEGIN
       BEGIN
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38020
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Found some orders are not picked(5). (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Found some orders are not picked(5). (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          GOTO QUIT_SP
       END
       IF EXISTS(SELECT 1
@@ -106,7 +107,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38030
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': The wave is not allowed to mix discrete and conso orders. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': The wave is not allowed to mix discrete and conso orders. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
             GOTO QUIT_SP
          END
       END
@@ -123,7 +124,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38040
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': No pick record found to generate pack. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': No pick record found to generate pack. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
             GOTO QUIT_SP
          END
       END
@@ -141,7 +142,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38050
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': No pick record found to generate pack. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': No pick record found to generate pack. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
             GOTO QUIT_SP
          END
       END
@@ -198,7 +199,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38060
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKHEADER Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKHEADER Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
 
          SET @c_LabelNo = ''
@@ -257,7 +258,7 @@ BEGIN
                BEGIN
                   SELECT @n_continue = 3
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38070
-                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKDETAIL Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKDETAIL Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
                END
 
                INSERT INTO PACKINFO 
@@ -271,7 +272,7 @@ BEGIN
                BEGIN
                   SELECT @n_continue = 3
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38071
-                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKINFO Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKINFO Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
                END
 
                SET @n_Qty = @n_Qty - @n_CtnQty
@@ -294,7 +295,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38080
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PICKINGINFO Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PICKINGINFO Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
 
          UPDATE PACKHEADER WITH (ROWLOCK)
@@ -307,7 +308,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38090
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
 
          FETCH NEXT FROM CUR_DISCPACK INTO @c_Orderkey, @c_Storerkey
@@ -369,7 +370,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38100
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKHEADER Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKHEADER Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
 
          SET @c_LabelNo = ''
@@ -429,7 +430,7 @@ BEGIN
                BEGIN
                   SELECT @n_continue = 3
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38110
-                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKDETAIL Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKDETAIL Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
                END
 
                INSERT INTO PACKINFO 
@@ -443,7 +444,7 @@ BEGIN
                BEGIN
                   SELECT @n_continue = 3
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38111
-                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKINFO Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKINFO Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
                END
 
                SET @n_Qty = @n_Qty - @n_CtnQty
@@ -466,7 +467,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38120
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PICKINGINFO Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PICKINGINFO Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
 
          UPDATE PACKHEADER WITH (ROWLOCK)
@@ -479,7 +480,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38130
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
 
          FETCH NEXT FROM CUR_CONSOCPACK INTO @c_Orderkey, @c_Storerkey
@@ -504,7 +505,7 @@ BEGIN
             COMMIT TRAN
          END
       END
-      EXECUTE dbo.nsp_LogError @n_Err, @c_Errmsg, 'ispWAVPK19'
+      EXECUTE dbo.nsp_LogError @n_Err, @c_Errmsg, 'mspWAVPK02'
       RAISERROR (@c_Errmsg, 16, 1) WITH SETERROR    -- SQL2012
       --RAISERROR @nErr @cErrmsg
       RETURN
@@ -520,5 +521,5 @@ BEGIN
    END
 END
 GO
-GRANT EXECUTE ON [dbo].[ispWAVPK19] TO [NSQL]
+GRANT EXECUTE ON [dbo].[mspWAVPK02] TO [NSQL]
 GO

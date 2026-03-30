@@ -153,19 +153,93 @@ BEGIN
        , cLabelNo             NVARCHAR(20)
    )
 
-   IF @cPickSlipNo = ''
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_ErrNo = 11601
-      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'PickSlipNo cannot be empty.'
-      GOTO EXIT_SP
-   END
-
    IF @nCartonNo = 0
    BEGIN
       SET @n_Continue = 3
       SET @n_ErrNo = 11602
       SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'CartonNo cannot be empty.'
+      GOTO EXIT_SP
+   END
+
+   IF @cType = 'toteid' 
+   BEGIN
+      IF @cPickSlipNo = '' 
+      AND @cOrderKey = '' 
+      AND @cLoadKey = ''
+      BEGIN
+         SELECT  @cPickSlipNo = PH.PickSlipNo
+               , @cOrderKey = PH.OrderKey
+         FROM PACKHEADER PH (NOLOCK)
+         WHERE EXISTS ( SELECT 1 
+                        FROM PACKDETAIL PD (NOLOCK)
+                        WHERE PD.PickSlipNo = PH.PickSlipNo
+                        AND PD.DropID = @cDropID
+                        AND PD.CartonNo = @nCartonNo
+                        AND EXISTS (SELECT 1 
+                                    FROM PACKINFO PIF (NOLOCK)
+                                    WHERE PIF.PickSlipNo = PD.PickSlipNo
+                                    AND PIF.CartonNo = PD.CartonNo
+                                    AND PIF.EditWho = @c_UserID
+                                    AND PIF.CartonStatus = 'INPROGRESS'
+                        )
+                     )
+         
+         IF @@ROWCOUNT = 1
+         BEGIN
+            INSERT INTO API.TPACK_UserSessionActivityLog 
+            (
+               PickSlipNo
+               , CartonNo
+               , LabelNo
+               , OrderKey
+               , LoadKey
+               , DropID
+               , StorerKey
+               , Facility
+               , Workstation
+               , LabelPrinter
+               , PaperPrinter
+               , AddWho
+               , AddDate
+               , EditWho
+               , EditDate
+            )
+            SELECT TOP 1 @cPickSlipNo
+               , @nCartonNo
+               , PD.LabelNo
+               , @cOrderKey
+               , L.LoadKey
+               , L.DropID
+               , L.StorerKey
+               , L.Facility 
+               , L.Workstation
+               , L.LabelPrinter
+               , L.PaperPrinter
+               , dbo.fnc_GetUserName()
+               , dbo.fnc_GetDate()
+               , dbo.fnc_GetUserName()
+               , dbo.fnc_GetDate()
+            FROM API.TPACK_UserSessionActivityLog L WITH (NOLOCK)
+            LEFT JOIN PACKDETAIL PD WITH (NOLOCK)
+            ON PD.DropID = L.DropID
+            AND PD.StorerKey = L.StorerKey
+            WHERE L.DropID = @cDropID
+            AND PD.PickSlipNo = @cPickSlipNo
+            AND PD.CartonNo = @nCartonNo
+            AND L.StorerKey = @cStorerKey
+            AND L.PickSlipNo = ''
+            AND L.OrderKey = ''
+            AND L.LoadKey = ''
+            ORDER BY L.RowRefNo DESC
+         END
+      END
+   END
+
+   IF @cPickSlipNo = ''
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_ErrNo = 11601
+      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'PickSlipNo cannot be empty.'
       GOTO EXIT_SP
    END
 

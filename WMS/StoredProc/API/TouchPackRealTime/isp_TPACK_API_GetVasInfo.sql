@@ -122,6 +122,56 @@ BEGIN
        , cSKU        NVARCHAR(20)
    )
 
+   IF @cType = 'toteid' 
+   BEGIN
+      IF @cPickSlipNo = '' 
+      AND @cOrderKey = '' 
+      AND @cLoadKey = ''
+      BEGIN
+            IF @nCartonNo <> 0
+            BEGIN
+               SELECT @cPickSlipNo = PH.PickSlipNo
+                  , @cOrderKey = PH.OrderKey
+               FROM PACKHEADER PH (NOLOCK)
+               WHERE EXISTS ( SELECT 1 
+                              FROM PACKDETAIL PD (NOLOCK)
+                              WHERE PD.PickSlipNo = PH.PickSlipNo
+                              AND PD.DropID = @cDropID
+                              AND PD.CartonNo = @nCartonNo
+                              AND EXISTS (SELECT 1 
+                                          FROM PACKINFO PIF (NOLOCK)
+                                          WHERE PIF.PickSlipNo = PH.PickSlipNo
+                                          AND PIF.CartonNo = PD.CartonNo
+                                          AND PIF.EditWho = @c_UserID
+                                          AND PIF.CartonStatus = 'INPROGRESS'
+                                          )
+                           )
+         END
+         ELSE
+         BEGIN
+            SELECT TOP 1 @cPickSlipNo = ISNULL(PH.PickHeaderKey, '')
+                        , @cOrderKey = ISNULL(PH.OrderKey, '')
+            FROM PICKHEADER PH (NOLOCK)
+            WHERE EXISTS ( SELECT 1 
+                           FROM PICKDETAIL PD (NOLOCK)
+                           WHERE PD.OrderKey = PH.OrderKey
+                           AND PD.DropID = @cDropID
+                           AND PD.SKU = @cSKU
+                           AND NOT (
+                              (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                              AND PD.[Status] = '9'
+                           )
+                           AND NOT EXISTS (SELECT 1
+                                       FROM PACKHEADER PH (NOLOCK)
+                                       WHERE PH.OrderKey = PD.OrderKey
+                                       AND PH.Status = '9'
+                                    )
+                        )
+            ORDER BY PH.OrderKey ASC
+         END
+      END
+   END
+   
    EXEC [API].[isp_TPACK_GetVasInfo_Wrapper]
             @cType         = @cType            
           , @bIsDiscrete   = @bIsDiscrete      

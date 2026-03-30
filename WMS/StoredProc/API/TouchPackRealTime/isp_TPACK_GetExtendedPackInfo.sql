@@ -245,8 +245,11 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      INSERT INTO @DynamicData(fieldname, fieldvalue)
-      VALUES (@cExtFieldCol, @cExtFieldVal)
+      IF ISNULL(@cExtFieldCol,'') <> '' AND ISNULL(@cExtFieldVal,'') <> ''
+      BEGIN
+         INSERT INTO @DynamicData(fieldname, fieldvalue)
+         VALUES (@cExtFieldCol, @cExtFieldVal)
+      END
    END
    -- Ext Field Display (END)
 
@@ -260,7 +263,7 @@ BEGIN
                                           , fieldValue 
                                     FROM @DynamicData 
                                     FOR JSON PATH
-                                    ),'')
+                                    ),'[]')
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      

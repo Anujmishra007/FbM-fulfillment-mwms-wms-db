@@ -72,21 +72,118 @@ BEGIN
    SET @nPrecedingCartonNo       = 0
    SET @cPrecedingCartonStatus   = ''
 
-    --Get Default Total Packed Carton Count & Total Packed Qty
-   SELECT  @nTtlPackedCtnCount = ISNULL(COUNT(PickSlipNo), 0) 
-         , @nTtlPackedQty = ISNULL(SUM(ISNULL(Qty,0)),0)
-   FROM PACKINFO (NOLOCK) 
-   WHERE PickSlipNo = @cPickSlipNo
+   --Get Default Total Packed Carton Count & Total Packed Qty
+   IF @cPickSlipNo <> ''
+   BEGIN
+      SELECT  @nTtlPackedCtnCount = ISNULL(COUNT(PickSlipNo), 0) 
+            , @nTtlPackedQty = ISNULL(SUM(ISNULL(Qty,0)),0)
+      FROM PACKINFO (NOLOCK) 
+      WHERE PickSlipNo = @cPickSlipNo
+   END
+   ELSE
+   BEGIN
+      IF @cType = 'toteid'
+      BEGIN
+         IF @cPickSlipNo = ''
+         AND @cOrderKey = ''
+         AND @cLoadKey = ''
+         AND @cDropID <> ''
+         BEGIN
+            IF @nCartonNo > 0
+            BEGIN
+               SELECT TOP 1 @cPickSlipNo = ISNULL(PickSlipNo,'')
+                              , @cOrderKey = ISNULL(OrderKey,'')
+               FROM API.TPACK_UserSessionActivityLog (NOLOCK)
+               WHERE DropID = @cDropID
+               AND EditWho = dbo.fnc_GetUserName()
+               AND CartonNo = @nCartonNo
+               ORDER BY RowRefNo DESC
+            END
+
+            IF @cPickSlipNo = '' AND @cOrderKey = ''
+            BEGIN
+               SELECT TOP 1 @cPickSlipNo = ISNULL(PH.PickSlipNo,'')
+                              , @cOrderKey = ISNULL(PH.OrderKey,'')
+               FROM PACKHEADER PH (NOLOCK)
+               WHERE [Status] <> '9'
+               AND EXISTS (SELECT 1 
+                             FROM PACKDETAIL PD (NOLOCK)
+                             WHERE PD.PickSlipNo = PH.PickSlipNo
+                             AND PD.CartonNo = @nCartonNo
+                             AND PD.DropID = @cDropID
+                             AND EXISTS(
+                                 SELECT 1
+                                 FROM PACKINFO PIF (NOLOCK)
+                                 WHERE PIF.PickSlipNo = PD.PickSlipNo
+                                 AND PIF.CartonNo = PD.CartonNo
+                                 AND PIF.EditWho = dbo.fnc_GetUserName()
+                                 AND PIF.CartonStatus = 'INPROGRESS'
+                             )
+                    )
+            END
+         END
+         
+         SELECT  @nTtlPackedCtnCount = ISNULL(COUNT(PIF.PickSlipNo), 0) 
+               , @nTtlPackedQty = ISNULL(SUM(ISNULL(PIF.Qty,0)),0)
+         FROM PACKINFO PIF (NOLOCK) 
+         WHERE (@cPickSlipNo = '' OR PIF.PickSlipNo = @cPickSlipNo)
+         AND EXISTS (SELECT 1 
+                     FROM PACKDETAIL PD (NOLOCK)
+                     WHERE PD.PickSlipNo = PIF.PickSlipNo
+                     AND PD.CartonNo = PIF.CartonNo
+                     AND PD.DropID = @cDropID
+                     AND EXISTS ( SELECT 1 
+                                    FROM PICKDETAIL PD2 (NOLOCK)
+                                    WHERE PD2.StorerKey = PD.StorerKey
+                                    AND PD2.DropID = PD.DropID
+                                    AND (@cOrderKey = '' OR PD2.OrderKey = @cOrderKey)
+                                    AND NOT (
+                                       (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD2.OrderKey) = 'E'
+                                       AND PD2.[Status] = '9'
+                                    )
+                                 )
+                     AND EXISTS (SELECT 1
+                                 FROM PACKHEADER PH (NOLOCK)
+                                 WHERE PD.PickSlipNo = PH.PickSlipNo
+                                 AND PH.Status <> '9'
+                              )
+                  )
+      END
+   END
 
    IF @bIsDiscrete = 1
    BEGIN
-      INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
-      SELECT SUM(Qty), Sku, [Status] 
-      FROM PICKDETAIL (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-      AND OrderKey = @cOrderKey
-      AND (@cDropID = '' OR DropID = @cDropID)
-      GROUP BY Sku, [Status]
+      IF @cType = 'toteid'
+      BEGIN
+         -- only tote and b2c
+         INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+         SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
+         FROM PICKDETAIL PD (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.DropID = @cDropID
+         AND (@cOrderKey = '' OR PD.OrderKey = @cOrderKey)
+         AND NOT (
+            (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+            AND PD.[Status] = '9'
+         )
+         AND ( @cOrderKey <> '' OR NOT EXISTS (SELECT 1
+                     FROM PACKHEADER PH (NOLOCK)
+                     WHERE PH.OrderKey = PD.OrderKey
+                     AND PH.Status = '9'
+                  )
+            )
+         GROUP BY PD.Sku, PD.[Status]
+      END
+      ELSE
+      BEGIN
+         INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+         SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
+         FROM PICKDETAIL PD (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.OrderKey = @cOrderKey
+         AND (@cDropID = '' OR PD.DropID = @cDropID)
+         GROUP BY PD.Sku, PD.[Status]
+      END
 
       IF @bIsCustom = 1 AND @cType = 'order'
       BEGIN
@@ -127,7 +224,7 @@ BEGIN
          SELECT  @nTtlPackedCtnCount = ISNULL(COUNT(DISTINCT CartonNo), 0) 
                , @nTtlPackedQty = ISNULL(SUM(ISNULL(Qty,0)),0)
          FROM PACKDETAIL (NOLOCK) 
-         WHERE  PickSlipNo = @cPickSlipNo
+         WHERE  (@cPickSlipNo = '' OR PickSlipNo = @cPickSlipNo)
          AND (@cDropID = '' OR DropID = @cDropID)
       END
    END
@@ -135,26 +232,54 @@ BEGIN
    BEGIN
       IF @bIsCustom = 0
       BEGIN
-         INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
-         SELECT SUM(Qty), Sku, [Status] 
-         FROM PICKDETAIL PD (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-         AND EXISTS ( SELECT 1 
-                        FROM LOADPLANDETAIL LPD (NOLOCK)
-                        WHERE LPD.OrderKey = PD.OrderKey
-                        AND LPD.LoadKey = @cLoadKey
-                        )
-         AND (@cDropID = '' OR DropID = @cDropID)
-         GROUP BY Sku, [Status]
+         IF @cType = 'toteid'
+         BEGIN
+            -- only tote and b2c
+            INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+            SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
+            FROM PICKDETAIL PD (NOLOCK)
+            WHERE PD.StorerKey = @cStorerKey
+            AND (@cLoadKey = '' OR EXISTS ( SELECT 1 
+                           FROM LOADPLANDETAIL LPD (NOLOCK)
+                           WHERE LPD.OrderKey = PD.OrderKey
+                           AND LPD.LoadKey = @cLoadKey
+                           )
+               )
+            AND DropID = @cDropID
+            AND NOT (
+               (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+               AND PD.[Status] = '9'
+            )
+            AND NOT EXISTS (SELECT 1
+                     FROM PACKHEADER PH (NOLOCK)
+                     WHERE PH.OrderKey = PD.OrderKey
+                     AND PH.Status = '9'
+                  )
+            GROUP BY PD.Sku, PD.[Status]
+         END
+         ELSE
+         BEGIN
+            INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+            SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
+            FROM PICKDETAIL PD (NOLOCK)
+            WHERE PD.StorerKey = @cStorerKey
+            AND EXISTS ( SELECT 1 
+                           FROM LOADPLANDETAIL LPD (NOLOCK)
+                           WHERE LPD.OrderKey = PD.OrderKey
+                           AND LPD.LoadKey = @cLoadKey
+                           )
+            AND (@cDropID = '' OR PD.DropID = @cDropID)
+            GROUP BY PD.Sku, PD.[Status]
+         END
       END
       ELSE
       BEGIN
          INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
-         SELECT SUM(Qty), Sku, [Status] 
+         SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
          FROM PICKDETAIL PD (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-         AND PickSlipNo = @cPickSlipNo
-         GROUP BY Sku, [Status]
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.PickSlipNo = @cPickSlipNo
+         GROUP BY PD.Sku, PD.[Status]
       END
    END
    
@@ -220,22 +345,43 @@ BEGIN
    END
 
    --Get Total SKU Count & Total Picked Qty with condition check
-   SELECT @nTtlPickQty = ISNULL(SUM(TtlPickedQty), 0)
-        , @nTtlSkuCount = COUNT(DISTINCT Sku) 
+    SELECT @nTtlPickQty = ISNULL(SUM(TtlPickedQty), 0)
+         , @nTtlSkuCount = COUNT(DISTINCT Sku) 
    FROM @PickQtyStatus
 
    IF @nCartonNo <> 0
    BEGIN
-      SELECT @nTtlCurCtnPackedQty = ISNULL(SUM(Qty), 0)
-      FROM PACKDETAIL (NOLOCK) 
-      WHERE PickSlipNo = @cPickSlipNo
-      AND CartonNo = @nCartonNo
-      AND (@cDropID = '' OR DropID = @cDropID)
+      IF @cType = 'toteid' 
+      AND @bIsDiscrete = 0
+      AND @cPickSlipNo = ''
+      AND @cOrderKey = ''
+      AND @cLoadKey = ''
+      BEGIN
+         SET @cCurrentCartonStatus = 'INPROGRESS'
+         SELECT @nTtlCurCtnPackedQty = ISNULL(SUM(PD.Qty), 0)
+         FROM PACKDETAIL PD (NOLOCK) 
+         WHERE PD.DropID = @cDropID
+         AND EXISTS ( SELECT 1 
+                        FROM PACKINFO PIF (NOLOCK)
+                        WHERE PIF.PickSlipNo = PD.PickSlipNo
+                        AND PIF.CartonNo = PD.CartonNo
+                        AND PIF.EditWho = @c_UserID
+                        AND PIF.CartonStatus = @cCurrentCartonStatus
+         )
+      END
+      ELSE
+      BEGIN
+         SELECT @nTtlCurCtnPackedQty = ISNULL(SUM(Qty), 0)
+         FROM PACKDETAIL (NOLOCK) 
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+         AND (@cDropID = '' OR DropID = @cDropID)
 
-      SELECT @cCurrentCartonStatus = CartonStatus
-      FROM PACKINFO (NOLOCK)
-      WHERE PickSlipNo = @cPickSlipNo
-      AND CartonNo = @nCartonNo
+         SELECT @cCurrentCartonStatus = CartonStatus
+         FROM PACKINFO (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+      END
    END
    ELSE
    BEGIN
@@ -270,17 +416,33 @@ BEGIN
    
    IF @cType = 'toteid'
    BEGIN
-      SELECT @nPrecedingCartonNo = P.CartonNo 
-      FROM PACKINFO P (NOLOCK)
-      WHERE P.PickSlipNo = @cPickSlipNo
-      AND P.EditWho = @c_UserID
-      AND P.CartonStatus = 'INPROGRESS'
-      AND EXISTS (SELECT 1 
-                  FROM PACKDETAIL PD (NOLOCK)
-                  WHERE PD.PickSlipNo = P.PickSlipNo
-                  AND PD.CartonNo = P.CartonNo
-                  AND PD.DropID = @cDropID
-      )
+      IF NOT(@cPickSlipNo = '' AND @cOrderKey = '' AND @cLoadKey = '')
+      BEGIN
+         SELECT @nPrecedingCartonNo = P.CartonNo 
+         FROM PACKINFO P (NOLOCK)
+         WHERE P.PickSlipNo = @cPickSlipNo
+         AND P.EditWho = @c_UserID
+         AND P.CartonStatus = 'INPROGRESS'
+         AND EXISTS (SELECT 1 
+                     FROM PACKDETAIL PD (NOLOCK)
+                     WHERE PD.PickSlipNo = P.PickSlipNo
+                     AND PD.CartonNo = P.CartonNo
+                     AND PD.DropID = @cDropID
+         )
+      END
+      ELSE
+      BEGIN
+         SELECT @nPrecedingCartonNo = P.CartonNo 
+         FROM PACKINFO P (NOLOCK)
+         WHERE P.EditWho = @c_UserID
+         AND P.CartonStatus = 'INPROGRESS'
+         AND EXISTS (SELECT 1 
+                     FROM PACKDETAIL PD (NOLOCK)
+                     WHERE PD.PickSlipNo = P.PickSlipNo
+                     AND PD.CartonNo = P.CartonNo
+                     AND PD.DropID = @cDropID
+         )
+      END
    END
    ELSE
    BEGIN
@@ -307,18 +469,34 @@ BEGIN
    
    IF @cType = 'toteid'
    BEGIN
-      SELECT TOP 1 @nPrecedingCartonNo = CartonNo 
-      FROM PACKDETAIL PD (NOLOCK)
-      WHERE PD.PickSlipNo = @cPickSlipNo
-      AND PD.DropID = @cDropID
-      AND EXISTS (SELECT 1 
-                  FROM PACKINFO P (NOLOCK)
-                  WHERE P.PickSlipNo = PD.PickSlipNo
-                  AND P.CartonNo = PD.CartonNo
-                  AND P.EditWho = @c_UserID
-                  AND P.CartonStatus = 'HOLD'
-      )
-      ORDER BY PD.EditDate DESC
+      IF @cPickSlipNo <> ''
+      BEGIN
+         SELECT TOP 1 @nPrecedingCartonNo = CartonNo 
+         FROM PACKDETAIL PD (NOLOCK)
+         WHERE PD.PickSlipNo = @cPickSlipNo
+         AND PD.DropID = @cDropID
+         AND EXISTS (SELECT 1 
+                     FROM PACKINFO P (NOLOCK)
+                     WHERE P.PickSlipNo = PD.PickSlipNo
+                     AND P.CartonNo = PD.CartonNo
+                     AND P.EditWho = @c_UserID
+                     AND P.CartonStatus = 'HOLD'
+         )
+         ORDER BY PD.EditDate DESC
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @nPrecedingCartonNo = CartonNo 
+         FROM PACKDETAIL PD (NOLOCK)
+         WHERE PD.DropID = @cDropID
+         AND EXISTS (SELECT 1 
+                     FROM PACKINFO P (NOLOCK)
+                     WHERE P.PickSlipNo = PD.PickSlipNo
+                     AND P.CartonNo = PD.CartonNo
+                     AND P.EditWho = @c_UserID
+                     AND P.CartonStatus = 'HOLD'
+         )
+      END
    END
    ELSE
    BEGIN

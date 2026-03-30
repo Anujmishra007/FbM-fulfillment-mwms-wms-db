@@ -155,107 +155,234 @@ BEGIN
    
    IF @bIsDiscrete = 1
    BEGIN
-      INSERT INTO @InitialSKUList
-      SELECT  S.SKU
-            , S.DESCR 
-            , S.MANUFACTURERSKU 
-            , S.RETAILSKU 
-            , S.ALTSKU 
-            , S.SKUGROUP 
-            , S.PACKKey 
-            , SUM(PD.Qty) AS nPickQty
-      FROM PICKDETAIL PD (NOLOCK)
-      INNER JOIN SKU S (NOLOCK)
-      ON PD.StorerKey = S.StorerKey
-      AND PD.SKU = S.SKU
-      WHERE PD.StorerKey = @cStorerKey
-      AND PD.OrderKey = @cOrderKey
-      AND (@cDropID = '' OR PD.DropID = @cDropID)
-      AND (@cSearchValue = '' 
-      OR ( 
-            S.SKU LIKE CONCAT(@cSearchValue, '%') 
-         OR S.DESCR LIKE CONCAT(@cSearchValue, '%') 
-         OR S.SKUGROUP LIKE CONCAT(@cSearchValue, '%') 
-         OR S.PACKKey LIKE CONCAT(@cSearchValue, '%')
-         OR S.MANUFACTURERSKU LIKE CONCAT(@cSearchValue, '%')
-         OR S.RETAILSKU LIKE CONCAT(@cSearchValue, '%')
-         OR S.ALTSKU LIKE CONCAT(@cSearchValue, '%')
-         OR EXISTS ( SELECT 1 
-                     FROM UPC (NOLOCK)
-                     WHERE UPC.StorerKey = @cStorerKey
-                     AND UPC.SKU = S.SKU
-                     AND UPC.PackKey = S.PACKKey
-                     AND UPC.UPC LIKE CONCAT(@cSearchValue, '%')
-                     AND UPC.UOM IN ('EA','EACH','PCS', '6')
-                     )
-         OR EXISTS ( SELECT 1 
-                     FROM UCC (NOLOCK)
-                     WHERE UCC.StorerKey = @cStorerKey
-                     AND UCC.SKU = S.SKU
-                     AND UCC.UCCNo LIKE CONCAT(@cSearchValue, '%')
-                     )
-      ))
-      GROUP BY   S.SKU
-               , S.DESCR
+      IF @cType = 'toteid'
+      BEGIN
+         -- only tote and b2c
+         INSERT INTO @InitialSKUList
+         SELECT  S.SKU
+               , S.DESCR 
                , S.MANUFACTURERSKU 
                , S.RETAILSKU 
-               , S.ALTSKU
-               , S.SKUGROUP
-               , S.PACKKey
+               , S.ALTSKU 
+               , S.SKUGROUP 
+               , S.PACKKey 
+               , SUM(PD.Qty) AS nPickQty
+         FROM PICKDETAIL PD (NOLOCK)
+         INNER JOIN SKU S (NOLOCK)
+         ON PD.StorerKey = S.StorerKey
+         AND PD.SKU = S.SKU
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.DropID = @cDropID
+         AND NOT (
+                  (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                  AND PD.[Status] = '9'
+               )
+         AND (@cSearchValue = '' 
+         OR ( 
+               S.SKU LIKE CONCAT(@cSearchValue, '%') 
+            OR S.DESCR LIKE CONCAT(@cSearchValue, '%') 
+            OR S.SKUGROUP LIKE CONCAT(@cSearchValue, '%') 
+            OR S.PACKKey LIKE CONCAT(@cSearchValue, '%')
+            OR S.MANUFACTURERSKU LIKE CONCAT(@cSearchValue, '%')
+            OR S.RETAILSKU LIKE CONCAT(@cSearchValue, '%')
+            OR S.ALTSKU LIKE CONCAT(@cSearchValue, '%')
+            OR EXISTS ( SELECT 1 
+                        FROM UPC (NOLOCK)
+                        WHERE UPC.StorerKey = @cStorerKey
+                        AND UPC.SKU = S.SKU
+                        AND UPC.PackKey = S.PACKKey
+                        AND UPC.UPC LIKE CONCAT(@cSearchValue, '%')
+                        AND UPC.UOM IN ('EA','EACH','PCS', '6')
+                        )
+            OR EXISTS ( SELECT 1 
+                        FROM UCC (NOLOCK)
+                        WHERE UCC.StorerKey = @cStorerKey
+                        AND UCC.SKU = S.SKU
+                        AND UCC.UCCNo LIKE CONCAT(@cSearchValue, '%')
+                        )
+         ))
+         GROUP BY   S.SKU
+                  , S.DESCR
+                  , S.MANUFACTURERSKU 
+                  , S.RETAILSKU 
+                  , S.ALTSKU
+                  , S.SKUGROUP
+                  , S.PACKKey
+      END
+      ELSE
+      BEGIN
+         INSERT INTO @InitialSKUList
+         SELECT  S.SKU
+               , S.DESCR 
+               , S.MANUFACTURERSKU 
+               , S.RETAILSKU 
+               , S.ALTSKU 
+               , S.SKUGROUP 
+               , S.PACKKey 
+               , SUM(PD.Qty) AS nPickQty
+         FROM PICKDETAIL PD (NOLOCK)
+         INNER JOIN SKU S (NOLOCK)
+         ON PD.StorerKey = S.StorerKey
+         AND PD.SKU = S.SKU
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.OrderKey = @cOrderKey
+         AND (@cDropID = '' OR PD.DropID = @cDropID)
+         AND (@cSearchValue = '' 
+         OR ( 
+               S.SKU LIKE CONCAT(@cSearchValue, '%') 
+            OR S.DESCR LIKE CONCAT(@cSearchValue, '%') 
+            OR S.SKUGROUP LIKE CONCAT(@cSearchValue, '%') 
+            OR S.PACKKey LIKE CONCAT(@cSearchValue, '%')
+            OR S.MANUFACTURERSKU LIKE CONCAT(@cSearchValue, '%')
+            OR S.RETAILSKU LIKE CONCAT(@cSearchValue, '%')
+            OR S.ALTSKU LIKE CONCAT(@cSearchValue, '%')
+            OR EXISTS ( SELECT 1 
+                        FROM UPC (NOLOCK)
+                        WHERE UPC.StorerKey = @cStorerKey
+                        AND UPC.SKU = S.SKU
+                        AND UPC.PackKey = S.PACKKey
+                        AND UPC.UPC LIKE CONCAT(@cSearchValue, '%')
+                        AND UPC.UOM IN ('EA','EACH','PCS', '6')
+                        )
+            OR EXISTS ( SELECT 1 
+                        FROM UCC (NOLOCK)
+                        WHERE UCC.StorerKey = @cStorerKey
+                        AND UCC.SKU = S.SKU
+                        AND UCC.UCCNo LIKE CONCAT(@cSearchValue, '%')
+                        )
+         ))
+         GROUP BY   S.SKU
+                  , S.DESCR
+                  , S.MANUFACTURERSKU 
+                  , S.RETAILSKU 
+                  , S.ALTSKU
+                  , S.SKUGROUP
+                  , S.PACKKey
+      END
    END
    ELSE
    BEGIN
-      INSERT INTO @InitialSKUList
-      SELECT  S.SKU
-            , S.DESCR 
-            , S.MANUFACTURERSKU 
-            , S.RETAILSKU 
-            , S.ALTSKU 
-            , S.SKUGROUP 
-            , S.PACKKey 
-            , SUM(PD.Qty) AS nPickQty
-      FROM PICKDETAIL PD (NOLOCK)
-      INNER JOIN SKU S (NOLOCK)
-      ON PD.StorerKey = S.StorerKey
-      AND PD.SKU = S.SKU
-      WHERE PD.StorerKey = @cStorerKey
-      AND EXISTS (SELECT 1
-                  FROM LOADPLANDETAIL LPD (NOLOCK)
-                  WHERE LPD.OrderKey = PD.OrderKey
-                  AND LPD.LoadKey = @cLoadKey
-      )
-      AND (@cDropID = '' OR PD.DropID = @cDropID)
-      AND (@cSearchValue = '' 
-      OR ( 
-            S.SKU LIKE CONCAT(@cSearchValue, '%') 
-         OR S.DESCR LIKE CONCAT(@cSearchValue, '%') 
-         OR S.SKUGROUP LIKE CONCAT(@cSearchValue, '%') 
-         OR S.PACKKey LIKE CONCAT(@cSearchValue, '%')
-         OR S.MANUFACTURERSKU LIKE CONCAT(@cSearchValue, '%')
-         OR S.RETAILSKU LIKE CONCAT(@cSearchValue, '%')
-         OR S.ALTSKU LIKE CONCAT(@cSearchValue, '%')
-         OR EXISTS ( SELECT 1 
-                     FROM UPC (NOLOCK)
-                     WHERE UPC.StorerKey = @cStorerKey
-                     AND UPC.SKU = S.SKU
-                     AND UPC.PackKey = S.PACKKey
-                     AND UPC.UPC LIKE CONCAT(@cSearchValue, '%')
-                     AND UPC.UOM IN ('EA','EACH','PCS', '6')
-                     )
-         OR EXISTS ( SELECT 1 
-                     FROM UCC (NOLOCK)
-                     WHERE UCC.StorerKey = @cStorerKey
-                     AND UCC.SKU = S.SKU
-                     AND UCC.UCCNo LIKE CONCAT(@cSearchValue, '%')
-                     )
-      ))
-      GROUP BY   S.SKU
-               , S.DESCR
+      IF @cLoadKey = '' AND @cDropID = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_ErrNo = 11951
+         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Failed to Perform Check SKU, LoadKey and DropID both are empty.
+         GOTO EXIT_SP
+      END
+
+      IF @cType = 'toteid'
+      BEGIN
+         -- only tote and b2c
+         INSERT INTO @InitialSKUList
+         SELECT  S.SKU
+               , S.DESCR 
                , S.MANUFACTURERSKU 
                , S.RETAILSKU 
-               , S.ALTSKU
-               , S.SKUGROUP
+               , S.ALTSKU 
+               , S.SKUGROUP 
                , S.PACKKey 
+               , SUM(PD.Qty) AS nPickQty
+         FROM PICKDETAIL PD (NOLOCK)
+         INNER JOIN SKU S (NOLOCK)
+         ON PD.StorerKey = S.StorerKey
+         AND PD.SKU = S.SKU
+         WHERE PD.StorerKey = @cStorerKey
+         AND (@cLoadKey = '' OR EXISTS (SELECT 1
+                     FROM LOADPLANDETAIL LPD (NOLOCK)
+                     WHERE LPD.OrderKey = PD.OrderKey
+                     AND LPD.LoadKey = @cLoadKey
+         ))
+         AND PD.DropID = @cDropID
+         AND NOT (
+                  (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                  AND PD.[Status] = '9'
+               )
+         AND (@cSearchValue = '' 
+         OR ( 
+               S.SKU LIKE CONCAT(@cSearchValue, '%') 
+            OR S.DESCR LIKE CONCAT(@cSearchValue, '%') 
+            OR S.SKUGROUP LIKE CONCAT(@cSearchValue, '%') 
+            OR S.PACKKey LIKE CONCAT(@cSearchValue, '%')
+            OR S.MANUFACTURERSKU LIKE CONCAT(@cSearchValue, '%')
+            OR S.RETAILSKU LIKE CONCAT(@cSearchValue, '%')
+            OR S.ALTSKU LIKE CONCAT(@cSearchValue, '%')
+            OR EXISTS ( SELECT 1 
+                        FROM UPC (NOLOCK)
+                        WHERE UPC.StorerKey = @cStorerKey
+                        AND UPC.SKU = S.SKU
+                        AND UPC.PackKey = S.PACKKey
+                        AND UPC.UPC LIKE CONCAT(@cSearchValue, '%')
+                        AND UPC.UOM IN ('EA','EACH','PCS', '6')
+                        )
+            OR EXISTS ( SELECT 1 
+                        FROM UCC (NOLOCK)
+                        WHERE UCC.StorerKey = @cStorerKey
+                        AND UCC.SKU = S.SKU
+                        AND UCC.UCCNo LIKE CONCAT(@cSearchValue, '%')
+                        )
+         ))
+         GROUP BY   S.SKU
+                  , S.DESCR
+                  , S.MANUFACTURERSKU 
+                  , S.RETAILSKU 
+                  , S.ALTSKU
+                  , S.SKUGROUP
+                  , S.PACKKey
+      END
+      ELSE
+      BEGIN
+         INSERT INTO @InitialSKUList
+         SELECT  S.SKU
+               , S.DESCR 
+               , S.MANUFACTURERSKU 
+               , S.RETAILSKU 
+               , S.ALTSKU 
+               , S.SKUGROUP 
+               , S.PACKKey 
+               , SUM(PD.Qty) AS nPickQty
+         FROM PICKDETAIL PD (NOLOCK)
+         INNER JOIN SKU S (NOLOCK)
+         ON PD.StorerKey = S.StorerKey
+         AND PD.SKU = S.SKU
+         WHERE PD.StorerKey = @cStorerKey
+         AND (@cLoadKey = '' OR EXISTS (SELECT 1
+                     FROM LOADPLANDETAIL LPD (NOLOCK)
+                     WHERE LPD.OrderKey = PD.OrderKey
+                     AND LPD.LoadKey = @cLoadKey
+         ))
+         AND (@cDropID = '' OR PD.DropID = @cDropID)
+         AND (@cSearchValue = '' 
+         OR ( 
+               S.SKU LIKE CONCAT(@cSearchValue, '%') 
+            OR S.DESCR LIKE CONCAT(@cSearchValue, '%') 
+            OR S.SKUGROUP LIKE CONCAT(@cSearchValue, '%') 
+            OR S.PACKKey LIKE CONCAT(@cSearchValue, '%')
+            OR S.MANUFACTURERSKU LIKE CONCAT(@cSearchValue, '%')
+            OR S.RETAILSKU LIKE CONCAT(@cSearchValue, '%')
+            OR S.ALTSKU LIKE CONCAT(@cSearchValue, '%')
+            OR EXISTS ( SELECT 1 
+                        FROM UPC (NOLOCK)
+                        WHERE UPC.StorerKey = @cStorerKey
+                        AND UPC.SKU = S.SKU
+                        AND UPC.PackKey = S.PACKKey
+                        AND UPC.UPC LIKE CONCAT(@cSearchValue, '%')
+                        AND UPC.UOM IN ('EA','EACH','PCS', '6')
+                        )
+            OR EXISTS ( SELECT 1 
+                        FROM UCC (NOLOCK)
+                        WHERE UCC.StorerKey = @cStorerKey
+                        AND UCC.SKU = S.SKU
+                        AND UCC.UCCNo LIKE CONCAT(@cSearchValue, '%')
+                        )
+         ))
+         GROUP BY   S.SKU
+                  , S.DESCR
+                  , S.MANUFACTURERSKU 
+                  , S.RETAILSKU 
+                  , S.ALTSKU
+                  , S.SKUGROUP
+                  , S.PACKKey
+      END
    END
 
    IF @@ROWCOUNT = 0
@@ -337,6 +464,14 @@ BEGIN
    END
    ELSE
    BEGIN
+      IF @cPickSlipNo = '' AND @cDropID = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_ErrNo = 11952
+         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Failed to Perform Check SKU, PickSlipNo and DropID both are empty.
+         GOTO EXIT_SP
+      END
+      
       INSERT INTO @SKUList
       SELECT  X.SKU
             , X.DESCR 
@@ -347,7 +482,7 @@ BEGIN
       FROM @InitialSKUList X
       LEFT JOIN PACKDETAIL PD2 (NOLOCK)
       ON PD2.StorerKey = @cStorerKey
-      AND PD2.PickSlipNo = @cPickSlipNo
+      AND (@cPickSlipNo = '' OR PD2.PickSlipNo = @cPickSlipNo)
       AND PD2.SKU = X.SKU
       AND (@cDropID = '' OR PD2.DropID = @cDropID)
       GROUP BY   X.SKU
