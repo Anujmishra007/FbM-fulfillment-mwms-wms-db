@@ -32,8 +32,8 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument03] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
-   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
-   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
+   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
+   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @b_Success            INT               = 0   OUTPUT  
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
@@ -327,7 +327,7 @@ BEGIN
                   , @c_ErrMsg       = @c_ErrMsg             OUTPUT
                   , @c_PrintSource  = @cPrintSource        
                   , @b_SCEPreView   = 0         
-                  , @c_JobIDs       = @cPrintLabelJobIDs    OUTPUT    
+                  , @c_JobIDs       = @ctempLabelJobIDs     OUTPUT    
                   , @c_AutoPrint    = 'N'     
                
             IF @b_Success = 0 
