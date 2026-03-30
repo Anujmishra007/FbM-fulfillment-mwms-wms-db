@@ -3696,14 +3696,24 @@ BEGIN
 
          IF @cExtScnSP = 'rdt_1812ExtScn09' --ONBR
          BEGIN
-            IF @nScn = 4022 AND @nStep = 3 AND @cUDF01 = 'SKIPFromID'
+            IF @cUDF01 = 'SKIPFromID'
             BEGIN
-               --Skip from id screen, set fromID = ''
-               SET @nInputKey = 1
-               SET @cInField05 = ''
-
-               GOTO Step_3
-            END
+               IF @nScn = 4022 AND @nStep = 3 
+               BEGIN
+                  IF @nInputKey = 1
+                  BEGIN
+                     --Skip from id screen, set fromID = ''
+                     SET @nInputKey = 1
+                     SET @cInField05 = ''
+                     GOTO Step_3
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nInputKey = 0
+                     GOTO Step_3
+                  END
+               END --FromID scn
+            END--Skip FromID scn
          END
       END
    END

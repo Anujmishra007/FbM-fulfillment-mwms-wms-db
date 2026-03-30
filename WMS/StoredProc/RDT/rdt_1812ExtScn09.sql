@@ -92,18 +92,35 @@ BEGIN
    
    IF @nFunc = 1812 -- TM Case Pick  
    BEGIN  
-      IF @nScn = 4022 AND @nStep = 3 AND @nMOBRECStep = 2 AND @nMOBRECScn = 4021 -- Generic Reason Code screen
+      IF @nScn = 4022 AND @nStep = 3 AND @nMOBRECStep = 2 AND @nMOBRECScn = 4021 -- From Loc scn to From ID scn
       BEGIN
-         IF @cSuggID = ''
+         IF @nInputKey = 1
          BEGIN
-            IF @nDebugFlag = 1
-               SELECT 'Skip FromID screen'
+            IF @cSuggID = ''
+            BEGIN
+               IF @nDebugFlag = 1
+                  SELECT 'Enter on FromLoc scn, Skip FromID screen'
 
-            SET @cUDF01 = 'SKIPFromID' -- set skip from ID flag
-         END
-        
-         GOTO QUIT
-      END
+               SET @cUDF01 = 'SKIPFromID' -- set skip from ID flag
+            END
+         
+            GOTO QUIT
+         END -- inputkey
+      END -- from loc to from id
+
+      IF @nMOBRECStep = 4 AND @nMOBRECScn = 4023 AND @nScn = 4022 AND @nStep = 3 -- SKU/Qty scn to FromID scn
+      BEGIN
+         IF @nInputKey = 0
+         BEGIN
+            IF @cSuggID = ''
+            BEGIN
+               IF @nDebugFlag = 1
+                  SELECT 'Esc on SKU/Qyt scn, Skip FromID screen, '
+
+               SET @cUDF01 = 'SKIPFromID'
+            END
+         END-- esc
+      END--SKU/Qty scn to FromID scn
    END --1812
 
 Quit:
