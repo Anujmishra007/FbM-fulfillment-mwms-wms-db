@@ -110,7 +110,7 @@ BEGIN
    SAVE TRAN rdt_777ConfirmSP01 -- For rollback or commit only our own transaction
    
    -- Normal Order
-   IF @nMPOCFlag <> 1
+   IF @nMPOCFlag = 0
    BEGIN
       -- PackHeader
       IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo)
@@ -783,7 +783,7 @@ BEGIN
 
    SET @InputQty = @nQty
    -- Handle PickDetail
-   IF @nMPOCFlag <> 1
+   IF @nMPOCFlag = 0
    BEGIN
       WHILE 1 = 1
       BEGIN

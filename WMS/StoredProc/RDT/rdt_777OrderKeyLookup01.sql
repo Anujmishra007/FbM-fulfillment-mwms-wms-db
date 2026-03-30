@@ -94,7 +94,7 @@ BEGIN
                
                -- Create PackHeader
                IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE Pickslipno = @cPickSlipNo)
-                  AND @nMPOCFlag <> 1
+                  AND @nMPOCFlag = 0
                BEGIN
                   DECLARE @cConsigneeKey NVARCHAR( 15)
                   DECLARE @cLoadKey NVARCHAR( 10)
