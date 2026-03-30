@@ -132,7 +132,7 @@ BEGIN
                   BEGIN
                      SELECT @n_continue = 3
                      SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63506
-                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+'TransferKey :'+@c_Transferkey+': Insert TRANSFER Failed! (mspASN2TransferAndFinalize)' + ' ( '
+                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+'ReceiptKey :'+@c_Receiptkey+': Insert TRANSFER Failed! (mspASN2TransferAndFinalize)' + ' ( '
                                             + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                      GOTO QUIT_SP
                   END
@@ -140,26 +140,31 @@ BEGIN
             -- Insert into TRANSFERDETAIL (one row per receipt line)
             INSERT INTO TRANSFERDETAIL (
                 Transferkey, TransferLineNumber, FromStorerkey,ToStorerKey,FromSku,FromLot, FromLoc, FromID, FromQty, FromPackkey, FromUOM,
-                ToLoc, ToId, ToLot, ToSku, ToQty, LOTTABLE03, LOTTABLE10, TOLOTTABLE10, TOLOTTABLE12
+                ToLoc, ToId, ToLot, ToSku, ToQty, LOTTABLE03, LOTTABLE10, TOLOTTABLE10, TOLOTTABLE12,ToPackkey,ToUOM,tolottable03,Lottable12
             )
             SELECT
                 @c_TransferKey,
-                RIGHT('0000' + RTRIM(CAST(ROW_NUMBER() OVER (ORDER BY ReceiptLineNumber) AS NVARCHAR(5))), 5),
-                Storerkey,
-                Storerkey,
-                Sku,
-                Lot,
-                Loc,
-                ID,
-                Qty,
-                Packkey,
-                UOM,
-                Loc,
-                ID,
+                RIGHT('0000' + RTRIM(CAST(ROW_NUMBER() OVER (ORDER BY RD.ReceiptLineNumber) AS NVARCHAR(5))), 5),
+                RD.Storerkey,
+                RD.Storerkey,
+                RD.Sku,
+                CASE
+                WHEN @n_Count = 1 THEN RD.Lot
+                ELSE (SELECT TOP 1 LOT FROM LOTXLOCXID L (NOLOCK)
+                WHERE L.Sku = RD.Sku AND L.Loc = RD.Loc AND L.ID = RD.ID
+                AND L.Qty - L.QtyAllocated - L.QtyPicked > 0)
+                END AS Lot,
+                RD. Loc,
+                RD. ID,
+                RD.Qty,
+                RD.Packkey,
+                RD.UOM,
+                RD.Loc,
+                RD.ID,
                 '',
-                Sku,
-                Qty,
-                ExternReceiptkey,
+                RD.Sku,
+                RD.Qty,
+                RD.ExternReceiptkey,
                 CASE
                 WHEN @n_Count = 1 THEN 'T1-TEMP'
                 ELSE 'T2-TEMP'
@@ -168,17 +173,18 @@ BEGIN
                 WHEN @n_Count = 1 THEN 'T2-TEMP'
                 ELSE 'T2-ENT'
                 END AS TOLOTTABLE10,
-                CASE
-                WHEN @n_Count = 1 THEN TrackingNo
-                ELSE ''
-                END AS TOLOTTABLE12
-            FROM #ReceiptData
+                RD.TrackingNo,
+                RD.Packkey,
+                RD.UOM,
+                RD.ExternReceiptkey,
+                RD.TrackingNo
+            FROM #ReceiptData RD
             SELECT @n_err = @@ERROR
                   IF  @n_err <> 0
                   BEGIN
                      SELECT @n_continue = 3
                      SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63507
-                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+'TransferKey :'+@c_Transferkey+': Insert TRANSFER DETAIL Failed! (mspASN2TransferAndFinalize)' + ' ( '
+                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+'ReceiptKey :'+@c_Receiptkey+': Insert TRANSFER DETAIL Failed! (mspASN2TransferAndFinalize)' + ' ( '
                                             + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                      GOTO QUIT_SP
                   END
@@ -187,7 +193,7 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63508
-               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Get Transfer Key Failed! (mspASN2TransferAndFinalize)' + ' ( '
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+'ReceiptKey :'+@c_Receiptkey+': Get Transfer Key Failed! (mspASN2TransferAndFinalize)' + ' ( '
                                       + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                GOTO QUIT_SP
             END
@@ -200,7 +206,7 @@ BEGIN
              BEGIN
                SELECT @n_continue = 3
                SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63508
-               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Transfer Failed! (mspASN2TransferAndFinalize)' + ' ( '
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+'ReceiptKey :'+@c_Receiptkey+': Finalize Transfer Failed! (mspASN2TransferAndFinalize)' + ' ( '
                                       + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                 GOTO QUIT_SP
               END
@@ -215,7 +221,7 @@ BEGIN
         BEGIN
            SELECT @n_continue = 3
            SELECT @c_errmsg = ERROR_MESSAGE(), @n_err = ERROR_NUMBER()
-           SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Unexpected Error Occured! (mspASN2TransferAndFinalize)' + ' ( '
+           SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+'ReceiptKey :'+@c_Receiptkey+': Unexpected Error Occured! (mspASN2TransferAndFinalize)' + ' ( '
                                   + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
            GOTO QUIT_SP
         END
