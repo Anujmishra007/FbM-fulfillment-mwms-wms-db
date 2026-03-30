@@ -61,7 +61,9 @@ BEGIN
          , @n_SkipProcess              INT = 0
          , @c_PickCondition_SQL        NVARCHAR(MAX) = ''
          , @c_PickDetailKey            NVARCHAR(10)  = ''   --WL02
-         , @CUR_UNALLOC                CURSOR   --WL02
+         , @CUR_UNALLOC                CURSOR               --WL02
+         , @n_RemoveShort              INT = 0              --WL02
+         , @n_ShortQty                 INT = 0              --WL02
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -440,6 +442,32 @@ BEGIN
       END
    END
 
+   --WL02 S
+   -- If partial reallocation, do not delete the shorted pickdetail lines
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
+   BEGIN
+      SELECT @n_ShortQty = SUM(Qty) 
+      FROM #T_ShortPick
+
+      IF EXISTS ( SELECT 1
+                  FROM #PickDetail_WIP P
+                  WHERE P.Storerkey = @c_StorerKey
+                  AND   P.Sku = @c_SKU
+                  AND   P.[Status] < '4' 
+                  AND   EXISTS ( SELECT 1 
+                                 FROM #T_ShortOrders T
+                                 WHERE T.OrderKey = P.OrderKey )
+                  AND NOT EXISTS ( SELECT 1
+                                    FROM #T_PICKDETAIL_CURRENT T
+                                    WHERE T.Pickdetailkey = P.PickDetailKey )
+                  HAVING SUM(P.Qty) = @n_ShortQty
+                )
+      BEGIN
+         SET @n_RemoveShort = 1
+      END
+   END
+   --WL02 E
+   
    -- Confirm Replenishment via RCMConfig
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
@@ -658,7 +686,7 @@ BEGIN
 
    --WL02 S
    -- Delete shorted pickdetail line if able to reallocate
-   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_RemoveShort = 1
    BEGIN
       SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT T.Pickdetailkey
