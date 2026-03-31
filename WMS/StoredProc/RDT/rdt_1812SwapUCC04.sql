@@ -115,6 +115,15 @@ BEGIN
       GOTO Fail
    END
 
+   IF @cTaskUOM = '6'
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'Piece picking, no swapping'
+
+      SET @nUCCQTY = 0
+      GOTO Quit
+   END
+
    IF @cTaskUCCNo = @cActUCCNo
    BEGIN
       IF @nDebugFlag = 1
