@@ -38,24 +38,24 @@ BEGIN
 
    DECLARE @n_Continue     INT   = 1  
          , @n_StartCnt     INT   = @@TRANCOUNT  
-         , @bIsB2B         BIT
+         , @bSkipCartonize BIT
 
-   SET @b_Success    = 0  
-   SET @n_ErrNo      = 0  
-   SET @c_ErrMsg     = ''
-   SET @bIsB2B       = 0
+   SET @b_Success       = 0  
+   SET @n_ErrNo         = 0  
+   SET @c_ErrMsg        = ''
+   SET @bSkipCartonize  = 0
 
    IF EXISTS(  SELECT 1
                FROM ORDERS (NOLOCK)
                WHERE OrderKey = @cOrderKey
-               AND OrderGroup = 'B2B'            
+               AND DocType = 'N'
    )
    BEGIN
-      SET @bIsB2B = 1
+      SET @bSkipCartonize = 1
    END
 
    SET @cPackTaskConfigJson = ISNULL ((SELECT  ConfigKey AS configKey
-                                             , CASE WHEN ConfigKey = 'TPS-skipCartonize' AND @bIsB2B = 1 
+                                             , CASE WHEN ConfigKey = 'TPS-skipCartonize' AND @bSkipCartonize = 1 
                                                       THEN '1'
                                                       ELSE sValue 
                                                       END as configVal
