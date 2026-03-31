@@ -65,7 +65,8 @@ BEGIN
         UOM NVARCHAR(10),
         Facility NVARCHAR(5),
         ExternReceiptkey NVARCHAR(20),
-        TrackingNo NVARCHAR(30)
+        TrackingNo NVARCHAR(30),
+        Lottable05 datetime
     )
 
     -- Populate temp table
@@ -82,7 +83,8 @@ BEGIN
            RD.UOM,
            R.Facility,
            R.ExternReceiptkey,
-           R.TrackingNo
+           R.TrackingNo,
+           RD.Lottable05
     FROM RECEIPT R (NOLOCK)
     JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
     JOIN LOTXLOCXID L (NOLOCK) ON L.Sku = RD.Sku AND L.Loc = RD.ToLoc AND L.ID = RD.ToID
@@ -140,7 +142,8 @@ BEGIN
             -- Insert into TRANSFERDETAIL (one row per receipt line)
             INSERT INTO TRANSFERDETAIL (
                 Transferkey, TransferLineNumber, FromStorerkey,ToStorerKey,FromSku,FromLot, FromLoc, FromID, FromQty, FromPackkey, FromUOM,
-                ToLoc, ToId, ToLot, ToSku, ToQty, LOTTABLE03, LOTTABLE10, TOLOTTABLE10, TOLOTTABLE12,ToPackkey,ToUOM,tolottable03,Lottable12
+                ToLoc, ToId, ToLot, ToSku, ToQty, LOTTABLE03, LOTTABLE10, TOLOTTABLE10, TOLOTTABLE12,ToPackkey,ToUOM,tolottable03,Lottable12,
+                LOTTABLE05,tolottable05
             )
             SELECT
                 @c_TransferKey,
@@ -177,7 +180,9 @@ BEGIN
                 RD.Packkey,
                 RD.UOM,
                 RD.ExternReceiptkey,
-                RD.TrackingNo
+                RD.TrackingNo,
+                RD.Lottable05,
+                RD.Lottable05
             FROM #ReceiptData RD
             SELECT @n_err = @@ERROR
                   IF  @n_err <> 0
