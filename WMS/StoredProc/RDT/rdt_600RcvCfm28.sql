@@ -2210,7 +2210,7 @@ END
 -- Handling transaction  
 SET @nTranCount = @@TRANCOUNT  
 BEGIN TRAN  -- Begin our own transaction  
-SAVE TRAN rdt_Receive_V7 -- For rollback or commit only our own transaction  
+SAVE TRAN rdt_600RcvCfm28 -- For rollback or commit only our own transaction  
   
 DECLARE @cOrg_ReceiptLineNumber NVARCHAR( 5)  
 DECLARE @nOrg_QTYExpected       INT  
