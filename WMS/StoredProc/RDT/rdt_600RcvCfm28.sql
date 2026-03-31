@@ -92,7 +92,7 @@ DECLARE @cIncludePOKeyFilter    NVARCHAR( 1) -- (Vicky04)
 DECLARE @cReceiptDetailFilterSP NVARCHAR( 20)  
 DECLARE @cCheckIDInUse          NVARCHAR( 20)   
 DECLARE @cChannel               NVARCHAR(20) -- (ChewKP04) 
-DECLARE @cPalletType            NVARCHAR(10)
+DECLARE @cPalletType            NVARCHAR(10) = ''
   
 DECLARE @cDuplicateFromMatchValue    NVARCHAR(20) -- (ChewKP01)  
         ,@nCount                     INT     -- (ChewKP01)  
@@ -2945,18 +2945,21 @@ BEGIN
 END 
 
 -- FCR-11294: Get PalletType from RDTMOBREC
-SELECT @cPalletType = C_String2
+SELECT @cPalletType = COALESCE(C_String2, '')
 FROM RDT.RDTMOBREC
 WHERE Mobile = @nMobile
 
-UPDATE RD
-SET PalletType = @cPalletType,
-    EditDate = GETDATE(),
-    EditWho = SUSER_SNAME()
-FROM dbo.ReceiptDetail RD WITH (ROWLOCK)
-INNER JOIN @tRD T ON T.ReceiptLineNumber = RD.ReceiptLineNumber
-WHERE RD.ReceiptKey = @cReceiptKey
-  AND T.BeforeReceivedQTY <> T.Org_BeforeReceivedQTY
+IF @cPalletType <> ''
+BEGIN
+   UPDATE RD
+   SET PalletType = @cPalletType,
+       EditDate = GETDATE(),
+       EditWho = SUSER_SNAME()
+   FROM dbo.ReceiptDetail RD WITH (ROWLOCK)
+   INNER JOIN @tRD T ON T.ReceiptLineNumber = RD.ReceiptLineNumber
+   WHERE RD.ReceiptKey = @cReceiptKey
+     AND T.BeforeReceivedQTY <> T.Org_BeforeReceivedQTY
+END
   
 -- Auto finalize upon receive  
 DECLARE @cFinalizeRD NVARCHAR(1)  
