@@ -803,7 +803,7 @@ IF EXISTS( SELECT TOP 1 1
       AND Facility IN ('', @cFacility)
       AND Function_ID IN (0, @nFunc))
 BEGIN
-   SET @cUCCWithDynamicCaseCnt = rdt.RDTGetConfig( @nFunc, 'ByPassTolerance', @cStorerKey)  
+   SET @cByPassTolerance = rdt.RDTGetConfig( @nFunc, 'ByPassTolerance', @cStorerKey)  
 END
 ELSE
 BEGIN
