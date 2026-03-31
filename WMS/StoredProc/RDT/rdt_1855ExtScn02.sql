@@ -181,59 +181,7 @@ BEGIN
 
    IF @nFunc = 1855
    BEGIN
-      IF @nAfterStep = 1
-      BEGIN
-         SET @cOutField15 = 'Method:1-Singles;2-Multi'
-         SET @nAfterStep = 99
-         SET @nAfterScn = @nScn_CartID
-      END
-      ELSE IF @nAfterStep = 2
-      BEGIN
-         SELECT @nCartonScanned = COUNT( DISTINCT DropID)
-         FROM dbo.TaskDetail WITH (NOLOCK)
-         WHERE Storerkey = @cStorerKey
-            AND TaskType = 'ASTCPK'
-            AND Status = '3'
-            AND Groupkey = @cGroupKey
-            AND UserKey = @cUserName
-            AND DeviceID = @cCartID
-            AND WaveKey = @cWaveKey
-            AND DropID <> ''
-
-         SET @cOutField09 = ISNULL(TRY_CAST(@nCartonScanned + 1 AS NVARCHAR(5)), '')
-            
-         SET @nAfterStep = 99
-         SET @nAfterScn = @nScn_CartMatrix
-      END
-      ELSE IF @nAfterStep = 4
-      BEGIN
-         SELECT @cTaskDetailKey = Value FROM @tExtScnData WHERE Variable = '@cTaskDetailKey'
-
-         SELECT @nSuggQty = ISNULL( SUM(PD.Qty), 0)
-         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
-         INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey
-         WHERE PD.StorerKey = @cStorerKey
-            AND TD.TaskDetailKey = @cTaskDetailKey
-            AND PD.Status < @cPickConfirmStatus
-
-         SELECT @nPickedQty = ISNULL( SUM(PD.Qty), 0)
-         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
-         INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey
-         WHERE PD.StorerKey = @cStorerKey
-            AND TD.TaskDetailKey = @cTaskDetailKey
-            AND PD.Status = @cPickConfirmStatus
-
-         SET @cOutField08 = @nPickedQty
-         SET @cOutField09 = @nSuggQty
-
-         SET @cUDF02 = CAST(@nPickedQty AS NVARCHAR(5))
-         SET @cUDF03 = CAST(@nSuggQty AS NVARCHAR(5))
-
-         SELECT @cSuggToteId = DropID FROM dbo.TaskDetail WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND TaskDetailKey = @cTaskDetailKey AND ISNULL(DropID, '') <> ''
-
-         SET @cOutField05 = 'TOTE:' + ISNULL(@cSuggToteId, '')
-      END
-      ELSE IF @nCurrentStep = 99
+      IF @nCurrentStep = 99
       BEGIN
          IF @nCurrentScn = @nScn_CartID
          BEGIN
@@ -1294,6 +1242,59 @@ BEGIN
                GOTO UPD_RDTMOBREC
             END
          END
+      END
+
+      IF @nAfterStep = 1
+      BEGIN
+         SET @cOutField15 = 'Method:1-Singles;2-Multi'
+         SET @nAfterStep = 99
+         SET @nAfterScn = @nScn_CartID
+      END
+      ELSE IF @nAfterStep = 2
+      BEGIN
+         SELECT @nCartonScanned = COUNT( DISTINCT DropID)
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE Storerkey = @cStorerKey
+            AND TaskType = 'ASTCPK'
+            AND Status = '3'
+            AND Groupkey = @cGroupKey
+            AND UserKey = @cUserName
+            AND DeviceID = @cCartID
+            AND WaveKey = @cWaveKey
+            AND DropID <> ''
+
+         SET @cOutField09 = ISNULL(TRY_CAST(@nCartonScanned + 1 AS NVARCHAR(5)), '')
+            
+         SET @nAfterStep = 99
+         SET @nAfterScn = @nScn_CartMatrix
+      END
+      ELSE IF @nAfterStep = 4
+      BEGIN
+         SELECT @cTaskDetailKey = Value FROM @tExtScnData WHERE Variable = '@cTaskDetailKey'
+
+         SELECT @nSuggQty = ISNULL( SUM(PD.Qty), 0)
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+         INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey
+         WHERE PD.StorerKey = @cStorerKey
+            AND TD.TaskDetailKey = @cTaskDetailKey
+            AND PD.Status < @cPickConfirmStatus
+
+         SELECT @nPickedQty = ISNULL( SUM(PD.Qty), 0)
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+         INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey
+         WHERE PD.StorerKey = @cStorerKey
+            AND TD.TaskDetailKey = @cTaskDetailKey
+            AND PD.Status = @cPickConfirmStatus
+
+         SET @cOutField08 = @nPickedQty
+         SET @cOutField09 = @nSuggQty
+
+         SET @cUDF02 = CAST(@nPickedQty AS NVARCHAR(5))
+         SET @cUDF03 = CAST(@nSuggQty AS NVARCHAR(5))
+
+         SELECT @cSuggToteId = DropID FROM dbo.TaskDetail WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND TaskDetailKey = @cTaskDetailKey AND ISNULL(DropID, '') <> ''
+
+         SET @cOutField05 = 'TOTE:' + ISNULL(@cSuggToteId, '')
       END
    END -- 1855
 
