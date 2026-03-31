@@ -176,7 +176,6 @@ BEGIN
                   AND TD.DeviceID = @cCartId
                   AND TD.WaveKey = @cWaveKey
                   AND TD.GroupKey = @cGroupKey
-                  AND TD.DropID = ''
             END TRY
             BEGIN CATCH
                SET @nErrNo = 261254
