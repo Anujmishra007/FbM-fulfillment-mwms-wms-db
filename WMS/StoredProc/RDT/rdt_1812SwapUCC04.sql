@@ -9,8 +9,9 @@ GO
 /*                                                                            */
 /* Purpose: Swap ucc for ONBR in Columbia                                     */
 /*                                                                            */
-/* Date        Rev  Author      Purposes                                      */
-/* 2026-03-24  1.0  Jackc      FCR-11571 Created                              */
+/* Date        Rev    Author      Purposes                                    */
+/* 2026-03-24  1.0    Jackc      FCR-11571 Created                            */
+/* 2026-03-27  1.0.1  Jackc      FCR-11571 Handle task is loose item picking  */
 /*                                                                            */
 /******************************************************************************/
 
@@ -115,12 +116,15 @@ BEGIN
       GOTO Fail
    END
 
+   --V1.0.1 If it is piece picking, return directly
    IF @cTaskUOM = '6'
    BEGIN
       IF @nDebugFlag = 1
-         SELECT 'Piece picking, no swapping'
-
+         SELECT 'Piece picking, return'
+         
       SET @nUCCQTY = 0
+      SET @cUCC = ''
+
       GOTO Quit
    END
 
