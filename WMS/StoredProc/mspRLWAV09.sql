@@ -23,6 +23,7 @@ GO
 /* 2026-02-25  Wan01    1.1   UWP-49319 - ONBR Conso Task Not Working     */  
 /* 2026-03-18  Wan02    1.2   UWP-52415 - INC9075034-Release Wave consume */
 /*                            DB Resources due to infinity Loop with qty=0*/
+/* 2026-03-31  Wan03    1.3   FCR-11572 - ONBR - Assign Lane for B2B      */
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV09]        
    @c_Wavekey     NVARCHAR(10)    
@@ -123,7 +124,7 @@ BEGIN
          , @cur_WaveReplLot            CURSOR
          , @cur_pick                   CURSOR
 
-         , @c_Doctype                  NVARCHAR(10)   = ''                          --(Wan02)
+         , @c_Doctype                  NVARCHAR(10)   = ''                          --(Wan03)
  
    SET @b_success = 0
    SET @n_err = 0
@@ -141,7 +142,7 @@ BEGIN
                   ,@c_Loadkey  = O.Loadkey
                   ,@c_WaveType = W.WaveType 
                   ,@c_DispatchCasePickMethod = w.DispatchCasePickMethod
-                  ,@c_Doctype  = o.Doctype                                          --(Wan02)
+                  ,@c_Doctype  = o.Doctype                                          --(Wan03)
       FROM WAVE W (NOLOCK)  
       JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey  
       JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
@@ -697,7 +698,7 @@ BEGIN
           +             ' THEN CONVERT(NVARCHAR(8), O.DeliveryDate, 112) ELSE '''' END AS DeliveryDate'
           +       ' ,'''' AS Loadkey'                                                   
           +        CASE WHEN @c_CustomToLoc = '' OR 
-                            (@c_CustomToLoc > '' AND @c_Doctype = 'N')              --(Wan02)
+                            (@c_CustomToLoc > '' AND @c_Doctype = 'N')              --(Wan03)
                         THEN ', ISNULL(LPLD.Loc,'''') AS LPLDLoc' 
                         ELSE ', '''' AS LPLDLoc' 
                         END      
@@ -741,14 +742,14 @@ BEGIN
           +              ' WHERE cl1.ListName = ''ONBRAZONES'''
           +              ' AND   cl1.Code = LOC.PutawayZone'
           +              ') AS TOLOC'
-                 END                                                                --(Wan02) - START
+                 END                                                                --(Wan03) - START
           + CASE WHEN @c_CustomToLoc = '' OR 
                      (@c_CustomToLoc > '' AND @c_Doctype = 'N')
                  THEN
             ' OUTER APPLY (SELECT TOP 1 ISNULL(LPD.Loc, '''') AS Loc'  
           +              ' FROM LoadPlanLaneDetail LPD (NOLOCK)'        
           +              ' WHERE LPD.LoadKey = O.Loadkey) AS LPLD' 
-                 END                                                                --(Wan02) - END
+                 END                                                                --(Wan03) - END
           + ' WHERE WD.Wavekey = @c_Wavekey'  
           + ' AND PD.Status = ''0'''
           + ' AND PD.Qty > 0'
@@ -772,7 +773,7 @@ BEGIN
           + CASE WHEN @c_CustomToLoc > '' OR @c_DefaultLoc = ''  
                  THEN ' , ISNULL(TOLOC.Loc,'''')' ELSE '' END
           + CASE WHEN @c_CustomToLoc = '' OR 
-                     (@c_CustomToLoc > '' AND @c_Doctype = 'N')                     --(Wan02)
+                     (@c_CustomToLoc > '' AND @c_Doctype = 'N')                     --(Wan03)
                  THEN ' , ISNULL(LPLD.Loc,'''')' ELSE '' END
           +        ' , AD.Areakey'
           +        ' , S.StdCube'                                                   --CR v3.4
@@ -783,12 +784,12 @@ BEGIN
           +        '        THEN O.Consigneekey ELSE '''' END'                                       
           +        ' , CASE WHEN @c_DispatchCasePickMethod =''1'''  
           +        '        THEN O.Orderkey ELSE '''' END'
-          + CASE WHEN @c_CustomToLoc = ''                                           --(Wan02) - START
+          + CASE WHEN @c_CustomToLoc = ''                                           --(Wan03) - START
                  THEN ' , ISNULL(LPLD.Loc,'''')'
                  WHEN @c_CustomToLoc > '' AND @c_Doctype = 'N' 
                  THEN ' , CASE WHEN PD.UOM < ''6'''
           +                  ' THEN ISNULL(LPLD.Loc,'''') '
-          +                  ' ELSE ISNULL(TOLOC.Loc,'''') END'                     --(Wan02) - END
+          +                  ' ELSE ISNULL(TOLOC.Loc,'''') END'                     --(Wan03) - END
                  ELSE ', ISNULL(TOLOC.Loc,'''')' END  
           +        ' , CASE WHEN @n_MaxUCCVol >= 0 THEN PD.UOM ELSE '''' END'
           +        ' , AD.Areakey'   
@@ -830,10 +831,10 @@ BEGIN
          IF @c_CustomToLoc = '' AND ISNULL(@c_DefaultLoc,'') <> '' 
            SET @c_ToLoc = @c_DefaultLoc  
 
-         IF ISNULL(@c_LPLDLoc,'') <> '' AND @c_CustomToLoc = ''                     --(Wan02)
+         IF ISNULL(@c_LPLDLoc,'') <> '' AND @c_CustomToLoc = ''                     --(Wan03)
             SET @c_ToLoc = @c_LPLDLoc
 
-         IF @c_CustomToLoc > '' AND @c_Doctype = 'N' AND @c_UOM < '6'               --(Wan02)
+         IF @c_CustomToLoc > '' AND @c_Doctype = 'N' AND @c_UOM < '6'               --(Wan03)
          BEGIN
             SET @c_ToLoc = @c_LPLDLoc
          END
