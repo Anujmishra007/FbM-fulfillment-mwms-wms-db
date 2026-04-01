@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 2.1                                                    */
+/* PVCS Version: 2.3                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -51,6 +51,8 @@ GO
 /* 10-Oct-2025  Michael   2.1 FCR-8380- Add SerialNoUpdateLotLocID(ML01)*/
 /* 05-Nov-2025  SSA02     2.2 UWP-43625- updated sequence of update Lot */
 /*                            table to avoid deadlock                   */
+/* 31-Mar-2026  Michael   2.3 FCR-11549-Fix InventoryHold not trigger if*/
+/*                            ID with Qty=0 exists during Receipt (ML02)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -111,6 +113,10 @@ BEGIN
          , @c_pstprocess    NVARCHAR(250) -- post process
          , @n_cnt           int       /* variable to hold @@ROWCOUNT */
          , @c_facility      NVARCHAR(5)
+         , @b_ID_HasInv     INT = 0                    --ML02
+         
+   IF EXISTS(SELECT TOP 1 1 FROM LOTxLOCxID WITH(NOLOCK) WHERE ID=@c_toid AND Qty>0)   --ML02
+      SET @b_ID_HasInv = 1                                                             --ML02
 
    SELECT @n_continue = 1, @b_success = 0, @n_err = 1, @c_ErrMsg = ''
 
@@ -470,7 +476,8 @@ BEGIN
             /* is already there!                                         */
             /* Warning:  Attempting to change this behaviour can really screw up */
             /* the HOLD module. Be very very careful! */
-            SELECT @c_status = @c_curstatus
+            IF @c_status = 'OK' OR @b_ID_HasInv = 1   --ML02
+               SELECT @c_status = @c_curstatus
 
             IF @c_allowidqtyupdate = '1'
             BEGIN
@@ -937,6 +944,7 @@ BEGIN
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
          IF @b_addid = 1 AND @c_status <> 'OK'
+            OR (@b_addid = 0 AND @c_status <> 'OK')   --ML02
          BEGIN
             EXECUTE nspInventoryHold
                        ''
