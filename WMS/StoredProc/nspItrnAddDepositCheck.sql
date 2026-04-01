@@ -113,10 +113,6 @@ BEGIN
          , @c_pstprocess    NVARCHAR(250) -- post process
          , @n_cnt           int       /* variable to hold @@ROWCOUNT */
          , @c_facility      NVARCHAR(5)
-         , @b_ID_HasInv     INT = 0                    --ML02
-         
-   IF EXISTS(SELECT TOP 1 1 FROM LOTxLOCxID WITH(NOLOCK) WHERE ID=@c_toid AND Qty>0)   --ML02
-      SET @b_ID_HasInv = 1                                                             --ML02
 
    SELECT @n_continue = 1, @b_success = 0, @n_err = 1, @c_ErrMsg = ''
 
@@ -129,6 +125,8 @@ BEGIN
          , @c_Lot_SN                   NVARCHAR(10) = ''                            --(Wan03)
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = '0'                           --(Wan03)
          , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML01
+         , @c_RcptAutoHoldEmptyID      NVARCHAR(30)        --ML02
+         , @b_ID_HasInv                INT                 --ML02
 
    DECLARE @b_addid int
    SELECT @b_addid = 0
@@ -160,6 +158,17 @@ BEGIN
          SELECT @c_allowoverallocations = '0'
       END
    END
+
+   --ML02-S
+   SET @c_RcptAutoHoldEmptyID = ''
+   SET @b_ID_HasInv = 0
+
+   SELECT @c_RcptAutoHoldEmptyID = Authority
+     FROM dbo.fnc_GetRight2(@c_facility, @c_StorerKey, '', 'RcptAutoHoldEmptyID')
+
+   IF EXISTS(SELECT TOP 1 1 FROM LOTxLOCxID WITH(NOLOCK) WHERE ID=@c_toid AND Qty>0)
+      SET @b_ID_HasInv = 1
+   --ML02-E
 
    -- (SWT02)
    SET @c_ChannelInventoryMgmt = '0'
@@ -476,7 +485,7 @@ BEGIN
             /* is already there!                                         */
             /* Warning:  Attempting to change this behaviour can really screw up */
             /* the HOLD module. Be very very careful! */
-            IF @c_status = 'OK' OR @b_ID_HasInv = 1   --ML02
+            IF ISNULL(@c_RcptAutoHoldEmptyID,'')<>'1' OR @c_status = 'OK' OR @b_ID_HasInv = 1   --ML02
                SELECT @c_status = @c_curstatus
 
             IF @c_allowidqtyupdate = '1'
@@ -944,7 +953,7 @@ BEGIN
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
          IF @b_addid = 1 AND @c_status <> 'OK'
-            OR (@b_addid = 0 AND @c_status <> 'OK')   --ML02
+            OR (ISNULL(@c_RcptAutoHoldEmptyID,'')='1' AND @b_addid = 0 AND @c_status <> 'OK')   --ML02
          BEGIN
             EXECUTE nspInventoryHold
                        ''
