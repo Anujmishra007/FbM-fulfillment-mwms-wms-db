@@ -480,6 +480,33 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
                                  + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'
                   GOTO QUIT_SP
                END   
+
+               IF ISNULL(TRIM(@c_taskdetailkey),'') = ''
+               BEGIN
+                  
+                  SELECT TOP 1 @c_TaskDetailkey = TaskDetailKey
+                  FROM TaskDetail WITH (NOLOCK)
+                  WHERE FromLoc = @c_FromLoc
+                  AND SKU = @c_Sku
+                  AND TaskType = @c_TaskType
+                  AND WaveKey = @c_Wavekey
+                  AND Storerkey = @c_Storerkey
+                  AND ISNULL(TRIM(TaskDetailKey),'') <> ''
+
+                  UPDATE #PICKDETAIL_WIP WITH (ROWLOCK)
+                  SET TaskDetailKey = @c_TaskDetailkey
+                  WHERE PickDetailKey = @c_PickDetailKey
+
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @n_Continue = 3
+                     SET @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err) 
+                     SET @n_Err = 83052
+                     SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update TaskDetailKey Fail. (mspRLWAV11)'
+                                    + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'
+                     GOTO QUIT_SP   
+                  END            
+               END
             END
             ELSE
             BEGIN
