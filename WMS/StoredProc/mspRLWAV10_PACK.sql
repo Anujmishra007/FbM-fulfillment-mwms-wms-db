@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 3.8                                                          */    
+/* Version: 3.9                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -55,6 +55,7 @@ GO
 /*                            QTY mapping (WL25)                         */
 /* 19-Mar-2026 WLChooi  3.7   FCR-11841 Fix algorithm (WL26)             */
 /* 01-Apr-2026 WLChooi  3.8   FCR-12170 Fix CSCORDTYPE logic (WL27)      */
+/* 01-Apr-2026 WLChooi  3.9   FCR-12172 Change CartonWeight logic (WL28) */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -220,6 +221,7 @@ BEGIN
       ,  Dim2                 DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
       ,  Dim3                 DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
       ,  FillTolerance        INT            NOT NULL DEFAULT (0)
+      ,  CartonWeight         FLOAT          NOT NULL DEFAULT (0.00)   --WL28
       )
 
     DECLARE @TMP_CL              TABLE
@@ -562,12 +564,13 @@ BEGIN
       ,  Dim2
       ,  Dim3
       ,  FillTolerance
+      ,  CartonWeight   --WL28
       )
       SELECT
          c.CartonizationGroup
       ,  c.CartonType
       ,  c.[Cube]
-      ,  c.MaxWeight
+      ,  ISNULL(c.MaxWeight, 0.00) - ISNULL(c.CartonWeight, 0.00)   --WL28
       ,  CartonLength = ISNULL(c.CartonLength,0.00)
       ,  CartonWidth  = ISNULL(c.CartonWidth,0.00)
       ,  CartonHeight = ISNULL(c.CartonHeight,0.00)
@@ -575,6 +578,7 @@ BEGIN
       ,  Dim2 = cds.MidVal
       ,  Dim3 = cds.MaxVal
       ,  FillTolerance= 100.00                                       --Not using FillTolerance
+      ,  ISNULL(c.CartonWeight, 0.00)   --WL28
       FROM dbo.CARTONIZATION AS c (NOLOCK)
       CROSS APPLY (SELECT MIN(val) AS MinVal
                         , SUM(val) - MIN(val) - MAX(val) AS MidVal
@@ -851,7 +855,7 @@ BEGIN
                                        THEN cz.MaxWeight
                                        WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
                                        THEN cz.MaxWeight
-                                       ELSE cl1.UDF02
+                                       ELSE CONVERT(FLOAT, cl1.UDF02) - cz.CartonWeight   --WL28
                                        END
                   ,cz.CartonLength
                   ,cz.CartonWidth
@@ -895,7 +899,7 @@ BEGIN
                                           THEN cz.MaxWeight
                                           WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
                                           THEN cz.MaxWeight
-                                          ELSE cl1.UDF02
+                                          ELSE CONVERT(FLOAT, cl1.UDF02) - cz.CartonWeight   --WL28
                                           END
                      ,cz.CartonLength
                      ,cz.CartonWidth
@@ -1291,7 +1295,7 @@ BEGIN
                                                 THEN cz.MaxWeight
                                                 WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
                                                 THEN cz.MaxWeight
-                                                ELSE cl1.UDF02
+                                                ELSE CONVERT(FLOAT, cl1.UDF02) - cz.CartonWeight   --WL28
                                                 END
                            ,cz.CartonLength
                            ,cz.CartonWidth
@@ -1335,7 +1339,7 @@ BEGIN
                                                    THEN cz.MaxWeight
                                                    WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
                                                    THEN cz.MaxWeight
-                                                   ELSE cl1.UDF02
+                                                   ELSE CONVERT(FLOAT, cl1.UDF02) - cz.CartonWeight   --WL28
                                                    END
                               ,cz.CartonLength
                               ,cz.CartonWidth
