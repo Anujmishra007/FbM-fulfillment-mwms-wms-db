@@ -230,6 +230,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
       END
    END
 
+
    IF @n_Continue IN(1,2)
    BEGIN
       SET @CUR_DYNRPL = CURSOR LOCAL FAST_FORWARD READ_ONLY  FOR
@@ -400,35 +401,14 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
                          +': To Loc not found. (mspRLWAV11)'
          END
 
-         IF @c_DocType = 'E' AND @c_EcomSingleFlag = 'S'
-         BEGIN
-            SELECT TOP 1 
-            @c_TaskDetailkey = pdw.TaskDetailKey,
-            @c_PickDetailKey = pdw.PickDetailKey   --AYDO1
-            FROM TASKDETAIL td (NOLOCK)
-            JOIN #PICKDETAIL_WIP pdw (NOLOCK) 
-               ON pdw.OrderKey = td.OrderKey 
-               AND pdw.StorerKey = td.Storerkey
-            WHERE td.WaveKey = @c_Wavekey
-            AND td.FromLoc = @c_FromLoc 
-            AND td.SKU = @c_Sku
-            AND ISNULL(TRIM(pdw.TaskDetailKey), '') <> ''
-         END 
-         ELSE
-         BEGIN
-            SELECT TOP 1 
-            @c_TaskDetailkey = pdw.TaskDetailKey,
-            @c_PickDetailKey = pdw.PickDetailKey   --AYDO1
-            FROM TASKDETAIL td (NOLOCK)
-            JOIN #PICKDETAIL_WIP pdw (NOLOCK) 
-               ON pdw.OrderKey = td.OrderKey 
-               AND pdw.OrderLineNumber = td.OrderLineNumber 
-               AND pdw.StorerKey = td.Storerkey
-            WHERE td.WaveKey = @c_Wavekey
-            AND td.Storerkey = @c_Storerkey
-            AND td.OrderKey = @c_Orderkey
-            AND td.OrderLineNumber = @c_OrderLineNumber
-         END
+         SELECT TOP 1 
+            @c_TaskDetailkey = pd.TaskDetailKey,
+            @c_PickDetailKey = pd.PickDetailKey   --AYDO1
+            FROM PickDetail pd (NOLOCK) 
+            WHERE pd.OrderKey = @c_Orderkey
+            AND pd.OrderLineNumber = @c_OrderLineNumber
+            AND pd.StorerKey = @c_Storerkey
+
          --AYD01 START: Handle duplicated TaskDetailKey issue
          IF EXISTS (SELECT 1 FROM TASKDETAIL td (NOLOCK) WHERE td.TaskDetailKey = @c_TaskDetailkey)
          BEGIN
