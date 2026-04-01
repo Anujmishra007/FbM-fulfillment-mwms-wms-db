@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 3.7                                                          */    
+/* Version: 3.8                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -54,6 +54,7 @@ GO
 /* 19-Mar-2026 WLChooi  3.6   FCR-11586 Add new condition for Packdetail */
 /*                            QTY mapping (WL25)                         */
 /* 19-Mar-2026 WLChooi  3.7   FCR-11841 Fix algorithm (WL26)             */
+/* 01-Apr-2026 WLChooi  3.8   FCR-12170 Fix CSCORDTYPE logic (WL27)      */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -199,8 +200,6 @@ BEGIN
          , @b_IsAudit               BIT            = 0      --WL25
          , @n_SumQty                INT            = 0      --WL25
 
-   DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
-         , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
 
    DECLARE @cur_PCKGRPH          CURSOR
          , @cur_PCKGRPS          CURSOR
@@ -760,14 +759,15 @@ BEGIN
    IF @n_Continue = 1
    BEGIN
       SET @cur_PCKGRPH = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT pcz.Orderkey
-          ,  pcz.DocType
-          ,  pcz.BillToKey
-          ,  pcz.Storerkey
-          ,  pcz.PackGrpNo
-          ,  pcz.UserDefine01   --WL19
-          ,  pcz.Shipperkey     --WL19
-          ,  HasAnyVAS = CAST(ISNULL(MAX(pcz.HasAnyVAS * 1), 0) AS BIT)   --WL25
+      SELECT DISTINCT
+            pcz.Orderkey
+         ,  pcz.DocType
+         ,  pcz.BillToKey
+         ,  pcz.Storerkey
+         ,  pcz.PackGrpNo
+         ,  pcz.UserDefine01   --WL19
+         ,  pcz.Shipperkey     --WL19
+         ,  HasAnyVAS = CAST(ISNULL(MAX(pcz.HasAnyVAS * 1), 0) AS BIT)   --WL25
       FROM #PRECTN AS pcz
       --WL25 S
       GROUP BY pcz.Orderkey
@@ -2316,16 +2316,6 @@ BEGIN
                        ELSE 9
                        END
 
-         --Lookup OrderType
-         --(ush022-2) start
-         SELECT TOP 1
-                  @c_OrderGroupAllowed = CL.Code,
-                  @c_DocTypeAllowed    = CL.Long
-         FROM @TMP_CL cl
-         WHERE CL.LISTNAME = 'CSCORDTYPE'
-         AND CL.Storerkey = @c_Storerkey
-         AND cl.Short = 'Y'
-         --(ush022-2) end
 
          IF @c_AuditPercent > ''
          BEGIN
@@ -2386,7 +2376,14 @@ BEGIN
                            ) aud
                WHERE cd.Orderkey = @c_Orderkey
                AND cd.CartonSeqNo = aud.CartonSeqNo
-               AND (cd.OrderGroup = @c_OrderGroupAllowed AND cd.DocType = @c_DocTypeAllowed)   --(ush022-2)
+               AND EXISTS ( SELECT 1
+                            FROM @TMP_CL clc
+                            WHERE clc.LISTNAME = 'CSCORDTYPE'
+                            AND clc.Storerkey = @c_Storerkey
+                            AND clc.Short = 'Y'
+                            AND clc.Code = cd.OrderGroup
+                            AND clc.Long = cd.DocType
+                          )   --WL27
             END
          END
 
