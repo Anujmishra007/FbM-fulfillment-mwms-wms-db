@@ -485,7 +485,7 @@ BEGIN
             /* is already there!                                         */
             /* Warning:  Attempting to change this behaviour can really screw up */
             /* the HOLD module. Be very very careful! */
-            IF ISNULL(@c_RcptAutoHoldEmptyID,'')<>'1' OR @c_status = 'OK' OR @b_ID_HasInv = 1   --ML02
+            IF (ISNULL(@c_RcptAutoHoldEmptyID,'')<>'1' OR @c_status = 'OK' OR @b_ID_HasInv = 1)   --ML02
                SELECT @c_status = @c_curstatus
 
             IF @c_allowidqtyupdate = '1'
@@ -953,7 +953,7 @@ BEGIN
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
          IF @b_addid = 1 AND @c_status <> 'OK'
-            OR (ISNULL(@c_RcptAutoHoldEmptyID,'')='1' AND @b_addid = 0 AND @c_status <> 'OK')   --ML02
+            OR (ISNULL(@c_RcptAutoHoldEmptyID,'')='1' AND @b_addid = 0 AND @c_status <> 'OK' AND @b_ID_HasInv = 0)   --ML02
          BEGIN
             EXECUTE nspInventoryHold
                        ''
