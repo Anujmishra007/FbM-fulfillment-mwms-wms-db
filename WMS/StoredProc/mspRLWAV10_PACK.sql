@@ -1047,7 +1047,7 @@ BEGIN
                               cz.CartonizationGroup
                            ,  cz.CartonType
                            ,  cz.[Cube]
-                           ,  MaxWeight = cz.MaxWeight - cz.CartonWeight   --WL28
+                           ,  cz.MaxWeight
                         FROM @TMP_CL cl1
                         JOIN @TMP_CL cl2 ON  cl2.ListName = 'CSCUK01GCR'
                                          AND cl2.Code > ''
@@ -1068,7 +1068,7 @@ BEGIN
                               cz.CartonizationGroup
                            ,  cz.CartonType
                            ,  cz.[Cube]
-                           ,  MaxWeight = cz.MaxWeight - cz.CartonWeight   --WL28
+                           ,  cz.MaxWeight
                         FROM @TMP_CL cl1
                         JOIN @TMP_CL cl2 ON  cl2.ListName = 'CSCUK01GCR'
                                          AND cl2.Code > ''
@@ -1088,7 +1088,7 @@ BEGIN
                               cz.CartonizationGroup
                            ,  cz.CartonType
                            ,  cz.[Cube]
-                           ,  MaxWeight = cz.MaxWeight - cz.CartonWeight   --WL28
+                           ,  cz.MaxWeight
                         FROM @t_CTNZ AS cz
                         WHERE cz.[Cube] >= cs.TotalPackCube
                         ORDER BY cz.RowID DESC   --WL11
@@ -1098,7 +1098,7 @@ BEGIN
                               cz.CartonizationGroup
                            ,  cz.CartonType
                            ,  cz.[Cube]
-                           ,  MaxWeight = cz.MaxWeight - cz.CartonWeight   --WL28
+                           ,  cz.MaxWeight
                         FROM @t_CTNZ AS cz
                         ORDER BY cz.RowID
                       ) czm
