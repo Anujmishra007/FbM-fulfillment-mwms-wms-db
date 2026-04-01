@@ -125,6 +125,7 @@ BEGIN
          , @cur_pick                   CURSOR
 
          , @c_Doctype                  NVARCHAR(10)   = ''                          --(Wan03)
+         , @c_AssignLane               NVARCHAR(10)   = ''                          --(Wan03)
  
    SET @b_success = 0
    SET @n_err = 0
@@ -157,7 +158,36 @@ BEGIN
       END 
    END
 
-   -----Wave Validation-----              
+   -----Wave Validation----- 
+   IF @n_Continue = 1 OR @n_Continue = 2                                            --(Wan03) - START
+   BEGIN 
+      IF @c_Doctype = 'N'
+      BEGIN
+         SET @c_AssignLane = ''
+         SELECT @c_AssignLane = lpld.Loc  
+         FROM WAVEDETAIL wd (NOLOCK)  
+         CROSS APPLY ( SELECT ld.Loadkey
+                            , ExternOrderKey = ISNULL(ld.ExternOrderKey,'')
+                            , ConsigneeKey   = ISNULL(ld.ConsigneeKey,'')
+                       FROM Loadplandetail ld (NOLOCK) 
+                       WHERE ld.Orderkey = wd.Orderkey
+                     ) lpd
+         JOIN LoadplanLaneDetail lpld (NOLOCK) ON  lpld.Loadkey = lpd.Loadkey
+                                               AND lpld.ExternOrderKey = lpd.ExternOrderKey   
+                                               AND lpld.ConsigneeKey   = lpd.ConsigneeKey 
+         WHERE WD.Wavekey = @c_Wavekey 
+         AND lpld.LocationCategory = 'STAGING'
+
+         IF @c_AssignLane = ''
+         BEGIN  
+            SET @n_Continue = 3    
+            SET @n_err = 83012    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                         +': Assign Lane not found for Non ECOM Orders. (mspRLWAV09)'         
+         END
+      END
+   END                                                                              --(Wan03) - END
+
    IF @n_Continue = 1 OR @n_Continue = 2  
    BEGIN   
       IF NOT EXISTS (SELECT 1   

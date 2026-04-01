@@ -94,6 +94,7 @@ BEGIN
       FROM #INSERTED i
       JOIN LoadPlanDetail lpd (NOLOCK) ON  lpd.Loadkey = i.Loadkey
                                        AND lpd.ExternOrderKey =  i.ExternOrderKey 
+                                       AND lpd.ConsigneeKey   =  i.ConsigneeKey 
       JOIN ORDERS o (NOLOCK) ON o.Orderkey = lpd.Orderkey
       LEFT OUTER JOIN LOC l (NOLOCK) ON  l.Loc = i.Loc
                                      AND l.locationcategory = i.LocationCategory
@@ -114,6 +115,7 @@ BEGIN
                       AND i.MBOLKey = d.MBOLKey
       JOIN LoadPlanDetail lpd (NOLOCK) ON  lpd.Loadkey = i.Loadkey
                                        AND lpd.ExternOrderKey =  i.ExternOrderKey 
+                                       AND lpd.ConsigneeKey   =  i.ConsigneeKey 
       JOIN ORDERS o (NOLOCK) ON o.Orderkey = lpd.Orderkey  
       LEFT OUTER JOIN LOC l (NOLOCK) ON  l.Loc = i.Loc
                                      AND l.locationcategory = i.LocationCategory
