@@ -52,7 +52,24 @@ BEGIN
             @cOtherPalletKey NVARCHAR( 30) = '',
             @cRoute          NVARCHAR( 20) = '',
             @cOption         NVARCHAR( 1) = '',
-            @cToID NVARCHAR( 18)
+            @cToID NVARCHAR( 18),
+            @nLoopId          INT = 0,
+            @nRowCount        INT,
+            @nMaxId           INT,
+            @cMoveFromLOC     NVARCHAR(10),
+            @cMoveFromID      NVARCHAR(18),
+            @nMoveQTY         INT,
+            @cMoveSKU         NVARCHAR(18)
+
+   -- Temporary table to store multiple SKU records for the same UCC
+   DECLARE @tMoveList TABLE
+   (
+      ID       INT IDENTITY(1,1),
+      FromLOC  NVARCHAR(10),
+      FromID   NVARCHAR(18),
+      QTY      INT,
+      SKU      NVARCHAR(18)
+   )
 
    SELECT @nStep = Step,
           @nInputKey = InputKey,
@@ -68,41 +85,69 @@ BEGIN
          BEGIN TRAN  -- Begin our own transaction
          SAVE TRAN rdt_1641ExtUpdSP18 -- For rollback or commit only our own transaction
 
-         UPDATE PICKDETAIL SET DROPID = @cDropID WHERE CASEID = @cUCCNo AND StorerKey = @cStorerKey 
+         -- Update PickDetail with DropID
+         UPDATE PICKDETAIL SET DROPID = @cDropID 
+         WHERE CASEID = @cUCCNo AND StorerKey = @cStorerKey 
 
-         SELECT @cFromLOC = LOC,
-            @cFromID = ID,
-            @nQTY = SUM(QTY),
-            @cSKU = SKU
+         -- Insert all SKU records from the UCC into temporary table
+         INSERT INTO @tMoveList (FromLOC, FromID, QTY, SKU)
+         SELECT LOC, ID, SUM(QTY), SKU
          FROM PickDetail (NOLOCK)
          WHERE CASEID = @cUCCNo
-         AND StorerKey = @cStorerKey
-         GROUP BY LOC,ID,SKU
+            AND StorerKey = @cStorerKey
+         GROUP BY LOC, ID, SKU
 
-         EXECUTE rdt.rdt_Move
-            @nMobile     = @nMobile,
-            @cLangCode   = @cLangCode,
-            @nErrNo      = @nErrNo  OUTPUT,
-            @cErrMsg     = @cErrMsg OUTPUT,
-            @cSourceType = 'rdt_1641ExtUpdSP18',
-            @cStorerKey  = @cStorerKey,
-            @cFacility   = @cFacility,
-            @cFromLOC    = @cFromLoc,
-            @cToLOC      = @cFromLOC,
-            @cFromID     = @cFromID,
-            @cToID       = @cDropID,
-            @nQTYPick    = @nQTY,  --(JH01) @nPackedQty,
-            @nQTY        = @nQTY,  --(JH01) @nPackedQty,
-            @cFromLOT    = NULL,
-            @nFunc       = @nFunc,
-            @cCaseID     = @cUCCNo,
-            @cSKU        = @cSKU
-         
-         IF @nErrNo <> 0
+         -- Get the maximum ID for loop counter
+         SELECT @nMaxId = MAX(ID) FROM @tMoveList
+
+         -- Loop through each SKU record and execute rdt_Move
+         WHILE @nLoopId < @nMaxId
          BEGIN
-            ROLLBACK TRAN
-            GOTO QUIT
+            SELECT TOP 1
+               @nLoopId = ID,
+               @cMoveFromLOC = FromLOC,
+               @cMoveFromID = FromID,
+               @nMoveQTY = QTY,
+               @cMoveSKU = SKU
+            FROM @tMoveList
+            WHERE ID > @nLoopId
+            ORDER BY ID
+            SET @nRowCount = @@ROWCOUNT
+
+            IF @nRowCount = 0
+               BREAK
+
+            -- Execute Move procedure for each SKU
+            EXECUTE rdt.rdt_Move
+               @nMobile     = @nMobile,
+               @cLangCode   = @cLangCode,
+               @nErrNo      = @nErrNo  OUTPUT,
+               @cErrMsg     = @cErrMsg OUTPUT,
+               @cSourceType = 'rdt_1641ExtUpdSP18',
+               @cStorerKey  = @cStorerKey,
+               @cFacility   = @cFacility,
+               @cFromLOC    = @cMoveFromLOC,
+               @cToLOC      = @cMoveFromLOC,
+               @cFromID     = @cMoveFromID,
+               @cToID       = @cDropID,
+               @nQTYPick    = @nMoveQTY,
+               @nQTY        = @nMoveQTY,
+               @cFromLOT    = NULL,
+               @nFunc       = @nFunc,
+               @cCaseID     = @cUCCNo,
+               @cSKU        = @cMoveSKU
+            
+            -- Check if any error occurred during the move
+            IF @nErrNo <> 0
+            BEGIN
+               ROLLBACK TRAN
+               GOTO QUIT
+            END
          END
+
+         -- Clear the temporary table for next iteration (if needed)
+         DELETE FROM @tMoveList
+
          COMMIT TRAN rdt_1641ExtUpdSP18
       END
    END
@@ -112,5 +157,6 @@ BEGIN
 Quit:
 END
 GO
+
 GRANT EXECUTE ON  [RDT].[rdt_1641ExtUpdSP18] TO [NSQL]
 GO
