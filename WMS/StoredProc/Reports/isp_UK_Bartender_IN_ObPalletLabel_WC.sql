@@ -116,14 +116,14 @@ BEGIN
 	N'SELECT TOP 1 S.Company,S.Address1,S.Address2,S.Address3,S.Address4,S.City,S.State,S.ZIP,'+CHAR(13)
    +N'O.ConsigneeKey,O.C_Company,O.C_Address1,O.C_Address2,O.C_Address3,O.C_Address4,O.C_City,O.C_State,O.C_Zip,O.C_Country,PD.CartonNo,PH.TTLCNTS,O.USERDEFINE05,FORMAT(O.DeliveryDate,''HH:MM'') AS TME,'+CHAR(13)
    +N'FORMAT(O.DeliveryDate,''dd/MM/yyyy'') AS DTE,PD.SKU,SK.DESCR,SUM(PD.QTY) AS QTY , CASE WHEN COUNT(PD.SKU)>1 THEN CONCAT(''MIXED'',COUNT(PD.SKU),''SKUS'') END AS MX,'+CHAR(13)
-   +N''''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''''+CHAR(13)
+   +N'PD.DROPID,'''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''','''''+CHAR(13)
    +N'FROM ORDERS O INNER JOIN STORER S ON S.Address1=O.ConsigneeKey '+CHAR(13)
    +N'INNER JOIN PACKHEADER PH ON PH.ORDERKEY=O.ORDERKEY INNER JOIN PACKDETAIL PD ON PD.PICKSLIPNO=PH.PICKSLIPNO'+CHAR(13)
-   +N'INNER JOIN MBOLDETAIL MD ON MD.ORDERKEY=O.ORDERKEY INNER JOIN MBOL M ON M.MBOLKEY=MD.MBOLKEY '+CHAR(13)
+   +N'LEFT JOIN MBOLDETAIL MD ON MD.ORDERKEY=O.ORDERKEY LEFT JOIN MBOL M ON M.MBOLKEY=MD.MBOLKEY '+CHAR(13)
    +N'INNER JOIN SKU SK ON SK.SKU=PD.SKU AND SK.StorerKey=O.StorerKey WHERE O.ConsigneeKey=''H25800847'' AND O.STATUS>=5'+CHAR(13)
    +N'AND PD.StorerKey=@c_Sparm1 and PD.DropID=@c_Sparm2'+CHAR(13)
    +N'GROUP BY  S.Company,S.Address1,S.Address2,S.Address3,S.Address4,S.City,S.State,S.ZIP,'+CHAR(13)
-   +N'O.ConsigneeKey,O.C_Company,O.C_Address1,O.C_Address2,O.C_Address3,O.C_Address4,O.C_City,O.C_State,O.C_Zip,O.C_Country,PD.CartonNo,PH.TTLCNTS,O.USERDEFINE05,PD.SKU,SK.DESCR,O.DeliveryDate'+CHAR(13)
+   +N'O.ConsigneeKey,O.C_Company,O.C_Address1,O.C_Address2,O.C_Address3,O.C_Address4,O.C_City,O.C_State,O.C_Zip,O.C_Country,PD.CartonNo,PH.TTLCNTS,O.USERDEFINE05,PD.SKU,SK.DESCR,O.DeliveryDate,PD.DROPID'+CHAR(13)
 
    IF @b_debug = 1    
    BEGIN    
