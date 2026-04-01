@@ -2927,6 +2927,50 @@ BEGIN
                   GOTO UPD_RDTMOBREC
                END
 
+               DECLARE @cListFacility NVARCHAR(5) = ''
+               DECLARE @iMatch   INT = 1
+               DECLARE @cPattern NVARCHAR(250) = ''
+               DECLARE @cCode    NVARCHAR(30) = ''
+
+               SET @iMatch = 1 -- True
+               SET @cCode = RTRIM( CAST( @nFunc AS NVARCHAR(5))) + '-DropID' 
+
+               SELECT @cListFacility = code2,
+                     @cPattern = ISNULL( Long, '')
+               FROM CodeLkup WITH (NOLOCK) 
+               WHERE ListName = 'DRIDFormat' 
+                  AND Code = @cCode 
+                  AND StorerKey = @cStorerKey
+
+               IF @@ROWCOUNT > 1 OR                               -- Multi record means facility config exist or  
+                  (@cListFacility <> '' AND @cListFacility IS NOT NULL)   -- Single record with facility config  
+               BEGIN 
+                  -- Retrieve own facility config  
+                  IF @cFacility <> @cListFacility  
+                  BEGIN   
+                     -- Get config by facility, then by storer  
+                     SET @cPattern = ''
+                     SELECT @cPattern = ISNULL( Long, '')
+                     FROM CodeLkup WITH (NOLOCK) 
+                     WHERE ListName = 'DRIDFormat' 
+                        AND Code = @cCode 
+                        AND StorerKey = @cStorerKey
+                        AND (code2 = '' OR code2 = @cFacility) 
+                  END
+               END
+               
+               IF ISNULL(@cPattern, '') <> ''
+               BEGIN
+                  SELECT @iMatch = master.dbo.RegExIsMatch( @cPattern, @cDropID, 0) -- 0=RegexOptions.None
+
+                  IF @iMatch = 0
+                  BEGIN
+                     SET @nErrNo = 255544
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid DropID format
+                     GOTO Quit
+                  END
+               END
+
                IF @cDropID = '' AND @cScannedDropID <> ''
                   AND EXISTS (
                      SELECT 1
