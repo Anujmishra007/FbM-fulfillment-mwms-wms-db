@@ -1047,7 +1047,7 @@ BEGIN
                               cz.CartonizationGroup
                            ,  cz.CartonType
                            ,  cz.[Cube]
-                           ,  cz.MaxWeight
+                           ,  MaxWeight = cz.MaxWeight - cz.CartonWeight   --WL28
                         FROM @TMP_CL cl1
                         JOIN @TMP_CL cl2 ON  cl2.ListName = 'CSCUK01GCR'
                                          AND cl2.Code > ''
@@ -1068,7 +1068,7 @@ BEGIN
                               cz.CartonizationGroup
                            ,  cz.CartonType
                            ,  cz.[Cube]
-                           ,  cz.MaxWeight
+                           ,  MaxWeight = cz.MaxWeight - cz.CartonWeight   --WL28
                         FROM @TMP_CL cl1
                         JOIN @TMP_CL cl2 ON  cl2.ListName = 'CSCUK01GCR'
                                          AND cl2.Code > ''
@@ -1088,7 +1088,7 @@ BEGIN
                               cz.CartonizationGroup
                            ,  cz.CartonType
                            ,  cz.[Cube]
-                           ,  cz.MaxWeight
+                           ,  MaxWeight = cz.MaxWeight - cz.CartonWeight   --WL28
                         FROM @t_CTNZ AS cz
                         WHERE cz.[Cube] >= cs.TotalPackCube
                         ORDER BY cz.RowID DESC   --WL11
@@ -1098,7 +1098,7 @@ BEGIN
                               cz.CartonizationGroup
                            ,  cz.CartonType
                            ,  cz.[Cube]
-                           ,  cz.MaxWeight
+                           ,  MaxWeight = cz.MaxWeight - cz.CartonWeight   --WL28
                         FROM @t_CTNZ AS cz
                         ORDER BY cz.RowID
                       ) czm
@@ -2863,6 +2863,7 @@ BEGIN
                SELECT @c_PickSlipNo
                      ,CartonNo   = cd.CartonSeqNo  + @n_CartonNo_Last
                      ,[Weight]   = ISNULL(SUM((cd.Qty / cd.PackQtyIndicator) * cd.StdGrossWgt), 0.00)
+                                 + ISNULL(cz.CartonWeight, 0.00)   --WL28
                      ,[Cube]     = cz.[Cube]
                      ,Qty        = CASE WHEN @b_IsAudit = 1   --WL25
                                         THEN 0
@@ -2890,6 +2891,7 @@ BEGIN
                                  ,  cz1.CartonWidth
                                  ,  cz1.CartonHeight
                                  ,  cz1.[Cube]
+                                 ,  cz1.CartonWeight   --WL28
                             FROM @t_CTNZ AS cz1
                             WHERE cz1.CartonizationGroup = cd.CartonGroup
                             AND cz1.CartonType = cd.CartonType
@@ -2908,6 +2910,7 @@ BEGIN
                      ,  CASE WHEN cd.UOM = '2' THEN cd.LabelNo ELSE '' END
                      ,  cd.[Audit]
                      ,  cd.DocType   --WL22
+                     ,  ISNULL(cz.CartonWeight, 0.00)   --WL28
 
                SET @n_err = @@ERROR
                IF @n_err <> 0
