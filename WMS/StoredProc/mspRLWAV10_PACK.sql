@@ -763,15 +763,14 @@ BEGIN
    IF @n_Continue = 1
    BEGIN
       SET @cur_PCKGRPH = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT
-            pcz.Orderkey
-         ,  pcz.DocType
-         ,  pcz.BillToKey
-         ,  pcz.Storerkey
-         ,  pcz.PackGrpNo
-         ,  pcz.UserDefine01   --WL19
-         ,  pcz.Shipperkey     --WL19
-         ,  HasAnyVAS = CAST(ISNULL(MAX(pcz.HasAnyVAS * 1), 0) AS BIT)   --WL25
+      SELECT pcz.Orderkey
+          ,  pcz.DocType
+          ,  pcz.BillToKey
+          ,  pcz.Storerkey
+          ,  pcz.PackGrpNo
+          ,  pcz.UserDefine01   --WL19
+          ,  pcz.Shipperkey     --WL19
+          ,  HasAnyVAS = CAST(ISNULL(MAX(pcz.HasAnyVAS * 1), 0) AS BIT)   --WL25
       FROM #PRECTN AS pcz
       --WL25 S
       GROUP BY pcz.Orderkey
