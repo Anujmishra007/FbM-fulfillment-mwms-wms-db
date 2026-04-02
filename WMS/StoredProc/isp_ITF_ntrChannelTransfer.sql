@@ -1,7 +1,7 @@
 /****** Object:  Trigger [ntrChannelTransferUpdate]    Script Date: 10/18/2018 6:14:09 PM ******/
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ITF_ntrChannelTransfer]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-DROP PROCEDURE [dbo].[isp_ITF_ntrChannelTransfer]
-GO
+--if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ITF_ntrChannelTransfer]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+--DROP PROCEDURE [dbo].[isp_ITF_ntrChannelTransfer]
+--GO --ADW035
 
 /************************************************************************/  
 /* Store Procedure:  isp_ITF_ntrChannelTransfer                         */  
@@ -40,7 +40,7 @@ GO
 /* DD-MMM-YYYY                                                          */  
 /************************************************************************/  
   
-CREATE PROC isp_ITF_ntrChannelTransfer  
+CREATE OR ALTER PROC [dbo].[isp_ITF_ntrChannelTransfer]
             @c_TriggerName          nvarchar(120)  
           , @c_SourceTable          nvarchar(60)  
           , @c_FromStorerKey        nvarchar(15)  
@@ -83,7 +83,8 @@ BEGIN
    SET @n_continue = 1   
    SET @b_success = 0   
    SET @n_err = 0   
-   SET @c_errmsg = ''   
+   SET @c_errmsg = ''
+   SET @c_UpdatedColumns = ''  --(ADW035)
 /********************************************************/  
 /* Variables Declaration & Initialization - (End)       */  
 /********************************************************/  
@@ -151,7 +152,8 @@ BEGIN
                         , RecordStatus  
                         , sValue  
                         , TargetTable  
-                        , StoredProc  
+                        , StoredProc
+                        , UpdatedColumns  --(ADW035)
             FROM ITFTriggerConfig WITH (NOLOCK)   
            WHERE StorerKey   = @c_FromStorerKey    
              AND SourceTable = @c_SourceTable  
@@ -159,13 +161,14 @@ BEGIN
   
          OPEN Cur_ITFTriggerConfig_ChannelTRFFrom  
          FETCH NEXT FROM Cur_ITFTriggerConfig_ChannelTRFFrom INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus  
-                                                                , @c_sValue, @c_TargetTable, @c_StoredProc  
+                                                                , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
   
          WHILE @@FETCH_STATUS <> -1  
          BEGIN  
             IF ISNULL(@c_ConfigFacility,'') = ''  
             BEGIN   
-               IF @c_ConfigKey = 'CNLTRFFLOG' 
+               --IF @c_ConfigKey = 'CNLTRFFLOG'
+               IF @c_ConfigKey = 'CNLTRFFLOG' OR @c_ConfigKey = 'WSCNLTRFFM' --(ADW035)
                BEGIN   
                   GOTO AddIntoTransmitLog_FromStorerKey  
                END -- IF @c_ConfigKey = 'CNLTRFFLOG'
@@ -226,7 +229,7 @@ BEGIN
   
    Next_Record_FromStorerKey:  
             FETCH NEXT FROM Cur_ITFTriggerConfig_ChannelTRFFrom INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus  
-                                                                   , @c_sValue, @c_TargetTable, @c_StoredProc  
+                                                                   , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
          END -- WHILE @@FETCH_STATUS <> -1  
          CLOSE Cur_ITFTriggerConfig_ChannelTRFFrom  
          DEALLOCATE Cur_ITFTriggerConfig_ChannelTRFFrom  
@@ -251,7 +254,8 @@ BEGIN
                         , RecordStatus  
                         , sValue  
                         , TargetTable  
-                        , StoredProc  
+                        , StoredProc
+                        , UpdatedColumns
             FROM ITFTriggerConfig WITH (NOLOCK)   
            WHERE StorerKey   = @c_ToStorerKey    
              AND SourceTable = @c_SourceTable  
@@ -259,13 +263,14 @@ BEGIN
   
          OPEN Cur_ITFTriggerConfig_ChannelTRFTo  
          FETCH NEXT FROM Cur_ITFTriggerConfig_ChannelTRFTo INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus  
-                                                              , @c_sValue, @c_TargetTable, @c_StoredProc  
+                                                              , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
   
          WHILE @@FETCH_STATUS <> -1  
          BEGIN  
             IF ISNULL(@c_ConfigFacility,'') = ''  
             BEGIN   
-               IF @c_ConfigKey = 'CNLTRFLOG' 
+              -- IF @c_ConfigKey = 'CNLTRFLOG'
+               IF @c_ConfigKey = 'CNLTRFLOG' OR @c_ConfigKey = 'WSCNLTRF' --(ADW035)
                BEGIN   
                   GOTO AddIntoTransmitLog_ToStorerKey  
                END -- IF @c_ConfigKey = 'CNLTRFLOG'
@@ -326,7 +331,7 @@ BEGIN
   
    Next_Record_ToStorerKey:  
             FETCH NEXT FROM Cur_ITFTriggerConfig_ChannelTRFTo INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus  
-                                                                 , @c_sValue, @c_TargetTable, @c_StoredProc  
+                                                                 , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
          END -- WHILE @@FETCH_STATUS <> -1  
          CLOSE Cur_ITFTriggerConfig_ChannelTRFTo  
          DEALLOCATE Cur_ITFTriggerConfig_ChannelTRFTo  
