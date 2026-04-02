@@ -166,7 +166,12 @@ BEGIN
                IF @c_ConfigKey = 'CNLTRFFLOG' 
                BEGIN   
                   GOTO AddIntoTransmitLog_FromStorerKey  
-               END -- IF @c_ConfigKey = 'CNLTRFFLOG'  
+               END -- IF @c_ConfigKey = 'CNLTRFFLOG'
+               --(ADW035) - Start
+               IF (@c_RecordStatus <> '' AND @c_RecordStatus = @c_Status AND UPPER(@c_UpdatedColumns) = 'STATUS')
+               BEGIN
+                    GOTO AddIntoTransmitLog_FromStorerKey
+               END
             END -- IF ISNULL(@c_ConfigFacility,'') = ''  
   
             GOTO Next_Record_FromStorerKey  
@@ -192,7 +197,26 @@ BEGIN
                                   ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '  
                   GOTO QUIT  
                END   
-            END -- IF @c_TargetTable = 'TRANSMITLOG3'  
+            END -- IF @c_TargetTable = 'TRANSMITLOG3'
+            --(ADW035) - Start - Add for TransmitLog2
+            IF @c_TargetTable = 'TRANSMITLOG2'
+            BEGIN
+                EXEC ispGenTransmitLog2 @c_Tablename, @c_ChannelTransferKey, @c_ReasonCode, @c_FromStorerKey, ''
+                                     , @b_success OUTPUT
+                                     , @n_err OUTPUT
+                                     , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 68003
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) +
+                                  ': Insert into TRANSMITLOG2 Failed. (isp_ITF_ntrChannelTransfer) ( SQLSvr MESSAGE = ' +
+                                  ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '
+                  GOTO QUIT
+               END
+            END -- IF @c_TargetTable = 'TRANSMITLOG2'
+            --(ADW035) - End
 /*************************************************************************************/  
 /* Records Insertion into selected TransmitLog table with FromStorerKey - (End)      */  
 /*************************************************************************************/  
@@ -241,9 +265,15 @@ BEGIN
                IF @c_ConfigKey = 'CNLTRFLOG' 
                BEGIN   
                   GOTO AddIntoTransmitLog_ToStorerKey  
-               END -- IF @c_ConfigKey = 'CNLTRFLOG'  
-            END -- IF ISNULL(@c_ConfigFacility,'') = ''   
-  
+               END -- IF @c_ConfigKey = 'CNLTRFLOG'
+
+               --(ADW035) - Start
+               IF (@c_RecordStatus <> '' AND @c_RecordStatus = @c_Status AND UPPER(@c_UpdatedColumns) = 'STATUS')
+               BEGIN
+                    GOTO AddIntoTransmitLog_ToStorerKey
+               END
+                --(ADW035) - End
+            END -- IF ISNULL(@c_ConfigFacility,'') = ''
             GOTO Next_Record_ToStorerKey  
   
 /*************************************************************************************/  
@@ -267,7 +297,26 @@ BEGIN
                                   ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '  
                   GOTO QUIT  
                END   
-            END -- IF @c_TargetTable = 'TRANSMITLOG3'  
+            END -- IF @c_TargetTable = 'TRANSMITLOG3'
+            --ADW035 - Add for TransmitLog2 Start
+            IF @c_TargetTable = 'TRANSMITLOG2'
+            BEGIN
+                EXEC ispGenTransmitLog2 @c_Tablename, @c_ChannelTransferKey, @c_ReasonCode, @c_ToStorerKey, ''
+                                     , @b_success OUTPUT
+                                     , @n_err OUTPUT
+                                     , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 68004
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) +
+                                  ': Insert into TRANSMITLOG2 Failed. (isp_ITF_ntrChannelTransfer) ( SQLSvr MESSAGE = ' +
+                                  ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '
+                  GOTO QUIT
+               END
+            END -- IF @c_TargetTable = 'TRANSMITLOG2'
+            --ADW035 - End
 /*************************************************************************************/  
 /* Records Insertion into selected TransmitLog table with FromStorerKey - (End)      */  
 /*************************************************************************************/  
