@@ -77,8 +77,8 @@ BEGIN
                     AND PD.CaseID = TD.CaseID
                 WHERE TD.TaskDetailKey = @cTaskDetailKey
                     AND PD.Status = '4'
-                    AND PD.TaskDetailKey = @cTaskDetailKey
                     AND PD.DropID NOT LIKE 'QC-VIRTUAL%'  
+                ORDER BY PD.PickDetailKey
 
                 -- Retrieve Order info
                 SELECT @cDocType = DocType, @cEcomSingleFlag = ECOM_SINGLE_Flag

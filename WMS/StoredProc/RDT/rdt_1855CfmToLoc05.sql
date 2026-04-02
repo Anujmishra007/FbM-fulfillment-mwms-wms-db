@@ -123,13 +123,13 @@ BEGIN
       END
 
       -- Calculate picked and total qty from PickDetail
-      SELECT @nPickedQty = SUM(Qty)
+      SELECT @nPickedQty = ISNULL(SUM(Qty), 0)
       FROM dbo.PickDetail WITH(NOLOCK)
       WHERE TaskDetailKey = @cTaskKey
         AND Status = '5'
         AND Qty > 0
 
-      SELECT @nTotalQty = SUM(Qty)
+      SELECT @nTotalQty = ISNULL(SUM(Qty), 0)
       FROM dbo.PickDetail WITH(NOLOCK)
       WHERE TaskDetailKey = @cTaskKey
 
