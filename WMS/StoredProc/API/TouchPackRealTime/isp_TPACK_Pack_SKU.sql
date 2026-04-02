@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-05   1.0  GCH225     Created                                          */
 /* 2026-02-11   2.0  GCH225     UWP:45984: Fix for PreCartonize issue            */
+/* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_Pack_SKU] (
@@ -131,32 +132,33 @@ BEGIN
       END
    END
 
-   -- Perform Check the Qty
-   EXEC [API].[isp_TPACK_ValidateQtyPack]
-        @cType             = @cType            
-      , @bIsDiscrete       = @bIsDiscrete      
-      , @bIsCustom         = @bIsCustom        
-      , @cPickSlipNo       = @cPickSlipNo       
-      , @cOrderKey         = @cOrderKey         
-      , @cLoadKey          = @cLoadKey          
-      , @cDropID           = @cDropID  
-      , @cStorerKey        = @cStorerKey        
-      , @cFacility         = @cFacility  
-      , @cInputValue1      = @cInputValue1
-      , @cScanType         = @cScanType
-      , @cSKU              = @cSKU
-      , @c_UserID          = @c_UserID
-      , @cLangCode         = @cLangCode
-      , @nQty              = @nQty
-      , @b_Success         = @b_Success   OUTPUT
-      , @n_ErrNo           = @n_ErrNo     OUTPUT
-      , @c_ErrMsg          = @c_ErrMsg    OUTPUT
+   -- Skip Double Check for improve performance.
+   -- -- Perform Check the Qty
+   -- EXEC [API].[isp_TPACK_ValidateQtyPack]
+   --      @cType             = @cType            
+   --    , @bIsDiscrete       = @bIsDiscrete      
+   --    , @bIsCustom         = @bIsCustom        
+   --    , @cPickSlipNo       = @cPickSlipNo       
+   --    , @cOrderKey         = @cOrderKey         
+   --    , @cLoadKey          = @cLoadKey          
+   --    , @cDropID           = @cDropID  
+   --    , @cStorerKey        = @cStorerKey        
+   --    , @cFacility         = @cFacility  
+   --    , @cInputValue1      = @cInputValue1
+   --    , @cScanType         = @cScanType
+   --    , @cSKU              = @cSKU
+   --    , @c_UserID          = @c_UserID
+   --    , @cLangCode         = @cLangCode
+   --    , @nQty              = @nQty
+   --    , @b_Success         = @b_Success   OUTPUT
+   --    , @n_ErrNo           = @n_ErrNo     OUTPUT
+   --    , @c_ErrMsg          = @c_ErrMsg    OUTPUT
 
-   IF @b_Success = 0
-   BEGIN
-      SET @n_Continue  = 3    
-      GOTO EXIT_SP
-   END
+   -- IF @b_Success = 0
+   -- BEGIN
+   --    SET @n_Continue  = 3    
+   --    GOTO EXIT_SP
+   -- END
 
    -- @cScanType List('sku','retailsku', 'manusku', 'altsku', 'upc', 'ucc', 'serialno')
    SELECT @cLabelNo = LabelNo
