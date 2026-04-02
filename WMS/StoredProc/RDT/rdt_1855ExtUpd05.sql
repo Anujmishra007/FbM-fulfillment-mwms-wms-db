@@ -67,10 +67,19 @@ BEGIN
             IF @cOption = '1'
             BEGIN
 
-                -- Retrieve context
-                SELECT @cOrderKey = OrderKey
-                FROM dbo.TaskDetail WITH(NOLOCK)
-                WHERE TaskDetailKey = @cTaskDetailKey
+                -- Get OrderKey via PickDetail
+                SELECT TOP 1 @cOrderKey = PD.OrderKey
+                FROM dbo.PickDetail PD WITH(NOLOCK)
+                INNER JOIN dbo.TaskDetail TD WITH(NOLOCK)
+                    ON PD.TaskDetailKey = TD.TaskDetailKey
+                    AND PD.Lot = TD.Lot
+                    AND PD.WaveKey = TD.WaveKey
+                    AND PD.CaseID = TD.CaseID
+                WHERE TD.TaskDetailKey = @cTaskDetailKey
+                    AND PD.Status = '4'
+                    AND PD.TaskDetailKey = @cTaskDetailKey
+                    AND PD.DropID NOT LIKE 'QC-VIRTUAL%'  
+                ORDER BY PD.PickDetailKey
 
                 -- Retrieve Order info
                 SELECT @cDocType = DocType, @cEcomSingleFlag = ECOM_SINGLE_Flag
