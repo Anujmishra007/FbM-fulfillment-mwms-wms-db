@@ -41,7 +41,7 @@ BEGIN
       @nRowCount           INT,
       @cAlertKey           NVARCHAR(18)
 
-   IF @nFunc = 1766 -- Handle CC & CCSUP
+   IF @nFunc IN ( 1766, 1795 ) -- Handle CC & CCSUP
    BEGIN
       IF @nStep IN (4, 7)
       BEGIN
