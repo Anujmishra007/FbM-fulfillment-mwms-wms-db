@@ -76,6 +76,9 @@ BEGIN
                     AND PD.WaveKey = TD.WaveKey
                     AND PD.CaseID = TD.CaseID
                 WHERE TD.TaskDetailKey = @cTaskDetailKey
+                    AND PD.Status = '4'
+                    AND PD.TaskDetailKey = @cTaskDetailKey
+                    AND PD.DropID NOT LIKE 'QC-VIRTUAL%'  
 
                 -- Retrieve Order info
                 SELECT @cDocType = DocType, @cEcomSingleFlag = ECOM_SINGLE_Flag
