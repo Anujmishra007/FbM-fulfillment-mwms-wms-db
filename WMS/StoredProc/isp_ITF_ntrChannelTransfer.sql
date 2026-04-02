@@ -36,7 +36,9 @@
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /* Date         Author    Ver.  Purposes                                */
-/* 2 April 2026 ADW035    1.1  FCR-11934 Add Transmitlog2 insertion     */
+/* 20-May-2021  MCTang     1.0   Add New Logic (MC01)                    */
+/* 20-May-2021  KHChan     1.0   LFI-2248 - add Transmitlog2 (KH01)      */
+/* 2 April 2026 ADW035     1.1  FCR-11934 copy sp changes from v0     */
 /* DD-MMM-YYYY                                                          */  
 /************************************************************************/  
   
@@ -153,7 +155,7 @@ BEGIN
                         , sValue  
                         , TargetTable  
                         , StoredProc
-                        , UpdatedColumns  --(ADW035)
+                        , UpdatedColumns  --(MC01)
             FROM ITFTriggerConfig WITH (NOLOCK)   
            WHERE StorerKey   = @c_FromStorerKey    
              AND SourceTable = @c_SourceTable  
@@ -168,16 +170,17 @@ BEGIN
             IF ISNULL(@c_ConfigFacility,'') = ''  
             BEGIN   
                --IF @c_ConfigKey = 'CNLTRFFLOG'
-               IF @c_ConfigKey = 'CNLTRFFLOG' OR @c_ConfigKey = 'WSCNLTRFFM' --(ADW035)
+               IF @c_ConfigKey = 'CNLTRFFLOG' OR @c_ConfigKey = 'WSCNLTRFFM'  --(KH01)
                BEGIN   
                   GOTO AddIntoTransmitLog_FromStorerKey  
                END -- IF @c_ConfigKey = 'CNLTRFFLOG'
-               --(ADW035) - Start
+
+               --(MC01) - S
                IF (@c_RecordStatus <> '' AND @c_RecordStatus = @c_Status AND UPPER(@c_UpdatedColumns) = 'STATUS')
                BEGIN
                     GOTO AddIntoTransmitLog_FromStorerKey
                END
-               --(ADW035) - End
+               --(MC01) - E
             END -- IF ISNULL(@c_ConfigFacility,'') = ''  
   
             GOTO Next_Record_FromStorerKey  
@@ -204,7 +207,7 @@ BEGIN
                   GOTO QUIT  
                END   
             END -- IF @c_TargetTable = 'TRANSMITLOG3'
-            --(ADW035) - Start - Add for TransmitLog2
+            --(KH01) - S
             IF @c_TargetTable = 'TRANSMITLOG2'
             BEGIN
                 EXEC ispGenTransmitLog2 @c_Tablename, @c_ChannelTransferKey, @c_ReasonCode, @c_FromStorerKey, ''
@@ -222,7 +225,7 @@ BEGIN
                   GOTO QUIT
                END
             END -- IF @c_TargetTable = 'TRANSMITLOG2'
-            --(ADW035) - End
+            --(KH01) - E
 /*************************************************************************************/  
 /* Records Insertion into selected TransmitLog table with FromStorerKey - (End)      */  
 /*************************************************************************************/  
@@ -275,12 +278,12 @@ BEGIN
                   GOTO AddIntoTransmitLog_ToStorerKey  
                END -- IF @c_ConfigKey = 'CNLTRFLOG'
 
-               --(ADW035) - Start
+               --(MC01) - S
                IF (@c_RecordStatus <> '' AND @c_RecordStatus = @c_Status AND UPPER(@c_UpdatedColumns) = 'STATUS')
                BEGIN
                     GOTO AddIntoTransmitLog_ToStorerKey
                END
-                --(ADW035) - End
+                --(MC01) - E
             END -- IF ISNULL(@c_ConfigFacility,'') = ''
             GOTO Next_Record_ToStorerKey  
   
@@ -306,7 +309,7 @@ BEGIN
                   GOTO QUIT  
                END   
             END -- IF @c_TargetTable = 'TRANSMITLOG3'
-            --ADW035 - Add for TransmitLog2 Start
+            --(KH01) - S
             IF @c_TargetTable = 'TRANSMITLOG2'
             BEGIN
                 EXEC ispGenTransmitLog2 @c_Tablename, @c_ChannelTransferKey, @c_ReasonCode, @c_ToStorerKey, ''
@@ -324,7 +327,7 @@ BEGIN
                   GOTO QUIT
                END
             END -- IF @c_TargetTable = 'TRANSMITLOG2'
-            --ADW035 - End
+            --(KH01) - E
 /*************************************************************************************/  
 /* Records Insertion into selected TransmitLog table with FromStorerKey - (End)      */  
 /*************************************************************************************/  
