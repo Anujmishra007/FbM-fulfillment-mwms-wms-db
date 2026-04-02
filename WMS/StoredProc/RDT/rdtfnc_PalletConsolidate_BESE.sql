@@ -309,6 +309,8 @@ BEGIN
          GOTO Step_1_Fail
       END
 
+      SET @nRowCount = 0
+
       SELECT TOP 1 
          @cToLOC        = LLI.Loc,
          @cSKU          = LLI.SKU,
@@ -335,6 +337,8 @@ BEGIN
       AND   LLI.ID = @cToID 
       AND   Qty > 0
       ORDER BY LLI.SKU
+
+      SET @nRowCount = @@ROWCOUNT
 
       -- Extended update
       IF @cExtendedValidateSP <> '' 
@@ -441,7 +445,7 @@ BEGIN
          END
       END
 
-      IF @cToLOC <> ''
+      IF @nRowCount > 0
       BEGIN
          --go to FromID screen
          SET @cNewIDFlag = '0'
@@ -470,7 +474,6 @@ BEGIN
 
          SET @cToLOC = ''
          
-
          IF @cSkipIDExistCheck = '1'
          BEGIN
             SET @cNewIDFlag = '1'
