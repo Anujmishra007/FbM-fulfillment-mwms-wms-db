@@ -134,19 +134,19 @@ BEGIN
       WHERE TaskDetailKey = @cTaskKey
 
       -- Update TaskDetail with calculated quantities
-      UPDATE dbo.TaskDetail SET
-         SystemQty = @nTotalQty,
-         Qty = ISNULL(@nPickedQty, 0), -- @nQTY_Bal,
-         EditDate = GETDATE(),
-         EditWho  = SUSER_SNAME()
-      WHERE TaskDetailKey = @cTaskKey
-
-      IF @@ERROR <> 0
-      BEGIN
+      BEGIN TRY
+         UPDATE dbo.TaskDetail SET
+            SystemQty = @nTotalQty,
+            Qty = ISNULL(@nPickedQty, 0),
+            EditDate = GETDATE(),
+            EditWho  = SUSER_SNAME()
+         WHERE TaskDetailKey = @cTaskKey
+      END TRY
+      BEGIN CATCH
          SET @nErrNo = 262902
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
          GOTO RollBackTran
-      END
+      END CATCH
 
       FETCH NEXT FROM @cur INTO @cTaskKey, @cFromLOC, @cFromID, @cSKU, @nQty, @cDropID  
    END  
