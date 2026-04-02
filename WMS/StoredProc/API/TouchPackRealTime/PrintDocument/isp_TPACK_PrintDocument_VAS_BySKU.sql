@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-12-24   1.0  YLI237     UWP-45422                                        */
 /* 2026-02-25   2.0  GCH225     UWP-49257 Enhancement.                           */
+/* 2026-04-01   2.1  GCH225     FCR-12063 VasCustPref New Logic                  */
 /*********************************************************************************/
 
 
@@ -46,6 +47,7 @@ BEGIN
    DECLARE @cModuleID   NVARCHAR(30)  = 'TPPACK'
          , @cUDF01_Pref NVARCHAR(60)  = ''
          , @cUDF02_Pref NVARCHAR(60)  = ''
+         , @cUDF04_Pref NVARCHAR(60)  = ''
          , @cCode2_Pref NVARCHAR(30)  = ''
          , @FinalUDF01  NVARCHAR(60)  = ''
          , @ReportID    NVARCHAR(10)  = ''
@@ -55,6 +57,7 @@ BEGIN
    
    SELECT  @cUDF01_Pref = ISNULL(UDF01,'')
          , @cUDF02_Pref = ISNULL(UDF02,'')
+         , @cUDF04_Pref = ISNULL(UDF04,'')
          , @cCode2_Pref = ISNULL(Code2,'')
    FROM CODELKUP (NOLOCK)
    WHERE StorerKey = @cStorerKey
@@ -66,12 +69,13 @@ BEGIN
    BEGIN
       IF @cUDF02_Pref = 'Consignee'
       BEGIN
-         SELECT  @FinalUDF01 = IIF((@cCode2_Pref = ConsigneeKey 
-                                 OR @cCode2_Pref = MarkForKey 
-                                 OR @cCode2_Pref = BillToKey)
+         SELECT @FinalUDF01 = IIF(
+            (@cUDF04_Pref = '' AND (@cCode2_Pref = ConsigneeKey OR @cCode2_Pref = MarkForKey OR @cCode2_Pref = BillToKey))
+         OR (@cUDF04_Pref = 'ConsigneeKey' AND @cCode2_Pref = ConsigneeKey)
+         OR (@cUDF04_Pref = 'MarkForKey' AND @cCode2_Pref = MarkForKey)
+         OR (@cUDF04_Pref = 'BillToKey' AND @cCode2_Pref = BillToKey)
                                  , @cUDF01_Pref
-                                 , @cUDF01_WK
-                                 )
+                                 , @cUDF01_WK)
          FROM ORDERS (NOLOCK)
          WHERE OrderKey = @cOrderKey 
          AND StorerKey = @cStorerKey;

@@ -21,6 +21,7 @@ GO
 /* 2026-02-24   2.2  GCH225     UWP-49353: Fix for Scan SKU into new Carton      */
 /* 2026-03-03   2.3  GCH225     UWP-49786: Fix for Block Recartonization         */
 /* 2026-03-12   2.4  GCH225     UWP-XXXXX: Skip UCC Carton Check for PreCartonize*/
+/* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -105,6 +106,10 @@ BEGIN
       SKU NVARCHAR(20) PRIMARY KEY
    )
 
+   CREATE TABLE #oOrderKeyList (
+      OrderKey NVARCHAR(10) PRIMARY KEY
+   )
+
    DECLARE @tLottableList TABLE (    
             sku      NVARCHAR(20)
          , lottable  NVARCHAR(30)   
@@ -147,6 +152,14 @@ BEGIN
    SET @nTtlExpQty            = 0
    SET @bIsPreCartonize       = 0
    SET @bAutoPickOrderFlag    = 0
+
+   IF @cLoadKey <> ''
+   BEGIN
+      INSERT INTO #oOrderKeyList (OrderKey)
+      SELECT DISTINCT OrderKey
+      FROM LOADPLANDETAIL (NOLOCK)
+      WHERE LoadKey = @cLoadKey
+   END
 
    --For Tote Conso Order and required to auto pick the orderkey and pickslip when user scan the SKU.
    IF @cType = 'toteid'
@@ -607,6 +620,7 @@ VALIDATE_SKU:
                            FROM PICKDETAIL PD (NOLOCK)
                            WHERE PD.DropID = @cDropID
                            AND (@cOrderKey = '' OR PD.OrderKey = @cOrderKey)
+                           AND PD.StorerKey = @cStorerKey
                            AND PD.SKU = t.SKU
                            AND NOT (
                               (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
@@ -622,6 +636,7 @@ VALIDATE_SKU:
                         FROM PICKDETAIL PD (NOLOCK)
                         WHERE PD.OrderKey = @cOrderKey
                         AND (@cDropID = '' OR PD.DropID = @cDropID)
+                        AND PD.StorerKey = @cStorerKey
                         AND PD.SKU = t.SKU)
       END
    END
@@ -644,13 +659,13 @@ VALIDATE_SKU:
                            FROM PICKDETAIL PD (NOLOCK)
                            WHERE (@cLoadKey = ''
                               OR EXISTS ( SELECT 1 
-                                          FROM LOADPLANDETAIL LPD (NOLOCK)
-                                          WHERE LPD.OrderKey = PD.OrderKey
-                                          AND LPD.LoadKey = @cLoadKey
+                                          FROM #oOrderKeyList OB
+                                          WHERE OB.OrderKey = PD.OrderKey
                                        )
                               )
                            AND (@cOrderKey = '' OR PD.OrderKey = @cOrderKey)
                            AND PD.DropID = @cDropID
+                           AND PD.StorerKey = @cStorerKey
                            AND t.SKU = PD.SKU
                            AND NOT (
                               (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
@@ -666,12 +681,12 @@ VALIDATE_SKU:
                            FROM PICKDETAIL PD (NOLOCK)
                            WHERE (@cLoadKey = ''
                               OR EXISTS ( SELECT 1 
-                                          FROM LOADPLANDETAIL LPD (NOLOCK)
-                                          WHERE LPD.OrderKey = PD.OrderKey
-                                          AND LPD.LoadKey = @cLoadKey
-                                          )
+                                          FROM #oOrderKeyList OB
+                                          WHERE OB.OrderKey = PD.OrderKey
+                                       )
                               )
                            AND (@cDropID = '' OR PD.DropID = @cDropID)
+                           AND PD.StorerKey = @cStorerKey
                            AND t.SKU = PD.SKU
                            )
       END
@@ -1469,6 +1484,8 @@ GET_PACKDETAIL_LIST:
                            ),'')
 
 EXIT_SP:
+   DROP TABLE IF EXISTS #oOrderKeyList
+
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      
