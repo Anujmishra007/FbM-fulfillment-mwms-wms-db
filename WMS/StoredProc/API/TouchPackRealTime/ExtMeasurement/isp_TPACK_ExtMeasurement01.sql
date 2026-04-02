@@ -13,6 +13,7 @@ GO
 /* 2026-03-12   1.0  GCH225     FCR-11552 Created                                */
 /* 2026-03-14   1.1  JWF011     FCR-11435 Update Weight calculation              */
 /* 2026-03-16   1.2  JWF011     FCR-11639 Add LWH and update Cube                */
+/* 2026-04-02   1.3  GCH225     FCR-12173 Weight + Cartonization carton Weight   */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtMeasurement01] (
@@ -56,25 +57,26 @@ BEGIN
    SET @n_ErrNo         = 0  
    SET @c_ErrMsg        = ''
   
-   SELECT  @fTtlWeight = SUM(IIF((ISNULL(S.STDGROSSWGT, 0) = 0), 0, ROUND((S.STDGROSSWGT * T.TtlQty), 4)))
-      FROM SKU S (NOLOCK)
-      INNER JOIN (
+  SELECT TOP 1 @fTtlLength = ISNULL(C.CartonLength, 0)
+              , @fTtlWidth = ISNULL(C.CartonWidth, 0)
+              , @fTtlHeight = ISNULL(C.CartonHeight,0)
+              , @fTtlCube = ISNULL(C.Cube, 0)
+              , @fTtlWeight = ISNULL(C.CartonWeight, 0)
+   FROM Cartonization C (NOLOCK)
+   WHERE C.CartonType = @cCartonType
+   AND C.CartonizationGroup = @cStorerKey
+
+   SELECT  @fTtlWeight = @fTtlWeight + SUM(IIF((ISNULL(S.STDGROSSWGT, 0) = 0), 0, ROUND((S.STDGROSSWGT * T.TtlQty), 4)))
+   FROM SKU S (NOLOCK)
+   INNER JOIN (
       SELECT PD.SKU AS SKU, SUM(PD.Qty) AS TtlQty
       FROM PACKDETAIL PD (NOLOCK)
       WHERE PD.PickSlipNo = @cPickSlipNo
       AND PD.CartonNo = @nCartonNo
       GROUP BY PD.SKU
       ) T
-      ON T.SKU = S.SKU
-      WHERE S.StorerKey = @cStorerKey
-   
-   SELECT TOP 1 @fTtlLength = ISNULL(C.CartonLength, 0)
-              , @fTtlWidth = ISNULL(C.CartonWidth, 0)
-              , @fTtlHeight = ISNULL(C.CartonHeight,0)
-              , @fTtlCube = ISNULL(C.Cube, 0)
-   FROM Cartonization C (NOLOCK)
-   WHERE C.CartonType = @cCartonType
-   AND C.CartonizationGroup = @cStorerKey
+   ON T.SKU = S.SKU
+   WHERE S.StorerKey = @cStorerKey
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      

@@ -75,6 +75,7 @@ BEGIN
          , @IsAggregate3      BIT = 0
          , @IsAggregate4      BIT = 0
 
+   SET @nContinuePrint     = 0
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
    SET @c_ErrMsg           = '' 

@@ -132,7 +132,7 @@ BEGIN
       END
    END
 
-   -- Skip Double Check for improve performance.
+   -- Skip double-check to improve performance.
    -- -- Perform Check the Qty
    -- EXEC [API].[isp_TPACK_ValidateQtyPack]
    --      @cType             = @cType            

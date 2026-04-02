@@ -153,6 +153,14 @@ BEGIN
    SET @bIsPreCartonize       = 0
    SET @bAutoPickOrderFlag    = 0
 
+   IF @cLoadKey <> ''
+   BEGIN
+      INSERT INTO #oOrderKeyList (OrderKey)
+      SELECT DISTINCT OrderKey
+      FROM LOADPLANDETAIL (NOLOCK)
+      WHERE LoadKey = @cLoadKey
+   END
+
    --For Tote Conso Order and required to auto pick the orderkey and pickslip when user scan the SKU.
    IF @cType = 'toteid'
    AND @cPickSlipNo = '' 
@@ -640,14 +648,6 @@ VALIDATE_SKU:
          SET @n_ErrNo = 11529
          SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Failed to Perform Check SKU, LoadKey and DropID both are empty.
          GOTO EXIT_SP
-      END
-
-      IF @cLoadKey <> ''
-      BEGIN
-         INSERT INTO #oOrderKeyList (OrderKey)
-         SELECT DISTINCT OrderKey
-         FROM LOADPLANDETAIL (NOLOCK)
-         WHERE LoadKey = @cLoadKey
       END
 
       IF @cType = 'toteid'

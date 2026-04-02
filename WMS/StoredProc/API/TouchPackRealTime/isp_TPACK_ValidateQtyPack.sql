@@ -276,6 +276,12 @@ BEGIN
       , @n_err       = @n_ErrNo           OUTPUT
       , @c_errmsg    = @c_ErrMsg          OUTPUT
 
+   IF @b_Success = 0
+   BEGIN    
+      SET @n_Continue  = 3  
+      GOTO EXIT_SP
+   END
+   
    IF @cShowShortPickQty <> '1'
    BEGIN
       DELETE FROM  @PickQtyStatus WHERE [Status] = '4'
