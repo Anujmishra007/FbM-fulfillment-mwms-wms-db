@@ -70,7 +70,8 @@ BEGIN
          , @c_sValue                nvarchar(10)  
          , @c_TargetTable           nvarchar(60)  
          , @c_StoredProc            nvarchar(200)  
-         , @c_ConfigFacility        nvarchar(5)  
+         , @c_ConfigFacility        nvarchar(5)
+         , @c_UpdatedColumns        NVARCHAR(250)  --(ADW035)
   
    -- ChannelTransfer table  
    DECLARE @c_Type                  nvarchar(12)  
