@@ -64,7 +64,7 @@ BEGIN
       @nCurrentScn            INT,
       @nCurrentStep           INT,
       @nRowCount              INT,
-      @cEntryDropID           NVARCHAR( 10),
+      @cEntryDropID           NVARCHAR( 20),
       @cOption                NVARCHAR( 10),
       @cSuggUCC               NVARCHAR( 20),
       @cSuggLOC               NVARCHAR( 10),
