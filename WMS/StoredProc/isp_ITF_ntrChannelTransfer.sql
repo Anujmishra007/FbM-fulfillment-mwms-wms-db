@@ -173,6 +173,7 @@ BEGIN
                BEGIN
                     GOTO AddIntoTransmitLog_FromStorerKey
                END
+               --(ADW035) - End
             END -- IF ISNULL(@c_ConfigFacility,'') = ''  
   
             GOTO Next_Record_FromStorerKey  
