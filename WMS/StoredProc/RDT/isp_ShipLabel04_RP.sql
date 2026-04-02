@@ -8,7 +8,8 @@ GO
 /* Copyright      : Maersk                                                 */      
 /*                                                                         */      
 /* Date       Rev  Author   Purposes                                       */      
-/* 2023-05-31 1.0  James    WMS-22632 Created                              */      
+/* 2023-05-31 1.0  James    WMS-22632 Created                              */
+/* 2026-04-02 1.1  NickT    UWP-53293 Set default value for @cCodePage     */
 /***************************************************************************/      
       
 CREATE OR ALTER PROC [dbo].[isp_ShipLabel04_RP] (      
@@ -30,7 +31,7 @@ CREATE OR ALTER PROC [dbo].[isp_ShipLabel04_RP] (
    @cPrintData       NVARCHAR( MAX) OUTPUT,      
    @nErrNo           INT            OUTPUT,      
    @cErrMsg          NVARCHAR( 20)  OUTPUT,
-   @cCodePage        NVARCHAR( 50)  OUTPUT          
+   @cCodePage        NVARCHAR( 50) = ''  OUTPUT          
 )      
 AS      
    SET NOCOUNT ON      

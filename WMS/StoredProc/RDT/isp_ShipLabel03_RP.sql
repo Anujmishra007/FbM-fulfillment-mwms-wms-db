@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'dbo.isp_ShipLabel03_RP') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure dbo.isp_ShipLabel03_RP
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,9 +11,10 @@ GO
 /* 2021-08-05 1.0  James    WMS-17661 Created                              */
 /* 2022-07-18 1.1  SYCHUA   JSM-82342 Prevent printing labels from other   */
 /*                          storerkey (SY01)                               */
+/* 2026-04-02 1.2  NickT    UWP-53293 Set default value for @cCodePage     */    
 /***************************************************************************/
 
-CREATE PROC [dbo].[isp_ShipLabel03_RP] (
+CREATE OR ALTER PROC [dbo].[isp_ShipLabel03_RP] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -36,7 +33,7 @@ CREATE PROC [dbo].[isp_ShipLabel03_RP] (
    @cPrintData       NVARCHAR( MAX) OUTPUT,
    @nErrNo           INT            OUTPUT,
    @cErrMsg          NVARCHAR( 20)  OUTPUT,
-   @cCodePage        NVARCHAR( 50)  OUTPUT
+   @cCodePage        NVARCHAR( 50) = ''  OUTPUT
 )
 AS
    SET NOCOUNT ON
