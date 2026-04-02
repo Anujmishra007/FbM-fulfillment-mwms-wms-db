@@ -149,7 +149,7 @@ BEGIN
       UCCNo                NVARCHAR(20),
       OriUCCNo             NVARCHAR(20),
       UCCQty               INT,
-      Dropid               NVARCHAR(18),
+      Dropid               NVARCHAR(20),
       Status               NVARCHAR(5) DEFAULT ('0')
    )
 
@@ -159,7 +159,7 @@ BEGIN
       PickDetailKey        NVARCHAR( 18),
       Loc                  NVARCHAR( 10),
       Id                   NVARCHAR(18),
-      DropID               NVARCHAR(18),
+      DropID               NVARCHAR(20),
       Qty                  INT,
       Lot                  NVARCHAR( 10),
       PickedQty            INT,
