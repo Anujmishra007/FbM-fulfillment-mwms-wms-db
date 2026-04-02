@@ -35,7 +35,8 @@ GO
 /* Version: 1.0                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
-/* Date         Author    Ver.  Purposes                                */  
+/* Date         Author    Ver.  Purposes                                */
+/* 2 April 2026 ADW035    1.1  FCR-11934 Add Transmitlog2 insertion     */
 /* DD-MMM-YYYY                                                          */  
 /************************************************************************/  
   
