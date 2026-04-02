@@ -256,6 +256,8 @@ BEGIN
 
    -- Prep next screen var
    SET @cFromID = ''
+   SET @cToID = ''
+   SET @cToLoc = ''
    SET @cOutField01 = ''         -- To ID
    
    SET @cFieldAttr01 = '' 
@@ -1072,6 +1074,7 @@ BEGIN
 
    SET @cOutField01 = ''
    SET @cToID = ''
+   SET @cToLoc = ''
    SET @cFromID = ''
    SET @nScannedCount = 0
 
