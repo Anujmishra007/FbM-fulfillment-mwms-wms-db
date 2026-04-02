@@ -73,7 +73,7 @@ BEGIN
          , @c_TargetTable           nvarchar(60)  
          , @c_StoredProc            nvarchar(200)  
          , @c_ConfigFacility        nvarchar(5)
-         , @c_UpdatedColumns        NVARCHAR(250)  --(ADW035)
+         , @c_UpdatedColumns        NVARCHAR(250)  --(MC01)
   
    -- ChannelTransfer table  
    DECLARE @c_Type                  nvarchar(12)  
@@ -86,7 +86,7 @@ BEGIN
    SET @b_success = 0   
    SET @n_err = 0   
    SET @c_errmsg = ''
-   SET @c_UpdatedColumns = ''  --(ADW035)
+   SET @c_UpdatedColumns = ''  --(MC01)
 /********************************************************/  
 /* Variables Declaration & Initialization - (End)       */  
 /********************************************************/  
@@ -273,7 +273,7 @@ BEGIN
             IF ISNULL(@c_ConfigFacility,'') = ''  
             BEGIN   
               -- IF @c_ConfigKey = 'CNLTRFLOG'
-               IF @c_ConfigKey = 'CNLTRFLOG' OR @c_ConfigKey = 'WSCNLTRF' --(ADW035)
+               IF @c_ConfigKey = 'CNLTRFLOG' OR @c_ConfigKey = 'WSCNLTRF' --(KH01)
                BEGIN   
                   GOTO AddIntoTransmitLog_ToStorerKey  
                END -- IF @c_ConfigKey = 'CNLTRFLOG'
