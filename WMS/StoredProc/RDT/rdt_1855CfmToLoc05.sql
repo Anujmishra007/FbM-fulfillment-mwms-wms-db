@@ -78,21 +78,21 @@ BEGIN
    AND   [Status] = '5'  
    OPEN @cur  
    FETCH NEXT FROM @cur INTO @cTaskKey, @cFromLOC, @cFromID, @cSKU, @nQty, @cDropID  
-   WHILE @@FETCH_STATUS = 0  
-   BEGIN  
-      UPDATE dbo.TaskDetail SET   
-         FinalLOC = @cToLoc,  
-         [Status] = '9',  
-         EditWho = SUSER_SNAME(),  
-         EditDate = GETDATE()  
-      WHERE TaskDetailKey = @cTaskKey   
-  
-      IF @@ERROR <> 0 OR @@ROWCOUNT = 0  
-      BEGIN  
-         SET @nErrNo = 262901   
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TskDtl fail   
-         GOTO RollBackTran    
-      END  
+   WHILE @@FETCH_STATUS = 0 
+   BEGIN
+      BEGIN TRY
+         UPDATE dbo.TaskDetail SET
+            FinalLOC = @cToLoc,
+            [Status] = '9',
+            EditWho = SUSER_SNAME(),
+            EditDate = GETDATE()
+         WHERE TaskDetailKey = @cTaskKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 262901
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TskDtl fail
+         GOTO RollBackTran
+      END CATCH  
         
       IF @cConfirmToLocMoveInventory = '1'  
       BEGIN  
