@@ -6723,6 +6723,7 @@ BEGIN
       V_String49     = @cDefaultcartontype,
       V_String50     = @cPackByFromDropID,
       V_String51     = @cDefaultCursor, --(v7.5)
+      V_String52     = @cPackByToDropID,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
