@@ -16,6 +16,7 @@ GO
 /* 2026-01-19   4.0  GCH225     UWP-47119 handle AutoPack & Carton Hold Logic    */
 /* 2026-02-06   4.1  Sean01     ADD Logic @cType = 'pickslip' and @bIsCustom = 1 */
 /* 2026-03-19   4.2  Sean02     UWP-42468: ToteID for multi orders               */
+/* 2026-04-02   4.3  JWF011     UWP-52777: update pickQty when by order          */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_PackConfirm] (
@@ -239,6 +240,16 @@ BEGIN
          AND PD.[Status] <= '5'
       END
       --Sean01 E
+      ELSE IF @cType = 'order' AND @bIsDiscrete = 1
+      BEGIN
+         SELECT  @nCntOrder = 1
+               , @nCntPICKLine = COUNT(PickDetailKey)
+               , @nTtlPickQty = SUM(Qty)
+         FROM PICKDETAIL PD WITH (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.OrderKey = @cOrderKey
+         AND PD.[Status] <= '5'
+      END
       ELSE
       BEGIN
          SELECT @nCntOrder = COUNT(DISTINCT PD.Orderkey)
