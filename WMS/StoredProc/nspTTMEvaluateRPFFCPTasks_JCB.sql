@@ -237,7 +237,7 @@ BEGIN
       AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
       AND TD.Status IN ('0','3')
       AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @c_UserID
-	  AND TD.Storerkey = @cStorerKey
+      AND TD.Storerkey = @cStorerKey
 
    UNION ALL
 
@@ -291,7 +291,7 @@ BEGIN
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
          INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
          WHERE TD.StorerKey = @cStorerKey
-		    AND ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
+            AND ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
             AND
             (
                (TD.Status = '0' AND (TD.UserKey = '' AND TD.UserKeyOverRide IN ('', @c_UserID) ) )
@@ -313,7 +313,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
-	                       AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
+                           AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
          END TRY
          BEGIN CATCH
@@ -338,10 +338,10 @@ BEGIN
          INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON PD.StorerKey = ORM.StorerKey AND PD.OrderKey = ORM.OrderKey
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
-		 INNER JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD.FinalLOC = LOC2.Loc AND LOC2.Facility = @cFacility
+         INNER JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD.FinalLOC = LOC2.Loc AND LOC2.Facility = @cFacility
          INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
          WHERE TD.StorerKey = @cStorerKey
-		    AND ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
+            AND ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
             AND
             (
                (TD.Status = '0' AND (TD.UserKey = '' AND TD.UserKeyOverRide IN ('', @c_UserID) ) )
@@ -364,7 +364,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
-	                       AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
+                           AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
@@ -387,7 +387,7 @@ BEGIN
          INNER JOIN dbo.LOC FinalLoc WITH(NOLOCK) ON TD.FinalLoc = FinalLoc.Loc AND FinalLoc.Facility = @cFacility
          INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
          WHERE TD.StorerKey = @cStorerKey
-		    AND ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
+            AND ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
             AND
             (
                (TD.Status = '0' AND (TD.UserKey = '' AND TD.UserKeyOverRide IN ('', @c_UserID) ) )
@@ -405,12 +405,12 @@ BEGIN
                LEFT JOIN dbo.SKU S WITH(NOLOCK) ON TD2.Sku = S.Sku AND S.StorerKey = TD2.Storerkey
             WHERE TD2.OrderKey = PD.OrderKey
                AND (
-			      TD2.Status IN ('S','H')
-			      OR (LOC2.Status <> 'OK' OR LOC2.LocationFlag NOT IN ('','NONE','INLOCKED'))
-			      OR (TD2.Status = '3' AND TD2.UserKey <> @c_UserID AND TD2.UserKeyOverRide <> @c_UserID)
-				  OR TD2.Qty * ISNULL(S.STDGROSSWGT,0) > @fMaximumWeight
-				  OR (PD1.TaskDetailKey IS NULL AND TD2.Status IN ('0','3') AND TD2.AreaKey = @c_AreaKey01) --PPA 20/11/2025 fixing to not provide orders with pickdetail is missing
-			   )
+                  TD2.Status IN ('S','H')
+                  OR (TD2.Status NOT IN ('x','9') AND (LOC2.Status <> 'OK' OR LOC2.LocationFlag NOT IN ('','NONE','INLOCKED')))
+                  OR (TD2.Status = '3' AND TD2.UserKey <> @c_UserID AND TD2.UserKeyOverRide <> @c_UserID)
+                  OR (TD2.Status NOT IN ('x','9') AND TD2.Qty * ISNULL(S.STDGROSSWGT,0) > @fMaximumWeight)
+                  OR (PD1.TaskDetailKey IS NULL AND TD2.Status IN ('0','3') AND TD2.AreaKey = @c_AreaKey01) --PPA 20/11/2025 fixing to not provide orders with pickdetail is missing
+               )
                AND TD2.TaskType IN ('FCP', 'FCP1')
                AND TD2.PickMethod = 'PP'
                AND LOC2.PutawayZone = LOC.PutawayZone
@@ -462,7 +462,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
-		                   AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
+                           AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
             AND ((EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
                   WHERE LISTNAME = 'JCBCOMPML'
@@ -577,7 +577,7 @@ BEGIN
             AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
-		                   AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
+                           AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
             AND ((NOT EXISTS (SELECT 1 FROM TaskDetail TD2 WITH (NOLOCK)
                WHERE TD2.StorerKey = TD.StorerKey
@@ -585,7 +585,10 @@ BEGIN
                   AND TD2.FromLoc = TD.FromLOC
                   AND TD2.STATUS = '3'
                   AND TD2.UserKey <> @c_UserID AND TD2.UserKeyOverRide <> @c_UserID
-                  AND TD2.TaskType IN ('RPF','RP1')) AND TD.AreaKey = 'MOTHERSONS' AND (ISNULL(@c_TTMPickCode,'') <> 'REPLEN' OR TD.PickMethod = 'PP'))
+                  AND TD2.TaskType IN ('RPF','RP1')) AND TD.AreaKey = 'MOTHERSONS' AND (ISNULL(@c_TTMPickCode,'') <> 'REPLEN' OR TD.PickMethod = 'PP')
+                  OR TD.UserKey = @c_UserID
+                  OR TD.UserKeyOverRide = @c_UserID
+                  )
                OR TD.AREAKEY <> 'MOTHERSONS')
       END TRY
       BEGIN CATCH
@@ -610,7 +613,7 @@ BEGIN
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
          AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE', 'INLOCKED'))
-		 AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE', 'INLOCKED'))
+         AND (LOC2.Status = 'OK' AND LOC2.LocationFlag IN ('','NONE', 'INLOCKED'))
          AND TD.PickMethod IN ('PP', 'FP')
          AND TD.StorerKey = @cStorerKey
          AND (
@@ -638,7 +641,7 @@ BEGIN
          AND NOT EXISTS (SELECT 1
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
-		                   AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
+                           AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
          AND ((NOT EXISTS (SELECT 1 FROM TaskDetail TD2 WITH (NOLOCK)
                WHERE TD2.StorerKey = TD.StorerKey
@@ -646,7 +649,10 @@ BEGIN
                   AND TD2.FromLoc = TD.FromLOC
                   AND TD2.STATUS = '3'
                   AND TD2.UserKey <> @c_UserID AND TD2.UserKeyOverRide <> @c_UserID
-                  AND TD2.TaskType IN ('RPF','RP1')) AND TD.AreaKey = 'MOTHERSONS' AND (ISNULL(@c_TTMPickCode,'') <> 'REPLEN' OR TD.PickMethod = 'PP'))
+                  AND TD2.TaskType IN ('RPF','RP1')) AND TD.AreaKey = 'MOTHERSONS' AND (ISNULL(@c_TTMPickCode,'') <> 'REPLEN' OR TD.PickMethod = 'PP')
+                  OR TD.UserKey = @c_UserID
+                  OR TD.UserKeyOverRide = @c_UserID
+                  )
                OR TD.AREAKEY <> 'MOTHERSONS')
       END TRY
       BEGIN CATCH
@@ -746,8 +752,8 @@ BEGIN
            TD.FinalLoc, 
            TD.FromID, 
            ISNULL(TD.SKU,'') AS SKU, 
-		   TD.Message01,
-		   TD.Message02,
+           TD.Message01,
+           TD.Message02,
            -- Calculate SKUGrossWeight of a task
            CASE 
              WHEN TD.SKU IS NULL OR TD.SKU = '' THEN 
@@ -787,10 +793,11 @@ BEGIN
       LEFT JOIN LOC LASTLOC WITH(NOLOCK) ON LASTLOC.Loc = ISNULL(@c_LastLoc,'') AND LASTLOC.Facility = @cFacility AND LASTLOC.LocationCategory = 'VNA'
       WHERE T.RowIndex = 1
       ORDER BY 
+         IIF(ISNULL(FromLoc,'')='INTRANSIT',1,99),
          IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle, 1, 99),
          IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle AND LASTLOC.Floor = T.FromLocFloor, 1, 99),
          IIF (T.Status = '3' AND UserKey = @c_UserID, 1, 2), 
-		 T.Message01 DESC,
+         T.Message01 DESC,
          T.Message02 DESC,
          IIF (UserKeyOverRide = @c_UserID AND UserKey IN ('',@c_UserID) AND T.Status = '3', 1, 2),
          IIF (UserKeyOverRide = @c_UserID AND T.Status = '0', 1, 2),
@@ -922,14 +929,14 @@ BEGIN
       END
       ELSE
       BEGIN
-	     SELECT @fPalletWeight = SUM(@nQty * SKU.STDGROSSWGT)
-		 FROM TaskDetail TD WITH (NOLOCK)
-		 INNER JOIN dbo.SKU WITH(NOLOCK) ON TD.StorerKey = SKU.StorerKey AND TD.SKU = SKU.SKU
-		 WHERE TD.FromLoc = @cFromLoc
-		 AND TD.FromID = @cFromID
-		 AND TD.SKU = @cSKU
-		 AND TD.Storerkey = @cStorerKey
-		 AND TD.TaskDetailKey = @cTaskDetailKey
+         SELECT @fPalletWeight = SUM(@nQty * SKU.STDGROSSWGT)
+         FROM TaskDetail TD WITH (NOLOCK)
+         INNER JOIN dbo.SKU WITH(NOLOCK) ON TD.StorerKey = SKU.StorerKey AND TD.SKU = SKU.SKU
+         WHERE TD.FromLoc = @cFromLoc
+         AND TD.FromID = @cFromID
+         AND TD.SKU = @cSKU
+         AND TD.Storerkey = @cStorerKey
+         AND TD.TaskDetailKey = @cTaskDetailKey
 
          /*SELECT @fPalletWeight = SUM(@nQty * SKU.STDGROSSWGT)
          FROM dbo.LOTXLOCXID LLI WITH (NOLOCK)
@@ -1838,7 +1845,7 @@ BEGIN
          TD.EditWho = @c_UserID,
          TD.Groupkey = FORMAT(GETDATE(), 'ddMMyyHHmm'),
          TD.TrafficCop = NULL,
-		 TD.StatusMsg = ''
+         TD.StatusMsg = ''
       FROM dbo.TaskDetail TD
       INNER JOIN @tTaskCandidate TC ON TD.TaskDetailKey = TC.TaskDetailKey
       WHERE TD.StorerKey = @cStorerKey
