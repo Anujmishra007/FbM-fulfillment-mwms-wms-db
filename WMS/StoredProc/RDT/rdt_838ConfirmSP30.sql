@@ -7,10 +7,11 @@ GO
 /* Store procedure: rdt_838ConfirmSP30                                           */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
-/* Date        Rev      Author       Purposes                                    */
-/* 2025-12-31  1.0      Dennis       FCR-8931                                    */
-/* 2026-03-30  1.1.0    JCH507       FCR-11193 PickDetail split logic            */
-/* 2026-04-01  1.1.1    JCH507       FCR-11193 Update CaseId instead of DropID   */
+/* Date        Rev    Author       Purposes                                      */
+/* 2025-12-31  1.0    Dennis       FCR-8931                                      */
+/* 2026-03-30  1.1.0  JCH507       FCR-11193 PickDetail split logic              */
+/* 2026-04-01  1.1.1  JCH507       FCR-11193 Update CaseId instead of DropID     */
+/* 2026-04-02  1.1.0  NickT        FCR-11343 Confirm B2C singles                 */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ConfirmSP30 (
@@ -68,12 +69,64 @@ BEGIN
    DECLARE @cPackDetailCartonID  NVARCHAR( 20)
    DECLARE @cPackByFromDropID    NVARCHAR( 1)
 
+   DECLARE @cIsB2CSingle         NVARCHAR(1) = '0'
+   DECLARE @cB2CSingleFlexPack   NVARCHAR(20) = '0'
+   DECLARE @cPickdetailKey       NVARCHAR( 18)
+
+   SELECT 
+      @cIsB2CSingle        = C_String1
+   FROM rdt.rdtMobRec WITH (NOLOCK)
+   WHERE Mobile = @nMobile
+   SET @cB2CSingleFlexPack = rdt.rdtGetConfig(@nFunc, 'B2CSingleFlexPack', @cStorerKey)
+
+
    -- Handling transaction
    DECLARE @nTranCount  INT
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_838ConfirmSP30 -- For rollback or commit only our own transaction
-   
+
+   -- For B2C single, it is pre-cartonized, it should always update existing carton and label, it won't create new carton or label, 
+   --even for the first time scanning, as the carton and label are created in advance, and the PickDetail is created when confirming Pick, 
+   --so it will always hit the update logic in Pack Confirm SP, it won't hit the insert logic, even for the first time scanning.
+   IF @cB2CSingleFlexPack = '1' AND @cIsB2CSingle = '1'
+   BEGIN
+      -- Get LabelLine
+      SET @cLabelLine = ''
+      SELECT @cLabelLine = LabelLine
+      FROM dbo.PackDetail WITH (NOLOCK) 
+      WHERE PickSlipNo = @cPickSlipNo 
+         AND CartonNo = @nCartonNo
+         AND LabelNo = @cLabelNo
+         AND SKU = @cSKU
+      
+      IF @cLabelLine = ''
+      BEGIN
+         SET @nErrNo = 262636
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No PackDetail is found
+         GOTO RollBackTran
+      END
+
+      BEGIN TRY
+         UPDATE dbo.PackDetail WITH (ROWLOCK) 
+         SET
+            Qty = IIF(Qty + 1 > ExpQty, ExpQty, Qty + 1),
+            EditWho = SUSER_SNAME(),
+            EditDate = GETDATE()
+         WHERE PickSlipNo = @cPickSlipNo 
+            AND CartonNo = @nCartonNo
+            AND LabelNo = @cLabelNo
+            AND LabelLine = @cLabelLine
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 262637
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PackDetail failed
+         GOTO RollBackTran
+      END CATCH
+
+      GOTO RDT_EVENT_LOG
+   END
+
    -- PackHeader
    IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo)
    BEGIN
@@ -916,6 +969,7 @@ BEGIN
       END
    END   
 
+   RDT_EVENT_LOG:
    --YeeKung      
    EXEC RDT.rdt_STD_EventLog           
    @cActionType         = '3',              
