@@ -106,6 +106,7 @@ GO
 /* 2025-11-11   7.9 Jackc       FCR-8675 Extend SKU, UCC barcode length                         */
 /* 2025-11-12   8.0 NickT       UWP-43907 Merge code from V0                                    */
 /* 2025-12-08   8.1 Dennis      FCR-8931 AddExtScnSP on Step 8                                  */
+/* 2026-04-01   8.2 NickT       FCR-11343 Make change for rdt_838ExtScn06 in step_99            */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -6598,6 +6599,8 @@ BEGIN
          END
          ELSE IF @cExtendedScreenSP = 'rdt_838ExtScn06'
          BEGIN
+            IF @cUDF01 = 'NO UPD RDTMOBREC'
+               RETURN
             IF @nPreStep = 99 AND @nPreScn = 4653 AND @nScn = 6708
             BEGIN
                SET @cCartonType = @cUDF01
@@ -6720,7 +6723,6 @@ BEGIN
       V_String49     = @cDefaultcartontype,
       V_String50     = @cPackByFromDropID,
       V_String51     = @cDefaultCursor, --(v7.5)
-      V_String52     = @cPackByToDropID,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
