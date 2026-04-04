@@ -35,6 +35,7 @@ BEGIN
 
    DECLARE @bSuccess    INT
    DECLARE @nExists     INT
+   DECLARE @nTranCount  INT
    DECLARE @cShort      NVARCHAR(20)
    DECLARE @cWCS        NVARCHAR(1)
    DECLARE @cCaseID     NVARCHAR(20)
@@ -67,6 +68,8 @@ BEGIN
       @cLot = Lot
    FROM TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskdetailKey
+
+   SET @nTranCount = @@TRANCOUNT
 
    -- TM Case Pick
    IF @nFunc = 1812
@@ -147,6 +150,9 @@ BEGIN
                SET @nLoopCnt = 1
                WHILE @nLoopCnt <= @nNumRecords
                BEGIN
+                  BEGIN TRAN
+                  SAVE TRAN rdt_1812ExtUpdAU03
+
                   SET @nCartonNo = @nMaxCartonNo + @nLoopCnt
 
                   -- Generate new LabelNo
@@ -166,7 +172,7 @@ BEGIN
                   BEGIN CATCH
                      SET @nErrNo = 263251
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackDetail Failed
-                     GOTO Quit
+                     GOTO RollBackTran
                   END CATCH
 
                   -- Update PACKINFO with SKU dimensions
@@ -197,7 +203,7 @@ BEGIN
                   BEGIN CATCH
                      SET @nErrNo = 263252
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PackInfo Failed
-                     GOTO Quit
+                     GOTO RollBackTran
                   END CATCH
 
                   -- Insert Transmitlog2 for Specialised orders
@@ -212,7 +218,7 @@ BEGIN
                   BEGIN CATCH
                      SET @nErrNo = 263253
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed
-                     GOTO Quit
+                     GOTO RollBackTran
                   END CATCH
 
                   -- Print SSCC Label for each PACKDETAIL.LabelNo
@@ -232,6 +238,8 @@ BEGIN
                         @nErrNo OUTPUT,
                         @cErrMsg OUTPUT
                   END
+
+                  COMMIT TRAN rdt_1812ExtUpdAU03
 
                   SET @nLoopCnt = @nLoopCnt + 1
                END
@@ -253,6 +261,9 @@ BEGIN
 
                WHILE @nLoopCnt <= @nNumRecords AND @nRemainingQty > 0
                BEGIN
+                  BEGIN TRAN
+                  SAVE TRAN rdt_1812ExtUpdAU03
+
                   SET @nCartonNo = @nMaxCartonNo + @nLoopCnt
 
                   -- Calculate qty for this case
@@ -280,7 +291,7 @@ BEGIN
                   BEGIN CATCH
                      SET @nErrNo = 263254
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackDetail Failed (CS Only)
-                     GOTO Quit
+                     GOTO RollBackTran
                   END CATCH
 
                   -- Update PACKINFO with PACK dimensions
@@ -311,7 +322,7 @@ BEGIN
                   BEGIN CATCH
                      SET @nErrNo = 263255
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PackInfo Failed (CS Only)
-                     GOTO Quit
+                     GOTO RollBackTran
                   END CATCH
 
                   -- Insert Transmitlog2 for Specialised orders
@@ -326,7 +337,7 @@ BEGIN
                   BEGIN CATCH
                      SET @nErrNo = 263256
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed (CS Only)
-                     GOTO Quit
+                     GOTO RollBackTran
                   END CATCH
 
                   -- Print SSCC Label for each PACKDETAIL.LabelNo
@@ -346,6 +357,8 @@ BEGIN
                         @nErrNo OUTPUT,
                         @cErrMsg OUTPUT
                   END
+
+                  COMMIT TRAN rdt_1812ExtUpdAU03
 
                   SET @nLoopCnt = @nLoopCnt + 1
                END
@@ -682,8 +695,13 @@ BEGIN
       END
    END
 
-Quit:
+   GOTO Quit
 
+RollBackTran:
+   ROLLBACK TRAN rdt_1812ExtUpdAU03
+Quit:
+   WHILE @@TRANCOUNT > @nTranCount
+      COMMIT TRAN
 
 END
 GO

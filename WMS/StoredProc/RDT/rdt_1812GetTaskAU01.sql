@@ -126,9 +126,10 @@ BEGIN
    END
 
    -- Get next task using dynamic ORDER BY
+   DECLARE @curRPTask CURSOR
    IF @cAreaKey = '' OR @cAreaKey = 'ALL'
       SET @cSQL = '
-         DECLARE curRPTask CURSOR GLOBAL READ_ONLY FAST_FORWARD FOR
+         SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT TOP 1
             TaskDetail.TaskDetailKey, TaskDetail.TaskType, TaskDetail.FromLOC, TaskDetail.FromID
             , TaskDetail.StorerKey, TaskDetail.SKU, TaskDetail.LOT, TaskDetail.QTY, TaskDetail.ToLOC, TaskDetail.ToID
@@ -156,7 +157,7 @@ BEGIN
          ORDER BY ' + @cOrderBy
    ELSE
       SET @cSQL = '
-         DECLARE curRPTask CURSOR GLOBAL READ_ONLY FAST_FORWARD FOR
+         SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT TOP 1
             TaskDetail.TaskDetailKey, TaskDetail.TaskType, TaskDetail.FromLOC, TaskDetail.FromID
             , TaskDetail.StorerKey, TaskDetail.SKU, TaskDetail.LOT, TaskDetail.QTY, TaskDetail.ToLOC, TaskDetail.ToID
@@ -184,12 +185,12 @@ BEGIN
                      AND TST.USERID = ''' + @cUserName + ''')
          ORDER BY ' + @cOrderBy
 
-   EXEC sp_executesql @cSQL
+   EXEC sp_executesql @cSQL, N'@curRPTask CURSOR OUTPUT', @curRPTask = @curRPTask OUTPUT
 
-   OPEN curRPTask
+   OPEN @curRPTask
    WHILE (1=1)
    BEGIN
-      FETCH NEXT FROM curRPTask INTO @cNewTaskKey, @cTaskType, @cFromLOC, @cFromID, @cStorerKey, @cSKU, @cLOT, @nQTY, @cToLOC, @cToID
+      FETCH NEXT FROM @curRPTask INTO @cNewTaskKey, @cTaskType, @cFromLOC, @cFromID, @cStorerKey, @cSKU, @cLOT, @nQTY, @cToLOC, @cToID
       IF @@FETCH_STATUS <> 0
       BEGIN
          SET @cNewTaskKey = ''
@@ -272,8 +273,8 @@ BEGIN
       BREAK -- Exit loop if found a task
    END
 
-   CLOSE curRPTask
-   DEALLOCATE curRPTask
+   CLOSE @curRPTask
+   DEALLOCATE @curRPTask
 
    IF @cNewTaskKey = ''
    BEGIN
