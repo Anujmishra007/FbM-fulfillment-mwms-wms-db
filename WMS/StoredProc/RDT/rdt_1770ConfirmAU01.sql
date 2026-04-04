@@ -1542,9 +1542,9 @@ BEGIN
 
                 SET @cLength  = CAST(@fLength AS NVARCHAR(10))
                 SET @cWidth   = CAST(@fWidth  AS NVARCHAR(10))
-                SET @cHeight  = CAST(@fWeight AS NVARCHAR(10))
+                SET @cHeight  = CAST(@fHeight AS NVARCHAR(10))
                 SET @cCube    = CAST(@fCube   AS NVARCHAR(10))
-                SET @cWeight  = CAST(@fHeight AS NVARCHAR(10))
+                SET @cWeight  = CAST(@fWeight AS NVARCHAR(10))
 
 
                 --Submit Print Job for each cases
