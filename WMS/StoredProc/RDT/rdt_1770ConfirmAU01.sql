@@ -1041,7 +1041,7 @@ BEGIN
                     AND UserDefine02 = @cPackData2
                     AND UserDefine03 = @cPackData3
 
-                IF @nPackDetailInfoKey = ''
+                IF @nPackDetailInfoKey = 0
                 BEGIN
                     -- Insert PackDetailInfo
                     INSERT INTO dbo.PackDetailInfo (

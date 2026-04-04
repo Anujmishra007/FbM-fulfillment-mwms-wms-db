@@ -30,3 +30,4 @@ execute rdt.rdtAddMsg 262775, 10, '262775INS MBDtl Fail', 'us_english', 1770
 execute rdt.rdtAddMsg 262776, 10, '262776INSPKHdrFail  ', 'us_english', 1770
 execute rdt.rdtAddMsg 262777, 10, '262777UPD PLTDL Err ', 'us_english', 1770
 execute rdt.rdtAddMsg 262778, 10, '262778UPDPLTHdrFail ', 'us_english', 1770
+execute rdt.rdtAddMsg 262779, 10, '262779INS TRANSLOG Fail', 'us_english', 1770

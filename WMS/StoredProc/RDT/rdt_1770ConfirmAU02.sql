@@ -1034,6 +1034,12 @@ BEGIN
                             GETDATE(), 
                             'rdt.' + SUSER_SNAME()
                         )
+                        IF @@ERROR <> 0
+                        BEGIN
+                            SET @nErrNo = 262779
+                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TRANSLOG Fail
+                            GOTO RollBackTran
+                        END
                     END
                 END
             END               
@@ -1184,9 +1190,9 @@ BEGIN
                 BEGIN
                     SET @fWeight = @fSKUWeight + @fCartonWeight  -- SKU + carton weight
                 END
-                
-                SET @cWeight = rdt.rdtFormatFloat( @fSKUWeight)
-                SET @fSKUWeight = CAST(@cWeight AS FLOAT)
+
+                SET @cWeight = rdt.rdtFormatFloat( @fWeight)
+                SET @fWeight = CAST(@cWeight AS FLOAT)
 
                 UPDATE dbo.PackInfo SET
                     QTY = QTY + @nQTY,
@@ -1525,6 +1531,12 @@ BEGIN
                         GETDATE(), 
                         'rdt.' + SUSER_SNAME()
                     )
+                    IF @@ERROR <> 0
+                    BEGIN
+                        SET @nErrNo = 262779
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TRANSLOG Fail
+                        GOTO RollBackTran
+                    END
                 END
             END
 
