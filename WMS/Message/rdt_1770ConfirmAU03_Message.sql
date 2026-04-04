@@ -1,7 +1,6 @@
 -- 262751 - 262800
 
 execute rdt.rdtdropmsg 262751, 262800
-
 execute rdt.rdtAddMsg 262751, 10, '262751IncorrectSetup', 'us_english', 1770
 execute rdt.rdtAddMsg 262752, 10, '262752IncorrectSetup', 'us_english', 1770
 execute rdt.rdtAddMsg 262753, 10, '262753UpdPickDtlFail', 'us_english', 1770
@@ -11,8 +10,6 @@ execute rdt.rdtAddMsg 262756, 10, '262756GetDetKey Fail', 'us_english', 1770
 execute rdt.rdtAddMsg 262757, 10, '262757Ins PDtl Fail ', 'us_english', 1770
 execute rdt.rdtAddMsg 262758, 10, '262758InsRefKeyFail ', 'us_english', 1770
 execute rdt.rdtAddMsg 262759, 10, '262759UpdPickDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262760, 10, '262760UpdPickDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262761, 10, '262761UpdPickDtlFail', 'us_english', 1770
 execute rdt.rdtAddMsg 262762, 10, '262762Offset error  ', 'us_english', 1770
 execute rdt.rdtAddMsg 262763, 10, '262763UpdTaskdetFail', 'us_english', 1770
 execute rdt.rdtAddMsg 262764, 10, '262764UpdTaskdetFail', 'us_english', 1770
@@ -30,4 +27,11 @@ execute rdt.rdtAddMsg 262775, 10, '262775INS MBDtl Fail', 'us_english', 1770
 execute rdt.rdtAddMsg 262776, 10, '262776INSPKHdrFail  ', 'us_english', 1770
 execute rdt.rdtAddMsg 262777, 10, '262777UPD PLTDL Err ', 'us_english', 1770
 execute rdt.rdtAddMsg 262778, 10, '262778UPDPLTHdrFail ', 'us_english', 1770
-execute rdt.rdtAddMsg 262779, 10, '262779INS TRANSLOG Fail', 'us_english', 1770
+execute rdt.rdtAddMsg 262779, 10, '262779INS TRANSLOGFl', 'us_english', 1770
+execute rdt.rdtAddMsg 262780, 10, '262780UPD UCC Fail  ', 'us_english', 1770
+execute rdt.rdtAddMsg 262781, 10, '262781InsShpLblFail ', 'us_english', 1770
+execute rdt.rdtAddMsg 262782, 10, '262782InsManiFail   ', 'us_english', 1770
+execute rdt.rdtAddMsg 262783, 10, '262783INSPalletFail ', 'us_english', 1770
+execute rdt.rdtAddMsg 262784, 10, '262784InsManiLnFail ', 'us_english', 1770
+execute rdt.rdtAddMsg 262785, 10, '262785InsPackLstFail', 'us_english', 1770
+execute rdt.rdtAddMsg 262786, 10, '262786InsPltLblFail ', 'us_english', 1770

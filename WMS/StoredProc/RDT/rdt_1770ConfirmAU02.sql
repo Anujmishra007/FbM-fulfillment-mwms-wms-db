@@ -10,7 +10,7 @@ GO
 /* 2026-04-04  1.1   SYC067    MOVE ASSIGN PICK TO BEFORE PRINT (SY02)     */  
 /***************************************************************************/  
   
-CREATE OR ALTER PROC [RDT].[rdt_1770ConfirmAU02] (  
+CREATE OR ALTER PROC RDT.rdt_1770ConfirmAU02 (  
     @nMobile        INT,  
     @nFunc          INT,  
     @cLangCode      NVARCHAR( 3),  
@@ -2111,5 +2111,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_1770ConfirmAU02] TO NSQL
+GRANT EXECUTE ON rdt.rdt_1770ConfirmAU02 TO NSQL
 GO
