@@ -1150,8 +1150,12 @@ BEGIN
 
             IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
             BEGIN
+                IF @cDefaultWeight = '2'
+                BEGIN
+                    SET @fWeight = @fSKUWeight  -- SKU weight only
+                END
 
-                IF @cDefaultWeight = '3'
+                ELSE IF @cDefaultWeight = '3'
                 BEGIN
                     SET @fWeight = @fSKUWeight + @fCartonWeight
                 END
@@ -1171,6 +1175,16 @@ BEGIN
             END
             ELSE
             BEGIN
+                -- Calculate weight for UPDATE
+                IF @cDefaultWeight = '2'
+                BEGIN
+                    SET @fWeight = @fSKUWeight  -- SKU weight only
+                END
+                ELSE IF @cDefaultWeight = '3'
+                BEGIN
+                    SET @fWeight = @fSKUWeight + @fCartonWeight  -- SKU + carton weight
+                END
+                
                 SET @cWeight = rdt.rdtFormatFloat( @fSKUWeight)
                 SET @fSKUWeight = CAST(@cWeight AS FLOAT)
 
@@ -1887,80 +1901,97 @@ BEGIN
     /***********************************************************************************************
                                                 Pack confirm
     ***********************************************************************************************/
-
-    IF ISNULL(@cFromID,'') <> ''
+    IF @cTaskType = 'FPK'  -- ADD THIS
     BEGIN
-        -- Update PickDetail, base on PackDetail.DropID
-        EXEC isp_AssignPackLabelToPickByDropIDAU
-            @cPickSlipNo
-            ,@cFromID
-            ,@bSuccess OUTPUT
-            ,@nErrNo   OUTPUT
-            ,@cErrMsg  OUTPUT
+        IF ISNULL(@cFromID,'') <> ''
+        BEGIN
+            -- Update PickDetail, base on PackDetail.DropID
+            EXEC isp_AssignPackLabelToPickByDropIDAU
+                @cPickSlipNo
+                ,@cFromID
+                ,@bSuccess OUTPUT
+                ,@nErrNo   OUTPUT
+                ,@cErrMsg  OUTPUT
+            IF @nErrNo <> 0
+                GOTO RollBackTran
+        END
+
+        -- PickHeader (needed by the rdt_Pack_PackConfirm in below)
+        IF NOT EXISTS( SELECT 1 FROM dbo.PickHeader WITH (NOLOCK) WHERE PickHeaderKey = @cPickSlipNo)
+        BEGIN
+            INSERT INTO dbo.PickHeader (PickHeaderKey, OrderKey)
+            VALUES (@cPickSlipNo, @cOrderKey)
+            IF @@ERROR <> 0
+            BEGIN
+                SET @nErrNo = 262776
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPKHdrFail
+                GOTO RollBackTran
+            END
+        END
+
+        -- Pack confirm
+        EXEC rdt.rdt_Pack_PackConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+            ,@cPickSlipNo
+            ,'' -- @cFromDropID
+            ,'' -- @cPackDtlDropID
+            ,'' -- @cPrintPackList
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
         IF @nErrNo <> 0
             GOTO RollBackTran
-    END
 
-    -- PickHeader (needed by the rdt_Pack_PackConfirm in below)
-    IF NOT EXISTS( SELECT 1 FROM dbo.PickHeader WITH (NOLOCK) WHERE PickHeaderKey = @cPickSlipNo)
-    BEGIN
-        INSERT INTO dbo.PickHeader (PickHeaderKey, OrderKey)
-        VALUES (@cPickSlipNo, @cOrderKey)
-        IF @@ERROR <> 0
+        IF EXISTS (SELECT TOP 1 1 FROM PACKHEADER (NOLOCK) WHERE PICKSLIPNO = @cPickSlipNo AND STATUS = '9')
         BEGIN
-            SET @nErrNo = 262776
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPKHdrFail
-            GOTO RollBackTran
-        END
-    END
+            DECLARE @cPackList NVARCHAR( 10)
 
-    -- Pack confirm
-    EXEC rdt.rdt_Pack_PackConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
-        ,@cPickSlipNo
-        ,'' -- @cFromDropID
-        ,'' -- @cPackDtlDropID
-        ,'' -- @cPrintPackList
-        ,@nErrNo  OUTPUT
-        ,@cErrMsg OUTPUT
-    IF @nErrNo <> 0
-        GOTO RollBackTran
+            SET @cPackList = rdt.RDTGetConfig( @nFunc, 'PackList', @cStorerKey)
+            IF @cPackList = '0'
+                SET @cPackList = ''
 
-    IF EXISTS (SELECT TOP 1 1 FROM PACKHEADER (NOLOCK) WHERE PICKSLIPNO = @cPickSlipNo AND STATUS = '9')
-    BEGIN
-        DECLARE @cPackList NVARCHAR( 10)
-
-        SET @cPackList = rdt.RDTGetConfig( @nFunc, 'PackList', @cStorerKey)
-        IF @cPackList = '0'
-            SET @cPackList = ''
-
-        IF @cPackList <> ''
-        BEGIN
-            DECLARE @tPackList AS VariableTable
-            INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
-            INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-            INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
-        END
-
-        IF @cPackList <> '' AND ISNULL(@cLabelPrinter,'') <> ''
-        BEGIN
-            IF EXISTS (SELECT TOP 1 1 FROM RDT.RDTREPORTTOPRINTER (NOLOCK)
-                        WHERE PRINTERGROUP = ISNULL(@cLabelPrinter,'')
-                        AND FUNCTION_ID = @nFunc
-                        AND REPORTTYPE = @cPackList)
+            IF @cPackList <> ''
             BEGIN
-                --DECLARE @tPackList AS VariableTable
-                --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
-                --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
-
-                -- Print label
-                EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
-                    @cPackList, -- Report type
-                    @tPackList, -- Report params
-                    'rdt_1770ConfirmAU02',
-                    @nErrNo  OUTPUT,
-                    @cErrMsg OUTPUT
+                DECLARE @tPackList AS VariableTable
+                INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
+                INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
+                INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
             END
+
+            IF @cPackList <> '' AND ISNULL(@cLabelPrinter,'') <> ''
+            BEGIN
+                IF EXISTS (SELECT TOP 1 1 FROM RDT.RDTREPORTTOPRINTER (NOLOCK)
+                            WHERE PRINTERGROUP = ISNULL(@cLabelPrinter,'')
+                            AND FUNCTION_ID = @nFunc
+                            AND REPORTTYPE = @cPackList)
+                BEGIN
+                    --DECLARE @tPackList AS VariableTable
+                    --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
+                    --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
+                    --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+
+                    -- Print label
+                    EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
+                        @cPackList, -- Report type
+                        @tPackList, -- Report params
+                        'rdt_1770ConfirmAU02',
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT
+                END
+                ELSE IF @cPackList <> '' AND ISNULL(@cPaperPrinter,'') <> ''
+                BEGIN
+                    --DECLARE @tPackList AS VariableTable
+                    --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
+                    --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
+                    --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+
+                    -- Print label
+                    EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
+                        @cPackList, -- Report type
+                        @tPackList, -- Report params
+                        'rdt_1770ConfirmAU02',
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT
+                END -- Packlist <> ''
+            END -- Packlist <> ''
             ELSE IF @cPackList <> '' AND ISNULL(@cPaperPrinter,'') <> ''
             BEGIN
                 --DECLARE @tPackList AS VariableTable
@@ -1976,115 +2007,100 @@ BEGIN
                     @nErrNo  OUTPUT,
                     @cErrMsg OUTPUT
             END -- Packlist <> ''
-        END -- Packlist <> ''
-        ELSE IF @cPackList <> '' AND ISNULL(@cPaperPrinter,'') <> ''
+        END
+
+        IF ISNULL(@cClosePalletFlag,'') = '1'
         BEGIN
-            --DECLARE @tPackList AS VariableTable
-            --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
-            --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-            --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
 
-            -- Print label
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
-                @cPackList, -- Report type
-                @tPackList, -- Report params
-                'rdt_1770ConfirmAU02',
-                @nErrNo  OUTPUT,
-                @cErrMsg OUTPUT
-        END -- Packlist <> ''
-    END
+            SET @cPLTUDF05 = ''
 
-    IF ISNULL(@cClosePalletFlag,'') = '1'
-    BEGIN
-
-        SET @cPLTUDF05 = ''
-
-        SELECT TOP 1 @cPLTUDF05 = P.PALLETKEY
-        FROM PALLET P WITH (NOLOCK)
-        JOIN PALLETDETAIL PLD WITH (NOLOCK) ON P.PALLETKEY = PLD.Palletkey
-        WHERE PLD.USERDEFINE01 = @cOrderKey
-        AND P.STATUS = '9'
-        AND ISNULL(USERDEFINE05,'') = ''
-
-        IF ISNULL(@cPLTUDF05,'') = ''
-            SELECT TOP 1 @cPLTUDF05 = PLD.USERDEFINE05
+            SELECT TOP 1 @cPLTUDF05 = P.PALLETKEY
             FROM PALLET P WITH (NOLOCK)
             JOIN PALLETDETAIL PLD WITH (NOLOCK) ON P.PALLETKEY = PLD.Palletkey
             WHERE PLD.USERDEFINE01 = @cOrderKey
             AND P.STATUS = '9'
-            AND ISNULL(USERDEFINE05,'') <> ''
+            AND ISNULL(USERDEFINE05,'') = ''
 
-        UPDATE dbo.PALLETDETAIL SET
-            UserDefine05 = @cPLTUDF05,
-            TrafficCop = NULL,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
-        WHERE PalletKey = @cFromID
+            IF ISNULL(@cPLTUDF05,'') = ''
+                SELECT TOP 1 @cPLTUDF05 = PLD.USERDEFINE05
+                FROM PALLET P WITH (NOLOCK)
+                JOIN PALLETDETAIL PLD WITH (NOLOCK) ON P.PALLETKEY = PLD.Palletkey
+                WHERE PLD.USERDEFINE01 = @cOrderKey
+                AND P.STATUS = '9'
+                AND ISNULL(USERDEFINE05,'') <> ''
 
-        IF @@ERROR <> 0
-        BEGIN
-            SET @nErrNo = 262777
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PLTDL Err
-            GOTO RollBackTran
+            UPDATE dbo.PALLETDETAIL SET
+                UserDefine05 = @cPLTUDF05,
+                TrafficCop = NULL,
+                EditDate = GETDATE(),
+                EditWho = SUSER_SNAME()
+            WHERE PalletKey = @cFromID
+
+            IF @@ERROR <> 0
+            BEGIN
+                SET @nErrNo = 262777
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PLTDL Err
+                GOTO RollBackTran
+            END
+
+            UPDATE dbo.PALLET WITH (ROWLOCK)
+            SET STATUS = '9'
+            WHERE PALLETKEY = @cFromID
+
+            IF @@ERROR <> 0
+            BEGIN
+                SET @nErrNo = 262778
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPLTHdrFail
+                GOTO RollBackTran
+            END
         END
 
-        UPDATE dbo.PALLET WITH (ROWLOCK)
-        SET STATUS = '9'
-        WHERE PALLETKEY = @cFromID
+        DECLARE @cPalletLabel        NVARCHAR( 10)
 
-        IF @@ERROR <> 0
-        BEGIN
-            SET @nErrNo = 262778
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPLTHdrFail
-            GOTO RollBackTran
-        END
-    END
+        DECLARE @tPalletLabel  AS VariableTable
 
-    DECLARE @cPalletLabel        NVARCHAR( 10)
+        SET @cPalletLabel = rdt.RDTGetConfig( @nFunc, 'PalletLabel', @cStorerKey)
+        IF @cPalletLabel = '0'
+            SET @cPalletLabel = ''
 
-    DECLARE @tPalletLabel  AS VariableTable
-
-    SET @cPalletLabel = rdt.RDTGetConfig( @nFunc, 'PalletLabel', @cStorerKey)
-    IF @cPalletLabel = '0'
-        SET @cPalletLabel = ''
-
-    IF EXISTS (SELECT TOP 1 1 FROM PALLET WITH (NOLOCK) WHERE PALLETKEY = @cFromID)
-    BEGIN
-
-        IF ISNULL(@cPalletLabel,'') <> '' AND ISNULL(@cLabelPrinter,'') <> ''
+        IF EXISTS (SELECT TOP 1 1 FROM PALLET WITH (NOLOCK) WHERE PALLETKEY = @cFromID)
         BEGIN
 
-            INSERT INTO @tPalletLabel (Variable, Value) VALUES
-            ( '@cStorerKey',     @cStorerKey),
-            ( '@cPalletKey',    @cFromID)
+            IF ISNULL(@cPalletLabel,'') <> '' AND ISNULL(@cLabelPrinter,'') <> ''
+            BEGIN
 
-            -- Print label
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-            @cPalletLabel, -- Report type
-            @tPalletLabel, -- Report params
-            'rdt_1770ConfirmAU02',
-            @nErrNo  OUTPUT,
-            @cErrMsg OUTPUT
+                INSERT INTO @tPalletLabel (Variable, Value) VALUES
+                ( '@cStorerKey',     @cStorerKey),
+                ( '@cPalletKey',    @cFromID)
 
-            SET @nErrNo = 0
-            SET @cErrMsg = ''
+                -- Print label
+                EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+                @cPalletLabel, -- Report type
+                @tPalletLabel, -- Report params
+                'rdt_1770ConfirmAU02',
+                @nErrNo  OUTPUT,
+                @cErrMsg OUTPUT
 
+                SET @nErrNo = 0
+                SET @cErrMsg = ''
+
+            END
         END
-    END
 
 
-    IF ISNULL(@cOrderUserDefine01,'') <> 'Specialised'
-    BEGIN
-        -- FCR-11723: Call carrier middleware for non-Specialised orders
-        EXEC [dbo].[isp_Carrier_Middleware_Interface]
-            @c_OrderKey    = @cOrderKey
-        , @c_Mbolkey     = ''
-        , @c_FunctionID  = @nFunc
-        , @n_CartonNo    = @nCartonNo
-        , @n_Step        = @nStep
-        , @b_Success     = @bSuccess  OUTPUT
-        , @n_Err         = @nErrNo    OUTPUT
-        , @c_ErrMsg      = @cErrMsg   OUTPUT
+        IF ISNULL(@cOrderUserDefine01,'') <> 'Specialised'
+        BEGIN
+            -- FCR-11723: Call carrier middleware for non-Specialised orders
+            EXEC [dbo].[isp_Carrier_Middleware_Interface]
+                @c_OrderKey    = @cOrderKey
+            , @c_Mbolkey     = ''
+            , @c_FunctionID  = @nFunc
+            , @n_CartonNo    = @nCartonNo
+            , @n_Step        = @nStep
+            , @b_Success     = @bSuccess  OUTPUT
+            , @n_Err         = @nErrNo    OUTPUT
+            , @c_ErrMsg      = @cErrMsg   OUTPUT
+        END
     END
 
 
@@ -2123,3 +2139,12 @@ Quit:
     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
         COMMIT TRAN
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON [rdt].[rdt_1770ConfirmAU02] TO NSQL
+GO

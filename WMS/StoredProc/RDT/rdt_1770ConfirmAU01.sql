@@ -1123,12 +1123,17 @@ BEGIN
             IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
             BEGIN
 
-                IF @cDefaultWeight = '3'
+                IF @cDefaultWeight = '2'
                 BEGIN
-                    SET @fWeight = @fSKUWeight + @fCartonWeight
+                    SET @fWeight = @fSKUWeight --SKU weight only
                 END
-                SET @cWeight = rdt.rdtFormatFloat( @fWeight)
 
+                ELSE IF @cDefaultWeight = '3'
+                BEGIN
+                    SET @fWeight = @fSKUWeight + @fCartonWeight  -- SKU + carton weight
+                END
+
+                SET @cWeight = rdt.rdtFormatFloat( @fWeight)
                 SET @fWeight = CAST(@cWeight AS FLOAT)
 
                 INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, Qty, Weight, Cube, CartonType, Length, Width, Height)
@@ -2069,3 +2074,12 @@ Quit:
     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
         COMMIT TRAN
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON [rdt].[rdt_1770ConfirmAU01] TO NSQL
+GO
