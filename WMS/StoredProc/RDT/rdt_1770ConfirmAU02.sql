@@ -3,14 +3,15 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 /***************************************************************************/
-/* Store procedure: rdt_1770ConfirmAU01                                    */
+/* Store procedure: rdt_1770ConfirmAU02                                    */
 /* Copyright      : Maersk                                                 */
+/* Customer       : CASTLERY PTE LTD                                       */
 /*                                                                         */
 /* Date        Rev   Author    Purposes                                    */
-/* 2025-05-26  1.0   SYC067    Created                                     */
+/* 2025-03-31  1.0   Sreeja    FCR-11723 Update dimensions                 */
 /***************************************************************************/
 
-CREATE OR ALTER PROC RDT.rdt_1770ConfirmAU01 (
+CREATE OR ALTER PROC rdt.rdt_1770ConfirmAU02 (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -56,6 +57,7 @@ BEGIN
     DECLARE @cPalletLineNumber NVARCHAR( 5)  --INC7331096
     DECLARE @cOrderKey   NVARCHAR( 10)         /* (JH01)*/
     DECLARE @cPLTUDF05   NVARCHAR( 30)
+    DECLARE @cTransmitLogKey NVARCHAR( 10)
 
     DECLARE @nPalletLength FLOAT = 116.0
     DECLARE @nPalletWidth  FLOAT = 116.0
@@ -99,7 +101,7 @@ BEGIN
     -- Check move alloc, but picked
     IF @cMoveQTYAlloc = '1' AND @cPickConfirmStatus = '5'
     BEGIN
-        SET @nErrNo = 262601
+        SET @nErrNo = 262751
         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
         GOTO Quit
     END
@@ -107,7 +109,7 @@ BEGIN
     -- Check move picked, but not pick confirm
     IF @cMoveQTYPick = '1' AND @cPickConfirmStatus < '5'
     BEGIN
-        SET @nErrNo = 262602
+        SET @nErrNo = 262752
         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
         GOTO Quit
     END
@@ -116,7 +118,7 @@ BEGIN
     DECLARE @nTranCount INT
     SET @nTranCount = @@TRANCOUNT
     BEGIN TRAN  -- Begin our own transaction
-    SAVE TRAN rdt_1770ConfirmAU01 -- For rollback or commit only our own transaction
+    SAVE TRAN rdt_1770ConfirmAU02 -- For rollback or commit only our own transaction
 
     IF @cTaskType = 'FPK' -- need to update PickDetail
     BEGIN
@@ -146,7 +148,7 @@ BEGIN
                 WHERE PickDetailKey = @cPickDetailKey
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262603
+                    SET @nErrNo = 262753
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
                     GOTO RollBackTran
                 END
@@ -168,7 +170,7 @@ BEGIN
                 WHERE PickDetailKey = @cPickDetailKey
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262604
+                    SET @nErrNo = 262754
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
                     GOTO RollBackTran
                 END
@@ -193,7 +195,7 @@ BEGIN
                     WHERE PickDetailKey = @cPickDetailKey
                     IF @@ERROR <> 0
                     BEGIN
-                        SET @nErrNo = 262605
+                        SET @nErrNo = 262755
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
                         GOTO RollBackTran
                     END
@@ -212,7 +214,7 @@ BEGIN
                     @cErrMsg           OUTPUT
                 IF @bSuccess <> 1
                 BEGIN
-                    SET @nErrNo = 262606
+                    SET @nErrNo = 262756
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetDetKey Fail
                     GOTO RollBackTran
                 END
@@ -243,7 +245,7 @@ BEGIN
                 WHERE PickDetailKey = @cPickDetailKey
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262607
+                    SET @nErrNo = 262757
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins PDtl Fail
                     GOTO RollBackTran
                 END
@@ -258,7 +260,7 @@ BEGIN
                     WHERE PickDetailKey = @cPickDetailKey
                     IF @@ERROR <> 0
                     BEGIN
-                        SET @nErrNo = 262608
+                        SET @nErrNo = 262758
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsRefKeyFail
                         GOTO RollBackTran
                     END
@@ -274,7 +276,7 @@ BEGIN
                 WHERE PickDetailKey = @cPickDetailKey
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262609
+                    SET @nErrNo = 262759
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
                     GOTO RollBackTran
                 END
@@ -287,7 +289,7 @@ BEGIN
                 WHERE PickDetailKey = @cPickDetailKey
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262610
+                    SET @nErrNo = 262760
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
                     GOTO RollBackTran
                 END
@@ -302,7 +304,7 @@ BEGIN
                 WHERE PickDetailKey = @cNewPickDetailKey
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262611
+                    SET @nErrNo = 262761
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
                     GOTO RollBackTran
                 END
@@ -318,7 +320,7 @@ BEGIN
         -- Check offset
         IF @nQTY_Bal <> 0
         BEGIN
-            SET @nErrNo = 262612
+            SET @nErrNo = 262762
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Offset error
             GOTO RollBackTran
         END
@@ -364,7 +366,7 @@ BEGIN
                 @cLangCode      = @cLangCode,
                 @nErrNo         = @nErrNo  OUTPUT,
                 @cErrMsg        = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-                @cSourceType    = 'rdt_1770ConfirmAU01',
+                @cSourceType    = 'rdt_1770ConfirmAU02',
                 @cStorerKey     = @cStorerKey,
                 @cFacility      = @cFacility,
                 @cFromLOC       = @cFromLOC,
@@ -383,7 +385,7 @@ BEGIN
                 @cLangCode      = @cLangCode,
                 @nErrNo         = @nErrNo  OUTPUT,
                 @cErrMsg        = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-                @cSourceType    = 'rdt_1770ConfirmAU01',
+                @cSourceType    = 'rdt_1770ConfirmAU02',
                 @cStorerKey     = @cStorerKey,
                 @cFacility      = @cFacility,
                 @cFromLOC       = @cFromLOC,
@@ -415,7 +417,7 @@ BEGIN
         WHERE TaskDetailKey = @cTaskDetailKey
         IF @@ERROR <> 0
         BEGIN
-            SET @nErrNo = 262613
+            SET @nErrNo = 262763
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail
             GOTO RollBackTran
         END
@@ -432,7 +434,7 @@ BEGIN
                 @cLangCode      = @cLangCode,
                 @nErrNo         = @nErrNo  OUTPUT,
                 @cErrMsg        = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-                @cSourceType    = 'rdt_1770ConfirmAU01',
+                @cSourceType    = 'rdt_1770ConfirmAU02',
                 @cStorerKey     = @cStorerKey,
                 @cFacility      = @cFacility,
                 @cFromLOC       = @cFromLOC,
@@ -456,7 +458,7 @@ BEGIN
         WHERE TaskDetailKey = @cTaskDetailKey
         IF @@ERROR <> 0
         BEGIN
-            SET @nErrNo = 262614
+            SET @nErrNo = 262764
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail
             GOTO RollBackTran
         END
@@ -485,6 +487,7 @@ BEGIN
         DECLARE @cConsigneeKey NVARCHAR( 15) = ''
         DECLARE @cBillToKey    NVARCHAR( 20) = ''
         DECLARE @cOrderType    NVARCHAR( 20) = ''
+        DECLARE @cOrderUserDefine01 NVARCHAR( 30) = '' -- FCR-11723: For Specialised check
 
         DECLARE @cCustomerType1     NVARCHAR( 20) = '' --PALLET / CASE
         DECLARE @cCustomerType2     NVARCHAR( 20) = '' --SANDWICH / RAINBOW
@@ -613,6 +616,7 @@ BEGIN
         IF @cOrderKey <> ''
             SELECT @cConsigneeKey = ConsigneeKey, @cBillToKey = BillToKey, @cOrderType = [Type]
                 , @cPWaveKey = UserDefine09, @cPLoadkey = LoadKey
+                , @cOrderUserDefine01 = UserDefine01  -- FCR - 11723: For Specialised check
             FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
 
         --Get Pack config
@@ -663,7 +667,7 @@ BEGIN
             VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, '', @cLoadKey)
             IF @@ERROR <> 0
             BEGIN
-                SET @nErrNo = 262615
+                SET @nErrNo = 262765
                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail
                 GOTO RollBackTran
             END
@@ -916,7 +920,7 @@ BEGIN
                                 @cErrMsg       OUTPUT
                             IF @nErrNo <> 0
                             BEGIN
-                                SET @nErrNo = 262616
+                                SET @nErrNo = 262766
                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
                                 GOTO RollBackTran
                             END
@@ -937,7 +941,7 @@ BEGIN
                                     @cErrMsg       OUTPUT
                                 IF @nErrNo <> 0
                                 BEGIN
-                                    SET @nErrNo = 262616
+                                    SET @nErrNo = 262766
                                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
                                     GOTO RollBackTran
                                 END
@@ -980,7 +984,7 @@ BEGIN
                 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262617
+                    SET @nErrNo = 262767
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackDtlFail
                     GOTO RollBackTran
                 END
@@ -994,7 +998,46 @@ BEGIN
                     AND LabelNo = @cLabelNo
                     AND AddWho = 'rdt.' + SUSER_SNAME()
                 ORDER BY CartonNo DESC -- max cartonno
-            END
+
+                -- FCR-11723: Insert into TRANSMITLOG2 for Specialised orders
+                IF ISNULL(@cOrderUserDefine01,'') = 'Specialised'
+                BEGIN
+                    -- Generate the required Key
+                    EXECUTE dbo.nspg_GetKey
+                        'TRANSMITLOGKEY',
+                        10,
+                        @cTransmitLogKey OUTPUT,
+                        @bSuccess        OUTPUT,
+                        @nErrNo          OUTPUT,
+                        @cErrMsg         OUTPUT
+                    IF @bSuccess = 1
+                    BEGIN
+                        INSERT INTO dbo.TRANSMITLOG2 (
+                            TRANSMITLOGKEY, 
+                            TableName, 
+                            Key1, 
+                            Key2, 
+                            Key3, 
+                            AddDate, 
+                            AddWho, 
+                            EditDate, 
+                            EditWho
+                        )
+                        VALUES (
+                            @cTransmitLogKey, 
+                            'WSCRCTNMW', 
+                            @cPickSlipNo, 
+                            CAST(@nCartonNo AS NVARCHAR(10)), 
+                            @cStorerKey, 
+                            GETDATE(), 
+                            'rdt.' + SUSER_SNAME(), 
+                            GETDATE(), 
+                            'rdt.' + SUSER_SNAME()
+                        )
+                    END
+                END
+            END               
+
             ELSE
             BEGIN
                 -- Update Packdetail
@@ -1010,7 +1053,7 @@ BEGIN
                     AND LabelLine = @cLabelLine
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262618
+                    SET @nErrNo = 262768
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackDtlFail
                     GOTO RollBackTran
                 END
@@ -1052,7 +1095,7 @@ BEGIN
                         'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                     IF @@ERROR <> 0
                     BEGIN
-                        SET @nErrNo = 262619
+                        SET @nErrNo = 262769
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PDInfoFail
                         GOTO RollBackTran
                     END
@@ -1070,7 +1113,7 @@ BEGIN
 
                     IF @@ERROR <> 0
                     BEGIN
-                        SET @nErrNo = 262620
+                        SET @nErrNo = 262770
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PDInfoFail
                         GOTO RollBackTran
                     END
@@ -1079,20 +1122,20 @@ BEGIN
             END
 
             -- PackInfo
-            SET @cCartonType = ''
+            -- FCR-11723: Get dimensions from SKU table instead of CARTONIZATION
+            SET @cCartonType = 'MFCARTON' 
 
-            SELECT @cCartonType   = C.CartonType
-                , @fLength       = CartonLength
-                , @fWidth        = CartonWidth
-                , @fHeight       = CartonHeight
-                , @fCube         = CartonLength * CartonWidth * CartonHeight
-                , @fCartonWeight = CartonWeight
-            FROM Cartonization C WITH (NOLOCK)
-            JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
-            WHERE S.StorerKey = @cStorerKey
-            AND C.CartonType = @cPalletType
+            -- FCR-11723: Get dimensions from SKU table
+            SELECT @fLength = ISNULL(SKU.[Length], 0)
+                , @fWidth  = ISNULL(SKU.Width, 0)
+                , @fHeight = ISNULL(SKU.Height, 0)
+                , @fCube   = ISNULL(SKU.[Length], 0) * ISNULL(SKU.Width, 0) * ISNULL(SKU.Height, 0)
+            FROM dbo.SKU SKU WITH (NOLOCK)
+            WHERE SKU.STORERKEY = @cStorerKey
+            AND SKU.SKU = @cSKU
 
             SET @fSKUWeight = 0
+            SET @fCartonWeight = 0
 
             IF @cDefaultWeight IN ('2', '3')
             BEGIN
@@ -1101,22 +1144,7 @@ BEGIN
                 FROM dbo.SKU SKU WITH (NOLOCK)
                 WHERE SKU.STORERKEY = @cStorerKey
                 AND SKU.SKU = @cSKU
-
-                -- Weight (SKU + carton)
-                --IF @cDefaultWeight = '3'
-                --BEGIN
-                --   -- Get carton type info
-                --   SELECT @nCartonWeight = CartonWeight
-                --   FROM Cartonization C WITH (NOLOCK)
-                --      JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
-                --   WHERE S.StorerKey = @cStorerKey
-                --      AND C.CartonType = @cCartonType
-                --
-                --   SET @nWeight = @nWeight + @nCartonWeight
-                --END
             END
-
-            --SET @cWeight = rdt.rdtFormatFloat( @fSKUWeight)
 
             SET @fWeight = 0
 
@@ -1133,11 +1161,10 @@ BEGIN
 
                 INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, Qty, Weight, Cube, CartonType, Length, Width, Height)
                 VALUES (@cPickSlipNo, @nCartonNo, @nQTY, @fWeight, @fCube, @cCartonType, @fLength, @fWidth, @fHeight)
-                --INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY)
-                --VALUES (@cPickSlipNo, @nCartonNo, @nQTY)
+
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262621
+                    SET @nErrNo = 262771
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail
                     GOTO RollBackTran
                 END
@@ -1152,12 +1179,16 @@ BEGIN
                     EditDate = GETDATE(),
                     EditWho = SUSER_SNAME(),
                     Weight = Weight + @fWeight,
+                    Length = @fLength,
+                    Width = @fWidth,
+                    Height = @fHeight,
+                    CartonType = @cCartonType,
                     TrafficCop = NULL
-                WHERE PickSlipNo = @cPickSlipNo
-                    AND CartonNo = @nCartonNo
+                WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo
+
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262622
+                    SET @nErrNo = 262772
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackInfFail
                     GOTO RollBackTran
                 END
@@ -1244,7 +1275,7 @@ BEGIN
                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
                         @cShipLabel, -- Report type
                         @tShipLabel, -- Report params
-                        'rdt_1770ConfirmAU01',
+                        'rdt_1770ConfirmAU02',
                         @nErrNo  OUTPUT,
                         @cErrMsg OUTPUT,
                         @nNoOfCopy
@@ -1271,7 +1302,7 @@ BEGIN
                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
                         @cCartonManifest, -- Report type
                         @tCartonManifest, -- Report params
-                        'rdt_1770ConfirmAU01',
+                        'rdt_1770ConfirmAU02',
                         @nErrNo  OUTPUT,
                         @cErrMsg OUTPUT
                     --IF @nErrNo <> 0
@@ -1333,7 +1364,7 @@ BEGIN
                 */
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262623
+                    SET @nErrNo = 262773
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPLTDtlFail
                     GOTO RollBackTran
                 END
@@ -1375,7 +1406,7 @@ BEGIN
                                 @cErrMsg       OUTPUT
                             IF @nErrNo <> 0
                             BEGIN
-                                SET @nErrNo = 262616
+                                SET @nErrNo = 262766
                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
                                 GOTO RollBackTran
                             END
@@ -1391,7 +1422,7 @@ BEGIN
                                 @cErrMsg       OUTPUT
                             IF @nErrNo <> 0
                             BEGIN
-                                SET @nErrNo = 262616
+                                SET @nErrNo = 262766
                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
                                 GOTO RollBackTran
                             END
@@ -1430,7 +1461,7 @@ BEGIN
                 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262617
+                    SET @nErrNo = 262767
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackDtlFail
                     GOTO RollBackTran
                 END
@@ -1445,6 +1476,43 @@ BEGIN
                     AND AddWho = 'rdt.' + SUSER_SNAME()
                 ORDER BY CartonNo DESC -- max cartonno
 
+            -- FCR-11723: Insert into TRANSMITLOG2 for Specialised orders
+            IF ISNULL(@cOrderUserDefine01,'') = 'Specialised'
+            BEGIN
+                -- Generate the required Key
+                EXECUTE dbo.nspg_GetKey
+                    'TRANSMITLOGKEY',
+                    10,
+                    @cTransmitLogKey OUTPUT,
+                    @bSuccess        OUTPUT,
+                    @nErrNo          OUTPUT,
+                    @cErrMsg         OUTPUT
+                IF @bSuccess = 1
+                BEGIN
+                    INSERT INTO dbo.TRANSMITLOG2 (
+                        TRANSMITLOGKEY, 
+                        TableName, 
+                        Key1, 
+                        Key2, 
+                        Key3, 
+                        AddDate, 
+                        AddWho, 
+                        EditDate, 
+                        EditWho
+                    )
+                    VALUES (
+                        @cTransmitLogKey, 
+                        'WSCRCTNMW', 
+                        @cPickSlipNo, 
+                        CAST(@nCartonNo AS NVARCHAR(10)), 
+                        @cStorerKey, 
+                        GETDATE(), 
+                        'rdt.' + SUSER_SNAME(), 
+                        GETDATE(), 
+                        'rdt.' + SUSER_SNAME()
+                    )
+                END
+            END
 
             --PackDetailInfo
             IF @cUpdatePackDetailInfo = '1'
@@ -1468,30 +1536,28 @@ BEGIN
                     'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262619
+                    SET @nErrNo = 262769
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PDInfoFail
                     GOTO RollBackTran
                 END
                 END
             END
 
-                SET @cCartonType = ''
+                -- FCR-11723: Get dimensions from SKU table instead of CARTONIZATION 
+                SET @cCartonType = 'MFCARTON' 
 
-                SELECT @cCartonType   = C.CartonType
-                    , @fLength       = CartonLength
-                    , @fWidth        = CartonWidth
-                    , @fHeight       = CartonHeight
-                    , @fCube         = CartonLength * CartonWidth * CartonHeight
-                    , @fCartonWeight = CartonWeight
-                FROM Cartonization C WITH (NOLOCK)
-                JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)
-                WHERE S.StorerKey = @cStorerKey
-                AND C.CartonType = CASE WHEN ISNULL(@cDefaultcartontype,'') <> '' THEN @cDefaultcartontype ELSE 'MFCARTON' END
-
-                SET @cCartonType = ISNULL(@cCartonType,'')
+                -- FCR-11723: Get dimensions from SKU table
+                SELECT @fLength = ISNULL(SKU.[Length], 0)
+                    , @fWidth  = ISNULL(SKU.Width, 0)
+                    , @fHeight = ISNULL(SKU.Height, 0)
+                    , @fCube   = ISNULL(SKU.[Length], 0) * ISNULL(SKU.Width, 0) * ISNULL(SKU.Height, 0)
+                FROM dbo.SKU SKU WITH (NOLOCK)
+                WHERE SKU.STORERKEY = @cStorerKey
+                AND SKU.SKU = @cSKU
 
                 SET @fSKUWeight = 0
                 SET @fWeight = 0
+                SET @fCartonWeight = 0
 
                 IF @cDefaultWeight IN ('2', '3')
                 BEGIN
@@ -1508,30 +1574,16 @@ BEGIN
                     END
                 END
 
-                IF @cCartonType = 'MFCARTON' --MANUFACTURER CARTON GET FROM PACKUOM1 DIMENSIONS INSTEAD
-                BEGIN
-                    SELECT
-                        @fLength = Pack.LengthUOM1,
-                        @fWidth = Pack.WidthUOM1,
-                        @fHeight = Pack.HeightUOM1,
-                        @fCube = Pack.LengthUOM1 * Pack.WidthUOM1 * Pack.HeightUOM1
-                    FROM dbo.Pack WITH (NOLOCK)
-                    JOIN dbo.SKU WITH (NOLOCK) ON SKU.PackKey = Pack.PackKey
-                    WHERE SKU.StorerKey = @cStorerKey
-                    AND SKU.SKU = @cSKU
-                END
-
                 SET @cWeight = rdt.rdtFormatFloat( @fSKUWeight)
 
                 SET @fWeight = CAST(@cWeight AS FLOAT)
 
                 INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, Qty, Weight, Cube, CartonType, Length, Width, Height)
                 VALUES (@cPickSlipNo, @nCartonNo, @nCasePackQty, @fWeight, @fCube, @cCartonType, @fLength, @fWidth, @fHeight)
-                --INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY)
-                --VALUES (@cPickSlipNo, @nCartonNo, @nQTY)
+                
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262621
+                    SET @nErrNo = 262771
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail
                     GOTO RollBackTran
                 END
@@ -1542,10 +1594,9 @@ BEGIN
 
                 SET @cLength  = CAST(@fLength AS NVARCHAR(10))
                 SET @cWidth   = CAST(@fWidth  AS NVARCHAR(10))
-                SET @cHeight  = CAST(@fWeight AS NVARCHAR(10))
+                SET @cHeight  = CAST(@fHeight AS NVARCHAR(10))  
                 SET @cCube    = CAST(@fCube   AS NVARCHAR(10))
-                SET @cWeight  = CAST(@fHeight AS NVARCHAR(10))
-
+                SET @cWeight  = CAST(@fWeight AS NVARCHAR(10)) 
 
                 --Submit Print Job for each cases
                 IF ISNULL(@cLabelPrinter,'') <> ''
@@ -1628,7 +1679,7 @@ BEGIN
                         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
                             @cShipLabel, -- Report type
                             @tShipLabel, -- Report params
-                            'rdt_1770ConfirmAU01',
+                            'rdt_1770ConfirmAU02',
                             @nErrNo  OUTPUT,
                             @cErrMsg OUTPUT,
                             @nNoOfCopy
@@ -1654,7 +1705,7 @@ BEGIN
                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
                         @cCartonManifest, -- Report type
                         @tCartonManifest, -- Report params
-                        'rdt_1770ConfirmAU01',
+                        'rdt_1770ConfirmAU02',
                         @nErrNo  OUTPUT,
                         @cErrMsg OUTPUT
                     --IF @nErrNo <> 0
@@ -1666,61 +1717,61 @@ BEGIN
                 BEGIN
 
                     IF NOT EXISTS (SELECT 1 FROM dbo.Pallet WITH (NOLOCK) WHERE Palletkey = @cFromID)
-                BEGIN
-                    IF ISNULL(@cPalletType,'') = ''
-                        SET @cPalletType = 'PALLET'
-
-                    --Calculate Height based on Ti Hi
-                    SET @nSumPackInfoWgt = 0.0
-
-                    SELECT @nSumPackInfoWgt = ISNULL(SUM(ISNULL(PIF.WEIGHT,0)),0)
-                        , @nPalletHeight   = 12 + ISNULL(MAX(ISNULL(PACKD.ESTHEIGHT,0)),0)
-                    FROM PackInfo PIF (NOLOCK)
-                    CROSS APPLY (
-                        SELECT PICKSLIPNO,CARTONNO,
-                        SUM(CEILING(PD.QTY / IIF(PACK.CASECNT>0,PACK.CASECNT,1)/ IIF(PACK.PALLETTI>0,PACK.PALLETTI,1))
-                            *PACK.HEIGHTUOM1) AS ESTHEIGHT
-                        FROM PACKDETAIL PD (NOLOCK)
-                        JOIN SKU (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.StorerKey
-                        JOIN PACK (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY
-                        WHERE PD.STORERKEY = @cStorerKey
-                        AND   PD.DropID = @cFromID
-                        AND   PD.PICKSLIPNO = @cPickSlipNo
-                        AND   ISNULL(@cFromID,'') <> ''
-                        GROUP BY PICKSLIPNO,CARTONNO
-                    ) as PACKD
-                    WHERE PIF.PICKSLIPNO = PACKD.PICKSLIPNO AND PIF.CARTONNO = PACKD.CARTONNO
-
-                    SET @nPalletWeight = ISNULL(@nPalletWeight,45) + ISNULL(@nSumPackInfoWgt,0)
-                    SET @nPalletHeight = CASE WHEN ISNULL(@nPalletHeight,116) > 160 THEN 160
-                                                WHEN ISNULL(@nPalletHeight,116) <= 13 THEN 120
-                                                ELSE ISNULL(@nPalletHeight,116) END
-                    INSERT dbo.Pallet (PalletKey, StorerKey, PalletType, Status, Length, Width, Height, GrossWgt)
-                    SELECT @cFromID, @cStorerkey, @cPalletType, '0', '116','116',@nPalletHeight,@nPalletWeight
-                    END
-
-                IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID AND CASEID = @cLabelNo)
-                BEGIN
-                /*INC7331096 (START)*/
-                    SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-                    FROM dbo.PalletDetail WITH (NOLOCK)
-                    WHERE PalletKey = @cFromID
-
-                    INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine03, ArchiveCop, UserDefine02)
-                    VALUES (@cFromID, @cPalletLineNumber, @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nQty, '0', @cOrderKey, @cDropID, NULL, @cLabelNo)
-                    /*INC7331096 (END)*/
-
-                    /*
-                    INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, QTY, Status, UserDefine01, UserDefine03, ArchiveCop)
-                    VALUES (@cFromID, '00001', @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nPackQTY, '9', @cOrderKey, @cDropID, '9')
-                    */
-                    IF @@ERROR <> 0
                     BEGIN
-                        SET @nErrNo = 262623
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPLTDtlFail
-                        GOTO RollBackTran
+                        IF ISNULL(@cPalletType,'') = ''
+                            SET @cPalletType = 'PALLET'
+
+                        --Calculate Height based on Ti Hi
+                        SET @nSumPackInfoWgt = 0.0
+
+                        SELECT @nSumPackInfoWgt = ISNULL(SUM(ISNULL(PIF.WEIGHT,0)),0)
+                            , @nPalletHeight   = 12 + ISNULL(MAX(ISNULL(PACKD.ESTHEIGHT,0)),0)
+                        FROM PackInfo PIF (NOLOCK)
+                        CROSS APPLY (
+                            SELECT PICKSLIPNO,CARTONNO,
+                            SUM(CEILING(PD.QTY / IIF(PACK.CASECNT>0,PACK.CASECNT,1)/ IIF(PACK.PALLETTI>0,PACK.PALLETTI,1))
+                                *PACK.HEIGHTUOM1) AS ESTHEIGHT
+                            FROM PACKDETAIL PD (NOLOCK)
+                            JOIN SKU (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.StorerKey
+                            JOIN PACK (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY
+                            WHERE PD.STORERKEY = @cStorerKey
+                            AND   PD.DropID = @cFromID
+                            AND   PD.PICKSLIPNO = @cPickSlipNo
+                            AND   ISNULL(@cFromID,'') <> ''
+                            GROUP BY PICKSLIPNO,CARTONNO
+                        ) as PACKD
+                        WHERE PIF.PICKSLIPNO = PACKD.PICKSLIPNO AND PIF.CARTONNO = PACKD.CARTONNO
+
+                        SET @nPalletWeight = ISNULL(@nPalletWeight,45) + ISNULL(@nSumPackInfoWgt,0)
+                        SET @nPalletHeight = CASE WHEN ISNULL(@nPalletHeight,116) > 160 THEN 160
+                                                    WHEN ISNULL(@nPalletHeight,116) <= 13 THEN 120
+                                                    ELSE ISNULL(@nPalletHeight,116) END
+                        INSERT dbo.Pallet (PalletKey, StorerKey, PalletType, Status, Length, Width, Height, GrossWgt)
+                        SELECT @cFromID, @cStorerkey, @cPalletType, '0', '116','116',@nPalletHeight,@nPalletWeight
                     END
-                END
+
+                    IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID AND CASEID = @cLabelNo)
+                    BEGIN
+                    /*INC7331096 (START)*/
+                        SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+                        FROM dbo.PalletDetail WITH (NOLOCK)
+                        WHERE PalletKey = @cFromID
+
+                        INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine03, ArchiveCop, UserDefine02)
+                        VALUES (@cFromID, @cPalletLineNumber, @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nQty, '0', @cOrderKey, @cDropID, NULL, @cLabelNo)
+                        /*INC7331096 (END)*/
+
+                        /*
+                        INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, QTY, Status, UserDefine01, UserDefine03, ArchiveCop)
+                        VALUES (@cFromID, '00001', @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nPackQTY, '9', @cOrderKey, @cDropID, '9')
+                        */
+                        IF @@ERROR <> 0
+                        BEGIN
+                            SET @nErrNo = 262773
+                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPLTDtlFail
+                            GOTO RollBackTran
+                        END
+                    END
                 END
             END --case loop
 
@@ -1788,7 +1839,7 @@ BEGIN
                     (@cMBOLKey, @cDropID, @cFacility, '0', 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262624
+                    SET @nErrNo = 262774
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS MBOL Fail
                     GOTO RollBackTran
                 END
@@ -1802,7 +1853,7 @@ BEGIN
                 (@cMBOLKey, '00000', @cOrderKey, '', 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                 IF @@ERROR <> 0
                 BEGIN
-                    SET @nErrNo = 262625
+                    SET @nErrNo = 262775
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS MBDtl Fail
                     GOTO RollbackTran
                 END
@@ -1825,7 +1876,7 @@ BEGIN
                 EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, '1', @cFacility, @cStorerKey, @cLabelPrinter, '',
                     @cManiLaneLBL, -- Report type
                     @tManiLaneLBL, -- Report params
-                    'rdt_1770ConfirmAU01',
+                    'rdt_1770ConfirmAU02',
                     @nErrNo  OUTPUT,
                     @cErrMsg OUTPUT
             END
@@ -1857,7 +1908,7 @@ BEGIN
         VALUES (@cPickSlipNo, @cOrderKey)
         IF @@ERROR <> 0
         BEGIN
-            SET @nErrNo = 262626
+            SET @nErrNo = 262776
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPKHdrFail
             GOTO RollBackTran
         END
@@ -1906,7 +1957,7 @@ BEGIN
                 EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
                     @cPackList, -- Report type
                     @tPackList, -- Report params
-                    'rdt_1770ConfirmAU01',
+                    'rdt_1770ConfirmAU02',
                     @nErrNo  OUTPUT,
                     @cErrMsg OUTPUT
             END
@@ -1921,7 +1972,7 @@ BEGIN
                 EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
                     @cPackList, -- Report type
                     @tPackList, -- Report params
-                    'rdt_1770ConfirmAU01',
+                    'rdt_1770ConfirmAU02',
                     @nErrNo  OUTPUT,
                     @cErrMsg OUTPUT
             END -- Packlist <> ''
@@ -1937,7 +1988,7 @@ BEGIN
             EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
                 @cPackList, -- Report type
                 @tPackList, -- Report params
-                'rdt_1770ConfirmAU01',
+                'rdt_1770ConfirmAU02',
                 @nErrNo  OUTPUT,
                 @cErrMsg OUTPUT
         END -- Packlist <> ''
@@ -1972,7 +2023,7 @@ BEGIN
 
         IF @@ERROR <> 0
         BEGIN
-            SET @nErrNo = 262627
+            SET @nErrNo = 262777
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PLTDL Err
             GOTO RollBackTran
         END
@@ -1983,7 +2034,7 @@ BEGIN
 
         IF @@ERROR <> 0
         BEGIN
-            SET @nErrNo = 262628
+            SET @nErrNo = 262778
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPLTHdrFail
             GOTO RollBackTran
         END
@@ -2011,7 +2062,7 @@ BEGIN
             EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
             @cPalletLabel, -- Report type
             @tPalletLabel, -- Report params
-            'rdt_1770ConfirmAU01',
+            'rdt_1770ConfirmAU02',
             @nErrNo  OUTPUT,
             @cErrMsg OUTPUT
 
@@ -2021,8 +2072,10 @@ BEGIN
         END
     END
 
-    IF ISNULL(@cCarrierFlag,'') = 'Y'
+
+    IF ISNULL(@cOrderUserDefine01,'') <> 'Specialised'
     BEGIN
+        -- FCR-11723: Call carrier middleware for non-Specialised orders
         EXEC [dbo].[isp_Carrier_Middleware_Interface]
             @c_OrderKey    = @cOrderKey
         , @c_Mbolkey     = ''
@@ -2033,6 +2086,7 @@ BEGIN
         , @n_Err         = @nErrNo    OUTPUT
         , @c_ErrMsg      = @cErrMsg   OUTPUT
     END
+
 
     EXEC RDT.rdt_STD_EventLog
         @cActionType    = '3', -- Picking
@@ -2059,11 +2113,11 @@ BEGIN
     IF @nErrNo <> 0
         GOTO RollBackTran
 
-    COMMIT TRAN rdt_1770ConfirmAU01 -- Only commit change made here
+    COMMIT TRAN rdt_1770ConfirmAU02 -- Only commit change made here
     GOTO Quit
 
 RollBackTran:
-    ROLLBACK TRAN rdt_1770ConfirmAU01 -- Only rollback change made here
+    ROLLBACK TRAN rdt_1770ConfirmAU02 -- Only rollback change made here
 Fail:
 Quit:
     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
