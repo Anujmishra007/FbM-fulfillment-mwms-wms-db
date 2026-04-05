@@ -17,3 +17,4 @@ execute rdt.rdtAddMsg 238413, 10, '238413UPD PKDtl Fail', 'us_english', 830
 execute rdt.rdtAddMsg 238414, 10, '238414UPD PKDtl Fail', 'us_english', 830
 execute rdt.rdtAddMsg 238415, 10, '238415UPD PKDtl Fail', 'us_english', 830
 execute rdt.rdtAddMsg 238416, 10, '238416UPD PKDtl Fail', 'us_english', 830 
+execute rdt.rdtAddMsg 238417, 10, '238417ID on HOLD, cannot SWAP', 'us_english', 830
