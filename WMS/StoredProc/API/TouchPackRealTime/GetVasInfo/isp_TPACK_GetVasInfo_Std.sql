@@ -20,6 +20,7 @@ GO
 /* 2026-01-28   7.0  GCH225     UWP-47815 Fix Codelkup Short Show VAS issue             */
 /* 2026-02-12   8.0  GCH225     UWP-48885 Fix 0H Header flag for PreCartonize case      */
 /* 2026-02-27   8.1  JWF011     UWP-49173 Fix Order Header VAS display 2 times          */
+/* 2026-04-03   8.2  GCH225     UWP-53582 Fix Print Type that Short column ='Y'         */
 /****************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_GetVasInfo_Std] (
@@ -224,7 +225,6 @@ BEGIN
                   LEFT JOIN CODELKUP CLK (NOLOCK)
                   ON WOD.[Type] = CLK.Code
                   WHERE CLK.LISTNAME = 'WKOrdType'
-                  AND CLK.Short <> 'Y'  -- Not equal to Y means required to show VAS.
                   AND CLK.UDF04 = 'PRICELB' -- Get the VAS info with Price for label printing, no matter it's mandatory or not, showflag is 0 as it won't display in VAS list but only used for label printing.
                   AND CLK.UDF01 <> '' -- Only get the VAS with print doc ID for label printing.
                   AND EXISTS (SELECT 1
@@ -249,6 +249,7 @@ BEGIN
 
       DELETE FROM @VASInfo
       WHERE cSKU <> @cSKU        
+
    END
    ELSE -- For Carton Level VAS display
    BEGIN
@@ -268,6 +269,10 @@ BEGIN
       WHERE cSKU = ''
       AND cExternLineNo <> '0H'
    END
+
+   DELETE FROM @VASInfo
+   WHERE cType <> 'print'
+   AND bShowFlag = 0
 
    ;WITH CTE AS
    (

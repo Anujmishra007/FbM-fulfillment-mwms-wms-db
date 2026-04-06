@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-09-08   1.0  GCH225     Created                                          */
 /* 2026-01-23   1.1  YLI237     Modify for UWP-45422                             */
+/* 2026-04-03   1.2  GCH225     FCR-12269: Removed PACKHEADER status check       */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_PrintDocument] (
@@ -194,12 +195,6 @@ BEGIN
                      AND PIF.CartonStatus = 'CLOSED'
                      AND PIF.EditWho = L.EditWho
                   )
-         AND EXISTS ( SELECT 1 
-                     FROM PACKHEADER PH (NOLOCK)
-                     WHERE PH.PickSlipNo = L.PickSlipNo
-                     AND PH.OrderKey = L.OrderKey
-                     AND PH.[Status] = '9'
-         )
          ORDER BY RowRefNo DESC
       END
 
