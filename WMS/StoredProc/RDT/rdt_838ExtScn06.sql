@@ -316,7 +316,7 @@ BEGIN
    WHERE Mobile = @nMobile
   
    -- Get storer configure  
-   SET @cPickStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   SET @cPickStatus = rdt.RDTGetConfig( @nFunc, 'PickStatus', @cStorerKey)
    IF @cPickStatus = '0'
       SET @cPickStatus = '5'
 
