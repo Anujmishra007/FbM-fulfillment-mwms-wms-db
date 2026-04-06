@@ -1,7 +1,7 @@
 /****** Object:  Trigger [ntrChannelTransferUpdate]    Script Date: 10/18/2018 6:14:09 PM ******/
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ITF_ntrChannelTransfer]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-DROP PROCEDURE [dbo].[isp_ITF_ntrChannelTransfer]
-GO
+--if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ITF_ntrChannelTransfer]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+--DROP PROCEDURE [dbo].[isp_ITF_ntrChannelTransfer]
+--GO --ADW035
 
 /************************************************************************/  
 /* Store Procedure:  isp_ITF_ntrChannelTransfer                         */  
@@ -35,11 +35,14 @@ GO
 /* Version: 1.0                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
-/* Date         Author    Ver.  Purposes                                */  
+/* Date         Author    Ver.  Purposes                                */
+/* 20-May-2021  MCTang     1.0   Add New Logic (MC01)                    */
+/* 20-May-2021  KHChan     1.0   LFI-2248 - add Transmitlog2 (KH01)      */
+/* 2 April 2026 ADW035     1.1  FCR-11934 copy sp changes from v0     */
 /* DD-MMM-YYYY                                                          */  
 /************************************************************************/  
   
-CREATE PROC isp_ITF_ntrChannelTransfer  
+CREATE OR ALTER PROC [dbo].[isp_ITF_ntrChannelTransfer]
             @c_TriggerName          nvarchar(120)  
           , @c_SourceTable          nvarchar(60)  
           , @c_FromStorerKey        nvarchar(15)  
@@ -69,7 +72,8 @@ BEGIN
          , @c_sValue                nvarchar(10)  
          , @c_TargetTable           nvarchar(60)  
          , @c_StoredProc            nvarchar(200)  
-         , @c_ConfigFacility        nvarchar(5)  
+         , @c_ConfigFacility        nvarchar(5)
+         , @c_UpdatedColumns        NVARCHAR(250)  --(MC01)
   
    -- ChannelTransfer table  
    DECLARE @c_Type                  nvarchar(12)  
@@ -81,7 +85,8 @@ BEGIN
    SET @n_continue = 1   
    SET @b_success = 0   
    SET @n_err = 0   
-   SET @c_errmsg = ''   
+   SET @c_errmsg = ''
+   SET @c_UpdatedColumns = ''  --(MC01)
 /********************************************************/  
 /* Variables Declaration & Initialization - (End)       */  
 /********************************************************/  
@@ -149,7 +154,8 @@ BEGIN
                         , RecordStatus  
                         , sValue  
                         , TargetTable  
-                        , StoredProc  
+                        , StoredProc
+                        , UpdatedColumns  --(MC01)
             FROM ITFTriggerConfig WITH (NOLOCK)   
            WHERE StorerKey   = @c_FromStorerKey    
              AND SourceTable = @c_SourceTable  
@@ -157,16 +163,24 @@ BEGIN
   
          OPEN Cur_ITFTriggerConfig_ChannelTRFFrom  
          FETCH NEXT FROM Cur_ITFTriggerConfig_ChannelTRFFrom INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus  
-                                                                , @c_sValue, @c_TargetTable, @c_StoredProc  
+                                                                , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
   
          WHILE @@FETCH_STATUS <> -1  
          BEGIN  
             IF ISNULL(@c_ConfigFacility,'') = ''  
             BEGIN   
-               IF @c_ConfigKey = 'CNLTRFFLOG' 
+               --IF @c_ConfigKey = 'CNLTRFFLOG'
+               IF @c_ConfigKey = 'CNLTRFFLOG' OR @c_ConfigKey = 'WSCNLTRFFM'  --(KH01)
                BEGIN   
                   GOTO AddIntoTransmitLog_FromStorerKey  
-               END -- IF @c_ConfigKey = 'CNLTRFFLOG'  
+               END -- IF @c_ConfigKey = 'CNLTRFFLOG'
+
+               --(MC01) - S
+               IF (@c_RecordStatus <> '' AND @c_RecordStatus = @c_Status AND UPPER(@c_UpdatedColumns) = 'STATUS')
+               BEGIN
+                    GOTO AddIntoTransmitLog_FromStorerKey
+               END
+               --(MC01) - E
             END -- IF ISNULL(@c_ConfigFacility,'') = ''  
   
             GOTO Next_Record_FromStorerKey  
@@ -192,14 +206,33 @@ BEGIN
                                   ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '  
                   GOTO QUIT  
                END   
-            END -- IF @c_TargetTable = 'TRANSMITLOG3'  
+            END -- IF @c_TargetTable = 'TRANSMITLOG3'
+            --(KH01) - S
+            IF @c_TargetTable = 'TRANSMITLOG2'
+            BEGIN
+                EXEC ispGenTransmitLog2 @c_Tablename, @c_ChannelTransferKey, @c_ReasonCode, @c_FromStorerKey, ''
+                                     , @b_success OUTPUT
+                                     , @n_err OUTPUT
+                                     , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 68003
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) +
+                                  ': Insert into TRANSMITLOG2 Failed. (isp_ITF_ntrChannelTransfer) ( SQLSvr MESSAGE = ' +
+                                  ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '
+                  GOTO QUIT
+               END
+            END -- IF @c_TargetTable = 'TRANSMITLOG2'
+            --(KH01) - E
 /*************************************************************************************/  
 /* Records Insertion into selected TransmitLog table with FromStorerKey - (End)      */  
 /*************************************************************************************/  
   
    Next_Record_FromStorerKey:  
             FETCH NEXT FROM Cur_ITFTriggerConfig_ChannelTRFFrom INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus  
-                                                                   , @c_sValue, @c_TargetTable, @c_StoredProc  
+                                                                   , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
          END -- WHILE @@FETCH_STATUS <> -1  
          CLOSE Cur_ITFTriggerConfig_ChannelTRFFrom  
          DEALLOCATE Cur_ITFTriggerConfig_ChannelTRFFrom  
@@ -224,7 +257,8 @@ BEGIN
                         , RecordStatus  
                         , sValue  
                         , TargetTable  
-                        , StoredProc  
+                        , StoredProc
+                        , UpdatedColumns
             FROM ITFTriggerConfig WITH (NOLOCK)   
            WHERE StorerKey   = @c_ToStorerKey    
              AND SourceTable = @c_SourceTable  
@@ -232,18 +266,25 @@ BEGIN
   
          OPEN Cur_ITFTriggerConfig_ChannelTRFTo  
          FETCH NEXT FROM Cur_ITFTriggerConfig_ChannelTRFTo INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus  
-                                                              , @c_sValue, @c_TargetTable, @c_StoredProc  
+                                                              , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
   
          WHILE @@FETCH_STATUS <> -1  
          BEGIN  
             IF ISNULL(@c_ConfigFacility,'') = ''  
             BEGIN   
-               IF @c_ConfigKey = 'CNLTRFLOG' 
+              -- IF @c_ConfigKey = 'CNLTRFLOG'
+               IF @c_ConfigKey = 'CNLTRFLOG' OR @c_ConfigKey = 'WSCNLTRF' --(KH01)
                BEGIN   
                   GOTO AddIntoTransmitLog_ToStorerKey  
-               END -- IF @c_ConfigKey = 'CNLTRFLOG'  
-            END -- IF ISNULL(@c_ConfigFacility,'') = ''   
-  
+               END -- IF @c_ConfigKey = 'CNLTRFLOG'
+
+               --(MC01) - S
+               IF (@c_RecordStatus <> '' AND @c_RecordStatus = @c_Status AND UPPER(@c_UpdatedColumns) = 'STATUS')
+               BEGIN
+                    GOTO AddIntoTransmitLog_ToStorerKey
+               END
+                --(MC01) - E
+            END -- IF ISNULL(@c_ConfigFacility,'') = ''
             GOTO Next_Record_ToStorerKey  
   
 /*************************************************************************************/  
@@ -267,14 +308,33 @@ BEGIN
                                   ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '  
                   GOTO QUIT  
                END   
-            END -- IF @c_TargetTable = 'TRANSMITLOG3'  
+            END -- IF @c_TargetTable = 'TRANSMITLOG3'
+            --(KH01) - S
+            IF @c_TargetTable = 'TRANSMITLOG2'
+            BEGIN
+                EXEC ispGenTransmitLog2 @c_Tablename, @c_ChannelTransferKey, @c_ReasonCode, @c_ToStorerKey, ''
+                                     , @b_success OUTPUT
+                                     , @n_err OUTPUT
+                                     , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 68004
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_err,0)) +
+                                  ': Insert into TRANSMITLOG2 Failed. (isp_ITF_ntrChannelTransfer) ( SQLSvr MESSAGE = ' +
+                                  ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '
+                  GOTO QUIT
+               END
+            END -- IF @c_TargetTable = 'TRANSMITLOG2'
+            --(KH01) - E
 /*************************************************************************************/  
 /* Records Insertion into selected TransmitLog table with FromStorerKey - (End)      */  
 /*************************************************************************************/  
   
    Next_Record_ToStorerKey:  
             FETCH NEXT FROM Cur_ITFTriggerConfig_ChannelTRFTo INTO @c_ConfigKey, @c_ConfigFacility, @c_Tablename, @c_RecordType, @c_RecordStatus  
-                                                                 , @c_sValue, @c_TargetTable, @c_StoredProc  
+                                                                 , @c_sValue, @c_TargetTable, @c_StoredProc, @c_UpdatedColumns
          END -- WHILE @@FETCH_STATUS <> -1  
          CLOSE Cur_ITFTriggerConfig_ChannelTRFTo  
          DEALLOCATE Cur_ITFTriggerConfig_ChannelTRFTo  
