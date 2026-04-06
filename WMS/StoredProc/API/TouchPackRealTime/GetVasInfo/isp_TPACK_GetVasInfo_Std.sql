@@ -185,6 +185,7 @@ BEGIN
                   LEFT JOIN CODELKUP CLK (NOLOCK)
                   ON WOD.[Type] = CLK.Code
                   WHERE CLK.LISTNAME = 'WKOrdType'
+                  AND CLK.Short <> 'Y'  -- Not equal to Y means required to show VAS.
                   AND EXISTS (SELECT 1
                               FROM WORKORDER WO (NOLOCK)
                               WHERE EXISTS ( SELECT 1 
