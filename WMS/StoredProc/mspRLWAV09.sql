@@ -164,7 +164,8 @@ BEGIN
       IF @c_Doctype = 'N'
       BEGIN
          SET @c_AssignLane = ''
-         SELECT @c_AssignLane = lpld.Loc  
+         SELECT TOP 1 @c_AssignLane = ISNULL(lpld.Loc,'')                           --Wan03 2026-04-06
+               , @c_LoadKey = lpd.Loadkey                                           --Wan03 2026-04-06         
          FROM WAVEDETAIL wd (NOLOCK)  
          CROSS APPLY ( SELECT ld.Loadkey
                             , ExternOrderKey = ISNULL(ld.ExternOrderKey,'')
@@ -172,18 +173,22 @@ BEGIN
                        FROM Loadplandetail ld (NOLOCK) 
                        WHERE ld.Orderkey = wd.Orderkey
                      ) lpd
-         JOIN LoadplanLaneDetail lpld (NOLOCK) ON  lpld.Loadkey = lpd.Loadkey
+         LEFT OUTER JOIN LoadplanLaneDetail lpld (NOLOCK) 
+                                               ON  lpld.Loadkey = lpd.Loadkey
                                                AND lpld.ExternOrderKey = lpd.ExternOrderKey   
                                                AND lpld.ConsigneeKey   = lpd.ConsigneeKey 
+                                               AND lpld.LocationCategory = 'STAGING'--Wan03 2026-04-06   
          WHERE WD.Wavekey = @c_Wavekey 
-         AND lpld.LocationCategory = 'STAGING'
+         AND lpld.Loc IN ('',NULL)                                                  --Wan03 2026-04-06
 
          IF @c_AssignLane = ''
          BEGIN  
             SET @n_Continue = 3    
             SET @n_err = 83012    
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
-                         +': Assign Lane not found for B2B Orders. (mspRLWAV09)'         
+                         +': Assign Lane not found for B2B Orders.'
+                         + ' Loadplan #: ' + @c_LoadKey                             --Wan03 2026-04-06
+                         + '. (mspRLWAV09)'          
          END
       END
    END                                                                              --(Wan03) - END
