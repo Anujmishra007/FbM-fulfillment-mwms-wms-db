@@ -183,7 +183,7 @@ BEGIN
             SET @n_Continue = 3    
             SET @n_err = 83012    
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
-                         +': Assign Lane not found for Non ECOM Orders. (mspRLWAV09)'         
+                         +': Assign Lane not found for B2B Orders. (mspRLWAV09)'         
          END
       END
    END                                                                              --(Wan03) - END
