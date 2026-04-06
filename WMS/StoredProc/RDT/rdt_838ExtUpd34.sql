@@ -93,6 +93,10 @@ BEGIN
                 FROM dbo.Storer WITH(NOLOCK)
                 WHERE StorerKey = @cStorerKey
 
+                -- Validate prefix: must exist and be exactly 7 characters
+                IF @cPrefix IS NULL OR LEN(RTRIM(@cPrefix)) <> 7
+                    GOTO Quit
+
                 -- Build counter key: PACKLBL_<STORERKEY>
                 SET @cCounterKey = 'PACKLBL_' + @cStorerKey
 
