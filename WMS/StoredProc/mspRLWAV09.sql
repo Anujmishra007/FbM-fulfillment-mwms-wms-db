@@ -163,25 +163,18 @@ BEGIN
    BEGIN 
       IF @c_Doctype = 'N'
       BEGIN
-         SET @c_AssignLane = ''
-         SELECT TOP 1 @c_AssignLane = ISNULL(lpld.Loc,'')                           --Wan03 2026-04-06
-               , @c_LoadKey = lpd.Loadkey                                           --Wan03 2026-04-06         
+         SET @c_LoadKey = ''                                                        --Wan03 2026-04-06
+         SELECT TOP 1 @c_LoadKey = lpd.Loadkey                                      --Wan03 2026-04-06
          FROM WAVEDETAIL wd (NOLOCK)  
-         CROSS APPLY ( SELECT ld.Loadkey
-                            , ExternOrderKey = ISNULL(ld.ExternOrderKey,'')
-                            , ConsigneeKey   = ISNULL(ld.ConsigneeKey,'')
-                       FROM Loadplandetail ld (NOLOCK) 
-                       WHERE ld.Orderkey = wd.Orderkey
-                     ) lpd
-         LEFT OUTER JOIN LoadplanLaneDetail lpld (NOLOCK) 
-                                               ON  lpld.Loadkey = lpd.Loadkey
-                                               AND lpld.ExternOrderKey = lpd.ExternOrderKey   
-                                               AND lpld.ConsigneeKey   = lpd.ConsigneeKey 
-                                               AND lpld.LocationCategory = 'STAGING'--Wan03 2026-04-06   
+         JOIN Loadplandetail lpd (NOLOCK)                                           --Wan03 2026-04-06
+                       ON lpd.Orderkey = wd.Orderkey               
+         LEFT OUTER JOIN LoadplanLaneDetail lpld (NOLOCK)                           --Wan03 2026-04-06
+                        ON  lpld.Loadkey = lpd.Loadkey
+                        AND lpld.LocationCategory = 'STAGING'                       --Wan03 2026-04-06   
          WHERE WD.Wavekey = @c_Wavekey 
          AND lpld.Loc IN ('',NULL)                                                  --Wan03 2026-04-06
 
-         IF @c_AssignLane = ''
+         IF @c_LoadKey > ''                                                         --Wan03 2026-04-06
          BEGIN  
             SET @n_Continue = 3    
             SET @n_err = 83012    
