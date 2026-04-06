@@ -248,13 +248,13 @@ BEGIN
                   GOTO Step_Reason_Fail
                END
 
-			   IF NOT EXISTS (
-			      SELECT 1 
-				  FROM dbo.CODELKUP WITH(NOLOCK) 
-				  WHERE LISTNAME = 'JCBREPLENR' 
-				     AND Short = @cReasonCode 
-					 AND Storerkey = @cStorerKey
-			   )
+               IF NOT EXISTS (
+                  SELECT 1 
+                  FROM dbo.CODELKUP WITH(NOLOCK) 
+                  WHERE LISTNAME = 'JCBREPLENR' 
+                     AND Short = @cReasonCode 
+                     AND Storerkey = @cStorerKey
+               )
                BEGIN
                   SET @nErrNo = 239671
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not allowed reason
@@ -716,6 +716,10 @@ BEGIN
                   UPDATE TaskDetail
                   SET StatusMsg = CONVERT(NVARCHAR(20), GETDATE(), 120)
                   WHERE TaskDetailKey = @cTaskDetailKey
+
+                  UPDATE TaskDetail
+                  SET Status = '0', UserKey = '', UserKeyOverride = ''
+                  WHERE UserKey = @cUserName AND Status = '3' AND TaskType LIKE 'R%' AND FromLoc <> 'INTRANSIT' AND PickMethod = 'PP' AND TaskDetailKey <> @cTaskDetailKey
                END
 
                IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE ListKey = @cListKey AND Status = '5')

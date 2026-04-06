@@ -76,13 +76,27 @@ BEGIN
 
    IF @nFunc = 1878
    BEGIN
+      IF @nInputKey = 1
+      BEGIN
+         IF @nStep = 3
+         BEGIN
+            IF @cFromID = '' AND @nScannedCount > 0
+            BEGIN
+               GOTO CREATE_TASK
+            END
+         END
+
+         GOTO QUIT
+      END--Enter
+
       IF @nInputKey = 0 --ESC
       BEGIN
          IF @nStep = 3
          BEGIN
             IF @nDebugFlag = 1
                SELECT 'Step3, ESC'
-      
+            
+            CREATE_TASK:
             IF @nScannedCount > 0
             BEGIN
                IF NOT EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) 
@@ -384,6 +398,8 @@ BEGIN
                END--open ASTPA with same id exists
             END --scanned count > 0
          END --St3
+
+         GOTO QUIT
       END -- ESC
    END
 
