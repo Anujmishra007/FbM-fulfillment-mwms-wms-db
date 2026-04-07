@@ -156,17 +156,24 @@ BEGIN
                   SET @nCartonNo = @nMaxCartonNo + @nLoopCnt
 
                   -- Generate new LabelNo
-                  EXEC dbo.nsp_GenerateKey 'LABELNO', @cStorerKey, @cLabelNo OUTPUT
+                  EXEC isp_GenUCCLabelNo
+                     @cStorerKey,
+                     @cLabelNo      OUTPUT,
+                     @bSuccess      OUTPUT,
+                     @nErrNo        OUTPUT,
+                     @cErrMsg       OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO RollBackTran
 
                   -- Insert PACKDETAIL with Qty = 1
                   BEGIN TRY
                      INSERT INTO PACKDETAIL (
-                        PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Lot, Qty,
-                        DropID, Status, AddWho, AddDate, EditWho, EditDate
+                        PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty,
+                        DropID, AddWho, AddDate, EditWho, EditDate
                      )
                      VALUES (
-                        @cPickSlipNo, @nCartonNo, @cLabelNo, '00001', @cStorerKey, @cSKU, @cLot, 1,
-                        @cDropID, '0', @cUserName, GETDATE(), @cUserName, GETDATE()
+                        @cPickSlipNo, @nCartonNo, @cLabelNo, '00001', @cStorerKey, @cSKU, 1,
+                        @cDropID, @cUserName, GETDATE(), @cUserName, GETDATE()
                      )
                   END TRY
                   BEGIN CATCH
@@ -191,11 +198,11 @@ BEGIN
                      IF @@ROWCOUNT = 0
                      BEGIN
                         INSERT INTO PACKINFO (
-                           PickSlipNo, CartonNo, StorerKey, [Length], Width, Height, CartonType,
+                           PickSlipNo, CartonNo, [Length], Width, Height, CartonType,
                            AddWho, AddDate, EditWho, EditDate
                         )
                         VALUES (
-                           @cPickSlipNo, @nCartonNo, @cStorerKey, @fSKULength, @fSKUWidth, @fSKUHeight, @cCartonType,
+                           @cPickSlipNo, @nCartonNo, @fSKULength, @fSKUWidth, @fSKUHeight, @cCartonType,
                            @cUserName, GETDATE(), @cUserName, GETDATE()
                         )
                      END
@@ -275,17 +282,24 @@ BEGIN
                   SET @nRemainingQty = @nRemainingQty - @nCaseQty
 
                   -- Generate new LabelNo
-                  EXEC dbo.nsp_GenerateKey 'LABELNO', @cStorerKey, @cLabelNo OUTPUT
+                  EXEC isp_GenUCCLabelNo
+                     @cStorerKey,
+                     @cLabelNo      OUTPUT,
+                     @bSuccess      OUTPUT,
+                     @nErrNo        OUTPUT,
+                     @cErrMsg       OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO RollBackTran
 
                   -- Insert PACKDETAIL with case qty
                   BEGIN TRY
                      INSERT INTO PACKDETAIL (
-                        PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Lot, Qty,
-                        DropID, Status, AddWho, AddDate, EditWho, EditDate
+                        PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty,
+                        DropID, AddWho, AddDate, EditWho, EditDate
                      )
                      VALUES (
-                        @cPickSlipNo, @nCartonNo, @cLabelNo, '00001', @cStorerKey, @cSKU, @cLot, @nCaseQty,
-                        @cDropID, '0', @cUserName, GETDATE(), @cUserName, GETDATE()
+                        @cPickSlipNo, @nCartonNo, @cLabelNo, '00001', @cStorerKey, @cSKU, @nCaseQty,
+                        @cDropID, @cUserName, GETDATE(), @cUserName, GETDATE()
                      )
                   END TRY
                   BEGIN CATCH
@@ -310,11 +324,11 @@ BEGIN
                      IF @@ROWCOUNT = 0
                      BEGIN
                         INSERT INTO PACKINFO (
-                           PickSlipNo, CartonNo, StorerKey, [Length], Width, Height, CartonType,
+                           PickSlipNo, CartonNo, [Length], Width, Height, CartonType,
                            AddWho, AddDate, EditWho, EditDate
                         )
                         VALUES (
-                           @cPickSlipNo, @nCartonNo, @cStorerKey, @fPackLength, @fPackWidth, @fPackHeight, @cCartonType,
+                           @cPickSlipNo, @nCartonNo, @fPackLength, @fPackWidth, @fPackHeight, @cCartonType,
                            @cUserName, GETDATE(), @cUserName, GETDATE()
                         )
                      END
@@ -373,8 +387,8 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            DECLARE @cLabelNo          NVARCHAR(20) = ''
-            DECLARE @cPickSlipNo       NVARCHAR(10) = ''
+            DECLARE @cLabelNo01          NVARCHAR(20) = ''
+            DECLARE @cPickSlipNo01       NVARCHAR(10) = ''
             DECLARE @cLoadKey          NVARCHAR(10) = ''
 
             DECLARE @cPalletLabel        NVARCHAR( 10)
@@ -566,7 +580,7 @@ BEGIN
                AND ISNULL(@cLabelPrinter,'') <> ''
             BEGIN
 
-               SELECT TOP 1 @cLabelNo = PD.LABELNO, @cPickSlipNo =  PD.PICKSLIPNO, @nCartonNo6 = PD.CARTONNO
+               SELECT TOP 1 @cLabelNo01 = PD.LABELNO, @cPickSlipNo01 =  PD.PICKSLIPNO, @nCartonNo6 = PD.CARTONNO
                FROM PACKDETAIL PD (NOLOCK)
                JOIN PACKHEADER PH (NOLOCK) ON PD.PICKSLIPNO = PH.PICKSLIPNO
                WHERE PH.ORDERKEY = @cOrderKey
@@ -575,10 +589,10 @@ BEGIN
 
                INSERT INTO @tShipLabel (Variable, Value) VALUES
                   ( '@cStorerKey',     @cStorerKey),
-                  ( '@cPickSlipNo',    @cPickSlipNo),
+                  ( '@cPickSlipNo',    @cPickSlipNo01),
                   ( '@cFromDropID',    @cDropID),
                   ( '@cPackDtlDropID', @cDropID),
-                  ( '@cLabelNo',       @cLabelNo),
+                  ( '@cLabelNo',       @cLabelNo01),
                   ( '@nCartonNo',      CAST( @nCartonNo6 AS NVARCHAR(10)))
 
          -- Print label
@@ -615,7 +629,7 @@ BEGIN
             END
             */
 
-            SELECT @cPickSlipNo = PH.PICKSLIPNO,
+            SELECT @cPickSlipNo01 = PH.PICKSLIPNO,
                    @cOrderKey   = ISNULL(PH.ORDERKEY,''),
                    @cLoadKey    = ISNULL(O.LOADKEY,'')
             FROM PACKHEADER PH (NOLOCK)
@@ -623,7 +637,7 @@ BEGIN
             WHERE O.ORDERKEY = @cOrderKey
 
             IF EXISTS (
-               SELECT TOP 1 1 FROM PACKHEADER (NOLOCK) WHERE PICKSLIPNO = @cPickSlipNo AND STATUS = '9')
+               SELECT TOP 1 1 FROM PACKHEADER (NOLOCK) WHERE PICKSLIPNO = @cPickSlipNo01 AND STATUS = '9')
             BEGIN
                DECLARE @cPackList NVARCHAR( 10)
 
@@ -636,7 +650,7 @@ BEGIN
                   DECLARE @tPackList AS VariableTable
                   INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
                   INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                  INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+                  INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo01)
                END
 
                IF @cPackList <> '' AND ISNULL(@cLabelPrinter,'') <> ''
@@ -649,7 +663,7 @@ BEGIN
                      --DECLARE @tPackList AS VariableTable
                      --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
                      --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                     --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+                     --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo01)
 
                      -- Print label
                      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
@@ -664,7 +678,7 @@ BEGIN
                      --DECLARE @tPackList AS VariableTable
                      --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
                      --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                     --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+                     --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo01)
 
                     -- Print label
                      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
@@ -680,7 +694,7 @@ BEGIN
                   --DECLARE @tPackList AS VariableTable
                   --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
                   --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                  --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+                  --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo01)
 
                  -- Print label
                   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
