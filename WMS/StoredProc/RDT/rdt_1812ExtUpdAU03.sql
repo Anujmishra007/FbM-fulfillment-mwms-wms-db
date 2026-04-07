@@ -98,6 +98,7 @@ BEGIN
             DECLARE @nNumRecords         INT = 0
             DECLARE @cCartonType         NVARCHAR(10) = ''
             DECLARE @cReportType         NVARCHAR(10) = ''
+            DECLARE @cTransmitLogKey     NVARCHAR(10) = ''
 
             -- Get Orders.UserDefine01
             IF @cOrderKey <> ''
@@ -214,12 +215,20 @@ BEGIN
                   END CATCH
 
                   -- Insert Transmitlog2 for Specialised orders
+                  EXEC nspg_GetKey 'TRANSMITLOGKEY2', 10, @cTransmitLogKey OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+                  IF @bSuccess <> 1 OR @nErrNo <> 0
+                  BEGIN
+                     SET @nErrNo = 263257
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get TransmitKey Failed
+                     GOTO RollBackTran
+                  END
+
                   BEGIN TRY
                      INSERT INTO Transmitlog2 (
-                        Key1, Key2, Key3, TableName, AddWho, AddDate
+                        TransmitLogKey, Key1, Key2, Key3, TableName, AddWho, AddDate
                      )
                      VALUES (
-                        @cPickSlipNo, CAST(@nCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
+                        @cTransmitLogKey, @cPickSlipNo, CAST(@nCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
                      )
                   END TRY
                   BEGIN CATCH
@@ -340,12 +349,20 @@ BEGIN
                   END CATCH
 
                   -- Insert Transmitlog2 for Specialised orders
+                  EXEC nspg_GetKey 'TRANSMITLOGKEY2', 10, @cTransmitLogKey OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+                  IF @bSuccess <> 1 OR @nErrNo <> 0
+                  BEGIN
+                     SET @nErrNo = 263258
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get TransmitKey Failed (CS Only)
+                     GOTO RollBackTran
+                  END
+
                   BEGIN TRY
                      INSERT INTO Transmitlog2 (
-                        Key1, Key2, Key3, TableName, AddWho, AddDate
+                        TransmitLogKey, Key1, Key2, Key3, TableName, AddWho, AddDate
                      )
                      VALUES (
-                        @cPickSlipNo, CAST(@nCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
+                        @cTransmitLogKey, @cPickSlipNo, CAST(@nCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
                      )
                   END TRY
                   BEGIN CATCH
