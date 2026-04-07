@@ -45,4 +45,5 @@ execute rdt.rdtAddMsg 262635, 10, '262635^NoPKDFound',        'us_english', 838,
 execute rdt.rdtAddMsg 262636, 10, '262636^NoPackDetail',      'us_english', 838, 0, '262636: No PackDetail is found'
 execute rdt.rdtAddMsg 262637, 10, '262637^UpdPackDtlFail',    'us_english', 838, 0, '262637: Update PackDetail failed'
 
+
 select * from rdt.rdtmsg (nolock) where message_id between 262601 and 262650

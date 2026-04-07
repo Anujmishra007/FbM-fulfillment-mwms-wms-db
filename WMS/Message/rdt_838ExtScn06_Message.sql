@@ -10,5 +10,10 @@ EXECUTE rdt.rdtAddMsg 253203, 10, '253203^SKUNotInDropID',        'us_english', 
 EXECUTE rdt.rdtAddMsg 253204, 10, '253204^OrdLockedByUsr',        'us_english', 838, 0, '253204 Order locked by user'
 EXECUTE rdt.rdtAddMsg 253205, 10, '253205^NoB2CSingleOrd',        'us_english', 838, 0, '253205 No B2C Single Order'
 EXECUTE rdt.rdtAddMsg 253206, 10, '253206^PackInfoNotFnd',        'us_english', 838, 0, '253206 Pack info not found'
+EXECUTE rdt.rdtAddMsg 253207, 10, '253207^SKUPacked',             'us_english', 838, 0, '253207 SKU is packed'
+EXECUTE rdt.rdtAddMsg 253208, 10, '253208^SKUPacked',             'us_english', 838, 0, '253208 SKU is packed or SKU is in different Carton'
+EXECUTE rdt.rdtAddMsg 253209, 10, '253209^SKUNotInDropID',        'us_english', 838, 0, '253209 SKU not in DropID'
+EXECUTE rdt.rdtAddMsg 253210, 10, '253210^PackInfoNotFnd',        'us_english', 838, 0, '253210 Pack info not found'
+EXECUTE rdt.rdtAddMsg 253211, 10, '253211^SKUPacked',             'us_english', 838, 0, '253211 SKU is packed'
 
 SELECT * FROM rdt.rdtMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 253201 AND 253250
