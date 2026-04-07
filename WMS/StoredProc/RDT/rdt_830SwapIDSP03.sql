@@ -250,9 +250,12 @@ BEGIN
    END
 
    -- Check ON HOLD swap ID logic
-   IF EXISTS( SELECT 1
+   DECLARE @cVerifyIDOnHold NVARCHAR( 1)
+   SET @cVerifyIDOnHold = rdt.RDTGetConfig( @nFunc, 'VerifyIDOnHold', @cStorerKey)
+
+   IF @cVerifyIDOnHold = '1' AND EXISTS( SELECT 1
       FROM dbo.INVENTORYHOLD WITH (NOLOCK)
-      WHERE ID = @cSuggID and HOLD = 1)
+      WHERE ID = @cID and HOLD = 1 and storerkey = @cStorerKey)
    BEGIN
       SET @nErrNo = 238417
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID on HOLD, cannot SWAP
