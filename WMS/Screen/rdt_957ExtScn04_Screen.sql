@@ -11,7 +11,7 @@ EXECUTE rdt.rdtAddScn 6714, 'ENG'
    ,@cLine07 = '%20i05'
    ,@cLine08 = 'Total Case: %08d06'
    ,@cLine09 = 'Total Scan: %08d07'
-   ,@cLine10 = ''
+   ,@cLine10 = 'No. Of UCC: %08d08'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5"],"3":["6","7"],"4":["8","9"],"5":["10"]}'
    ,@nFunc = 957

@@ -100,6 +100,7 @@ BEGIN
       @nDropIdQty          INT,
       @nQty                INT,
       @nQty1               INT,
+      @nQty2               INT,
       @nDropIDScannedQty   INT,
       @cMoveQTYAlloc       NVARCHAR( 1),
       @cMoveQTYPick        NVARCHAR( 1),
@@ -135,21 +136,21 @@ BEGIN
    IF @cPickConfirmStatus NOT IN ( '3', '5')
       SET @cPickConfirmStatus = '5'
 
-   -- Check move alloc, but picked
-   IF @cMoveQTYAlloc = '1' AND @cPickConfirmStatus = '5'
-   BEGIN
-      SET @nErrNo = 249213
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
-      GOTO Quit
-   END
-
-   -- Check move picked, but not pick confirm
-   IF @cMoveQTYPick = '1' AND @cPickConfirmStatus < '5'
-   BEGIN
-      SET @nErrNo = 249214
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
-      GOTO Quit
-   END
+--    -- Check move alloc, but picked
+--    IF @cMoveQTYAlloc = '1' AND @cPickConfirmStatus = '5'
+--    BEGIN
+--       SET @nErrNo = 249213
+--       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
+--       GOTO Quit
+--    END
+--
+--    -- Check move picked, but not pick confirm
+--    IF @cMoveQTYPick = '1' AND @cPickConfirmStatus < '5'
+--    BEGIN
+--       SET @nErrNo = 249214
+--       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
+--       GOTO Quit
+--    END
 
    SET @nTranCount = @@TRANCOUNT
 
@@ -180,9 +181,11 @@ BEGIN
                   INNER JOIN dbo.SKU sku WITH(NOLOCK) ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
                WHERE pkh.StorerKey = @cStorerKey
                  AND pkh.PickHeaderKey = @cPickSlipNo
-                 AND pkd.ID = @cDropID
-                 AND ucc.Status = '3'
+                 --AND pkd.ID = @cDropID
+                 AND ucc.Status < '5'
                  AND pkd.UOM = '2' --Only accept UOM = 2
+               ORDER BY pkd.LOC, pkd.ID, pkd.StorerKey, pkd.SKU
+
 
                SELECT @nRowCount = @@ROWCOUNT
 
@@ -200,8 +203,8 @@ BEGIN
                   INNER JOIN dbo.SKU sku WITH(NOLOCK) ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
                WHERE pkh.StorerKey = @cStorerKey
                  AND pkh.PickHeaderKey = @cPickSlipNo
-                 AND pkd.ID = @cDropID
-                 AND ucc.Status = '3'
+                 --AND pkd.ID = @cDropID
+                 --AND ucc.Status < '5'
                  AND pkd.UOM = '2' --Only accept UOM = 2
 
                SELECT @nDropIDScannedQty = SUM(pkd.Qty)
@@ -211,9 +214,20 @@ BEGIN
                   INNER JOIN dbo.SKU sku WITH(NOLOCK) ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
                WHERE pkh.StorerKey = @cStorerKey
                  AND pkh.PickHeaderKey = @cPickSlipNo
-                 AND pkd.ID = @cDropID
-                 AND ((ucc.Status = '3' AND ISNULL(ucc.Userdefined08, '') = '1')
+                 --AND pkd.ID = @cDropID
+                 AND ((ucc.Status < '5' AND ISNULL(ucc.Userdefined08, '') = '1')
                   OR ucc.Status = '5')
+
+               SELECT
+                  @nQty2 = COUNT(DISTINCT pkd.DropID)
+               FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
+                       INNER JOIN dbo.PICKHEADER pkh WITH(NOLOCK) ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
+                       INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID AND ucc.Sku = pkd.Sku
+               WHERE pkh.StorerKey = @cStorerKey
+                 AND pkh.PickHeaderKey = @cPickSlipNo
+                 AND pkd.Status = @cPickConfirmStatus
+                 AND ucc.Status <'5'
+                 AND pkd.uom = '2'
 
 
                SELECT @cPacKKey = PackKey
@@ -245,15 +259,18 @@ BEGIN
                IF @cSuggestUCC = '1'
                BEGIN
                   SET @cOutField05 = @cUCCNo
+                  SET @cOutField01 = @cSuggestLoc
+
                END
                ELSE
                SET @cOutField05 = ''
 
-               SET @cOutField01 = @cSuggestLoc
                SET @cOutField02 = @cDropID
 
                SET @cOutField06 = CAST (@nQty AS NVARCHAR(5))
                SET @cOutField07 = CAST (@nQty1 AS NVARCHAR(5))
+               SET @cOutField08 = CAST (@nQty2 AS NVARCHAR(5))
+
 
                SET @nAfterScn = 6714
                SET @nAfterStep = 99
@@ -275,6 +292,11 @@ BEGIN
       BEGIN
          IF @nCurrentScn = 6717 -- Msg screen
          BEGIN
+
+            SET @cPickSlipNo = ''
+            SET @cInField01 = ''
+            SET @cOutField01 = ''
+
             SET @nAfterScn = 5290 --back to pickslip scn
             SET @nAfterStep = 1
 
@@ -312,7 +334,7 @@ BEGIN
                   @cUCCStatus    = ucc.Status,
                   @cUCCPicked    = ISNULL(ucc.Userdefined08, ''),
                   @cUCCLoc       = ucc.Loc,
-                  @cUCCID        = pkd.ID,
+                  --@cUCCID        = pkd.ID,
                   @cSKU          = ucc.Sku,
                   @nUCCQTY       = ucc.Qty,
                   @cPickDetailKey = pkd.PickDetailKey,
@@ -324,6 +346,7 @@ BEGIN
                   AND pkh.PickHeaderKey = @cPickSlipNo
                   --AND pkd.ID = @cDropID
                   AND pkd.DropID = @cUCCNo
+               ORDER BY pkd.LOC, pkd.ID, pkd.StorerKey, pkd.SKU
 
                SELECT @nRowCount = @@ROWCOUNT
                IF @nRowCount < 0 --UCC Not Found in this pickslip
@@ -333,12 +356,12 @@ BEGIN
                   GOTO Quit
                END
 
-               IF @cUCCID <> @cDropID
-               BEGIN--249227
-                  SET @nErrNo = 249227
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCIDNOTValid
-                  GOTO Quit
-               END
+--                IF @cUCCID <> @cDropID
+--                BEGIN--249227
+--                   SET @nErrNo = 249227
+--                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCIDNOTValid
+--                   GOTO Quit
+--                END
 
                IF ISNULL(@cPickDetailUOM, '') = '6'
                BEGIN--249223
@@ -430,8 +453,10 @@ BEGIN
 
                   UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
                   SET Status = @cPickConfirmStatus,
+                      --ID = @cDropID,
                      EditDate = GETDATE(),
                      EditWho  = SUSER_SNAME()
+                     -- TrafficCop = NULL
                   WHERE StorerKey = @cStorerKey
                      AND PickDetailKey = @cPickDetailKey
                END TRY
@@ -443,6 +468,11 @@ BEGIN
 
                   SET @nErrNo = 249209
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdDataFail
+
+                  INSERT INTO TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Col1,Col2, Col3, Col4, Col5)
+                  VALUES( 'rdt_957ExtScn04', GETDATE(), @cPickDetailKey, @cUCCNo, @cPickSlipNo, @cDropID,
+                          ERROR_LINE(),SUBSTRING(ERROR_MESSAGE(),1,50),SUBSTRING(ERROR_MESSAGE(),51,50),SUBSTRING(ERROR_MESSAGE(),101,50),'')
+
                   GOTO Quit
                END CATCH
 
@@ -474,10 +504,11 @@ BEGIN
                INNER JOIN dbo.SKU sku WITH(NOLOCK) ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
                WHERE pkh.StorerKey = @cStorerKey
                   AND pkh.PickHeaderKey = @cPickSlipNo
-                  AND pkd.ID = @cDropID
-                  AND ucc.Status = '3'
+                  --AND pkd.ID = @cDropID
+                  AND ucc.Status < '5'
                   AND pkd.UOM = '2'
                   AND ISNULL(ucc.Userdefined08, '') = ''
+               ORDER BY pkd.LOC, pkd.ID, pkd.StorerKey, pkd.SKU
 
                SELECT @nRowCount = @@ROWCOUNT
 
@@ -509,8 +540,8 @@ BEGIN
                           INNER JOIN dbo.SKU sku WITH(NOLOCK) ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
                   WHERE pkh.StorerKey = @cStorerKey
                     AND pkh.PickHeaderKey = @cPickSlipNo
-                    AND pkd.ID = @cDropID
-                    AND ucc.Status = '3'
+                    --AND pkd.ID = @cDropID
+                    --AND ucc.Status < '5'
                     AND pkd.UOM = '2' --Only accept UOM = 2
 
                   SELECT @nDropIDScannedQty = SUM(pkd.Qty)
@@ -520,9 +551,21 @@ BEGIN
                           INNER JOIN dbo.SKU sku WITH(NOLOCK) ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
                   WHERE pkh.StorerKey = @cStorerKey
                     AND pkh.PickHeaderKey = @cPickSlipNo
-                    AND pkd.ID = @cDropID
-                    AND ((ucc.Status = '3' AND ISNULL(ucc.Userdefined08, '') = '1')
+                    --AND pkd.ID = @cDropID
+                    AND ((ucc.Status < '5' AND ISNULL(ucc.Userdefined08, '') = '1')
                      OR ucc.Status = '5')
+                    AND pkd.UOM = '2'
+
+                  SELECT
+                     @nQty2 = COUNT(DISTINCT pkd.DropID)
+                  FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
+                          INNER JOIN dbo.PICKHEADER pkh WITH(NOLOCK) ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
+                          INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID AND ucc.Sku = pkd.Sku
+                  WHERE pkh.StorerKey = @cStorerKey
+                    AND pkh.PickHeaderKey = @cPickSlipNo
+                    AND pkd.Status = @cPickConfirmStatus
+                    AND ucc.Status <'5'
+                    AND pkd.uom = '2'
 
 
                   SELECT @cPacKKey = PackKey
@@ -548,6 +591,7 @@ BEGIN
 
                   SET @cOutField06 = CAST (@nQty AS NVARCHAR(5))
                   SET @cOutField07 = CAST (@nQty1 AS NVARCHAR(5))
+                  SET @cOutField08 = CAST (@nQty2 AS NVARCHAR(5))
 
 
                   SET @cOutField01 = @cSuggestLoc
@@ -612,7 +656,7 @@ BEGIN
                      AND pkd.Status = @cPickConfirmStatus
                      AND ucc.Status <'5'
                      AND pkd.uom = '2'
-                     AND pkd.ID = @cDropID
+                     --AND pkd.ID = @cDropID
 
                   OPEN C_UCC
                   FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID, @cOrderKey
@@ -653,6 +697,27 @@ BEGIN
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
 
+
+                     -- Insert blank ID (to overcome FK_LOTxLOCxID_ID_01)
+                     IF NOT EXISTS( SELECT 1 FROM ID WITH (NOLOCK)
+                                    WHERE ID = @cDropID)
+                     BEGIN
+                        INSERT INTO ID (ID) VALUES (@cDropID)
+                        IF @@ERROR <> 0 --OR @@ROWCOUNT <> 1
+                        BEGIN
+
+                           IF @nTranCount > 0
+                              ROLLBACK TRAN rdt_957ExtScn04_02
+                           ELSE
+                              ROLLBACK TRAN
+
+                           SET @nErrNo = 112874
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS LLI Fail
+                           GOTO Quit
+
+                        END
+                     END
+
                      -- Insert blank LOTxLOCxID (to overcome FK_PICKDETAIL_LOTLOCID_01)
                      IF NOT EXISTS( SELECT 1 FROM LOTxLOCxID WITH (NOLOCK)
                                     WHERE LOT = @cLOT
@@ -680,7 +745,8 @@ BEGIN
                      SET Loc = @cToLoc,
                         ID = @cDropID,
                         EditDate = GETDATE(),
-                        EditWho  = SUSER_SNAME()
+                        EditWho  = SUSER_SNAME(),
+                        trafficcop = NULL
                      WHERE PickDetailKey = @cPickDetailKey
 
                      SELECT 
@@ -748,13 +814,18 @@ BEGIN
                         CLOSE C_UCC
                         DEALLOCATE C_UCC
 
-                        SET @nErrNo = 249212
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MoveUCCFail
-
                         IF @nTranCount > 0
                            ROLLBACK TRAN rdt_957ExtScn04_02
                         ELSE
                            ROLLBACK TRAN
+
+                        INSERT INTO TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Col1,Col2, Col3, Col4, Col5)
+                        VALUES( 'rdt_957ExtScn04', GETDATE(), @cPickDetailKey, @cUCCNo, @cPickSlipNo, @cDropID,
+                                @nErrNo,@cErrMsg,'','','')
+
+                        SET @nErrNo = 249212
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MoveUCCFail
+
 
                         GOTO Quit
                      END
@@ -775,9 +846,9 @@ BEGIN
                   ELSE
                      ROLLBACK TRAN
 
-
---                   insert into traceinfo (tracename,timein, step1, step2, Col1,Col2,Col3)
---                   values ('rdt_957ExtScn04',getdate(), @cUCCID, @cDropID,  SUBSTRING(ERROR_MESSAGE(), 0, 50), SUBSTRING(ERROR_MESSAGE(), 51, 50), SUBSTRING(ERROR_MESSAGE(), 101, 50))
+                  INSERT INTO TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Col1,Col2, Col3, Col4, Col5)
+                  VALUES( 'rdt_957ExtScn04', GETDATE(), @cPickDetailKey, @cUCCNo, @cPickSlipNo, @cDropID,
+                          ERROR_LINE(),SUBSTRING(ERROR_MESSAGE(),1,50),SUBSTRING(ERROR_MESSAGE(),51,50),SUBSTRING(ERROR_MESSAGE(),101,50),'')
 
                   GOTO Quit
                END CATCH
@@ -885,33 +956,36 @@ BEGIN
             END
             ELSE IF @nInputKey = 0
             BEGIN
-               IF NOT EXISTS(
-                  SELECT 1
-                  FROM dbo.PICKDETAIL pkd WITH (NOLOCK)
-                  INNER JOIN dbo.PICKHEADER pkh WITH (NOLOCK)
-                     ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
-                  INNER JOIN dbo.UCC ucc WITH (NOLOCK)
-                     ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID
-                  INNER JOIN dbo.SKU sku WITH (NOLOCK)
-                     ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
-                  WHERE pkh.StorerKey = @cStorerKey
-                     AND pkh.PickHeaderKey = @cPickSlipNo
-                     AND ucc.Status <= '3'
-                     AND ISNULL(ucc.Userdefined08, '') = ''
-               )
-               BEGIN -- finished, goto msg screen
-                  SET @nAfterScn = 6717  --Msg screen
-                  SET @nAfterStep = 99
-               END
-               ELSE
-               BEGIN -- Not finished, continue picking
-
-                  SET @cOutField01 = @cPickSlipNo
-                  SET @cOutField02 = ''
-                  SET @cOutField03 = ''
-                  SET @nAfterScn = 5291 --DropID scn
-                  SET @nAfterStep = 2
-               END
+--                IF NOT EXISTS(
+--                   SELECT 1
+--                   FROM dbo.PICKDETAIL pkd WITH (NOLOCK)
+--                   INNER JOIN dbo.PICKHEADER pkh WITH (NOLOCK)
+--                      ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
+--                   INNER JOIN dbo.UCC ucc WITH (NOLOCK)
+--                      ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID
+--                   INNER JOIN dbo.SKU sku WITH (NOLOCK)
+--                      ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
+--                   WHERE pkh.StorerKey = @cStorerKey
+--                      AND pkh.PickHeaderKey = @cPickSlipNo
+--                      AND ucc.Status <= '3'
+--                      AND ISNULL(ucc.Userdefined08, '') = ''
+--                )
+--                BEGIN -- finished, goto msg screen
+--                   SET @nAfterScn = 6717  --Msg screen
+--                   SET @nAfterStep = 99
+--                END
+--                ELSE
+--                BEGIN -- Not finished, continue picking
+--
+--                   SET @cOutField01 = @cPickSlipNo
+--                   SET @cOutField02 = ''
+--                   SET @cOutField03 = ''
+--                   SET @nAfterScn = 5291 --DropID scn
+--                   SET @nAfterStep = 2
+--                END
+               SET @nErrNo = 249217
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidOption
+               GOTO Quit
             END
             GOTO Quit
          END
