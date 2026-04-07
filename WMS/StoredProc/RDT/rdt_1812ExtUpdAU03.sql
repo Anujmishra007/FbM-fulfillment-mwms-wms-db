@@ -125,10 +125,111 @@ BEGIN
                FROM dbo.PACK WITH (NOLOCK)
                WHERE PackKey = @cPackKey
 
-            -- Get PickSlipNo from PackHeader
+            -- Get PickSlipNo from PackHeader (or create if not exists)
             SELECT @cPickSlipNo = PH.PICKSLIPNO
             FROM PACKHEADER PH WITH (NOLOCK)
             WHERE PH.ORDERKEY = @cOrderKey
+
+            -- If PACKHEADER doesn't exist, create PICKHEADER, PICKINGINFO, and PACKHEADER
+            IF ISNULL(@cPickSlipNo, '') = ''
+            BEGIN
+               BEGIN TRAN
+               SAVE TRAN rdt_1812Header
+
+               -- Generate new PickSlipNo
+               EXEC nspg_GetKey
+                  @KeyName     = 'PICKSLIP',
+                  @fieldlength = 9,
+                  @keystring   = @cPickSlipNo  OUTPUT,
+                  @b_success   = @bSuccess     OUTPUT,
+                  @n_err       = @nErrNo       OUTPUT,
+                  @c_errmsg    = @cErrMsg      OUTPUT,
+                  @b_resultset = 0,
+                  @n_batch     = 1
+               IF @bSuccess <> 1 OR @nErrNo <> 0
+               BEGIN
+                  SET @nErrNo = 263259
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get PickSlipNo Failed
+                  GOTO RollBackHeaderTran
+               END
+
+               DECLARE @cPickHeaderKey NVARCHAR(10) = 'P' + @cPickSlipNo
+
+               -- Insert PICKHEADER
+               IF NOT EXISTS (SELECT 1 FROM dbo.PICKHEADER WITH (NOLOCK) WHERE OrderKey = @cOrderKey)
+               BEGIN
+                  BEGIN TRY
+                     INSERT INTO PICKHEADER (
+                        PickHeaderKey, Orderkey, Storerkey, 
+                        Priority, Type, Zone, Status, PickType
+                     )
+                     SELECT
+                        @cPickHeaderKey, Orderkey, Storerkey, 
+                        Priority, '5', '3', '0', '0'
+                     FROM dbo.ORDERS WITH (NOLOCK)
+                     WHERE Orderkey = @cOrderKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 263261
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PickHeader Failed
+                     GOTO RollBackHeaderTran
+                  END CATCH
+               END
+
+               -- Insert PICKINGINFO
+               IF NOT EXISTS (SELECT 1 FROM dbo.PICKINGINFO WITH (NOLOCK) WHERE PickSlipNo = @cPickHeaderKey)
+               BEGIN
+                  BEGIN TRY
+                     INSERT INTO PICKINGINFO (PickSlipNo, ScanInDate, ScanOutDate, PickerID)
+                     VALUES (@cPickHeaderKey, GETDATE(), NULL, @cUserName)
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 263262
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PickingInfo Failed
+                     GOTO RollBackHeaderTran
+                  END CATCH
+               END
+
+               -- Update PICKDETAIL with PickSlipNo for this order and task
+               BEGIN TRY
+                  UPDATE PICKDETAIL WITH (ROWLOCK)
+                  SET PickSlipNo = @cPickHeaderKey,
+                      EditWho = @cUserName,
+                      EditDate = GETDATE()
+                  WHERE OrderKey = @cOrderKey
+                    AND TaskDetailKey = @cTaskdetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 263263
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PickDetail Failed
+                  GOTO RollBackHeaderTran
+               END CATCH
+
+               -- Insert PACKHEADER
+               BEGIN TRY
+                  INSERT INTO PACKHEADER (
+                     PickSlipNo, Storerkey, Orderkey, 
+                     LoadKey,  Status, CartonGroup, ManifestPrinted, ConsoOrderKey,
+                     AddWho, AddDate, EditWho, EditDate
+                  )
+                  SELECT
+                     @cPickHeaderKey, O.Storerkey, O.Orderkey,
+                     O.LoadKey,  '0', S.CartonGroup, '', '',
+                     @cUserName, GETDATE(), @cUserName, GETDATE()
+                  FROM ORDERS O WITH (NOLOCK)
+                  JOIN STORER S WITH (NOLOCK) ON O.Storerkey = S.Storerkey
+                  WHERE O.Orderkey = @cOrderKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 263260
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackHeader Failed
+                  GOTO RollBackHeaderTran
+               END CATCH
+
+               SET @cPickSlipNo = @cPickHeaderKey
+
+               COMMIT TRAN rdt_1812Header
+            END
 
             -- Get max CartonNo for the PickSlipNo
             SELECT @nMaxCartonNo = ISNULL(MAX(CartonNo), 0)
@@ -253,6 +354,8 @@ BEGIN
                         'rdt_1812ExtUpdAU03',
                         @nErrNo OUTPUT,
                         @cErrMsg OUTPUT
+                     IF @nErrNo <> 0
+                        GOTO RollBackTran
                   END
 
                   COMMIT TRAN rdt_1812ExtUpdAU03
@@ -387,6 +490,8 @@ BEGIN
                         'rdt_1812ExtUpdAU03',
                         @nErrNo OUTPUT,
                         @cErrMsg OUTPUT
+                     IF @nErrNo <> 0
+                        GOTO RollBackTran
                   END
 
                   COMMIT TRAN rdt_1812ExtUpdAU03
@@ -726,6 +831,10 @@ BEGIN
       END
    END
 
+   GOTO Quit
+
+RollBackHeaderTran:
+   ROLLBACK TRAN rdt_1812Header
    GOTO Quit
 
 RollBackTran:
