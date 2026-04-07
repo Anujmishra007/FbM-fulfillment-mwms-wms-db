@@ -1,5 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[mspPRDEU1]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-DROP PROCEDURE [dbo].[mspPRDEU1]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -7,12 +5,11 @@ SET ANSI_NULLS OFF
 GO
 /************************************************************************/
 /* Store Procedure:  mspPRDEU1                                          */
-/* Creation Date: 07-04-26 (Base from nspPR_CH03-Used Earlier)                                             */
-/* Copyright: MAERSK                                                       */
-/* Written by:Surya                                                          */
+/* Creation Date: 25-03-26 (Base From nspPR_CH03 used earlier           */
+/* Copyright: MAERSK                                                    */
+/* Written by:Surya                                                     */
 /*                                                                      */
-/* Purpose:  Pre-Allocation Strategy of REDBULL                    */
-/*                                                                      */
+/* Purpose:  Pre-Allocation Strategy of REDBULL FCR-10743               */                                                        */
 /* Input Parameters:  @c_storerkey char                                 */
 /*                    @c_sku char                                       */
 /*                    @c_lot char                                       */
@@ -29,31 +26,19 @@ GO
 /* Output Parameters:  None                                             */
 /*                                                                      */
 /* Return Status:  None                                                 */
-/*                                                                      */
-/* Usage:  For Allocation of Redbull                                                             */
-/*                                                                      */
+/* Usage:  For Allocation of Redbull                                    */
 /* Local Variables:                                                     */
-/*                                                                      */
-/* Called By: PreAllocation Module                                         */
-/*                                                                      */
+/* Called By: PreAllocation Module                                      */
 /* PVCS Version: 1.1                                                    */
-/*                                                                      */
-/* Version: 5.5                                                         */
-/*                                                                      */
-/* Data Modifications: 25-Mar-2026                                                  */
+/* Version: 1.0                                                         */
+/* Data Modifications: 25-Mar-2026                                      */
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Purposes                                      */
-/* 01-Apr-2005  YokeBeen  Changed to have an Outer Join to check during */
-/*                        pre-allocation for ORDERS.Facility.           */
-/*                        - (SOS#33930) - (YokeBeen01)                  */
-/* 28-Jun-2007  June     SOS76195 - Fix allocate Piece from Bulk   loc  */
-/* 02-Feb-2009  Leong     SOS128087 - SQL 2005 compatible fix           */
-/* 25-Jul-2014  TLTING    Pass extra parm @c_OtherParms                 */
-/* 25-MAR-2026  Surya     Changes to use more Partial Pallet            */
+/* 25-MAR-2026  Surya     Changes to use more Full Pallet/Partial Pallet*/
 /************************************************************************/
 
-CREATE PROCEDURE [dbo].[mspPRDEU1]
+CREATE OR ALTER PROCEDURE [dbo].[mspPRDEU1]
 --REDBULL GERMANY
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
