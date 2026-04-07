@@ -6,12 +6,12 @@ GO
 SET ANSI_NULLS OFF
 GO
 /************************************************************************/
-/* Store Procedure:  mspPRDEU1                                        */
-/* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
-/* Written by:                                                          */
+/* Store Procedure:  mspPRDEU1                                          */
+/* Creation Date: 07-04-26 (Base from nspPR_CH03-Used Earlier)                                             */
+/* Copyright: MAERSK                                                       */
+/* Written by:Surya                                                          */
 /*                                                                      */
-/* Purpose:  Pre-Allocation Strategy of IDSCN - NIKE                    */
+/* Purpose:  Pre-Allocation Strategy of REDBULL                    */
 /*                                                                      */
 /* Input Parameters:  @c_storerkey char                                 */
 /*                    @c_sku char                                       */
@@ -30,26 +30,27 @@ GO
 /*                                                                      */
 /* Return Status:  None                                                 */
 /*                                                                      */
-/* Usage:                                                               */
+/* Usage:  For Allocation of Redbull                                                             */
 /*                                                                      */
 /* Local Variables:                                                     */
 /*                                                                      */
-/* Called By: Allocation Module                                         */
+/* Called By: PreAllocation Module                                         */
 /*                                                                      */
 /* PVCS Version: 1.1                                                    */
 /*                                                                      */
-/* Version: 5.4                                                         */
+/* Version: 5.5                                                         */
 /*                                                                      */
-/* Data Modifications:                                                  */
+/* Data Modifications: 25-Mar-2026                                                  */
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Purposes                                      */
 /* 01-Apr-2005  YokeBeen  Changed to have an Outer Join to check during */
 /*                        pre-allocation for ORDERS.Facility.           */
 /*                        - (SOS#33930) - (YokeBeen01)                  */
-/* 28-Jun-2007  June     SOS76195 - Fix allocate Piece from Bulk   loc   */
+/* 28-Jun-2007  June     SOS76195 - Fix allocate Piece from Bulk   loc  */
 /* 02-Feb-2009  Leong     SOS128087 - SQL 2005 compatible fix           */
-/* 25-Jul-2014  TLTING     Pass extra parm @c_OtherParms                */
+/* 25-Jul-2014  TLTING    Pass extra parm @c_OtherParms                 */
+/* 25-MAR-2026  Surya     Changes to use more Partial Pallet            */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[mspPRDEU1]
@@ -65,7 +66,7 @@ CREATE PROCEDURE [dbo].[mspPRDEU1]
 @c_uom NVARCHAR(10) ,
 @c_facility NVARCHAR(10)  ,
 @n_uombase int ,
-@n_qtylefttofulfill int ,  -- new column
+@n_qtylefttofulfill int ,         -- new column
 @c_OtherParms NVARCHAR(200) = ''  --Orderinfo4PreAllocation
 AS
 BEGIN
@@ -106,18 +107,18 @@ BEGIN
 
    -- Get PACK.Pallet quantity using OrderDetail.PackKey or fallback to SKU.PackKey
    SELECT @n_PalletQty = P.Pallet
-FROM OrderDetail (NOLOCK) OD
-JOIN PACK (NOLOCK) P ON (OD.PackKey = P.Packkey)
-WHERE OD.OrderKey = ISNULL(@c_OrderKey, '')
-  AND OD.OrderLineNumber = ISNULL(@c_OrderLineNumber, '')
-  AND OD.StorerKey = @c_storerkey
-  AND OD.SKU = @c_sku
+      FROM OrderDetail (NOLOCK) OD
+      JOIN PACK (NOLOCK) P ON (OD.PackKey = P.Packkey)
+      WHERE OD.OrderKey = ISNULL(@c_OrderKey, '')
+      AND OD.OrderLineNumber = ISNULL(@c_OrderLineNumber, '')
+      AND OD.StorerKey = @c_storerkey
+      AND OD.SKU = @c_sku
 -- If OrderDetail not found, get from SKU.PackKey
 IF @n_PalletQty IS NULL
 BEGIN
    SELECT @n_PalletQty = P.Pallet
-   FROM SKU (NOLOCK) S
-   JOIN PACK (NOLOCK) P ON (S.Packkey = P.Packkey)
+      FROM SKU (NOLOCK) S
+      JOIN PACK (NOLOCK) P ON (S.Packkey = P.Packkey)
    WHERE S.SKU = @c_sku
      AND S.StorerKey = @c_storerkey
 END
@@ -185,8 +186,8 @@ END
    BEGIN
       SELECT 'nspPR_CH01 : Before Lot Lookup .....'
       SELECT '@c_lot'=@c_lot,'@c_lottable01'=@c_lottable01, '@c_lottable02'=@c_lottable02, '@c_lottable03'=@c_lottable03
-     SELECT '@d_lottable04' = @d_lottable04, '@d_lottable05' = @d_lottable05, '@c_manual' = @c_manual  , '@c_sku' = @c_sku
-     SELECT '@c_storerkey' = @c_storerkey, '@c_facility' = @c_facility, '@n_PalletQty' = @n_PalletQty
+      SELECT '@d_lottable04' = @d_lottable04, '@d_lottable05' = @d_lottable05, '@c_manual' = @c_manual  , '@c_sku' = @c_sku
+      SELECT '@c_storerkey' = @c_storerkey, '@c_facility' = @c_facility, '@n_PalletQty' = @n_PalletQty
    END
 
    -- when any of the lottables is supplied, get the specific lot
@@ -208,8 +209,8 @@ END
    BEGIN
       SELECT 'nspPR_CH01 : After Lot Lookup .....'
       SELECT '@c_lot'=@c_lot,'@c_lottable01'=@c_lottable01, '@c_lottable02'=@c_lottable02, '@c_lottable03'=@c_lottable03
-     SELECT '@d_lottable04' = @d_lottable04, '@d_lottable05' = @d_lottable05, '@c_manual' = @c_manual
-     SELECT '@c_storerkey' = @c_storerkey
+      SELECT '@d_lottable04' = @d_lottable04, '@d_lottable05' = @d_lottable05, '@c_manual' = @c_manual
+      SELECT '@c_storerkey' = @c_storerkey
    END
 
    -- Start : SOS76195
@@ -317,7 +318,7 @@ SELECT @c_SQLManualN =
          BEGIN
             SELECT 'AND LOC.FACILITY = N''' + @c_facility + '''' + @c_LimitString1 + '"'
          END
-		 PRINT @c_SQLManualN
+       PRINT @c_SQLManualN
         -- Execute Manual=N Query
         EXEC (@c_SQLManualN)
       END
@@ -422,9 +423,9 @@ SELECT @c_SQLManualN =
                     N'AND    P.Storerkey = N''' + @c_storerkey + N''' ' +
                     N'AND    P.SKU = N''' + @c_sku +  N''' ' +
                          N'AND    ORDERS.FACILITY = N''' + @c_facility + N''' ' +
-                N'AND    P.qty > 0 ' +
+                    N'AND    P.qty > 0 ' +
                     N'GROUP BY p.Lot, ORDERS.Facility) P ON LOTXLOCXID.Lot = P.Lot AND P.Facility = LOC.Facility ' +
-             N'WHERE LOTXLOCXID.STORERKEY = N''' + @c_storerkey + N''' ' +
+                    N'WHERE LOTXLOCXID.STORERKEY = N''' + @c_storerkey + N''' ' +
                   N'AND LOTXLOCXID.SKU = N''' + @c_sku +  N''' ' +
                   N'AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'' And LOC.LocationFlag = ''NONE'' ' +
                   N'AND LOC.FACILITY = N''' + @c_facility + N''' ' + @c_LimitString + N' ' +
