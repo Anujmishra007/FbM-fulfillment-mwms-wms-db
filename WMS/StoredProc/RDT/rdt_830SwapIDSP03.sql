@@ -11,6 +11,7 @@ GO
 /* Date        Rev  Author      Purposes                                */
 /* 13-05-2025  1.0  Ung         FCR-4215 base rdt_830SwapIDSP02         */
 /*                              Swap SKU only without consider lottable */
+/* 05-04-2026  1.1 ASP123      FCR-11252 Check On-Hold status before SWAP */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_830SwapIDSP03
@@ -246,6 +247,19 @@ BEGIN
       SET @nErrNo = 238402      
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff SKU
       GOTO quit
+   END
+
+   -- Check ON HOLD swap ID logic
+   DECLARE @cVerifyIDOnHold NVARCHAR( 1)
+   SET @cVerifyIDOnHold = rdt.RDTGetConfig( @nFunc, 'VerifyIDOnHold', @cStorerKey)
+
+   IF @cVerifyIDOnHold = '1' AND EXISTS( SELECT 1
+      FROM dbo.INVENTORYHOLD WITH (NOLOCK)
+      WHERE ID = @cID and HOLD = 1 and storerkey = @cStorerKey)
+   BEGIN
+      SET @nErrNo = 238417
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID on HOLD, cannot SWAP
+      GOTO Quit
    END
 
    -- Get first task (by SKU, LOT)
