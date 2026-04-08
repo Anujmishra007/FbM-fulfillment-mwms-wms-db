@@ -31,5 +31,6 @@ EXECUTE rdt.rdtAddMsg 260426, 10, '260426 InvOption',             'us_english', 
 EXECUTE rdt.rdtAddMsg 260427, 10, '260427 UpdTskFail',            'us_english', 1855, 0, '260427 Update TaskDetail failed'
 EXECUTE rdt.rdtAddMsg 260428, 10, '260428 UpdTskFail',            'us_english', 1855, 0, '260428 Update TaskDetail failed'
 EXECUTE rdt.rdtAddMsg 260429, 10, '260429 NoToteIDNeeded',        'us_english', 1855, 0, '260429 No need more ToteID'
+EXECUTE rdt.rdtAddMsg 260430, 10, '260430 WaveKeyMissing',        'us_english', 1855, 0, '260430 Wavekey is missing'
 
 SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 260401 AND 260450
