@@ -106,7 +106,8 @@ GO
 /* 2025-11-11   7.9 Jackc       FCR-8675 Extend SKU, UCC barcode length                         */
 /* 2025-11-12   8.0 NickT       UWP-43907 Merge code from V0                                    */
 /* 2025-12-08   8.1 Dennis      FCR-8931 AddExtScnSP on Step 8                                  */
-/* 2026-04-01   8.2 NickT       FCR-11343 Make change for rdt_838ExtScn06 in step_99            */
+/* 2026-01-07   8.2 Dennis      FCR-7820 AddExtScnSp                                            */
+/* 2026-04-01   8.3 NickT       FCR-11343 Make change for rdt_838ExtScn06 in step_99            */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -3314,7 +3315,7 @@ BEGIN
       BEGIN
          EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg
       END
-
+      SET @cMobBarcode = ''
       SET @cOutField08 = CASE WHEN @cFieldAttr08 = 'O' THEN @cOutField08 ELSE '' END -- PQTY
       SET @cOutField14 = CASE WHEN @cFieldAttr14 = 'O' THEN @cOutField14 ELSE '' END -- MQTY
    END
@@ -6620,6 +6621,101 @@ BEGIN
                   WHERE Mobile = @nMobile
                   GOTO Step_5
                END
+            END
+         END
+         ELSE IF @cExtendedScreenSP = 'rdt_838ExtScn07'
+         BEGIN
+            IF @nPreStep = 99 AND @nPreScn = 6861
+            BEGIN
+               IF @nInputKey = 1 AND @nScn = 6861 AND @nErrNo = 0
+               BEGIN
+                  SET @cPickSlipNo = @cUDF01
+                  SET @cPackDtlDropID = @cUDF12
+               END
+               IF @nInputKey = 1  AND @nScn = 4651 -- From DropID scan to STEP2
+               BEGIN
+                  SET @cPickSlipNo = @cUDF01
+                  SET @nCartonNo    = CAST(ISNULL(@cUDF02, '0') AS INT)
+                  SET @cLabelNo     = ISNULL(@cUDF03, '')
+                  SET @cCustomNo    = ISNULL(@cUDF04, '')
+                  SET @cCustomID    = ISNULL(@cUDF05, '')
+                  SET @nCartonSKU   = CAST(ISNULL(@cUDF06, '0') AS INT)
+                  SET @nCartonQTY   = CAST(ISNULL(@cUDF07, '0') AS INT)
+                  SET @nTotalCarton = CAST(ISNULL(@cUDF08, '0') AS INT)
+                  SET @nTotalPick   = CAST(ISNULL(@cUDF09, '0') AS INT)
+                  SET @nTotalPack   = CAST(ISNULL(@cUDF10, '0') AS INT)
+                  SET @nTotalShort  = CAST(ISNULL(@cUDF11, '0') AS INT)
+                  SET @cPackDtlDropID = @cUDF12
+               END
+               IF @nInputKey = 0
+               BEGIN
+                  -- EventLog
+                  EXEC RDT.rdt_STD_EventLog
+                     @cActionType = '9', -- Sign-out
+                     @cUserID     = @cUserName,
+                     @nMobileNo   = @nMobile,
+                     @nFunctionID = @nFunc,
+                     @cFacility   = @cFacility,
+                     @cStorerKey  = @cStorerKey,
+                     @nStep       = @nStep
+
+                  -- Back to menu
+                  SET @nFunc = @nMenu
+                  SET @nScn  = @nMenu
+                  SET @nStep = 0
+                  SET @cOutField01 = '' -- Option
+               END
+            END
+            IF @nPreStep = 99 AND @nPreScn = 6827 AND @nScn = 4651 -- GOTO STEP2
+            BEGIN
+               SET @nCartonNo = CAST(@cUDF01 AS INT)
+               SET @cLabelNo = @cUDF02
+               SET @cCustomNo = @cUDF03
+               SET @cCustomID = @cUDF04
+               SET @nCartonSKU = CAST(@cUDF05 AS INT)
+               SET @nCartonQTY = CAST(@cUDF06 AS INT)
+               SET @nTotalCarton = CAST(@cUDF07 AS INT)
+               SET @nTotalPick = CAST(@cUDF08 AS INT)
+               SET @nTotalPack = CAST(@cUDF09 AS INT)
+               SET @nTotalShort = CAST(@cUDF10 AS INT)
+            END
+            IF @nPreStep = 99 AND @nPreScn = 6827 AND @nScn = 4652 -- GOTO STEP 3 (Option 1/2/3)
+            BEGIN
+               -- Get values from UDF (set by ExtScnSp)
+               SET @cCartonType = @cUDF01
+               SET @nCartonNo   = CAST(ISNULL(@cUDF02, '0') AS INT)
+               SET @cLabelNo    = ISNULL(@cUDF03, '')
+               SET @cSKU        = ISNULL(@cUDF04, '')
+               SET @nPackedQTY  = CAST(ISNULL(@cUDF05, '0') AS INT)
+               SET @nCartonSKU  = CAST(ISNULL(@cUDF06, '0') AS INT)
+               SET @nCartonQTY  = CAST(ISNULL(@cUDF07, '0') AS INT)
+               SET @cLabelLine  = ISNULL(@cUDF08, '')
+
+               -- Get Option
+               SELECT @cOption = C_STRING1 FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
+
+               -- Option 2: Edit carton - get additional SKU info from UDF
+               IF @cOption = '2'
+               BEGIN
+                  SET @cSKUDescr        = ISNULL(@cUDF09, '')
+                  SET @cPrePackIndicator = ISNULL(@cUDF10, '')
+                  SET @cPackQtyIndicator = ISNULL(@cUDF11, '')
+                  SET @cMUOM_Desc       = ISNULL(@cUDF12, '')
+                  SET @cPUOM_Desc       = ISNULL(@cUDF13, '')
+                  SET @nPUOM_Div        = CAST(ISNULL(@cUDF14, '0') AS INT)
+                  SET @nPQTY            = CAST(ISNULL(@cUDF15, '0') AS INT)
+               END
+
+               -- Clear barcode for new input
+               SET @cMobBarcode = ''
+               SET @nEnter = 0
+            END
+            IF @nPreStep = 99 AND @nPreScn = 6827 AND @nScn = 4657 -- GOTO STEP 8 (Option 4: UCC)
+            BEGIN
+               -- Get values from UDF (set by ExtScnSp)
+               SET @nTotalUCC = CAST(ISNULL(@cUDF02, '0') AS INT)
+               SET @cUCCCounter = ''
+               SET @cMobBarcode = ''
             END
          END
          GOTO Quit
