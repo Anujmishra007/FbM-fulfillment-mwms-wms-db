@@ -181,7 +181,19 @@ BEGIN
 
    IF @nFunc = 1855
    BEGIN
-      IF @nCurrentStep = 99
+      IF @nCurrentStep = 10
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            SET @cOption = @cInField01
+            IF @cOption = '1'
+            BEGIN
+               SET @nAfterScn = @nScn_CartMatrix
+               SET @nAfterStep = @nStep_CartMatrix
+            END
+         END
+      END
+      ELSE IF @nCurrentStep = 99
       BEGIN
          IF @nCurrentScn = @nScn_CartID
          BEGIN
@@ -1252,6 +1264,31 @@ BEGIN
       END
       ELSE IF @nAfterStep = 2
       BEGIN
+         DECLARE @cContinuePickFlag NVARCHAR(1) = 'N'
+         IF @nCurrentStep = 10
+         BEGIN
+            IF @cWaveKey = ''
+            BEGIN
+               SELECT TOP 1 @cWaveKey = WaveKey
+               FROM dbo.TaskDetail WITH (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+                  AND TaskType = 'ASTCPK'
+                  AND Status = '3'
+                  AND Groupkey = @cGroupKey
+                  AND UserKey = @cUserName
+                  AND DeviceID = @cCartID
+                  AND DropID <> ''
+            END
+            SET @cContinuePickFlag= 'Y'
+         END
+
+         IF ISNULL(@cWaveKey, '') = ''
+         BEGIN
+            SET @nErrNo = 260430
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Wavekey is missing
+            GOTO Quit
+         END
+
          SELECT @nCartonScanned = COUNT( DISTINCT DropID)
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE Storerkey = @cStorerKey
@@ -1263,10 +1300,19 @@ BEGIN
             AND WaveKey = @cWaveKey
             AND DropID <> ''
 
-         SET @cOutField09 = ISNULL(TRY_CAST(@nCartonScanned + 1 AS NVARCHAR(5)), '')
+         SET @cOutField09 = @nCartonScanned
+         SET @cOutField15 = ''
             
          SET @nAfterStep = 99
          SET @nAfterScn = @nScn_CartMatrix
+
+         IF @cContinuePickFlag= 'Y'
+         BEGIN
+            SET @cUDF01 = 'NO UPD RDTMOBREC'
+            GOTO UPD_RDTMOBREC
+         END
+         ELSE
+            SET @cUDF01 = ''
       END
       ELSE IF @nAfterStep = 4
       BEGIN
