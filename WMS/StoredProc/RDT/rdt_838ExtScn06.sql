@@ -2762,6 +2762,7 @@ BEGIN
       V_String4 = @cCartonType,
       V_String5 = @cCube,
       V_String6 = @cWeight,
+      V_String20 = @cFromDropID,
       V_Barcode = @cMobBarcode,
 
       EditDate = GETDATE(),

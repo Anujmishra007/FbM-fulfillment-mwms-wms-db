@@ -111,6 +111,7 @@ BEGIN
          UPDATE dbo.PackDetail WITH (ROWLOCK) 
          SET
             Qty = IIF(Qty + 1 > ExpQty, ExpQty, Qty + 1),
+            DropID = @cFromDropID,
             EditWho = SUSER_SNAME(),
             EditDate = GETDATE()
          WHERE PickSlipNo = @cPickSlipNo 
