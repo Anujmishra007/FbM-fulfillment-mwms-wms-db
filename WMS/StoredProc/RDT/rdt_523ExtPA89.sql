@@ -102,6 +102,12 @@ BEGIN
                            AND ( LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
                            AND LOC.Loc = LOC2.Loc
                         )
+         AND NOT EXISTS(SELECT 1
+                        FROM rdt.rdtPutawaySkipLOCLog SkipLOC WITH (NOLOCK)
+                        WHERE SkipLOC.Mobile = @nMobile
+                           AND SkipLOC.Func = @nFunc
+                           AND SkipLOC.LOC = LOC.LOC
+                        )
       ORDER BY LOC.LogicalLocation, LOC.Loc
 
       IF @@ROWCOUNT = 0
@@ -129,6 +135,12 @@ BEGIN
                         AND ( LLI1.Qty - LLI1.QtyPicked > 0 OR LLI1.PendingMoveIN > 0) 
                         AND LOC.Loc = LOC1.Loc
                   )
+            AND NOT EXISTS( SELECT 1
+                           FROM rdt.rdtPutawaySkipLOCLog SkipLOC WITH (NOLOCK)
+                           WHERE SkipLOC.Mobile = @nMobile
+                              AND SkipLOC.Func = @nFunc
+                              AND SkipLOC.LOC = LOC.LOC
+                           )
          GROUP BY LOC.Loc, LOC.LogicalLocation, LOC.CommingleSku,  LOC.[Cube], SKU.SKU, SKU.STDCUBE
 
          SELECT TOP 1 @cSuggestedLOC = Loc
@@ -171,6 +183,11 @@ BEGIN
                         AND ( LLI1.Qty - LLI1.QtyPicked > 0 OR LLI1.PendingMoveIN > 0) 
                         AND LOC.Loc = LOC1.Loc
                   )
+         AND NOT EXISTS(SELECT 1 FROM rdt.rdtPutawaySkipLOCLog SkipLOC WITH (NOLOCK)
+                        WHERE SkipLOC.Mobile = @nMobile
+                           AND SkipLOC.Func = @nFunc
+                           AND SkipLOC.LOC = LOC.LOC
+                        )
       GROUP BY LOC.Loc, LOC.LogicalLocation, LOC.CommingleSku,  LOC.[Cube], SKU.SKU, SKU.STDCUBE
 
       SET @nLoopIndex = -1
@@ -219,6 +236,12 @@ BEGIN
                               AND ISNULL(LOC2.PutawayZone, '') = @cPutawayZone
                               AND ( LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
                               AND LOC.Loc = LOC2.Loc
+                           )
+            AND NOT EXISTS( SELECT 1
+                           FROM rdt.rdtPutawaySkipLOCLog SkipLOC WITH (NOLOCK)
+                           WHERE SkipLOC.Mobile = @nMobile
+                              AND SkipLOC.Func = @nFunc
+                              AND SkipLOC.LOC = LOC.LOC
                            )
          ORDER BY LOC.LogicalLocation, LOC.Loc
 
