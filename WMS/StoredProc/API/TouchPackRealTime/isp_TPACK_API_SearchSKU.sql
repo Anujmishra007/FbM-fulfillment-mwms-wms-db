@@ -69,6 +69,9 @@ BEGIN
       SKU NVARCHAR(20) PRIMARY KEY
    )
 
+   DECLARE @oOrderKeyList TABLE (
+      OrderKey NVARCHAR(10) PRIMARY KEY
+   )
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
    SET @c_ErrMsg           = ''  
@@ -187,6 +190,19 @@ BEGIN
    BEGIN    
       SET @n_Continue = 3  
       GOTO EXIT_SP
+   END
+
+   IF @cLoadKey <> ''
+   BEGIN
+      INSERT INTO @oOrderKeyList (OrderKey)
+      SELECT OrderKey
+      FROM LOADPLANDETAIL (NOLOCK)
+      WHERE LoadKey = @cLoadKey
+   END
+   ELSE
+   BEGIN IF @cOrderKey <> ''
+      INSERT INTO @oOrderKeyList (OrderKey)
+      VALUES (@cOrderKey)
    END
 
    --Search the SKU, AltSKU, RetailSKU, ManufacturerSKU, UPC
@@ -435,13 +451,10 @@ BEGIN
             INSERT INTO @oLoadKeySKUList (SKU)
             SELECT DISTINCT PD.SKU
             FROM PICKDETAIL PD (NOLOCK)
-            WHERE (@cLoadKey = ''  
-               OR EXISTS ( SELECT 1 
-                           FROM LOADPLANDETAIL LPD (NOLOCK)
-                           WHERE LPD.OrderKey = PD.OrderKey
-                           AND  LPD.LoadKey = @cLoadKey
+            WHERE EXISTS ( SELECT 1 
+                           FROM @oOrderKeyList O
+                           WHERE O.OrderKey = PD.OrderKey
                         )
-                  )
             AND PD.DropID = @cDropID
             AND NOT (
                   (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
@@ -453,13 +466,10 @@ BEGIN
             INSERT INTO @oLoadKeySKUList (SKU)
             SELECT DISTINCT PD.SKU
             FROM PICKDETAIL PD (NOLOCK)
-            WHERE (@cLoadKey = ''  
-               OR EXISTS ( SELECT 1 
-                           FROM LOADPLANDETAIL LPD (NOLOCK)
-                           WHERE LPD.OrderKey = PD.OrderKey
-                           AND  LPD.LoadKey = @cLoadKey
+            WHERE EXISTS ( SELECT 1 
+                           FROM @oOrderKeyList O
+                           WHERE O.OrderKey = PD.OrderKey
                         )
-                  )
             AND (@cDropID = '' OR PD.DropID = @cDropID)
          END
 
