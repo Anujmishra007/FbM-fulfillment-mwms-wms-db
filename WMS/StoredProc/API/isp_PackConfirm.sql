@@ -878,7 +878,6 @@ BEGIN
          FROM Mapped
          WHERE TargetBarcode IS NOT NULL
          GROUP BY TargetBarcode
-         ORDER BY MIN(RowNo);
 
          SET @cCurUPC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
          SELECT UPC, Qty 

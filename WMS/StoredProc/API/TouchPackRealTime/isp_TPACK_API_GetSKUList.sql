@@ -164,10 +164,17 @@ BEGIN
       FROM LOADPLANDETAIL (NOLOCK)
       WHERE LoadKey = @cLoadKey
    END
-   ELSE
-   BEGIN IF @cOrderKey <> ''
+   ELSE IF @cOrderKey <> ''
+   BEGIN 
       INSERT INTO @oOrderKeyList (OrderKey)
       VALUES (@cOrderKey)
+   END
+   ELSE IF @cLoadKey = '' AND @cOrderKey = '' AND @cDropID <> ''
+   BEGIN
+      INSERT INTO @oOrderKeyList (OrderKey)
+      SELECT DISTINCT OrderKey
+      FROM PICKDETAIL (NOLOCK)
+      WHERE DropID = @cDropID
    END
 
    IF @bIsDiscrete = 1
