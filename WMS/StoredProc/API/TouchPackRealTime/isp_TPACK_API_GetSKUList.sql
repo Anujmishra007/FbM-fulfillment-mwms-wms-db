@@ -74,6 +74,10 @@ BEGIN
     , nPackQty    INT
    )
 
+   DECLARE @oOrderKeyList TABLE (
+      OrderKey    NVARCHAR(10) PRIMARY KEY
+   )
+   
    SET @b_Success             = 0  
    SET @n_ErrNo               = 0  
    SET @c_ErrMsg              = ''  
@@ -153,6 +157,26 @@ BEGIN
 
    SET @nOffset = ISNULL(@nPageIndex, 0)
    
+   IF @cLoadKey <> ''
+   BEGIN
+      INSERT INTO @oOrderKeyList (OrderKey)
+      SELECT OrderKey
+      FROM LOADPLANDETAIL (NOLOCK)
+      WHERE LoadKey = @cLoadKey
+   END
+   ELSE IF @cOrderKey <> ''
+   BEGIN 
+      INSERT INTO @oOrderKeyList (OrderKey)
+      VALUES (@cOrderKey)
+   END
+   ELSE IF @cLoadKey = '' AND @cOrderKey = '' AND @cDropID <> ''
+   BEGIN
+      INSERT INTO @oOrderKeyList (OrderKey)
+      SELECT DISTINCT OrderKey
+      FROM PICKDETAIL (NOLOCK)
+      WHERE DropID = @cDropID
+   END
+
    IF @bIsDiscrete = 1
    BEGIN
       IF @cType = 'toteid'
@@ -262,14 +286,6 @@ BEGIN
    END
    ELSE
    BEGIN
-      IF @cLoadKey = '' AND @cDropID = ''
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_ErrNo = 11951
-         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Failed to Perform Check SKU, LoadKey and DropID both are empty.
-         GOTO EXIT_SP
-      END
-
       IF @cType = 'toteid'
       BEGIN
          -- only tote and b2c
@@ -287,11 +303,10 @@ BEGIN
          ON PD.StorerKey = S.StorerKey
          AND PD.SKU = S.SKU
          WHERE PD.StorerKey = @cStorerKey
-         AND (@cLoadKey = '' OR EXISTS (SELECT 1
-                     FROM LOADPLANDETAIL LPD (NOLOCK)
-                     WHERE LPD.OrderKey = PD.OrderKey
-                     AND LPD.LoadKey = @cLoadKey
-         ))
+         AND EXISTS (SELECT 1 
+                     FROM @oOrderKeyList O 
+                     WHERE O.OrderKey = PD.OrderKey
+                     )
          AND PD.DropID = @cDropID
          AND NOT (
                   (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
@@ -345,11 +360,10 @@ BEGIN
          ON PD.StorerKey = S.StorerKey
          AND PD.SKU = S.SKU
          WHERE PD.StorerKey = @cStorerKey
-         AND (@cLoadKey = '' OR EXISTS (SELECT 1
-                     FROM LOADPLANDETAIL LPD (NOLOCK)
-                     WHERE LPD.OrderKey = PD.OrderKey
-                     AND LPD.LoadKey = @cLoadKey
-         ))
+         AND EXISTS (SELECT 1 
+                     FROM @oOrderKeyList O 
+                     WHERE O.OrderKey = PD.OrderKey
+                  )
          AND (@cDropID = '' OR PD.DropID = @cDropID)
          AND (@cSearchValue = '' 
          OR ( 

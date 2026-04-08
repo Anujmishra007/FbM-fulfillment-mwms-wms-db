@@ -26,6 +26,7 @@ GO
 /* 2025-04-28   2.4  Yeekung    FCR-3819 Pack Merge with other app(yeekung07) */
 /* 2025-05-16   2.4  Yeekung    UWP-33699 Merge username (yeekung08)          */
 /* 2025-07-22   2.5  GCH225     UWP-38184 Enhanced the lsp_SetUser logic      */
+/* 2026-04-07   3.0  GCH225     UWP-52943 Fix UPC Logic                       */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_HoldCarton] (
@@ -163,6 +164,15 @@ DECLARE @HoldCartonList TABLE (
    barcodeVal      NVARCHAR(60),  
    ADCode          NVARCHAR(60),
    UPC             NVARCHAR(MAX)
+)
+
+DECLARE @oUPCList TABLE (
+      UPC NVARCHAR(30) PRIMARY KEY
+   )
+
+DECLARE @oMappedUPC TABLE (
+   UPC NVARCHAR(30) PRIMARY KEY
+   , QTY INT
 )
 
 DECLARE @pickSKUDetail TABLE (
@@ -560,15 +570,120 @@ END
                QTY               INT            '$.QTY'
             ) )
          BEGIN
-            SET @cCurUPC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-            SELECT UPC, SUM(QTY) 
-            FROM OPENJSON(@cUPCJSON)  
-            WITH (  
-               UPC               NVARCHAR( 30)  '$.UPC',  
-               QTY               INT            '$.QTY'
-            )  
-            WHERE ISNULL(UPC,'') <> ''
-            GROUP BY  UPC
+            DELETE FROM @oUPCList
+            WHERE 1=1
+
+            DELETE FROM @oMappedUPC
+            WHERE 1=1
+
+            INSERT INTO @oUPCList
+            SELECT ISNULL(RTRIM(UPC), '') 
+            FROM UPC (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+            AND SKU = @cSKU
+            
+            ;WITH JsonData AS (
+               --------------------------------------------------------
+               -- Step 1: Read JSON in array order
+               --------------------------------------------------------
+               SELECT  CAST([key] AS INT) + 1 AS RowNo
+                     , JSON_VALUE([value], '$.UPC') AS UPC
+                     , TRY_CAST(JSON_VALUE([value], '$.QTY') AS INT) AS Qty
+               FROM OPENJSON(@cUPCJSON)
+               WHERE JSON_VALUE([value], '$.UPC') IS NOT NULL
+               AND LTRIM(RTRIM(JSON_VALUE([value], '$.UPC'))) <> ''
+            ),
+            Checked AS (
+               --------------------------------------------------------
+               -- Step 2: Check UPC valid for SKU
+               --------------------------------------------------------
+               SELECT  j.RowNo
+                     , j.UPC
+                     , j.Qty
+                     ,  CASE 
+                           WHEN  S.AltSKU IS NOT NULL 
+                              OR S.RetailSKU IS NOT NULL 
+                              OR S.ManufacturerSKU IS NOT NULL 
+                              OR EXISTS ( SELECT 1 
+                                       FROM @oUPCList o 
+                                       WHERE o.UPC = j.UPC
+                                    )
+                              THEN 1
+                              ELSE 0
+                        END AS IsValid
+               FROM JsonData j
+               LEFT JOIN SKU (NOLOCK) S
+               ON S.SKU = @cSKU
+               AND S.StorerKey = @cStorerKey
+               AND (S.AltSKU = j.UPC 
+                  OR S.RetailSKU = j.UPC
+                  OR S.ManufacturerSKU = j.UPC
+                  OR EXISTS ( SELECT 1 
+                              FROM @oUPCList o 
+                              WHERE o.UPC = j.UPC
+                           )
+               )
+            ),
+            Grouped AS (
+               --------------------------------------------------------
+               -- Step 3:
+               -- Create running group based on how many valid barcodes
+               -- have appeared so far
+               --------------------------------------------------------
+               SELECT  c.*
+                     , SUM(CASE WHEN c.IsValid = 1 THEN 1 ELSE 0 END)
+                           OVER (ORDER BY c.RowNo ROWS UNBOUNDED PRECEDING) AS ValidGroup
+               FROM Checked c
+            ),
+            Mapped AS (
+               --------------------------------------------------------
+               -- Step 4:
+               -- Map each row to surviving valid barcode
+               --
+               -- Cases:
+               -- A) ValidGroup > 0
+               --    => use the valid barcode of that group
+               --
+               -- B) ValidGroup = 0
+               --    => means rows before first valid barcode
+               --       map them to the FIRST valid barcode in the whole list
+               --------------------------------------------------------
+               SELECT  g.RowNo
+                     , g.UPC
+                     , g.Qty
+                     , g.IsValid
+                     , g.ValidGroup
+                     ,  CASE
+                           WHEN g.ValidGroup > 0 THEN
+                              (
+                                 SELECT TOP 1 x.UPC
+                                 FROM Grouped x
+                                 WHERE x.ValidGroup = g.ValidGroup
+                                    AND x.IsValid = 1
+                                 ORDER BY x.RowNo
+                              )
+                           ELSE
+                              (
+                                 SELECT TOP 1 x.UPC
+                                 FROM Grouped x
+                                 WHERE x.IsValid = 1
+                                 ORDER BY x.RowNo
+                              )
+                        END AS TargetBarcode
+               FROM Grouped g
+            )
+            ------------------------------------------------------------
+            -- Step 5: Final grouped result
+            ------------------------------------------------------------       
+            INSERT INTO @oMappedUPC (UPC, Qty)
+            SELECT TargetBarcode, SUM(Qty)
+            FROM Mapped
+            WHERE TargetBarcode IS NOT NULL
+            GROUP BY TargetBarcode
+
+            SET @cCurUPC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+            SELECT UPC, Qty 
+            FROM @oMappedUPC
 
             OPEN @cCurUPC 
             FETCH NEXT FROM @cCurUPC INTO @cUPC,@nUPCQTY
@@ -1574,11 +1689,8 @@ NEXT_Lottable:
 
 
    EXIT_SP:
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
-   REVERT
+   IF @b_ExecuteAs= 1 REVERT
+   EXEC [WM].[lsp_ResetUser]
 END
 GO
 
