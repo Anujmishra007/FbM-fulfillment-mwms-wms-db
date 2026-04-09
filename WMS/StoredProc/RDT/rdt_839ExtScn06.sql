@@ -162,6 +162,7 @@ BEGIN
       @nTranCount             INT,
       @nLoopIndex             INT = -1,
       @cRemarks               NVARCHAR( 30),
+      @cWaveKey               NVARCHAR( 10),
 
       @cChkLottable01 NVARCHAR( 18),   @cChkLottable02 NVARCHAR( 18),   @cChkLottable03 NVARCHAR( 18),
       @dChkLottable04 DATETIME,        @dChkLottable05 DATETIME,        @cChkLottable06 NVARCHAR( 30),
@@ -545,7 +546,7 @@ BEGIN
                BEGIN
                   SET @nErrNo = 255529
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Reason code is required
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END
 
                IF NOT EXISTS(SELECT 1 
@@ -556,7 +557,7 @@ BEGIN
                BEGIN
                   SET @nErrNo = 255501
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid reason code
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END
                
                SET @cRealloMethod = rdt.rdtGetConfig( @nFunc, 'RealloMethod', @cStorerKey)
@@ -626,7 +627,7 @@ BEGIN
 
                      SET @nErrNo = 255528
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update rdtPickLog failed
-                     GOTO Quit
+                     GOTO UPD_RDTMOBREC
                   END CATCH
                END
 
@@ -656,7 +657,7 @@ BEGIN
                   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                      COMMIT TRAN
 
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END
                   
                -- 2. Hold the location
@@ -697,7 +698,7 @@ BEGIN
 
                   SET @nErrNo = 255502
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Hold Loc failed
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END CATCH
 
                IF @nErrNo <> 0  
@@ -707,7 +708,7 @@ BEGIN
                   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                      COMMIT TRAN
 
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END  
 
                -- 3. Send supervisor alert message
@@ -745,7 +746,7 @@ BEGIN
 
                   SET @nErrNo = 255503
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Send alert message failed
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END CATCH
 
                -- 4. Re-allocate the pick task
@@ -766,9 +767,10 @@ BEGIN
 
                DECLARE @curPD CURSOR
                SET @curPD = CURSOR FOR
-                  SELECT DISTINCT PD.PickDetailKey
+                  SELECT DISTINCT WD.WaveKey, PD.SKU, PD.Loc
                   FROM dbo.PickDetail PD WITH(NOLOCK)
                   INNER JOIN @tRDTPickLog TRPL ON ( (PD.OrderKey = TRPL.OrderKey AND PD.OrderLineNumber = TRPL.OrderLineNumber AND ISNULL(PD.SourceType, '') = TRPL.PickDetailKey) OR (PD.PickDetailKey = TRPL.PickDetailKey) )
+                  INNER JOIN dbo.WaveDetail WD WITH(NOLOCK) ON WD.OrderKey = PD.OrderKey
                   WHERE PD.StorerKey = @cStorerKey
                      AND PD.Status = '4'
 
@@ -785,27 +787,40 @@ BEGIN
                   @cTaskType            = TaskType,
                   @cExecStatements      = StoredProcName
                FROM dbo.QCmd_TransmitlogConfig WITH (NOLOCK)
-               WHERE TableName = 'RealloPickDetail'
+               WHERE TableName = '839ShortPickHold'
                   AND App_Name = 'WMS'
                   AND  StorerKey =  @cStorerKey
 
+               DECLARE 
+                  @cLoopSKU      NVARCHAR(20),
+                  @cLoopLoc      NVARCHAR(10)
+
                OPEN @curPD
-               FETCH NEXT FROM @curPD INTO @cPickDetailKey
+               FETCH NEXT FROM @curPD INTO @cWaveKey, @cLoopSKU, @cLoopLoc
                WHILE @@FETCH_STATUS = 0
                BEGIN
                   IF @cRealloMethod = 'Sync'
                   BEGIN
                      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExecStatements) +
-                           ' @cPickDetailKey, ' +
-                           ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+                           ' @c_Wavekey, ' +
+                           ' @c_SKU, ' +
+                           ' @c_InputValue, ' +
+                           ' @c_Taskdetailkey, ' +
+                           ' @b_Success OUTPUT, ' +
+                           ' @n_Err OUTPUT, @c_ErrMsg OUTPUT '
                         SET @cSQLParam =
-                           ' @cPickDetailKey         NVARCHAR( 18) ' +
-                           ',@nErrNo          INT           OUTPUT     ' +
-                           ',@cErrMsg         NVARCHAR(250) OUTPUT     '
+                           '  @c_Wavekey          NVARCHAR(10) ' +
+                           ' ,@c_SKU              NVARCHAR(20) ' +
+                           ' ,@c_InputValue       NVARCHAR(20) ' +
+                           ' ,@c_Taskdetailkey    NVARCHAR(10) ' +
+                           ' ,@b_Success          INT     OUTPUT ' +
+                           ' ,@n_Err              INT     OUTPUT ' +
+                           ' ,@c_ErrMsg           NVARCHAR(225) OUTPUT  '
 
                         BEGIN TRY
                            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                              @cPickDetailKey,
+                              @cWaveKey, @cLoopSKU, @cLoopLoc,
+                              @bSuccess OUTPUT,
                               @nErrNo OUTPUT, @cErrMsg OUTPUT
                         END TRY
                         BEGIN CATCH
@@ -819,7 +834,7 @@ BEGIN
 
                            CLOSE @curPD
                            DEALLOCATE @curPD
-                           GOTO Quit
+                           GOTO UPD_RDTMOBREC
                         END CATCH
 
                         IF @nErrNo <> 0
@@ -831,18 +846,21 @@ BEGIN
 
                            CLOSE @curPD
                            DEALLOCATE @curPD
-                           GOTO Quit
+                           GOTO UPD_RDTMOBREC
                         END
                   END
                   ELSE IF @cRealloMethod = 'Async'
                   BEGIN
                      SET @cExecStatements = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements)
-                                          + ' @cPickDetailKey = ''' + @cPickDetailKey + ''''
+                                             + ' @c_Wavekey = ''' + ISNULL(@cWaveKey,'') + ''''
+                                             + ', @c_SKU = ''' + @cLoopSKU + ''''
+                                             + ', @c_InputValue = ''' + @cLoopLoc + ''''
+                                             + ', @c_TaskDetailKey = '''''
 
                      -- Submit task to QCommander
                      BEGIN TRY
                         EXEC isp_QCmd_SubmitTaskToQCommander
-                           @cTaskType           = 'D'                  -- 'T' - TransmitlogKey, 'D' - Data Stream 
+                           @cTaskType           = 'O'                  -- 'T' - TransmitlogKey, 'D' - Data Stream 
                            , @cStorerKey          = @cStorerKey
                            , @cDataStream         = @cDataStream
                            , @cCmdType            = @cCmdType 
@@ -871,7 +889,7 @@ BEGIN
 
                         CLOSE @curPD
                         DEALLOCATE @curPD
-                        GOTO Quit
+                        GOTO UPD_RDTMOBREC
                      END CATCH
 
                      IF @nErrNo <> 0
@@ -883,10 +901,10 @@ BEGIN
 
                         CLOSE @curPD
                         DEALLOCATE @curPD
-                        GOTO Quit
+                        GOTO UPD_RDTMOBREC
                      END
                   END
-                  FETCH NEXT FROM @curPD INTO @cPickDetailKey
+                  FETCH NEXT FROM @curPD INTO @cWaveKey, @cLoopSKU, @cLoopLoc
                END
                CLOSE @curPD
                DEALLOCATE @curPD
