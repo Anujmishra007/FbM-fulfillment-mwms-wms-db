@@ -305,22 +305,8 @@ BEGIN
                SET @nErrNo = 0
                SET @cErrMsg1 = 'WRONG LOC.'
                SET @cErrMsg2 = 'PLS HOLD THE SKU.'
-               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2
-               IF @nErrNo = 1
-               BEGIN
-                  SET @cErrMsg1 = ''
-                  SET @cErrMsg2 = ''
-               END
-
-               -- Prep next screen var
-               SET @cOutField01 = @cFromLOC
-               SET @cOutField02 = @cFromID
-               SET @cOutField03 = ''
-            
-               -- Go to next screen
-               SET @nAfterScn = 1733
-               SET @nAfterStep = 4
-               GOTO Quit
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, '', @cErrMsg1, @cErrMsg2
+               GOTO Scn_1738_Fail
             END
 
             SET @cChkFacility = ''
