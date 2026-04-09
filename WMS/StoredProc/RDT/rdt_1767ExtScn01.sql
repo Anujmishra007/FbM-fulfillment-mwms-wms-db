@@ -13,9 +13,10 @@ GO
 /* 2024-06-13 1.0.0  NLT013     FCR-4971. Created                         */
 /* 2024-06-13 1.0.1  Dennis     FCR-4971. Fix Bug                         */
 /* 2026-01-15 1.0.2  James      FCR-7347. Fix Bug                         */
+/* 2026-04-09 1.0.3  James      FCR-7347. Fix script header               */
 /**************************************************************************/
 
-REATE OR ALTER PROC [RDT].[rdt_1767ExtScn01] (
+CREATE OR ALTER PROC [RDT].[rdt_1767ExtScn01] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
