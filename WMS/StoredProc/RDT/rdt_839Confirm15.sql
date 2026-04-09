@@ -352,7 +352,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET
-                  Status = '6',
+                  Status = '5',
                   OrderKey = @cLoopOrderKey,
                   OrderLineNumber = @cLoopOrderKeyLineNumber,
                   EditDate = GETDATE(),
@@ -445,7 +445,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET
-                  Status = '6',
+                  Status = '5',
                   OrderKey = @cLoopOrderKey,
                   OrderLineNumber = @cLoopOrderKeyLineNumber,
                   EditDate = GETDATE(),
@@ -830,7 +830,10 @@ BEGIN
 
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
-               SET Status = '6'
+               SET 
+                  Status = '5',
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
                WHERE UCCNo = @cPieceLotUCC
             END TRY
             BEGIN CATCH
