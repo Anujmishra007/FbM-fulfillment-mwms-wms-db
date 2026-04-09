@@ -42,4 +42,16 @@ EXECUTE rdt.rdtAddMsg 263616, 10, '263616 CarrierIntFail',        'us_english', 
 -- Assign Pack Label
 EXECUTE rdt.rdtAddMsg 263617, 10, '263617 AsgnPkLblFail',         'us_english', 1812, 0, '263617 Assign Pack Label Failed'
 
+-- Specialised Orders (FCR-12113) - CS or EA
+EXECUTE rdt.rdtAddMsg 263618, 10, '263618 InsPkDtlSpec',          'us_english', 1812, 0, '263618 Insert PackDetail Failed (Specialised CS or EA)'
+EXECUTE rdt.rdtAddMsg 263619, 10, '263619 UpdPkInfoSpec',         'us_english', 1812, 0, '263619 Update PackInfo Failed (Specialised CS or EA)'
+EXECUTE rdt.rdtAddMsg 263620, 10, '263620 InsTransLogSpec',       'us_english', 1812, 0, '263620 Insert TransmitLog Failed (Specialised CS or EA)'
+EXECUTE rdt.rdtAddMsg 263621, 10, '263621 GetTransKeySpec',       'us_english', 1812, 0, '263621 Get TransmitKey Failed (Specialised CS or EA)'
+
+-- Specialised Orders (FCR-12113) - CS Only
+EXECUTE rdt.rdtAddMsg 263622, 10, '263622 InsPkDtlCSOnly',        'us_english', 1812, 0, '263622 Insert PackDetail Failed (Specialised CS Only)'
+EXECUTE rdt.rdtAddMsg 263623, 10, '263623 UpdPkInfoCSOnly',       'us_english', 1812, 0, '263623 Update PackInfo Failed (Specialised CS Only)'
+EXECUTE rdt.rdtAddMsg 263624, 10, '263624 GetTransKeyCSOnly',     'us_english', 1812, 0, '263624 Get TransmitKey Failed (Specialised CS Only)'
+EXECUTE rdt.rdtAddMsg 263625, 10, '263625 InsTransLogCSOnly',     'us_english', 1812, 0, '263625 Insert TransmitLog Failed (Specialised CS Only)'
+
 SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 263601 AND 263650
