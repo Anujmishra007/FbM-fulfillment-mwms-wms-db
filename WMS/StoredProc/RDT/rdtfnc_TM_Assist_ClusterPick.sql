@@ -2286,7 +2286,7 @@ BEGIN
             SET @cSuggSKU = ''
 
             SET @nErrNo = 0
-            EXEC [RDT].[rdt_TM_ClusterPick_GetTask]
+            EXEC [RDT].[rdt_TM_Assist_ClusterPick_GetTask]
                @nMobile          = @nMobile,
                @nFunc            = @nFunc,
                @cLangCode        = @cLangCode,
