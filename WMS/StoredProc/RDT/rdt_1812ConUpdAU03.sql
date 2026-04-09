@@ -119,7 +119,7 @@ BEGIN
    /***********************************************************************************************
                                                PackHeader
    ***********************************************************************************************/
-   IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE Pickslipno = @cPickSlipNo  )
+   IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE Pickslipno = @cPickSlipNo AND OrderKey = @cOrderKey )
    BEGIN
       -- Get PickSlipNo
       IF @cPickSlipNo = ''
@@ -158,7 +158,7 @@ BEGIN
    END
 
    /***********************************************************************************************
-     Specialised Orders Handling (FCR-12113)
+     Specialised Orders Handling (FCR-11492)
      - If ORDERS.UserDefine01 = 'Specialised' and SKU.PickCode = 'CS or EA': Create PACKDETAIL per unit
      - If ORDERS.UserDefine01 = 'Specialised' and SKU.PickCode = 'CS Only': Create PACKDETAIL per case
    ***********************************************************************************************/
