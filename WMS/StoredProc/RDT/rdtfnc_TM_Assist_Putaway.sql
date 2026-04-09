@@ -5,23 +5,24 @@ SET ANSI_NULLS OFF
 GO  
 
     
-/************************************************************************/    
-/* Store procedure: rdtfnc_TM_Assist_Putaway                            */    
-/* Copyright      : LF Logistics                                        */    
-/*                                                                      */    
-/* Purpose: Putaway pallet to ASRS                                      */    
-/*                                                                      */    
-/* Modifications log:                                                   */    
-/*                                                                      */    
-/* Date       Rev  Author   Purposes                                    */    
-/* 2015-03-05 1.0  Ung      Created SOS332730                           */    
-/* 2019-09-12 1.1  Ung      WMS-10452 Add override LOC                  */    
-/* 2019-10-03 1.2  James    WMS-10316 Clear Case ID when esc (james01)  */    
-/* 2020-08-17 1.3  YeeKung  WMS-14344 Fixed bugs (yeekung01)            */    
-/* 2021-06-30 1.4  James    WMS-17016 Add Sku, Qty screen (james02)     */    
-/*                          Add variabletable param                     */    
-/* 2021-10-21 1.5  Chermain WMS-17638 Add ExtUpd in st1 (cc01)          */
-/************************************************************************/    
+/******************************************************************************/    
+/* Store procedure: rdtfnc_TM_Assist_Putaway                                  */    
+/* Copyright      : LF Logistics                                              */    
+/*                                                                            */    
+/* Purpose: Putaway pallet to ASRS                                            */    
+/*                                                                            */    
+/* Modifications log:                                                         */    
+/*                                                                            */    
+/* Date       Rev  Author   Purposes                                          */    
+/* 2015-03-05 1.0  Ung      Created SOS332730                                 */    
+/* 2019-09-12 1.1  Ung      WMS-10452 Add override LOC                        */    
+/* 2019-10-03 1.2  James    WMS-10316 Clear Case ID when esc (james01)        */    
+/* 2020-08-17 1.3  YeeKung  WMS-14344 Fixed bugs (yeekung01)                  */    
+/* 2021-06-30 1.4  James    WMS-17016 Add Sku, Qty screen (james02)           */    
+/*                          Add variabletable param                           */    
+/* 2021-10-21 1.5  Chermain WMS-17638 Add ExtUpd in st1 (cc01)                */
+/* 2026-04-07 1.6  Jackc    FCR-10346 Add extupd to st1 inputkey=1 (jackc01)  */
+/******************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_Putaway] (    
    @nMobile    INT,    
@@ -658,7 +659,33 @@ BEGIN
          ,@nErrNo    OUTPUT    
          ,@cErrMsg   OUTPUT    
       IF @nErrNo <> 0    
-         GOTO Quit    
+         GOTO Quit
+
+      -- Extended Update  --(jackc01)
+      IF @cExtendedUpdateSP <> ''  
+      BEGIN  
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
+         BEGIN  
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'  
+            SET @cSQLParam =  
+               '@nMobile         INT,           ' +  
+               '@nFunc           INT,           ' +  
+               '@cLangCode       NVARCHAR( 3),  ' +  
+               '@nStep           INT,           ' +  
+               '@nInputKey       INT,           ' +   
+               '@cTaskdetailKey  NVARCHAR( 10), ' +  
+               '@cToLOC          NVARCHAR( 10), ' +  
+               '@nErrNo          INT OUTPUT,    ' +  
+               '@cErrMsg         NVARCHAR( 20) OUTPUT '  
+     
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+     
+            IF @nErrNo <> 0  
+               GOTO Quit  
+         END  
+      END      
     
       -- Get next task    
       SET @cNextTaskDetailKey = ''    
@@ -2092,7 +2119,7 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/    
 Quit:    
 BEGIN    
-   UPDATE RDTMOBREC WITH (ROWLOCK) SET    
+   UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET    
       ErrMsg = @cErrMsg,    
       Func   = @nFunc,    
       Step   = @nStep,    
