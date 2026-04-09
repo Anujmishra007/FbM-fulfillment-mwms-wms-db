@@ -2300,6 +2300,7 @@ BEGIN
                @cTaskDetailKey   = @cTaskDetailKey OUTPUT,
                @cFromLoc         = @cSuggFromLOC   OUTPUT,
                @cCartonId        = @cSuggCartonID  OUTPUT,
+               @cToteId          = @cSuggToteId    OUTPUT,
                @cSKU             = @cSuggSKU       OUTPUT,
                @nQty             = @nSuggQty       OUTPUT,
                @tGetTask         = @tGetTask,
