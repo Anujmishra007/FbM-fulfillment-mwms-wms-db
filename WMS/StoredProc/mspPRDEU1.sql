@@ -1,15 +1,15 @@
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 /************************************************************************/
-/* Store Procedure:  mspPRDEU1                                       */
-/* Creation Date: 02/03/26                                              */
+/* Store Procedure:  mspPRDEU1                                          */
+/* Creation Date: 25-03-26 (Base From nspPR_CH03 used earlier           */
 /* Copyright: MAERSK                                                    */
-/* Written by:  Suryakanta Sahoo                                        */
+/* Written by:Surya                                                     */
 /*                                                                      */
-/* Purpose:  FCR-10743 Pre-Allocation Strategy                          */
-/*                                                                      */
+/* Purpose:  Pre-Allocation Strategy of REDBULL FCR-10743               */                                                        */
 /* Input Parameters:  @c_storerkey char                                 */
 /*                    @c_sku char                                       */
 /*                    @c_lot char                                       */
@@ -26,310 +26,408 @@ GO
 /* Output Parameters:  None                                             */
 /*                                                                      */
 /* Return Status:  None                                                 */
-/*                                                                      */
-/* Usage:                                                               */
-/*                                                                      */
+/* Usage:  For Allocation of Redbull                                    */
 /* Local Variables:                                                     */
-/*                                                                      */
-/* Called By: Allocation Module                                         */
-/*                                                                      */
+/* Called By: PreAllocation Module                                      */
 /* PVCS Version: 1.1                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
+/* Version: 1.0                                                         */
+/* Data Modifications: 25-Mar-2026                                      */
 /*                                                                      */
 /* Updates:                                                             */
-/*   Date              Author          Purposes                         */
-/*   02/03/26        Suryakanta        FCR-10743                        */
+/* Date         Author    Purposes                                      */
+/* 25-MAR-2026  Surya     Changes to use more Full Pallet/Partial Pallet*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[mspPRDEU1]
-   @c_storerkey NVARCHAR(15),
-   @c_sku NVARCHAR(20),
-   @c_lot NVARCHAR(10),
-   @c_lottable01 NVARCHAR(18),
-   @c_lottable02 NVARCHAR(18),
-   @c_lottable03 NVARCHAR(18),
-   @d_lottable04 DATETIME,
-   @d_lottable05 DATETIME,
-   @c_uom NVARCHAR(10),
-   @c_facility NVARCHAR(10),
-   @n_uombase INT,
-   @n_qtylefttofulfill INT,
-   @c_OtherParms NVARCHAR(200) = ''
+--REDBULL GERMANY
+@c_storerkey NVARCHAR(15) ,
+@c_sku NVARCHAR(20) ,
+@c_lot NVARCHAR(10) ,
+@c_lottable01 NVARCHAR(18) ,
+@c_lottable02 NVARCHAR(18) ,
+@c_lottable03 NVARCHAR(18) ,
+@d_lottable04 datetime ,
+@d_lottable05 datetime ,
+@c_uom NVARCHAR(10) ,
+@c_facility NVARCHAR(10)  ,
+@n_uombase int ,
+@n_qtylefttofulfill int ,         -- new column
+@c_OtherParms NVARCHAR(200) = ''  --Orderinfo4PreAllocation
 AS
 BEGIN
 
-   DECLARE @b_success INT, @n_err INT, @c_errmsg NVARCHAR(250), @b_debug INT
+   DECLARE @b_success int,@n_err int,@c_errmsg NVARCHAR(250),@b_debug int
    DECLARE @c_manual NVARCHAR(1)
-   DECLARE @c_LimitString NVARCHAR(255)
-   DECLARE @c_Limitstring1 NVARCHAR(255), @c_lottable04label NVARCHAR(20)
+   DECLARE @c_LimitString NVARCHAR(255) -- To limit the where clause based on the user input
+   DECLARE @c_Limitstring1 NVARCHAR(255)  , @c_lottable04label NVARCHAR(20)
 
-   SELECT @b_success = 0, @n_err = 0, @c_errmsg = '', @b_debug = 0
+   -- Extract OrderKey and OrderLineNumber from @c_OtherParms
+   DECLARE @c_OrderKey NVARCHAR(10)
+   DECLARE @c_OrderLineNumber NVARCHAR(5)
+   DECLARE @n_PackKey INT
+   DECLARE @n_PalletQty INT
+
+   SELECT @b_success= 0, @n_err= 0, @c_errmsg='', @b_debug= 0
    SELECT @c_manual = 'N'
 
-   DECLARE @n_shelflife INT
-   DECLARE @n_continue INT
+   -- Extract OrderKey (positions 1-10) and OrderLineNumber (positions 11-15) from @c_OtherParms
+   IF LEN(ISNULL(@c_OtherParms, '')) >= 10
+   BEGIN
+      SELECT @c_OrderKey = SUBSTRING(@c_OtherParms, 1, 10)
+      IF LEN(ISNULL(@c_OtherParms, '')) >= 15
+         SELECT @c_OrderLineNumber = SUBSTRING(@c_OtherParms, 11, 5)
+   END
+
+   DECLARE @n_shelflife int
+   DECLARE @n_continue int
+
    DECLARE @c_UOMBase NVARCHAR(10)
-   DECLARE @sql_query NVARCHAR(MAX)
-   SELECT @c_UOMBase = @n_uombase
+
+   -- ==========================================
+   -- DYNAMIC SQL VARIABLES
+   -- ==========================================
+   DECLARE @c_SQLManualN NVARCHAR(MAX)
+   DECLARE @c_SQLManualYDebug NVARCHAR(MAX)
+   DECLARE @c_SQLManualYExec NVARCHAR(MAX)
+
+   -- Get PACK.Pallet quantity using OrderDetail.PackKey or fallback to SKU.PackKey
+   SELECT @n_PalletQty = P.Pallet
+      FROM OrderDetail (NOLOCK) OD
+      JOIN PACK (NOLOCK) P ON (OD.PackKey = P.Packkey)
+      WHERE OD.OrderKey = ISNULL(@c_OrderKey, '')
+      AND OD.OrderLineNumber = ISNULL(@c_OrderLineNumber, '')
+      AND OD.StorerKey = @c_storerkey
+      AND OD.SKU = @c_sku
+-- If OrderDetail not found, get from SKU.PackKey
+IF @n_PalletQty IS NULL
+BEGIN
+   SELECT @n_PalletQty = P.Pallet
+      FROM SKU (NOLOCK) S
+      JOIN PACK (NOLOCK) P ON (S.Packkey = P.Packkey)
+   WHERE S.SKU = @c_sku
+     AND S.StorerKey = @c_storerkey
+END
+
+   -- Final fallback to parameter if still no value
+   IF @n_PalletQty IS NULL OR @n_PalletQty = 0
+      SELECT @n_PalletQty = @n_uombase
+
+   SELECT @c_UOMBase = CAST(ISNULL(@n_PalletQty, @n_uombase) AS NVARCHAR(10))
+
+   -- ==========================================
+   -- ORDER-DRIVEN ALLOCATION STRATEGY - FIFO RULES
+   -- ==========================================
+   -- Calculate order structure to determine allocation strategy
+   DECLARE @n_FullPalletsNeeded INT
+   DECLARE @n_RemainderQty INT
+   DECLARE @c_AllocationStrategy NVARCHAR(20)  -- 'FULL_ONLY', 'FULL_THEN_PARTIAL', 'PARTIAL_ONLY'
+
+   -- Calculate pallet requirements from order quantity
+   SELECT @n_FullPalletsNeeded = @n_qtylefttofulfill / @n_PalletQty
+   SELECT @n_RemainderQty = @n_qtylefttofulfill % @n_PalletQty
+
+   -- Determine allocation strategy based on order structure
+   IF @n_FullPalletsNeeded > 0 AND @n_RemainderQty = 0
+   BEGIN
+      -- Scenario 1: Order contains ONLY full pallet quantities
+      -- Strategy: Allocate from full pallets ONLY, exclude partial pallets
+      SELECT @c_AllocationStrategy = 'FULL_ONLY'
+   END
+   ELSE IF @n_FullPalletsNeeded > 0 AND @n_RemainderQty > 0
+   BEGIN
+      -- Scenario 2: Order contains full pallets + remainder
+      -- Strategy: First allocate full pallets, then use partials for remainder
+      SELECT @c_AllocationStrategy = 'FULL_THEN_PARTIAL'
+   END
+   ELSE IF @n_FullPalletsNeeded = 0 AND @n_RemainderQty > 0
+   BEGIN
+      -- Scenario 3: Order contains NO full pallets (remainder only)
+      -- Strategy: Standard FIFO across all partial pallets
+      SELECT @c_AllocationStrategy = 'PARTIAL_ONLY'
+   END
+
+   -- Debug output for allocation strategy
+   IF @b_debug = 1
+   BEGIN
+      SELECT '=== ORDER-DRIVEN ALLOCATION STRATEGY ===' AS DebugHeader
+      SELECT '@n_qtylefttofulfill' = @n_qtylefttofulfill,
+             '@n_PalletQty' = @n_PalletQty,
+             '@n_FullPalletsNeeded' = @n_FullPalletsNeeded,
+             '@n_RemainderQty' = @n_RemainderQty,
+             '@c_AllocationStrategy' = @c_AllocationStrategy
+   END
 
    IF @d_lottable04 = '1900-01-01'
    BEGIN
-      SELECT @d_lottable04 = NULL
+     SELECT @d_lottable04 = null
    END
 
    IF @d_lottable05 = '1900-01-01'
    BEGIN
-      SELECT @d_lottable05 = NULL
+     SELECT @d_lottable05 = null
    END
 
    IF @b_debug = 1
    BEGIN
       SELECT 'nspPR_CH01 : Before Lot Lookup .....'
-      SELECT '@c_lot' = @c_lot, '@c_lottable01' = @c_lottable01, '@c_lottable02' = @c_lottable02, '@c_lottable03' = @c_lottable03
-      SELECT '@d_lottable04' = @d_lottable04, '@d_lottable05' = @d_lottable05, '@c_manual' = @c_manual, '@c_sku' = @c_sku
-      SELECT '@c_storerkey' = @c_storerkey, '@c_facility' = @c_facility
+      SELECT '@c_lot'=@c_lot,'@c_lottable01'=@c_lottable01, '@c_lottable02'=@c_lottable02, '@c_lottable03'=@c_lottable03
+      SELECT '@d_lottable04' = @d_lottable04, '@d_lottable05' = @d_lottable05, '@c_manual' = @c_manual  , '@c_sku' = @c_sku
+      SELECT '@c_storerkey' = @c_storerkey, '@c_facility' = @c_facility, '@n_PalletQty' = @n_PalletQty
    END
 
-   IF ((ISNULL(LTRIM(RTRIM(@c_lottable01)), '')) <> '' OR
-       (ISNULL(LTRIM(RTRIM(@c_lottable02)), '')) <> '' OR
-       (ISNULL(LTRIM(RTRIM(@c_lottable03)), '')) <> '' OR
-       (ISNULL(LTRIM(RTRIM(@d_lottable04)), '')) <> '' OR
-       (ISNULL(LTRIM(RTRIM(@d_lottable05)), '')) <> '') OR
-       LEFT(ISNULL(LTRIM(RTRIM(@c_lot)), ''), 1) = '*'
+   -- when any of the lottables is supplied, get the specific lot
+--   IF (@c_lottable01<>'' OR @c_lottable02<>'' OR @c_lottable03<>'' OR
+--       @d_lottable04 IS NOT NULL OR @d_lottable05 IS NOT NULL) OR LEFT(@c_lot,1) = '*'
+
+   IF ((ISNULL(LTRIM(RTRIM(@c_lottable01)),'')) <> '' OR
+       (ISNULL(LTRIM(RTRIM(@c_lottable02)),'')) <> '' OR
+       (ISNULL(LTRIM(RTRIM(@c_lottable03)),'')) <> '' OR
+       (ISNULL(LTRIM(RTRIM(@d_lottable04)),'')) <> '' OR
+       (ISNULL(LTRIM(RTRIM(@d_lottable05)),'')) <> '' ) OR
+       LEFT(ISNULL(LTRIM(RTRIM(@c_lot)),''),1) = '*' -- SOS128087
+
    BEGIN
-      SELECT @c_manual = 'Y'
+     SELECT @c_manual = 'Y'
    END
 
    IF @b_debug = 1
    BEGIN
       SELECT 'nspPR_CH01 : After Lot Lookup .....'
-      SELECT '@c_lot' = @c_lot, '@c_lottable01' = @c_lottable01, '@c_lottable02' = @c_lottable02, '@c_lottable03' = @c_lottable03
+      SELECT '@c_lot'=@c_lot,'@c_lottable01'=@c_lottable01, '@c_lottable02'=@c_lottable02, '@c_lottable03'=@c_lottable03
       SELECT '@d_lottable04' = @d_lottable04, '@d_lottable05' = @d_lottable05, '@c_manual' = @c_manual
       SELECT '@c_storerkey' = @c_storerkey
    END
 
-   IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) IS NOT NULL AND
-      dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) <> '' AND
-      LEFT(@c_lot, 1) <> '*'
+   -- Start : SOS76195
+   IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) IS NOT NULL AND dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) <> '' AND LEFT(@c_lot, 1) <> '*'
+   -- IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) IS NOT NULL AND LEFT(@c_lot, 1) <> '*'
+   -- END : SOS76195
    BEGIN
-      /* Lot specific candidate set */
+
+     /* Lot specific candidate set with FIFO and pallet type detection */
       DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR
       SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT,
              QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
-      FROM LOT (NOLOCK)
-         INNER JOIN LOTATTRIBUTE (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT
-         INNER JOIN LOTXLOCXID (NOLOCK) ON LOTXLOCXID.LOT = LOT.LOT
-         INNER JOIN LOC (NOLOCK) ON LOTXLOCXID.LOC = LOC.LOC
-         INNER JOIN ID (NOLOCK) ON LOTXLOCXID.ID = ID.ID
-         INNER JOIN SKUxLOC (NOLOCK) ON SKUxLOC.StorerKey = LOTxLOCxID.StorerKey
-            AND SKUxLOC.SKU = LOTxLOCxID.SKU
-            AND SKUxLOC.LOC = LOTxLOCxID.LOC
-      WHERE LOT.LOT = @c_lot
-         AND LOC.Facility = @c_facility
-         AND LOTXLOCXID.STORERKEY = @c_storerkey
-         AND LOTXLOCXID.SKU = @c_sku
-         AND ((LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) % @n_uombase) = 0
-         AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) >= @n_uombase
-      ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.LOTTABLE05
-
+      FROM LOT (NOLOCK), LOTATTRIBUTE (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK), SKUxLOC (NOLOCK)
+      WHERE LOT.LOT = LOTATTRIBUTE.LOT
+      AND LOTXLOCXID.Lot = LOT.LOT
+      AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT
+      AND LOTXLOCXID.LOC = LOC.LOC
+      AND LOC.Facility = @c_facility
+      AND LOT.LOT = @c_lot
+      AND SKUxLOC.StorerKey = LOTxLOCxID.StorerKey
+      AND SKUxLOC.SKU = LOTxLOCxID.SKU
+      AND SKUxLOC.LOC = LOTxLOCxID.LOC
+           ORDER BY CASE
+                       WHEN (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) >= @c_UOMBase
+                            AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED) % @c_UOMBase = 0
+                       THEN 1
+                       ELSE 0
+                     END, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.LOTTABLE05
       IF @b_debug = 1
-      BEGIN
-         SELECT ' Lot not null'
-         SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT,
-                QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
+     BEGIN
+       SELECT ' Lot not null'
+       SELECT  LOT.STORERKEY,LOT.SKU,LOT.LOT ,
+                 QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
          FROM LOT, LOTATTRIBUTE
          WHERE LOT.LOT = LOTATTRIBUTE.LOT
-            AND LOT.LOT = @c_lot
+       AND LOT.LOT = @c_lot
          ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.LOTTABLE02
-      END
+     END
    END
    ELSE
    BEGIN
       /* Everything Else when no lottable supplied */
       IF @c_manual = 'N'
       BEGIN
-         IF @b_debug = 1
-            SELECT 'Manual = N and Lot is NULL'
+         IF @b_debug = 1 SELECT 'Manual = N and Lot is NULL'
 
-         SELECT @n_shelflife = CONVERT(INT, SKU.SUSR2)
-         FROM SKU (NOLOCK)
-         WHERE SKU = @c_sku
-            AND STORERKEY = @c_storerkey
+       SELECT @n_shelflife = convert(int, SKU.SUSR2)
+       FROM SKU (NOLOCK)
+       WHERE SKU = @c_sku
+       AND STORERKEY = @c_storerkey
 
          SELECT @c_lottable04label = SKU.Lottable04label
          FROM SKU (NOLOCK)
          WHERE SKU = @c_sku
-            AND STORERKEY = @c_storerkey
+       AND STORERKEY = @c_storerkey
 
          SELECT @c_Limitstring1 = ''
 
-         IF @c_lottable04label = 'MANDATE'
+       IF @c_lottable04label = 'MANDATE'
          BEGIN
             IF @n_shelflife > 0
             BEGIN
-               SELECT @c_Limitstring1 = dbo.fnc_RTrim(@c_LimitString1) + ' AND lottable04 > N''' +
-                  CONVERT(CHAR(15), DATEADD(DAY, -@n_shelflife, GETDATE()), 106) + ''''
+               SELECT @c_Limitstring1 = dbo.fnc_RTrim(@c_LimitString1) + ' AND lottable04  > N''' + convert(char(15), DateAdd(day, - @n_shelflife, getdate()), 106) + ''''
             END
             ELSE
             BEGIN
-               SELECT @c_Limitstring1 = dbo.fnc_RTrim(@c_LimitString1) + ' AND Lottable05 <= N''' +
-                  CONVERT(CHAR(15), GETDATE(), 106) + ''''
+               SELECT @c_Limitstring1 = dbo.fnc_RTrim(@c_LimitString1) + ' AND Lottable05 <= N''' + convert(char(15), getdate(), 106) + ''''
             END
          END
 
          IF @b_debug = 1
          BEGIN
             SELECT 'Manual = N'
-            SELECT 'limitstring', @c_limitstring1
+            SELECT 'limitstring' , @c_limitstring1
          END
 
-     SET @sql_query = 'DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR  ' +
-            'SELECT MIN(LOTXLOCXID.STORERKEY) , MIN(LOTXLOCXID.SKU), LOT.LOT,   ' +
-            'QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated) )' +
-            'FROM LOT (NOLOCK) , LOTATTRIBUTE (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK), ID (NOLOCK), SKU (NOLOCK), SKUxLOC (NOLOCK) ' +
-            'WHERE LOTXLOCXID.STORERKEY = N''' + @c_storerkey + ''' ' +
-            ' AND LOTXLOCXID.SKU = N''' + @c_sku + ''' ' +
-            ' AND LOT.STATUS = "OK" AND LOC.STATUS = "OK" AND ID.STATUS = "OK" And LOC.LocationFlag = "NONE" ' +
-            ' AND LOTXLOCXID.ID = ID.ID AND lot.lot = lotattribute.lot ' +
-            ' AND LOTXLOCXID.LOT = LOT.LOT AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT ' +
-            ' AND LOTXLOCXID.LOC = LOC.LOC ' +
-            ' AND SKU.SKU = LOTXLOCxID.SKU ' +
-            ' AND SKU.STORERKEY = LOTXLOCXID.STORERKEY ' +
-            ' AND LOTATTRIBUTE.SKU = SKU.SKU AND LOTATTRIBUTE.STORERKEY = SKU.STORERKEY ' +
-            ' AND LOC.FACILITY = N''' + @c_facility + ''' ' + @c_LimitString1 + ' ' +
-            ' AND SKUxLOC.StorerKey = LOTxLOCxID.StorerKey ' +
-            ' AND SKUxLOC.SKU = LOTxLOCxID.SKU ' +
-            ' AND SKUxLOC.LOC = LOTxLOCxID.LOC ' +
-            ' AND ID.QTY >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
-            ' GROUP BY LOT.LOT ' +
-            ' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked)- MIN(LOT.QtyPreAllocated) )>= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
-            'AND ((SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreAllocated)) % ' + CAST(@n_uombase AS NVARCHAR) + ') = 0 ' +
-            ' ORDER BY lotATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE05 '
+--SELECT 'abc' = @c_limitstring1
 
-    EXEC (@sql_query)
-         IF @b_debug = 1
+        -- Build Manual=N Dynamic SQL Query
+SELECT @c_SQLManualN =
+            N'DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
+            N'SELECT STORERKEY = MIN(LOTXLOCXID.STORERKEY), SKU = MIN(LOTXLOCXID.SKU), LOT.LOT, ' +
+            N'QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) ' +
+            N'FROM LOT (NOLOCK), LOTATTRIBUTE (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK), ID (NOLOCK), SKU (NOLOCK), SKUxLOC (NOLOCK) ' +
+            N'WHERE LOTXLOCXID.STORERKEY = N''' + @c_storerkey + N''' ' +
+            N' AND LOTXLOCXID.SKU = N''' + @c_sku +  N''' ' +
+            N' AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'' And LOC.LocationFlag = ''NONE'' ' +
+            N' AND LOTXLOCXID.ID = ID.ID AND lot.lot = lotattribute.lot ' +
+            N' AND LOTXLOCXID.LOT = LOT.LOT AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT ' +
+            N' AND LOTXLOCXID.LOC = LOC.LOC ' +
+            N' AND SKU.SKU = LOTXLOCxID.SKU ' +
+            N' AND SKU.STORERKEY = LOTXLOCXID.STORERKEY ' +
+            N' AND LOTATTRIBUTE.SKU = SKU.SKU AND LOTATTRIBUTE.STORERKEY = SKU.STORERKEY ' +
+            N' AND LOC.FACILITY = N''' + @c_facility + N''' ' + @c_LimitString1 + N' ' +
+            N' AND SKUxLOC.StorerKey = LOTxLOCxID.StorerKey ' +
+            N' AND SKUxLOC.SKU = LOTxLOCxID.SKU ' +
+            N' AND SKUxLOC.LOC = LOTxLOCxID.LOC ' +
+            N' GROUP BY LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 ' +
+            N' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked) - MIN(LOT.QtyPreAllocated)) >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
+            N' ORDER BY CASE WHEN (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) >= ' + @c_UOMBase + N' ' +
+            N'                     AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) % ' + @c_UOMBase + N' = 0 ' +
+            N'               THEN 1 ELSE 0 END, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 '
+
+        IF @b_debug = 1
          BEGIN
             SELECT 'AND LOC.FACILITY = N''' + @c_facility + '''' + @c_LimitString1 + '"'
          END
+       PRINT @c_SQLManualN
+        -- Execute Manual=N Query
+        EXEC (@c_SQLManualN)
       END
       ELSE
       BEGIN
-         IF @b_debug = 1
-            SELECT 'Manual = Y and Lot is NULL'
+         IF @b_debug = 1 SELECT 'Manual = Y and Lot is NULL'
 
-         SELECT @c_LimitString = ''
+        SELECT @c_LimitString = ''
 
-         IF ISNULL(RTRIM(@c_lottable01), '') <> ''
-            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND Lottable01= N''' +
-               dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable01)) + ''''
+       -- IF @c_lottable01 <> ' '
+         IF ISNULL(RTRIM(@c_lottable01),'') <> '' -- SOS128087
+        SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + ' AND Lottable01= N''' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable01)) + ''''
 
-         IF ISNULL(RTRIM(@c_lottable02), '') <> ''
-            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable02= N''' +
-               dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable02)) + ''''
+       -- IF @c_lottable02 <> ' '
+         IF ISNULL(RTRIM(@c_lottable02),'') <> '' -- SOS128087
+         SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + ' AND lottable02= N''' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable02)) + ''''
 
-         IF ISNULL(RTRIM(@c_lottable03), '') <> ''
-            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable03= N''' +
-               dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable03)) + ''''
+       -- IF @c_lottable03 <> ' '
+         IF ISNULL(RTRIM(@c_lottable03),'') <> '' -- SOS128087
+       SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + ' AND lottable03= N''' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lottable03)) + ''''
 
-         IF ISNULL(RTRIM(@d_lottable04), '') <> '' AND
-            ISNULL(RTRIM(@d_lottable04), '') <> '1900-01-01'
-            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 = N''' +
-               dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(CHAR(20), @d_lottable04))) + ''''
+         -- IF @d_lottable04 IS NOT NULL AND @d_lottable04 <> '1900-01-01'
+         IF ISNULL(RTRIM(@d_lottable04),'') <> '' AND ISNULL(RTRIM(@d_lottable04),'') <> '1900-01-01' -- SOS128087
+         SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 = N''' + dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(char(20), @d_lottable04))) + ''''
 
-         IF ISNULL(RTRIM(@d_lottable05), '') <> '' AND
-            ISNULL(RTRIM(@d_lottable05), '') <> '1900-01-01'
-            SELECT @c_LimitString = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable05= N''' +
-               dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(CHAR(20), @d_lottable05))) + ''''
+       -- IF @d_lottable05 IS NOT NULL  AND @d_lottable05 <> '1900-01-01'
+         IF ISNULL(RTRIM(@d_lottable05),'') <> '' AND ISNULL(RTRIM(@d_lottable05),'') <> '1900-01-01' -- SOS128087
+        SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + ' AND lottable05= N''' + dbo.fnc_LTrim(dbo.fnc_RTrim(CONVERT(char(20), @d_lottable05))) + ''''
 
-         IF LEFT(@c_lot, 1) = '*'
+       IF LEFT(@c_lot,1) = '*'
+       BEGIN
+          SELECT @n_shelflife = convert(int, substring(@c_lot, 2, 9))
+
+         IF @n_shelflife < 13
+         -- it's month
          BEGIN
-            SELECT @n_shelflife = CONVERT(INT, SUBSTRING(@c_lot, 2, 9))
-
-            IF @n_shelflife < 13
-            BEGIN
-               SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 > N''' +
-                  CONVERT(CHAR(15), DATEADD(MONTH, @n_shelflife, GETDATE()), 106) + ''''
-            END
-            ELSE
-            BEGIN
-               SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04 > N''' +
-                  CONVERT(CHAR(15), DATEADD(DAY, @n_shelflife, GETDATE()), 106) + ''''
-            END
+           SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04  > N''' + convert(char(15), dateadd(month, @n_shelflife, getdate()), 106) + ''''
          END
-
+         ELSE
+         BEGIN
+           SELECT @c_Limitstring = dbo.fnc_RTrim(@c_LimitString) + ' AND lottable04  > N''' + convert(char(15), DateAdd(day, @n_shelflife, getdate()), 106) + ''''
+         END
+       END
          IF @b_debug = 1
          BEGIN
             SELECT '@c_limitstring', @c_limitstring
          END
+       -- set @b_debug = 1
 
          IF @b_debug = 1
          BEGIN
-            PRINT ('DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
-               ' SELECT MIN(LOTXLOCXID.STORERKEY) , MIN(LOTXLOCXID.SKU), LOT.LOT, ' +
-               ' QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated) ) ' +
-               ' FROM LOT (NOLOCK) ' +
-               ' JOIN LOTATTRIBUTE (NOLOCK) ON (lot.lot = lotattribute.lot) ' +
-               ' JOIN LOTXLOCXID (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT) ' +
-               ' JOIN LOC (NOLOCK) ON (LOTXLOCXID.LOC = LOC.LOC) ' +
-               ' JOIN ID (NOLOCK) ON (LOTXLOCXID.ID = ID.ID) ' +
-               ' JOIN SKUxLOC (NOLOCK) ON (SKUxLOC.SKU = LOTxLOCxID.SKU AND SKUxLOC.LOC = LOTxLOCxID.LOC AND SKUxLOC.StorerKey = LOTxLOCxID.StorerKey) ' +
-               ' LEFT OUTER JOIN (SELECT P.lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) ' +
-               ' FROM PreallocatePickdetail P (NOLOCK), ORDERS (NOLOCK) ' +
-               ' WHERE P.Orderkey = ORDERS.Orderkey ' +
-               ' AND P.Storerkey = N''' + @c_storerkey + ''' ' +
-               ' AND P.SKU = N''' + @c_sku + ''' ' +
-               ' AND ORDERS.FACILITY = N''' + @c_facility + ''' ' +
-               ' AND P.qty > 0 ' +
-               ' GROUP BY p.Lot, ORDERS.Facility) P ON LOTXLOCXID.Lot = P.Lot AND P.Facility = LOC.Facility ' +
-               ' WHERE LOTXLOCXID.STORERKEY = N''' + @c_storerkey + ''' ' +
-               ' AND LOTXLOCXID.SKU = N''' + @c_sku + ''' ' +
-               ' AND LOT.STATUS = "OK" AND LOC.STATUS = "OK" AND ID.STATUS = "OK" And LOC.LocationFlag = "NONE" ' +
-               ' AND LOC.FACILITY = N''' + @c_facility + ''' ' + @c_LimitString + ' ' +
-               ' AND (SKUxLOC.LocationType NOT IN ("PICK", "CASE") OR SKUxLOC.LocationType IN ("PICK", "CASE")) ' +
-               ' AND ID.QTY >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
-               ' GROUP BY LOT.LOT, SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ' +
-               ' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked)- MIN(LOT.QtyPreAllocated) ) >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
-               ' AND ((SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreAllocated)) % ' + CAST(@n_uombase AS NVARCHAR) + ') = 0 ' +
-               ' ORDER BY SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ')
+            -- Build Manual=Y Debug SQL Query
+            SELECT @c_SQLManualYDebug = N'DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
+                  N'SELECT STORERKEY = MIN(LOTXLOCXID.STORERKEY) , SKU = MIN(LOTXLOCXID.SKU), LOT.LOT, ' +
+                  N'QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) ' +
+                  N'FROM LOT (NOLOCK) ' +
+           N'JOIN LOTATTRIBUTE (NOLOCK) ON (lot.lot = lotattribute.lot) ' +
+           N'JOIN LOTXLOCXID (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT) ' +
+           N'JOIN LOC (NOLOCK) ON (LOTXLOCXID.LOC = LOC.LOC) ' +
+           N'JOIN ID (NOLOCK) ON (LOTXLOCXID.ID = ID.ID) ' +
+           N'JOIN SKUxLOC (NOLOCK) ON (SKUxLOC.SKU = LOTxLOCxID.SKU AND SKUxLOC.LOC = LOTxLOCxID.LOC AND SKUxLOC.StorerKey = LOTxLOCxID.StorerKey) ' +
+           N'LEFT OUTER JOIN (SELECT P.lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) ' +
+                    N'FROM   PreallocatePickdetail P (NOLOCK), ORDERS (NOLOCK) ' +
+                    N'WHERE  P.Orderkey = ORDERS.Orderkey ' +
+                    N'AND    P.Storerkey = N''' + @c_storerkey + N''' ' +
+                    N'AND    P.SKU = N''' + @c_sku +  N''' ' +
+                         N'AND    ORDERS.FACILITY = N''' + @c_facility + N''' ' +
+                N'AND    P.qty > 0 ' +
+                    N'GROUP BY p.Lot, ORDERS.Facility) P ON LOTXLOCXID.Lot = P.Lot AND P.Facility = LOC.Facility ' +
+                  N'WHERE LOTXLOCXID.STORERKEY = N''' + @c_storerkey + N''' ' +
+                  N'AND LOTXLOCXID.SKU = N''' + @c_sku +  N''' ' +
+                  N'AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'' And LOC.LocationFlag = ''NONE'' ' +
+                  N'AND LOC.FACILITY = N''' + @c_facility + N''' ' + @c_LimitString + N' ' +
+                  N'AND (SKUxLOC.LocationType NOT IN (''PICK'', ''CASE'') OR SKUxLOC.LocationType IN (''PICK'', ''CASE'')) ' +
+                  N'GROUP BY LOT.LOT, SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ' +
+                  N' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked) - MIN(LOT.QtyPreAllocated)) >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
+                  N' ORDER BY CASE WHEN (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) >= ' + @c_UOMBase + N' ' +
+                  N'                     AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) % ' + @c_UOMBase + N' = 0 ' +
+                  N'               THEN 1 ELSE 0 END, SKUxLOC.LocationType, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.Lottable05 '
+
+            -- Print Manual=Y Debug Query
+            PRINT @c_SQLManualYDebug
          END
 
-      SELECT @c_StorerKey = dbo.fnc_RTrim(@c_StorerKey)
-      SELECT @c_Sku = dbo.fnc_RTrim(@c_SKU)
+     -- (YokeBeen01) - Start
+       SELECT @c_StorerKey = dbo.fnc_RTrim(@c_StorerKey)
+       SELECT @c_Sku = dbo.fnc_RTrim(@c_SKU)
 
-      SET @sql_query = 'DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
-            ' SELECT MIN(LOTXLOCXID.STORERKEY) , MIN(LOTXLOCXID.SKU), LOT.LOT, ' +
-            ' QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated) ) ' +
-            ' FROM LOT (NOLOCK) ' +
-            ' JOIN LOTATTRIBUTE (NOLOCK) ON (lot.lot = lotattribute.lot) ' +
-            ' JOIN LOTXLOCXID (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT) ' +
-            ' JOIN LOC (NOLOCK) ON (LOTXLOCXID.LOC = LOC.LOC) ' +
-            ' JOIN ID (NOLOCK) ON (LOTXLOCXID.ID = ID.ID) ' +
-            ' JOIN SKUxLOC (NOLOCK) ON (SKUxLOC.SKU = LOTxLOCxID.SKU AND SKUxLOC.LOC = LOTxLOCxID.LOC AND SKUxLOC.StorerKey = LOTxLOCxID.StorerKey) ' +
-            ' LEFT OUTER JOIN (SELECT P.lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) ' +
-            ' FROM PreallocatePickdetail P (NOLOCK), ORDERS (NOLOCK) ' +
-            ' WHERE P.Orderkey = ORDERS.Orderkey ' +
-            ' AND P.Storerkey = N''' + @c_storerkey + ''' ' +
-            ' AND P.SKU = N''' + @c_sku + ''' ' +
-            ' AND ORDERS.FACILITY = N''' + @c_facility + ''' ' +
-            ' AND P.qty > 0 ' +
-            ' GROUP BY p.Lot, ORDERS.Facility) P ON LOTXLOCXID.Lot = P.Lot AND P.Facility = LOC.Facility ' +
-            ' WHERE LOTXLOCXID.STORERKEY = N''' + @c_storerkey + ''' ' +
-            ' AND LOTXLOCXID.SKU = N''' + @c_sku + ''' ' +
-            ' AND LOT.STATUS = "OK" AND LOC.STATUS = "OK" AND ID.STATUS = "OK" And LOC.LocationFlag = "NONE" ' +
-            ' AND LOC.FACILITY = N''' + @c_facility + ''' ' + @c_LimitString + ' ' +
-            ' AND (SKUxLOC.LocationType NOT IN ("PICK", "CASE") OR SKUxLOC.LocationType IN ("PICK", "CASE")) ' +
-            ' AND ID.QTY >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
-            ' GROUP BY LOT.LOT, SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ' +
-            ' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked)- MIN(LOT.QtyPreAllocated) )>= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
-            ' AND ((SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreAllocated)) % ' + CAST(@n_uombase AS NVARCHAR) + ') = 0 ' +
-            ' ORDER BY SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 '
-     EXEC (@sql_query)
+            -- Build Manual=Y Executed SQL Query
+            SELECT @c_SQLManualYExec = N'DECLARE PREALLOCATE_CURSOR_CANDIDATES SCROLL CURSOR FOR ' +
+                  N'SELECT STORERKEY = MIN(LOTXLOCXID.STORERKEY) , SKU = MIN(LOTXLOCXID.SKU), LOT.LOT, ' +
+                  N'QTYAVAILABLE = (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) ' +
+                  N'FROM LOT (NOLOCK) ' +
+           N'JOIN LOTATTRIBUTE (NOLOCK) ON (lot.lot = lotattribute.lot) ' +
+           N'JOIN LOTXLOCXID (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT) ' +
+           N'JOIN LOC (NOLOCK) ON (LOTXLOCXID.LOC = LOC.LOC) ' +
+           N'JOIN ID (NOLOCK) ON (LOTXLOCXID.ID = ID.ID) ' +
+           N'JOIN SKUxLOC (NOLOCK) ON (SKUxLOC.SKU = LOTxLOCxID.SKU AND SKUxLOC.LOC = LOTxLOCxID.LOC AND SKUxLOC.StorerKey = LOTxLOCxID.StorerKey) ' +
+           N'LEFT OUTER JOIN (SELECT P.lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) ' +
+                    N'FROM   PreallocatePickdetail P (NOLOCK), ORDERS (NOLOCK) ' +
+                    N'WHERE  P.Orderkey = ORDERS.Orderkey ' +
+                    N'AND    P.Storerkey = N''' + @c_storerkey + N''' ' +
+                    N'AND    P.SKU = N''' + @c_sku +  N''' ' +
+                         N'AND    ORDERS.FACILITY = N''' + @c_facility + N''' ' +
+                    N'AND    P.qty > 0 ' +
+                    N'GROUP BY p.Lot, ORDERS.Facility) P ON LOTXLOCXID.Lot = P.Lot AND P.Facility = LOC.Facility ' +
+                    N'WHERE LOTXLOCXID.STORERKEY = N''' + @c_storerkey + N''' ' +
+                  N'AND LOTXLOCXID.SKU = N''' + @c_sku +  N''' ' +
+                  N'AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'' And LOC.LocationFlag = ''NONE'' ' +
+                  N'AND LOC.FACILITY = N''' + @c_facility + N''' ' + @c_LimitString + N' ' +
+                  N'AND (SKUxLOC.LocationType NOT IN (''PICK'', ''CASE'') OR SKUxLOC.LocationType IN (''PICK'', ''CASE'')) ' +
+                  N'GROUP BY LOT.LOT, SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ' +
+                  N' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked) - MIN(LOT.QtyPreAllocated)) >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
+                  N' ORDER BY CASE WHEN (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) >= ' + @c_UOMBase + N' ' +
+                  N'                     AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) % ' + @c_UOMBase + N' = 0 ' +
+                  N'               THEN 1 ELSE 0 END,SKUxLOC.LocationType, LOTATTRIBUTE.Lottable04,LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.Lottable05 '
+
+            -- Execute Manual=Y Query
+            EXEC (@c_SQLManualYExec)
+       -- (YokeBeen01) - END
+
      END
    END
 END
 GO
-GRANT EXECUTE ON mspPRDEU1 TO nSQL
+GRANT EXECUTE ON mspPRDEU1 to nSQL
 GO
