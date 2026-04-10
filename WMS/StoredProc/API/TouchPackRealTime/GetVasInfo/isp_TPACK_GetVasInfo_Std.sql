@@ -184,6 +184,7 @@ BEGIN
                   FROM WORKORDERDETAIL WOD (NOLOCK)
                   LEFT JOIN CODELKUP CLK (NOLOCK)
                   ON WOD.[Type] = CLK.Code
+                  AND CLK.StorerKey = @cStorerKey
                   WHERE CLK.LISTNAME = 'WKOrdType'
                   AND CLK.Short <> 'Y'  -- Not equal to Y means required to show VAS.
                   AND EXISTS (SELECT 1
@@ -224,6 +225,7 @@ BEGIN
                   FROM WORKORDERDETAIL WOD (NOLOCK)
                   LEFT JOIN CODELKUP CLK (NOLOCK)
                   ON WOD.[Type] = CLK.Code
+                  AND CLK.StorerKey = @cStorerKey
                   WHERE CLK.LISTNAME = 'WKOrdType'
                   AND CLK.UDF04 = 'PRICELB' -- Get the VAS info with Price for label printing, no matter it's mandatory or not, showflag is 0 as it won't display in VAS list but only used for label printing.
                   AND CLK.UDF01 <> '' -- Only get the VAS with print doc ID for label printing.

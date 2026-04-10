@@ -24,6 +24,7 @@ CREATE OR ALTER PROC [API].[isp_TPACK_ExtPackTaskConfig01] (
    , @cStorerKey           NVARCHAR(15)      = ''
    , @cFacility            NVARCHAR(5)       = ''
    , @c_UserID             NVARCHAR(256)     = ''
+   , @cLangCode            NVARCHAR(3)       = ''
    , @cPackTaskConfigJson  NVARCHAR(MAX)     = ''  OUTPUT
    , @b_Success            INT               = 0   OUTPUT
    , @n_ErrNo              INT               = 0   OUTPUT

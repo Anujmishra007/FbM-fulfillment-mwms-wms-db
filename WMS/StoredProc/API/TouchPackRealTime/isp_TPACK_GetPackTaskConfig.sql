@@ -24,6 +24,7 @@ CREATE OR ALTER PROC [API].[isp_TPACK_GetPackTaskConfig] (
    , @cStorerKey           NVARCHAR(15)      = ''
    , @cFacility            NVARCHAR(5)       = ''
    , @c_UserID             NVARCHAR(256)     = ''
+   , @cLangCode            NVARCHAR(3)       = ''
    , @cPackTaskConfigJson  NVARCHAR(MAX)     = ''  OUTPUT
    , @b_Success            INT               = 0   OUTPUT
    , @n_ErrNo              INT               = 0   OUTPUT
@@ -39,7 +40,6 @@ BEGIN
    DECLARE @n_Continue           INT            = 1  
          , @n_StartCnt           INT            = @@TRANCOUNT  
          , @cExtPackTaskConfig   NVARCHAR(250)
-         , @cLangCode            NVARCHAR(3)   
          , @cSQL                 NVARCHAR(MAX)
          , @cSQLParam            NVARCHAR(3000)
 
@@ -47,7 +47,6 @@ BEGIN
    SET @n_ErrNo               = 0  
    SET @c_ErrMsg              = ''  
    SET @cExtPackTaskConfig    = ''
-   SET @cLangCode             = 'ENG'
 
    SELECT @cExtPackTaskConfig = ISNULL(sValue,'')
    FROM STORERCONFIG (NOLOCK)
@@ -80,6 +79,7 @@ BEGIN
                   + ', @cStorerKey                  ' + CHAR(13)
                   + ', @cFacility                   ' + CHAR(13)
                   + ', @c_UserID                    ' + CHAR(13)
+                  + ', @cLangCode                   ' + CHAR(13)
                   + ', @cPackTaskConfigJson  OUTPUT ' + CHAR(13)
                   + ', @b_Success            OUTPUT ' + CHAR(13)
                   + ', @n_ErrNo              OUTPUT ' + CHAR(13)
@@ -95,6 +95,7 @@ BEGIN
                      + ', @cStorerKey          NVARCHAR(15)         ' + CHAR(13)
                      + ', @cFacility           NVARCHAR(5)          ' + CHAR(13)
                      + ', @c_UserID            NVARCHAR(256)        ' + CHAR(13)
+                     + ', @cLangCode           NVARCHAR(3)          ' + CHAR(13)
                      + ', @cPackTaskConfigJson NVARCHAR(MAX) OUTPUT ' + CHAR(13)
                      + ', @b_Success           INT           OUTPUT ' + CHAR(13)
                      + ', @n_ErrNo             INT           OUTPUT ' + CHAR(13)
@@ -112,6 +113,7 @@ BEGIN
                         , @cStorerKey       
                         , @cFacility      
                         , @c_UserID         
+                        , @cLangCode
                         , @cPackTaskConfigJson  OUTPUT
                         , @b_Success            OUTPUT
                         , @n_ErrNo              OUTPUT
