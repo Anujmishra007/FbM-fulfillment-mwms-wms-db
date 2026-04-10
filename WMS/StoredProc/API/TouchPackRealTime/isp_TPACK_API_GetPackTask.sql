@@ -673,6 +673,7 @@ BEGIN
       , @cStorerKey           = @cStorerKey        
       , @cFacility            = @cFacility  
       , @c_UserID             = @c_UserID
+      , @cLangCode            = @cLangCode
       , @cPackTaskConfigJson  = @cPackTaskConfigJson  OUTPUT
       , @b_Success            = @b_Success            OUTPUT
       , @n_ErrNo              = @n_ErrNo              OUTPUT

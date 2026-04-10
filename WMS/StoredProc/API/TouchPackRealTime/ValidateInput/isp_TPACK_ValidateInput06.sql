@@ -100,6 +100,19 @@ BEGIN
          GOTO EXIT_SP
       END
    END
+   ELSE
+   BEGIN
+      IF @cScanType IN ('altsku', 'manufacturersku', 'retailsku')
+      BEGIN
+         IF LEFT(@cInputValue1,2) <> '69'
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_ErrNo = 14803
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Invalid Barcode Format Prefix (69) not found.'    
+            GOTO EXIT_SP
+         END
+      END
+   END
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
