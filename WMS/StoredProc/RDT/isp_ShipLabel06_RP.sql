@@ -65,7 +65,7 @@ AS
    BEGIN
       EXEC master.dbo.isp_BASe64Decode 'UTF-8', @cBase64Data, @cDecodedData OUTPUT, @cDecodeErrMsg OUTPUT
 
-      IF @cDecodeErrMsg <> ''
+      IF ISNULL(@cDecodeErrMsg, '') <> ''
       BEGIN
          SET @nErrNo = 263701
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 263701^Base64DecodeErr
