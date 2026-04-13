@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_PutawayByID_Confirm]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_PutawayByID_Confirm]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 23-03-2015  1.0  Ung      SOS336606. Created                         */
 /* 25-03-2020  1.1  Ung      WMS-12631 Add ConfirmSP                    */
+/* 13-04-2026  1.3  Ung      FCR-8113 Add suggest alternate LOC         */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_PutawayByID_Confirm] (
+CREATE OR ALTER PROC [rdt].[rdt_PutawayByID_Confirm] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -132,6 +130,28 @@ BEGIN
       ,@cErrMsg OUTPUT
    IF @nErrNo <> 0
       GOTO RollBackTran
+
+   -- Unlock putaway skipped LOC
+   IF EXISTS( SELECT TOP 1 1
+      FROM rdt.rdtPutawaySkipLOCLog WITH (NOLOCK) 
+      WHERE Mobile = @nMobile
+         AND Func = @nFunc)
+   BEGIN
+      DECLARE @nRowRef INT 
+      DECLARE @curSkipLOC CURSOR 
+      SET @curSkipLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT RowRef
+         FROM rdt.rdtPutawaySkipLOCLog WITH (NOLOCK) 
+         WHERE Mobile = @nMobile
+            AND Func = @nFunc
+      OPEN @curSkipLOC
+      FETCH NEXT FROM @curSkipLOC INTO @nRowRef
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         DELETE rdt.rdtPutawaySkipLOCLog WHERE RowRef = @nRowRef
+         FETCH NEXT FROM @curSkipLOC INTO @nRowRef
+      END
+   END
 
    COMMIT TRAN rdt_PutawayByID_Confirm -- Only commit change made here
    GOTO Quit
