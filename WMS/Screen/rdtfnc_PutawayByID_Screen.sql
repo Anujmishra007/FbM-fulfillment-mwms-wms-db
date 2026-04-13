@@ -71,8 +71,7 @@ EXECUTE rdt.rdtAddScn 4114, 'ENG',
    @cLine14 = '%e',     
    @nFunc   = 1819
 
-
---FCR-122  Reason code
+--FCR-122 ExtScreen Reason code
 DELETE rdt.RDTScn WHERE Scn = 4115 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4115, 'ENG'
    ,@cLine01 = ''
@@ -88,15 +87,40 @@ EXECUTE rdt.rdtAddScn 4115, 'ENG'
 -- 4116 = ExtScreen overwrite suggested loc
 DELETE rdt.RDTScn WHERE Scn = 4116 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4116, 'ENG',
-        @cLine01 = '',
-        @cLine02 = 'LOC NOT MATCH.',
-        @cLine03 = 'Scanned LOC: %20d02',
-        @cLine04 = 'Suggested LOC: %20d03',
-        @cLine05 = 'PROCEED?',
-        @cLine06 = '',
-        @cLine07 = '1 = YES',
-        @cLine08 = '2 = NO',
-        @cLine09 = '',
-        @cLine10 = 'OPTION: %01i01',
-        @cLine14 = '%e',
-        @nFunc   = 1819
+     @cLine01 = '',
+     @cLine02 = 'LOC NOT MATCH.',
+     @cLine03 = 'Scanned LOC: %20d02',
+     @cLine04 = 'Suggested LOC: %20d03',
+     @cLine05 = 'PROCEED?',
+     @cLine06 = '',
+     @cLine07 = '1 = YES',
+     @cLine08 = '2 = NO',
+     @cLine09 = '',
+     @cLine10 = 'OPTION: %01i01',
+     @cLine14 = '%e',
+     @nFunc   = 1819
+
+-- 4117 = Suggest alternate LOC screen
+DELETE rdt.RDTScn WHERE Scn = 4117 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4117, 'ENG'  
+   ,@cLine01 = ''
+   ,@cLine02 = 'SUGGEST ALTERNATE'
+   ,@cLine03 = 'PUTAWAY LOC?'
+   ,@cLine04 = ''
+   ,@cLine05 = '1 = YES'
+   ,@cLine06 = '2 = NO'
+   ,@cLine07 = ''
+   ,@cLine08 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 1819
+   
+-- 4118 = Reason code screen (built-in, not ExtScn)
+DELETE rdt.RDTScn WHERE Scn = 4118 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4118, 'ENG'  
+   ,@cLine01 = ''
+   ,@cLine02 = 'REASON CODE:'
+   ,@cLine03 = '%10i01'
+   ,@cLine04 = ''
+   ,@cLine14 = '%e'     
+   ,@nFunc = 1819
+   
