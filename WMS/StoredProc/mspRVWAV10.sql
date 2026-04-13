@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.5                                                          */    
+/* Version: 1.6                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -27,6 +27,7 @@ GO
 /* 12-Mar-2026 WLChooi  1.4   FCR-11568 Clear CaseID & DropID if matches */
 /*                            (WL04)                                     */
 /* 16-Mar-2026 WLChooi  1.5   FCR-11584 Clear Shipperkey (WL05)          */
+/* 13-Apr-2026 WLChooi  1.6   FCR-12448 Remove RPF task (WL06)           */
 /*************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV10]
       @c_Wavekey      NVARCHAR(10)
@@ -60,6 +61,7 @@ BEGIN
          , @c_GetOrderkey     NVARCHAR(10)   = ''
          , @c_Shipperkey      NVARCHAR(15)   = ''
          --WL05 E
+         , @b_RemoveRPF       BIT            = 1   --WL06
  
    -- Reject if wave not yet release
    IF @n_Continue = 1 OR @n_Continue = 2
@@ -89,6 +91,17 @@ BEGIN
          SELECT @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err) 
                           + ': Some Tasks have been started. Not allow to Reverse Wave Released (mspRVWAV10)'
       END
+
+      --WL06 S
+      IF EXISTS ( SELECT 1 FROM TASKDETAIL TD (NOLOCK)
+                  WHERE TD.Wavekey = @c_Wavekey
+                  AND TD.Sourcetype IN ('mspRLWAV10')
+                  AND TD.[Status] NOT IN ('0', 'H')
+                  AND TD.Tasktype IN ('RPF') )
+      BEGIN
+         SET @b_RemoveRPF = 0
+      END
+      --WL06 E
    END
 
    IF @n_debug = 0
@@ -124,7 +137,8 @@ BEGIN
       FROM TASKDETAIL (NOLOCK)
       WHERE Wavekey = @c_Wavekey
       AND Sourcetype IN ('mspRLWAV10')
-      AND Tasktype IN ('CPK', 'ASTCPK')   --WL02
+      AND (Tasktype IN ('CPK', 'ASTCPK') OR (@b_RemoveRPF = 1 AND TaskType = 'RPF'))   --WL02   --WL06
+      AND [Status] IN ('0', 'H')
 
       OPEN CUR_TASK
 
@@ -272,6 +286,7 @@ BEGIN
       UPDATE WAVE WITH (ROWLOCK)
          SET TMReleaseFlag = 'N'
           ,  UserDefine02 = ''   --WL03
+          ,  UserDefine01 = IIF(@b_RemoveRPF = 1, '', UserDefine01)   --WL06
           ,  TrafficCop = NULL
           ,  EditWho  = SUSER_SNAME()
           ,  EditDate = GETDATE()
