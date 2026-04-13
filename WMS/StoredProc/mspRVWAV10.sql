@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.5                                                          */    
+/* Version: 1.6                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -27,6 +27,7 @@ GO
 /* 12-Mar-2026 WLChooi  1.4   FCR-11568 Clear CaseID & DropID if matches */
 /*                            (WL04)                                     */
 /* 16-Mar-2026 WLChooi  1.5   FCR-11584 Clear Shipperkey (WL05)          */
+/* 13-Apr-2026 WLChooi  1.6   FCR-12448 Remove RPF task (WL06)           */
 /*************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV10]
       @c_Wavekey      NVARCHAR(10)
@@ -124,7 +125,8 @@ BEGIN
       FROM TASKDETAIL (NOLOCK)
       WHERE Wavekey = @c_Wavekey
       AND Sourcetype IN ('mspRLWAV10')
-      AND Tasktype IN ('CPK', 'ASTCPK')   --WL02
+      AND Tasktype IN ('CPK', 'ASTCPK', 'RPF')   --WL02   --WL06
+      AND [Status] IN ('0', 'H')
 
       OPEN CUR_TASK
 
