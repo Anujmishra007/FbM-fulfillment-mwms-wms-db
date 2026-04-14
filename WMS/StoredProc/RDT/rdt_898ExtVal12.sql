@@ -3,15 +3,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_898ExtVal12                                     */
-/* Copyright      : Maersk                                              */
-/* Customer:                                                            */
-/*                                                                      */
-/* Date        Author   Ver.     Purposes                               */
-/* 2025-10-29  1.0      Dennis   FCR-8472 Created                       */
-/* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields*/  
-/************************************************************************/
+/****************************************************************************/
+/* Store procedure: rdt_898ExtVal12                                         */
+/* Copyright      : Maersk                                                  */
+/* Customer: BAT SA                                                         */
+/*                                                                          */
+/* Date        Author   Ver.     Purposes                                   */
+/* 2025-10-29  1.0      Dennis   FCR-8472 Created                           */
+/* 2026-01-08  1.0.1    Dennis   UWP-46688 Fixed issue with lottable fields */  
+/* 2026-04-10  1.2      Sreeja   Change error message numbers               */
+/****************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal12]
     @nMobile     INT
@@ -114,7 +115,7 @@ BEGIN
       BEGIN
          IF LEN(@cTOID) <> 10
          BEGIN
-            SET @nErrNo = 250752
+            SET @nErrNo = 263901
             SET @cErrMsg = [rdt].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP') 
             GOTO Quit
          END
@@ -152,22 +153,22 @@ BEGIN
                      BEGIN
                         IF @cColumn = N'Lottable01'
                         BEGIN
-                           SET @nErrNo = 224703
+                           SET @nErrNo = 263902
                            SET @cErrMsg = [rdt].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP') 
                         END
                         ELSE IF @cColumn = N'Lottable02'
                         BEGIN
-                           SET @nErrNo = 224704
+                           SET @nErrNo = 263903
                            SET @cErrMsg = [rdt].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP') 
                         END
                         ELSE IF @cColumn = N'Lottable03'
                         BEGIN
-                           SET @nErrNo = 224705
+                           SET @nErrNo = 263904
                            SET @cErrMsg = [rdt].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP') 
                         END
                         ELSE IF @cColumn = N'Lottable04'
                         BEGIN
-                           SET @nErrNo = 224706
+                           SET @nErrNo = 263905
                            SET @cErrMsg = [rdt].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP') 
                         END
                         ELSE
@@ -213,7 +214,7 @@ BEGIN
                      
                      IF @cLastSku <> N'' AND @cLastSku <> @cSKU
                      BEGIN
-                        SET @nErrNo = 224702
+                        SET @nErrNo = 263906
                         SET @cErrMsg = [rdt].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP') --Mix SKU Not Allowed
                         GOTO CLOSELIST
                      END
