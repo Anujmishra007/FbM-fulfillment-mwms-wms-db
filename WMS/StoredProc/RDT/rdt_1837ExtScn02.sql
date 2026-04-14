@@ -293,7 +293,7 @@ BEGIN
                      ' FROM dbo.PickDetail WITH (NOLOCK) ' + 
                      ' WHERE StorerKey = @cStorerKey ' + 
                         ' AND Status = ''' + @cPickConfirmStatus + '''' +  
-                        ' AND QTY > 0 AND LOC IN( ''CONVEYOR'',''CSCQC'')' + 
+                        ' AND QTY > 0 AND LOC IN( ''CONVEYOR'',''CSCHOSP'')' + 
                         ' AND ' + RTRIM( @cPickDetailCartonID) + ' = @cCartonID ' +
                         ' ORDER BY 1 ' +
                         ' SET @nRowCount = @@ROWCOUNT '
