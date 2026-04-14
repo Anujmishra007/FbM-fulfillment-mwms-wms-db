@@ -277,7 +277,10 @@ BEGIN
                END
             
             -- Convert YYMMDD to YYYYMMDD
-            IF @cMfgDateRaw IS NOT NULL AND LEN(@cMfgDateRaw) = 6 AND ISNUMERIC(@cMfgDateRaw) = 1
+            IF @cMfgDateRaw IS NOT NULL
+               AND LEN(@cMfgDateRaw) = 6
+               AND @cMfgDateRaw NOT LIKE '%[^0-9]%'
+               AND TRY_CONVERT(INT, @cMfgDateRaw) IS NOT NULL
             BEGIN
                SET @cLottable03 = '20' + @cMfgDateRaw  -- 20 + YYMMDD = YYYYMMDD
             END

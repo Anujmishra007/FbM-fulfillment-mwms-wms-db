@@ -11,7 +11,7 @@ GO
 /* Date        Author   Ver.     Purposes                                   */
 /* 2025-10-29  1.0      Dennis   FCR-8472 Created                           */
 /* 2026-01-08  1.0.1    Dennis   UWP-46688 Fixed issue with lottable fields */  
-/* 2026-04-10  1.2      Sreeja   FCR-11052 barcode length validation        */
+/* 2026-04-10  1.2      Sreeja   Change error message numbers               */
 /****************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal12]
@@ -124,22 +124,6 @@ BEGIN
       BEGIN
       	IF @nInputKey = 1
       	BEGIN
-
-            DECLARE @cBarcode NVARCHAR(MAX)
-            SET @cBarcode = REPLACE(TRIM(@cLottable02), ' ', '')
-            
-            -- Only validate if barcode starts with (10) - Label 2 format
-            IF LEFT(@cBarcode, 4) = '(10)'
-            BEGIN
-               -- Validate barcode length (must be 40 or 44)
-               IF LEN(@cBarcode) NOT IN (40, 44)
-               BEGIN
-                  SET @nErrNo = 263907
-                  SET @cErrMsg = rdt.rdtGetMessageLong(@nErrNo, @cLangCode, N'DSP')
-                  GOTO Quit
-               END
-            END
-
             IF @cStorerConfig <> ''
             BEGIN
 

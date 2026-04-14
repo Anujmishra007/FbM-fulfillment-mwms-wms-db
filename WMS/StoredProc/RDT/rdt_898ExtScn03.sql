@@ -287,28 +287,38 @@ BEGIN
             DECLARE @cRawBarcode NVARCHAR(MAX)
             SET @cRawBarcode = REPLACE(TRIM(@cInField02), ' ', '')
             
-            -- If barcode contains parentheses, it must be a valid GS1 barcode starting with (10)
+                        -- FCR-11052: If barcode contains parentheses, it must be a valid GS1 barcode starting with (10)
             IF CHARINDEX('(', @cRawBarcode) > 0
             BEGIN
                IF LEFT(@cRawBarcode, 4) <> '(10)'
                BEGIN
                   SET @nErrNo = 250754
-                  SET @cErrMsg = 'Invalid barcode'
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO Quit
+               END
+               
+               -- FCR-11052: Validate barcode length (must be 40 or 44)
+               IF LEN(@cRawBarcode) NOT IN (40, 44)
+               BEGIN
+                  SET @nErrNo = 263907
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                   GOTO Quit
                END
             END
 
-
             IF @cDecodeSP <> ''
             BEGIN
-               IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+               IF EXISTS( SELECT 1
+                            FROM sys.objects
+                           WHERE name = RTRIM( @cDecodeSP)
+                             AND type = 'P'
+                             AND schema_id = SCHEMA_ID( 'rdt'))
                BEGIN
                   DECLARE @nUCCQTY INT
                   
                   -- @cLottable02 is only NVARCHAR(18) and truncates the barcode
                   SET @cUCC = @cInField02
-
-                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  SET @cSQL = 'EXEC rdt.' + QUOTENAME( RTRIM( @cDecodeSP)) +
                               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
                               ' @cUCC        OUTPUT, @nUCCQTY     OUTPUT,' +
                               ' @cUserDefine01 OUTPUT, @cUserDefine02 OUTPUT, @cUserDefine03 OUTPUT, @cUserDefine04 OUTPUT, @cUserDefine05 OUTPUT, ' +
