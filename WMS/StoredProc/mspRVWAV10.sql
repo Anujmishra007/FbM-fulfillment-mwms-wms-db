@@ -95,7 +95,6 @@ BEGIN
       --WL06 S
       IF EXISTS ( SELECT 1 FROM TASKDETAIL TD (NOLOCK)
                   WHERE TD.Wavekey = @c_Wavekey
-                  AND TD.Sourcetype IN ('mspRLWAV10')
                   AND TD.[Status] NOT IN ('0', 'H')
                   AND TD.Tasktype IN ('RPF') )
       BEGIN
@@ -137,8 +136,16 @@ BEGIN
       FROM TASKDETAIL (NOLOCK)
       WHERE Wavekey = @c_Wavekey
       AND Sourcetype IN ('mspRLWAV10')
-      AND (Tasktype IN ('CPK', 'ASTCPK') OR (@b_RemoveRPF = 1 AND TaskType = 'RPF'))   --WL02   --WL06
+      AND Tasktype IN ('CPK', 'ASTCPK')   --WL02
       AND [Status] IN ('0', 'H')
+      --WL06 S
+      UNION ALL
+      SELECT Taskdetailkey
+      FROM TASKDETAIL (NOLOCK)
+      WHERE Wavekey = @c_Wavekey
+      AND (@b_RemoveRPF = 1 AND TaskType = 'RPF')
+      AND [Status] IN ('0', 'H')
+      --WL06 E
 
       OPEN CUR_TASK
 
