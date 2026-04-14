@@ -8,10 +8,11 @@ GO
 /* Store procedure: rdt_898DecodeSP03                                         */
 /* Copyright: Maersk                                                          */
 /*                                                                            */
-/* Customer: Decode for PAGE                                                  */
+/* Customer: BAT SA                                                           */
 /*                                                                            */
 /* Date        Author   Ver.  Purposes                                        */
 /* 2025-10-27  Dennis   1.0   FCR-8472 Created                                */
+/* 2026-04-09  Sreeja   1.1   FCR-11052  Decode batch and manufacturing date  */ 
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_898DecodeSP03] (
    @nMobile             INT,
@@ -83,7 +84,7 @@ BEGIN
       BEGIN
          IF LEN(@cBarcode) < 20
          BEGIN
-            SET @nErrNO = 250753
+            SET @nErrNO = 263851
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
             GOTO QUIT
          END
@@ -237,6 +238,49 @@ BEGIN
 
             IF @@ROWCOUNT = 0
                SET @cUserDefine01 = @cUCC
+         END
+      END
+      
+      IF @nStep = 99
+      BEGIN
+         -- FCR-11052: Get barcode from @cUCC (passed from ExtScn03)
+         -- @cLottable02 is NVARCHAR(18) and truncates the barcode
+         SET @cBarcode = REPLACE(TRIM(@cUCC), ' ', '')
+
+         -- Only decode if barcode length is 40 or 44 AND starts with (10)
+         IF LEN(@cBarcode) IN (40, 44) AND LEFT(@cBarcode, 4) = '(10)'
+         BEGIN
+            -- Decode Batch: Value between (10) and (11)
+            SET @cLottable02 = 
+               CASE 
+                  WHEN CHARINDEX('(11)', @cBarcode) > CHARINDEX('(10)', @cBarcode) THEN
+                     SUBSTRING(
+                        @cBarcode,
+                        CHARINDEX('(10)', @cBarcode) + 4,
+                        CHARINDEX('(11)', @cBarcode) - CHARINDEX('(10)', @cBarcode) - 4
+                     )
+                  ELSE @cLottable02
+               END
+            
+            -- Decode Manufacturing Date: Value between (11) and (240)
+            -- Input format: YYMMDD, Output format: YYYYMMDD
+            DECLARE @cMfgDateRaw NVARCHAR(6)
+            SET @cMfgDateRaw = 
+               CASE 
+                  WHEN CHARINDEX('(240)', @cBarcode) > CHARINDEX('(11)', @cBarcode) THEN
+                     SUBSTRING(
+                        @cBarcode,
+                        CHARINDEX('(11)', @cBarcode) + 4,
+                        CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
+                     )
+                  ELSE NULL
+               END
+            
+            -- Convert YYMMDD to YYYYMMDD
+            IF @cMfgDateRaw IS NOT NULL AND LEN(@cMfgDateRaw) = 6 AND ISNUMERIC(@cMfgDateRaw) = 1
+            BEGIN
+               SET @cLottable03 = '20' + @cMfgDateRaw  -- 20 + YYMMDD = YYYYMMDD
+            END
          END
       END
    END
