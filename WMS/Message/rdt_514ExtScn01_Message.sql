@@ -5,7 +5,7 @@ execute rdt.rdtDropMsg 263451, 263500
 execute rdt.rdtAddMsg 263451, 10, '263451 UCC needed',     'us_english', 514
 execute rdt.rdtAddMsg 263452, 10, '263452 UCC DoubleScan', 'us_english', 514
 
-EXECUTE rdt.rdtAddMsg 263454, 10, '263453 InvUCC',                'us_english', 514, 0, '263453 UCC belongs to an active task'
+EXECUTE rdt.rdtAddMsg 263453, 10, '263453 InvUCC',                'us_english', 514, 0, '263453 UCC belongs to an active task'
 EXECUTE rdt.rdtAddMsg 263454, 10, '263454 InvUCC',                'us_english', 514, 0, '263454 UCC not received'
 EXECUTE rdt.rdtAddMsg 263455, 10, '263455 InvUCC',                'us_english', 514, 0, '263455 UCC is allocated'
 EXECUTE rdt.rdtAddMsg 263456, 10, '263456 InvUCC',                'us_english', 514, 0, '263456 UCC is picked'

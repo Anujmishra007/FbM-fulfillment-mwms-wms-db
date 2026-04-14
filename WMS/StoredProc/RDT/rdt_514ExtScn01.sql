@@ -438,7 +438,7 @@ BEGIN
                               GOTO SCN_UCC_FAIL
                            END
 
-                           IF @cUCCStatusTmp NOT IN( '1', '4', 'H' )
+                           IF @cUCCStatusTmp NOT IN( '1', 'H' )
                            BEGIN
                               SET @nErrNo = 263458
                               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Invalid UCC status
