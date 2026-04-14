@@ -283,6 +283,7 @@ BEGIN
          SET @c_FeatureKeys = ''                                                                                    
          SELECT @c_FeatureKeys = gr.Option5  
          FROM dbo.fnc_GetRight2(@cFacility, @cStorerkey, '', 'BackEndAutoAllocCfg') gr
+         WHERE gr.Authority = '1'
 
          SET @c_PendingAllocSOByQty  = 'N'
          SET @c_ExcludeLoadplanCheck = 'N'
