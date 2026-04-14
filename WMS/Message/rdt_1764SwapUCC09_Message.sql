@@ -60,4 +60,8 @@ execute rdt.rdtAddMsg 230400, 10, '230400MissingPackDtl', 'us_english', 1764
 execute rdt.rdtAddMsg 230363, 10, '230363UCCLotNotMatch', 'us_english', 1764
 execute rdt.rdtAddMsg 230402, 10, '203402DUP PackDtl   ', 'us_english', 1764
 
+-- UWP-54220 
+execute rdt.rdtAddMsg 230401, 10, '230401 UpdPacjDetailFail', 'us_english', 1764, 0, '230401 Update PackDetail Failed'
+execute rdt.rdtAddMsg 230403, 10, '230403 UpdPacjDetailFail', 'us_english', 1764, 0, '230403 Update PackDetail Failed'
+
 select * from rdt.rdtMsg (nolock) where message_id between 230351 and 230450
