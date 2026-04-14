@@ -25,8 +25,8 @@ GO
 /* 10-Feb-2026 SSA01    1.0   Create UWP-47046                             */
 /***************************************************************************/
 CREATE OR ALTER   PROC [dbo].[mspSKURPL01]
-   @c_Facility   NVARCHAR(5)    = '',
    @c_Storerkey  NVARCHAR(15)   = '',
+   @c_Facility   NVARCHAR(5)    = '',
    @c_PickLocType  NVARCHAR(15),
    @c_DynamicPickLocType  NVARCHAR(15),
    @c_ReplGroup  NVARCHAR(15),
@@ -175,6 +175,7 @@ BEGIN
            , UOM NVARCHAR(10) NOT NULL DEFAULT('')
            , PackKey NVARCHAR(20) NOT NULL DEFAULT('')
            , Priority int NOT NULL DEFAULT(0)
+           , Status NVARCHAR(10) NOT NULL DEFAULT('')
           )
 
 
@@ -321,34 +322,32 @@ BEGIN
    IF @n_continue = 1
    BEGIN
       -- Do not execute it Replenishment Task not done yet
-
-        IF EXISTS(SELECT 1
-                  FROM Replenishment RP WITH (NOLOCK)
-                  JOIN #replenVivo rpl ON RP.Sku = rpl.Sku AND RP.ToLoc = rpl.Loc
-                  WHERE RP.StorerKey = @c_StorerKey
-                  AND RP.Confirmed = 'N')
-        BEGIN
-            PRINT '>>>>>> Replenishment Exists, Do nothing'
-            GOTO QUIT_SP
-        END
-
-        IF EXISTS(SELECT 1
-                  FROM TaskDetail TD WITH (NOLOCK)
-                  JOIN #replenVivo rpl ON TD.Sku = rpl.Sku AND TD.ToLoc = rpl.Loc
-                  WHERE TD.Storerkey = @c_Storerkey
-                  AND TD.Status IN ('Q', '0','1', '3')
-                  AND TD.TaskType = 'RPF')
-        BEGIN
-            PRINT '>>>>>> Replenishment Task Exists, Do nothing'
-            GOTO QUIT_SP
-        END
-
+                UPDATE r
+                SET r.Status = 'ELIGIBLE' -- or any column you want to update
+                FROM #replenVivo r
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM TaskDetail WITH (NOLOCK)
+                    WHERE Sku = r.Sku
+                      AND ToLoc = r.Loc
+                      AND StorerKey = @c_StorerKey
+                      AND TaskType = 'RPF'
+                      AND Status IN ('Q', '0', '1', '3')
+                )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM Replenishment RP WITH (NOLOCK)
+                    WHERE RP.Sku = r.Sku
+                      AND RP.ToLoc = r.Loc
+                      AND RP.StorerKey = @c_StorerKey
+                      AND RP.Confirmed = 'N'
+                );
 
     /* Insert Into Replenishment Table Now */
 
-
         DECLARE CUR_REPLENISH CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
         SELECT  Sku, fromLoc, Loc, fromId, fromLot, Qty,UOM,PackKey,priority FROM #replenVivo
+         WHERE  Status = 'ELIGIBLE'
         OPEN CUR_REPLENISH
 
        FETCH NEXT FROM CUR_REPLENISH INTO @c_Sku,@c_FromLOC , @c_Loc, @c_FromId,@c_FromLot,@n_Qty, @c_UOM, @c_PackKey,@c_Priority
@@ -402,7 +401,6 @@ BEGIN
                         ': Insert Into TaskDetail Failed (mspSKURPL01)'
                      +' ( '+' SQLSvr MESSAGE='+ TRIM(@c_ErrMsg) +' ) '
           END
-
 
           FETCH NEXT FROM CUR_REPLENISH INTO  @c_Sku,@c_FromLOC , @c_Loc, @c_FromId,@c_FromLot,@n_Qty, @c_UOM, @c_PackKey,@c_Priority
        END
