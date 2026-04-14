@@ -76,6 +76,11 @@ BEGIN
       ,@cYearChar   NVARCHAR(10)
       ,@cMonthChar  NVARCHAR(10)
       ,@cDateChar   NVARCHAR(10)
+      ,@nMOBRECScn  INT
+
+      SELECT @nMOBRECScn = Scn
+      FROM rdt.RDTMOBREC WITH(NOLOCK)
+      WHERE Mobile = @nMobile
 
    SET @cBarcode = replace(TRIM(@cUCC),' ','')
    IF @nFunc = 898 -- UCC receiving
@@ -241,11 +246,27 @@ BEGIN
          END
       END
       
-      IF @nStep = 99
+      IF @nStep = 99 AND @nMOBRECScn = 1304
       BEGIN
-         -- FCR-11052: Get barcode from @cUCC (passed from ExtScn03)
-         -- @cLottable02 is NVARCHAR(18) and truncates the barcode
          SET @cBarcode = REPLACE(TRIM(@cUCC), ' ', '')
+
+         -- Validation - If barcode contains parentheses, must be valid GS1
+         IF CHARINDEX('(', @cBarcode) > 0
+         BEGIN
+            IF LEFT(@cBarcode, 4) <> '(10)'
+            BEGIN
+               SET @nErrNo = 263852
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END
+            
+            IF LEN(@cBarcode) NOT IN (40, 44)
+            BEGIN
+               SET @nErrNo = 263853
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END
+         END
 
          -- Only decode if barcode length is 40 or 44 AND starts with (10)
          IF LEN(@cBarcode) IN (40, 44) AND LEFT(@cBarcode, 4) = '(10)'

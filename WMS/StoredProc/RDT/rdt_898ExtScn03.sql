@@ -12,7 +12,7 @@ GO
 /* Date        Rev     Author   Purposes                                      */  
 /* 2025-10-28  1.0.0   Dennis   FCR-8472 Created                              */  
 /* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields    */  
-/* 2026-04-14  1.2     Sreeja   FCR-11052 Add DecodeSP for Step_99            */
+/* 2026-04-14  1.2     Sreeja   FCR-11052 Add DecodeSP for Step_99              */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC  [RDT].[rdt_898ExtScn03] (
@@ -282,29 +282,6 @@ BEGIN
             SET @cLottable01 = @cInField01
             SET @cLottable02 = @cInField02
             SET @cLottable03 = @cInField03
-
-            -- Use @cInField02 (NVARCHAR(60)) - has full barcode
-            DECLARE @cRawBarcode NVARCHAR(MAX)
-            SET @cRawBarcode = REPLACE(TRIM(@cInField02), ' ', '')
-            
-                        -- FCR-11052: If barcode contains parentheses, it must be a valid GS1 barcode starting with (10)
-            IF CHARINDEX('(', @cRawBarcode) > 0
-            BEGIN
-               IF LEFT(@cRawBarcode, 4) <> '(10)'
-               BEGIN
-                  SET @nErrNo = 250754
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                  GOTO Quit
-               END
-               
-               -- FCR-11052: Validate barcode length (must be 40 or 44)
-               IF LEN(@cRawBarcode) NOT IN (40, 44)
-               BEGIN
-                  SET @nErrNo = 263907
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                  GOTO Quit
-               END
-            END
 
             IF @cDecodeSP <> ''
             BEGIN
