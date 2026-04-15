@@ -1,3 +1,4 @@
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -13,7 +14,7 @@ GO
 /* 2025-11-12   PYU015    1.0   UWP-54107 Created                       */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE [dbo].[ispPutCode_MICID01]
+CREATE OR ALTER   PROCEDURE [dbo].[ispPutCode_MICID01]
     @n_PTraceHeadKey             NVARCHAR(10)
    ,@n_PTraceDetailKey           NVARCHAR(10)
    ,@c_PutawayStrategyKey        NVARCHAR(10)
@@ -43,24 +44,6 @@ BEGIN
    DECLARE @c_Reason            NVARCHAR(80)
 
    -- Generate T-SQL
-   IF @c_ToLoc = ''
-   BEGIN
-      IF @b_debug = 1
-         -- Putaway trace turn on, LOC is not pre-filter out
-         SET @c_SQL = '' 
-      ELSE
-      BEGIN
-         SET @c_SQL = 
-               ' AND EXISTS(
-                          SELECT 1
-                            FROM ID WITH(NOLOCK)
-                           WHERE Id        = @c_ID
-                             AND Status    = LOC.status
-                         )
-               '
-      END
-      RETURN
-   END
 
    IF @c_ToLoc != ''
    BEGIN
@@ -90,6 +73,30 @@ BEGIN
          SET @b_RestrictionsPassed = 0 --False
          RETURN
        END
+
+      IF EXISTS(
+              SELECT 1
+               FROM dbo.LOTxLOCxID INV WITH(NOLOCK)
+               INNER JOIN ID I WITH(NOLOCK) ON INV.Id = I.Id
+               WHERE INV.StorerKey = @c_StorerKey
+                AND INV.Loc = @c_ToLoc
+                AND EXISTS (
+                        SELECT 1
+                         FROM ID D WITH(NOLOCK)
+                        WHERE D.Id = @c_ID
+                          AND D.Status <> I.Status
+                        )
+               )
+        BEGIN
+          IF @b_debug = 1
+          BEGIN
+            SELECT @c_Reason = 'FAILED PutCode: ispPutCode_MICID01, inventory Status is not the same as ID,ToLoc = ' + @c_ToLoc
+            EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey, @c_PutawayStrategyLineNumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
+          END
+          SET @b_RestrictionsPassed = 0 --False
+          RETURN         
+      END
+
    END
 END
 GO
@@ -99,5 +106,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON dbo.ispPutCode_MICID01 TO NSQL
+GRANT EXECUTE ON [dbo].[ispPutCode_MICID01] TO [NSQL]
 GO
