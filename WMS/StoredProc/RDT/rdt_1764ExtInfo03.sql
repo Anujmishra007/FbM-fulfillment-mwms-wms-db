@@ -34,27 +34,45 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @nQTY   INT
-   DECLARE @cUCCNo NVARCHAR(20)
+   DECLARE @nDebugFlag INT = 0
 
-   -- TM Replen From
+   DECLARE @cCaseID   NVARCHAR( 20)
+   DECLARE @cFromLoc  NVARCHAR( 20)
+   DECLARE @cToLoc    NVARCHAR( 20)
+   DECLARE @cFromLoc2 NVARCHAR( 20)
+   DECLARE @cToLoc2   NVARCHAR( 20)
+   DECLARE @nScn      INT
+   DECLARE @nIPK      INT
+
+   SELECT TOP 1 @cFromLoc = FromLoc, @cToLoc = ToLoc FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND FromLoc = 'INTRANSIT'
+   SELECT TOP 1 @cFromLoc2 = FromLoc, @cToLoc2 = ToLoc FROM TaskDetail TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey
+   SELECT TOP 1 @nScn = Scn, @nIPK = InputKey FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
+
    IF @nFunc = 1764
    BEGIN
-      IF @nAfterStep = 5 -- NEXT TASK / CLOSE PALLET
+      SET @cExtendedInfo1 = ''
+
+      IF @cFromLoc = 'INTRANSIT'
       BEGIN
-         -- Get UCC on task not yet pick
-         DECLARE @cToLOC NVARCHAR(10)
-         DECLARE @cFinalLOC NVARCHAR(10)
-         SELECT 
-            @cToLOC = ToLOC, 
-            @cFinalLOC = FinalLoC
-         FROM TaskDetail (NOLOCK)
+         SET @cExtendedInfo1 = 'To Loc: '+@cToLoc
+      END
+
+      IF @nAfterStep = 4 --SKU/Qty Screen
+      BEGIN
+         SELECT @cCaseID = CaseID
+         FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskDetailKey
 
-         IF @@ROWCOUNT = 1
-            SET @cExtendedInfo1 = 'FINALLOC: ' + CASE WHEN @cFinalLOC <> '' THEN @cFinalLOC ELSE @cToLOC END
+         SET @cExtendedInfo1 = 'Case: ' + @cCaseID
+      END --st4
+
+      IF (@nAfterStep = 5 AND @nIPK = 1) OR (@nStep = 5 AND @nScn = 2684 AND @nIPK = 0)
+      BEGIN
+         SET @cExtendedInfo1 = 'Source loc: ' + @cFromLoc2
       END
-   END
+   END--1812
+
+   Quit:
 END
 GO
 
