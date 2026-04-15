@@ -424,6 +424,13 @@ BEGIN
                               GOTO SCN_UCC_FAIL
                            END
 
+                           IF @cUCCStatusTmp = '4'
+                           BEGIN
+                              SET @nErrNo = 263460
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  UCC Status is 4
+                              GOTO SCN_UCC_FAIL
+                           END
+
                            IF @cUCCStatusTmp = '5'
                            BEGIN
                               SET @nErrNo = 263456

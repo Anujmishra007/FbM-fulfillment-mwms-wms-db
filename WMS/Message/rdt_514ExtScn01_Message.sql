@@ -12,5 +12,6 @@ EXECUTE rdt.rdtAddMsg 263456, 10, '263456 InvUCC',                'us_english', 
 EXECUTE rdt.rdtAddMsg 263457, 10, '263457 InvUCC',                'us_english', 514, 0, '263457 UCC is consumed'
 EXECUTE rdt.rdtAddMsg 263458, 10, '263458 InvUCC',                'us_english', 514, 0, '263458 Invalid UCC status'
 EXECUTE rdt.rdtAddMsg 263459, 10, '263459 InvUCC',                'us_english', 514, 0, '263459 UCC does not exist'
+EXECUTE rdt.rdtAddMsg 263460, 10, '263460 InvUCC',                'us_english', 514, 0, '263460 UCC Status is 4'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 263451 AND 263500
