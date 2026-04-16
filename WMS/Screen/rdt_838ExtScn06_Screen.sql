@@ -34,3 +34,18 @@ EXECUTE rdt.rdtAddScn 6862, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2","3","4","5","6","7"],"2":["9","10","11","12"]}'
    ,@nFunc = 838
+
+-- FCR-12450
+-- 6865 = PickSlipNo, DropID screen
+DELETE rdt.RDTScn WHERE Scn = 6865 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6865, 'ENG'
+   ,@cLine01 = 'PSNO: %10i01'
+   ,@cLine02 = ''
+   ,@cLine03 = 'FROM DROPID:'
+   ,@cLine04 = '%20i02'
+   ,@cLine05 = ''
+   ,@cLine06 = 'TO DROPID: '
+   ,@cLine07 = '%20i03'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4"],"3":["6","7"]}'
+   ,@nFunc = 838

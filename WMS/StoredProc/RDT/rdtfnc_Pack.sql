@@ -385,6 +385,8 @@ SELECT
    @cPackByFromDropID   = V_String50,
    @cDefaultCursor      = V_String51, --(v7.5)
    @cPackByToDropID     = V_String52,
+   --C_String1 used by extscn
+   --C_String2 used by extscn
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -6820,6 +6822,8 @@ BEGIN
       V_String50     = @cPackByFromDropID,
       V_String51     = @cDefaultCursor, --(v7.5)
       V_String52     = @cPackByToDropID,
+      --C_String1 used by extscn
+      --C_String2 used by extscn
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

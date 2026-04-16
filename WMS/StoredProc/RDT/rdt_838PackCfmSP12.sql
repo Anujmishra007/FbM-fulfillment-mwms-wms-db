@@ -14,6 +14,7 @@ GO
 /* 2026-02-12 1.0  NLT013      UWP-48240. Created                             */
 /* 2026-03-31 1.1  JackC       FCR-11193 Move Inv from FromDropID to LabelNo  */
 /* 2026-04-08 1.2  NLT013      FCR-11343. Update Packheader for single        */
+/* 2026-04-14 1.3  JackC       FCR-12450 Update PKD status & merge duplicates */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838PackCfmSP12] (
@@ -52,14 +53,15 @@ BEGIN
    --V1.1 variables
    DECLARE @nFromDropID_PickQty     INT
    DECLARE @nFromDropID_PackQty     INT
-   DECLARE @cLoopDropID             NVARCHAR(20)
+   DECLARE @cLoopCaseID             NVARCHAR(20)
    DECLARE @cPackByFromDropID       NVARCHAR( 1)
    DECLARE @cMoveInvFlag            NVARCHAR( 1)
    DECLARE @cLoopSKU                NVARCHAR(20)
    DECLARE @cLoopLot                NVARCHAR(10)
+   DECLARE @cLoopID                 NVARCHAR(18)
    DECLARE @nLoopQTY                INT
    DECLARE @cFromLOC                NVARCHAR(10)
-   DECLARE @cMoveQTYPick            NVARCHAR(1)
+   DECLARE @cMoveQTYAlloc            NVARCHAR(1)
 
    SET @cOrderKey = ''      
    SET @cLoadKey = ''      
@@ -215,33 +217,36 @@ BEGIN
 
    IF @cPackByFromDropID = '1' AND ISNULL (@cFromDropID, '') <> ''
    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) 
-                        WHERE StorerKey = @cStorerKey
-                           AND DropID = @cFromDropID
-                           AND UOM = '2')
+      SELECT @nFromDropID_PickQty = ISNULL(SUM(QTY), 0)
+      FROM dbo.PickDetail WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND DropID = @cFromDropID
+      AND Status = @cPickStatus
+
+      SELECT @nFromDropID_PackQty = ISNULL(SUM(QTY), 0)
+      FROM dbo.PackDetail WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND DropID = @cFromDropID
+
+      IF @nFromDropID_PickQty = @nFromDropID_PackQty
       BEGIN
-         SELECT @nFromDropID_PickQty = ISNULL(SUM(QTY), 0)
-         FROM dbo.PickDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-         AND DropID = @cFromDropID
-         AND Status = @cPickStatus
+         IF NOT EXISTS (SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) 
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cFromDropID
+                     AND UOM = '2')
+         BEGIN --UOM6 packing
+            IF @nDebugFlag = 1
+               SELECT 'UOM6 Packing'
 
-         SELECT @nFromDropID_PackQty = ISNULL(SUM(QTY), 0)
-         FROM dbo.PackDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-         AND DropID = @cFromDropID
-
-         IF @nFromDropID_PickQty = @nFromDropID_PackQty
-         BEGIN
             IF NOT EXISTS (SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) 
                            WHERE StorerKey = @cStorerKey
                               AND DropID = @cFromDropID
                               AND CaseId = ''
                               AND Status = @cPickStatus)
             BEGIN
-               SET @cMoveQTYPick = rdt.RDTGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
+               SET @cMoveQTYAlloc = rdt.RDTGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
 
-               IF @cMoveQTYPick <> '1'
+               IF @cMoveQTYAlloc <> '1'
                BEGIN
                   SET @nErrNo = 262655
                   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
@@ -257,17 +262,33 @@ BEGIN
                IF @nDebugFlag = 1
                   SELECT 'FromDropId still exists in PKD'
             END
-         END
+         END -- UOM6 Packing
          ELSE
          BEGIN
             IF @nDebugFlag = 1
-               SELECT 'PickQty <> PackQty', @nFromDropID_PickQty AS PickQty, @nFromDropID_PackQty AS PackQty
-         END
+               SELECT 'UCC Packing, update pkd to 5'
+
+            BEGIN TRY
+               UPDATE dbo.PickDetail WITH (ROWLOCK)
+               SET 
+                  Status = '5',
+                  EditWho = SUSER_SNAME(),
+                  EditDate = GETDATE()
+               WHERE StorerKey = @cStorerKey
+                  AND DropID = @cFromDropID
+                  AND Status = @cPickStatus
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 262658
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END CATCH
+         END -- UCC packing
       END
       ELSE
       BEGIN
          IF @nDebugFlag = 1
-               SELECT 'UCC Pack, No need to movement'
+            SELECT 'PickQty <> PackQty', @nFromDropID_PickQty AS PickQty, @nFromDropID_PackQty AS PackQty
       END
    END
    ELSE
@@ -323,7 +344,228 @@ BEGIN
    DECLARE @nTranCount  INT      
    SET @nTranCount = @@TRANCOUNT      
    BEGIN TRAN  -- Begin our own transaction      
-   SAVE TRAN rdt_838PackCfmSP12 -- For rollback or commit only our own transaction      
+   SAVE TRAN rdt_838PackCfmSP12 -- For rollback or commit only our own transaction
+
+   --V1.1 start: Move inventory from FromDropID to LabelNo
+   IF @cMoveInvFlag = '1'
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'Move Inventory from fromDropID to LabelNo Logic', @cFromDropID AS FromDropID
+
+      SELECT TOP 1  @cFromLoc = lli.LOC
+      FROM dbo.LotxLocxID lli WITH (NOLOCK)
+	   JOIN dbo.PickDetail pd with (nolock)
+	   ON lli.storerkey = pd.storerkey
+		   AND lli.loc= pd.loc
+		   AND lli.lot=pd.lot
+		   AND lli.id = pd.id
+      WHERE pd.StorerKey = @cStorerKey
+         AND pd.dropid = @cFromDropID
+		   AND pd.Status = @cPickStatus
+
+      IF ISNULL(@cFromLOC,'') = ''
+      BEGIN
+         SET @nErrNo = 262654
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         GOTO RollBackTran
+      END
+
+      DECLARE curMove CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT CaseID, SKU, Lot, SUM(QTY) AS QTY, ID --jackc
+         FROM dbo.PickDetail WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND DropID = @cFromDropID --jackc
+            AND Status = @cPickStatus
+         GROUP BY ID, DropID, CaseID, SKU, Lot
+         HAVING SUM(QTY) > 0
+
+      OPEN curMove
+      FETCH NEXT FROM curMove INTO @cLoopCaseID, @cLoopSKU, @cLoopLot, @nLoopQTY, @cLoopID
+ 
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         EXECUTE rdt.rdt_Move
+            @nMobile     = @nMobile,
+            @cLangCode   = @cLangCode,
+            @nErrNo      = @nErrNo OUTPUT,
+            @cErrMsg     = @cErrMsg OUTPUT,
+            @cSourceType = 'rdt_838PackCfmSP12',
+            @cStorerKey  = @cStorerKey,
+            @cFacility   = @cFacility,
+            @cFromLOC    = @cFromLOC,
+            @cToLOC      = @cFromLOC,
+            @cFromID     = @cLoopID,
+            @cToID       = @cLoopCaseID,
+            @cSKU        = @cLoopSKU,
+            @nQTY        = @nLoopQTY,
+            @nQTYAlloc    = @nLoopQTY,
+            @cFromLOT    = @cLoopLot,
+            @cCaseID     = @cLoopCaseID,
+            @nFunc       = @nFunc
+
+         IF @nErrNo <> 0
+         BEGIN
+            CLOSE curMove
+            DEALLOCATE curMove
+            GOTO RollBackTran
+         END
+
+         FETCH NEXT FROM curMove INTO @cLoopCaseID, @cLoopSKU, @cLoopLot, @nLoopQTY, @cLoopID
+      END
+
+      CLOSE curMove
+      DEALLOCATE curMove
+
+      -- FCR-12450: Save affected PickDetailKeys before update (for merge operation)
+      -- Use temp table with index for better performance
+      CREATE TABLE #AffectedPKD (
+         PickDetailKey NVARCHAR(18) PRIMARY KEY,
+         CaseID NVARCHAR(20),
+         OrderKey NVARCHAR(10),
+         OrderLineNumber NVARCHAR(5),
+         Lot NVARCHAR(10),
+         Loc NVARCHAR(10),
+         ID NVARCHAR(18),
+         Qty INT,
+         UOMQty INT
+      )
+
+      INSERT INTO #AffectedPKD (PickDetailKey, CaseID, OrderKey, OrderLineNumber, Lot, Loc, ID, Qty, UOMQty)
+      SELECT PickDetailKey, CaseID, OrderKey, OrderLineNumber, Lot, Loc, ID, Qty, UOMQty
+      FROM dbo.PickDetail WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND DropID = @cFromDropID
+         AND Status = @cPickStatus
+
+      IF @nDebugFlag = 1
+         SELECT 'Affected PKD', * FROM #AffectedPKD
+
+      BEGIN TRY
+         UPDATE pd WITH (ROWLOCK)
+         SET DropID = pd.CaseId,
+             Status = '5',
+             EditWho = SUSER_SNAME(),
+             EditDate = GETDATE()
+         FROM dbo.PickDetail pd
+         JOIN #AffectedPKD a ON pd.PickDetailKey = a.PickDetailKey
+      END TRY
+      BEGIN CATCH
+         DROP TABLE #AffectedPKD
+         SET @nErrNo = 262659
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         GOTO RollBackTran
+      END CATCH
+
+      CREATE TABLE #MergeAction (
+         PickDetailKey NVARCHAR(18) PRIMARY KEY,
+         ActionType CHAR(1),  -- 'U' = Update (keep), 'D' = Delete
+         TotalQty INT,
+         TotalUOMQty INT
+      )
+
+      ;WITH RankedPKD AS (
+         SELECT
+            PickDetailKey,
+            ROW_NUMBER() OVER (
+               PARTITION BY CaseID, OrderKey, OrderLineNumber, Lot, Loc, ID
+               ORDER BY PickDetailKey
+            ) AS RowNum,
+            SUM(Qty) OVER (
+               PARTITION BY CaseID, OrderKey, OrderLineNumber, Lot, Loc, ID
+            ) AS TotalQty,
+            SUM(UOMQty) OVER (
+               PARTITION BY CaseID, OrderKey, OrderLineNumber, Lot, Loc, ID
+            ) AS TotalUOMQty,
+            COUNT(*) OVER (
+               PARTITION BY CaseID, OrderKey, OrderLineNumber, Lot, Loc, ID
+            ) AS RecCount
+         FROM #AffectedPKD
+         WHERE CaseID <> ''
+      )
+      INSERT INTO #MergeAction (PickDetailKey, ActionType, TotalQty, TotalUOMQty)
+      SELECT
+         PickDetailKey,
+         CASE WHEN RowNum = 1 THEN 'U' ELSE 'D' END,
+         TotalQty,
+         TotalUOMQty
+      FROM RankedPKD
+      WHERE RecCount > 1
+
+      IF @nDebugFlag = 1
+         SELECT 'Merged affected PKD', * FROM #MergeAction
+
+      IF EXISTS (SELECT 1 FROM #MergeAction)
+      BEGIN
+         -- Step 1: unallocated duplicate records
+         BEGIN TRY
+            UPDATE pd WITH (ROWLOCK)
+            SET Qty = 0,
+               Status = '0',
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+            FROM dbo.PickDetail pd
+            JOIN #MergeAction m ON pd.PickDetailKey = m.PickDetailKey
+            WHERE m.ActionType = 'D'
+         END TRY
+         BEGIN CATCH
+            DROP TABLE #MergeAction
+            DROP TABLE #AffectedPKD
+            SET @nErrNo = 262662
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+            GOTO RollBackTran
+         END CATCH
+
+         -- Step 2: delete duplicate records (use clustered index)
+         BEGIN TRY
+            DELETE pd WITH (ROWLOCK)
+            FROM dbo.PickDetail pd
+            JOIN #MergeAction m ON pd.PickDetailKey = m.PickDetailKey
+            WHERE m.ActionType = 'D'
+         END TRY
+         BEGIN CATCH
+            DROP TABLE #MergeAction
+            DROP TABLE #AffectedPKD
+            SET @nErrNo = 262661
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+            GOTO RollBackTran
+         END CATCH
+
+         -- Step 3: Update kept records with summed Qty and UOMQty (use clustered index)
+         BEGIN TRY
+            UPDATE pd WITH (ROWLOCK)
+            SET Qty = m.TotalQty,
+               UOMQty = m.TotalUOMQty,
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+            FROM dbo.PickDetail pd
+            JOIN #MergeAction m ON pd.PickDetailKey = m.PickDetailKey
+            WHERE m.ActionType = 'U'
+         END TRY
+         BEGIN CATCH
+            DROP TABLE #MergeAction
+            DROP TABLE #AffectedPKD
+            SET @nErrNo = 262660
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+            GOTO RollBackTran
+         END CATCH
+      END -- handle duplicate pkd
+
+      DROP TABLE #MergeAction
+      DROP TABLE #AffectedPKD
+
+      BEGIN TRY
+         UPDATE dbo.PackDetail WITH (ROWLOCK)
+         SET DropID = LabelNo
+         WHERE StorerKey = @cStorerKey
+            AND DropID = @cFromDropID
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 262656
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         GOTO RollBackTran
+      END CATCH
+   END
+   --V1.1 end      
 
    -- Pack confirm      
    IF @cPackConfirm = 'Y'      
@@ -350,6 +592,17 @@ BEGIN
             BEGIN CATCH
                SET @nErrNo = 262657
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --  Update PackHeader failed
+               GOTO RollBackTran
+            END CATCH
+
+            BEGIN TRY
+               UPDATE dbo.PackInfo WITH(ROWLOCK)
+                  SET CartonStatus = ''
+               WHERE PickSlipNo = @cPickSlipNo
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 262680
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --  Update PackInfo failed
                GOTO RollBackTran
             END CATCH
 
@@ -520,101 +773,7 @@ BEGIN
          IF @bSuccess <> 1            
             GOTO RollBackTran       
       END 
-   END-- pack confirm
-
-   --V1.1 start: Move inventory from FromDropID to LabelNo
-   IF @cMoveInvFlag = '1'
-   BEGIN
-      IF @nDebugFlag = 1
-         SELECT 'Move Inventory from fromDropID to LabelNo Logic', @cFromDropID AS FromDropID
-
-      BEGIN TRY
-         UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-            DropID = CaseId,
-            Status = '5',
-            EditWho = SUSER_SNAME(),
-            EditDate = GETDATE()
-         WHERE StorerKey = @cStorerKey
-            AND ID = @cFromDropID
-            AND Status = @cPickStatus
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 262652
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-         GOTO RollBackTran
-      END CATCH
-
-      SELECT TOP 1 @cFromLOC = LOC
-      FROM dbo.LotxLocxID WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND ID = @cFromDropID
-
-      IF ISNULL(@cFromLOC,'') = ''
-      BEGIN
-         SET @nErrNo = 262654
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-         GOTO RollBackTran
-      END
-
-      DECLARE curMove CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT DropID, SKU, Lot, SUM(QTY) AS QTY
-         FROM dbo.PickDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-            AND ID = @cFromDropID
-            AND Status = '5'
-         GROUP BY DropID, SKU, Lot
-         HAVING SUM(QTY) > 0
-
-      OPEN curMove
-      FETCH NEXT FROM curMove INTO @cLoopDropID, @cLoopSKU, @cLoopLot, @nLoopQTY
-
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-         EXECUTE rdt.rdt_Move
-            @nMobile     = @nMobile,
-            @cLangCode   = @cLangCode,
-            @nErrNo      = @nErrNo OUTPUT,
-            @cErrMsg     = @cErrMsg OUTPUT,
-            @cSourceType = 'rdt_838PackCfmSP12',
-            @cStorerKey  = @cStorerKey,
-            @cFacility   = @cFacility,
-            @cFromLOC    = @cFromLOC,
-            @cToLOC      = @cFromLOC,
-            @cFromID     = @cFromDropID,
-            @cToID       = @cLoopDropID,
-            @cSKU        = @cLoopSKU,
-            @nQTY        = @nLoopQTY,
-            @nQTYPick    = @nLoopQTY,
-            @cFromLOT    = @cLoopLot,
-            @cCaseID     = @cLoopDropID,
-            @nFunc       = @nFunc
-
-         IF @nErrNo <> 0
-         BEGIN
-            CLOSE curMove
-            DEALLOCATE curMove
-            GOTO RollBackTran
-         END
-
-         FETCH NEXT FROM curMove INTO @cLoopDropID, @cLoopSKU, @cLoopLot, @nLoopQTY
-      END
-
-      CLOSE curMove
-      DEALLOCATE curMove
-
-      BEGIN TRY
-         UPDATE dbo.PackDetail WITh (ROWLOCK)
-         SET DropID = LabelNo
-         WHERE StorerKey = @cStorerKey
-            AND DropID = @cFromDropID
-      END TRY
-      BEGIN CATCh
-         SET @nErrNo = 262656
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-         GOTO RollBackTran
-      END CATCH
-   END
-   --V1.1 end          
+   END-- pack confirm          
       
    COMMIT TRAN rdt_838PackCfmSP12      
    GOTO Quit      
