@@ -33,10 +33,6 @@ GO
 /* 12-Mar-2026 WLChooi  1.8   FCR-11579 Fix missing taskdetailkey (WL08) */
 /* 16-Mar-2026 WLChooi  1.9   FCR-11624 Fix TaskToPick linkage (WL09)    */
 /* 18-Mar-2026 WLChooi  2.0   FCR-11805 Conso task for ECOM (WL10)       */
-/* 19-Mar-2026 WLChooi  2.1   FCR-11805 Stamp CaseID=Taskdetailkey for   */
-/*                            B2C UOM 6 - Taskdetail (WL11)              */
-/* 24-Mar-2026 WLChooi  2.2   FCR-11894 Stamp CaseID=Taskdetailkey for   */
-/*                            B2C UOM 6 - Pickdetail (WL12)              */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -750,25 +746,11 @@ BEGIN
                SET @n_Continue = 3
             END
 
-            --WL11 S
             --WL08 S
             UPDATE TASKDETAIL
             SET FromLoc = IIF(@c_OriginalFromLoc <> @c_FromLoc, @c_FromLoc, FromLoc)
-              , CaseID = IIF(TaskType = 'ASTCPK' AND UOM >= '6'
-                           , @c_TaskdetailKey
-                           , CaseID)
             WHERE Taskdetailkey = @c_TaskdetailKey
             --WL08 E
-            --WL11 E
-
-            --WL12 S
-            UPDATE p
-            SET p.CaseID = p.Taskdetailkey
-            FROM #PICKDETAIL_WIP p
-            JOIN #TMP_ORDER_DETAIL tod ON tod.Orderkey = p.Orderkey
-            WHERE tod.DocType = 'E'
-            AND p.UOM >= '6'
-            --WL12 E
          END
 
          SET @c_Groupkey_P = @c_Groupkey

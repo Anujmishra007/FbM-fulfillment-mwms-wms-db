@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.1                                                          */    
+/* Version: 1.2                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -21,6 +21,7 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
 /* 10-Mar-2026 WLChooi  1.1   FCR-11471 Update Userdefine02 (WL01)       */
+/* 14-Apr-2026 WLChooi  1.2   FCR-12447 ECOM Tote Packing (WL02)         */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10]        
    @c_Wavekey     NVARCHAR(10)
@@ -36,21 +37,21 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF    
      
    DECLARE
-           @n_StartTCnt       INT   = @@TRANCOUNT
-         , @n_Continue        INT   = 1
-         , @n_RowCount        INT   = 0
+           @n_StartTCnt             INT   = @@TRANCOUNT
+         , @n_Continue              INT   = 1
+         , @n_RowCount              INT   = 0
 
-         , @c_Facility        NVARCHAR(5) = ''
-         , @c_Storerkey       NVARCHAR(15)= ''
-         , @c_Orderkey        NVARCHAR(10)= ''
-         , @c_Loadkey         NVARCHAR(10)= ''
-         , @c_PickSlipNo      NVARCHAR(10)= ''
-         , @c_SourceType      NVARCHAR(30)= 'mspRLWAV10'
+         , @c_Facility              NVARCHAR(5) = ''
+         , @c_Storerkey             NVARCHAR(15)= ''
+         , @c_Orderkey              NVARCHAR(10)= ''
+         , @c_Loadkey               NVARCHAR(10)= ''
+         , @c_PickSlipNo            NVARCHAR(10)= ''
+         , @c_SourceType            NVARCHAR(30)= 'mspRLWAV10'
 
-         , @c_SQL             NVARCHAR(MAX) = ''
-         , @c_SQLParms        NVARCHAR(2000)= ''
-
-         , @cur_PCKGRPH       CURSOR
+         , @c_SQL                   NVARCHAR(MAX) = ''
+         , @c_SQLParms              NVARCHAR(2000)= ''
+         , @c_Option5               NVARCHAR(MAX) = ''      --WL02
+         , @c_ECOMPackingByTote     NVARCHAR(10)  = 'Y'     --WL02
  
    IF @n_Continue = 1
    BEGIN
@@ -118,6 +119,16 @@ BEGIN
       JOIN ORDERS o (NOLOCK) ON o.Orderkey = wd.Orderkey
       WHERE wd.Wavekey = @c_Wavekey
       ORDER BY wd.WaveDetailKey
+
+      --WL02 S
+      SELECT @c_Option5 = ISNULL(fgr.Option5,'')
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
+
+      IF ISNULL(@c_Option5, '') <> ''
+      BEGIN
+         SELECT @c_ECOMPackingByTote = dbo.fnc_GetParamValueFromString('@c_ECOMPackingByTote', @c_Option5, @c_ECOMPackingByTote)
+      END
+      --WL02 E
    END
 
    IF @n_Continue = 1 AND @@TRANCOUNT = 0 
@@ -186,7 +197,22 @@ BEGIN
       BEGIN
          SET @n_Continue = 3
       END
-      
+
+      IF @c_ECOMPackingByTote = 'Y'
+      BEGIN
+         EXEC [dbo].[mspRLWAV10_TOTE]
+            @c_Wavekey  = @c_Wavekey
+         ,  @b_Success  = @b_Success   OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @n_debug    = @n_debug  
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3
+         END
+      END
+
       IF @n_debug = 1
       BEGIN
          select 'pack', DoCartonize, pickslipno,* from #PickDetail_WIP
