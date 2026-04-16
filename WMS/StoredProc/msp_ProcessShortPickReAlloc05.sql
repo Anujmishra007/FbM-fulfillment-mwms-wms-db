@@ -87,57 +87,61 @@ BEGIN
           , PRIMARY KEY (Orderkey, Storerkey, SKU)
       )
 
-      CREATE TABLE #PickDetail_WIP
-      (
-         [PickDetailKey]        [NVARCHAR](18)   NOT NULL PRIMARY KEY
-       , [CaseID]               [NVARCHAR](20)   NOT NULL DEFAULT (' ')
-       , [PickHeaderKey]        [NVARCHAR](18)   NOT NULL
-       , [OrderKey]             [NVARCHAR](10)   NOT NULL
-       , [OrderLineNumber]      [NVARCHAR](5)    NOT NULL
-       , [Lot]                  [NVARCHAR](10)   NOT NULL
-       , [Storerkey]            [NVARCHAR](15)   NOT NULL
-       , [Sku]                  [NVARCHAR](20)   NOT NULL
-       , [AltSku]               [NVARCHAR](20)   NOT NULL DEFAULT (' ')
-       , [UOM]                  [NVARCHAR](10)   NOT NULL DEFAULT (' ')
-       , [UOMQty]               [INT]            NOT NULL DEFAULT ((0))
-       , [Qty]                  [INT]            NOT NULL DEFAULT ((0))
-       , [QtyMoved]             [INT]            NOT NULL DEFAULT ((0))
-       , [Status]               [NVARCHAR](10)   NOT NULL DEFAULT ('0')
-       , [DropID]               [NVARCHAR](20)   NOT NULL DEFAULT ('')
-       , [Loc]                  [NVARCHAR](10)   NOT NULL DEFAULT ('UNKNOWN')
-       , [ID]                   [NVARCHAR](18)   NOT NULL DEFAULT (' ')
-       , [PackKey]              [NVARCHAR](10)   NULL DEFAULT (' ')
-       , [UpdateSource]         [NVARCHAR](10)   NULL DEFAULT ('0')
-       , [CartonGroup]          [NVARCHAR](10)   NULL
-       , [CartonType]           [NVARCHAR](10)   NULL
-       , [ToLoc]                [NVARCHAR](10)   NULL DEFAULT (' ')
-       , [DoReplenish]          [NVARCHAR](1)    NULL DEFAULT ('N')
-       , [ReplenishZone]        [NVARCHAR](10)   NULL DEFAULT (' ')
-       , [DoCartonize]          [NVARCHAR](1)    NULL DEFAULT ('N')
-       , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
-       , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
-       , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [TrafficCop]           [NVARCHAR](1)    NULL
-       , [ArchiveCop]           [NVARCHAR](1)    NULL
-       , [OptimizeCop]          [NVARCHAR](1)    NULL
-       , [ShipFlag]             [NVARCHAR](1)    NULL DEFAULT ('0')
-       , [PickSlipNo]           [NVARCHAR](10)   NULL
-       , [TaskDetailKey]        [NVARCHAR](10)   NULL
-       , [TaskManagerReasonKey] [NVARCHAR](10)   NULL
-       , [Notes]                [NVARCHAR](4000) NULL
-       , [MoveRefKey]           [NVARCHAR](10)   NULL DEFAULT ('')
-       , [WIP_Refno]            [NVARCHAR](30)   NULL DEFAULT ('')
-       , [Channel_ID]           [BIGINT]         NULL DEFAULT ((0))
-       , [TmpReplenKey]         [NVARCHAR](10)   NOT NULL DEFAULT ('')
-      )
-
-      CREATE INDEX IX_PickDetail_WIP_OrderKey_Status ON #PickDetail_WIP (OrderKey, [Status]) INCLUDE (Qty, QtyMoved, PickDetailKey)
-      CREATE INDEX IX_PickDetail_WIP_WaveKey_UOM_Status ON #PickDetail_WIP (WaveKey, UOM, [Status]) INCLUDE (OrderKey, Storerkey, SKU, TaskDetailKey)
-      CREATE INDEX IX_PickDetail_WIP_TaskUpdate ON #PickDetail_WIP (UOM, PickMethod, Lot, Loc, ID, DropID) INCLUDE (PickDetailKey)
+      --WL02
+      IF OBJECT_ID('tempdb..#PickDetail_WIP ','u') IS NULL
+      BEGIN
+         CREATE TABLE #PickDetail_WIP
+         (
+            [PickDetailKey]        [NVARCHAR](18)   NOT NULL PRIMARY KEY
+          , [CaseID]               [NVARCHAR](20)   NOT NULL DEFAULT (' ')
+          , [PickHeaderKey]        [NVARCHAR](18)   NOT NULL
+          , [OrderKey]             [NVARCHAR](10)   NOT NULL
+          , [OrderLineNumber]      [NVARCHAR](5)    NOT NULL
+          , [Lot]                  [NVARCHAR](10)   NOT NULL
+          , [Storerkey]            [NVARCHAR](15)   NOT NULL
+          , [Sku]                  [NVARCHAR](20)   NOT NULL
+          , [AltSku]               [NVARCHAR](20)   NOT NULL DEFAULT (' ')
+          , [UOM]                  [NVARCHAR](10)   NOT NULL DEFAULT (' ')
+          , [UOMQty]               [INT]            NOT NULL DEFAULT ((0))
+          , [Qty]                  [INT]            NOT NULL DEFAULT ((0))
+          , [QtyMoved]             [INT]            NOT NULL DEFAULT ((0))
+          , [Status]               [NVARCHAR](10)   NOT NULL DEFAULT ('0')
+          , [DropID]               [NVARCHAR](20)   NOT NULL DEFAULT ('')
+          , [Loc]                  [NVARCHAR](10)   NOT NULL DEFAULT ('UNKNOWN')
+          , [ID]                   [NVARCHAR](18)   NOT NULL DEFAULT (' ')
+          , [PackKey]              [NVARCHAR](10)   NULL DEFAULT (' ')
+          , [UpdateSource]         [NVARCHAR](10)   NULL DEFAULT ('0')
+          , [CartonGroup]          [NVARCHAR](10)   NULL
+          , [CartonType]           [NVARCHAR](10)   NULL
+          , [ToLoc]                [NVARCHAR](10)   NULL DEFAULT (' ')
+          , [DoReplenish]          [NVARCHAR](1)    NULL DEFAULT ('N')
+          , [ReplenishZone]        [NVARCHAR](10)   NULL DEFAULT (' ')
+          , [DoCartonize]          [NVARCHAR](1)    NULL DEFAULT ('N')
+          , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
+          , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
+          , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
+          , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
+          , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+          , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
+          , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+          , [TrafficCop]           [NVARCHAR](1)    NULL
+          , [ArchiveCop]           [NVARCHAR](1)    NULL
+          , [OptimizeCop]          [NVARCHAR](1)    NULL
+          , [ShipFlag]             [NVARCHAR](1)    NULL DEFAULT ('0')
+          , [PickSlipNo]           [NVARCHAR](10)   NULL
+          , [TaskDetailKey]        [NVARCHAR](10)   NULL
+          , [TaskManagerReasonKey] [NVARCHAR](10)   NULL
+          , [Notes]                [NVARCHAR](4000) NULL
+          , [MoveRefKey]           [NVARCHAR](10)   NULL DEFAULT ('')
+          , [WIP_Refno]            [NVARCHAR](30)   NULL DEFAULT ('')
+          , [Channel_ID]           [BIGINT]         NULL DEFAULT ((0))
+          , [TmpReplenKey]         [NVARCHAR](10)   NOT NULL DEFAULT ('')
+         )
+   
+         CREATE INDEX IX_PickDetail_WIP_OrderKey_Status ON #PickDetail_WIP (OrderKey, [Status]) INCLUDE (Qty, QtyMoved, PickDetailKey)
+         CREATE INDEX IX_PickDetail_WIP_WaveKey_UOM_Status ON #PickDetail_WIP (WaveKey, UOM, [Status]) INCLUDE (OrderKey, Storerkey, SKU, TaskDetailKey)
+         CREATE INDEX IX_PickDetail_WIP_TaskUpdate ON #PickDetail_WIP (UOM, PickMethod, Lot, Loc, ID, DropID) INCLUDE (PickDetailKey)
+      END
 
       CREATE TABLE #T_CaseID (
             Storerkey   NVARCHAR(15)
@@ -636,25 +640,6 @@ BEGIN
          SET @c_ErrMsg = ERROR_MESSAGE()
       END CATCH
    END
-   
-   -- Re-initialize #PICKDETAIL_WIP after redo Pre-cartonization
-   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
-   BEGIN
-      --Initialize Pickdetail work in progress staging table   
-      EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
-                                  , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = @c_PickCondition_SQL
-                                  , @c_Action = 'I' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
-                                  , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
-                                  , @b_Success = @b_Success OUTPUT
-                                  , @n_Err = @n_err OUTPUT
-                                  , @c_ErrMsg = @c_errmsg OUTPUT
-   
-      IF @b_Success <> 1
-      BEGIN
-         SET @n_Continue = 3
-      END
-   END
 
    -- Update TaskDetail Message02 for reallocated tasks
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
@@ -708,34 +693,12 @@ BEGIN
             SET @c_ErrMsg = ERROR_MESSAGE()
          END CATCH
 
-         -- Delete from temp table as well
-         DELETE FROM #PICKDETAIL_WIP
-         WHERE PickDetailKey = @c_PickDetailKey
-
          FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
       END
       CLOSE @CUR_UNALLOC
       DEALLOCATE @CUR_UNALLOC
    END
    --WL02 E
-
-   --Update pickdetail_WIP work in progress staging table back to pickdetail 
-   IF (@n_Continue = 1 or @n_Continue = 2) AND @n_SkipProcess = 0
-   BEGIN
-      EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
-                                  , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = @c_PickCondition_SQL
-                                  , @c_Action = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
-                                  , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
-                                  , @b_Success = @b_Success OUTPUT
-                                  , @n_Err = @n_err OUTPUT
-                                  , @c_ErrMsg = @c_errmsg OUTPUT
-
-      IF @b_Success <> 1
-      BEGIN
-         SET @n_Continue = 3
-      END
-   END
 
    --Delete pickdetail_WIP work in progress staging table    
    IF (@n_Continue = 1 or @n_Continue = 2)
