@@ -2935,6 +2935,23 @@ BEGIN
                      BEGIN TRAN  -- Begin our own transaction
                      SAVE TRAN rdt_838ExtScn06_6865 -- For rollback or commit only our own transaction
 
+                     -- Delete records that are merged (not the kept one)
+                     BEGIN TRY
+                        DELETE PD
+                        FROM dbo.PickDetail PD WITH (ROWLOCK)
+                        WHERE PD.PickDetailKey IN (SELECT PickDetailKey FROM @tPD)
+                          AND PD.PickDetailKey NOT IN (SELECT KeepPickDetailKey FROM @tMerged)
+                     END TRY
+                     BEGIN CATCH
+                        IF XACT_STATE() <> -1
+                           ROLLBACK TRAN rdt_838ExtScn06_6865
+                        ELSE
+                           ROLLBACK TRAN
+                        SET @nErrNo = 253217
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                        GOTO Quit
+                     END CATCH
+
                      -- Update PickDetail: set DropID and merged Qty for kept records
                      BEGIN TRY
                         UPDATE PD WITH (ROWLOCK) SET 
@@ -2946,22 +2963,11 @@ BEGIN
                         INNER JOIN @tMerged M ON PD.PickDetailKey = M.KeepPickDetailKey
                      END TRY
                      BEGIN CATCH
-                        ROLLBACK TRAN rdt_838ExtScn06_6865
+                        IF XACT_STATE() <> -1
+                           ROLLBACK TRAN rdt_838ExtScn06_6865
+                        ELSE
+                           ROLLBACK TRAN
                         SET @nErrNo = 253216
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                        GOTO Quit
-                     END CATCH
-
-                     -- Delete records that are merged (not the kept one)
-                     BEGIN TRY
-                        DELETE PD
-                        FROM dbo.PickDetail PD WITH (ROWLOCK)
-                        WHERE PD.PickDetailKey IN (SELECT PickDetailKey FROM @tPD)
-                          AND PD.PickDetailKey NOT IN (SELECT KeepPickDetailKey FROM @tMerged)
-                     END TRY
-                     BEGIN CATCH
-                        ROLLBACK TRAN rdt_838ExtScn06_6865
-                        SET @nErrNo = 253217
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                         GOTO Quit
                      END CATCH
