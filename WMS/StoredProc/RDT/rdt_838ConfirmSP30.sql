@@ -11,7 +11,8 @@ GO
 /* 2025-12-31  1.0    Dennis       FCR-8931                                      */
 /* 2026-03-30  1.1.0  JCH507       FCR-11193 PickDetail split logic              */
 /* 2026-04-01  1.1.1  JCH507       FCR-11193 Update CaseId instead of DropID     */
-/* 2026-04-02  1.1.0  NickT        FCR-11343 Confirm B2C singles                 */
+/* 2026-04-02  1.2.0  NickT        FCR-11343 Confirm B2C singles                 */
+/* 2026-04-16  1.3.0  JCH507       FCR-12450 Resolve B2C Multi precartonization  */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ConfirmSP30 (
@@ -323,7 +324,9 @@ BEGIN
          SKU = @cSKU, 
          QTY = QTY + @nQTY, 
          EXPQTY = CASE WHEN @cDocType = 'N' AND ISNULL(@cUCCNo,'') = '' THEN EXPQTY + @nQTY ELSE EXPQTY END,
-         DropID =  DropID ,
+         --DropID =  DropID , V1.3.0
+         --B2C Multi has precartonization data. Set drop id to fromDropID when 1st sku scanned.
+         DropID =  case when Qty = 0 THEN @cFromDropID ELSE DropID END ,
          EditWho = 'rdt.' + SUSER_SNAME(), 
          EditDate = GETDATE(), 
          ArchiveCop = NULL
@@ -373,6 +376,7 @@ BEGIN
       DECLARE @cTargetPickDetailKey NVARCHAR(10)
       DECLARE @cNewPickDetailKey    NVARCHAR(10)
       DECLARE @cOperationType       NVARCHAR(10)
+      DECLARE @bSkipPKDCleanup      BIT = 0
 
       -- Get PickStatus from config
       SET @cPickStatus = rdt.rdtGetConfig(@nFunc, 'PickStatus', @cStorerKey)
@@ -441,12 +445,19 @@ BEGIN
          IF @nDebugFlag = 1
             SELECT 'Loop FromDropID PKD', @cLoopPickDetailKey AS LoopPKD, @nLoopQty AS PKDQty
 
-         -- Post-validation: No more PickDetail
+         -- Post-validation: No more PickDetail - skip and log to TraceInfo
          IF @cLoopPickDetailKey IS NULL
          BEGIN
-            SET @nErrNo = 262635
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-            GOTO RollBackTran
+            --V1.3.0 B2C Multi has case id in pickdetail. Skip pkd update if no case id record found
+            --SET @nErrNo = 262635
+            --SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+            --GOTO RollBackTran
+            INSERT INTO dbo.TRACEINFO (TraceName, STEP1, STEP2, STEP3, COL1, COL2, COL3, COL4, COL5)
+            VALUES ('rdt_838ConfirmSP30', 'SkipPKD', ISNULL(@nRemainQTY,0), 0,
+                      @cOrderKey, @cSKU, @cFromDropID, @cLabelNo, SUSER_SNAME())
+
+            SET @bSkipPKDCleanup = 1
+            BREAK -- Exit loop, skip PickDetail update， clean up
          END
 
          -- Check if target PickDetail exists (already packed to this LabelNo)
@@ -686,7 +697,7 @@ BEGIN
          -- Debug logging
          IF @nDebugFlag = 2
          BEGIN
-            INSERT INTO TRACEINFO (STEP1, STEP2, STEP3, COL1, COL2, COL3, COL4, COL5)
+            INSERT INTO dbo.TRACEINFO (STEP1, STEP2, STEP3, COL1, COL2, COL3, COL4, COL5)
             VALUES (@nRemainQTY, @nLoopQTY, @cOperationType, @cLoopPickDetailKey, ISNULL(@cTargetPickDetailKey,''), @cLabelNo, @cFromDropID, SUSER_SNAME())
          END
       END
@@ -694,11 +705,32 @@ BEGIN
       IF @nDebugFlag = 1
          SELECT 'PKD looping finished, clear PKD Qty = 0'
 
-      -- Cleanup: Delete RefKeyLookup for zero-qty PickDetails
-      BEGIN TRY
-         DELETE FROM dbo.RefKeyLookup
-         WHERE PickDetailKey IN (
-            SELECT PickDetailKey FROM dbo.PickDetail WITH (NOLOCK)
+      -- Skip cleanup if no PickDetail was found
+      IF @bSkipPKDCleanup = 0
+      BEGIN
+         -- Cleanup: Delete RefKeyLookup for zero-qty PickDetails
+         BEGIN TRY
+            DELETE FROM dbo.RefKeyLookup
+            WHERE PickDetailKey IN (
+               SELECT PickDetailKey FROM dbo.PickDetail WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+               AND OrderKey = @cOrderKey
+               AND SKU = @cSKU
+               AND DropID = @cFromDropID
+               AND CaseId = ''
+               AND Status = @cPickStatus
+               AND QTY = 0
+            )
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 262628
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+            GOTO RollBackTran
+         END CATCH
+
+         -- Cleanup: Delete zero-qty PickDetails
+         BEGIN TRY
+            DELETE FROM dbo.PickDetail
             WHERE StorerKey = @cStorerKey
             AND OrderKey = @cOrderKey
             AND SKU = @cSKU
@@ -706,30 +738,13 @@ BEGIN
             AND CaseId = ''
             AND Status = @cPickStatus
             AND QTY = 0
-         )
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 262628
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-         GOTO RollBackTran
-      END CATCH
-
-      -- Cleanup: Delete zero-qty PickDetails
-      BEGIN TRY
-         DELETE FROM dbo.PickDetail
-         WHERE StorerKey = @cStorerKey
-         AND OrderKey = @cOrderKey
-         AND SKU = @cSKU
-         AND DropID = @cFromDropID
-         AND CaseId = ''
-         AND Status = @cPickStatus
-         AND QTY = 0
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 262627
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-         GOTO RollBackTran
-      END CATCH
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 262627
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+            GOTO RollBackTran
+         END CATCH
+      END
    END
    --V1.1 FCR-11193 end
 
