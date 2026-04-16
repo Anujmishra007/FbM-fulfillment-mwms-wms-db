@@ -268,6 +268,7 @@ BEGIN
         , PICKDETAIL.Pickslipno  = ''   --WL03
         , PICKDETAIL.CartonGroup = ''   --WL03
         , PICKDETAIL.CartonType  = ''   --WL03
+        , PICKDETAIL.Notes       = ''   --WL06
         , TrafficCop = NULL
         , EditWho  = SUSER_SNAME()
         , EditDate = GETDATE()

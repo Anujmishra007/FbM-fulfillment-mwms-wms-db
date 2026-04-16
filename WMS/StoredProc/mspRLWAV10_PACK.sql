@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 3.9                                                          */    
+/* Version: 4.0                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -56,6 +56,7 @@ GO
 /* 19-Mar-2026 WLChooi  3.7   FCR-11841 Fix algorithm (WL26)             */
 /* 01-Apr-2026 WLChooi  3.8   FCR-12170 Fix CSCORDTYPE logic (WL27)      */
 /* 01-Apr-2026 WLChooi  3.9   FCR-12172 Change CartonWeight logic (WL28) */
+/* 10-Apr-2026 WLChooi  4.0   FCR-12447 Tote Assignment for B2C (WL29)   */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -200,7 +201,7 @@ BEGIN
          , @b_HasAnyVAS             BIT            = 0      --WL25
          , @b_IsAudit               BIT            = 0      --WL25
          , @n_SumQty                INT            = 0      --WL25
-
+         , @c_ECOMPackingByTote     NVARCHAR(10)   = 'Y'    --WL29
 
    DECLARE @cur_PCKGRPH          CURSOR
          , @cur_PCKGRPS          CURSOR
@@ -307,6 +308,20 @@ BEGIN
                           WHEN @b_Success = 1 THEN 1
                           WHEN @b_Success = 2 THEN 4
                           END
+
+   --WL29 S
+   IF @n_Continue = 1
+   BEGIN
+      IF NOT EXISTS ( SELECT 1
+                      FROM #PickDetail_WIP pw
+                      WHERE pw.WaveKey = @c_Wavekey
+                      AND (pw.CaseID = '' OR pw.CaseID IS NULL) 
+                    )
+      BEGIN
+         SET @n_Continue = 4
+      END
+   END
+   --WL29 E
 
    IF @n_Continue = 1
    BEGIN
@@ -520,6 +535,7 @@ BEGIN
       IF ISNULL(@c_Option5, '') <> ''
       BEGIN
          SELECT @c_PackECOM = dbo.fnc_GetParamValueFromString('@c_PackECOM', @c_Option5, @c_PackECOM)
+         SELECT @c_ECOMPackingByTote = dbo.fnc_GetParamValueFromString('@c_ECOMPackingByTote', @c_Option5, @c_ECOMPackingByTote)   --WL29
       END
    END
 
@@ -630,7 +646,7 @@ BEGIN
       -- Set optional configuration
       SET @c_SQLCond = ' WHERE (PICKDETAIL.CaseID = '''' OR PICKDETAIL.CaseID IS NULL)'
 
-      IF @c_PackECOM = 'N'
+      IF @c_PackECOM = 'N' OR @c_ECOMPackingByTote = 'Y'   --WL29
       BEGIN
          SET @c_SQLCond = @c_SQLCond + ' AND ORDERS.DocType = ''N'''
       END
@@ -819,7 +835,6 @@ BEGIN
                ,cz.Dim3
                ,CartonDefault = 1
          FROM @t_CTNZ AS cz
-
          WHERE cz.CartonizationGroup = @c_CTNGroup
          ORDER BY cz.RowID
 
@@ -832,7 +847,7 @@ BEGIN
          ORDER BY cz.RowID
 
          -- B2C
-         IF @c_DocType = 'E'
+         IF @c_DocType = 'E' AND @c_ECOMPackingByTote = 'N'   --WL29
          BEGIN
             INSERT INTO #CTNZ
             (
@@ -1198,7 +1213,7 @@ BEGIN
                SET @b_NewCarton = 1
 
                --WL22 S
-               IF @c_DocType = 'E'
+               IF @c_DocType = 'E' AND @c_ECOMPackingByTote = 'N'   --WL29
                BEGIN
                   SELECT @b_API = IIF(ISNUMERIC(cl1.UDF02) = 1, cl1.UDF02, 0)
                   FROM @TMP_CL cl1
