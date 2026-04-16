@@ -1,4 +1,3 @@
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -9,7 +8,7 @@ GO
 /* Copyright: MAERSK                                                    */
 /* Written by:Surya                                                     */
 /*                                                                      */
-/* Purpose:  Pre-Allocation Strategy of REDBULL FCR-10743               */                                                        */
+/* Purpose:  Pre-Allocation Strategy of REDBULL FCR-10743               */
 /* Input Parameters:  @c_storerkey char                                 */
 /*                    @c_sku char                                       */
 /*                    @c_lot char                                       */
