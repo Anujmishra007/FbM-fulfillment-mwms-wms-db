@@ -1976,7 +1976,7 @@ BEGIN
          BEGIN TRY
             UPDATE dbo.PackDetail 
             SET
-               LabelNo = @cActUCCNo,
+               RefNo = @cActUCCNo,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
             WHERE PickSlipNo = @cPickSlipNo
@@ -2015,7 +2015,7 @@ BEGIN
          BEGIN TRY
             UPDATE dbo.PackDetail 
             SET
-               LabelNo = @cTaskUCCNo,
+               RefNo = @cTaskUCCNo,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
             WHERE PickSlipNo = @cPickSlipNo
