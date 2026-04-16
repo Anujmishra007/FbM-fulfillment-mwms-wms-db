@@ -27,7 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2026-03-09  Wan      1.0   Created                                   */
 /************************************************************************/
-CREATE OR ALTER PROC dbo.mspPutA01
+CREATE OR ALTER PROC dbo.mspPutA01 
    @c_UserID            NVARCHAR(128)  = ''
 ,  @c_Storerkey         NVARCHAR(15)   
 ,  @c_Lot               NVARCHAR(10)   = ''
@@ -224,7 +224,7 @@ BEGIN
       SET @c_UserID = dbo.Fnc_GetUserName()
    END
   
-   SET @c_ReceiptLineNumber  = ''
+   --SET @c_ReceiptLineNumber  = ''
 
    IF @c_Sku > '' 
    BEGIN
@@ -715,6 +715,10 @@ BEGIN
                          + ',@n_Qty INT '
                          + ',@n_LPNLeftToFulfill INT '
                          + ',@n_Pallet INT'
+                         + ',@c_Receiptkey NVARCHAR(10)'                            --2026-04-16
+                         + ',@c_ReceiptlineNumber NVARCHAR(5)'                      --2026-04-16
+                         + ',@c_FromLoc NVARCHAR(10)'                               --2026-04-16
+                         + ',@c_ID NVARCHAR(18)'                                    --2026-04-16
                          + ',@b_Proceed BIT OUTPUT'
 
          EXEC sp_ExecuteSQL @c_SQLSkipPAType
@@ -725,11 +729,18 @@ BEGIN
                            ,@n_Qty
                            ,@n_LPNLeftToFulfill
                            ,@n_Pallet
+                           ,@c_Receiptkey                                           --2026-04-16
+                           ,@c_ReceiptlineNumber                                    --2026-04-16
+                           ,@c_FromLoc                                              --2026-04-16
+                           ,@c_ID                                                   --2026-04-16
                            ,@b_Proceed OUTPUT
 
          IF @b_Debug = 1
          BEGIN
             PRINT '@b_Proceed: ' + @c_SQLSkipPAType
+            PRINT '@c_Receiptkey: ' + @c_Receiptkey + 
+                  ',@c_ReceiptlineNumber: ' + @c_ReceiptlineNumber +
+                  ',@c_ID: ' + @c_ID
             PRINT @b_Proceed
          END
 
@@ -747,7 +758,7 @@ BEGIN
             + ', @c_PAType: ' + @c_PAType
       END
 
-      IF @c_PAType <> 'EmptyLoc' 
+      IF @c_PAType NOT IN ('EmptyLoc','PADefaultLoc')                                 --2026-04-16
       BEGIN
          SET @c_SQLCond = @c_SQLCond_Sku + @c_SQLCond_PA + @c_SQLCond
       END
@@ -768,6 +779,21 @@ BEGIN
  
       SET @c_ToLoc = ''
       SET @n_AvailablePASlot = 0
+      IF @c_PAType = 'PADefaultLoc'                                                 --2026-04-16
+      BEGIN
+         IF @c_SQLCond = ''
+         BEGIN
+            SET @c_SQLCond = ' AND 1 = 2'
+         END
+
+         SET @c_SQL = 
+         + N'SELECT TOP 1 @c_ToLoc = LOC.Loc'
+         +              ',@n_AvailablePASlot = LOC.MaxPallet' 
+         + ' FROM  #TMP_PALOC as tpa'
+         + ' JOIN LOC (NOLOCK) ON LOC.Loc = tpa.LOC'
+         + ' WHERE 1 = 1' 
+         + @c_SQLCond
+      END
       IF @c_PAType = 'MatchLPNAttrib' 
       BEGIN
          --Find Same Friend
@@ -828,6 +854,9 @@ BEGIN
                       +', @dt_Lottable15  DATETIME'
                       +', @n_Qty          INT'
                       +', @n_LPNLeftToFulfill   INT'
+                      +', @c_Facility     NVARCHAR(5)'                              --2026-04-16
+                      +', @c_Receiptkey   NVARCHAR(10)'                             --2026-04-16
+                      +', @c_ReceiptLineNumber  NVARCHAR(5)'                        --2026-04-16
                       +', @c_ToLoc        NVARCHAR(10)   OUTPUT' 
                       +', @n_AvailablePASlot INT         OUTPUT'
                         
@@ -852,6 +881,9 @@ BEGIN
                         ,@dt_Lottable15 
                         ,@n_Qty
                         ,@n_LPNLeftToFulfill
+                        ,@c_Facility                                                --2026-04-16
+                        ,@c_Receiptkey                                              --2026-04-16
+                        ,@c_ReceiptLineNumber                                       --2026-04-16
                         ,@c_ToLoc            OUTPUT
                         ,@n_AvailablePASlot  OUTPUT
 
@@ -859,6 +891,11 @@ BEGIN
       BEGIN
          PRINT '@c_PAType: ' + @c_PAType
              + ',@c_SQL: ' + @c_SQL
+      END
+
+      IF @c_PAType = 'PADefaultLoc' AND @c_ToLoc = ''                               --2026-04-16
+      BEGIN
+         SET @n_Continue = 4
       END
  
       IF @c_ToLoc > ''

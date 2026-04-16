@@ -282,6 +282,7 @@ BEGIN
 
       IF @b_Debug = 1
       BEGIN
+         PRINT '@c_LPNAttribPAGrp: ' + @c_LPNAttribPAGrp         
          PRINT '@c_PAGrpSortBy: ' + @c_PAGrpSortBy
          SELECT --TOP 1 WITH TIES
                 rd.GrpNo
@@ -456,8 +457,10 @@ BEGIN
          BEGIN
             IF @b_Debug = 1
             BEGIN
-               PRINT '@c_FromID: ' + @c_FromID
-                 + ', @n_LPNLeftToFulfill: ' + CAST( @n_LPNLeftToFulfill AS NVARCHAR)
+               PRINT '@c_FromID: ' + @c_FromID  
+                 + ', @c_ReceiptLineNumber: ' + @c_ReceiptLineNumber
+                 + ', @n_LPNLeftToFulfill: ' + CAST( @n_LPNLeftToFulfill AS NVARCHAR) 
+                 + ', @n_QtyReceived : ' + CAST( @n_QtyReceived AS NVARCHAR) 
             END
 
             SET @c_SQL = ' ' + @c_PutACode + ' '
@@ -571,9 +574,10 @@ BEGIN
             IF @n_Continue = 1
             BEGIN
                SET @b_ManualBreak = 1                                               --2026-03-27
-               SET @c_ReceiptLineNumber = ''
+               --SET @c_ReceiptLineNumber = ''                                      --2026-04-16  
                SET @CUR_PAID = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                SELECT   rd.ReceiptKey
+                     ,  MIN(rd.ReceiptLineNumber)                                   --2026-04-16               
                      ,  rd.StorerKey
                      ,  rd.Sku
                      ,  rd.ToLoc
@@ -594,11 +598,12 @@ BEGIN
                      ,  rd.ToID
                      ,  rd.GrpSortBy
                ORDER BY rd.GrpSortBy
-                      , MIN(rd.ReceiptLineNumber)
+                     ,  MIN(rd.ReceiptLineNumber)                                         
                      
 
                OPEN @CUR_PAID 
                FETCH NEXT FROM @CUR_PAID INTO @c_ReceiptKey 
+                                           ,  @c_ReceiptLineNumber                  --2026-04-16                 
                                            ,  @c_Storerkey, @c_Sku 
                                            ,  @c_FromLoc, @c_FromID, @n_QtyReceived
 
@@ -607,7 +612,7 @@ BEGIN
                   SET @b_ManualBreak = 0                                            --2026-03-27
                   SET @n_PendingMoveIn = 0
 
-                  IF @c_ToLoc > '' 
+                  IF @c_ToLoc > ''   
                   BEGIN
                      SET @n_PendingMoveIn = @n_QtyReceived
                   END
@@ -743,10 +748,11 @@ BEGIN
                         SET @n_LPNLeftToFulfill = @n_LPNLeftToFulfill - 1
                      END
                   END
-
+   
                   FETCH NEXT FROM @CUR_PAID INTO @c_ReceiptKey 
-                                              ,  @c_Storerkey, @c_Sku
-                                              ,  @c_FromLoc, @c_FromID, @n_QtyReceived
+                                                ,@c_ReceiptLineNumber               --2026-04-16                    
+                                                ,@c_Storerkey, @c_Sku
+                                                ,@c_FromLoc, @c_FromID, @n_QtyReceived
                END
                CLOSE @CUR_PAID
                DEALLOCATE @CUR_PAID
