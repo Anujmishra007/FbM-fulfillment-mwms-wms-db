@@ -783,7 +783,10 @@ BEGIN
 
          WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
          BEGIN
-            SET @b_NewCarton = 1
+            IF @n_HardCTNGrpNo_P <> @n_HardCTNGrpNo
+            BEGIN
+               SET @b_NewCarton = 1
+            END
 
             SELECT @b_API = IIF(ISNUMERIC(cl1.UDF02) = 1, cl1.UDF02, 0)
             FROM @TMP_CL cl1
