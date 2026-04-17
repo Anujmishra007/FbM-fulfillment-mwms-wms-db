@@ -149,6 +149,20 @@ BEGIN
                   GOTO Quit
                END
 
+               -- Config exists: If all LONG (FixedLength) values are NULL/0, validate ampersand count
+               IF NOT EXISTS (SELECT 1 FROM @tDecodeConfig WHERE ISNULL(FixedLength, 0) > 0)
+               BEGIN
+                  DECLARE @nAmpersandCount INT
+                  SET @nAmpersandCount = LEN(@cBarcode) - LEN(REPLACE(@cBarcode, '&', ''))
+
+                  IF @nAmpersandCount <> 4
+                  BEGIN
+                     SET @nErrNo = 260357  -- Invalid QR format
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END
+
                IF @nDebugFlag = 1
                   SELECT 'Config' AS Debug, * FROM @tDecodeConfig ORDER BY SeqNo
 
