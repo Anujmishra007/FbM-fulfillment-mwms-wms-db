@@ -61,7 +61,8 @@ BEGIN
    DECLARE @cLoopID                 NVARCHAR(18)
    DECLARE @nLoopQTY                INT
    DECLARE @cFromLOC                NVARCHAR(10)
-   DECLARE @cMoveQTYAlloc            NVARCHAR(1)
+   DECLARE @cMoveQTYAlloc           NVARCHAR(1)
+   DECLARE @cPackStatus             NVARCHAR(1)
 
    SET @cOrderKey = ''      
    SET @cLoadKey = ''      
@@ -215,86 +216,96 @@ BEGIN
    IF @nDebugFlag = 1
       SELECT 'Set Move FromDropID flag'
 
-   IF @cPackByFromDropID = '1' AND ISNULL (@cFromDropID, '') <> ''
+   SELECT @cPackStatus = Status FROM dbo.PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey
+
+   IF ISNULL(@cPackStatus,'') <> '9'
    BEGIN
-      SELECT @nFromDropID_PickQty = ISNULL(SUM(QTY), 0)
-      FROM dbo.PickDetail WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-      AND DropID = @cFromDropID
-      AND Status = @cPickStatus
-
-      SELECT @nFromDropID_PackQty = ISNULL(SUM(QTY), 0)
-      FROM dbo.PackDetail WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-      AND DropID = @cFromDropID
-
-      IF @nFromDropID_PickQty = @nFromDropID_PackQty
+      IF @cPackByFromDropID = '1' AND ISNULL (@cFromDropID, '') <> ''
       BEGIN
-         IF NOT EXISTS (SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) 
-                  WHERE StorerKey = @cStorerKey
-                     AND DropID = @cFromDropID
-                     AND UOM = '2')
-         BEGIN --UOM6 packing
-            IF @nDebugFlag = 1
-               SELECT 'UOM6 Packing'
+         SELECT @nFromDropID_PickQty = ISNULL(SUM(QTY), 0)
+         FROM dbo.PickDetail WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+         AND DropID = @cFromDropID
+         AND Status = @cPickStatus
 
+         SELECT @nFromDropID_PackQty = ISNULL(SUM(QTY), 0)
+         FROM dbo.PackDetail WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+         AND DropID = @cFromDropID
+
+         IF @nFromDropID_PickQty = @nFromDropID_PackQty
+         BEGIN
             IF NOT EXISTS (SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) 
-                           WHERE StorerKey = @cStorerKey
-                              AND DropID = @cFromDropID
-                              AND CaseId = ''
-                              AND Status = @cPickStatus)
-            BEGIN
-               SET @cMoveQTYAlloc = rdt.RDTGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
-
-               IF @cMoveQTYAlloc <> '1'
-               BEGIN
-                  SET @nErrNo = 262655
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                  GOTO Quit
-               END
-
+                     WHERE StorerKey = @cStorerKey
+                        AND DropID = @cFromDropID
+                        AND UOM = '2')
+            BEGIN --UOM6 packing
                IF @nDebugFlag = 1
-                  SELECT 'Set MoveInvFlag = 1'
-               SET @cMoveInvFlag = '1' 
-            END
+                  SELECT 'UOM6 Packing'
+
+               IF NOT EXISTS (SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) 
+                              WHERE StorerKey = @cStorerKey
+                                 AND DropID = @cFromDropID
+                                 AND CaseId = ''
+                                 AND Status = @cPickStatus)
+               BEGIN
+                  SET @cMoveQTYAlloc = rdt.RDTGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
+
+                  IF @cMoveQTYAlloc <> '1'
+                  BEGIN
+                     SET @nErrNo = 262655
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF @nDebugFlag = 1
+                     SELECT 'Set MoveInvFlag = 1'
+                  SET @cMoveInvFlag = '1' 
+               END
+               ELSE
+               BEGIN
+                  IF @nDebugFlag = 1
+                     SELECT 'FromDropId still exists in PKD'
+               END
+            END -- UOM6 Packing
             ELSE
             BEGIN
                IF @nDebugFlag = 1
-                  SELECT 'FromDropId still exists in PKD'
-            END
-         END -- UOM6 Packing
+                  SELECT 'UCC Packing, update pkd to 5'
+
+               BEGIN TRY
+                  UPDATE dbo.PickDetail WITH (ROWLOCK)
+                  SET 
+                     Status = '5',
+                     EditWho = SUSER_SNAME(),
+                     EditDate = GETDATE()
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cFromDropID
+                     AND Status = @cPickStatus
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 262658
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  GOTO Quit
+               END CATCH
+            END -- UCC packing
+         END
          ELSE
          BEGIN
             IF @nDebugFlag = 1
-               SELECT 'UCC Packing, update pkd to 5'
-
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH (ROWLOCK)
-               SET 
-                  Status = '5',
-                  EditWho = SUSER_SNAME(),
-                  EditDate = GETDATE()
-               WHERE StorerKey = @cStorerKey
-                  AND DropID = @cFromDropID
-                  AND Status = @cPickStatus
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 262658
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-               GOTO Quit
-            END CATCH
-         END -- UCC packing
+               SELECT 'PickQty <> PackQty', @nFromDropID_PickQty AS PickQty, @nFromDropID_PackQty AS PackQty
+         END
       END
       ELSE
       BEGIN
          IF @nDebugFlag = 1
-            SELECT 'PickQty <> PackQty', @nFromDropID_PickQty AS PickQty, @nFromDropID_PackQty AS PackQty
+            SELECT 'PackByFromDropID is off, or FromDropID is empty'
       END
-   END
+   END -- pack status = 9
    ELSE
    BEGIN
       IF @nDebugFlag = 1
-         SELECT 'PackByFromDropID is off, or FromDropID is empty'
+            SELECT 'Pack was closed. No need to move'
    END
    --V1.1 end      
 
@@ -384,6 +395,9 @@ BEGIN
  
       WHILE @@FETCH_STATUS = 0
       BEGIN
+         IF @nDebugFlag = 1
+            SELECT 'Moving', @cLoopCaseID AS CaseID, @cLoopSKU, @cLoopLot, @nLoopQTY, @cLoopID AS FromID
+
          EXECUTE rdt.rdt_Move
             @nMobile     = @nMobile,
             @cLangCode   = @cLangCode,
@@ -738,6 +752,26 @@ BEGIN
             END    
          END    
       END
+
+      --Show packing complet message for B2B order
+      IF EXISTS (SELECT 1 
+                  FROM dbo.Orders WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND OrderKey = @cOrderKey
+                     AND doctype = 'N')
+      AND ISNULL(@cOrderKey, '') <> ''
+      BEGIN
+         DECLARE @cMsg01   NVARCHAR (60)
+         SET @cMsg01 = 'B2B Order: '+ @cOrderKey
+
+         EXEC rdt.rdtInsertMsgQueue 
+            @nMobile = @nMobile, 
+            @nErrNo  = @nErrNo OUTPUT, 
+            @cErrMsg = @cErrMsg OUTPUT, 
+            @cLine01 = @cMsg01, 
+            @cLine02 = 'Packing complete',
+            @nDisplayMsg = 0
+      END
     
       --abs    
       IF NOT EXISTS ( SELECT 1       
@@ -780,7 +814,9 @@ BEGIN
       
 RollBackTran:      
    ROLLBACK TRAN rdt_838PackCfmSP12 -- Only rollback change made here      
-Quit:      
+Quit:
+   IF @nDebugFlag = 1
+      SELECT 'Quit', @nErrNo, @cErrMsg      
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started      
       COMMIT TRAN      
       
