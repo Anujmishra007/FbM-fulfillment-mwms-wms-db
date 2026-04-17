@@ -17,12 +17,9 @@ EXECUTE rdt.rdtAddScn 6826, 'ENG',
    ,@cLine02 = '%20d01'
    ,@cLine03 = ''
    ,@cLine05 = 'Shipping VAS Task '
-   ,@cLine06 = 'Code: '
+   ,@cLine06 = 'Code & Desc: '
    ,@cLine07 = '%20d02'
    ,@cLine08 = ''
-   ,@cLine09 = 'Shipping VAS Task '
-   ,@cLine10 = 'Description: '
-   ,@cLine11 = '%20d03'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["5","6","7"],"3":["9","10","11"]}'
    ,@nFunc = 1641

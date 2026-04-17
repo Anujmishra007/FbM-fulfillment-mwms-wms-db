@@ -196,14 +196,12 @@ BEGIN
                END
 
                SELECT
-                  @cOutField02 = LEFT(DOCINFO.Data, CHARINDEX('-',DOCINFO.Data)-1), --Vas Task Code
-                  @cOutField03 = RIGHT(DOCINFO.Data, LEN(DOCINFO.Data) - CHARINDEX('-', DOCINFO.Data)) -- Vas Task Description
+                  @cOutField02 =  LEFT(DOCINFO.Data,20) --Vas Task Code
                FROM dbo.DocInfo WITH(NOLOCK)
                WHERE DOCINFO.Key2 = @cOrderKey
                   AND DOCINFO.StorerKey = @cStorerKey
                   AND DOCINFO.TableName = 'ORDERS'   
                   AND DocInfo.Key3 = 'Z017'
-                  AND CHARINDEX('-', DOCINFO.Data) > 0
 
                SET @cScannedDropID = @cFromID
                SET @cOutField01 = @cFromID
