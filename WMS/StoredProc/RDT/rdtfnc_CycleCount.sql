@@ -151,6 +151,7 @@ GO
 /*                           barcode type (james33)                     */
 /* 18-Sep-2025 6.8  James    FCR-2614 Fix uom conversion issue (james34)*/
 /*                           Add decodesp to add new ucc step           */
+/* 17-04-2026  6.9  NYE018  FCR-9688 error handling after decode        */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -6776,6 +6777,13 @@ BEGIN
                      @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
                      @nErrNo        OUTPUT, @cErrMsg        OUTPUT
 
+                  -- Check decode error
+                  IF ISNULL(@nErrNo, 0) <> 0  -- FCR-9688
+                  BEGIN
+                     SET @cNewSKU = ''
+                     GOTO SKU_Add_Sku_Fail
+                  END
+
                   IF ISNULL( @cUPC, '') <> ''
                      SET @cNewSKU = @cUPC
                END
@@ -6918,6 +6926,13 @@ BEGIN
                   @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
                   @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
                   @nErrNo        OUTPUT, @cErrMsg        OUTPUT
+
+               -- Check decode error
+               IF ISNULL(@nErrNo, 0) <> 0  -- FCR-9688
+               BEGIN
+                  SET @cNewSKU = ''
+                  GOTO SKU_Add_Sku_Fail
+               END
 
                IF ISNULL( @cUPC, '') <> ''
                   SET @cNewSKU = @cUPC
@@ -9406,6 +9421,12 @@ BEGIN
 
                   IF ISNULL( @cUPC, '') <> ''
                      SET @cNewSKU = @cUPC
+
+                  IF ISNULL(@nErrNo, 0) <> 0  -- FCR-9688
+                  BEGIN
+                     SET @cNewSKU = ''
+                     GOTO SINGLE_SKU_Sku_Scan_Fail
+                  END
                END
             END   -- End for DecodeSP
 
@@ -9548,6 +9569,12 @@ BEGIN
 
                IF ISNULL( @cUPC, '') <> ''
                   SET @cNewSKU = @cUPC
+               
+               IF ISNULL(@nErrNo, 0) <> 0  -- FCR-9688
+               BEGIN
+                  SET @cNewSKU = ''
+                  GOTO SINGLE_SKU_Sku_Scan_Fail
+               END
             END
          END   -- End for DecodeSP
 
@@ -10688,6 +10715,13 @@ BEGIN
                      @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
                      @nErrNo        OUTPUT, @cErrMsg        OUTPUT
 
+                  -- Check decode error
+                  IF ISNULL(@nErrNo, 0) <> 0  -- FCR-9688
+                  BEGIN
+                     SET @cNewSKU = ''
+                     GOTO SINGLE_SKU_Increase_Qty_Fail
+                  END
+
                   IF ISNULL( @cUPC, '') <> ''
                      SET @cNewSKU = @cUPC
                END
@@ -10829,6 +10863,14 @@ BEGIN
                   @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
                   @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
                   @nErrNo        OUTPUT, @cErrMsg        OUTPUT
+
+               -- Check decode error
+               IF ISNULL(@nErrNo, 0) <> 0  -- FCR-9688
+               BEGIN
+                  SET @cNewSKU = ''
+                  GOTO SINGLE_SKU_Increase_Qty_Fail
+               END
+
 
                IF ISNULL( @cUPC, '') <> ''
                   SET @cNewSKU = @cUPC
@@ -15208,6 +15250,13 @@ BEGIN
 
                      IF ISNULL( @cUPC, '') <> ''
                         SET @cValidateSKU = @cUPC
+                     
+                     -- Check decode error
+                     IF ISNULL(@nErrNo, 0) <> 0 -- FCR-9688
+                     BEGIN
+                        SET @cValidateSKU = ''
+                        GOTO SINGLE_SKU_Increase_Qty_Fail
+                     END
                   END
                END   -- End for DecodeSP
 
@@ -15353,6 +15402,13 @@ BEGIN
 
                   IF ISNULL( @cUPC, '') <> ''
                      SET @cValidateSKU = @cUPC
+
+                  IF ISNULL(@nErrNo, 0) <> 0 -- FCR-9688
+                  BEGIN
+                     SET @cValidateSKU = ''
+                     GOTO SINGLE_SKU_Increase_Qty_Fail
+                  END
+
                END
             END   -- End for DecodeSP
 
