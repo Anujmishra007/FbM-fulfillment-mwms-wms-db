@@ -148,7 +148,7 @@ BEGIN
 
 
 
-		 Update sQty set QtyToReplen = Max from #skuQtyVivo sQty
+		    Update sQty set QtyToReplen = Max-sQty.QtyAvailable  from #skuQtyVivo sQty
         WHERE  sQty.QtyAvailable < sQty.Qty AND sQty.QtyAvailable > Min AND sQty.Priority = '9'
 
         Update sQty set sQty.Priority = 5 from #skuQtyVivo sQty
@@ -157,7 +157,21 @@ BEGIN
         Update sQty set QtyToReplen = sQty.Qty-sQty.QtyAvailable from #skuQtyVivo sQty
         WHERE sQty.Loc = '' AND sQty.QtyAvailable < sQty.Qty AND sQty.Priority = '7'
 
-
+        DELETE s
+        FROM #skuQtyVivo s
+        WHERE EXISTS (
+            SELECT 1
+            FROM (
+                SELECT t.Sku, SUM(t.Qty) AS TotalQty
+                FROM TaskDetail t WITH (NOLOCK)
+                WHERE StorerKey = @c_StorerKey
+                      AND TaskType = 'RPF'
+                      AND Status IN ('Q', '0', '1', '3')
+                GROUP BY t.Sku
+            ) agg
+            WHERE agg.Sku = s.Sku
+             AND agg.TotalQty >= s.QtyToReplen
+        )
 
        IF OBJECT_ID('tempdb..#replenVivo','u') IS NOT NULL
            BEGIN
@@ -197,7 +211,7 @@ BEGIN
                    AND LOC.Status = 'OK'
                    AND LOC.Facility = @c_Facility
                    AND LOC.LocationType = @c_DynamicPickLocType
-                   AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC)
+                   AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC )
                    GROUP BY LOC.LOC
                    ORDER BY LOC.LOC
 
@@ -322,7 +336,7 @@ BEGIN
    IF @n_continue = 1
    BEGIN
       -- Do not execute it Replenishment Task not done yet
-                UPDATE r
+               UPDATE r
                 SET r.Status = 'ELIGIBLE' -- or any column you want to update
                 FROM #replenVivo r
                 WHERE NOT EXISTS (
@@ -347,7 +361,8 @@ BEGIN
 
         DECLARE CUR_REPLENISH CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
         SELECT  Sku, fromLoc, Loc, fromId, fromLot, Qty,UOM,PackKey,priority FROM #replenVivo
-         WHERE  Status = 'ELIGIBLE'
+        WHERE Status = 'ELIGIBLE'
+
         OPEN CUR_REPLENISH
 
        FETCH NEXT FROM CUR_REPLENISH INTO @c_Sku,@c_FromLOC , @c_Loc, @c_FromId,@c_FromLot,@n_Qty, @c_UOM, @c_PackKey,@c_Priority
@@ -413,14 +428,14 @@ BEGIN
   BEGIN
             BEGIN TRY
             UPDATE TD
-            SET TD.Priority = sqv.Priority
+            SET TD.Priority = '5',TD.SourcePriority = '5'
             FROM TASKDETAIL TD WITH (ROWLOCK)
             JOIN #skuQtyVivo sqv ON
                 TD.Sku = sqv.Sku AND
                 TD.ToLoc = sqv.Loc AND
                 TD.StorerKey = @c_StorerKey
             WHERE
-                sqv.Priority = '5' AND
+                sqv.Priority =  '9' AND
                 TD.TaskType = 'RPF' AND
                 TD.Status NOT IN ('X','9') AND
                 TD.SourcePriority = '9'
