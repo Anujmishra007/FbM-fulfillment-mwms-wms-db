@@ -1,0 +1,502 @@
+name: Prod DB vs Repo Release (EUR)
+
+on:
+  workflow_dispatch:
+    inputs:
+      database_name:
+        description: 'Select the WMS DB to compare'
+        required: true
+        type: choice
+        options:
+          - GBRWMS
+          - IRLWMS
+          - IRLV1WMS
+          - SENWMS
+          - TGOWMS
+          - NLDWMS
+          - HRVWMS
+          - DEUWMS
+          - DEUV1WMS
+          - ESPWMS
+          - DNKWMS
+          - SWEV1WMS
+          - CMRWMS
+          - NGAWMS
+          - BELWMS
+          - CZEWMS
+          - ZAFWMS
+          - ZAFV1WMS
+          - SAUWMS
+          - KENWMS
+          - TURV1WMS
+          - AREWMS
+      extract_objects:
+        description: 'Object types to extract and compare'
+        required: true
+        type: choice
+        default: 'all'
+        options:
+          - all
+          - StoredProc
+          - Function
+          - Views
+          - Tables
+          - Trigger
+          - Sequence
+
+permissions: write-all
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  WMSDB_NAME: ${{ inputs.database_name }}
+  WMSDB_METADATA_REPO: FbM-fulfillment-mwms-wms-db-metadata
+  DB_ADMIN_USER: admin_user
+  REGION: EUR
+  ENV_CODE: europe
+  RUNNER_LABEL: prod-weu-vm-management-agent
+
+jobs:
+  fetch-metadata:
+    runs-on: ubuntu-latest
+    name: Fetch ${{ inputs.database_name }} Metadata (EUR)
+    outputs:
+      DB_SERVER_NAME: ${{ steps.get-metadata.outputs.DB_SERVER_NAME }}
+      DB_CURRENT_VERSION: ${{ steps.get-metadata.outputs.DB_CURRENT_VERSION }}
+    steps:
+      - name: Fetch metadata from metadata repo
+        id: get-metadata
+        shell: pwsh
+        run: |
+          Write-Host "Fetching metadata for ${{ inputs.database_name }} from europe environment..."
+
+          $json_metadata = curl -L -s `
+            -H "Accept: application/vnd.github+json" `
+            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" `
+            -H "X-GitHub-Api-Version: 2022-11-28" `
+            "https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO }}/contents/metadata/wms/databases/v2/europe.json?ref=main" | jq -r '.content' | base64 -d | ConvertFrom-Json
+
+          Write-Host "Metadata retrieved successfully"
+
+          # Validate database exists in metadata
+          if ("${{ inputs.database_name }}" -in $json_metadata.databases.PSObject.Properties.name) {
+            Write-Host "[OK] Database ${{ inputs.database_name }} found in europe.json"
+          } else {
+            Write-Host "Available databases in europe.json:"
+            $json_metadata.databases.PSObject.Properties.name | ForEach-Object { Write-Host "  - $_" }
+            throw "Database ${{ inputs.database_name }} does not exist in europe.json"
+          }
+
+          # Extract DB details
+          $DB_SERVER_NAME = $json_metadata.databases."${{ inputs.database_name }}".Server_name
+          $DB_CURRENT_VERSION = $json_metadata.databases."${{ inputs.database_name }}".Database_Version
+
+          Write-Host "Database: ${{ inputs.database_name }}"
+          Write-Host "Server: $DB_SERVER_NAME"
+          Write-Host "Current Version: $DB_CURRENT_VERSION"
+
+          # Set outputs
+          "DB_SERVER_NAME=$DB_SERVER_NAME" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "DB_CURRENT_VERSION=$DB_CURRENT_VERSION" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Display metadata summary
+        shell: pwsh
+        run: |
+          $summaryFile = $env:GITHUB_STEP_SUMMARY
+
+          Add-Content $summaryFile "## ${{ inputs.database_name }} Database Metadata" -Encoding UTF8
+          Add-Content $summaryFile "" -Encoding UTF8
+          Add-Content $summaryFile "| Property | Value |" -Encoding UTF8
+          Add-Content $summaryFile "|----------|-------|" -Encoding UTF8
+          Add-Content $summaryFile "| Environment | Prod EUR |" -Encoding UTF8
+          Add-Content $summaryFile "| Database | ${{ inputs.database_name }} |" -Encoding UTF8
+          Add-Content $summaryFile "| Server | ${{ steps.get-metadata.outputs.DB_SERVER_NAME }} |" -Encoding UTF8
+          Add-Content $summaryFile "| Current Version | ${{ steps.get-metadata.outputs.DB_CURRENT_VERSION }} |" -Encoding UTF8
+
+  compare-db-vs-repo:
+    runs-on: prod-weu-vm-management-agent
+    needs: [fetch-metadata]
+    name: Compare ${{ inputs.database_name }} DB vs Release Branch
+    env:
+      DB_SERVER_NAME: ${{ needs.fetch-metadata.outputs.DB_SERVER_NAME }}
+      DB_CURRENT_VERSION: ${{ needs.fetch-metadata.outputs.DB_CURRENT_VERSION }}
+      DB_ADMIN_PASSWORD: ${{ secrets.CDT_DB_ADMIN_USER_PASSWORD }}
+
+    steps:
+      - name: Display configuration
+        run: |
+          echo "=============================================="
+          echo "DB vs Repo Comparison Configuration"
+          echo "=============================================="
+          echo "Environment: Prod EUR"
+          echo "ENV_CODE: europe"
+          echo "Database: ${{ env.WMSDB_NAME }}"
+          echo "Server: ${{ env.DB_SERVER_NAME }}"
+          echo "Current Version: ${{ env.DB_CURRENT_VERSION }}"
+          echo "Objects to Extract: ${{ inputs.extract_objects }}"
+          echo "=============================================="
+
+      - name: Checkout Release Branch
+        uses: actions/checkout@v4
+        with:
+          ref: release
+          fetch-depth: 0
+
+      - name: Install PowerShell
+        uses: PSModule/install-powershell@v1
+
+      - name: Install required PowerShell modules
+        shell: pwsh
+        run: |
+          $modules = @('SqlServer', 'PSScriptAnalyzer')
+          foreach ($module in $modules) {
+              if (-not (Get-Module -ListAvailable -Name $module)) {
+                  Write-Host "Installing $module..."
+                  Set-PSRepository PSGallery -InstallationPolicy Trusted
+                  Install-Module $module -ErrorAction Stop -Force
+              } else {
+                  Write-Host "$module is already installed. Skipping..."
+              }
+          }
+
+      - name: Check Python Installation
+        id: check-python
+        shell: bash
+        run: |
+          if command -v python3 &> /dev/null; then
+            PYTHON_VERSION=$(python3 --version)
+            echo "Python already installed: $PYTHON_VERSION"
+            echo "python_cmd=python3" >> $GITHUB_OUTPUT
+          elif command -v python &> /dev/null; then
+            PYTHON_VERSION=$(python --version)
+            echo "Python already installed: $PYTHON_VERSION"
+            echo "python_cmd=python" >> $GITHUB_OUTPUT
+          else
+            echo "Python not found"
+            echo "python_cmd=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          PYTHON_CMD="${{ steps.check-python.outputs.python_cmd }}"
+          if [ -z "$PYTHON_CMD" ]; then
+            echo "Error: Python is not installed on this runner"
+            exit 1
+          fi
+          echo "Using $PYTHON_CMD"
+          $PYTHON_CMD -m pip install --upgrade pip
+          $PYTHON_CMD -m pip install openpyxl pandas
+
+      - name: Create output directories
+        run: |
+          mkdir -p ./db_extracted/StoredProc
+          mkdir -p ./db_extracted/Function
+          mkdir -p ./db_extracted/Views
+          mkdir -p ./db_extracted/Tables
+          mkdir -p ./db_extracted/Trigger
+          mkdir -p ./db_extracted/Sequence
+          mkdir -p ./db_extracted/Jobs
+          mkdir -p ./comparison_output
+          mkdir -p ./logs
+
+      - name: Create DB Credential
+        id: create-credential
+        shell: pwsh
+        run: |
+          $securePassword = ConvertTo-SecureString "${{ env.DB_ADMIN_PASSWORD }}" -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential("${{ env.DB_ADMIN_USER }}", $securePassword)
+          $credential | Export-Clixml -Path ./db_credential.xml
+          Write-Host "Credential created successfully"
+
+      - name: Extract Stored Procedures
+        if: ${{ inputs.extract_objects == 'all' || inputs.extract_objects == 'StoredProc' }}
+        shell: pwsh
+        run: |
+          Write-Host "Extracting Stored Procedures from ${{ env.WMSDB_NAME }} on ${{ env.DB_SERVER_NAME }}..."
+          $credential = Import-Clixml -Path ./db_credential.xml
+          ./.github/scripts/compare/Export-SQLServerStoredProcs.ps1 `
+            -ServerInstance "${{ env.DB_SERVER_NAME }}" `
+            -Database "${{ env.WMSDB_NAME }}" `
+            -OutputDirectory "./db_extracted/StoredProc" `
+            -Credential $credential
+          Write-Host "Stored Procedures extraction completed"
+
+      - name: Extract Functions
+        if: ${{ inputs.extract_objects == 'all' || inputs.extract_objects == 'Function' }}
+        shell: pwsh
+        run: |
+          Write-Host "Extracting Functions from ${{ env.WMSDB_NAME }} on ${{ env.DB_SERVER_NAME }}..."
+          $credential = Import-Clixml -Path ./db_credential.xml
+          ./.github/scripts/compare/Export-SQLServerFunctions.ps1 `
+            -ServerInstance "${{ env.DB_SERVER_NAME }}" `
+            -Database "${{ env.WMSDB_NAME }}" `
+            -OutputDirectory "./db_extracted/Function" `
+            -Credential $credential
+          Write-Host "Functions extraction completed"
+
+      - name: Extract Views
+        if: ${{ inputs.extract_objects == 'all' || inputs.extract_objects == 'Views' }}
+        shell: pwsh
+        run: |
+          Write-Host "Extracting Views from ${{ env.WMSDB_NAME }} on ${{ env.DB_SERVER_NAME }}..."
+          $credential = Import-Clixml -Path ./db_credential.xml
+          ./.github/scripts/compare/Export-SQLServerViews.ps1 `
+            -ServerInstance "${{ env.DB_SERVER_NAME }}" `
+            -Database "${{ env.WMSDB_NAME }}" `
+            -OutputDirectory "./db_extracted/Views" `
+            -Credential $credential
+          Write-Host "Views extraction completed"
+
+      - name: Extract Tables
+        if: ${{ inputs.extract_objects == 'all' || inputs.extract_objects == 'Tables' }}
+        shell: pwsh
+        run: |
+          Write-Host "Extracting Tables from ${{ env.WMSDB_NAME }} on ${{ env.DB_SERVER_NAME }}..."
+          $credential = Import-Clixml -Path ./db_credential.xml
+          ./.github/scripts/compare/Export-SQLServerTables.ps1 `
+            -ServerInstance "${{ env.DB_SERVER_NAME }}" `
+            -Database "${{ env.WMSDB_NAME }}" `
+            -OutputDirectory "./db_extracted/Tables" `
+            -Credential $credential
+          Write-Host "Tables extraction completed"
+
+      - name: Extract Triggers
+        if: ${{ inputs.extract_objects == 'all' || inputs.extract_objects == 'Trigger' }}
+        shell: pwsh
+        run: |
+          Write-Host "Extracting Triggers from ${{ env.WMSDB_NAME }} on ${{ env.DB_SERVER_NAME }}..."
+          $credential = Import-Clixml -Path ./db_credential.xml
+          ./.github/scripts/compare/Export-SQLServerTriggers.ps1 `
+            -ServerInstance "${{ env.DB_SERVER_NAME }}" `
+            -Database "${{ env.WMSDB_NAME }}" `
+            -OutputDirectory "./db_extracted/Trigger" `
+            -Credential $credential
+          Write-Host "Triggers extraction completed"
+
+      - name: Extract Sequences
+        if: ${{ inputs.extract_objects == 'all' || inputs.extract_objects == 'Sequence' }}
+        shell: pwsh
+        run: |
+          Write-Host "Extracting Sequences from ${{ env.WMSDB_NAME }} on ${{ env.DB_SERVER_NAME }}..."
+          $credential = Import-Clixml -Path ./db_credential.xml
+          ./.github/scripts/compare/Export-SQLServerSequences.ps1 `
+            -ServerInstance "${{ env.DB_SERVER_NAME }}" `
+            -Database "${{ env.WMSDB_NAME }}" `
+            -OutputDirectory "./db_extracted/Sequence" `
+            -Credential $credential
+          Write-Host "Sequences extraction completed"
+
+      - name: Extract SQL Agent Jobs
+        if: ${{ inputs.extract_objects == 'all' }}
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Write-Host "Extracting SQL Agent Jobs from ${{ env.WMSDB_NAME }} on ${{ env.DB_SERVER_NAME }}..."
+          $credential = Import-Clixml -Path ./db_credential.xml
+          ./.github/scripts/compare/Export-SQLServerJobs.ps1 `
+            -ServerInstance "${{ env.DB_SERVER_NAME }}" `
+            -Database "${{ env.WMSDB_NAME }}" `
+            -OutputDirectory "./db_extracted/Jobs" `
+            -Credential $credential
+          Write-Host "SQL Agent Jobs extraction completed"
+
+      - name: Cleanup Credential File
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path ./db_credential.xml) {
+            Remove-Item ./db_credential.xml -Force
+            Write-Host "Credential file cleaned up"
+          }
+
+      - name: Create Python Config
+        shell: bash
+        run: |
+          cat > ./.github/scripts/compare/config_workflow.py << 'EOF'
+          """
+          Auto-generated configuration for DB vs Repo comparison
+          Generated by GitHub Actions workflow
+          """
+
+          import os
+
+          # ============================================================================
+          # PATH CONFIGURATION
+          # ============================================================================
+
+          PROD_EXPORT_BASE = os.environ.get('PROD_EXPORT_PATH', './db_extracted')
+          V0_REPO_ROOT = os.environ.get('V0_REPO_ROOT', './')
+          V0_REPO_BASE = os.path.join(V0_REPO_ROOT, 'WMS')
+          V0_BRANCH = 'release'
+
+          SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+          REFERENCE_EXCEL = os.path.join(SCRIPT_DIR, 'metadata', 'Release_Comparison_04-11-26_23-22.xlsx')
+          OUTPUT_DIR = os.path.join(SCRIPT_DIR, "comparison_output")
+          OUTPUT_XLSX = os.path.join(OUTPUT_DIR, "DB_vs_Repo_Comparison.xlsx")
+
+          # ============================================================================
+          # OBJECT TYPES TO COMPARE
+          # ============================================================================
+
+          EXTRACT_INPUT = "${{ inputs.extract_objects }}"
+          if EXTRACT_INPUT == "all":
+              OBJECT_TYPES = ["StoredProc", "Function", "Trigger", "Sequence", "Views", "Tables"]
+          else:
+              OBJECT_TYPES = [EXTRACT_INPUT]
+
+          # ============================================================================
+          # OUTPUT SETTINGS
+          # ============================================================================
+
+          OUTPUT_SUBDIR = "comparison_output"
+          EXCEL_FILENAME_PREFIX = "DB_vs_Repo_Comparison"
+          HTML_DIFF_SUBDIR = "html_diffs"
+          SUMMARY_FILENAME = "Summary_Dashboard.html"
+
+          ENABLE_VERSION_DETECTION = True
+          ENABLE_COSMETIC_FILTERING = True
+          ENABLE_HTML_DIFFS = True
+          ENABLE_METADATA_IMPORT = True
+          SQL_FILE_EXTENSION = ".sql"
+          CREATE_BACKUP = False
+
+          EXCEL_COLUMNS = [
+              "Filename", "Status", "Production Path", "Repo Path",
+              "Production Latest Version", "Repo Latest Version",
+              "Version Comparison", "Version Difference",
+              "Production Version Count", "Repo Version Count",
+              "Production-Only Versions", "Repo-Only Versions",
+              "Content Difference", "Logic Difference", "Cosmetic Only",
+              "Change Classification", "Priority", "Risk Level",
+              "Manual Review Needed", "HTML Diff File",
+              "Category", "Domain", "Dev Domain", "Unified", "Unified Date",
+              "Analysis Notes", "Description"
+          ]
+
+          APPLY_EXCEL_FORMATTING = True
+          GENERATE_SUMMARY_STATS = True
+          MAX_FILE_SIZE_MB = 50
+          ENABLE_PARALLEL_PROCESSING = False
+          MAX_WORKERS = 4
+          VERBOSE = True
+          DEBUG = False
+          EOF
+
+          echo "Python config_workflow.py created successfully"
+
+      - name: Backup original config and use workflow config
+        shell: bash
+        run: |
+          cd ./.github/scripts/compare
+          if [ -f config.py ]; then
+            cp config.py config_original.py
+          fi
+          cp config_workflow.py config.py
+          echo "Config file prepared for workflow execution"
+
+      - name: Run Comparison Script
+        env:
+          PROD_EXPORT_PATH: ../../../db_extracted
+          V0_REPO_ROOT: ../../../
+          PYTHON_CMD: ${{ steps.check-python.outputs.python_cmd }}
+        shell: bash
+        run: |
+          echo "Running comparison between ${{ env.WMSDB_NAME }} DB objects and repo release branch..."
+          cd ./.github/scripts/compare
+          $PYTHON_CMD compare_prod_vs_repo_parallel.py
+          echo "Comparison completed"
+
+      - name: Add Last Modified Column
+        env:
+          PYTHON_CMD: ${{ steps.check-python.outputs.python_cmd }}
+        shell: bash
+        run: |
+          echo "Adding Last Modified column to comparison Excel..."
+          cd ./.github/scripts/compare
+
+          EXCEL_FILE=$(find ./comparison_output -name "*.xlsx" -type f | head -1)
+          if [ -z "$EXCEL_FILE" ]; then
+            echo "Warning: No Excel file found in comparison_output"
+            exit 0
+          fi
+
+          cat > run_add_last_modified.py << 'PYEOF'
+          import sys, os, glob
+          sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+          from add_last_modified_column import add_last_modified_column
+          excel_files = glob.glob('./comparison_output/*.xlsx')
+          if not excel_files:
+              sys.exit(0)
+          add_last_modified_column(excel_files[0], os.environ.get('PROD_EXPORT_PATH', '../../../db_extracted'))
+          PYEOF
+
+          PROD_EXPORT_PATH="../../../db_extracted" $PYTHON_CMD run_add_last_modified.py
+          rm -f run_add_last_modified.py
+          echo "Last Modified column added successfully"
+
+      - name: Restore original config
+        if: always()
+        shell: bash
+        run: |
+          cd ./.github/scripts/compare
+          if [ -f config_original.py ]; then
+            mv config_original.py config.py
+          fi
+          rm -f config_workflow.py
+
+      - name: Generate Summary Report
+        if: always()
+        shell: pwsh
+        run: |
+          $summaryFile = $env:GITHUB_STEP_SUMMARY
+
+          Add-Content $summaryFile "## ${{ env.WMSDB_NAME }} DB vs Repo Comparison Results" -Encoding UTF8
+          Add-Content $summaryFile "" -Encoding UTF8
+          Add-Content $summaryFile "| Property | Value |" -Encoding UTF8
+          Add-Content $summaryFile "|----------|-------|" -Encoding UTF8
+          Add-Content $summaryFile "| Environment | Prod EUR |" -Encoding UTF8
+          Add-Content $summaryFile "| Database | ${{ env.WMSDB_NAME }} |" -Encoding UTF8
+          Add-Content $summaryFile "| DB Server | ${{ env.DB_SERVER_NAME }} |" -Encoding UTF8
+          Add-Content $summaryFile "| Current DB Version | ${{ env.DB_CURRENT_VERSION }} |" -Encoding UTF8
+          Add-Content $summaryFile "| Compare Branch | release |" -Encoding UTF8
+          Add-Content $summaryFile "| Objects Extracted | ${{ inputs.extract_objects }} |" -Encoding UTF8
+
+          $extractedCount = @{
+            'StoredProc' = (Get-ChildItem -Path "./db_extracted/StoredProc" -Filter "*.sql" -ErrorAction SilentlyContinue | Measure-Object).Count
+            'Function' = (Get-ChildItem -Path "./db_extracted/Function" -Filter "*.sql" -ErrorAction SilentlyContinue | Measure-Object).Count
+            'Views' = (Get-ChildItem -Path "./db_extracted/Views" -Filter "*.sql" -ErrorAction SilentlyContinue | Measure-Object).Count
+            'Tables' = (Get-ChildItem -Path "./db_extracted/Tables" -Filter "*.sql" -ErrorAction SilentlyContinue | Measure-Object).Count
+            'Trigger' = (Get-ChildItem -Path "./db_extracted/Trigger" -Filter "*.sql" -ErrorAction SilentlyContinue | Measure-Object).Count
+            'Sequence' = (Get-ChildItem -Path "./db_extracted/Sequence" -Filter "*.sql" -ErrorAction SilentlyContinue | Measure-Object).Count
+          }
+
+          Add-Content $summaryFile "### Extracted Objects Summary" -Encoding UTF8
+          Add-Content $summaryFile "| Object Type | Count |" -Encoding UTF8
+          Add-Content $summaryFile "|-------------|-------|" -Encoding UTF8
+          foreach ($type in $extractedCount.Keys) {
+            Add-Content $summaryFile "| $type | $($extractedCount[$type]) |" -Encoding UTF8
+          }
+
+      - name: Upload Extracted DB Objects
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: EUR-${{ inputs.database_name }}-db-extracted-${{ github.run_id }}
+          path: ./db_extracted/
+          retention-days: 30
+
+      - name: Upload Comparison Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: EUR-${{ inputs.database_name }}-comparison-results-${{ github.run_id }}
+          path: ./.github/scripts/compare/comparison_output/
+          retention-days: 30
+
+      - name: Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: EUR-${{ inputs.database_name }}-comparison-logs-${{ github.run_id }}
+          path: ./logs/
+          retention-days: 7
