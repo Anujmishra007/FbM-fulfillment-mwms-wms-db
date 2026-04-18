@@ -53,6 +53,8 @@ GO
 /*                            table to avoid deadlock                   */
 /* 31-Mar-2026  Michael   2.3 FCR-11549-Fix InventoryHold not trigger if*/
 /*                            ID with Qty=0 exists during Receipt (ML02)*/
+/* 20-Apr-2026  Preetham 2.4  UWP-54452 : Bypass empty ID Status for    */
+/*                                        Kit Finalization (VNI01)      */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -953,7 +955,8 @@ BEGIN
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
          IF @b_addid = 1 AND @c_status <> 'OK'
-            OR (ISNULL(@c_RcptAutoHoldEmptyID,'')='1' AND @b_addid = 0 AND @c_status <> 'OK' AND @b_ID_HasInv = 0)   --ML02
+          --OR (ISNULL(@c_RcptAutoHoldEmptyID,'')='1' AND @b_addid = 0 AND @c_status <> 'OK' AND @b_ID_HasInv = 0)   --ML02
+            OR (ISNULL(@c_RcptAutoHoldEmptyID,'')='1' AND @b_addid = 0 AND COALESCE(NULLIF(@c_status, ''), 'OK') <> 'OK' AND @b_ID_HasInv = 0)   --VNI01
          BEGIN
             EXECUTE nspInventoryHold
                        ''
