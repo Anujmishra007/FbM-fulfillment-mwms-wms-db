@@ -168,6 +168,7 @@ BEGIN
    DECLARE @fSKULength          FLOAT = 0
    DECLARE @fSKUWidth           FLOAT = 0
    DECLARE @fSKUHeight          FLOAT = 0
+   DECLARE @fSKUStdGrossWgt     FLOAT = 0
    DECLARE @fPackLength         FLOAT = 0
    DECLARE @fPackWidth          FLOAT = 0
    DECLARE @fPackHeight         FLOAT = 0
@@ -197,12 +198,13 @@ BEGIN
       FROM dbo.Orders WITH (NOLOCK)
       WHERE OrderKey = @cOrderKey
 
-   -- Get SKU.PickCode, SKU dimensions, and PackKey
+   -- Get SKU.PickCode, SKU dimensions, Weight, and PackKey
    IF @cSKU <> '' AND @cStorerKey <> ''
       SELECT @cPickCode = ISNULL(Pickcode, ''),
              @fSKULength = ISNULL([Length], 0),
              @fSKUWidth = ISNULL(Width, 0),
              @fSKUHeight = ISNULL(Height, 0),
+             @fSKUStdGrossWgt = ISNULL(STDGROSSWGT, 0),
              @cSKUPackKey = ISNULL(PackKey, '')
       FROM dbo.SKU WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey AND SKU = @cSKU
@@ -217,7 +219,9 @@ BEGIN
       WHERE PackKey = @cSKUPackKey
 
    -- Process Specialised Orders
-   IF @cOrderUserDefine01 = 'Specialised'
+   IF @cOrderUserDefine01 IN (SELECT DISTINCT code FROM dbo.CODELKUP   
+      (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'AUTO' AND STORERKEY = @cStorerkey
+   )
    BEGIN
       -- Get max CartonNo for the PickSlipNo
       SELECT @nMaxCartonNo = ISNULL(MAX(CartonNo), 0)
@@ -269,13 +273,15 @@ BEGIN
                GOTO RollBackTran
             END CATCH
 
-            -- Update or Insert PACKINFO with SKU dimensions
+            -- Update or Insert PACKINFO with SKU dimensions (v1.2 - added Weight and QTY)
             BEGIN TRY
                UPDATE PACKINFO
                SET [Length] = @fSKULength,
                    Width = @fSKUWidth,
                    Height = @fSKUHeight,
                    CartonType = @cSpecCartonType,
+                   Weight = @fSKUStdGrossWgt * 1,
+                   QTY = 1,
                    EditWho = @cUserName,
                    EditDate = GETDATE()
                WHERE PickSlipNo = @cPickSlipNo
@@ -285,11 +291,12 @@ BEGIN
                IF @@ROWCOUNT = 0
                BEGIN
                   INSERT INTO PACKINFO (
-                     PickSlipNo, CartonNo, [Length], Width, Height, CartonType,
+                     PickSlipNo, CartonNo, [Length], Width, Height, CartonType, Weight, QTY,
                      AddWho, AddDate, EditWho, EditDate
                   )
                   VALUES (
                      @cPickSlipNo, @nSpecCartonNo, @fSKULength, @fSKUWidth, @fSKUHeight, @cSpecCartonType,
+                     @fSKUStdGrossWgt * 1, 1,
                      @cUserName, GETDATE(), @cUserName, GETDATE()
                   )
                END
@@ -300,28 +307,28 @@ BEGIN
                GOTO RollBackTran
             END CATCH
 
-            -- Insert Transmitlog2 for Specialised orders
-            EXEC nspg_GetKey 'TRANSMITLOGKEY2', 10, @cTransmitLogKey OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
-            IF @bSuccess <> 1 OR @nErrNo <> 0
-            BEGIN
-               SET @nErrNo = 263621
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get TransmitKey Failed
-               GOTO RollBackTran
-            END
+            ---- Insert Transmitlog2 for Specialised orders
+            --EXEC nspg_GetKey 'TRANSMITLOGKEY2', 10, @cTransmitLogKey OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            --IF @bSuccess <> 1 OR @nErrNo <> 0
+            --BEGIN
+            --   SET @nErrNo = 263621
+            --   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get TransmitKey Failed
+            --   GOTO RollBackTran
+            --END
 
-            BEGIN TRY
-               INSERT INTO Transmitlog2 (
-                  TransmitLogKey, Key1, Key2, Key3, TableName, AddWho, AddDate
-               )
-               VALUES (
-                  @cTransmitLogKey, @cPickSlipNo, CAST(@nSpecCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
-               )
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 263620
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed
-               GOTO RollBackTran
-            END CATCH
+            --BEGIN TRY
+            --   INSERT INTO Transmitlog2 (
+            --      TransmitLogKey, Key1, Key2, Key3, TableName, AddWho, AddDate
+            --   )
+            --   VALUES (
+            --      @cTransmitLogKey, @cPickSlipNo, CAST(@nSpecCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
+            --   )
+            --END TRY
+            --BEGIN CATCH
+            --   SET @nErrNo = 263620
+            --   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed
+            --   GOTO RollBackTran
+            --END CATCH
 
             -- Print SSCC Label for each PACKDETAIL.LabelNo
             IF @cSpecReportType <> '' AND ISNULL(@cLabelPrinter, '') <> ''
@@ -403,13 +410,15 @@ BEGIN
                GOTO RollBackTran
             END CATCH
 
-            -- Update or Insert PACKINFO with PACK dimensions
+            -- Update or Insert PACKINFO with PACK dimensions (v1.2 - added Weight and QTY)
             BEGIN TRY
                UPDATE PACKINFO
                SET [Length] = @fPackLength,
                    Width = @fPackWidth,
                    Height = @fPackHeight,
                    CartonType = @cSpecCartonType,
+                   Weight = @fSKUStdGrossWgt * @nCaseQty,
+                   QTY = @nCaseQty,
                    EditWho = @cUserName,
                    EditDate = GETDATE()
                WHERE PickSlipNo = @cPickSlipNo
@@ -419,11 +428,12 @@ BEGIN
                IF @@ROWCOUNT = 0
                BEGIN
                   INSERT INTO PACKINFO (
-                     PickSlipNo, CartonNo, [Length], Width, Height, CartonType,
+                     PickSlipNo, CartonNo, [Length], Width, Height, CartonType, Weight, QTY,
                      AddWho, AddDate, EditWho, EditDate
                   )
                   VALUES (
                      @cPickSlipNo, @nSpecCartonNo, @fPackLength, @fPackWidth, @fPackHeight, @cSpecCartonType,
+                     @fSKUStdGrossWgt * @nCaseQty, @nCaseQty,
                      @cUserName, GETDATE(), @cUserName, GETDATE()
                   )
                END
@@ -434,28 +444,28 @@ BEGIN
                GOTO RollBackTran
             END CATCH
 
-            -- Insert Transmitlog2 for Specialised orders
-            EXEC nspg_GetKey 'TRANSMITLOGKEY2', 10, @cTransmitLogKey OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
-            IF @bSuccess <> 1 OR @nErrNo <> 0
-            BEGIN
-               SET @nErrNo = 263624
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get TransmitKey Failed (CS Only)
-               GOTO RollBackTran
-            END
+            ---- Insert Transmitlog2 for Specialised orders
+            --EXEC nspg_GetKey 'TRANSMITLOGKEY2', 10, @cTransmitLogKey OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            --IF @bSuccess <> 1 OR @nErrNo <> 0
+            --BEGIN
+            --   SET @nErrNo = 263624
+            --   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get TransmitKey Failed (CS Only)
+            --   GOTO RollBackTran
+            --END
 
-            BEGIN TRY
-               INSERT INTO Transmitlog2 (
-                  TransmitLogKey, Key1, Key2, Key3, TableName, AddWho, AddDate
-               )
-               VALUES (
-                  @cTransmitLogKey, @cPickSlipNo, CAST(@nSpecCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
-               )
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 263625
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed (CS Only)
-               GOTO RollBackTran
-            END CATCH
+            --BEGIN TRY
+            --   INSERT INTO Transmitlog2 (
+            --      TransmitLogKey, Key1, Key2, Key3, TableName, AddWho, AddDate
+            --   )
+            --   VALUES (
+            --      @cTransmitLogKey, @cPickSlipNo, CAST(@nSpecCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
+            --   )
+            --END TRY
+            --BEGIN CATCH
+            --   SET @nErrNo = 263625
+            --   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed (CS Only)
+            --   GOTO RollBackTran
+            --END CATCH
 
             -- Print SSCC Label for each PACKDETAIL.LabelNo
             IF @cSpecReportType <> '' AND ISNULL(@cLabelPrinter, '') <> ''
@@ -483,38 +493,41 @@ BEGIN
          -- Skip to Pack Confirm for Specialised orders
          GOTO PACKCFM
       END
-      -- Scenario 3: Specialised but not CS or EA / CS Only - Print label by TaskDetailKey only
-      ELSE
+   END
+   -- Scenario 3: NOT Specialised (NOAUTO) - Print label by TaskDetailKey only
+   ELSE IF @cOrderUserDefine01 IN (SELECT DISTINCT code FROM
+      dbo.CODELKUP (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'NOAUTO' AND
+      STORERKEY = @cStorerkey
+   )
+   BEGIN
+      -- Get report type from CODELKUP Code = 4 (for TaskDetailKey printing)
+      DECLARE @cReportType4 NVARCHAR(10) = ''
+      SELECT @cReportType4 = ISNULL(Code2, '')
+      FROM CODELKUP WITH (NOLOCK)
+      WHERE ListName = 'RDTLBLRPT'
+        AND Code = '4'
+        AND StorerKey = @cStorerKey
+
+      -- Print label by TaskDetailKey
+      IF @cReportType4 <> '' AND ISNULL(@cLabelPrinter, '') <> ''
       BEGIN
-         -- Get report type from CODELKUP Code = 4 (for TaskDetailKey printing)
-         DECLARE @cReportType4 NVARCHAR(10) = ''
-         SELECT @cReportType4 = ISNULL(Code2, '')
-         FROM CODELKUP WITH (NOLOCK)
-         WHERE ListName = 'RDTLBLRPT'
-           AND Code = '4'
-           AND StorerKey = @cStorerKey
+         DECLARE @tTaskLabel AS VariableTable
+         DELETE FROM @tTaskLabel
 
-         -- Print label by TaskDetailKey
-         IF @cReportType4 <> '' AND ISNULL(@cLabelPrinter, '') <> ''
-         BEGIN
-            DECLARE @tTaskLabel AS VariableTable
-            DELETE FROM @tTaskLabel
+         INSERT INTO @tTaskLabel (Variable, Value) VALUES
+            ('@cStorerKey', @cStorerKey),
+            ('@cTaskDetailKey', @cTaskdetailKey)
 
-            INSERT INTO @tTaskLabel (Variable, Value) VALUES
-               ('@cStorerKey', @cStorerKey),
-               ('@cTaskDetailKey', @cTaskdetailKey)
-
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-               @cReportType4,
-               @tTaskLabel,
-               'rdt_1812ConUpdAU03',
-               @nErrNo OUTPUT,
-               @cErrMsg OUTPUT
-         END
-
-         -- Skip to Pack Confirm for Specialised orders
-         GOTO PACKCFM
+         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+            @cReportType4,
+            @tTaskLabel,
+            'rdt_1812ConUpdAU03',
+            @nErrNo OUTPUT,
+            @cErrMsg OUTPUT
       END
+
+      -- Skip to Pack Confirm for non-Specialised orders
+      GOTO PACKCFM
    END
    -- End of Specialised Orders Handling
 
@@ -1855,6 +1868,13 @@ BEGIN
           , @b_Success     = @bSuccess  OUTPUT
           , @n_Err         = @nErrNo    OUTPUT
           , @c_ErrMsg      = @cErrMsg   OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            SET @nErrNo = 263616
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- CarrierIntFail
+            GOTO RollBackTran
+         END
       END
    END
 
