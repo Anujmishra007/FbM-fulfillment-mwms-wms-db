@@ -439,7 +439,7 @@ BEGIN
                SELECT @c_ErrMsg='NSQL '+CONVERT(char(5), @n_err) + ': Insert Failed On Table LOT. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
             END
          END
-     END
+      END
 
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
@@ -485,7 +485,7 @@ BEGIN
             /* is already there!                                         */
             /* Warning:  Attempting to change this behaviour can really screw up */
             /* the HOLD module. Be very very careful! */
-            IF (ISNULL(@c_RcptAutoHoldEmptyID,'')<>'1' OR @c_status = 'OK' OR @b_ID_HasInv = 1)   --ML02
+            IF (ISNULL(@c_RcptAutoHoldEmptyID,'')<>'1' OR ISNULL(@c_status,'') IN ('','OK') OR @b_ID_HasInv = 1)   --ML02
                SELECT @c_status = @c_curstatus
 
             IF @c_allowidqtyupdate = '1'
@@ -564,6 +564,7 @@ BEGIN
             SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
          END
       END
+
       -- SSA04 start --
        IF @n_continue=1 or @n_continue=2
        BEGIN
