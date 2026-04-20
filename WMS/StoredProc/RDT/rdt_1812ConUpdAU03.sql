@@ -1849,34 +1849,34 @@ BEGIN
    IF @nErrNo <> 0
        GOTO RollBackTran
 
-   IF ISNULL(@cCarrierFlag,'') = 'Y'
+   -- IF ISNULL(@cCarrierFlag,'') = 'Y'
+   -- BEGIN
+   -- SET @nPackCNT = 0
+
+   -- SELECT @nPackCNT = COUNT(DISTINCT LABELNO)
+   -- FROM PACKDETAIL WITH (NOLOCK)
+   -- WHERE PICKSLIPNO = @cPickSlipNo
+
+   -- IF ISNULL(@nPackCNT,0) <= CAST(@cCustomerType5 AS INT)
+   -- BEGIN
+   EXEC [dbo].[isp_Carrier_Middleware_Interface]
+      @c_OrderKey    = @cOrderKey
+      , @c_Mbolkey     = ''
+      , @c_FunctionID  = @nFunc
+      , @n_CartonNo    = @nCartonNo
+      , @n_Step        = @nStep
+      , @b_Success     = @bSuccess  OUTPUT
+      , @n_Err         = @nErrNo    OUTPUT
+      , @c_ErrMsg      = @cErrMsg   OUTPUT
+   
+   IF @nErrNo <> 0
    BEGIN
-      SET @nPackCNT = 0
-
-      SELECT @nPackCNT = COUNT(DISTINCT LABELNO)
-      FROM PACKDETAIL WITH (NOLOCK)
-      WHERE PICKSLIPNO = @cPickSlipNo
-
-      IF ISNULL(@nPackCNT,0) <= CAST(@cCustomerType5 AS INT)
-      BEGIN
-         EXEC [dbo].[isp_Carrier_Middleware_Interface]
-            @c_OrderKey    = @cOrderKey
-          , @c_Mbolkey     = ''
-          , @c_FunctionID  = @nFunc
-          , @n_CartonNo    = @nCartonNo
-          , @n_Step        = @nStep
-          , @b_Success     = @bSuccess  OUTPUT
-          , @n_Err         = @nErrNo    OUTPUT
-          , @c_ErrMsg      = @cErrMsg   OUTPUT
-         
-         IF @nErrNo <> 0
-         BEGIN
-            SET @nErrNo = 263616
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- CarrierIntFail
-            GOTO RollBackTran
-         END
-      END
+      SET @nErrNo = 263616
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- CarrierIntFail
+      GOTO RollBackTran
    END
+   -- END
+   -- END
 
    COMMIT TRAN rdt_1812ConUpdAU03 -- Only commit change made here
    GOTO Quit
