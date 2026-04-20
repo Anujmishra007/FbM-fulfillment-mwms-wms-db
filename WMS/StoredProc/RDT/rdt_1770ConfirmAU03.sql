@@ -1098,10 +1098,11 @@ BEGIN
             AND SKU.SKU = @cSKU
 
             SET @fSKUWeight = 0
+            SET @fWeight = 0
             SET @fCartonWeight = 0
 
             -- FCR-11723: Weight = Sku.STDGROSSWGT * QTY
-            SELECT @fSKUWeight = ISNULL( SKU.STDGrossWGT * @nQty, 0)
+            SELECT @fSKUWeight = ISNULL(SKU.STDGrossWGT * @nQty, 0)
             FROM dbo.SKU SKU WITH (NOLOCK)
             WHERE SKU.STORERKEY = @cStorerKey
             AND SKU.SKU = @cSKU
@@ -1131,8 +1132,8 @@ BEGIN
 
                 BEGIN TRY
                     UPDATE dbo.PackInfo SET  
-                        QTY = @nQTY,  
-                        Weight = @fWeight,  
+                        QTY = QTY + @nQTY,  
+                        Weight = Weight + @fWeight,  
                         Length = @fLength,  
                         Width = @fWidth,  
                         Height = @fHeight,  
@@ -1142,7 +1143,7 @@ BEGIN
                         EditWho = SUSER_SNAME(),  
                         TrafficCop = NULL  
                     WHERE PickSlipNo = @cPickSlipNo  
-                    AND CartonNo = @nCartonNo  
+                    AND CartonNo = @nCartonNo   
                 END TRY
                 BEGIN CATCH
                     SET @nErrNo = 262772
@@ -1487,17 +1488,16 @@ BEGIN
             AND SKU.SKU = @cSKU
 
             SET @fSKUWeight = 0
-            SET @fWeight = @fSKUWeight
+            SET @fWeight = 0
             SET @fCartonWeight = 0
 
             -- FCR-11723: Weight = Sku.STDGROSSWGT * QTY
-            SELECT @fSKUWeight = ISNULL( SKU.STDGrossWGT * @nCasePackQty, 0)
+            SELECT @fSKUWeight = ISNULL(SKU.STDGrossWGT * @nQty, 0)
             FROM dbo.SKU SKU WITH (NOLOCK)
             WHERE SKU.STORERKEY = @cStorerKey
             AND SKU.SKU = @cSKU
 
-            SET @cWeight = rdt.rdtFormatFloat( @fSKUWeight)
-
+            SET @cWeight = rdt.rdtFormatFloat(@fSKUWeight)
             SET @fWeight = CAST(@cWeight AS FLOAT)
 
             BEGIN TRY
@@ -1889,7 +1889,7 @@ BEGIN
                 , @b_Success     = @bSuccess  OUTPUT
                 , @n_Err         = @nErrNo    OUTPUT
                 , @c_ErrMsg      = @cErrMsg   OUTPUT
-            
+                
             IF @nErrNo <> 0
                 GOTO RollBackTran
 
