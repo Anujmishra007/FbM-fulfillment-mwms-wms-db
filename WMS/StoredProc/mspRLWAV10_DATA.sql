@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.1                                                          */    
+/* Version: 1.2                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -21,6 +21,7 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
 /* 10-Mar-2026 WLChooi  1.1   FCR-11514 Update UOM to 6 for PU VAS (WL01)*/
+/* 20-Apr-2026 WLChooi  1.2   FCR-12598 Check for ASTCPK (WL02)          */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_DATA]        
    @c_Wavekey     NVARCHAR(10)
@@ -61,7 +62,7 @@ BEGIN
                             + ' AND NOT EXISTS (SELECT 1'
                             +                '  FROM TASKDETAIL td (NOLOCK)' 
                             +                '  WHERE td.TaskdetailKey = PICKDETAIL.TaskdetailKey'
-                            +                '  AND td.Tasktype = ''CPK'''
+                            +                '  AND td.Tasktype IN (''CPK'', ''ASTCPK'')'   --WL02
                             +                '  AND td.SourceType    = ''mspRLWAV10'''
                             +                '  AND td.[Status]      <> ''X'''
                             +                ' )'
