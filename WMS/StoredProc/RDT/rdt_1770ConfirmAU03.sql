@@ -57,7 +57,6 @@ BEGIN
     DECLARE @cPalletLineNumber NVARCHAR( 5)  --INC7331096
     DECLARE @cOrderKey   NVARCHAR( 10)         /* (JH01)*/
     DECLARE @cPLTUDF05   NVARCHAR( 30)
-    DECLARE @cTransmitLogKey NVARCHAR( 10)
 
     DECLARE @nPalletLength FLOAT = 116.0
     DECLARE @nPalletWidth  FLOAT = 116.0
@@ -487,7 +486,6 @@ BEGIN
         DECLARE @cConsigneeKey NVARCHAR( 15) = ''
         DECLARE @cBillToKey    NVARCHAR( 20) = ''
         DECLARE @cOrderType    NVARCHAR( 20) = ''
-        DECLARE @cOrderUserDefine01 NVARCHAR( 30) = '' -- FCR-11723: For Specialised check
 
         DECLARE @cCustomerType1     NVARCHAR( 20) = '' --PALLET / CASE
         DECLARE @cCustomerType2     NVARCHAR( 20) = '' --SANDWICH / RAINBOW
@@ -616,7 +614,6 @@ BEGIN
         IF @cOrderKey <> ''
             SELECT @cConsigneeKey = ConsigneeKey, @cBillToKey = BillToKey, @cOrderType = [Type]
                 , @cPWaveKey = UserDefine09, @cPLoadkey = LoadKey
-                , @cOrderUserDefine01 = UserDefine01  -- FCR - 11723: For Specialised check
             FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
 
         --Get Pack config
@@ -1001,50 +998,6 @@ BEGIN
                 AND AddWho = 'rdt.' + SUSER_SNAME()
                 ORDER BY CartonNo DESC -- max cartonno
 
-                -- FCR-11723: Insert into TRANSMITLOG2 for Specialised orders
-                IF ISNULL(@cOrderUserDefine01,'') = 'Specialised'
-                BEGIN
-                    -- Generate the required Key
-                    EXECUTE dbo.nspg_GetKey
-                        'TRANSMITLOGKEY',
-                        10,
-                        @cTransmitLogKey OUTPUT,
-                        @bSuccess        OUTPUT,
-                        @nErrNo          OUTPUT,
-                        @cErrMsg         OUTPUT
-                    IF @bSuccess = 1
-                    BEGIN
-                        BEGIN TRY
-                            INSERT INTO dbo.TRANSMITLOG2 (
-                                TRANSMITLOGKEY, 
-                                TableName, 
-                                Key1, 
-                                Key2, 
-                                Key3, 
-                                AddDate, 
-                                AddWho, 
-                                EditDate, 
-                                EditWho
-                            )
-                            VALUES (
-                                @cTransmitLogKey, 
-                                'WSCRCTNMW', 
-                                @cPickSlipNo, 
-                                CAST(@nCartonNo AS NVARCHAR(10)), 
-                                @cStorerKey, 
-                                GETDATE(), 
-                                'rdt.' + SUSER_SNAME(), 
-                                GETDATE(), 
-                                'rdt.' + SUSER_SNAME()
-                            )
-                        END TRY
-                        BEGIN CATCH
-                            SET @nErrNo = 262779
-                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TRANSLOG Fail
-                            GOTO RollBackTran
-                        END CATCH
-                    END
-                END
             END               
 
             ELSE
@@ -1147,28 +1100,16 @@ BEGIN
             SET @fSKUWeight = 0
             SET @fCartonWeight = 0
 
-            IF @cDefaultWeight IN ('2', '3')
-            BEGIN
-                -- Weight (SKU only)
-                SELECT @fSKUWeight = ISNULL( SKU.STDGrossWGT * @nQty, 0)
-                FROM dbo.SKU SKU WITH (NOLOCK)
-                WHERE SKU.STORERKEY = @cStorerKey
-                AND SKU.SKU = @cSKU
-            END
+            -- FCR-11723: Weight = Sku.STDGROSSWGT * QTY
+            SELECT @fSKUWeight = ISNULL( SKU.STDGrossWGT * @nQty, 0)
+            FROM dbo.SKU SKU WITH (NOLOCK)
+            WHERE SKU.STORERKEY = @cStorerKey
+            AND SKU.SKU = @cSKU
 
-            SET @fWeight = 0
+            SET @fWeight = @fSKUWeight
 
             IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
             BEGIN
-                IF @cDefaultWeight = '2'
-                BEGIN
-                    SET @fWeight = @fSKUWeight  -- SKU weight only
-                END
-
-                ELSE IF @cDefaultWeight = '3'
-                BEGIN
-                    SET @fWeight = @fSKUWeight + @fCartonWeight
-                END
                 SET @cWeight = rdt.rdtFormatFloat( @fWeight)
 
                 SET @fWeight = CAST(@cWeight AS FLOAT)
@@ -1185,25 +1126,20 @@ BEGIN
             END
             ELSE
             BEGIN
-                -- Calculate weight for UPDATE
-                IF @cDefaultWeight = '2'
-                BEGIN
-                    SET @fWeight = @fSKUWeight  -- SKU weight only
-                END
-                ELSE IF @cDefaultWeight = '3'
-                BEGIN
-                    SET @fWeight = @fSKUWeight + @fCartonWeight  -- SKU + carton weight
-                END
-
                 SET @cWeight = rdt.rdtFormatFloat( @fWeight)
                 SET @fWeight = CAST(@cWeight AS FLOAT)
 
                 BEGIN TRY
                     UPDATE dbo.PackInfo SET  
-                        QTY = QTY + @nQTY,  
+                        QTY = @nQTY,  
+                        Weight = @fWeight,  
+                        Length = @fLength,  
+                        Width = @fWidth,  
+                        Height = @fHeight,  
+                        CartonType = @cCartonType,  
+                        Cube = @fCube,  
                         EditDate = GETDATE(),  
                         EditWho = SUSER_SNAME(),  
-                        Weight = Weight + @fWeight,  
                         TrafficCop = NULL  
                     WHERE PickSlipNo = @cPickSlipNo  
                     AND CartonNo = @nCartonNo  
@@ -1511,51 +1447,6 @@ BEGIN
                     AND AddWho = 'rdt.' + SUSER_SNAME()
                 ORDER BY CartonNo DESC -- max cartonno
 
-            -- FCR-11723: Insert into TRANSMITLOG2 for Specialised orders
-            IF ISNULL(@cOrderUserDefine01,'') = 'Specialised'
-            BEGIN
-                -- Generate the required Key
-                EXECUTE dbo.nspg_GetKey
-                    'TRANSMITLOGKEY',
-                    10,
-                    @cTransmitLogKey OUTPUT,
-                    @bSuccess        OUTPUT,
-                    @nErrNo          OUTPUT,
-                    @cErrMsg         OUTPUT
-                IF @bSuccess = 1
-                BEGIN
-                    BEGIN TRY
-                        INSERT INTO dbo.TRANSMITLOG2 (
-                            TRANSMITLOGKEY, 
-                            TableName, 
-                            Key1, 
-                            Key2, 
-                            Key3, 
-                            AddDate, 
-                            AddWho, 
-                            EditDate, 
-                            EditWho
-                        )
-                        VALUES (
-                            @cTransmitLogKey, 
-                            'WSCRCTNMW', 
-                            @cPickSlipNo, 
-                            CAST(@nCartonNo AS NVARCHAR(10)), 
-                            @cStorerKey, 
-                            GETDATE(), 
-                            'rdt.' + SUSER_SNAME(), 
-                            GETDATE(), 
-                            'rdt.' + SUSER_SNAME()
-                        )
-                    END TRY
-                    BEGIN CATCH
-                        SET @nErrNo = 262779
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TRANSLOG Fail
-                        GOTO RollBackTran
-                    END CATCH
-                END
-            END
-
             --PackDetailInfo
             IF @cUpdatePackDetailInfo = '1'
             BEGIN
@@ -1596,23 +1487,14 @@ BEGIN
             AND SKU.SKU = @cSKU
 
             SET @fSKUWeight = 0
-            SET @fWeight = 0
+            SET @fWeight = @fSKUWeight
             SET @fCartonWeight = 0
 
-            IF @cDefaultWeight IN ('2', '3')
-            BEGIN
-                -- Weight (SKU only)
-                SELECT @fSKUWeight = ISNULL(SKU.STDGrossWGT*@nCasePackQty,0)
-                FROM dbo.SKU SKU WITH (NOLOCK)
-                WHERE SKU.STORERKEY = @cStorerKey
-                AND SKU.SKU = @cSKU
-
-                -- Weight (SKU + carton)
-                IF @cDefaultWeight = '3'
-                BEGIN
-                    SET @fSKUWeight = @fSKUWeight + @fCartonWeight
-                END
-            END
+            -- FCR-11723: Weight = Sku.STDGROSSWGT * QTY
+            SELECT @fSKUWeight = ISNULL( SKU.STDGrossWGT * @nCasePackQty, 0)
+            FROM dbo.SKU SKU WITH (NOLOCK)
+            WHERE SKU.STORERKEY = @cStorerKey
+            AND SKU.SKU = @cSKU
 
             SET @cWeight = rdt.rdtFormatFloat( @fSKUWeight)
 
@@ -1997,6 +1879,21 @@ BEGIN
             IF @nErrNo <> 0
                 GOTO RollBackTran
 
+            -- Call Carrier Middleware Interface after PackConfirm 
+            EXEC [dbo].[isp_Carrier_Middleware_Interface]
+                    @c_OrderKey    = @cOrderKey
+                , @c_Mbolkey     = ''
+                , @c_FunctionID  = @nFunc
+                , @n_CartonNo    = @nCartonNo
+                , @n_Step        = @nStep
+                , @b_Success     = @bSuccess  OUTPUT
+                , @n_Err         = @nErrNo    OUTPUT
+                , @c_ErrMsg      = @cErrMsg   OUTPUT
+            
+            IF @nErrNo <> 0
+                GOTO RollBackTran
+
+
             IF EXISTS (SELECT TOP 1 1 FROM PACKHEADER (NOLOCK) WHERE PICKSLIPNO = @cPickSlipNo AND STATUS = '9')
             BEGIN
                 DECLARE @cPackList NVARCHAR( 10)
@@ -2148,21 +2045,7 @@ BEGIN
                     SET @nErrNo = 0
                     SET @cErrMsg = ''
 
-            END
-        END
-
-            IF ISNULL(@cOrderUserDefine01,'') <> 'Specialised'
-            BEGIN
-                -- FCR-11723: Call carrier middleware for non-Specialised orders
-                EXEC [dbo].[isp_Carrier_Middleware_Interface]
-                    @c_OrderKey    = @cOrderKey
-                , @c_Mbolkey     = ''
-                , @c_FunctionID  = @nFunc
-                , @n_CartonNo    = @nCartonNo
-                , @n_Step        = @nStep
-                , @b_Success     = @bSuccess  OUTPUT
-                , @n_Err         = @nErrNo    OUTPUT
-                , @c_ErrMsg      = @cErrMsg   OUTPUT
+                END
             END
         END
     END
