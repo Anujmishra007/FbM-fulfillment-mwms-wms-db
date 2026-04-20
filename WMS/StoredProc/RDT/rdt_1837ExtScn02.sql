@@ -224,7 +224,7 @@ BEGIN
                   INSERT INTO @tReportParam (Variable, Value)
                   VALUES
                      ( '@cStorerKey', @cStorerKey),
-                     ( '@cLabelNo', @cCartonID)
+                     ( '@cOrderKey', @cOrderKey)
 
                   -- Print label
                   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
