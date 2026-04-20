@@ -20,5 +20,6 @@ execute rdt.rdtAddMsg 262659, 10, '262659^UpdPKDDropIDFail',      'us_english', 
 execute rdt.rdtAddMsg 262660, 10, '262660^MergePKDQtyFail',       'us_english', 838, 0, '262660: Merge PickDetail Qty failed'
 execute rdt.rdtAddMsg 262661, 10, '262661^DelPKDDupFail',         'us_english', 838, 0, '262661: Delete PickDetail duplicates failed'
 execute rdt.rdtAddMsg 262662, 10, '262662^UnalloPKDFail',         'us_english', 838, 0, '262662: Unallocate PickDetail duplicates failed'
+execute rdt.rdtAddMsg 262663, 10, '262663^PackQty>PickQty',       'us_english', 838, 0, '262663: PackQty > PickQty. Skip Inv movement'
 
 select * from rdt.rdtmsg (nolock) where message_id between 262651 and 262700

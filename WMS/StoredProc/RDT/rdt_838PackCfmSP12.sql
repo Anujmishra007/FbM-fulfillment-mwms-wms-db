@@ -63,6 +63,9 @@ BEGIN
    DECLARE @cFromLOC                NVARCHAR(10)
    DECLARE @cMoveQTYAlloc           NVARCHAR(1)
    DECLARE @cPackStatus             NVARCHAR(1)
+   DECLARE @cMsg01                  NVARCHAR (60)
+   DECLARE @cMsg02                  NVARCHAR (60)
+   DECLARE @cMsg03                  NVARCHAR (60)
 
    SET @cOrderKey = ''      
    SET @cLoadKey = ''      
@@ -294,6 +297,13 @@ BEGIN
          BEGIN
             IF @nDebugFlag = 1
                SELECT 'PickQty <> PackQty', @nFromDropID_PickQty AS PickQty, @nFromDropID_PackQty AS PackQty
+
+            IF @nFromDropID_PackQty > @nFromDropID_PickQty
+            BEGIN
+               SET @nErrNo = 262663
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END
          END
       END
       ELSE
@@ -761,7 +771,6 @@ BEGIN
                      AND doctype = 'N')
       AND ISNULL(@cOrderKey, '') <> ''
       BEGIN
-         DECLARE @cMsg01   NVARCHAR (60)
          SET @cMsg01 = 'B2B Order: '+ @cOrderKey
 
          EXEC rdt.rdtInsertMsgQueue 
