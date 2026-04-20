@@ -8,7 +8,8 @@ GO
 /* Copyright      : LFLogistics                                               */        
 /*                                                                            */        
 /* Date         Rev  Author     Purposes                                      */        
-/* 2025-01-21   1.0  yeekung    TPS-970 Created                               */ 
+/* 2025-01-21   1.0  yeekung    TPS-970 Created                               */
+/* 2026-04-20   2.0  GCH225     FCR-11777 Created                            */  
 /******************************************************************************/        
         
 CREATE OR ALTER  PROC [API].[isp_TPS_ExtUpd05] (        
@@ -52,9 +53,12 @@ DECLARE   @cJITOrders         NVARCHAR(20),
          @bSuccess         INT,
          @b_Debug            INT
 
-DECLARE @cTransmitLogKey      NVARCHAR(20)
-DECLARE @c_QCmdClass          NVARCHAR(10)   = ''  
-        
+DECLARE @cTransmitLogKey NVARCHAR(20)
+DECLARE @c_QCmdClass     NVARCHAR(10) = ''  
+DECLARE @cUPCEPC         NVARCHAR(100)
+DECLARE @cLblLineNumber  NVARCHAR(10)
+DECLARE @cSKU            NVARCHAR(30)
+
 DECLARE @CloseCtnList TABLE (     
    UCC             NVARCHAR( 30),  
    SKU             NVARCHAR( 20),      
@@ -75,17 +79,6 @@ DECLARE @pickSKUDetail TABLE (
    PickDetailStatus NVARCHAR ( 3)  
 )  
 
---INSERT INTO @CloseCtnList      
---SELECT *      
---FROM OPENJSON(@cCloseCartonJson)      
---WITH (      
---   SKU             NVARCHAR( 20) '$.SKU',      
---   Qty             INT           '$.PackedQty',      
---   Weight          Float         '$.WEIGHT',      
---   Cube            Float         '$.CUBE',      
---   lottableValue   NVARCHAR(60)  '$.Lottable',       
---   SkuBarcode      NVARCHAR( 60) '$.SkuBarcode'       
---)      
 INSERT INTO @CloseCtnList (UCC,SKU, QTY, WEIGHT, CUBE, lottableVal,SkuBarcode, ADCode)      
 SELECT     
 HDR.UCC  
@@ -133,6 +126,64 @@ BEGIN
    SELECT @cOrderKey = OrderKey
    FROM PickHeader (NOLOCK)
    WHERE PickHeaderkey = @cPickSlipNo
+
+   DECLARE CUR_PSN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
+   SELECT SKU, ISNULL(SkuBarcode, ADCode) AS SkuBarcode    
+   FROM @CloseCtnList      
+   WHERE (SkuBarcode <> '' OR ADCode <> '')      
+      
+   OPEN CUR_PSN      
+   FETCH NEXT FROM CUR_PSN INTO @cSKU, @cUPCEPC     
+   WHILE @@FETCH_STATUS <> -1      
+   BEGIN 
+      SELECT  @cLblLineNumber = LabelLine
+            , @cLabelNo = LabelNo
+      FROM PACDETAIL (NOLOCK)
+      WHERE StorerKey = @cStorerKey        
+      AND PickSlipNo = @cPickSlipNo
+      AND CartonNo = @nCartonNo
+      AND SKU = @cSKU   
+
+      INSERT INTO PACKSERIALNO( PickSlipNo
+                              , CartonNo
+                              , LabelNo
+                              , LabelLine
+                              , StorerKey
+                              , SKU
+                              , SerialNo
+                              , Qty
+                              , PickDetailKey
+                              , AddWho
+                              , AddDate
+                              , EditWho
+                              , EditDate)    
+                        VALUES( @cPickSlipNo
+                              , @nCartonNo
+                              , @cLabelNo
+                              , @cLblLineNumber
+                              , @cStorerKey
+                              , @cSKU
+                              , @cUPCEPC
+                              , 1
+                              , ''
+                              , @cUserName
+                              , GETDATE()
+                              , @cUserName
+                              , GETDATE())  
+
+      IF @@ERROR <> 0         
+      BEGIN         
+         SET @b_Success = 0;
+         SET @n_Err = 1003451        
+         SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert PackSerialNo table. Function : isp_TPS_ExtUpd05'        
+         GOTO RollBackTran        
+      END  
+
+NEXTITEM:
+      FETCH NEXT FROM CUR_PSN INTO @cSKU, @cUPCEPC        
+   END
+   CLOSE CUR_PSN;
+   DEALLOCATE CUR_PSN;
 
    EXEC nspGetRight    
       @c_Facility   = @cFacility   

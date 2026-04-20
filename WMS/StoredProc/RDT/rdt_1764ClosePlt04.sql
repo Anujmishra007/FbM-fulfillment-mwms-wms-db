@@ -25,6 +25,7 @@ GO
 /* 2025-12-09  1.6.0    NLT013    UWP-45319 No need to update Message03 if short*/
 /* 2025-12-31  1.7.0    NLT013    FCR-7928 Trigger WSSOAlloUpd for real short  */
 /* 2026-01-07  1.8.0    NLT013    UWP-46553 Update Task failed if last task is short*/
+/* 2026-04-18  1.9.0    NLT013    FCR-12136 Support PickMode                   */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
@@ -71,6 +72,8 @@ BEGIN
    DECLARE @cSQLParam      NVARCHAR( MAX)
    DECLARE @cCurrentTaskDetailKey NVARCHAR(10)
    DECLARE @cReasonKey     NVARCHAR( 10)
+   DECLARE @cSupportPickMode       NVARCHAR(5)
+   DECLARE @cPickModeFlag          NVARCHAR(1)
 
    DECLARE @tTaskDetail TABLE
    (
@@ -87,6 +90,7 @@ BEGIN
    SET @cErrMsg = ''
 
    SELECT @cStorerKey = StorerKey,
+      @cFacility = Facility,
       @cCurrentTaskDetailKey = V_TaskDetailKey
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
@@ -112,6 +116,19 @@ BEGIN
       INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
    END
 
+   SELECT TOP 1
+      @cFromLoc         = TD.FromLoc
+   FROM dbo.TaskDetail TD WITH(NOLOCK)
+   WHERE TD.StorerKey = @cStorerKey
+      AND TaskDetailKey = @cCurrentTaskDetailKey
+   
+   SELECT @cPickModeFlag = IIF(LocationGroup = 'PICKMOD', '1', '0')
+   FROM dbo.LOC WITH(NOLOCK)
+   WHERE Facility = @cFacility
+      AND Loc = @cFromLoc
+
+   SET @cSupportPickMode = rdt.rdtGetConfig( @nFunc, 'SupportPickMode', @cStorerKey)
+
    /***********************************************************************************************
                                      Standard Close Pallet
    ***********************************************************************************************/
@@ -123,6 +140,7 @@ BEGIN
    SAVE TRAN rdt_1764ClosePlt04 -- For rollback or commit only our own transaction
 
    IF EXISTS(SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cScannedToLoc AND LocationType = 'PND' )
+    OR (@cSupportPickMode = '1' AND @cPickModeFlag = '1')
    BEGIN
       DECLARE 
          @nCurrentStep        INT
@@ -132,7 +150,8 @@ BEGIN
       FROM rdt.RDTMOBREC WITH (NOLOCK)
       WHERE Mobile = @nMobile
 
-      IF @nCurrentStep = 6
+      IF (@nCurrentStep = 6)
+         OR (@nCurrentStep = 4 AND @cSupportPickMode = '1' AND @cPickModeFlag = '1')
       BEGIN
          DELETE FROM @tTaskDetail
          INSERT INTO @tTaskDetail ( TaskDetailKey )
@@ -642,7 +661,7 @@ BEGIN
       @nRowCount                 INT,
       @bSuccess                  INT
 
-   SELECT
+   SELECT 
       @cLocationType = LocationType,
       @cLocationCategory = LocationCategory,
       @cToLoc = Loc
@@ -650,6 +669,7 @@ BEGIN
    WHERE LOC = IIF(@cScannedToLoc <> '', @cScannedToLoc, @cToLoc)
 
    IF @cLocationType = 'PND'
+    OR (@nCurrentStep = 4 AND @cSupportPickMode = '1' AND @cPickModeFlag = '1')
    BEGIN
       DECLARE @tPickDetail TABLE
       (

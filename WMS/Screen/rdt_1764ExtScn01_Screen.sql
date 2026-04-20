@@ -6,8 +6,8 @@ DELETE rdt.RDTScn WHERE Scn = 6527 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6527, 'ENG',
     @cLine01 = 'REPLEN FROM      RPF'
    ,@cLine02 = ''
-   ,@cLine03 = 'Pallet is closed and'
-   ,@cLine04 = 'moved'
+   ,@cLine03 = '%20d03'--'Pallet is closed and'     --FCR-12136
+   ,@cLine04 = '%20d04'--'moved'                    --FCR-12136
    ,@cLine05 = ''
    ,@cLine06 = '1 = Next Task'
    ,@cLine07 = '9 = Exit to TM'

@@ -19,6 +19,7 @@ GO
 /* 2025-11-08 1.4.0  NLT013   UWP-43838 Skip InProgress/Completed Task                          */
 /* 2025-11-14 1.5.0  NLT013   UWP-43847 Fix issue: PickDetail status is not updated             */ 
 /* 2025-01-29 1.6.0  NLT013   UWP-47931 Fix issue: QCmd is not proceed in some scenarios        */
+/* 2025-04-10 1.7.0  NLT013   FCR-12136 Support Pick Mode                                       */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn01] (
@@ -74,6 +75,8 @@ BEGIN
       @nCurrentScn            INT,
       @cTaskDetailKey         NVARCHAR(10) = '',
       @cPendingTaskDetailKey    NVARCHAR(10) = '',
+      @nStep_FromLOC          INT         = 2,
+      @nScn_FromLOC           INT         = 2681,
       @nStep_SKU              INT         = 4,
       @nScn_SKU               INT         = 2683,
       @nStep_NextTask         INT         = 5,
@@ -129,6 +132,10 @@ BEGIN
       @nTranCount             INT,
       @cUCCNo                 NVARCHAR(20),
       @cPickDetailKey         NVARCHAR(18),
+      @cPickModeFlag          NVARCHAR(1),
+      @cAlertMessage          NVARCHAR(255),
+      @bSuccess               INT,
+      @cSupportPickMode       NVARCHAR(5),
 
       @cMessage01              NVARCHAR(125),
       @cMessage02              NVARCHAR(125),
@@ -137,6 +144,7 @@ BEGIN
       @cMessage05              NVARCHAR(125)
 
    SET @cUDF01  = ''
+   SET @cUDF13 = ''
 
       DECLARE @tPickDetail TABLE
       (
@@ -154,8 +162,10 @@ BEGIN
       @nCurrentStep        = Step,
       @nCurrentScn         = Scn,
       @cUserName           = UserName,
+      @cDropID             = V_String3,
       @cListKey            = V_String7,
-      @cUCCNo              = I_Field08
+      @cUCCNo              = I_Field08,
+      @cPickModeFlag       = C_String1
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -178,7 +188,8 @@ BEGIN
          SELECT TOP 1 
             @cPendingTaskDetailKey   = TD.TaskDetailKey,
             @cDropID          = TD.DropID,
-            @cAreaKey         = TD.AreaKey
+            @cAreaKey         = TD.AreaKey,
+            @cFromLoc         = TD.FromLoc
          FROM dbo.TaskDetail TD WITH(NOLOCK)
          INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey AND PD.Status <> '4'
          WHERE TD.StorerKey = @cStorerKey
@@ -346,6 +357,110 @@ BEGIN
             SET @cUDF12 = @cListKey
             SET @cUDF13 = @cPendingTaskDetailKey
          END
+
+         ELSE
+         BEGIN
+            SET @cSupportPickMode = rdt.rdtGetConfig( @nFunc, 'SupportPickMode', @cStorerKey)
+
+            IF @cSupportPickMode = '1'
+            BEGIN
+                SELECT @cTaskDetailKey = Value FROM @tExtScnData WHERE Variable = '@cTaskDetailKey'
+
+               SELECT TOP 1
+                  @cFromLoc         = TD.FromLoc,
+                  @cPickMethod      = PickMethod,
+                  @cSuggFromLOC     = FromLoc
+               FROM dbo.TaskDetail TD WITH(NOLOCK)
+               WHERE TD.StorerKey = @cStorerKey
+                  AND TaskDetailKey = @cTaskDetailKey
+               
+               SELECT @cPickModeFlag = IIF(LocationGroup = 'PICKMOD', '1', '0')
+               FROM dbo.LOC WITH(NOLOCK)
+               WHERE Facility = @cFacility
+                  AND Loc = @cFromLoc
+
+               IF @cPickModeFlag = '1'
+               BEGIN
+                  DECLARE @cNewDropID NVARCHAR( 10)
+                  EXECUTE dbo.nspg_GetKey
+                     'NewDropID',
+                     8 ,
+                     @cNewDropID       OUTPUT,
+                     @bSuccess         OUTPUT,
+                     @nErrNo           OUTPUT,
+                     @cErrMsg          OUTPUT
+
+                  IF @bSuccess <> 1
+                  BEGIN
+                     SET @nErrNo = 234864
+                     SET @cErrMsg = rdt.rdtgetmessage( 66029, @cLangCode, 'DSP') --  Generate DropID Failed
+                     GOTO Quit
+                  END
+
+                  IF @nErrNo <> 0
+                     GOTO Quit
+
+                  SET @cUDF11 = 'PM' + @cNewDropID
+
+                  SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) 
+                  FROM dbo.LOC WITH (NOLOCK) 
+                  WHERE Facility = @cFacility 
+                     AND LOC = @cFromLoc
+
+                  IF ISNULL( @cLocDescr, '') = ''
+                     SET @cLocDescr = @cSuggFromLOC
+
+                  -- Prepare next screen variable
+                  SET @cOutField01 = @cPickMethod
+                  SET @cOutField02 = @cNewDropID
+                  SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
+                  SET @cOutField04 = '' -- FromLOC
+                  SET @cOutField10 = '' -- ExtendedInfo
+
+                  SET @nAfterScn = @nScn_FromLOC
+                  SET @nAfterStep = @nStep_FromLOC
+               END
+            END
+         END
+      END
+      ELSE IF @nCurrentStep = @nStep_FromLOC -- FromLoc
+      BEGIN
+         IF @nInputKey = 0
+         BEGIN
+            IF @cPickModeFlag = '1'
+            BEGIN
+               SELECT 
+                  @cTaskDetailKey = V_TaskDetailKey
+               FROM RDT.RDTMOBREC WITH(NOLOCK)
+               WHERE Mobile = @nMobile
+
+               BEGIN TRY
+                  UPDATE dbo.TaskDetail WITH(ROWLOCK)
+                  SET ReasonKey = 'EXIT',
+                     Status = '0',
+                     EditDate = GetDate(),
+                     EditWho = @cUserName,
+                     TrafficCop = NULL
+                  WHERE TaskDetailKey = @cTaskDetailKey
+                     AND StorerKey = @cStorerKey
+                     AND Status = '3'
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 234865
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update Task Failed
+               END CATCH
+
+               SET @cOutField01 = ''
+               SET @cOutField02 = ''
+               SET @cOutField03 = ''
+               SET @cOutfield04 = ''
+               SET @cOutField05 = ''
+               SET @cOutField09 = ''
+
+               SET @cUDF13 = 'BackToTaskManagement'
+               GOTO Quit
+            END
+         END
       END
       ELSE IF @nCurrentStep = @nStep_SKU -- SKU/UCC
       BEGIN
@@ -365,6 +480,63 @@ BEGIN
 
             BEGIN TRAN
             SAVE TRAN rdt_1764ExtScn01
+
+            IF @cPickModeFlag = '1' 
+               AND EXISTS(SELECT 1 FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cUCCNo)
+            BEGIN
+               SELECT @nQTY = CAST(Value AS INT) FROM @tExtScnData WHERE Variable = '@nQTY'
+               SELECT @nQTY_RPL = CAST(Value AS INT) FROM @tExtScnData WHERE Variable = '@nQTY_RPL'
+
+               IF @nQTY = @nQTY_RPL
+               BEGIN
+                  EXEC rdt.rdt_TM_Replen_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
+                     @cTaskDetailKey,
+                     @cDropID,
+                     @nQTY,
+                     '',
+                     @cListKey,
+                     @nErrNo             OUTPUT,
+                     @cErrMsg            OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO RollBack_rdt_1764ExtScn01
+
+                  IF EXISTS (SELECT 1 FROM dbo.TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND Status = '5')
+                  BEGIN
+                     SET @cToLoc = rdt.rdtGetConfig( @nFunc, 'PickModeDefaultToLoc', @cStorerkey)
+
+                     IF NOT EXISTS(SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE Loc = @cToLoc)
+                        SET @cToLoc = 'WCS'
+
+                     EXEC rdt.rdt_TM_Replen_ClosePallet @nMobile, @nFunc, @cLangCode,
+                        @cUserName,
+                        @cListKey,
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT,
+                        @cToLOC
+                        
+                     IF @nErrNo <> 0
+                     BEGIN
+                        GOTO RollBack_rdt_1764ExtScn01
+                     END
+
+                     SET @nAfterStep = 99
+                     SET @nAfterScn = @nScn_NewExit
+                     SET @cOutField02 = '1'
+
+                     SET @cOutField03 = 'UCC Moved'
+                     SET @cOutField04 = ''
+
+                     GOTO COMMIT_1764ExtScn01
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nErrNo = 234866
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update Task Failed
+                     GOTO RollBack_rdt_1764ExtScn01
+                  END
+               END
+            END
             
             -- If no enough qty for full UCC, mark the task as BADUCC
             IF @cUCCNo <> '' AND 
@@ -475,6 +647,7 @@ BEGIN
                GOTO RollBack_rdt_1764ExtScn01
             END CATCH
 
+            COMMIT_1764ExtScn01:
             COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
          END
       END
@@ -765,6 +938,9 @@ BEGIN
 
                SET @nAfterScn = @nScn_NewExit
                SET @nAfterStep = @nStep_99
+
+               SET @cOutField03 = 'Pallet is closed and'
+               SET @cOutField04 = 'moved'
                GOTO Quit
             END
 
@@ -867,6 +1043,17 @@ BEGIN
 
          SET @nAfterScn = @nScn_NewExit
          SET @nAfterStep = @nStep_99
+
+         IF @cPickModeFlag = '1'
+         BEGIN
+            SET @cOutField03 = 'UCC Moved'
+            SET @cOutField04 = ''
+         END
+         ELSE
+         BEGIN
+            SET @cOutField03 = 'Pallet is closed and'
+            SET @cOutField04 = 'moved'
+         END
       END 
    END
 
@@ -883,12 +1070,27 @@ RollBack_rdt_1764ExtScn01:
          ROLLBACK TRANSACTION rdt_1764ExtScn01
       END
    END
+
+   IF @cPickModeFlag = '1' AND @nCurrentStep = @nStep_SKU
+   BEGIN
+      DECLARE @nRowRef INT
+
+      SELECT TOP 1 @nRowRef = RowRef FROM rdt.rdtRPFLog WITH (NOLOCK) 
+      WHERE TaskDetailKey = @cTaskDetailKey 
+         AND UCCNo = @cUCCNo
+      
+      IF @@ROWCOUNT > 0
+         DELETE FROM rdt.rdtRPFLog WITH(ROWLOCK) WHERE RowRef = @nRowRef
+   END
    GOTO Fail
 Fail:
    SET @nAfterScn = @nCurrentScn 
    SET @nAfterStep = @nCurrentStep
 
 Quit:
+   UPDATE RDT.RDTMOBREC WITH(ROWLOCK)
+   SET C_String1 = @cPickModeFlag
+   WHERE Mobile = @nMobile
 
 END
 GO
