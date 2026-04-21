@@ -634,8 +634,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 3. UCC to replenish, swap UCC with alloc
@@ -954,8 +952,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 4. UCC to pick, swap UCC free
@@ -1200,8 +1196,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    --5. UCC to pick, swap UCC with replenish
@@ -1495,8 +1489,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 6. UCC to pick, swap UCC with alloc
@@ -1939,8 +1931,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- Data error (not in the 7 scenarios)
@@ -2029,12 +2019,7 @@ BEGIN
             GOTO RollBackTran
          END CATCH
       END
-   END
 
-CommitTran:
-   -- Log UCC swap
-   IF @cTaskUCCNo <> @cActUCCNo
-   BEGIN
       DECLARE @cTaskUCCStatus NVARCHAR(1)
       SELECT @cTaskUCCStatus = Status FROM UCC WITH (NOLOCK) WHERE UCCNo = @cTaskUCCNo AND StorerKey = @cStorerkey
 
@@ -2042,6 +2027,7 @@ CommitTran:
       VALUES (1764, @cTaskUCCNo, @cActUCCNo, @cTaskDetailKey, @cTaskUCCStatus, @cActUCCStatus)
    END
 
+CommitTran:
    SET @cSKU = @cActUCCSKU
    SET @nUCCQTY = @nActUCCQTY
    SET @cUCC = @cActUCCNo
