@@ -181,11 +181,18 @@ BEGIN
       GOTO RollBackTran
    END
 
-   UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropId = @cDropId
-   WHERE StorerKey = @cStorerKey AND CaseID = @cLabelNo
+   BEGIN TRY
+      UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropId = @cDropId
+      WHERE StorerKey = @cStorerKey AND CaseID = @cLabelNo
 
-   UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET CaseID = ''
-   WHERE StorerKey = @cStorerKey AND PickDetailKey = @cPickDetailKey
+      UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET CaseID = ''
+      WHERE StorerKey = @cStorerKey AND PickDetailKey = @cPickDetailKey
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 259602
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+      GOTO RollBackTran
+   END CATCH
 
    COMMIT TRAN tran_SerialUnpack
    GOTO Quit
