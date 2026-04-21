@@ -184,7 +184,7 @@ BEGIN
    UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropId = @cDropId
    WHERE StorerKey = @cStorerKey AND CaseID = @cLabelNo
 
-   UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET CaseID = NULL
+   UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET CaseID = ''
    WHERE StorerKey = @cStorerKey AND PickDetailKey = @cPickDetailKey
 
    COMMIT TRAN tran_SerialUnpack
