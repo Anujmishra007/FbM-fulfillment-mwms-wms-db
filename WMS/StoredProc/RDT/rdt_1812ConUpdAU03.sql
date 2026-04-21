@@ -175,6 +175,7 @@ BEGIN
    DECLARE @cSKUPackKey         NVARCHAR(50) = ''
 
    DECLARE @nSpecCartonNo       INT = 0
+   DECLARE @nCartonNo           INT = 0  -- Declared here for use in PACKCFM carrier interface call
    DECLARE @nMaxCartonNo        INT = 0
    DECLARE @cSpecLabelNo        NVARCHAR(20) = ''
    DECLARE @nLoopCnt            INT = 0
@@ -353,6 +354,9 @@ BEGIN
             SET @nLoopCnt = @nLoopCnt + 1
          END
 
+         -- Set @nCartonNo for carrier interface call at PACKCFM
+         SET @nCartonNo = @nSpecCartonNo
+
          -- Skip to Pack Confirm for Specialised orders
          GOTO PACKCFM
       END
@@ -490,6 +494,9 @@ BEGIN
             SET @nLoopCnt = @nLoopCnt + 1
          END
 
+         -- Set @nCartonNo for carrier interface call at PACKCFM
+         SET @nCartonNo = @nSpecCartonNo
+
          -- Skip to Pack Confirm for Specialised orders
          GOTO PACKCFM
       END
@@ -526,12 +533,14 @@ BEGIN
             @cErrMsg OUTPUT
       END
 
+      -- Set @nCartonNo for carrier interface call at PACKCFM (use 0 for NOAUTO path)
+      SET @nCartonNo = 0
+
       -- Skip to Pack Confirm for non-Specialised orders
       GOTO PACKCFM
    END
    -- End of Specialised Orders Handling
 
-   DECLARE @nCartonNo   INT = 0
    DECLARE @cLabelLine  NVARCHAR(5) = ''
    DECLARE @cNewLine    NVARCHAR(1) = 'N'
 
@@ -1859,22 +1868,22 @@ BEGIN
 
    -- IF ISNULL(@nPackCNT,0) <= CAST(@cCustomerType5 AS INT)
    -- BEGIN
-   EXEC [dbo].[isp_Carrier_Middleware_Interface]
-      @c_OrderKey    = @cOrderKey
-      , @c_Mbolkey     = ''
-      , @c_FunctionID  = @nFunc
-      , @n_CartonNo    = @nCartonNo
-      , @n_Step        = @nStep
-      , @b_Success     = @bSuccess  OUTPUT
-      , @n_Err         = @nErrNo    OUTPUT
-      , @c_ErrMsg      = @cErrMsg   OUTPUT
+   -- EXEC [dbo].[isp_Carrier_Middleware_Interface]
+   --    @c_OrderKey    = @cOrderKey
+   --    , @c_Mbolkey     = ''
+   --    , @c_FunctionID  = @nFunc
+   --    , @n_CartonNo    = @nCartonNo
+   --    , @n_Step        = @nStep
+   --    , @b_Success     = @bSuccess  OUTPUT
+   --    , @n_Err         = @nErrNo    OUTPUT
+   --    , @c_ErrMsg      = @cErrMsg   OUTPUT
    
-   IF @nErrNo <> 0
-   BEGIN
-      SET @nErrNo = 263616
-      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- CarrierIntFail
-      GOTO RollBackTran
-   END
+   -- IF @nErrNo <> 0
+   -- BEGIN
+   --    SET @nErrNo = 263616
+   --    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- CarrierIntFail
+   --    GOTO RollBackTran
+   -- END
    -- END
    -- END
 
