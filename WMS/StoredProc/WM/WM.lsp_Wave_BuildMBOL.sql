@@ -5,14 +5,14 @@ GO
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_Wave_BuildMBOL                                  */                                                                                  
 /* Creation Date:                                                       */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
+/* Copyright: Measrk Logisitics                                         */                                                                                        
 /* Written by: Wan                                                      */                                                                                  
 /*                                                                      */                                                                                  
 /* Purpose: WM - Wave Creation                                          */                                                                                  
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.4                                                    */                                                                                  
+/* PVCS Version: 1.9                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -27,9 +27,10 @@ GO
 /*                            if @c_UserName <> SUSER_SNAME()           */
 /* 2021-08--5  Wan02    1.3   Fixed Linkage issue                       */
 /* 2022-09-20  SPChin   1.4   JSM-96335 - Extend ExternOrderkey Length  */
-/* 2025-09-02  SWT01    1.5   Enhanced session management pattern       */
+/* 2025-08-25  WLChooi  1.9   FCR-7399 SCE Build MBOL Post Update (WL01)*/
+/* 2026-04-20  Wan03          FCR-12218 - Merge v0 FCR-7399 to v2       */
 /************************************************************************/                                                                                  
-CREATE OR ALTER PROC [WM].[lsp_Wave_BuildMBOL]                                                                                                                    
+CREATE OR ALTER PROC [WM].[lsp_Wave_BuildMBOL]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
    ,  @c_Facility       NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey      NVARCHAR(15)                                                                                                                            
@@ -131,7 +132,7 @@ AS
          , @c_MBOLkey                  NVARCHAR(10)   = ''  
          , @c_Loadkey                  NVARCHAR(10)   = ''
          , @c_Orderkey                 NVARCHAR(10)   = '' 
-         , @c_ExternOrderkey           NVARCHAR(50)   = ''	--JSM-96335
+         , @c_ExternOrderkey           NVARCHAR(50)   = ''  --JSM-96335
          , @c_Route                    NVARCHAR(10)   = ''
          , @d_OrderDate                DATETIME       = NULL
          , @d_DeliveryDate             DATETIME       = NULL
@@ -142,26 +143,23 @@ AS
    SET @b_Success = 1
    SET @n_Err     = 0
  
-   -- Start enhanced session management (SWT01)
-   SET @n_Err = 0
-   DECLARE @b_ExecuteAs        BIT = 0
-   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
-   BEGIN
+    -- SWT02 - (Wan01) - Move up
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN              
+      SET @n_Err = 0 
       EXEC [WM].[lsp_SetUser] 
-           @c_UserName = @c_UserName  OUTPUT
-        ,  @n_Err      = @n_Err       OUTPUT
-        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
-      
-      IF @n_Err <> 0
-      BEGIN
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+              
+      --(Wan01)           
+      IF @n_Err <> 0       
+      BEGIN                
          GOTO EXIT_SP
       END
       
-      IF @b_ExecuteAs = 1
-         EXECUTE AS LOGIN = @c_UserName
-   END                                    
-	 -- End enhanced session management (SWT01)
+      EXECUTE AS LOGIN = @c_UserName      
+   END
 
    IF @n_Err <> 0 
    BEGIN
@@ -175,7 +173,7 @@ AS
       RNum              INT NOT NULL PRIMARY KEY                                                                  
    ,  OrderKey          NVARCHAR(10)   NULL DEFAULT ('') 
    ,  Loadkey           NVARCHAR(10)   NULL DEFAULT ('')                                                                                                                               
-   ,  ExternOrderKey    NVARCHAR(50)   NULL DEFAULT ('')	--JSM-96335                                                                                                                       
+   ,  ExternOrderKey    NVARCHAR(50)   NULL DEFAULT ('') --JSM-96335                                                                                                                       
    ,  [Route]           NVARCHAR(10)   NULL DEFAULT ('')
    ,  OrderDate         DATETIME       NULL                                                                                                                         
    ,  DeliveryDate      DATETIME       NULL                                                                                                                                  
@@ -769,7 +767,26 @@ START_BUILDMBOL:
    END
 
  END_BUILDMBOL:                                                                                                                                              
-                  
+   --(Wan03) WL01 S
+   IF @n_Continue IN (1,2)
+   BEGIN
+      SET @b_Success = 1
+      EXEC [WM].[lsp_Wave_BuildMBOL_Update]
+         @c_Wavekey        = @c_Wavekey
+      ,  @c_BuildParmKey   = @c_BuildParmKey
+      ,  @b_Success        = @b_Success  OUTPUT
+      ,  @n_err            = @n_err      OUTPUT                                                                                    
+      ,  @c_ErrMsg         = @c_ErrMsg   OUTPUT
+      ,  @b_debug          = @b_debug
+   
+      IF @b_Success <> 1
+      BEGIN
+         SET @n_Continue = 3
+         GOTO EXIT_SP
+      END
+   END
+   --(Wan03) WL01 E     
+       
    IF @b_debug = 2                                                                                                                                              
    BEGIN                                                                                                                                                       
       SET @d_EndTime_Debug = GETDATE()                                                    
@@ -819,8 +836,7 @@ EXIT_SP:
       BEGIN TRAN                                                                                                                                               
    END
 
-   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
-   EXEC [WM].[lsp_ResetUser]  -- (SWT01)       
+   REVERT                                                                                                                                                            
    IF @b_debug = 2                                                                                                                                              
    BEGIN                                                                                                                                                       
       PRINT 'SP-lsp_Wave_BuildMBOL DEBUG-STOP...'                                               
