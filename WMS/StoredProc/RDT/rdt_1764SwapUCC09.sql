@@ -634,8 +634,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 3. UCC to replenish, swap UCC with alloc
@@ -954,8 +952,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 4. UCC to pick, swap UCC free
@@ -1200,8 +1196,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    --5. UCC to pick, swap UCC with replenish
@@ -1495,8 +1489,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 6. UCC to pick, swap UCC with alloc
@@ -1939,8 +1931,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- Data error (not in the 7 scenarios)
@@ -1951,90 +1941,88 @@ BEGIN
       GOTO RollBackTran
    END
 
-   IF @cTaskUCCNo <> @cActUCCNo AND @cTaskUOM = '2'
-   BEGIN
-      DECLARE @nLoopIndex INT = -1
-
-      SET @nCartonNo = 0
-      SET @cLabelNo = ''
-      SET @cLabelLine = ''
-
-      WHILE 1 = 1
-      BEGIN
-         SELECT TOP 1
-            @nLoopIndex = RowRef,
-            @nCartonNo = CartonNo,
-            @cLabelNo = LabelNo,
-            @cLabelLine = LabelLine
-         FROM @tTaskUCCPackDetail
-         WHERE RowRef > @nLoopIndex
-         ORDER BY RowRef
-
-         IF @@ROWCOUNT = 0
-            BREAK
-
-         BEGIN TRY
-            UPDATE dbo.PackDetail 
-            SET
-               RefNo = @cActUCCNo,
-               EditDate = GETDATE(),
-               EditWho = SUSER_SNAME()
-            WHERE PickSlipNo = @cPickSlipNo
-               AND CartonNo = @nCartonNo
-               AND LabelNo = @cLabelNo
-               AND LabelLine = @cLabelLine
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo = 230401
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PackDetail Failed
-            GOTO RollBackTran
-         END CATCH
-      END
-
-      SET @nLoopIndex = -1
-      SET @cPickSlipNo = ''
-      SET @nCartonNo = 0
-      SET @cLabelNo = ''
-      SET @cLabelLine = ''
-
-      WHILE 1 = 1
-      BEGIN
-         SELECT TOP 1
-            @nLoopIndex = RowRef,
-            @cPickSlipNo = PickSlipNo,
-            @nCartonNo = CartonNo,
-            @cLabelNo = LabelNo,
-            @cLabelLine = LabelLine
-         FROM @tActualUCCPackDetail
-         WHERE RowRef > @nLoopIndex
-         ORDER BY RowRef
-
-         IF @@ROWCOUNT = 0
-            BREAK
-
-         BEGIN TRY
-            UPDATE dbo.PackDetail 
-            SET
-               RefNo = @cTaskUCCNo,
-               EditDate = GETDATE(),
-               EditWho = SUSER_SNAME()
-            WHERE PickSlipNo = @cPickSlipNo
-               AND CartonNo = @nCartonNo
-               AND LabelNo = @cLabelNo
-               AND LabelLine = @cLabelLine
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo = 230403
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PackDetail Failed
-            GOTO RollBackTran
-         END CATCH
-      END
-   END
-
-CommitTran:
-   -- Log UCC swap
    IF @cTaskUCCNo <> @cActUCCNo
    BEGIN
+      IF @cTaskUOM = '2'
+      BEGIN
+         DECLARE @nLoopIndex INT = -1
+
+         SET @nCartonNo = 0
+         SET @cLabelNo = ''
+         SET @cLabelLine = ''
+
+         WHILE 1 = 1
+         BEGIN
+            SELECT TOP 1
+               @nLoopIndex = RowRef,
+               @nCartonNo = CartonNo,
+               @cLabelNo = LabelNo,
+               @cLabelLine = LabelLine
+            FROM @tTaskUCCPackDetail
+            WHERE RowRef > @nLoopIndex
+            ORDER BY RowRef
+
+            IF @@ROWCOUNT = 0
+               BREAK
+
+            BEGIN TRY
+               UPDATE dbo.PackDetail 
+               SET
+                  RefNo = @cActUCCNo,
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND LabelNo = @cLabelNo
+                  AND LabelLine = @cLabelLine
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 230401
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PackDetail Failed
+               GOTO RollBackTran
+            END CATCH
+         END
+
+         SET @nLoopIndex = -1
+         SET @cPickSlipNo = ''
+         SET @nCartonNo = 0
+         SET @cLabelNo = ''
+         SET @cLabelLine = ''
+
+         WHILE 1 = 1
+         BEGIN
+            SELECT TOP 1
+               @nLoopIndex = RowRef,
+               @cPickSlipNo = PickSlipNo,
+               @nCartonNo = CartonNo,
+               @cLabelNo = LabelNo,
+               @cLabelLine = LabelLine
+            FROM @tActualUCCPackDetail
+            WHERE RowRef > @nLoopIndex
+            ORDER BY RowRef
+
+            IF @@ROWCOUNT = 0
+               BREAK
+
+            BEGIN TRY
+               UPDATE dbo.PackDetail 
+               SET
+                  RefNo = @cTaskUCCNo,
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND LabelNo = @cLabelNo
+                  AND LabelLine = @cLabelLine
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 230403
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PackDetail Failed
+               GOTO RollBackTran
+            END CATCH
+         END
+      END
+
       DECLARE @cTaskUCCStatus NVARCHAR(1)
       SELECT @cTaskUCCStatus = Status FROM UCC WITH (NOLOCK) WHERE UCCNo = @cTaskUCCNo AND StorerKey = @cStorerkey
 
@@ -2042,6 +2030,7 @@ CommitTran:
       VALUES (1764, @cTaskUCCNo, @cActUCCNo, @cTaskDetailKey, @cTaskUCCStatus, @cActUCCStatus)
    END
 
+CommitTran:
    SET @cSKU = @cActUCCSKU
    SET @nUCCQTY = @nActUCCQTY
    SET @cUCC = @cActUCCNo
