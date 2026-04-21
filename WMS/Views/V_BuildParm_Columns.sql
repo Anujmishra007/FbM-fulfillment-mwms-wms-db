@@ -6,14 +6,14 @@ GO
 /************************************************************************/
 /* View: V_BuildParm_Columns                                            */
 /* Creation Date: 2018 (initial checkin)                                */
-/* Copyright: LF Logistics                                              */
+/* Copyright: Maersk Logistics                                          */
 /* Written by: Wan                                                      */
 /*                                                                      */
 /* Purpose:                                                             */
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 2.2                                                    */
+/* PVCS Version: 2.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -42,6 +42,8 @@ GO
 /* 2023-06-23  Wan09    2.2   LFWM-4176 - CN UAT  Split wave into loads */
 /*                            based on customized SP                    */
 /* 2025-05-06  USH022-01 2.3   ORDERDETAIL Added into GROUP-FCR-3956    */
+/* 2025-08-25  WLChooi  2.5   FCR-7399 Add EDIT for WAVEBUILDMBOL (WL01)*/
+/* 2026-04-20  Wan10          FCR-12218 - Merge v0 FCR-7399 to v2       */
 /************************************************************************/
 CREATE OR ALTER VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
@@ -408,6 +410,18 @@ FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('MBOL','MBOLDETAIL','LOADPLAN', 'LOADPLANDETAIL','ORDERS','ORDERDETAIL','PICKDETAIL','SKU','LOC')
 AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
 AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
+--(Wan10) WL01 S
+UNION ALL
+SELECT BuildParmType = 'WAVEBUILDMBOL'
+      ,CondType  = 'EDIT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('MBOL')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho','AddDate', 'ArchiveCop', 'TrafficCop'
+                           ,'Status'                                                               --(Wan10) remove invalid mbol column
+                           )                                                                                                              
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
+--(Wan10) WL01 E
 GO
 
 GRANT SELECT ON V_BuildParm_Columns TO nSQL
