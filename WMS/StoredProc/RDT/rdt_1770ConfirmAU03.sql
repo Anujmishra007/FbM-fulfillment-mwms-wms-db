@@ -993,7 +993,6 @@ BEGIN
                 AND LabelNo = @cLabelNo
                 AND AddWho = 'rdt.' + SUSER_SNAME()
                 ORDER BY CartonNo DESC -- max cartonno
-
             END               
 
             ELSE
@@ -1313,10 +1312,12 @@ BEGIN
                     END CATCH
                 END
 
-                IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID)
+                IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID  AND CASEID = @cLabelNo)
                 BEGIN
+                    SET @cPalletLineNumber = '00001'  -- Initialize default
+
                     SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-                    FROM dbo.PalletDetail WITH (NOLOCK)
+                    FROM dbo.PalletDetail WITH (UPDLOCK, ROWLOCK)
                     WHERE PalletKey = @cFromID
                     BEGIN TRY
                         INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine03, ArchiveCop, UserDefine02)
@@ -2058,11 +2059,13 @@ BEGIN
     IF @nErrNo <> 0
         GOTO RollBackTran
 
-    COMMIT TRAN rdt_1770ConfirmAU03 -- Only commit change made here
+    IF @@TRANCOUNT > @nTranCount
+        COMMIT TRAN rdt_1770ConfirmAU03 -- Only commit change made here
     GOTO Quit
 
 RollBackTran:
-    ROLLBACK TRAN rdt_1770ConfirmAU03 -- Only rollback change made here
+    IF @@TRANCOUNT > @nTranCount
+        ROLLBACK TRAN rdt_1770ConfirmAU03 -- Only rollback change made here
 Quit:
     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
         COMMIT TRAN
