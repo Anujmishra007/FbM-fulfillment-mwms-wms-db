@@ -1317,7 +1317,7 @@ BEGIN
                     SET @cPalletLineNumber = '00001'  -- Initialize default
 
                     SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-                    FROM dbo.PalletDetail WITH (UPDLOCK, ROWLOCK)
+                    FROM dbo.PalletDetail WITH (UPDLOCK, HOLDLOCK)
                     WHERE PalletKey = @cFromID
                     BEGIN TRY
                         INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine03, ArchiveCop, UserDefine02)
@@ -1680,7 +1680,7 @@ BEGIN
                 BEGIN
                 /*INC7331096 (START)*/
                     SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-                    FROM dbo.PalletDetail WITH (NOLOCK)
+                    FROM dbo.PalletDetail WITH (UPDLOCK, HOLDLOCK)
                     WHERE PalletKey = @cFromID
 
                     BEGIN TRY
