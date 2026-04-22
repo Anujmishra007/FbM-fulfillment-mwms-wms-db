@@ -81,6 +81,8 @@ GO
 /* 2023-05-10 5.1  WinSern    JSM-142212 add 'Order By RowRef' (ws01)         */
 /* 2024-04-17 5.2  Ung        UWP-18071 Add ByPassTolerance RDT supersede WMS */
 /* 2025-09-08 5.3  Dennis     UWP-40726Add 4 fields to DuplicateFromMatchValue*/
+
+/* 2025-12-17 5.4  YeeKung    FCR-9675 Add Original QTY (yeekung02)           */
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive_V7] (  
@@ -170,6 +172,7 @@ DECLARE @cDuplicateFromMatchValue    NVARCHAR(20) -- (ChewKP01)
         ,@cBorrowed_OriginalReceiptLineNumber NVARCHAR(5) -- (ChewKP01)  
   
 DECLARE @nRDQTY      INT    
+DECLARE @nOriginalQty INT
     
 SET  @cASNMatchByPOLineValue = '0'    -- (ChewKP01)  
 SET  @cExternLineNumber = ''          -- (ChewKP01)  
@@ -712,6 +715,8 @@ END
 SET @cSKU = CASE WHEN @cSKUCode <> '' THEN @cSKUCode ELSE @cUCCSKU END  
 SET @cUOM = CASE WHEN @cSKUCode <> '' THEN @cSKUUOM  ELSE @cUCCUOM END  
 SET @nQTY = CASE WHEN @cSKUCode <> '' THEN @nSKUQTY  ELSE @nUCCQTY END  
+SET @nOriginalQty = @nQTY
+
   
 -- Get SKU's setting  
 DECLARE @cLottable01Required NVARCHAR( 1)  
@@ -2901,7 +2906,7 @@ BEGIN
       GOTO RollBackTran    
    END     
        
-   SET @nQTY_Bal = @nQTY    
+   SET @nQTY_Bal = @nOriginalQty   
        
    -- Loop serial no    
    SET @curRD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR    
