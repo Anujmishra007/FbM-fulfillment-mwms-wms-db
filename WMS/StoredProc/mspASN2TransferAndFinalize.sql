@@ -75,7 +75,7 @@ BEGIN
            R.ContainerKey,
            R.Storerkey,
            RD.Sku,
-           RD.ToLoc,
+           L.Loc,
            L.LOT,
            RD.ToID,
            RD.QtyReceived,
@@ -87,7 +87,10 @@ BEGIN
            RD.Lottable05
     FROM RECEIPT R (NOLOCK)
     JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
-    JOIN LOTXLOCXID L (NOLOCK) ON L.Sku = RD.Sku AND L.Loc = RD.ToLoc AND L.ID = RD.ToID
+    JOIN LOTXLOCXID L (NOLOCK) ON L.Sku = RD.Sku
+    --AND L.Loc = RD.ToLoc
+    AND L.ID = RD.ToID
+    AND L.Storerkey = RD.Storerkey
     LEFT JOIN TRANSFERDETAIL TD (NOLOCK) ON TD.LOTTABLE03 = R.ExternReceiptkey
     WHERE RD.Receiptkey = @c_Receiptkey
     AND L.Qty - L.QtyAllocated - L.QtyPicked > 0
@@ -120,10 +123,7 @@ BEGIN
                 Storerkey,
                 'CUS',
                 'T1T2',
-                CASE
-                WHEN @n_Count = 1 THEN ''
-                ELSE TrackingNo
-                END AS CustomerRefNo,
+                TrackingNo,
                 ContainerKey,
                 Facility,
                 Facility
@@ -154,15 +154,25 @@ BEGIN
                 CASE
                 WHEN @n_Count = 1 THEN RD.Lot
                 ELSE (SELECT TOP 1 LOT FROM LOTXLOCXID L (NOLOCK)
-                WHERE L.Sku = RD.Sku AND L.Loc = RD.Loc AND L.ID = RD.ID
+                WHERE L.Sku = RD.Sku  AND L.ID = RD.ID AND L.storerkey = RD.Storerkey
                 AND L.Qty - L.QtyAllocated - L.QtyPicked > 0)
                 END AS Lot,
-                RD. Loc,
-                RD. ID,
+                CASE
+                WHEN @n_Count = 1 THEN RD.Loc
+                ELSE (SELECT TOP 1 L.Loc FROM LOTXLOCXID L (NOLOCK)
+                 WHERE L.Sku = RD.Sku AND L.ID = RD.ID AND L.storerkey = RD.Storerkey
+                AND L.Qty - L.QtyAllocated - L.QtyPicked > 0)
+               END AS Loc,
+                RD.ID,
                 RD.Qty,
                 RD.Packkey,
                 RD.UOM,
-                RD.Loc,
+                CASE
+                WHEN @n_Count = 1 THEN RD.Loc
+                ELSE (SELECT TOP 1 L.Loc FROM LOTXLOCXID L (NOLOCK)
+                      WHERE L.Sku = RD.Sku AND L.ID = RD.ID AND L.storerkey = RD.Storerkey
+                        AND L.Qty - L.QtyAllocated - L.QtyPicked > 0)
+                 END AS ToLoc,
                 RD.ID,
                 '',
                 RD.Sku,
@@ -216,8 +226,8 @@ BEGIN
                 GOTO QUIT_SP
               END
            END
-           SET @n_Count = @n_Count + 1
          END
+         SET @n_Count = @n_Count + 1
        END
      END
      END TRY
