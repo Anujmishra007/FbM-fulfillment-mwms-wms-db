@@ -1312,16 +1312,12 @@ BEGIN
                     END CATCH
                 END
 
-                IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID  AND CASEID = @cLabelNo)
+                IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID AND CASEID = @cLabelNo)
                 BEGIN
-                    SET @cPalletLineNumber = '00001'  -- Initialize default
-
-                    SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-                    FROM dbo.PalletDetail WITH (UPDLOCK, HOLDLOCK)
-                    WHERE PalletKey = @cFromID
                     BEGIN TRY
+                        -- Pass '0' for PalletLineNumber - trigger will auto-generate
                         INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine03, ArchiveCop, UserDefine02)
-                        VALUES (@cFromID, @cPalletLineNumber, @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nQty, '0', @cOrderKey, @cDropID, NULL, @cLabelNo)
+                        VALUES (@cFromID, '0', @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nQty, '0', @cOrderKey, @cDropID, NULL, @cLabelNo)
                     END TRY
                     BEGIN CATCH
                         SET @nErrNo = 262773
@@ -1678,14 +1674,10 @@ BEGIN
 
                 IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID AND CASEID = @cLabelNo)
                 BEGIN
-                /*INC7331096 (START)*/
-                    SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-                    FROM dbo.PalletDetail WITH (UPDLOCK, HOLDLOCK)
-                    WHERE PalletKey = @cFromID
-
                     BEGIN TRY
+                        -- Pass '0' for PalletLineNumber - trigger will auto-generate
                         INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine03, ArchiveCop, UserDefine02)
-                        VALUES (@cFromID, @cPalletLineNumber, @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nCasePackQty, '0', @cOrderKey, @cDropID, NULL, @cLabelNo)
+                        VALUES (@cFromID, '0', @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nCasePackQty, '0', @cOrderKey, @cDropID, NULL, @cLabelNo)
                     END TRY
                     BEGIN CATCH
                         SET @nErrNo = 262773
