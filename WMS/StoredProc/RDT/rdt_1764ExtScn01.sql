@@ -303,7 +303,8 @@ BEGIN
                UPDATE dbo.TaskDetail WITH (ROWLOCK)
                SET Status = '0',
                   EditDate = GETDATE(),
-                  EditWho  = SUSER_SNAME()
+                  EditWho  = SUSER_SNAME(),
+                  TrafficCop = NULL
                WHERE TaskDetailKey = @cTaskdetailKey
                   AND StorerKey = @cStorerKey
             END TRY
@@ -412,7 +413,7 @@ BEGIN
 
                   -- Prepare next screen variable
                   SET @cOutField01 = @cPickMethod
-                  SET @cOutField02 = @cNewDropID
+                  SET @cOutField02 = @cUDF11
                   SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
                   SET @cOutField04 = '' -- FromLOC
                   SET @cOutField10 = '' -- ExtendedInfo
@@ -438,6 +439,7 @@ BEGIN
                   UPDATE dbo.TaskDetail WITH(ROWLOCK)
                   SET ReasonKey = 'EXIT',
                      Status = '0',
+                     UserKey = '',
                      EditDate = GetDate(),
                      EditWho = @cUserName,
                      TrafficCop = NULL
@@ -520,12 +522,8 @@ BEGIN
                         GOTO RollBack_rdt_1764ExtScn01
                      END
 
-                     SET @nAfterStep = 99
-                     SET @nAfterScn = @nScn_NewExit
-                     SET @cOutField02 = '1'
-
-                     SET @cOutField03 = 'UCC Moved'
-                     SET @cOutField04 = ''
+                     SET @nAfterStep = @nStep_Exit
+                     SET @nAfterScn = @nScn_Exit
 
                      GOTO COMMIT_1764ExtScn01
                   END
@@ -747,10 +745,6 @@ BEGIN
                   GOTO RollBack_rdt_1764ExtScn01
                END CATCH
 
-               DECLARE 
-                  @cAlertMessage       NVARCHAR(255),
-                  @bSuccess            INT
-
                SELECT @cUCCNo = UCCNo
                FROM dbo.TaskDetail TD WITH(NOLOCK)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON TD.StorerKey = UCC.StorerKey AND TD.CaseID = UCC.UCCNo
@@ -796,7 +790,7 @@ BEGIN
                   END TRY
                   BEGIN CATCH
                      SET @nErrNo = 234863
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Hold UCC Failed
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Hold UCC Failed
                      GOTO RollBack_rdt_1764ExtScn01
                   END CATCH
                END
@@ -1046,6 +1040,9 @@ BEGIN
 
          IF @cPickModeFlag = '1'
          BEGIN
+            SET @cOutField01 = @cToLoc
+            SET @cOutField02 = '1'
+
             SET @cOutField03 = 'UCC Moved'
             SET @cOutField04 = ''
          END
