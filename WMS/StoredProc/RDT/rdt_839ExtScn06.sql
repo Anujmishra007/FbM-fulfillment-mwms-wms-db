@@ -712,11 +712,31 @@ BEGIN
                END  
 
                -- 3. Send supervisor alert message
+
+               -- Get SKU description
+               DECLARE @cDispStyleColorSize  NVARCHAR( 20)
+               SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)
+
+               DECLARE @cDispExtValue  NVARCHAR( 20)
+               SET @cDispExtValue = rdt.RDTGetConfig( @nFunc, 'DispExtValues', @cStorerKey)  --(yeekung03)
+
+               IF @cDispStyleColorSize = '0'
+                  SELECT @cSKUDescr = Descr FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSuggSKU
+               ELSE IF @cDispStyleColorSize = '1'
+                  SELECT @cSKUDescr =
+                     CAST( Style AS NCHAR(20)) +
+                     CAST( Color AS NCHAR(10)) +
+                     CAST( Size  AS NCHAR(10))
+                  FROM SKU WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND SKU = @cSuggSKU
+
                BEGIN TRY
                   DECLARE @cVarianceQty NVARCHAR(10) = ISNULL(TRY_CAST((@nSuggQTY - @nActQTY) AS NVARCHAR(10)), '')
                   SET @cAlertMessage =
                         'Short happens while picking(FN839), Loc: ' + @cSuggLOC 
                         + ' ,SKU: ' + @cSuggSKU 
+                        + ' ,SKU Descr: ' + @cSKUDescr
                         + ' ,UCC/SerialNo: ' + @cSuggUCC 
                         + ' ,VARIANCE QTY: ' + @cVarianceQty
                   EXEC nspLogAlert
