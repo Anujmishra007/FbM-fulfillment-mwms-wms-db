@@ -1,6 +1,3 @@
-USE [GLOWMS]
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_1812ScnAttr01]    Script Date: 4/23/2026 12:36:30 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -16,7 +13,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */  
 /* 2026-04-16 1.0  Sreeja     FCR-12393. Location-based color coding    */
 /************************************************************************/
-ALTER     PROC [RDT].[rdt_1812ScnAttr01] (
+CREATE OR ALTER PROC [RDT].[rdt_1812ScnAttr01] (
    @nMobile          INT,
    @nFunc            INT,
    @nScn             INT,
@@ -51,7 +48,7 @@ BEGIN
     IF @nScn = 4021
     BEGIN
         -- Line 8 = FROM LOC display field (%10d03)
-        IF @cY = '8'
+        IF @cY = 8
         BEGIN
             SELECT TOP 1 @cSValueSP = ISNULL(ColorCode,'')
             FROM LOC (NOLOCK) WHERE LOC = @suggestLoc
