@@ -48,7 +48,7 @@ BEGIN
     DECLARE @nQTYPick       INT
     DECLARE @cFromLOC       NVARCHAR( 10)
     DECLARE @cFromID        NVARCHAR( 18)
-    DECLARE @cSKU           NVARCHAR( 15)
+    DECLARE @cSKU           NVARCHAR( 20)
     DECLARE @cLOT           NVARCHAR( 10)
     DECLARE @cPickMethod    NVARCHAR( 10)
     DECLARE @cPickConfirmStatus NVARCHAR( 1)
@@ -993,7 +993,6 @@ BEGIN
                 AND LabelNo = @cLabelNo
                 AND AddWho = 'rdt.' + SUSER_SNAME()
                 ORDER BY CartonNo DESC -- max cartonno
-
             END               
 
             ELSE
@@ -1313,12 +1312,15 @@ BEGIN
                     END CATCH
                 END
 
-                IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID)
+                IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID AND CASEID = @cLabelNo)
                 BEGIN
-                    SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-                    FROM dbo.PalletDetail WITH (NOLOCK)
-                    WHERE PalletKey = @cFromID
                     BEGIN TRY
+                        SET @cPalletLineNumber = '00001'  -- Initialize default
+
+                        SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+                        FROM dbo.PalletDetail WITH (NOLOCK)
+                        WHERE PalletKey = @cFromID
+
                         INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine03, ArchiveCop, UserDefine02)
                         VALUES (@cFromID, @cPalletLineNumber, @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nQty, '0', @cOrderKey, @cDropID, NULL, @cLabelNo)
                     END TRY
@@ -1677,12 +1679,13 @@ BEGIN
 
                 IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID AND CASEID = @cLabelNo)
                 BEGIN
-                /*INC7331096 (START)*/
-                    SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-                    FROM dbo.PalletDetail WITH (NOLOCK)
-                    WHERE PalletKey = @cFromID
-
                     BEGIN TRY
+                        SET @cPalletLineNumber = '00001'  -- Initialize default
+
+                        SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+                        FROM dbo.PalletDetail WITH (NOLOCK)
+                        WHERE PalletKey = @cFromID
+
                         INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine03, ArchiveCop, UserDefine02)
                         VALUES (@cFromID, @cPalletLineNumber, @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nCasePackQty, '0', @cOrderKey, @cDropID, NULL, @cLabelNo)
                     END TRY
@@ -1888,9 +1891,10 @@ BEGIN
                 BEGIN
                     DECLARE @tPackList AS VariableTable
                     BEGIN TRY
-                        INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
-                        INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                        INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+                        INSERT INTO @tPackList (Variable, Value) VALUES 
+                            ('@cLoadKey', @cLoadKey),
+                            ('@cOrderKey', @cOrderKey),
+                            ('@cPickSlipNo', @cPickSlipNo);
                     END TRY
                     BEGIN CATCH
                         SET @nErrNo = 262785
@@ -1906,11 +1910,6 @@ BEGIN
                                 AND FUNCTION_ID = @nFunc
                                 AND REPORTTYPE = @cPackList)
                     BEGIN
-                        --DECLARE @tPackList AS VariableTable
-                        --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
-                        --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                        --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
-
                         -- Print label
                         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
                             @cPackList, -- Report type
@@ -1921,11 +1920,6 @@ BEGIN
                     END
                     ELSE IF @cPackList <> '' AND ISNULL(@cPaperPrinter,'') <> ''
                     BEGIN
-                        --DECLARE @tPackList AS VariableTable
-                        --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
-                        --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                        --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
-
                         -- Print label
                         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
                             @cPackList, -- Report type
@@ -1937,11 +1931,6 @@ BEGIN
                 END -- Packlist <> ''
                 ELSE IF @cPackList <> '' AND ISNULL(@cPaperPrinter,'') <> ''
                 BEGIN
-                    --DECLARE @tPackList AS VariableTable
-                    --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
-                    --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                    --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
-
                     -- Print label
                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
                         @cPackList, -- Report type
@@ -2058,14 +2047,22 @@ BEGIN
     IF @nErrNo <> 0
         GOTO RollBackTran
 
-    COMMIT TRAN rdt_1770ConfirmAU03 -- Only commit change made here
+    IF @@TRANCOUNT > @nTranCount
+        COMMIT TRAN rdt_1770ConfirmAU03 -- Only commit change made here
     GOTO Quit
 
 RollBackTran:
-    ROLLBACK TRAN rdt_1770ConfirmAU03 -- Only rollback change made here
+    IF @@TRANCOUNT > @nTranCount
+        ROLLBACK TRAN rdt_1770ConfirmAU03 -- Only rollback change made here
 Quit:
-    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-        COMMIT TRAN
+    -- Only commit if the transaction is still active and committable
+    WHILE @@TRANCOUNT > @nTranCount 
+    BEGIN
+        IF XACT_STATE() = 1 
+            COMMIT TRAN;
+        ELSE
+            ROLLBACK TRAN; -- Rollback if transaction is doomed
+    END
 END
 GO
 
