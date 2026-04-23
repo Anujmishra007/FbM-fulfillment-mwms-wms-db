@@ -740,7 +740,7 @@ BEGIN
                         + ' ,UCC/SerialNo: ' + @cSuggUCC 
                         + ' ,VARIANCE QTY: ' + @cVarianceQty
                   EXEC nspLogAlert
-                        @c_modulename       = 'rdt_839ExtScn06'
+                        @c_modulename       = 'Pick Piece'
                         , @c_AlertMessage     = @cAlertMessage
                         , @n_Severity         = '5'
                         , @b_success          = @bSuccess
@@ -821,53 +821,49 @@ BEGIN
                BEGIN
                   IF @cRealloMethod = 'Sync'
                   BEGIN
-                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExecStatements) +
-                           ' @c_Wavekey, ' +
-                           ' @c_SKU, ' +
-                           ' @c_InputValue, ' +
-                           ' @c_Taskdetailkey, ' +
-                           ' @b_Success OUTPUT, ' +
-                           ' @n_Err OUTPUT, @c_ErrMsg OUTPUT '
-                        SET @cSQLParam =
-                           '  @c_Wavekey          NVARCHAR(10) ' +
-                           ' ,@c_SKU              NVARCHAR(20) ' +
-                           ' ,@c_InputValue       NVARCHAR(20) ' +
-                           ' ,@c_Taskdetailkey    NVARCHAR(10) ' +
-                           ' ,@b_Success          INT     OUTPUT ' +
-                           ' ,@n_Err              INT     OUTPUT ' +
-                           ' ,@c_ErrMsg           NVARCHAR(225) OUTPUT  '
+                     SET @cSQL = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements) +
+                            ' @c_Wavekey, @c_SKU, @c_InputValue, @c_Taskdetailkey, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '
 
-                        BEGIN TRY
-                           EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                              @cWaveKey, @cLoopSKU, @cLoopLoc,
-                              @bSuccess OUTPUT,
-                              @nErrNo OUTPUT, @cErrMsg OUTPUT
-                        END TRY
-                        BEGIN CATCH
-                           IF XACT_STATE() = -1
-                              ROLLBACK TRAN rdt_839ExtScn06_6773
-                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                              COMMIT TRAN
-                              
-                           SET @nErrNo = 255534
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec Reallocate SP failed
+                     SET @cSQLParam =
+                        '  @c_Wavekey          NVARCHAR(10) ' +
+                        ' ,@c_SKU              NVARCHAR(20) ' +
+                        ' ,@c_InputValue       NVARCHAR(20) ' +
+                        ' ,@c_Taskdetailkey    NVARCHAR(10) ' +
+                        ' ,@b_Success          INT     OUTPUT ' +
+                        ' ,@n_Err              INT     OUTPUT ' +
+                        ' ,@c_ErrMsg           NVARCHAR(225) OUTPUT  '
 
-                           CLOSE @curPD
-                           DEALLOCATE @curPD
-                           GOTO UPD_RDTMOBREC
-                        END CATCH
+                     BEGIN TRY
+                        EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                           @cWaveKey, @cLoopSKU, @cLoopLoc, '',
+                           @bSuccess OUTPUT,
+                           @nErrNo OUTPUT, @cErrMsg OUTPUT
+                     END TRY
+                     BEGIN CATCH
+                        IF XACT_STATE() = -1
+                           ROLLBACK TRAN rdt_839ExtScn06_6773
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+                           
+                        SET @nErrNo = 255534
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec Reallocate SP failed
 
-                        IF @nErrNo <> 0
-                        BEGIN
-                           IF XACT_STATE() = -1
-                              ROLLBACK TRAN rdt_839ExtScn06_6773
-                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                              COMMIT TRAN
+                        CLOSE @curPD
+                        DEALLOCATE @curPD
+                        GOTO UPD_RDTMOBREC
+                     END CATCH
 
-                           CLOSE @curPD
-                           DEALLOCATE @curPD
-                           GOTO UPD_RDTMOBREC
-                        END
+                     IF @nErrNo <> 0
+                     BEGIN
+                        IF XACT_STATE() = -1
+                           ROLLBACK TRAN rdt_839ExtScn06_6773
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+
+                        CLOSE @curPD
+                        DEALLOCATE @curPD
+                        GOTO UPD_RDTMOBREC
+                     END
                   END
                   ELSE IF @cRealloMethod = 'Async'
                   BEGIN
