@@ -1655,14 +1655,14 @@ BEGIN
       -- Get suggest LOC
       DECLARE @cSuggAltLOC        NVARCHAR( 10) = ''
       DECLARE @cPickAndDropAltLOC NVARCHAR( 10) = ''
+      DECLARE @nAltPABookingKey   INT = 0
       SET @nPAErrNo = 0
-      SET @nPABookingKey = 0
       EXEC rdt.rdt_PutawayByID_GetSuggestLOC @nMobile, @nFunc, @cLangCode, @cUserName, @cStorerKey, @cFacility
          ,@cFromLOC
          ,@cFromID
          ,@cSuggAltLOC        OUTPUT
          ,@cPickAndDropAltLOC OUTPUT
-         ,@nPABookingKey      OUTPUT
+         ,@nAltPABookingKey   OUTPUT
          ,@nPAErrNo           OUTPUT
          ,@cErrMsg            OUTPUT
       IF @nPAErrNo <> 0 AND
@@ -1672,6 +1672,21 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
          GOTO Quit
       END      
+      
+      -- Release original booking
+      IF @nPABookingKey <> 0
+      BEGIN
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+            ,'' --FromLOC
+            ,'' --FromID
+            ,'' --cSuggLOC
+            ,'' --Storer
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,@nPABookingKey = @nPABookingKey OUTPUT
+         IF @nErrNo <> 0  
+            GOTO Quit
+      END
       
       -- Generate alert
       DECLARE @c_AlertMessage NVARCHAR( 255)
@@ -1687,7 +1702,7 @@ BEGIN
             'ALTERNATE LOC = ' + @cPickAndDropAltLOC + @cCRLF + 
             'REASON CODE = ' + @cReasonCode
       EXEC nspLogAlert
-           @c_modulename       = 'Putaway by SKU'
+           @c_modulename       = 'Putaway by ID'
          , @c_AlertMessage     = @c_AlertMessage
          , @n_Severity         = 5
          , @b_Success          = 0
@@ -1701,6 +1716,9 @@ BEGIN
       -- Save to suggested LOC
       SET @cSuggLOC = @cSuggAltLOC
       SET @cPickAndDropLOC = @cPickAndDropAltLOC
+      
+      -- Save booking
+      SET @nPABookingKey = @nAltPABookingKey
    END
 
    -- Prepare next screen var
