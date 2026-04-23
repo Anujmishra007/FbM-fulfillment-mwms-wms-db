@@ -740,7 +740,7 @@ BEGIN
                         + ' ,UCC/SerialNo: ' + @cSuggUCC 
                         + ' ,VARIANCE QTY: ' + @cVarianceQty
                   EXEC nspLogAlert
-                        @c_modulename       = 'rdt_839ExtScn06'
+                        @c_modulename       = 'Pick Piece'
                         , @c_AlertMessage     = @cAlertMessage
                         , @n_Severity         = '5'
                         , @b_success          = @bSuccess
