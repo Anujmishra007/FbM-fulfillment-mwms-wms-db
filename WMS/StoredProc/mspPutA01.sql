@@ -26,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2026-03-09  Wan      1.0   Created                                   */
+/* 2026-04-23  Wan01    1.0   Fixed for MatchLPNAttrib standard condition*/
 /************************************************************************/
 CREATE OR ALTER PROC dbo.mspPutA01 
    @c_UserID            NVARCHAR(128)  = ''
@@ -700,6 +701,7 @@ BEGIN
       IF @c_PAType = 'MatchLPNAttrib' 
       BEGIN
          SET @c_SQLCond = @c_SQLCond + ' AND LotxLocxId.ID > '''''
+                        + ' AND LotxLocxId.Qty - LotxLocxId.QtyPicked + LotxLocxId.PendingMoveIN > 0' --2026-04-23
          IF CHARINDEX('LOC.MaxPallet', @c_SQLCond_Loc) > 0
          BEGIN
             SET @c_SQLCond = @c_SQLCond + ' AND LOC.MaxPallet > LocxId.nID'
