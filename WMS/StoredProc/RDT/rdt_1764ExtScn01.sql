@@ -522,8 +522,13 @@ BEGIN
                         GOTO RollBack_rdt_1764ExtScn01
                      END
 
-                     SET @nAfterStep = @nStep_Exit
-                     SET @nAfterScn = @nScn_Exit
+                     SET @nAfterScn = @nScn_NewExit
+                     SET @nAfterStep = @nStep_99
+
+                     SET @cOutField01 = @cToLoc
+                     SET @cOutField02 = '1'
+                     SET @cOutField03 = 'UCC Moved'
+                     SET @cOutField04 = ''
 
                      GOTO COMMIT_1764ExtScn01
                   END
