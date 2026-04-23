@@ -27,5 +27,6 @@ EXECUTE rdt.rdtAddMsg 263816, 10, '263816^QTY exceed expected',  'us_english', 1
 EXECUTE rdt.rdtAddMsg 263817, 10, '263817^SKU not in BOM',       'us_english', 1880, 0, '263817 SKU not in BOM'
 EXECUTE rdt.rdtAddMsg 263818, 10, '263818^QTY exceeds expected', 'us_english', 1880, 0, '263818 QTY exceeds expected'
 EXECUTE rdt.rdtAddMsg 263819, 10, '263819^QTY mismatch',         'us_english', 1880, 0, '263819 QTY mismatch'
+EXECUTE rdt.rdtAddMsg 263820, 10, '263820^QTY exceeds max',      'us_english', 1880, 0, '263820 QTY exceeds max'
 
 SELECT * FROM rdt.rdtmsg WITH (NOLOCK) WHERE message_id BETWEEN 263801 AND 263850

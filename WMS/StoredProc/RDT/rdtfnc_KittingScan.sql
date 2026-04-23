@@ -169,6 +169,12 @@ SELECT
    @cDefaultToQty       = V_String13,
    @cConvertQTYSP       = V_String14,
    @cDYNBOM             = V_String15,
+   @cLottableCode       = V_String16,
+   @cExpectedChildSKU   = V_String17,
+   @cChildSKUDescr      = V_String18,
+   @nQTYExp             = ISNULL(TRY_CAST(NULLIF(V_String19, '') AS INT), 0),
+   @nBOMQty             = ISNULL(TRY_CAST(NULLIF(V_String20, '') AS INT), 0),
+   @nChildSKUQty        = ISNULL(TRY_CAST(NULLIF(V_String21, '') AS INT), 0),
    @cLottable01         = V_Lottable01,
    @cLottable02         = V_Lottable02,
    @cLottable03         = V_Lottable03,
@@ -184,21 +190,22 @@ SELECT
    @dLottable13         = V_Lottable13,
    @dLottable14         = V_Lottable14,
    @dLottable15         = V_Lottable15,
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,
-   @cInField02 = I_Field02,   @cOutField02 = O_Field02,
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03,
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04,
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05,
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06,
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07,
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08,
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09,
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10,
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11,
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12,
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13,
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
-   @cInField15 = I_Field15,   @cOutField15 = O_Field15
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
+   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04 = FieldAttr04,
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05 = FieldAttr05,
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06 = FieldAttr06,
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07 = FieldAttr07,
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08 = FieldAttr08,
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09 = FieldAttr09,
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10 = FieldAttr10,
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11 = FieldAttr11,
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12 = FieldAttr12,
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13 = FieldAttr13,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14 = FieldAttr14,
+   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15 = FieldAttr15
+
 
 FROM rdt.rdtMobRec WITH (NOLOCK)
 WHERE Mobile = @nMobile
@@ -387,6 +394,9 @@ BEGIN
       -- Prep next screen var
       SET @cOutField01 = '' -- To LOC
       SET @cOutField02 = '' -- To ID
+
+      IF @cDefaultToLoc <> ''
+         SET @cOutField01 = @cDefaultToLoc
 
       -- Go to next To LOC/ID screen
       SET @nScn = 6881
@@ -577,6 +587,8 @@ BEGIN
       -- Prep next screen var
       SET @cOutField01 = '' -- Parent SKU
       SET @cOutField02 = '' -- QTY
+      IF @cDefaultToQty <> ''
+         SET @cOutField02 = @cDefaultToQty
 
       -- Go to Parent SKU screen
       SET @nScn = 6882
@@ -765,6 +777,18 @@ BEGIN
       END
 
       SET @nQTY = ISNULL(TRY_CAST(@cQTY AS INT), 0)
+
+      -- Validate QTY does not exceed DefaultToQty (if configured as numeric)
+      IF @cDefaultToQty <> '' AND TRY_CAST(@cDefaultToQty AS INT) IS NOT NULL
+      BEGIN
+         IF @nQTY > CAST(@cDefaultToQty AS INT)
+         BEGIN
+            SET @nErrNo = 263820
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTY exceeds max
+            EXEC rdt.rdtSetFocusField @nMobile, 2
+            GOTO Step_3_Fail
+         END
+      END
 
       -- ConvertQTYSP support - convert input qty to actual qty
       SET @nConvertedQty = @nQTY
@@ -997,6 +1021,8 @@ BEGIN
       SET @cOutField01 = '' -- To LOC
       SET @cOutField02 = '' -- To ID
       EXEC rdt.rdtSetFocusField @nMobile, 1
+      IF @cDefaultToLoc <> ''
+         SET @cOutField01 = @cDefaultToLoc  -- Keep default To LOC for user convenience
 
       -- Go back to To LOC/ID screen
       SET @nScn  = 6881
@@ -1028,11 +1054,6 @@ Step 4. Scn = 6883. Child SKU screen (Loop)
 ********************************************************************************/
 Step_4:
 BEGIN
-   -- Restore state from MOBREC
-   SET @cExpectedChildSKU = @cOutField03
-   SET @nQTYExp = ISNULL(TRY_CAST(NULLIF(@cOutField06, '') AS INT), 0)
-   SET @nBOMQty = ISNULL(TRY_CAST(NULLIF(@cOutField07, '') AS INT), 0)
-
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
       -- Screen mapping
@@ -1459,6 +1480,8 @@ BEGIN
       SET @cOutField01 = '' -- Parent SKU
       SET @cOutField02 = '' -- QTY
       EXEC rdt.rdtSetFocusField @nMobile, 1
+      IF @cDefaultToQty <> ''
+         SET @cOutField02 = @cDefaultToQty
 
       -- Go back to Parent SKU screen
       SET @nScn  = 6882
@@ -1727,6 +1750,9 @@ BEGIN
          SET @nChildSKUIndex = 1
          SET @cOutField01 = ''
          SET @cOutField02 = ''
+         SET @cBarcode = ''
+         IF @cDefaultToQty <> ''
+            SET @cOutField02 = @cDefaultToQty
          SET @nScn  = 6882
          SET @nStep = 3
          GOTO Quit
@@ -1792,7 +1818,7 @@ BEGIN
 
       -- Clear barcode before returning to Step 4
       SET @cBarcode = ''
-
+      SET @cFieldAttr08=''
       -- Go back to Child SKU screen
       SET @cOutField01 = @cParentSKU
       SET @cOutField03 = @cExpectedChildSKU
@@ -1846,6 +1872,12 @@ BEGIN
       V_String13     = @cDefaultToQty,
       V_String14     = @cConvertQTYSP,
       V_String15     = @cDYNBOM,
+      V_String16     = @cLottableCode,
+      V_String17     = @cExpectedChildSKU,
+      V_String18     = @cChildSKUDescr,
+      V_String19     = CAST(@nQTYExp AS NVARCHAR(10)),
+      V_String20     = CAST(@nBOMQty AS NVARCHAR(10)),
+      V_String21     = CAST(@nChildSKUQty AS NVARCHAR(10)),
       V_Lottable01   = @cLottable01,
       V_Lottable02   = @cLottable02,
       V_Lottable03   = @cLottable03,
@@ -1861,21 +1893,22 @@ BEGIN
       V_Lottable13   = @dLottable13,
       V_Lottable14   = @dLottable14,
       V_Lottable15   = @dLottable15,
-      I_Field01      = @cInField01,  O_Field01 = @cOutField01,
-      I_Field02      = @cInField02,  O_Field02 = @cOutField02,
-      I_Field03      = @cInField03,  O_Field03 = @cOutField03,
-      I_Field04      = @cInField04,  O_Field04 = @cOutField04,
-      I_Field05      = @cInField05,  O_Field05 = @cOutField05,
-      I_Field06      = @cInField06,  O_Field06 = @cOutField06,
-      I_Field07      = @cInField07,  O_Field07 = @cOutField07,
-      I_Field08      = @cInField08,  O_Field08 = @cOutField08,
-      I_Field09      = @cInField09,  O_Field09 = @cOutField09,
-      I_Field10      = @cInField10,  O_Field10 = @cOutField10,
-      I_Field11      = @cInField11,  O_Field11 = @cOutField11,
-      I_Field12      = @cInField12,  O_Field12 = @cOutField12,
-      I_Field13      = @cInField13,  O_Field13 = @cOutField13,
-      I_Field14      = @cInField14,  O_Field14 = @cOutField14,
-      I_Field15      = @cInField15,  O_Field15 = @cOutField15
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
+      I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
+      I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
+      I_Field04 = @cInField04,  O_Field04 = @cOutField04,   FieldAttr04  = @cFieldAttr04,
+      I_Field05 = @cInField05,  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05,
+      I_Field06 = @cInField06,  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06,
+      I_Field07 = @cInField07,  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07,
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08,
+      I_Field09 = @cInField09,  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09,
+      I_Field10 = @cInField10,  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10,
+      I_Field11 = @cInField11,  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11,
+      I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
+      I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
+      I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
+
 
    WHERE Mobile = @nMobile
 END
