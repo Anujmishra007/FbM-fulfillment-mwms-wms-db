@@ -334,6 +334,8 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = '4',
+                  QtyMoved = Qty,
+                  Qty = 0,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -534,6 +536,8 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = '4',
+                  QtyMoved = Qty,
+                  Qty = 0,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -616,6 +620,8 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = '4',
+                  QtyMoved = Qty,
+                  Qty = 0,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cNewPickDetailKey
