@@ -963,8 +963,8 @@ BEGIN
                FROM CodeLKUP CL (NOLOCK)
                JOIN Cartonization CZ WITH (NOLOCK) ON CL.Code = CZ.CartonType
                JOIN Storer S WITH (NOLOCK) ON (S.CartonGroup = CZ.CartonizationGroup AND S.StorerKey = CL.StorerKey)
-               --JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = CL.CODE AND (QTY-QtyPicked-QTYAllocated) > 0
-               --JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND SKU.SKU = CL.CODE --AND BUSR8 = CZ.CartonType
+               JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND BUSR8 = CZ.CartonType
+               JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = SKU.SKU AND (QTY-QtyPicked-QTYAllocated) > 0
                WHERE CL.ListName = 'PAGECARTON'
                AND S.StorerKey = @cStorerKey
                AND CL.UDF01 = 'Y'
@@ -1008,8 +1008,8 @@ BEGIN
             FROM CodeLKUP CL (NOLOCK)
             JOIN Cartonization CZ WITH (NOLOCK) ON CL.Code = CZ.CartonType
             JOIN Storer S WITH (NOLOCK) ON (S.CartonGroup = CZ.CartonizationGroup AND S.StorerKey = CL.StorerKey)
-            --JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = CL.CODE AND (QTY-QtyPicked-QTYAllocated) > 0
-            --JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND SKU.SKU = CL.CODE --AND BUSR8 = CZ.CartonType
+            JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND BUSR8 = CZ.CartonType
+            JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = SKU.SKU AND (QTY-QtyPicked-QTYAllocated) > 0
             WHERE CL.ListName = 'PAGECARTON'
             AND S.StorerKey = @cStorerKey
             AND CL.Code = @cCartonType
@@ -1378,8 +1378,8 @@ BEGIN
                FROM CodeLKUP CL (NOLOCK)
                JOIN Cartonization CZ WITH (NOLOCK) ON CL.Code = CZ.CartonType
                JOIN Storer S WITH (NOLOCK) ON (S.CartonGroup = CZ.CartonizationGroup AND S.StorerKey = CL.StorerKey)
-               --JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = CL.CODE AND (QTY-QtyPicked-QTYAllocated) > 0
-               --JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND SKU.SKU = CL.CODE --AND BUSR8 = CZ.CartonType
+               JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND BUSR8 = CZ.CartonType
+               JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = SKU.SKU AND (QTY-QtyPicked-QTYAllocated) > 0
                WHERE CL.ListName = 'PAGECARTON'
                AND S.StorerKey = @cStorerKey
                AND CL.UDF01 = 'Y'

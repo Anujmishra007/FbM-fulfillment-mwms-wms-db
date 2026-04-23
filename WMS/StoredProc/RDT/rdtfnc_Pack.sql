@@ -165,7 +165,7 @@ DECLARE
    @cLangCode        NVARCHAR( 3),
    @nInputKey        INT,
    @nMenu            INT,
-   @cFlowThruScreen  NVARCHAR( 1), 
+   @cFlowThruScreen  NVARCHAR( 30), 
 
    @cFacility        NVARCHAR( 5),
    @cStorerKey       NVARCHAR( 15),
