@@ -26,6 +26,7 @@ GO
 /* 2025-07-29   2.4.0 NickT      !!!Cutover, user V0 REPO for development!!!  */
 /* 2025-11-05   2.5.0 Jackc      FCR-8676 Extend Barcode length on UCC screen */
 /* 2026-03-19   2.6.0 NickT      FCR-10076 Add extend screen                  */
+/* 2026-04-24   2.7.0 Jackc      UWP-55166 Fix UCC decode fail in std decoding*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
@@ -856,6 +857,8 @@ BEGIN
                -- Standard decode
                IF @cDecodeSP = '1'
                BEGIN
+                  SET @cUCC = ''
+
                   EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcodeUCC,
                      @cUPC        = @cUPC           OUTPUT,
                      @nQTY        = @nQTY           OUTPUT,
