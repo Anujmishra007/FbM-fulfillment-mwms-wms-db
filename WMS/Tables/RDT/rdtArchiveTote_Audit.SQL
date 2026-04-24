@@ -15,13 +15,22 @@ BEGIN
 END
 GO
 
-ALTER TABLE [RDT].[rdtArchiveTote_Audit] ADD CONSTRAINT [PKrdtArchiveTote_Audit] PRIMARY KEY CLUSTERED ([ID]) WITH (FILLFACTOR=80) ON [PRIMARY]
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[RDT].[rdtArchiveTote_Audit]') AND name = N'PKrdtArchiveTote_Audit')
+BEGIN
+   ALTER TABLE [RDT].[rdtArchiveTote_Audit] ADD CONSTRAINT [PKrdtArchiveTote_Audit] PRIMARY KEY CLUSTERED ([ID]) WITH (FILLFACTOR=80) ON [PRIMARY]
+END
 GO
 
-ALTER TABLE [RDT].[rdtArchiveTote_Audit] ADD  CONSTRAINT [DF_RDT.rdtArchiveTote_Audit_AddDate]  DEFAULT (getdate()) FOR [AddDate]
+IF NOT EXISTS (SELECT * FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID(N'[RDT].[rdtArchiveTote_Audit]') AND name = N'DF_RDT.rdtArchiveTote_Audit_AddDate')
+BEGIN
+   ALTER TABLE [RDT].[rdtArchiveTote_Audit] ADD CONSTRAINT [DF_RDT.rdtArchiveTote_Audit_AddDate] DEFAULT (getdate()) FOR [AddDate]
+END
 GO
 
-ALTER TABLE [RDT].[rdtArchiveTote_Audit] ADD  CONSTRAINT [DF_RDT.rdtArchiveTote_Audit_AddWho]  DEFAULT (suser_sname()) FOR [AddWho]
+IF NOT EXISTS (SELECT * FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID(N'[RDT].[rdtArchiveTote_Audit]') AND name = N'DF_RDT.rdtArchiveTote_Audit_AddWho')
+BEGIN
+   ALTER TABLE [RDT].[rdtArchiveTote_Audit] ADD CONSTRAINT [DF_RDT.rdtArchiveTote_Audit_AddWho] DEFAULT (suser_sname()) FOR [AddWho]
+END
 GO
 
 GRANT DELETE ON  [RDT].[rdtArchiveTote_Audit] TO [NSQL]
