@@ -31,11 +31,10 @@ BEGIN
    SET XACT_ABORT OFF
 
    DECLARE
-      @n_PackDetail_Cnt     INT = 0,
-      @n_PickDetail_Cnt     INT = 0,
-      @b_PickDetailExists   BIT = 0,
-      @b_PackDetailExists   BIT = 0,
-      @cPickDetailKeys      NVARCHAR(4000)
+      @n_PackDetail_Cnt       INT = 0,
+      @n_PickDetail_Cnt       INT = 0,
+      @cPackDetail_Keys       NVARCHAR(2000) = '',
+      @cPickDetail_Keys       NVARCHAR(2000) = ''
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -47,23 +46,18 @@ BEGIN
    SET @cToteID = RTRIM(LTRIM(@cToteID))
 
    -- Validations
-   IF LEN(@cToteID) <> 10
+   IF ( LEN(@cToteID) <> 10 )
    BEGIN
       SET @nErrNo  = 264757
       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
       GOTO ROLLBACK_UPD   
-      --SELECT 'ToteID must be exactly 10 characters in length.'
-      --RETURN
    END
 
    IF SUBSTRING(@cToteID, 1, 4) <> '0000'
    BEGIN
       SET @nErrNo  = 264758
       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-      GOTO ROLLBACK_UPD
-   
-      --SELECT 'ToteID first 4 chars must be 00000'
-      --RETURN
+      GOTO ROLLBACK_UPD      
    END
 
    --------------------------------------------------------------------------------------
@@ -118,8 +112,10 @@ BEGIN
            AND PAD.LabelNo    = T.LabelNo
            AND PAD.LabelLine  = T.LabelLine
 
-         SET @n_PackDetail_Cnt   = @@ROWCOUNT
-         SET @b_PackDetailExists = CASE WHEN @n_PackDetail_Cnt > 0 THEN 1 ELSE 0 END
+       SET @n_PackDetail_Cnt   = @@ROWCOUNT
+       SELECT @cPackDetail_Keys =  STRING_AGG(PickSlipNo + ',' + CAST(CartonNo  AS NVARCHAR)+ ',' + LabelNo + ',' + LabelLine , '|') 
+       FROM @tPackDetail               
+         
       END TRY
       BEGIN CATCH
          SET @nErrNo  = 264752
@@ -161,7 +157,8 @@ BEGIN
             ON PID.PickDetailKey = TPD.PickDetailKey
 
          SET @n_PickDetail_Cnt   = @@ROWCOUNT
-         SET @b_PickDetailExists = CASE WHEN @n_PickDetail_Cnt > 0 THEN 1 ELSE 0 END
+       SELECT @cPickDetail_Keys = STRING_AGG(pickdetailkey, '|')   FROM @tPickDetail
+
       END TRY
       BEGIN CATCH
          SET @nErrNo  = 264754
@@ -183,19 +180,19 @@ BEGIN
          INSERT INTO RDT.rdtArchiveTote_Audit
          (
          StorerKey,
-		 DropID,
-         PickDetail_Exists,
+         DropID,
+         PackDetail_Keys,
          PickDetail_Cnt,
-         PackDetail_Exists,
+         PickDetail_Keys,
          PackDetail_Cnt
          )
          VALUES
          (
          @cStorerKey,
          @cToteID,
-         CASE WHEN @b_PickDetailExists = 1 THEN 'Y' ELSE 'N' END,
+         @cPackDetail_Keys,
          @n_PickDetail_Cnt,
-         CASE WHEN @b_PackDetailExists = 1 THEN 'Y' ELSE 'N' END,
+         @cPickDetail_Keys,
          @n_PackDetail_Cnt
          )
       END TRY
@@ -229,20 +226,21 @@ BEGIN
    -- Output
    --------------------------------------------------------------------------------------
    SELECT
-      @cStorerKey                AS StorerKey,
-      @cToteID                  AS OriginalDropId,
-      CONCAT(@cPrefix, @cToteID) AS NewDropId,
-      @b_PickDetailExists        AS PickDetailExists,
-      @b_PackDetailExists        AS PackDetailExists,
-      @n_PickDetail_Cnt          AS PickDetailUpdated,
-      @n_PackDetail_Cnt          AS PackDetailUpdated,
-      @bSuccess                  AS SorterToteRelease
+      @cStorerKey                   AS StorerKey,
+      @cToteID                      AS OriginalDropId,
+      CONCAT(@cPrefix, @cToteID)    AS NewDropId,
+      @cPackDetail_Keys             AS PickDetailExists,
+      @cPickDetail_Keys             AS PackDetailExists,
+      @n_PickDetail_Cnt             AS PickDetailUpdated,
+      @n_PackDetail_Cnt             AS PackDetailUpdated,
+      @bSuccess                     AS SorterToteRelease
 
    COMMIT TRAN
 
 ROLLBACK_UPD:
    IF (XACT_STATE()) = -1
       ROLLBACK
+
 END
 GO
 
