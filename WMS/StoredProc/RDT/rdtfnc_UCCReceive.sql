@@ -147,8 +147,8 @@ DECLARE
    @cPPK                 NVARCHAR(30),
    @nCaseCntQty          INT,
    @nCnt                 INT,
-     @nFromScn             INT, --(yeekung01)
-     @nNewUCCWithMultiSKURcv INT, -- To detect received new UCC with multi SKU UCC
+   @nFromScn             INT, --(yeekung01)
+   @nNewUCCWithMultiSKURcv INT, -- To detect received new UCC with multi SKU UCC
    @cExtendedUpdateSP    NVARCHAR(20),
    @cUCCExtValidate      NVARCHAR(20),
    @cClosePallet         NVARCHAR(1),
@@ -171,6 +171,9 @@ DECLARE
    @cExtScnSP            NVARCHAR(20),            -- change from ExtendedScreenSP to ExtScnSP (yys027 migrate-crocs-FCR-1126)
    @tExtScnData          VariableTable,           -- for support ExtScnSP
    @nAction              INT,
+   @nRowCount            INT, --(jackc01)
+   @cAllowMultiSKUPATask NVARCHAR(1), --(jackc01)
+   @cChkSKU              NVARCHAR(20), -- (jackc01)
    @cGenPATaskSP         NVARCHAR(20),--(jackc01)
 
    @cLottable01       NVARCHAR(18),
@@ -334,12 +337,13 @@ SELECT
    @cUserDefine08          = V_String38, -- FCR-759
    @cUserDefine09          = V_String39, -- FCR-759
    @cFlowThruScreen        = V_String40,
-   @cExtScnSP      = V_String41,
+   @cExtScnSP              = V_String41,
+   @cGenPATaskSP           = V_String42,
 
    @nQTY             = V_Integer1,
    @nCaseCntQty      = V_Integer2,
    @nCnt             = V_Integer3,
-     @nFromScn         = V_Integer4,
+   @nFromScn         = V_Integer4,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -432,6 +436,9 @@ BEGIN
    SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey) -- change from ExtendedScreenSP to ExtScnSP (yys027 migrate-1126)
    IF @cExtScnSP = '0'
       SET @cExtScnSP = ''
+   SET @cGenPATaskSP = rdt.RDTGetConfig( @nFunc, 'GenPATaskSP', @cStorerKey)
+   IF @cGenPATaskSP = '0'
+      SET @cGenPATaskSP = ''
 
    SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
 
@@ -2118,6 +2125,39 @@ BEGIN
                GOTO Step_6_Fail
             END
          END
+
+         --(jackc01)
+         -- Verify whether multi SKU on toID
+         IF @cGenPATaskSP <> ''
+         BEGIN
+            SET @cAllowMultiSKUPATask = rdt.RDTGetConfig( @nFunc, 'AllowMultiSKUPATask', @cStorerKey)
+            IF @cAllowMultiSKUPATask = '0'
+               SET @cAllowMultiSKUPATask = ''
+
+            IF @cAllowMultiSKUPATask <> '1'
+            BEGIN
+               SET @nRowCount = 0
+
+               SELECT @nRowCount = COUNT(DISTINCT SKU) FROM dbo.UCC WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND ID = @cTOID AND Status NOT IN ('0','6')
+               IF @nRowCount > 1
+               BEGIN
+                  SET @nErrNO = 63176
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- one SKU one ID
+                  GOTO Step_6_Fail
+               END
+               ELSE IF @nRowCount = 1
+               BEGIN
+                  SELECT TOP 1 @cChkSKU = SKU FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND ID = @cTOID
+                  IF @cSKU <> @cChkSKU
+                  BEGIN
+                     SET @nErrNO = 63177
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- one SKU one ID
+                     GOTO Step_6_Fail
+                  END
+               END
+            END
+         END
+         --(jackc01) end
       END -- UCC Exists
 
       --Get value from RDT Storer config 'ReceiveAllowAddNewUCC'
@@ -4280,39 +4320,27 @@ BEGIN
       --(jackc01) start
       IF @cOption = '3' -- Yes and putaway
       BEGIN
-         SET @cGenPATaskSP = rdt.RDTGetConfig( @nFunc, 'GenPATaskSP', @cStorerKey)
-         IF @cGenPATaskSP = '0'
-            SET @cGenPATaskSP = ''
-
          IF @cGenPATaskSP <> ''
          BEGIN
-            IF (SELECT COUNT(DISTINCT SKU) FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND ID = @cTOID) <> 1
-            BEGIN
-               SET @nErrNO = 63176
+            BEGIN TRY
+               EXECUTE rdt.rdt_UCCReceive_CreateNextTask
+                  @nMobile       = @nMobile,
+                  @nFunc         = @nFunc,
+                  @cLangCode     = @cLangCode,
+                  @cStorerKey    = @cStorerKey,
+                  @cReceiptKey   = @cReceiptKey,
+                  @cPOKey        = @cPOKey,
+                  @cLOC          = @cLOC,
+                  @cToID         = @cToID,
+                  @nErrNo        = @nErrNo  OUTPUT,
+                  @cErrMsg       = @cErrMsg OUTPUT
+            --No need to handle ErrNo <> 0, always go to next step (jackc01)
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 63175
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen task fail
-            END
-            ELSE
-            BEGIN
-               BEGIN TRY
-                  EXECUTE rdt.rdt_UCCReceive_CreateNextTask
-                     @nMobile       = @nMobile,
-                     @nFunc         = @nFunc,
-                     @cLangCode     = @cLangCode,
-                     @cStorerKey    = @cStorerKey,
-                     @cReceiptKey   = @cReceiptKey,
-                     @cPOKey        = @cPOKey,
-                     @cLOC          = @cLOC,
-                     @cToID         = @cToID,
-                     @nErrNo      = @nErrNo  OUTPUT,
-                     @cErrMsg     = @cErrMsg OUTPUT
+            END CATCH
 
-                  --No need to handle ErrNo <> 0, always go to next step (jackc01)
-               END TRY
-               BEGIN CATCH
-                  SET @nErrNo = 63175
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen task fail
-               END CATCH
-            END
             -- Prepare next screen
             SET @cToID = ''
             SET @cOutField01 = @cReceiptKey
@@ -4328,7 +4356,7 @@ BEGIN
             GOTO Step_12_Quit
          END
       END
-      --(jackc02) end
+      --(jackc01) end
 
       IF @cExtScnSP <> ''
       BEGIN
@@ -4909,6 +4937,7 @@ BEGIN
       V_String39 = @cUserDefine09,
       V_String40 = @cFlowThruScreen,
       V_String41 = @cExtScnSP,
+      V_String42 = @cGenPATaskSP,
 
       V_Lottable01 = @cLottable01,
       V_Lottable02 = @cLottable02,

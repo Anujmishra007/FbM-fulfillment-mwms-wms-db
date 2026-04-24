@@ -47,7 +47,6 @@ BEGIN
    /***********************************************************************************************
                                              Customize Create Task 
    ***********************************************************************************************/   
-   -- (ChewKP03) 
    SET @cGenPATaskSP = rdt.RDTGetConfig( @nFunc, 'GenPATaskSP', @cStorerKey)            
    IF @cGenPATaskSP = '0'            
       SET @cGenPATaskSP = ''   
