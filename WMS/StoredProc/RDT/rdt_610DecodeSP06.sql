@@ -155,6 +155,21 @@ BEGIN
                   DECLARE @nAmpersandCount INT
                   SET @nAmpersandCount = LEN(@cBarcode) - LEN(REPLACE(@cBarcode, '&', ''))
 
+                  IF @nAmpersandCount = 0 -- plain sku with no delimiter
+                  BEGIN
+                     SET @cUPC = @cBarcode
+
+                     -- Validate SKU exists
+                     IF NOT EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUPC)
+                     BEGIN
+                        SET @nErrNo = 260358 -- Invalid SKU
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                        GOTO Quit
+                     END
+
+                     GOTO Quit
+                  END
+
                   IF @nAmpersandCount <> 4
                   BEGIN
                      SET @nErrNo = 260357  -- Invalid QR format
