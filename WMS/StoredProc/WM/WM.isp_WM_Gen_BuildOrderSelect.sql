@@ -121,11 +121,11 @@ DECLARE @cSortBy NVARCHAR(2000),
 DECLARE @c_AutoUpdLoadDefaultStorerStrg NVARCHAR(10),
         @c_AutoUpdSuperOrderFlag NVARCHAR(10)  
         
-DECLARE @c_PendingAllocSOByQty      CHAR(1)       = 'N'                         --(Wan01)
-      , @c_ExcludeLoadplanCheck     CHAR(1)       = 'N'                         --(Wan01)
-      , @c_FeatureKeys              NVARCHAR(1000)= ''                          --(Wan01)
-      , @c_SQLWhereStatus           NVARCHAR(500) = ''                          --(Wan01)
-      , @c_SQLWhereLoadplan         NVARCHAR(200) = ''                          --(Wan01)
+DECLARE @c_PendingAllocSOByQty      CHAR(1)       = 'N'                         --(Wan02)
+      , @c_ExcludeLoadplanCheck     CHAR(1)       = 'N'                         --(Wan02)
+      , @c_FeatureKeys              NVARCHAR(1000)= ''                          --(Wan02)
+      , @c_SQLWhereStatus           NVARCHAR(500) = ''                          --(Wan02)
+      , @c_SQLWhereLoadplan         NVARCHAR(200) = ''                          --(Wan02)
           
 DECLARE @t_TraceInfo TABLE(
         TraceName NVARCHAR(160),

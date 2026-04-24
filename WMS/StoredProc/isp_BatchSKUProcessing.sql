@@ -6,14 +6,14 @@ GO
 /************************************************************************/  
 /* Stored Procedure: isp_BatchSKUProcessing                             */  
 /* Creation Date:                                                       */  
-/* Copyright: IDS                                                       */  
+/* Copyright: Maersk Logisitics                                         */  
 /* Written by:                                                          */  
 /*                                                                      */  
 /* Purpose:                                                             */  
 /*                                                                      */  
 /* Called By:                                                           */  
 /*                                                                      */  
-/* PVCS Version: 2.3 (Unicode)                                          */  
+/* PVCS Version: 3.3 (Unicode)                                          */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -55,6 +55,8 @@ GO
 /*                            AllocateStrategyLineNumber to pickcode    */                     
 /* 16-OCT-2023  NJOW05  3.2   WMS-23919 add sort by orderkey option to  */
 /*                            AutoAllocSort config                      */
+/* 24-APR-2025 Wan05    3.3   FCR-11826 - IN - Maersk WMS v2 - DAIMLER  */
+/*                            TRUCK AG - Auto Alloaction                */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -115,6 +117,10 @@ BEGIN
          ,  @c_PreAllocationSP              NVARCHAR(200) --NJOW02
          ,  @c_AutoAllocSort                NVARCHAR(30)  --NJOW03
          ,  @c_AutoAllocSort_opt1           NVARCHAR(50)  --NJOW03
+
+         , @c_PendingAllocSOByQty         CHAR(1)       = 'N'                         --(Wan05)
+         , @c_FeatureKeys                 NVARCHAR(1000)= ''                          --(Wan05)
+         , @c_Status_ORD                  NVARCHAR(10)  = '2'                         --(Wan05)
 
    DECLARE   
          @c_Lottable06 NVARCHAR(30),              @c_Lottable07 NVARCHAR(30),  
@@ -398,7 +404,30 @@ BEGIN
       ,  OtherValue     NVARCHAR(20)   NOT NULL DEFAULT('')   
       )
    END
-   --(Wan04) - END   
+   --(Wan04) - END 
+   
+   IF @n_Continue = 1 OR @n_Continue = 2  
+   BEGIN 
+      SET @c_FeatureKeys = ''                                                          --(Wan05) - START
+      SELECT @c_FeatureKeys = gr.Option5  
+      FROM dbo.fnc_GetRight2(@c_facility, @c_StorerKey, '', 'BackEndAutoAllocCfg') gr
+      WHERE gr.Authority = '1'                                                            
+
+      SET @c_PendingAllocSOByQty = 'N'
+
+      IF @c_FeatureKeys > ''
+      BEGIN
+         SELECT @c_PendingAllocSOByQty = dbo.fnc_GetParamValueFromString('@c_PendingAllocSOByQty'
+                                                                        , @c_Featurekeys
+                                                                        , @c_PendingAllocSOByQty)
+      END                                                                              
+
+      SET @c_Status_ORD = '2'
+      IF @c_PendingAllocSOByQty = 'Y'
+      BEGIN
+         SET @c_Status_ORD = '9'
+      END
+   END                                                                                       --(Wan05) - END
 
    SET @d_Step1 = GETDATE() - @d_Step1   
    SET @c_Col1 = 'Stp1-Prealloc'   
@@ -504,7 +533,8 @@ BEGIN
                           AND PREALLOCATEPICKDETAIL.SKU = SKU.SKU                            
          JOIN STRATEGY (NOLOCK) ON Strategy.StrategyKey = CASE WHEN @c_Strategy = '' THEN SKU.StrategyKey ELSE @c_Strategy END   
          JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey            
-         WHERE ORDERS.Status IN ('0', '1')  
+         --WHERE ORDERS.Status IN ('0', '1')                                        --(Wan05)                                  
+         WHERE ORDERS.Status < @c_Status_ORD                                        --(Wan05)    
          AND   ORDERS.SOStatus NOT IN ('CANC', 'PENDCANC') -- (SWT04)
          AND   ORDERS.StorerKey = @c_StorerKey   
          AND   PREALLOCATEPICKDETAIL.StorerKey = @c_StorerKey    
@@ -555,7 +585,8 @@ BEGIN
          AND   OD.Sku = @c_SKU  
          AND   ORDERS.Type NOT IN ( 'M', 'I' )   
          AND   ORDERS.SOStatus NOT IN ('CANC', 'PENDCANC') -- (SWT04)
-         AND   ORDERS.Status IN ('0','1')   
+         --AND   ORDERS.Status IN ('0','1')                                         --(Wan05)  
+         AND   ORDERS.Status < @c_Status_ORD                                        --(Wan05)    
          AND   (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked )) > 0  
          AND   EXISTS(SELECT 1 FROM AutoAllocBatchDetail AS aabd WITH (NOLOCK)   
                       WHERE aabd.AllocBatchNo = @n_AllocBatchNo   
@@ -707,7 +738,6 @@ BEGIN
          SET CARTONGROUP = @c_CartonizationGroup  
          WHERE CartonGroup = SPACE(10)  
       END  
-  
   
       --IF ISNULL(RTRIM(@c_Strategy), '') = ''   
       --BEGIN  
