@@ -22,6 +22,7 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 2026-03-09  AYD      1.0   FCR-10825: Vivo - Wave Reverse SP          */
 /* 2026-03-30  AYD01    1.1   Handle duplicated TaskDetailKey.           */
+/* 2026-04-27  AYD02    1.2   UWP-54594: Remove wave released validation */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
   @c_Wavekey      NVARCHAR(10)
@@ -185,19 +186,20 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
    IF @@TRANCOUNT = 0
       BEGIN TRAN
 
-   IF @n_Continue = 1 OR @n_Continue = 2
-   BEGIN
-      IF EXISTS ( SELECT 1 FROM TASKDETAIL td (NOLOCK)
-                  WHERE td.Wavekey = @c_Wavekey
-                  AND td.TaskType IN ('RPF', 'FPK', 'FCP', 'ASTCPK')
-                  AND td.[Status] <= '9'
-                )
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 83030
-         SET @c_Errmsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Task has been released. (mspRLWAV11)'
-      END
-   END
+   --AYD02: Remove wave released validation, as per UWP-54594
+   -- IF @n_Continue = 1 OR @n_Continue = 2
+   -- BEGIN
+   --    IF EXISTS ( SELECT 1 FROM TASKDETAIL td (NOLOCK)
+   --                WHERE td.Wavekey = @c_Wavekey
+   --                AND td.TaskType IN ('RPF', 'FPK', 'FCP', 'ASTCPK')
+   --                AND td.[Status] <= '9'
+   --              )
+   --    BEGIN
+   --       SET @n_Continue = 3
+   --       SET @n_Err = 83030
+   --       SET @c_Errmsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Task has been released. (mspRLWAV11)'
+   --    END
+   -- END
 
    --Initialize Pickdetail work in progress staging table
    IF @n_Continue = 1 OR @n_Continue = 2
