@@ -6719,6 +6719,12 @@ BEGIN
                SET @cUCCCounter = ''
                SET @cMobBarcode = ''
             END
+            IF @nStep = 4
+            BEGIN
+               SET @cInField01 = @cOutField01
+               SET @nInputKey='1'
+               GOTO Step_4
+            END
          END
          GOTO Quit
       END
