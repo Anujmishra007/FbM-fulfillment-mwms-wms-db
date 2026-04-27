@@ -232,25 +232,25 @@ BEGIN
                END
             END
 
-            IF @n_Continue = 1
-            BEGIN
-               SET @c_Sku = ''
-               SELECT TOP 1 @c_Sku = pw.Sku
-               FROM #PICKDETAIL_WIP AS pw  
-               JOIN dbo.SKU AS s WITH (NOLOCK) ON s.StorerKey = pw.Storerkey AND s.Sku = pw.Sku  
-               JOIN dbo.PACK AS p WITH (NOLOCK) ON p.Packkey = s.Packkey
-               WHERE @n_MaxCube_B2C < CASE WHEN ISNULL(p.CubeUOM3, 0.00) = 0.00 THEN s.StdCube ELSE p.CubeUOM3 END
-               AND pw.UOM >= '6'
-
-               IF @c_Sku > ''
-               BEGIN
-                  SET @n_Continue = 3  
-                  SET @n_err = 63047  
-                  SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
-                                + 'Sku: ' + TRIM(@c_Sku) + '''s cube > Tote''s cube. ' 
-                                + 'Wave#: ' + @c_Wavekey + ' . (mspRLWAV10_VLDN)' 
-               END
-            END
+            --IF @n_Continue = 1
+            --BEGIN
+            --   SET @c_Sku = ''
+            --   SELECT TOP 1 @c_Sku = pw.Sku
+            --   FROM #PICKDETAIL_WIP AS pw  
+            --   JOIN dbo.SKU AS s WITH (NOLOCK) ON s.StorerKey = pw.Storerkey AND s.Sku = pw.Sku  
+            --   JOIN dbo.PACK AS p WITH (NOLOCK) ON p.Packkey = s.Packkey
+            --   WHERE @n_MaxCube_B2C < CASE WHEN ISNULL(p.CubeUOM3, 0.00) = 0.00 THEN s.StdCube ELSE p.CubeUOM3 END
+            --   AND pw.UOM >= '6'
+            
+            --   IF @c_Sku > ''
+            --   BEGIN
+            --      SET @n_Continue = 3  
+            --      SET @n_err = 63047  
+            --      SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+            --                    + 'Sku: ' + TRIM(@c_Sku) + '''s cube > Tote''s cube. ' 
+            --                    + 'Wave#: ' + @c_Wavekey + ' . (mspRLWAV10_VLDN)' 
+            --   END
+            --END
          END
       END
    END
