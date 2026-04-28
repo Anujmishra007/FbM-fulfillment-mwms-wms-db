@@ -62,3 +62,4 @@ execute rdt.rdtAddMsg 229601, 10, '229601^Invalid Tote', 'us_english', 1867
 execute rdt.rdtAddMsg 229602, 10, '229602^DropIDIsUsed', 'us_english', 1867
 execute rdt.rdtAddMsg 229603, 10, '229603^DropIDUsedforPAL', 'us_english', 1867
 execute rdt.rdtAddMsg 229604, 10, '229604^Cannot Close Carton', 'us_english', 1867
+execute rdt.rdtAddMsg 229605, 10, '229605^Carton Cnt Mismatch', 'us_english', 1867

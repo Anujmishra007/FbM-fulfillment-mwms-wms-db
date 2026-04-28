@@ -20,6 +20,7 @@ GO
 /* 2025-02-08   1.4.0  NLT013   FCR-1872 ignore lottable values while picking            */
 /* 2026-04-24   1.5.0  Dennis   Add Cannot Close Carton error msg;                       */
 /*                              Exclude task if wave has status 3/5 or UserKeyOverRide   */
+/* 2026-04-28   1.5.1  Dennis   Method 3: Check carton count matches Message03           */
 /*****************************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPickV2](        
@@ -1267,8 +1268,34 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Cannot Close Carton
             GOTO Quit
          END
-         SELECT  short  
-         FROM CodeLKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQPKTYPE' AND Code2 = '' AND StorerKey = @cStorerKey
+
+         -- Method 3: Check if scanned carton count (@cMax) matches expected count (Message03)
+         IF @cMax <> ''
+         BEGIN
+            DECLARE @nMaxCartonCnt INT = 0
+            SELECT @nMaxCartonCnt = COUNT(1) FROM STRING_SPLIT(@cMax, '|')
+
+            SELECT @cMessage03 = Message03
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE Storerkey = @cStorerKey
+            AND   TaskType = 'ASTCPK'
+            AND   [Status] = '3'
+            AND   Groupkey = @cGroupKey
+            AND   UserKey = @cUserName
+            AND   DeviceID = @cCartID
+            AND   DropID <> ''
+            ORDER BY EditDate DESC
+
+            IF ISNULL(@cMessage03, '') <> '' AND TRY_CAST(@cMessage03 AS INT) IS NOT NULL
+            BEGIN
+               IF @nMaxCartonCnt <> CAST(@cMessage03 AS INT)
+               BEGIN
+                  SET @nErrNo = 229605
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Carton Cnt Mismatch
+                  GOTO Quit
+               END
+            END
+         END
 
          -- method = 3
          IF EXISTS(SELECT 1
