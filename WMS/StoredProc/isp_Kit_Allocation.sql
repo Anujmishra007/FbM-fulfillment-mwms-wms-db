@@ -1168,7 +1168,10 @@ BEGIN
                     END*/
                                                                                              --Preetham1(start)
                     DECLARE @c_BypassNullPalletType VARCHAR(1)
-                    SELECT @c_BypassNullPalletType = SValue FROM STORERCONFIG WITH (NOLOCK) WHERE StorerKey = @c_aStorerKey
+                    SELECT @c_BypassNullPalletType = SValue
+                    FROM STORERCONFIG WITH (NOLOCK)
+                    WHERE StorerKey = @c_aStorerKey
+                    AND ConfigKey = 'BypassNullPltTypeKitAllocate'
 
                     IF @c_BypassNullPalletType = 'Y'
                     BEGIN
