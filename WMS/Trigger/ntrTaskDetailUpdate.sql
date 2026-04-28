@@ -70,7 +70,9 @@ GO
 /*                               and QtyReplen                          */
 /* 17-Apl-2025  3.7     Wan03    UWP-32707 - FCR-3957 - JCB Putaway Using*/
 /*                               TM SCE                                 */
-/* 06-Oct-2025  1.0     AK01     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
+/* 06-Oct-2025  3.8     AK01     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
+/* 17-Apl-2025  3.9     AYD01    UWP-54594: Allow release tasks for     */
+/*                               shorted lines                          */
 /************************************************************************/ 
        
 CREATE OR ALTER TRIGGER [dbo].[ntrTaskDetailUpdate]        
@@ -104,8 +106,66 @@ BEGIN
    ,  @c_ReservedID     NVARCHAR(18) --NJOW04
    ,  @c_Facility                   NVARCHAR(5)  = ''                         --(Wan03)
    ,  @c_TaskMultiLotLPNLockPMI     NVARCHAR(10) = '0'                        --(Wan03)
-       
+   ,  @c_AllowReleaseShortedLine    NVARCHAR(1)  = '0'                        --(AYD01)
+   ,  @b_Releasable                 INT          = 1                          --(AYD01)
+
    DECLARE @c_LocationCategy NVARCHAR(10) -- (Vicky02)        
+
+   DECLARE @c_taskdetailkey NVARCHAR(10), @c_tasktype NVARCHAR(10), @c_newtaskdetailkey NVARCHAR(10)        
+   DECLARE @c_pickdetailkey NVARCHAR(10)        
+   DECLARE @c_storerkey NVARCHAR(15), @c_sku NVARCHAR(20), @c_fromloc NVARCHAR(10), @c_fromid NVARCHAR(18),        
+            @c_toloc NVARCHAR(10), @c_toid NVARCHAR(18), @c_lot NVARCHAR(10), @n_qty int, @c_packkey NVARCHAR(10), @c_uom NVARCHAR(10),        
+            @c_caseid NVARCHAR(10), @c_sourcekey NVARCHAR(30), @c_sourcetype NVARCHAR(30), @c_Status NVARCHAR(10), @c_reasonkey NVARCHAR(10),        
+            @c_wavekey NVARCHAR(10), @c_userposition NVARCHAR(10), @c_userkey NVARCHAR(18), @c_childid NVARCHAR(18)        
+   DECLARE @c_deletedtasktype NVARCHAR(10), @c_deletedstorerkey NVARCHAR(15), @c_deletedsku NVARCHAR(20), @c_deletedfromloc NVARCHAR(10), @c_deletedfromid NVARCHAR(18),        
+            @c_deletedtoloc NVARCHAR(10), @c_deletedtoid NVARCHAR(18), @c_deletedlot NVARCHAR(10), @n_deletedqty int, @c_deletedpackkey NVARCHAR(10), @c_deleteduom NVARCHAR(10),        
+            @c_deletedcaseid NVARCHAR(10), @c_deletedsourcekey NVARCHAR(30), @c_deletedStatus NVARCHAR(10), @c_deletedreasonkey NVARCHAR(10),        
+            @c_deleteduserposition NVARCHAR(10), @c_deleteduserkey NVARCHAR(18)        
+   DECLARE @c_rc_toloc NVARCHAR(10), @c_rc_validinfromloc NVARCHAR(10), @c_rc_validintoloc NVARCHAR(10),        
+            @c_rc_locholdkey NVARCHAR(10), @c_rc_idholdkey NVARCHAR(10), @c_rc_removetaskfromuserqueue NVARCHAR(10),        
+            @c_rc_docyclecount NVARCHAR(10), @c_rc_taskStatus NVARCHAR(10), @c_rc_continueprocessing NVARCHAR(10)        
+   DECLARE @c_work_loc NVARCHAR(10), @c_work_id NVARCHAR(18),        
+            @n_qtynotmoved int, @n_scratch_qtytobemoved int, @n_checkcount int        
+            
+   DECLARE @b_isDiffFloor int, @c_fromoutloc NVARCHAR(10)        
+   declare @c_unit NVARCHAR(10)        
+      
+   DECLARE @c_taskuom NVARCHAR(10) -- (Vicky01)        
+      
+   DECLARE @c_listkey             NVARCHAR(10), --NJOW01        
+            @n_PendingMoveIn       INT, --NJOW03
+            @n_deletedPendingMoveIn INT, --NJOW03
+            @n_QtyReplen2          INT, --NJOW03
+            @n_deletedQtyReplen     INT --NJOW03
+      
+   -- (Vicky04) - Start        
+   DECLARE  @c_lottable01        NVARCHAR(18),        
+            @c_lottable02        NVARCHAR(18),        
+            @c_lottable03        NVARCHAR(18),        
+            @d_lottable04        datetime,        
+            @d_lottable05        datetime        
+   -- (Vicky04) - End   
+   
+      -- (CS01) - Start        
+   DECLARE  @c_lottable06        NVARCHAR(30),        
+            @c_lottable07        NVARCHAR(30),        
+            @c_lottable08        NVARCHAR(30), 
+            @c_lottable09        NVARCHAR(30),        
+            @c_lottable10        NVARCHAR(30),        
+            @c_lottable11        NVARCHAR(30), 
+            @c_lottable12        NVARCHAR(30),
+            @d_lottable13        datetime,       
+            @d_lottable14        datetime,        
+            @d_lottable15        datetime        
+   -- (CS01) - End         
+            
+   -- (ChewKP05) - Start        
+   DECLARE         
+           @c_ReplenLot NVARCHAR(10)        
+         , @n_QtyReplen INT        
+         , @n_ddQty  INT        
+         , @n_nQtyReplen INT        
+   -- (ChewKP05) - End        
         
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT        
 
@@ -114,7 +174,7 @@ BEGIN
       SELECT @n_continue = 4        
    END      
      
- -- tlting01  
+   -- tlting01  
    IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)  
    BEGIN  
       UPDATE Taskdetail SET TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName()   
@@ -139,8 +199,23 @@ BEGIN
       SELECT @n_continue = 4        
    END        
    /* #INCLUDE <TRTASKDU1.SQL> */        
+   --AYD01 START
+   SELECT @c_AllowReleaseShortedLine = dbo.fnc_GetConfigValue(@c_Facility, '', 'AllowReleaseShortedLine')
+   DECLARE CUR_DEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
+   SELECT TaskDetailKey, StorerKey, [STATUS]
+   FROM deleted     
+                        
+   OPEN CUR_DEL
+   FETCH NEXT FROM CUR_DEL INTO @c_TaskDetailKey, @c_StorerKey, @c_Status    
+   WHILE @@FETCH_STATUS = 0 
+   BEGIN
+      
+      FETCH NEXT FROM CUR_DEL INTO @c_TaskDetailKey, @c_StorerKey, @c_Status
+   END
+   CLOSE CUR_DEL
+   DEALLOCATE CUR_DEL
            
-   IF @n_continue=1 or @n_continue=2        
+   IF @n_continue IN (1,2)   
    BEGIN        
       IF EXISTS (SELECT * FROM deleted WHERE Status='9' )        
       BEGIN        
@@ -149,7 +224,7 @@ BEGIN
          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Item(s) Are Completed - Update Failed. (ntrTaskDetailUpdate)'        
       END        
    END        
-
+   --AYD01 END
    --NJOW02
    IF @n_continue=1 or @n_continue=2          
    BEGIN
@@ -194,61 +269,7 @@ BEGIN
            
    IF @n_continue = 1 or @n_continue = 2        
    BEGIN        
-      DECLARE @c_taskdetailkey NVARCHAR(10), @c_tasktype NVARCHAR(10), @c_newtaskdetailkey NVARCHAR(10)        
-      DECLARE @c_pickdetailkey NVARCHAR(10)        
-      DECLARE @c_storerkey NVARCHAR(15), @c_sku NVARCHAR(20), @c_fromloc NVARCHAR(10), @c_fromid NVARCHAR(18),        
-              @c_toloc NVARCHAR(10), @c_toid NVARCHAR(18), @c_lot NVARCHAR(10), @n_qty int, @c_packkey NVARCHAR(10), @c_uom NVARCHAR(10),        
-              @c_caseid NVARCHAR(10), @c_sourcekey NVARCHAR(30), @c_sourcetype NVARCHAR(30), @c_Status NVARCHAR(10), @c_reasonkey NVARCHAR(10),        
-              @c_wavekey NVARCHAR(10), @c_userposition NVARCHAR(10), @c_userkey NVARCHAR(18), @c_childid NVARCHAR(18)        
-      DECLARE @c_deletedtasktype NVARCHAR(10), @c_deletedstorerkey NVARCHAR(15), @c_deletedsku NVARCHAR(20), @c_deletedfromloc NVARCHAR(10), @c_deletedfromid NVARCHAR(18),        
-              @c_deletedtoloc NVARCHAR(10), @c_deletedtoid NVARCHAR(18), @c_deletedlot NVARCHAR(10), @n_deletedqty int, @c_deletedpackkey NVARCHAR(10), @c_deleteduom NVARCHAR(10),        
-              @c_deletedcaseid NVARCHAR(10), @c_deletedsourcekey NVARCHAR(30), @c_deletedStatus NVARCHAR(10), @c_deletedreasonkey NVARCHAR(10),        
-              @c_deleteduserposition NVARCHAR(10), @c_deleteduserkey NVARCHAR(18)        
-      DECLARE @c_rc_toloc NVARCHAR(10), @c_rc_validinfromloc NVARCHAR(10), @c_rc_validintoloc NVARCHAR(10),        
-              @c_rc_locholdkey NVARCHAR(10), @c_rc_idholdkey NVARCHAR(10), @c_rc_removetaskfromuserqueue NVARCHAR(10),        
-              @c_rc_docyclecount NVARCHAR(10), @c_rc_taskStatus NVARCHAR(10), @c_rc_continueprocessing NVARCHAR(10)        
-      DECLARE @c_work_loc NVARCHAR(10), @c_work_id NVARCHAR(18),        
-              @n_qtynotmoved int, @n_scratch_qtytobemoved int, @n_checkcount int        
-              
-      DECLARE @b_isDiffFloor int, @c_fromoutloc NVARCHAR(10)        
-      declare @c_unit NVARCHAR(10)        
-        
-      DECLARE @c_taskuom NVARCHAR(10) -- (Vicky01)        
-        
-      DECLARE @c_listkey             NVARCHAR(10), --NJOW01        
-              @n_PendingMoveIn       INT, --NJOW03
-              @n_deletedPendingMoveIn INT, --NJOW03
-              @n_QtyReplen2          INT, --NJOW03
-              @n_deletedQtyReplen     INT --NJOW03
-        
-      -- (Vicky04) - Start        
-      DECLARE  @c_lottable01        NVARCHAR(18),        
-               @c_lottable02        NVARCHAR(18),        
-               @c_lottable03        NVARCHAR(18),        
-               @d_lottable04        datetime,        
-               @d_lottable05        datetime        
-      -- (Vicky04) - End   
       
-       -- (CS01) - Start        
-      DECLARE  @c_lottable06        NVARCHAR(30),        
-               @c_lottable07        NVARCHAR(30),        
-               @c_lottable08        NVARCHAR(30), 
-               @c_lottable09        NVARCHAR(30),        
-               @c_lottable10        NVARCHAR(30),        
-               @c_lottable11        NVARCHAR(30), 
-               @c_lottable12        NVARCHAR(30),
-               @d_lottable13        datetime,       
-               @d_lottable14        datetime,        
-               @d_lottable15        datetime        
-      -- (CS01) - End         
-              
-      -- (ChewKP05) - Start        
-      DECLARE         
-             @c_ReplenLot NVARCHAR(10)        
-           , @n_QtyReplen INT        
-           , @n_ddQty  INT        
-           , @n_nQtyReplen INT        
-      -- (ChewKP05) - End        
   
       --(Wan01) - START  
       DECLARE @c_RefTaskKey      NVARCHAR(10)  
