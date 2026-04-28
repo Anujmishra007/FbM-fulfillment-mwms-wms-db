@@ -1167,8 +1167,11 @@ BEGIN
                           SET @c_UOM = @c_CaseUOM
                     END*/
                                                                                              --Preetham1(start)
-                    DECLARE @c_BypassNullPalletType VARCHAR(1)
-                    SELECT @c_BypassNullPalletType = SValue
+                    DECLARE @c_BypassNullPalletType VARCHAR(1) = 'N'
+                    SELECT @c_BypassNullPalletType = ISNULL(SValue, 'N')
+                    FROM STORERCONFIG WITH (NOLOCK)
+                    WHERE StorerKey = @c_aStorerKey
+                      AND ConfigKey = 'BypassNullPalletType'
                     FROM STORERCONFIG WITH (NOLOCK)
                     WHERE StorerKey = @c_aStorerKey
                     AND ConfigKey = 'BypassNullPltTypeKitAllocate'
