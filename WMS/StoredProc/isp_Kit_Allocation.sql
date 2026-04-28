@@ -31,6 +31,7 @@ GO
 /* 16-Apr-2025  Ansuman01 1.3 UWP-30689 Pallet Allocation for KIT       */
 /* 23-Apr-2025  Ansuman02 1.4 UWP-33237 PalletType addition             */
 /* 06-May-2025  Ansuman03 1.5 UWP-30689 Partial Pallet Allocation       */
+/* 28-Apr-2026  Preetham1 1.6 FCR-11186 Bypass Pallet Type              */
 /************************************************************************/
 CREATE OR ALTER PROC  isp_Kit_Allocation
 @c_KitKey              NVARCHAR(10)
@@ -1165,7 +1166,15 @@ BEGIN
                        ELSE IF @c_aUOM = '2' AND @n_Qty % @n_PackQty = 0
                           SET @c_UOM = @c_CaseUOM
                     END*/
+                                                                                             --Preetham1(start)
+                    DECLARE @c_BypassNullPalletType VARCHAR(1)
+                    SELECT @c_BypassNullPalletType = SValue FROM STORERCONFIG WITH (NOLOCK) WHERE StorerKey = @c_aStorerKey
 
+                    IF @c_BypassNullPalletType = 'Y'
+                    BEGIN
+                       SET @c_PalletType = ''
+                    END
+                                                                                             --Preetham1(end)
                     UPDATE KITDETAIL WITH (ROWLOCK)
                     SET Id = @c_ID,
                         Loc = @c_Loc,
