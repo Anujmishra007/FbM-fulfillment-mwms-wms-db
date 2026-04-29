@@ -148,8 +148,7 @@ BEGIN
       INNER JOIN CODELKUP CLK (NOLOCK)
       ON CLK.Code = WOD.[Type]
       AND CLK.StorerKey = @cStorerKey
-      WHERE WOD.SKU = @cSKU
-      AND EXISTS ( SELECT 1
+      WHERE EXISTS ( SELECT 1
                      FROM WORKORDER WO (NOLOCK)
                      WHERE WO.ExternWorkOrderKey = @cOrderKey
                      AND WO.StorerKey = @cStorerKey
@@ -249,6 +248,7 @@ BEGIN
          , IsPaperPrinter
          , ReportType
    FROM @VASReports
+   WHERE (@cReportType = '' OR ReportType = @cReportType)
    ORDER BY ReportID
 
    OPEN CUR_VASALL
