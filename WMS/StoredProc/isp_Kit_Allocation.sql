@@ -1171,9 +1171,6 @@ BEGIN
                     SELECT @c_BypassNullPalletType = ISNULL(SValue, 'N')
                     FROM STORERCONFIG WITH (NOLOCK)
                     WHERE StorerKey = @c_aStorerKey
-                      AND ConfigKey = 'BypassNullPalletType'
-                    FROM STORERCONFIG WITH (NOLOCK)
-                    WHERE StorerKey = @c_aStorerKey
                     AND ConfigKey = 'BypassNullPltTypeKitAllocate'
 
                     IF @c_BypassNullPalletType = 'Y' AND @c_PalletType IS NULL
