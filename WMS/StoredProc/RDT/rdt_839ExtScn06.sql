@@ -736,7 +736,7 @@ BEGIN
                      AND SKU = @cSuggSKU
 
 
-               SET @cPickDetailKeyTemp = IIF(LEN(@cPickDetailKeyTemp) > 10, '', @cPickDetailKeyTemp)
+               SET @cPickDetailKeyTemp = IIF(LEN(@cPickDetailKeyTemp) > 10, RIGHT(@cPickDetailKeyTemp, 10), @cPickDetailKeyTemp)
 
                BEGIN TRY
                   DECLARE @cVarianceQty NVARCHAR(10) = ISNULL(TRY_CAST((@nSuggQTY - @nActQTY) AS NVARCHAR(10)), '')
