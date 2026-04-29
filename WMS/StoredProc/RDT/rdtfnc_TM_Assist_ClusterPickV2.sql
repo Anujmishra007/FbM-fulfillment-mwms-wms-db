@@ -2139,16 +2139,27 @@ BEGIN
         
    IF @nInputKey = 0 -- ESC        
    BEGIN        
-      SELECT TOP 1 @nCartonScanned = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
-      FROM dbo.TaskDetail WITH (NOLOCK)      
-      WHERE Storerkey = @cStorerKey      
-      AND   TaskType = 'ASTCPK'      
-      AND   [Status] = '3'      
-      AND   Groupkey = @cGroupKey      
-      AND   UserKey = @cUserName      
-      AND   DeviceID = @cCartID
-      AND   DropID <> '' -- FCR-652 Fix issue by jack      
-               
+      IF @cMethod = '3'
+      BEGIN
+         -- Method 3: Get carton count from @cMax
+         IF ISNULL(@cMax, '') <> ''
+            SELECT @nCartonScanned = COUNT(1) FROM STRING_SPLIT(@cMax, '|')
+         ELSE
+            SET @nCartonScanned = 0
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @nCartonScanned = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE Storerkey = @cStorerKey
+         AND   TaskType = 'ASTCPK'
+         AND   [Status] = '3'
+         AND   Groupkey = @cGroupKey
+         AND   UserKey = @cUserName
+         AND   DeviceID = @cCartID
+         AND   DropID <> '' -- FCR-652 Fix issue by jack
+      END
+
       -- Prepare next screen var        
       SET @cOutField01 = @cCartPickMethod        
       SET @cOutField02 = @cCartID        
