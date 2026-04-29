@@ -1,3 +1,7 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /****************************************************************************************************/
 /* Store procedure: rdt_838ExtSNVal05                                                               */
 /* Copyright      : Maersk                                                                          */
@@ -6,9 +10,10 @@
 /*                                                                                                  */
 /* Date        Rev  Author          Purposes                                                        */
 /* 06-03-2026  1.0  bruce.yuan      FCR-11432 Only allow to Pack SNO as per pickdetail.ID           */
+/* 29-04-2026  1.1  bruce.yuan      UWP-55389 fix an issue                                          */
 /****************************************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_838ExtSNVal05]
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_838ExtSNVal05]
     @nMobile          INT,
     @nFunc            INT,
     @cLangCode        NVARCHAR( 3),
@@ -151,28 +156,29 @@ BEGIN
             GOTO Quit
         END
 
-        IF NOT EXISTS( SELECT 1
-            FROM dbo.SerialNo WITH(NOLOCK)
-            WHERE StorerKey = @cStorerKey
-            AND SerialNo = @cSerialNo
-            AND SKU = @cSKU
-            AND ID = @cID)
+        IF NOT EXISTS(SELECT 1
+                    FROM dbo.PICKDETAIL p WITH(NOLOCK)
+                    INNER JOIN rdt.RDTMOBREC m WITH(NOLOCK) ON p.PickSlipNo = m.V_PickSlipNo AND p.DropID = m.V_String20
+                    INNER JOIN dbo.SerialNo SN WITH(NOLOCK) ON SN.StorerKey = P.Storerkey AND SN.SKU = p.Sku AND SN.ID = p.ID
+                    WHERE p.Storerkey = @cStorerKey
+                        AND p.Sku = @cSKU
+                        AND m.Mobile = @nMobile
+                        AND SN.SerialNo = @cSerialNo)
         BEGIN
             SET @nErrNo = 262112
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO not ID
-            GOTO Quit	     
+            GOTO Quit
         END
     END
 
 Quit:
-
 END
-GO
-
-GRANT EXECUTE ON rdt.rdt_838ExtSNVal05 TO NSQL
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON [RDT].[rdt_838ExtSNVal05] TO [NSQL]
 GO

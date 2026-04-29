@@ -4,21 +4,16 @@ SET QUOTED_IDENTIFIER OFF
 GO
   
 /*********************************************************************************/
-/* Store procedure: isp_TPACK_PrintDocument_Wrapper                              */
+/* Store procedure: isp_TPACK_PrintVASDocument_Wrapper                           */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
-/* Purpose        : Print Label and Paper Wrapper                                */
+/* Purpose        : Print  VAS Label or Paper Wrapper                            */
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
-/* 2025-09-09   1.0  GCH225     Created                                          */
-/* 2025-09-09   1.1  YLI237     UWP-43135                                        */
-/* 2026-01-23   2.0  GCH225     UWP-47547: Removed the error prompt for JobID,   */
-/*                                         not all PrintType will return JobID   */
-/* 2025-01-23   2.1  YLI237     UWP-45422                                        */
-/* 2026-02-25   2.2  GCH225     UWP-49257 Enhancement.                           */
+/* 2026-04-29   1.0  GCH225     Created                                          */
 /*********************************************************************************/
 
-CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_Wrapper] (
+CREATE OR ALTER  PROC [API].[isp_TPACK_PrintVASDocument_Wrapper] (
      @cType                NVARCHAR(30)      = ''
    , @bIsDiscrete          BIT               = 0
    , @bIsCustom            BIT               = 0
@@ -61,7 +56,6 @@ BEGIN
          , @cSQL              NVARCHAR(MAX)
          , @cSQLParam         NVARCHAR(MAX)
          , @cConfigKey        NVARCHAR(30)
-         , @cSPName           NVARCHAR(50)
          , @nContinuePrint    INT
 
 
@@ -73,134 +67,17 @@ BEGIN
    SET @cSQL               = ''
    SET @cSQLParam          = ''
    SET @cConfigKey         = ''
-   SET @cSPName            = ''
    SET @nContinuePrint     = 1 -- Default to call the standard print SP if Extended Print SP is not configured or print config JSON is not provided.
 
-   IF @oPrintConfigJson <> ''
+   SELECT @cExtendedPrintSP = ISNULL(OPTION5,'')
+   FROM STORERCONFIG (NOLOCK) 
+   WHERE StorerKey = @cStorerKey 
+   AND ConfigKey = 'TPS-VAS'
+   AND sValue IN('1', '3')
+
+   IF @@ROWCOUNT = 1
    BEGIN
-      IF ISJSON(@oPrintConfigJson) = 0
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_ErrNo = 11804
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Invalid JSON Format for oPrintConfigJson.
-         GOTO EXIT_SP
-      END
-
-      DECLARE CUR_PRINT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT  j.cConfigKey 
-            , RTRIM(j.cSPName)
-      FROM OPENJSON(@oPrintConfigJson)
-      WITH (
-         cConfigKey  NVARCHAR(30)
-       , cSPName     NVARCHAR(50)
-      ) j
-      LEFT JOIN dbo.sysobjects s
-      ON s.[name] = j.cSPName  
-      AND s.[type] = 'P'
-
-      OPEN CUR_PRINT
-      FETCH NEXT FROM CUR_PRINT INTO  @cConfigKey 
-                                    , @cSPName
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-         SET @cSQL = 'EXEC [API].[' + @cSPName    + ']' + CHAR(13)
-                     + '  @cType                      ' + CHAR(13)
-                     + ', @bIsDiscrete                ' + CHAR(13)
-                     + ', @bIsCustom                  ' + CHAR(13)
-                     + ', @cPickSlipNo                ' + CHAR(13)
-                     + ', @cOrderKey                  ' + CHAR(13)
-                     + ', @cLoadKey                   ' + CHAR(13)
-                     + ', @cDropID                    ' + CHAR(13)
-                     + ', @cStorerKey                 ' + CHAR(13)
-                     + ', @cFacility                  ' + CHAR(13)
-                     + ', @nCartonNo                  ' + CHAR(13)
-                     + ', @c_UserID                   ' + CHAR(13)
-                     + ', @cLangCode                  ' + CHAR(13)
-                     + ', @bIsLastCarton              ' + CHAR(13)
-                     + ', @bPrintLabelFlag            ' + CHAR(13)
-                     + ', @bPrintPaperFlag            ' + CHAR(13)
-                     + ', @cLabelPrinter              ' + CHAR(13)
-                     + ', @cPaperPrinter              ' + CHAR(13)
-                     + ', @cReportType                ' + CHAR(13)
-                     + ', @cPrintLabelJobIDs   OUTPUT ' + CHAR(13)
-                     + ', @cPrintPaperJobIDs   OUTPUT ' + CHAR(13)
-                     + ', @nContinuePrint      OUTPUT ' + CHAR(13)
-                     + ', @b_Success           OUTPUT ' + CHAR(13)
-                     + ', @n_ErrNo             OUTPUT ' + CHAR(13)
-                     + ', @c_ErrMsg            OUTPUT ' + CHAR(13)
-
-         SET @cSQLParam = '  @cType             NVARCHAR(30)         ' + CHAR(13)
-                        + ', @bIsDiscrete       BIT                  ' + CHAR(13)
-                        + ', @bIsCustom         BIT                  ' + CHAR(13)
-                        + ', @cPickSlipNo       NVARCHAR(10)         ' + CHAR(13)
-                        + ', @cOrderKey         NVARCHAR(10)         ' + CHAR(13)
-                        + ', @cLoadKey          NVARCHAR(10)         ' + CHAR(13)
-                        + ', @cDropID           NVARCHAR(20)         ' + CHAR(13)
-                        + ', @cStorerKey        NVARCHAR(15)         ' + CHAR(13)
-                        + ', @cFacility         NVARCHAR(5)          ' + CHAR(13)
-                        + ', @nCartonNo         INT                  ' + CHAR(13)
-                        + ', @c_UserID          NVARCHAR(256)        ' + CHAR(13)
-                        + ', @cLangCode         NVARCHAR(3)          ' + CHAR(13)
-                        + ', @bIsLastCarton     BIT                  ' + CHAR(13)
-                        + ', @bPrintLabelFlag   BIT                  ' + CHAR(13)
-                        + ', @bPrintPaperFlag   BIT                  ' + CHAR(13)
-                        + ', @cLabelPrinter     NVARCHAR(30)         ' + CHAR(13)
-                        + ', @cPaperPrinter     NVARCHAR(30)         ' + CHAR(13)
-                        + ', @cReportType       NVARCHAR(30)         ' + CHAR(13)
-                        + ', @cPrintLabelJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
-                        + ', @cPrintPaperJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
-                        + ', @nContinuePrint    INT           OUTPUT ' + CHAR(13)
-                        + ', @b_Success         INT           OUTPUT ' + CHAR(13)
-                        + ', @n_ErrNo           INT           OUTPUT ' + CHAR(13)
-                        + ', @c_ErrMsg          NVARCHAR(250) OUTPUT ' + CHAR(13)
-         
-         EXEC sp_ExecuteSQL  @cSQL
-                           , @cSQLParam
-                           , @cType            
-                           , @bIsDiscrete      
-                           , @bIsCustom        
-                           , @cPickSlipNo      
-                           , @cOrderKey        
-                           , @cLoadKey         
-                           , @cDropID          
-                           , @cStorerKey       
-                           , @cFacility          
-                           , @nCartonNo        
-                           , @c_UserID         
-                           , @cLangCode  
-                           , @bIsLastCarton 
-                           , @bPrintLabelFlag
-                           , @bPrintPaperFlag
-                           , @cLabelPrinter    
-                           , @cPaperPrinter    
-                           , @cReportType
-                           , @cPrintLabelJobIDs OUTPUT
-                           , @cPrintPaperJobIDs OUTPUT
-                           , @nContinuePrint    OUTPUT
-                           , @b_Success         OUTPUT
-                           , @n_ErrNo           OUTPUT
-                           , @c_ErrMsg          OUTPUT
-         
-         IF @b_Success = 0
-         BEGIN
-            SET @n_Continue = 3   
-            GOTO EXIT_SP
-         END
-
-         FETCH NEXT FROM CUR_PRINT INTO  @cConfigKey 
-                                       , @cSPName
-      END
-      CLOSE CUR_PRINT
-      DEALLOCATE CUR_PRINT
-   END
-   ELSE
-   BEGIN
-      SELECT @cExtendedPrintSP = ISNULL(sValue,'')
-      FROM STORERCONFIG (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-      AND ConfigKey = 'TPS-ExtPrintDoc'
-
-      IF @@ROWCOUNT = 1  
+      IF @cExtendedPrintSP <> '' 
       BEGIN
          IF NOT EXISTS( SELECT 1 
                         FROM dbo.sysobjects 
@@ -209,7 +86,7 @@ BEGIN
          )
          BEGIN
             SET @n_Continue = 3
-            SET @n_ErrNo = 11801    
+            SET @n_ErrNo = 15801    
             SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Invalid Extended Print SP Name in StorerConfig.
             GOTO EXIT_SP  
          END
@@ -232,6 +109,9 @@ BEGIN
                    + ', @bPrintPaperFlag            ' + CHAR(13)
                    + ', @cLabelPrinter              ' + CHAR(13)
                    + ', @cPaperPrinter              ' + CHAR(13)
+                   + ', @bIsAutoPrint               ' + CHAR(13)
+                   + ', @nCopy                      ' + CHAR(13)
+                   + ', @cSKU                       ' + CHAR(13)
                    + ', @cReportType                ' + CHAR(13)
                    + ', @cPrintLabelJobIDs   OUTPUT ' + CHAR(13)
                    + ', @cPrintPaperJobIDs   OUTPUT ' + CHAR(13)
@@ -257,6 +137,9 @@ BEGIN
                         + ', @bPrintPaperFlag   BIT                  ' + CHAR(13)
                         + ', @cLabelPrinter     NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPaperPrinter     NVARCHAR(30)         ' + CHAR(13)
+                        + ', @bIsAutoPrint      BIT                  ' + CHAR(13)
+                        + ', @nCopy             INT                  ' + CHAR(13)
+                        + ', @cSKU              NVARCHAR(20)         ' + CHAR(13)
                         + ', @cReportType       NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPrintLabelJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
                         + ', @cPrintPaperJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
@@ -285,6 +168,9 @@ BEGIN
                            , @cLabelPrinter    
                            , @cPaperPrinter    
                            , @cReportType
+                           , @bIsAutoPrint
+                           , @nCopy
+                           , @cSKU
                            , @cPrintLabelJobIDs OUTPUT
                            , @cPrintPaperJobIDs OUTPUT
                            , @nContinuePrint    OUTPUT
@@ -297,10 +183,10 @@ BEGIN
             SET @n_Continue = 3   
             GOTO EXIT_SP
          END
-      END  
+      END
       ELSE
       BEGIN
-         EXEC [API].[isp_TPACK_PrintDocument_Std]
+         EXEC [API].[isp_TPACK_PrintDocument_VAS]
          @cType             = @cType            
          , @bIsDiscrete       = @bIsDiscrete      
          , @bIsCustom         = @bIsCustom        
@@ -318,9 +204,13 @@ BEGIN
          , @bPrintPaperFlag   = @bPrintPaperFlag
          , @cLabelPrinter     = @cLabelPrinter    
          , @cPaperPrinter     = @cPaperPrinter    
+         , @bIsAutoPrint      = @bIsAutoPrint
+         , @nCopy             = @nCopy
+         , @cSKU              = @cSKU
          , @cReportType       = @cReportType
          , @cPrintLabelJobIDs = @cPrintLabelJobIDs   OUTPUT
          , @cPrintPaperJobIDs = @cPrintPaperJobIDs   OUTPUT
+         , @nContinuePrint    = @nContinuePrint      OUTPUT
          , @b_Success         = @b_Success           OUTPUT
          , @n_ErrNo           = @n_ErrNo             OUTPUT
          , @c_ErrMsg          = @c_ErrMsg            OUTPUT

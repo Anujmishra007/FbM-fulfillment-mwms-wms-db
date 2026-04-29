@@ -45,19 +45,23 @@ SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF        
 SET CONCAT_NULL_YIELDS_NULL OFF        
          
-DECLARE   @cJITOrders         NVARCHAR(20),
-         @nPickslipPackQty INT,
-         @nPickslipPickQty INT,
-         @cCartonNo         NVARCHAR(5),
-         @nTranCount         INT,
-         @bSuccess         INT,
-         @b_Debug            INT
+DECLARE  @cJITOrders       NVARCHAR(20)
+       , @nPickslipPackQty INT
+       , @nPickslipPickQty INT
+       , @cCartonNo        NVARCHAR(5)
+       , @nTranCount       INT
+       , @bSuccess         INT
+       , @b_Debug          INT
 
-DECLARE @cTransmitLogKey NVARCHAR(20)
-DECLARE @c_QCmdClass     NVARCHAR(10) = ''  
-DECLARE @cUPCEPC         NVARCHAR(100)
-DECLARE @cLblLineNumber  NVARCHAR(10)
-DECLARE @cSKU            NVARCHAR(30)
+DECLARE @cTransmitLogKey   NVARCHAR(20)
+      , @c_QCmdClass       NVARCHAR(10) = ''  
+      , @cUPCEPC           NVARCHAR(100)
+      , @cLblLineNumber    NVARCHAR(10)
+      , @cSKU              NVARCHAR(30)
+      , @c_UPC         NVARCHAR(100)
+      , @c_EPC         NVARCHAR(100)
+      , @c_Separator       NVARCHAR(5)
+      , @n_Position        INT
 
 DECLARE @CloseCtnList TABLE (     
    UCC             NVARCHAR( 30),  
@@ -127,15 +131,54 @@ BEGIN
    FROM PickHeader (NOLOCK)
    WHERE PickHeaderkey = @cPickSlipNo
 
+   SELECT @c_Separator = NULLIF(RTRIM(Option1), '')
+   FROM StorerConfig WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey 
+   AND ConfigKey = 'SKUDecode';
+
+   IF NOT EXISTS (SELECT 1 
+                  FROM @CloseCtnList 
+                  WHERE (SkuBarcode <> '' OR ADCode <> ''))
+   OR @c_Separator = ''
+   BEGIN
+      GOTO SkipEPC
+   END
+   
    DECLARE CUR_PSN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
    SELECT SKU, ISNULL(SkuBarcode, ADCode) AS SkuBarcode    
    FROM @CloseCtnList      
-   WHERE (SkuBarcode <> '' OR ADCode <> '')      
+   WHERE (SkuBarcode <> '' OR ADCode <> '') 
+   AND CHARINDEX(';', ISNULL(SkuBarcode, ADCode)) > 0 -- Only process those with ';' in barcode
       
    OPEN CUR_PSN      
    FETCH NEXT FROM CUR_PSN INTO @cSKU, @cUPCEPC     
    WHILE @@FETCH_STATUS <> -1      
    BEGIN 
+      SET @c_UPC = ''
+      SET @c_EPC = ''
+      SET @n_Position = CHARINDEX(@c_Separator, @cUPCEPC)
+
+      IF @n_Position<= 0
+      BEGIN
+         GOTO NEXTITEM
+      END
+
+      SET @c_UPC = LEFT(@cUPCEPC, @n_Position - 1)
+      SET @c_EPC = SUBSTRING(@cUPCEPC, @n_Position + LEN(@c_Separator), LEN(@cUPCEPC));
+
+      IF EXISTS ( SELECT 1
+                  FROM PACKSERIALNO (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                  AND StorerKey  = @cStorerKey
+                  AND SerialNo   = @c_EPC
+      )
+      BEGIN
+         SET @b_Success = 0;
+         SET @n_Err = 90031;
+         SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP')  --' EPC already scanned (ispSKUDCPA02)';
+         GOTO RollBackTran;
+      END
+
       SELECT  @cLblLineNumber = LabelLine
             , @cLabelNo = LabelNo
       FROM PACDETAIL (NOLOCK)
@@ -143,7 +186,7 @@ BEGIN
       AND PickSlipNo = @cPickSlipNo
       AND CartonNo = @nCartonNo
       AND SKU = @cSKU   
-
+      
       INSERT INTO PACKSERIALNO( PickSlipNo
                               , CartonNo
                               , LabelNo
@@ -152,7 +195,7 @@ BEGIN
                               , SKU
                               , SerialNo
                               , Qty
-                              , PickDetailKey
+                              , Barcode
                               , AddWho
                               , AddDate
                               , EditWho
@@ -163,9 +206,9 @@ BEGIN
                               , @cLblLineNumber
                               , @cStorerKey
                               , @cSKU
-                              , @cUPCEPC
+                              , @c_EPC
                               , 1
-                              , ''
+                              , @cUPCEPC
                               , @cUserName
                               , GETDATE()
                               , @cUserName
@@ -175,15 +218,17 @@ BEGIN
       BEGIN         
          SET @b_Success = 0;
          SET @n_Err = 1003451        
-         SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert PackSerialNo table. Function : isp_TPS_ExtUpd05'        
+         SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Failed to insert into PACKSERIALNO table. Function : isp_TPS_ExtUpd05
          GOTO RollBackTran        
       END  
-
+      
 NEXTITEM:
       FETCH NEXT FROM CUR_PSN INTO @cSKU, @cUPCEPC        
    END
    CLOSE CUR_PSN;
    DEALLOCATE CUR_PSN;
+
+SkipEPC:
 
    EXEC nspGetRight    
       @c_Facility   = @cFacility   
@@ -277,5 +322,3 @@ SET ANSI_NULLS ON
 GO
 GRANT EXECUTE ON api.isp_TPS_ExtUpd05 TO NSQL
 GO
-
-

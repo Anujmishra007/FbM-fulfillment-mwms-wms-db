@@ -28,7 +28,6 @@ CREATE OR ALTER PROC [API].[isp_TPACK_PrintDocument_VAS_BySKU] (
    , @cUDF04_WK            NVARCHAR(60)   = ''
    , @bPrintLabelFlag      BIT            = 0
    , @bPrintPaperFlag      BIT            = 0
-   , @cReportType          NVARCHAR(20)   = ''
    , @cLangCode            NVARCHAR(3)    = ''
    , @b_Success            INT            = 0   OUTPUT  
    , @n_ErrNo              INT            = 0   OUTPUT
@@ -41,57 +40,86 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
 
-   DECLARE @n_Continue  INT           = 1  
-         , @n_StartCnt  INT           = @@TRANCOUNT  
+   DECLARE @n_Continue     INT           = 1  
+         , @n_StartCnt     INT           = @@TRANCOUNT  
 
-   DECLARE @cModuleID   NVARCHAR(30)  = 'TPPACK'
-         , @cUDF01_Pref NVARCHAR(60)  = ''
-         , @cUDF02_Pref NVARCHAR(60)  = ''
-         , @cUDF04_Pref NVARCHAR(60)  = ''
-         , @cCode2_Pref NVARCHAR(30)  = ''
-         , @FinalUDF01  NVARCHAR(60)  = ''
-         , @ReportID    NVARCHAR(10)  = ''
-         , @ReportLine  NVARCHAR(5)   = ''
+   DECLARE @cModuleID      NVARCHAR(30)  = 'TPPACK'
+         , @cUDF01_Pref    NVARCHAR(60)  = ''
+         , @cUDF02_Pref    NVARCHAR(60)  = ''
+         , @cUDF04_Pref    NVARCHAR(60)  = ''
+         , @cCode2_Pref    NVARCHAR(30)  = ''
+         , @FinalUDF01     NVARCHAR(60)  = ''
+         , @ReportID       NVARCHAR(10)  = ''
+         , @ReportLine     NVARCHAR(5)   = ''
+         , @cConsigneeKey  NVARCHAR(15) = ''
+         , @cMarkForKey    NVARCHAR(15) = ''
+         , @cBillToKey     NVARCHAR(15) = ''
+         , @cStyle         NVARCHAR(30) = ''
+         , @cSKUGroup      NVARCHAR(30) = ''
 
    SET @FinalUDF01 = @cUDF01_WK
    
-   SELECT  @cUDF01_Pref = ISNULL(UDF01,'')
-         , @cUDF02_Pref = ISNULL(UDF02,'')
-         , @cUDF04_Pref = ISNULL(UDF04,'')
-         , @cCode2_Pref = ISNULL(Code2,'')
+   IF @cOrderKey <> ''
+   BEGIN
+      SELECT  @cConsigneeKey = ISNULL(ConsigneeKey, '')
+            , @cMarkForKey   = ISNULL(MarkForKey, '')
+            , @cBillToKey    = ISNULL(BillToKey, '')
+      FROM ORDERS (NOLOCK)
+      WHERE OrderKey = @cOrderKey 
+   END
+
+   IF @cSKU <> ''
+   BEGIN
+      SELECT @cStyle    = ISNULL(Style, '')
+           , @cSKUGroup = ISNULL(SKUGroup, '')
+      FROM SKU (NOLOCK)
+      WHERE StorerKey = @cStorerKey 
+      AND SKU = @cSKU;
+   END
+
+   DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT  ISNULL(UDF01,'')
+         , ISNULL(UDF02,'')
+         , ISNULL(UDF04,'')
+         , ISNULL(Code2,'')
    FROM CODELKUP (NOLOCK)
    WHERE StorerKey = @cStorerKey
    AND LISTNAME = 'VASCustPre' 
    AND Code = @cWODType
    AND Short = 'Active' 
    
-   IF @@ROWCOUNT <> 0
+   OPEN CUR_LOOP
+   FETCH NEXT FROM CUR_LOOP INTO @cUDF01_Pref
+                               , @cUDF02_Pref
+                               , @cUDF04_Pref
+                               , @cCode2_Pref
+   WHILE @@FETCH_STATUS = 0
    BEGIN
       IF @cUDF02_Pref = 'Consignee'
       BEGIN
-         SELECT @FinalUDF01 = IIF(
-            (@cUDF04_Pref = '' AND (@cCode2_Pref = ConsigneeKey OR @cCode2_Pref = MarkForKey OR @cCode2_Pref = BillToKey))
-         OR (@cUDF04_Pref = 'ConsigneeKey' AND @cCode2_Pref = ConsigneeKey)
-         OR (@cUDF04_Pref = 'MarkForKey' AND @cCode2_Pref = MarkForKey)
-         OR (@cUDF04_Pref = 'BillToKey' AND @cCode2_Pref = BillToKey)
+         SET @FinalUDF01 = IIF(
+            (@cUDF04_Pref = '' AND (@cCode2_Pref = @cConsigneeKey OR @cCode2_Pref = @cMarkForKey OR @cCode2_Pref = @cBillToKey))
+         OR (@cUDF04_Pref = 'ConsigneeKey' AND @cCode2_Pref = @cConsigneeKey)
+         OR (@cUDF04_Pref = 'MarkForKey' AND @cCode2_Pref = @cMarkForKey)
+         OR (@cUDF04_Pref = 'BillToKey' AND @cCode2_Pref = @cBillToKey)
                                  , @cUDF01_Pref
                                  , @cUDF01_WK)
-         FROM ORDERS (NOLOCK)
-         WHERE OrderKey = @cOrderKey 
-         AND StorerKey = @cStorerKey;
       END
       ELSE IF @cUDF02_Pref = 'SKU'
       BEGIN
-         SELECT  @FinalUDF01 = IIF((@cCode2_Pref = SKUGroup 
-                                 OR @cCode2_Pref = Style)
+         SET  @FinalUDF01 = IIF((@cCode2_Pref = @cSKUGroup 
+                                 OR @cCode2_Pref = @cStyle)
                                  , @cUDF01_Pref
-                                 , @cUDF01_WK
-                                 )
-         FROM SKU (NOLOCK)
-         WHERE StorerKey = @cStorerKey 
-         AND SKU = @cSKU;
-      END     
+                                 , @cUDF01_WK)
+      END  
+      
+      FETCH NEXT FROM CUR_LOOP INTO @cUDF01_Pref
+                                  , @cUDF02_Pref
+                                  , @cUDF04_Pref
+                                  , @cCode2_Pref   
    END
+   CLOSE CUR_LOOP
+   DEALLOCATE CUR_LOOP
       
    IF @FinalUDF01 <> '' AND CHARINDEX('_', @FinalUDF01) > 0
    BEGIN
@@ -105,33 +133,24 @@ BEGIN
       GOTO EXIT_SP
    END
 
-    IF @bPrintPaperFlag = 1 OR @bPrintLabelFlag = 1
-    BEGIN
-        SELECT  WMR.ReportID
-             , WMRD.ReportLineNo
-             , IIF(WMRD.PrintType = 'LOGIREPORT', 'JReport', 'WMReport') AS PrintSource
-             , ISNULL(WMRD.DefaultPrinterID, '') AS DefaultPrinterID
-             , WMRD.IsPaperPrinter
-             , ISNULL(WMR.KeyFieldName1, '') AS KeyFieldName1
-             , ISNULL(WMR.KeyFieldName2, '') AS KeyFieldName2
-             , ISNULL(WMR.KeyFieldName3, '') AS KeyFieldName3
-             , ISNULL(WMR.KeyFieldName4, '') AS KeyFieldName4
-             , IIF(@cUDF04_WK = 'PRICELB', 1, 0) AS IsSKUPrint
-        FROM WMREPORTDETAIL WMRD (NOLOCK)
-        JOIN WMREPORT WMR (NOLOCK) 
-        ON WMR.ReportID = WMRD.ReportID 
-        WHERE WMR.ModuleID = @cModuleID
-        AND WMRD.StorerKey = @cStorerKey
-        AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
-        AND WMR.ReportType = @cReportType
-        AND WMR.ReportID = @ReportID
-        AND WMRD.ReportLineNo = @ReportLine
-	    AND (
-               (@bPrintPaperFlag = 1 AND WMRD.IsPaperPrinter = 'Y')
-            OR (@bPrintLabelFlag = 1 AND WMRD.IsPaperPrinter <> 'Y')
-        )       
-    END
-   
+   SELECT  WMR.ReportID
+         , WMRD.ReportLineNo
+         , IIF(WMRD.PrintType = 'LOGIREPORT', 'JReport', 'WMReport') AS PrintSource
+         , ISNULL(WMRD.DefaultPrinterID, '') AS DefaultPrinterID
+         , WMRD.IsPaperPrinter
+         , ISNULL(WMR.KeyFieldName1, '') AS KeyFieldName1
+         , ISNULL(WMR.KeyFieldName2, '') AS KeyFieldName2
+         , ISNULL(WMR.KeyFieldName3, '') AS KeyFieldName3
+         , ISNULL(WMR.KeyFieldName4, '') AS KeyFieldName4
+         , WMR.ReportType
+   FROM WMREPORTDETAIL WMRD (NOLOCK)
+   JOIN WMREPORT WMR (NOLOCK) 
+   ON WMR.ReportID = WMRD.ReportID 
+   WHERE WMR.ModuleID = @cModuleID
+   AND WMRD.StorerKey = @cStorerKey
+   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
+   AND WMR.ReportID = @ReportID
+   AND WMRD.ReportLineNo = @ReportLine
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
