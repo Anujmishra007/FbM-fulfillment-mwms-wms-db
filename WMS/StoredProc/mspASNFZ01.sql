@@ -45,7 +45,9 @@ GO
 /* 2025-05-14  JH01     1.8   UWP-31657 - Change to map Receipt/ReceiptDetail*/
 /* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
 /* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */ 
-/* 2026-02-11  NJOW01   2.1   UWP-48746 Performance tuning                 */   
+/* 2025-09-04  JH04     2.1   Fix for duplicate OrderKey Issue             */ 
+/* 2025-12-10  JH05     2.2   UWP-44219 Fix issue if externreceiptkey empty*/
+/* 2026-02-11  NJOW01   2.3   UWP-48746 Performance tuning                 */   
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
@@ -98,6 +100,7 @@ BEGIN
          , @c_Id                 NVARCHAR(36)                  --(SSA06)
          , @CUR_RECDET           CURSOR
          , @c_NewTran            NVARCHAR(1) = 'N'  --NJOW01
+         , @c_Option5            NVARCHAR(500) = '' --NJOW01
 
    SET @b_Success= 1
    SET @n_Err    = 0
@@ -296,7 +299,15 @@ BEGIN
    
    --NJOW01 S
    SET @c_NewTran = 'Y'
-
+   
+   SELECT @c_Option5 = SC.Option5
+   FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '','PostFinalizeReceiptSP') AS SC 
+   
+   SET @c_NewTran = dbo.fnc_GetParamValueFromString ('@c_NewTran', @c_Option5, @c_NewTran)
+   
+   IF ISNULL(@c_NewTran,'') = ''
+      SET @c_NewTran = 'Y'
+        
    IF @c_NewTran = 'Y'
    BEGIN
       WHILE @@TRANCOUNT > 0  
@@ -525,6 +536,9 @@ BEGIN
                   LEFT JOIN  STORER S WITH (NOLOCK) ON (S.StorerKey = RD.UserDefine02 AND S.Type = '2'  AND S.ConsigneeFor = RD.StorerKey)
                   WHERE RD.ExternReceiptkey = @c_ExternReceiptkey                                        --(JH01)
 			            AND RD.ReceiptKey = @c_Receiptkey                                                      --(JH03)
+                     AND RD.UserDefine02 = @c_Consigneekey  --(JH04)
+                     AND ISNULL(RD.UserDefine06,'1900-01-01') = @c_DeliveryDate --(JH04)
+                     AND RD.PutawayLoc = @c_Door  --(JH04)
                   -- FROM  PO  (NOLOCK)                                                                  --(JH01)
                   -- WHERE PO.Pokey = @c_POKey                                                           --(JH01)
                   GROUP BY S.Company, S.Address1, S.Address2, S.Address3, RH.SellerCompany, RH.CarrierReference, RH.SellerName, RH.SellerAddress1, --(JH01)
