@@ -12,6 +12,7 @@ GO
 /* 2024-12-06 1.0    JCH507    FCR-1157 for levis (based on rdt_1764SwapUCC07)  */
 /* 2025-09-10 1.1.0  NICKT     FCR-7730 Check lottables by "SwapUCC"            */
 /* 2026-04-14 1.2.0  NICKT     UWP-54220 Update PackDetail.RefNo                */
+/* 2026-04-29 1.2.1  NICKT     UWP-54220 Swap failed if scanned UCC has diff lot*/
 /********************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764SwapUCC09
@@ -1616,6 +1617,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                   QTY = 0,
+                  DropID = '',
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -1638,6 +1640,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                   QTY = 0,
+                  DropID = '',
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
