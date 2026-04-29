@@ -1176,9 +1176,9 @@ BEGIN
                     WHERE StorerKey = @c_aStorerKey
                     AND ConfigKey = 'BypassNullPltTypeKitAllocate'
 
-                    IF @c_BypassNullPalletType = 'Y'
+                    IF @c_BypassNullPalletType = 'Y' AND @c_PalletType IS NULL
                     BEGIN
-                       SET @c_PalletType = ''
+                          SET @c_PalletType = ''
                     END
                                                                                              --Preetham1(end)
                     UPDATE KITDETAIL WITH (ROWLOCK)
