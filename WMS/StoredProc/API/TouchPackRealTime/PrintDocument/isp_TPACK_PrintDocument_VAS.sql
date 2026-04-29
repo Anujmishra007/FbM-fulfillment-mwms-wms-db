@@ -197,38 +197,37 @@ BEGIN
                                  , @cUDF04_WK
    WHILE @@FETCH_STATUS = 0
    BEGIN
-         INSERT INTO @VASReports ( ReportID
-                                 , ReportLineNo
-                                 , PrintSource
-                                 , DefaultPrinterID
-                                 , IsPaperPrinter
-                                 , KeyFieldName1
-                                 , KeyFieldName2
-                                 , KeyFieldName3
-                                 , KeyFieldName4
-                                 , ReportType)
-         EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
-            @cWODType          = @cWODType
-            , @cStorerKey      = @cStorerKey
-            , @cFacility       = @cFacility
-            , @cOrderKey       = @cOrderKey
-            , @cPickSlipNo     = @cPickSlipNo
-            , @nCartonNo       = @nCartonNo
-            , @cSKU            = @cWODSKU
-            , @cUDF01_WK       = @cUDF01_WK
-            , @cUDF04_WK       = @cUDF04_WK
-            , @bPrintLabelFlag = @bPrintLabelFlag
-            , @bPrintPaperFlag = @bPrintPaperFlag
-            , @cLangCode       = @cLangCode
-            , @b_Success       = @b_Success       OUTPUT
-            , @n_ErrNo         = @n_ErrNo         OUTPUT
-            , @c_ErrMsg        = @c_ErrMsg        OUTPUT
+      INSERT INTO @VASReports ( ReportID
+                              , ReportLineNo
+                              , PrintSource
+                              , DefaultPrinterID
+                              , IsPaperPrinter
+                              , KeyFieldName1
+                              , KeyFieldName2
+                              , KeyFieldName3
+                              , KeyFieldName4
+                              , ReportType)
+      EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
+         @cWODType          = @cWODType
+         , @cStorerKey      = @cStorerKey
+         , @cFacility       = @cFacility
+         , @cOrderKey       = @cOrderKey
+         , @cPickSlipNo     = @cPickSlipNo
+         , @nCartonNo       = @nCartonNo
+         , @cSKU            = @cWODSKU
+         , @cUDF01_WK       = @cUDF01_WK
+         , @cUDF04_WK       = @cUDF04_WK
+         , @bPrintLabelFlag = @bPrintLabelFlag
+         , @bPrintPaperFlag = @bPrintPaperFlag
+         , @cLangCode       = @cLangCode
+         , @b_Success       = @b_Success       OUTPUT
+         , @n_ErrNo         = @n_ErrNo         OUTPUT
+         , @c_ErrMsg        = @c_ErrMsg        OUTPUT
 
-         IF @b_Success = 0 
-         BEGIN
-            SET @n_Continue = 3 
-            GOTO EXIT_SP  
-         END
+      IF @b_Success = 0 
+      BEGIN
+         SET @n_Continue = 3 
+         GOTO EXIT_SP  
       END
       FETCH NEXT FROM sku_cursor INTO @cWODSKU
                                     , @cWODType
