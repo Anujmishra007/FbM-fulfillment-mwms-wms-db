@@ -29,8 +29,8 @@ CREATE OR ALTER PROC [API].[isp_TPACK_PrintDocument_VAS] (
    , @c_UserID             NVARCHAR(256)     = ''  
    , @cLangCode            NVARCHAR(3)       = ''
    , @bIsLastCarton        BIT               = 0
-   , @bPrintLabelFlag      BIT               = 0
-   , @bPrintPaperFlag      BIT               = 0
+   , @bPrintLabelFlag      BIT               = 0   OUTPUT
+   , @bPrintPaperFlag      BIT               = 0   OUTPUT
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
    , @bIsAutoPrint         BIT               = 0
@@ -235,6 +235,16 @@ BEGIN
    END
    CLOSE sku_cursor
    DEALLOCATE sku_cursor
+
+   IF @cReportType = '' AND 
+   EXISTS ( SELECT 1 
+            FROM @VASReports
+            WHERE ReportType = 'TPVASCarton'
+   )
+   BEGIN
+      -- If TPVASCarton exists, then no need to continue print the standard or custom carton label.
+      SET @bPrintLabelFlag = 0
+   END
    
    DECLARE CUR_VASALL CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
    SELECT  ReportID
