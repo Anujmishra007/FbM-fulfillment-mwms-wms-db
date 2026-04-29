@@ -143,7 +143,7 @@ BEGIN
       @cStoredUCC      = ISNULL(V_String49, '')   -- Store current UCC in V_String49
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
-   
+
    -- Get ProcessType, ExternReceiptKey and Signatory from RECEIPT
    SELECT @cProcessType = ISNULL(RTRIM(ProcessType), ''),
           @cExternReceiptKey = ISNULL(RTRIM(ExternReceiptKey), ''),
@@ -341,7 +341,7 @@ BEGIN
          END
 
          -- Validate UCC is 20-digit number
-         IF LEN(@cUCC) > 20 OR @cUCC LIKE '%[^0-9]%'
+         IF LEN(@cUCC) <> 20 OR @cUCC LIKE '%[^0-9]%'
          BEGIN
             SET @nErrNo = 264815
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
