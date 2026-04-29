@@ -600,11 +600,15 @@ BEGIN
                      AND RPL.PickMethod = 'GetTask-U'
                END
 
+               DECLARE @cPickDetailKeyTemp   NVARCHAR(18)
+               DECLARE @cAlertKey            NVARCHAR(18)
+
                SET @nLoopIndex = -1
                WHILE 1 = 1
                BEGIN
                   SELECT TOP 1
-                     @nLoopIndex = RowRef
+                     @nLoopIndex = RowRef,
+                     @cPickDetailKeyTemp = PickDetailKey
                   FROM @tRDTPickLog
                   WHERE RowRef > @nLoopIndex
                   ORDER BY RowRef
@@ -731,6 +735,9 @@ BEGIN
                   WHERE StorerKey = @cStorerKey
                      AND SKU = @cSuggSKU
 
+
+               SET @cPickDetailKeyTemp = IIF(LEN(@cPickDetailKeyTemp) > 10, '', @cPickDetailKeyTemp)
+
                BEGIN TRY
                   DECLARE @cVarianceQty NVARCHAR(10) = ISNULL(TRY_CAST((@nSuggQTY - @nActQTY) AS NVARCHAR(10)), '')
                   SET @cAlertMessage =
@@ -755,7 +762,7 @@ BEGIN
                         , @c_Lot              = ''
                         , @c_Loc              = @cSuggLOC
                         , @c_ID               = ''
-                        , @c_TaskDetailKey    = ''
+                        , @c_TaskDetailKey    = @cPickDetailKeyTemp
                         , @c_UCCNo            = @cSuggUCC
                END TRY
                BEGIN CATCH
@@ -768,6 +775,33 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Send alert message failed
                   GOTO UPD_RDTMOBREC
                END CATCH
+
+               SELECT TOP 1 @cAlertKey = AlertKey 
+               FROM dbo.AlertLog WITH(NOLOCK) 
+               WHERE TaskDetailKey IS NOT NULL
+                  AND TaskDetailKey = @cAlertMessage 
+                  AND StorerKey = @cStorerKey
+               ORDER BY LogDate DESC
+
+               IF @cAlertKey IS NOT NULL
+               BEGIN
+                  BEGIN TRY
+                     UPDATE dbo.AlertLog WITH(ROWLOCK)
+                     SET Resolution = @cReasonCode
+                     WHERE AlertKey = @cAlertKey
+                        AND StorerKey = @cStorerKey
+                  END TRY
+                  BEGIN CATCH
+                     IF XACT_STATE() = -1
+                        ROLLBACK TRAN rdt_839ExtScn06_6773
+                     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                        COMMIT TRAN
+
+                     SET @nErrNo = 255545
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update AlertLog failed
+                     GOTO UPD_RDTMOBREC
+                  END CATCH
+               END
 
                -- 4. Re-allocate the pick task
                DECLARE 
