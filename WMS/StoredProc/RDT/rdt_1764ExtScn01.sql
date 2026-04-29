@@ -491,6 +491,18 @@ BEGIN
 
                IF @nQTY = @nQTY_RPL
                BEGIN
+                  -- Need sync @nQTY to rdtMobRec for later use, such as short pick
+                  BEGIN TRY
+                     UPDATE rdt.rdtMobRec WITH(ROWLOCK)
+                     SET V_Integer4 = @nQTY
+                     WHERE Mobile = @nMobile
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 234867
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update RDTMOBREC Failed
+                     GOTO RollBack_rdt_1764ExtScn01
+                  END CATCH
+
                   EXEC rdt.rdt_TM_Replen_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
                      @cTaskDetailKey,
                      @cDropID,
