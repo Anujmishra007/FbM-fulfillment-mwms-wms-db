@@ -119,14 +119,18 @@ BEGIN
    DECLARE @nStep_8 INT = 8, @nScn_8 INT = 1307  -- SKU Screen (SKIP, use stored SKU)
    DECLARE @nStep_9 INT = 9, @nScn_9 INT = 1308  -- QTY Screen (SKIP, use PACK.CaseCnt)
    DECLARE @nStep_10 INT = 10, @nScn_10 INT = 1309  -- Extra Data / Confirm
+   DECLARE @nStep_11 INT = 11, @nScn_11 INT = 1310  -- ESC Anyway? (1=YES, 2=NO)
 
-   -- Only handle function 898
+   -- Local variable for option
+   DECLARE @cOption NVARCHAR(1)
+   DECLARE @nCurrentStep INT
+
    IF @nFunc <> 898
       GOTO Quit
 
    -- Get data from RDTMOBREC
-   -- Note: Use V_String48 for our own carton count (main SP overwrites V_String3)
    SELECT
+      @nCurrentStep    = Step,
       @cReceiptKey     = ISNULL(V_ReceiptKey, ''),
       @cPOKey          = ISNULL(V_POKey, ''),
       @cMax            = ISNULL(V_Max, ''),
@@ -139,7 +143,7 @@ BEGIN
       @cStoredUCC      = ISNULL(V_String49, '')   -- Store current UCC in V_String49
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
-
+   
    -- Get ProcessType, ExternReceiptKey and Signatory from RECEIPT
    SELECT @cProcessType = ISNULL(RTRIM(ProcessType), ''),
           @cExternReceiptKey = ISNULL(RTRIM(ExternReceiptKey), ''),
@@ -148,36 +152,26 @@ BEGIN
    WHERE ReceiptKey = @cReceiptKey
      AND StorerKey = @cStorerKey
 
-   -- Debug trace
-   INSERT INTO TRACEINFO (TRACENAME, TIMEIN, STEP1, STEP2, STEP3, STEP4, COL1, COL2, COL3)
-   VALUES ('rdt_898ExtScn07', GETDATE(), @nStep, @nScn, @nInputKey, 0,
-           @cProcessType, @cCartonCnt + '/' + @cTotalCarton, 'StoredSKU=' + ISNULL(@cStoredSKU,''))
-
    /*==========================================================================
    STEP 0: Screen 4 (Estimated UCC on ID) - Clear stored SKU for new batch
    When user enters a new UCC count, clear the stored SKU so first UCC of
    new batch will ask for SKU input.
-   Also capture the estimated UCC count from @cInField05 and store it in
-   V_String2, since the main SP only updates this at the END.
    ==========================================================================*/
    IF @nStep = @nStep_4
    BEGIN
       IF @nInputKey = 1
       BEGIN
          -- Capture the estimated UCC count from user input
-         -- @cInField05 contains the value entered on Screen 4
          SET @cTotalCarton = ISNULL(RTRIM(@cInField05), '0')
 
-         -- Clear stored SKU for new batch and store the total carton count
+         -- Clear stored SKU, stored UCC for new batch and store the total carton count
          UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
          SET V_String50 = '',
+             V_String49 = '',  -- Clear stored UCC (important for ProcessType C count tracking)
              V_String2 = @cTotalCarton,
-             V_String48 = '0'  -- Reset carton count for new batch (use V_String48, main SP overwrites V_String3)
+             V_String48 = '0'  -- Reset carton count for new batch
          WHERE Mobile = @nMobile
 
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'NEW_BATCH_TOTAL_CARTON', @cTotalCarton)
-         -- Let main SP continue processing
       END
    END
 
@@ -187,11 +181,44 @@ BEGIN
    ==========================================================================*/
    IF @nStep = @nStep_5
    BEGIN
+
+      IF @nCurrentStep = @nStep_11
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            SET @cOption = ISNULL(RTRIM(@cInField01), '')
+
+            IF @cOption = '1'
+            BEGIN
+               -- Option 1: YES - Go to Estimated UCC on ID (Screen 4)
+               -- Clear stored SKU for new batch
+               UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
+               SET V_String50 = '',
+                  V_String48 = '0',
+                  V_String49 = ''
+               WHERE Mobile = @nMobile
+
+               -- Set correct field values for Screen 4
+               SET @cOutField01 = ISNULL(@cReceiptKey, '')  -- ASN
+               SET @cOutField02 = ISNULL(@cPOKey, '')       -- PO
+               SET @cOutField03 = ISNULL(@cLoc, '')         -- TO LOC
+               SET @cOutField04 = ISNULL(@cToID, '')        -- TO ID
+               SET @cOutField05 = ''                        -- Estimated UCC count (empty for input)
+               SET @cOutField11 = ''
+
+               SET @nAfterStep = @nStep_4
+               SET @nAfterScn = @nScn_4
+               GOTO Quit
+            END
+         END
+      END
+
       IF @nInputKey = 1
       BEGIN
          -- Detect new batch: StoredSKU is empty (cleared when previous batch completed)
          -- Reset carton counter for new batch since Step 4 handler never runs
-         IF @cStoredSKU = '' OR @cStoredSKU IS NULL
+         -- Only for ProcessType N - ProcessType C doesn't use StoredSKU
+         IF (@cStoredSKU = '' OR @cStoredSKU IS NULL) -- AND UPPER(@cProcessType) = 'N'
          BEGIN
             -- New batch detected - reset carton counter
             UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
@@ -200,12 +227,9 @@ BEGIN
 
             SET @cCartonCnt = '0'
 
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'NEW_BATCH_RESET', 'V_String48 reset to 0')
          END
 
          -- At Step 5, if this is fresh (carton count = 0), try to get total from @cInField05
-         -- The main SP just processed Step 4 and @cInField05 might still have the estimate
          IF (@cTotalCarton = '0' OR @cTotalCarton = '') AND @cCartonCnt = '0'
          BEGIN
             -- Try to get total from @cInField05 (estimate entered at Step 4)
@@ -222,8 +246,6 @@ BEGIN
                SET V_String2 = @cTotalCarton
                WHERE Mobile = @nMobile
 
-               INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-               VALUES ('rdt_898ExtScn07', GETDATE(), 'CAPTURED_TOTAL_FROM_FIELD05', @cTotalCarton)
             END
          END
 
@@ -234,17 +256,9 @@ BEGIN
          SET @nAfterStep = @nStep_6
          SET @nAfterScn = @nScn_6
 
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'SKIP_5_TO_6', @cCountDisplay)
          GOTO Quit
       END
 
-      IF @nInputKey = 0
-      BEGIN
-         SET @nAfterStep = @nStep_4
-         SET @nAfterScn = @nScn_4
-         GOTO Quit
-      END
    END
 
    /*==========================================================================
@@ -253,6 +267,59 @@ BEGIN
    ==========================================================================*/
    IF @nStep = @nStep_6
    BEGIN
+
+      IF @nCurrentStep = @nStep_11 
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            SET @cOption = ISNULL(RTRIM(@cInField01), '')
+
+            IF @cOption = '2'
+            BEGIN
+               -- Option 2: NO - Go back to UCC screen (Screen 6)
+               SET @cCountDisplay = ISNULL(@cCartonCnt, '0') + '/' + ISNULL(@cTotalCarton, '0')
+
+               SET @cOutField01 = ''  -- UCC (empty for input)
+               SET @cOutField02 = ISNULL(@cStoredSKU, '')   -- SKU
+               SET @cOutField11 = @cCountDisplay
+
+               SET @nAfterStep = @nStep_6
+               SET @nAfterScn = @nScn_6
+               GOTO Quit
+            END
+         END
+
+         -- ESC on this screen - go back to UCC screen
+         IF @nInputKey = 0
+         BEGIN
+            SET @cCountDisplay = ISNULL(@cCartonCnt, '0') + '/' + ISNULL(@cTotalCarton, '0')
+
+            SET @cOutField01 = ''
+            SET @cOutField02 = ISNULL(@cStoredSKU, '')
+            SET @cOutField11 = @cCountDisplay
+
+            SET @nAfterStep = @nStep_6
+            SET @nAfterScn = @nScn_6
+            GOTO Quit
+         END
+      END
+      ELSE IF @nCurrentStep = @nStep_8
+      BEGIN
+
+         -- ESC on this screen - go back to UCC screen
+         IF @nInputKey = 0
+         BEGIN
+            SET @cCountDisplay = ISNULL(@cCartonCnt, '0') + '/' + ISNULL(@cTotalCarton, '0')
+
+            SET @cOutField01 = ''
+            SET @cOutField02 = ISNULL(@cStoredSKU, '')
+            SET @cOutField11 = @cCountDisplay
+
+            SET @nAfterStep = @nStep_6
+            SET @nAfterScn = @nScn_6
+            GOTO Quit
+         END
+      END
       -- Only set count display if we have valid total (not 0)
       -- Otherwise let main SP handle it
       IF @cTotalCarton <> '0' AND @cTotalCarton <> ''
@@ -278,9 +345,6 @@ BEGIN
          BEGIN
             SET @nErrNo = 264815
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'INVALID_UCC_FORMAT', 'Len=' + CAST(LEN(@cUCC) AS NVARCHAR(10)) + ',UCC=' + @cUCC)
-
             GOTO Quit
          END
 
@@ -302,23 +366,92 @@ BEGIN
                SET @nAfterScn = @nScn_6
                GOTO Quit
             END
-            -- For CID with existing UCC, let main SP handle the normal flow
-         END
 
-         select @cProcessType, 'rdt_898ExtScn07'
+            -- -- Check if a previous receive completed (V_String49 has a value from previous UCC)
+            -- -- If so, increment count before processing the new UCC
+            -- IF @cStoredUCC <> '' AND @cStoredUCC IS NOT NULL
+            -- BEGIN
+            --    -- Previous receive completed, increment count
+            --    SET @nCurrentCnt = ISNULL(TRY_CAST(@cCartonCnt AS INT), 0) + 1
+            --    SET @cCartonCnt = CAST(@nCurrentCnt AS NVARCHAR(4))
+
+            --    -- Update counter
+            --    UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
+            --    SET V_String48 = @cCartonCnt
+            --    WHERE Mobile = @nMobile
+            -- END
+
+            SET @nCurrentCnt = ISNULL(TRY_CAST(@cCartonCnt AS INT), 0) + 1
+            SET @cCartonCnt = CAST(@nCurrentCnt AS NVARCHAR(4))
+
+            -- Store current UCC in V_String49 to track this receive in progress
+            UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
+            SET V_String49 = @cUCC, V_String48 = @cCartonCnt
+            WHERE Mobile = @nMobile
+
+            -- Update count display
+            SET @nTotalCnt = ISNULL(TRY_CAST(@cTotalCarton AS INT), 0)
+            SET @cCountDisplay = @cCartonCnt + '/' + CAST(@nTotalCnt AS NVARCHAR(4))
+            SET @cOutField11 = @cCountDisplay
+
+            -- Check if count is full - navigate to TO ID or ASN screen
+            IF @nTotalCnt > 0 AND @nCurrentCnt >= @nTotalCnt
+            BEGIN
+               -- Count full - check if ASN fully received
+               SET @nASNFullyReceived = 0
+               IF NOT EXISTS (
+                  SELECT 1 FROM dbo.ReceiptDetail RD WITH(NOLOCK)
+                  WHERE RD.ReceiptKey = @cReceiptKey
+                    AND RD.QtyExpected > RD.QtyReceived
+               )
+                  SET @nASNFullyReceived = 1
+
+               IF @nASNFullyReceived = 1
+               BEGIN
+                  -- ASN fully received, go to Screen 1 (ASN)
+                  UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
+                  SET V_String50 = '', V_String49 = ''
+                  WHERE Mobile = @nMobile
+
+                  SET @cOutField01 = ''
+                  SET @cOutField02 = ''
+                  SET @cOutField03 = ''
+                  SET @cOutField04 = ''
+                  SET @cOutField05 = ''
+                  SET @cOutField11 = ''
+
+                  SET @nAfterStep = @nStep_1
+                  SET @nAfterScn = @nScn_1
+                  GOTO Quit
+               END
+               ELSE
+               BEGIN
+                  -- Go to TO ID screen (Screen 3)
+                  UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
+                  SET V_String50 = '', V_String49 = ''
+                  WHERE Mobile = @nMobile
+
+                  SET @cOutField01 = ISNULL(@cReceiptKey, '')
+                  SET @cOutField02 = ISNULL(@cPOKey, '')
+                  SET @cOutField03 = ISNULL(@cLoc, '')
+                  SET @cOutField04 = ''
+                  SET @cOutField05 = ''
+                  SET @cOutField11 = ''
+
+                  SET @nAfterStep = @nStep_3
+                  SET @nAfterScn = @nScn_3
+                  GOTO Quit
+               END
+            END
+
+            -- Count not full - let main SP handle the normal flow
+         END
 
          -- NORMAL Mode: For new UCC, execute all hidden steps' logic
          IF UPPER(@cProcessType) = 'N'
          BEGIN
             IF @nUCCExists = 0
             BEGIN
-               -- ============================================================
-               -- Execute Step 7 logic (Create New UCC? = YES)
-               -- ============================================================
-               INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-               VALUES ('rdt_898ExtScn07', GETDATE(), 'EXEC_STEP7_AUTO_YES', @cUCC)
-
-
                -- ============================================================
                -- Execute Step 8 logic (SKU)
                -- Use stored SKU if available, otherwise this is first UCC
@@ -338,17 +471,12 @@ BEGIN
                   SET @nAfterStep = @nStep_8
                   SET @nAfterScn = @nScn_8
 
-                  INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-                  VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_UCC_GO_TO_SKU', 'StoredUCC=' + @cUCC)
                   GOTO Quit
                END
                ELSE
                BEGIN
                   -- Subsequent UCC - use stored SKU
                   SET @cSKU = @cStoredSKU
-
-                  INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-                  VALUES ('rdt_898ExtScn07', GETDATE(), 'USE_STORED_SKU', @cSKU)
 
                   -- Validate SKU
                   IF NOT EXISTS (SELECT 1 FROM dbo.SKU WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
@@ -372,9 +500,6 @@ BEGIN
                     AND S.SKU = @cSKU
 
                   SET @nQTY = @nCaseCnt
-
-                  INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-                  VALUES ('rdt_898ExtScn07', GETDATE(), 'EXEC_STEP9_QTY', 'QTY=' + CAST(@nQTY AS NVARCHAR(10)))
 
                   -- ============================================================
                   -- Execute Step 10 logic (Call rdt_UCCReceive_Confirm)
@@ -400,62 +525,48 @@ BEGIN
 
                   IF @nQtyExpected > 0
                   BEGIN
-                     SET @cLott01 = CAST(ROUND(@nCube / @nQtyExpected, 8) AS NVARCHAR(18))
-                     SET @cLott02 = CAST(ROUND(@nGrossWgt / @nQtyExpected, 8) AS NVARCHAR(18))
+                     SET @cLott01 = CAST(CAST(ROUND(@nCube / @nQtyExpected, 3) AS DECIMAL(18,3)) AS NVARCHAR(18))
+                     SET @cLott02 = CAST(CAST(ROUND(@nGrossWgt / @nQtyExpected, 3) AS DECIMAL(18,3)) AS NVARCHAR(18))
                   END
-
-                  INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-                  VALUES ('rdt_898ExtScn07', GETDATE(), 'LOTT_CALC', 'L01=' + @cLott01 + ',L02=' + @cLott02 + ',L06=' + @cLott06 + ',L07=' + @cLott07)
 
                   -- Initialize error variables
                   SET @nErrNo = 0
                   SET @cErrMsg = ''
 
-                  INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3)
-                  VALUES ('rdt_898ExtScn07', GETDATE(), 'CALLING_CONFIRM',
-                          'UCC=' + @cUCC + ',SKU=' + @cSKU + ',QTY=' + CAST(@nQTY AS NVARCHAR(10)),
-                          'RK=' + @cReceiptKey + ',LOC=' + @cLoc + ',ID=' + @cToID)
-
                   BEGIN TRY
                   BEGIN TRANSACTION
 
-                  -- EXEC rdt.rdt_UCCReceive_Confirm
-                  --    @nFunc         = @nFunc,
-                  --    @nMobile       = @nMobile,
-                  --    @cLangCode     = @cLangCode,
-                  --    @nErrNo        = @nErrNo OUTPUT,
-                  --    @cErrMsg       = @cErrMsg OUTPUT,
-                  --    @cStorerKey    = @cStorerKey,
-                  --    @cFacility     = @cFacility,
-                  --    @cReceiptKey   = @cReceiptKey,
-                  --    @cPOKey        = @cPOKeyValue,
-                  --    @cToLOC        = @cLoc,
-                  --    @cToID         = @cToID,
-                  --    @cSKUCode      = '',
-                  --    @cSKUUOM       = '',
-                  --    @nSKUQTY       = 0,
-                  --    @cUCC          = @cUCC,
-                  --    @cUCCSKU       = @cSKU,
-                  --    @nUCCQTY       = @nQTY,
-                  --    @cCreateUCC    = '1',
-                  --    @cLottable01   = @cLott01,
-                  --    @cLottable02   = @cLott02,
-                  --    @cLottable03   = '',
-                  --    @dLottable04   = NULL,
-                  --    @dLottable05   = NULL,
-                  --    @nNOPOFlag     = @nNOPOFlag,
-                  --    @cConditionCode = 'OK',
-                  --    @cSubreasonCode = ''
-
-                  INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-                  VALUES ('rdt_898ExtScn07', GETDATE(), 'CONFIRM_RESULT', 'ErrNo=' + CAST(ISNULL(@nErrNo,0) AS NVARCHAR(10)) + ',Msg=' + ISNULL(@cErrMsg,''))
+                  EXEC rdt.rdt_UCCReceive_Confirm
+                     @nFunc         = @nFunc,
+                     @nMobile       = @nMobile,
+                     @cLangCode     = @cLangCode,
+                     @nErrNo        = @nErrNo OUTPUT,
+                     @cErrMsg       = @cErrMsg OUTPUT,
+                     @cStorerKey    = @cStorerKey,
+                     @cFacility     = @cFacility,
+                     @cReceiptKey   = @cReceiptKey,
+                     @cPOKey        = @cPOKeyValue,
+                     @cToLOC        = @cLoc,
+                     @cToID         = @cToID,
+                     @cSKUCode      = '',
+                     @cSKUUOM       = '',
+                     @nSKUQTY       = 0,
+                     @cUCC          = @cUCC,
+                     @cUCCSKU       = @cSKU,
+                     @nUCCQTY       = @nQTY,
+                     @cCreateUCC    = '1',
+                     @cLottable01   = @cLott01,
+                     @cLottable02   = @cLott02,
+                     @cLottable03   = '',
+                     @dLottable04   = NULL,
+                     @dLottable05   = NULL,
+                     @nNOPOFlag     = @nNOPOFlag,
+                     @cConditionCode = 'OK',
+                     @cSubreasonCode = ''
 
                   IF ISNULL(@nErrNo, 0) <> 0
                   BEGIN
                      ROLLBACK TRANSACTION
-                     INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-                     VALUES ('rdt_898ExtScn07', GETDATE(), 'CONFIRM_ERROR', @cErrMsg)
-
                      GOTO Quit
                   END
 
@@ -474,20 +585,12 @@ BEGIN
                         ROLLBACK TRANSACTION
                      SET @nErrNo = 264819
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                     INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-                     VALUES ('rdt_898ExtScn07', GETDATE(), 'LOTT_UPD_FAIL', ERROR_MESSAGE())
-
                      GOTO Quit
                   END CATCH
-
-                  INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-                  VALUES ('rdt_898ExtScn07', GETDATE(), 'UCC_RECEIVED', @cUCC)
 
                   -- Increase carton count
                   SET @nCurrentCnt = ISNULL(TRY_CAST(@cCartonCnt AS INT), 0) + 1
                   SET @nTotalCnt = ISNULL(TRY_CAST(@cTotalCarton AS INT), 0)
-
-                  SELECT @nCurrentCnt AS CurrentCount, @nTotalCnt AS TotalCount
 
                   UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
                   SET V_String48 = CAST(@nCurrentCnt AS NVARCHAR(4))
@@ -525,8 +628,6 @@ BEGIN
 
                         SET @nAfterStep = @nStep_1
                         SET @nAfterScn = @nScn_1
-                        INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1)
-                        VALUES ('rdt_898ExtScn07', GETDATE(), 'ASN_FULL_TO_SCREEN_1')
                      END
                      ELSE
                      BEGIN
@@ -546,8 +647,6 @@ BEGIN
 
                         SET @nAfterStep = @nStep_3
                         SET @nAfterScn = @nScn_3
-                        INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1)
-                        VALUES ('rdt_898ExtScn07', GETDATE(), 'COUNT_MATCHED_TO_SCREEN_3')
                      END
                   END
                   ELSE
@@ -559,8 +658,6 @@ BEGIN
 
                      SET @nAfterStep = @nStep_6
                      SET @nAfterScn = @nScn_6
-                     INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-                     VALUES ('rdt_898ExtScn07', GETDATE(), 'BACK_TO_UCC_SCREEN_6', @cCountDisplay)
                   END
                   GOTO Quit
                END
@@ -578,11 +675,26 @@ BEGIN
          END
       END
 
-      -- ESC: Go back to Screen 4
+      -- ESC: Check if coming from Screen 8 (first UCC SKU entry)
       IF @nInputKey = 0
       BEGIN
-         SET @nAfterStep = @nStep_4
-         SET @nAfterScn = @nScn_4
+         -- If there's a stored UCC, user pressed ESC on Screen 8 - stay on Screen 6
+         IF @cStoredUCC <> '' AND @cStoredUCC IS NOT NULL
+         BEGIN
+            -- Clear stored UCC since user cancelled
+            UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
+            SET V_String49 = ''
+            WHERE Mobile = @nMobile
+
+            SET @cOutField01 = ''
+            SET @cCountDisplay = ISNULL(@cCartonCnt, '0') + '/' + ISNULL(@cTotalCarton, '0')
+            SET @cOutField11 = @cCountDisplay
+
+            SET @nAfterStep = @nStep_6
+            SET @nAfterScn = @nScn_6
+            GOTO Quit
+         END
+
          GOTO Quit
       END
    END
@@ -599,8 +711,6 @@ BEGIN
             -- Auto-YES, go to SKU screen
             SET @nAfterStep = @nStep_8
             SET @nAfterScn = @nScn_8
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'SKIP_7_AUTO_YES_TO_8')
             GOTO Quit
          END
 
@@ -615,12 +725,6 @@ BEGIN
          END
       END
 
-      IF @nInputKey = 0
-      BEGIN
-         SET @nAfterStep = @nStep_4
-         SET @nAfterScn = @nScn_4
-         GOTO Quit
-      END
    END
 
    /*==========================================================================
@@ -629,12 +733,6 @@ BEGIN
    ==========================================================================*/
    IF @nStep = @nStep_8
    BEGIN
-      -- Debug trace at Screen 8 entry
-      INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3)
-      VALUES ('rdt_898ExtScn07', GETDATE(), 'SCREEN_8_ENTRY',
-              'InputKey=' + CAST(@nInputKey AS NVARCHAR(10)) + ',StoredUCC=' + ISNULL(@cStoredUCC,''),
-              'Max=' + ISNULL(SUBSTRING(@cMax,1,20),'') + ',OutF01=' + ISNULL(@cOutField01,''))
-
       IF @nInputKey = 1
       BEGIN
          SET @cSKU = ISNULL(RTRIM(SUBSTRING(@cMax, 1, 20)), '')
@@ -644,9 +742,6 @@ BEGIN
          -- If no stored UCC, try from field
          IF @cUCC = ''
             SET @cUCC = ISNULL(RTRIM(@cOutField01), ISNULL(RTRIM(@cInField01), ''))
-
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'SCREEN_8_VALUES', 'SKU=' + @cSKU + ',UCC=' + @cUCC)
 
          IF @cSKU <> '' AND @cUCC <> ''
          BEGIN
@@ -667,9 +762,6 @@ BEGIN
             SET V_String50 = @cSKU
             WHERE Mobile = @nMobile
 
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'STORED_SKU', @cSKU)
-
             -- ============================================================
             -- Execute Step 9 logic (QTY = PACK.CaseCnt)
             -- ============================================================
@@ -683,10 +775,6 @@ BEGIN
               AND S.SKU = @cSKU
 
             SET @nQTY = @nCaseCnt
-
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_UCC_QTY', 'QTY=' + CAST(@nQTY AS NVARCHAR(10)))
-
             -- ============================================================
             -- Execute Step 10 logic (Call rdt_UCCReceive_Confirm)
             -- ============================================================
@@ -709,62 +797,48 @@ BEGIN
 
             IF @nQtyExpected > 0
             BEGIN
-               SET @cLott01 = CAST(ROUND(@nCube / @nQtyExpected, 8) AS NVARCHAR(18))
-               SET @cLott02 = CAST(ROUND(@nGrossWgt / @nQtyExpected, 8) AS NVARCHAR(18))
+               SET @cLott01 = CAST(CAST(ROUND(@nCube / @nQtyExpected, 3) AS DECIMAL(18,3)) AS NVARCHAR(18))
+               SET @cLott02 = CAST(CAST(ROUND(@nGrossWgt / @nQtyExpected, 3) AS DECIMAL(18,3)) AS NVARCHAR(18))
             END
-
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_LOTT_CALC', 'L01=' + @cLott01 + ',L02=' + @cLott02 + ',L06=' + @cLott06 + ',L07=' + @cLott07)
 
             -- Initialize error variables
             SET @nErrNo = 0
             SET @cErrMsg = ''
 
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_CALLING_CONFIRM',
-                    'UCC=' + @cUCC + ',SKU=' + @cSKU + ',QTY=' + CAST(@nQTY AS NVARCHAR(10)),
-                    'RK=' + @cReceiptKey + ',LOC=' + @cLoc + ',ID=' + @cToID)
-
             BEGIN TRY
             BEGIN TRANSACTION
 
-            -- EXEC rdt.rdt_UCCReceive_Confirm
-            --    @nFunc         = @nFunc,
-            --    @nMobile       = @nMobile,
-            --    @cLangCode     = @cLangCode,
-            --    @nErrNo        = @nErrNo OUTPUT,
-            --    @cErrMsg       = @cErrMsg OUTPUT,
-            --    @cStorerKey    = @cStorerKey,
-            --    @cFacility     = @cFacility,
-            --    @cReceiptKey   = @cReceiptKey,
-            --    @cPOKey        = @cPOKeyValue,
-            --    @cToLOC        = @cLoc,
-            --    @cToID         = @cToID,
-            --    @cSKUCode      = '',
-            --    @cSKUUOM       = '',
-            --    @nSKUQTY       = 0,
-            --    @cUCC          = @cUCC,
-            --    @cUCCSKU       = @cSKU,
-            --    @nUCCQTY       = @nQTY,
-            --    @cCreateUCC    = '1',
-            --    @cLottable01   = @cLott01,
-            --    @cLottable02   = @cLott02,
-            --    @cLottable03   = '',
-            --    @dLottable04   = NULL,
-            --    @dLottable05   = NULL,
-            --    @nNOPOFlag     = @nNOPOFlag,
-            --    @cConditionCode = 'OK',
-            --    @cSubreasonCode = ''
-
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_CONFIRM_RESULT', 'ErrNo=' + CAST(ISNULL(@nErrNo,0) AS NVARCHAR(10)) + ',Msg=' + ISNULL(@cErrMsg,''))
+            EXEC rdt.rdt_UCCReceive_Confirm
+               @nFunc         = @nFunc,
+               @nMobile       = @nMobile,
+               @cLangCode     = @cLangCode,
+               @nErrNo        = @nErrNo OUTPUT,
+               @cErrMsg       = @cErrMsg OUTPUT,
+               @cStorerKey    = @cStorerKey,
+               @cFacility     = @cFacility,
+               @cReceiptKey   = @cReceiptKey,
+               @cPOKey        = @cPOKeyValue,
+               @cToLOC        = @cLoc,
+               @cToID         = @cToID,
+               @cSKUCode      = '',
+               @cSKUUOM       = '',
+               @nSKUQTY       = 0,
+               @cUCC          = @cUCC,
+               @cUCCSKU       = @cSKU,
+               @nUCCQTY       = @nQTY,
+               @cCreateUCC    = '1',
+               @cLottable01   = @cLott01,
+               @cLottable02   = @cLott02,
+               @cLottable03   = '',
+               @dLottable04   = NULL,
+               @dLottable05   = NULL,
+               @nNOPOFlag     = @nNOPOFlag,
+               @cConditionCode = 'OK',
+               @cSubreasonCode = ''
 
             IF ISNULL(@nErrNo, 0) <> 0
             BEGIN
                ROLLBACK TRANSACTION
-               INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-               VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_UCC_CONFIRM_ERROR', @cErrMsg)
-
                GOTO Quit
             END
 
@@ -783,14 +857,8 @@ BEGIN
                   ROLLBACK TRANSACTION
                SET @nErrNo = 264819
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-               INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-               VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_CONFIRM_FAIL', ERROR_MESSAGE())
-
                GOTO Quit
             END CATCH
-
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_UCC_RECEIVED', @cUCC)
 
             -- Increase carton count
             SET @nCurrentCnt = ISNULL(TRY_CAST(@cCartonCnt AS INT), 0) + 1
@@ -830,8 +898,6 @@ BEGIN
 
                   SET @nAfterStep = @nStep_1
                   SET @nAfterScn = @nScn_1
-                  INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1)
-                  VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_UCC_ASN_FULL_TO_1')
                END
                ELSE
                BEGIN
@@ -850,8 +916,6 @@ BEGIN
 
                   SET @nAfterStep = @nStep_3
                   SET @nAfterScn = @nScn_3
-                  INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1)
-                  VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_UCC_COUNT_MATCHED_TO_3')
                END
             END
             ELSE
@@ -862,19 +926,11 @@ BEGIN
 
                SET @nAfterStep = @nStep_6
                SET @nAfterScn = @nScn_6
-               INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-               VALUES ('rdt_898ExtScn07', GETDATE(), 'FIRST_UCC_BACK_TO_6', @cCountDisplay)
             END
             GOTO Quit
          END
       END
 
-      IF @nInputKey = 0
-      BEGIN
-         SET @nAfterStep = @nStep_4
-         SET @nAfterScn = @nScn_4
-         GOTO Quit
-      END
    END
 
    /*==========================================================================
@@ -887,11 +943,6 @@ BEGIN
       -- Get SKU from @tExtScnData (main SP passes validated values here)
       SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
       SELECT @cUCC = Value FROM @tExtScnData WHERE Variable = '@cUCC'
-
-      INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3)
-      VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_INTERCEPT',
-              'StoredUCC=' + ISNULL(@cStoredUCC,'') + ',ExtUCC=' + ISNULL(@cUCC,''),
-              'ExtSKU=' + ISNULL(@cSKU,''))
 
       -- If we have a stored UCC, this is our first UCC flow
       -- Process the UCC receive here
@@ -920,9 +971,6 @@ BEGIN
              V_String49 = ''  -- Clear stored UCC after processing
          WHERE Mobile = @nMobile
 
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_STORED_SKU', @cSKU)
-
          -- Get QTY from PACK.CaseCnt
          SET @nCaseCnt = 1
          SELECT @nCaseCnt = ISNULL(P.CaseCnt, 1),
@@ -934,9 +982,6 @@ BEGIN
            AND S.SKU = @cSKU
 
          SET @nQTY = @nCaseCnt
-
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_QTY', 'QTY=' + CAST(@nQTY AS NVARCHAR(10)))
 
          -- Call rdt_UCCReceive_Confirm
          SET @cPOKeyValue = CASE WHEN UPPER(@cPOKey) = 'NOPO' THEN '' ELSE @cPOKey END
@@ -958,55 +1003,43 @@ BEGIN
 
          IF @nQtyExpected > 0
          BEGIN
-            SET @cLott01 = CAST(ROUND(@nCube / @nQtyExpected, 8) AS NVARCHAR(18))
-            SET @cLott02 = CAST(ROUND(@nGrossWgt / @nQtyExpected, 8) AS NVARCHAR(18))
+            SET @cLott01 = CAST(CAST(ROUND(@nCube / @nQtyExpected, 3) AS DECIMAL(18,3)) AS NVARCHAR(18))
+            SET @cLott02 = CAST(CAST(ROUND(@nGrossWgt / @nQtyExpected, 3) AS DECIMAL(18,3)) AS NVARCHAR(18))
          END
-
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_LOTT_CALC', 'L01=' + @cLott01 + ',L02=' + @cLott02 + ',L06=' + @cLott06 + ',L07=' + @cLott07)
 
          SET @nErrNo = 0
          SET @cErrMsg = ''
 
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_CALLING_CONFIRM',
-                 'UCC=' + @cUCC + ',SKU=' + @cSKU + ',QTY=' + CAST(@nQTY AS NVARCHAR(10)),
-                 'RK=' + @cReceiptKey + ',LOC=' + @cLoc + ',ID=' + @cToID)
-
          BEGIN TRY
          BEGIN TRANSACTION
 
-         -- EXEC rdt.rdt_UCCReceive_Confirm
-         --    @nFunc         = @nFunc,
-         --    @nMobile       = @nMobile,
-         --    @cLangCode     = @cLangCode,
-         --    @nErrNo        = @nErrNo OUTPUT,
-         --    @cErrMsg       = @cErrMsg OUTPUT,
-         --    @cStorerKey    = @cStorerKey,
-         --    @cFacility     = @cFacility,
-         --    @cReceiptKey   = @cReceiptKey,
-         --    @cPOKey        = @cPOKeyValue,
-         --    @cToLOC        = @cLoc,
-         --    @cToID         = @cToID,
-         --    @cSKUCode      = '',
-         --    @cSKUUOM       = '',
-         --    @nSKUQTY       = 0,
-         --    @cUCC          = @cUCC,
-         --    @cUCCSKU       = @cSKU,
-         --    @nUCCQTY       = @nQTY,
-         --    @cCreateUCC    = '1',
-         --    @cLottable01   = @cLott01,
-         --    @cLottable02   = @cLott02,
-         --    @cLottable03   = '',
-         --    @dLottable04   = NULL,
-         --    @dLottable05   = NULL,
-         --    @nNOPOFlag     = @nNOPOFlag,
-         --    @cConditionCode = 'OK',
-         --    @cSubreasonCode = ''
-
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_CONFIRM_RESULT',
-                 'ErrNo=' + CAST(ISNULL(@nErrNo,0) AS NVARCHAR(10)) + ',Msg=' + ISNULL(@cErrMsg,''))
+         EXEC rdt.rdt_UCCReceive_Confirm
+            @nFunc         = @nFunc,
+            @nMobile       = @nMobile,
+            @cLangCode     = @cLangCode,
+            @nErrNo        = @nErrNo OUTPUT,
+            @cErrMsg       = @cErrMsg OUTPUT,
+            @cStorerKey    = @cStorerKey,
+            @cFacility     = @cFacility,
+            @cReceiptKey   = @cReceiptKey,
+            @cPOKey        = @cPOKeyValue,
+            @cToLOC        = @cLoc,
+            @cToID         = @cToID,
+            @cSKUCode      = '',
+            @cSKUUOM       = '',
+            @nSKUQTY       = 0,
+            @cUCC          = @cUCC,
+            @cUCCSKU       = @cSKU,
+            @nUCCQTY       = @nQTY,
+            @cCreateUCC    = '1',
+            @cLottable01   = @cLott01,
+            @cLottable02   = @cLott02,
+            @cLottable03   = '',
+            @dLottable04   = NULL,
+            @dLottable05   = NULL,
+            @nNOPOFlag     = @nNOPOFlag,
+            @cConditionCode = 'OK',
+            @cSubreasonCode = ''
 
          IF ISNULL(@nErrNo, 0) <> 0
          BEGIN
@@ -1030,14 +1063,8 @@ BEGIN
                ROLLBACK TRANSACTION
             SET @nErrNo = 264819
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_CONFIRM_FAIL', ERROR_MESSAGE())
-
             GOTO Quit
          END CATCH
-
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_UCC_RECEIVED=' + @cUCC)
 
          -- Increase carton count
          SET @nCurrentCnt = ISNULL(TRY_CAST(@cCartonCnt AS INT), 0) + 1
@@ -1075,8 +1102,6 @@ BEGIN
 
                SET @nAfterStep = @nStep_1
                SET @nAfterScn = @nScn_1
-               INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1)
-               VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_ASN_FULL_TO_1')
             END
             ELSE
             BEGIN
@@ -1095,8 +1120,6 @@ BEGIN
 
                SET @nAfterStep = @nStep_3
                SET @nAfterScn = @nScn_3
-               INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1)
-               VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_COUNT_MATCHED_TO_3')
             END
          END
          ELSE
@@ -1107,42 +1130,39 @@ BEGIN
 
             SET @nAfterStep = @nStep_6
             SET @nAfterScn = @nScn_6
-            INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3)
-            VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_BACK_TO_UCC_6', @cCountDisplay,
-                    'Step=' + CAST(@nAfterStep AS NVARCHAR(10)) + ',Scn=' + CAST(@nAfterScn AS NVARCHAR(10)) + ',OF11=' + ISNULL(@cOutField11,'NULL'))
          END
-
-         -- Debug trace before returning to main SP
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3)
-         VALUES ('rdt_898ExtScn07', GETDATE(), 'BEFORE_QUIT_STEP9',
-                 'ErrNo=' + CAST(ISNULL(@nErrNo,0) AS NVARCHAR(10)) + ',ErrMsg=' + ISNULL(@cErrMsg,''),
-                 'OF01=' + ISNULL(@cOutField01,'NULL') + ',OF11=' + ISNULL(@cOutField11,'NULL'))
-
          GOTO Quit
       END
 
-      -- Default: just redirect to Screen 6
-      INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1)
-      VALUES ('rdt_898ExtScn07', GETDATE(), 'STEP9_DEFAULT_REDIRECT_TO_6')
+      -- ESC: Go back to Screen 6 (UCC screen)
+      IF @nInputKey = 0
+      BEGIN
+         -- Clear stored UCC since user cancelled
+         UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
+         SET V_String49 = ''
+         WHERE Mobile = @nMobile
+
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
+         SET @cCountDisplay = ISNULL(@cCartonCnt, '0') + '/' + ISNULL(@cTotalCarton, '0')
+         SET @cOutField11 = @cCountDisplay
+
+         SET @nAfterStep = @nStep_6
+         SET @nAfterScn = @nScn_6
+         GOTO Quit
+      END
+
       SET @nAfterStep = @nStep_6
       SET @nAfterScn = @nScn_6
       GOTO Quit
    END
 
    Quit:
-   -- Ensure @nErrNo is explicitly set for success cases
-   -- This prevents stale error values from causing issues in main SP
    IF @nErrNo IS NULL OR (@nErrNo <> 0 AND @cErrMsg = '')
       SET @nErrNo = 0
    IF @cErrMsg IS NULL
       SET @cErrMsg = ''
 
-   -- Final trace before SP returns (COL max 50 chars)
-   INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3, COL4)
-   VALUES ('rdt_898ExtScn07', GETDATE(), 'AT_QUIT_LABEL',
-           'Stp=' + CAST(ISNULL(@nAfterStep,-1) AS NVARCHAR(5)) + ',Scn=' + CAST(ISNULL(@nAfterScn,-1) AS NVARCHAR(5)) + ',Err=' + CAST(ISNULL(@nErrNo,0) AS NVARCHAR(5)),
-           'Tot=' + ISNULL(@cTotalCarton,'') + ',Cnt=' + ISNULL(@cCartonCnt,''),
-           'OF11=' + ISNULL(LEFT(@cOutField11,20),''))
 END
 GO
 
