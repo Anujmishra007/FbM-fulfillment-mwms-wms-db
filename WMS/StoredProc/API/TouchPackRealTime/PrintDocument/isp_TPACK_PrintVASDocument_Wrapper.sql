@@ -27,8 +27,8 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintVASDocument_Wrapper] (
    , @c_UserID             NVARCHAR(256)     = ''  
    , @cLangCode            NVARCHAR(3)       = ''
    , @bIsLastCarton        BIT               = 0
-   , @bPrintLabelFlag      BIT               = 0
-   , @bPrintPaperFlag      BIT               = 0
+   , @bPrintLabelFlag      BIT               = 0   OUTPUT
+   , @bPrintPaperFlag      BIT               = 0   OUTPUT
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
    , @oPrintConfigJson     NVARCHAR(MAX)     = ''
@@ -105,8 +105,8 @@ BEGIN
                    + ', @c_UserID                   ' + CHAR(13)
                    + ', @cLangCode                  ' + CHAR(13)
                    + ', @bIsLastCarton              ' + CHAR(13)
-                   + ', @bPrintLabelFlag            ' + CHAR(13)
-                   + ', @bPrintPaperFlag            ' + CHAR(13)
+                   + ', @bPrintLabelFlag     OUTPUT ' + CHAR(13)
+                   + ', @bPrintPaperFlag     OUTPUT ' + CHAR(13)
                    + ', @cLabelPrinter              ' + CHAR(13)
                    + ', @cPaperPrinter              ' + CHAR(13)
                    + ', @bIsAutoPrint               ' + CHAR(13)
@@ -133,8 +133,8 @@ BEGIN
                         + ', @c_UserID          NVARCHAR(256)        ' + CHAR(13)
                         + ', @cLangCode         NVARCHAR(3)          ' + CHAR(13)
                         + ', @bIsLastCarton     BIT                  ' + CHAR(13)
-                        + ', @bPrintLabelFlag   BIT                  ' + CHAR(13)
-                        + ', @bPrintPaperFlag   BIT                  ' + CHAR(13)
+                        + ', @bPrintLabelFlag   BIT           OUTPUT ' + CHAR(13)
+                        + ', @bPrintPaperFlag   BIT           OUTPUT ' + CHAR(13)
                         + ', @cLabelPrinter     NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPaperPrinter     NVARCHAR(30)         ' + CHAR(13)
                         + ', @bIsAutoPrint      BIT                  ' + CHAR(13)
@@ -163,8 +163,8 @@ BEGIN
                            , @c_UserID         
                            , @cLangCode  
                            , @bIsLastCarton 
-                           , @bPrintLabelFlag
-                           , @bPrintPaperFlag
+                           , @bPrintLabelFlag   OUTPUT
+                           , @bPrintPaperFlag   OUTPUT
                            , @cLabelPrinter    
                            , @cPaperPrinter    
                            , @cReportType
@@ -200,8 +200,8 @@ BEGIN
          , @c_UserID          = @c_UserID
          , @cLangCode         = @cLangCode
          , @bIsLastCarton     = @bIsLastCarton
-         , @bPrintLabelFlag   = @bPrintLabelFlag
-         , @bPrintPaperFlag   = @bPrintPaperFlag
+         , @bPrintLabelFlag   = @bPrintLabelFlag     OUTPUT
+         , @bPrintPaperFlag   = @bPrintPaperFlag     OUTPUT
          , @cLabelPrinter     = @cLabelPrinter    
          , @cPaperPrinter     = @cPaperPrinter    
          , @bIsAutoPrint      = @bIsAutoPrint

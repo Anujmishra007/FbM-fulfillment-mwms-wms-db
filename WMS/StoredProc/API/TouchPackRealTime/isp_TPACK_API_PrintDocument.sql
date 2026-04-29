@@ -240,6 +240,48 @@ BEGIN
    --    SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'CartonNo cannot be empty.'
    --    GOTO EXIT_SP
    -- END
+
+   EXEC [API].[isp_TPACK_PrintVASDocument_Wrapper]
+     @cType                = @cType            
+   , @bIsDiscrete          = @bIsDiscrete      
+   , @bIsCustom            = @bIsCustom        
+   , @cPickSlipNo          = @cPickSlipNo       
+   , @cOrderKey            = @cOrderKey         
+   , @cLoadKey             = @cLoadKey          
+   , @cDropID              = @cDropID           
+   , @cStorerKey           = @cStorerKey        
+   , @cFacility            = @cFacility         
+   , @nCartonNo            = @nCartonNo
+   , @c_UserID             = @c_UserID
+   , @cLangCode            = @cLangCode
+   , @bIsLastCarton        = @bIsLastCarton
+   , @bPrintLabelFlag      = @bPrintLabelFlag   OUTPUT
+   , @bPrintPaperFlag      = @bPrintPaperFlag   OUTPUT
+   , @cLabelPrinter        = @cLabelPrinter
+   , @cPaperPrinter        = @cPaperPrinter
+   , @oPrintConfigJson     = @oPrintConfigJson
+   , @bIsAutoPrint         = @bIsAutoPrint
+   , @nCopy                = @nCopy
+   , @cSKU                 = @cSKU
+   , @cReportType          = @cReportType
+   , @cPrintLabelJobIDs    = @cPrintLabelJobIDs OUTPUT
+   , @cPrintPaperJobIDs    = @cPrintPaperJobIDs OUTPUT
+   , @b_Success            = @b_Success         OUTPUT
+   , @n_ErrNo              = @n_ErrNo           OUTPUT
+   , @c_ErrMsg             = @c_ErrMsg          OUTPUT
+
+   IF @b_Success = 0
+   BEGIN
+      SET @n_Continue = 3  
+      
+      IF @n_ErrNo = 0
+      BEGIN
+         SET @n_ErrNo = 11757
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + @c_ErrMsg --'Print VAS document failed.'
+      END
+      GOTO EXIT_SP
+   END
+
    IF @cSKU = ''
    BEGIN
       EXEC [API].[isp_TPACK_PrintDocument_Wrapper]
@@ -282,47 +324,6 @@ BEGIN
          END
          GOTO EXIT_SP
       END
-   END
-   
-   EXEC [API].[isp_TPACK_PrintVASDocument_Wrapper]
-     @cType                = @cType            
-   , @bIsDiscrete          = @bIsDiscrete      
-   , @bIsCustom            = @bIsCustom        
-   , @cPickSlipNo          = @cPickSlipNo       
-   , @cOrderKey            = @cOrderKey         
-   , @cLoadKey             = @cLoadKey          
-   , @cDropID              = @cDropID           
-   , @cStorerKey           = @cStorerKey        
-   , @cFacility            = @cFacility         
-   , @nCartonNo            = @nCartonNo
-   , @c_UserID             = @c_UserID
-   , @cLangCode            = @cLangCode
-   , @bIsLastCarton        = @bIsLastCarton
-   , @bPrintLabelFlag      = @bPrintLabelFlag
-   , @bPrintPaperFlag      = @bPrintPaperFlag
-   , @cLabelPrinter        = @cLabelPrinter
-   , @cPaperPrinter        = @cPaperPrinter
-   , @oPrintConfigJson     = @oPrintConfigJson
-   , @bIsAutoPrint         = @bIsAutoPrint
-   , @nCopy                = @nCopy
-   , @cSKU                 = @cSKU
-   , @cReportType          = @cReportType
-   , @cPrintLabelJobIDs    = @cPrintLabelJobIDs OUTPUT
-   , @cPrintPaperJobIDs    = @cPrintPaperJobIDs OUTPUT
-   , @b_Success            = @b_Success         OUTPUT
-   , @n_ErrNo              = @n_ErrNo           OUTPUT
-   , @c_ErrMsg             = @c_ErrMsg          OUTPUT
-
-   IF @b_Success = 0
-   BEGIN
-      SET @n_Continue = 3  
-      
-      IF @n_ErrNo = 0
-      BEGIN
-         SET @n_ErrNo = 11757
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + @c_ErrMsg --'Print VAS document failed.'
-      END
-      GOTO EXIT_SP
    END
 
 

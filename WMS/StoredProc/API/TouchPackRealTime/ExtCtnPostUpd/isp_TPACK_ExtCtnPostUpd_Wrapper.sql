@@ -27,6 +27,7 @@ CREATE OR ALTER PROC [API].[isp_TPACK_ExtCtnPostUpd_Wrapper] (
    , @nCartonNo            INT               = 0   
    , @nPrecedingCartonNo   INT               = 0   
    , @cCartonStatus        NVARCHAR(20)      = ''
+   , @bIsLastCarton        BIT               = 0
    , @c_UserID             NVARCHAR(256)     = ''  
    , @cLangCode            NVARCHAR(3)       = ''
    , @b_Success            INT               = 0   OUTPUT
@@ -82,6 +83,7 @@ BEGIN
        , @nCartonNo           = @nCartonNo
        , @nPrecedingCartonNo  = @nPrecedingCartonNo
        , @cCartonStatus       = @cCartonStatus
+       , @bIsLastCarton       = @bIsLastCarton
        , @c_UserID            = @c_UserID
        , @cLangCode           = @cLangCode
        , @b_Success           = @b_Success     OUTPUT
@@ -115,6 +117,7 @@ BEGIN
                    + ', @nCartonNo            ' + CHAR(13)
                    + ', @nPrecedingCartonNo   ' + CHAR(13)
                    + ', @cCartonStatus        ' + CHAR(13)
+                   + ', @bIsLastCarton        ' + CHAR(13)
                    + ', @c_UserID             ' + CHAR(13)
                    + ', @cLangCode            ' + CHAR(13)
                    + ', @b_Success     OUTPUT ' + CHAR(13)
@@ -133,6 +136,7 @@ BEGIN
                         + ', @nCartonNo          INT                  ' + CHAR(13)
                         + ', @nPrecedingCartonNo INT                  ' + CHAR(13)
                         + ', @cCartonStatus      NVARCHAR(20)         ' + CHAR(13)
+                        + ', @bIsLastCarton      BIT                  ' + CHAR(13)
                         + ', @c_UserID           NVARCHAR(256)        ' + CHAR(13)
                         + ', @cLangCode          NVARCHAR(3)          ' + CHAR(13)
                         + ', @b_Success          INT           OUTPUT ' + CHAR(13)
@@ -153,6 +157,7 @@ BEGIN
                            , @nCartonNo  
                            , @nPrecedingCartonNo
                            , @cCartonStatus
+                           , @bIsLastCarton
                            , @c_UserID         
                            , @cLangCode        
                            , @b_Success     OUTPUT
