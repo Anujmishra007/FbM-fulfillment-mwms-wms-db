@@ -31,6 +31,7 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument09] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
+   , @cReportType          NVARCHAR(30)      = ''
    , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
    , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
    , @nContinuePrint       INT               = 0   OUTPUT
@@ -49,7 +50,6 @@ BEGIN
          , @n_StartCnt           INT            = @@TRANCOUNT  
 
    DECLARE @cModuleID            NVARCHAR(30)
-         , @cReportType          NVARCHAR(30)
          , @cSQL                 NVARCHAR(MAX)
          , @cSQLParam            NVARCHAR(MAX)
          , @cReportID            NVARCHAR(10)
@@ -97,7 +97,6 @@ BEGIN
    SET @IsAggregate4       = 0
    SET @cModuleID          = 'TPPACK'
    SET @cCustomLabelSP     = ''
-   SET @cReportType        = ''
 
    SELECT @cEcomPlatform = ISNULL(ECOM_Platform,'')
    FROM ORDERS (NOLOCK)

@@ -31,11 +31,7 @@ BEGIN
       @cBarcode     NVARCHAR( 60),    
       @cUserName    NVARCHAR( 30),    
       @cLangCode    NVARCHAR( 3),    
-      @cSKU         NVARCHAR( 30),
-      @nQPos          INT,
-      @nBangPos       INT,
-      @cUPCValue    NVARCHAR(100),
-      @cEPCValue    NVARCHAR(100)
+      @cSKU         NVARCHAR( 30)
           
  --Decode Json Format    
    SELECT @cStorerKey = StorerKey, @cFacility = Facility,  @nFunc = Func, @cBarcode = Barcode, @cUserName = UserName, @cLangCode = LangCode    
@@ -51,82 +47,107 @@ BEGIN
 
    SET @n_Err = 0
    SET @c_ErrMsg = ''
-   SET @b_Success = 1     
-   SET @cUPCValue = ''
-   SET @cEPCValue = ''
+   SET @b_Success = 1
      
-   IF  CHARINDEX(';', @cBarcode) > 0
-   BEGIN
-      SET @cUPCValue = LEFT(@cBarcode, CHARINDEX(';', @cBarcode) - 1)
-      SET @cEPCValue = RIGHT(@cBarcode, LEN(@cBarcode) - CHARINDEX(';', @cBarcode))
-   END
-   ELSE
-   BEGIN
-      SET @cUPCValue = @cBarcode
-   END
+   EXEC [dbo].[ispSKUDC18] 
+         @c_Storerkey = @cStorerKey
+      , @c_Sku = @cBarcode
+      , @c_NewSku = @cSKU       OUTPUT
+      , @b_Success = @b_Success OUTPUT
+      , @n_Err = @n_Err         OUTPUT
+      , @c_ErrMsg = @c_ErrMsg   OUTPUT
 
-   SELECT @cSKU = SKU
-   FROM UPC (NOLOCK)
-   WHERE StorerKey = @cStorerKey
-   AND UPC = @cUPCValue
-
-   IF @@ROWCOUNT = 0 OR @cSKU IS NULL OR @cSKU = ''
+   IF @b_Success = 0 OR @cSKU = ''
    BEGIN
       SET @b_Success = 0
-      SET @n_Err = 400000
-	   SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Not able to find SKU for current UPC('  + @cUPCValue + ').'
+      IF @n_Err = 0
+      BEGIN
+         SET @n_Err = 400000
+         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Not able to decode SKU for current barcode('  + @cBarcode + ').'
+      END
       SET @jResult = (SELECT '' AS SKU
-                      FOR JSON PATH,INCLUDE_NULL_VALUES 
-                      )
+                     FOR JSON PATH,INCLUDE_NULL_VALUES 
+                     )
       GOTO EXIT_SP
    END
 
-   IF EXISTS ( SELECT 1
-               FROM SKU (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-               AND SKU = @cSKU
-               AND BUSR5 = 'Y'
-   )
+   IF @cSKU <> ''
    BEGIN
-      IF @cEPCValue = ''
-      BEGIN
-         SET @b_Success = 0
-         SET @n_Err = 400000
-         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Need to scan EPC for this SKU('  + @cSKU + ').' 
-         SET @jResult = (SELECT '' AS SKU
-                         FOR JSON PATH,INCLUDE_NULL_VALUES 
-                         )
-         GOTO EXIT_SP
-      END
-      ELSE
-      BEGIN
-         IF LEN(@cEPCValue) <> 24
-         BEGIN
-            SET @b_Success = 0
-            SET @n_Err = 400000
-            SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'The length of EPC value (' + @cEPCValue + ') is not correct.'
-            SET @jResult = (SELECT '' AS SKU
-                           FOR JSON PATH,INCLUDE_NULL_VALUES 
-                           )
-            GOTO EXIT_SP
-         END
-      END
-   END
-   ELSE
-   BEGIN
-      IF @cEPCValue <> ''
-      BEGIN
-         SET @b_Success = 0
-         SET @n_Err = 400000
-         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Current SKU('  + @cSKU + ') does not require EPC scan, but got EPC value (' + @cEPCValue + ').' 
-         SET @jResult = (SELECT '' AS SKU
-                         FOR JSON PATH,INCLUDE_NULL_VALUES 
-                         )
-         GOTO EXIT_SP
-      END
+      SET @jResult = (SELECT @cSKU AS SKU
+                     FOR JSON PATH,INCLUDE_NULL_VALUES 
+                     )
    END
 
-   SET @jResult =  JSON_QUERY('[{"SKU":"' + @cSKU + '"}]')
+   -- IF  CHARINDEX(';', @cBarcode) > 0
+   -- BEGIN
+   --    SET @cUPCValue = LEFT(@cBarcode, CHARINDEX(';', @cBarcode) - 1)
+   --    SET @cEPCValue = RIGHT(@cBarcode, LEN(@cBarcode) - CHARINDEX(';', @cBarcode))
+   -- END
+   -- ELSE
+   -- BEGIN
+   --    SET @cUPCValue = @cBarcode
+   -- END
+
+   -- SELECT @cSKU = SKU
+   -- FROM UPC (NOLOCK)
+   -- WHERE StorerKey = @cStorerKey
+   -- AND UPC = @cUPCValue
+
+   -- IF @@ROWCOUNT = 0 OR @cSKU IS NULL OR @cSKU = ''
+   -- BEGIN
+   --    SET @b_Success = 0
+   --    SET @n_Err = 400000
+	--    SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Not able to find SKU for current UPC('  + @cUPCValue + ').'
+   --    SET @jResult = (SELECT '' AS SKU
+   --                    FOR JSON PATH,INCLUDE_NULL_VALUES 
+   --                    )
+   --    GOTO EXIT_SP
+   -- END
+
+   -- IF EXISTS ( SELECT 1
+   --             FROM SKU (NOLOCK)
+   --             WHERE StorerKey = @cStorerKey
+   --             AND SKU = @cSKU
+   --             AND BUSR5 = 'Y'
+   -- )
+   -- BEGIN
+   --    IF @cEPCValue = ''
+   --    BEGIN
+   --       SET @b_Success = 0
+   --       SET @n_Err = 400000
+   --       SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Need to scan EPC for this SKU('  + @cSKU + ').' 
+   --       SET @jResult = (SELECT '' AS SKU
+   --                       FOR JSON PATH,INCLUDE_NULL_VALUES 
+   --                       )
+   --       GOTO EXIT_SP
+   --    END
+   --    ELSE
+   --    BEGIN
+   --       IF LEN(@cEPCValue) <> 24
+   --       BEGIN
+   --          SET @b_Success = 0
+   --          SET @n_Err = 400000
+   --          SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'The length of EPC value (' + @cEPCValue + ') is not correct.'
+   --          SET @jResult = (SELECT '' AS SKU
+   --                         FOR JSON PATH,INCLUDE_NULL_VALUES 
+   --                         )
+   --          GOTO EXIT_SP
+   --       END
+   --    END
+   -- END
+   -- ELSE
+   -- BEGIN
+   --    IF @cEPCValue <> ''
+   --    BEGIN
+   --       SET @b_Success = 0
+   --       SET @n_Err = 400000
+   --       SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Current SKU('  + @cSKU + ') does not require EPC scan, but got EPC value (' + @cEPCValue + ').' 
+   --       SET @jResult = (SELECT '' AS SKU
+   --                       FOR JSON PATH,INCLUDE_NULL_VALUES 
+   --                       )
+   --       GOTO EXIT_SP
+   --    END
+   -- END
 EXIT_SP:
 END    
 GO
