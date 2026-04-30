@@ -922,6 +922,20 @@ BEGIN
                SET @nAfterStep = @nStep_NextTask
                SET @cUDF01 = @cDefaultSkipReason
             END
+            ELSE IF @cOption = '9'
+            BEGIN
+               IF @cPickModeFlag = '1'
+               BEGIN
+                  SET @nAfterScn = @nScn_NewExit
+                  SET @nAfterStep = @nStep_99
+
+                  SET @cOutField01 = @cToLoc
+                  SET @cOutField02 = '1'
+                  SET @cOutField03 = 'UCC Moved'
+                  SET @cOutField04 = ''
+                  GOTO Quit
+               END
+            END
          END
       END
       ELSE IF @nCurrentStep = @nStep_Reason -- ReasonCOde
