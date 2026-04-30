@@ -186,7 +186,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
    IF @@TRANCOUNT = 0
       BEGIN TRAN
 
-   --AYD02: Remove wave released validation, as per UWP-54594
+   --AYD02 START: Remove wave released validation, as per UWP-54594
    -- IF @n_Continue = 1 OR @n_Continue = 2
    -- BEGIN
    --    IF EXISTS ( SELECT 1 FROM TASKDETAIL td (NOLOCK)
@@ -200,6 +200,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
    --       SET @c_Errmsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Task has been released. (mspRLWAV11)'
    --    END
    -- END
+   --AYD02 END
 
    --Initialize Pickdetail work in progress staging table
    IF @n_Continue = 1 OR @n_Continue = 2
@@ -221,6 +222,12 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
       END
       ELSE
       BEGIN
+         --AYD03 Start: Only process records with Taskdetailkey is null, which means those records are not being processed by other wave release process, to avoid duplicated processing for same pickdetail record when multiple wave release happen at the same time for same order
+         DELETE FROM #PICKDETAIL_WIP
+         WHERE WaveKey = @c_Wavekey
+         AND ISNULL(TRIM(Taskdetailkey), '') <> ''
+         --AYD03 End
+
          UPDATE #PICKDETAIL_WIP
          SET #PICKDETAIL_WIP.Taskdetailkey = ''
          FROM #PICKDETAIL_WIP
