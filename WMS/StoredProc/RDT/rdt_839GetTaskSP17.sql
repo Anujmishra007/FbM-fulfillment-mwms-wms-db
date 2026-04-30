@@ -197,6 +197,10 @@ BEGIN
    FROM [RDT].[rdtPickLog] WITH(NOLOCK)
    WHERE PickSlipNo = @cPickSlipNo
 
+   CREATE NONCLUSTERED INDEX IX_EPL_Search 
+   ON #ExistingPickLogs (PickDetailKey, PickMethod) 
+   INCLUDE (Status, Mobile, AddWho)
+
    /***********************************************************************************************
                                               Get next Zone
    ***********************************************************************************************/
