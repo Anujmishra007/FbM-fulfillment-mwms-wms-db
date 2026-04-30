@@ -537,7 +537,14 @@ BEGIN
       SET @nCartonNo = 0
 
       -- Skip to Pack Confirm for non-Specialised orders
-      GOTO PACKCFM
+      IF EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE Pickslipno = @cPickSlipNo) 
+      BEGIN
+         GOTO PACKCFM
+      END
+      ELSE
+      BEGIN
+         GOTO Quit
+      END
    END
    -- End of Specialised Orders Handling
 
