@@ -11,6 +11,48 @@ GO
 /* Copyright      : Maersk                                                 */
 /* Customer       :                                                        */
 /*                                                                         */
+/* Screen Flow:                                                            */
+/*   Scn 4650: Entry point from rdtfnc_Pack Step 1                         */
+/*             -> Clear rdtPickLog, jump to Scn 6861                       */
+/*                                                                         */
+/*   Scn 6861: DropID Scan Screen (Step 99)                                */
+/*             Field01: PickSlipNo (display)                               */
+/*             Field02: DropID (input)                                     */
+/*             Field03: PackDtlDropID                                      */
+/*             -> Validate & insert to rdtPickLog                          */
+/*             -> Loop scan more DropIDs or ENTER to continue              */
+/*             -> Jump to Scn 4651 (Pack Option)                           */
+/*                                                                         */
+/*   Scn 4651: Pack Option Screen (Step 2)                                 */
+/*             Field01: PickSlipNo                                         */
+/*             Field02-04: TotalPick/TotalPack/TotalShort                  */
+/*             Field05-06: CustomNo/TotalCarton, CustomID                  */
+/*             Field07-08: CartonSKU, CartonQTY                            */
+/*             Field09: Option (1=New/2=Edit/3=Repack/4=UCC)               */
+/*             -> Jump to Scn 6827 (Carton Type)                           */
+/*                                                                         */
+/*   Scn 6827: Carton Type Screen (Step 99)                                */
+/*             Field01: Suggested CartonType (display)                     */
+/*             Field02: CartonType (input)                                 */
+/*             -> Validate CartonType, check WTW order type                */
+/*             -> Option 1/2/3: Jump to Scn 4652 (SKU Scan)                */
+/*             -> Option 4: Jump to Scn 4657 (UCC)                         */
+/*                                                                         */
+/*   Scn 4652: SKU Scan Screen (Step 3)                                    */
+/*             Field01: CustomNo (NEW for Option 1)                        */
+/*             Field02: LabelLine/CartonSKU                                */
+/*             Field03: SKU (input)                                        */
+/*             Field04: SKU (display)                                      */
+/*             Field05-06: SKU Description                                 */
+/*             Field07: PackedQTY                                          */
+/*             Field08: QTY (input)                                        */
+/*             Field09: CartonQTY                                          */
+/*             -> Back to Scn 4651 or Scn 6827                             */
+/*                                                                         */
+/*   Scn 4657: UCC Screen (Step 8) - Option 4 only                         */
+/*             Field01: UCC (input)                                        */
+/*             Field02: Scan                                               */
+/*             Field03: TotalUCC                                           */
 /*                                                                         */
 /* Date        Rev    Author     Purposes                                  */
 /* 2026-01-07  1.0.0  Dennis     FCR-7820 Created                          */
@@ -310,6 +352,12 @@ BEGIN
    BEGIN
       IF @nCurrentStep = 2
             UPDATE rdt.RDTMOBREC SET C_STRING1 = @cInField09 WHERE Mobile = @nMobile
+
+      /*------------------------------------------------------------------
+         Scn 4650: Entry point from rdtfnc_Pack Step 1
+         - Clear rdtPickLog for this session
+         - Jump to Scn 6861 (DropID Scan)
+      ------------------------------------------------------------------*/
       IF @nScn = 4650
       BEGIN
          -- Clear pick log
@@ -328,6 +376,14 @@ BEGIN
          GOTO QUIT
       END
 
+      /*------------------------------------------------------------------
+         Scn 6861: DropID Scan Screen (Step 99)
+         - Field01: PickSlipNo (display, from previous scans)
+         - Field02: DropID (input)
+         - Field03: PackDtlDropID
+         - ENTER: Validate DropID, insert to rdtPickLog, loop or continue
+         - ESC: Clear rdtPickLog and exit
+      ------------------------------------------------------------------*/
       IF @nScn = 6861
       BEGIN
          DECLARE @cScannedDropID NVARCHAR(20)
@@ -498,6 +554,7 @@ BEGIN
                SET @cUDF11 = CAST( @nTotalShort AS NVARCHAR(10))
                SET @cUDF12 = @cPackDtlDropID
 
+               -- Jump to Scn 4651 (Pack Option Screen)
                SET @nAfterStep = 2
                SET @nAfterScn = 4651
                GOTO QUIT
@@ -888,13 +945,14 @@ BEGIN
                SET @cUDF11 = CAST( @nTotalShort AS NVARCHAR(10))
                SET @cUDF12 = @cPackDtlDropID
 
+               -- Jump to Scn 4651 (Pack Option Screen) when PackDtlDropID specified
                SET @nAfterStep = 2
                SET @nAfterScn = 4651
                GOTO QUIT
             END
 
             EXEC rdt.rdtSetFocusField @nMobile, 2
-            -- Loop back to scan next DropID
+            -- Loop back to Scn 6861 to scan next DropID
             SET @cUDF01 = @cPickSlipNo
             SET @cUDF12 = @cPackDtlDropID
             SET @cOutField01 = ''
@@ -904,6 +962,9 @@ BEGIN
             SET @nAfterScn = 6861
             GOTO QUIT
          END
+         /*--------------------------------------------------------------
+            Scn 6861: ESC - Clear rdtPickLog and exit to main Pack flow
+         --------------------------------------------------------------*/
          IF @nInputKey = 0
          BEGIN
             -- Clear pick log
@@ -914,6 +975,11 @@ BEGIN
          END
       END
 
+      /*------------------------------------------------------------------
+         Transition: Step 2/7 -> Step 3
+         - From Scn 4651 (Pack Option) or Scn 4656 (Serial) to Scn 6827
+         - Calculate suggested CartonType based on WTW or cube
+      ------------------------------------------------------------------*/
       IF (@nCurrentStep = 2 AND @nAfterStep = 3)
       OR (@nCurrentStep = 7 AND @nAfterStep = 3)
       BEGIN
@@ -978,6 +1044,17 @@ BEGIN
          SET @nAfterScn = 6827
          GOTO QUIT
       END
+      /*------------------------------------------------------------------
+         Scn 6827: Carton Type Screen (Step 99)
+         - Field01: Suggested CartonType (display, from WTW or cube calc)
+         - Field02: CartonType (input)
+         - ENTER: Validate CartonType
+           - Option 1 (New): Jump to Scn 4652 with empty carton
+           - Option 2 (Edit): Jump to Scn 4652 with existing carton info
+           - Option 3 (Repack): Jump to Scn 4652 with cleared carton
+           - Option 4 (UCC): Jump to Scn 4657
+         - ESC: Back to Scn 4651 (Pack Option)
+      ------------------------------------------------------------------*/
       IF @nScn = 6827
       BEGIN
          IF @nInputKey = 1
@@ -1060,7 +1137,11 @@ BEGIN
             -- Get Option from C_STRING1
             SELECT @cOption = C_STRING1 FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
 
-            -- Option 1: New carton
+            /*--------------------------------------------------------------
+               Option 1: New carton -> Scn 4652 (SKU Scan)
+               - Create new carton with empty SKU info
+               - Field01 shows 'NEW'
+            --------------------------------------------------------------*/
             IF @cOption = '1'
             BEGIN
                SET @nCartonNo = 0
@@ -1101,7 +1182,11 @@ BEGIN
                EXEC rdt.rdtSetFocusField @nMobile, 6  -- SKU
             END
 
-            -- Option 2: Edit carton
+            /*--------------------------------------------------------------
+               Option 2: Edit carton -> Scn 4652 (SKU Scan)
+               - Load existing carton and SKU info
+               - Field01 shows CustomNo
+            --------------------------------------------------------------*/
             ELSE IF @cOption = '2'
             BEGIN
                -- Check UCC
@@ -1210,7 +1295,11 @@ BEGIN
                EXEC rdt.rdtSetFocusField @nMobile, 3  -- SKU
             END
 
-            -- Option 3: Repack carton
+            /*--------------------------------------------------------------
+               Option 3: Repack carton -> Scn 4652 (SKU Scan)
+               - Clear carton content for repacking
+               - Field01 shows CustomNo
+            --------------------------------------------------------------*/
             ELSE IF @cOption = '3'
             BEGIN
                SET @cSKU = ''
@@ -1244,7 +1333,10 @@ BEGIN
                EXEC rdt.rdtSetFocusField @nMobile, 3  -- SKU
             END
 
-            -- Option 4: UCC
+            /*--------------------------------------------------------------
+               Option 4: UCC -> Scn 4657 (UCC Screen)
+               - Scan UCC labels for cartons
+            --------------------------------------------------------------*/
             ELSE IF @cOption = '4'
             BEGIN
                -- Get total UCC
@@ -1267,6 +1359,9 @@ BEGIN
             SET @nAfterStep = 3
             SET @nAfterScn = 4652
          END
+         /*--------------------------------------------------------------
+            Scn 6827: ESC - Back to Scn 4651 (Pack Option)
+         --------------------------------------------------------------*/
          ELSE IF @nInputKey = 0
          BEGIN
 
@@ -1320,16 +1415,23 @@ BEGIN
             -- Enable field
             SET @cFieldAttr08 = '' -- QTY
             SET @cOutField15 = ''
+            -- Back to Scn 4651 (Pack Option Screen)
             SET @nAfterStep = 2
             SET @nAfterScn = 4651
             GOTO QUIT
          END
       END
+      /*------------------------------------------------------------------
+         Scn 4652: SKU Scan Screen - ESC handling (Step 3)
+         - If coming from Step 4 (confirm), return to Scn 6827
+         - Otherwise recalculate CartonType and go to Scn 6827
+      ------------------------------------------------------------------*/
       IF @nCurrentStep = 3 AND @nInputKey = 0
       BEGIN
          IF @nStep = 4
          BEGIN
             SELECT @cOutField01 = C_STRING2 FROM RDT.RDTMOBREC WHERE Mobile = @nMobile
+            UPDATE RDT.RDTMOBREC SET Step   = @nStep, Scn    = @nScn,InputKey = 1 WHERE Mobile = @nMobile
             GOTO QUIT
          END
          SET @cOutField01 = ''
