@@ -27,5 +27,6 @@ execute rdt.rdtAddMsg 234863, 10, '234863 HoldUCCFail',     'us_english', 1764, 
 execute rdt.rdtAddMsg 234864, 10, '234864 GenDropIDFail',      'us_english', 1764, 0, '234864 Generate DropID Failed'
 execute rdt.rdtAddMsg 234865, 10, '234865 UpdTaskFail',        'us_english', 1764, 0, '234865 Update Task Failed'
 execute rdt.rdtAddMsg 234866, 10, '234866 UpdTaskFail',        'us_english', 1764, 0, '234866 Update Task Failed'
+execute rdt.rdtAddMsg 234867, 10, '234867 UpdRDTMOBRECFail',   'us_english', 1764, 0, '234867 Update RDTMOBREC Failed'
 
 SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 234851 AND 234900

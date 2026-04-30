@@ -491,6 +491,18 @@ BEGIN
 
                IF @nQTY = @nQTY_RPL
                BEGIN
+                  -- Need sync @nQTY to rdtMobRec for later use, such as short pick
+                  BEGIN TRY
+                     UPDATE rdt.rdtMobRec WITH(ROWLOCK)
+                     SET V_Integer4 = @nQTY
+                     WHERE Mobile = @nMobile
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 234867
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update RDTMOBREC Failed
+                     GOTO RollBack_rdt_1764ExtScn01
+                  END CATCH
+
                   EXEC rdt.rdt_TM_Replen_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
                      @cTaskDetailKey,
                      @cDropID,
@@ -909,6 +921,20 @@ BEGIN
                SET @nAfterScn = @nScn_NextTask
                SET @nAfterStep = @nStep_NextTask
                SET @cUDF01 = @cDefaultSkipReason
+            END
+            ELSE IF @cOption = '9'
+            BEGIN
+               IF @cPickModeFlag = '1'
+               BEGIN
+                  SET @nAfterScn = @nScn_NewExit
+                  SET @nAfterStep = @nStep_99
+
+                  SET @cOutField01 = @cToLoc
+                  SET @cOutField02 = '1'
+                  SET @cOutField03 = 'UCC Moved'
+                  SET @cOutField04 = ''
+                  GOTO Quit
+               END
             END
          END
       END
