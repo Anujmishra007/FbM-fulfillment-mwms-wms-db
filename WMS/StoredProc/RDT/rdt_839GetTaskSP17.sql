@@ -182,6 +182,25 @@ BEGIN
       C_String2 = ''
    WHERE Mobile = @nMobile
 
+   DROP TABLE IF EXISTS #ExistingPickLogs
+
+   CREATE TABLE #ExistingPickLogs (
+      PickDetailKey     NVARCHAR(10) NOT NULL,
+      PickMethod        NVARCHAR(10),
+      Status            NVARCHAR(1),
+      Mobile            INT,
+      AddWho            NVARCHAR(128)
+   )
+
+   INSERT INTO #ExistingPickLogs
+   SELECT PickDetailKey, PickMethod, Status, Mobile, AddWho
+   FROM [RDT].[rdtPickLog] WITH(NOLOCK)
+   WHERE PickSlipNo = @cPickSlipNo
+
+   CREATE NONCLUSTERED INDEX IX_EPL_Search 
+   ON #ExistingPickLogs (PickDetailKey, PickMethod) 
+   INCLUDE (Status, Mobile, AddWho)
+
    /***********************************************************************************************
                                               Get next Zone
    ***********************************************************************************************/
@@ -203,27 +222,17 @@ BEGIN
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
                AND PD.Status < @cPickConfirmStatus
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -237,20 +246,17 @@ BEGIN
                INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
                   AND PD.Status < @cPickConfirmStatus
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             -- Piece in UCC
@@ -264,53 +270,17 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+               LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-
-                  -- AND NOT EXISTS(SELECT 1 
-                  --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                  --                WHERE RPL.PickSlipNo = @cPickSlipNo
-                  --                   AND RPL.Mobile = @nMobile
-                  --                   AND RPL.AddWho = @cUserName
-                  --                   AND RPL.PickMethod = 'GetTask-U'
-                  --                   AND RPL.Status IN ( '4', '9' )
-                  --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-                  -- AND NOT EXISTS(SELECT 1 
-                  --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                  --                WHERE RPL.PickSlipNo = @cPickSlipNo
-                  --                   AND RPL.AddWho <> @cUserName
-                  --                   AND RPL.PickMethod = 'GetTask-U'
-                  --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-                  -- AND NOT EXISTS(SELECT 1 
-                  --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                  --                WHERE RPL.PickSlipNo = @cPickSlipNo
-                  --                   AND RPL.AddWho <> @cUserName
-                  --                   AND RPL.PickMethod = 'Pick-P'
-                  --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-                  -- AND NOT EXISTS(SELECT 1 
-                  --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                  --                WHERE RPL.PickSlipNo = @cPickSlipNo
-                  --                   AND RPL.Mobile = @nMobile
-                  --                   AND RPL.AddWho = @cUserName
-                  --                   AND RPL.PickMethod = 'Pick-P'
-                  --                   AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.Lot, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.Lot, PD.StorerKey, PD.SKU
 
@@ -321,27 +291,15 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -356,33 +314,18 @@ BEGIN
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone <> @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -396,21 +339,18 @@ BEGIN
                INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             -- Piece in UCC
@@ -424,26 +364,18 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.Lot, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.Lot, PD.StorerKey, PD.SKU
 
@@ -454,29 +386,17 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -495,32 +415,17 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -533,20 +438,17 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             -- Piece in UCC
@@ -559,25 +461,17 @@ BEGIN
                   @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -588,29 +482,17 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -624,33 +506,18 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.OrderKey = @cOrderKey
                AND LOC.PickZone <> @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -663,21 +530,18 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             -- Piece in UCC
@@ -690,26 +554,18 @@ BEGIN
                   @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -719,29 +575,17 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -761,32 +605,17 @@ BEGIN
             INNER JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE LPD.LoadKey = @cLoadKey  
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -800,20 +629,17 @@ BEGIN
                INNER JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey  
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             -- Piece in UCC
@@ -827,25 +653,17 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -856,28 +674,16 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -892,33 +698,18 @@ BEGIN
             INNER JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE LPD.LoadKey = @cLoadKey  
                AND LOC.PickZone <> @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -932,21 +723,18 @@ BEGIN
                INNER JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey  
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -959,26 +747,18 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -989,29 +769,17 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -1030,32 +798,17 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -1068,20 +821,17 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -1093,25 +843,17 @@ BEGIN
                   @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -1121,28 +863,16 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -1156,33 +886,18 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone <> @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -1195,21 +910,18 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -1221,26 +933,18 @@ BEGIN
                   @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -1250,29 +954,17 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone <> @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -1298,32 +990,17 @@ BEGIN
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -1337,20 +1014,17 @@ BEGIN
                INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -1363,25 +1037,17 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -1392,28 +1058,16 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -1428,33 +1082,18 @@ BEGIN
             JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -1468,21 +1107,18 @@ BEGIN
                JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -1495,26 +1131,18 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -1525,29 +1153,17 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -1566,32 +1182,17 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -1604,10 +1205,12 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
@@ -1615,11 +1218,6 @@ BEGIN
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -1631,25 +1229,17 @@ BEGIN
                   @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -1659,28 +1249,16 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -1694,33 +1272,18 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.OrderKey = @cOrderKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -1733,11 +1296,13 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
@@ -1745,11 +1310,6 @@ BEGIN
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -1761,26 +1321,18 @@ BEGIN
                   @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -1790,29 +1342,17 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -1832,32 +1372,17 @@ BEGIN
             JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE LPD.LoadKey = @cLoadKey  
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -1871,10 +1396,12 @@ BEGIN
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey  
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
@@ -1882,11 +1409,6 @@ BEGIN
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -1899,40 +1421,21 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Status IN ( '4', '9' ) AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.AddWho <> @cUserName AND EPL2.PickMethod = 'GetTask-U' AND EPL2.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL3 ON EPL3.AddWho <> @cUserName AND EPL3.PickMethod = 'Pick-P' AND EPL3.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL4 ON EPL4.Mobile = @nMobile AND EPL4.AddWho = @cUserName AND EPL4.PickMethod = 'Pick-P' AND EPL4.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
+                  AND EPL3.PickDetailKey IS NULL
+                  AND EPL4.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -1943,28 +1446,16 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -1979,33 +1470,18 @@ BEGIN
             JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE LPD.LoadKey = @cLoadKey  
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -2019,11 +1495,13 @@ BEGIN
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey  
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
@@ -2031,11 +1509,6 @@ BEGIN
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -2048,26 +1521,18 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -2078,29 +1543,17 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -2119,32 +1572,17 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -2157,10 +1595,12 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
@@ -2168,11 +1608,6 @@ BEGIN
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -2184,25 +1619,17 @@ BEGIN
                   @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -2212,28 +1639,16 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -2247,33 +1662,18 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (LOC.LogicalLocation > @cCurrLogicalLOC
                OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY LOC.LogicalLocation, LOC.LOC, PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -2286,11 +1686,13 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
@@ -2298,11 +1700,6 @@ BEGIN
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -2314,26 +1711,18 @@ BEGIN
                   @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND (LOC.LogicalLocation > @cCurrLogicalLOC
                   OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
                ORDER BY LOC.LogicalLocation, LOC.LOC, PD.LOT, PD.StorerKey, PD.SKU
 
@@ -2343,29 +1732,17 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -2391,33 +1768,18 @@ BEGIN
             JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND (( @cType = 'BALPICK' AND PD.DropID <> @cCurrUCC) OR
                      ( @cType = 'NEXTSKU' AND PD.DropID = PD.DropID))
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -2431,20 +1793,17 @@ BEGIN
                JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          
             IF @nRowCount = 0
@@ -2456,26 +1815,18 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND (( @cType = 'BALPICK' AND PD.LOT <> @cCurrLOT) OR
                      ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -2486,28 +1837,16 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -2521,34 +1860,19 @@ BEGIN
             JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND (( @cType = 'BALPICK' AND PD.DropID <> @cCurrUCC) OR
                      ( @cType = 'NEXTSKU' AND PD.DropID = PD.DropID))
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -2562,21 +1886,18 @@ BEGIN
                JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -2588,27 +1909,19 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND (( @cType = 'BALPICK' AND PD.LOT <> @cCurrLOT) OR
                      ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -2619,29 +1932,17 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -2659,33 +1960,18 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND (( @cType = 'BALPICK' AND PD.DropID <> @cCurrUCC) OR
                      ( @cType = 'NEXTSKU' AND PD.DropID = PD.DropID))
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -2698,20 +1984,17 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -2722,26 +2005,18 @@ BEGIN
                   --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)    --INC0720911
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status <> '4'
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND (( @cType = 'BALPICK' AND PD.LOT <> @cCurrLOT) OR
                      ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -2751,28 +2026,16 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -2785,34 +2048,19 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.OrderKey = @cOrderKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND (( @cType = 'BALPICK' AND PD.DropID <> @cCurrUCC) OR
                      ( @cType = 'NEXTSKU' AND PD.DropID = PD.DropID))
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -2825,21 +2073,18 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -2850,27 +2095,19 @@ BEGIN
                   --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status <> '4'
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND (( @cType = 'BALPICK' AND PD.LOT <> @cCurrLOT) OR
                      ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -2880,29 +2117,17 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -2921,33 +2146,18 @@ BEGIN
             JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE LPD.LoadKey = @cLoadKey  
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND (( @cType = 'BALPICK' AND PD.DropID <> @cCurrUCC) OR
                      ( @cType = 'NEXTSKU' AND PD.DropID = PD.DropID))
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -2961,20 +2171,17 @@ BEGIN
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey  
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -2986,26 +2193,18 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND (( @cType = 'BALPICK' AND PD.LOT <> @cCurrLOT) OR
                      ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -3016,28 +2215,16 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -3051,34 +2238,19 @@ BEGIN
             JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE LPD.LoadKey = @cLoadKey  
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND (( @cType = 'BALPICK' AND PD.DropID <> @cCurrUCC) OR
                      ( @cType = 'NEXTSKU' AND PD.DropID = PD.DropID))
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -3092,21 +2264,18 @@ BEGIN
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey  
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -3118,27 +2287,19 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND (( @cType = 'BALPICK' AND PD.LOT <> @cCurrLOT) OR
                      ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -3149,29 +2310,17 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -3189,33 +2338,18 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND (( @cType = 'BALPICK' AND PD.DropID <> @cCurrUCC) OR
                      ( @cType = 'NEXTSKU' AND PD.DropID = PD.DropID))
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -3228,20 +2362,17 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -3252,26 +2383,18 @@ BEGIN
                   --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)  --INC0720911
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND (( @cType = 'BALPICK' AND PD.LOT <> @cCurrLOT) OR
                      ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -3281,28 +2404,16 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -3315,34 +2426,19 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND (( @cType = 'BALPICK' AND PD.DropID <> @cCurrUCC) OR
                      ( @cType = 'NEXTSKU' AND PD.DropID = PD.DropID))
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -3355,21 +2451,18 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -3380,27 +2473,19 @@ BEGIN
                   --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)  --INC0720911
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND (( @cType = 'BALPICK' AND PD.LOT <> @cCurrLOT) OR
                      ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -3410,29 +2495,17 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -3459,31 +2532,16 @@ BEGIN
             JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -3497,20 +2555,17 @@ BEGIN
                JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -3522,25 +2577,17 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND PD.SKU = PD.SKU
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -3551,28 +2598,16 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -3586,32 +2621,17 @@ BEGIN
             JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -3625,21 +2645,18 @@ BEGIN
                JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -3651,26 +2668,18 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND PD.SKU = PD.SKU
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -3681,29 +2690,17 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -3721,31 +2718,16 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -3758,20 +2740,17 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -3782,25 +2761,17 @@ BEGIN
                   --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)    --INC0720911
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND PD.SKU = PD.SKU
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -3810,28 +2781,16 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -3844,32 +2803,17 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.OrderKey = @cOrderKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -3882,21 +2826,18 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -3907,26 +2848,18 @@ BEGIN
                   --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND PD.SKU = PD.SKU
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -3936,29 +2869,17 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -3977,31 +2898,16 @@ BEGIN
             JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE LPD.LoadKey = @cLoadKey  
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -4015,20 +2921,17 @@ BEGIN
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey  
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -4040,25 +2943,17 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND PD.SKU = PD.SKU
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -4069,28 +2964,16 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                     AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -4104,32 +2987,17 @@ BEGIN
             JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE LPD.LoadKey = @cLoadKey  
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -4143,21 +3011,18 @@ BEGIN
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey  
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -4169,26 +3034,18 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND PD.SKU = PD.SKU
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -4199,29 +3056,17 @@ BEGIN
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                   JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE LPD.LoadKey = @cLoadKey
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
@@ -4239,31 +3084,16 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -4276,20 +3106,17 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -4300,25 +3127,17 @@ BEGIN
                   --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)  --INC0720911
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND PD.SKU = PD.SKU
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -4328,28 +3147,16 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
          ELSE
@@ -4362,32 +3169,17 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+            LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickDetailKey = PD.PickDetailKey AND EPL1.PickMethod = 'GetTask-U' AND EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.Status IN ( '4', '9' )
+            LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.PickDetailKey = PD.PickDetailKey AND EPL2.PickMethod = 'GetTask-U' AND EPL2.AddWho <> @cUserName
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.UOM = '2'
+               AND EPL1.PickDetailKey IS NULL
+               AND EPL2.PickDetailKey IS NULL
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
-               -- AND NOT EXISTS(SELECT 1 
-               --                FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-               --                WHERE RPL.PickSlipNo = @cPickSlipNo
-               --                   AND RPL.PickMethod = 'GetTask-U'
-               --                   AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-               AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.AddWho <> @cUserName
-                                    AND RPL.PickMethod = 'GetTask-U'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             GROUP BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, UCC.UCCNo, PD.StorerKey, PD.SKU
 
@@ -4400,21 +3192,18 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.StorerKey = UCC.StorerKey AND PD.DropID = UCC.UCCNo
+               LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.PickMethod = 'GetTask-U' AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '2'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.ID = @cSuggID
                   AND PD.SKU = @cSuggSKU
                   AND PD.DropID = @cSuggUCC
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.PickMethod = 'GetTask-U'
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
             END
 
             IF @nRowCount = 0
@@ -4425,26 +3214,18 @@ BEGIN
                   --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)  --INC0720911
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Status IN ( '4', '9' ) AND EPL1.PickMethod = 'GetTask-P' AND EPL1.PickDetailKey = PD.PickDetailKey
+                  LEFT JOIN #ExistingPickLogs EPL2 ON EPL2.Mobile = @nMobile AND EPL2.PickMethod = 'Pick-P' AND EPL2.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
+                  AND EPL2.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND LOC.LOC = @cCurrLOC
                   AND PD.SKU = PD.SKU
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Status IN ( '4', '9' )
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
                GROUP BY PD.StorerKey, PD.SKU, PD.LOT
                ORDER BY PD.StorerKey, PD.SKU, PD.LOT
 
@@ -4454,29 +3235,17 @@ BEGIN
                SELECT DISTINCT PD.OrderKey, @cPickZone, PD.PickDetailKey, @cStorerKey, @cLOT, PD.Qty, @nMobile, @cPickSlipNo, 'GetTask-P', PD.LOC, PD.ID, PD.LOT, PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ExistingPickLogs EPL1 ON EPL1.Mobile = @nMobile AND EPL1.AddWho = @cUserName AND EPL1.PickMethod IN ('GetTask-P', 'Pick-P') AND EPL1.PickDetailKey = PD.PickDetailKey
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.UOM = '6'
+                  AND EPL1.PickDetailKey IS NULL
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.LOC = @cSuggLOC
                   AND PD.SKU = @cSuggSKU
                   AND PD.LOT = @cLot
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'GetTask-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
-                  AND NOT EXISTS(SELECT 1 
-                                 FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                                 WHERE RPL.PickSlipNo = @cPickSlipNo
-                                    AND RPL.Mobile = @nMobile
-                                    AND RPL.AddWho = @cUserName
-                                    AND RPL.PickMethod = 'Pick-P'
-                                    AND RPL.PickDetailKey = PD.PickDetailKey)
             END
          END
       END
