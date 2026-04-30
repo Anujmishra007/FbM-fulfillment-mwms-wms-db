@@ -413,6 +413,20 @@ BEGIN
 
    SET @nQty = @nSuggQty
 
+   DROP TABLE IF EXISTS #ProcessedDetails
+   CREATE TABLE #ProcessedDetails (
+      PickDetailKey NVARCHAR(10) NOT NULL PRIMARY KEY
+   )
+
+   INSERT INTO #ProcessedDetails (PickDetailKey)
+   SELECT DISTINCT PickDetailKey
+   FROM [RDT].[rdtPickLog] WITH(NOLOCK)
+   WHERE PickSlipNo = @cPickSlipNo
+      AND Mobile = @nMobile
+      AND AddWho = @cUserName
+      AND PickMethod IN ('GetTask-U', 'GetTask-P')
+      AND Status IN ('4', '9')
+
    -- get @nTtlBalQty
    BEGIN
       IF @cZone IN ('XD', 'LB', 'LP')
@@ -500,17 +514,11 @@ BEGIN
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
                   AND PD.Status < '4'
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.Mobile = @nMobile
-                                 AND RPL.AddWho = @cUserName
-                                 AND RPL.PickMethod IN ( 'GetTask-U', 'GetTask-P' )
-                                 AND RPL.Status IN( '4', '9' )
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
+                  AND EPL.PickDetailKey IS NULL
          END
          ELSE
          BEGIN
@@ -518,18 +526,12 @@ BEGIN
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                  LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.PickZone = @cPickZone
                   AND PD.QTY > 0
                   AND PD.Status < '4'
-                  AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.Mobile = @nMobile
-                                 AND RPL.AddWho = @cUserName
-                                 AND RPL.PickMethod IN ( 'GetTask-U', 'GetTask-P' )
-                                 AND RPL.Status IN( '4', '9' )
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
+                  AND EPL.PickDetailKey IS NULL
          END
       END
    
@@ -540,34 +542,22 @@ BEGIN
             SELECT  @nBalQty= SUM(PD.QTY)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
                AND PD.Status < '4'
-               AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.Mobile = @nMobile
-                                 AND RPL.AddWho = @cUserName
-                                 AND RPL.PickMethod IN ( 'GetTask-U', 'GetTask-P' )
-                                 AND RPL.Status IN( '4', '9' )
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
+               AND EPL.PickDetailKey IS NULL
 
          ELSE
             SELECT  @nBalQty= SUM(PD.QTY)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
             WHERE PD.OrderKey = @cOrderKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                AND PD.Status < '4'
-               AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.Mobile = @nMobile
-                                 AND RPL.AddWho = @cUserName
-                                 AND RPL.PickMethod IN ( 'GetTask-U', 'GetTask-P' )
-                                 AND RPL.Status IN( '4', '9' )
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
+               AND EPL.PickDetailKey IS NULL
       END
       
       -- Conso PickSlip
@@ -578,35 +568,23 @@ BEGIN
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
             WHERE LPD.LoadKey = @cLoadKey
                AND PD.QTY > 0
                AND PD.Status < '4'
-               AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.Mobile = @nMobile
-                                 AND RPL.AddWho = @cUserName
-                                 AND RPL.PickMethod IN ( 'GetTask-U', 'GetTask-P' )
-                                 AND RPL.Status IN( '4', '9' )
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
+               AND EPL.PickDetailKey IS NULL
          ELSE
             SELECT  @nBalQty= SUM(PD.QTY)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
             WHERE LPD.LoadKey = @cLoadKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                --AND PD.Status <>'4'
                AND PD.Status < '4'
-               AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.Mobile = @nMobile
-                                 AND RPL.AddWho = @cUserName
-                                 AND RPL.PickMethod IN ( 'GetTask-U', 'GetTask-P' )
-                                 AND RPL.Status IN( '4', '9' )
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
+               AND EPL.PickDetailKey IS NULL
       END
 
       -- Custom PickSlip
@@ -616,35 +594,23 @@ BEGIN
             SELECT  @nBalQty= SUM(PD.QTY)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                --AND PD.Status <>'4'
                AND PD.Status < '4'
-               AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.Mobile = @nMobile
-                                 AND RPL.AddWho = @cUserName
-                                 AND RPL.PickMethod IN ( 'GetTask-U', 'GetTask-P' )
-                                 AND RPL.Status IN( '4', '9' )
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
+               AND EPL.PickDetailKey IS NULL
          ELSE
             SELECT  @nBalQty= SUM(PD.QTY)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
                --AND PD.Status <>'4'
                AND PD.Status < '4'
-               AND NOT EXISTS(SELECT 1 
-                              FROM [RDT].[rdtPickLog] RPL WITH(NOLOCK)
-                              WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.Mobile = @nMobile
-                                 AND RPL.AddWho = @cUserName
-                                 AND RPL.PickMethod IN ( 'GetTask-U', 'GetTask-P' )
-                                 AND RPL.Status IN( '4', '9' )
-                                 AND RPL.PickDetailKey = PD.PickDetailKey)
+               AND EPL.PickDetailKey IS NULL
       END
 
       SELECT @nRdtLogPickedQty = SUM(PickLockQty)
