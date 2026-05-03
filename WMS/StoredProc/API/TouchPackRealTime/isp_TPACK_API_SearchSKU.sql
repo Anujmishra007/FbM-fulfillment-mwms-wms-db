@@ -240,7 +240,7 @@ BEGIN
    IF @cCartonStatus <> 'INPROGRESS' AND LEN(@cCartonStatus) > 0
    BEGIN
       INSERT INTO @oSKUList (SKU)
-      SELECT DISTINCT SKU 
+      SELECT SKU 
       FROM (
          SELECT PD.SKU AS SKU
          FROM PACKDETAIL PD (NOLOCK)
@@ -291,8 +291,10 @@ BEGIN
                         AND U.SKU = PD.SKU
                         AND U.UPC LIKE @cKeyboardVal + '%'
                         AND U.UOM IN ('EA','EACH','PCS', '6')
-                        )
+                        )        
       )x
+      GROUP BY x.SKU
+      ORDER BY LEN(x.SKU) ASC
 
       IF (SELECT COUNT(1) FROM @oSKUList ) = 0
       BEGIN
@@ -310,7 +312,7 @@ BEGIN
          BEGIN
             -- only tote and b2c
             INSERT INTO @oSKUList (SKU)
-            SELECT DISTINCT SKU 
+            SELECT SKU 
             FROM (
                SELECT PD.SKU AS SKU
                FROM PICKDETAIL PD (NOLOCK)
@@ -383,11 +385,14 @@ BEGIN
                   AND PD.[Status] = '9'
                )
             )x
+            GROUP BY x.SKU
+            ORDER BY LEN(x.SKU) ASC
+
          END
          ELSE
          BEGIN
             INSERT INTO @oSKUList (SKU)
-            SELECT DISTINCT SKU 
+            SELECT SKU 
             FROM (
                SELECT PD.SKU AS SKU
                FROM PICKDETAIL PD (NOLOCK)
@@ -440,6 +445,8 @@ BEGIN
                            AND U.UOM IN ('EA','EACH','PCS', '6')
                            )
             )x
+            GROUP BY x.SKU
+            ORDER BY LEN(x.SKU) ASC
          END
       END
       ELSE
@@ -481,7 +488,7 @@ BEGIN
          END
 
          INSERT INTO @oSKUList (SKU)
-         SELECT DISTINCT SKU
+         SELECT SKU
          FROM (
             SELECT SKU
             FROM @oLoadKeySKUList
@@ -524,6 +531,8 @@ BEGIN
                           AND U.UOM IN ('EA','EACH','PCS', '6')
                          )
          )x
+         GROUP BY x.SKU
+         ORDER BY LEN(x.SKU) ASC
       END
 
       IF (SELECT COUNT(1) FROM @oSKUList ) > 1
@@ -659,6 +668,8 @@ BEGIN
                                                        , @bClickFirstOnly     AS bClickFirstOnly
                                                        , CAST(0 AS BIT)       AS bShowADScreen
                                                        , CAST(0 AS BIT)       AS bShowLottableScreen
+                                                      --  , CAST(0 AS BIT)       AS bShowNumpadScreen
+                                                      --  , CAST(0 AS BIT)       AS bShowVASScreen
                                                        , CAST(0 AS BIT)       AS bAutoCloseCarton
                                                        , @nCartonNo           AS nCartonNo
                                                        , 0                    AS nNumberOfADField

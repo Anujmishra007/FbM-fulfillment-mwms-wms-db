@@ -59,12 +59,15 @@ BEGIN
          , @cSQLPageClause       NVARCHAR(2000)
          , @cSQLParams           NVARCHAR(2000) 
          , @cSQLQueryEnd         NVARCHAR(1000)
-         , @bIsWhereClauseExists BIT            
          , @oDynamicJson         NVARCHAR(MAX) 
          , @nSKUCount            INT
          , @cDynamicColumn1      NVARCHAR(100)
          , @cDynamicColumn2      NVARCHAR(100)
+         , @cDynamicColumn3      NVARCHAR(100)
+         , @cDynamicColumn4      NVARCHAR(100)
+         , @cDynamicColumn5      NVARCHAR(4000)
          , @cOffset              NVARCHAR(10)
+         , @cAuthority           NVARCHAR(30)
 
    SET @b_Success             = 0
    SET @cPackDetailList       = ''
@@ -78,11 +81,13 @@ BEGIN
    SET @cSQLPageClause        = ''
    SET @cSQLParams            = ''
    SET @cSQLQueryEnd          = ''
-   SET @bIsWhereClauseExists  = 0
    SET @oDynamicJson          = ''
    SET @nSKUCount             = 0
    SET @cDynamicColumn1       = ''
    SET @cDynamicColumn2       = ''
+   SET @cDynamicColumn3       = ''
+   SET @cDynamicColumn4       = ''
+   SET @cDynamicColumn5       = ''
    SET @cOffset               = ''
 
    SET @cSQLQueryEnd = ' FOR JSON PATH )) ' + CHAR(13)
@@ -108,64 +113,92 @@ BEGIN
    SET @cSQLParams = @cSQLParams
                    + ' @oDynamicJson NVARCHAR(MAX) OUTPUT ' 
    
-   SELECT  @cDynamicColumn1 = ISNULL(OPTION1,'')
-         , @cDynamicColumn2 = ISNULL(OPTION2,'')
-   FROM STORERCONFIG (NOLOCK)    
-   WHERE StorerKey = @cStorerKey    
-   AND ConfigKey ='TPS-dynamicPackDetail'
-   AND sValue = '1'
+   EXEC nspGetRight    
+        @c_Facility  = @cFacility    
+      , @c_StorerKey = @cStorerKey   
+      , @c_sku       = ''    
+      , @c_ConfigKey = 'TPS-dynamicPackDetail'    
+      , @c_authority = @cAuthority        OUTPUT    
+      , @b_Success   = @b_Success         OUTPUT
+      , @n_err       = @n_ErrNo           OUTPUT
+      , @c_errmsg    = @c_ErrMsg          OUTPUT
+      , @c_Option1   = @cDynamicColumn1   OUTPUT
+      , @c_Option2   = @cDynamicColumn2   OUTPUT
+      , @c_Option3   = @cDynamicColumn3   OUTPUT
+      , @c_Option4   = @cDynamicColumn4   OUTPUT
+      , @c_Option5   = @cDynamicColumn5   OUTPUT
 
-   IF @@ROWCOUNT = 1 
+   IF @b_Success = 0
+   BEGIN    
+      SET @n_Continue  = 3  
+      GOTO EXIT_SP
+   END
+
+   IF @cAuthority = '1'
    BEGIN
-      IF @cDynamicColumn1 <> ''
+      IF  @cDynamicColumn3 = 'CUSTOM' 
       BEGIN
-         SET @cSQLSelectClause = @cSQLSelectClause
-                               + ', ''' + rdt.rdtGetParsedString(@cDynamicColumn1, 2, '.') + ''' AS DynamicColumn1 ' + CHAR(13)
-   
-         IF rdt.rdtGetParsedString(@cDynamicColumn1, 1, '.') = 'SKU'
+         IF @cDynamicColumn5 = '' 
+         AND ISJSON(@cDynamicColumn5) <> 1
          BEGIN
-            SET @cSQLSelectClause = @cSQLSelectClause
-                                  + ', S.'
-            SET @cSQLGroupByClause = @cSQLGroupByClause 
-                                   + ', S.'
+            SET @n_Continue = 3
+            SET @n_ErrNo = 10952      
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Invalid configuration for dynamic columns.'
+            GOTO EXIT_SP
          END
-         ELSE IF rdt.rdtGetParsedString(@cDynamicColumn1, 1, '.') = 'PACKDETAIL'
-         BEGIN
-            SET @cSQLSelectClause = @cSQLSelectClause
-                                  + ', PD.'                            
-            SET @cSQLGroupByClause = @cSQLGroupByClause 
-                                   + ', PD.'
-         END
-         SET @cSQLSelectClause = @cSQLSelectClause 
-                               + rdt.rdtGetParsedString(@cDynamicColumn1, 2, '.') + ' AS DynamicValue1 ' + CHAR(13)
-         SET @cSQLGroupByClause = @cSQLGroupByClause 
-                                + rdt.rdtGetParsedString(@cDynamicColumn1, 2, '.') + CHAR(13)
       END
-      
-      IF @cDynamicColumn2 <> ''
+      ELSE
       BEGIN
-         SET @cSQLSelectClause = @cSQLSelectClause
-                               + ', ''' + rdt.rdtGetParsedString(@cDynamicColumn2, 2, '.') + ''' AS DynamicColumn2 ' + CHAR(13)
+         IF @cDynamicColumn1 <> ''
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                 + ', ''' + rdt.rdtGetParsedString(@cDynamicColumn1, 2, '.') + ''' AS DynamicColumn1 ' + CHAR(13)
+      
+            IF rdt.rdtGetParsedString(@cDynamicColumn1, 1, '.') = 'SKU'
+            BEGIN
+               SET @cSQLSelectClause = @cSQLSelectClause
+                                    + ', S.'
+               SET @cSQLGroupByClause = @cSQLGroupByClause 
+                                    + ', S.'
+            END
+            ELSE IF rdt.rdtGetParsedString(@cDynamicColumn1, 1, '.') = 'PACKDETAIL'
+            BEGIN
+               SET @cSQLSelectClause = @cSQLSelectClause
+                                    + ', PD.'                            
+               SET @cSQLGroupByClause = @cSQLGroupByClause 
+                                    + ', PD.'
+            END
+            SET @cSQLSelectClause = @cSQLSelectClause 
+                                 + rdt.rdtGetParsedString(@cDynamicColumn1, 2, '.') + ' AS DynamicValue1 ' + CHAR(13)
+            SET @cSQLGroupByClause = @cSQLGroupByClause 
+                                 + rdt.rdtGetParsedString(@cDynamicColumn1, 2, '.') + CHAR(13)
+         END
+         
+         IF @cDynamicColumn2 <> ''
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                 + ', ''' + rdt.rdtGetParsedString(@cDynamicColumn2, 2, '.') + ''' AS DynamicColumn2 ' + CHAR(13)
 
-         IF rdt.rdtGetParsedString(@cDynamicColumn2, 1, '.') = 'SKU'
-         BEGIN
-            SET @cSQLSelectClause = @cSQLSelectClause
-                                  + ', S.'
+            IF rdt.rdtGetParsedString(@cDynamicColumn2, 1, '.') = 'SKU'
+            BEGIN
+               SET @cSQLSelectClause = @cSQLSelectClause
+                                    + ', S.'
+               SET @cSQLGroupByClause = @cSQLGroupByClause 
+                                    + ', S.'
+            END
+            ELSE IF rdt.rdtGetParsedString(@cDynamicColumn2, 1, '.') = 'PACKDETAIL'
+            BEGIN
+               SET @cSQLSelectClause = @cSQLSelectClause
+                                    + ', PD.'                            
+               SET @cSQLGroupByClause = @cSQLGroupByClause 
+                                    + ', PD.'
+            END
+            SET @cSQLSelectClause = @cSQLSelectClause 
+                                 + rdt.rdtGetParsedString(@cDynamicColumn2, 2, '.') + ' AS DynamicValue2 ' + CHAR(13)
             SET @cSQLGroupByClause = @cSQLGroupByClause 
-                                   + ', S.'
+                                 + rdt.rdtGetParsedString(@cDynamicColumn2, 2, '.') + CHAR(13)
          END
-         ELSE IF rdt.rdtGetParsedString(@cDynamicColumn2, 1, '.') = 'PACKDETAIL'
-         BEGIN
-            SET @cSQLSelectClause = @cSQLSelectClause
-                                  + ', PD.'                            
-            SET @cSQLGroupByClause = @cSQLGroupByClause 
-                                   + ', PD.'
-         END
-         SET @cSQLSelectClause = @cSQLSelectClause 
-                               + rdt.rdtGetParsedString(@cDynamicColumn2, 2, '.') + ' AS DynamicValue2 ' + CHAR(13)
-         SET @cSQLGroupByClause = @cSQLGroupByClause 
-                                + rdt.rdtGetParsedString(@cDynamicColumn2, 2, '.') + CHAR(13)
-      END      
+      END       
    END
    ELSE
    BEGIN
@@ -239,7 +272,7 @@ BEGIN
       END
 
       SET @cSQLOrderByClause = @cSQLOrderByClause 
-                             + ' ORDER BY MAX(S.EditDate) DESC ' + CHAR(13)
+                             + ' ORDER BY LEN(S.SKU) ASC, MAX(S.EditDate) DESC ' + CHAR(13)
 
       SET @cSQLParams = @cSQLParams
                       + ' , @cLottableList NVARCHAR(1000) '
@@ -249,6 +282,14 @@ BEGIN
                       + ' , @cSKU NVARCHAR(20) '
                       + ' , @cSKUList NVARCHAR(1000) '
 
+      IF @cDynamicColumn3 = 'CUSTOM'
+      BEGIN
+         SET @cSQLSelectClause = @cSQLSelectClause + JSON_VALUE(@cDynamicColumn5, '$.select')
+         SET @cSQLFromClause = @cSQLFromClause + JSON_VALUE(@cDynamicColumn5, '$.from')
+         SET @cSQLWhereClause = @cSQLWhereClause + JSON_VALUE(@cDynamicColumn5, '$.where')
+         SET @cSQLGroupByClause = @cSQLGroupByClause + JSON_VALUE(@cDynamicColumn5, '$.groupBy')
+      END
+
       SET @cSQLQuery = @cSQLSelectClause 
                      + @cSQLFromClause 
                      + @cSQLWhereClause 
@@ -257,7 +298,7 @@ BEGIN
                      + @cSQLPageClause
                      + @cSQLQueryEnd
 
-      --PRINT @cSQLQuery 
+      PRINT @cSQLQuery 
 
       --Store JSON result into variable
       EXEC sp_executesql  @cSQLQuery
@@ -294,6 +335,14 @@ BEGIN
                       + ' , @cPickSlipNo NVARCHAR(10) '
                       + ' , @nCartonNo INT ' 
 
+      IF @cDynamicColumn3 = 'CUSTOM'
+      BEGIN
+         SET @cSQLSelectClause = @cSQLSelectClause + JSON_VALUE(@cDynamicColumn5, '$.select')
+         SET @cSQLFromClause = @cSQLFromClause + JSON_VALUE(@cDynamicColumn5, '$.from')
+         SET @cSQLWhereClause = @cSQLWhereClause + JSON_VALUE(@cDynamicColumn5, '$.where')
+         SET @cSQLGroupByClause = @cSQLGroupByClause + JSON_VALUE(@cDynamicColumn5, '$.groupBy')
+      END
+
       SET @cSQLQuery = @cSQLSelectClause 
                      + @cSQLFromClause 
                      + @cSQLWhereClause 
@@ -302,7 +351,7 @@ BEGIN
                      + @cSQLPageClause
                      + @cSQLQueryEnd
 
-      --PRINT @cSQLQuery
+      PRINT @cSQLQuery
       
       --Store JSON result into variable
       EXEC sp_executesql  @cSQLQuery

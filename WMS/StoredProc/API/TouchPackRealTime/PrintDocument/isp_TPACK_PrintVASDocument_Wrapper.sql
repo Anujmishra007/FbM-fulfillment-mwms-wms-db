@@ -167,10 +167,10 @@ BEGIN
                            , @bPrintPaperFlag   OUTPUT
                            , @cLabelPrinter    
                            , @cPaperPrinter    
-                           , @cReportType
                            , @bIsAutoPrint
                            , @nCopy
                            , @cSKU
+                           , @cReportType
                            , @cPrintLabelJobIDs OUTPUT
                            , @cPrintPaperJobIDs OUTPUT
                            , @nContinuePrint    OUTPUT
