@@ -112,6 +112,11 @@ BEGIN
                                  , @cUDF01_Pref
                                  , @cUDF01_WK)
       END  
+
+      IF @FinalUDF01 <> '' AND CHARINDEX('_', @FinalUDF01) > 0
+      BEGIN
+         BREAK;
+      END
       
       FETCH NEXT FROM CUR_LOOP INTO @cUDF01_Pref
                                   , @cUDF02_Pref
@@ -120,7 +125,7 @@ BEGIN
    END
    CLOSE CUR_LOOP
    DEALLOCATE CUR_LOOP
-      
+   
    IF @FinalUDF01 <> '' AND CHARINDEX('_', @FinalUDF01) > 0
    BEGIN
       SET @ReportID = LEFT(@FinalUDF01, CHARINDEX('_', @FinalUDF01) - 1);
