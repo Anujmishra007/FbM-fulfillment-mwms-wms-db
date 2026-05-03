@@ -298,7 +298,7 @@ BEGIN
                      + @cSQLPageClause
                      + @cSQLQueryEnd
 
-      PRINT @cSQLQuery 
+      -- PRINT @cSQLQuery 
 
       --Store JSON result into variable
       EXEC sp_executesql  @cSQLQuery
@@ -351,7 +351,7 @@ BEGIN
                      + @cSQLPageClause
                      + @cSQLQueryEnd
 
-      PRINT @cSQLQuery
+      -- PRINT @cSQLQuery
       
       --Store JSON result into variable
       EXEC sp_executesql  @cSQLQuery

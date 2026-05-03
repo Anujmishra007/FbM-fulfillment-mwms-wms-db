@@ -36,8 +36,8 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintVASDocument_Wrapper] (
    , @nCopy                INT               = 1   
    , @cSKU                 NVARCHAR(20)      = ''
    , @cReportType          NVARCHAR(30)      = ''
-   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
-   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
+   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
+   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @b_Success            INT               = 0   OUTPUT  
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
