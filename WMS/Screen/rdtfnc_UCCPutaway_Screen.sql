@@ -1,6 +1,5 @@
---SOS301473 - rebuit screen 
 
--- 926 = ?? screen
+-- 926 = UCC screen
 DELETE rdt.RDTScn WHERE Scn = 926 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 926, 'ENG',
     @cLine01 = 'UCC:'
@@ -9,7 +8,7 @@ EXECUTE rdt.rdtAddScn 926, 'ENG',
    ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 521
 
--- 927 = ?? screen
+-- 927 = Final LOC screen
 DELETE rdt.RDTScn WHERE Scn = 927 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 927, 'ENG',
     @cLine01 = 'UCC:'
@@ -26,7 +25,7 @@ EXECUTE rdt.rdtAddScn 927, 'ENG',
    ,@cWebGroup = '{"1":["1","2"],"2":["4","5"],"3":["7","8"],"4":["10","11"],"5":["12"],"6":["13"]}'
    ,@nFunc = 521
    
--- 928 = ?? screen
+-- 928 = Successful screen
 DELETE rdt.RDTScn WHERE Scn = 928 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 928, 'ENG',
     @cLine02 = 'Successful putaway'
@@ -38,7 +37,7 @@ EXECUTE rdt.rdtAddScn 928, 'ENG',
    ,@cAutoDisappear = '1'
    ,@nFunc = 521
    
--- 929 = ?? screen
+-- 929 = Mix carton screen
 DELETE rdt.RDTScn WHERE Scn = 929 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 929, 'ENG',
     @cLine02 = 'MIXED CARTON.'
@@ -49,7 +48,7 @@ EXECUTE rdt.rdtAddScn 929, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 521
    
--- 930 = ?? screen -- WMS-16559 (cc02)
+-- 930 = LOC not match screen -- WMS-16559 (cc02)
 DELETE rdt.RDTScn WHERE Scn = 930 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 930, 'ENG'
    ,@cLine01 = ''
@@ -62,3 +61,28 @@ EXECUTE rdt.rdtAddScn 930, 'ENG'
    ,@cLine08 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
    ,@nFunc = 521
+
+-- 931 = Suggest alternate LOC screen
+DELETE rdt.RDTScn WHERE Scn = 931 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 931, 'ENG'  
+   ,@cLine01 = ''
+   ,@cLine02 = 'SUGGEST ALTERNATE'
+   ,@cLine03 = 'PUTAWAY LOC?'
+   ,@cLine04 = ''
+   ,@cLine05 = '1 = YES'
+   ,@cLine06 = '2 = NO'
+   ,@cLine07 = ''
+   ,@cLine08 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 521
+   
+-- 932 = Reason code screen (built-in, not ExtScn)
+DELETE rdt.RDTScn WHERE Scn = 932 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 932, 'ENG'  
+   ,@cLine01 = ''
+   ,@cLine02 = 'REASON CODE:'
+   ,@cLine03 = '%10i01'
+   ,@cLine04 = ''
+   ,@cLine14 = '%e'     
+   ,@nFunc = 521
+   
