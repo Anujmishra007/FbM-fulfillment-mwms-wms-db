@@ -58,6 +58,37 @@ Look up affected storers from `.github/instructions/data/V2_RDT_Production_Confi
 - `ConfigKey` contains SP-type config (ExtScnSP, ExtendedUpdateSP, etc.)
 - `Svalue` matches the Extension SP name pattern for the Function ID
 
+### 4. Severity Classification (REQUIRED)
+
+```
+## Severity Classification
+
+### CRITICAL (Must Fix Before Deploy)
+
+| Issue ID | Description | Root Cause | Affected Scope |
+|----------|-------------|------------|----------------|
+
+### HIGH (Review Before Deploy)
+
+| Issue ID | Description | Root Cause | Affected Scope |
+|----------|-------------|------------|----------------|
+
+### MEDIUM (Monitor After Deploy)
+
+| Issue ID | Description | Root Cause | Affected Scope |
+|----------|-------------|------------|----------------|
+
+### LOW (Tech Debt)
+
+| Issue ID | Description | Root Cause | Affected Scope |
+|----------|-------------|------------|----------------|
+```
+
+**Issue Type Legend:**
+- **RUNTIME_BUG**: Logic error, SP exists and executes incorrectly
+- **SESSION_BUG**: Affects MOBREC state at Quit (impacts ALL storers)
+- **CONFIG_ISSUE**: SP configured but file missing (pre-existing, LOW)
+
 ---
 
 ## Analysis Instructions
@@ -550,6 +581,37 @@ When reviewing a PR, structure the comment like this:
 |-------|----------|-------------|
 | {Issue name} | **{CRITICAL/HIGH/MEDIUM/LOW}** | {Description of the risk} |
 | {Issue name} | {Severity} | {Description of the risk} |
+
+## Severity Classification
+
+### CRITICAL (Must Fix Before Deploy)
+
+| Issue ID | Description | Root Cause | Affected Scope |
+|----------|-------------|------------|----------------|
+| {ID-001} | {description} | Line {N}: {cause} | **ALL Storers** |
+
+### HIGH (Review Before Deploy)
+
+| Issue ID | Description | Root Cause | Affected Scope |
+|----------|-------------|------------|----------------|
+| {ID-002} | {description} | Line {N}: {cause} | {Specific storers} |
+
+### MEDIUM (Monitor After Deploy)
+
+| Issue ID | Description | Root Cause | Affected Scope |
+|----------|-------------|------------|----------------|
+| {ID-003} | {description} | Line {N}: {cause} | {Scope} |
+
+### LOW (Tech Debt)
+
+| Issue ID | Description | Root Cause | Affected Scope |
+|----------|-------------|------------|----------------|
+| {ID-004} | {description} | Line {N}: {cause} | {Scope} |
+
+**Issue Type Legend:**
+- **RUNTIME_BUG**: Logic error, SP exists and executes incorrectly
+- **SESSION_BUG**: Affects MOBREC state at Quit (impacts ALL storers)
+- **CONFIG_ISSUE**: SP configured but file missing (pre-existing, LOW)
 
 ## Test Recommendations
 
