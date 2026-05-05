@@ -4,18 +4,16 @@ SET QUOTED_IDENTIFIER OFF
 GO
   
 /*********************************************************************************/
-/* Store procedure: isp_TPACK_PrintDocument_VAS                                  */
+/* Store procedure: isp_TPACK_PrintDocument_VAS01                                */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
-/* Purpose        : Specific reports printing function by VAS Code               */
+/* Purpose        : Columbia reports printing function by VAS Code               */
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
-/* 2025-12-24   1.0  YLI237     UWP-43509                                        */
-/* 2026-02-25   2.0  GCH225     UWP-49257 Enhancement.                           */
-/* 2026-03-05   3.0  GCH225     UWP-50005 Fix Continue Print Logic               */
+/* 2026-04-30   1.0  GCH225     Created                                          */
 /*********************************************************************************/
 
-CREATE OR ALTER PROC [API].[isp_TPACK_PrintDocument_VAS] (
+CREATE OR ALTER PROC [API].[isp_TPACK_PrintDocument_VAS01] (
      @cType                NVARCHAR(30)      = ''
    , @bIsDiscrete          BIT               = 0
    , @bIsCustom            BIT               = 0
@@ -120,6 +118,7 @@ BEGIN
    SET @cUDF04_WK          = ''
    SET @nContinuePrint     = 0
 
+   
    DECLARE @VASReports TABLE (
       ReportID         NVARCHAR(10)
     , ReportLineNo     NVARCHAR(5)
@@ -235,16 +234,6 @@ BEGIN
    END
    CLOSE sku_cursor
    DEALLOCATE sku_cursor
-
-   IF @cReportType = '' AND 
-   EXISTS ( SELECT 1 
-            FROM @VASReports
-            WHERE ReportType = 'TPVASCarton'
-   )
-   BEGIN
-      -- If TPVASCarton exists, then no need to continue print the standard or custom carton label.
-      SET @bPrintLabelFlag = 0
-   END
    
    DECLARE CUR_VASALL CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
    SELECT  ReportID

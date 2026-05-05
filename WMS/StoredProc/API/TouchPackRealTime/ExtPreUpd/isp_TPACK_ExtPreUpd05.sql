@@ -56,6 +56,7 @@ BEGIN
          , @b_Debug           INT
          , @cTransmitLogKey   NVARCHAR(20)
          , @c_QCmdClass       NVARCHAR(10)   = ''
+         , @cEPC              NVARCHAR(100)
 
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
@@ -67,6 +68,7 @@ BEGIN
    SET @bSuccess           = 0
    SET @b_Debug            = 0
    SET @cTransmitLogKey    = ''
+   SET @cEPC               = ''
 
    -- Get OrderKey from PickHeader if not provided
    IF ISNULL(@cOrderKey, '') = ''
@@ -74,6 +76,52 @@ BEGIN
       SELECT @cOrderKey = OrderKey
       FROM PickHeader (NOLOCK)
       WHERE PickHeaderkey = @cPickSlipNo
+   END
+
+   IF ISJSON(@cInputValue2) = 1 
+   AND (SELECT COUNT(1) 
+               FROM OPENJSON(@cInputValue2) 
+               WITH ([value] NVARCHAR(100) '$')
+   ) = 1
+   BEGIN
+      SELECT @cEPC = [value]
+      FROM OPENJSON(@cInputValue2)
+      WITH ([value] NVARCHAR(100) '$') J
+
+      INSERT INTO PACKSERIALNO( PickSlipNo
+                              , CartonNo
+                              , LabelNo
+                              , LabelLine
+                              , StorerKey
+                              , SKU
+                              , SerialNo
+                              , Qty
+                              , PickDetailKey
+                              , AddWho
+                              , AddDate
+                              , EditWho
+                              , EditDate)    
+                        VALUES( @cPickSlipNo
+                              , @nCartonNo
+                              , @cLabelNo
+                              , @cLabelLine
+                              , @cStorerKey
+                              , @cSKU
+                              , @cEPC
+                              , 1
+                              , ''
+                              , @c_UserID
+                              , GETDATE()
+                              , @c_UserID
+                              , GETDATE())  
+
+      IF @@ERROR <> 0         
+      BEGIN         
+         SET @b_Success = 0;
+         SET @n_ErrNo = 15651        
+         SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo ,@cLangCode ,'DSP') -- 'Failed to insert into PACKSERIALNO
+         GOTO EXIT_SP        
+      END
    END
 
    -- Check TPS-JITOrders config
