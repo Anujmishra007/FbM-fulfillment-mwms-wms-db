@@ -1,5 +1,5 @@
 ---
-applyTo: "WMS/StoredProc/RDT/*.sql,WMS/Message/*.sql,WMS/Screen/*.sql"
+applyTo: "WMS/StoredProc/RDT/rdt*.sql,WMS/Message/rdt*.sql,WMS/Screen/rdt*.sql"
 ---
 
 # RDT SP Change Impact Analyzer - PR Review Instructions
@@ -18,6 +18,45 @@ When reviewing PRs that contain changes to RDT stored procedures, follow this an
 | StorerKey | Storer identifier | AIRAU01, CROCS, NIKE |
 | ConfigKey | Configuration key name | ExtendedUpdateSP, DecodeSP |
 | Svalue | Config value (SP name or 0/1) | rdt_600ExtUpd08, 1 |
+
+---
+
+## PR Summary Requirements (MANDATORY)
+
+**CRITICAL**: Every PR review comment MUST include these sections at the top:
+
+### 1. Severity Assessment (REQUIRED)
+
+```
+## Severity: {CRITICAL / HIGH / MEDIUM / LOW}
+```
+
+| Severity | Criteria |
+|----------|----------|
+| **CRITICAL** | Logic error affecting ALL storers, MOBREC corruption, data loss risk, session state corruption |
+| **HIGH** | Logic error affecting specific storers, execution flow break, Extension SP bypass |
+| **MEDIUM** | Non-critical behavior change, variable state change with limited impact |
+| **LOW** | Tech debt, code cleanup, no functional impact |
+
+### 2. Deployment Recommendation (REQUIRED)
+
+```
+## Deployment Recommendation: {APPROVED / NEEDS REVIEW}
+
+**Reason**: {one-line explanation}
+```
+
+### 3. Affected Storers (REQUIRED if Extension SPs involved)
+
+```
+## Affected Storers
+| WMS | Storer | Extension SP | Impact |
+|-----|--------|--------------|--------|
+```
+
+Look up affected storers from `.github/instructions/data/V2_RDT_Production_Config.csv` where:
+- `ConfigKey` contains SP-type config (ExtScnSP, ExtendedUpdateSP, etc.)
+- `Svalue` matches the Extension SP name pattern for the Function ID
 
 ---
 
@@ -464,8 +503,74 @@ Check:
 
 ---
 
+## Example PR Review Comment Format
+
+When reviewing a PR, structure the comment like this:
+
+```markdown
+# Pull Request Review - RDT SP Analysis
+
+## Severity: {CRITICAL / HIGH / MEDIUM / LOW}
+
+**Reason**: {Brief explanation of why this severity level was assigned}
+
+## Deployment Recommendation: {APPROVED / REJECT / NEEDS REVIEW}
+
+**Reason**: {One-line explanation of the recommendation}
+
+---
+
+## Summary
+
+| Field | Value |
+|-------|-------|
+| **Main SP** | {rdtfnc_*.sql filename} |
+| **Function ID** | {Function ID from @nFunc} |
+| **Change Type** | {Brief description: variable change, logic change, flow change, etc.} |
+| **Affected Step** | {Step label and screen number} |
+
+## Changes
+
+- {Change 1: what was added/removed/modified}
+- {Change 2: what was added/removed/modified}
+- {Impact on surrounding logic}
+
+## Affected Storers
+
+{Look up from V2_RDT_Production_Config.csv}
+
+| WMS | Storer | Extension SP | Impact |
+|-----|--------|--------------|--------|
+| {WMS} | {StorerKey} | {rdt_*ExtScn*.sql} | {How this storer is affected} |
+| {WMS} | {StorerKey} | {rdt_*ExtUpd*.sql} | {How this storer is affected} |
+
+## Risk Assessment
+
+| Issue | Severity | Description |
+|-------|----------|-------------|
+| {Issue name} | **{CRITICAL/HIGH/MEDIUM/LOW}** | {Description of the risk} |
+| {Issue name} | {Severity} | {Description of the risk} |
+
+## Test Recommendations
+
+- [ ] {Test scenario 1 with specific storer/WMS}
+- [ ] {Test scenario 2 with specific storer/WMS}
+- [ ] {Verification step}
+
+---
+
+┌─────────────────────────────────────────────────────────────────┐
+│  DEPLOYMENT DECISION: {APPROVED / NEEDS REVIEW}      │
+│                                                                 │
+│  {One sentence summary of the decision and any conditions}      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Version
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.1 | 2026-04-29 | RDT Team | Added mandatory PR summary requirements (Severity, Deployment Recommendation, Affected Storers) and example format |
 | 1.0 | 2026-04-29 | RDT Team | Initial PR review instructions based on RDT_SP_Analysis.md v1.7 |
