@@ -1,0 +1,90 @@
+/***************************************************************************/        
+/* Store procedure: rdt_898VAL_IND_PAGE                                    */        
+/* Copyright      : LF Logistics                                           */        
+/*                                                                         */        
+/* Date        Rev   Author   Purposes                                     */        
+/* 03-12-2025  1.0   TCO-IBS  Multi SKU and Lottable Validation            */        
+/***************************************************************************/        
+    
+CREATE PROCEDURE [RDT].[rdt_898VAL_IND_PAGE]        
+      @nMobile        INT        
+    , @nFunc          INT        
+    , @cLangCode      NVARCHAR(3)        
+    , @cReceiptKey    NVARCHAR(10)        
+    , @cPOKey         NVARCHAR(10)        
+    , @cLOC           NVARCHAR(10)        
+    , @cToID          NVARCHAR(18)        
+    , @cLottable01    NVARCHAR(18)        
+    , @cLottable02    NVARCHAR(18)        
+    , @cLottable03    NVARCHAR(18)        
+    , @dLottable04    DATETIME        
+    , @cUCC           NVARCHAR(20)        
+    , @nErrNo         INT OUTPUT        
+    , @cErrMsg        NVARCHAR(20) OUTPUT        
+AS        
+BEGIN        
+    SET NOCOUNT ON;        
+    SET QUOTED_IDENTIFIER OFF;        
+    SET ANSI_NULLS OFF;        
+    SET CONCAT_NULL_YIELDS_NULL OFF;        
+           
+    IF @nFunc = 898    -- UCC receiving        
+    BEGIN        
+        DECLARE @nTranCount     INT;        
+        DECLARE @cStorerKey     NVARCHAR(15);        
+        DECLARE @cSKU           NVARCHAR(20);        
+        DECLARE @cCartonGroup   NVARCHAR(10);        
+        DECLARE @cIOFlag        NVARCHAR(1);        
+        DECLARE @cBUSR3         NVARCHAR(30);        
+        DECLARE @cStyle         NVARCHAR(20);        
+        DECLARE @cSize          NVARCHAR(10);        
+        DECLARE @cUDF01         NVARCHAR(15);        
+        DECLARE @fSTDGrossWGT   FLOAT;        
+        DECLARE @fSTDNetWGT     FLOAT;        
+        DECLARE @cCubicScan     NVARCHAR(1);        
+        DECLARE @cChkLottable01 NVARCHAR(18);        
+        DECLARE @xLottable01    NVARCHAR(18);        
+  DECLARE @xLottable06    NVARCHAR(18);  
+    
+        IF LEFT(@cToID, 2) <> 'DM'    
+        BEGIN    
+            -- Get StorerKey        
+            SELECT      
+                  @cStorerKey  = StorerKey,    
+                  @cSKU        = SKU,    
+                  @xLottable01 = Lottable01,  
+                  @xLottable06 = Lottable06        
+            FROM ReceiptDetail WITH (NOLOCK)     
+            WHERE ReceiptKey = @cReceiptKey     
+              AND UserDefine01 = @cUCC;        
+       
+            SELECT TOP 1 Lottable01    
+            FROM ReceiptDetail WITH (NOLOCK)        
+            WHERE StorerKey = @cStorerKey    
+              AND ReceiptKey = @cReceiptKey        
+              AND ToID = @cToID        
+              AND BeforeReceivedQTY > 0;        
+             
+            IF @@ROWCOUNT > 0        
+            BEGIN        
+                IF NOT EXISTS (    
+                    SELECT 1     
+                    FROM ReceiptDetail WITH (NOLOCK)     
+                    WHERE StorerKey = @cStorerKey     
+                      AND ReceiptKey = @cReceiptKey     
+                      AND ToID = @cToID     
+                      AND SKU = @cSKU     
+                      AND Lottable01 = @xLottable01  
+       AND Lottable06 = @xLottable06  
+                )        
+                BEGIN        
+                    SET @nErrNo = 253254;        
+                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP'); -- 253254 MixSKUlot1or6        
+                    GOTO Quit;        
+                END   
+            END        
+        END    
+    END       
+    
+Quit:    
+END; 
