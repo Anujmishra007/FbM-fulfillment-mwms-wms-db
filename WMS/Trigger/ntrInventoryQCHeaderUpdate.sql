@@ -1,4 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrInventoryQCHeaderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrInventoryQCHeaderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 drop trigger [dbo].[ntrInventoryQCHeaderUpdate]
 GO
 
@@ -49,6 +49,7 @@ GO
 /* 27-Dec-2013  MCTang    1.6  Added new trigger point - IQC2LOG for    */
 /*                             Alternate. (MC01)                        */
 /* 15-May-2015  MCTang    1.7  New Interface Trigger Points (MC02)      */
+/* 09-Oct-2025  SPC040    1.8  Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
 CREATE TRIGGER ntrInventoryQCHeaderUpdate 
@@ -93,8 +94,8 @@ BEGIN
         AND NOT UPDATE(EditDate)         
    BEGIN
       UPDATE InventoryQC WITH (ROWLOCK)
-         SET EditDate = GETDATE(),
-             EditWho = SUSER_SNAME()
+         SET EditDate = dbo.fnc_GetDate(),
+             EditWho = dbo.fnc_GetUserName()
         FROM InventoryQC, INSERTED
        WHERE InventoryQC.QC_Key = INSERTED.QC_Key
        AND   InventoryQC.FinalizeFlag <> 'Y'
@@ -347,8 +348,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate) 
    BEGIN
       UPDATE InventoryQC WITH (ROWLOCK)
-         SET EditDate = GETDATE(),
-             EditWho = SUSER_SNAME()
+         SET EditDate = dbo.fnc_GetDate(),
+             EditWho = dbo.fnc_GetUserName()
         FROM InventoryQC, INSERTED
        WHERE InventoryQC.QC_Key = INSERTED.QC_Key
        AND INSERTED.FinalizeFlag = 'Y'               -- TLTING02

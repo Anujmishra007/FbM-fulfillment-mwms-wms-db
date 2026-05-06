@@ -3,9 +3,6 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrNSQLConfigUpdate' AND type = 'TR')
-   DROP TRIGGER ntrNSQLConfigUpdate
-GO
 
 /************************************************************************/
 /* Trigger: ntrNSQLConfigUpdate                                         */
@@ -32,9 +29,10 @@ GO
 /* Date         Author     Purposes                                     */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
 /*                                                                      */
+/* 06-Oct-2025  AK01   1.1 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER ntrNSQLConfigUpdate
+CREATE OR ALTER TRIGGER ntrNSQLConfigUpdate
 ON  NSQLConfig
 FOR UPDATE
 AS
@@ -67,8 +65,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
 	BEGIN 	
 	 	UPDATE NSQLConfig with (ROWLOCK)
-    	   SET EditDate = GETDATE(),
-     	       EditWho = SUSER_SNAME(),
+    	   SET EditDate = dbo.fnc_GetDate(),
+     	       EditWho = dbo.fnc_GetUserName(),
      	       Trafficcop = NULL
         FROM NSQLConfig, INSERTED
        WHERE NSQLConfig.ConfigKey = INSERTED.ConfigKey
@@ -89,4 +87,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

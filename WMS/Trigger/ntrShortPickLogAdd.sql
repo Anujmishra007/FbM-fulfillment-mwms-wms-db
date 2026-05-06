@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrShortPickLogAdd]') AND OBJECTPROPERTY(ID, N'Istrigger') = 1)
-DROP TRIGGER [dbo].[ntrShortPickLogAdd]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -30,8 +27,9 @@ GO
 /* 13-07-2012   James      1.1   SOS249039 - Insert short pick into virtual*/  
 /*                               loc (james01)                             */  
 /* 30-Jul-2014  CSCHONG    1.2   Add Lottable06-15 (CS01)                  */
+/* 06-OCT-2025  AK01       1.3   UWP-42143 Data Audit                      */
 /***************************************************************************/    
-CREATE TRIGGER [dbo].[ntrShortPickLogAdd]  
+CREATE OR ALTER TRIGGER [dbo].[ntrShortPickLogAdd]  
 ON [dbo].[ShortPickLog]  
 FOR INSERT  
 AS  
@@ -389,6 +387,27 @@ BEGIN
          GOTO QUIT  
       END   
    END  
+     
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE ShortPickLog
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM ShortPickLog
+      JOIN INSERTED ON ShortPickLog.Rowref = INSERTED.Rowref
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=65008 
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table ShortPickLog. (ntrShortPickLogAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
      
    QUIT:  
    IF @n_continue=3 -- Error Occured - Process And Return  

@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_1720ExtUpdSP01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_1720ExtUpdSP01]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,13 +11,15 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2015-06-15  1.0  ChewKP   SOS#354259 Created                         */  
+/* 2025-12-11  1.1  NickT    FCR-8808 Add @nInputKey                    */  
 /************************************************************************/    
     
-CREATE PROC [RDT].[rdt_1720ExtUpdSP01] (    
+CREATE OR ALTER PROC [RDT].[rdt_1720ExtUpdSP01] (    
       @nMobile        INT, 
       @nFunc          INT, 
       @cLangCode      NVARCHAR( 3),  
       @nStep          INT, 
+      @nInputKey      INT,
       @cStorerKey     NVARCHAR( 15), 
       @cFacility      NVARCHAR( 5), 
       @cFromPalletID  NVARCHAR( 20), 

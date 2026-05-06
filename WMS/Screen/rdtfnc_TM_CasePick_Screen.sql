@@ -27,13 +27,13 @@ EXECUTE rdt.rdtAddScn 4021, 'ENG',
    ,@cLine06 = ''
    ,@cLine07 = 'FROM LOC:'
    ,@cLine08 = '%10d03'
-   ,@cLine09 = '%10i04'
+   ,@cLine09 = '%20i04' --FCR-3959 Extend length to 20 to adapt with loc digit check
    ,@cLine10 = ''
    ,@cLine11 = ''
    ,@cLine12 = ''
    ,@cLine13 = '%20d10'
    ,@cLine14 = '%e'
-   ,@cWebGroup = '{"1":["4","5"],"1":["7","8","9"],"3":["13"]}'
+   ,@cWebGroup = '{"1":["4","5"],"2":["7","8"],"3":["9"],"4":["13"]}'
    ,@nFunc = 1812
 
 -- From ID
@@ -99,7 +99,7 @@ EXECUTE rdt.rdtAddScn 4025, 'ENG',
    ,@cLine05 = ''
    ,@cLine06 = 'TO LOC:'
    ,@cLine07 = '%10d02'
-   ,@cLine08 = '%10i03'
+   ,@cLine08 = '%20i03' --FCR-3959 Extend length to 20 to adapt with loc digit check
    ,@cLine09 = ''
    ,@cLine10 = '%20d10'
    ,@cLine14 = '%e'
@@ -148,5 +148,13 @@ EXECUTE rdt.rdtAddScn 4028, 'ENG',
    ,@cLine07 = '9 = NO'
    ,@cLine08 = ''
    ,@cLine09 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 1812
+
+-- 6620  = Reason Code screen
+DELETE rdt.RDTScn WHERE Scn = 6620 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6620, 'ENG',
+   @cLine02 = 'REASON CODE: '
+   ,@cLine03 = '%10i01'
    ,@cLine14 = '%e'
    ,@nFunc = 1812

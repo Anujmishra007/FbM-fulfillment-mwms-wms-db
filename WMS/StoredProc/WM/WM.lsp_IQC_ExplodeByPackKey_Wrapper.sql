@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_IQC_ExplodeByPackKey_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_IQC_ExplodeByPackKey_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -32,8 +27,9 @@ GO
 /* 28-OCT-2021 Wan03    1.3   LFWM-2944 - UAT - TW  Not able to 'Explode by PackKey' when */
 /*                            quantity is less than Pallet quantity in Inventory QC module*/
 /* 28-OCT-2021 Wan03    1.3   DevOps Combine Script                                       */
+/* 2025-10-06  SSA01    1.4   UWP-42142 -Enhanced session management and cleanup.         */
 /******************************************************************************************/
-CREATE PROCEDURE [WM].[lsp_IQC_ExplodeByPackKey_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_IQC_ExplodeByPackKey_Wrapper]
     @c_QC_Key NVARCHAR(10) 
    ,@c_QCLineNo NVARCHAR(5)=''  
    ,@b_Success INT=1 OUTPUT 
@@ -93,21 +89,27 @@ BEGIN
    SET @b_Success = 1
    SET @c_ErrMsg =''
 
-   IF SUSER_SNAME() <> @c_UserName
+
+   -- (SSA01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''
    BEGIN
-      SET @n_Err = 0 
+      SET @n_Err = 0
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END  
                       
-      EXECUTE AS LOGIN = @c_UserName
+       IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SSA01) Enhanced session management - End
    
    BEGIN TRAN
    BEGIN TRY
@@ -255,8 +257,8 @@ BEGIN
                     
                   UPDATE InventoryQCDetail   
                   SET ToID = @c_ToId                   
-                     , EditDate = GETDATE()  
-                     , EditWho = @c_UserName   
+                     , EditDate = dbo.fnc_GetDate()    --(SSA01)
+                     , EditWho = dbo.fnc_GetUserName()   --(SSA01)
                   WHERE QC_Key = @c_QC_Key  
                   AND   QCLineNo = @c_QCLineNo   
                   
@@ -503,8 +505,8 @@ BEGIN
                        , ToQty = @n_InsertQty                     --(Wan02) 
                        , OriginalQty = @n_InsertOriginalQty       --(Wan02) 
                        , ToID = @c_ToId                           --(Wan02) 
-                       , EditDate = GETDATE()
-                       , EditWho = @c_UserName 
+                       , EditDate = dbo.fnc_GetDate()    --(SSA01)
+                       , EditWho = dbo.fnc_GetUserName()   --(SSA01)
                      WHERE QC_Key = @c_QC_Key
                      AND   QCLineNo = @c_QCLineNo 
                   END TRY
@@ -599,7 +601,9 @@ BEGIN
    END
    --(Wan03) - END
    
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SSA01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_IQC_ExplodeByPackKey_Wrapper] TO nSQL 

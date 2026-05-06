@@ -1,4 +1,4 @@
-/****** Object:  Trigger [ntrChannelTransferUpdate]    Script Date: 10/18/2018 6:14:09 PM ******/
+﻿/****** Object:  Trigger [ntrChannelTransferUpdate]    Script Date: 10/18/2018 6:14:09 PM ******/
 if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrChannelTransferDetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 DROP TRIGGER [dbo].[ntrChannelTransferDetailUpdate]
 GO
@@ -36,7 +36,8 @@ GO
 /*                                                                                                                */  
 /* Updates:                                                                                                       */  
 /* Date         Author  Ver.  Purposes                                                                            */  
-/* 04-March-2019  kelvinongcy  1.0   WMS-8095 - JDSports - Update EditDate & EditWho in Channel related tables    */ 
+/* 04-March-2019  kelvinongcy  1.0   WMS-8095 - JDSports - Update EditDate & EditWho in Channel related tables    */
+/* 09-October-2025 SPC040      1.1   Replace SUSER_SNAME with fnc_GetUserName                                     */ 
 /******************************************************************************************************************/  
 CREATE TRIGGER [dbo].[ntrChannelTransferDetailUpdate]  
 ON  [dbo].[ChannelTransferDetail] FOR UPDATE  
@@ -73,8 +74,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN  
       UPDATE ChannelTransferDetail  
-      SET EditDate = GETDATE(),  
-          EditWho = SUSER_SNAME(),
+      SET EditDate = dbo.fnc_GetDate(),  
+          EditWho = dbo.fnc_GetUserName(),
           TrafficCop = NULL 
       FROM ChannelTransferDetail (NOLOCK), INSERTED (NOLOCK)  
       WHERE ChannelTransferDetail.ChannelTransferKey = INSERTED.ChannelTransferKey  

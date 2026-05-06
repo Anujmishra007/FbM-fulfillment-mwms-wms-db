@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[rdt].[rdtfnc_UCCInquiry]') AND OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   DROP PROCEDURE [rdt].[rdtfnc_UCCInquiry]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF
@@ -37,9 +33,10 @@ GO
 /*                             Add ExtendedInfo SP (ChewKP01)           */
 /* 30-Sep-2016 1.6  Ung        Performance tuning                       */
 /* 08-Oct-2018 1.7  TungGH     Performance                              */   
+/* 30-Jun-2025 1.8  Dennis     FCR-3400 Decode Sp                       */   
 /************************************************************************/
 
-CREATE PROC rdt.rdtfnc_UCCInquiry (
+CREATE OR ALTER PROC rdt.rdtfnc_UCCInquiry (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 1024) OUTPUT
@@ -89,7 +86,9 @@ DECLARE
    @cExtendedInfoSP  NVARCHAR(20), -- (ChewKP02)
    @cSQL           NVARCHAR(1000),   
    @cSQLParam      NVARCHAR(1000),   
-   @coFieled01     NVARCHAR(20),
+   @coFieled01     NVARCHAR(60),
+   @cDecodeSP      NVARCHAR( 20),
+   @cBarcode       NVARCHAR(60),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -139,6 +138,7 @@ SELECT
    @cNewScnLayout    = V_String4, -- (Vicky02)
    @cUCCStatus       = V_String5, -- (Vicky02)
    @cExtendedInfoSP  = V_String6, -- (ChewKP01)
+   @cDecodeSP        = V_String7,
    
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -199,6 +199,10 @@ BEGIN
       SET @cNewScnLayout = ''
       SET @cNewScnLayout = rdt.RDTGetConfig( @nFunc, 'NewScnLayout', @cStorer) -- Parse in Function
       
+      SET @cDecodeSP  = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorer) --(yeekung01)
+      IF @cDecodeSP = '0'
+         SET @cDecodeSP = ''
+
       -- (ChewKP01)
       SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorer)
       IF @cExtendedInfoSP = '0'
@@ -243,6 +247,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cUCC = @cInField01      
+      SET @cBarcode = @cInField01
       
       -- If UCC and SKU are blank
       IF (@cUCC = '' OR @cUCC IS NULL) AND (@cSKU = '' OR @cSKU IS NULL)
@@ -256,6 +261,46 @@ BEGIN
       -- Else check if UCC is blank but SKU not blank, go to next page
       IF @cUCC <> '' AND @cUCC IS NOT NULL
       BEGIN
+         IF @cDecodeSP <> ''
+         BEGIN
+            -- Standard decode
+            IF @cDecodeSP = '1'
+            BEGIN
+             EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode, 
+               @cUCCNo  = @cUCC    OUTPUT,   
+               @nErrNo  = @nErrNo  OUTPUT,   
+               @cErrMsg = @cErrMsg OUTPUT,  
+               @cType   = 'UCCNo'  
+            END
+
+            -- Customize decode
+            ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
+                  ' @cID OUTPUT, @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile      INT,           ' +
+                  ' @nFunc        INT,           ' +
+                  ' @cLangCode    NVARCHAR( 3),  ' +
+                  ' @nStep        INT,           ' +
+                  ' @nInputKey    INT,           ' +
+                  ' @cFacility    NVARCHAR( 5),  ' +
+                  ' @cStorerKey   NVARCHAR( 15), ' +
+                  ' @cBarcode     NVARCHAR( 60), ' +
+                  ' @cID          NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cUCC         NVARCHAR( 20)  OUTPUT, ' +
+                  ' @nErrNo       INT            OUTPUT, ' +
+                  ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cBarcode,
+                  @cID OUTPUT, @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            END
+
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+         END
          -- (ChewKP01)
          SELECT
              @cUCCStatus = Status
@@ -411,7 +456,7 @@ BEGIN
                   '@nStep      INT,           ' + 
                   '@cStorer    NVARCHAR( 15), ' + 
                   '@cUCC       NVARCHAR( 20), ' + 
-                  '@coFieled01 NVARCHAR( 20) OUTPUT'
+                  '@coFieled01 NVARCHAR( 60) OUTPUT'
    
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                   @nMobile, @nFunc, @cLangCode, @nStep, @cStorer, @cUCC, @coFieled01 OUTPUT
@@ -540,7 +585,8 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cUCC = @cInField01      
-      
+      SET @cBarcode = @cInField01
+
       -- If UCC and SKU are blank
       IF (@cUCC = '' OR @cUCC IS NULL) AND (@cSKU = '' OR @cSKU IS NULL)
       BEGIN
@@ -553,6 +599,47 @@ BEGIN
       -- Else check if UCC is blank but SKU not blank, go to next page
       IF @cUCC <> '' AND @cUCC IS NOT NULL
       BEGIN
+         IF @cDecodeSP <> ''
+         BEGIN
+            -- Standard decode
+            IF @cDecodeSP = '1'
+            BEGIN
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
+                  @cUCCNo  = @cUCC    OUTPUT,
+                  @nErrNo  = @nErrNo  OUTPUT,
+                  @cErrMsg = @cErrMsg OUTPUT,
+                  @cType   = 'UCCNo'
+            END
+
+            -- Customize decode
+            ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
+                  ' @cID OUTPUT, @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile      INT,           ' +
+                  ' @nFunc        INT,           ' +
+                  ' @cLangCode    NVARCHAR( 3),  ' +
+                  ' @nStep        INT,           ' +
+                  ' @nInputKey    INT,           ' +
+                  ' @cFacility    NVARCHAR( 5),  ' +
+                  ' @cStorerKey   NVARCHAR( 15), ' +
+                  ' @cBarcode     NVARCHAR( 60), ' +
+                  ' @cID          NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cUCC         NVARCHAR( 20)  OUTPUT, ' +
+                  ' @nErrNo       INT            OUTPUT, ' +
+                  ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cBarcode,
+                  @cID OUTPUT, @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            END
+
+            IF @nErrNo <> 0
+               GOTO Step_3_Fail
+         END
+
          SELECT
             @cSKU = SKU,
             @cLOT = LOT,
@@ -785,6 +872,7 @@ BEGIN
       V_String4      = @cNewScnLayout, -- (Vicky02)
       V_String5      = @cUCCStatus,    -- (Vicky02)
       V_String6      = @cExtendedInfoSP, -- (ChewKP01)
+      V_String7      = @cDecodeSP,
 
       I_Field01 = '',  O_Field01 = @cOutField01,
       I_Field02 = '',  O_Field02 = @cOutField02,

@@ -10,11 +10,10 @@ GO
 /* Written by: Supriya Sangeetham                                        */    
 /*                                                                       */    
 /* Purpose: UWP-18823 - Trigger replenishment with wave release          */  
-/*                                                                       */  
 /*                                                                       */    
 /* Called By: Wave Release                                               */    
 /*                                                                       */    
-/* PVCS Version: 1.0                                                     */    
+/* Version: 2.0                                                          */
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -34,64 +33,112 @@ GO
 /*                            type 2 with UOM1                           */
 /* 2024-11-12  SSA07    1.7   Updating to add two step replenishment for */
 /*                            type 1 with UOM7                           */
+/* 2025-05-09  Wan01    1.8   FCR-3958 - JCB Picking Task                */
+/* 2025-06-17                 Overwrite the whole logic as implement new */
+/*                            process. Use back same SP                  */
+/* 2025-07-01                 Version 1.90 & 1.91 & fixes. Add v2.0      */
+/* 2025-07-02                 Version v2.1 & fixes                       */
+/* 2025-07-04                 Version v2.2 & fix                         */
+/* 2025-09-04                 fix                                        */
+/* 2025-10-10  SSA08    1.9   UWP-42248 -Enhanced session management     */
+/* 2025-10-24  PPA374   1.10  UWP-42949 -Added PP type for the RPF task  */
+/* 2025-12-04  Wan01    1.11  FCR-3958 CR V2.3 (Work with PPA374)        */
+/* 2026-01-06  Wan01          UWP-45254, CR V2.3 fixed                   */
+/* 2026-02-13  VNI01    2.0   UWP-48774 , BUG FIX FOR MISSING TASKDETKEY */
+/*                              ON SECOND WAVE RELEASE(WORK WITH PPA374) */
+/* 2026-02-25  PPA374   2.1   Update logic to not fail allocation check  */
+/*                              on shipped orders                        */
+/* 2026-03-18  PPA374   2.2   ISNULL TaskDetail for manual allocation    */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
-  @c_wavekey      NVARCHAR(10)
- ,@b_Success      int        OUTPUT
- ,@n_err          int        OUTPUT
- ,@c_errmsg       NVARCHAR(250)  OUTPUT
- AS
- BEGIN
+   @c_Wavekey      NVARCHAR(10)
+,  @b_Success      int            = 1   OUTPUT
+,  @n_err          int            = 0   OUTPUT
+,  @c_errmsg       NVARCHAR(250)  = ''  OUTPUT
+AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_continue    int = 1
+   DECLARE @n_Continue    int = 1
          , @n_starttcnt   int = @@TRANCOUNT         -- Holds the current transaction count
          , @n_debug       int = 0
-         , @n_cnt         int = 0
+         , @n_Cnt         int = 0
 
    SET @b_success = 0
    SET @n_err = 0
    SET @c_errmsg = ''
 
-   DECLARE @c_Storerkey                NVARCHAR(15)   = ''
-         , @c_Facility                 NVARCHAR(5)    = ''
+   DECLARE @c_Facility                 NVARCHAR(5)    = ''
+         , @c_Storerkey                NVARCHAR(15)   = ''
+         , @c_TMReleaseFlag            NVARCHAR(10)   = 'N'   
+ 
+         , @c_InValid                  NVARCHAR(10)   = ''                           
+         , @c_ShortErrMsg              NVARCHAR(20)   = ''  
+         , @c_ToLocCodes               NVARCHAR(100)  = ''                          --v1.91
+         , @c_FCP                      NCHAR(1)       = 'N'                          
+         , @c_RPF                      NCHAR(1)       = 'N'                          
+         , @c_OrderType                NVARCHAR(50)   = ''                           
+         , @c_C_Company                NVARCHAR(350)  = ''       
+
+         , @c_Taskdetailkey            NVARCHAR(10)   = ''
          , @c_TaskType                 NVARCHAR(10)   = ''
          , @c_SourceType               NVARCHAR(30)   = ''
+         , @c_TaskStatus               NVARCHAR(10)   = '0'    
          , @c_Sku                      NVARCHAR(20)   = ''
          , @c_Lot                      NVARCHAR(10)   = ''
          , @c_FromLoc                  NVARCHAR(10)   = ''
          , @c_FromID                   NVARCHAR(18)   = ''
          , @c_Toloc                    NVARCHAR(10)   = ''
          , @c_ToID                     NVARCHAR(18)   = ''
+         , @c_FinalLoc                 NVARCHAR(10)   = ''  
+         , @c_FinalID                  NVARCHAR(18)   = ''  
+         , @c_CaseID                   NVARCHAR(20)   = '' 
+         , @n_IDQty                    INT            = 0
          , @n_Qty                      INT            = 0
          , @n_UOMQty                   INT            = 0
          , @c_UOM                      NVARCHAR(10)   = ''
          , @c_Orderkey                 NVARCHAR(10)   = ''
          , @c_LoadKey                  NVARCHAR(10)   = ''
          , @c_Groupkey                 NVARCHAR(10)   = ''
+         , @c_RefTaskkey               NVARCHAR(10)   = ''                          --v1.90
+         , @c_ReplFromLoc              NVARCHAR(10)   = ''                          --v1.90
+         , @c_ReplFromID               NVARCHAR(18)   = ''                          --v1.90
          , @c_Priority                 NVARCHAR(10)   = ''
          , @c_PickMethod               NVARCHAR(10)   = ''
-         , @c_LinkTaskToPick_SQL       NVARCHAR(4000) = ''
-         , @c_Taskdetailkey            NVARCHAR(10)   = ''
-         , @c_ID                       NVARCHAR(18)   = ''
-         , @n_TaskQty                  INT                       --(SSA01)
-         , @n_PickQty                  INT                       --(SSA01)
-         , @c_SQL                      NVARCHAR(MAX)             --(SSA01)
-         , @c_CurrPickDetailKey        NVARCHAR(10)              --(SSA01)
-         , @c_CurrTaskDetailKey        NVARCHAR(10)              --(SSA01)
-         , @c_Type                     NVARCHAR(10)              --(SSA02)
-         , @c_LocationGroup            NVARCHAR(10)              --(SSA02)
-         , @c_SortLane                 NVARCHAR(10)              --(SSA02)
-         , @c_Finalloc                 NVARCHAR(10)   = ''       --(SSA02)
-         , @n_SortLaneQty              INT            = 0        --(SSA02)
-         , @c_userDefine01             NVARCHAR(10)   = ''       --(SSA02)
-         , @c_PickDetailLoc            NVARCHAR(10)   = ''       --(SSA02)
-         , @c_PickDetailToLoc          NVARCHAR(10)   = ''       --(SSA02)
-         , @c_SQLParams                 NVARCHAR(MAX)
+         , @c_Putawayzone              NVARCHAR(10)   = '' 
+         , @c_LocationGroup            NVARCHAR(10)   = ''            
+         , @c_LocationCategory         NVARCHAR(10)   = ''                           
+         , @c_LocAisle                 NVARCHAR(10)   = ''                           
+         , @c_Floor                    NVARCHAR(6)    = ''                           
+         , @c_Lanes                    NVARCHAR(100)  = '' 
+         , @c_LinkTaskToPick_SQL       NVARCHAR(4000) = ''         
 
+         , @c_SQL                      NVARCHAR(MAX)  = ''            
+         , @c_SQLParams                NVARCHAR(1000) = '' 
+         
+         , @cur_RPF                    CURSOR                                                                                         
+         , @cur_FCP                    CURSOR                                        
+                                                                                     
+   DECLARE @TMP_FCP_CL                 TABLE                                                                                
+      ( [RowID]                        INT               IDENTITY(1,1) PRIMARY KEY                   
+      , [LISTNAME]                     [nvarchar](10)    NULL     
+      , [Code]                         [nvarchar](30)    NULL  
+      , [Description]                  [nvarchar](250)   NULL  
+      , [Short]                        [nvarchar](10)    NULL  
+      , [Long]                         [nvarchar](250)   NULL  
+      , [Notes]                        [nvarchar](4000)  NULL  
+      , [Notes2]                       [nvarchar](4000)  NULL  
+      , [Storerkey]                    [nvarchar](50)    NOT NULL  
+      , [UDF01]                        [nvarchar](60)    NOT NULL  
+      , [UDF02]                        [nvarchar](60)    NOT NULL  
+      , [UDF03]                        [nvarchar](60)    NOT NULL  
+      , [UDF04]                        [nvarchar](60)    NOT NULL  
+      , [UDF05]                        [nvarchar](60)    NOT NULL  
+      , [code2]                        [nvarchar](30)    NOT NULL 
+      )
 
    SET @c_SourceType = 'mspRLWAV02'
    SET @c_Priority   = '9'
@@ -99,79 +146,477 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    SET @c_PickMethod = 'FP'
 
    -----Get Storerkey and facility
-
-   SELECT TOP 1 @c_StorerKey = O.Storerkey,
-               @c_Facility = O.Facility
+   SELECT TOP 1 @c_StorerKey= O.Storerkey 
+               ,@c_Facility = O.Facility
+               ,@c_TMReleaseFlag = w.TMReleaseFlag
    FROM WAVE W (NOLOCK)
    JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
    JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
    WHERE WD.Wavekey = @c_Wavekey
-
-   ------Loadplan Validation
-
-   IF  (@n_continue = 1 OR @n_continue = 2)
+   ORDER BY WD.WaveDetailKey
+ 
+   IF @n_Continue = 1                                                                
    BEGIN
-      SELECT TOP 1 @c_Loadkey  = ISNULL(lpd.Loadkey,''),@c_Type  = ISNULL(O.Type,'')
-      FROM WAVE W (NOLOCK)
-      JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
-      JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
-      LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
-      WHERE W.Wavekey = @c_Wavekey
-      ORDER BY ISNULL(lpd.Loadkey,'')
+      INSERT INTO @TMP_FCP_CL (Listname, Code, Description, Short, Long                
+                              ,Notes, Notes2, Storerkey
+                              ,UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
+      SELECT CODELKUP.Listname   
+           , CODELKUP.Code   
+           , [Description] = ISNULL(CODELKUP.[Description],'')   
+           , Short = ISNULL(CODELKUP.Short,'')      
+           , Long  = ISNULL(CODELKUP.Long ,'')     
+           , Notes = ISNULL(CODELKUP.Notes,'')      
+           , Notes2= ISNULL(CODELKUP.Notes2,'')           
+           , CODELKUP.Storerkey  
+           , CODELKUP.UDF01   
+           , CODELKUP.UDF02   
+           , CODELKUP.UDF03   
+           , CODELKUP.UDF04   
+           , CODELKUP.UDF05   
+           , CODELKUP.Code2  
+      FROM CODELKUP (NOLOCK)  
+      WHERE CODELKUP.Listname = 'JCBCOMPML'  
+      AND   CODELKUP.Storerkey = @c_Storerkey
+      ORDER BY CODELKUP.Code 
+      
+      INSERT INTO @TMP_FCP_CL (Listname, Code, Description, Short, Long                
+                              ,Notes, Notes2, Storerkey
+                              ,UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
+      SELECT CODELKUP.Listname   
+           , CODELKUP.Code   
+           , [Description] = ISNULL(CODELKUP.[Description],'')   
+           , Short = ISNULL(CODELKUP.Short,'')      
+           , Long  = ISNULL(CODELKUP.Long ,'')     
+           , Notes = ISNULL(CODELKUP.Notes,'')      
+           , Notes2= ISNULL(CODELKUP.Notes2,'')           
+           , CODELKUP.Storerkey  
+           , CODELKUP.UDF01   
+           , CODELKUP.UDF02   
+           , CODELKUP.UDF03   
+           , CODELKUP.UDF04   
+           , CODELKUP.UDF05   
+           , CODELKUP.Code2  
+      FROM CODELKUP (NOLOCK)  
+      WHERE CODELKUP.Listname = 'JCBORDPR'  
+      AND   CODELKUP.Storerkey = @c_Storerkey
+      ORDER BY CODELKUP.Code 
 
-      IF @c_Loadkey = ''
+      INSERT INTO @TMP_FCP_CL (Listname, Code, Description, Short, Long                
+                              ,Notes, Notes2, Storerkey
+                              ,UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
+      SELECT CODELKUP.Listname   
+           , CODELKUP.Code   
+           , [Description] = ISNULL(CODELKUP.[Description],'')   
+           , Short = ISNULL(CODELKUP.Short,'')      
+           , Long  = ISNULL(CODELKUP.Long ,'')     
+           , Notes = ISNULL(CODELKUP.Notes,'')      
+           , Notes2= ISNULL(CODELKUP.Notes2,'')           
+           , CODELKUP.Storerkey  
+           , CODELKUP.UDF01   
+           , CODELKUP.UDF02   
+           , CODELKUP.UDF03   
+           , CODELKUP.UDF04   
+           , CODELKUP.UDF05   
+           , CODELKUP.Code2  
+      FROM CODELKUP (NOLOCK)  
+      WHERE CODELKUP.Listname = 'JCBKITORDT'  
+      AND   CODELKUP.Storerkey = @c_Storerkey
+      ORDER BY CODELKUP.Code 
+
+      IF OBJECT_ID('tempdb..#TMP_ORD') IS NOT NULL                                     
       BEGIN
-         SET @n_continue = 3
+         DROP TABLE #TMP_ORD
+      END
+
+      CREATE TABLE #TMP_ORD
+      (  Orderkey       NVARCHAR(10)   NOT NULL    DEFAULT('') PRIMARY KEY
+      ,  LoadKey        NVARCHAR(10)   NOT NULL    DEFAULT('')
+      ,  MBOLKey        NVARCHAR(10)   NOT NULL    DEFAULT('')
+      ,  OtherReference NVARCHAR(30)   NOT NULL    DEFAULT('')
+      ,  Facility       NVARCHAR(5)    NOT NULL    DEFAULT('') 
+      ,  Storerkey      NVARCHAR(15)   NOT NULL    DEFAULT('')
+      ,  [Type]         NVARCHAR(10)   NOT NULL    DEFAULT('')
+      ,  [Priority]     NVARCHAR(10)   NOT NULL    DEFAULT('')
+      ,  [Status]       NVARCHAR(10)   NOT NULL    DEFAULT('')
+      ,  C_Company      NVARCHAR(100)  NOT NULL    DEFAULT('')
+      ,  CompML         NVARCHAR(10)   NOT NULL    DEFAULT('')
+      ,  KitOrder       INT            NOT NULL    DEFAULT(0)
+      ,  KitLoc         NVARCHAR(100)  NOT NULL    DEFAULT('')                      --2025-07-03
+      ,  MSLanes        NVARCHAR(100)  NOT NULL    DEFAULT('')                      --2025-07-03
+      ,  ToLocCodes     NVARCHAR(100)  NOT NULL    DEFAULT('')                      --v1.91
+      ,  AutoRL         NCHAR(1)       NOT NULL    DEFAULT('N')
+      ,  FCP            NCHAR(1)       NOT NULL    DEFAULT('N')
+      ,  RPF            NCHAR(1)       NOT NULL    DEFAULT('N')
+      ,  PRGRP          NVARCHAR(30)   NOT NULL    DEFAULT('')                      --v2.1      
+      )
+
+      INSERT INTO #TMP_ORD ( Orderkey, Facility, Storerkey, Loadkey, MBOLKey
+                           , OtherReference, [Type], [Priority], [Status]
+                           , C_Company, CompML, MSLanes, ToLocCodes                 --v1.91
+                           , AutoRL, FCP, RPF, PRGRP                                --v2.1
+                           )
+      SELECT  
+              o.Orderkey
+            , o.Facility
+            , o.StorerKey
+            , LoadKey = ISNULL(lpd.LoadKey,'')
+            , MbolKey = ISNULL(md.MbolKey,'')
+            , OtherReference = ISNULL(m.OtherReference, '')
+            , o.[Type]
+            , [Priority]= ISNULL(cl2.Short, '')
+            , [Status]  = ISNULL(od.[Status],'0')                                   --2025-09-04
+            , C_Company = ISNULL(o.C_Company,'')
+            , CompML    = ISNULL(MIN(cl.ListName),'')
+            , MSLanes=  ISNULL(STRING_AGG(l.Loc , ',')     
+                        WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC),'')             --2025-07-03
+            , ToLocCodes=ISNULL(STRING_AGG(cl.Short , ',')     
+                        WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC),'')             --2025-07-03
+            , AutoRL = CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
+            , FCP    = CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
+            , RPF    = CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END  
+            , PRGRP  = ISNULL(cl2.Code,'')                                          --v2.1            
+      FROM WAVE w (NOLOCK) 
+      JOIN WAVEDETAIL wd (NOLOCK) ON wd.Wavekey  = w.Wavekey
+      JOIN ORDERS o (NOLOCK) ON o.Orderkey = wd.OrderKey
+      LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = o.Orderkey
+      LEFT OUTER JOIN MBOLDETAIL md (NOLOCK) ON md.Orderkey = o.Orderkey
+      LEFT OUTER JOIN MBOL       m  (NOLOCK) ON m.MbolKey = md.MbolKey
+      LEFT OUTER JOIN @TMP_FCP_CL cl ON cl.ListName = 'JCBCOMPML' 
+                                    AND cl.Storerkey= o.StorerKey
+                                    AND cl.Long = o.C_Company
+                                    AND o.C_Company <> '' AND o.C_Company IS NOT NULL
+      LEFT OUTER JOIN LOC l (NOLOCK) ON  l.loc = cl.Short
+                                     AND l.Facility = o.Facility
+                                     AND cl.Short <> '' AND cl.Short IS NOT NULL
+                                     AND l.LocationFlag <> 'INACTIVE'                                      
+      OUTER APPLY (SELECT TOP 1 WITH TIES                                           --v2.1
+                     cl.Code, cl.Short, cl.UDF01, cl.UDF04, cl.UDF05
+                   FROM @TMP_FCP_CL cl   
+                   WHERE cl.ListName = 'JCBORDPR' 
+                   AND cl.Storerkey= o.StorerKey
+                   AND cl.Code2 = o.[Type]
+                   AND cl.UDF02 IN ('', o.[Priority])
+                   AND cl.UDF03 IN ('', o.[OrderGroup]) 
+                   GROUP BY cl.Code, cl.Short, cl.UDF01, cl.UDF02, cl.UDF03, cl.UDF04, cl.UDF05
+                   ORDER BY DENSE_RANK() OVER (PARTITION BY o.Orderkey                            
+                                               ORDER BY o.Orderkey
+                                              ,CASE WHEN cl.UDF02 = o.[Priority]   THEN 1
+                                                    WHEN cl.UDF03 = o.[OrderGroup] THEN 2 
+                                                    ELSE 3 END)
+                  ) cl2  
+      OUTER APPLY (SELECT od1.Orderkey                                              --2025-09-04
+                        , [Status] = CASE WHEN SUM(od1.OpenQty) = SUM(od1.QtyAllocated + od1.QtyPicked) --25/02/2026 PPA374 Swapped places with '0' check to avoid failing shipped orders
+                                          THEN '2'
+                                          WHEN SUM(od1.QtyAllocated + od1.QtyPicked) = 0
+                                          THEN '0'
+                                          ELSE '1'
+                                          END
+                   FROM ORDERDETAIL od1 (NOLOCK)  
+                   WHERE od1.Orderkey = o.Orderkey
+                   GROUP BY od1.Orderkey
+                  ) od  
+      WHERE w.WaveKey = @c_Wavekey
+      GROUP BY o.Orderkey
+            ,  o.Facility
+            ,  o.StorerKey
+            ,  ISNULL(lpd.LoadKey,'')
+            ,  ISNULL(md.MbolKey,'')
+            ,  ISNULL(m.OtherReference, '')
+            ,  o.[Type]
+            ,  ISNULL(cl2.Short, '')
+            ,  ISNULL(od.[Status],'0')                                              --2025-09-04
+            ,  ISNULL(o.C_Company,'')
+            ,  CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
+            ,  CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
+            ,  CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END             
+            ,  ISNULL(cl2.Code,'')                                                  --v2.1    
+
+      SET @c_InValid = ''
+      SELECT @c_InValid = CASE WHEN SUM(CASE WHEN o.Loadkey = '' THEN 1 ELSE 0 END) > 0 
+                               THEN 'BLP' 
+                               WHEN SUM(CASE WHEN o.MBOLKey = '' THEN 1 ELSE 0 END) > 0 
+                               THEN 'BMB'
+                               WHEN COUNT(DISTINCT o.[Type]) > 1    
+                               THEN 'MT'
+                               WHEN COUNT(DISTINCT o.PRGrp) > 1                     --v2.1 
+                               THEN 'MPG'                               
+                               WHEN COUNT(DISTINCT o.C_Company) > 1 
+                               THEN 'MC'
+                               END
+            ,@c_FCP = MAX(CASE WHEN @c_TMReleaseFlag = 'A' AND o.AutoRL = 'Y' THEN 'Y'
+                               WHEN @c_TMReleaseFlag <>'A' THEN o.FCP
+                               ELSE 'N'
+                               END)   
+            ,@c_RPF = MAX(o.RPF)                     
+      FROM #TMP_ORD o 
+
+      IF @c_FCP = 'N' 
+      BEGIN
+         SET @n_Continue = 4
+         GOTO QUIT_SP 
+      END
+
+      IF @c_InValid = 'BLP'
+      BEGIN
+         SET @n_Continue = 3
          SET @n_err = 83010
-         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Loadplan has not generated yet. (mspRLWAV02)'
+         SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Empty Loadplan Found'
+                       + '. (mspRLWAV02)'
+         SET @c_ShortErrMsg = 'Bad Loadplan'
+      END
+      ELSE IF @c_InValid = 'BMB'
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err = 83020
+         SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Empty Ship Reference Found'
+                       + '. (mspRLWAV02)'
+         SET @c_ShortErrMsg = 'Bad Ship Ref.'
+      END
+      ELSE IF @c_InValid = 'MT'
+      BEGIN
+         SET @c_errmsg = ''
+         ;WITH OT AS
+         (
+         SELECT TOP 2 WITH TIES o.[Type], Orderkey = MIN(o.Orderkey) 
+         FROM #TMP_ORD o 
+         GROUP BY o.[Type]
+         ORDER BY ROW_NUMBER() OVER (PARTITION BY o.[Type] ORDER BY o.[Type])
+         )
+         SELECT @c_ErrMsg = String_Agg( OT.[Type] + ' - ' + OT.Orderkey, ', ' )
+                          WITHIN GROUP (ORDER BY OT.[Type]) 
+         FROM OT 
+
+         SET @n_Continue = 3
+         SET @n_err = 83030
+         SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': More than one order type in the wave:'
+                       + @c_errmsg
+                       + '. (mspRLWAV02)'
+         SET @c_ShortErrMsg = 'Bad Order Type'
+      END
+      ELSE IF @c_InValid = 'MPG'                                                    --v2.1
+      BEGIN
+         SET @c_errmsg = ''
+         ;WITH PG AS
+         (
+         SELECT TOP 2 WITH TIES o.PRGrp, Orderkey = MIN(o.Orderkey) 
+         FROM #TMP_ORD o 
+         GROUP BY o.PRGrp
+         ORDER BY ROW_NUMBER() OVER (PARTITION BY o.PRGrp ORDER BY o.PRGrp)
+         )
+         SELECT @c_ErrMsg = String_Agg( PG.PRGrp + ' - ' + PG.Orderkey, ', ' )
+                          WITHIN GROUP (ORDER BY PG.PRGrp) 
+         FROM PG 
+
+         SET @n_Continue = 3
+         SET @n_err = 83032
+         SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': More than one JCBORDPR''s code in the wave:'
+                       + @c_errmsg
+                       + '. (mspRLWAV02)'
+         SET @c_ShortErrMsg = 'Bad JCBORDPR Code'
+      END
+      ELSE IF @c_InValid = 'MC'
+      BEGIN
+         SET @c_errmsg = ''
+         
+         ;WITH OCC  AS
+         (
+         SELECT TOP 2 WITH TIES o.[C_Company], Orderkey = MIN(o.Orderkey) 
+         FROM #TMP_ORD o 
+         GROUP BY o.C_Company
+         ORDER BY ROW_NUMBER() OVER (PARTITION BY o.C_Company ORDER BY o.C_Company)
+         )
+         SELECT @c_ErrMsg = String_Agg( OCC.[C_Company] + ' - ' + OCC.Orderkey, ', ' )
+                          WITHIN GROUP (ORDER BY OCC.C_Company) 
+         FROM OCC 
+
+         SET @n_Continue = 3
+         SET @n_err = 83040
+         SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': More than one C_Company in the wave:'
+                       + @c_errmsg
+                       + '. (mspRLWAV02)'
+         SET @c_ShortErrMsg = 'Bad Company'
+      END
+
+      IF @n_Continue = 1 
+      BEGIN
+         ;WITH ko  AS  
+         (SELECT o.Orderkey 
+                , KitOrder = 1
+                , KitLoc   = ISNULL(STRING_AGG(l.Loc , ',')                      --2025-07-03   
+                             WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC),'')      --v1.91
+                , ToLocCodes= ISNULL(STRING_AGG(cl.Long , ',')                   --v1.91
+                              WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC),'')     --2025-07-03
+         FROM #TMP_ORD o
+         JOIN @TMP_FCP_CL cl ON  cl.ListName = 'JCBKITORDT' 
+                             AND cl.Storerkey= o.StorerKey
+                             AND cl.Code = o.[Type] 
+                             AND cl.Short = 'Y' 
+         LEFT OUTER JOIN LOC l (NOLOCK) ON  l.LocationCategory = cl.Long
+                                        AND l.Facility = o.Facility
+                                        AND l.LocationFlag <> 'INACTIVE'                                           
+         GROUP BY o.Orderkey
+         )
+         UPDATE o
+            SET  KitOrder = ko.KitOrder
+               , KitLoc   = ko.KitLoc
+               , ToLocCodes = ko.ToLocCodes                                      --v1.91
+         FROM #TMP_ORD o
+         JOIN ko  ON  ko.Orderkey = o.Orderkey
+
+         SET @c_InValid = ''
+         SELECT TOP 1 WITH TIES                       
+             @c_Orderkey= o.Orderkey
+            ,@c_InValid = CASE WHEN o.[Status] <> '2'      
+                               THEN 'PA'
+                               WHEN o.CompML = ''          
+                               THEN 'BC'
+                               WHEN o.KitOrder = 1 AND k.KitLoc = ''                --2025-07-03     
+                               THEN 'BKL'
+                               WHEN o.KitOrder = 0 AND o.OtherReference > '' AND l.Loc IS NULL
+                               THEN 'BMBL'
+                               WHEN o.KitOrder = 0 AND o.OtherReference = '' AND m.MSLanes = ''                                         
+                               THEN 'BML'
+                               ELSE '' END
+            ,@c_ToLocCodes = CASE WHEN o.KitOrder = 1   THEN tc.ToLocCodes     --v1.91
+                                  WHEN o.KitOrder = 0 AND o.OtherReference = '' THEN tc.ToLocCodes --2025-07-02
+                                  ELSE o.OtherReference END
+         FROM #TMP_ORD o 
+         LEFT OUTER JOIN LOC l (NOLOCK) ON  l.loc = o.OtherReference
+                                        AND l.Facility = @c_Facility
+                                        AND l.LocationFlag <> 'INACTIVE' 
+         OUTER APPLY (SELECT TOP 1 [value] AS KitLoc                                
+                      FROM string_split (o.KitLoc,',')
+                      ORDER BY [value]) k  
+         OUTER APPLY (SELECT TOP 1 [value] AS MSLanes
+                      FROM string_split (o.MSLanes,',')
+                      ORDER BY [value]) m  
+         OUTER APPLY (SELECT TOP 1 [value] AS ToLocCodes                            --v1.91                             
+                      FROM string_split (o.ToLocCodes,',')
+                      ORDER BY [value]) tc                        
+         ORDER BY CASE WHEN o.[Status] <> '2'      
+                       THEN 1
+                       WHEN o.CompML = ''          
+                       THEN 2
+                       WHEN o.KitOrder = 1 AND k.KitLoc = ''        
+                       THEN 3
+                       WHEN o.KitOrder = 0 AND o.OtherReference > '' AND l.Loc IS NULL             --2025-07-02
+                       THEN 3
+                       WHEN o.KitOrder = 0 AND o.OtherReference = '' AND m.MSLanes = ''            --2025-07-03                                         
+                       THEN 3
+                       ELSE 9 END
+
+         IF @c_InValid = 'PA'
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 83050
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Orderkey ' + @c_Orderkey 
+                         +' is not fully Allocated. (mspRLWAV02)'
+            SET @c_ShortErrMsg = 'Not Fully Allocated'
+         END
+         ELSE IF @c_InValid = 'BC'
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 83060
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Orderkey ' + @c_Orderkey 
+                         +' has bad C_Company. (mspRLWAV02)'
+            SET @c_ShortErrMsg = 'Bad Company'
+         END
+         ELSE IF @c_InValid = 'BKL'
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 83070
+            IF  @c_ToLocCodes = ''                                                  --2025-07-03
+            BEGIN 
+               SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) 
+                             + ': Invalid Location Category. (mspRLWAV02)'
+            END
+            ELSE
+            BEGIN
+               SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) 
+                             + ': No Location OR INACTIVE Location with Category: (' + @c_ToLocCodes  
+                             + ') exists in ' + @c_Facility + ' facility'
+                             + '. (mspRLWAV02)'
+            END
+            SET @c_ShortErrMsg = 'Bad Kit Loc'
+         END
+         ELSE IF @c_InValid IN ('BMBL','BML')
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_err = 83080
+            IF  @c_ToLocCodes = ''                                                  --2025-07-03
+            BEGIN
+               SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) 
+                  + ': Invalid JCBCOMPML''s Short. (mspRLWAV02)'
+            END
+            ELSE
+            BEGIN 
+               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err) 
+                            + CASE WHEN @c_InValid = 'BMBL' THEN ': Location ('
+                                   ELSE ': Marshalling lane ('
+                                   END
+                            + @c_ToLocCodes 
+                            +') does not exist OR INACTIVE in ' + @c_Facility 
+                            + ' facility. (mspRLWAV02)'
+            END
+            SET @c_ShortErrMsg = 'Bad Marshall Lane'
+         END
+      END
+   END                                                                                                                                                         
+  
+   -----Wave Validation
+   IF @n_Continue = 1 OR @n_Continue = 2  
+   BEGIN
+      SET @n_Cnt = 0
+      IF @c_RPF = 'Y'                                                                
+      BEGIN
+         SELECT @n_Cnt = 1
+         FROM WAVEDETAIL wd (NOLOCK)
+         JOIN PICKDETAIL pd (NOLOCK) ON wd.Orderkey= pd.Orderkey
+         JOIN LOTxLOCxID lli (NOLOCK) ON  lli.lot = pd.Lot
+                                      AND lli.Loc = pd.Toloc
+                                      AND lli.ID  = pd.CaseID
+         WHERE wd.Wavekey    = @c_Wavekey
+         AND   pd.UOM        = '7'
+         AND   pd.ToLoc      > '' 
+         AND   pd.CaseID     > ''
+         AND   pd.[Status]   = '0'
+         AND   lli.Qty       > 0             
+         AND   lli.QtyReplen = 0
+      END
+
+      IF @c_FCP = 'Y'
+      BEGIN
+         IF @n_Cnt = 0 AND
+            NOT EXISTS (SELECT 1                                                   --2025-07-01
+                        FROM WAVEDETAIL wd (NOLOCK)
+                        JOIN PICKDETail pd (NOLOCK) ON wd.Orderkey= pd.Orderkey
+                        LEFT OUTER JOIN Taskdetail td (NOLOCK) 
+                                                    ON td.TaskDetailKey= pd.TaskDetailKey
+                                                    AND TD.Sourcetype = @c_SourceType
+                                                    AND TD.Tasktype   = 'FCP'
+                        WHERE wd.Wavekey    = @c_Wavekey
+                        AND   pd.[Status]   = '0'
+                        GROUP BY pd.pickdetailkey
+                        HAVING COUNT(1) = SUM(CASE WHEN ISNULL(td.[Status],'X') = 'X' 
+                                                   THEN 1 ELSE 0 END)
+                  )
+         BEGIN
+            SET @n_Continue = 3 
+            SET @n_err = 83090
+            SET @c_errmsg = 'NSQL' +CONVERT(NVARCHAR(5),@n_err)+ ': Nothing to release'
+                          + '. (mspRLWAV02)'
+            SET @c_ShortErrMsg = 'Nothing To Release'
+         END
       END
    END
 
-   ------(SSA02) Start----------
-   -- (SSA06) Removed UOM = 1 for Type 2 ------
-   -----Wave Validation
-   IF @n_continue = 1 OR @n_continue = 2
-   BEGIN
-     SET @c_SQL = ' IF NOT EXISTS (SELECT 1 '
-          + ' FROM WAVEDETAIL WD (NOLOCK)'
-          + ' JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey'
-          + ' LEFT JOIN TASKDETAIL TD (NOLOCK) ON  PD.Taskdetailkey = TD.Taskdetailkey AND TD.Sourcetype = @c_SourceType AND TD.Tasktype = @c_TaskType'
-          + ' WHERE WD.Wavekey = @c_Wavekey'
-          + ' AND PD.Status = ''0'''
-          + CASE WHEN @c_Type = '1' THEN ' AND PD.UOM = ''7'''
-                 WHEN @c_Type = '6' THEN ' AND PD.UOM = ''1'''
-                 WHEN @c_Type = '2' THEN ' AND PD.UOM = ''7'''
-                 ELSE ' AND PD.UOM = ''7'''
-                 END
-          + ' AND TD.Taskdetailkey IS NULL )'
-          + ' BEGIN '
-          + ' SET @n_continue = 3 '
-          + ' SET @n_err = 83020'
-          + ' SET @c_errmsg=''NSQL''+CONVERT(NVARCHAR(5),@n_err)+'': Nothing to release. (mspRLWAV02)'''
-          + ' END'
-        SET @c_SQLParams= N'@c_Wavekey   NVARCHAR(10)'
-                                    + ',@c_SourceType NVARCHAR(30)'
-                                    + ',@c_TaskType   NVARCHAR(10)'
-                                    + ',@n_continue            INT OUTPUT'
-                                    + ',@n_Err                INT OUTPUT'
-                                    + ',@c_ErrMsg             NVARCHAR(250) OUTPUT'
-        EXEC sp_executesql @c_SQL
-                          ,@c_SQLParams
-                          ,@c_Wavekey
-                          ,@c_SourceType
-                          ,@c_TaskType
-                          ,@n_continue OUTPUT
-                          ,@n_err OUTPUT
-                          ,@c_errmsg OUTPUT
-
-		 END
-
-    ------(SSA02) end----------
    --Create pickdetail Work in progress temporary table
-   IF @n_continue = 1 OR @n_continue = 2
+   IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NOT NULL
+      BEGIN
          DROP TABLE #PICKDETAIL_WIP
+      END
 
       CREATE TABLE #PickDetail_WIP(
          [PickDetailKey]   [nvarchar](18) NOT NULL PRIMARY KEY
@@ -202,10 +647,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
       ,  [PickMethod]      [nvarchar](1)  NOT NULL DEFAULT (' ')
       ,  [WaveKey]         [nvarchar](10) NOT NULL DEFAULT (' ')
       ,  [EffectiveDate]   [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())
-      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())
+      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())               --(SSA08)
+      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())           --(SSA08)
+      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())               --(SSA08)
+      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())           --(SSA08)
       ,  [TrafficCop]      [nvarchar](1)  NULL
       ,  [ArchiveCop]      [nvarchar](1)  NULL
       ,  [OptimizeCop]     [nvarchar](1)  NULL
@@ -219,15 +664,17 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
       ,  [Channel_ID]      [bigint]       NULL DEFAULT ((0)))
    END
 
-   IF @@TRANCOUNT = 0
+   IF @n_Continue = 1 AND @@TRANCOUNT = 0 
+   BEGIN
       BEGIN TRAN
+   END
 
    --Initialize Pickdetail work in progress staging table
-   IF @n_continue = 1 OR @n_continue = 2
+   IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       EXEC isp_CreatePickdetail_WIP
           @c_Loadkey               = ''
-         ,@c_Wavekey               = @c_wavekey
+         ,@c_Wavekey               = @c_Wavekey
          ,@c_WIP_RefNo             = @c_SourceType
          ,@c_PickCondition_SQL     = ''
          ,@c_Action                = 'I'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
@@ -238,308 +685,502 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
 
       IF @b_Success <> 1
       BEGIN
-         SET @n_continue = 3
+         SET @n_Continue = 3
       END
-      ELSE
+ 
+      IF @n_Continue = 1
       BEGIN
-         UPDATE #PICKDETAIL_WIP
-         SET #PICKDETAIL_WIP.Taskdetailkey = ''
-         FROM #PICKDETAIL_WIP
-         LEFT JOIN TASKDETAIL TD (NOLOCK) ON  TD.Taskdetailkey = #PICKDETAIL_WIP.Taskdetailkey
+         UPDATE p                                                                   
+         SET p.Taskdetailkey = ''
+         FROM #PICKDETAIL_WIP p
+         LEFT JOIN TASKDETAIL TD (NOLOCK) ON  TD.Taskdetailkey = p.Taskdetailkey
+                                          AND TD.[Status] NOT IN ('X','9')
                                           AND TD.Sourcetype = @c_SourceType
-                                          AND TD.Tasktype = @c_TaskType
-                                          AND TD.Status <> 'X'
+                                          AND TD.Tasktype   = 'FCP'                 --2025-07-01
          WHERE TD.Taskdetailkey IS NULL
+            AND NOT EXISTS (                                    -- VNI01(START)
+                SELECT 1 FROM TASKDETAIL TD1 WITH (NOLOCK)
+                INNER JOIN PICKDETAIL PD1 WITH (NOLOCK)
+                    ON TD1.Taskdetailkey = PD1.Taskdetailkey
+                    AND TD1.StorerKey = PD1.StorerKey
+                    AND TD1.OrderKey = PD1.OrderKey
+                WHERE TD1.Status NOT IN ('9','X')
+                    AND PD1.TaskDetailKey <> ''
+                    AND TD1.StorerKey = @c_StorerKey
+                    AND TD1.TaskType IN ('FCP1', 'RCP1', 'RP1')
+            )                                                    -- VNI01(END)
       END
    END
 
-   IF @n_continue IN(1,2)
+   IF @n_Continue IN (1,2) AND @c_RPF = 'Y'
    BEGIN
-   ------(SSA02) ,(SSA04)start----------
-   ----- (SSA06) Removed UOM = 1 for Type 2
-   SET @c_SQL =N'DECLARE cur_WaveReplto CURSOR FAST_FORWARD READ_ONLY FOR '
-      +' SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.ToLoc, PD.CaseId, PD.Loc, PD.ID,PD.UOM,SUM(PD.QTY)'
-      +' FROM WAVEDETAIL WD (NOLOCK)'
-      +' JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey'
-      +' JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey'
-      +' JOIN #PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey'
-      +' LEFT JOIN TASKDETAIL TD (NOLOCK) ON  TD.Taskdetailkey = PD.Taskdetailkey'
-      +' AND TD.Sourcetype = @c_SourceType'
-      +' AND TD.Tasktype = @c_TaskType'
-      +' AND TD.Status <> ''X'''
-      +' WHERE WD.Wavekey = @c_Wavekey'
-      +' AND PD.Status = ''0'''
-      + CASE WHEN @c_Type = '1' THEN ' AND PD.UOM = ''7'''
-                 WHEN @c_Type = '6' THEN ' AND PD.UOM = ''1'''
-                 WHEN @c_Type = '2' THEN ' AND PD.UOM = ''7'''
-                 ELSE ' AND PD.UOM = ''7'''
-                 END
-      +' AND PD.WIP_RefNo = @c_SourceType'
-      +' AND TD.Taskdetailkey IS NULL'
-      +' GROUP BY WD.Wavekey,PD.Storerkey, PD.Sku, PD.Lot, PD.ToLoc, PD.CaseId, PD.Loc, PD.ID'
-      +', PD.UOM'
-      +' ORDER BY PD.Storerkey,  PD.Sku,  PD.Lot,  PD.Loc,  PD.CaseId,  PD.ToLoc'
-      SET @c_SQLParams= N'@c_Wavekey   NVARCHAR(10)'
-                                    + ',@c_SourceType NVARCHAR(30)'
-                                    + ',@c_TaskType   NVARCHAR(10)'
+      SET @cur_RPF = CURSOR FAST_FORWARD READ_ONLY FOR
+      SELECT Orderkey = CASE WHEN COUNT(DISTINCT pd.Orderkey) > 1 THEN '' 
+                             ELSE MIN(pd.Orderkey) END
+            ,pd.Storerkey
+            ,Sku = CASE WHEN COUNT(DISTINCT pd.Sku) > 1 THEN '' ELSE MIN(pd.SKU) END
+            ,lot = CASE WHEN COUNT(DISTINCT pd.Lot) > 1 THEN '' ELSE MIN(pd.Lot) END
+            ,pd.ToLoc
+            ,pd.CaseID
+            ,pd.Loc
+            ,pd.ID
+            --,KitLoc = CASE WHEN o.OtherReference > '' THEN o.OtherReference       --2025-08-25
+            --               WHEN o.KitOrder = 1 THEN o.KitLoc
+            --               ELSE o.MSLanes
+            --               END
 
+            ,Qty    = SUM(pd.Qty)
+            ,IDQty  = ISNULL(lpn.Qty,0)
+            ,la.Lottable11
+      FROM #TMP_ORD o 
+      JOIN #PICKDETAIL_WIP pd ON pd.OrderKey = o.Orderkey
+      JOIN LOTxLOCxID lli (NOLOCK) ON  lli.lot = pd.Lot
+                                   AND lli.Loc = pd.Toloc
+                                   AND lli.ID  = pd.CaseID
+      JOIN LotAttribute la(NOLOCK) ON  la.lot  = lli.Lot
+      JOIN Loc l (NOLOCK) ON pd.ToLoc = l.Loc                                       --v2.2
+      OUTER APPLY ( SELECT Qty = SUM(lli1.Qty)
+                    FROM LOTxLOCxID lli1 (NOLOCK) 
+                    WHERE lli1.Storerkey = pd.Storerkey
+                    AND lli1.Loc = pd.Toloc
+                    AND lli1.ID  = pd.CaseID
+                    GROUP BY  lli1.Storerkey
+                           ,  lli1.Loc
+                           ,  lli1.ID 
+                  ) lpn
+      WHERE pd.UOM        = '7'
+      AND   pd.ToLoc      > ''
+      AND   pd.CaseID     > ''
+      AND   pd.[Status]   = '0'
+      AND   lli.Qty       > 0
+      AND   lli.QtyReplen = 0
+      GROUP BY pd.Wavekey
+            ,  pd.Storerkey
+            ,  pd.toLoc
+            ,  pd.CaseID
+            ,  pd.Loc
+            ,  pd.ID
+            --,  CASE WHEN o.OtherReference > '' THEN o.OtherReference              --2025-08-25
+            --        WHEN o.KitOrder = 1 THEN o.KitLoc
+            --        ELSE o.MSLanes
+            --        END
+            ,  ISNULL(lpn.Qty,0)
+            ,  la.Lottable11
+            ,  l.LogicalLocation                                                    --v2.2
+      ORDER BY l.LogicalLocation                                                    --v2.2
+            ,  pd.ToLoc                                                             --v2.2
+            ,  pd.CaseID                                                            --v2.2
 
-      EXEC sp_executesql @c_SQL
-                          ,@c_SQLParams
-                          ,@c_Wavekey
-                          ,@c_SourceType
-                          ,@c_TaskType
+      OPEN @cur_RPF
 
-      ------(SSA02) end----------
-      OPEN cur_WaveReplto
+      FETCH NEXT FROM @cur_RPF INTO @c_Orderkey
+                                 ,  @c_Storerkey
+                                 ,  @c_Sku
+                                 ,  @c_Lot
+                                 ,  @c_FromLoc
+                                 ,  @c_FromID
+                                 ,  @c_ToLoc
+                                 ,  @c_ToID
+                                 --,  @c_Lanes                                      --2025-08-25
+                                 ,  @n_Qty
+                                 ,  @n_IDQty                                 
+                                 ,  @c_CaseID    
 
-      FETCH NEXT FROM cur_WaveReplto INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_FromID, @c_ToLoc, @c_ToID
-                                          ,@c_UOM,@n_Qty
-      WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
-        ------(SSA02) ,(SSA07)start----------
-         IF @c_UOM = '7'  --(SSA04)
+         SET @c_Taskdetailkey = ''
+         SET @c_TaskType   = 'RPF'
+         SET @c_PickMethod = CASE WHEN @c_CaseID > ''                            --2025-10-24 - PPA374
+                                     THEN 'PP' 
+                                     WHEN @c_FromID = ''
+                                     THEN 'PP' 
+                                     ELSE 'FP' END
+         SET @c_UOM        = '1'
+         SET @c_FinalLoc   = ''
+         SET @c_Priority   = ''                                                     --(Wan01) FCR-3958 CR V2.3
+         SET @c_TaskStatus = '0'                                                    --v2.2         
+         
+         
+         SELECT TOP 1 @c_Priority = Priority                                        --(Wan01) FCR-3958 CR V2.3
+         FROM #TMP_ORD  
+         
+         --SELECT TOP 1 @c_FinalLoc = l.Loc                                         --2025-08-25 - START
+         --FROM string_split (@c_Lanes, ',') ss
+         --JOIN LOC l (NOLOCK) ON l.Loc = ss.[value]
+         --WHERE l.Facility = @c_Facility
+         --ORDER BY CASE WHEN l.[Status] =  'OK' AND l.LocationFlag = 'NONE' THEN 1
+         --              WHEN l.[Status] <> 'OK' THEN 2
+         --              WHEN l.LocationFlag <> 'NONE' THEN 2
+         --              ELSE 9
+         --              END 
+         --         ,l.LogicalLocation
+
+         SET @c_FinalLoc = @c_ToLoc                                                  
+
+         SET @c_LocAisle = ''
+         SET @c_Floor    = ''
+         SELECT @c_LocAisle = l.LocAisle
+               ,@c_Floor    = l.[Floor]
+         FROM Loc l (NOLOCK)
+         WHERE l.Loc = @c_FromLoc
+
+         SET @n_Cnt = 0                                                             --2025-09-01
+         SELECT TOP 1 @c_ToLoc = l.Loc
+               ,  @n_Cnt = 1                                                        --2025-09-01
+         FROM LOC l (NOLOCK)
+         WHERE l.Facility = @c_Facility
+         AND   l.LocationCategory = 'PND_OUT'                                        
+         AND   l.LocAisle = @c_LocAisle
+         AND   l.[Floor]  = @c_Floor
+         ORDER BY l.LogicalLocation                                                 --2025-08-25 - END
+
+         IF @n_Cnt = 1                                                                 
          BEGIN
-            SELECT @n_Qty = lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen from LOTxLOCxID lli (NOLOCK)
-                WHERE lli.Lot = @c_Lot
-                AND lli.Loc = @c_FromLoc AND lli.ID  = @c_FromID
-                AND lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen > 0
+            SET @c_ToId = @c_FromID                                                 --2025-09-01 Fix for UWP-40397
+         END
+ 
+         IF @n_IDQty > @n_Qty AND @c_CaseID > ''                     --Lottable11
+         BEGIN
+            SELECT @n_Qty = SUM(lli.Qty)
+            FROM LOTxLOCxID lli (NOLOCK) 
+            JOIN LotAttribute la(NOLOCK) ON  la.lot  = lli.Lot 
+            WHERE lli.Storerkey = @c_Storerkey
+            AND   lli.Loc = @c_FromLoc
+            AND   lli.ID  = @c_FromID 
+            AND   la.Lottable11 = @c_CaseID
+         END
+         ELSE                                                                       --2025-07-04 - START
+         BEGIN
+            SET @n_Qty = @n_IDQty
+         END                                                                        --2025-07-04 - END  
 
-           IF NOT EXISTS (SELECT 1
-            FROM SKUxLOC SL (NOLOCK)
-            JOIN #PICKDETAIL_WIP PD (NOLOCK) ON PD.Storerkey = SL.Storerkey
-            WHERE SL.Storerkey = PD.Storerkey
-            AND SL.Sku = PD.Sku
-            AND SL.loc = @c_ToLoc
-            AND SL.LocationType IN ('CASE','PICK')
-            GROUP BY SL.StorerKey
-            ,  SL.Sku
-            ,  SL.Loc
-            ,  SL.QtyLocationLimit)
-            BEGIN
-               SET @n_continue = 3
-               SET @n_err = 83030
-               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Replenishment ToLoc is not a pickface/case. (mspRLWAV02)'
-            END
+         EXEC isp_InsertTaskDetail
+            @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT
+         ,  @c_TaskType              = @c_TaskType
+         ,  @c_Storerkey             = @c_Storerkey
+         ,  @c_Sku                   = @c_Sku
+         ,  @c_Lot                   = @c_Lot
+         ,  @c_UOM                   = @c_UOM
+         ,  @n_UOMQty                = @n_Qty
+         ,  @n_Qty                   = @n_Qty
+         ,  @c_FromLoc               = @c_FromLoc
+         ,  @c_LogicalFromLoc        = @c_FromLoc
+         ,  @c_FromID                = @c_FromID                                    --Confirm refer to Inv's ID
+         ,  @c_ToLoc                 = @c_ToLoc
+         ,  @c_LogicalToLoc          = @c_ToLoc
+         ,  @c_ToID                  = @c_ToID                                      --Confirm refer to Inv's ID
+         ,  @c_CaseID                = @c_CaseID                                    --2025-06-17
+         ,  @c_PickMethod            = @c_PickMethod
+         ,  @c_Status                = @c_TaskStatus                                --v2.2         
+         ,  @c_Priority              = @c_Priority
+         ,  @c_SourcePriority        = '9'
+         ,  @c_SourceType            = @c_SourceType
+         ,  @c_SourceKey             = @c_Wavekey
+         ,  @c_OrderKey              = @c_Orderkey
+         ,  @c_Groupkey              = ''
+         ,  @c_Wavekey               = @c_Wavekey
+         ,  @c_FinalLoc              = @c_FinalLoc
+         ,  @c_FinalID               = @c_ToID                                      --Confirm refer to Inv's ID            
+         ,  @c_AreaKey               = '?F'  -- ?F=Get from location areakey
+         ,  @c_Message03             = ''
+         ,  @n_QtyReplen             = @n_Qty
+         ,  @c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip
+         ,  @c_LinkTaskToPick_SQL    = ''
+         ,  @c_WIP_RefNo             = @c_SourceType
+         ,  @b_Success               = @b_Success OUTPUT
+         ,  @n_Err                   = @n_err OUTPUT
+         ,  @c_ErrMsg                = @c_errmsg OUTPUT
 
-            SELECT @c_Orderkey = orderkey from #PICKDETAIL_WIP PD (NOLOCK)  --(SSA01)
-                  WHERE PD.Storerkey = @c_Storerkey
-                  AND PD.Sku = @c_Sku
-                  AND PD.Lot = @c_Lot             --(SSA03)
-                  AND PD.CaseId = @c_FromID
-                  AND PD.ToLoc = @c_FromLoc
-                  AND PD.ID = @c_ToID
-                  AND PD.Loc = @c_ToLoc
+         IF @b_Success <> 1
+         BEGIN
+            SET @n_Continue = 3
          END
 
-         IF @c_UOM = '1' AND @c_Type = '6' --(SSA05)
-         SELECT @n_Qty = lli.Qty from LOTxLOCxID lli (NOLOCK)
-                WHERE lli.Lot = @c_Lot
-                AND lli.Loc = @c_ToLoc AND lli.ID  = @c_ToID
-
-         IF @n_continue IN(1,2)
-         BEGIN
-             SET @c_PickDetailLoc = @c_ToLoc
-             SET @c_PickDetailToLoc = @c_FromLoc
-
-             IF (@c_Type = '1' AND @c_UOM = '7') OR (@c_Type = '2' AND @c_UOM = '7')
-             BEGIN
-                  SELECT @c_LocationGroup = loc.locationgroup
-                        FROM Loc loc (NOLOCK)
-                        WHERE loc.loc = @c_FromLoc
-
-                  IF @c_LocationGroup <> ''
-                     BEGIN
-                        SET @c_Finalloc  = @c_ToLoc
-                        SET @c_ToLoc = @c_LocationGroup
-                     END
-             END
-             ELSE IF (@c_Type = '6' AND @c_UOM = '1')     --(SSA06)
-                BEGIN
-                   SET @c_FromLoc = @c_ToLoc
-                   SET @c_FromID = @c_ToID       --(SSA04)
-                   SET @c_Orderkey = ''
-
-                   SELECT @c_LocationGroup = loc.locationgroup
-                      FROM Loc loc (NOLOCK)
-                      WHERE loc.loc = @c_FromLoc
-
-                   SELECT TOP 1 @c_SortLane  = ISNULL(cdlkup.code,'') ,@n_SortLaneQty = Sum(ISNULL(lli.Qty,0)), @c_userDefine01 = ISNULL(cdlkup.UDF01, '')
-                   FROM codelkup cdlkup  (NOLOCK)
-                   LEFT JOIN Lotxlocxid lli (NOLOCK) on cdlkup.code = lli.loc
-                   WHERE cdlkup.Listname ='JCB_SORTL'  AND cdlkup.Storerkey = @c_Storerkey
-                   GROUP by cdlkup.code ,cdlkup.UDF01 order by Sum(lli.Qty),cdlkup.code ASC
-
-                   IF @c_userDefine01 <> '' AND @c_userDefine01 = '1'
-                   BEGIN
-                      IF @n_SortLaneQty > 0
-                      BEGIN
-                         SET @n_continue = 3
-                         SET @n_err = 83040
-                         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': SortLane Loc is not empty . (mspRLWAV02)'
-                      END
-                   END
-                   IF @c_LocationGroup <> ''
-                   BEGIN
-                      SET @c_ToLoc = @c_LocationGroup
-                      SET @c_Finalloc  = @c_SortLane
-                   END
-                   ELSE
-                      SET @c_ToLoc = @c_SortLane
-                END
-         END
-         ------(SSA02) ,(SSA07)end----------
-         IF @n_continue IN(1,2)
-         BEGIN
-           SET @c_Taskdetailkey = ''
-           SET @c_PickMethod = 'FP'
-           SET @c_GroupKey = @c_WaveKey
-           SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.USERDEFINE09 = @c_WaveKey'  --(SSA01)
-
-           EXEC isp_InsertTaskDetail
-               @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT
-              ,@c_TaskType              = @c_TaskType
-              ,@c_Storerkey             = @c_Storerkey
-              ,@c_Sku                   = @c_Sku
-              ,@c_Lot                   = @c_Lot
-              ,@c_UOM                   = @c_UOM
-              ,@n_UOMQty                = @n_Qty
-              ,@n_Qty                   = @n_Qty
-              ,@c_FromLoc               = @c_FromLoc
-              ,@c_LogicalFromLoc        = @c_FromLoc
-              ,@c_FromID                = @c_FromID
-              ,@c_ToLoc                 = @c_ToLoc
-              ,@c_LogicalToLoc          = @c_ToLoc
-              ,@c_ToID                  = @c_FromID                                  --(SSA01)
-              ,@c_PickMethod            = @c_PickMethod
-              ,@c_Priority              = @c_Priority
-              ,@c_SourcePriority        = '9'
-              ,@c_SourceType            = @c_SourceType
-              ,@c_SourceKey             = @c_Wavekey
-              ,@c_OrderKey              = @c_Orderkey
-              ,@c_Groupkey              = @c_Groupkey
-              ,@c_WaveKey               = @c_Wavekey
-              ,@c_FinalLOC              = @c_Finalloc
-              ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey
-              ,@c_Message03             = ''
-              ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip
-              ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL
-              ,@c_WIP_RefNo             = @c_SourceType
-              ,@b_Success               = @b_Success OUTPUT
-              ,@n_Err                   = @n_err OUTPUT
-              ,@c_ErrMsg                = @c_errmsg OUTPUT
-
-           IF @b_Success <> 1
-           BEGIN
-              SET @n_continue = 3
-           END
-           ELSE
-           --Update taskdetailkey in the pickdetail Work in progress staging table (SSA01)
-           BEGIN
-		          SELECT  @n_TaskQty = @n_Qty
-              IF LEFT(LTRIM(@c_LinkTaskToPick_SQL), 4) <> 'AND ' AND (CHARINDEX('ORDER BY', LTRIM(@c_LinkTaskToPick_SQL)) = 0 OR CHARINDEX('ORDER BY', LTRIM(@c_LinkTaskToPick_SQL)) > 1)
-                 SET @c_LinkTaskToPick_SQL  = 'AND ' + RTRIM(LTRIM(@c_LinkTaskToPick_SQL))
-
-          	  IF CHARINDEX('ORDER BY', @c_LinkTaskToPick_SQL) = 0
-          	     SET @c_LinkTaskToPick_SQL = @c_LinkTaskToPick_SQL + CHAR(13) + ' ORDER BY ORDERS.Loadkey, ORDERS.Orderkey, PICKDETAIL.Pickdetailkey '
-
-              SET @c_LinkTaskToPick_SQL  = ' AND WAVEDETAIL.Wavekey = @c_Wavekey ' + CHAR(13) +  @c_LinkTaskToPick_SQL
-              SET @c_LinkTaskToPick_SQL  = ' AND PICKDETAIL.WIP_RefNo = @c_WIP_RefNo ' + CHAR(13) +  @c_LinkTaskToPick_SQL
-              --(SSA04)
-              IF OBJECT_ID('tempdb..#TMP_PICK') IS NOT NULL
-              DROP TABLE #TMP_PICK
-
-              CREATE TABLE #TMP_PICK (Pickdetailkey NVARCHAR(10) primary key,
-	 	                          Qty           INT NULL,
-	 	                          Taskdetailkey NVARCHAR(10),
-	 	                          rowid         INT IDENTITY(1,1))
-              TRUNCATE TABLE #TMP_PICK
-
-              SET @c_SQL = ' INSERT INTO #TMP_PICK (Pickdetailkey, Qty, Taskdetailkey)
-                         SELECT PICKDETAIL.Pickdetailkey,
-                                PICKDETAIL.Qty, PICKDETAIL.Taskdetailkey
-                         FROM #PICKDETAIL_WIP PICKDETAIL (NOLOCK)
-                         JOIN ORDERS (NOLOCK) ON PICKDETAIL.Orderkey = ORDERS.Orderkey
-                         JOIN LOC (NOLOCK) ON PICKDETAIL.Loc = LOC.Loc
-                         JOIN SKUXLOC (NOLOCK) ON PICKDETAIL.Storerkey = SKUXLOC.Storerkey AND PICKDETAIL.Sku = SKUXLOC.Sku AND PICKDETAIL.Loc = SKUXLOC.Loc
-                         JOIN WAVEDETAIL (NOLOCK) ON ORDERS.Orderkey = WAVEDETAIL.Orderkey
-                         WHERE ISNULL(PICKDETAIL.Taskdetailkey,'''') = ''''
-                         AND PICKDETAIL.Storerkey = @c_Storerkey
-                         AND (PICKDETAIL.Sku = @c_Sku OR ISNULL(@c_Sku,'''') = '''')
-                         AND (PICKDETAIL.Lot = @c_Lot OR ISNULL(@c_Lot,'''') = '''')
-                         AND PICKDETAIL.Loc = @c_PickDetailLoc
-                         AND PICKDETAIL.ID = @c_ToID
-                         AND PICKDETAIL.ToLoc = @c_PickDetailToLoc
-                         AND PICKDETAIL.CaseId = @c_FromID '+ @c_LinkTaskToPick_SQL
-
-              EXEC sp_executesql @c_SQL,
-                 N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Lot NVARCHAR(10), @c_PickDetailToLoc NVARCHAR(10), @c_PickDetailLoc NVARCHAR(10),@c_ToID NVARCHAR(18),
-                 @c_FromID NVARCHAR(18), @c_UOM NVARCHAR(10), @c_Wavekey NVARCHAR(10), @c_Loadkey NVARCHAR(10), @c_Orderkey NVARCHAR(10), @c_WIP_RefNo NVARCHAR(30)',
-               @c_Storerkey,
-               @c_Sku,
-               @c_Lot,
-               @c_PickDetailToLoc,
-               @c_PickDetailLoc,
-               @c_ToID,
-               @c_FromID,
-               @c_UOM,
-               @c_Wavekey,
-               @c_Loadkey,
-               @c_Orderkey,
-               @c_SourceType
-
-              DECLARE CUR_Pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-              SELECT Pickdetailkey, Qty ,Taskdetailkey
-              FROM #TMP_PICK
-              ORDER BY rowid
-
-              OPEN CUR_Pick
-
-              FETCH NEXT FROM CUR_Pick INTO @c_CurrPickdetailkey, @n_PickQty, @c_CurrTaskDetailKey
-              WHILE @@FETCH_STATUS = 0 AND @c_CurrTaskDetailKey = ''
-              BEGIN
-                 IF @n_PickQty <= @n_TaskQty
-                 BEGIN
-             	       SET @c_SQL = 'UPDATE #PICKDETAIL_WIP WITH (ROWLOCK) ' +
-                                ' SET Taskdetailkey =  @c_TaskdetailKey,' +
-                                ' editdate =  getdate(), ' +
-                                ' TrafficCop = NULL ' +
-                                ' WHERE Pickdetailkey = @c_CurrPickdetailKey ' +
-                                ' AND WIP_Refno = @c_WIP_RefNo '
-                    EXEC sp_executesql @c_SQL,
-                    N'@c_CurrPickdetailKey NVARCHAR(10), @c_TaskdetailKey NVARCHAR(10), @c_WIP_RefNo NVARCHAR(30)',
-                    @c_CurrPickdetailKey,
-                    @c_TaskdetailKey,
-                    @c_SourceType
-                    SELECT @n_err = @@ERROR
-                    IF @n_err <> 0
-                       BEGIN
-                          SELECT @n_continue = 3
-                          SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83050
-                          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail_WIP Table Failed. (mspRLWAV02)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-                          BREAK
-                       END
-                   SET @c_CurrTaskDetailKey = @c_TaskdetailKey
-                 END
-                 FETCH NEXT FROM CUR_Pick INTO @c_CurrPickdetailkey, @n_PickQty, @c_CurrTaskDetailKey
-              END
-              CLOSE CUR_Pick
-              DEALLOCATE CUR_Pick
-           END
-         END
-           FETCH NEXT FROM cur_WaveReplto INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_FromID, @c_ToLoc, @c_ToID
-                                               ,@c_UOM,@n_Qty
+         FETCH NEXT FROM @cur_RPF INTO @c_Orderkey
+                                    ,  @c_Storerkey
+                                    ,  @c_Sku
+                                    ,  @c_Lot
+                                    ,  @c_FromLoc
+                                    ,  @c_FromID
+                                    ,  @c_ToLoc
+                                    ,  @c_ToID
+                                    --,  @c_Lanes                                   --2025-08-25
+                                    ,  @n_Qty
+                                    ,  @n_IDQty  
+                                    ,  @c_CaseID      
       END
-         CLOSE cur_WaveReplto
-         DEALLOCATE cur_WaveReplto
-  END
+      CLOSE @cur_RPF
+      DEALLOCATE @cur_RPF
+   END
+
+   IF @n_Continue IN (1,2) AND @c_FCP = 'Y'                                          
+   BEGIN
+      SET @cur_FCP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT o.Orderkey
+         ,   o.[Priority]
+         ,   o.C_Company
+         ,   Lanes = CASE  WHEN o.KitOrder = 1 THEN o.KitLoc                        --2025-07-03
+                           WHEN o.KitOrder = 0 AND o.OtherReference > '' THEN o.OtherReference
+                           ELSE o.MSLanes
+                           END
+         ,   pd.Storerkey
+         ,   Sku = CASE WHEN COUNT(DISTINCT pd.Sku) > 1 THEN '' ELSE MIN(pd.SKU) END
+         ,   UOM = MAX(pd.UOM)   --UOM='7' if Have RPF, Use for Reverse Logic
+         ,   Lot = CASE WHEN COUNT(DISTINCT pd.Lot) > 1 THEN '' ELSE MIN(pd.Lot) END
+         ,   pd.Loc
+         ,   pd.ID
+         ,   CaseID = la.Lottable11                                                 --2025-08-27
+         ,   ReplFromLoc = ISNULL(pd.ToLoc,'')                                      --v1.90
+         ,   ReplFromID  = pd.CaseID                                                --v1.90
+         ,   Qty = SUM(pd.Qty)
+         ,   l.LocAisle
+         ,   l.[Floor]
+         ,   l.Putawayzone  
+         ,   l.LocationGroup 
+         ,   l.LocationCategory 
+      FROM #PickDetail_WIP pd
+      JOIN #TMP_ORD o ON o.Orderkey  = pd.Orderkey
+      JOIN LOTATTRIBUTE la (NOLOCK) ON la.lot = pd.lot
+      JOIN LOC l (NOLOCK) ON l.loc = pd.Loc
+      OUTER APPLY (   SELECT TOP 1                                                     --2025-12-05
+                      RecCnt = CASE WHEN pd.ID > '' AND la.Lottable11  = ''            --2025-12-18 (Wan01) FCR-3958 CR V2.3  
+                                    AND  o.KitOrder = 0
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11 > '' 
+                                    AND  o.KitOrder = 0
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11  = ''            
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot = ''
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11 > '' 
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot = ''
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11  = ''      
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot > '' AND td.Lot = pd.Lot
+                                    THEN 1
+                                    WHEN pd.ID > '' AND la.Lottable11 > '' 
+                                    AND  o.KitOrder = 1 AND td.Orderkey = o.Orderkey
+                                    AND  td.Lot > '' AND td.Lot = pd.Lot
+                                    THEN 1
+                                    ELSE 0
+                                    END
+                      FROM dbo.Taskdetail td (NOLOCK)
+                      WHERE td.CaseID = la.Lottable11
+                      AND   td.TaskType IN ('FCP','FCP1')
+                      AND   td.Status <> 'X'                                        --2025-12-18
+                      AND   td.Storerkey = pd.Storerkey
+                      AND   td.FromID    = pd.ID
+                      AND   td.FromID    > ''
+                      ORDER BY 1 DESC                                               --2025-12-05
+                  ) tdr
+      WHERE ISNULL(pd.TaskDetailKey,'') = ''                                        --2025-07-01;  --PPA374 18/03/2026 to allow manual allocation to release
+      AND tdr.RecCnt IN (0,NULL)                                                    --(Wan01) FCR-3958 CR V2.3  
+      AND pd.Status < '5'                                                           --(Wan01) FCR-3958 CR V2.3 
+      GROUP BY o.Orderkey
+            ,  o.[Priority]      
+            ,  o.C_Company
+            ,  CASE  WHEN o.KitOrder = 1 THEN o.KitLoc                              --2025-07-03
+                     WHEN o.KitOrder = 0 AND o.OtherReference > '' THEN o.OtherReference
+                     ELSE o.MSLanes
+                     END
+            ,  pd.Storerkey
+            ,  pd.Loc
+            ,  pd.ID
+            ,  la.Lottable11                                                        --2025-08-27                                  
+            ,  ISNULL(pd.ToLoc,'')                                                  --v1.90
+            ,  pd.CaseID                                                            --v1.90
+            ,  l.LocAisle
+            ,  l.[Floor]
+            ,  l.Putawayzone  
+            ,  l.LocationGroup 
+            ,  l.LocationCategory 
+      ORDER BY MIN(pd.Pickdetailkey)
+
+      OPEN @cur_FCP
+
+      FETCH NEXT FROM @cur_FCP INTO @c_Orderkey, @c_Priority, @c_C_Company, @c_Lanes
+                                  , @c_Storerkey, @c_Sku, @c_UOM
+                                  , @c_Lot, @c_FromLoc, @c_FromID, @c_CaseID
+                                  , @c_ReplFromLoc, @c_ReplFromID                   --v1.90
+                                  , @n_Qty, @c_LocAisle, @c_Floor
+                                  , @c_Putawayzone, @c_LocationGroup, @c_LocationCategory 
+
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
+      BEGIN
+         SET @c_Taskdetailkey = ''
+         SET @c_TaskType      = 'FCP'
+         SET @c_ToLoc         = ''
+         SET @c_FinalLoc      = ''
+         SET @c_ToID          = @c_FromID                                                
+         SET @c_FinalID       = @c_ToID                                                
+         SET @c_PickMethod    = CASE WHEN @c_CaseID > ''                            --2025-08-27
+                                     THEN 'PP' 
+                                     WHEN @c_FromID = ''
+                                     THEN 'PP' 
+                                     ELSE 'FP' END
+         SET @c_TaskStatus    = '0'
+         SET @c_RefTaskkey    = ''                                                  --v1.90
+         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'
+                                   +' AND PICKDETAIL.Loc = @c_FromLoc'
+                                   +' AND PICKDETAIL.ID  = @c_FromID'
+                                   +' AND PICKDETAIL.UOM  = @c_UOM'                 --2026-01-06                                     
+         SET @c_LocationGroup = ISNULL(@c_LocationGroup,'')                         --2025-09-25
+
+         IF @c_UOM = '7'
+         BEGIN
+            SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'          --2026-01-06
+                                      +' AND PICKDETAIL.Loc = @c_FromLoc'  
+                                      +' AND PICKDETAIL.ID  = @c_FromID'  
+                                      +' AND ((PICKDETAIL.ToLoc = ''' + @c_ReplFromLoc + ''''  
+                                      +' AND   PICKDETAIL.CaseID= ''' + @c_ReplFromID  + ''''  
+                                      +' AND   PICKDETAIL.UOM   = ''7'')' 
+                                      +' OR   (PICKDETAIL.UOM   = ''6''))'    
+                                                  
+            IF EXISTS ( SELECT 1
+                        FROM #PickDetail_WIP pd
+                        JOIN LOTxLOCxID lli (NOLOCK) ON  lli.lot = pd.Lot
+                                                     AND lli.Loc = pd.ToLoc
+                                                     AND lli.ID  = pd.CaseID
+                        WHERE pd.Orderkey = @c_Orderkey
+                        AND   pd.UOM = @c_UOM
+                        AND   pd.Loc = @c_FromLoc
+                        AND   pd.ID  = @c_FromID
+                        AND   lli.QtyReplen > 0
+                      )
+            BEGIN
+               SET @c_TaskStatus = 'S'
+
+               SELECT @c_RefTaskKey =  td.TaskDetailKey 
+               FROM TASKDETAIL td (NOLOCK)
+               WHERE td.TaskType   = 'RPF'
+               --AND   td.Caseid     = ''                                           --(Wan01) FCR-3958 CR V2.3                                
+               AND   td.Storerkey  = @c_Storerkey
+               AND   td.UOM        = '1'
+               AND   td.FromLoc    = @c_ReplFromLoc 
+               AND   td.FromID     = @c_ReplFromID
+               AND   td.SourceType = @c_SourceType
+
+               SET @c_Putawayzone      = ''                                         --2025-08-27
+               SET @c_LocationGroup    = ''                                         --2025-08-27
+               SET @c_LocationCategory = ''                                         --2025-08-27
+            END
+         END
+      
+         SELECT TOP 1 @c_FinalLoc = l.Loc
+         FROM string_split (@c_Lanes, ',') ss
+         JOIN LOC l (NOLOCK) ON l.Loc = ss.[value]
+         WHERE l.Facility = @c_Facility
+         ORDER BY CASE WHEN l.[Status] =  'OK' AND l.LocationFlag = 'NONE' THEN 1
+                       WHEN l.[Status] <> 'OK' THEN 2
+                       WHEN l.LocationFlag <> 'NONE' THEN 2
+                       ELSE 9
+                       END 
+                  ,l.LogicalLocation
+ 
+         SET @c_ToLoc = @c_FinalLoc
+
+         SELECT TOP 1 @c_ToLoc = l.Loc
+         FROM LOC l (NOLOCK)
+         WHERE l.Facility = @c_Facility
+         AND   l.LocationCategory = 'PND_OUT'                                       --v2.0
+         AND   l.LocAisle = @c_LocAisle
+         AND   l.[Floor]  = @c_Floor
+         ORDER BY l.LogicalLocation
+                
+         SET @b_Success = 1
+         SET @n_Err = 0
+         SET @c_errmsg = ''
+
+         EXEC isp_InsertTaskDetail
+            @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT
+         ,  @c_TaskType              = @c_TaskType
+         ,  @c_Storerkey             = @c_Storerkey
+         ,  @c_Sku                   = @c_Sku
+         ,  @c_Lot                   = @c_Lot
+         ,  @c_UOM                   = @c_UOM
+         ,  @n_UOMQty                = @n_Qty
+         ,  @n_Qty                   = @n_Qty
+         ,  @c_FromLoc               = @c_FromLoc
+         ,  @c_LogicalFromLoc        = @c_FromLoc
+         ,  @c_FromID                = @c_FromID                                    --Confirm refer to Inv's ID
+         ,  @c_ToLoc                 = @c_ToLoc
+         ,  @c_LogicalToLoc          = @c_ToLoc
+         ,  @c_ToID                  = @c_ToID                                      --Confirm refer to Inv's ID
+         ,  @c_CaseID                = @c_CaseID
+         ,  @c_PickMethod            = @c_PickMethod
+         ,  @c_Status                = @c_TaskStatus
+         ,  @c_Priority              = @c_Priority
+         ,  @c_SourcePriority        = '9'
+         ,  @c_SourceType            = @c_SourceType
+         ,  @c_SourceKey             = @c_Wavekey
+         ,  @c_OrderKey              = @c_Orderkey
+         ,  @c_Groupkey              = ''
+         ,  @c_RefTaskkey            = @c_RefTaskkey                                --v1.90
+         ,  @c_Wavekey               = @c_Wavekey
+         ,  @c_FinalLoc              = @c_FinalLoc
+         ,  @c_FinalID               = @c_FinalID                                    --Confirm refer to Inv's ID    
+         ,  @c_AreaKey               = '?F'  -- ?F=Get from location areakey
+         ,  @c_Message01             = @c_Putawayzone
+         ,  @c_Message02             = @c_LocationGroup
+         ,  @c_Message03             = @c_LocationCategory
+         ,  @c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip
+         ,  @c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL
+         ,  @c_WIP_RefNo             = @c_SourceType
+         ,  @b_Success               = @b_Success OUTPUT
+         ,  @n_Err                   = @n_err OUTPUT
+         ,  @c_ErrMsg                = @c_errmsg OUTPUT
+
+         IF @b_Success <> 1
+         BEGIN
+            SET @n_Continue = 3
+         END         
+
+         FETCH NEXT FROM @cur_FCP INTO @c_Orderkey, @c_Priority, @c_C_Company, @c_Lanes 
+                                    ,  @c_Storerkey, @c_Sku, @c_UOM
+                                    ,  @c_Lot, @c_FromLoc, @c_FromID, @c_CaseID 
+                                    ,  @c_ReplFromLoc, @c_ReplFromID                --v1.90
+                                    ,  @n_Qty, @c_LocAisle, @c_Floor
+                                    ,  @c_Putawayzone, @c_LocationGroup, @c_LocationCategory 
+      END
+      CLOSE @cur_FCP
+      DEALLOCATE @cur_FCP                                                           
+   END       
+      
+   IF @n_Continue IN (1,2) AND @c_FCP = 'Y'   
+   BEGIN
+      SET @n_Cnt = 0                                                                --2025-07-02 - START
+      SELECT @n_Cnt = CASE WHEN w.[Status] = '99'   THEN 1
+                           WHEN w.UserDefine04 > '' THEN 1
+                           ELSE 0
+                           END
+      FROM WAVE w (NOLOCK) 
+      WHERE w.Wavekey = @c_Wavekey
+      
+      IF @n_Cnt > 0                                                                 --2025-07-02 - END
+      BEGIN 
+         UPDATE Wave WITH (ROWLOCK)
+            SET UserDefine04 = ''
+               ,[Status]   = '2'                                                    --v1.91
+               ,TrafficCop = NULL 
+         WHERE Wavekey = @c_Wavekey
+            
+         SET @n_err =  @@ERROR
+         IF  @n_err <> 0
+         BEGIN
+            SET @c_errmsg = ERROR_MESSAGE()
+         END
+      END
+   END
 
    -----Update pickdetail_WIP work in progress staging table back to pickdetail
-   IF @n_continue = 1 or @n_continue = 2
+   IF @n_Continue IN (1,2)
    BEGIN
       EXEC isp_CreatePickdetail_WIP
             @c_Loadkey               = ''
-         ,  @c_Wavekey               = @c_wavekey
+         ,  @c_Wavekey               = @c_Wavekey
          ,  @c_WIP_RefNo             = @c_SourceType
          ,  @c_PickCondition_SQL     = ''
          ,  @c_Action                = 'U'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
@@ -550,18 +1191,16 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
 
       IF @b_Success <> 1
       BEGIN
-         SET @n_continue = 3
+         SET @n_Continue = 3
       END
    END
 
-RETURN_SP:
-
    -----Delete pickdetail_WIP work in progress staging table
-   IF @n_continue IN (1,2)
+   IF @n_Continue IN (1,2)
    BEGIN
       EXEC isp_CreatePickdetail_WIP
             @c_Loadkey               = ''
-         ,  @c_Wavekey               = @c_wavekey
+         ,  @c_Wavekey               = @c_Wavekey
          ,  @c_WIP_RefNo             = @c_SourceType
          ,  @c_PickCondition_SQL     = ''
          ,  @c_Action                = 'D'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
@@ -572,14 +1211,22 @@ RETURN_SP:
 
       IF @b_Success <> 1
       BEGIN
-         SET @n_continue = 3
+         SET @n_Continue = 3
       END
    END
 
+QUIT_SP:
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NOT NULL
+   BEGIN
       DROP TABLE #PICKDETAIL_WIP
+   END
 
-   IF @n_continue=3  -- Error Occured - Process And Return
+   IF OBJECT_ID('tempdb..#TMP_ORD') IS NOT NULL                                      
+   BEGIN
+      DROP TABLE #TMP_ORD
+   END
+
+   IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_success = 0
       IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_starttcnt
@@ -593,6 +1240,32 @@ RETURN_SP:
             COMMIT TRAN
          END
       END
+      
+      IF @c_FCP = 'Y'                                                               
+      BEGIN
+         WHILE @@TRANCOUNT > 0                                 
+         BEGIN
+            COMMIT TRAN
+         END  
+            
+         UPDATE Wave WITH (ROWLOCK)
+            SET UserDefine04 = @c_ShortErrMsg 
+               ,Status = '99'
+               ,TrafficCop = NULL 
+         WHERE Wavekey = @c_Wavekey
+         
+         SET @n_err =  @@ERROR
+         IF  @n_err <> 0
+         BEGIN
+            SET @c_errmsg = ERROR_MESSAGE()
+         END
+         
+         WHILE @@TRANCOUNT < @n_starttcnt
+         BEGIN
+            BEGIN TRAN
+         END 
+      END                                                                            
+      
       execute nsp_logerror @n_err, @c_errmsg, "mspRLWAV02"
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
    END

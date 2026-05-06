@@ -7,7 +7,7 @@ GO
 
 /*****************************************************************************/  
 /* Store procedure: rdtfnc_Scan_To_Container                                 */  
-/* Copyright      : IDS                                                      */  
+/* Copyright      : MAERSK                                                   */  
 /*                                                                           */  
 /* Purpose: SOS#152430                                                       */  
 /*                                                                           */  
@@ -51,7 +51,10 @@ GO
 /* 2020-07-08 3.7  YeeKung  WMS-13899 Add PalletLbl print (yeekung05)        */   
 /* 2022-11-29 3.8  YeeKung  JSM-103586 Fix Count @cTotalCTNCnt by labelno    */
 /*                          Instead by CartonNo (yeekung06)                  */
-/* 2024-08-15 3.9 NLT013    FCR-673 Add Extended Screen                      */
+/* 2024-08-15 3.9  NLT013   FCR-673 Add Extended Screen                      */
+/* 2024-05-28 4.0  James    WMS-25441 Allow containerkey blank and auto      */   
+/*                          create new container record (not exists)(james12)*/
+/* 2025-08-12 3.9  Jackc    !!!Cutover. Use V0 repo for work!!!              */
 /*****************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_Scan_To_Container](  
@@ -121,8 +124,8 @@ DECLARE
    @n_ErrNo             INT,     -- (james02)  
   
    @cExtendedUpdateSP   NVARCHAR( 20),       -- (james05)  
-   @cExtendedValidateSP NVARCHAR( 20),       -- (james05)  
-   @cExtendedScnSP      NVARCHAR( 20),
+   @cExtendedValidateSP NVARCHAR( 20),       -- (james05)
+   @cExtendedScnSP      NVARCHAR( 20),       -- v3.9  
    @cSQL                NVARCHAR(1000),      -- (james05)  
    @cSQLParam           NVARCHAR(1000),      -- (james05)  
   
@@ -152,9 +155,9 @@ DECLARE
    @cCaptureContainerInfoSP      NVARCHAR( 20),    --(james12)
    @cContainerNoIsOptional       NVARCHAR( 1),     --(james12) 
    @tCaptureVar         VARIABLETABLE,
-   @cPalletLabel        NVARCHAR( 10),      --(yeekung05)  
-   @tExtScnData         VariableTable,
-   @nExtScnAction       INT,
+   @cPalletLabel        NVARCHAR( 10),      --(yeekung05)
+   @tExtScnData         VariableTable,  --v3.9
+   @nExtScnAction       INT,            --V3.9
    
    @cParam1    NVARCHAR( 20),   @cParamLabel1 NVARCHAR( 20),  
    @cParam2    NVARCHAR( 20),   @cParamLabel2 NVARCHAR( 20),  
@@ -187,6 +190,7 @@ DECLARE
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),  
    @cFieldAttr15 NVARCHAR( 1),
 
+   --v3.9 extscn parameters start
    @cLottable01     NVARCHAR( 18),
    @cLottable02     NVARCHAR( 18),
    @cLottable03     NVARCHAR( 18),
@@ -213,6 +217,7 @@ DECLARE
    @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
    @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
    @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
+   --V3.9 extscn parameters end  
   
 -- Getting Mobile information  
 SELECT  
@@ -311,8 +316,8 @@ BEGIN
    IF @nStep = 6 GOTO Step_6   -- Scn = 2195   CLOSE CONTAINER, OPTION  -- (james06)  
    IF @nStep = 7 GOTO Step_7   -- Scn = 2196   PRINT MANIFEST?  
    IF @nStep = 8 GOTO Step_8   -- Scn = 2197   Userdefine fields  -- (james09)  
-   IF @nStep = 9 GOTO Step_9   -- Scn = 2198   Userdefine fields  -- (james12)  
-   IF @nStep = 99 GOTO Step_99   -- Extended Screen
+   IF @nStep = 9 GOTO Step_9   -- Scn = 2198   Userdefine fields  -- (james12)
+   IF @nStep = 99 GOTO Step_99   -- Extended Screen  
 END  
   
 RETURN -- Do nothing if incorrect step  
@@ -382,6 +387,7 @@ BEGIN
 
    SET @cContainerNoIsOptional = rdt.RDTGetConfig( @nFunc, 'ContainerNoIsOptional', @cStorerKey)
       
+      
     --event log   -(cc01)  
     EXEC RDT.rdt_STD_EventLog
       @cActionType     = '1', -- Sign-in
@@ -395,8 +401,9 @@ BEGIN
    SET @cOutField01 = ''  
    SET @cOutField02 = ''  
    SET @cOutField03 = ''  
-   SET @cOutField04 = ''  
+   SET @cOutField04 = ''
 
+   --V3.9 start
    SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScnSP = '0'
       SET @cExtendedScnSP = ''
@@ -409,6 +416,7 @@ BEGIN
          GOTO Step_99
       END
    END
+   --V3.9 ends  
 END  
 GOTO Quit  
   
@@ -432,7 +440,8 @@ BEGIN
          GOTO Step_1_Fail  
       END  
   
-      IF ISNULL(@cContainerKey, '') = ''  
+      IF ISNULL(@cContainerKey, '') = '' AND 
+         NOT EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cColumnName AND type = 'P')  -- (james12)
       BEGIN  
          -- Check if containerkey is allow blank. If it is allow then auto generate a new containerkey (james02)  
          IF rdt.RDTGetConfig( @nFunc, 'ContainerKeyAllowBlank', @cStorerKey) <> '1'  
@@ -490,26 +499,7 @@ BEGIN
                COMMIT TRAN  
          END  
       END  
-  
-      --ContainerKey Not Exists  
-      IF NOT EXISTS (SELECT 1 FROM dbo.CONTAINER WITH (NOLOCK) WHERE ContainerKey = @cContainerKey)  
-      BEGIN  
-         SET @nErrNo = 95854  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid CONTKEY  
-         GOTO Step_1_Fail  
-      END  
-  
-      IF (@cVerifypalletstatus='')  --(yeekung01)
-      BEGIN  
-         --ContainerKey Status > 0      
-         IF EXISTS (SELECT 1 FROM dbo.CONTAINER WITH (NOLOCK) WHERE ContainerKey = @cContainerKey AND Status > 0)      
-         BEGIN      
-            SET @nErrNo = 95855      
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --CONTKEY Done      
-            GOTO Step_1_Fail      
-         END    
-      END   
-  
+
       IF @cColumnName = ''  
       BEGIN  
          -- (james06)  
@@ -624,7 +614,7 @@ BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cColumnName AND type = 'P')  
             BEGIN  
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cColumnName) +  
-                  ' @nMobile, @nFunc, @cLangCode, @cFacility, @cStorerKey, @cContainerKey, @cMBOLKey OUTPUT, @cContainerNo OUTPUT, ' +   
+                  ' @nMobile, @nFunc, @cLangCode, @cFacility, @cStorerKey, @cContainerKey OUTPUT, @cMBOLKey OUTPUT, @cContainerNo OUTPUT, ' +   
                   ' @nErrNo OUTPUT, @cErrMsg OUTPUT'  
                SET @cSQLParam =  
                   '@nMobile         INT,           ' +  
@@ -632,14 +622,14 @@ BEGIN
                   '@cLangCode       NVARCHAR( 3),  ' +  
                   '@cFacility       NVARCHAR( 5),  ' +  
                   '@cStorerKey      NVARCHAR( 15), ' +  
-                  '@cContainerKey   NVARCHAR( 10), ' +  
+                  '@cContainerKey   NVARCHAR( 10) OUTPUT, ' +  
                   '@cMBOLKey        NVARCHAR( 10) OUTPUT, ' +  
                   '@cContainerNo    NVARCHAR( 20) OUTPUT, ' +  
                   '@nErrNo          INT           OUTPUT, ' +  
                   '@cErrMsg         NVARCHAR( 20) OUTPUT  '  
      
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-                  @nMobile, @nFunc, @cLangCode, @cFacility, @cStorerKey, @cContainerKey, @cMBOLKey OUTPUT, @cContainerNo OUTPUT,   
+                  @nMobile, @nFunc, @cLangCode, @cFacility, @cStorerKey, @cContainerKey OUTPUT, @cMBOLKey OUTPUT, @cContainerNo OUTPUT,   
                   @nErrNo OUTPUT, @cErrMsg OUTPUT  
      
                IF @nErrNo <> 0  
@@ -647,6 +637,25 @@ BEGIN
             END              
          END  
       END  
+
+      --ContainerKey Not Exists  
+      IF NOT EXISTS (SELECT 1 FROM dbo.CONTAINER WITH (NOLOCK) WHERE ContainerKey = @cContainerKey)  
+      BEGIN  
+         SET @nErrNo = 95854  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid CONTKEY  
+         GOTO Step_1_Fail  
+      END  
+  
+      IF (@cVerifypalletstatus='')  --(yeekung01)
+      BEGIN  
+         --ContainerKey Status > 0      
+         IF EXISTS (SELECT 1 FROM dbo.CONTAINER WITH (NOLOCK) WHERE ContainerKey = @cContainerKey AND Status > 0)      
+         BEGIN      
+            SET @nErrNo = 95855      
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --CONTKEY Done      
+            GOTO Step_1_Fail      
+         END    
+      END   
   
       -- (james06)  
       SET @nErrNo = 0  
@@ -798,7 +807,7 @@ BEGIN
          WHERE CH.OtherReference = CASE WHEN @cMbolNotFromOtherReference = '1' THEN CH.OtherReference ELSE @cMBOLKEY END  
          AND   CH.MBOLKey = CASE WHEN @cMbolNotFromOtherReference = '1' THEN @cMBOLKEY ELSE CH.MBOLKEY END  
      
-         SELECT @cTotalCTNCnt = CAST(COUNT(PD.LabelNo) AS CHAR)  --(yeekung06)
+         SELECT @cTotalCTNCnt = CAST(COUNT(DISTINCT PD.LabelNo) AS CHAR)  --(yeekung06)
          FROM dbo.MBOLDETAIL MD WITH (NOLOCK)  
          JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON (MD.Orderkey = PH.Orderkey)  
          JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
@@ -1020,7 +1029,7 @@ BEGIN
       WHERE CH.OtherReference = CASE WHEN @cMbolNotFromOtherReference = '1' THEN CH.OtherReference ELSE @cMBOLKEY END  
       AND   CH.MBOLKey = CASE WHEN @cMbolNotFromOtherReference = '1' THEN @cMBOLKEY ELSE CH.MBOLKEY END  
   
-      SELECT @cTotalCTNCnt = CAST(COUNT(PD.CartonNo) AS CHAR)  
+      SELECT @cTotalCTNCnt = CAST(COUNT(DISTINCT PD.LabelNo) AS CHAR)  --(yeekung06)
       FROM dbo.MBOLDETAIL MD WITH (NOLOCK)  
       JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON (MD.Orderkey = PH.Orderkey)  
       JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
@@ -1330,9 +1339,9 @@ BEGIN
             GOTO Step_99
          END
       END
-   END
+   END 
 
-   GOTO Quit  
+   GOTO Quit 
   
    Step_2_Fail:  
    BEGIN  
@@ -1348,8 +1357,8 @@ BEGIN
       JOIN dbo.CONTAINERDETAIL CD WITH (NOLOCK) ON (CH.ContainerKey = CD.ContainerKey)        
       WHERE CH.OtherReference = CASE WHEN @cMbolNotFromOtherReference = '1' THEN CH.OtherReference ELSE @cMBOLKEY END  
       AND   CH.MBOLKey = CASE WHEN @cMbolNotFromOtherReference = '1' THEN @cMBOLKEY ELSE CH.MBOLKEY END  
-  
-      SELECT @cTotalCTNCnt = CAST(COUNT(PD.CartonNo) AS CHAR)  
+      
+      SELECT @cTotalCTNCnt = CAST(COUNT(DISTINCT PD.LabelNo) AS CHAR)  --(yeekung06)
       FROM dbo.MBOLDETAIL MD WITH (NOLOCK)  
       JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON (MD.Orderkey = PH.Orderkey)  
       JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
@@ -1788,7 +1797,7 @@ BEGIN
   
       SET @nScn = @nScn - 2  
       SET @nStep = @nStep - 2  
-   END  
+   END
 
    Step_3_ExtScn:
    BEGIN
@@ -1943,7 +1952,7 @@ BEGIN
       WHERE CH.OtherReference = CASE WHEN @cMbolNotFromOtherReference = '1' THEN CH.OtherReference ELSE @cMBOLKEY END  
       AND   CH.MBOLKey = CASE WHEN @cMbolNotFromOtherReference = '1' THEN @cMBOLKEY ELSE CH.MBOLKEY END  
   
-      SELECT @cTotalCTNCnt = CAST(COUNT(PD.CartonNo) AS CHAR)  
+     SELECT @cTotalCTNCnt = CAST(COUNT(DISTINCT PD.LabelNo) AS CHAR)  --(yeekung06)
       FROM dbo.MBOLDETAIL MD WITH (NOLOCK)  
       JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON (MD.Orderkey = PH.Orderkey)  
       JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
@@ -2057,17 +2066,17 @@ BEGIN
   
          SET @nScn = @nScn - 4  
          SET @nStep = @nStep - 4  
-  
-         GOTO Step_5_ExtScn
+
+         GOTO Step_5_ExtScn  
       END  
       ELSE  
       BEGIN  
          SET @cOutField01 = ''  
   
          SET @nScn = @nScn - 4  
-         SET @nStep = @nStep - 4
+         SET @nStep = @nStep - 4  
       END  
-   END  
+   END
 
    Step_5_ExtScn:
    BEGIN
@@ -2303,7 +2312,7 @@ BEGIN
       -- Prep next screen var  
       SET @cOutField01 = ''  
       SET @cOutField02 = ''  
-   END  
+   END
 
    Step_6_ExtScn:
    BEGIN
@@ -2393,7 +2402,7 @@ BEGIN
       -- Prep next screen var  
       SET @cOutField01 = ''  
       SET @cOutField02 = ''  
-   END  
+   END
 
    Step_7_ExtScn:
    BEGIN
@@ -2575,7 +2584,7 @@ BEGIN
             WHERE CH.OtherReference = CASE WHEN @cMbolNotFromOtherReference = '1' THEN CH.OtherReference ELSE @cMBOLKEY END  
             AND   CH.MBOLKey = CASE WHEN @cMbolNotFromOtherReference = '1' THEN @cMBOLKEY ELSE CH.MBOLKEY END  
      
-            SELECT @cTotalCTNCnt = CAST(COUNT(PD.CartonNo) AS CHAR)  
+            SELECT @cTotalCTNCnt = CAST(COUNT(DISTINCT PD.LabelNo) AS CHAR)  --(yeekung06)
             FROM dbo.MBOLDETAIL MD WITH (NOLOCK)  
             JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON (MD.Orderkey = PH.Orderkey)  
             JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
@@ -2728,7 +2737,7 @@ BEGIN
             WHERE CH.OtherReference = CASE WHEN @cMbolNotFromOtherReference = '1' THEN CH.OtherReference ELSE @cMBOLKEY END  
             AND   CH.MBOLKey = CASE WHEN @cMbolNotFromOtherReference = '1' THEN @cMBOLKEY ELSE CH.MBOLKEY END  
      
-            SELECT @cTotalCTNCnt = CAST(COUNT(PD.CartonNo) AS CHAR)  
+            SELECT @cTotalCTNCnt = CAST(COUNT(DISTINCT PD.LabelNo) AS CHAR)  --(yeekung06)
             FROM dbo.MBOLDETAIL MD WITH (NOLOCK)  
             JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON (MD.Orderkey = PH.Orderkey)  
             JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
@@ -2757,7 +2766,7 @@ BEGIN
                SET @nScn = @nPrevScn + 3  
                SET @nStep = @nPrevStep + 3  
   
-               GOTO Step_8_ExtScn  
+               GOTO Step_8_ExtScn 
             END  
   
             --prepare prev screen variable  
@@ -2778,7 +2787,7 @@ BEGIN
             SET @nStep = @nPrevScn - 2  
          END  
       END  
-   END  
+   END
 
    Step_8_ExtScn:
    BEGIN
@@ -2882,8 +2891,8 @@ BEGIN
          JOIN dbo.CONTAINERDETAIL CD WITH (NOLOCK) ON (CH.ContainerKey = CD.ContainerKey)        
          WHERE CH.OtherReference = CASE WHEN @cMbolNotFromOtherReference = '1' THEN CH.OtherReference ELSE @cMBOLKEY END  
          AND   CH.MBOLKey = CASE WHEN @cMbolNotFromOtherReference = '1' THEN @cMBOLKEY ELSE CH.MBOLKEY END  
-     
-         SELECT @cTotalCTNCnt = CAST(COUNT(PD.CartonNo) AS CHAR)  
+         
+         SELECT @cTotalCTNCnt = CAST(COUNT(DISTINCT PD.LabelNo) AS CHAR)  --(yeekung06)
          FROM dbo.MBOLDETAIL MD WITH (NOLOCK)  
          JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON (MD.Orderkey = PH.Orderkey)  
          JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  

@@ -43,6 +43,10 @@ GO
 /* 22-JAN-2024 2.3  NJOW02      WMS-24558 Add post CC adjustment call   */
 /*                              custom sp                               */
 /* 20-Dec-2024 2.4  CLVN01      FCR-2118 Skip DuplicateUCC Checking     */
+/* 08-JAN-2025 2.4  JihHaur     INC7586352 UCC only use 1st count (JH01)*/
+/* 10-Oct-2025 2.5  SSA01       UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
+/* 27-Mar-2026 2.5  MICHAEL     UWP-52575-Exclude zero adj qty (ML01)   */
 /************************************************************************/
 
 CREATE or ALTER PROCEDURE [dbo].[isp_CCPostingByAdjustment_UCC]
@@ -651,6 +655,7 @@ BEGIN -- main
       
       -- Not counted, need to adjust out
       IF @c_Status = '0'
+         AND ISNULL(@n_SystemQty,0) > 0   --ML01
       BEGIN
          --NJOW01 S
          SET @n_AdjQty = @n_SystemQty * -1
@@ -886,8 +891,8 @@ BEGIN -- main
             -- If the UCC has no variance but status is not correct then reset back to 1
             UPDATE dbo.UCC WITH (ROWLOCK) SET
                [STATUS] = CASE WHEN [STATUS] = '1' THEN [STATUS] ELSE '1' END,
-               EditWho = 'rdt.' + sUser_sName(),
-               EditDate = GETDATE()
+               EditWho = 'rdt.' + dbo.fnc_GetUserName(),       --(SSA01)
+               EditDate = dbo.fnc_GetDate()   --(SSA01)
             WHERE UCCNo = @c_UCC
                AND StorerKey = @c_StorerKey
                AND Sku       = @c_Sku                                                                                    --(Wan01)
@@ -1134,7 +1139,11 @@ BEGIN -- main
                        AND    StorerKey = @c_StorerKey
                        AND    Sku       = @c_Sku                                                                      --(Wan01)
                        AND    STATUS = '2'
-                       AND    Qty = 0) --OR @c_Status = '0'
+                       AND 0 = CASE @n_FinalizeStage                                                                 /*JH01 AND    Qty = 0) --OR @c_Status = '0'*/  
+				WHEN 1 THEN ISNULL(Qty,0)  
+			        WHEN 2 THEN ISNULL(Qty_Cnt2,0)   
+			        WHEN 3 THEN ISNULL(Qty_Cnt3,0) END)  
+            AND ISNULL(@n_OldQty,0) > 0   --ML01
          BEGIN
             IF EXISTS ( SELECT 1 FROM LOTxLOCxID WITH (NOLOCK)
                         WHERE StorerKey = @c_OldStorer
@@ -1392,8 +1401,8 @@ BEGIN -- main
       BEGIN
          UPDATE UCC SET
             Status = '6',
-            EditWho = 'rdt.' + sUser_sName(),
-            EditDate = GETDATE()
+            EditWho = 'rdt.' + dbo.fnc_GetUserName(),      --(SSA01)
+            EditDate = dbo.fnc_GetDate()   --(SSA01)
          WHERE UCC.LOC = @c_LOC
             AND UCC.SKU = CASE WHEN @c_SKU = '' THEN UCC.SKU ELSE @c_SKU END
             AND UCC.Status = '1'

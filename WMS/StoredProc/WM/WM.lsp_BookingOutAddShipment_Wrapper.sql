@@ -22,6 +22,10 @@ GO
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2022-03-02  Wan01    1.0   Created.                                  */
 /* 2022-03-02  Wan01    1.0   DevOps Combine Script.                    */
+/* 2025-09-02  SWT01    1.1   Enhanced session management and cleanup.  */
+/* 2025-10-10  AK01     1.2   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() to fnc_GetDate()*/
+/* 2025-02-26  YGO050   1.3   fCR-10661                               */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BookingOutAddShipment_Wrapper]                                                                                                                     
       @n_BookingNo            INT 
@@ -39,11 +43,12 @@ BEGIN
 
    DECLARE  @n_StartTCnt            INT = @@TRANCOUNT  
          ,  @n_Continue             INT = 1
-         
-   DECLARE @t_Shipment     TABLE 
-         (  RowRef         INT         PRIMARY KEY
-         ,  ShipmentGID    NVARCHAR(50)   NOT NULL DEFAULT('')
-         )      
+         ,  @b_ExecuteAs            BIT = 0
+
+   DECLARE @t_Shipment     TABLE
+         (  RowRef         INT             PRIMARY KEY
+         ,  ShipmentGID    NVARCHAR(50)    NOT NULL DEFAULT('')
+         )
 
    SET @b_Success = 1
    SET @n_Err     = 0
@@ -54,6 +59,7 @@ BEGIN
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
                 
@@ -62,24 +68,27 @@ BEGIN
          GOTO EXIT_SP
       END
     
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+      BEGIN
+         EXECUTE AS LOGIN = @c_UserName
+      END
    END
 
-   BEGIN TRAN  
-   BEGIN TRY
-      INSERT INTO @t_Shipment (RowRef, ShipmentGID)
-      SELECT ts.Rowref, ts.ShipmentGID
-      FROM STRING_SPLIT(@c_ShipmentGIDs,'|') AS ss
-      JOIN dbo.TMS_Shipment AS ts WITH (NOLOCK) ON ts.ShipmentGID = ss.[value]
-      WHERE (ts.BookingNo = 0 OR ts.BookingNo IS NULL)
-   
-      UPDATE ts WITH (ROWLOCK)
-      SET BookingNo = @n_BookingNo
-      FROM @t_Shipment AS ts2 
-      JOIN dbo.TMS_Shipment AS ts ON ts.RowRef = ts2.RowRef
-      
-      IF @@ERROR <> 0 
-      BEGIN
+BEGIN TRAN
+BEGIN TRY
+INSERT INTO @t_Shipment (RowRef, ShipmentGID )  -- YGO050
+SELECT ts.Rowref, ts.ShipmentGID             -- YGO050
+FROM STRING_SPLIT(@c_ShipmentGIDs,'|') AS ss
+         JOIN dbo.TMS_Shipment AS ts WITH (NOLOCK) ON ts.ShipmentGID = ss.[value]
+WHERE (ts.BookingNo = 0 OR ts.BookingNo IS NULL)
+
+UPDATE ts WITH (ROWLOCK)
+SET BookingNo = @n_BookingNo
+FROM @t_Shipment AS ts2
+    JOIN dbo.TMS_Shipment AS ts ON ts.RowRef = ts2.RowRef
+
+    IF @@ERROR <> 0
+BEGIN
          SET @n_Continue = 3
          SET @n_Err = 560451
          SET @c_ErrMsg = 'MSQL' + CONVERT(CHAR(6),@n_Err) + ': Update TMS_Shipment fail. (lsp_BookingOutAddShipment_Wrapper)'
@@ -90,8 +99,8 @@ BEGIN
       BEGIN
          UPDATE dbo.Booking_Out WITH (ROWLOCK)
             SET [Status] = '0'
-               ,EditWho = SUSER_SNAME()
-               ,EditDate = GETDATE()
+               ,EditWho = dbo.fnc_GetUserName()
+               ,EditDate = dbo.fnc_GetDate()
          WHERE BookingNo = @n_BookingNo
          AND [Status] = 'R'
          
@@ -101,12 +110,27 @@ BEGIN
             SET @n_Err = 560452
             SET @c_ErrMsg = 'MSQL' + CONVERT(CHAR(6),@n_Err) + ': Update Booking_Out fail. (lsp_BookingOutAddShipment_Wrapper)'
             GOTO EXIT_SP
-         END
-      END    
-   END TRY
-   
-   BEGIN CATCH
-      SET @n_Continue = 3
+END
+END
+   --YGO050 - START
+      -- Update RECEIPT.Appointment_No for outbound booking using WHERE IN statement instead of cursor
+      UPDATE dbo.RECEIPT WITH (ROWLOCK)
+      SET Appointment_No = ts.BookingNo
+      FROM @t_Shipment AS ts
+      WHERE dbo.RECEIPT.ExternReceiptKey = ts.ShipmentGID
+
+      IF @@ERROR <> 0
+      BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 560453
+            SET @c_ErrMsg = 'MSQL' + CONVERT(CHAR(6),@n_Err) + ': Update RECEIPT fail. (lsp_BookingOutAddShipment_Wrapper)'
+            GOTO EXIT_SP
+      END
+--YGO050 - END
+END TRY
+
+BEGIN CATCH
+SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
@@ -147,8 +171,12 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN 
    END
-         
-   REVERT
+
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+      EXEC [WM].[lsp_ResetUser]
+   END
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_BookingOutAddShipment_Wrapper] TO nSQL 

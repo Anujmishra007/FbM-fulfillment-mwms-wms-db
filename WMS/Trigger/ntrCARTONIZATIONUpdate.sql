@@ -1,3 +1,7 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************************/  
 /* Trigger:  ntrCARTONIZATIONUpdate                                              	*/
 /* Creation Date:                                                                	*/
@@ -24,6 +28,7 @@
 /* Date         Author			Ver.  Purposes                                        */
 /* 04-Mar-2022  TLTING    		1.1   WMS-19029 prevent bulk update or delete         */
 /* 2022-04-12   kelvinongcy	1.2   amend way for control user run batch (kocy01)	*/ 
+/* 06-Oct-2025  AK01                    1.3   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /********************************************************************************** */  
 
 CREATE OR ALTER TRIGGER [dbo].[ntrCARTONIZATIONUpdate]
@@ -60,8 +65,8 @@ BEGIN -- main
    IF (@n_continue = 1 or @n_continue = 2)  AND NOT UPDATE(EditDate)
    BEGIN
 		UPDATE CARTONIZATION WITH (ROWLOCK) 
-   	SET CARTONIZATION.EditWho = SUSER_SNAME(),
-			CARTONIZATION.EditDate = GETDATE(),
+   	SET CARTONIZATION.EditWho = dbo.fnc_GetUserName(),
+			CARTONIZATION.EditDate = dbo.fnc_GetDate(),
 			CARTONIZATION.TrafficCop = NULL
 		FROM CARTONIZATION 
       JOIN INSERTED ON CARTONIZATION.CartonizationKey = INSERTED.CartonizationKey
@@ -112,3 +117,4 @@ BEGIN -- main
    END
 
 END -- main
+

@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 14-Nov-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 10-Oct-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispRECD10]
@@ -93,8 +94,8 @@ BEGIN
               , Lottable07 = @c_Receiptkey
               , Lottable08 = @c_Type
               , TrafficCop = NULL
-              , EditDate   = GETDATE()
-              , EditWho    = SUSER_SNAME()
+              , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho    = dbo.fnc_GetUserName()         --(SSA01)
             WHERE ReceiptKey = @c_Receiptkey
             AND ReceiptLineNumber = @c_ReceiptLineNumber
 
@@ -110,8 +111,8 @@ BEGIN
             UPDATE RECEIPT
             SET CarrierKey = @c_Consigneekey
               , TrafficCop = NULL
-              , EditDate   = GETDATE()
-              , EditWho    = SUSER_SNAME()
+              , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho    = dbo.fnc_GetUserName()            --(SSA01)
             WHERE ReceiptKey = @c_Receiptkey
 
             IF @@ERROR <> 0

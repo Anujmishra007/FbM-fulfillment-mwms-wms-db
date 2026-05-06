@@ -45,8 +45,9 @@ GO
 /* 02-Jan-2018  KHChan   1.6  Add Trigger point #WMS-3237 (KH03)        */
 /* 04-Jan-2018  KHChan   1.6  Added Generic Trigger for Interface.      */
 /*                            Remark KH03 (KH04)                        */
+/* 06-Oct-2025  AK01     1.7  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/    
-ALTER TRIGGER [dbo].[ntrCartonTrackUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrCartonTrackUpdate]
 ON [dbo].[CartonTrack]
 FOR UPDATE
 AS
@@ -118,7 +119,7 @@ BEGIN
    IF (@n_continue=1 OR @n_continue=2) AND NOT UPDATE (EditDate)   
    BEGIN
       UPDATE CartonTrack  WITH (ROWLOCK)
-      SET    EditDate = GETDATE(), EditWho = SUSER_SNAME()
+      SET    EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()
       FROM   CartonTrack, INSERTED(NOLOCK)
       WHERE  CartonTrack.RowRef = INSERTED.RowRef  
       
@@ -439,3 +440,4 @@ BEGIN
    END
 END  
 GO
+

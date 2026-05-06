@@ -34,6 +34,9 @@ GO
 /* 2023-11-22 2.6  YeeKung  UWP-11213 Fix Bug   (yeekung05)                   */
 /* 2023-12-03 2.7  YeeKung  UWP-11635 Fix Bug   (yeekung06)                   */
 /* 2024-12-02 3.0.0 LJQ006  FCR-1406. Created                                 */
+/* 2026-03-19 3.0.1 JACKC   UWP-52474 Fix DefaultToLoc = 0 issue (jackc01)    */
+/* 2026-02-16 4.0.0 NYE018  FCR-10366 add loc check digit                     */
+/* 2026-03-01 4.0.1 Dennis  DefaultLoc init value should be ''                */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_Pallet_Build](
@@ -118,6 +121,9 @@ DECLARE
    @tExtScnData               VariableTable,
    @cExtScnSP                 NVARCHAR(20),
    @nAction                   INT,
+
+   @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10366
+   @cCheckDigitLOC      NVARCHAR( 20), -- FCR-10366
 
    @cLottable01 NVARCHAR( 18),   @cChkLottable01 NVARCHAR( 18),
    @cLottable02 NVARCHAR( 18),   @cChkLottable02 NVARCHAR( 18),
@@ -220,6 +226,8 @@ SELECT
    @cDefaultLoc               = V_String29, --(yeekung02)
    @cExtScnSP                 = V_String30,
 
+   @cLOCCheckDigitSP          = V_String31, -- FCR-10366
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -260,6 +268,7 @@ BEGIN
    IF @nStep = 6 GOTO Step_6   -- Scn = 2325   Print Label ? 
    IF @nStep = 7 GOTO Step_7   -- Scn = 2326   Reopen the Pallet 
    IF @nStep = 8 GOTO Step_8   -- Scn = 2327   Capture Pallet Info
+   IF @nStep = 99 GOTO Step_99 -- Scn = ExtScnSP
 END
 
 RETURN -- Do nothing if incorrect step
@@ -305,6 +314,8 @@ BEGIN
 
    --(yeekung02)
    SET @cDefaultLoc = rdt.RDTGetConfig( @nFunc, 'DefaultLoc', @cStorerKey)
+   IF @cDefaultLoc = '0'           -- Added this check to remove 0 in the screen Loc field - NYE018
+      SET @cDefaultLoc = ''        -- NYE018
 
    -- (james01)
    SET @cPltBuildNotInsDropID = rdt.RDTGetConfig( @nFunc, 'PltBuildNotInsDropID', @cStorerKey)
@@ -336,6 +347,8 @@ BEGIN
 
    -- (james04)
    SET @cPalletNoMixOrderKey = rdt.RDTGetConfig( @nFunc, 'PalletNoMixOrderKey', @cStorerKey)
+
+   SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-10366
 
    -- initialise all variable
    SET @cDropID = ''
@@ -415,6 +428,11 @@ BEGIN
       -- Go to DropID screen
       SET @nScn  = 2320
       SET @nStep = 1
+   END
+   IF @cExtScnSP <> '' 
+      AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
    END
 END
 GOTO Quit
@@ -664,6 +682,10 @@ BEGIN
          SET @nStep = 0
       END
    END
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
    GOTO Quit
 
    Step_1_Fail:
@@ -700,6 +722,23 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 2
          GOTO Step_2_Fail
       END
+
+      -- FCR-10366
+      SET @cCheckDigitLOC = @cInField02
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_2_Fail
+         END
+         SET @cDropLOC = @cCheckDigitLOC
+      END
+      -- FCR-10366
 
       SET @cOutField01 = @cDropID
       SET @cOutField02 = @cDropLOC
@@ -1361,6 +1400,10 @@ BEGIN
       SET @nScn = @nScn - 3
       SET @nStep = @nStep - 3
    END
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
    GOTO Quit
 
    Step_4_Fail:
@@ -1479,6 +1522,11 @@ BEGIN
    SET @cFieldAttr06 = ''
    SET @cFieldAttr08 = ''
    SET @cFieldAttr10 = ''
+   
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
 END
 GOTO Quit
 
@@ -1864,6 +1912,9 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
+         DECLARE @nStepBackup INT, @nScnBackup INT
+         SET @nStepBackup = @nStep
+         SET @nScnBackup = @nScn
 
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES    
@@ -1903,6 +1954,30 @@ BEGIN
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
          IF @nErrNo <> 0
             GOTO Step_99_Fail
+         
+         IF @cExtScnSP = 'rdt_1641ExtScn02'
+         BEGIN
+            IF @nScnBackup = 6825 AND @nInputKey = 0 AND @nStep <> 5
+            BEGIN
+               -- EventLog - Sign Out Function
+               EXEC RDT.rdt_STD_EventLog
+               @cActionType = '9', -- Sign Out function
+               @cUserID     = @cUserName,
+               @nMobileNo   = @nMobile,
+               @nFunctionID = @nFunc,
+               @cFacility   = @cFacility,
+               @cStorerKey  = @cStorerkey
+
+               SET @cOutField01 = ''
+
+               -- Back to menu
+               SET @nFunc = @nMenu
+               SET @nScn  = @nMenu
+               SET @nStep = 0
+            END
+            IF @cExtendedInfoSP = ''
+               SET @cExtendedInfo1 = ''
+         END
       END
    END
 
@@ -1963,6 +2038,8 @@ BEGIN
       V_String28    = @cDecodeSP,
       V_String29    = @cDefaultLoc, --(yeekung02)
       V_String30    = @cExtScnSP,
+
+      V_String31    = @cLOCCheckDigitSP, -- FCR-10366
       
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

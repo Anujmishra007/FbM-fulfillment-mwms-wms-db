@@ -32,6 +32,7 @@ GO
 /*                           ASNTradeReturn save document took very long */
 /*                           time                                        */
 /*                           Performance tune                            */
+/* 2025-09-02  SWT01    1.7  Enhanced session management pattern         */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Wrapup_Validation_Wrapper]  
       @c_Module               NVARCHAR(60) = ''
@@ -81,7 +82,8 @@ BEGIN
          , @c_SQLSchema_OXML        NVARCHAR(MAX) = ''  
          , @c_TableColumns_OXML     NVARCHAR(MAX) = ''  
          , @c_SQL2                  NVARCHAR(MAX) = ''
-         
+
+   DECLARE @b_ExecuteAs             BIT = 0  -- (SWY01)
    --SET @n_Err = 0                                                                 --(Wan05) Move Down
    --IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
    --BEGIN
@@ -180,21 +182,22 @@ BEGIN
 
          IF @c_ReqInPutExtValidate = 'Y' 
               OR EXISTS (SELECT 1 FROM sys.Objects (NOLOCK) WHERE Name = @c_SPName AND type = 'P') 
-         BEGIN  
-            
-            SET @n_Err = 0                                                                 --(Wan05) Move Down
-            IF SUSER_SNAME() <> @c_UserName        
+         BEGIN           	
+         	-- Start enhanced session management (SWT01)
+            SET @n_Err = 0
+            SET @b_ExecuteAs = 0 
+            IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
             BEGIN
                EXEC [WM].[lsp_SetUser] 
-                        @c_UserName = @c_UserName  OUTPUT
-                     ,  @n_Err      = @n_Err       OUTPUT
-                     ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                     
-               IF @n_Err = 0   
-               BEGIN       
+                     @c_UserName = @c_UserName  OUTPUT
+                  ,  @n_Err      = @n_Err       OUTPUT
+                  ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                  ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+               IF @n_Err = 0 AND @b_ExecuteAs = 1
                   EXECUTE AS LOGIN = @c_UserName
-               END
-            END                                                                           --(Wan05) Move Down
+            END                                    
+            -- End enhanced session management (SWT01)
                
             CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) PRIMARY KEY)  
             CREATE TABLE #SCHEMA (Column_Name NVARCHAR(80), Data_Type NVARCHAR(80)) 
@@ -407,7 +410,8 @@ BEGIN
       END 
    END   --(Wan02) - END
 
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)      
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_Wrapup_Validation_Wrapper] TO nSQL 

@@ -49,7 +49,9 @@ GO
 /* 27-Nov-2019  WLChooi  2.4   WMS-11168 - Update Route from Voyage(WL01)   */
 /* 29-Nov-2019  WLChooi  2.5   WMS-11169 - New Storerconfig -               */ 
 /*                                        DefaultCarrierAgent (WL02)        */
-/* 28-May-2020  NJOW04   2.6   WMS-13515 Move post                                     */
+/* 28-May-2020  NJOW04   2.6   WMS-13515 Move post                          */
+/* 10-OCT-2025  SSA01    2.7   UWP-42248 -Enhanced session management       */
+/*                             and cleanup.                                 */
 /****************************************************************************/
  
 CREATE PROCEDURE [dbo].[isp_InsertMBOLDetail] 
@@ -189,7 +191,7 @@ BEGIN -- main
          UPDATE ORDERDETAIL WITH (ROWLOCK) 
             SET MBOLKey = @cMBOLKey, TrafficCop = NULL, 
                 LoadKey = CASE WHEN LoadKey = '' OR LoadKey IS NULL THEN @cLoadKey ELSE LoadKey END 
-               ,EditDate = GETDATE() -- KHLim01
+               ,EditDate = dbo.fnc_GetDate()   --(SSA01) -- KHLim01
          WHERE OrderKey = @cOrderKey
            AND   Loadkey = @cLoadKey -- SOS39592
          AND   (MBOLKey = '' OR MBOLKey IS NULL)
@@ -214,7 +216,7 @@ BEGIN -- main
             SET MBOLKey = @cMBOLKey, 
                 LoadKey = CASE WHEN LoadKey = '' OR LoadKey IS NULL THEN @cLoadKey ELSE LoadKey END, 
                 TrafficCop = NULL
-               ,EditDate = GETDATE() -- KHLim01
+               ,EditDate = dbo.fnc_GetDate()   --(SSA01) -- KHLim01
          WHERE OrderKey = @cOrderKey
          AND   (MBOLKey = '' OR MBOLKey IS NULL)
    
@@ -510,7 +512,7 @@ BEGIN -- main
              @cExternOrderKey,   @dDelivery_Date, 
              @nStdGrossWgt,      @nStdCube,     
              SUBSTRING( RTRIM( @cCustomerName), 1, 30),     @dOrderDate,   -- (james01)
-             @cInvoiceNo,        '*' + dbo.fnc_RTrim(sUser_sName()), 
+             @cInvoiceNo,        '*' + dbo.fnc_RTrim(dbo.fnc_GetUserName()),     --(SSA01)
              @nTotalCarton,      @nCtnCnt1,       --SOS216105
              @nCtnCnt2,          @nCtnCnt3,       --SOS216105
              @nCtnCnt4,          @nCtnCnt5)       --SOS216105
@@ -529,7 +531,7 @@ BEGIN -- main
          SET    Weight = @nStdGrossWgt, 
                 Cube   = @nStdCube, 
                 TrafficCop = NULL
-               ,EditDate = GETDATE() -- KHLim01
+               ,EditDate = dbo.fnc_GetDate()   --(SSA01)-- KHLim01
          WHERE  MBOLKey = @cMBOLKey
          AND      Orderkey = @cOrderKey
          AND    Loadkey = @cLoadkey -- SOS39592 
@@ -578,8 +580,8 @@ BEGIN -- main
                VesselQualifier = CASE WHEN VesselQualifier = '' THEN @cTruckType ELSE VesselQualifier END ,
                TRAFFICCOP = NULL,
                [Route] = CASE WHEN ISNULL([Route],'') = '' THEN @cRoute ELSE [Route] END, --WL01
-               EditDate = GETDATE(), -- KHLim01
-               EditWho = SUSER_SNAME() --WL01
+               EditDate = dbo.fnc_GetDate(),   --(SSA01) -- KHLim01
+               EditWho = dbo.fnc_GetUserName() --WL01 (SSA01)
          WHERE MBOLKey = @cMbolKey 
    
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT 
@@ -617,8 +619,8 @@ BEGIN -- main
             BEGIN
                UPDATE MBOL WITH (ROWLOCK)
                SET Carrieragent = @c_GetAuthority,
-                   EditDate = GETDATE(),
-                   EditWho = SUSER_SNAME()
+                   EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                   EditWho = dbo.fnc_GetUserName()     --(SSA01)
                WHERE MBOLKey = @cMbolKey
             END
          END

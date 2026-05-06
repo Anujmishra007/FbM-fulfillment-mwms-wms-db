@@ -27,7 +27,8 @@ GO
 /* Data Modifications:                                                     */
 /*                                                                         */
 /* Updates:                                                                */
-/* Date         Author  Ver   Purposes                                     */
+/* Date         Author   Ver   Purposes                                    */
+/* 2025-10-10   SSA01    1.1  UWP-42248 -Enhanced session management       */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPRREC03]  
 (     @c_Receiptkey  NVARCHAR(10)  
@@ -68,8 +69,8 @@ BEGIN
    
    UPDATE RECEIPTDETAIL WITH (ROWLOCK)
    SET  RECEIPTDETAIL.ToID = RECEIPTDETAIL.Lottable02
-      , RECEIPTDETAIL.EditDate = GETDATE()
-      , RECEIPTDETAIL.EditWho  = SUSER_SNAME()
+      , RECEIPTDETAIL.EditDate = dbo.fnc_GetDate()    --(SSA01)
+      , RECEIPTDETAIL.EditWho  = dbo.fnc_GetUserName()        --(SSA01)
       , RECEIPTDETAIL.Trafficcop = NULL
    FROM RECEIPTDETAIL JOIN SKU (NOLOCK) ON RECEIPTDETAIL.Storerkey = SKU.Storerkey AND RECEIPTDETAIL.Sku = SKU.Sku
    WHERE RECEIPTDETAIL.ReceiptKey = @c_Receiptkey

@@ -17,7 +17,10 @@ GO
 /*                              pickdetail remains in status 5 with no ID                */
 /* 2025-01-13   1.2    PPA374   Allowing to use same DropID for trolley                  */
 /* 2025-01-17   1.3    PPA374   Fix for method 3 close option no DROPID update           */
-/* 2025-02-08   1.4.0  NLT013   FCR-1872 ignore lottable values while picking            */ 
+/* 2025-02-08   1.4.0  NLT013   FCR-1872 ignore lottable values while picking            */
+/* 2026-04-24   1.5.0  Dennis   Add Cannot Close Carton error msg;                       */
+/*                              Exclude task if wave has status 3/5 or UserKeyOverRide   */
+/* 2026-04-28   1.5.1  Dennis   Method 3: Check carton count matches Message03           */
 /*****************************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPickV2](        
@@ -817,10 +820,16 @@ BEGIN
       AND   TD.UserKey = ''      
       AND   TD.DeviceID = ''
       AND   TD.AreaKey = @cPickZone
-      --AND   (
-        --    (@cMethod <> '' AND ORD.UserDefine10 = @cShort4CDLKUp)
-         --   OR (1=1)
-          --  )
+      -- Exclude task if wave has any task with Status = '3' or '5' or UserKeyOverride <> '' (method 1 only)
+      AND   (
+               @cMethod <> '1'
+               OR NOT EXISTS (
+                  SELECT 1 FROM dbo.TaskDetail TD2 WITH (NOLOCK)
+                  WHERE TD2.WaveKey = TD.WaveKey
+                  AND   TD2.StorerKey = TD.StorerKey
+                  AND   (TD2.[Status] IN ('3', '5') OR TD2.UserKeyOverRide <> '')
+               )
+            )
       AND   (
                (EXISTS(SELECT 1 FROM @tMethodShort MS WHERE ORD.UserDefine10 = MS.MethodShort) AND @cMethod <> '')
                OR
@@ -1245,8 +1254,48 @@ BEGIN
       -- close
       IF @cOption = '1'
       BEGIN
-         SELECT  short  
-         FROM CodeLKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQPKTYPE' AND Code2 = '' AND StorerKey = @cStorerKey
+         IF EXISTS ( SELECT 1
+                     FROM dbo.TaskDetail WITH (NOLOCK)
+                     WHERE Storerkey = @cStorerKey
+                     AND   TaskType = 'ASTCPK'
+                     AND   [Status] = '3'
+                     AND   Groupkey = @cGroupKey
+                     AND   UserKey = @cUserName
+                     AND   DeviceID = @cCartID
+                     AND   DropID = '')
+         BEGIN
+            SET @nErrNo = 229604
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Cannot Close Carton
+            GOTO Quit
+         END
+
+         -- Method 3: Check if scanned carton count (@cMax) matches expected count (Message03)
+         IF @cMax <> ''
+         BEGIN
+            DECLARE @nMaxCartonCnt INT = 0
+            SELECT @nMaxCartonCnt = COUNT(1) FROM STRING_SPLIT(@cMax, '|')
+
+            SELECT @cMessage03 = Message03
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE Storerkey = @cStorerKey
+            AND   TaskType = 'ASTCPK'
+            AND   [Status] = '3'
+            AND   Groupkey = @cGroupKey
+            AND   UserKey = @cUserName
+            AND   DeviceID = @cCartID
+            AND   DropID <> ''
+            ORDER BY EditDate DESC
+
+            IF ISNULL(@cMessage03, '') <> '' AND TRY_CAST(@cMessage03 AS INT) IS NOT NULL
+            BEGIN
+               IF @nMaxCartonCnt <> CAST(@cMessage03 AS INT)
+               BEGIN
+                  SET @nErrNo = 229605
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Carton Cnt Mismatch
+                  GOTO Quit
+               END
+            END
+         END
 
          -- method = 3
          IF EXISTS(SELECT 1
@@ -1792,7 +1841,7 @@ BEGIN
          
          UPDATE dbo.TaskDetail SET
             DropID = @cCartonID,
-            StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 1)) + '-' + @cCartonType,
+            StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 5)) + '-' + @cCartonType,
             EditWho = @cUserName,
             EditDate = GETDATE()
          WHERE TaskDetailKey = @cLockTaskKey
@@ -1834,7 +1883,7 @@ BEGIN
          BEGIN      
             UPDATE dbo.TaskDetail SET
                DropID = @cCartonID,
-               StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 1)) + '-' + @cCartonType,
+               StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 5)) + '-' + @cCartonType,
                EditWho = @cUserName,
                EditDate = GETDATE()
             WHERE TaskDetailKey = @cLockTaskKey
@@ -2090,16 +2139,27 @@ BEGIN
         
    IF @nInputKey = 0 -- ESC        
    BEGIN        
-      SELECT TOP 1 @nCartonScanned = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
-      FROM dbo.TaskDetail WITH (NOLOCK)      
-      WHERE Storerkey = @cStorerKey      
-      AND   TaskType = 'ASTCPK'      
-      AND   [Status] = '3'      
-      AND   Groupkey = @cGroupKey      
-      AND   UserKey = @cUserName      
-      AND   DeviceID = @cCartID
-      AND   DropID <> '' -- FCR-652 Fix issue by jack      
-               
+      IF @cMethod = '3'
+      BEGIN
+         -- Method 3: Get carton count from @cMax
+         IF ISNULL(@cMax, '') <> ''
+            SELECT @nCartonScanned = COUNT(1) FROM STRING_SPLIT(@cMax, '|')
+         ELSE
+            SET @nCartonScanned = 0
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @nCartonScanned = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE Storerkey = @cStorerKey
+         AND   TaskType = 'ASTCPK'
+         AND   [Status] = '3'
+         AND   Groupkey = @cGroupKey
+         AND   UserKey = @cUserName
+         AND   DeviceID = @cCartID
+         AND   DropID <> '' -- FCR-652 Fix issue by jack
+      END
+
       -- Prepare next screen var        
       SET @cOutField01 = @cCartPickMethod        
       SET @cOutField02 = @cCartID        

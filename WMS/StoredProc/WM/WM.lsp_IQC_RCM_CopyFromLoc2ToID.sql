@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_IQC_RCM_CopyFromLoc2ToID]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [WM].[lsp_IQC_RCM_CopyFromLoc2ToID]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -25,8 +20,10 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2021-10-05  Wan      1.0   Created.                                   */
 /* 2021-10-05  Wan      1.0   Devops Combine Script                      */
+/* 2025-10-06  SSA01    1.1   UWP-42142 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_IQC_RCM_CopyFromLoc2ToID]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_IQC_RCM_CopyFromLoc2ToID]
    @c_QC_Key         NVARCHAR(10)          
 ,  @b_Success        INT          = 1   OUTPUT   
 ,  @n_Err            INT          = 0   OUTPUT
@@ -42,26 +39,30 @@ BEGIN
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0 -- (SSA01)
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
-
+   -- Enhanced session management (SSA01)
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-    
-      EXECUTE AS LOGIN = @c_UserName
+
+     IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- End enhanced session management (SSA01)
 
    BEGIN TRY
       BEGIN TRAN
@@ -129,7 +130,9 @@ BEGIN
       BEGIN TRAN
    END
 
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SSA01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END  
 GO
 GRANT EXECUTE ON [WM].lsp_IQC_RCM_CopyFromLoc2ToID TO nSQL 

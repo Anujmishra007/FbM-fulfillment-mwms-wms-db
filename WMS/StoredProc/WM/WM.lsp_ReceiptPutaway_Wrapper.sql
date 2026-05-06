@@ -15,6 +15,9 @@ GO
 /*                               Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2023-10-30  1.3   NJOW01      WMS-24015 Support putaway multi sku    */
 /*                               pallet id to a loc                     */
+/* 2025-09-02  1.4   SWT01       Enhanced session management pattern    */
+/* 2025-10-10  1.5   AK01        UWP-41151 - Replace SUSER_SNAME with   */
+/*                               fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_ReceiptPutaway_Wrapper]
       @c_ReceiptKey NVARCHAR(10)
@@ -35,23 +38,26 @@ BEGIN
 
     DECLARE @n_StartTCnt   INT   = @@TRANCOUNT
         
-    SET @n_Err = 0 
-    --(mingle01) - START   
-    IF SUSER_SNAME() <> @c_UserName
-    BEGIN
-       EXEC [WM].[lsp_SetUser] 
-             @c_UserName = @c_UserName  OUTPUT
-          ,  @n_Err      = @n_Err       OUTPUT
-          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-       IF @n_Err <> 0 
-       BEGIN
-          GOTO EXIT_SP
-       END
-    
-       EXECUTE AS LOGIN = @c_UserName
-    END
-    --(mingle01) - END
+    -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
    
     --(mingle01) - START
     BEGIN TRY        
@@ -592,7 +598,7 @@ BEGIN
                   UPDATE RECEIPTDETAIL 
                   SET PutawayLoc = @c_SuggestedLoc
                      ,EditWho = @c_UserName
-                     ,EditDate= GETDATE()
+                     ,EditDate= dbo.fnc_GetDate()
                   WHERE ReceiptKey = @c_ReceiptKey
                   AND ReceiptLineNumber = @c_ReceiptLineNumber
                END TRY
@@ -647,8 +653,10 @@ BEGIN
    END
 
 
-   REVERT  
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)  
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_ReceiptPutaway_Wrapper] TO nSQL 
 GO         
+

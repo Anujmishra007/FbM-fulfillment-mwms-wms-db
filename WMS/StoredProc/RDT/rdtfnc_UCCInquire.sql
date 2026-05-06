@@ -16,13 +16,14 @@ GO
 /* 16-Feb-2017 1.0  James    WMS1074 - Created                          */
 /* 09-Oct-2018 1.1  Gan      Performance tuning                         */
 /* 11-Sep-2023 1.2  James    WMS-23534 Add custom reference (james01)   */
+/* 29-01-2026  1.3  SSR259   FCR-9907 - Add DecodeSP call and corrected */
+/*                                        row count check               */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCInquire] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
-   @cErrMsg    NVARCHAR( 1024) OUTPUT
-)
+   @cErrMsg    NVARCHAR( 1024) OUTPUT )
 AS
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
@@ -54,9 +55,11 @@ DECLARE
    @cPackUOM       NVARCHAR( 10),
    @cPPK           NVARCHAR( 5),
 
+   @cDecodeSP           NVARCHAR( 20),
    @cExtendedUCCInfoSP  NVARCHAR(20),
    @cSQL                NVARCHAR(MAX),
    @cSQLParam           NVARCHAR(MAX),
+   
    @cExtInfo01          NVARCHAR(20),
    @cExtInfo02          NVARCHAR(20),
    @cExtInfo03          NVARCHAR(20),
@@ -86,7 +89,9 @@ DECLARE
    @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),
    @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60)
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),
+
+   @cBarcode              NVARCHAR( MAX)
 
 -- Getting Mobile information
 SELECT
@@ -101,8 +106,10 @@ SELECT
    @cFacility        = Facility,
    @cUserName        = UserName,
    @cUCC             = V_UCC,
+   @cBarcode         = V_Barcode,
 
    @cExtendedUCCInfoSP  = V_String1,
+   @cDecodeSP           = V_String2,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -129,7 +136,7 @@ BEGIN
    IF @nStep = 0  GOTO Step_0   -- Menu. Func = 729
    IF @nStep = 1  GOTO Step_1   -- Scn = 4810. UCC, SKU, DESCR, QTY, extendedinfo...
 END
-RETURN -- Do nothing if incorrect step
+RETURN
 
 
 /********************************************************************************
@@ -154,6 +161,11 @@ BEGIN
       @cOutField14   = '',
       @cOutField15   = '',
       @cUCC = ''
+
+      SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerkey)
+      IF @cDecodeSP IN ('0', '')
+         SET @cDecodeSP = ''
+
 
       SET @cExtendedUCCInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUCCInfoSP', @cStorerkey)
       IF @cExtendedUCCInfoSP IN ('0', '')
@@ -190,9 +202,39 @@ Step_1:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
-      -- Screen mapping
-      SET @cUCC = @cInField01
 
+      -- @cBarcode already populated from V_Barcode (FCR-9907)
+      SET @cUCC = @cBarcode
+
+      IF @cDecodeSP <> ''
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
+               ' @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile      INT,           ' +
+               ' @nFunc        INT,           ' +
+               ' @cLangCode    NVARCHAR( 3),  ' +
+               ' @nStep        INT,           ' +
+               ' @nInputKey    INT,           ' +
+               ' @cFacility    NVARCHAR( 5),  ' +
+               ' @cStorerKey   NVARCHAR( 15), ' +
+               ' @cBarcode     NVARCHAR( MAX), ' +
+               ' @cUCC         NVARCHAR( 20)  OUTPUT, ' +
+               ' @nErrNo       INT            OUTPUT, ' +
+               ' @cErrMsg      NVARCHAR( 1024)  OUTPUT'
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcode,
+               @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         END
+
+      -- Check for DecodeSP errors immediately
+      IF @nErrNo <> 0
+      BEGIN
+         GOTO Step_1_Fail
+      END
+         
       -- If UCC and SKU are blank
       IF ISNULL(@cUCC, '') = ''
       BEGIN
@@ -277,13 +319,19 @@ BEGIN
          WHERE UCCNo = @cUCC
          AND   StorerKey = @cStorerKey
 
-         IF @@ROWCOUNT = 0
+         SET @nRowCount = @@ROWCOUNT
+
+         IF @nRowCount = 0
          BEGIN
             SET @nErrNo = 106102
             SET @cErrMsg = rdt.rdtgetmessage( 106102, @cLangCode, 'DSP') --'Invalid UCC'
             GOTO Step_1_Fail
          END
-         ELSE  --@@ROWCOUNT > 1
+         ELSE IF @nRowCount = 1  -- Valid UCC with single SKU (FCR-9907)
+         BEGIN
+            SET @nMultiSKU = 0
+         END
+         ELSE  --@nRowCount > 1
          BEGIN
             SELECT @nQTY = ISNULL( SUM( Qty), 0)
             FROM dbo.UCC WITH (NOLOCK)
@@ -328,7 +376,7 @@ BEGIN
             '@cExtInfo06   NVARCHAR( 20)  OUTPUT, ' +
             '@cExtInfo07   NVARCHAR( 20)  OUTPUT, ' +
             '@nErrNo       INT            OUTPUT, ' +
-            '@cErrMsg      NVARCHAR( 20)  OUTPUT  '
+            '@cErrMsg      NVARCHAR(1024) OUTPUT  '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cUCC,
@@ -360,6 +408,7 @@ BEGIN
       SET @cOutField13 = @cExtInfo07
 
       SET @nMultiSKU = 0
+      SET @cBarcode = ''  -- Clear for next scan (FCR-9907)
    END
 
    IF @nInputKey = 0 -- ESC
@@ -426,6 +475,8 @@ BEGIN
       V_QTY          = @nQTY,
 
       V_String1      = @cExtendedUCCInfoSP,
+      V_String2      = @cDecodeSP,
+      V_Barcode      = @cBarcode,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

@@ -35,6 +35,7 @@ GO
 /* 02-Jan-2025  kelvinong 1.3   INC7536941 Prevent insert Container if ContainerKey */ 
 /*                              is blank result in mboldetail deleted all according */ 
 /*                              blank containerkey if deleted (kocy02)              */
+/* 06-OCT-2025  AK01      1.4   UWP-42143 Data Audit                                */
 /************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrContainerHeaderAdd]
@@ -113,6 +114,27 @@ CREATE OR ALTER TRIGGER [dbo].[ntrContainerHeaderAdd]
     --  END
     --END
     
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE CONTAINER
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM CONTAINER
+      JOIN INSERTED ON CONTAINER.ContainerKey = INSERTED.ContainerKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67904 
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table CONTAINER. (ntrCONTAINERAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+   
     /* #INCLUDE <TRCONHA2.SQL> */
     IF @n_continue=3  -- Error Occured - Process And Return
     BEGIN

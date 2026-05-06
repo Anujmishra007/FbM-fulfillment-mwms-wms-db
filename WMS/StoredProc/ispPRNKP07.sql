@@ -21,6 +21,7 @@ GO
 /* 2021-10-21  NJOW01   1.0   WMS-18109 Prepack qty restriction check   */
 /* 2021-10-21  NJOW01   1.0   DEVOPS Combine script                     */
 /* 2022-05-30  Wan01    1.1   WMS-19632 - TH-Nike-Wave Allocate         */
+/* 2025-10-10  SSA01    1.2  UWP-42248 -Enhanced session management     */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[ispPRNKP07]        
     @c_WaveKey                      NVARCHAR(10)
@@ -781,8 +782,8 @@ BEGIN
                      UPDATE TASKDETAIL 
                         SET SystemQty = SystemQty + @n_QtyToInsert
                            ,Trafficcop = NULL
-                           ,Editdate   = GETDATE()
-                           ,EditWho    = SUSER_SNAME()
+                           ,Editdate   = dbo.fnc_GetDate()    --(SSA01)
+                           ,EditWho    = dbo.fnc_GetUserName()          --(SSA01)
                      WHERE TaskDetailkey = @c_TaskDetailkey
                      AND CaseID =  @c_UCCNo
                      --AND Qty - SystemQty >= @n_QtyToInsert 

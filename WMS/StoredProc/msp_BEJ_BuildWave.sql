@@ -23,6 +23,7 @@ GO
 /* 2024-11-08  ALT028   1.1   FCR-764 - Revise logic.                   */
 /* 2024-11-12  WFA015   1.2   FCR-764 - Merge & Revise script.          */
 /*                            - Update latest Orders.ShipperKey only.   */
+/* 2025-10-10  SSA01    1.3   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_BEJ_BuildWave]
@@ -379,8 +380,8 @@ BEGIN
          UPDATE ORDERS WITH (ROWLOCK)
          SET UserDefine10 = @c_ParcelType
            , ShipperKey   = @c_ShipperKey
-           , EditWho      = SUSER_SNAME()
-           , EditDate     = GETDATE()
+           , EditWho      = dbo.fnc_GetUserName()        --(SSA01)
+           , EditDate     = dbo.fnc_GetDate()   --(SSA01)
            , TrafficCop   = NULL
          WHERE OrderKey   = @c_OrderKey
 
@@ -420,7 +421,7 @@ BEGIN
       IF @c_SQLMaxOrd <> ''
       BEGIN
          SET @c_SQL = N'UPDATE BUILDPARM WITH (ROWLOCK)'
-                    + ' SET EditDate = GETDATE()'
+                    + ' SET EditDate = dbo.fnc_GetDate()'       --(SSA01)
                     + ' ' + @c_SQLMaxOrd
                     + ' WHERE BuildParmKey = @c_BuildParmKey'
 
@@ -587,8 +588,8 @@ BEGIN
          UPDATE WAVE WITH (ROWLOCK)
             SET UserDefine01 = CONVERT(NVARCHAR(19), @d_DeliveryDate, 121)
               , UserDefine02 = @c_ParcelCategory
-              , EditWho      = SUSER_SNAME()
-              , EditDate     = GETDATE()
+              , EditWho      = dbo.fnc_GetUserName()           --(SSA01)
+              , EditDate     = dbo.fnc_GetDate()   --(SSA01)
               , TrafficCop   = NULL
          WHERE WaveKey = @c_WaveKey
 

@@ -23,6 +23,10 @@ GO
 /* 2023-12-19  Wan01-v0 1.0   Created.                                  */
 /* 2023-12-19  Wan01-v0 1.0   DevOps Combine Script.                    */
 /* 2024-07-02  Inv Team 1.1   UWP-17135 - Migrate Inbound Door booking  */
+/* 2025-05-21  SSA01    1.2   FCR-3921 - Upadated ASN Custom Fields     */
+/* 2025-05-26  SSA02    1.3   FCR-3921 -Added extrenReceiptkey condition*/
+/* 2025-05-26  SWT01    1.4   Setting Session Context for user name     */
+/* 2025-02-26  YGO050   1.3   fCR-10661                               */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BookingInAddShipment_Wrapper]                                                                                                                     
       @n_BookingNo            INT                           --Booking In's Booking No
@@ -47,35 +51,41 @@ BEGIN
    DECLARE @t_Shipment     TABLE 
          (  RowRef         INT         PRIMARY KEY
          ,  ShipmentGID    NVARCHAR(50)   NOT NULL DEFAULT('')
-         )      
+         )
 
    SET @b_Success = 1
    SET @n_Err     = 0
    
    SET @n_Err = 0 
  
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
-   BEGIN
+   BEGIN 
+
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
 
-   BEGIN TRAN  
-   BEGIN TRY
-      INSERT INTO @t_Shipment (RowRef, ShipmentGID)
-      SELECT ts.Rowref, ts.ShipmentGID
-      FROM STRING_SPLIT(@c_ShipmentGIDs,'|') AS ss
-      JOIN dbo.TMS_Shipment AS ts WITH (NOLOCK) ON ts.ShipmentGID = ss.[value]
-      WHERE ts.BookingNo IN (0, NULL)
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT01) - END
+
+    BEGIN TRAN
+    BEGIN TRY
+        INSERT INTO @t_Shipment (RowRef, ShipmentGID)   --YGO050
+        SELECT ts.Rowref, ts.ShipmentGID              --YGO050
+        FROM STRING_SPLIT(@c_ShipmentGIDs,'|') AS ss
+        JOIN dbo.TMS_Shipment AS ts WITH (NOLOCK) ON ts.ShipmentGID = ss.[value]
+        WHERE ts.BookingNo IN (0, NULL)
 
       SELECT @dt_ShipmentPlannedStartDate = bi.BookingDate
             ,@dt_ShipmentPlannedEndDate   = bi.EndTime
@@ -96,10 +106,88 @@ BEGIN
          SET @c_ErrMsg = 'MSQL' + CONVERT(CHAR(6),@n_Err) + ': Update TMS_Shipment fail. (lsp_BookingInAddShipment_Wrapper)'
          GOTO EXIT_SP
       END
-   END TRY
-   
-   BEGIN CATCH
-      SET @n_Continue = 3
+
+      -- (SSA01) start --
+      DECLARE @c_ASNCustomFieldsSP NVARCHAR(30)
+           , @c_SQL NVARCHAR( MAX)
+           , @c_SQLParam NVARCHAR( MAX)
+           , @c_StorerKey NVARCHAR(30)
+           , @c_Facility NVARCHAR(15)
+           , @c_ShipmentGID NVARCHAR(50) --(SSA02)
+
+           SET @c_ASNCustomFieldsSP = ''
+           SET @c_StorerKey = ''
+           SET @c_Facility  = ''
+           SET @c_ShipmentGID = ''  --(SSA02)
+      --(SSA02)
+      SELECT TOP 1 @c_ShipmentGID = ShipmentGID
+      FROM TMS_Shipment WITH(NOLOCK)
+      WHERE BookingNo = @n_BookingNo
+
+      SELECT TOP 1 @c_StorerKey = R.Storerkey, @c_Facility = R.Facility
+      FROM RECEIPT R WITH (NOLOCK)
+      WHERE (ReceiptKey = @c_ShipmentGID  --(SSA02)
+      OR ExternReceiptKey = @c_ShipmentGID) --(SSA02)
+      AND ISNULL(@c_ShipmentGID, '') <> ''
+
+	   EXECUTE nspGetRight
+         @c_Facility,
+         @c_StorerKey,
+         '',  --Sku
+         'ASNCustomFieldsSP', -- Configkey
+         @b_success    OUTPUT,
+         @c_ASNCustomFieldsSP     OUTPUT,
+         @n_err        OUTPUT,
+         @c_errmsg     OUTPUT
+
+      IF @b_success <> 1
+      BEGIN
+          SET @n_continue = 3
+          SET @n_Err = 562002
+          SET @c_ErrMsg = RTRIM(ISNULL(@c_Errmsg,'')) + ' (lsp_BookingInAddShipment_Wrapper)'
+          GOTO EXIT_SP
+      END
+
+      IF ISNULL(RTRIM(@c_ASNCustomFieldsSP),'') IN ('','0','1')
+      BEGIN
+          SET @c_ASNCustomFieldsSP = ''
+      END
+
+      IF @c_ASNCustomFieldsSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @c_ASNCustomFieldsSP AND type = 'P')
+            BEGIN
+
+               SET @c_SQL = N'EXEC dbo.' + RTRIM( @c_ASNCustomFieldsSP) +
+               ' @n_BookingNo = @n_BookingNo'
+
+               SET @c_SQLParam = N'@n_BookingNo INT'
+
+               EXEC sp_ExecuteSQL @c_SQL, @c_SQLParam, @n_BookingNo
+
+               IF @@ERROR <> 0
+               GOTO EXIT_SP
+            END
+      END
+     -- (SSA01) End --
+--YGO050 - START
+      -- Update RECEIPT.Appointment_No for inbound booking using WHERE IN statement instead of cursor
+      UPDATE dbo.RECEIPT WITH (ROWLOCK)
+      SET Appointment_No = @n_BookingNo
+      WHERE ExternReceiptKey IN (SELECT ShipmentGID FROM @t_Shipment)
+
+      IF @@ERROR <> 0
+      BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 562003
+            SET @c_ErrMsg = 'MSQL' + CONVERT(CHAR(6),@n_Err) + ': Update RECEIPT fail. (lsp_BookingInAddShipment_Wrapper)'
+            GOTO EXIT_SP
+      END
+--YGO050 - END
+END TRY
+
+BEGIN CATCH
+SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
@@ -141,7 +229,10 @@ EXIT_SP:
       BEGIN TRAN 
    END
          
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_BookingInAddShipment_Wrapper] TO nSQL 

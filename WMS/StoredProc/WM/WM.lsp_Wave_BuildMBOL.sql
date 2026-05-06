@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Wave_BuildMBOL]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Wave_BuildMBOL]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -10,14 +5,14 @@ GO
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_Wave_BuildMBOL                                  */                                                                                  
 /* Creation Date:                                                       */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
+/* Copyright: Measrk Logisitics                                         */                                                                                        
 /* Written by: Wan                                                      */                                                                                  
 /*                                                                      */                                                                                  
 /* Purpose: WM - Wave Creation                                          */                                                                                  
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.4                                                    */                                                                                  
+/* PVCS Version: 1.9                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -32,8 +27,10 @@ GO
 /*                            if @c_UserName <> SUSER_SNAME()           */
 /* 2021-08--5  Wan02    1.3   Fixed Linkage issue                       */
 /* 2022-09-20  SPChin   1.4   JSM-96335 - Extend ExternOrderkey Length  */
+/* 2025-08-25  WLChooi  1.9   FCR-7399 SCE Build MBOL Post Update (WL01)*/
+/* 2026-04-20  Wan03          FCR-12218 - Merge v0 FCR-7399 to v2       */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_Wave_BuildMBOL]                                                                                                                       
+CREATE OR ALTER PROC [WM].[lsp_Wave_BuildMBOL]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
    ,  @c_Facility       NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey      NVARCHAR(15)                                                                                                                            
@@ -135,7 +132,7 @@ AS
          , @c_MBOLkey                  NVARCHAR(10)   = ''  
          , @c_Loadkey                  NVARCHAR(10)   = ''
          , @c_Orderkey                 NVARCHAR(10)   = '' 
-         , @c_ExternOrderkey           NVARCHAR(50)   = ''	--JSM-96335
+         , @c_ExternOrderkey           NVARCHAR(50)   = ''  --JSM-96335
          , @c_Route                    NVARCHAR(10)   = ''
          , @d_OrderDate                DATETIME       = NULL
          , @d_DeliveryDate             DATETIME       = NULL
@@ -176,7 +173,7 @@ AS
       RNum              INT NOT NULL PRIMARY KEY                                                                  
    ,  OrderKey          NVARCHAR(10)   NULL DEFAULT ('') 
    ,  Loadkey           NVARCHAR(10)   NULL DEFAULT ('')                                                                                                                               
-   ,  ExternOrderKey    NVARCHAR(50)   NULL DEFAULT ('')	--JSM-96335                                                                                                                       
+   ,  ExternOrderKey    NVARCHAR(50)   NULL DEFAULT ('') --JSM-96335                                                                                                                       
    ,  [Route]           NVARCHAR(10)   NULL DEFAULT ('')
    ,  OrderDate         DATETIME       NULL                                                                                                                         
    ,  DeliveryDate      DATETIME       NULL                                                                                                                                  
@@ -770,7 +767,26 @@ START_BUILDMBOL:
    END
 
  END_BUILDMBOL:                                                                                                                                              
-                  
+   --(Wan03) WL01 S
+   IF @n_Continue IN (1,2)
+   BEGIN
+      SET @b_Success = 1
+      EXEC [WM].[lsp_Wave_BuildMBOL_Update]
+         @c_Wavekey        = @c_Wavekey
+      ,  @c_BuildParmKey   = @c_BuildParmKey
+      ,  @b_Success        = @b_Success  OUTPUT
+      ,  @n_err            = @n_err      OUTPUT                                                                                    
+      ,  @c_ErrMsg         = @c_ErrMsg   OUTPUT
+      ,  @b_debug          = @b_debug
+   
+      IF @b_Success <> 1
+      BEGIN
+         SET @n_Continue = 3
+         GOTO EXIT_SP
+      END
+   END
+   --(Wan03) WL01 E     
+       
    IF @b_debug = 2                                                                                                                                              
    BEGIN                                                                                                                                                       
       SET @d_EndTime_Debug = GETDATE()                                                    

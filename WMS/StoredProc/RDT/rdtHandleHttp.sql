@@ -16,6 +16,10 @@ GO
 /* 20-Sep-2023 1.0  JLC042   Created base on rdtHandle ver 1.28         */
 /* 07-Nov-2023 1.1  JLC042   Fix Message Screen issue UWP-10463         */
 /* 24-May-2024 1.2  NLT013   Add session id to get unique mobile        */
+/* 03-Apr-2025 1.3.0 NLT013  UWP-32244 Extend Menu number               */
+/* 23-Jul-2025 1.4.0 Dennis   Add trace id                              */
+/* 31-Aug-2025 1.5.0 NickT   FCR-7417 Fix an issue: infinity tran loop  */
+/* 06-Nov-2025 1.6.0 NickT   UWP-43698 Check duplicate request          */
 /************************************************************************/
 CREATE OR ALTER PROC  [RDT].[rdtHandleHttp]
   @InMobile      INT ,
@@ -47,6 +51,7 @@ BEGIN
       @nMsgQStatus NVARCHAR(1), -- SOS90411
       @cStoredProcName NVARCHAR( 1024),
       @cClientIP   NVARCHAR( 15),
+      @cTraceID    NVARCHAR( 100),
       @cUserName   NVARCHAR(18),
       @cSessionID  NVARCHAR(60)
 
@@ -66,6 +71,16 @@ BEGIN
          '</FromRDT>'
    ELSE
       SELECT @InMessage = REPLACE( @InMessage, 'encoding="UTF-8"', 'encoding="UTF-16"')
+
+   -- Check if it is a duplicate request
+   DECLARE @nDuplicateRequestFlag INT
+   EXEC RDT.rdtCheckDuplicateRequest @InMobile, @InMessage, @nErrNo OUTPUT, @cErrMsg OUTPUT, @OutMessage OUTPUT, @nDuplicateRequestFlag OUTPUT, @cTraceID OUTPUT
+
+   -- If previous OutMessage is not null, means last request is complete, return directly
+   IF @nDuplicateRequestFlag = 1 
+   BEGIN
+      RETURN
+   END
 
    -- Get the function, screen, step from the XML (also assign a new mobile no if 1st time login)
    EXEC RDT.rdtSetMobile
@@ -101,6 +116,8 @@ BEGIN
    BEGIN
    IF @cActionKey <> ''
    BEGIN
+      EXEC RDT.rdtUpdRDTMOBTraceID  @InMobile, @InMessage, @cTraceID, @nErrNo OUTPUT, @cErrMsg OUTPUT, @OutMessage OUTPUT
+
       IF @nFunction < 500 -- Menu
       BEGIN
          SET @nErrNo = 0
@@ -109,7 +126,7 @@ BEGIN
          BEGIN
             IF @nFunction = 0  -- login screen
             BEGIN
-               EXEC RDT.rdtLogin @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT, @cClientIP, @cSessionID
+               EXEC RDT.rdtLogin @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT, @cClientIP, @cSessionID, @cTraceID, @InMessage
                SET @nErrNo = @@ERROR
                IF @nErrNo <> 0
                   GOTO EXIT_PROCESS_MENU
@@ -128,7 +145,7 @@ BEGIN
                IF @nErrNo <> 0
                   GOTO EXIT_PROCESS_MENU
             END
-            ELSE
+            ELSE IF @nFunction > 2 OR @nFunction < -100
             BEGIN
                -- Menu
                EXEC RDT.rdtProcessMenu @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT
@@ -140,7 +157,7 @@ BEGIN
 
          IF @cActionKey = 'NO' -- ESC
          BEGIN
-            IF @nFunction <= 5   -- logout if at top level menu
+            IF @nFunction > -1 AND @nFunction <= 5   -- logout if at top level menu
             BEGIN
                IF @nFunction = 1
                BEGIN
@@ -249,7 +266,7 @@ BEGIN
                      GOTO EXIT_PROCESS_MENU
                END
             END  --IF @nFunction <= 5
-            ELSE
+            ELSE IF @nFunction > 5 OR @nFunction < -100
             BEGIN
                -- Back to Previous Screen
                EXEC RDT.rdtPrevScreen @InMobile, @nScn OUTPUT
@@ -366,7 +383,7 @@ BEGIN
       SET  @dEndTime = GETDATE()
       SET @nTimeTaken = CAST( DATEDIFF( ms, @dStartTime, @dEndTime) AS INT)
       SET @nTimeTaken1 = CAST( DATEDIFF( ms, @dStartTime1, @dEndTime) AS INT)
-      EXEC RDT.rdtSetTrace @InMobile ,999, 999, 1, @dStartTime, @dEndTime, @nTimeTaken, @nTimeTaken1
+      EXEC RDT.rdtSetTrace @InMobile ,999, 999, 1, @dStartTime, @dEndTime, @nTimeTaken, @nTimeTaken1, @cTraceID
    -- (Vicky02) - End
    END  -- Process Message Queue
    ELSE
@@ -382,7 +399,7 @@ BEGIN
       DECLARE @cXML NVARCHAR( MAX)
       SET @cXML = ''
 
-      IF @nFunction Between 5 AND 499
+      IF @nFunction Between 5 AND 499 OR @nFunction < -100
          EXEC RDT.rdtGetMenuHttp @InMobile, @cXML OUTPUT    -- Menu
       ELSE
          EXEC RDT.rdtGetScreenHttp @InMobile, @cXML OUTPUT  -- Functional
@@ -410,7 +427,7 @@ BEGIN
       SET @dEndTime = GETDATE()
       SET @nTimeTaken = CAST( DATEDIFF( ms, @dStartTime, @dEndTime) AS INT)
       SET @nTimeTaken1 = @nTimeTaken - @nTimeTaken1
-      EXEC RDT.rdtSetTrace @InMobile ,@nStartFunc, @nStartScn, @nStartStep, @dStartTime, @dEndTime, @nTimeTaken, @nTimeTaken1
+      EXEC RDT.rdtSetTrace @InMobile ,@nStartFunc, @nStartScn, @nStartStep, @dStartTime, @dEndTime, @nTimeTaken, @nTimeTaken1,@cTraceID
    END
 
    -- Record the XML being send out
@@ -423,10 +440,22 @@ BEGIN
       SELECT @InMessage = REPLACE( @InMessage, 'encoding="UTF-8"', 'encoding="UTF-16"')     -- (ChewKP01)
       SELECT @OutMessage = REPLACE( @OutMessage, 'encoding="UTF-8"', 'encoding="UTF-16"')   -- (ChewKP01)
 
-      INSERT INTO RDT.RDTMessage(Mobile, Message, MessageOut, InFunc, InScn, InStep)
-      VALUES (@InMobile, @InMessage, @OutMessage, @nStartFunc, @nStartScn, @nStartStep)
+      INSERT INTO RDT.RDTMessage(Mobile, Message, MessageOut, InFunc, InScn, InStep,TraceID)
+      VALUES (@InMobile, @InMessage, @OutMessage, @nStartFunc, @nStartScn, @nStartStep,@cTraceID)
    END
 
-   WHILE @@TRANCOUNT > 0
-      COMMIT TRAN
+   UPDATE RDT.RDTMOBTraceID WITH (ROWLOCK)
+   SET MessageOut = @OutMessage,
+      OutTime = GETDATE()
+   WHERE Mobile = @InMobile
+
+   BEGIN TRY
+      WHILE @@TRANCOUNT > 0 AND XACT_STATE() = 1
+         COMMIT TRAN
+      IF XACT_STATE() = -1
+         ROLLBACK TRAN
+   END TRY
+   BEGIN CATCH
+      RETURN
+   END CATCH
 END

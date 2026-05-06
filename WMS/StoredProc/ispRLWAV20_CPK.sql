@@ -31,6 +31,7 @@ GO
 /* 2020-09-26  Wan02    1.1   Recalculate CPK.Fromloc = RPF.TologicalLoc*/
 /*                            due to BULK ->IN TRANSIT/InLoc->Final Loc.*/
 /*                            #PICKETAIL_WIP data from ispRLWAV20_PACK  */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC ispRLWAV20_CPK
            @c_Wavekey            NVARCHAR(10)
@@ -731,8 +732,8 @@ BEGIN
       UPDATE PICKDETAIL 
          SET TaskDetailkey = @c_TaskDetailKey
             ,Trafficcop = NULL
-            ,EditWho  = SUSER_SNAME()
-            ,EditDate = GETDATE()
+            ,EditWho  = dbo.fnc_GetUserName()           --(SSA01)
+            ,EditDate = dbo.fnc_GetDate()    --(SSA01)
       FROM  PICKDETAIL PD WITH (NOLOCK)
       WHERE PD.PickdetailKey = @c_PickDetailKey
 

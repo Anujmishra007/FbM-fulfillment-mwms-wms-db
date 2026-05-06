@@ -1,0 +1,322 @@
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+/******************************************************************************/
+/* Store procedure: rdt_898DecodeSP03                                         */
+/* Copyright: Maersk                                                          */
+/*                                                                            */
+/* Customer: BAT SA                                                           */
+/*                                                                            */
+/* Date        Author   Ver.  Purposes                                        */
+/* 2025-10-27  Dennis   1.0   FCR-8472 Created                                */
+/* 2026-04-09  Sreeja   1.1   FCR-11052  Decode batch and manufacturing date  */ 
+/******************************************************************************/
+CREATE OR ALTER PROC [RDT].[rdt_898DecodeSP03] (
+   @nMobile             INT,
+   @nFunc               INT,
+   @cLangCode           NVARCHAR( 3),
+   @nStep               INT,
+   @nInputKey           INT,
+   @cStorerKey          NVARCHAR( 15),
+   @cReceiptKey         NVARCHAR( 10),
+   @cPOKey              NVARCHAR( 10),
+   @cLOC                NVARCHAR( 10),
+   @cUCC                NVARCHAR( MAX)  OUTPUT,
+   @nUCCQTY             INT            OUTPUT,
+   @cUserDefine01       NVARCHAR(30)   OUTPUT,
+   @cUserDefine02       NVARCHAR(30)   OUTPUT,
+   @cUserDefine03       NVARCHAR(30)   OUTPUT,
+   @cUserDefine04       NVARCHAR(30)   OUTPUT,
+   @cUserDefine05       NVARCHAR(30)   OUTPUT,
+   @cUserDefine06       NVARCHAR(30)   OUTPUT,
+   @cUserDefine07       NVARCHAR(30)   OUTPUT,
+   @cUserDefine08       NVARCHAR(30)   OUTPUT,
+   @cUserDefine09       NVARCHAR(30)   OUTPUT,
+   @cLottable01         NVARCHAR( 18)  OUTPUT,
+   @cLottable02         NVARCHAR( 18)  OUTPUT,
+   @cLottable03         NVARCHAR( 18)  OUTPUT,
+   @dLottable04         DATETIME       OUTPUT,
+   @dLottable05         DATETIME       OUTPUT,
+   @cLottable06         NVARCHAR( 30)  OUTPUT,
+   @cLottable07         NVARCHAR( 30)  OUTPUT,
+   @cLottable08         NVARCHAR( 30)  OUTPUT,
+   @cLottable09         NVARCHAR( 30)  OUTPUT,
+   @cLottable10         NVARCHAR( 30)  OUTPUT,
+   @cLottable11         NVARCHAR( 30)  OUTPUT,
+   @cLottable12         NVARCHAR( 30)  OUTPUT,
+   @dLottable13         DATETIME       OUTPUT,
+   @dLottable14         DATETIME       OUTPUT,
+   @dLottable15         DATETIME       OUTPUT,
+   @nErrNo              INT            OUTPUT,
+   @cErrMsg             NVARCHAR( 20)  OUTPUT
+)
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @nDebugFlag  INT = 0
+
+   DECLARE 
+      @cBarcode      NVARCHAR(MAX)
+      ,@cLocaleUCC   NVARCHAR( 20)
+      ,@cSKU         NVARCHAR( 20)
+      ,@cSKUBUSR5    NVARCHAR( 30)
+      ,@cSKUBUSR6    NVARCHAR( 30)
+      ,@cAttribute1  NVARCHAR( 50)
+      ,@nRowCount    INT
+      ,@cFirstChar  NCHAR(1)
+      ,@cSecondChar NCHAR(1)
+      ,@cThirdChar  NCHAR(1)
+      ,@cYearChar   NVARCHAR(10)
+      ,@cMonthChar  NVARCHAR(10)
+      ,@cDateChar   NVARCHAR(10)
+      ,@nMOBRECScn  INT
+
+      SELECT @nMOBRECScn = Scn
+      FROM rdt.RDTMOBREC WITH(NOLOCK)
+      WHERE Mobile = @nMobile
+
+   SET @cBarcode = replace(TRIM(@cUCC),' ','')
+   IF @nFunc = 898 -- UCC receiving
+   BEGIN
+      IF @nStep = 6 -- UCC
+      BEGIN
+         IF LEN(@cBarcode) < 20
+         BEGIN
+            SET @nErrNO = 263851
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+            GOTO QUIT
+         END
+         SELECT @cLottable01 = EXTERNRECEIPTKEY FROM Receipt (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
+         IF LEN(@cBarcode) IN( 40 , 44)
+         BEGIN
+            SELECT 
+            @cUCC = CASE 
+               WHEN CHARINDEX('(240)', @cBarcode) > 0 THEN
+                     SUBSTRING(
+                        @cBarcode,
+                        CHARINDEX('(240)', @cBarcode) + 5,
+                        LEN(@cBarcode)
+                     )
+               ELSE NULL
+            END,
+            @cLottable02 = 
+            CASE 
+               WHEN CHARINDEX('(10)', @cBarcode) > 0 AND CHARINDEX('(11)', @cBarcode) > CHARINDEX('(10)', @cBarcode) THEN
+                     SUBSTRING(
+                        @cBarcode,
+                        CHARINDEX('(10)', @cBarcode) + 4,
+                        CHARINDEX('(11)', @cBarcode) - CHARINDEX('(10)', @cBarcode) - 4
+                     )
+               ELSE NULL
+            END,
+            @cLottable03 = 
+            CASE 
+               WHEN CHARINDEX('(11)', @cBarcode) > 0 AND CHARINDEX('(240)', @cBarcode) > CHARINDEX('(11)', @cBarcode) THEN
+                     CASE 
+                        WHEN ISNUMERIC(
+                           SUBSTRING(
+                                 @cBarcode,
+                                 CHARINDEX('(11)', @cBarcode) + 4,
+                                 CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
+                           )
+                        ) = 1 
+                        AND LEN(
+                           SUBSTRING(
+                                 @cBarcode,
+                                 CHARINDEX('(11)', @cBarcode) + 4,
+                                 CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
+                           )
+                        ) = 6 THEN
+                          
+                           '20' + LEFT(
+                                 SUBSTRING(
+                                    @cBarcode,
+                                    CHARINDEX('(11)', @cBarcode) + 4,
+                                    CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
+                                 ), 2
+                           )  +
+                           SUBSTRING(
+                                 SUBSTRING(
+                                    @cBarcode,
+                                    CHARINDEX('(11)', @cBarcode) + 4,
+                                    CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
+                                 ), 3, 2
+                           ) +
+                           RIGHT(
+                                 SUBSTRING(
+                                    @cBarcode,
+                                    CHARINDEX('(11)', @cBarcode) + 4,
+                                    CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
+                                 ), 2
+                           ) 
+                        ELSE NULL
+                     END
+               ELSE NULL
+            END
+         END
+         ELSE IF LEN(@cBarcode) = 34
+         BEGIN
+            SELECT 
+               @cUCC = RIGHT(@cBarcode, 20),
+               
+               @cUserDefine05 = LEFT(@cBarcode, LEN(@cBarcode) - 20),
+               
+               @cLottable02 = SUBSTRING(@cBarcode, 3, 7),
+               
+               @cLottable03 = CASE 
+                  WHEN LEN(@cBarcode) >= 19 THEN
+                        '20' + LEFT(SUBSTRING(@cBarcode, 14, 6), 2) +
+                        SUBSTRING(SUBSTRING(@cBarcode, 14, 6), 3, 2) +
+                        RIGHT(SUBSTRING(@cBarcode, 14, 6), 2) 
+                  ELSE NULL
+               END
+         END
+         ELSE IF LEN(@cBarcode) = 67
+         BEGIN
+            SELECT 
+               @cUCC = SUBSTRING(@cBarcode, 19, 19),
+               
+               @cUserDefine01 = SUBSTRING(@cBarcode, 51, 8),
+               
+               @cLottable02 = SUBSTRING(@cBarcode, 40, 8),
+               
+               @cLottable03 = SUBSTRING(@cBarcode, 23, 3)
+               
+            SELECT @cFirstChar = SUBSTRING(@cLottable03,1,1),
+                  @cSecondChar = SUBSTRING(@cLottable03,2,1),
+                  @cThirdChar = SUBSTRING(@cLottable03,3,1);
+            WITH CurrentDecade AS (
+               SELECT 
+                  number AS decade_index,
+                  (YEAR(GETDATE()) / 10) * 10 + number AS decade_year
+               FROM (
+                  SELECT 0 AS number UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4
+                  UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9
+               ) numbers
+            )
+            SELECT 
+               @cYearChar = decade_year
+            FROM CurrentDecade
+            WHERE decade_index = @cFirstChar
+
+            SELECT 
+               @cMonthChar = Short
+            FROM CodeLKUP WITH (NOLOCK)
+            WHERE ListName = 'BAT_MFGDT' AND StorerKey = @cStorerKey
+            AND CODE2 = @cSecondChar AND Code = '2'
+
+            SELECT 
+               @cDateChar = Short
+            FROM CodeLKUP WITH (NOLOCK)
+            WHERE ListName = 'BAT_MFGDT' AND StorerKey = @cStorerKey
+            AND CODE2 = @cThirdChar AND Code = '3'
+
+            SET @cLottable03 =   @cYearChar + RIGHT(@cMonthChar, 2) + RIGHT(@cDateChar, 2) 
+         END
+      END
+      IF @nStep = 8 -- Sku
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            IF LEN(@cBarcode) = 17
+            BEGIN
+               SELECT @cUserDefine01 = 
+               CASE 
+                  WHEN CHARINDEX('(21)', @cBarcode) > 0 AND CHARINDEX('(241)', @cBarcode) > CHARINDEX('(21)', @cBarcode) THEN
+                        SUBSTRING(
+                           @cBarcode,
+                           CHARINDEX('(21)', @cBarcode) + 4,
+                           CHARINDEX('(241)', @cBarcode) - CHARINDEX('(21)', @cBarcode) - 4
+                        )
+                  ELSE NULL
+               END
+               GOTO QUIT
+            END
+            SELECT @cUserDefine01 = SKU FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND ALTSKU = @cUCC
+
+            IF @@ROWCOUNT = 0
+               SET @cUserDefine01 = @cUCC
+         END
+      END
+      
+      IF @nStep = 99 AND @nMOBRECScn = 1304
+      BEGIN
+         SET @cBarcode = REPLACE(TRIM(@cUCC), ' ', '')
+
+         -- Validation - If barcode contains parentheses, must be valid GS1
+         IF CHARINDEX('(', @cBarcode) > 0
+         BEGIN
+            IF LEFT(@cBarcode, 4) <> '(10)'
+            BEGIN
+               SET @nErrNo = 263852
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END
+            
+            IF LEN(@cBarcode) NOT IN (40, 44)
+            BEGIN
+               SET @nErrNo = 263853
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END
+         END
+
+         -- Only decode if barcode length is 40 or 44 AND starts with (10)
+         IF LEN(@cBarcode) IN (40, 44) AND LEFT(@cBarcode, 4) = '(10)'
+         BEGIN
+            -- Decode Batch: Value between (10) and (11)
+            SET @cLottable02 = 
+               CASE 
+                  WHEN CHARINDEX('(11)', @cBarcode) > CHARINDEX('(10)', @cBarcode) THEN
+                     SUBSTRING(
+                        @cBarcode,
+                        CHARINDEX('(10)', @cBarcode) + 4,
+                        CHARINDEX('(11)', @cBarcode) - CHARINDEX('(10)', @cBarcode) - 4
+                     )
+                  ELSE @cLottable02
+               END
+            
+            -- Decode Manufacturing Date: Value between (11) and (240)
+            -- Input format: YYMMDD, Output format: YYYYMMDD
+            DECLARE @cMfgDateRaw NVARCHAR(6)
+            SET @cMfgDateRaw = 
+               CASE 
+                  WHEN CHARINDEX('(240)', @cBarcode) > CHARINDEX('(11)', @cBarcode) THEN
+                     SUBSTRING(
+                        @cBarcode,
+                        CHARINDEX('(11)', @cBarcode) + 4,
+                        CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
+                     )
+                  ELSE NULL
+               END
+            
+            -- Convert YYMMDD to YYYYMMDD
+            IF @cMfgDateRaw IS NOT NULL
+               AND LEN(@cMfgDateRaw) = 6
+               AND @cMfgDateRaw NOT LIKE '%[^0-9]%'
+               AND TRY_CONVERT(INT, @cMfgDateRaw) IS NOT NULL
+            BEGIN
+               SET @cLottable03 = '20' + @cMfgDateRaw  -- 20 + YYMMDD = YYYYMMDD
+            END
+         END
+      END
+   END
+
+   Quit:
+
+END
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON rdt.rdt_898DecodeSP03 TO NSQL
+GO

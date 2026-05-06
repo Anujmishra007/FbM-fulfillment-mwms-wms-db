@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 12-Apr-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 10-Oct-2025  SSA01    1.1   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRVWAV50]      
@@ -119,8 +120,8 @@ BEGIN
       UPDATE PICKDETAIL WITH (ROWLOCK) 
       SET PICKDETAIL.TaskdetailKey  = '',
           PICKDETAIL.TrafficCop     = NULL,
-          PICKDETAIL.EditDate       = GETDATE(),
-          PICKDETAIL.EditWho        = SUSER_SNAME()
+          PICKDETAIL.EditDate       = dbo.fnc_GetDate(),   --(SSA01)
+          PICKDETAIL.EditWho        = dbo.fnc_GetUserName()        --(SSA01)
       FROM WAVEDETAIL (NOLOCK)  
       JOIN PICKDETAIL ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey
       WHERE WAVEDETAIL.Wavekey = @c_Wavekey 
@@ -141,8 +142,8 @@ BEGIN
       UPDATE PICKDETAIL WITH (ROWLOCK) 
        SET PICKDETAIL.CaseID      = ''
          , PICKDETAIL.TrafficCop  = NULL
-         , PICKDETAIL.EditWho     = SUSER_SNAME()
-         , PICKDETAIL.EditDate    = GETDATE()
+         , PICKDETAIL.EditWho     = dbo.fnc_GetUserName()          --(SSA01)
+         , PICKDETAIL.EditDate    = dbo.fnc_GetDate()   --(SSA01)
          --, PICKDETAIL.DropID      = ''
          --, PICKDETAIL.MoveRefKey  = ''
       FROM WAVEDETAIL (NOLOCK)  
@@ -181,8 +182,8 @@ BEGIN
       UPDATE WAVE 
       SET TMReleaseFlag = 'N'      
        ,  TrafficCop    = NULL        
-       ,  EditWho       = SUSER_SNAME()  
-       ,  EditDate      = GETDATE() 
+       ,  EditWho       = dbo.fnc_GetUserName()        --(SSA01)
+       ,  EditDate      = dbo.fnc_GetDate()   --(SSA01)
       WHERE WAVEKEY = @c_wavekey  
 
       SELECT @n_err = @@ERROR

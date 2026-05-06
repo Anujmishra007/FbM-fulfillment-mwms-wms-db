@@ -6,13 +6,19 @@ GO
 /*****************************************************************************/
 /* Store procedure: rdt_957ExtScn02                                          */
 /* Copyright: Maersk WMS                                                     */
+/* Customer: Granite Levis                                                   */
 /*                                                                           */
 /* Purpose:                                                                  */
 /*                                                                           */
 /* Date       Rev  Author   Purposes                                         */
 /* 2024-07-04 1.0  NLT013   FCR-454 CREATE                                   */
-/* 2024-11-07 1.0  NLT013   UWP-26694 update orderkey info for swapped UCC   */
+/* 2024-11-07 1.1  NLT013   UWP-26694 update orderkey info for swapped UCC   */
+/* 2025-02-27 1.2.0 NLT013  UWP-30644 FN957 case pick error                  */
+/* 2025-03-07 1.2.1 Dennis  UWP-30644 FN957 case pick error                  */
+/* 2025-07-03 1.3  JackC    UWP-37190 Set UCCstatus to 6 if toLoc is loseUCC */
 /*                                                                           */
+/* 2025-08-01 1.4.0 NickT   FCR-7106 Enhancement for FN957                   */
+/* 2026-03-20 1.5.0 NickT   FCR-10076 Pick by wave                           */
 /*****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn02] (
@@ -89,6 +95,7 @@ BEGIN
       @cSuggestUCC         NVARCHAR( 1),
       @cSuggestLoc         NVARCHAR( 10),
       @cToLoc              NVARCHAR( 10),
+      @cToLocLoseUCC       NVARCHAR( 1), --V1.2
       @cUCCLoc             NVARCHAR( 10),
       @cLOT                NVARCHAR( 10),
       @cPickDetailKey      NVARCHAR( 18),
@@ -107,20 +114,33 @@ BEGIN
       @cMoveQTYPick        NVARCHAR( 1),
       @cPickConfirmStatus  NVARCHAR( 1),
       @cPacKKey            NVARCHAR( 10),
-      @nCaseCnt            INT
+      @nCaseCnt            INT,
+
+      @cOrderType          NVARCHAR( 10),
+      @cOrderConsigneeKey  NVARCHAR( 15),
+      @cPickDetailUOM      NVARCHAR( 10),
+      @cWaveKey            NVARCHAR( 10),
+      @cUserName           NVARCHAR( 18),
+      @cPickListKey        NVARCHAR( 100),
+      @nPackFlag           INT,
+      @nMenu               INT
 
    SELECT 
       @nCurrentStep       = Step,
       @nCurrentScn         = Scn,
+      @nMenu               = Menu,
       @cPickSlipNo         = V_PickSlipNo,
       @cPickZone           = V_Zone,
+      @cUserName           = UserName,
       @cDropID             = V_String4,
       @cExtendedValidateSP = V_String21,
       @cExtendedUpdateSP   = V_String22,
       @cExtendedInfoSP     = V_String23,
 
       @cSSCC               = C_String1,
-      @cSuggestUCC         = C_String2
+      @cSuggestUCC         = C_String2,
+      @cWaveKey            = C_String3,
+      @cPickListKey        = C_String4
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -132,6 +152,9 @@ BEGIN
       SET @cPickConfirmStatus = '5'
    IF @cPickConfirmStatus NOT IN ( '3', '5')
       SET @cPickConfirmStatus = '5'
+
+   SET @nErrNo = 0
+   SET @cErrMsg = ''
 
    -- Check move alloc, but picked
    IF @cMoveQTYAlloc = '1' AND @cPickConfirmStatus = '5'
@@ -149,28 +172,142 @@ BEGIN
       GOTO Quit
    END
 
+   SET @cUDF01 = ''
+   SET @cUDF03 = ''
+
    SET @nTranCount = @@TRANCOUNT
 
    IF @nFunc = 957  --Pick Case
    BEGIN
-      IF @nCurrentStep = 2 -- DropID
+      IF @nCurrentStep = 99 -- Extended Screen
       BEGIN
-         IF @nAction = 0 --Jump to 6387 SSCC
+         IF @nCurrentScn = 6849 -- WaveKey
          BEGIN
-            IF @nInputKey = 1 --Jump to 6387 SSCC
+            SET @cUDF03 = 'NO UPD RDTMOBREC'
+            IF @nInputKey = 1
             BEGIN
+               SET @cWaveKey = TRIM(ISNULL(@cInField01, ''))
+
+               IF @cWaveKey = ''
+               BEGIN
+                  SET @nErrNo = 218923
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- WaveKey is needed
+                  GOTO Quit
+               END
+
+               DECLARE @cUserDefine09 NVARCHAR(10)
+
+               SELECT @cUserDefine09 = ISNULL(UserDefine09, '')
+               FROM dbo.Wave WITH(NOLOCK)
+               WHERE WaveKey = @cWaveKey
+
+               SELECT @nRowCount = @@ROWCOUNT
+
+               IF @nRowCount = 0
+               BEGIN
+                  SET @nErrNo = 218924
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Invalid WaveKey
+                  GOTO Quit
+               END
+
+               IF EXISTS(SELECT 1 FROM dbo.PickDetail WITH(NOLOCK) WHERE StorerKey <> @cStorerKey AND WaveKey = @cWaveKey)
+               BEGIN
+                  SET @nErrNo = 218926
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different StorerKey
+                  GOTO Quit
+               END
+
+               IF NOT EXISTS(SELECT 1 FROM dbo.PickDetail WITH(NOLOCK) WHERE WaveKey = @cWaveKey AND Status = '0')
+               BEGIN
+                  SET @nErrNo = 218927
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Pick is completed
+                  GOTO Quit
+               END
+
+               IF @cUserDefine09 = 'Y'
+               BEGIN
+                  SET @nErrNo = 218925
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Wave cannot be picked
+                  GOTO Quit
+               END
+
+               SET @cOutField01 = @cWaveKey
+               SET @cPickListKey = NEWID()
+
+               SET @nAfterScn = 6860
+               SET @nAfterStep = 99
+            END
+            ELSE IF @nInputKey = 0
+            BEGIN
+               -- EventLog
+               EXEC RDT.rdt_STD_EventLog
+                  @cActionType = '9', -- Sign-out
+                  @cUserID     = @cUserName,
+                  @nMobileNo   = @nMobile,
+                  @nFunctionID = @nFunc,
+                  @cFacility   = @cFacility,
+                  @cStorerKey  = @cStorerKey
+
+               -- Back to menu
+               SET @nFunc = @nMenu
+               SET @nAfterScn  = @nMenu
+               SET @nAfterStep = 0
+               SET @cOutField01 = '' -- Option
+            END
+            GOTO Quit
+         END
+         ELSE IF @nCurrentScn = 6860 -- PickZone
+         BEGIN
+            SET @cUDF03 = 'NO UPD RDTMOBREC'
+            IF @nInputKey = 1
+            BEGIN
+               SET @cPickZone = @cInField02
+               SET @cDropID = @cInField03
+
+               IF @cPickZone <> ''
+                  AND NOT EXISTS( SELECT TOP 1 1
+                           FROM dbo.Orders O WITH (NOLOCK)
+                           INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON O.StorerKey = PD.StorerKey AND O.OrderKey = PD.OrderKey
+                           INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+                           WHERE PD.WaveKey = @cWaveKey
+                              AND PD.Status = '0'
+                              AND LOC.PickZone = @cPickZone)
+               BEGIN
+                  SET @nErrNo = 218928
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No pick task in the PickZone
+                  EXEC rdt.rdtSetFocusField @nMobile, 2-- PickZone
+                  SET @cOutField02 = ''
+                  GOTO Quit
+               END
+               SET @cOutField02 = @cPickZone
+
+               -- Check DropID format
+               IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'DROPID', @cDropID) = 0
+               BEGIN
+                  SET @nErrNo = 130580
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+                  EXEC rdt.rdtSetFocusField @nMobile, 3 -- DropID
+                  SET @cOutField03 = ''
+                  GOTO Quit
+               END
+               SET @cOutField03 = @cDropID
+
                SET @cOutField01 = ''
                SET @nAfterScn = 6387
                SET @nAfterStep = 99
-
+               GOTO Quit
+            END
+            ELSE IF @nInputKey = 0
+            BEGIN
+               SET @nAfterScn = 6849
+               SET @nAfterStep = 99
+               SET @cOutField01 = ''
                GOTO Quit
             END
          END
-      END
-      ELSE IF @nCurrentStep = 99 -- Extended Screen
-      BEGIN
-         IF @nCurrentScn = 6387 -- SSCC
+         ELSE IF @nCurrentScn = 6387 -- SSCC
          BEGIN
+            SET @cUDF03 = 'NO UPD RDTMOBREC'
             IF @nInputKey = 1
             BEGIN
                SET @cSSCC = @cInField01
@@ -188,14 +325,14 @@ BEGIN
                   @cSKUStyle  = sku.Style, 
                   @cSKUSize   = sku.Size,
                   @cSKUMeasurement = sku.Measurement,
-                  @cSuggestLoc  = ucc.Loc
+                  @cSuggestLoc  = ucc.Loc,
+                  @cPickSlipNo = pkh.PickHeaderKey
                FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
                INNER JOIN dbo.PICKHEADER pkh WITH(NOLOCK) ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
                INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID
                INNER JOIN dbo.SKU sku WITH(NOLOCK) ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
                WHERE pkh.StorerKey = @cStorerKey
-                  AND pkh.PickHeaderKey = @cPickSlipNo
-                  --AND pkd.ID = @cDropID
+                  AND pkd.WaveKey = @cWaveKey
                   AND pkd.CaseID = @cSSCC
                   AND ucc.Status = '3'
 
@@ -214,8 +351,7 @@ BEGIN
                INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID
                INNER JOIN dbo.SKU sku WITH(NOLOCK) ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
                WHERE pkh.StorerKey = @cStorerKey
-                  AND pkh.PickHeaderKey = @cPickSlipNo
-                  --AND pkd.ID = @cDropID
+                  AND pkd.WaveKey = @cWaveKey
                   AND pkd.CaseID = @cSSCC
                   AND ucc.Status = '3'
 
@@ -225,8 +361,7 @@ BEGIN
                INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID
                INNER JOIN dbo.SKU sku WITH(NOLOCK) ON pkd.StorerKey = sku.StorerKey AND pkd.Sku = sku.Sku
                WHERE pkh.StorerKey = @cStorerKey
-                  AND pkh.PickHeaderKey = @cPickSlipNo
-                  --AND pkd.ID = @cDropID
+                  AND pkd.WaveKey = @cWaveKey
                   AND pkd.CaseID = @cSSCC
                   AND ((ucc.Status = '3' AND ISNULL(ucc.Userdefined08, '') = '1')
                      OR ucc.Status = '5')
@@ -281,15 +416,14 @@ BEGIN
                INNER JOIN dbo.PICKHEADER pkh WITH(NOLOCK) ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
                INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID
                WHERE pkh.StorerKey = @cStorerKey
-                  AND pkh.PickHeaderKey = @cPickSlipNo
-                  --AND pkd.ID = @cDropID
+                  AND pkd.WaveKey = @cWaveKey
                   AND ucc.Status = '3'
                   AND ISNULL(ucc.Userdefined08, '') = '1'
 
                IF @nRowCount = 0
                BEGIN
                   -- Prepare LOC screen var
-                  SET @cOutField01 = @cPickSlipNo
+                  SET @cOutField01 = @cWaveKey
                   SET @cOutField02 = '' --PickZone
                   SET @cOutField03 = '' --DropID
 
@@ -298,8 +432,8 @@ BEGIN
                   -- Enable field
                   SET @cFieldAttr07 = '' -- QTY
                   
-                  SET @nAfterScn = 5291
-                  SET @nAfterStep = 2
+                  SET @nAfterScn = 6860
+                  SET @nAfterStep = 99
 
                   GOTO Quit
                END
@@ -314,6 +448,7 @@ BEGIN
          END
          ELSE IF @nCurrentScn = 6388 -- UCCNo
          BEGIN
+            SET @cUDF03 = 'NO UPD RDTMOBREC'
             IF @nInputKey = 1
             BEGIN
                SET @cUCCNo = TRIM(@cInField05)
@@ -351,7 +486,6 @@ BEGIN
                INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID
                WHERE pkh.StorerKey = @cStorerKey
                   AND pkh.PickHeaderKey = @cPickSlipNo
-                  --AND pkd.ID = @cDropID
                   AND pkd.CaseID = @cSSCC
                   AND pkd.DropID = @cUCCNo
 
@@ -385,7 +519,8 @@ BEGIN
                      @cOrderLineNumber = ISNULL(ucc1.OrderLineNumber, ''),
                      @cSwapUCCID    = ucc2.Id,
                      @cSwapUCCLot   = ucc2.LOT,
-                     @cPickDetailKey = pkd.PickDetailKey
+                     @cPickDetailKey = pkd.PickDetailKey,
+                     @cPickDetailUOM = pkd.UOM
                   FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
                   INNER JOIN dbo.PICKHEADER pkh WITH(NOLOCK) ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
                   INNER JOIN dbo.UCC ucc1 WITH(NOLOCK) ON ucc1.StorerKey = pkd.StorerKey AND ucc1.UCCNo = pkd.DropID
@@ -394,7 +529,6 @@ BEGIN
                   INNER JOIN LOTATTRIBUTE dia2 WITH(NOLOCK) ON ucc2.Lot = dia2.Lot
                   WHERE pkh.StorerKey = @cStorerKey
                      AND pkh.PickHeaderKey = @cPickSlipNo
-                     --AND pkd.ID = @cDropID
                      AND pkd.CaseID = @cSSCC
                      AND dia1.Lottable01 = dia2.Lottable01
                      AND ucc2.Status = '1'
@@ -409,6 +543,28 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid UCC
                      GOTO Quit
                   END
+
+                  SELECT 
+                     @cOrderType = ord.Type,
+                     @cOrderConsigneeKey = ord.ConsigneeKey
+                  FROM dbo.ORDERS ord WITH(NOLOCK)
+                  WHERE ord.StorerKey = @cStorerKey
+                     AND ord.OrderKey = @cOrderKey
+
+                  SELECT @nRowCount = COUNT(1)
+                  FROM dbo.CODELKUP WITH(NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND ListName = 'NOSWAP'
+                     AND Code = @cOrderConsigneeKey
+                     AND Short IS NOT NULL
+                     AND Short = @cOrderType 
+                  
+                  IF @nRowCount > 0
+                  BEGIN
+                     SET @nErrNo = 218922
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not allow to swap UCC
+                     GOTO Quit
+                  END
                END 
 
                IF @nTranCount = 0
@@ -420,7 +576,7 @@ BEGIN
                   --swap UCC successfully, need update the pkd and UCC
                   IF @cUCCAllocated IS NOT NULL AND @cUCCAllocated <> @cUCCNo
                   BEGIN
-                     EXEC [RDT].[rdt_957SwapID01]
+                     EXEC [RDT].[rdt_957SwapUCC01]
                         @nMobile       = @nMobile,
                         @nFunc         = @nFunc,
                         @cLangCode     = @cLangCode,
@@ -429,29 +585,10 @@ BEGIN
                         @cFacility     = @cFacility,
                         @cStorerKey    = @cStorerKey,
                         @cPickSlipNo   = @cPickSlipNo,
-                        @cPickZone     = '',
-                        @cLOC          = @cUCCLoc,
-                        @cSuggID       = @cID,
-                        @cID           = @cSwapUCCID,
-                        @cSKU          = @cSKU,
-                        @nQTY          = @nUCCQTY,
-                        @cLottable01   = '',
-                        @cLottable02   = '',
-                        @cLottable03   = '',
-                        @dLottable04   = NULL,
-                        @dLottable05   = NULL,
-                        @cLottable06   = '',
-                        @cLottable07   = '',
-                        @cLottable08   = '',
-                        @cLottable09   = '',
-                        @cLottable10   = '',
-                        @cLottable11   = '',
-                        @cLottable12   = '',
-                        @dLottable13   = NULL,
-                        @dLottable14   = NULL,
-                        @dLottable15   = NULL,
-                        @nErrNo        = @nErrNo,
-                        @cErrMsg       = @cErrMsg
+                        @cActUCCNo     = @cUCCNo,
+                        @cTaskUCCNo    = @cUCCAllocated OUTPUT,
+                        @nErrNo        = @nErrNo OUTPUT,
+                        @cErrMsg       = @cErrMsg OUTPUT
 
                      IF @nErrNo <> 0
                      BEGIN
@@ -470,21 +607,59 @@ BEGIN
                         DropID = @cUCCNo
                      WHERE PickDetailKey = @cPickDetailKey
 
-                     SET @cUDF01 = 'SWAPUCC'
-                     SET @cUDF02 = @cSwapUCCID
+                     SELECT @nRowCount = COUNT(1)
+                     FROM dbo.CODELKUP WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND ListName = 'LVSSTO'
+                        AND Code = @cOrderConsigneeKey
+                        AND Short IS NOT NULL
+                        AND Short = @cOrderType 
+                     
+                     IF @nRowCount > 0 AND @cPickDetailUOM = '2'
+                     BEGIN
+                        UPDATE dbo.PickDetail WITH(ROWLOCK)
+                        SET
+                           Caseid = @cUCCNo,
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME()
+                        WHERE PickDetailKey = @cPickDetailKey
+
+                        UPDATE dbo.PackDetail WITH(ROWLOCK)
+                        SET
+                           LabelNo = @cUCCNo,
+                           DropID = @cUCCNo,
+                           RefNo = @cUCCNo,
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME()
+                        WHERE PickSlipNo = @cPickSlipNo
+                           AND LabelNo = @cUCCAllocated
+
+                        UPDATE dbo.PackInfo WITH(ROWLOCK)
+                        SET
+                           RefNo = @cUCCNo,
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME()
+                        WHERE PickSlipNo = @cPickSlipNo
+                           AND RefNo IS NOT NULL
+                           AND Refno = @cUCCAllocated
+                     END
 
                      UPDATE dbo.UCC WITH(ROWLOCK)
                      SET Status = '3',
                         Userdefined08 = '1',
                         OrderKey = @cOrderKey,
-                        OrderLineNumber = @cOrderLineNumber
+                        OrderLineNumber = @cOrderLineNumber,
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
 
                      UPDATE dbo.UCC WITH(ROWLOCK)
                      SET Status = '1',
                         OrderKey = '',
-                        OrderLineNumber = ''
+                        OrderLineNumber = '',
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCAllocated
                   END
@@ -493,7 +668,9 @@ BEGIN
                   BEGIN
                      ---update UCC
                      UPDATE dbo.UCC WITH(ROWLOCK)
-                     SET Userdefined08 = '1'
+                     SET Userdefined08 = '1',
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
                         AND Status = '3'
@@ -513,7 +690,9 @@ BEGIN
                      AND ucc.Status = '5'
 
                   UPDATE orm WITH(ROWLOCK)
-                  SET orm.Status = '3'
+                  SET orm.Status = '3',
+                     EditDate = GETDATE(),
+                     EditWho  = SUSER_SNAME()
                   FROM ORDERS orm
                   INNER JOIN 
                      (SELECT orm1.StorerKey, orm1.OrderKey, COUNT(1) AS totalOrderQty
@@ -541,6 +720,7 @@ BEGIN
 
                   UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
                   SET Status = @cPickConfirmStatus,
+                     Notes = @cPickListKey,
                      EditDate = GETDATE(),
                      EditWho  = SUSER_SNAME()
                   WHERE StorerKey = @cStorerKey
@@ -556,9 +736,6 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdDataFail
                   GOTO Quit
                END CATCH
-
-               DECLARE @cUserName NVARCHAR( 18)
-               SET @cUserName = SUSER_SNAME()
 
                EXEC RDT.rdt_STD_EventLog
                   @cActionType   = '3', -- Picking
@@ -641,14 +818,30 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLocNeeded
                   GOTO Quit
                END
+               -- V1.2 start
+               -- Check TOLOC valid 
+               /*IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility)
+               BEGIN
+                  SET @nErrNo = 218919
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLOC
+                  GOTO Quit
+               END*/
+               SELECT @cToLocLoseUCC = loseucc FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility
 
-               -- Check TOLOC valid
-               IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility)
+               IF @@ROWCOUNT = 0
                BEGIN
                   SET @nErrNo = 218919
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLOC
                   GOTO Quit
                END
+               ELSE
+               BEGIN
+                  IF @cToLocLoseUCC <> '1'
+                     SET @cToLocLoseUCC = '0'
+               END
+               --V1.2 end
+
+               DECLARE @cLoopPickSlipNo   NVARCHAR( 18)
 
                IF @nTranCount = 0
                   BEGIN TRANSACTION
@@ -659,17 +852,21 @@ BEGIN
                   --Create Cursor to loop PickDetail 1 by 1
                   DECLARE C_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                   SELECT 
-                     ucc.UCCNo, ucc.Loc, ucc.Qty, ucc.Sku, ucc.LOT, pkd.PickDetailKey, pkd.ID
+                     ucc.UCCNo, ucc.Loc, ucc.Qty, ucc.Sku, ucc.LOT, pkd.PickDetailKey, pkd.ID, pkd.OrderKey, pkh.PickHeaderKey
                   FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
                   INNER JOIN dbo.PICKHEADER pkh WITH(NOLOCK) ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
                   INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID AND ucc.Sku = pkd.Sku
                   WHERE pkh.StorerKey = @cStorerKey
-                     AND pkh.PickHeaderKey = @cPickSlipNo
+                     AND pkd.WaveKey = @cWaveKey
                      AND pkd.Status = @cPickConfirmStatus
-                     --AND pkd.ID = @cDropID
+                     AND ISNULL(pkd.Notes, '') = @cPickListKey
+                     AND ucc.Status < '5'
+                     AND pkd.uom = '2'
+                     -- AND pkd.CaseID = @cSSCC
+                     -- AND pkd.ID = @cDropID
 
                   OPEN C_UCC
-                  FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID
+                  FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID, @cOrderKey, @cLoopPickSlipNo
 
                   WHILE (@@FETCH_STATUS <> -1)
                   BEGIN
@@ -695,17 +892,84 @@ BEGIN
                         @cFromLOT    = @cLOT 
 
                      UPDATE dbo.UCC WITH(ROWLOCK)
-                     SET Status = '5',
+                     SET 
+                        Status = CASE WHEN @cToLocLoseUCC = '1' 
+                                    THEN '6' --lost
+                                    ELSE '5' END, --Picked V1.2
                         Userdefined08 = '',
                         Loc = @cToLoc,
-                        ID = @cDropID
+                        ID = @cDropID,
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
 
                      UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
                      SET Loc = @cToLoc,
-                        ID = @cDropID
+                        ID = @cDropID,
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE PickDetailKey = @cPickDetailKey
+
+                     SELECT 
+                        @cOrderType = ord.Type,
+                        @cOrderConsigneeKey = ord.ConsigneeKey
+                     FROM dbo.ORDERS ord WITH(NOLOCK)
+                     WHERE ord.StorerKey = @cStorerKey
+                        AND ord.OrderKey = @cOrderKey
+
+                     SELECT @nRowCount = COUNT(1)
+                     FROM dbo.CODELKUP WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND ListName = 'LVSSTO'
+                        AND Code = @cOrderConsigneeKey
+                        AND Short IS NOT NULL
+                        AND Short = @cOrderType
+
+                     IF @nRowCount > 0
+                     BEGIN
+                        UPDATE dbo.PackInfo WITH(ROWLOCK)
+                        SET CartonStatus = 'PACKED',
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME()
+                        WHERE PickSlipNo = @cLoopPickSlipNo
+                           AND RefNo IS NOT NULL
+                           AND RefNo = @cUCCNo
+
+                        SELECT @nRowCount = COUNT(1)
+                        FROM dbo.PackInfo WITH(NOLOCK)
+                        WHERE PickSlipNo = @cLoopPickSlipNo
+                           AND ISNULL(CartonStatus, '') <> 'PACKED'
+
+                        IF @nRowCount = 0
+                           AND NOT EXISTS (SELECT 1 
+                                          FROM dbo.PickHeader PH WITH(NOLOCK)
+                                          INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                                             ON PH.StorerKey = PD.StorerKey
+                                             AND PH.OrderKey = PD.OrderKey
+                                          WHERE PH.StorerKey = @cStorerkey
+                                             AND PH.PickHeaderKey = @cLoopPickSlipNo
+                                             AND PD.Status < '4'
+                                             AND PD.Qty > 0
+                                           )
+                           AND (SELECT COUNT(DISTINCT LabelNo) FROM dbo.PackDetail WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND PickSlipNo = @cLoopPickSlipNo)
+                               =
+                               (SELECT COUNT(DISTINCT CaseID)
+                                 FROM dbo.PickHeader PH WITH(NOLOCK)
+                                 INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                                    ON PH.StorerKey = PD.StorerKey
+                                    AND PH.OrderKey = PD.OrderKey
+                                 WHERE PH.StorerKey = @cStorerkey
+                                    AND PH.PickHeaderKey = @cLoopPickSlipNo
+                                    AND PD.Qty > 0)
+                        BEGIN
+                           UPDATE dbo.PackHeader WITH(ROWLOCK)
+                           SET Status = '9', --Packed
+                              EditDate = GETDATE(),
+                              EditWho  = SUSER_SNAME()
+                           WHERE PickSlipNo = @cLoopPickSlipNo
+                        END
+                     END
 
                      IF @nErrNo <> 0
                      BEGIN
@@ -724,7 +988,7 @@ BEGIN
                      END
 
                      -- Fetch Next From Cursor
-                     FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID
+                     FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID, @cOrderKey, @cLoopPickSlipNo
                   END -- WHILE 1=1
                   CLOSE C_UCC
                   DEALLOCATE C_UCC
@@ -741,12 +1005,12 @@ BEGIN
                   GOTO Quit
                END CATCH
 
-               SET @cOutField01 = @cPickSlipNo
+               SET @cOutField01 = @cWaveKey
                SET @cOutField02 = '' --PickZone
                SET @cOutField03 = '' --DropID
 
-               SET @nAfterScn = 5291  --Drop ID
-               SET @nAfterStep = 2
+               SET @nAfterScn = 6860
+               SET @nAfterStep = 99
             END
             ELSE IF @nInputKey = 0
             BEGIN
@@ -794,13 +1058,46 @@ BEGIN
             GOTO Quit
          END
       END
+
+      IF @nAfterStep = 1 AND @nAfterScn = 5290
+      BEGIN
+         SET @nAfterStep = 99
+         SET @nAfterScn = 6849
+      END
    END
 Fail:
    
 Quit:
    UPDATE rdt.rdtMobRec WITH (ROWLOCK) SET
       C_String1 = @cSSCC,
-      C_String2 = @cSuggestUCC
+      C_String2 = @cSuggestUCC,
+      C_String3 = @cWaveKey,
+      C_String4 = @cPickListKey,
+
+      Func           = @nFunc,
+      Step           = @nAfterStep,
+      Scn            = @nAfterScn,
+      ErrMsg         = @cErrMsg,
+
+      V_PickSlipNo   = @cPickSlipNo,
+      V_Zone         = @cPickZone,
+      V_String4      = @cDropID,
+
+      I_Field01 = '',  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
+      I_Field02 = '',  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
+      I_Field03 = '',  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
+      I_Field04 = '',  O_Field04 = @cOutField04,   FieldAttr04  = @cFieldAttr04,
+      I_Field05 = '',  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05,
+      I_Field06 = '',  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06,
+      I_Field07 = '',  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07,
+      I_Field08 = '',  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08,
+      I_Field09 = '',  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09,
+      I_Field10 = '',  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10,
+      I_Field11 = '',  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11,
+      I_Field12 = '',  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
+      I_Field13 = '',  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
+      I_Field14 = '',  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
+      I_Field15 = '',  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
    WHERE Mobile = @nMobile
 
    WHILE @@TRANCOUNT > @nTranCount

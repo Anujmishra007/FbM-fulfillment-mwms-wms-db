@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[RDTResumeSession]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[RDTResumeSession]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -22,7 +19,7 @@ GO
 /* 2024-05-24 1.1  NLT013   Add session id to get unique mobile               */ 
 /* 2024-07-26 1.2  Jackc    UWP-21905 Encrypt password                        */                    
 /******************************************************************************/                    
-CREATE PROC [RDT].[RDTResumeSession] (                   
+CREATE OR ALTER PROC [RDT].[RDTResumeSession] (                   
    @nMobile    INT,                    
    @nErrNo     INT  OUTPUT,                    
    @cErrMsg    NVARCHAR(20) OUTPUT, -- screen limitation, 20 char max             
@@ -90,7 +87,6 @@ CREATE PROC [RDT].[RDTResumeSession] (
       SET mobile = (CASE WHEN mobile = @cMobile01 THEN @cMobile02 ELSE @cMobile01 END),        
       EditDate = GETDATE()        
       WHERE mobile = @cMobile02 OR mobile=@cMobile01        
-        
    END        
         
    ELSE IF @cInField01 = '9'         

@@ -38,6 +38,10 @@ GO
 /* 09-Aug-20200 NJOW01    2.0 DEVOPS Combine Script                       */
 /* 12-Aug-2024  Wan04     2.1 LFWM-4446 - RG[GIT] Serial Number Solution  */
 /*                            - Transfer by Serial Number                 */
+/* 11-Jun-2025  TLTING02  2.1 storerconfig BlockDoubleShip                */
+/* 10-Oct-2025  SSA01     2.2 UWP-42248 -Enhanced session management      */
+/* 05-Nov-2025  SSA02     2.2 UWP-43625- updated sequence of update Lot */
+/*                            table to avoid deadlock                   */
 /**************************************************************************/
 
 CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
@@ -95,6 +99,8 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
  ,      @c_pstprocess NVARCHAR(250)
  ,      @n_cnt int
 
+ DECLARE @c_BlockDoubleShip NVARCHAR(30)
+ 
  IF @n_continue=1 or @n_continue=2
  BEGIN
      IF @d_Lottable04 = ''
@@ -121,6 +127,9 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
 
   -- (SWT02)
  DECLARE @c_Facility NVARCHAR(10)
+
+ DECLARE @n_LotRcnt int, @n_rcnt int,@n_curCaseCnt int, @n_curInnerPack int , @n_curqty int, @c_curstatus NVARCHAR(10), @n_curPallet int,
+             @f_curcube float, @f_curGrossWgt float, @f_curNetWgt float, @f_curotherunit1 float, @f_curotherunit2 float
 
  SELECT @c_Facility = Facility
  FROM LOC WITH (NOLOCK)
@@ -255,41 +264,6 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                   + ' - Do Not Matched with LOTATTRIBUTE.(nspItrnAddWithdrawalCheck)' -- INC0871401
              END
          END
-     END
- END
- IF @n_continue=1 or @n_continue=2
- BEGIN
-     DECLARE @n_rcnt int,@n_curCaseCnt int, @n_curInnerPack int , @n_curqty int, @c_curstatus NVARCHAR(10), @n_curPallet int,
-             @f_curcube float, @f_curGrossWgt float, @f_curNetWgt float, @f_curotherunit1 float, @f_curotherunit2 float
-     SELECT @n_curCaseCnt=CaseCnt,  @n_curInnerPack=InnerPack,  @n_curqty=Qty,  @n_curPallet=Pallet,  @f_curcube=cube,
-            @f_curGrossWgt=GrossWgt,  @f_curNetWgt=NetWgt,  @f_curotherunit1=otherunit1,  @f_curotherunit2=otherunit2
-     FROM LOT (NOLOCK) WHERE LOT = @c_lot
-     SELECT @n_rcnt=@@ROWCOUNT
-     IF @n_rcnt=1
-     BEGIN
-         UPDATE LOT
-         SET   CaseCnt=CaseCnt+@n_CaseCnt, InnerPack=InnerPack+@n_InnerPack, QTY = QTY+@n_qty, Pallet=Pallet+@n_Pallet,
-               CUBE=CUBE+@f_cube, GrossWgt=(CASE WHEN (GrossWgt+@f_GrossWgt) > 0 THEN (GrossWgt+@f_GrossWgt) ELSE 0 END ),
-               NetWgt=(CASE WHEN (NetWgt+@f_NetWgt) > 0 THEN (NetWgt+@f_NetWgt) ELSE 0 END ),
-               OTHERUNIT1=OTHERUNIT1+@f_otherunit1, OTHERUNIT2=OTHERUNIT2+@f_otherunit2
-         WHERE LOT=@c_LOT
-         SELECT @n_Err = @@ERROR, @n_cnt = @@ROWCOUNT
-         IF @n_Err <> 0
-         BEGIN
-             SELECT @n_continue = 3
-             SELECT @n_Err = 61921 --61308
-             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
-         END
-         ELSE IF @n_cnt = 0
-         BEGIN
-             SELECT @n_continue = 3, @n_Err = 61922 --61325
-             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
-         END
-     END
-     ELSE BEGIN
-         SELECT @n_continue = 3, @n_Err = 61923 --61309
-         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
-         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table ' + ISNULL(RTRIM(@c_lot),'') + ' Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'  --INC1362763
      END
  END
 
@@ -430,6 +404,44 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
          SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': LOTxLOCxID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
      END
  END
+ --(SSA02) start--
+ IF @n_continue=1 or @n_continue=2
+ BEGIN
+
+     SELECT @n_curCaseCnt=CaseCnt,  @n_curInnerPack=InnerPack,  @n_curqty=Qty,  @n_curPallet=Pallet,  @f_curcube=cube,
+            @f_curGrossWgt=GrossWgt,  @f_curNetWgt=NetWgt,  @f_curotherunit1=otherunit1,  @f_curotherunit2=otherunit2
+     FROM LOT (NOLOCK) WHERE LOT = @c_lot
+     SELECT @n_LotRcnt=@@ROWCOUNT
+     IF @n_LotRcnt=1
+     BEGIN
+         UPDATE LOT
+         SET   CaseCnt=CaseCnt+@n_CaseCnt, InnerPack=InnerPack+@n_InnerPack, QTY = QTY+@n_qty, Pallet=Pallet+@n_Pallet,
+               CUBE=CUBE+@f_cube, GrossWgt=(CASE WHEN (GrossWgt+@f_GrossWgt) > 0 THEN (GrossWgt+@f_GrossWgt) ELSE 0 END ),
+               NetWgt=(CASE WHEN (NetWgt+@f_NetWgt) > 0 THEN (NetWgt+@f_NetWgt) ELSE 0 END ),
+               OTHERUNIT1=OTHERUNIT1+@f_otherunit1, OTHERUNIT2=OTHERUNIT2+@f_otherunit2
+         WHERE LOT=@c_LOT
+         SELECT @n_Err = @@ERROR, @n_cnt = @@ROWCOUNT
+         IF @n_Err <> 0
+         BEGIN
+             SELECT @n_continue = 3
+             SELECT @n_Err = 61921 --61308
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
+         END
+         ELSE IF @n_cnt = 0
+         BEGIN
+             SELECT @n_continue = 3, @n_Err = 61922 --61325
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
+         END
+     END
+     --ELSE
+     IF (@n_LotRcnt <> 1 AND @n_LotRcnt <> 0) AND (@n_continue = 1 OR @n_continue = 2)
+     BEGIN
+         SELECT @n_continue = 3, @n_Err = 61923 --61309
+         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
+         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table ' + ISNULL(RTRIM(@c_lot),'') + ' Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'  --INC1362763
+     END
+ END
+ --(SSA02) end--
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
      IF EXISTS(SELECT 1 FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> 'OK')
@@ -738,8 +750,8 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
             BEGIN
                 UPDATE ChannelInv WITH (ROWLOCK)
                    SET Qty = Qty + @n_qty,
-                       EditDate = GETDATE(),
-                       EditWho  = SUSER_SNAME()
+                       EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                       EditWho  = dbo.fnc_GetUserName()          --(SSA01)
                 WHERE Channel_ID = @n_Channel_ID
                 SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
 
@@ -773,8 +785,8 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
             Lottable05 = @d_Lottable05,
             Status = @c_Status,
             Channel_ID = @n_Channel_ID, -- (SWT02)
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+            EditWho = dbo.fnc_GetUserName()          --(SSA01)
       WHERE ItrnKey = @c_itrnkey
    END
    --(Wan03) - START
@@ -890,6 +902,42 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
    END
 END
 
+
+  --TLTING02
+  IF @n_continue = 1 or @n_continue = 2
+   BEGIN
+	 
+     SET @b_success = 0
+     SET @c_BlockDoubleShip = ''
+     Execute nspGetRight
+        @c_facility = ''
+     ,  @c_StorerKey= @c_StorerKey                   -- Storer
+     ,  @c_Sku      = ''                             -- Sku
+     ,  @c_ConfigKey= 'BlockDoubleShip'                  -- ConfigKey
+     ,  @b_success  = @b_success         OUTPUT
+     ,  @c_authority= @c_BlockDoubleShip     OUTPUT
+     ,  @n_err      = @n_err             OUTPUT
+     ,  @c_ErrMsg   = @c_ErrMsg          OUTPUT
+
+     IF @b_success <> 1
+     BEGIN
+        SET @n_continue = 3
+        SET @n_Err = 62711
+        SET @c_ErrMsg = 'nspItrnAddWithdrawalCheck:' + ISNULL(RTRIM(@c_ErrMsg),'')
+     END
+
+	   IF @c_BlockDoubleShip = '1' 
+	   AND @c_sourcetype = 'ntrPickDetailUpdate'  
+	   AND EXISTS (  SELECT 1 FROM ITRN  (NOLOCK) WHERE SourceKey = @c_sourcekey  AND  SourceType = @c_sourcetype  AND ItrnKey <> @c_itrnkey  )
+	   
+	   BEGIN 
+	      SELECT @n_continue = 3  
+	                  SELECT @n_err = 62992  
+	                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
+	                  +': Double ship for Pickdetail. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+	   END
+	END
+	
 /* #INCLUDE <SPIAWC2.SQL> */
 IF @n_continue = 3  -- Error Occured - Process And Return
 BEGIN

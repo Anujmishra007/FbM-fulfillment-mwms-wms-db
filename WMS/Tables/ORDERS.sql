@@ -1,7 +1,7 @@
 IF NOT EXISTS (SELECT *
                FROM sys.tables
                WHERE name = 'ORDERS'
-                 AND type = 'U')
+                 AND type in (N'U'))
     BEGIN
 
     CREATE TABLE [dbo].[ORDERS]
@@ -141,7 +141,7 @@ IF NOT EXISTS (SELECT *
          [RTNTrackingNo] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Orders_RTNTrackingNo] DEFAULT (''),
          [BizUnit] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Orders_BizUnit] DEFAULT (''),
          [HashValue] [tinyint] NULL CONSTRAINT [DF_ORDERS_HashValue] DEFAULT ((1)),
-         [ECOM_OAID] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Orders_ECOM_OAID] DEFAULT (''),
+         [ECOM_OAID] [nvarchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Orders_ECOM_OAID] DEFAULT (''),
          [ECOM_Platform] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Orders_ECOM_Platform] DEFAULT (''),
          [CancelReasonCode] [nvarchar](60) NULL
 
@@ -175,7 +175,16 @@ IF NOT EXISTS (SELECT *
 
          ALTER TABLE [dbo].[ORDERS] WITH NOCHECK ADD CONSTRAINT [FK_ORDERS_STORER_01] FOREIGN KEY ([StorerKey]) REFERENCES [dbo].[STORER] ([StorerKey])
 
-         EXEC sp_addextendedproperty N'MS_Description', 'A Shipment Order is an outbound document in response to a customer√Üs request for product from the warehouse. It records the quantity of each commodity ordered, as well as the destination of each shipment. Orders can be created manually or transmitted electronically via IML.', 'SCHEMA', N'dbo', 'TABLE', N'ORDERS', NULL, NULL
+
+		 GRANT DELETE ON  [dbo].[ORDERS] TO [NSQL]
+
+		 GRANT INSERT ON  [dbo].[ORDERS] TO [NSQL]
+
+		 GRANT SELECT ON  [dbo].[ORDERS] TO [NSQL]
+
+		 GRANT UPDATE ON  [dbo].[ORDERS] TO [NSQL]
+
+         EXEC sp_addextendedproperty N'MS_Description', 'A Shipment Order is an outbound document in response to a customer∆s request for product from the warehouse. It records the quantity of each commodity ordered, as well as the destination of each shipment. Orders can be created manually or transmitted electronically via IML.', 'SCHEMA', N'dbo', 'TABLE', N'ORDERS', NULL, NULL
 
          EXEC sp_addextendedproperty N'MS_Description', 'Load Date', 'SCHEMA', N'dbo', 'TABLE', N'ORDERS', 'COLUMN', N'AddDate'
 
@@ -464,14 +473,17 @@ ELSE
                 EXEC sp_addextendedproperty N'MS_Description', 'The reason why an order is cancelled', 'SCHEMA', N'dbo', 'TABLE', N'ORDERS', 'COLUMN', N'CancelReasonCode'
             END
 
+
+
+	--ALTER COLUMN 
+ IF  EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'ECOM_OAID' AND Object_ID = Object_ID('dbo.ORDERS') and max_length <>512)
+			BEGIN
+				ALTER TABLE dbo.ORDERS 
+				ALTER COLUMN [ECOM_OAID]  [nvarchar] (256) NULL;
+
+			END
+
+
     END
-
-   GRANT SELECT ON  [dbo].[ORDERS] TO [JReportRole]
-
-   GRANT DELETE ON  [dbo].[ORDERS] TO [NSQL]
-
-   GRANT INSERT ON  [dbo].[ORDERS] TO [NSQL]
-
-   GRANT SELECT ON  [dbo].[ORDERS] TO [NSQL]
-
-   GRANT UPDATE ON  [dbo].[ORDERS] TO [NSQL]

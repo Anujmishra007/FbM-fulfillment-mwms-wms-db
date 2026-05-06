@@ -26,6 +26,7 @@ GO
 /* 2023-06-23  Wan03    1.3   LFWM-4176 - CN UAT  Split wave into loads */
 /*                            based on customized SP                    */
 /*                            DevOps Combine Script                     */
+/* 2025-09-02  SWT01    1.4   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveGenLoadPlan]                                                                                                                     
       @c_WaveKey           NVARCHAR(10)
@@ -68,20 +69,27 @@ BEGIN
          )                                                                          --(Wan03) - END    
          
    SET @b_Success = 1
-   SET @n_Err     = 0
                
-   SET @n_Err = 0 
-   EXEC [WM].[lsp_SetUser] 
-         @c_UserName = @c_UserName  OUTPUT
-      ,  @n_Err      = @n_Err       OUTPUT
-      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-   EXECUTE AS LOGIN = @c_UserName
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-   IF @n_Err <> 0 
-   BEGIN
-      GOTO EXIT_SP
-   END 
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
 
    IF NOT EXISTS( SELECT 1 FROM WAVEDETAIL WITH (NOLOCK)
                   WHERE WaveKey = @c_WaveKey )
@@ -340,7 +348,8 @@ EXIT_SP:
       BEGIN TRAN
    END 
    --(Wan02) - END  
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_WaveGenLoadPlan] TO nSQL 

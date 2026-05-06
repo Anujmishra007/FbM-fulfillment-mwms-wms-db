@@ -1,4 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrCCAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrCCAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 drop trigger [dbo].[ntrCCAdd]
 GO
 
@@ -7,6 +7,8 @@ GO
 SET ANSI_NULLS OFF 
 GO
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
+/* 09-Oct-2025  SPC040     Replace SUSER_SNAME with fnc_GetUserName     */
+
 
 CREATE TRIGGER ntrCCAdd
  ON  CC
@@ -43,10 +45,10 @@ CREATE TRIGGER ntrCCAdd
  BEGIN
  UPDATE CC
  SET  TrafficCop = NULL,
- AddDate = GETDATE(),
- AddWho = SUSER_SNAME(),
- EditDate = GETDATE(),
- EditWho = SUSER_SNAME()
+ AddDate = dbo.fnc_GetDate(),
+ AddWho = dbo.fnc_GetUserName(),
+ EditDate = dbo.fnc_GetDate(),
+ EditWho = dbo.fnc_GetUserName()
  FROM CC, INSERTED
  WHERE CC.CCKey = INSERTED.CCKey
  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT

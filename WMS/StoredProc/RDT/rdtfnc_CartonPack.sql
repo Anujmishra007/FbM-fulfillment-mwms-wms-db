@@ -26,6 +26,7 @@ GO
 /*                            Add @cDoc1Value to print param               */
 /*                            Add conditional print pack list              */
 /*                            Add ExtendedValidateSP at print pack list    */
+/* 2025-09-17   1.7  Cuize    FCR-7763 Add ExtScn                          */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_CartonPack](
@@ -99,7 +100,8 @@ DECLARE
    @cShipLabel          NVARCHAR( 10), 
    @cCartonManifest     NVARCHAR( 10), 
    @cPackList           NVARCHAR( 10),
-   @cDefaultCartonType  NVARCHAR( 10), 
+   @cDefaultCartonType  NVARCHAR( 10),
+   @cExtendedScnSP      NVARCHAR( 20),
 
    @nCartonNo           INT,
 
@@ -117,7 +119,39 @@ DECLARE
    @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),  @cFieldAttr12 NVARCHAR( 1),
    @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),  @cFieldAttr13 NVARCHAR( 1),
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),  @cFieldAttr14 NVARCHAR( 1),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),  @cFieldAttr15 NVARCHAR( 1)
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),  @cFieldAttr15 NVARCHAR( 1),
+
+   --v1.7 extscn parameters start
+   @cLottable01     NVARCHAR( 18),
+   @cLottable02     NVARCHAR( 18),
+   @cLottable03     NVARCHAR( 18),
+   @dLottable04     DATETIME,
+   @dLottable05     DATETIME,
+   @cLottable06     NVARCHAR( 30),
+   @cLottable07     NVARCHAR( 30),
+   @cLottable08     NVARCHAR( 30),
+   @cLottable09     NVARCHAR( 30),
+   @cLottable10     NVARCHAR( 30),
+   @cLottable11     NVARCHAR( 30),
+   @cLottable12     NVARCHAR( 30),
+   @dLottable13     DATETIME,
+   @dLottable14     DATETIME,
+   @dLottable15     DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250),
+
+   @nExtScnAction       INT,
+   @tExtScnData         VariableTable
+   --V1.7 extscn parameters end
 
 -- Getting Mobile information
 SELECT
@@ -162,6 +196,7 @@ SELECT
    @cCartonManifest     = V_String32, 
    @cPackList           = V_String33,
    @cDefaultCartonType  = V_String34,
+   @cExtendedScnSP      = V_String35,
 
    @nCartonNo           = V_Integer1,
 
@@ -205,6 +240,7 @@ BEGIN
    IF @nStep = 2  GOTO Step_CartonID      -- Scn = 5581. Scan Carton ID
    IF @nStep = 3  GOTO Step_PrintPackList -- Scn = 5582. Print PackList
    IF @nStep = 4  GOTO Step_PackInfo      -- Scn = 5583. Pack Info
+   IF @nStep = 99 GOTO Step_99   -- Extended Screen
 END
 RETURN -- Do nothing if incorrect step
 
@@ -248,7 +284,10 @@ BEGIN
       SET @cShipLabel = ''
    SET @cDecodeSP = rdt.rdtGetConfig( @nFunc, 'DecodeSP', @cStorerKey)  
    IF @cDecodeSP = '0'  
-      SET @cDecodeSP = ''  
+      SET @cDecodeSP = ''
+   SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScnSP = '0'
+      SET @cExtendedScnSP = ''
 
    -- Logging
    EXEC RDT.rdt_STD_EventLog
@@ -287,6 +326,14 @@ BEGIN
       -- Go to carton ID screen
       SET @nScn = @nScn_CartonID
       SET @nStep = @nStep_CartonID
+   END
+
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
    END
 END
 GOTO Quit
@@ -380,6 +427,14 @@ BEGIN
 
       -- Reset all variables
       SET @cOutField01 = '' 
+   END
+
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         BEGIN
+            GOTO Step_99
+         END
    END
 END
 GOTO Quit
@@ -821,6 +876,14 @@ Step_CartonID_Quit:
       END
    END
 
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
 END
 GOTO Quit
 
@@ -1135,6 +1198,49 @@ BEGIN
          SET @cOutField03 = @cCube
       END
 
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tExtVal, ' +
+                        ' @cDoc1Value, @cCartonID, @cCartonSKU, @nCartonQTY, @cPackInfo, @cCartonType, @cCube, @cWeight, @cPackInfoRefNo, ' +
+                        ' @cPickSlipNo, @nCartonNo, @cLabelNo, @nErrNo OUTPUT, @cErrMsg OUTPUT  '
+            SET @cSQLParam =
+                    ' @nMobile        INT,           ' +
+                    ' @nFunc          INT,           ' +
+                    ' @cLangCode      NVARCHAR( 3),  ' +
+                    ' @nStep          INT,           ' +
+                    ' @nInputKey      INT,           ' +
+                    ' @cStorerKey     NVARCHAR( 15), ' +
+                    ' @cFacility      NVARCHAR( 5),  ' +
+                    ' @tExtVal        VariableTable READONLY, ' +
+                    ' @cDoc1Value     NVARCHAR( 20), ' +
+                    ' @cCartonID      NVARCHAR( 20), ' +
+                    ' @cCartonSKU     NVARCHAR( 20), ' +
+                    ' @nCartonQTY     INT,           ' +
+                    ' @cPackInfo      NVARCHAR( 4),  ' +
+                    ' @cCartonType    NVARCHAR( 10), ' +
+                    ' @cCube          NVARCHAR( 10), ' +
+                    ' @cWeight        NVARCHAR( 10), ' +
+                    ' @cPackInfoRefNo NVARCHAR( 20), ' +
+                    ' @cPickSlipNo    NVARCHAR( 10), ' +
+                    ' @nCartonNo      INT,           ' +
+                    ' @cLabelNo       NVARCHAR( 20), ' +
+                    ' @nErrNo         INT           OUTPUT, ' +
+                    ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tExtVal,
+                 @cDoc1Value, @cCartonID, @cCartonSKU, @nCartonQTY, @cPackInfo, @cCartonType, @cCube, @cWeight, @cPackInfoRefNo,
+                 @cPickSlipNo, @nCartonNo, @cLabelNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       DECLARE @fCube   FLOAT 
       DECLARE @fWeight FLOAT 
       SET @fCube = CAST( @cCube AS FLOAT)
@@ -1315,8 +1421,73 @@ BEGIN
       SET @nScn = @nScn_CartonID
       SET @nStep = @nStep_CartonID
    END
+
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         BEGIN
+            GOTO Step_99
+         END
+   END
 END
 GOTO Quit
+
+/********************************************************************************
+Scn = XXXX Ext Scn
+********************************************************************************/
+
+Step_99:
+BEGIN
+
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+
+
+         EXECUTE [RDT].[rdt_ExtScnEntry]
+                 @cExtendedScnSP,  --855ExtScn01
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+                 @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+                 @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+                 @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+                 @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+                 @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+                 @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+                 @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+                 @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+                 @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+                 @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+                 @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+                 @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+                 @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+                 @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+                 @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+                 @nExtScnAction,
+                 @nScn OUTPUT,  @nStep OUTPUT,
+                 @nErrNo   OUTPUT,
+                 @cErrMsg  OUTPUT,
+                 @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+                 @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+                 @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+                 @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+                 @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+                 @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+                 @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+                 @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+                 @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+                 @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         GOTO Quit
+      END
+   END
+
+   Step_99_Fail:
+   GOTO Quit
+END
 
 
 /********************************************************************************
@@ -1360,6 +1531,8 @@ BEGIN
       V_String32 = @cCartonManifest, 
       V_String33 = @cPackList,
       V_String34 = @cDefaultCartonType,
+      V_String35 = @cExtendedScnSP,
+
 
       V_Integer1 = @nCartonNo,
 

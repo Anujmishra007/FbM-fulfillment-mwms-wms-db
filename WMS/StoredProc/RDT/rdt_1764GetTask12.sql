@@ -14,6 +14,11 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 2024-12-06  1.0  JCH507    FCR-1157 (Copied from Generic GetNextTask)*/
+/* 2025-05-20  1.1  NLT013    UWP-34684 Assign wrong task to user       */
+/* 2025-06-05  1.1.0  NLT013  UWP-34684 Fix issue: Cursor is not allocated*/
+/*                            , it causes unpected error                */
+/* 2025-09-22 1.2.0 NickT     FCR-7693 Add user override priority in task*/
+/* 2025-09-10  1.2.0  NLT013  FCR-7730 add AreaKey limitation           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764GetTask12] (
@@ -64,6 +69,10 @@ BEGIN
 
    DECLARE @cLastToLoc     NVARCHAR( 10) --v1.0
 
+   DECLARE @cFinalLocCategory NVARCHAR( 10)
+   DECLARE @cFinalLocType     NVARCHAR( 10)
+   DECLARE @cSLLocType        NVARCHAR( 10)
+
    SET @cNewTaskKey = ''
 
    -- Get task info
@@ -71,7 +80,8 @@ BEGIN
       @cLastToLoc = ToLoc, --v1.0
       @cFinalLOC = CASE WHEN FinalLOC = '' THEN ToLOC ELSE FinalLoc END,
       @cWaveKey = WaveKey,
-      @cPickMethod = PickMethod --v1.0
+      @cPickMethod = PickMethod, --v1.0
+      @cStorerKey = StorerKey
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE ListKey = @cListKey
       AND TransitCount = 0
@@ -109,51 +119,181 @@ BEGIN
    SET @cPalletFinalLOC = ''
    --V1.0 JCH507 END
 
+   -- V1.1 NLT013 BEGIN
+   -- Get the final location
+   -- 1. if any task (without TransitLoc) is completed, get top 1 ToLoc
+   SELECT TOP 1 @cPalletFinalLOC = ToLoc
+   FROM dbo.TaskDetail WITH (NOLOCK)
+   WHERE ListKey = @cListKey
+      AND ToLoc <> ''
+      AND FinalLOC = ''
+      AND TaskType = 'RPF'
+      AND Status = '5'
+      AND TransitCount = 0
+
+   -- 2. if no task in found, search the task with TransitLoc, get top 1 FinalLoc
+   IF ISNULL(@cPalletFinalLOC, '') = ''
+   BEGIN
+      SELECT TOP 1 @cPalletFinalLOC = FinalLOC
+      FROM dbo.TaskDetail WITH (NOLOCK)
+      WHERE ListKey = @cListKey
+         AND FinalLOC <> ''
+         AND TaskType = 'RPF'
+         AND Status = '5'
+         AND TransitCount = 0
+   END
+
+   SET @cPalletFinalLOC = IIF(ISNULL(@cPalletFinalLOC, '') = '', @cFinalLOC, @cPalletFinalLOC)
+
+   IF @cPalletFinalLOC = ''
+   BEGIN
+      SET @nErrNo = 230304
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No Final Loc
+      GOTO Fail
+   END
+   ELSE
+   BEGIN
+      SELECT TOP 1
+         @cFinalLocCategory = LOC.LocationCategory,
+         @cFinalLocType = LOC.LocationType,
+         @cSLLocType    = SL.LocationType
+      FROM dbo.LOC WITH (NOLOCK)
+      JOIN dbo.PutawayZone PZ WITH (NOLOCK)
+         ON LOC.FACILITY = PZ.FACILITY AND Loc.PutawayZone = PZ.PutawayZone
+      LEFT JOIN dbo.SKUxLOC SL WITH (NOLOCK)  
+         ON SL.StorerKey = @cStorerKey AND LOC.LOC = SL.LOC
+      LEFT JOIN dbo.AreaDetail AD WITH(NOLOCK)
+         ON PZ.PutawayZone = AD.PutawayZone
+      WHERE LOC.LOC = @cPalletFinalLOC
+
+      IF @bDebugFlag = 1
+         SELECT 'Get Final Loc Info', @cFinalLocCategory AS FinalLocCategory, @cFinalLocType AS FinalLocType, @cSLLocType AS SLLocType
+   END
+   -- V1.1 NLT013 END
+
    -- Get next task
+   -- If 2nd task type is ASTMV, move the whole DropID to final location, the tasks should have the same final location
+   -- If 2nd task type is ASTRPT, will create seperate ASTRPT task for each box, the tasks should have the same final location type
    DECLARE @curRPTask CURSOR
    IF @cAreaKey = ''
-      SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT
-            TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
-         FROM dbo.TaskDetail WITH (NOLOCK)
+   BEGIN
+      IF @cFinalLocType = 'PND' AND @cFinalLocCategory = 'Induction' --ASTMV
+      BEGIN
+         SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT
+               TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
+            FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-         WHERE TaskDetail.TaskType IN ('RPF')
-            AND TaskDetail.PickMethod = 'PP' -- Partial pallet
-            AND TaskDetail.Status = '0'
-            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
-            AND TaskDetail.WaveKey = @cWaveKey
-            AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
-            AND TaskDetail.PickMethod = @cPickMethod -- V1.0
-            -- Have permission in FromLOC
-            AND EXISTS( SELECT 1
-               FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
-                  WHERE PermissionType = TaskDetail.TaskType
-                     AND TMU.UserKey = @cUserName
-                     AND TMU.Permission = '1')
-         ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            WHERE TaskDetail.TaskType = 'RPF'
+               AND TaskDetail.Status = '0'
+               AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
+               AND TaskDetail.WaveKey = @cWaveKey
+               AND TaskDetail.PickMethod = @cPickMethod -- V1.0 Should be FP
+               AND TaskDetail.ToLOC = @cPalletFinalLOC --V1.1
+               -- Have permission in FromLOC
+               AND EXISTS( SELECT 1
+                  FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
+                     WHERE PermissionType = TaskDetail.TaskType
+                        AND TMU.UserKey = @cUserName
+                        AND TMU.AreaKey = AreaDetail.AreaKey
+                        AND TMU.Permission = '1')
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
+      END
+      ELSE IF (@cSLLocType = 'PICK' OR @cFinalLocType = 'DYNAMICPK') AND @cFinalLocCategory = 'Shelving' --ASTRPT
+      BEGIN
+         SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT
+               TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
+            INNER JOIN dbo.LOC AS LOC1 WITH (NOLOCK) ON (TaskDetail.ToLoc = LOC1.LOC)
+            INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
+            WHERE TaskDetail.TaskType = 'RPF'
+               AND TaskDetail.Status = '0'
+               AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
+               AND TaskDetail.WaveKey = @cWaveKey
+               AND TaskDetail.PickMethod = @cPickMethod -- V1.0 Should be PP
+               AND LOC1.LocationType = @cFinalLocType --V1.1
+               -- Have permission in FromLOC
+               AND EXISTS( SELECT 1
+                  FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
+                     WHERE PermissionType = TaskDetail.TaskType
+                        AND TMU.UserKey = @cUserName
+                        AND TMU.AreaKey = AreaDetail.AreaKey
+                        AND TMU.Permission = '1')
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
+      END
+   END
    ELSE
-      SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT
-            TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
-         FROM dbo.TaskDetail WITH (NOLOCK)
+   BEGIN
+      IF @cFinalLocType = 'PND' AND @cFinalLocCategory = 'Induction' --ASTMV
+      BEGIN
+         SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT
+               TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
+            FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-         WHERE AreaDetail.AreaKey = @cAreaKey
-            AND TaskDetail.TaskType IN ('RPF')
-            AND TaskDetail.PickMethod = 'PP' -- Partial pallet
-            AND TaskDetail.Status = '0'
-            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
-            AND TaskDetail.WaveKey = @cWaveKey
-            AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
-            AND TaskDetail.PickMethod = @cPickMethod -- V1.0
-            -- Have permission in FromLOC
-            AND EXISTS( SELECT 1
-               FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
-                  WHERE PermissionType = TaskDetail.TaskType
-                     AND TMU.UserKey = @cUserName
-                     AND TMU.Permission = '1')
-         ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            WHERE AreaDetail.AreaKey = @cAreaKey
+               AND TaskDetail.TaskType = 'RPF'
+               AND TaskDetail.Status = '0'
+               AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
+               AND TaskDetail.WaveKey = @cWaveKey
+               AND TaskDetail.PickMethod = @cPickMethod -- V1.0 Should be FP
+               AND TaskDetail.ToLOC = @cPalletFinalLOC --V1.1 
+               -- Have permission in FromLOC
+               AND EXISTS( SELECT 1
+                  FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
+                     WHERE PermissionType = TaskDetail.TaskType
+                        AND TMU.UserKey = @cUserName
+                        AND TMU.AreaKey = AreaDetail.AreaKey
+                        AND TMU.Permission = '1')
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
+      END
+      ELSE IF (@cSLLocType = 'PICK' OR @cFinalLocType = 'DYNAMICPK') AND @cFinalLocCategory = 'Shelving' --ASTRPT
+      BEGIN
+         SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT
+               TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
+            INNER JOIN dbo.LOC AS LOC1 WITH (NOLOCK) ON (TaskDetail.ToLoc = LOC1.LOC)
+            INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
+            WHERE AreaDetail.AreaKey = @cAreaKey
+               AND TaskDetail.TaskType = 'RPF'
+               AND TaskDetail.Status = '0'
+               AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
+               AND TaskDetail.WaveKey = @cWaveKey
+               AND LOC1.LocationType = @cFinalLocType --V1.1 
+               AND TaskDetail.PickMethod = @cPickMethod -- V1.0 Should be PP
+               -- Have permission in FromLOC
+               AND EXISTS( SELECT 1
+                  FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
+                     WHERE PermissionType = TaskDetail.TaskType
+                        AND TMU.UserKey = @cUserName
+                        AND TMU.AreaKey = AreaDetail.AreaKey
+                        AND TMU.Permission = '1')
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
+      END
+   END
+
+   DECLARE @nCursorStatus SMALLINT
+   SELECT @nCursorStatus = CURSOR_STATUS('variable', '@curRPTask')
+
+   IF @nCursorStatus IN (-2, -3) -- -2 Not applicable. -3 A cursor with the specified name does not exist.
+   BEGIN
+      SET @cNewTaskKey = ''
+      GOTO CHK_TASK_KEY
+   END
 
    OPEN @curRPTask
    WHILE (1=1)
@@ -263,6 +403,7 @@ BEGIN
       BREAK -- Exit loop if found a task
    END
 
+CHK_TASK_KEY:
    IF @cNewTaskKey = ''
    BEGIN
       IF EXISTS( SELECT 1
@@ -308,7 +449,7 @@ BEGIN
             ,UserKey    = @cUserName
             ,ReasonKey  = ''
             ,TransitLOC = @cTransitLOC
-            ,FinalLOC   = @cToLOC
+            ,FinalLOC   = IIF(FinalLoc = '', @cToLOC, FinalLoc) --V1.1 NLT013 update FinalLoc only if FinalLoc is empty
             ,FinalID    = @cToID
             ,ToLOC      = @cTransitLOC
             ,ToID       = @cDropID

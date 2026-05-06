@@ -43,7 +43,7 @@ CREATE PROC rdt.rdt_PTLPiece_Assign (
    @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT, 
    @nScn             INT           OUTPUT,
    @nErrNo           INT           OUTPUT, 
-   @cErrMsg          NVARCHAR( 20) OUTPUT
+   @cErrMsg          NVARCHAR( 1024) OUTPUT
 )
 AS
 BEGIN
@@ -118,7 +118,7 @@ BEGIN
          '@cInField15   NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT, ' + 
          '@nScn         INT           OUTPUT, ' + 
          '@nErrNo       INT           OUTPUT, ' +
-         '@cErrMsg      NVARCHAR( 20) OUTPUT  '
+         '@cErrMsg      NVARCHAR( 1024) OUTPUT  '
          
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
          @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 

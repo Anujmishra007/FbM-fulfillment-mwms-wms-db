@@ -3,14 +3,17 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_1764SwapUCC09                                         */
-/* Copyright      : Maersk                                                    */
-/* Customer: Levis                                                            */
-/*                                                                            */
-/* Date       Rev  Author    Purposes                                         */
-/* 2024-12-06 1.0  JCH507    FCR-1157 for levis (based on rdt_1764SwapUCC07)  */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_1764SwapUCC09                                           */
+/* Copyright      : Maersk                                                      */
+/* Customer: Levis                                                              */
+/*                                                                              */
+/* Date       Rev    Author    Purposes                                         */
+/* 2024-12-06 1.0    JCH507    FCR-1157 for levis (based on rdt_1764SwapUCC07)  */
+/* 2025-09-10 1.1.0  NICKT     FCR-7730 Check lottables by "SwapUCC"            */
+/* 2026-04-14 1.2.0  NICKT     UWP-54220 Update PackDetail.RefNo                */
+/* 2026-04-29 1.2.1  NICKT     UWP-54220 Swap failed if scanned UCC has diff lot*/
+/********************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764SwapUCC09
    @nMobile          INT,
@@ -67,6 +70,7 @@ BEGIN
    DECLARE @cPickDetailKey NVARCHAR( 10)
    DECLARE @cPickSlipNo    NVARCHAR( 10)
    DECLARE @nCartonNo      INT
+   DECLARE @cLabelNo       NVARCHAR( 20)
    DECLARE @cLabelLine     NVARCHAR( 5)
    DECLARE @cDocType       NVARCHAR( 1)
    DECLARE @nQTY           INT
@@ -212,99 +216,89 @@ BEGIN
       GOTO Fail
    END
 
-   --v1.0
-   -- Check UCC Lot Match
-   IF @cTaskLOT <> @cActUCCLOT
-   BEGIN
-      SET @nErrNo = 230363
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCLotNotMatch
-      GOTO Fail
-   END
-   --v1.0 end
-
-   --DECLARE
-   --   @cChkL01 NVARCHAR(1) = '0', @cTaskL01 NVARCHAR(18), @cUCCL01 NVARCHAR(18),
-   --   @cChkL02 NVARCHAR(1) = '0', @cTaskL02 NVARCHAR(18), @cUCCL02 NVARCHAR(18),
-   --   @cChkL03 NVARCHAR(1) = '0', @cTaskL03 NVARCHAR(18), @cUCCL03 NVARCHAR(18),
-   --   @cChkL04 NVARCHAR(1) = '0', @dTaskL04 DATETIME,     @dUCCL04 DATETIME,
-   --   @cChkL05 NVARCHAR(1) = '0', @dTaskL05 DATETIME,     @dUCCL05 DATETIME,
-   --   @cChkL06 NVARCHAR(1) = '0', @cTaskL06 NVARCHAR(18), @cUCCL06 NVARCHAR(18),
-   --   @cChkL07 NVARCHAR(1) = '0', @cTaskL07 NVARCHAR(18), @cUCCL07 NVARCHAR(18),
-   --   @cChkL08 NVARCHAR(1) = '0', @cTaskL08 NVARCHAR(18), @cUCCL08 NVARCHAR(18),
-   --   @cChkL09 NVARCHAR(1) = '0', @cTaskL09 NVARCHAR(18), @cUCCL09 NVARCHAR(18),
-   --   @cChkL10 NVARCHAR(1) = '0', @cTaskL10 NVARCHAR(18), @cUCCL10 NVARCHAR(18),
-   --   @cChkL11 NVARCHAR(1) = '0', @cTaskL11 NVARCHAR(18), @cUCCL11 NVARCHAR(18),
-   --   @cChkL12 NVARCHAR(1) = '0', @cTaskL12 NVARCHAR(18), @cUCCL12 NVARCHAR(18),
-   --   @cChkL13 NVARCHAR(1) = '0', @dTaskL13 DATETIME,     @dUCCL13 DATETIME,
-   --   @cChkL14 NVARCHAR(1) = '0', @dTaskL14 DATETIME,     @dUCCL14 DATETIME,
-   --   @cChkL15 NVARCHAR(1) = '0', @dTaskL15 DATETIME,     @dUCCL15 DATETIME
-
    -- Get facility
    SELECT @cFacility = Facility FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
 
-   ---- Get check lottable setting
-   --SELECT
-   --   @cChkL01 = CASE WHEN Code = 'Lottable01' THEN '1' ELSE @cChkL01 END,
-   --   @cChkL02 = CASE WHEN Code = 'Lottable02' THEN '1' ELSE @cChkL02 END,
-   --   @cChkL03 = CASE WHEN Code = 'Lottable03' THEN '1' ELSE @cChkL03 END,
-   --   @cChkL04 = CASE WHEN Code = 'Lottable04' THEN '1' ELSE @cChkL04 END,
-   --   @cChkL05 = CASE WHEN Code = 'Lottable05' THEN '1' ELSE @cChkL05 END,
-   --   @cChkL06 = CASE WHEN Code = 'Lottable06' THEN '1' ELSE @cChkL06 END,
-   --   @cChkL07 = CASE WHEN Code = 'Lottable07' THEN '1' ELSE @cChkL07 END,
-   --   @cChkL08 = CASE WHEN Code = 'Lottable08' THEN '1' ELSE @cChkL08 END,
-   --   @cChkL09 = CASE WHEN Code = 'Lottable09' THEN '1' ELSE @cChkL09 END,
-   --   @cChkL10 = CASE WHEN Code = 'Lottable10' THEN '1' ELSE @cChkL10 END,
-   --   @cChkL11 = CASE WHEN Code = 'Lottable11' THEN '1' ELSE @cChkL11 END,
-   --   @cChkL12 = CASE WHEN Code = 'Lottable12' THEN '1' ELSE @cChkL12 END,
-   --   @cChkL13 = CASE WHEN Code = 'Lottable13' THEN '1' ELSE @cChkL13 END,
-   --   @cChkL14 = CASE WHEN Code = 'Lottable14' THEN '1' ELSE @cChkL14 END,
-   --   @cChkL15 = CASE WHEN Code = 'Lottable15' THEN '1' ELSE @cChkL15 END
-   --FROM dbo.CodeLKUP WITH (NOLOCK)
-   --WHERE ListName = 'SwapUCC'
-   --   AND StorerKey = @cStorerKey
-   --   AND Code2 = @cFacility
+   DECLARE
+      @cChkL01 NVARCHAR(1) = '0', @cTaskL01 NVARCHAR(18), @cUCCL01 NVARCHAR(18),
+      @cChkL02 NVARCHAR(1) = '0', @cTaskL02 NVARCHAR(18), @cUCCL02 NVARCHAR(18),
+      @cChkL03 NVARCHAR(1) = '0', @cTaskL03 NVARCHAR(18), @cUCCL03 NVARCHAR(18),
+      @cChkL04 NVARCHAR(1) = '0', @dTaskL04 DATETIME,     @dUCCL04 DATETIME,
+      @cChkL05 NVARCHAR(1) = '0', @dTaskL05 DATETIME,     @dUCCL05 DATETIME,
+      @cChkL06 NVARCHAR(1) = '0', @cTaskL06 NVARCHAR(18), @cUCCL06 NVARCHAR(18),
+      @cChkL07 NVARCHAR(1) = '0', @cTaskL07 NVARCHAR(18), @cUCCL07 NVARCHAR(18),
+      @cChkL08 NVARCHAR(1) = '0', @cTaskL08 NVARCHAR(18), @cUCCL08 NVARCHAR(18),
+      @cChkL09 NVARCHAR(1) = '0', @cTaskL09 NVARCHAR(18), @cUCCL09 NVARCHAR(18),
+      @cChkL10 NVARCHAR(1) = '0', @cTaskL10 NVARCHAR(18), @cUCCL10 NVARCHAR(18),
+      @cChkL11 NVARCHAR(1) = '0', @cTaskL11 NVARCHAR(18), @cUCCL11 NVARCHAR(18),
+      @cChkL12 NVARCHAR(1) = '0', @cTaskL12 NVARCHAR(18), @cUCCL12 NVARCHAR(18),
+      @cChkL13 NVARCHAR(1) = '0', @dTaskL13 DATETIME,     @dUCCL13 DATETIME,
+      @cChkL14 NVARCHAR(1) = '0', @dTaskL14 DATETIME,     @dUCCL14 DATETIME,
+      @cChkL15 NVARCHAR(1) = '0', @dTaskL15 DATETIME,     @dUCCL15 DATETIME
 
-   ---- Get task lottable
-   --SELECT
-   --   @cTaskL01 = Lottable01, @cTaskL02 = Lottable02, @cTaskL03 = Lottable03, @dTaskL04 = Lottable04, @dTaskL05 = Lottable05,
-   --   @cTaskL06 = Lottable06, @cTaskL07 = Lottable07, @cTaskL08 = Lottable08, @cTaskL09 = Lottable09, @cTaskL10 = Lottable10,
-   --   @cTaskL11 = Lottable11, @cTaskL12 = Lottable12, @dTaskL13 = Lottable13, @dTaskL14 = Lottable14, @dTaskL15 = Lottable15
-   --FROM LotAttribute WITH (NOLOCK)
-   --WHERE LOT = @cTaskLOT
+   -- Get check lottable setting
+   SELECT
+      @cChkL01 = CASE WHEN Code = 'Lottable01' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL01 END,
+      @cChkL02 = CASE WHEN Code = 'Lottable02' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL02 END,
+      @cChkL03 = CASE WHEN Code = 'Lottable03' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL03 END,
+      @cChkL04 = CASE WHEN Code = 'Lottable04' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL04 END,
+      @cChkL05 = CASE WHEN Code = 'Lottable05' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL05 END,
+      @cChkL06 = CASE WHEN Code = 'Lottable06' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL06 END,
+      @cChkL07 = CASE WHEN Code = 'Lottable07' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL07 END,
+      @cChkL08 = CASE WHEN Code = 'Lottable08' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL08 END,
+      @cChkL09 = CASE WHEN Code = 'Lottable09' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL09 END,
+      @cChkL10 = CASE WHEN Code = 'Lottable10' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL10 END,
+      @cChkL11 = CASE WHEN Code = 'Lottable11' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL11 END,
+      @cChkL12 = CASE WHEN Code = 'Lottable12' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL12 END,
+      @cChkL13 = CASE WHEN Code = 'Lottable13' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL13 END,
+      @cChkL14 = CASE WHEN Code = 'Lottable14' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL14 END,
+      @cChkL15 = CASE WHEN Code = 'Lottable15' AND ISNULL(Short, '') = 'Y' THEN '1' ELSE @cChkL15 END
+   FROM dbo.CodeLKUP WITH (NOLOCK)
+   WHERE ListName = 'SWAPUCC'
+     AND StorerKey = @cStorerKey
+     AND ISNULL(TRY_CAST(code2 AS INT), 0) = @nFunc
 
-   ---- Get UCC lottable
-   --SELECT
-   --   @cUCCL01 = Lottable01, @cUCCL02 = Lottable02, @cUCCL03 = Lottable03, @dUCCL04 = Lottable04, @dUCCL05 = Lottable05,
-   --   @cUCCL06 = Lottable06, @cUCCL07 = Lottable07, @cUCCL08 = Lottable08, @cUCCL09 = Lottable09, @cUCCL10 = Lottable10,
-   --   @cUCCL11 = Lottable11, @cUCCL12 = Lottable12, @dUCCL13 = Lottable13, @dUCCL14 = Lottable14, @dUCCL15 = Lottable15
-   --FROM LotAttribute WITH (NOLOCK)
-   --WHERE LOT = @cActUCCLOT
+   -- Get task lottable
+   SELECT
+      @cTaskL01 = Lottable01, @cTaskL02 = Lottable02, @cTaskL03 = Lottable03, @dTaskL04 = Lottable04, @dTaskL05 = Lottable05,
+      @cTaskL06 = Lottable06, @cTaskL07 = Lottable07, @cTaskL08 = Lottable08, @cTaskL09 = Lottable09, @cTaskL10 = Lottable10,
+      @cTaskL11 = Lottable11, @cTaskL12 = Lottable12, @dTaskL13 = Lottable13, @dTaskL14 = Lottable14, @dTaskL15 = Lottable15
+   FROM dbo.LotAttribute WITH (NOLOCK)
+   WHERE LOT = @cTaskLOT
 
-   -- Check all lottables
-   --DECLARE @nLottableNo INT = 0
-   --IF @nLottableNo = 0 AND @cChkL01= '1' AND @cTaskL01 <> @cUCCL01 SET @nLottableNo =  1 ELSE
-   --IF @nLottableNo = 0 AND @cChkL02= '1' AND @cTaskL02 <> @cUCCL02 SET @nLottableNo =  2 ELSE
-   --IF @nLottableNo = 0 AND @cChkL03= '1' AND @cTaskL03 <> @cUCCL03 SET @nLottableNo =  3 ELSE
-   --IF @nLottableNo = 0 AND @cChkL04= '1' AND @dTaskL04 <> @dUCCL04 SET @nLottableNo =  4 ELSE
-   --IF @nLottableNo = 0 AND @cChkL05= '1' AND @dTaskL05 <> @dUCCL05 SET @nLottableNo =  5 ELSE
-   --IF @nLottableNo = 0 AND @cChkL06= '1' AND @cTaskL06 <> @cUCCL06 SET @nLottableNo =  6 ELSE
-   --IF @nLottableNo = 0 AND @cChkL07= '1' AND @cTaskL07 <> @cUCCL07 SET @nLottableNo =  7 ELSE
-   --IF @nLottableNo = 0 AND @cChkL08= '1' AND @cTaskL08 <> @cUCCL08 SET @nLottableNo =  8 ELSE
-   --IF @nLottableNo = 0 AND @cChkL09= '1' AND @cTaskL09 <> @cUCCL09 SET @nLottableNo =  9 ELSE
-   --IF @nLottableNo = 0 AND @cChkL10= '1' AND @cTaskL10 <> @cUCCL10 SET @nLottableNo = 10 ELSE
-   --IF @nLottableNo = 0 AND @cChkL11= '1' AND @cTaskL11 <> @cUCCL11 SET @nLottableNo = 11 ELSE
-   --IF @nLottableNo = 0 AND @cChkL12= '1' AND @cTaskL12 <> @cUCCL12 SET @nLottableNo = 12 ELSE
-   --IF @nLottableNo = 0 AND @cChkL13= '1' AND @dTaskL13 <> @dUCCL13 SET @nLottableNo = 13 ELSE
-   --IF @nLottableNo = 0 AND @cChkL14= '1' AND @dTaskL14 <> @dUCCL14 SET @nLottableNo = 14 ELSE
-   --IF @nLottableNo = 0 AND @cChkL15= '1' AND @dTaskL15 <> @dUCCL15 SET @nLottableNo = 15
+   -- Get UCC lottable
+   SELECT
+      @cUCCL01 = Lottable01, @cUCCL02 = Lottable02, @cUCCL03 = Lottable03, @dUCCL04 = Lottable04, @dUCCL05 = Lottable05,
+      @cUCCL06 = Lottable06, @cUCCL07 = Lottable07, @cUCCL08 = Lottable08, @cUCCL09 = Lottable09, @cUCCL10 = Lottable10,
+      @cUCCL11 = Lottable11, @cUCCL12 = Lottable12, @dUCCL13 = Lottable13, @dUCCL14 = Lottable14, @dUCCL15 = Lottable15
+   FROM dbo.LotAttribute WITH (NOLOCK)
+   WHERE LOT = @cActUCCLOT
 
-   ---- Validate lottable
-   --IF @nLottableNo > 0
-   --BEGIN
-   --   SET @nErrNo = 166410
-   --   SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --Not match L99
-   --   GOTO Fail
-   --END
+   --Check all lottables
+   DECLARE @nLottableNo INT = 0
+   IF @nLottableNo = 0 AND @cChkL01= '1' AND @cTaskL01 <> @cUCCL01 SET @nLottableNo =  1 ELSE
+   IF @nLottableNo = 0 AND @cChkL02= '1' AND @cTaskL02 <> @cUCCL02 SET @nLottableNo =  2 ELSE
+   IF @nLottableNo = 0 AND @cChkL03= '1' AND @cTaskL03 <> @cUCCL03 SET @nLottableNo =  3 ELSE
+   IF @nLottableNo = 0 AND @cChkL04= '1' AND @dTaskL04 <> @dUCCL04 SET @nLottableNo =  4 ELSE
+   IF @nLottableNo = 0 AND @cChkL05= '1' AND @dTaskL05 <> @dUCCL05 SET @nLottableNo =  5 ELSE
+   IF @nLottableNo = 0 AND @cChkL06= '1' AND @cTaskL06 <> @cUCCL06 SET @nLottableNo =  6 ELSE
+   IF @nLottableNo = 0 AND @cChkL07= '1' AND @cTaskL07 <> @cUCCL07 SET @nLottableNo =  7 ELSE
+   IF @nLottableNo = 0 AND @cChkL08= '1' AND @cTaskL08 <> @cUCCL08 SET @nLottableNo =  8 ELSE
+   IF @nLottableNo = 0 AND @cChkL09= '1' AND @cTaskL09 <> @cUCCL09 SET @nLottableNo =  9 ELSE
+   IF @nLottableNo = 0 AND @cChkL10= '1' AND @cTaskL10 <> @cUCCL10 SET @nLottableNo = 10 ELSE
+   IF @nLottableNo = 0 AND @cChkL11= '1' AND @cTaskL11 <> @cUCCL11 SET @nLottableNo = 11 ELSE
+   IF @nLottableNo = 0 AND @cChkL12= '1' AND @cTaskL12 <> @cUCCL12 SET @nLottableNo = 12 ELSE
+   IF @nLottableNo = 0 AND @cChkL13= '1' AND @dTaskL13 <> @dUCCL13 SET @nLottableNo = 13 ELSE
+   IF @nLottableNo = 0 AND @cChkL14= '1' AND @dTaskL14 <> @dUCCL14 SET @nLottableNo = 14 ELSE
+   IF @nLottableNo = 0 AND @cChkL15= '1' AND @dTaskL15 <> @dUCCL15 SET @nLottableNo = 15
+
+   -- Validate lottable
+   IF @nLottableNo > 0
+   BEGIN
+      SET @nErrNo = 230360
+      SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --Not match L99
+      GOTO Fail
+   END
 
    ---- Check UCC taken by other (PickDetail)
    --IF EXISTS( SELECT TOP 1 1
@@ -362,6 +356,50 @@ BEGIN
    5. UCC to pick, swap UCC with replenish
    6. UCC to pick, swap UCC with alloc
 */
+
+   SELECT TOP 1
+      @cPickSlipNo = PH.PickHeaderKey
+   FROM dbo.PickDetail PD WITH(NOLOCK)
+   INNER JOIN dbo.TaskDetail TD WITH (NOLOCK) ON TD.CaseID IS NOT NULL AND PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey AND PD.DropID = TD.CaseID
+   INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON PD.StorerKey = PH.StorerKey AND PD.OrderKey = PH.OrderKey
+   WHERE TD.TaskDetailKey = @cTaskDetailKey
+      AND TD.StorerKey = @cStorerKey
+
+   DECLARE @tTaskUCCPackDetail TABLE
+   (
+      RowRef   INT IDENTITY(1,1),
+      PickSlipNo     NVARCHAR (10),
+      CartonNo       INT,
+      LabelNo        NVARCHAR (20),
+      LabelLine      NVARCHAR (5)
+   )
+
+   DECLARE @tActualUCCPackDetail TABLE
+   (
+      RowRef   INT IDENTITY(1,1),
+      PickSlipNo     NVARCHAR (10),
+      CartonNo       INT,
+      LabelNo        NVARCHAR (20),
+      LabelLine      NVARCHAR (5)
+   )
+
+   IF @cTaskUOM = '2' AND @cTaskUCCNo <> @cActUCCNo
+   BEGIN
+      INSERT INTO @tTaskUCCPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+      SELECT @cPickSlipNo, CartonNo, LabelNo, LabelLine
+      FROM dbo.PackDetail WITH(NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+         AND StorerKey = @cStorerKey
+         AND RefNo IS NOT NULL
+         AND RefNo = @cTaskUCCNo
+
+      INSERT INTO @tActualUCCPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+      SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+      FROM dbo.PackDetail WITH(NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND RefNo IS NOT NULL
+         AND RefNo = @cActUCCNo
+   END
 
    DECLARE @cTaskUCCType   NVARCHAR(10)
    DECLARE @cActUCCType    NVARCHAR(10)
@@ -597,8 +635,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 3. UCC to replenish, swap UCC with alloc
@@ -917,8 +953,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 4. UCC to pick, swap UCC free
@@ -1163,8 +1197,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    --5. UCC to pick, swap UCC with replenish
@@ -1458,8 +1490,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 6. UCC to pick, swap UCC with alloc
@@ -1587,6 +1617,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                   QTY = 0,
+                  DropID = '',
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -1609,6 +1640,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                   QTY = 0,
+                  DropID = '',
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -1902,8 +1934,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- Data error (not in the 7 scenarios)
@@ -1914,10 +1944,88 @@ BEGIN
       GOTO RollBackTran
    END
 
-CommitTran:
-   -- Log UCC swap
    IF @cTaskUCCNo <> @cActUCCNo
    BEGIN
+      IF @cTaskUOM = '2'
+      BEGIN
+         DECLARE @nLoopIndex INT = -1
+
+         SET @nCartonNo = 0
+         SET @cLabelNo = ''
+         SET @cLabelLine = ''
+
+         WHILE 1 = 1
+         BEGIN
+            SELECT TOP 1
+               @nLoopIndex = RowRef,
+               @nCartonNo = CartonNo,
+               @cLabelNo = LabelNo,
+               @cLabelLine = LabelLine
+            FROM @tTaskUCCPackDetail
+            WHERE RowRef > @nLoopIndex
+            ORDER BY RowRef
+
+            IF @@ROWCOUNT = 0
+               BREAK
+
+            BEGIN TRY
+               UPDATE dbo.PackDetail 
+               SET
+                  RefNo = @cActUCCNo,
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND LabelNo = @cLabelNo
+                  AND LabelLine = @cLabelLine
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 230401
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PackDetail Failed
+               GOTO RollBackTran
+            END CATCH
+         END
+
+         SET @nLoopIndex = -1
+         SET @cPickSlipNo = ''
+         SET @nCartonNo = 0
+         SET @cLabelNo = ''
+         SET @cLabelLine = ''
+
+         WHILE 1 = 1
+         BEGIN
+            SELECT TOP 1
+               @nLoopIndex = RowRef,
+               @cPickSlipNo = PickSlipNo,
+               @nCartonNo = CartonNo,
+               @cLabelNo = LabelNo,
+               @cLabelLine = LabelLine
+            FROM @tActualUCCPackDetail
+            WHERE RowRef > @nLoopIndex
+            ORDER BY RowRef
+
+            IF @@ROWCOUNT = 0
+               BREAK
+
+            BEGIN TRY
+               UPDATE dbo.PackDetail 
+               SET
+                  RefNo = @cTaskUCCNo,
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND LabelNo = @cLabelNo
+                  AND LabelLine = @cLabelLine
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 230403
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PackDetail Failed
+               GOTO RollBackTran
+            END CATCH
+         END
+      END
+
       DECLARE @cTaskUCCStatus NVARCHAR(1)
       SELECT @cTaskUCCStatus = Status FROM UCC WITH (NOLOCK) WHERE UCCNo = @cTaskUCCNo AND StorerKey = @cStorerkey
 
@@ -1925,6 +2033,7 @@ CommitTran:
       VALUES (1764, @cTaskUCCNo, @cActUCCNo, @cTaskDetailKey, @cTaskUCCStatus, @cActUCCStatus)
    END
 
+CommitTran:
    SET @cSKU = @cActUCCSKU
    SET @nUCCQTY = @nActUCCQTY
    SET @cUCC = @cActUCCNo

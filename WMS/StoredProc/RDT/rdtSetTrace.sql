@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtSetTrace]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtSetTrace]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -26,9 +22,10 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
 /* 2015-10-06   Ung           Performance tuning for CN Nov 11          */
+/* 2025-07-23   Dennis        Add Trace ID                              */
 /************************************************************************/
 
-CREATE PROC rdt.rdtSetTrace
+CREATE OR ALTER PROC rdt.rdtSetTrace
    @inmobile   int ,
    @nFunc      int = 0,
    @nScn       int = 0,
@@ -36,7 +33,8 @@ CREATE PROC rdt.rdtSetTrace
    @StartTime  DATETIME,
    @EndTime    DATETIME,
    @nTimeTaken int = 0, 
-   @nScnTime   int = 0
+   @nScnTime   int = 0,
+   @cTraceID   NVARCHAR(100) = ''
 AS
 BEGIN
    SET NOCOUNT ON 
@@ -55,8 +53,8 @@ BEGIN
       AND @Scn  IS NOT NULL
       AND @Step IS NOT NULL
    BEGIN
-      INSERT INTO RDT.RDTTrace(Mobile, InFunc, InScn, InStep, OutFunc, OutScn, OutStep, Usr, StartTime, EndTime, TimeTaken, ScnTime)
-      VALUES (@inmobile, @nFunc, @nScn, @nStep, @Func, @Scn, @Step, @Usr, @StartTime, @EndTime, @nTimeTaken, @nScnTime)
+      INSERT INTO RDT.RDTTrace(Mobile, InFunc, InScn, InStep, OutFunc, OutScn, OutStep, Usr, StartTime, EndTime, TimeTaken, ScnTime,TraceID)
+      VALUES (@inmobile, @nFunc, @nScn, @nStep, @Func, @Scn, @Step, @Usr, @StartTime, @EndTime, @nTimeTaken, @nScnTime,@cTraceID)
    END
 
 END

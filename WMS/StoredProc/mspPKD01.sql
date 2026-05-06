@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-11-22  Wan      1.0   Created.                                  */
+/* 2025-10-10  SSA01    1.1   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC mspPKD01   
    @c_Action        NVARCHAR(10),
@@ -116,8 +117,8 @@ BEGIN
                   SET Lot    = @c_Lot_Ins
                      ,FromID = @c_ID_Ins
                      ,Trafficcop = NULL
-                     ,EditWho    = SUSER_SNAME()
-                     ,EditDate   = GETDATE()
+                     ,EditWho    = dbo.fnc_GetUserName()         --(SSA01)
+                     ,EditDate   = dbo.fnc_GetDate()   --(SSA01)
                WHERE TaskDetailKey = @c_TaskDetailkey
         
                IF @@ERROR <> 0
@@ -131,8 +132,8 @@ BEGIN
                   SET Qty = Qty - @n_Qty_Ins
                      ,SystemQty = SystemQty - @n_Qty_Ins
                      ,Trafficcop = NULL
-                     ,EditWho    = SUSER_SNAME()
-                     ,EditDate   = GETDATE()
+                     ,EditWho    = dbo.fnc_GetUserName()         --(SSA01)
+                     ,EditDate   = dbo.fnc_GetDate()   --(SSA01)
                WHERE TaskDetailKey = @c_TaskDetailkey
         
                IF @@ERROR <> 0

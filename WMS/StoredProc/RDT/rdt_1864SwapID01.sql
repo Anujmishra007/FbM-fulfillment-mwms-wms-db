@@ -14,6 +14,7 @@ GO
 /* 2023-08-07 1.0    Ung      WMS-23032 Created                               */
 /* 2024-05-03 1.1    Ung      WMS-23592 Add lottable                          */
 /* 2024-05-13 1.1.1  JCH507   UWP-19424 Error when SWAP ID enaabled           */
+/* 2026-04-05 1.2    ASP123   FCR-11252 Check On-Hold status before SWAP      */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1864SwapID01] (
@@ -163,6 +164,19 @@ BEGIN
    BEGIN
       SET @nErrNo = 204968
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID part alloc
+      GOTO Quit
+   END
+
+   -- Check ON HOLD swap ID logic
+   DECLARE @cVerifyIDOnHold NVARCHAR( 1)
+   SET @cVerifyIDOnHold = rdt.RDTGetConfig( @nFunc, 'VerifyIDOnHold', @cStorerKey)
+
+   IF @cVerifyIDOnHold = '1' AND EXISTS( SELECT 1
+      FROM dbo.INVENTORYHOLD WITH (NOLOCK)
+      WHERE ID = @cID and HOLD = 1 and storerkey = @cStorerKey)
+   BEGIN
+      SET @nErrNo = 204972
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID on HOLD, cannot SWAP
       GOTO Quit
    END
 

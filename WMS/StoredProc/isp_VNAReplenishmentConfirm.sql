@@ -16,6 +16,11 @@ GO
 /*                                  ToLoc is PickFace location                          */
 /*                                  Same Aisle: Move inv to final location directly     */
 /* 2024-10-22  1.4.0    NLT013      UWP-27527 No need to add QtyRepl if ToLoc is not PND*/
+/******************************Merged Into V0********************************************/
+/* 2025-07-09  1.5.0    Dennis      FCR-4498 Release Pick Task When Finished            */
+/* 2025-07-17  1.5.1    Jackc       FCR-4498 Refresh picking task's reftaskkey to RP1   */
+/* 2025-10-10  1.5.2    SSA01       UWP-42248 -Enhanced session management              */
+/*                                  and cleanup.                                        */
 /****************************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_VNAReplenishmentConfirm] (
@@ -96,6 +101,15 @@ BEGIN
    SET @cPickConfirmStatus = '9'
    SET @cUserName          = SYSTEM_USER
 
+   DECLARE @tTask TABLE
+   (
+      id            INT IDENTITY(1,1),
+      TaskDetailKey NVARCHAR(10), 
+      ToLOC         NVARCHAR(10),
+      TaskType      NVARCHAR(10),
+      Status        NVARCHAR(10),
+      FinalLOC      NVARCHAR(10)
+   )
    -- Get task info
    SELECT
       @cTaskType        = td.TaskType,
@@ -180,8 +194,8 @@ BEGIN
 
    -- Lock orders to prevent deadlock
    UPDATE ord SET
-      EditDate = GETDATE(),
-      EditWho = SUSER_SNAME(),
+      EditDate = dbo.fnc_GetDate(),   --(SSA01)
+      EditWho = dbo.fnc_GetUserName(),         --(SSA01)
       TrafficCop = NULL
    FROM Orders ord WITH(ROWLOCK)
    INNER JOIN PickDetail pkd WITH (NOLOCK)
@@ -254,7 +268,7 @@ BEGIN
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
       Status      = @cPickConfirmStatus, -- Closed
       EndTime     = GETDATE(),
-      EditDate    = GETDATE(),
+      EditDate    = dbo.fnc_GetDate(),   --(SSA01)
       EditWho     = @cUserName,
       Trafficcop  = NULL,
       StatusMsg   = ''
@@ -345,6 +359,24 @@ BEGIN
       GOTO RollBackTran
    END
 
+   --V1.5.1 start
+   --IF new RP1 is created,  then picking task link to new replenishment task,except new task itself
+   IF @cTaskType = @cVNAOUT AND ISNULL(@cNewTaskDetailKey, '') <> ''
+   BEGIN
+      BEGIN TRY
+         UPDATE dbo.TaskDetail WITH (ROWLOCK)
+         SET REFTASKKEY = @cNewTaskDetailKey
+         WHERE REFTASKKEY = @cTaskDetailKey
+            AND TaskDetailKey <> @cNewTaskDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 248352
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update LOTxLOCxID Fail
+         GOTO RollBackTran
+      END CATCH
+   END
+   --V1.5.1 end
+
    UPD_INV:
    -- Reduce QTYReplen
    UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
@@ -374,6 +406,20 @@ BEGIN
       SET @nErrNo = 212534
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update LOTxLOCxID Fail
       GOTO RollBackTran
+   END
+   
+   IF @cTaskToLoc = @cTaskFinalLoc AND @cTaskType = @cVNAOUT
+   BEGIN
+      BEGIN TRY
+         UPDATE dbo.TaskDetail WITH (ROWLOCK)
+         SET Status = '0'
+         WHERE REFTASKKEY = @cTaskDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 248351
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update LOTxLOCxID Fail
+         GOTO RollBackTran
+      END CATCH
    END
 
    COMMIT TRAN isp_VNAReplenishmentConfirm -- Only commit change made here

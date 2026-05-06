@@ -56,6 +56,7 @@ EXECUTE rdt.rdtAddScn 1044, 'ENG',
    @cLine08 = '         %05d08 %05d11',
    @cLine09 = 'QTY AVL: %05d09 %05d12',
    @cLine10 = 'QTY MV:  %05i10 %05i13',
+   @cLine13 = '%20d15',--FCR-9660 extend info
    @cLine14 = '%e'
 
 -- 1045 = To ID

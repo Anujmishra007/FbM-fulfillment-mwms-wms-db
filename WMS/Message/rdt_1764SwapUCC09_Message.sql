@@ -13,7 +13,8 @@ execute rdt.rdtAddMsg 230356, 10, '230356UCCLOCNotMatch', 'us_english', 1764
 execute rdt.rdtAddMsg 230357, 10, '230357UCCIDNotMatch ', 'us_english', 1764
 execute rdt.rdtAddMsg 230358, 10, '230358UCCSKUNotMatch', 'us_english', 1764
 execute rdt.rdtAddMsg 230359, 10, '230359UCCQTYNotMatch', 'us_english', 1764
---execute rdt.rdtAddMsg 230360, 10, '166410Not match L   ', 'us_english', 1764
+--FCR-7730
+execute rdt.rdtAddMsg 230360, 10, '230360Not match L   ', 'us_english', 1764
 --execute rdt.rdtAddMsg 230361, 10, '166411UCCTookByOther', 'us_english', 1764
 --execute rdt.rdtAddMsg 230362, 10, '166412UCCTookByOther', 'us_english', 1764
 
@@ -58,5 +59,9 @@ execute rdt.rdtAddMsg 230400, 10, '230400MissingPackDtl', 'us_english', 1764
 --New added msg
 execute rdt.rdtAddMsg 230363, 10, '230363UCCLotNotMatch', 'us_english', 1764
 execute rdt.rdtAddMsg 230402, 10, '203402DUP PackDtl   ', 'us_english', 1764
+
+-- UWP-54220 
+execute rdt.rdtAddMsg 230401, 10, '230401 UpdPacjDetailFail', 'us_english', 1764, 0, '230401 Update PackDetail Failed'
+execute rdt.rdtAddMsg 230403, 10, '230403 UpdPacjDetailFail', 'us_english', 1764, 0, '230403 Update PackDetail Failed'
 
 select * from rdt.rdtMsg (nolock) where message_id between 230351 and 230450

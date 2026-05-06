@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrC4recEXPUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrC4recEXPUpdate]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -8,8 +5,9 @@ SET ANSI_NULLS OFF
 GO
 
 /* 28-Oct-2013  TLTING    1.1     Review Editdate column update         */
+/* 08-Oct-2025  AK01      1.2     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 
-CREATE TRIGGER ntrC4recEXPUpdate
+CREATE OR ALTER TRIGGER ntrC4recEXPUpdate
  ON  C4_Rec_Exp
  FOR UPDATE
  AS
@@ -27,7 +25,7 @@ CREATE TRIGGER ntrC4recEXPUpdate
  	IF NOT UPDATE(EditDate)
  	BEGIN
  	   UPDATE c4_rec_exp 
-    	   SET EditDate = GETDATE()
+    	   SET EditDate = dbo.fnc_GetDate()
        	       
            FROM C4_rec_exp, INSERTED
           WHERE C4_REC_Exp.DOcumentkey = INSERTED.DOcumentkey
@@ -46,4 +44,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

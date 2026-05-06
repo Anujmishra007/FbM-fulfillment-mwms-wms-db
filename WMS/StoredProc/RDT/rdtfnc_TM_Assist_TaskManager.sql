@@ -7,22 +7,24 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdtfnc_TM_Assist_TaskManager                        */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Assisted Task Manager for ASRS                              */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2015-03-04 1.0  Ung      SOS332780 Created                           */
-/* 2016-09-30 1.1  Ung      Performance tuning                          */
-/* 2018-10-25 1.2  Gan      Performance tuning                          */
-/* 2019-08-13 1.3  Ung      WMS-10166 Add case ID                       */
-/* 2019-09-27 1.4  James    WMS-10316 Add Taskdetailkey in table        */
-/*                          RDT.RDTMOBREC (james01)                     */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdtfnc_TM_Assist_TaskManager                           */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Purpose: Assisted Task Manager for ASRS                                 */
+/*                                                                         */
+/* Modifications log:                                                      */
+/*                                                                         */
+/* Date       Rev    Author   Purposes                                     */
+/* 2015-03-04 1.0    Ung      SOS332780 Created                            */
+/* 2016-09-30 1.1    Ung      Performance tuning                           */
+/* 2018-10-25 1.2    Gan      Performance tuning                           */
+/* 2019-08-13 1.3    Ung      WMS-10166 Add case ID                        */
+/* 2019-09-27 1.4    James    WMS-10316 Add Taskdetailkey in table         */
+/*                             RDT.RDTMOBREC (james01)                     */
+/* 2025-03-24 1.5.0  JCH507   FCR-2597 Add generic decode logic to FromID  */
+/* 2026-04-07 1.6.0  JCH507   FCR-10346 Add ExtVal, ExtUpd (jackc01)       */
+/***************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_TM_Assist_TaskManager] (
    @nMobile    INT,
@@ -37,18 +39,28 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
 -- Misc variable
 DECLARE
-   @cStrategyKey     NVARCHAR(10), 
-   @cTTMStrategyKey  NVARCHAR(10), 
-   @cTTMTaskType     NVARCHAR(10), 
-   @cTaskDetailKey   NVARCHAR(10), 
-   @cAreaKey         NVARCHAR(10), 
-   @nToFunc          INT, 
-   @nToStep          INT, 
-   @nToScn           INT, 
-   @cPutawayZone     NVARCHAR(10), 
-   @cFromLOC         NVARCHAR(10), 
-   @cFromID          NVARCHAR(18), 
-   @cCaseID          NVARCHAR(20) 
+   @cStrategyKey        NVARCHAR(10), 
+   @cTTMStrategyKey     NVARCHAR(10), 
+   @cTTMTaskType        NVARCHAR(10), 
+   @cTaskDetailKey      NVARCHAR(10), 
+   @cAreaKey            NVARCHAR(10), 
+   @nToFunc             INT, 
+   @nToStep             INT, 
+   @nToScn              INT, 
+   @cPutawayZone        NVARCHAR(10), 
+   @cFromLOC            NVARCHAR(10),
+   @cFromID             NVARCHAR(18), 
+   @cCaseID             NVARCHAR(20),
+   @cExtendedValidateSP NVARCHAR( 20),
+   @cExtendedUpdateSP   NVARCHAR( 20),
+
+   --V1.5.0 start
+   @cToLOC           NVARCHAR(10), 
+   @cDecodeSP        NVARCHAR(20),
+   @cBarcode         NVARCHAR(60),
+   @cSQL             NVARCHAR( MAX), 
+   @cSQLParam        NVARCHAR( MAX)
+   --V1.5.0 end
       
 -- RDT.RDTMobRec variable
 DECLARE
@@ -91,18 +103,20 @@ DECLARE
 
 -- Load RDT.RDTMobRec
 SELECT
-   @nFunc            = Func,
-   @nScn             = Scn,
-   @nStep            = Step,
-   @nInputKey        = InputKey,
-   @nMenu            = Menu,
-   @cLangCode        = Lang_code,
-
-   @cStorerKey       = StorerKey,
-   @cFacility        = Facility,
-   @cUserName        = UserName,
-   @cPrinter         = Printer,
-   @cTaskDetailKey   = V_TaskDetailKey,
+   @nFunc               = Func,
+   @nScn                = Scn,
+   @nStep               = Step,
+   @nInputKey           = InputKey,
+   @nMenu               = Menu,
+   @cLangCode           = Lang_code,
+   
+   @cStorerKey          = StorerKey,
+   @cFacility           = Facility,
+   @cUserName           = UserName,
+   @cPrinter            = Printer,
+   @cTaskDetailKey      = V_TaskDetailKey,
+   @cExtendedValidateSP = V_String1,
+   @cExtendedUpdateSP   = V_String2,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -129,7 +143,7 @@ SELECT
    @cFieldAttr13 =  FieldAttr13,    @cFieldAttr14   = FieldAttr14,
    @cFieldAttr15 =  FieldAttr15
 
-FROM RDTMOBREC (NOLOCK)
+FROM rdt.RDTMOBREC (NOLOCK)
 WHERE Mobile = @nMobile
 
 -- Redirect to respective screen
@@ -146,7 +160,14 @@ Step 0. Called from menu (func = 1814)
 ********************************************************************************/
 Step_0:
 BEGIN
-   -- Set the entry point
+   SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)    
+   IF @cExtendedValidateSP = '0'    
+      SET @cExtendedValidateSP = ''
+
+   SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
+
    SET @nScn = 4060
    SET @nStep = 1
 
@@ -174,6 +195,15 @@ Step 1. Screen = 4060
 ********************************************************************************/
 Step_1:
 BEGIN
+   --Get ExtVali, ExtUpd again in Step1 AST sub func back to 1814 step1 instead of Step0 (jackc01)
+   SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)    
+   IF @cExtendedValidateSP = '0'    
+      SET @cExtendedValidateSP = ''
+
+   SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
+
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
@@ -196,9 +226,60 @@ BEGIN
          GOTO Step_1_Fail
       END
 
+      --V1.5.0 start
+      SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+      IF @cDecodeSP = '0'
+         SET @cDecodeSP = ''
+      --V1.5.0 end
+
       -- From ID
       IF @cFromID <> ''
       BEGIN
+         --V1.5.0 start
+         SET @cBarcode = @cInField01
+         -- Decode
+         IF @cDecodeSP <> ''
+         BEGIN
+            -- Standard decode
+            IF @cDecodeSP = '1'
+            BEGIN
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
+                  @cID     = @cFromID OUTPUT, 
+                  @nErrNo  = @nErrNo  OUTPUT, 
+                  @cErrMsg = @cErrMsg OUTPUT,
+                  @cType   = 'ID'
+            END
+
+            -- Customize decode
+            ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
+                  ' @cID   OUTPUT, @cLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg  OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile      INT,           ' +
+                  ' @nFunc        INT,           ' +
+                  ' @cLangCode    NVARCHAR( 3),  ' +
+                  ' @nStep        INT,           ' +
+                  ' @nInputKey    INT,           ' +
+                  ' @cFacility    NVARCHAR( 5),  ' +
+                  ' @cStorerKey   NVARCHAR( 15), ' +
+                  ' @cBarcode     NVARCHAR( 60), ' +
+                  ' @cID          NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cLOC         NVARCHAR( 10)  OUTPUT, ' +
+                  ' @nErrNo       INT            OUTPUT, ' +
+                  ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, 
+                  @cFromID OUTPUT, @cToLOC   OUTPUT, @nErrNo   OUTPUT, @cErrMsg  OUTPUT
+            END
+
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+         END --DecodeSP <>''
+         --V1.5.0 end
+
          -- Check ID valid
          IF NOT EXISTS ( SELECT 1 FROM dbo.ID WITH (NOLOCK) WHERE ID = @cFromID)
          BEGIN
@@ -293,6 +374,43 @@ BEGIN
          GOTO Quit
       END
 
+      -- Extended validate  (jackc01)  
+      IF @cExtendedValidateSP <> ''    
+      BEGIN    
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')    
+         BEGIN    
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cTaskdetailKey, ' +
+               ' @cTTMTaskType, @cFromLoc, @cFromID, @cCaseID, @nToFunc, @nToScn, ' +     
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'    
+            SET @cSQLParam =    
+               '@nMobile         INT,           ' +    
+               '@nFunc           INT,           ' +    
+               '@cLangCode       NVARCHAR( 3),  ' +   
+               '@nStep           INT,           ' +    
+               '@nInputKey       INT,           ' +
+               '@cStorerKey      NVARCHAR( 15), ' + 
+               '@cFacility       NVARCHAR( 5),  ' +     
+               '@cTaskdetailKey  NVARCHAR( 10), ' +    
+               '@cTTMTaskType    NVARCHAR(10),  ' +
+               '@cFromLOC        NVARCHAR(10),  ' +
+               '@cFromID         NVARCHAR(18),  ' + 
+               '@cCaseID         NVARCHAR(20),  ' +
+               '@nToFunc         INT,           ' +    
+               '@nToScn          INT,           ' +         
+               '@nErrNo          INT OUTPUT,    ' +    
+               '@cErrMsg         NVARCHAR( 20) OUTPUT '    
+    
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cTaskdetailKey, 
+               @cTTMTaskType, @cFromLOC, @cFromID, @cCaseID, @nToFunc, @nToScn,    
+               @nErrNo OUTPUT, @cErrMsg OUTPUT    
+    
+            IF @nErrNo <> 0    
+               GOTO Quit    
+         END    
+      END  
+
       SET @cAreaKey = ''
       SET @cStrategyKey = ''
       SET @cTTMStrategyKey = ''
@@ -303,7 +421,44 @@ BEGIN
       
       -- Get TTMStrategyKey
       SELECT @cStrategyKey = StrategyKey FROM dbo.TaskManagerUser WITH (NOLOCK) WHERE UserKey = @cUserName 
-      SELECT @cTTMStrategyKey = TtmstrategyKey FROM dbo.Strategy WITH (NOLOCK) WHERE StrategyKey = @cStrategyKey    
+      SELECT @cTTMStrategyKey = TtmstrategyKey FROM dbo.Strategy WITH (NOLOCK) WHERE StrategyKey = @cStrategyKey 
+
+      -- Extended update  (jackc01)  
+      IF @cExtendedUpdateSP <> ''    
+      BEGIN    
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')    
+         BEGIN    
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cTaskdetailKey, ' +
+               ' @cTTMTaskType, @cFromLoc, @cFromID, @cCaseID, @nToFunc, @nToScn, ' +     
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'    
+            SET @cSQLParam =    
+               '@nMobile         INT,           ' +    
+               '@nFunc           INT,           ' +    
+               '@cLangCode       NVARCHAR( 3),  ' +   
+               '@nStep           INT,           ' +    
+               '@nInputKey       INT,           ' +
+               '@cStorerKey      NVARCHAR( 15), ' + 
+               '@cFacility       NVARCHAR( 5),  ' +     
+               '@cTaskdetailKey  NVARCHAR( 10), ' +    
+               '@cTTMTaskType    NVARCHAR(10),  ' +
+               '@cFromLOC        NVARCHAR(10),  ' +
+               '@cFromID         NVARCHAR(18),  ' + 
+               '@cCaseID         NVARCHAR(20),  ' +
+               '@nToFunc         INT,           ' +    
+               '@nToScn          INT,           ' +         
+               '@nErrNo          INT OUTPUT,    ' +    
+               '@cErrMsg         NVARCHAR( 20) OUTPUT '    
+    
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cTaskdetailKey, 
+               @cTTMTaskType, @cFromLOC, @cFromID, @cCaseID, @nToFunc, @nToScn,    
+               @nErrNo OUTPUT, @cErrMsg OUTPUT    
+    
+            IF @nErrNo <> 0    
+               GOTO Quit    
+         END    
+      END     
 
       -- Pass data to sub module
       SET @cOutField06 = @cTaskdetailKey    
@@ -350,18 +505,21 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
 Quit:
 BEGIN
-   UPDATE RDTMOBREC WITH (ROWLOCK) SET
-      EditDate = GETDATE(), 
-      ErrMsg = @cErrMsg,
-      Func   = @nFunc,
-      Step   = @nStep,
-      Scn    = @nScn,
+   UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET
+      EditDate    = GETDATE(), 
+      ErrMsg      = @cErrMsg,
+      Func        = @nFunc,
+      Step        = @nStep,
+      Scn         = @nScn,
 
-      StorerKey = @cStorerKey,
-      Facility  = @cFacility,
+      StorerKey   = @cStorerKey,
+      Facility    = @cFacility,
       -- UserName  = @cUserName,
-      Printer   = @cPrinter,
+      Printer     = @cPrinter,
       V_TaskDetailKey = @cTaskDetailKey,
+
+      V_String1   = @cExtendedValidateSP ,
+      V_String2   = @cExtendedUpdateSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

@@ -48,8 +48,18 @@ BEGIN
    @cReportType    NVARCHAR( 10),
    @cUDF02         NVARCHAR( 10),
    @cFacility      NVARCHAR( 5),
-   @nSKUCnt        INT
-   
+   @nSKUCnt        INT,
+   @nLoopIndex     INT = 1
+
+   DECLARE @tSkus TABLE
+   (
+      ID    INT IDENTITY(1,1),
+      SKU   NVARCHAR(20),
+      SKUStyle NVARCHAR(MAX),
+      SKUSizeMeasurement NVARCHAR(MAX),
+      QTY   INT
+   )
+
    SELECT @cFacility = FACILITY FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
    SELECT @cLabelNo = @cValue01, @cReportType = @cValue02
 
@@ -70,6 +80,9 @@ BEGIN
       @Facility_Facility NVARCHAR(MAX) = '',
       @Facility_State NVARCHAR(MAX) = '',
       @Facility_Zip NVARCHAR(MAX) = '',
+      @Orders_C_Zip NVARCHAR(MAX) = '',
+      @Orders_C_Zip_Barcode NVARCHAR(MAX) = '',
+      @Orders_C_Zip_Readable NVARCHAR(MAX) = '',
       @MBOL_Carrierkey NVARCHAR(MAX) = '',
       @MBOL_Door NVARCHAR(MAX) = '',
       @MBOL_ExternMBOLKey NVARCHAR(MAX) = '',
@@ -96,8 +109,8 @@ BEGIN
       @Orders_C_Contact1 NVARCHAR(MAX) = '',
       @Orders_C_ISOCntryCode NVARCHAR(MAX) = '',
       @Orders_C_State NVARCHAR(MAX) = '',
-      @Orders_C_Zip NVARCHAR(MAX) = '',
       @Orders_Consigneekey NVARCHAR(MAX) = '',
+      @Orders_ConsigneekeyBarcode NVARCHAR(MAX) = '',
       @Orders_ExternOrderkey NVARCHAR(MAX) = '',
       @Orders_M_Address1 NVARCHAR(MAX) = '',
       @Orders_M_Address2 NVARCHAR(MAX) = '',
@@ -113,12 +126,15 @@ BEGIN
       @PackDetail_Carton_Total_Qty NVARCHAR(MAX) = '',
       @Packdetail_Carton_Count NVARCHAR(MAX) = '',
       @Packdetail_Labelno NVARCHAR(MAX) = '',
+      @Packdetail_LabelnoBarcode NVARCHAR(MAX) = '',
+      @PackDetail_Total_Qty NVARCHAR(MAX) = '',
       @PackDetail_Total_Qty_by_SKU NVARCHAR(MAX) = '',
       @PackInfo_CartonType NVARCHAR(MAX) = '',
       @Storer_Company_Type7 NVARCHAR(MAX) = '',
       @Storer_Storerkey_Type7 NVARCHAR(MAX) = '',
       @MBOL_CarrierAgent NVARCHAR(MAX) = '',
       @PackDetail_CartonNo NVARCHAR(MAX) = '',
+      @PackDetail_DropId NVARCHAR(MAX) = '',
       @Storer_Company_Type_1 NVARCHAR(MAX) = '',
       @Storer_Storerkey_Type_1 NVARCHAR(MAX) = '',
       @SKU_RetailSKU NVARCHAR(MAX) = '',
@@ -126,22 +142,17 @@ BEGIN
       @SKU_Style NVARCHAR(MAX) = '',
       @wkOrdUDef2 NVARCHAR(MAX) = '',
       @wkOrdUDef4 NVARCHAR(MAX) = '',
+      @wkOrdType NVARCHAR(MAX) = '',
+      @costCenter NVARCHAR(MAX) = '',
+      @naturalAcct NVARCHAR(MAX) = '',
+      @LVSUSA_Packing_List NVARCHAR(MAX) = '',
       @Hangers NVARCHAR(MAX) = '';
+   DECLARE
+      @DeliveryIDSuffix  NVARCHAR(MAX) = ''
 
    SELECT
       @CartonTrack_TrackingNo = ''
-   
-   SELECT TOP 1
-      @Facility_Address1 = Address1,
-      @Facility_Address2 = Address2,
-      @Facility_City = City,
-      @Facility_Description = Descr,
-      @Facility_Facility = Facility,
-      @Facility_State = State,
-      @Facility_Zip = Zip
-   FROM dbo.Facility WITH(NOLOCK)
-   WHERE FACILITY = @cFacility
-   
+
    IF @cOrderKey <> 'MPOC'
    BEGIN
       SELECT TOP 1
@@ -155,38 +166,45 @@ BEGIN
       WHERE O.OrderKey = @cOrderKey
 
       SELECT
-         @Orders_B_Address1 = B_Address1,
-         @Orders_B_Address2 = B_Address2,
-         @Orders_B_City = B_City,
-         @Orders_B_Company = B_Company,
-         @Orders_B_ISOCntryCode = B_ISOCntryCode,
-         @Orders_B_State = B_State,
-         @Orders_B_Zip = B_Zip,
-         @Orders_Billtokey = BilltoKey,
-         @Orders_BuyerPO = BuyerPO,
-         @Orders_C_Address1 = C_Address1,
-         @Orders_C_Address2 = C_Address2,
-         @Orders_C_City = C_City,
-         @Orders_C_Company = C_Company,
-         @Orders_C_Contact1 = C_Contact1,
-         @Orders_C_ISOCntryCode = C_ISOCntryCode,
-         @Orders_C_State = C_State,
-         @Orders_C_Zip = C_Zip,
-         @Orders_Consigneekey = Consigneekey,
-         @Orders_ExternOrderkey = ExternOrderkey,
-         @Orders_M_Address1 = M_Address1,
-         @Orders_M_Address2 = M_Address2,
-         @Orders_M_City = M_City,
-         @Orders_M_Company = M_Company,
-         @Orders_M_Contact1 = M_Contact1,
-         @Orders_M_State = M_State,
-         @Orders_M_Zip = M_Zip,
-         @Orders_Markforkey = Markforkey,
-         @Orders_UserDefine04 = Userdefine04,
-         @Orders_UserDefine08 = Userdefine08,
-         @Orders_UserDefine09 = Userdefine09
-      FROM dbo.Orders WITH(NOLOCK)
-      WHERE OrderKey = @cOrderKey
+         @Orders_B_Address1 = O.B_Address1,
+         @Orders_B_Address2 = O.B_Address2,
+         @Orders_B_City = O.B_City,
+         @Orders_B_Company = O.B_Company,
+         @Orders_B_ISOCntryCode = O.B_ISOCntryCode,
+         @Orders_B_State = O.B_State,
+         @Orders_B_Zip = O.B_Zip,
+         @Orders_Billtokey = O.BilltoKey,
+         @Orders_BuyerPO = O.BuyerPO,
+         @Orders_C_Address1 = O.C_Address1,
+         @Orders_C_Address2 = O.C_Address2,
+         @Orders_C_City = O.C_City,
+         @Orders_C_Company = O.C_Company,
+         @Orders_C_Contact1 = O.C_Contact1,
+         @Orders_C_ISOCntryCode = O.C_ISOCntryCode,
+         @Orders_C_State = O.C_State,
+         @Orders_C_Zip = O.C_Zip,
+         @Orders_C_Zip_Barcode = CONCAT('(420) ', SUBSTRING(O.C_Zip, 1, 5)),
+         @Orders_C_Zip_Readable = CONCAT('420', SUBSTRING(O.C_Zip, 1, 5)),
+         @Orders_Consigneekey = O.Consigneekey,
+         @Orders_ConsigneekeyBarcode = O.Consigneekey,
+         @Orders_ExternOrderkey = O.ExternOrderkey,
+         @Orders_M_Address1 = O.M_Address1,
+         @Orders_M_Address2 = O.M_Address2,
+         @Orders_M_City = O.M_City,
+         @Orders_M_Company = O.M_Company,
+         @Orders_M_Contact1 = O.M_Contact1,
+         @Orders_M_State = O.M_State,
+         @Orders_M_Zip = O.M_Zip,
+         @Orders_Markforkey = O.Markforkey,
+         @Orders_UserDefine04 = O.Userdefine04,
+         @Orders_UserDefine08 = O.Userdefine08,
+         @Orders_UserDefine09 = O.Userdefine09,
+         @cFacility = O.Facility,
+         @DeliveryIDSuffix = CASE WHEN O.Facility = 'LEV01' THEN '72' ELSE '' END,
+         @OrderInfo_OrderInfo02 = OI.OrderInfo02
+      FROM dbo.Orders O WITH(NOLOCK)
+         LEFT JOIN OrderInfo OI (NOLOCK) ON O.OrderKey = OI.OrderKey
+      WHERE O.OrderKey = @cOrderKey
 
       SELECT TOP 1
          @OrderDetail_Userdefine07 = Userdefine07,
@@ -196,22 +214,40 @@ BEGIN
       WHERE OrderKey = @cOrderKey
    END
 
+   SELECT TOP 1
+      @Facility_Address1 = Address1,
+      @Facility_Address2 = Address2,
+      @Facility_City = City,
+      @Facility_Description = Descr,
+      @Facility_Facility = Facility,
+      @Facility_State = State,
+      @Facility_Zip = Zip
+   FROM dbo.Facility WITH(NOLOCK)
+   WHERE FACILITY = @cFacility
+
    SELECT
       @PackDetail_Carton_Total_Qty = SUM(Qty),
-      @Packdetail_Carton_Count = COUNT(CartonNo),
       @Packdetail_Labelno = Labelno,
-      @PackDetail_Total_Qty_by_SKU = SUM(Qty)
+      @PackDetail_Total_Qty = SUM(Qty)
    FROM dbo.PackDetail WITH(NOLOCK) 
    WHERE StorerKey = @cStorerKey 
       AND labelno = @cLabelNo
    GROUP BY LabelNo
 
-   -- SELECT
-   --    @PackDetail_Total_Qty_by_SKU = SUM(Qty)
-   -- FROM dbo.PackDetail WITH(NOLOCK) 
-   -- WHERE StorerKey = @cStorerKey 
-   --    AND labelno = @cLabelNo
-   -- GROUP BY LabelNo,SKU
+   SELECT TOP 1
+      @PackDetail_CartonNo = CartonNo,
+      @Packdetail_Labelno = CONCAT('00', Labelno),
+      @Packdetail_Carton_Count = (dbo.fnc_GetGNCarton(PICKSLIPNO)),
+      @PackDetail_DropId = DropID
+   FROM dbo.PackDetail WITH(NOLOCK)
+   WHERE StorerKey = @cStorerKey
+      AND labelno = @cLabelNo
+
+   SET @Packdetail_LabelnoBarcode = '(' + LEFT(@Packdetail_Labelno, 2) + ') ' +
+                                    SUBSTRING(@Packdetail_Labelno, 3, 1) + ' ' +
+                                    SUBSTRING(@Packdetail_Labelno, 4, 7) + ' ' +
+                                    SUBSTRING(@Packdetail_Labelno, 11, 9) + ' ' +
+                                    RIGHT(@Packdetail_Labelno, 1)
 
    SELECT TOP 1
       @PackInfo_CartonType = CartonType
@@ -231,16 +267,45 @@ BEGIN
    WHERE StorerKey = @cStorerKey 
       AND labelno = @cLabelNo
 
+   INSERT INTO @tSkus(SKU,SKUSizeMeasurement,SKUStyle,QTY)
    SELECT
-      @SKU_RetailSKU = CONCAT('',CASE WHEN @nSKUCnt = 1 THEN RetailSKU ELSE 'MIXED' END,''),
-      @SKU_Size_Measurement =  CONCAT('',CASE WHEN @nSKUCnt = 1 THEN ISNULL(Size,'') + ISNULL(Measurement,'') ELSE 'MIXED' END,''),
-      @SKU_Style = CONCAT('',CASE WHEN @nSKUCnt = 1 THEN ISNULL(STYLE,'') ELSE 'MIXED' END,'')
+      CONCAT('',ISNULL(RetailSKU,''),''),
+      CONCAT('',ISNULL(Size,'') ,'x', ISNULL(Measurement,''),''),
+      CONCAT('',ISNULL(STYLE,''),''),
+      SUM(PD.QTY)
    FROM dbo.SKU SKU WITH (NOLOCK)
    INNER JOIN dbo.PackDetail PD WITH(NOLOCK) ON PD.SKU = SKU.SKU AND PD.StorerKey = SKU.StorerKey
    WHERE PD.StorerKey = @cStorerKey 
       AND PD.labelno = @cLabelNo
+   GROUP BY SKU.RetailSKU, SKU.Size, SKU.Measurement, SKU.Style
 
-   SELECT top 1 @wkOrdUDef2 = wod.WkOrdUdef2,
+   WHILE(1=1)
+   BEGIN
+      SELECT
+         @SKU_RetailSKU = SKU,
+         @SKU_Size_Measurement = SKUSizeMeasurement,
+         @SKU_Style = SKUStyle,
+         @PackDetail_Total_Qty_by_SKU = Qty
+      FROM @tSkus
+      WHERE ID = @nLoopIndex
+      IF @@ROWCOUNT = 0
+      BEGIN
+         SELECT @SKU_RetailSKU = '', @SKU_Size_Measurement = '', @SKU_Style = '', @PackDetail_Total_Qty_by_SKU = ''
+      END
+
+      SET @cPrintData = REPLACE(@cPrintData, CONCAT('[[Label.SKU_RetailSKU',@nLoopIndex,']]'), ISNULL(@SKU_RetailSKU, ''));
+      SET @cPrintData = REPLACE(@cPrintData, CONCAT('[[Label.SKU_Size_Measurement',@nLoopIndex,']]'), ISNULL(@SKU_Size_Measurement, ''));
+      SET @cPrintData = REPLACE(@cPrintData, CONCAT('[[Label.SKU_Style',@nLoopIndex,']]'), ISNULL(@SKU_Style, ''));
+      SET @cPrintData = REPLACE(@cPrintData, CONCAT('[[Label.PackDetail_Total_Qty_by_SKU',@nLoopIndex,']]'), ISNULL(@PackDetail_Total_Qty_by_SKU, ''));
+
+      SET @nLoopIndex = @nLoopIndex + 1
+      IF @nLoopIndex > 23
+         BREAK
+   END
+
+   SELECT top 1 
+      @wkordtype = CASE WHEN ISNULL((dbo.fnc_GetGNNewFlow(PKD.ORDERKEY) ),'') <> '' THEN  'N E W F L O W' ELSE '' END,
+      @wkOrdUDef2 = CASE WHEN ISNULL((dbo.fnc_GetGNHangers(PKD.ORDERKEY) ),'') <> '' THEN dbo.fnc_GetGNHangers(Pkd.ORDERKEY) ELSE 'N E W F L O W' END,
       @wkOrdUDef4 = wod.WkOrdUdef4,
       @Hangers = IIF(CLK.udf01 = 'H','Hanger','')
    FROM dbo.WorkOrderDetail wod (NOLOCK)
@@ -251,8 +316,17 @@ BEGIN
       AND WOD.StorerKey = @cStorerKey
 
 
+   IF @cReportType in ('CTNLVCL11', 'VENLVSL11')
+   BEGIN
+      SELECT @OrderInfo_Notes = dbo.fnc_GetGNDeptSL11(@cLabelNo)
+   END
+   ELSE
+   BEGIN
+      SELECT @OrderInfo_Notes = dbo.fnc_GetGNDept_MPOC(@cLabelNo)
+   END
+
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.CartonTrack_TrackingNo]]', ISNULL(@CartonTrack_TrackingNo, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.Date_Time_Now]]', CONVERT(VARCHAR, GETDATE(), 120));
+   SET @cPrintData = REPLACE(@cPrintData, '[[Label.Date_Time_Now]]', CONVERT(NVARCHAR(5), GETDATE(), 110));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Facility_Address1]]', ISNULL(@Facility_Address1, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Facility_Address2]]', ISNULL(@Facility_Address2, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Facility_City]]', ISNULL(@Facility_City, ''));
@@ -296,6 +370,8 @@ BEGIN
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Orders_M_Contact1_C_Contact1]]', CASE WHEN ISNULL(@Orders_M_Contact1, '') = '' THEN ISNULL(@Orders_C_Contact1, '') ELSE ISNULL(@Orders_M_Contact1, '') END);
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Orders_M_State_C_State]]', CASE WHEN ISNULL(@Orders_M_State, '') = '' THEN ISNULL(@Orders_C_State, '') ELSE ISNULL(@Orders_M_State, '') END);
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Orders_M_Zip]]', ISNULL(@Orders_M_Zip, ''));
+   SET @cPrintData = REPLACE(@cPrintData, '[[Label.Orders_C_Zip_Barcode]]', '' + ISNULL(@Orders_C_Zip_Barcode, '') + '');
+   SET @cPrintData = REPLACE(@cPrintData, '[[Label.Orders_C_Zip_Readable]]', '' + ISNULL(@Orders_C_Zip_Readable, '') + '');
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Orders_Markforkey_Consigneekey]]', CASE WHEN ISNULL(@Orders_Markforkey, '') = '' THEN ISNULL(@Orders_Consigneekey, '') ELSE ISNULL(@Orders_Markforkey, '') END);
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Orders_UserDefine04]]', ISNULL(@Orders_UserDefine04, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Orders_UserDefine08]]', ISNULL(@Orders_UserDefine08, ''));
@@ -303,112 +379,27 @@ BEGIN
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail.Carton_Total_Qty]]', ISNULL(@PackDetail_Carton_Total_Qty, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Packdetail_Carton_Count]]', ISNULL(@Packdetail_Carton_Count, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Packdetail_Labelno]]', ISNULL(@Packdetail_Labelno, ''));
+SET @cPrintData = REPLACE(@cPrintData, '[[Label.Packdetail_LabelnoBarcode]]', ISNULL(@Packdetail_LabelnoBarcode, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU]]', ISNULL(@PackDetail_Total_Qty_by_SKU, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackInfo_CartonType]]', ISNULL(@PackInfo_CartonType, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Storer_Company_Type7]]', ISNULL(@Storer_Company_Type7, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Storer_Storerkey_Type7]]', ISNULL(@Storer_Storerkey_Type7, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[Label.MBOL_CarrierAgent]]', ISNULL(@MBOL_CarrierAgent, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[Label.PackDetail_CartonNo]]', ISNULL(@PackDetail_CartonNo, ''));
+SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_DropId]]', ISNULL(@PackDetail_DropId, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[Label.Storer_Company_Type_1]]', ISNULL(@Storer_Company_Type_1, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[Label.Storer_Storerkey_Type_1]]', ISNULL(@Storer_Storerkey_Type_1, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU1]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement1]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style1]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU1]]', ISNULL(@PackDetail_Total_Qty_by_SKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU2]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement2]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style2]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU2]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU3]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement3]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style3]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU3]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU4]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement4]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style4]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU4]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU5]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement5]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style5]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU5]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU6]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement6]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style6]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU6]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU7]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement7]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style7]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU7]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU8]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement8]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style8]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU8]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU9]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement9]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style9]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU9]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU10]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement10]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style10]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU10]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU11]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement11]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style11]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU11]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU12]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement12]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style12]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU12]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU13]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement13]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style13]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU13]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU14]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement14]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style14]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU14]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU15]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement15]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style15]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU15]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU16]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement16]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style16]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU16]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU17]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement17]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style17]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU17]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU18]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement18]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style18]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU18]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU19]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement19]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style19]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU19]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU20]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement20]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style20]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU20]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU21]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement21]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style21]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU21]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU22]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement22]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style22]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU22]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_RetailSKU23]]', ISNULL(@SKU_RetailSKU, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Size_Measurement23]]', ISNULL(@SKU_Size_Measurement, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.SKU_Style23]]', ISNULL(@SKU_Style, ''));
-   SET @cPrintData = REPLACE(@cPrintData, '[[Label.PackDetail_Total_Qty_by_SKU23]]', ISNULL(@SKU_Style, ''));
+   SET @cPrintData = REPLACE(@cPrintData, '[[Label.LVSUSA_Delivery_ID_Suffix]]', ISNULL(@DeliveryIDSuffix, ''));
+   SET @cPrintData = REPLACE(@cPrintData, '[[Label.Orders_ConsigneekeyBarcode]]', ISNULL(@Orders_ConsigneekeyBarcode, ''));
 
    /** LVSUS Spec **/
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.LVSUSA_Hangers_Included]]', ISNULL(@Hangers, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.WorkOrderDetail_WkOrdUDef2]]', ISNULL(@wkOrdUDef2, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.WorkOrderDetail_WkOrdUDef4]]', ISNULL(@wkOrdUDef4, ''));
-
+   SET @cPrintData = REPLACE(@cPrintData, '[[Label.LVSUSA_Packing_List]]', ISNULL(@LVSUSA_Packing_List, ''));
+   SET @cPrintData = REPLACE(@cPrintData, '[[Label.WorkOrderDetail_Type]]', ISNULL(@wkordtype, ''));
+   SET @cPrintData = REPLACE(@cPrintData, '[[Label.LVSUSA_Cost_Center]]', ISNULL(@costCenter, ''));
+   SET @cPrintData = REPLACE(@cPrintData, '[[Label.LVSUSA_Natural_Acct]] ', ISNULL(@naturalAcct, ''));
 
    Quit:
    RETURN

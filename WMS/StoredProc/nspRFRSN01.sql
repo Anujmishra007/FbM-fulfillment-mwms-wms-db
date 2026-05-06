@@ -43,6 +43,7 @@ GO
 /* 28-05-2024   1.6   NLT013     FCR-229 - Increase the max length of   */
 /*                               qty text box to 7 digit, and handle    */
 /*                               the exception                          */
+/* 10-10-2025   1.7   SSA01      UWP-42248 -Enhanced session management */
 /************************************************************************/
 
 CREATE PROC    [dbo].[nspRFRSN01]
@@ -298,9 +299,9 @@ SET @c_NewLineChar =  master.dbo.fnc_GetCharASCII(13) + master.dbo.fnc_GetCharAS
                   Status = CASE WHEN @cContProcNotUpdTaskStatus = '1' THEN Status ELSE '9' END,
                   Reasonkey = CASE WHEN ISNULL(@c_reasoncode, '') = '' THEN Reasonkey ELSE @c_reasoncode END,
                   UserPosition = CASE WHEN @c_userposition <> '' THEN @c_userposition ELSE '2' END, -- (Vicky01)
-                  EndTime = getdate(),
-                  EditDate = getdate(),
-                  EditWho = suser_sname()
+                  EndTime = dbo.fnc_GetDate(),    --(SSA01)
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName()         --(SSA01)
              WHERE taskdetailkey = @c_taskdetailkey
              AND STATUS <> '9'
           END
@@ -311,9 +312,9 @@ SET @c_NewLineChar =  master.dbo.fnc_GetCharASCII(13) + master.dbo.fnc_GetCharAS
                  UPDATE TASKDETAIL WITH (ROWLOCK)
                  SET Reasonkey = CASE WHEN ISNULL(@c_reasoncode, '') = '' THEN Reasonkey ELSE @c_reasoncode END,
                      UserPosition = CASE WHEN @c_userposition <> '' THEN @c_userposition ELSE '2' END, -- (Vicky01)
-                     EndTime = getdate(),
-                     EditDate = getdate(),
-                     EditWho = suser_sname(),
+                     EndTime = dbo.fnc_GetDate(),    --(SSA01)
+                     EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                     EditWho = dbo.fnc_GetUserName(),        --(SSA01)
                      Trafficcop = NULL
                 WHERE taskdetailkey = @c_taskdetailkey
                 AND STATUS <> '9'

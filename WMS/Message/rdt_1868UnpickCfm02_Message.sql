@@ -1,0 +1,7 @@
+-- 259551 - 259600 - UWP-48932 NYE018
+
+execute rdt.rdtDropMsg 259551, 259600
+
+execute rdt.rdtAddMsg 259551, 10, '259551^FromLOC      ',  'us_english', 1868, 0, '259551^From LOC Not Exists'
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 259551 AND 259600

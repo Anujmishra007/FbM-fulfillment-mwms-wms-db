@@ -23,7 +23,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 01-04-2020  Wan01    1.2   Sync Exceed & SCE                         */   
+/* 01-04-2020  Wan01    1.2   Sync Exceed & SCE                         */
+/* 10-10-2025  SSA01    1.3   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC ispRVWAV07
         @c_Wavekey      NVARCHAR(10)  
@@ -113,8 +114,8 @@ BEGIN
       SET TaskDetailKey = ''
          ,Wavekey       = ''
          ,TrafficCop    = NULL
-         ,EditWho = SUSER_NAME()
-         ,EditDate= GETDATE()
+         ,EditWho = dbo.fnc_GetUserName()     --(SSA01)
+         ,EditDate= dbo.fnc_GetDate()   --(SSA01)
       WHERE PickDetailkey = @c_PickDetailKey
 
       SET @n_err = @@ERROR
@@ -192,8 +193,8 @@ BEGIN
    --   ,EditWho = SUSER_NAME()        --(Wan01)
    SET TMReleaseFlag = 'N'             --(Wan01) 
    ,  TrafficCop = NULL                --(Wan01) 
-   ,  EditWho = SUSER_SNAME()          --(Wan01) 
-   ,  EditDate= GETDATE()              --(Wan01)      
+   ,  EditWho = dbo.fnc_GetUserName()         --(Wan01)(SSA01)
+   ,  EditDate= dbo.fnc_GetDate()   --(SSA01)             --(Wan01)
    WHERE Wavekey = @c_Wavekey 
    
    SET @n_err = @@ERROR

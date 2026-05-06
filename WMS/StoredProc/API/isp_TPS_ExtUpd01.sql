@@ -12,10 +12,13 @@ GO
 /* Date         Rev  Author     Purposes                                      */      
 /* 2021-10-25   1.0  Chermaine  TPS-616 Created                               */      
 /* 2023-05-30   1.1  YeeKung    TPS-703 Bug Fixed (yeekung01)                 */
+/* 2024-05-15   1.2  YeeKung    TPS-907 Fixed Serialno status (yeekung02)     */
+/* 2024-08-19   1.3  YeeKung    INC7149777 Fixed the status (yeekung03)       */
+/* 2025-01-22   1.4  YeeKung    TPS-970 Add New Params (yeekung04)            */
 /******************************************************************************/      
       
 CREATE OR ALTER PROC [API].[isp_TPS_ExtUpd01] (      
- @cStorerKey      NVARCHAR( 15),    
+   @cStorerKey      NVARCHAR( 15),    
    @cFacility       NVARCHAR( 5),      
    @nFunc           INT,          
    @cUserName       Nvarchar( 128),    
@@ -34,7 +37,8 @@ CREATE OR ALTER PROC [API].[isp_TPS_ExtUpd01] (
    @fCartonCube     FLOAT,         
    @cWorkstation    NVARCHAR( 30),     
    @cLabelNo        NVARCHAR( 20),    
-   @cCloseCartonJson   NVARCHAR (MAX),    
+   @cCloseCartonJson   NVARCHAR (MAX),   
+   @pickSkuDetailJson   NVARCHAR( MAX),
    @b_Success       INT = 1        OUTPUT,    
    @n_Err           INT = 0        OUTPUT,    
    @c_ErrMsg        NVARCHAR( 255) = ''  OUTPUT     
@@ -63,7 +67,8 @@ DECLARE
    @nSNQTY           INT,
    @bsuccess         INT,    
    @nErrNo           INT,    
-   @nTranCount       INT    
+   @nTranCount       INT,
+   @cStatus          NVARCHAR(20)
        
 DECLARE @CloseCtnList TABLE (    
    SKU             NVARCHAR( 20),    
@@ -156,8 +161,8 @@ BEGIN
                      
                   IF @bsuccess <> 1      
                   BEGIN      
-                     SET @n_Err = 175737      
-                     SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to get SerialNo Key. Function : isp_TPS_ExtUpd01'      
+                     SET @n_Err = 1002601      
+                     SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to get SerialNo Key. Function : isp_TPS_ExtUpd01'      
                      GOTO RollBackTran      
                   END      
                       
@@ -173,7 +178,21 @@ BEGIN
                                                    AND S.OrderLineNumber = PD.OrderLineNUmber      
                                                    AND S.SKU = @cSKU  )       
                      
-                  SET @nQty = CASE WHEN ISNULL(@nQty,'') IN(0,'') then 1 ELSE @nQty END 
+                  SET @nQty =  1
+
+                  
+                  IF EXISTS ( SELECT 1
+                              FROM SKU (NOLOCK)
+                              WHERE SKU = @cSKU 
+                                 AND  StorerKey = @cStorerKey  
+                                 AND SerialNoCapture IN ('1','3'))
+                  BEGIN
+                     SET @cStatus ='1'
+                  END
+                  ELSE
+                  BEGIN
+                     SET @cStatus ='6'
+                  END
                   
 
                    SELECT @cLblLineNumber = PD.LabelLine  
@@ -190,18 +209,18 @@ BEGIN
     
                   IF @@ERROR <> 0       
                   BEGIN       
-                     SET @n_Err = 175738      
-                     SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
+                     SET @n_Err = 1002602      
+                     SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert PackSerialNo table. Function : isp_TPS_ExtUpd01'      
                      GOTO RollBackTran      
                   END      
                   
-                  INSERT INTO SerialNo (SerialNoKey, OrderKey, OrderLineNumber, StorerKey, SKU, SerialNo, Qty, status )       
-                  VALUES ( @cSerialNoKey, @cOrderKey, ISNULL(@cOrderLineNumber,''), @cStorerKey, @cSKU , @cSerialNo , @nQty, '1' )       
+                  INSERT INTO SerialNo (SerialNoKey, OrderKey, OrderLineNumber, StorerKey, SKU, SerialNo, Qty, status,CartonNo )       
+                  VALUES ( @cSerialNoKey, @cOrderKey, ISNULL(@cOrderLineNumber,''), @cStorerKey, @cSKU , @cSerialNo , @nQty, @cStatus,@nCartonNo)       
 
                   IF @@ERROR <> 0       
                   BEGIN       
-                     SET @n_Err = 175738      
-                     SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
+                     SET @n_Err = 1002603      
+                     SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
                      GOTO RollBackTran      
                   END      
                END      
@@ -251,8 +270,8 @@ BEGIN
     
                      IF @@ERROR <> 0       
                      BEGIN       
-                        SET @n_Err = 175738      
-                        SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
+                        SET @n_Err = 1002604      
+                        SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
                         GOTO RollBackTran      
                      END      
                   END    
@@ -268,8 +287,8 @@ BEGIN
                       
                   IF @@ERROR <> 0       
                   BEGIN       
-                     SET @n_Err = 175739      
-                     SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd01'      
+                     SET @n_Err = 1002605      
+                     SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd01'      
                      GOTO RollBackTran      
                   END      
                END    
@@ -292,9 +311,6 @@ BEGIN
     
 END      
 GO
-  
-SET QUOTED_IDENTIFIER OFF  
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON

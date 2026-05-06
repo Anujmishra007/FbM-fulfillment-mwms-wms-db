@@ -1,15 +1,16 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrXdockHeaderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-	DROP TRIGGER [dbo].[ntrXdockHeaderUpdate]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
+/* 06-Oct-2025  AK01       UWP-42143 - Replace SUSER_SNAME with         */
+/*                           fnc_GetUserName                            */
 
-CREATE TRIGGER ntrXdockHeaderUpdate
+
+CREATE OR ALTER TRIGGER ntrXdockHeaderUpdate
  ON  XDOCK
  FOR UPDATE
  AS
@@ -49,8 +50,8 @@ CREATE TRIGGER ntrXdockHeaderUpdate
  IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
  BEGIN
  UPDATE    XDOCK
- SET  EditDate = GETDATE(),
- EditWho = SUSER_SNAME()
+ SET  EditDate = dbo.fnc_GetDate(),
+ EditWho = dbo.fnc_GetUserName()
  FROM XDOCK,
  INSERTED
  WHERE XDOCK.XDOCKKey = INSERTED.XDOCKKey
@@ -184,4 +185,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

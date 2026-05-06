@@ -26,6 +26,7 @@ GO
 /* 28-Oct-2013  TLTING   1.2  Review Editdate column update             */ 
 /* 14-Apr-2015  KHLim02  1.3  additional PK code2                       */ 
 /* 22-Feb-2022  TLTING   1.4  prevent bulk update                       */ 
+/* 06-Oct-2025  AK01     1.5  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/  
   
 CREATE OR ALTER TRIGGER [dbo].[ntrCodeLKUPUpdate]  
@@ -57,8 +58,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2  ) AND NOT UPDATE(EditDate) 
    BEGIN  
       UPDATE CodeLKUP  
-         SET EditDate = GETDATE(),  
-             EditWho = SUSER_SNAME(),  
+         SET EditDate = dbo.fnc_GetDate(),  
+             EditWho = dbo.fnc_GetUserName(),  
              TrafficCop = NULL  
         FROM CodeLKUP, INSERTED  
        WHERE CodeLKUP.LISTNAME = INSERTED.LISTNAME
@@ -85,7 +86,7 @@ BEGIN
     IF ( (Select count(1) FROM  CodeLKUP A (NOLOCK), INSERTED
        WHERE INSERTED.LISTNAME = A.LISTNAME AND INSERTED.Code = A.Code AND INSERTED.Storerkey = A.Storerkey AND A.code2 = INSERTED.code2 
        ) > 100 ) 
-       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn'    )
+       AND dbo.fnc_GetUserName() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn'    )
    BEGIN
       
          SELECT @n_continue = 3
@@ -124,3 +125,4 @@ BEGIN
       RETURN  
    END  
 END  
+

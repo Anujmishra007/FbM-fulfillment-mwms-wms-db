@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrWorkOrderJobAdd' AND type = 'TR')
-   DROP TRIGGER ntrWorkOrderJobAdd
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -14,7 +11,7 @@ GO
 /* Written by: YTWan                                                       */
 /*                                                                         */
 /* Purpose: Update other transactions while WorkOrderJob is added          */
-/*        : SOS#315823 - Project Merlion ¡V VAP RCM to record Wastage,     */
+/*        : SOS#315823 - Project Merlion ï¿½V VAP RCM to record Wastage,     */
 /*          Rejects and Reconciliation                                     */
 /* Return Status:                                                          */
 /*                                                                         */
@@ -32,9 +29,10 @@ GO
 /*                            Reservation Strategy - MixSku in 1 Pallet    */
 /*                            enhancement                                  */
 /* 26-FEB-2016  Wan02    1.2  Fixed Wrong WorkorderJob.Qtyjob Update       */    
-/* 10-MAR-2016  Wan03    1.3  Fixed Error Msg                              */             
+/* 10-MAR-2016  Wan03    1.3  Fixed Error Msg                              */
+/* 06-OCT-2025  AK01     1.4  UWP-42143 Data Audit                         */             
 /***************************************************************************/
-CREATE TRIGGER ntrWorkOrderJobAdd ON WORKORDERJOB
+CREATE OR ALTER TRIGGER ntrWorkOrderJobAdd ON WORKORDERJOB
 FOR INSERT
 AS
 BEGIN
@@ -291,6 +289,28 @@ BEGIN
    CLOSE CUR_JOB
    DEALLOCATE CUR_JOB
 */
+
+--AK01 - S
+IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+BEGIN
+   UPDATE WorkOrderJob
+     SET AddWho  = dbo.fnc_GetUserName(),
+         AddDate = dbo.fnc_GetDate(), 
+         EditWho  = dbo.fnc_GetUserName(),
+         EditDate = dbo.fnc_GetDate(), 
+         TrafficCop = NULL 
+   FROM WorkOrderJob
+   JOIN INSERTED ON WorkOrderJob.SerialKey = INSERTED.SerialKey
+   SELECT @n_err = @@ERROR
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63716  
+      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table WorkOrderJob. (ntrWorkOrderJobAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+   END
+END
+--AK01 - E
+
 QUIT:
 --   IF CURSOR_STATUS( 'LOCAL', 'CUR_JOB') in (0 , 1)  
 --   BEGIN

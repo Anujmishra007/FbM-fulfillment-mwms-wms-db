@@ -27,6 +27,7 @@ GO
 /* 04-AUG-2014  YTWan    1.1  SOS#313850-Passin orderkey parameter (Wan01)*/
 /* 31-OCT-2016  Shong    1.2  WMS-249 - Replenishment enhancements       */
 /* 01-APR-2020  Wan02    1.3  Sync Exceed & SCE                          */
+/* 10-Oct-2025  SSA01    1.4  UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[ispRVWAV00]      
 @c_wavekey      NVARCHAR(10)  
@@ -116,8 +117,8 @@ BEGIN
       UPDATE LOTxLOCxID WITH (ROWLOCK)
          SET QtyReplen = QtyReplen - CASE WHEN QtyReplen < @n_Qty THEN QtyReplen ELSE @n_Qty END, 
              TrafficCop = NULL,
-             EditWho = SUSER_SNAME(),
-             EditDate = GETDATE() 
+             EditWho = dbo.fnc_GetUserName(),         --(SSA01)
+             EditDate = dbo.fnc_GetDate()   --(SSA01)
       WHERE Lot = @c_Lot
       AND   LOC = @c_FromLoc 
       AND   ID  = @c_FromID  
@@ -173,7 +174,7 @@ BEGIN
        --SET STATUS = '0' -- Normal          --(Wan02)
        SET TMReleaseFlag = 'N'               --(Wan02) 
         ,  TrafficCop = NULL                 --(Wan02) 
-        ,  EditWho = SUSER_SNAME()           --(Wan02) 
+        ,  EditWho = dbo.fnc_GetUserName()           --(Wan02) (SSA01)
         ,  EditDate= GETDATE()               --(Wan02)   
     WHERE WAVEKEY = @c_wavekey  
     SELECT @n_err = @@ERROR  
@@ -203,7 +204,7 @@ BEGIN
         UPDATE ORDERS WITH (ROWLOCK)
         SET SOStatus = '0',
             TrafficCop = NULL,
-            EditWho = SUSER_SNAME(),
+            EditWho = dbo.fnc_GetUserName(),         --(SSA01)
             EditDate = GETDATE()
         WHERE Userdefine09 = @c_Wavekey
         AND SOStatus = 'TSRELEASED'

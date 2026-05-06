@@ -26,6 +26,8 @@ GO
 /* 29-JUN-2005  Shong         Performance Tunning                       */
 /* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
 /*                                                                      */
+/* 10-OCT-2025  SSA01      1.2  UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/
 CREATE PROC isp_Populate_Load_By_PickSlip
    @c_LoadKey NVARCHAR(10),
@@ -124,8 +126,8 @@ BEGIN
          UPDATE OD
          SET TRAFFICCOP = NULL,
              LoadKey = @c_LoadKey,
-             EditWho = sUser_sName(),
-             EditDate = Getdate() 
+             EditWho = dbo.fnc_GetUserName(),     --(SSA01)
+             EditDate = dbo.fnc_GetDate()   --(SSA01)
          FROM ORDERDETAIL od 
          JOIN PickDetail P (nolock) ON OD.OrderKey = P.OrderKey AND OD.OrderLineNumber = P.OrderLineNumber 
          WHERE P.PickslipNo = @c_PickslipNo

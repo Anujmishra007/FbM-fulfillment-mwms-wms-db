@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
@@ -30,6 +30,8 @@ GO
 /* 10-Dec-2021 Chai02   1.3   LFWM-3166 - UAT - TW | Kitting To Part UOM Issue*/
 /* 10-AUG-2021 Wan02    1.4   LFWM-3679 - UAT - PH  SCE Kitting Calculate*/
 /*                            Consumption issue                          */
+/* 2025-09-02  SWT01    1.5   Enhanced session management pattern       */
+/* 10-Oct-2025 SPC040   1.6   Replace SUSER_SNAME with fnc_GetUserName   */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Kit_Calc_Consumption]  (
    @c_StorerKey      NVARCHAR(15), 
@@ -56,6 +58,7 @@ BEGIN
                                                                                                    
    DECLARE @n_Continue     INT = '1'         
          , @n_Count        INT = 0 
+         , @b_ExecuteAs    BIT = 0
          , @c_ComponentSku NVARCHAR(20) = '' 
          , @n_ComponentQty DECIMAL = 0 --(Chai01)
          , @n_ParentQty    DECIMAL = 0 --(Chai01) 
@@ -77,20 +80,25 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0
+   
+   -- Enhanced session management (SWT01)
    IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
    BEGIN    
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END                                   --(Wan01) - END
+   -- End enhanced session management (SWT01)
    
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
       DECLARE @c_FromSKU         NVARCHAR(20) = '',
@@ -232,7 +240,7 @@ BEGIN
          END                                                                                       --(Wan02) - END
          
          UPDATE KITDETAIL WITH (ROWLOCK)
-            SET Qty = @n_CompleteQty_KitTo, EditDate = GETDATE(), EditWho = SUSER_SNAME()          --(Wan02)
+            SET Qty = @n_CompleteQty_KitTo, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()          --(Wan02)
          WHERE KITKey = @c_KitKey 
          AND   KITLineNumber = @c_KitLineNumber 
          AND   [Type] = @c_Type_KitTo                                                              --(Wan02)
@@ -261,7 +269,9 @@ BEGIN
    BEGIN
       SET @b_Success = 1
    END
-   REVERT      
+   
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_Kit_Calc_Consumption] TO nSQL 

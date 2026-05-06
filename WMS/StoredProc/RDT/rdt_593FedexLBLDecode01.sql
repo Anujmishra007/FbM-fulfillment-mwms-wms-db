@@ -58,8 +58,8 @@ AS
    EXEC master.dbo.isp_BASe64Decode 'UTF-8', @c_InputString, @c_OutputString OUTPUT,@cErrMsg OUTPUT
    IF @cErrMSG <> ''
    BEGIN
-      SET @cErrMSG = 'Print Data Error'
-      SET @nErrNo = 9999
+      SET @nErrNo = 237601
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Print Data Error
    END
    SET @cPrintData = @c_OutputString
 

@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
 /* 24-Mar-2004  WANYT  1.0    Timberland FBR#20720: RF Stock Take Entry */
+/* 10-Oct-2025  SSA01  1.1    UWP-42248 -Enhanced session management    */
 /************************************************************************/
 SET ANSI_NULLS OFF
 GO
@@ -296,8 +297,8 @@ BEGIN
 					      Qty_Cnt2        = CASE @n_count WHEN 2 THEN 0 ELSE Qty_Cnt2 END,
 					      Qty_Cnt3        =	CASE @n_count WHEN 3 THEN 0 ELSE Qty_Cnt3 END,
 					      STATUS          = CASE lot WHEN ' ' THEN 1 ELSE 2 END,
-					      EditDate	      = GetDate(),
-					      EditWho         = Suser_Sname()	
+					      EditDate	      = dbo.fnc_GetDate(),    --(SSA01)
+					      EditWho         = dbo.fnc_GetUserName()             --(SSA01)
 					WHERE CCKey           = @c_cckey
 					AND   ccdetailkey     = @c_entryccdetailkey
 					AND   (Qty             <> CASE @n_count WHEN 1 THEN 0 ELSE Qty END
@@ -331,8 +332,8 @@ BEGIN
 			      Qty_Cnt2        = CASE @n_count WHEN 2 THEN @n_qty ELSE Qty_Cnt2 END,
 			      Qty_Cnt3        =	CASE @n_count WHEN 3 THEN @n_qty ELSE Qty_Cnt3 END,
 			      STATUS          = CASE Lot WHEN ' ' THEN 1 ELSE 2 END,
-			      EditDate	      = GetDate(),
-			      EditWho         = Suser_Sname()	
+			      EditDate	      = dbo.fnc_GetDate(),    --(SSA01)
+			      EditWho         = dbo.fnc_GetUserName()	           --(SSA01)
 			WHERE CCKey           = @c_cckey
 			AND   ccdetailkey     = @c_ccdetailkey
 			AND   (Qty             <> CASE @n_count WHEN 1 THEN @n_qty ELSE Qty END

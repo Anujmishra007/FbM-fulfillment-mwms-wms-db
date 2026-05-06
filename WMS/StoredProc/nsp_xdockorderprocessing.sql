@@ -58,6 +58,7 @@ GO
 /*                              issue while order processing for XDock       */
 /* 15-Apr-2024 USH022-01        Ticket - UWP-18028- XDock Allocation Issue   */
 /* 25-Sep-2024 SSA01            UWP-24194 - Enhanced XDock Allocation Strategy*/
+/* 11-Feb-2026 NJOW02           UWP-48746 Performance tuning                 */
 /*****************************************************************************/
 CREATE OR ALTER PROCEDURE nsp_XDockOrderProcessing
    @c_ExternPOKey NVARCHAR(20) ,
@@ -191,6 +192,8 @@ CREATE TABLE #TEMPSKU
 Sku nvarchar(20) NULL
 )
 
+CREATE INDEX IDX_TEMPSKU ON #TEMPSKU (Sku) --NJOW02
+
 
 CREATE TABLE #CONSIGNEE
 (
@@ -270,7 +273,7 @@ INSERT INTO #TEMPSKU
    BEGIN
       IF @c_Type = '01'
       BEGIN
-         SELECT @c_SQLStmt = "INSERT INTO #Ordlines " +
+         /*SELECT @c_SQLStmt = "INSERT INTO #Ordlines " +
                              "(Orderkey, Orderlinenumber, Storerkey, Sku, " +
                              "OriginalQty, OpenQty, ShippedQty, AdjustedQty, " +
                              "Qtypreallocated, QtyAllocated, Qtypicked, Packkey, " +
@@ -286,13 +289,45 @@ INSERT INTO #TEMPSKU
                              "WHERE OH.Orderkey = OD.Orderkey "                                 + 
                              "AND OH.facility = N'" + dbo.fnc_RTrim(@c_facility) + "' "                  + 
                              "AND OH.status < '" + "2" + "' "                                   + 
-                             "AND OD.Storerkey = N'" + dbo.fnc_RTrim(@c_StorerKey) + "' "                + 
+                             "AND OD.Storerkey = N'" + dbo.fnc_RTrim(@c_StorerKey) + "' "                +   
                              "AND OD.ExternPOKey = N'" + dbo.fnc_RTrim(@c_ExternPOKey) + "' "            + 
                              "AND OD.OpenQty - OD.QtyAllocated - OD.Qtypicked > 0 "             +
                              "AND OD.SKU IN (SELECT SKU FROM #TEMPSKU) "                        +
                              "ORDER BY OD.Orderkey, OD.SKU "
-         EXEC (@c_SQLStmt)
-         
+         */
+
+         --NJOW02
+         SELECT @c_SQLStmt = "INSERT INTO #Ordlines " +
+                             "(Orderkey, Orderlinenumber, Storerkey, Sku, " +
+                             "OriginalQty, OpenQty, ShippedQty, AdjustedQty, " +
+                             "Qtypreallocated, QtyAllocated, Qtypicked, Packkey, " +
+                             "UOM, Lottable03, Lottable05, ExternPOKey, " +
+                             "Facility, CalOrdQty, ID) " +                                              --(SSA01)
+                             "SELECT OD.Orderkey, OD.Orderlinenumber, OD.Storerkey, OD.Sku, "   +
+                             "OD.OriginalQty, OD.OpenQty, OD.ShippedQty, OD.AdjustedQty, "      +
+                             "OD.Qtypreallocated, OD.QtyAllocated, OD.Qtypicked, OD.Packkey, "  +       
+                             "OD.UOM, OD.Lottable03, OD.Lottable05, OD.ExternPOKey, "           + 
+                             "OH.Facility, (OD.OpenQty - OD.QtyAllocated - OD.Qtypicked) AS CalOrdQty," +
+                             "OD.ID "                                                          +       --(SSA01)
+                             "FROM ORDERDETAIL OD (NOLOCK), ORDERS OH (NOLOCK) "                +
+                             "WHERE OH.Orderkey = OD.Orderkey "                                 + 
+                             "AND OH.facility = @c_facility "                                   + 
+                             "AND OH.status < '" + "2" + "' "                                   + 
+                             "AND OH.Storerkey = @c_StorerKey "                                 +   
+                             "AND OD.ExternPOKey = @c_ExternPOKey "                             + 
+                             "AND OD.OpenQty - OD.QtyAllocated - OD.Qtypicked > 0 "             +
+                             "AND EXISTS(SELECT 1 FROM #TEMPSKU WHERE #TEMPSKU.Sku = OD.Sku) "  +
+                             "ORDER BY OD.Orderkey, OD.SKU "
+
+         --EXEC (@c_SQLStmt)
+
+         --NJOW02
+         EXEC sp_executesql @c_SQLStmt,
+            N'@c_Facility NVARCHAR(5), @c_Storerkey NVARCHAR(15), @c_ExternPOKey NVARCHAR(20)', 
+            @c_facility,
+            @c_StorerKey,
+            @c_ExternPOKey
+        
          IF (SELECT COUNT(*) FROM #Ordlines) = 0 
          BEGIN 
             SELECT @n_Continue = 3
@@ -372,7 +407,7 @@ INSERT INTO #TEMPSKU
             SELECT @c_OrderByStmt = @c_OrderByStmt + ", OD.SKU " 
          END
 
-         SELECT @c_SQLStmt = "INSERT INTO #Ordlines " + 
+         /*SELECT @c_SQLStmt = "INSERT INTO #Ordlines " + 
                              "(Orderkey, Orderlinenumber, Storerkey, Sku, " +
                              "OriginalQty, OpenQty, ShippedQty, AdjustedQty, " +
                              "Qtypreallocated, QtyAllocated, Qtypicked, Packkey, " +
@@ -392,8 +427,29 @@ INSERT INTO #TEMPSKU
                              "AND OH.status < '" + "2" + "' "                                   + 
                              "AND OD.OpenQty - OD.QtyAllocated - OD.Qtypicked > 0 "             +
                              "AND OH.Orderkey = OD.Orderkey "                            
+         */                    
 
-
+         --NJOW02
+         SELECT @c_SQLStmt = "INSERT INTO #Ordlines " + 
+                             "(Orderkey, Orderlinenumber, Storerkey, Sku, " +
+                             "OriginalQty, OpenQty, ShippedQty, AdjustedQty, " +
+                             "Qtypreallocated, QtyAllocated, Qtypicked, Packkey, " +
+                             "UOM, Lottable03, Lottable05, ExternPOKey, " +
+                             "Facility, CalOrdQty,  ID) " +                                           --(SSA01)
+                             "SELECT OD.Orderkey, OD.Orderlinenumber, OD.Storerkey, OD.Sku, "   +
+                             "OD.OriginalQty, OD.OpenQty, OD.ShippedQty, OD.AdjustedQty, "      +
+                             "OD.Qtypreallocated, OD.QtyAllocated, OD.Qtypicked, OD.Packkey, "  +       
+                             "OD.UOM, OD.Lottable03, OD.Lottable05, OD.ExternPOKey, "           + 
+                             "OH.Facility, (OD.OpenQty - OD.QtyAllocated - OD.Qtypicked) AS CalOrdQty, " +
+                             "OD.ID " +                                                                --(SSA01)
+                             "FROM ORDERDETAIL OD (NOLOCK), ORDERS OH (NOLOCK) "                +
+                             "WHERE OD.ExternPOKey = @c_ExternPOKey "                           + 
+                             "AND OH.Storerkey = @c_StorerKey "                                 + 
+                             "AND EXISTS(SELECT 1 FROM #TEMPSKU WHERE #TEMPSKU.Sku = OD.Sku) "  + 
+                             "AND OH.facility = @c_facility "                                   + 
+                             "AND OH.status < '" + "2" + "' "                                   + 
+                             "AND OD.OpenQty - OD.QtyAllocated - OD.Qtypicked > 0 "             +
+                             "AND OH.Orderkey = OD.Orderkey "                            
 
          IF len(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0 
          BEGIN
@@ -409,7 +465,14 @@ INSERT INTO #TEMPSKU
             select @c_SQLStmt 
          END
 
-         EXEC (@c_SQLStmt)          
+         --EXEC (@c_SQLStmt)          
+         
+         --NJOW02
+         EXEC sp_executesql @c_SQLStmt,
+            N'@c_Facility NVARCHAR(5), @c_Storerkey NVARCHAR(15), @c_ExternPOKey NVARCHAR(20)', 
+            @c_facility,
+            @c_StorerKey,
+            @c_ExternPOKey         
       
          IF @b_debug = '1' 
          BEGIN  

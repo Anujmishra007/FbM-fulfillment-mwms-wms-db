@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrWorkOrderJobOperationUpdate' AND type = 'TR')
-   DROP TRIGGER ntrWorkOrderJobOperationUpdate
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -30,8 +27,10 @@ GO
 /* 26-JAN-2016  YTWan    1.1  SOS#315603 - Project Merlion - VAP SKU       */
 /*                            Reservation Strategy - MixSku in 1 Pallet    */
 /*                            enhancement                                  */	
+/* 06-Oct-2025  AK01     1.2  UWP-42143 - Replace SUSER_SNAME with         */
+/*                             fnc_GetUserName                             */
 /***************************************************************************/
-CREATE TRIGGER ntrWorkOrderJobOperationUpdate ON WORKORDERJOBOPERATION 
+CREATE OR ALTER TRIGGER ntrWorkOrderJobOperationUpdate ON WORKORDERJOBOPERATION 
 FOR UPDATE
 AS
 BEGIN
@@ -85,8 +84,8 @@ BEGIN
    IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE WORKORDERJOBOPERATION WITH (ROWLOCK)
-      SET EditDate = GETDATE() 
-         ,EditWho  = SUSER_SNAME() 
+      SET EditDate = dbo.fnc_GetDate() 
+         ,EditWho  = dbo.fnc_GetUserName() 
          ,TrafficCop = NULL
       FROM WORKORDERJOBOPERATION
       JOIN DELETED  ON (DELETED.JobKey  = WORKORDERJOBOPERATION.JobKey)
@@ -166,8 +165,8 @@ BEGIN
 
          UPDATE WORKORDERJOBOPERATION WITH (ROWLOCK)
          SET JobStatus    = @c_JobStatus
-            ,EditWho      = SUSER_NAME()
-            ,EditDate     = GETDATE()
+            ,EditWho      = dbo.fnc_GetUserName()
+            ,EditDate     = dbo.fnc_GetDate()
             ,Trafficcop   = NULL
          WHERE JobKey = @c_JobKey
          AND   JobLine= @c_JobLineNo
@@ -240,8 +239,8 @@ BEGIN
                ,JobStatus   = CASE WHEN @n_QtyReleased > 0 THEN '4' 
                                    WHEN @c_JobStatus = '6' THEN '6'
                                    ELSE JobStatus END
-               ,EditWho     = SUSER_NAME()
-               ,EditDate    = GETDATE()
+               ,EditWho     = dbo.fnc_GetUserName()
+               ,EditDate    = dbo.fnc_GetDate()
             WHERE JobKey       = @c_JobKey 
             AND   WorkOrderkey = @c_WorkOrderkey
 
@@ -261,8 +260,8 @@ BEGIN
       END
 
       UPDATE WORKORDERJOBDETAIL WITH (ROWLOCK)
-      SET EditWho   = SUSER_NAME()
-         ,EditDate  = GETDATE()
+      SET EditWho   = dbo.fnc_GetUserName()
+         ,EditDate  = dbo.fnc_GetDate()
          ,QtyItemsOrd  = @n_QtyItemsOrd
          ,QtyItemsRes  = @n_QtyItemsRes
          ,QtyItemsNeed = QtyItemsOrd - QtyItemsRes
@@ -333,4 +332,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
+
 

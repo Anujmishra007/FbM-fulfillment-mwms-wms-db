@@ -28,6 +28,7 @@ GO
 /* Updates:                                                             */
 /* Date         Ver.  Author     Purposes                               */
 /* 22-Dec-2010  1.2   SHONG      Adding TrafficCop When updating TASK   */
+/* 10-Oct-2025  1.3   SSA01      UWP-42248 -Enhanced session management */
 /************************************************************************/
 
 CREATE PROC    [dbo].[nspTTMEvaluateDPKTasks]
@@ -260,10 +261,10 @@ BEGIN
                     SET    STATUS = '3'
                           ,UserKey = @c_userid
                           ,Reasonkey = ''
-                          ,StartTime = GETDATE() -- (Shong01)
+                          ,StartTime = dbo.fnc_GetDate()   --(SSA01) -- (Shong01)
                           ,TrafficCop = NULL -- (Shong02) 
-                          ,EditDate = GETDATE() 
-                          ,EditWho = sUser_sName() 
+                          ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+                          ,EditWho = dbo.fnc_GetUserName()      --(SSA01)
                     WHERE  TaskDetailKey = @c_TaskDetailKey
                        AND STATUS IN ('0') -- (ChewKP01) 
                     

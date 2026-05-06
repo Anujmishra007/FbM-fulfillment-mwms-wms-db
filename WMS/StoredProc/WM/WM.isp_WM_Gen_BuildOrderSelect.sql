@@ -13,7 +13,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: PowerBuidler                                              */                                                                                  
 /*                                                                      */                                                                                  
-/* PVCS Version: 1.1                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 5.4                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -23,6 +23,8 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2023-10-23  Wan01    1.1   LFWM-4554 - PROD - CN  Auto Allocation    */
 /*                            Backend SP enhancement                    */
+/* 07-APR-2025 Wan02    1.2   FCR-11826 - IN - Maersk WMS v2 - DAIMLER  */
+/*                            TRUCK AG - Auto Alloaction                */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[isp_WM_Gen_BuildOrderSelect]                                                                                                                       
    @cParmCode              NVARCHAR(10),                                                                                                                    
@@ -117,7 +119,13 @@ DECLARE @cSortBy NVARCHAR(2000),
       , @b_JoinLoc         BIT            --(Wan01)                                                                                                
           
 DECLARE @c_AutoUpdLoadDefaultStorerStrg NVARCHAR(10),
-        @c_AutoUpdSuperOrderFlag NVARCHAR(10)                                                                                                               
+        @c_AutoUpdSuperOrderFlag NVARCHAR(10)  
+        
+DECLARE @c_PendingAllocSOByQty      CHAR(1)       = 'N'                         --(Wan02)
+      , @c_ExcludeLoadplanCheck     CHAR(1)       = 'N'                         --(Wan02)
+      , @c_FeatureKeys              NVARCHAR(1000)= ''                          --(Wan02)
+      , @c_SQLWhereStatus           NVARCHAR(500) = ''                          --(Wan02)
+      , @c_SQLWhereLoadplan         NVARCHAR(200) = ''                          --(Wan02)
           
 DECLARE @t_TraceInfo TABLE(
         TraceName NVARCHAR(160),
@@ -196,7 +204,42 @@ SELECT @c_SQLField = '',
        @c_SQLGroup      = '',
        @n_cnt           = 0,
        @c_GroupFlag     = 'N',
-       @C_SQLCond       = ''                                                
+       @C_SQLCond       = ''   
+
+SET @c_FeatureKeys = ''                                                             --(Wan02) - START
+SELECT @c_FeatureKeys = gr.Option5  
+FROM dbo.fnc_GetRight2(@cFacility, @cStorerkey, '', 'BackEndAutoAllocCfg') gr
+WHERE gr.Authority = '1'
+
+SET @c_PendingAllocSOByQty = 'N'
+SET @c_ExcludeLoadplanCheck = 'N'
+IF @c_FeatureKeys > ''
+BEGIN
+   SELECT @c_PendingAllocSOByQty = dbo.fnc_GetParamValueFromString('@c_PendingAllocSOByQty'
+                                                                  , @c_Featurekeys
+                                                                  , @c_PendingAllocSOByQty)
+
+   SELECT @c_ExcludeLoadplanCheck = dbo.fnc_GetParamValueFromString('@c_ExcludeLoadplanCheck'
+                                                                  , @c_Featurekeys
+                                                                  , @c_ExcludeLoadplanCheck)
+END
+
+SET @c_SQLWhereStatus = ' AND ORDERS.[Status] < ''3'''
+IF @c_PendingAllocSOByQty = 'Y'
+BEGIN
+   SET @c_SQLWhereStatus = ' AND ORDERS.[Status] < ''9'''
+                         + ' AND ORDERDETAIL.[Status] < ''9'''
+                         + ' AND ORDERDETAIL.OpenQty-ORDERDETAIL.QtyAllocated'
+                         +     '-ORDERDETAIL.QtyPicked > 0'
+
+END
+
+SET @c_SQLWhereLoadplan = ' AND LD.LoadKey IS NULL'                                
+                        + ' AND (ORDERS.LoadKey = '''' OR ORDERS.LoadKey IS NULL)'
+IF @c_ExcludeLoadplanCheck = 'Y'
+BEGIN
+   SET @c_SQLWhereLoadplan = ''
+END                                                                                 --(Wan02) - END
 
 SELECT @c_ParmGroup = ISNULL(RTRIM(bpc.ParmGroup), '')
 FROM BUILDPARMGROUPCFG AS bpc WITH(NOLOCK)
@@ -302,7 +345,6 @@ DECLARE CUR_BUILD_LOAD_COND CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
   AND bc.[Type] IN ('CONDITION') 
   AND bc.BuildParmKey = @cParmCode
   ORDER BY bc.BuildParmLineNo   
-  
             
 OPEN CUR_BUILD_LOAD_COND                                                                                                                                    
           
@@ -531,10 +573,14 @@ SET @cSQL =
    + ' WHERE ORDERS.StorerKey = N''' + @cStorerKey + '''' + 
    CASE WHEN ISNULL(@cFacility, '') <> '' THEN ' AND ORDERS.Facility = N''' + @cFacility + '''' 
         ELSE ''
-   END + '
-   AND ORDERS.Status < ''3'' AND LD.LoadKey IS NULL
-   AND (ORDERS.LoadKey = '''' OR ORDERS.LoadKey IS NULL)
-   AND ORDERS.SOStatus NOT IN (''PENDING'',''PENDCANC'',''HOLD'') '  + RTRIM(@c_SQLCond)                                                                                      
+   END 
+   + @c_SQLWhereStatus                                                              --(Wan02)
+   + @c_SQLWhereLoadplan                                                            --(Wan02)
+   + ' AND ORDERS.SOStatus NOT IN (''PENDING'',''PENDCANC'',''HOLD'') '             --(Wan01) 
+   --AND ORDERS.Status < ''3'' AND LD.LoadKey IS NULL                               --(Wan01)
+   --AND (ORDERS.LoadKey = '''' OR ORDERS.LoadKey IS NULL)                          --(Wan01)      
+   --AND ORDERS.SOStatus NOT IN (''PENDING'',''PENDCANC'',''HOLD'') '               --(Wan01)
+   + RTRIM(@c_SQLCond)                                                                                      
  
            
 IF ISNULL(@c_GroupFlag, '') = 'Y'

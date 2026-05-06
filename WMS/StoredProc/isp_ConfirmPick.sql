@@ -30,7 +30,9 @@ GO
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author       Purposes                                   */    
+/* Date         Author   Version   Purposes                             */
+/* 2025-10-09   SSA01    1.1   UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/    
 CREATE PROC [dbo].[isp_ConfirmPick]    
 ( @c_OrderKey NVARCHAR(10) = '',    
@@ -100,7 +102,7 @@ BEGIN
       WHILE @@FETCH_STATUS = 0
       BEGIN
          UPDATE ORDERDETAIL WITH (ROWLOCK)     
-            SET [Status] = '5', EditDate = GETDATE(), EditWho=sUser_sName(), TrafficCop = NULL     
+            SET [Status] = '5', EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName(), TrafficCop = NULL  --(SSA01)
          WHERE OrderKey = @c_OrderKey   
          AND   OrderLineNumber = @c_OrderLineNumber
          
@@ -127,7 +129,7 @@ BEGIN
       IF @c_Status < '5' AND @c_Status <> ''      
       BEGIN
          UPDATE ORDERS WITH (ROWLOCK)     
-            SET [Status] = '5', EditDate = GETDATE(), EditWho=sUser_sName()      
+            SET [Status] = '5', EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName()        --(SSA01)
          WHERE OrderKey = @c_OrderKey     
      
          IF @@ERROR <> 0    

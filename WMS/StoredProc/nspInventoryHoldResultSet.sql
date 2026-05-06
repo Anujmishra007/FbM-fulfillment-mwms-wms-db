@@ -1,19 +1,18 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'nspInventoryHoldResultSet' AND type = 'P')
-   DROP PROC nspInventoryHoldResultSet
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
-GO
+
 /*******************************************************************/
-/* Modification History:                                           */ 
+/* Modification History:                                           */
 /*                                                                 */
 /* 06/11/2002 Leo Ng  Program rewrite for IDS version 5            */
-/* 2014-Mar-21  TLTING    1.1   SQL20112 Bug                      */
-/* 2014-Nov-11  CSCHONG   2.0   Add Lottable06-15 (CS01)          */             
+/* 2014-Mar-21  TLTING    1.1   SQL20112 Bug                       */
+/* 2014-Nov-11  CSCHONG   2.0   Add Lottable06-15 (CS01)           */
+/* 2025-09-24   MICHAEL   2.1   FCR-7829 UCC-level HOLD (ML01)     */
 /* *****************************************************************/
 
-CREATE  PROC    nspInventoryHoldResultSet
+CREATE OR ALTER PROC    [dbo].[nspInventoryHoldResultSet]
                 @c_lot          NVARCHAR(10)
  ,              @c_Loc          NVARCHAR(10)
  ,              @c_ID           NVARCHAR(18)
@@ -31,7 +30,7 @@ CREATE  PROC    nspInventoryHoldResultSet
  ,              @c_Lottable10   NVARCHAR(30)   = ''    --(CS01)
  ,              @c_Lottable11   NVARCHAR(30)   = ''    --(CS01)
  ,              @c_Lottable12   NVARCHAR(30)   = ''    --(CS01)
- ,              @dt_Lottable13  DATETIME       = NULL  --(CS01) 
+ ,              @dt_Lottable13  DATETIME       = NULL  --(CS01)
  ,              @dt_Lottable14  DATETIME       = NULL  --(CS01)
  ,              @dt_Lottable15  DATETIME       = NULL  --(CS01)
  ,              @c_Status       NVARCHAR(10)
@@ -40,18 +39,19 @@ CREATE  PROC    nspInventoryHoldResultSet
  ,              @n_err          int OUTPUT
  ,              @c_errmsg       NVARCHAR(250) OUTPUT
  , 		       @c_remark	     NVARCHAR(260) = '' -- SOS89194
+ ,              @c_UCCNo        NVARCHAR(20)  = ''   --ML01
  AS
  BEGIN
-   SET NOCOUNT ON 
+   SET NOCOUNT ON
    SET ANSI_NULLS OFF
-   SET QUOTED_IDENTIFIER OFF 
+   SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
+
     /* IDSV5 - Leo */
     IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_hold)) <> "1" and dbo.fnc_LTrim(dbo.fnc_RTrim(@c_hold)) <> "0"
     BEGIN
-      EXECUTE nsp_logerror 78405, 
-              'NSQL78405: Insert Failed On InventoryHold. Hold flag should be 1 or 0! (nspItrnAddHold)', 
+      EXECUTE nsp_logerror 78405,
+              'NSQL78405: Insert Failed On InventoryHold. Hold flag should be 1 or 0! (nspItrnAddHold)',
               'nspInventoryHold'
       --RAISERROR 78405 'NSQL78405: Insert Failed On InventoryHold. Hold flag should be 1 or 0! (nspItrnAddHold)'
       RAISERROR ('NSQL78405: Insert Failed On InventoryHold. Hold flag should be 1 or 0! (nspItrnAddHold)', 16, 1) WITH SETERROR  -- SQL2012
@@ -67,8 +67,8 @@ CREATE  PROC    nspInventoryHoldResultSet
        ,     @c_lottable01
        ,     @c_lottable02
        ,     @c_lottable03
-       ,     @dt_lottable04	
-       ,     @dt_lottable05 
+       ,     @dt_lottable04
+       ,     @dt_lottable05
        ,     @c_Lottable06    --(CS01)
        ,     @c_Lottable07    --(CS01)
        ,     @c_Lottable08    --(CS01)
@@ -76,23 +76,19 @@ CREATE  PROC    nspInventoryHoldResultSet
        ,     @c_Lottable10    --(CS01)
        ,     @c_Lottable11    --(CS01)
        ,     @c_Lottable12    --(CS01)
-       ,     @dt_Lottable13   --(CS01) 
+       ,     @dt_Lottable13   --(CS01)
        ,     @dt_Lottable14   --(CS01)
-       ,     @dt_Lottable15   --(CS01) 
+       ,     @dt_Lottable15   --(CS01)
        ,     @c_Status
        ,     @c_Hold
        ,     @b_Success OUTPUT
-       ,     @n_err OUTPUT 
+       ,     @n_err OUTPUT
        ,     @c_errmsg OUTPUT
 		 , 	 @c_remark -- SOS89194
+       ,     @c_UCCNo  --ML01
     END
  END
 
 GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
-
-GRANT EXECUTE On nspInventoryHoldResultSet to nSQL
+GRANT EXECUTE ON  [dbo].[nspInventoryHoldResultSet] TO [NSQL]
 GO

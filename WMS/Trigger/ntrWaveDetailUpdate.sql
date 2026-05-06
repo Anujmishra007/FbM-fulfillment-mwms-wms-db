@@ -39,6 +39,8 @@ GO
 /* 23-Nov-2022  Wan01      1.3  LFWM-3861-CN Loreal build Wave performance*/
 /*                              enhancement and Calculate Wave Status   */
 /*                              when wave detail's orderkey change/remove*/ 
+/* 06-Oct-2025 AK01        1.4  UWP-42143 - Replace SUSER_SNAME with    */
+/*                              fnc_GetUserName                         */
 /************************************************************************/
 CREATE OR ALTER TRIGGER ntrWaveDetailUpdate  
 ON  WaveDetail  
@@ -82,8 +84,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN 
       UPDATE WAVEDetail
-      SET EditDate = GETDATE(),
-         EditWho  = SUSER_SNAME(),
+      SET EditDate = dbo.fnc_GetDate(),
+         EditWho  = dbo.fnc_GetUserName(),
          TrafficCop = NULL
       FROM WAVEDetail (NOLOCK), INSERTED (NOLOCK)
       WHERE WAVEDetail.WaveDetailKey = INSERTED.WaveDetailKey
@@ -234,3 +236,4 @@ BEGIN
    END  
 END
 GO
+

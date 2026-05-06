@@ -29,6 +29,7 @@
 /* 07-Nov-2023  1.0    JLC042    Copy from rdtGetMsgScreen                   */
 /* 17-07-2024   1.1    JACKC     UWP-21829 Error msg not visible             */
 /* 26-09-2024   1.2    NLT013    UWP-24932 Error message UI issue            */
+/* 03-04-2025   1.3.0  NLT013    UWP-32244 Extend Menu number                */
 /*****************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtGetMsgScreenHttp] (
@@ -149,9 +150,9 @@ AS
    SET @cXMLScreen = '<screen'
    -- Get screen title
    DECLARE @cScnTitle NVARCHAR( 250) = ''
-   IF @nFunc BETWEEN 5 AND 499 -- Menu
+   IF @nFunc BETWEEN 5 AND 499 OR @nFunc < -100 -- Menu
       SET @cScnTitle = rdt.rdtGetMessageLong( @nFunc, @cLangCode, 'MNU')
-   ELSE -- Function, include login, store and facility, resume session
+   ELSE IF @nFunc BETWEEN 0 AND 4 OR @nFunc > 499  -- Function, include login, store and facility, resume session
       SET @cScnTitle = rdt.rdtGetMessageLong( @nFunc, @cLangCode, 'FNC')
    SET @cXMLScreen += ' title="' + @cScnTitle + '"/>'
 

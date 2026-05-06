@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_Putaway]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_Putaway]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -29,9 +26,11 @@ GO
 /* 2014-02-10 1.2  Ung      Fix split UCC multiple times                */
 /* 2019-10-08 1.3  Chermain WMS-10753 Change Eventlog Col from          */
 /*                          @cRefNo3 to @cucc (cc01)                    */
+/* 2023-11-20 1.4  Ung      WMS-23730 Add Final ID                      */
+/* 2025-11-23 1.5  Ung      FCR-8111 Add serial no                      */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_Putaway (
+CREATE OR ALTER PROCEDURE rdt.rdt_Putaway (
    @nMobile     INT,
    @nFunc       INT, 
    @cLangCode   NVARCHAR( 3), 
@@ -46,8 +45,10 @@ CREATE PROCEDURE rdt.rdt_Putaway (
    @cFinalLOC   NVARCHAR( 10), 
    @cLabelType  NVARCHAR( 20) = '', 
    @cUCC		    NVARCHAR( 20) = '',
-   @nErrNo      INT          OUTPUT,
-   @cErrMsg     NVARCHAR( 20) OUTPUT  -- screen limitation, 20 char max
+   @nErrNo      INT           OUTPUT,
+   @cErrMsg     NVARCHAR( 20) OUTPUT,
+   @cFinalID    NVARCHAR( 18) = NULL, 
+   @nBulkSNO    INT = 0
 ) AS
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
@@ -68,6 +69,10 @@ CREATE PROCEDURE rdt.rdt_Putaway (
    -- Get PackKey, UOM
    SELECT @cPackKey = PackKey FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
    SELECT @cPackUOM3 = PackUOM3 FROM Pack WITH (NOLOCK) WHERE PackKey = @cPackKey
+   
+   -- TO ID
+   IF @cFinalID IS NULL
+      SET @cFinalID = @cID
    
    -- Handling transaction
    DECLARE @nTranCount INT
@@ -97,35 +102,6 @@ CREATE PROCEDURE rdt.rdt_Putaway (
    BEGIN
       IF @nQTY < @nPA_QTY
          SET @nPA_QTY = @nQTY
-
-/* Remark due to not support LOC.CommingleSKU
-
-      -- NOTE: Not convert QTY as nspItrnAddMove will convert QTY based on pass-in UOM
-      EXEC dbo.nspRFPA02
-           @c_sendDelimiter = '`'           -- NVARCHAR(1)
-         , @c_ptcid         = 'RDT'         -- NVARCHAR(5)
-         , @c_userid        = 'RDT'         -- NVARCHAR(10)
-         , @c_taskId        = 'RDT'         -- NVARCHAR(10)
-         , @c_databasename  = NULL          -- NVARCHAR(5)
-         , @c_appflag       = NULL          -- NVARCHAR(2)
-         , @c_recordType    = NULL          -- NVARCHAR(2)
-         , @c_server        = NULL          -- NVARCHAR(30)
-         , @c_storerkey     = @cPA_StorerKey-- NVARCHAR(30)
-         , @c_lot           = @cPA_LOT      -- NVARCHAR(10) -- optional
-         , @c_sku           = @cPA_SKU      -- NVARCHAR(30)
-         , @c_fromloc       = @cLOC         -- NVARCHAR(18)
-         , @c_fromid        = @cID          -- NVARCHAR(18)
-         , @c_toloc         = @cFinalLOC    -- NVARCHAR(18)
-         , @c_toid          = @cID          -- NVARCHAR(18)
-         , @n_qty           = @nPA_QTY      -- int
-         , @c_uom           = @cPackUOM3    -- NVARCHAR(10)
-         , @c_packkey       = @cPackKey     -- NVARCHAR(10) -- optional
-         , @c_reference     = ' '           -- NVARCHAR(10) -- not used
-         , @c_outstring     = @c_outstring  OUTPUT   -- NVARCHAR(255)  OUTPUT
-         , @b_Success       = @b_Success    OUTPUT   -- int        OUTPUT
-         , @n_err           = @nErrNo       OUTPUT   -- int        OUTPUT
-         , @c_errmsg        = @cErrMsg      OUTPUT   -- NVARCHAR(250)  OUTPUT
-*/
       
       EXEC rdt.rdt_Move
          @nMobile     = @nMobile,
@@ -138,10 +114,12 @@ CREATE PROCEDURE rdt.rdt_Putaway (
          @cFromLOC    = @cLOC, 
          @cToLOC      = @cFinalLOC, 
          @cFromID     = @cID,       -- NULL means not filter by ID. Blank is a valid ID
-         @cToID       = @cID,       -- NULL means not changing ID. Blank consider a valid ID
+         @cToID       = @cFinalID,  -- NULL means not changing ID. Blank consider a valid ID
          @cSKU        = @cPA_SKU, 
          @nQTY        = @nPA_QTY, 
-         @cFromLOT    = @cPA_LOT
+         @cFromLOT    = @cPA_LOT, 
+         @nFunc       = @nFunc, 
+         @nBulkSNO    = @nBulkSNO
 
       IF @nErrNo <> 0
          GOTO RollBackTran

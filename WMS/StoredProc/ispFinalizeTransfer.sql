@@ -6,14 +6,14 @@ GO
 /**************************************************************************/
 /* Trigger: ispFinalizeTransfer                                           */
 /* Creation Date: 21-Jul-2009                                             */
-/* Copyright: IDS                                                         */
+/* Copyright: Maersk Logistics                                            */
 /* Written by:                                                            */
 /*                                                                        */
 /* Purpose: Finalize Transfer                                             */
 /*                                                                        */
 /* Called By: n_cst_transfer.Event ue_finalizeall                         */
 /*                                                                        */
-/* PVCS Version: 3.2                                                      */
+/* PVCS Version: 4.2                                                      */
 /*                                                                        */
 /* Version: 6.0                                                           */
 /*                                                                        */
@@ -62,9 +62,20 @@ GO
 /* 10-Feb-2023  NJOW04    3.3 DEVOPS Combine Script                       */
 /* 07-Aug-2023  NJOW05    3.4 INC2128003 fix transfer error by adding     */
 /*                            lot,loc,id and channel validation           */
+/* 28-Aug-2024  PakYuen   3.5 JSM-130518-Add c_ToFacility into filtering  */
 /* 08-Oct-2024  PYU015    3.5 fix transferdetail lot value                */
+/*                            (PY01)                                      */ 
 /* 12-AUG-2024  Wan11     3.6 LFWM-4446 - RG[GIT] Serial Number Solution  */
 /*                            - Transfer by Serial Number                 */
+/* 02-Jan-2025  NJOW06    3.7 LFWM-4774 skip check empty lot, loc, id if  */
+/*                            AllowTransferZeroQty=1 and fromqty is 0     */
+/* 25-Apr-2025  NJOW07    3.8 FCR-3051 if turn on TRFAllocHoldChannel skip*/
+/*                            checking the channel hold qty               */
+/* 04-JUL-2025  SSA01     3.9 FCR-3982- Added PalletType                  */
+/* 10-OCT-2025  SSA02     4.1 UWP-42248 -Enhanced session management      */
+/*                             and cleanup.                               */
+/* 10-Oct-2025  Michael   4.2 FCR-8380- Add SerialNoUpdateLotLocID (ML02) */
+/* 04-Dec-2025  USH022-01 4.3 UWP-41775-Update UCC.StorerKey |VAS Transfer*/
 /**************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispFinalizeTransfer]
@@ -215,6 +226,9 @@ BEGIN
          , @c_ToLoc                     NVARCHAR(10)      --(Wan07)
          , @n_ToQty                     INT               --(Wan07)
          , @c_ChkNoMixLottableForAllSku NVARCHAR(30)=''  --NJOW04
+         , @c_TRFAllocHoldChannel       NVARCHAR(30)=''  --NJOW07
+         , @n_TrfChannelHoldQty         INT=0            --NJOW07
+         , @c_TransferLineNo            NVARCHAR(5)      --SSA01
 
   /*CS01 Start*/
  DECLARE    @c_Lottable01                  NVARCHAR(18),
@@ -333,6 +347,25 @@ BEGIN
          , @n_SerialNo_TRFQty          INT          = 0        --(Wan11)
 
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = ''       --(Wan11)
+         
+         --ML02-S
+         , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''
+         , @c_SerialNo_Loc             NVARCHAR(10) = ''
+         , @n_FromUCC_RowRef           INT          = 0
+         , @n_ToUCC_RowRef             INT          = 0
+         , @c_Receiptkey               NVARCHAR(10) = ''
+         , @c_ReceiptLineNumber        NVARCHAR(5)  = ''
+         , @c_UCC_UDF01                NVARCHAR(15) = ''
+         , @c_UCC_UDF02                NVARCHAR(15) = ''
+         , @c_UCC_UDF03                NVARCHAR(20) = ''
+         , @c_UCC_UDF04                NVARCHAR(30) = ''
+         , @c_UCC_UDF05                NVARCHAR(30) = ''
+         , @c_UCC_UDF06                NVARCHAR(30) = ''
+         , @c_UCC_UDF07                NVARCHAR(30) = ''
+         , @c_UCC_UDF08                NVARCHAR(30) = ''
+         , @c_UCC_UDF09                NVARCHAR(30) = ''
+         , @c_UCC_UDF10                NVARCHAR(30) = ''
+         --ML02-E
 
 
    --1 XXXXXXX--
@@ -389,6 +422,9 @@ BEGIN
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority
       FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
    END                                                                              --(Wan11) - END
+
+   SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                                 --ML02
+   FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML02
 
    /* KC01 - start */
    EXECUTE dbo.nspGetRight
@@ -484,7 +520,7 @@ BEGIN
       END
    END
    --NJOW04 E
-   
+      
    --(CS01)  -Start
      IF EXISTS (SELECT 1 FROM dbo.StorerConfig WITH (NOLOCK)
               WHERE StorerKey = @cFromStorerKey
@@ -503,18 +539,22 @@ BEGIN
    BEGIN
       CREATE TABLE  #tTransferDet
        ( Rowref      int not NULL Identity(1,1) Primary Key,
-         LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int)
+         LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int
+       , PalletType NVARCHAR(10), ToPalletType NVARCHAR(10), TransferLineNumber NVARCHAR(5))   --SSA01 
 
       --Declare @tTransferDet Table (LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int)
 
-      INSERT INTO #tTransferDet (LOT, LOC, ID, Qty)
+      INSERT INTO #tTransferDet (LOT, LOC, ID, Qty
+           , PalletType, ToPalletType, TransferLineNumber)     --SSA01
       SELECT FromLOT, FromLOC, FromID, SUM(FromQTY)
+           , FromPalletType, ToPalletType, TransferLineNumber  --SSA01
       FROM   TransferDetail WITH (NOLOCK)
       Where  TransferKey = @c_Transferkey
       AND    TransferLineNumber = CASE WHEN @c_TransferLineNumber = '' THEN TransferLineNumber  --(Wan08)
                                        ELSE @c_TransferLineNumber END                           --(Wan08)
       AND    Status < '9'                    --(Wan04)
       GROUP BY FromLOT, FromLOC, FromID
+           , FromPalletType, ToPalletType, TransferLineNumber  --SSA01
 
       IF EXISTS(SELECT 1 FROM LOTxLOCxID LLI WITH (NOLOCK)
                 JOIN #tTransferDet TD ON TD.LOT = LLI.LOT AND
@@ -536,13 +576,54 @@ BEGIN
                 FROM #tTransferDet TD 
                 LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK) ON TD.LOT = LLI.LOT AND
                           TD.LOC = LLI.LOC AND TD.ID = LLI.ID
-                WHERE LLI.Lot IS NULL)
+                WHERE LLI.Lot IS NULL
+                AND NOT (@c_AllowTRFZeroQty = '1' AND TD.Qty = 0)  --NJOW06                
+                )
       BEGIN
          SET @nContinue = 3
          SET @n_err = 80010
          SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': From Lot + Location + ID Not found at the inventory (ispFinalizeTransfer)'
          GOTO Quit_Proc
       END                        
+
+      --(SSA01) start
+      SELECT TOP 1 @c_TransferLineNo = tfd.TransferLineNumber
+      FROM #tTransferDet tfd
+      WHERE tfd.PalletType IS NOT NULL
+      AND tfd.PalletType != ''
+      AND NOT EXISTS (
+         SELECT 1
+         FROM ID (NOLOCK) id
+         WHERE id.PalletType = tfd.PalletType
+         AND id.id = tfd.ID
+      )
+      IF @c_TransferLineNo IS NOT NULL AND @c_TransferLineNo <> ''
+      BEGIN
+         SET @nContinue = 3
+         SET @n_err = 80019
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo :'+@c_TransferLineNo+': From Pallet Type Is Not Matched With From ID (ispFinalizeTransfer)'
+         GOTO Quit_Proc
+      END
+
+      SELECT TOP 1 @c_TransferLineNo = tfd.TransferLineNumber
+      FROM #tTransferDet tfd
+      WHERE tfd.ToPalletType IS NOT NULL
+      AND tfd.ToPalletType != ''
+      AND NOT EXISTS (
+         SELECT 1
+         FROM pallettypemaster(NOLOCK) ptm
+         WHERE ptm.PalletType = tfd.ToPalletType
+         AND ptm.storerkey = @c_ToStorerKey
+         AND ptm.facility = @c_ToFacility
+      )
+      IF @c_TransferLineNo IS NOT NULL AND @c_TransferLineNo <> ''
+      BEGIN
+         SET @nContinue = 3
+         SET @n_err = 80024
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo:'+@c_TransferLineNo +': To Pallet Type Not found In Pallet Type Master Data (ispFinalizeTransfer)'
+         GOTO Quit_Proc
+      END
+      --(SSA01) end
    END
    
    --NJOW05 S
@@ -571,6 +652,29 @@ BEGIN
       
       IF @c_ChannelInventoryMgmt = '1'
       BEGIN
+         --NJOW07 S
+         SET @b_success = 0
+         Execute nspGetRight
+                 @c_facility
+               , @cFromStorerKey             -- Storer
+               , ''                          -- Sku
+               , 'TRFAllocHoldChannel'  -- ConfigKey
+               , @b_success                   OUTPUT
+               , @c_TRFAllocHoldChannel       OUTPUT
+               , @n_err                       OUTPUT
+               , @c_errmsg                    OUTPUT
+         
+         IF @b_success <> 1
+         BEGIN
+            SET @nContinue = 3
+            SET @n_err = 62905
+            SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
+                          + ' Retrieve of Right (TRFAllocHoldChannel) Failed (ispFinalizeTransfer) ( '
+                          + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+            GOTO Quit_Proc
+         END
+         --NJOW07 E
+      	
          DECLARE CUR_TRFCHANNEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR       
             SELECT TransferLineNumber, FromLOT, FromSku, FromChannel, FromQTY, ToChannel
             FROM TRANSFERDETAIL (NOLOCK)
@@ -580,6 +684,7 @@ BEGIN
             AND Status < '9'             
             AND FromChannel <> ''
             AND FromChannel IS NOT NULL
+            AND NOT (@c_AllowTRFZeroQty = '1' AND FromQty = 0)  --NJOW06                         
             ORDER BY TransferLineNumber
 
          OPEN CUR_TRFCHANNEL
@@ -612,7 +717,21 @@ BEGIN
             END
             ELSE
             BEGIN
-               SELECT @n_ChannelAvailableQty = (Qty - QtyAllocated - QtyOnHold)
+            	 --NJOW07
+            	 SET @n_TrfChannelHoldQty = 0
+            	 IF @c_TRFAllocHoldChannel = '1'
+            	 BEGIN    
+                  SELECT @n_TrfChannelHoldQty = SUM(cihd.Qty)
+                  FROM ChannelInvHold cih (NOLOCK)  
+                  JOIN ChannelInvHoldDetail cihd (NOLOCK) ON cihd.InvHoldkey = cih.InvHoldkey 
+                  WHERE cih.Sourcekey = @c_Transferkey 
+                  AND cih.HoldType = 'TRF' 
+                  AND cihd.Hold = '1'  
+                  AND cihd.SourceLineNo = @cTransferLineNumber 
+                  AND cihd.Channel_ID = @n_Channel_ID                                                     
+            	 END            	 
+            	 
+               SELECT @n_ChannelAvailableQty = (Qty - QtyAllocated - QtyOnHold) + @n_TrfChannelHoldQty --NJOW07
                FROM CHANNELINV (NOLOCK)
                WHERE Channel_ID = @n_Channel_ID
                
@@ -1239,7 +1358,7 @@ BEGIN
                 ToLottable06, ToLottable07,  ToLottable08,  ToLottable09,  ToLottable10,
                 ToLottable11, ToLottable12,  ToLottable13,  ToLottable14,  ToLottable15
                 /* KC01 - end */
-               ,FromSerialNo, ToSerialNo                                            --(Wan11)
+               ,ISNULL(FromSerialNo,''), ISNULL(ToSerialNo,'')                                     --(Wan11)
          FROM   TRANSFERDETAIL WITH (NOLOCK)
          WHERE  TransferKey = @c_TransferKey
          AND    TransferLineNumber = CASE WHEN @c_TransferLineNumber = '' THEN TransferLineNumber  --(Wan08)
@@ -1510,8 +1629,8 @@ BEGIN
                          ToLottable13 = CASE WHEN ISNULL(@d_Lottable13, '')  = '' THEN ToLottable13 ELSE @d_Lottable13 END,
                          ToLottable14 = CASE WHEN ISNULL(@d_Lottable14, '')  = '' THEN ToLottable14 ELSE @d_Lottable14 END,
                          ToLottable15 = CASE WHEN ISNULL(@d_Lottable15, '')  = '' THEN ToLottable15 ELSE @d_Lottable15 END,
-                         EditDate = GETDATE(),
-                         EditWho = SUSER_SNAME(),
+                         EditDate = dbo.fnc_GetDate(),   --(SSA02)
+                         EditWho = dbo.fnc_GetUserName(),       --(SSA02)
                          TrafficCop = NULL
                    WHERE  TransferKey = @c_TransferKey
                    AND    TransferLineNumber = @cTransferLineNumber
@@ -1556,8 +1675,8 @@ BEGIN
             UPDATE TRANSFERDETAIL WITH (ROWLOCK)
             SET STATUS = '9'
               , Trafficcop = NULL
-              , EditDate = GETDATE()
-              , EditWho = SUSER_SNAME()
+              , EditDate = dbo.fnc_GetDate()   --(SSA02)
+              , EditWho = dbo.fnc_GetUserName()        --(SSA02)
             WHERE  TransferKey = @c_TransferKey
             AND    TransferLineNumber = @cTransferLineNumber
             AND    Status <> '9'
@@ -1573,8 +1692,8 @@ BEGIN
 
             UPDATE TRANSFER WITH (ROWLOCK)
             SET OpenQty = OpenQty - @nFromQty
-              , EditDate = GETDATE()
-              , EditWho = SUSER_SNAME()
+              , EditDate = dbo.fnc_GetDate()   --(SSA02)
+              , EditWho = dbo.fnc_GetUserName()      --(SSA02)
             WHERE TransferKey = @c_TransferKey
 
             IF @@ERROR <> 0
@@ -2059,6 +2178,8 @@ BEGIN
          END
          --TK01 END
 
+         SET @c_SerialNoCapture = ''   --ML02
+
          SELECT @c_SerialNoCapture = s.SerialNoCapture                              --(Wan11) - START
          FROM SKU s (NOLOCK)
                      WHERE s.StorerKey = @cFromStorerKey
@@ -2067,7 +2188,8 @@ BEGIN
 
          IF @c_SerialNoCapture IN ('1','2','3')
          BEGIN
-            IF @c_FromSerialNo = '' AND @c_ASNFizUpdLotToSerialNo = '1' AND
+            IF @c_FromSerialNo = '' AND (@c_ASNFizUpdLotToSerialNo = '1'
+             OR @c_SerialNoUpdateLotLocID = '1') AND   --ML02
                @c_SerialNoCapture IN ('1','2')
             BEGIN
                SET @nContinue = 3
@@ -2089,17 +2211,27 @@ BEGIN
                     SET @b_CheckToValue = 1
                 END
 
-                IF @b_CheckToValue = 0 AND @c_ASNFizUpdLotToSerialNo = '1' AND
+                IF @b_CheckToValue = 0 AND (@c_ASNFizUpdLotToSerialNo = '1'
+                 OR @c_SerialNoUpdateLotLocID = '1') AND   --ML02
                     @cFromID <> @cToID
                 BEGIN
                     SET @b_CheckToValue = 1
                 END
+
+                --ML02-S
+                IF @b_CheckToValue = 0 AND @c_SerialNoUpdateLotLocID = '1' AND
+                    @cFromLoc <> @cToLoc
+                BEGIN
+                    SET @b_CheckToValue = 1
+                END
+                --ML02-E
 
                 IF @b_CheckToValue = 1
                 BEGIN
                     SET @n_Err = 80053
                     SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
                                  + ': Serialno transfer are required same From & To Sku'
+                                 + CASE WHEN @c_SerialNoUpdateLotLocID = '1' THEN ', Loc' ELSE '' END    --ML02
                                  + ', ID And Serialno'
                                  + '. From SerialNo: ' + @c_FromSerialNo
                                  + ', Line #: ' + @cTransferLineNumber
@@ -2121,6 +2253,8 @@ BEGIN
                 END
 
                 IF @c_ASNFizUpdLotToSerialNo = '1' AND (@cFromID = '' Or @cToID ='')
+                    AND NOT (@c_SerialNoUpdateLotLocID = '1' AND @cFromID = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@cFromLoc AND (LoseID='1' OR LoseUCC='1')))   --ML02
+                    AND NOT (@c_SerialNoUpdateLotLocID = '1' AND @cToID   = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@cToLoc   AND (LoseID='1' OR LoseUCC='1')))   --ML02
                 BEGIN
                     SET @nContinue = 3
                     SET @n_Err = 80052
@@ -2135,11 +2269,13 @@ BEGIN
                 SET @n_SerialNo_Cnt    = 0
                 SET @c_SerialNo_Lot = ''
                 SET @c_SerialNo_ID  = ''
+                SET @c_SerialNo_Loc = ''   --ML02
                 SET @c_SerialNo_Status = ''
 
                 SELECT @n_SerialNo_Cnt = 1
                       ,@c_SerialNo_Lot = sn.Lot
                       ,@c_SerialNo_ID  = sn.ID
+                      ,@c_SerialNo_Loc = ISNULL(sn.Loc,'')   --ML02
                       ,@c_SerialNo_Status = sn.[Status]
                       ,@n_SerialNo_Qty = sn.Qty
                 FROM SerialNo sn (NOLOCK)
@@ -2154,18 +2290,26 @@ BEGIN
                       SET @n_SerialNo_Cnt = 0
                    END
 
-                   IF @c_ASNFizUpdLotToSerialNo = '1' AND
+                   IF (@c_ASNFizUpdLotToSerialNo = '1'
+                    OR @c_SerialNoUpdateLotLocID = '1') AND   --ML02
                       (@c_SerialNo_Lot <> @cFromLot OR @c_SerialNo_ID <> @cFromID)
                    BEGIN
                       SET @n_SerialNo_Cnt = 0
                    END
+
+                   --ML02-S
+                   IF @c_SerialNoUpdateLotLocID = '1' AND @c_SerialNo_Loc <> @cFromLoc
+                   BEGIN
+                      SET @n_SerialNo_Cnt = 0
+                   END
+                   --ML02-E
 
                    IF @n_SerialNo_Qty <> 1
                    BEGIN
                       SET @nContinue = 3
                       SET @n_Err = 80054
                       SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
-                                     + ': Invalid Serialno qty found in SerialNo Table for adjustment'
+                                     + ': Invalid Serialno qty found in SerialNo Table for transfer'
                                      + '. From SerialNo: ' + @c_FromSerialNo
                                      + ', Line #: ' + @cTransferLineNumber
                                      + '. (ispFinalizeTransfer)'
@@ -2295,6 +2439,7 @@ BEGIN
                BEGIN
                   IF @cFromUCC <> '' AND @cFromUCC IS NOT NULL       --(Wan09) 
                   BEGIN                                              --(Wan09) 
+/* ML02-S
                      UPDATE UCC
                      SET Sku = @cToSKU,
                          Qty = @nToQty,
@@ -2303,6 +2448,7 @@ BEGIN
                          Lot = @cToLOT,
                          Loc = @cToLOC,
                          ID  = @cToID,
+                         StorerKey = @cToStorerKey,                     --USH022-01
                          Status = CASE WHEN @c_LoseUCC = '1' THEN '6' -- (ChewKP02)
                                   ELSE Status
                                   END
@@ -2321,6 +2467,139 @@ BEGIN
                         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
                         GOTO Quit_Proc
                      END
+ML02-E  */
+--ML02-S
+                     -- From UCC
+                     SELECT @n_FromUCC_RowRef    = NULL
+                          , @c_Receiptkey        = ''
+                          , @c_ReceiptLineNumber = ''
+                          , @c_UCC_UDF01         = ''
+                          , @c_UCC_UDF02         = ''
+                          , @c_UCC_UDF03         = ''
+                          , @c_UCC_UDF04         = ''
+                          , @c_UCC_UDF05         = ''
+                          , @c_UCC_UDF06         = ''
+                          , @c_UCC_UDF07         = ''
+                          , @c_UCC_UDF08         = ''
+                          , @c_UCC_UDF09         = ''
+                          , @c_UCC_UDF10         = ''
+
+                     SELECT TOP 1
+                            @n_FromUCC_RowRef    = UCC_RowRef
+                          , @c_Receiptkey        = Receiptkey
+                          , @c_ReceiptLineNumber = ReceiptLineNumber
+                          , @c_UCC_UDF01         = Userdefined01
+                          , @c_UCC_UDF02         = Userdefined02
+                          , @c_UCC_UDF03         = Userdefined03
+                          , @c_UCC_UDF04         = Userdefined04
+                          , @c_UCC_UDF05         = Userdefined05
+                          , @c_UCC_UDF06         = Userdefined06
+                          , @c_UCC_UDF07         = Userdefined07
+                          , @c_UCC_UDF08         = Userdefined08
+                          , @c_UCC_UDF09         = Userdefined09
+                          , @c_UCC_UDF10         = Userdefined10
+                       FROM UCC WITH(NOLOCK)
+                      WHERE UCCNo = @cFromUCC
+                        AND StorerKey = @cFromStorerKey
+                        AND Sku = @cFromSKU
+                        AND Lot = @cFromLOT
+                        AND Loc = @cFromLOC
+                        AND ID  = @cFromID
+                      ORDER BY UCC_RowRef
+
+                     IF @n_FromUCC_RowRef IS NOT NULL
+                     BEGIN
+                        UPDATE UCC WITH(ROWLOCK)
+                           SET Qty = Qty - @nFromQty
+                             , SourceKey = @c_Transferkey
+                             , SourceType = 'TF'
+                             , Status = CASE WHEN @c_LoseUCC = '1' THEN '6'
+                                             WHEN Qty - @nFromQty = 0 THEN '6'
+                                             ELSE Status
+                                        END
+                         WHERE UCC_RowRef = @n_FromUCC_RowRef
+
+                        SELECT @n_err = @@ERROR
+                        IF @n_err <> 0
+                        BEGIN
+                           SELECT @nContinue = 3
+                           SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80059
+                           SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                           GOTO Quit_Proc
+                        END
+                     END
+
+                     -- To UCC
+                     IF @c_LoseUCC <> '1' AND ISNULL(@cToUCC,'') <> ''
+                     BEGIN
+                        SET @n_ToUCC_RowRef = NULL
+
+                        SELECT TOP 1
+                               @n_ToUCC_RowRef = UCC_RowRef
+                          FROM UCC WITH(NOLOCK)
+                         WHERE UCCNo = @cToUCC
+                           AND StorerKey = @cToStorerKey
+                           AND Sku = @cToSKU
+                           AND Lot = @cToLOT
+                           AND Loc = @cToLOC
+                           AND ID  = @cToID
+                         ORDER BY UCC_RowRef
+
+                        SET @cExternKey = ISNULL(@cExternKey,'')
+
+                        IF @n_ToUCC_RowRef IS NOT NULL
+                        BEGIN
+                           UPDATE UCC WITH(ROWLOCK)
+                              SET Qty = CASE WHEN Status='1' THEN Qty ELSE 0 END + @nToQty
+                                , SourceKey = @c_Transferkey
+                                , SourceType = 'TT'
+                                , Status = CASE WHEN @c_LoseUCC = '1' THEN '6'
+                                                ELSE Status
+                                           END
+                            WHERE UCC_RowRef = @n_ToUCC_RowRef
+
+                           SELECT @n_err = @@ERROR
+                           IF @n_err <> 0
+                           BEGIN
+                              SELECT @nContinue = 3
+                              SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80060
+                              SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                              GOTO Quit_Proc
+                           END
+                        END
+                        ELSE
+                        BEGIN
+                           INSERT UCC (UccNo, ExternKey, StorerKey, Sku, Lot, Loc, Id, Qty, Status, SourceKey, SourceType, Receiptkey, ReceiptLineNumber,
+                                       Userdefined01, Userdefined02, Userdefined03, Userdefined04, Userdefined05, Userdefined06, Userdefined07, Userdefined08, Userdefined09, Userdefined10)
+                               VALUES (@cToUCC, @cExternKey, @cToStorerKey, @cToSKU, @cToLOT, @cToLOC, @cToID, @nToQty, @cUCCStatus, @c_Transferkey, 'TT', @c_Receiptkey, @c_ReceiptLineNumber,
+                                       @c_UCC_UDF01, @c_UCC_UDF02, @c_UCC_UDF03, @c_UCC_UDF04, @c_UCC_UDF05, @c_UCC_UDF06, @c_UCC_UDF07, @c_UCC_UDF08, @c_UCC_UDF09, @c_UCC_UDF10)
+
+                           SELECT @n_err = @@ERROR
+                           IF @n_err <> 0
+                           BEGIN
+                              SELECT @nContinue = 3
+                              SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80061
+                              SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Into UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                              GOTO Quit_Proc
+                           END
+                        END
+                     END
+                     IF EXISTS(SELECT TOP 1 1 FROM UCC WITH(NOLOCK)
+                        WHERE UCC_RowRef = @n_FromUCC_RowRef AND Qty = 0)
+                     BEGIN
+                        DELETE UCC WITH(ROWLOCK)
+                        WHERE UCC_RowRef = @n_FromUCC_RowRef AND Qty = 0
+
+                        SELECT @n_err = @@ERROR
+                        IF @n_err <> 0
+                        BEGIN
+                           SELECT @nContinue = 3
+                           SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err=80062
+                           SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Delete UCC Fail. (ispFinalizeTransfer)' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                           GOTO Quit_Proc
+                        END
+                     END
+--ML02-E
                   END                                                --(Wan09) 
                END -- IF @cFromUCC = @cToUCC
                ELSE
@@ -2723,6 +3002,8 @@ BEGIN
                      END  -- @n_holdby <> 0
                   END   --@c_fromlotStatus = 'OK'
                END -- @cFromLot <> @cTolot
+
+
             END -- @c_RemainHoldOnTransfer
             /* KC01 - end */
          END

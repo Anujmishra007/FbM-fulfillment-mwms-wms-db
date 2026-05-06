@@ -31,6 +31,7 @@ GO
 /* 20-Apr-2023  WLChooi  1.7  WMS-22098 - Modify Logic for CSOS (WL07)  */
 /* 06-Jun-2023  WLChooi  1.8  Bug Fix for Batchno reset (WL08)          */
 /* 09-Aug-2023  WLChooi  1.9  WMS-23340 - Change PK From Codelkup (WL09)*/
+/* 10-Oct-2025  SSA01    2.0  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV53]      
@@ -282,10 +283,10 @@ BEGIN
       ,  [PickMethod]            [NVARCHAR](1)     NOT NULL    DEFAULT (' ')  
       ,  [WaveKey]               [NVARCHAR](10)    NOT NULL    DEFAULT (' ')  
       ,  [EffectiveDate]         [datetime]        NOT NULL    DEFAULT (getdate())  
-      ,  [AddDate]               [datetime]        NOT NULL    DEFAULT (getdate())  
-      ,  [AddWho]                [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())  
-      ,  [EditDate]              [datetime]        NOT NULL    DEFAULT (getdate())  
-      ,  [EditWho]               [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())  
+      ,  [AddDate]               [datetime]        NOT NULL    DEFAULT (getdate())    --(SSA01)
+      ,  [AddWho]                [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())       --(SSA01)
+      ,  [EditDate]              [datetime]        NOT NULL    DEFAULT (getdate())    --(SSA01)
+      ,  [EditWho]               [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())       --(SSA01)
       ,  [TrafficCop]            [nvarchar](1)     NULL  
       ,  [ArchiveCop]            [nvarchar](1)     NULL  
       ,  [OptimizeCop]           [nvarchar](1)     NULL  
@@ -343,8 +344,8 @@ BEGIN
          SET #PickDetail_WIP.TaskdetailKey   = '', 
              #PickDetail_WIP.Notes           = '',   
              #PickDetail_WIP.Wavekey         = @c_Wavekey,   
-             #PickDetail_WIP.EditWho         = SUSER_SNAME(),  
-             #PickDetail_WIP.EditDate        = GETDATE(),     
+             #PickDetail_WIP.EditWho         = dbo.fnc_GetUserName(),        --(SSA01)
+             #PickDetail_WIP.EditDate        = dbo.fnc_GetDate(),    --(SSA01)
              #PickDetail_WIP.TrafficCop      = NULL,
              #PickDetail_WIP.CaseID          = ''   --WL06
          WHERE #PickDetail_WIP.Pickdetailkey = @c_curPickdetailkey
@@ -1448,8 +1449,8 @@ BEGIN
                      SET CaseID = RIGHT('000' + CAST(@n_CartonNo AS NVARCHAR), 3) 
                        , PickSlipNo = @c_BatchNo
                        , TrafficCop = NULL  
-                       , EditWho = SUSER_SNAME()
-                       , EditDate = GETDATE()
+                       , EditWho = dbo.fnc_GetUserName()           --(SSA01)
+                       , EditDate = dbo.fnc_GetDate()    --(SSA01)
                      WHERE Pickdetailkey = @c_pickdetailkey  
                      SELECT @n_err = @@ERROR  
                      IF @n_err <> 0  
@@ -1512,8 +1513,8 @@ BEGIN
                        , Qty = @n_packqty  
                        , UOMQTY = CASE UOM WHEN '6' THEN @n_packqty ELSE UOMQty END   
                        , TrafficCop = NULL  
-                       , EditWho = SUSER_SNAME()
-                       , EditDate = GETDATE()
+                       , EditWho = dbo.fnc_GetUserName()             --(SSA01)
+                       , EditDate = dbo.fnc_GetDate()    --(SSA01)
                       WHERE Pickdetailkey = @c_pickdetailkey  
          
                       SELECT @n_err = @@ERROR  
@@ -1721,7 +1722,7 @@ BEGIN
                   BEGIN
                      INSERT INTO PACKDETAIL (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)  
                      VALUES (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_StorerKey, @c_SKU,  
-                             @n_Qty, SUSER_SNAME(), GETDATE(), SUSER_SNAME(), GETDATE())
+                             @n_Qty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate())           --(SSA01)
             
                      SELECT @n_err = @@ERROR  
             
@@ -1776,8 +1777,8 @@ BEGIN
       UPDATE WAVE WITH (ROWLOCK)
       SET TMReleaseFlag = 'Y'        
        ,  TrafficCop = NULL      
-       ,  EditWho = SUSER_SNAME()
-       ,  EditDate= GETDATE()    
+       ,  EditWho = dbo.fnc_GetUserName()           --(SSA01)
+       ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
       WHERE WAVEKEY = @c_wavekey  
 
       SELECT @n_err = @@ERROR  

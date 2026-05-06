@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrCBOLUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrCBOLUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -36,9 +33,10 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver. Purposes                                 */  
 /* 28-Oct-2013  TLTING    1.1  Review Editdate column update            */
+/* 06-Oct-2025  AK01      1.2  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/  
   
-CREATE TRIGGER ntrCBOLUpdate  
+CREATE OR ALTER TRIGGER ntrCBOLUpdate  
 ON  CBOL  
 FOR UPDATE  
 AS  
@@ -76,8 +74,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate) 
    BEGIN  
       UPDATE CBOL  with (ROWLOCK)
-      SET EditWho = sUser_sName(),  
-          EditDate = GetDate()  
+      SET EditWho = dbo.fnc_GetUserName(),  
+          EditDate = dbo.fnc_GetDate()  
       FROM CBOL   
       JOIN INSERTED ON CBOL.Cbolkey = INSERTED.Cbolkey  
    END  

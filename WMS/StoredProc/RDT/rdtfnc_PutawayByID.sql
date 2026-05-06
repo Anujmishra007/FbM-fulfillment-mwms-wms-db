@@ -3,31 +3,35 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdtfnc_PutawayByID                                  */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Putaway by pallet ID                                        */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2015-03-19 1.0  Ung      SOS336606 Created                           */
-/* 2015-09-28 1.1  Ung      Add MoveQTYAlloc, MoveQTYPick               */
-/*                          Add PutawayMatchSuggestLOC                  */
-/* 2016-08-04 1.2  Ung      SOS374890 Add DefaultToLOC                  */
-/*                          Performance turning                         */
-/* 2018-06-11 1.3  James    WMS5390 Add rdt_decode (james01)            */
-/* 2018-09-03 1.4  James    WMS6233 Add sucessfully putaway scn(james02)*/
-/* 2019-01-28 1.5  James    WMS7793 Add pallet criteria scn (james03)   */
-/* 2019-07-17 1.6  James    WMS9858 Add loc prefix (james04)            */   
-/* 2019-08-07 1.7  James    WMS10120 Add screen confirm overwrite       */
-/*                          suggested loc (james05)                     */
-/* 2023-03-20 1.8  Dennis   UWP-14536 Check Digit                       */
-/* 2024-04-18 1.9  Calvin   UWP-18503 Map full input values (CLVN01)    */
-/* 2024-06-11 2.0  NLT013   FCR-267 Unlock locations for all UCC        */
-/* 2024-07-31 2.1  CYU027   FCR-122 Add Reason Code for Override        */
-/************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdtfnc_PutawayByID                                           */
+/* Copyright      : LF Logistics                                                 */
+/*                                                                               */
+/* Purpose: Putaway by pallet ID                                                 */
+/*                                                                               */
+/* Modifications log:                                                            */
+/*                                                                               */
+/* Date       Rev  Author   Purposes                                             */
+/* 2015-03-19 1.0  Ung      SOS336606 Created                                    */
+/* 2015-09-28 1.1  Ung      Add MoveQTYAlloc, MoveQTYPick                        */
+/*                          Add PutawayMatchSuggestLOC                           */
+/* 2016-08-04 1.2  Ung      SOS374890 Add DefaultToLOC                           */
+/*                          Performance turning                                  */
+/* 2018-06-11 1.3  James    WMS5390 Add rdt_decode (james01)                     */
+/* 2018-09-03 1.4  James    WMS6233 Add sucessfully putaway scn(james02)         */
+/* 2019-01-28 1.5  James    WMS7793 Add pallet criteria scn (james03)            */
+/* 2019-07-17 1.6  James    WMS9858 Add loc prefix (james04)                     */   
+/* 2019-08-07 1.7  James    WMS10120 Add screen confirm overwrite                */
+/*                          suggested loc (james05)                              */
+/* 2023-03-20 1.8  Dennis   UWP-14536 Check Digit                                */
+/* 2024-04-18 1.9  Calvin   UWP-18503 Map full input values (CLVN01)             */
+/* 2024-06-11 2.0  NLT013   FCR-267 Unlock locations for all UCC                 */
+/* 2024-07-31 2.1  CYU027   FCR-122 Add Reason Code for Override                 */
+/* 2025-08-25 0.0  Jackc    !!!Cutover. Use V0 repo for work!!!                  */
+/* 2025-10-13 2.2  YKC028   FCR-8113 Add RDtformat                               */
+/*                 Ung      Add suggest alternate LOC                            */
+/* 2026-02-01 2.2  Jackc    FCR-9755 Add extinfo to st2 PAMatchLoc = 2(jack01)   */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PutawayByID] (
    @nMobile    INT,
@@ -44,7 +48,9 @@ DECLARE
    @nTranCount          INT, 
    @bSuccess            INT, 
    @cSQL                NVARCHAR( MAX), 
-   @cSQLParam           NVARCHAR( MAX)
+   @cSQLParam           NVARCHAR( MAX), 
+   @nPAErrNo            INT
+
 
 -- RDT.RDTMobRec variable
 DECLARE
@@ -220,7 +226,9 @@ BEGIN
    IF @nStep = 3 GOTO Step_3   -- Scn = 4112. Successful Putaway
    IF @nStep = 4 GOTO Step_4   -- Scn = 4113. Pallet criteria
    IF @nStep = 5 GOTO Step_5   -- Scn = 4114. Loc not match. Proceed?
-   IF @nStep =99 GOTO Step_ExtScn   -- Scn = 4114. Reason Code
+   IF @nStep = 6 GOTO Step_6   -- Scn = 4117. Suggest alternate LOC?
+   IF @nStep = 7 GOTO Step_7   -- Scn = 4118. Reason code
+   IF @nStep =99 GOTO Step_ExtScn   -- Scn = Customize
 END
 RETURN -- Do nothing if incorrect step
 
@@ -365,6 +373,14 @@ BEGIN
       BEGIN
          SET @nErrNo = 52751
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --From ID needed
+         GOTO Step_1_Fail
+      END
+
+      -- Check barcode format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'ID', @cFromID) = 0
+      BEGIN
+         SET @nErrNo = 52761
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
          GOTO Step_1_Fail
       END
 
@@ -543,7 +559,6 @@ BEGIN
       SAVE TRAN rdtfnc_PutawayByID -- For rollback or commit only our own transaction
 
       -- Get suggest LOC
-      DECLARE @nPAErrNo INT
       SET @nPAErrNo = 0
       SET @nPABookingKey = 0
       EXEC rdt.rdt_PutawayByID_GetSuggestLOC @nMobile, @nFunc, @cLangCode, @cUserName, @cStorerKey, @cFacility
@@ -708,6 +723,26 @@ BEGIN
          GOTO Step_2_Fail
       END
 
+      -- Suggest alternate LOC
+      IF @cToLOC = '99'
+      BEGIN
+         -- Check suggest LOC
+         IF @cSuggLOC = ''
+         BEGIN
+            SET @nErrNo = 52766
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NoSuggLOC No99
+            GOTO Step_2_Fail
+         END
+         
+         SET @cOutField01 = '' -- Option
+         
+         -- Go to suggest alternative LOC screen
+         SET @nScn = @nScn + 6
+         SET @nStep = @nStep + 4
+         
+         GOTO Quit
+      END
+
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1819ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
       IF @cExtendedScreenSP <> ''
@@ -780,6 +815,38 @@ BEGIN
             -- Go to LOC not match screen
             SET @nScn = @nScn + 3
             SET @nStep = @nStep + 3
+
+            -- Extended info (jack01)
+            IF @cExtendedInfoSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+               BEGIN
+                  SET @cExtendedInfo = ''
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @cExtendedInfo OUTPUT, ' + 
+                     ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                  SET @cSQLParam =
+                     '@nMobile         INT,           ' +
+                     '@nFunc           INT,           ' +
+                     '@cLangCode       NVARCHAR( 3),  ' +
+                     '@nStep           INT,           ' +
+                     '@nAfterStep      INT,           ' +
+                     '@nInputKey       INT,           ' + 
+                     '@cFromID         NVARCHAR( 18), ' +
+                     '@cSuggLOC        NVARCHAR( 10), ' +
+                     '@cPickAndDropLOC NVARCHAR( 10), ' +
+                     '@cToLOC          NVARCHAR( 10), ' +
+                     '@cExtendedInfo   NVARCHAR( 20) OUTPUT, ' +
+                     '@nErrNo          INT           OUTPUT, ' +
+                     '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+      
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @cExtendedInfo OUTPUT, 
+                     @nErrNo OUTPUT, @cErrMsg OUTPUT
+      
+                  SET @cOutField15 = @cExtendedInfo
+               END
+            END
             
             GOTO Quit
          END
@@ -948,6 +1015,27 @@ BEGIN
          END
       END
 
+      -- Unlock putaway skipped LOC
+      IF EXISTS( SELECT TOP 1 1
+         FROM rdt.rdtPutawaySkipLOCLog WITH (NOLOCK) 
+         WHERE Mobile = @nMobile
+            AND Func = @nFunc)
+      BEGIN
+         DECLARE @nRowRef INT 
+         DECLARE @curSkipLOC CURSOR 
+         SET @curSkipLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT RowRef
+            FROM rdt.rdtPutawaySkipLOCLog WITH (NOLOCK) 
+            WHERE Mobile = @nMobile
+               AND Func = @nFunc
+         OPEN @curSkipLOC
+         FETCH NEXT FROM @curSkipLOC INTO @nRowRef
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            DELETE rdt.rdtPutawaySkipLOCLog WHERE RowRef = @nRowRef
+            FETCH NEXT FROM @curSkipLOC INTO @nRowRef
+         END
+      END
 
       -- Prepare next screen var
       SET @cOutField01 = '' --FromID
@@ -1344,10 +1432,342 @@ BEGIN
 END
 
 /********************************************************************************
-Scn = 4115. REASON CODE
-   REASON CODE:          (field01, input)
+Step 6. Scn = 4117.
+   SUGGEST ALTERNATE
+   PUTAWAY LOC?
+   1 = YES
+   2 = NO
+   OPTION (Input, Field01)
 ********************************************************************************/
+Step_6:
+BEGIN
+   IF @nInputKey = 1
+   BEGIN
+      SET @cOption = @cInField01
 
+      -- Check blank
+      IF @cOption = ''
+      BEGIN
+         SET @nErrNo = 52762
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --Option req
+         GOTO Quit
+      END
+
+      -- Check optin valid
+      IF @cOption NOT IN ('1', '2')
+      BEGIN
+         SET @nErrNo = 52763
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --Invalid Option
+         SET @cOutField01 = ''
+         GOTO Quit
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' + 
+               '@cFromID         NVARCHAR( 18), ' +
+               '@cSuggLOC        NVARCHAR( 10), ' +
+               '@cPickAndDropLOC NVARCHAR( 10), ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT           OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+   
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+   
+            IF @nErrNo <> 0
+            BEGIN
+               SET @cOutField01 = ''
+               GOTO Quit
+            END
+         END
+      END
+
+      IF @cOption = '1' -- YES
+      BEGIN
+         -- Go to reason code screen
+         SET @nScn = @nScn + 1
+         SET @nStep = @nStep + 1
+      END
+      
+      IF @cOption = '2' -- NO
+      BEGIN
+         -- Prepare next screen var
+         SET @cOutField01 = @cFromID
+         SET @cOutField02 = CASE WHEN @cPickAndDropLOC = '' THEN @cSuggLOC ELSE @cPickAndDropLOC END
+         SET @cOutField03 = CASE WHEN @cDefaultToLOC = '1' THEN @cOutField02 ELSE '' END -- Final LOC
+         SET @cOutField15 = '' -- ExtendedInfo
+
+         -- Go to suggested LOC screen
+         SET @nScn = @nScn - 6
+         SET @nStep = @nStep - 4
+      END
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- Prepare next screen var
+      SET @cOutField01 = @cFromID
+      SET @cOutField02 = CASE WHEN @cPickAndDropLOC = '' THEN @cSuggLOC ELSE @cPickAndDropLOC END
+      SET @cOutField03 = CASE WHEN @cDefaultToLOC = '1' THEN @cOutField02 ELSE '' END -- Final LOC
+      SET @cOutField15 = '' -- ExtendedInfo
+
+      -- Go to suggested LOC screen
+      SET @nScn = @nScn - 6
+      SET @nStep = @nStep - 4
+   END
+   
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @cExtendedInfo OUTPUT, ' + 
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@nAfterStep      INT,           ' +
+            '@nInputKey       INT,           ' + 
+            '@cFromID         NVARCHAR( 18), ' +
+            '@cSuggLOC        NVARCHAR( 10), ' +
+            '@cPickAndDropLOC NVARCHAR( 10), ' +
+            '@cToLOC          NVARCHAR( 10), ' +
+            '@cExtendedInfo   NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, 6, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @cExtendedInfo OUTPUT, 
+            @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         SET @cOutField15 = @cExtendedInfo
+      END
+   END
+END
+GOTO Quit
+
+/********************************************************************************
+Step 7. Scn = 4118.
+   REASON CODE (Input, Field01)
+********************************************************************************/
+Step_7:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      -- Screen mapping
+      DECLARE @cReasonCode NVARCHAR( 10)
+      SET @cReasonCode = @cInField01
+
+      -- Check blank
+      IF @cReasonCode = ''
+      BEGIN
+         SET @nErrNo = 52764
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --NeedReasonCode
+         GOTO Quit
+      END
+
+      -- Check ReasonCode valid
+      IF NOT EXISTS( SELECT TOP 1 1 
+         FROM dbo.CodeLKUP WITH (NOLOCK)
+         WHERE ListName = 'RDTREASON'
+            AND Code = @nFunc
+            AND Code2 = @cReasonCode
+            AND StorerKey = @cStorerKey)
+      BEGIN
+         SET @nErrNo = 52765
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --Bad ReasonCode
+         SET @cOutField01 = ''
+         GOTO Quit
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' + 
+               '@cFromID         NVARCHAR( 18), ' +
+               '@cSuggLOC        NVARCHAR( 10), ' +
+               '@cPickAndDropLOC NVARCHAR( 10), ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT           OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+   
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+   
+            IF @nErrNo <> 0
+            BEGIN
+               SET @cOutField01 = ''
+               GOTO Quit
+            END
+         END
+      END
+
+      -- Insert skip LOC
+      IF @cPickAndDropLOC = ''
+      BEGIN
+         IF NOT EXISTS( SELECT 1
+            FROM rdt.rdtPutawaySkipLOCLog WITH (NOLOCK) 
+            WHERE Mobile = @nMobile
+               AND Func = @nFunc 
+               AND LOC = @cSuggLOC)
+         BEGIN
+            INSERT INTO rdt.rdtPutawaySkipLOCLog (Mobile, Func, LOC)
+            VALUES( @nMobile, @nFunc, @cSuggLOC)
+         END
+      END
+      ELSE
+      BEGIN
+         IF NOT EXISTS( SELECT 1
+            FROM rdt.rdtPutawaySkipLOCLog WITH (NOLOCK) 
+            WHERE Mobile = @nMobile
+               AND Func = @nFunc 
+               AND LOC = @cPickAndDropLOC)
+         BEGIN
+            INSERT INTO rdt.rdtPutawaySkipLOCLog (Mobile, Func, LOC)
+            VALUES( @nMobile, @nFunc, @cPickAndDropLOC)
+         END
+      END
+      
+      -- Get suggest LOC
+      DECLARE @cSuggAltLOC        NVARCHAR( 10) = ''
+      DECLARE @cPickAndDropAltLOC NVARCHAR( 10) = ''
+      DECLARE @nAltPABookingKey   INT = 0
+      SET @nPAErrNo = 0
+      EXEC rdt.rdt_PutawayByID_GetSuggestLOC @nMobile, @nFunc, @cLangCode, @cUserName, @cStorerKey, @cFacility
+         ,@cFromLOC
+         ,@cFromID
+         ,@cSuggAltLOC        OUTPUT
+         ,@cPickAndDropAltLOC OUTPUT
+         ,@nAltPABookingKey   OUTPUT
+         ,@nPAErrNo           OUTPUT
+         ,@cErrMsg            OUTPUT
+      IF @nPAErrNo <> 0 AND
+         @nPAErrNo <> -1 -- No suggested LOC
+      BEGIN
+         SET @nErrNo = @nPAErrNo
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+         GOTO Quit
+      END      
+      
+      -- Release original booking
+      IF @nPABookingKey <> 0
+      BEGIN
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+            ,'' --FromLOC
+            ,'' --FromID
+            ,'' --cSuggLOC
+            ,'' --Storer
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,@nPABookingKey = @nPABookingKey OUTPUT
+         IF @nErrNo <> 0  
+            GOTO Quit
+      END
+      
+      -- Generate alert
+      DECLARE @c_AlertMessage NVARCHAR( 255)
+      DECLARE @cCRLF NVARCHAR( 2) = CHAR(13) + CHAR(10)
+      IF @cPickAndDropAltLOC = ''
+         SET @c_AlertMessage = 
+            'SUGGESTED LOC = ' + @cSuggLOC + @cCRLF + 
+            'ALTERNATE LOC = ' + @cSuggAltLOC + @cCRLF + 
+            'REASON CODE = ' + @cReasonCode
+      ELSE
+         SET @c_AlertMessage = 
+            'SUGGESTED LOC = ' + @cPickAndDropLOC + @cCRLF + 
+            'ALTERNATE LOC = ' + @cPickAndDropAltLOC + @cCRLF + 
+            'REASON CODE = ' + @cReasonCode
+      EXEC nspLogAlert
+           @c_modulename       = 'Putaway by ID'
+         , @c_AlertMessage     = @c_AlertMessage
+         , @n_Severity         = 5
+         , @b_Success          = 0
+         , @n_err              = 0
+         , @c_errmsg           = ''
+         , @c_Activity         = 'SUGGEST ALTERNATE LOC'
+         , @c_Storerkey        = @cStorerKey
+         , @c_Loc              = @cFromLOC
+         , @c_ID               = @cFromID
+      
+      -- Save to suggested LOC
+      SET @cSuggLOC = @cSuggAltLOC
+      SET @cPickAndDropLOC = @cPickAndDropAltLOC
+      
+      -- Save booking
+      SET @nPABookingKey = @nAltPABookingKey
+   END
+
+   -- Prepare next screen var
+   SET @cOutField01 = @cFromID
+   SET @cOutField02 = CASE WHEN @cPickAndDropLOC = '' THEN @cSuggLOC ELSE @cPickAndDropLOC END
+   SET @cOutField03 = CASE WHEN @cDefaultToLOC = '1' THEN @cOutField02 ELSE '' END -- Final LOC
+   SET @cOutField15 = '' -- ExtendedInfo
+
+   -- Go to suggested LOC screen
+   SET @nScn = @nScn - 7
+   SET @nStep = @nStep - 5
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @cExtendedInfo OUTPUT, ' + 
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@nAfterStep      INT,           ' +
+            '@nInputKey       INT,           ' + 
+            '@cFromID         NVARCHAR( 18), ' +
+            '@cSuggLOC        NVARCHAR( 10), ' +
+            '@cPickAndDropLOC NVARCHAR( 10), ' +
+            '@cToLOC          NVARCHAR( 10), ' +
+            '@cExtendedInfo   NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, 7, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @cExtendedInfo OUTPUT, 
+            @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         SET @cOutField15 = @cExtendedInfo
+      END
+   END
+END
+GOTO Quit
+
+/********************************************************************************
+Scn = Customize
+********************************************************************************/
 Step_ExtScn:
 BEGIN
    IF @cExtScnSP <> ''

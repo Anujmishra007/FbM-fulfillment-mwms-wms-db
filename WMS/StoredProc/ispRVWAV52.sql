@@ -22,6 +22,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2022-05-12  Wan      1.0   Created.                                  */
 /* 2022-05-12  Wan      1.0   DevOps Combine Script.                    */
+/* 2025-10-10  SSA01    1.1   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispRVWAV52]
@@ -179,8 +180,8 @@ BEGIN
       SET p.CaseID = ''
          ,p.PickSlipNo = ''
          ,p.TaskDetailKey = ''
-         ,p.EditWho = SUSER_SNAME()
-         ,p.EditDate = GETDATE()
+         ,p.EditWho = dbo.fnc_GetUserName()           --(SSA01)
+         ,p.EditDate = dbo.fnc_GetDate()   --(SSA01)
          ,p.TrafficCop = NULL
    FROM @t_PickDetail AS tpd
    JOIN dbo.PICKDETAIL p ON p.PickdetailKey = tpd.PickDetailKey
@@ -211,8 +212,8 @@ BEGIN
    UPDATE WAVE WITH (ROWLOCK)  
    SET TMReleaseFlag = 'N'               
       ,Trafficcop = NULL  
-      ,EditWho = SUSER_SNAME()  
-      ,EditDate= GETDATE()  
+      ,EditWho = dbo.fnc_GetUserName()          --(SSA01)
+      ,EditDate= dbo.fnc_GetDate()   --(SSA01)
    WHERE Wavekey = @c_Wavekey   
      
    SET @n_err = @@ERROR  

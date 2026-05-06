@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdt_1764CfmExtUpd01') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_1764CfmExtUpd01
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -17,9 +13,12 @@ GO
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
 /* 2016-08-25   Ung       1.0   SOS372531 Created                       */
+/* 2023-10-19   Ung       1.1   WMS-23838 Add channel                   */
+/* 2025-12-31   James     1.2   UWP-46211 Fix Qty Replen retrieve       */
+/*                              wrongly (james01)                       */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_1764CfmExtUpd01
+CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd01
     @nMobile            INT 
    ,@nFunc              INT 
    ,@cLangCode          NVARCHAR( 3) 
@@ -68,12 +67,6 @@ BEGIN
    FROM TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskdetailKey
 
---if suser_sname() = 'wmsgt'
---begin
---   select * from TaskDetail with (nolock) where TaskDetailKey in (@cNewTaskdetailKey, @cTaskdetailKey)
---   select 'rdt_1764CfmExtUpd01' 'here1', @nOrgTaskQty '@nOrgTaskQty', @nShortQTY '@nShortQTY', @cReasonCode '@cReasonCode'
---end
-
    -- FP, does not close pallet or short
    IF @cPickMethod = 'FP'
       RETURN
@@ -82,8 +75,8 @@ BEGIN
    SET @nQTY_RPL = 0
    SET @nQTY = 0
    SELECT 
-      @nQTY_RPL = V_String15, 
-      @nQTY = V_String18 
+      @nQTY_RPL = V_Integer1,
+      @nQTY = V_Integer4
    FROM rdt.rdtMobRec WITH (NOLOCK) 
    WHERE Mobile = @nMobile
 
@@ -114,9 +107,6 @@ BEGIN
    10       5           5           4        Close pallet   Split PickDetail
    10       5           5           4        Short          Split & short PickDetail, reduce booking
    */ 
-
---if suser_sname() = 'wmsgt'
---   select 'rdt_1764CfmExtUpd01' 'here2', @nQTY '@nQTY', @nSystemQTY '@nSystemQTY', @cReasonCode '@cReasonCode'
 
    IF @cPickMethod = 'PP' AND
       @cReasonCode = '' AND   -- Not short
@@ -206,7 +196,7 @@ BEGIN
             -- Create a new PickDetail to hold the balance
             INSERT INTO dbo.PickDetail (
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM, UOMQTY, QTYMoved,
-               DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone,
+               DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone, Channel_ID,
                DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
                PickDetailKey,
                Status, 
@@ -215,7 +205,7 @@ BEGIN
                OptimizeCop)
             SELECT
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, UOMQTY, QTYMoved,
-               DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone,
+               DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone, Channel_ID,
                DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
                @cNewPickDetailKey,
                '0', 
@@ -282,9 +272,6 @@ BEGIN
       IF @nQTY > @nSystemQTY
          SET @nQTYReplen = @nQTYReplen - (@nQTY - @nSystemQTY)
 
---if suser_sname() = 'wmsgt'
---   select @nQTYReplen '@nQTYReplen'
-   
       -- Reduce booking
       IF @nQTYReplen > 0
       BEGIN

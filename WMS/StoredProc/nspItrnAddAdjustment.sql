@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[nspItrnAddAdjustment]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspItrnAddAdjustment]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,9 +27,10 @@ GO
 /* 27-APR-2017  JyhBin        Initialize lottable01 to lottable03 value */
 /* 27-Jul-2017  TLTING        SET Option                                */
 /* 07-Feb-2016  SWT02         Channel Management                        */
+/* 25-JUN-2025  SSA01         UWP-3982- Added PalletType in inventory   */
 /************************************************************************/
 
-CREATE PROC [dbo].[nspItrnAddAdjustment]
+CREATE OR ALTER PROC [dbo].[nspItrnAddAdjustment]
      @n_ItrnSysId    int
    , @c_StorerKey    NVARCHAR(15)
    , @c_Sku          NVARCHAR(20)
@@ -76,7 +73,8 @@ CREATE PROC [dbo].[nspItrnAddAdjustment]
    , @n_err          int        OUTPUT
    , @c_errmsg       NVARCHAR(250)  OUTPUT
    , @c_Channel      NVARCHAR(20)   = '' -- SWT02
-   , @n_Channel_ID   BIGINT         = 0 OUTPUT -- SWT02   
+   , @n_Channel_ID   BIGINT         = 0 OUTPUT -- SWT02
+   , @c_PalletType   NVARCHAR(10)   = '' -- SSA01
 AS
 BEGIN
    SET NOCOUNT ON 
@@ -189,7 +187,8 @@ BEGIN
             , UOMQty
             , EffectiveDate
             , Channel  -- SWT02 
-            , Channel_ID -- SWT02              
+            , Channel_ID -- SWT02
+            , PalletType  -- SSA01
          )
          VALUES  (
               @c_ItrnKey
@@ -235,7 +234,8 @@ BEGIN
             , @n_UOMQty
             , @d_EffectiveDate
             ,@c_Channel -- SWT02
-            ,@n_Channel_ID -- SWT02               
+            ,@n_Channel_ID -- SWT02
+            ,@c_PalletType --SSA01
          )
       SELECT @n_err = @@ERROR
       IF @n_err <> 0

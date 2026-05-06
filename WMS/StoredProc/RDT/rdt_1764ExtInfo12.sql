@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date         Author     Ver.  Purposes                               */
 /* 2024-12-05   JCH507     1.0   FCR-1157 Show UCC St4 for Levis        */
+/* 2025-08-13   Cuize      1.1   FCR-6731 Mask UCC Values               */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764ExtInfo12
@@ -30,6 +31,12 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @cStorerkey       NVARCHAR( 15)
+
+   SELECT @cStorerKey = Storerkey
+      FROM rdt.rdtMobRec WITH (NOLOCK)
+   WHERE Mobile = @nMobile
+
    -- TM Replen From
    IF @nFunc = 1764
    BEGIN
@@ -40,6 +47,9 @@ BEGIN
             @cExtendedInfo1 = ISNULL(caseid,'')
          FROM dbo.TaskDetail WITH (NOLOCK) 
          WHERE TaskdetailKey = @cTaskdetailKey
+
+
+        SELECT @cExtendedInfo1 = rdt.rdtMaskValue(@nFunc, @cStorerKey, 'UCC', @cExtendedInfo1)
       END
    END
 

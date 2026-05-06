@@ -1,7 +1,5 @@
-﻿
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 
@@ -14,9 +12,10 @@ GO
 /*                                                                         */
 /* Date        Rev   Author      Purposes                                  */
 /* 2024-09-11  1.0   PXL009      Create for FCR-778 Violet Pack Changes    */
+/*2025-09-09   1.1   SUNDAR      VAS Label Information in Pack ScreenRITM7760734*/
 /***************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_838ExtScn04] (
+CREATE OR ALTER   PROC [RDT].[rdt_838ExtScn04] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -109,7 +108,7 @@ BEGIN
       @cCustomerPalletMixBrands        NVARCHAR( 20),
       @cCustomerPalletProductGrouping  NVARCHAR( 18),
       @cCustomerOrderType              NVARCHAR( 10),
-
+	  @cVasLbl							NVARCHAR( 60),
       @cDefaultOption                  NVARCHAR( 1),
       @cLabelNo                        NVARCHAR( 20),
       @cCustomNo                       NVARCHAR( 5),
@@ -325,22 +324,32 @@ BEGIN
             --    GOTO Quit
             -- END
 
+	
+SELECT TOP 1 @cVasLbl= CASE WHEN ( OD.UserDefine08 IS  NULL OR OD.UserDefine08='') THEN 'Default Label'
+ELSE CONCAT('VAS:',ISNULL(SUBSTRING(S.COMPANY,1,6),''),':',ISNULL(OD.USERDEFINE08,''))   END
+FROM ORDERS O INNER JOIN ORDERDETAIL OD ON OD.ORDERKEY=O.ORDERKEY INNER JOIN CODELKUP C ON C.CODE2=O.ConsigneeKey 
+INNER JOIN PICKDETAIL PD ON PD.OrderKey=OD.ORDERKEY  AND PD.OrderLineNumber=OD.OrderLineNumber AND PD.SKU=OD.Sku
+INNER JOIN STORER S ON S.STORERKEY=C.CODE2 AND S.FACILITY=O.FACILITY  
+WHERE PD.DROPID=@cFromDropID  AND C.Storerkey=O.STORERKEY AND C.LISTNAME='VASLBL' AND S.TYPE=2 
+           
+
             SET @cOutField01  = @cPackDtlDropID
             SET @cOutField02  = @cCustomerPalletType
             SET @cOutField03  = @cCustomerPalletHeight
             SET @cOutField04  = @cCustomerPalletCube
-            SET @cOutField05  = N''
+            SET @cOutField05  =ISNULL(@cVasLbl,'Default Label')
             SET @cOutField06  = N''
             SET @cOutField07  = N''
             SET @cOutField08  = N''
             SET @cOutField09  = N''
             SET @cOutField10  = N''
-            SELECT @cOutField05  = [Message] FROM @tWarnings WHERE [ID] = 1
-            SELECT @cOutField06  = [Message] FROM @tWarnings WHERE [ID] = 2
-            SELECT @cOutField07  = [Message] FROM @tWarnings WHERE [ID] = 3
-            SELECT @cOutField08  = [Message] FROM @tWarnings WHERE [ID] = 4
-            SELECT @cOutField09  = [Message] FROM @tWarnings WHERE [ID] = 5
-            SELECT @cOutField10  = [Message] FROM @tWarnings WHERE [ID] = 6
+			   SET @cOutField11  = N''
+            SELECT @cOutField06  = [Message] FROM @tWarnings WHERE [ID] = 1
+            SELECT @cOutField07  = [Message] FROM @tWarnings WHERE [ID] = 2
+            SELECT @cOutField08  = [Message] FROM @tWarnings WHERE [ID] = 3
+            SELECT @cOutField09  = [Message] FROM @tWarnings WHERE [ID] = 4
+            SELECT @cOutField10  = [Message] FROM @tWarnings WHERE [ID] = 5
+            SELECT @cOutField11  = [Message] FROM @tWarnings WHERE [ID] = 6
 
             SET @nAfterScn    = @nScn_ExtScn04
             SET @nAfterStep   = @nStep_ExtScn
@@ -498,5 +507,4 @@ GO
 
 GRANT EXECUTE ON [RDT].[rdt_838ExtScn04] TO NSQL
 GO
-
 

@@ -32,6 +32,7 @@ GO
 /* 14-Jun-2023 NJOW03   1.3   WMS-22845 Send to WCS failed not to rollback*/
 /*                            the updated ucc and pickdetail and continue */
 /*                            next ucc. WCS issue will fix later sperately*/
+/* 10-Oct-2025  SSA01   1.4   UWP-42248 -Enhanced session management      */
 /**************************************************************************/       
 CREATE   PROC [dbo].[ispPOGenReplen01]       
            @c_ReplenishmentGroup NVARCHAR(10)        
@@ -244,8 +245,8 @@ BEGIN
                UPDATE PICKDETAIL WITH (ROWLOCK)       
                SET DropID = @c_UCCNo       
                   ,TrafficCop  = NULL      
-                  ,EditWho  = SUSER_SNAME()       
-                  ,EditDate = GETDATE()       
+                  ,EditWho  = dbo.fnc_GetUserName()           --(SSA01)
+                  ,EditDate = dbo.fnc_GetDate()    --(SSA01)
                WHERE PickDetailkey = @c_PickDetailkey       
             
                IF @@ERROR <> 0       
@@ -278,8 +279,8 @@ BEGIN
             UPDATE UCC WITH (ROWLOCK)       
             SET Status = '5'       
                ,UserDefined10 = @c_ReplenishmentKey       
-               ,EditWho  = SUSER_SNAME()       
-               ,EditDate = GETDATE()       
+               ,EditWho  = dbo.fnc_GetUserName()            --(SSA01)
+               ,EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE UCC_RowRef = @n_UCC_RowRef       
        
             IF @@ERROR <> 0       

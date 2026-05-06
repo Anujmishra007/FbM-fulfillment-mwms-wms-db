@@ -26,6 +26,7 @@ GO
 /*12/10/2018   NJOW01   1.0   WMS-6415 Calculate task priority by        */
 /*                            consigneekey holiday                       */
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
+/* 10-10-2025  SSA01    1.2   UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV15]      
@@ -445,7 +446,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV15]
                  TaskDetailKey = @c_TaskDetailKey,
                  PickslipNo = @c_Pickslipno,
                  WaveKey = @c_Wavekey,
-                 EditDate = GETDATE(),                             
+                 EditDate = dbo.fnc_GetDate(),    --(SSA01)
                  TrafficCop = NULL
              WHERE PickDetailKey = @c_PickDetailKey  
              
@@ -516,8 +517,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV15]
           --SET STATUS = '1' -- Released        --(Wan01) 
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               --(Wan01)
+           ,  EditWho = dbo.fnc_GetUserName()          --(Wan01)(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

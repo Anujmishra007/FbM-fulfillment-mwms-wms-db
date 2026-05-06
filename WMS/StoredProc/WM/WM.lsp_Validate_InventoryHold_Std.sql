@@ -1,6 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /**************************************************************************/  
 /* Stored Procedure: lsp_Validate_InventoryHold_Std                       */  
@@ -21,6 +21,7 @@ GO
 /* Date         Author   Ver  Purposes                                    */ 
 /* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch               */
 /* 2023-03-14   NJOW01   1.2  LFWM-3608 performance tuning for XML Reading*/
+/* 2025-09-24   MICHAEL  1.3  FCR-7829  Inventory UCC-level HOLD (ML01)   */
 /**************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_InventoryHold_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -125,6 +126,7 @@ BEGIN
             EXEC sp_xml_removedocument @n_XMLHandle                         
          END
       END
+
       --NJOW01 E      
 
       /*
@@ -202,9 +204,9 @@ BEGIN
          ,  @c_Lottable13        NVARCHAR(8)  = ''  
          ,  @c_Lottable14        NVARCHAR(8)  = ''  
          ,  @c_Lottable15        NVARCHAR(8)  = ''  
-
          ,  @n_Count             INT          = 0
          ,  @c_InvHoldKey        NVARCHAR(10) = ''
+         ,  @c_UCCNo             NVARCHAR(20) = ''   --ML01
 
       SELECT TOP 1 
             @c_InventoryHoldKey = ISNULL(RTRIM(IH.InventoryHoldKey),'')
@@ -233,6 +235,16 @@ BEGIN
       FROM  #VALDN IH  --NJOW01
       ORDER BY RowId 
 
+      --ML01-S
+      IF COL_LENGTH('tempdb..#VALDN', 'UCCNo') IS NOT NULL
+      BEGIN
+         SET @c_SQL = N'SELECT TOP 1 @c_UCCNo = ISNULL(RTRIM(UCCNo),'''') FROM #VALDN ORDER BY RowId'
+         EXEC sp_executesql @c_SQL
+            , N'@c_UCCNo NVARCHAR(20) OUTPUT'
+            , @c_UCCNo OUTPUT
+      END
+      --ML01-E
+
       IF @c_Lottable04 = '19000101' SET @c_Lottable04 = ''
       IF @c_Lottable05 = '19000101' SET @c_Lottable05 = ''
       IF @c_Lottable13 = '19000101' SET @c_Lottable13 = ''
@@ -240,30 +252,36 @@ BEGIN
       IF @c_Lottable15 = '19000101' SET @c_Lottable15 = ''
 
       IF @c_lot = '' AND @c_id = '' AND @c_loc = ''                                                                         
+      AND (@c_Storerkey='' OR @c_UCCNo = '')   --ML01
       AND @c_lottable01 = '' AND @c_lottable02 = '' AND @c_lottable03 = '' AND @c_lottable04 = '' AND @c_lottable05 = '' 
       AND @c_lottable06 = '' AND @c_lottable07 = '' AND @c_lottable08 = '' AND @c_lottable09 = '' AND @c_lottable10 = '' 
       AND @c_lottable11 = '' AND @c_lottable12 = '' AND @c_lottable13 = '' AND @c_lottable14 = '' AND @c_lottable15 = ''  
       BEGIN
          SET @n_Continue = 3
          SET @n_err = 551401
-         SET @c_errmsg = 'Either Lot / Movable Unit / Loc / Lottables must have value'
+--ML01         SET @c_errmsg = 'Either Lot / Movable Unit / Loc / Lottables must have value'
+         SET @c_errmsg = 'Either Lot / Movable Unit / Loc / Storer+UCCNo / Lottables must have value'   --ML01
                        + '. (lsp_Validate_InventoryHold_Std)'
          GOTO EXIT_SP
       END 
 
-      IF (@c_lot <> '' OR @c_id <> '' OR @c_loc <> '') AND  
+--ML01      IF (@c_lot <> '' OR @c_id <> '' OR @c_loc <> '') AND  
+      IF (@c_lot <> '' OR @c_id <> '' OR @c_loc <> '' OR (@c_Storerkey<>'' AND @c_UCCNo<>'')) AND   --ML01
          (@c_lottable01 <> '' OR @c_lottable02 <> '' OR @c_lottable03 <> '' OR @c_lottable04 <> '' OR @c_lottable05 <> '' OR 
           @c_lottable06 <> '' OR @c_lottable07 <> '' OR @c_lottable08 <> '' OR @c_lottable09 <> '' OR @c_lottable10 <> '' OR 
           @c_lottable11 <> '' OR @c_lottable12 <> '' OR @c_lottable13 <> '' OR @c_lottable14 <> '' OR @c_lottable15 <> '' ) 
       BEGIN
          SET @n_Continue = 3
          SET @n_err = 551402
-         SET @c_errmsg = 'Either (Lot / Movable Unit / Loc) have value OR (Lottables) have value. Cannot be both'
+--ML01         SET @c_errmsg = 'Either (Lot / Movable Unit / Loc) have value OR (Lottables) have value. Cannot be both'
+         SET @c_errmsg = 'Either (Lot / Movable Unit / Loc / Storer+UCCNo) have value OR (Lottables) have value. Cannot be both'   --ML01
                        + '. (lsp_Validate_InventoryHold_Std)'
          GOTO EXIT_SP
       END 
 
       IF (@c_lottable01 <> '' OR @c_lottable02 <> '' OR @c_lottable03 <> '' OR @c_lottable04 <> '' OR @c_lottable05 <> '')
+      OR (@c_lottable06 <> '' OR @c_lottable07 <> '' OR @c_lottable08 <> '' OR @c_lottable09 <> '' OR @c_lottable10 <> '' OR   --ML01
+          @c_lottable11 <> '' OR @c_lottable12 <> '' OR @c_lottable13 <> '' OR @c_lottable14 <> '' OR @c_lottable15 <> '')     --ML01
       BEGIN
          IF @c_StorerKey = '' OR @c_SKU = ''
          BEGIN
@@ -372,6 +390,28 @@ BEGIN
                GOTO EXIT_SP 
             END
          END
+--ML01-S
+         IF @c_Storerkey <> '' AND @c_UCCNo <> ''
+         BEGIN
+            SELECT TOP 1 @n_Count = 1
+                 , @c_InvHoldKey = IH.InventoryHoldKey
+            FROM   INVENTORYHOLD IH WITH (NOLOCK)
+            WHERE  IH.Storerkey = @c_Storerkey
+            AND    IH.UCCNo = @c_UCCNo
+            AND    IH.[Status] = @c_Status
+
+            IF @n_Count > 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_err = 551409
+               SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Duplicate UCCNo + Status in InventoryHold table,'
+                             + ' InventoryHoldKey = ' + RTRIM(@c_InvHoldKey)
+                             + '. (lsp_Validate_InventoryHold_Std)'
+                             + ' |' + RTRIM(@c_InvHoldKey)
+               GOTO EXIT_SP
+            END
+         END
+--ML01-E
       END
    END TRY
    

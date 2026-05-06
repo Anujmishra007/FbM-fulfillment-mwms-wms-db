@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = object_id(N'[dbo].[ntrBuildLoadLogUpdate]') AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrBuildLoadLogUpdate]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,9 +13,10 @@ GO
 /* Called By: When records Updated                                      */  
 /* Modifications:                                                       */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 06-Oct-2025  AK01     1.0  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName       */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrBuildLoadLogUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrBuildLoadLogUpdate]  
 ON  [dbo].[BuildLoadLog]   
 FOR UPDATE  
 AS  
@@ -52,8 +49,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2  ) AND NOT UPDATE(EditDate) 
    BEGIN  
       UPDATE BuildLoadLog  
-         SET EditDate   = GETDATE(),  
-             EditWho    = SUSER_SNAME(),  
+         SET EditDate   = dbo.fnc_GetDate(),  
+             EditWho    = dbo.fnc_GetUserName(),  
              TrafficCop = NULL  
         FROM BuildLoadLog, INSERTED  
        WHERE BuildLoadLog.BatchNo = INSERTED.BatchNo
@@ -104,5 +101,6 @@ BEGIN
    END  
 END   -- main
 GO
+
 
 

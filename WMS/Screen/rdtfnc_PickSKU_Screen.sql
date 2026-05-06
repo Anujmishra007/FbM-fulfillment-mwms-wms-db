@@ -32,7 +32,7 @@ EXECUTE rdt.rdtAddScn 4692, 'ENG',
    @cLine02 = '%20d02', 
    @cLine03 = 'SKU:',
    @cLine04 = '%20d03',
-   @cLine05 = '%60i04',
+   @cLine05 = '%2000iV_Barcode', --FCR-8676
    @cLine06 = '%20d05',
    @cLine07 = '%20d06',
    @cLine08 = 'LOTTABLES:',
@@ -110,3 +110,16 @@ EXECUTE rdt.rdtAddScn 4697, 'ENG',
    @cLine14 = '%e',
    @cWebGroup = '{"1":["1"],"2":["3","4","5"]}', 
    @nFunc = 830
+
+-- 6528 = short pick screen (reallocation)
+DELETE rdt.RDTScn WHERE Scn = 6528 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6528, 'ENG',
+   @cLine01 = '',
+   @cLine02 = 'Confirm short pick?',
+   @cLine03 = '',
+   @cLine04 = '1 = YES',
+   @cLine05 = '2 = NO',
+   @cLine06 = '9 = Alternate PICK LOC',
+   @cLine07 = '',
+   @cLine08 = 'OPTION: %01i01',
+   @cLine14 = '%e'

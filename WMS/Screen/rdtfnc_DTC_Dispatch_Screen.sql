@@ -1,8 +1,10 @@
 --scn 3910 --- 3919
 
-DELETE RDT.RDTMSG WHERE MESSAGE_ID = 841 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
-INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+IF NOT EXISTS (SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID=841)
+BEGIN
+   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES ('841', 'ENG', 'FNC', 'DTC Dispatch', 'rdtfnc_DTC_Dispatch', '0')
+END
 
 -- 2400 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3910 AND Lang_Code = 'ENG'
@@ -36,7 +38,7 @@ EXECUTE rdt.rdtAddScn 3911, 'ENG',
    ,@cLine09 = '%60i04'       -- Enlarge to 60 chars (WMS893)
    ,@cLine10 = 'TTL PICK: %05d05'
    ,@cLine11 = 'TTL SCAN: %05d06'
-   ,@cLine13 = '%20d07'
+   ,@cLine13 = '%20d07' --(yeekung01)
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1"],"2":["4","5"],"3":["6","7"],"4":["8","9"],"5":["10","11"]}'
    ,@nFunc = 841
@@ -117,11 +119,14 @@ EXECUTE rdt.rdtAddScn 3916, 'ENG',
     @cLine01 = 'CARTON: %10i07'
    ,@cLine03 = 'CUBE: %10i02^DT:INT'
    ,@cLine05 = 'WEIGHT: %10i03^DT:INT'
-   ,@cLine07 = 'REF NO:'
-   ,@cLine08 = '%20i04'
-   ,@cLine13 = '%20d08' --WMS-22041
+   ,@cLine06 = 'LENGTH: %10i05^DT:INT'  -- FCR-1625
+   ,@cLine07 = 'WIDTH:  %10i06^DT:INT'  -- FCR-1625
+   ,@cLine08 = 'HEIGHT: %10i08^DT:INT'  -- FCR-1625
+   ,@cLine09 = 'REF NO:'
+   ,@cLine10 = '%20i04'
+   ,@cLine13 = '%20d09' --WMS-22041
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1"],"2":["3"],"3":["5"],"4":["7","8"],"5":["13"]}'
    ,@nFunc = 841
 
---select * from rdt.rdtscn with (nolock) where scn between 3910 and 3919 
+select * from rdt.rdtscn with (nolock) where scn between 3910 and 3919 

@@ -81,6 +81,8 @@ GO
 /*2023-03-30 1.52 YeeKung  WMS-22041 Add extendedinfo in ctnscn (yeekung07)  */
 /*2023-05-23 1.53 YeeKung  WMS-22408 Add orderkeyout in ctntype (yeekung08)  */
 /*2023-07-21 1.54 YeeKung  WMS-22755 Fix the serialno bug fix (yeekung09)    */
+/*2023-09-14 1.55 YeeKung  WMS-23625 correct sku params (yeekung10)          */
+/*2024-12-13 1.56 YeeKung  FCR-1626 Add length width height (yeekung11)      */
 /*****************************************************************************/          
 CREATE OR ALTER  PROC [RDT].[rdtfnc_DTC_Dispatch](          
    @nMobile    INT,          
@@ -200,7 +202,10 @@ DECLARE
    @cSKUDesc            NVARCHAR(20),           
    @cUseUdf04AsTrackNo  NVARCHAR(1),   -- (james14)        
    @cCube               NVARCHAR( 10),  --(cc01)        
-   @cWeight             NVARCHAR( 10),  --(cc01)        
+   @cWeight             NVARCHAR( 10),  --(cc01)
+   @cCtnLength          NVARCHAR( 10),
+   @cCtnWidth           NVARCHAR( 10),
+   @cCtnHeight          NVARCHAR( 10),       
    @cRefNo              NVARCHAR( 20),  --(cc01)        
    @cRefNoLookupSP      NVARCHAR( 20),   -- (james14)       
    @cRefNoInsLogSP      NVARCHAR( 20),   -- (james14)      
@@ -298,7 +303,10 @@ SELECT
    @cRefNo              = V_String33,  --(cc01)        
    @cRefNoInsLogSP      = V_String34,      
    @cDecodeSP           = V_String35,  
-   @cMultiMethod        = V_String36, --(yeekung03)  
+   @cMultiMethod        = V_String36, --(yeekung03)
+   @cCtnLength          = V_String37,  
+   @cCtnWidth           = V_String38, 
+   @cCtnHeight          = V_String39, 
      
    @nPrevScn         = V_FromScn,          
    @nPrevStep        = V_FromStep,          
@@ -1284,7 +1292,7 @@ BEGIN
             IF @nErrNo <> 0          
                GOTO Step_2_Fail          
           
-            SET @cSKU  = ISNULL( @c_oFieled01, '')          
+            SET @cUPC  = ISNULL( @c_oFieled01, '')          
         
             IF @cSerialNoCapture IN('1','3')          
             BEGIN          
@@ -1312,7 +1320,7 @@ BEGIN
                END  
   
                -- Customize decode  
-      ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')  
+               ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')  
                BEGIN  
                   SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +  
                      ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +  
@@ -1346,25 +1354,25 @@ BEGIN
                      GOTO Quit  
                END  
   
-               SET @cSku = @cUPC  
+               --SET @cUPC = @cUPC  
             END  
-            ELSE    
-            BEGIN    
-               SET @cSKU  = @cInSku    
-            END  
+            --ELSE    
+            --BEGIN    
+            --   SET @cUPC  = @cInSku    
+            --END  
          END          
       END          
-      ELSE          
-      BEGIN          
-         SET @cSku = @cInSku  -- (james01)          
-      END          
+      --ELSE          
+      --BEGIN          
+      --   SET @cSku = @cInSku  -- (james01)          
+      --END          
           
        -- Get SKU barcode count          
       SET @nSKUCnt = 0          
           
       EXEC rdt.rdt_GETSKUCNT          
           @cStorerKey  = @cStorerKey          
-         ,@cSKU        = @cSKU          
+         ,@cSKU        = @cUPC         --(yeekung10) 
          ,@nSKUCnt     = @nSKUCnt       OUTPUT          
          ,@bSuccess    = @b_Success     OUTPUT          
          ,@nErr        = @nErrNo        OUTPUT          
@@ -1410,11 +1418,13 @@ BEGIN
       -- Get SKU code          
       EXEC rdt.rdt_GETSKU          
           @cStorerKey  = @cStorerKey          
-         ,@cSKU        = @cSKU          OUTPUT          
+         ,@cSKU        = @cUPC          OUTPUT          
          ,@bSuccess    = @b_Success     OUTPUT          
          ,@nErr        = @nErrNo        OUTPUT          
          ,@cErrMsg     = @cErrMsg       OUTPUT          
          ,@cSKUStatus  = @cSKUStatus          
+
+      SET @cSKU = @cUPC
           
       -- Custom get orderkey sp. Can do swap lot inside the sp and insert ecommlog          
       IF @cGetOrders_SP <> ''          
@@ -1811,7 +1821,10 @@ BEGIN
                ('@cRefNo',       @cRefNo),         
                ('@cWaveKey',     @cWaveKey),        
                ('@cLoadKey',     @cLoadKey),         
-               ('@cOption',    @cOption)               
+               ('@cOption',      @cOption), 
+               ('@cCtnLength',   @cCtnLength),  
+               ('@cCtnWidth',    @cCtnWidth),  
+               ('@cCtnHeight',    @cCtnHeight)              
                             
              SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +                            
                 ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cToteNo, @cSKU, @nStep, @cPickSlipNo, @cOrderKey, @cTrackNo, @cTrackNoFlag OUTPUT, @cOrderKeyOut OUTPUT,         
@@ -2038,13 +2051,20 @@ BEGIN
                   -- Get PackInfo          
                   SET @cCartonType = ''          
                   SET @cWeight = ''          
-                  SET @cCube = ''          
+                  SET @cCube = ''       
+                  SET @cCtnHeight = ''
+                  SET @cCtnWidth = ''
+                  SET @cCtnLength = ''  
                   SET @cRefNo = ''          
                          
                   SET @cOutField02 = ''    
                   SET @cOutField03 = ''    
-                  SET @cOutField04 = ''    
-                  SET @cOutField07 = ''  
+                  SET @cOutField04 = ''   
+                  SET @cOutField05 = ''    
+                  SET @cOutField06 = ''    
+                  SET @cOutField07 = ''   
+                  SET @cOutField08 = '' 
+                  SET @cOutField09 = ''  
                   SET @cOrderKey = @cOrderKeyOut  
                          
                   --set default Value        
@@ -2054,17 +2074,24 @@ BEGIN
                   SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                   SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                   SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                  SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                  SET @cFieldAttr08 = '' -- QTY          
+                  SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+                  SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                  SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                  SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+                  
+                  SET @cFieldAttr09 = '' -- QTY          
                 
                   -- Position cursor          
                   IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                   IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                   IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-                  IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4
+                  IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+                  IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+                  IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+                  IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
 
 
-                  SET @cOutField08 = @cExtendedinfo --(yeekung07)
+                  SET @cOutField09 = @cExtendedinfo --(yeekung07)
                 
                   -- Go to next screen          
                   SET @nScn = @nScn + 5          
@@ -2171,31 +2198,47 @@ BEGIN
                      -- Get PackInfo          
                      SET @cCartonType = ''          
                      SET @cWeight = ''          
-                     SET @cCube = ''          
-                     SET @cRefNo = ''  
+                     SET @cCube = ''       
+                     SET @cCtnHeight = ''
+                     SET @cCtnWidth = ''
+                     SET @cCtnLength = ''  
+                     SET @cRefNo = ''          
+                           
+                     SET @cOutField02 = ''    
+                     SET @cOutField03 = ''    
+                     SET @cOutField04 = ''   
+                     SET @cOutField05 = ''    
+                     SET @cOutField06 = ''    
+                     SET @cOutField07 = ''   
+                     SET @cOutField08 = '' 
+                     SET @cOutField09 = ''  
                      SET @cOrderKey = @cOrderKeyOut  
-                                   
+                           
                      --set default Value        
                      SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
-                     SET @cOutField02 = ''        
-                     SET @cOutField03 = ''        
-                     SET @cOutField04 = ''           
-                                   
+                                    
                      -- Enable disable field          
                      SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                      SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                      SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr08 = '' -- QTY          
-                
+                     SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+                     SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                     SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                     SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+                     
+                     SET @cFieldAttr09 = '' -- QTY          
+                  
                      -- Position cursor          
                      IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                      IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                      IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-                     IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
-                
-                
-                     SET @cOutField08 = @cExtendedinfo --(yeekung07)
+                     IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+                     IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+                     IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+                     IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+
+                     SET @cOutField09 = @cExtendedinfo --(yeekung07)
 
                      -- Go to next screen          
                      SET @nScn = @nScn + 5          
@@ -2324,31 +2367,47 @@ BEGIN
                      -- Get PackInfo          
                      SET @cCartonType = ''          
                      SET @cWeight = ''          
-                     SET @cCube = ''          
-                     SET @cRefNo = ''  
-                     
-                                   
+                     SET @cCube = ''       
+                     SET @cCtnHeight = ''
+                     SET @cCtnWidth = ''
+                     SET @cCtnLength = ''  
+                     SET @cRefNo = ''          
+                           
+                     SET @cOutField02 = ''    
+                     SET @cOutField03 = ''    
+                     SET @cOutField04 = ''   
+                     SET @cOutField05 = ''    
+                     SET @cOutField06 = ''    
+                     SET @cOutField07 = ''   
+                     SET @cOutField08 = '' 
+                     SET @cOutField09 = ''  
+                     SET @cOrderKey = @cOrderKeyOut  
+                           
                      --set default Value        
                      SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
-                     SET @cOutField02 = ''        
-                     SET @cOutField03 = ''        
-                     SET @cOutField04 = ''          
-                                   
+                                    
                      -- Enable disable field          
                      SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                      SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                      SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr08 = '' -- QTY          
-                
+                     SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+                     SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                     SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                     SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+                     
+                     SET @cFieldAttr09 = '' -- QTY          
+                  
                      -- Position cursor          
                      IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                      IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                      IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-                     IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
-                
-                     
-                     SET @cOutField08 = @cExtendedinfo --(yeekung07)
+                     IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+                     IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+                     IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+                     IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+
+                     SET @cOutField09 = @cExtendedinfo --(yeekung07)
 
                      SET @cOrderkey    = @cOrderKeyOut    
                 
@@ -2488,30 +2547,47 @@ BEGIN
                            -- Get PackInfo          
                            SET @cCartonType = ''          
                            SET @cWeight = ''          
-                           SET @cCube = ''          
-                           SET @cRefNo = ''     
+                           SET @cCube = ''       
+                           SET @cCtnHeight = ''
+                           SET @cCtnWidth = ''
+                           SET @cCtnLength = ''  
+                           SET @cRefNo = ''          
+                                 
+                           SET @cOutField02 = ''    
+                           SET @cOutField03 = ''    
+                           SET @cOutField04 = ''   
+                           SET @cOutField05 = ''    
+                           SET @cOutField06 = ''    
+                           SET @cOutField07 = ''   
+                           SET @cOutField08 = '' 
+                           SET @cOutField09 = ''  
                            SET @cOrderKey = @cOrderKeyOut  
-                        
+                                 
                            --set default Value        
                            SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
-                           SET @cOutField02 = ''        
-                           SET @cOutField03 = ''        
-                           SET @cOutField04 = ''           
-                                   
+                                          
                            -- Enable disable field          
                            SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                            SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                            SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                           SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                           SET @cFieldAttr08 = '' -- QTY          
-                
+                           SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+                           SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                           SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                           SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+                           
+                           SET @cFieldAttr09 = '' -- QTY          
+                        
                            -- Position cursor          
                            IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                            IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                            IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-                           IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
+                           IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+                           IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+                           IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+                           IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
 
-                           SET @cOutField08 = @cExtendedinfo --(yeekung07)                
+
+                           SET @cOutField09 = @cExtendedinfo --(yeekung07)            
 
                            -- Go to next screen          
                            SET @nScn = @nScn + 5          
@@ -2539,34 +2615,51 @@ BEGIN
                      BEGIN          
                       --(cc01)        
                         IF @cScanCTSCN <> ''                      
-                        BEGIN                  
+                        BEGIN                         
                            -- Get PackInfo          
                            SET @cCartonType = ''          
                            SET @cWeight = ''          
-                           SET @cCube = ''          
+                           SET @cCube = ''       
+                           SET @cCtnHeight = ''
+                           SET @cCtnWidth = ''
+                           SET @cCtnLength = ''  
                            SET @cRefNo = ''          
+                                 
+                           SET @cOutField02 = ''    
+                           SET @cOutField03 = ''    
+                           SET @cOutField04 = ''   
+                           SET @cOutField05 = ''    
+                           SET @cOutField06 = ''    
+                           SET @cOutField07 = ''   
+                           SET @cOutField08 = '' 
+                           SET @cOutField09 = ''  
                            SET @cOrderKey = @cOrderKeyOut  
-                                   
+                                 
                            --set default Value        
                            SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
-                           SET @cOutField02 = ''        
-                           SET @cOutField03 = ''        
-                           SET @cOutField04 = ''       
-                                   
+                                          
                            -- Enable disable field          
                            SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                            SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                            SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                           SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                           SET @cFieldAttr08 = '' -- QTY          
-                
+                           SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+                           SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                           SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                           SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+                           
+                           SET @cFieldAttr09 = '' -- QTY          
+                        
                            -- Position cursor          
                            IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                            IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                            IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-                           IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
+                           IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+                           IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+                           IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+                           IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
 
-                           SET @cOutField08 = @cExtendedinfo --(yeekung07)                
+
+                           SET @cOutField09 = @cExtendedinfo --(yeekung07)            
                            
                            -- Go to next screen          
                            SET @nScn = @nScn + 5          
@@ -2595,35 +2688,51 @@ BEGIN
                  
          --(cc01)        
          IF @cScanCTSCN <> ''                      
-    BEGIN                  
+         BEGIN                  
             -- Get PackInfo          
             SET @cCartonType = ''          
             SET @cWeight = ''          
-            SET @cCube = ''          
-            SET @cRefNo = ''  
+            SET @cCube = ''       
+            SET @cCtnHeight = ''
+            SET @cCtnWidth = ''
+            SET @cCtnLength = ''  
+            SET @cRefNo = ''          
+                     
+            SET @cOutField02 = ''    
+            SET @cOutField03 = ''    
+            SET @cOutField04 = ''   
+            SET @cOutField05 = ''    
+            SET @cOutField06 = ''    
+            SET @cOutField07 = ''   
+            SET @cOutField08 = '' 
+            SET @cOutField09 = ''  
             SET @cOrderKey = @cOrderKeyOut  
-                                   
+                     
             --set default Value        
             SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
-            SET @cOutField02 = ''        
-            SET @cOutField03 = ''        
-            SET @cOutField04 = ''        
-                    
-                                   
+                              
             -- Enable disable field          
             SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
             SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
             SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-            SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-            SET @cFieldAttr08 = '' -- QTY          
-                
+            SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+            SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+            SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+            SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+            
+            SET @cFieldAttr09 = '' -- QTY          
+            
             -- Position cursor          
             IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
             IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
             IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-            IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
-           
-            SET @cOutField08 = @cExtendedinfo --(yeekung07)                
+            IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+            IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+            IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+            IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+
+            SET @cOutField09 = @cExtendedinfo --(yeekung07)             
 
             -- Go to next screen          
             SET @nScn = @nScn + 5          
@@ -2680,30 +2789,47 @@ BEGIN
                -- Get PackInfo          
                SET @cCartonType = ''          
                SET @cWeight = ''          
-               SET @cCube = ''          
-               SET @cRefNo = ''   
+               SET @cCube = ''       
+               SET @cCtnHeight = ''
+               SET @cCtnWidth = ''
+               SET @cCtnLength = ''  
+               SET @cRefNo = ''          
+                        
+               SET @cOutField02 = ''    
+               SET @cOutField03 = ''    
+               SET @cOutField04 = ''   
+               SET @cOutField05 = ''    
+               SET @cOutField06 = ''    
+               SET @cOutField07 = ''   
+               SET @cOutField08 = '' 
+               SET @cOutField09 = ''  
                SET @cOrderKey = @cOrderKeyOut  
-                                   
+                        
                --set default Value        
                SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
-               SET @cOutField02 = ''        
-               SET @cOutField03 = ''        
-               SET @cOutField04 = ''         
-                                   
+                                 
                -- Enable disable field          
                SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-               SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-               SET @cFieldAttr08 = '' -- QTY          
-                
+               SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+               SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+               SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+               SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+               
+               SET @cFieldAttr09 = '' -- QTY          
+               
                -- Position cursor          
                IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-               IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
-            
-               SET @cOutField08 = @cExtendedinfo --(yeekung07)                
+               IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+               IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+               IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+               IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+
+               SET @cOutField09 = @cExtendedinfo --(yeekung07)             
             
                -- Go to next screen          
                SET @nScn = @nScn + 5          
@@ -3493,7 +3619,10 @@ BEGIN
                ('@cRefNo',       @cRefNo),         
                ('@cWaveKey',     @cWaveKey),        
                ('@cLoadKey',     @cLoadKey),         
-               ('@cOption',      @cOption)               
+               ('@cOption',      @cOption), 
+               ('@cCtnLength',   @cCtnLength),  
+               ('@cCtnWidth',    @cCtnWidth),  
+               ('@cCtnHeight',    @cCtnHeight)               
                             
              SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +                            
                 ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cToteNo, @cSKU, @nStep, @cPickSlipNo, @cOrderKey, @cTrackNo, @cTrackNoFlag OUTPUT, @cOrderKeyOut OUTPUT,         
@@ -3595,7 +3724,7 @@ BEGIN
                ORDER BY EditDate DESC        
         
                IF ISNULL(RTRIM(@cWavekey),'')  <> '' OR ISNULL(RTRIM(@cLoadKey),'')  <> ''           
-   BEGIN           
+               BEGIN           
                   SET @nTotalPickedQty = 0           
                   SET @nTotalScannedQty = 0           
         
@@ -3668,7 +3797,7 @@ BEGIN
          BEGIN        
             SET @nTotalScannedQty = 0          
             SELECT @nTotalScannedQty = SUM(QTY)          
-   FROM dbo.PickDetail PD WITH (NOLOCK)          
+            FROM dbo.PickDetail PD WITH (NOLOCK)          
             INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.OrderKey = PD.OrderKey          
             INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = PH.OrderKey          
             WHERE PD.DropID = @cToteNo          
@@ -3782,7 +3911,10 @@ BEGIN
       SET @cCartonType  = CASE WHEN @cFieldAttr07 = '' THEN @cInField07 ELSE @cOutField07 END          
       SET @cCube        = CASE WHEN @cFieldAttr02 = '' THEN @cInField02 ELSE @cOutField02 END          
       SET @cWeight      = CASE WHEN @cFieldAttr03 = '' THEN @cInField03 ELSE @cOutField03 END          
-      SET @cRefNo       = CASE WHEN @cFieldAttr04 = '' THEN @cInField04 ELSE @cOutField04 END             
+      SET @cRefNo       = CASE WHEN @cFieldAttr04 = '' THEN @cInField04 ELSE @cOutField04 END    
+      SET @cCtnLength   = CASE WHEN @cFieldAttr05 = '' THEN @cInField05 ELSE @cOutField05 END          
+      SET @cCtnWidth    = CASE WHEN @cFieldAttr06 = '' THEN @cInField06 ELSE @cOutField06 END          
+      SET @cCtnHeight   = CASE WHEN @cFieldAttr08 = '' THEN @cInField08 ELSE @cOutField08 END           
               
       ---- Carton type          
       IF @cFieldAttr07 = ''        
@@ -3913,13 +4045,130 @@ BEGIN
             SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END  
             SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube ELSE '' END  
             SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END  
-            EXEC rdt.rdtSetFocusField @nMobile, 4  
+            EXEC rdt.rdtSetFocusField @nMobile, 7
             SET @cOutField04 = ''  
             GOTO Quit    
          END    
   
          SET @cOutField04 = @cRefNo          
-      END                
+      END   
+
+      -- Length          
+      IF @cFieldAttr05 = ''          
+      BEGIN          
+         -- Check blank          
+         IF @cCtnLength = ''          
+         BEGIN          
+            SET @nErrNo = 172056          
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Length          
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END  
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube  ELSE '' END  
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END  
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END  
+            SET @cOutField06 = CASE WHEN @cFieldAttr06 = '' THEN @cCtnWidth ELSE '' END 
+            SET @cOutField08 = CASE WHEN @cFieldAttr08 = '' THEN @cCtnHeight ELSE '' END  
+            EXEC rdt.rdtSetFocusField @nMobile, 5     
+            SET @cOutField05 = ''     
+            GOTO Quit          
+         END                 
+  
+         -- Check valid weight range    
+         IF rdt.rdtIsValidRange( @nFunc, @cStorerKey, 'Length', 'FLOAT', @cCtnLength) = 0    
+         BEGIN    
+            SET @nErrNo = 172057  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Range  
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END  
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube  ELSE '' END  
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END  
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END  
+            SET @cOutField06 = CASE WHEN @cFieldAttr06 = '' THEN @cCtnWidth ELSE '' END 
+            SET @cOutField08 = CASE WHEN @cFieldAttr08 = '' THEN @cCtnHeight ELSE '' END  
+            EXEC rdt.rdtSetFocusField @nMobile, 5     
+            SET @cOutField05 = ''  
+            GOTO QUIT  
+         END  
+  
+         SET @nErrNo = 0          
+         SET @cOutField05 = @cCtnLength          
+      END  
+
+      -- Width          
+      IF @cFieldAttr06 = ''          
+      BEGIN          
+         -- Check blank          
+         IF @cCtnWidth = ''          
+         BEGIN          
+            SET @nErrNo = 172051          
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Cube          
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END  
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube  ELSE '' END  
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END  
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END  
+            SET @cOutField05 = CASE WHEN @cFieldAttr05 = '' THEN @cCtnLength ELSE '' END 
+            SET @cOutField08 = CASE WHEN @cFieldAttr08 = '' THEN @cCtnHeight ELSE '' END  
+            EXEC rdt.rdtSetFocusField @nMobile, 6  
+            SET @cOutField06 = ''        
+            GOTO Quit          
+         END                 
+  
+         -- Check valid weight range    
+         IF rdt.rdtIsValidRange( @nFunc, @cStorerKey, 'Width', 'FLOAT', @cCtnWidth) = 0    
+         BEGIN    
+            SET @nErrNo = 172054  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Range  
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END  
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube  ELSE '' END  
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END  
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END  
+            SET @cOutField05 = CASE WHEN @cFieldAttr05 = '' THEN @cCtnLength ELSE '' END 
+            SET @cOutField08 = CASE WHEN @cFieldAttr08 = '' THEN @cCtnHeight ELSE '' END  
+            EXEC rdt.rdtSetFocusField @nMobile, 6
+            SET @cOutField06 = ''  
+            GOTO QUIT  
+         END  
+  
+         SET @nErrNo = 0          
+         SET @cOutField06 = @cCtnWidth          
+      END           
+
+      -- Height          
+      IF @cFieldAttr08 = ''          
+      BEGIN          
+         -- Check blank          
+         IF @cCtnHeight = ''          
+         BEGIN          
+            SET @nErrNo = 172051          
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Cube          
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END  
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube  ELSE '' END  
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END  
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END  
+            SET @cOutField05 = CASE WHEN @cFieldAttr05 = '' THEN @cCtnLength ELSE '' END 
+            SET @cOutField06 = CASE WHEN @cFieldAttr06 = '' THEN @cCtnWidth ELSE '' END  
+            EXEC rdt.rdtSetFocusField @nMobile, 8  
+            SET @cOutField08 = ''        
+            GOTO Quit          
+         END                 
+  
+         -- Check valid weight range    
+         IF rdt.rdtIsValidRange( @nFunc, @cStorerKey, 'Height', 'FLOAT', @cCtnHeight) = 0    
+         BEGIN    
+            SET @nErrNo = 172051          
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Cube          
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END  
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube  ELSE '' END  
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END  
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END  
+            SET @cOutField05 = CASE WHEN @cFieldAttr05 = '' THEN @cCtnLength ELSE '' END 
+            SET @cOutField06 = CASE WHEN @cFieldAttr06 = '' THEN @cCtnWidth ELSE '' END  
+            EXEC rdt.rdtSetFocusField @nMobile, 8  
+            SET @cOutField08 = ''        
+            GOTO Quit    
+         END  
+  
+         SET @nErrNo = 0          
+         SET @cOutField08 = @cCtnHeight          
+      END      
   
       IF @cExtendedUpdateSP <> ''                            
       BEGIN                                      
@@ -3934,7 +4183,10 @@ BEGIN
                ('@cRefNo',       @cRefNo),         
                ('@cWaveKey',     @cWaveKey),        
                ('@cLoadKey',     @cLoadKey),         
-               ('@cOption',      @cOption)               
+               ('@cOption',      @cOption), 
+               ('@cCtnLength',   @cCtnLength),  
+               ('@cCtnWidth',    @cCtnWidth),  
+               ('@cCtnHeight',    @cCtnHeight)           
                             
              SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +                            
                 ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cToteNo, @cSKU, @nStep, @cPickSlipNo, @cOrderKey, @cTrackNo, @cTrackNoFlag OUTPUT, @cOrderKeyOut OUTPUT,         
@@ -4284,12 +4536,15 @@ BEGIN
             SET @cOrderKeyOut = ''            
             
             INSERT INTO @tExtUpd (Variable, Value) VALUES         
-            ('@cCube',        @cCube),     
-            ('@cWeight',      @cWeight),        
-            ('@cRefNo',       @cRefNo),         
-            ('@cWaveKey',     @cWaveKey),        
-            ('@cLoadKey',     @cLoadKey),         
-            ('@cOption',      @cOption)               
+               ('@cCube',        @cCube),        
+               ('@cWeight',      @cWeight),        
+               ('@cRefNo',       @cRefNo),         
+               ('@cWaveKey',     @cWaveKey),        
+               ('@cLoadKey',     @cLoadKey),         
+               ('@cOption',      @cOption), 
+               ('@cCtnLength',   @cCtnLength),  
+               ('@cCtnWidth',    @cCtnWidth),  
+               ('@cCtnHeight',    @cCtnHeight)                  
                             
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +                            
                ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cToteNo, @cSKU, @nStep, @cPickSlipNo, @cOrderKey, @cTrackNo, @cTrackNoFlag OUTPUT, @cOrderKeyOut OUTPUT,         
@@ -4450,7 +4705,10 @@ BEGIN
                ('@cRefNo',       @cRefNo),         
                ('@cWaveKey',     @cWaveKey),        
                ('@cLoadKey',     @cLoadKey),         
-               ('@cOption',      @cOption)               
+               ('@cOption',      @cOption), 
+               ('@cCtnLength',   @cCtnLength),  
+               ('@cCtnWidth',    @cCtnWidth),  
+               ('@cCtnHeight',    @cCtnHeight)                 
                             
              SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +                            
                 ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cToteNo, @cSKU, @nStep, @cPickSlipNo, @cOrderKey, @cTrackNo, @cTrackNoFlag OUTPUT, @cOrderKeyOut OUTPUT,         
@@ -4719,24 +4977,47 @@ BEGIN
                      -- Get PackInfo          
                      SET @cCartonType = ''          
                      SET @cWeight = ''          
-                     SET @cCube = ''          
+                     SET @cCube = ''       
+                     SET @cCtnHeight = ''
+                     SET @cCtnWidth = ''
+                     SET @cCtnLength = ''  
                      SET @cRefNo = ''          
-                                   
+                           
+                     SET @cOutField02 = ''    
+                     SET @cOutField03 = ''    
+                     SET @cOutField04 = ''   
+                     SET @cOutField05 = ''    
+                     SET @cOutField06 = ''    
+                     SET @cOutField07 = ''   
+                     SET @cOutField08 = '' 
+                     SET @cOutField09 = ''  
+                     SET @cOrderKey = @cOrderKeyOut  
+                           
                      --set default Value        
-                     SET @cOutField07 = ''        
-                                   
+                     SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                                    
                      -- Enable disable field          
                      SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                      SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                      SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr08 = '' -- QTY          
-                
+                     SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+                     SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                     SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                     SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+                     
+                     SET @cFieldAttr09 = '' -- QTY          
+                  
                      -- Position cursor          
                      IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                      IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                      IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-                     IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
+                     IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+                     IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+                     IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+                     IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+
+                     SET @cOutField09 = @cExtendedinfo --(yeekung07)    
                 
                      -- Go to next screen          
                      SET @nScn = @nPrevScn + 5         
@@ -4990,24 +5271,47 @@ BEGIN
                            -- Get PackInfo          
                            SET @cCartonType = ''          
                            SET @cWeight = ''          
-                           SET @cCube = ''          
+                           SET @cCube = ''       
+                           SET @cCtnHeight = ''
+                           SET @cCtnWidth = ''
+                           SET @cCtnLength = ''  
                            SET @cRefNo = ''          
-                                   
+                                 
+                           SET @cOutField02 = ''    
+                           SET @cOutField03 = ''    
+                           SET @cOutField04 = ''   
+                           SET @cOutField05 = ''    
+                           SET @cOutField06 = ''    
+                           SET @cOutField07 = ''   
+                           SET @cOutField08 = '' 
+                           SET @cOutField09 = ''  
+                           SET @cOrderKey = @cOrderKeyOut  
+                                 
                            --set default Value        
-                           SET @cOutField07 = ''        
-                                   
+                           SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                                          
                            -- Enable disable field          
                            SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                            SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                            SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                           SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                           SET @cFieldAttr08 = '' -- QTY          
-                
+                           SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+                           SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                           SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                           SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+                           
+                           SET @cFieldAttr09 = '' -- QTY          
+                        
                            -- Position cursor          
                            IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                            IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                            IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-                           IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
+                           IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+                           IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+                           IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+                           IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+
+                           SET @cOutField09 = @cExtendedinfo --(yeekung07)       
                 
                            -- Go to next screen          
                            SET @nScn = @nPrevScn + 5           
@@ -5039,25 +5343,47 @@ BEGIN
                            -- Get PackInfo          
                            SET @cCartonType = ''          
                            SET @cWeight = ''          
-                           SET @cCube = ''          
+                           SET @cCube = ''       
+                           SET @cCtnHeight = ''
+                           SET @cCtnWidth = ''
+                           SET @cCtnLength = ''  
                            SET @cRefNo = ''          
-                                   
+                                 
+                           SET @cOutField02 = ''    
+                           SET @cOutField03 = ''    
+                           SET @cOutField04 = ''   
+                           SET @cOutField05 = ''    
+                           SET @cOutField06 = ''    
+                           SET @cOutField07 = ''   
+                           SET @cOutField08 = '' 
+                           SET @cOutField09 = ''  
+                           SET @cOrderKey = @cOrderKeyOut  
+                                 
                            --set default Value        
-                           SET @cOutField07 = ''        
-                                   
+                           SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                                          
                            -- Enable disable field          
                            SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                            SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                            SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                           SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                           SET @cFieldAttr08 = '' -- QTY          
-                
+                           SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+                           SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                           SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                           SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+                           
+                           SET @cFieldAttr09 = '' -- QTY          
+                        
                            -- Position cursor          
                            IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                            IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                            IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-                           IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
-                
+                           IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+                           IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+                           IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+                           IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+
+                           SET @cOutField09 = @cExtendedinfo --(yeekung07)
                            -- Go to next screen          
                            SET @nScn = @nPrevScn + 5        
                            SET @nStep = @nStep - 1          
@@ -5093,24 +5419,47 @@ BEGIN
             -- Get PackInfo          
             SET @cCartonType = ''          
             SET @cWeight = ''          
-            SET @cCube = ''          
+            SET @cCube = ''       
+            SET @cCtnHeight = ''
+            SET @cCtnWidth = ''
+            SET @cCtnLength = ''  
             SET @cRefNo = ''          
-                                   
-           --set default Value        
-            SET @cOutField07 = ''        
-                                   
-           -- Enable disable field          
+                     
+            SET @cOutField02 = ''    
+            SET @cOutField03 = ''    
+            SET @cOutField04 = ''   
+            SET @cOutField05 = ''    
+            SET @cOutField06 = ''    
+            SET @cOutField07 = ''   
+            SET @cOutField08 = '' 
+            SET @cOutField09 = ''  
+            SET @cOrderKey = @cOrderKeyOut  
+                     
+            --set default Value        
+            SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                              
+            -- Enable disable field          
             SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
             SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
             SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-            SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-            SET @cFieldAttr08 = '' -- QTY          
-                
+            SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+            SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+            SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+            SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+            
+            SET @cFieldAttr09 = '' -- QTY          
+            
             -- Position cursor          
             IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
             IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
             IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-            IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
+            IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+            IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+            IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+            IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+
+            SET @cOutField09 = @cExtendedinfo --(yeekung07)        
                 
             -- Go to next screen          
             SET @nScn = @nPrevScn + 5           
@@ -5171,28 +5520,51 @@ BEGIN
          ELSE            
          BEGIN            
           IF @cScanCTSCN <> ''                      
-            BEGIN                  
+            BEGIN                          
                -- Get PackInfo          
                SET @cCartonType = ''          
                SET @cWeight = ''          
-               SET @cCube = ''          
+               SET @cCube = ''       
+               SET @cCtnHeight = ''
+               SET @cCtnWidth = ''
+               SET @cCtnLength = ''  
                SET @cRefNo = ''          
-                                 
+                        
+               SET @cOutField02 = ''    
+               SET @cOutField03 = ''    
+               SET @cOutField04 = ''   
+               SET @cOutField05 = ''    
+               SET @cOutField06 = ''    
+               SET @cOutField07 = ''   
+               SET @cOutField08 = '' 
+               SET @cOutField09 = ''  
+               SET @cOrderKey = @cOrderKeyOut  
+                        
                --set default Value        
-               SET @cOutField07 = ''        
-                                   
+               SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                                 
                -- Enable disable field          
                SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
                SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-               SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-               SET @cFieldAttr08 = '' -- QTY          
-                
+               SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END      
+               SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+               SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+               SET @cFieldAttr08 = CASE WHEN CHARINDEX( 'H', @cScanCTSCN) = 0 THEN 'O' ELSE '' END       
+               
+               SET @cFieldAttr09 = '' -- QTY          
+               
                -- Position cursor          
                IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
                IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
                IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-               IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
+               IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE          
+               IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
+               IF @cFieldAttr08 = '' AND @cOutField08 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE           
+               IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+
+               SET @cOutField09 = @cExtendedinfo --(yeekung07)         
                 
                -- Go to next screen          
                SET @nScn = @nPrevScn + 5           
@@ -5320,6 +5692,9 @@ BEGIN
        V_String34     = @cRefNoInsLogSP,          
        V_String35     = @cDecodeSP,  
        V_String36     = @cMultiMethod,  
+       V_String37     = @cCtnLength,
+       V_String38     = @cCtnWidth,
+       V_String39     = @cCtnHeight,
          
        V_FromScn      = @nPrevScn,          
        V_FromStep     = @nPrevStep,          

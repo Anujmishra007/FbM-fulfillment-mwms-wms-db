@@ -29,6 +29,8 @@ GO
 /*                                         logic (ZG01)                 */ 
 /* 16-Jun-2020 CSCHONG  1.1   WMS-13625 revised grouping (CS01)         */  
 /* 05-Oct-2021 MINGLE   1.2   WMS-18083 add storerkey(ML01)             */
+/* 10-OCT-2025 SSA01    1.3   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_GetPickSlipWave18_New]  
          @c_Wavekey_Type          NVARCHAR(15)     
@@ -443,8 +445,8 @@ BEGIN
       UPDATE PICKDETAIL  
          SET PickSlipNo = @c_Pickslipno  
             ,TrafficCop = NULL  
-            ,EditWho  = SUSER_SNAME()  
-            ,EditDate = GETDATE()  
+            ,EditWho  = dbo.fnc_GetUserName()           --(SSA01)
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01)
       WHERE PickDetailKey = @c_PickDetailKey  
           
       IF @@ERROR <> 0   

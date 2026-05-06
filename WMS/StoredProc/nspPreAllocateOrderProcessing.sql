@@ -98,6 +98,8 @@ GO
 /*                         isp_ChannelAllocGetHoldQty_Wrapper.          */                                
 /*                         Pass in PreAllocateStrategyKey and           */
 /*                         PreAllocateStrategyLineNumber to pickcode    */
+/* 02-APR-2024  NJOW08     WMS-24584 Fix preallocatestrategykey update  */
+/* 21-Feb-2025  WLChooi    WMS-26556 Support multi facilities (WL02)    */
 /************************************************************************/
 CREATE OR ALTER PROC  [dbo].[nspPreAllocateOrderProcessing]
                @c_orderkey     NVARCHAR(10)
@@ -944,7 +946,7 @@ BEGIN
             IF ISNULL(@c_StrategykeyParm,'') <> ''  --NJOW05   
       BEGIN  
          UPDATE TMP    
-         SET StrategyKey = ISNULL(STRATEGY.PreAllocateStrategyKey, '')    
+         SET Pickcode = ISNULL(STRATEGY.PreAllocateStrategyKey, '')    --NJOW08
          FROM #OPORDERLINES TMP    
          JOIN STRATEGY     WITH (NOLOCK) ON  STRATEGY.Strategykey = @c_StrategykeyParm           
       END        
@@ -1905,7 +1907,8 @@ BEGIN
          FROM LOTxLOCxID  LLI WITH (NOLOCK) 
          JOIN LOC         LOC WITH (NOLOCK) ON (LLI.Loc = LOC.LOC)
          WHERE LLI.Lot =  @c_sLOT  
-         AND   LOC.Facility = @c_facility
+         --AND   LOC.Facility = @c_facility   --WL02
+         AND   LOC.Facility IN ( SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_sStorerKey, @c_Facility) )   --WL02
 
          IF @n_FacLotAvailQty < @n_QtyAvailable
          BEGIN 
