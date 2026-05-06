@@ -71,7 +71,7 @@ GO
 /* 17-Apl-2025  3.7     Wan03    UWP-32707 - FCR-3957 - JCB Putaway Using*/
 /*                               TM SCE                                 */
 /* 06-Oct-2025  3.8     AK01     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
-/* 06-May-2026  3.9     AYD01    UWP-54594: Allow release for shorted lines */
+/* 06-May-2026  3.9     AYD01    FCR-10825: Allow release for shorted lines */
 /************************************************************************/ 
        
 CREATE OR ALTER TRIGGER [dbo].[ntrTaskDetailUpdate]        
