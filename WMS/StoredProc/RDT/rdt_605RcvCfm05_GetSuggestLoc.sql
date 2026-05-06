@@ -341,7 +341,7 @@ BEGIN
          AND LA.Lottable11 = @cLottable11
          AND LLI.StorerKey = @cStorerKey
          AND LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0
-         AND IDCount.TotalIDCount < LOC.MaxPallet
+         AND (LOC.MaxPallet = 0 OR IDCount.TotalIDCount < LOC.MaxPallet)
       ORDER BY LOC.LogicalLocation, LOC.Loc
 
       -- Second try: Find empty location if no matching inventory

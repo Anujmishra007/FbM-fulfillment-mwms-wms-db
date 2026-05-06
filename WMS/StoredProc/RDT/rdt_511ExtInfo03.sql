@@ -3,19 +3,20 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/*************************************************************************************/
-/* Store procedure: rdt_511ExtInfo03                                                */
-/* Purpose: Move By ID Extended Validate                                            */
-/*                                                                                  */
-/* Called from: rdtfnc_Move_ID                                                      */
-/*                                                                                  */
-/* Modifications log:                                                               */
-/*                                                                                  */
-/* Date        Rev  Author     Purposes                                             */
-/* 23/12/2025  1.0  PSJ036     UWP-48074 - Created - Suggest to LOC                 */
-/* 25/02/2026  1.1  PSJ036     UWP-49555 INC9014812 - Adjust Suggest loc            */
-/* 25/02/2026  1.2  PSJ036     UWP-49555 RITM8667192 - MovebyID to correct PTW location*/
-/*************************************************************************************/
+/************************************************************************************************************/
+/* Store procedure: rdt_511ExtInfo03                                                                        */
+/* Purpose: Move By ID Extended Validate                                                                    */
+/*                                                                                                          */
+/* Called from: rdtfnc_Move_ID                                                                              */
+/*                                                                                                          */
+/* Modifications log:                                                                                       */
+/*                                                                                                          */
+/* Date        Rev  Author     Purposes                                                                     */
+/* 23/12/2025  1.0  PSJ036     UWP-48074 - Created - Suggest to LOC                                         */
+/* 25/02/2026  1.1  PSJ036     UWP-49555 INC9014812 - Adjust Suggest loc                                    */
+/* 25/02/2026  1.2  PSJ036     UWP-49555 RITM8667192 - MovebyID to correct PTW location                     */
+/* 05/03/2026  1.3  PSJ036     UWP-50167 INC9037843 - validate Storerkey and Status in Pickdetail.          */
+/************************************************************************************************************/
 
 CREATE OR ALTER     PROC [RDT].[rdt_511ExtInfo03] (
    @nMobile          INT,
@@ -32,7 +33,7 @@ CREATE OR ALTER     PROC [RDT].[rdt_511ExtInfo03] (
    @cExtendedInfo    NVARCHAR( 20) OUTPUT
 )
 AS
-
+BEGIN
    -- IDENTIFY TYPE PROCESS TO VALIDATE TOLOC
    DECLARE @cB2BnoVas        NVARCHAR(10)
    DECLARE @cB2BVas          NVARCHAR(10)
@@ -85,7 +86,7 @@ AS
             WHERE STORERKEY = @cStorerKey
             AND OrderKey = ( SELECT TOP 1 OrderKey 
                         FROM dbo.PICKDETAIL WITH (NOLOCK)
-                        WHERE ID = @cFromID and Status = '3')  --PSJ036 REV1.1
+                        WHERE ID = @cFromID AND STORERKEY = @cStorerKey AND Status = '3')  --PSJ036 REV1.1 REV1.3
 
             -- B2C ORDER
             IF @cDocType = 'E' and @cFromLOC = 'ONESTEIRA'
@@ -113,7 +114,7 @@ AS
                         AND ORDERS.OrderKey IN (
                            SELECT DISTINCT PD.OrderKey 
                            FROM dbo.PICKDETAIL AS PD WITH (NOLOCK) 
-                           WHERE PD.Status = '3' AND PD.ID = @cFromID))  --PSJ036 REV1.1
+                           WHERE PD.Status = '3' AND PD.STORERKEY = @cStorerKey AND PD.ID = @cFromID))  --PSJ036 REV1.1 REV1.3
                   BEGIN
                      SET @cExtendedInfo = 'Sugg LOC: ' + @cB2BVas
                      GOTO QUIT
@@ -134,8 +135,9 @@ AS
       END -- END VALIDATION
    END
 QUIT:
-
+END
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON

@@ -17,6 +17,7 @@ GO
 /* 2025-11-07 1.1.0  JackC    UWP-43820 Commit tran per update to                      */
 /*                            improve deadlock                                         */
 /* 2026-01-15 1.2.0  NickT    FCR-7928 Only trigger WSSOAlloUpd for real short PKD     */
+/* 2026-04-24 1.3.0  Dennis   UWP-55052 Only trigger WSSOAlloUpd for auto Wave         */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_869ConfirmSP01 (
@@ -274,7 +275,10 @@ BEGIN
                         AND Key2 = @cPickDetailKey
                         AND Key3 = @cStorerkey
                         AND TableName = 'WSSOAlloUpd')
-         AND @nQty > 0 AND @cTaskManagerReasonKey <> 'SHORT'
+      AND @nQty > 0 AND @cTaskManagerReasonKey <> 'SHORT'
+      AND EXISTS (SELECT 1 FROM WaveDetail WD WITH (NOLOCK)
+                  JOIN WAVE W WITH (NOLOCK) ON WD.WAVEKEY = W.WAVEKEY AND W.USERDEFINE09 = 'Y'
+                  WHERE WD.OrderKey = @cLoopOrderKey)
       BEGIN
          BEGIN TRY
             EXECUTE ispGenTransmitLog2

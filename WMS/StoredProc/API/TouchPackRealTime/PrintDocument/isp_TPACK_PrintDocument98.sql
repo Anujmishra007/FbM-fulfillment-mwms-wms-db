@@ -251,7 +251,7 @@ BEGIN
    --      )  
    --      BEGIN 
    --         SET @n_Continue = 3
-   --         SET @n_ErrNo = 11851
+   --         SET @n_ErrNo = 99999
    --         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No records found in WMReport.'
    --         GOTO EXIT_SP
    --      END
@@ -276,7 +276,7 @@ BEGIN
    --      IF @cFieldName1 = ''
    --      BEGIN
    --         SET @n_Continue = 3
-   --         SET @n_ErrNo = 11852
+   --         SET @n_ErrNo = 99999
    --         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
    --         GOTO EXIT_SP
    --      END       
@@ -417,7 +417,7 @@ BEGIN
    --            IF @cPrinterInGroup = ''  
    --            BEGIN  
    --               SET @n_Continue = 3
-   --               SET @n_ErrNo = 11853    
+   --               SET @n_ErrNo = 99999    
    --               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not found PrinterID in PrinterGroup.'  
    --               GOTO EXIT_SP  
    --            END
@@ -476,7 +476,7 @@ BEGIN
    --      )
    --      BEGIN
    --         SET @n_Continue = 3
-   --         SET @n_ErrNo = 11857
+   --         SET @n_ErrNo = 99999
    --         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Invalid Custom Label SP Name in StorerConfig.'
    --         GOTO EXIT_SP
    --      END
@@ -593,7 +593,7 @@ BEGIN
    --   )  
    --   BEGIN
    --      SET @n_Continue = 3
-   --      SET @n_ErrNo = 11854
+   --      SET @n_ErrNo = 99999
    --      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Paper: No records found in WMReport.'
    --      GOTO EXIT_SP
    --   END
@@ -618,7 +618,7 @@ BEGIN
    --   IF @cFieldName1 = ''
    --   BEGIN
    --      SET @n_Continue = 3
-   --      SET @n_ErrNo = 11855
+   --      SET @n_ErrNo = 99999
    --      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Paper: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
    --      GOTO EXIT_SP
    --   END       
@@ -740,7 +740,7 @@ BEGIN
    --         IF @cPrinterInGroup = ''  
    --         BEGIN  
    --            SET @n_Continue = 3
-   --            SET @n_ErrNo = 11856    
+   --            SET @n_ErrNo = 99999    
    --            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Paper: Not found PrinterID in PrinterGroup.'  
    --            GOTO EXIT_SP  
    --         END

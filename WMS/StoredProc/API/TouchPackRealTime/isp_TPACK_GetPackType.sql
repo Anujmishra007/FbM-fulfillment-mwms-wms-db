@@ -19,6 +19,7 @@ GO
 /* 2025-12-16   1.1  Sean       Update MPOC logic                                */
 /* 2025-12-17   1.2  Sean       Restructure query logic based on @cType          */
 /* 2026-12-17   1.3  Sean       UWP-46560 issue fix                              */
+/* 2026-02-05   1.4  Sean       added @bIsCustom = 1 for  @cType = 'PickSlip'    */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_GetPackType] (
@@ -74,44 +75,69 @@ BEGIN
          WHERE pd.OrderKey = @cOrderKey
          AND pd.StorerKey = @cStorerKey
          AND o.StorerKey = @cStorerKey
-         AND pd.[Status] <= '9'
-         AND o.[Status] <= '9'
          GROUP BY pd.OrderKey, o.Ecom_Single_Flag
       END
       ELSE
       BEGIN
-         INSERT INTO @OrderAnalysis (OrderKey, EcomSingleFlag, TotalQty)
-         SELECT  pd.OrderKey
-               , o.Ecom_Single_Flag
-               , SUM(pd.Qty) AS TotalQty
-         FROM PICKDETAIL pd (NOLOCK)
-         INNER JOIN ORDERS o (NOLOCK) ON o.OrderKey = pd.OrderKey
-         WHERE EXISTS (SELECT 1
-                      FROM LOADPLANDETAIL lpd (NOLOCK)
-                      WHERE lpd.OrderKey = pd.OrderKey
-                      AND lpd.LoadKey = @cLoadKey)
-         AND pd.StorerKey = @cStorerKey
-         AND o.StorerKey = @cStorerKey
-         AND pd.[Status] <= '9'
-         AND o.[Status] <= '9'
-         GROUP BY pd.OrderKey, o.Ecom_Single_Flag
-
-         IF EXISTS (
-            SELECT 1
-            FROM PICKDETAIL pd (NOLOCK)
-            WHERE EXISTS (SELECT 1
-                         FROM LOADPLANDETAIL lpd (NOLOCK)
-                         WHERE lpd.OrderKey = pd.OrderKey
-                         AND lpd.LoadKey = @cLoadKey)
-            AND pd.StorerKey = @cStorerKey
-            AND pd.[Status] <= '9'
-            AND pd.DropID IS NOT NULL
-            AND pd.DropID <> ''
-            GROUP BY pd.DropID
-            HAVING COUNT(DISTINCT pd.OrderKey) > 1
-         )
+         IF @bIsCustom = 0
          BEGIN
-            SET @nHasMPOC = 1
+            INSERT INTO @OrderAnalysis (OrderKey, EcomSingleFlag, TotalQty)
+            SELECT  pd.OrderKey
+                  , o.Ecom_Single_Flag
+                  , SUM(pd.Qty) AS TotalQty
+            FROM PICKDETAIL pd (NOLOCK)
+            INNER JOIN ORDERS o (NOLOCK) ON o.OrderKey = pd.OrderKey
+            WHERE EXISTS (SELECT 1
+                        FROM LOADPLANDETAIL lpd (NOLOCK)
+                        WHERE lpd.OrderKey = pd.OrderKey
+                        AND lpd.LoadKey = @cLoadKey)
+            AND pd.StorerKey = @cStorerKey
+            AND o.StorerKey = @cStorerKey
+            GROUP BY pd.OrderKey, o.Ecom_Single_Flag
+
+            -- IF EXISTS (
+            --    SELECT 1
+            --    FROM PICKDETAIL pd (NOLOCK)
+            --    WHERE EXISTS (SELECT 1
+            --                FROM LOADPLANDETAIL lpd (NOLOCK)
+            --                WHERE lpd.OrderKey = pd.OrderKey
+            --                AND lpd.LoadKey = @cLoadKey)
+            --    AND pd.StorerKey = @cStorerKey
+            --    AND pd.DropID IS NOT NULL
+            --    AND pd.DropID <> ''
+            --    GROUP BY pd.DropID
+            --    HAVING COUNT(DISTINCT pd.OrderKey) > 1
+            -- )
+            -- BEGIN
+            --    SET @nHasMPOC = 1
+            -- END
+         END
+         ELSE
+         BEGIN -- @bIsCustom = 1
+            INSERT INTO @OrderAnalysis (OrderKey, EcomSingleFlag, TotalQty)
+            SELECT  pd.OrderKey
+                  , o.Ecom_Single_Flag
+                  , SUM(pd.Qty) AS TotalQty
+            FROM PICKDETAIL pd (NOLOCK)
+            INNER JOIN ORDERS o (NOLOCK) ON o.OrderKey = pd.OrderKey
+            WHERE pd.PickSlipNo = @cPickSlipNo
+            AND pd.StorerKey = @cStorerKey
+            AND o.StorerKey = @cStorerKey
+            GROUP BY pd.OrderKey, o.Ecom_Single_Flag
+
+            -- IF EXISTS (
+            --    SELECT 1
+            --    FROM PICKDETAIL pd (NOLOCK)
+            --    WHERE pd.PickSlipNo = @cPickSlipNo
+            --    AND pd.StorerKey = @cStorerKey
+            --    AND pd.DropID IS NOT NULL
+            --    AND pd.DropID <> ''
+            --    GROUP BY pd.DropID
+            --    HAVING COUNT(DISTINCT pd.OrderKey) > 1
+            -- )
+            -- BEGIN
+            --    SET @nHasMPOC = 1
+            -- END
          END
       END
    END
@@ -119,24 +145,26 @@ BEGIN
    ELSE IF @cType = 'toteid'
    BEGIN
       INSERT INTO @OrderAnalysis (OrderKey, EcomSingleFlag, TotalQty)
-      SELECT  pd.OrderKey
+      SELECT  PD.OrderKey
             , o.Ecom_Single_Flag
             , SUM(pd.Qty) AS TotalQty
-      FROM PICKDETAIL pd (NOLOCK)
-      INNER JOIN ORDERS o (NOLOCK) ON o.OrderKey = pd.OrderKey
-      WHERE pd.StorerKey = @cStorerKey
-      AND pd.DropID = @cDropID
-      AND pd.[Status] <= '9'
-      AND o.[Status] <= '9'
-      GROUP BY pd.OrderKey, o.Ecom_Single_Flag
+      FROM PICKDETAIL PD (NOLOCK)
+      INNER JOIN ORDERS o (NOLOCK) ON o.OrderKey = PD.OrderKey
+      WHERE PD.StorerKey = @cStorerKey
+      AND PD.DropID = @cDropID
+      AND NOT (
+            o.DocType = 'E'
+            AND PD.[Status] = '9'
+      )
+      GROUP BY PD.OrderKey, o.Ecom_Single_Flag
 
-      SELECT @nOrderCount = COUNT(DISTINCT OrderKey)
-      FROM @OrderAnalysis
+      -- SELECT @nOrderCount = COUNT(DISTINCT OrderKey)
+      -- FROM @OrderAnalysis 
 
-      IF @nOrderCount > 1
-      BEGIN
-         SET @nHasMPOC = 1
-      END
+      -- IF @nOrderCount > 1
+      -- BEGIN
+      --    SET @nHasMPOC = 1
+      -- END
    END
    -- Branch 3: @cType = 'order'
    ELSE IF @cType = 'order'
@@ -150,21 +178,19 @@ BEGIN
       WHERE pd.OrderKey = @cOrderKey
       AND pd.StorerKey = @cStorerKey
       AND o.StorerKey = @cStorerKey
-      AND pd.[Status] <= '9'
-      AND o.[Status] <= '9'
       GROUP BY pd.OrderKey, o.Ecom_Single_Flag
    END
 
-   SELECT @nOrderCount = COUNT(DISTINCT OrderKey)
-   FROM @OrderAnalysis
+   -- SELECT @nOrderCount = COUNT(DISTINCT OrderKey)
+   -- FROM @OrderAnalysis
 
-   -- Step 2: MPOC Check
-   IF @nHasMPOC = 1
-   BEGIN
-      SET @cPackType = 'MPOC'
-      SET @b_Success = 1
-      GOTO EXIT_SP
-   END
+   -- -- Step 2: MPOC Check
+   -- IF @nHasMPOC = 1
+   -- BEGIN
+   --    SET @cPackType = 'MPOC'
+   --    SET @b_Success = 1
+   --    GOTO EXIT_SP
+   -- END
 
    -- Step 4: Single Order - Determine Single/Multi based on Ecom flag or quantity
    IF EXISTS (SELECT 1 FROM @OrderAnalysis WHERE EcomSingleFlag = 'M' OR TotalQty > 1)

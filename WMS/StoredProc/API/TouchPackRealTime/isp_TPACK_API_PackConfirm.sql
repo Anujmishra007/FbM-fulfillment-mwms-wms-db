@@ -14,6 +14,9 @@ GO
 /* 2025-11-12   2.0  GCH225     UWP-42536 for VAS feature                        */
 /* 2026-01-14   3.0  GCH225     UWP-47048 handle SkipCartonize Logic             */
 /* 2026-01-19   4.0  GCH225     UWP-47119 handle AutoPack & Carton Hold Logic    */
+/* 2026-02-06   4.1  Sean01     ADD Logic @cType = 'pickslip' and @bIsCustom = 1 */
+/* 2026-03-19   4.2  Sean02     UWP-42468: ToteID for multi orders               */
+/* 2026-04-02   4.3  JWF011     UWP-52777: update pickQty when by order          */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_PackConfirm] (
@@ -171,6 +174,37 @@ BEGIN
        , bConfirmCloseAllFlag BIT
    )
 
+   IF @cType = 'toteid'
+   BEGIN
+      IF @cPickSlipNo = '' 
+      AND @cOrderKey = '' 
+      AND @cLoadKey = ''
+      BEGIN
+         SELECT TOP 1 @cPickSlipNo = L.PickSlipNo
+               , @cOrderKey = L.OrderKey
+         FROM API.TPACK_UserSessionActivityLog L (NOLOCK)
+         WHERE L.DropID = @cDropID
+         AND L.StorerKey = @cStorerKey
+         AND L.CartonNo = @nCartonNo
+         AND L.EditWho = @c_UserID
+         AND L.OrderKey IS NOT NULL AND L.OrderKey <> ''
+         AND EXISTS ( SELECT 1 
+                     FROM PACKINFO PIF (NOLOCK)
+                     WHERE PIF.PickSlipNo = L.PickSlipNo
+                     AND PIF.CartonNo = @nCartonNo
+                     AND PIF.CartonStatus = 'CLOSED'
+                     AND PIF.EditWho = L.EditWho
+                  )
+         AND NOT EXISTS ( SELECT 1 
+                     FROM PACKHEADER PH (NOLOCK)
+                     WHERE PH.PickSlipNo = L.PickSlipNo
+                     AND PH.OrderKey = L.OrderKey
+                     AND PH.[Status] = '9'
+         )
+         ORDER BY RowRefNo DESC
+      END
+   END
+
    IF @cPickSlipNo = ''
    BEGIN
       SET @n_Continue = 3
@@ -193,17 +227,43 @@ BEGIN
 
    IF @bIsDiscrete = 0 OR (@cType <> 'pickslip' AND @cLoadKey <> '')
    BEGIN
-      SELECT @nCntOrder = COUNT(DISTINCT PD.Orderkey)
-           , @nCntPICKLine = COUNT(PickDetailKey)
-           , @nTtlPickQty = SUM(Qty)
-      FROM PICKDETAIL PD WITH (NOLOCK)
-      WHERE PD.StorerKey = @cStorerKey
-      AND EXISTS (SELECT 1 
-                  FROM LOADPLANDETAIL LPD (NOLOCK)
-                  WHERE LPD.LoadKey = @cLoadKey
-                  AND LPD.OrderKey = PD.OrderKey
-      )
-      AND PD.[Status] <= '5'
+      --Sean01 S
+      IF @cType = 'toteid' AND @cLoadKey = ''
+      BEGIN
+         SELECT @nCntOrder = 1
+            , @nCntPICKLine = COUNT(PickDetailKey)
+            , @nTtlPickQty = SUM(Qty)
+         FROM PICKDETAIL PD WITH (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.OrderKey = @cOrderKey
+         AND PD.DropID = @cDropID
+         AND PD.[Status] <= '5'
+      END
+      --Sean01 E
+      ELSE IF @cType = 'order' AND @bIsDiscrete = 1
+      BEGIN
+         SELECT  @nCntOrder = 1
+               , @nCntPICKLine = COUNT(PickDetailKey)
+               , @nTtlPickQty = SUM(Qty)
+         FROM PICKDETAIL PD WITH (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.OrderKey = @cOrderKey
+         AND PD.[Status] <= '5'
+      END
+      ELSE
+      BEGIN
+         SELECT @nCntOrder = COUNT(DISTINCT PD.Orderkey)
+               , @nCntPICKLine = COUNT(PickDetailKey)
+               , @nTtlPickQty = SUM(Qty)
+            FROM PICKDETAIL PD WITH (NOLOCK)
+            WHERE PD.StorerKey = @cStorerKey
+            AND EXISTS (SELECT 1 
+                        FROM LOADPLANDETAIL LPD (NOLOCK)
+                        WHERE LPD.LoadKey = @cLoadKey
+                        AND LPD.OrderKey = PD.OrderKey
+            )
+            AND PD.[Status] <= '5'
+      END
    END
    ELSE
    BEGIN

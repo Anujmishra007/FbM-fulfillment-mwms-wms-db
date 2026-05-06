@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 2.1                                                    */
+/* PVCS Version: 2.3                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -51,6 +51,8 @@ GO
 /* 10-Oct-2025  Michael   2.1 FCR-8380- Add SerialNoUpdateLotLocID(ML01)*/
 /* 05-Nov-2025  SSA02     2.2 UWP-43625- updated sequence of update Lot */
 /*                            table to avoid deadlock                   */
+/* 31-Mar-2026  Michael   2.3 FCR-11549-Fix InventoryHold not trigger if*/
+/*                            ID with Qty=0 exists during Receipt (ML02)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -123,6 +125,8 @@ BEGIN
          , @c_Lot_SN                   NVARCHAR(10) = ''                            --(Wan03)
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = '0'                           --(Wan03)
          , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML01
+         , @c_RcptAutoHoldEmptyID      NVARCHAR(30)        --ML02
+         , @b_ID_HasInv                INT                 --ML02
 
    DECLARE @b_addid int
    SELECT @b_addid = 0
@@ -154,6 +158,17 @@ BEGIN
          SELECT @c_allowoverallocations = '0'
       END
    END
+
+   --ML02-S
+   SET @c_RcptAutoHoldEmptyID = ''
+   SET @b_ID_HasInv = 0
+
+   SELECT @c_RcptAutoHoldEmptyID = Authority
+     FROM dbo.fnc_GetRight2(@c_facility, @c_StorerKey, '', 'RcptAutoHoldEmptyID')
+
+   IF EXISTS(SELECT TOP 1 1 FROM LOTxLOCxID WITH(NOLOCK) WHERE ID=@c_toid AND Qty>0)
+      SET @b_ID_HasInv = 1
+   --ML02-E
 
    -- (SWT02)
    SET @c_ChannelInventoryMgmt = '0'
@@ -424,7 +439,7 @@ BEGIN
                SELECT @c_ErrMsg='NSQL '+CONVERT(char(5), @n_err) + ': Insert Failed On Table LOT. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
             END
          END
-     END
+      END
 
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
@@ -470,7 +485,8 @@ BEGIN
             /* is already there!                                         */
             /* Warning:  Attempting to change this behaviour can really screw up */
             /* the HOLD module. Be very very careful! */
-            SELECT @c_status = @c_curstatus
+            IF (ISNULL(@c_RcptAutoHoldEmptyID,'')<>'1' OR ISNULL(@c_status,'') IN ('','OK') OR @b_ID_HasInv = 1)   --ML02
+               SELECT @c_status = @c_curstatus
 
             IF @c_allowidqtyupdate = '1'
             BEGIN
@@ -548,6 +564,7 @@ BEGIN
             SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
          END
       END
+
       -- SSA04 start --
        IF @n_continue=1 or @n_continue=2
        BEGIN
@@ -937,6 +954,7 @@ BEGIN
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
          IF @b_addid = 1 AND @c_status <> 'OK'
+            OR (ISNULL(@c_RcptAutoHoldEmptyID,'')='1' AND @b_addid = 0 AND @c_status <> 'OK' AND @b_ID_HasInv = 0)   --ML02
          BEGIN
             EXECUTE nspInventoryHold
                        ''

@@ -6,7 +6,7 @@ GO
 /***************************************************************************/
 /* Store procedure: rdt_898ExtVal13                                        */
 /* Copyright      : Maersk WMS                                             */
-/* Customer       : Granite                                                */
+/* Customer       : UAE Levis                                              */
 /*                                                                         */
 /* Date       Rev    Author     Purposes                                   */
 /* 2025-11-21 1.0.0  Dennis     FCR-8723 Sku validation                    */

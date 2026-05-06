@@ -69,6 +69,9 @@ BEGIN
       SKU NVARCHAR(20) PRIMARY KEY
    )
 
+   DECLARE @oOrderKeyList TABLE (
+      OrderKey NVARCHAR(10) PRIMARY KEY
+   )
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
    SET @c_ErrMsg           = ''  
@@ -189,13 +192,49 @@ BEGIN
       GOTO EXIT_SP
    END
 
+   IF @cLoadKey <> ''
+   BEGIN
+      INSERT INTO @oOrderKeyList (OrderKey)
+      SELECT OrderKey
+      FROM LOADPLANDETAIL (NOLOCK)
+      WHERE LoadKey = @cLoadKey
+   END
+   ELSE IF @cOrderKey <> ''
+   BEGIN 
+      INSERT INTO @oOrderKeyList (OrderKey)
+      VALUES (@cOrderKey)
+   END
+   ELSE IF @cLoadKey = '' AND @cOrderKey = '' AND @cDropID <> ''
+   BEGIN
+      INSERT INTO @oOrderKeyList (OrderKey)
+      SELECT DISTINCT OrderKey
+      FROM PICKDETAIL (NOLOCK)
+      WHERE DropID = @cDropID
+   END
+
    --Search the SKU, AltSKU, RetailSKU, ManufacturerSKU, UPC
    IF @nCartonNo > 0
    BEGIN
-      SELECT @cCartonStatus = ISNULL(CartonStatus,'')
-      FROM PACKINFO (NOLOCK)
-      WHERE PickSlipNo = @cPickSlipNo
-      AND CartonNo = @nCartonNo
+      IF @cType = 'toteid' AND @cPickSlipNo = ''
+      BEGIN
+         SELECT @cCartonStatus = ISNULL(PIF.CartonStatus,'')
+               ,@cPickSlipNo = PIF.PickSlipNo
+         FROM PACKINFO PIF (NOLOCK)
+         WHERE EXISTS ( SELECT 1 
+                        FROM PACKDETAIL PD (NOLOCK)
+                        WHERE PD.PickSlipNo = PIF.PickSlipNo
+                        AND PD.CartonNo = @nCartonNo
+                        AND PD.DropID = @cDropID
+                    )
+         AND PIF.CartonNo = @nCartonNo
+      END
+      ELSE
+      BEGIN
+         SELECT @cCartonStatus = ISNULL(PIF.CartonStatus,'')
+         FROM PACKINFO PIF (NOLOCK)
+         WHERE PIF.PickSlipNo = @cPickSlipNo
+         AND PIF.CartonNo = @nCartonNo
+      END
    END
 
    IF @cCartonStatus <> 'INPROGRESS' AND LEN(@cCartonStatus) > 0
@@ -267,72 +306,179 @@ BEGIN
    BEGIN
       IF @bIsDiscrete = 1
       BEGIN
-         INSERT INTO @oSKUList (SKU)
-         SELECT DISTINCT SKU 
-         FROM (
-            SELECT PD.SKU AS SKU
-            FROM PICKDETAIL PD (NOLOCK)
-            WHERE PD.OrderKey = @cOrderKey
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND PD.SKU LIKE @cKeyboardVal + '%'
-            UNION ALL
-            SELECT PD.SKU AS SKU
-            FROM PICKDETAIL PD (NOLOCK)
-            WHERE PD.OrderKey = @cOrderKey
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND EXISTS (SELECT 1 
-                        FROM SKU S (NOLOCK)
-                        WHERE S.StorerKey = PD.StorerKey
-                        AND S.SKU = PD.SKU
-                        AND S.AltSKU LIKE @cKeyboardVal + '%'
-                        )
-            UNION ALL
-            SELECT PD.SKU AS SKU
-            FROM PICKDETAIL PD (NOLOCK)
-            WHERE PD.OrderKey = @cOrderKey
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND EXISTS (SELECT 1 
-                        FROM SKU S (NOLOCK)
-                        WHERE S.StorerKey = PD.StorerKey
-                        AND S.SKU = PD.SKU
-                        AND S.RetailSKU LIKE @cKeyboardVal + '%'
-                        )
-            UNION ALL
-            SELECT PD.SKU AS SKU
-            FROM PICKDETAIL PD (NOLOCK)
-            WHERE PD.OrderKey = @cOrderKey
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND EXISTS (SELECT 1 
-                        FROM SKU S (NOLOCK)
-                        WHERE S.StorerKey = PD.StorerKey
-                        AND S.SKU = PD.SKU
-                        AND S.ManufacturerSKU LIKE @cKeyboardVal + '%'
-                        )
-            UNION ALL
-            SELECT PD.SKU AS SKU
-            FROM PICKDETAIL PD (NOLOCK)
-            WHERE PD.OrderKey = @cOrderKey
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND EXISTS (SELECT 1 
-                          FROM UPC U (NOLOCK)
-                          WHERE U.StorerKey = PD.StorerKey
-                          AND U.SKU = PD.SKU
-                          AND U.UPC LIKE @cKeyboardVal + '%'
-                          AND U.UOM IN ('EA','EACH','PCS', '6')
-                         )
-         )x
+         IF @cType = 'toteid'
+         BEGIN
+            -- only tote and b2c
+            INSERT INTO @oSKUList (SKU)
+            SELECT DISTINCT SKU 
+            FROM (
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND PD.DropID = @cDropID
+               AND PD.SKU LIKE @cKeyboardVal + '%'
+               AND NOT (
+                  (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                  AND PD.[Status] = '9'
+               )
+               UNION ALL
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND PD.DropID = @cDropID
+               AND EXISTS (SELECT 1 
+                           FROM SKU S (NOLOCK)
+                           WHERE S.StorerKey = PD.StorerKey
+                           AND S.SKU = PD.SKU
+                           AND S.AltSKU LIKE @cKeyboardVal + '%'
+                           )
+               AND NOT (
+                  (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                  AND PD.[Status] = '9'
+               )
+               UNION ALL
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND PD.DropID = @cDropID
+               AND EXISTS (SELECT 1 
+                           FROM SKU S (NOLOCK)
+                           WHERE S.StorerKey = PD.StorerKey
+                           AND S.SKU = PD.SKU
+                           AND S.RetailSKU LIKE @cKeyboardVal + '%'
+                           )
+               AND NOT (
+                  (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                  AND PD.[Status] = '9'
+               )
+               UNION ALL
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND PD.DropID = @cDropID
+               AND EXISTS (SELECT 1 
+                           FROM SKU S (NOLOCK)
+                           WHERE S.StorerKey = PD.StorerKey
+                           AND S.SKU = PD.SKU
+                           AND S.ManufacturerSKU LIKE @cKeyboardVal + '%'
+                           )
+               AND NOT (
+                  (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                  AND PD.[Status] = '9'
+               )
+               UNION ALL
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND PD.DropID = @cDropID
+               AND EXISTS (SELECT 1 
+                           FROM UPC U (NOLOCK)
+                           WHERE U.StorerKey = PD.StorerKey
+                           AND U.SKU = PD.SKU
+                           AND U.UPC LIKE @cKeyboardVal + '%'
+                           AND U.UOM IN ('EA','EACH','PCS', '6')
+                           )
+               AND NOT (
+                  (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                  AND PD.[Status] = '9'
+               )
+            )x
+         END
+         ELSE
+         BEGIN
+            INSERT INTO @oSKUList (SKU)
+            SELECT DISTINCT SKU 
+            FROM (
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND (@cDropID = '' OR PD.DropID = @cDropID)
+               AND PD.SKU LIKE @cKeyboardVal + '%'
+               UNION ALL
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND (@cDropID = '' OR PD.DropID = @cDropID)
+               AND EXISTS (SELECT 1 
+                           FROM SKU S (NOLOCK)
+                           WHERE S.StorerKey = PD.StorerKey
+                           AND S.SKU = PD.SKU
+                           AND S.AltSKU LIKE @cKeyboardVal + '%'
+                           )
+               UNION ALL
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND (@cDropID = '' OR PD.DropID = @cDropID)
+               AND EXISTS (SELECT 1 
+                           FROM SKU S (NOLOCK)
+                           WHERE S.StorerKey = PD.StorerKey
+                           AND S.SKU = PD.SKU
+                           AND S.RetailSKU LIKE @cKeyboardVal + '%'
+                           )
+               UNION ALL
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND (@cDropID = '' OR PD.DropID = @cDropID)
+               AND EXISTS (SELECT 1 
+                           FROM SKU S (NOLOCK)
+                           WHERE S.StorerKey = PD.StorerKey
+                           AND S.SKU = PD.SKU
+                           AND S.ManufacturerSKU LIKE @cKeyboardVal + '%'
+                           )
+               UNION ALL
+               SELECT PD.SKU AS SKU
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+               AND (@cDropID = '' OR PD.DropID = @cDropID)
+               AND EXISTS (SELECT 1 
+                           FROM UPC U (NOLOCK)
+                           WHERE U.StorerKey = PD.StorerKey
+                           AND U.SKU = PD.SKU
+                           AND U.UPC LIKE @cKeyboardVal + '%'
+                           AND U.UOM IN ('EA','EACH','PCS', '6')
+                           )
+            )x
+         END
       END
       ELSE
       BEGIN
-         INSERT INTO @oLoadKeySKUList (SKU)
-         SELECT DISTINCT PD.SKU
-         FROM PICKDETAIL PD (NOLOCK)
-         WHERE EXISTS ( SELECT 1 
-                        FROM LOADPLANDETAIL LPD (NOLOCK)
-                        WHERE LPD.OrderKey = PD.OrderKey
-                        AND LPD.LoadKey = @cLoadKey
+         IF @cLoadKey = '' AND @cDropID = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_ErrNo = 10557
+            SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Failed to Perform Check SKU, LoadKey and DropID both are empty.
+            GOTO EXIT_SP
+         END
+
+         IF @cType = 'toteid'
+         BEGIN
+            -- only tote and b2c
+            INSERT INTO @oLoadKeySKUList (SKU)
+            SELECT DISTINCT PD.SKU
+            FROM PICKDETAIL PD (NOLOCK)
+            WHERE EXISTS ( SELECT 1 
+                           FROM @oOrderKeyList O
+                           WHERE O.OrderKey = PD.OrderKey
                         )
-         AND (@cDropID = '' OR PD.DropID = @cDropID)
+            AND PD.DropID = @cDropID
+            AND NOT (
+                  (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                  AND PD.[Status] = '9'
+               )
+         END
+         ELSE
+         BEGIN
+            INSERT INTO @oLoadKeySKUList (SKU)
+            SELECT DISTINCT PD.SKU
+            FROM PICKDETAIL PD (NOLOCK)
+            WHERE EXISTS ( SELECT 1 
+                           FROM @oOrderKeyList O
+                           WHERE O.OrderKey = PD.OrderKey
+                        )
+            AND (@cDropID = '' OR PD.DropID = @cDropID)
+         END
 
          INSERT INTO @oSKUList (SKU)
          SELECT DISTINCT SKU
@@ -528,10 +674,8 @@ BEGIN
                            ),'')
 
 EXIT_SP:
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
+   IF @b_sp_ExecuteAs = 1 REVERT
+   EXEC [WM].[lsp_ResetUser]
 
    IF @n_Continue = 3  -- Error Occured - Process And Return      
    BEGIN      

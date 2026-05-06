@@ -21,7 +21,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-07-31  AlexK    1.0   FCR-6833 - initial.                       */
 /* 2025-10-17  AlexK01  1.1   FCR-6833 - Change Request                 */
-/* 2026-02-02  suryakanta.sahoo  1.5   FCR-10266 - Change Request       */
+/* 2026-02-02  surya    1.5   FCR-10266 - Change Request                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_BEJ_UnWaveLoadShipOrders]
@@ -54,7 +54,8 @@ BEGIN
          , @c_MbolLineNumber        NVARCHAR(5)
          , @c_LoadKey               NVARCHAR(10)
          , @c_LoadLineNumber        NVARCHAR(5)
-         , @c_WaveKey               NVARCHAR(10)  --suryakanta.sahoo 2026-02-02 - FCR-10266
+         , @c_WaveKey               NVARCHAR(10)          --suryakanta.sahoo 2026-02-02 - FCR-10266
+         , @c_BehaviorType          VARCHAR(1)     = ''   --suryakanta.sahoo 2026-02-02 - FCR-10266
 
    IF RIGHT(ISNULL(TRIM(@c_OtherConfig),''),2) = '##'
    BEGIN
@@ -70,7 +71,8 @@ BEGIN
    IF @n_Continue = 1
    BEGIN
       SET @CUR = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT OrderKey
+      -- BEHAVIOR A: SOStatus changed to something other than 0 or 9
+      SELECT OrderKey ,'A' AS BehaviorType  --suryakanta.sahoo 2026-02-02 - FCR-10266
       FROM dbo.ORDERS ORD (NOLOCK)
       WHERE StorerKey = @c_StorerKey
       AND [Status] = '0'
@@ -82,24 +84,25 @@ BEGIN
       --AND SpecialHandling = 'B'
 	  AND SOStatus NOT IN ('0', '9')
 
-      UNION                                     --suryakanta.sahoo 2026-02-02 - FCR-10266
-      SELECT ORD2.OrderKey                      --suryakanta.sahoo 2026-02-02 - FCR-10266
-      FROM dbo.ORDERS ORD2 WITH (NOLOCK)        --suryakanta.sahoo 2026-02-02 - FCR-10266
-      WHERE ORD2.StorerKey = @c_StorerKey       --suryakanta.sahoo 2026-02-02 - FCR-10266
-        AND ORD2.UserDefine09 IN (              --suryakanta.sahoo 2026-02-02 - FCR-10266
-        SELECT UserDefine09                     --suryakanta.sahoo 2026-02-02 - FCR-10266
-        FROM dbo.ORDERS WITH (NOLOCK)           --suryakanta.sahoo 2026-02-02 - FCR-10266
-        WHERE Status = '0'                      --suryakanta.sahoo 2026-02-02 - FCR-10266
-        AND SOStatus = '0'                      --suryakanta.sahoo 2026-02-02 - FCR-10266
-        AND OrderGroup <> ''                    --suryakanta.sahoo 2026-02-02 - FCR-10266
-        AND StorerKey = @c_StorerKey            --suryakanta.sahoo 2026-02-02 - FCR-10266
-        GROUP BY UserDefine09                   --suryakanta.sahoo 2026-02-02 - FCR-10266
-        HAVING COUNT(DISTINCT OrderGroup) <> 1  --suryakanta.sahoo 2026-02-02 - FCR-10266
+      UNION
+      -- BEHAVIOR B: OrderGroup changed (one wave, multiple orders with different OrderGroup values) --suryakanta.sahoo 2026-02-02 - FCR-10266
+      SELECT ORD2.OrderKey ,'B' AS BehaviorType --suryakanta.sahoo 2026-02-02 - FCR-10266 (S)
+      FROM dbo.ORDERS ORD2 WITH (NOLOCK)
+      WHERE ORD2.StorerKey = @c_StorerKey
+        AND ORD2.UserDefine09 IN (
+        SELECT UserDefine09
+        FROM dbo.ORDERS WITH (NOLOCK)
+        WHERE Status = '0'
+        AND SOStatus = '0'
+        AND OrderGroup <> ''
+        AND StorerKey = @c_StorerKey
+        GROUP BY UserDefine09
+        HAVING COUNT(DISTINCT OrderGroup) <> 1   --suryakanta.sahoo 2026-02-02 - FCR-10266(E)
         )
     ORDER BY OrderKey
 
 OPEN @CUR
-      FETCH NEXT FROM @CUR INTO @c_OrderKey
+      FETCH NEXT FROM @CUR INTO @c_OrderKey , @c_BehaviorType  --suryakanta.sahoo 2026-02-02 - FCR-10266
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
          --Reset
@@ -118,13 +121,17 @@ OPEN @CUR
             FROM dbo.MBOLDetail (NOLOCK)
             WHERE OrderKey = @c_OrderKey
 
+            IF @b_Debug = 1
+            BEGIN
+               PRINT 'Processing OrderKey: ' + @c_OrderKey + ' MbolKey: ' + ISNULL(@c_MbolKey, 'NULL')
+            END
+
             IF ISNULL(@c_MbolKey, '') <> '' AND ISNULL(@c_MbolLineNumber, '') <> ''
             BEGIN
                DELETE FROM dbo.MBOLDetail
                WHERE MbolKey = @c_MbolKey
                AND MbolLineNumber = @c_MbolLineNumber
-               DELETE FROM dbo.MBOL
-               WHERE MbolKey = @c_MbolKey
+
                --Delete order from MOBL table containing Header details
                --suryakanta.sahoo 2026-02-02 - FCR-10266
                 IF NOT EXISTS ( SELECT 1 FROM dbo.MBOLDetail (NOLOCK) WHERE MbolKey = @c_MbolKey )
@@ -173,14 +180,27 @@ OPEN @CUR
                 END
             END
             --Remove OrderGroup from Orders.
-            UPDATE dbo.Orders WITH (ROWLOCK)
-            SET OrderGroup          = ''
-               ,Door                = ''    --AlexK01
-               ,[Route]             = ''    --AlexK01
-               ,IntermodalVehicle   = ''    --AlexK01
-            WHERE OrderKey = @c_OrderKey
+            -- BEHAVIOR A: Clear fields when SOStatus changed
+            IF @c_BehaviorType = 'A'
+            BEGIN
+               UPDATE dbo.Orders WITH (ROWLOCK)
+               SET OrderGroup          = ''
+                  ,Door                = ''    --AlexK01
+                  ,[Route]             = ''    --AlexK01
+                  ,IntermodalVehicle   = ''    --AlexK01
+               WHERE OrderKey = @c_OrderKey
 
-            COMMIT TRAN
+               IF @b_Debug = 1                  --suryakanta.sahoo 2026-02-02 - FCR-10266
+               BEGIN
+                  PRINT 'BEHAVIOR A: Cleared OrderGroup, Door, Route, IntermodalVehicle for ' + @c_OrderKey
+               END
+            END
+
+            -- Update Orders table - preserve order group and other fields
+            -- BEHAVIOR B: Preserve fields when OrderGroup changed
+
+
+    COMMIT TRAN
          END TRY
          BEGIN CATCH
             IF @@TRANCOUNT > 0
@@ -195,7 +215,7 @@ OPEN @CUR
 
          END CATCH
 
-         FETCH NEXT FROM @CUR INTO @c_OrderKey
+         FETCH NEXT FROM @CUR INTO @c_OrderKey , @c_BehaviorType           --suryakanta.sahoo 2026-02-02 - FCR-10266
       END
       CLOSE @CUR
       DEALLOCATE @CUR

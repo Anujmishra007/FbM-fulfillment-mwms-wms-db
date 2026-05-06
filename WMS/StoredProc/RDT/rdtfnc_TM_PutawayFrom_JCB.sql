@@ -674,25 +674,25 @@ BEGIN
       ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
 
      IF EXISTS (
-        SELECT 1 
-        FROM dbo.TaskDetail TD WITH(NOLOCK) 
-           INNER JOIN LOC L WITH(NOLOCK)
-              ON L.Loc = TD.ToLoc
-           INNER JOIN @tAisleInUsed A
-              ON A.LocAisle = L.LocAisle
-        WHERE AreaKey = @cAreaKey 
-           AND (TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @cUserName OR TD.UserKeyOverRide = @cUserName)))
-           AND TD.Storerkey = @cStorerKey
-           AND L.Facility = @cFacility
-           AND L.LocationCategory = 'VNA'
-           AND A.Userkey <> @cUserName
-     )
-        AND ISNULL(@cTaskdetailKey, '') = ''
-        BEGIN
-           SET @nErrNo = 218256
-           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Aisle in use'
-           GOTO Step_2_Fail
-        END
+         SELECT 1 
+         FROM dbo.TaskDetail TD WITH(NOLOCK) 
+            INNER JOIN LOC L WITH(NOLOCK)
+               ON L.Loc = TD.ToLoc
+            INNER JOIN @tAisleInUsed A
+               ON A.LocAisle = L.LocAisle
+         WHERE AreaKey = @cAreaKey 
+         AND (TD.Status = '0' OR (TD.Status = '3' AND (TD.UserKey = @cUserName OR TD.UserKeyOverRide = @cUserName)))
+         AND TD.Storerkey = @cStorerKey
+         AND L.Facility = @cFacility
+         AND L.LocationCategory = 'VNA'
+         AND A.Userkey <> @cUserName
+       )
+       AND ISNULL(@cTaskdetailKey, '') = ''
+     BEGIN
+        SET @nErrNo = 218256
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Aisle in use'
+         GOTO Step_2_Fail
+     END
 
       IF ISNULL(@cTaskdetailKey, '') = ''
       BEGIN
@@ -1225,18 +1225,18 @@ BEGIN
 
    Step_3_Fail:
    BEGIN
-        IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
-        BEGIN
-           UPDATE dbo.TaskDetail WITH (ROWLOCK)
-           SET Status = '0',
-               ReasonKey = '',
-               UserKey = '',
-               EditDate = GETDATE(),
-               EditWho = 'RDTPA'
-           WHERE TaskDetailKey = @cTaskdetailKey
+      IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+      BEGIN
+         UPDATE dbo.TaskDetail WITH (ROWLOCK)
+         SET Status = '0',
+            ReasonKey = '',
+            UserKey = '',
+            EditDate = GETDATE(),
+            EditWho = 'RDTPA'
+         WHERE TaskDetailKey = @cTaskdetailKey
 
-           SET @cSuggID = ''
-        END
+        SET @cSuggID = ''
+      END
 
       SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
       SET @cOutField02 = @cSuggID  --Suggested FromID
@@ -1813,29 +1813,29 @@ BEGIN
          SET @cOutField07 = ''
          SET @cOutField08 = ''
 
-        IF @cErrMsg = 'No More Task'
-        BEGIN
+         IF @cErrMsg = 'No More Task'
+         BEGIN
            IF EXISTS(
             SELECT 1 
             FROM dbo.TaskDetail TD WITH(NOLOCK) 
             WHERE AreaKey = @cAreaKey 
                AND TD.Storerkey = @cStorerKey 
-              AND Status = '0' 
-              AND EXISTS(
-                 SELECT 1 
-                 FROM dbo.LOC L WITH(NOLOCK) 
-                 WHERE TD.ToLoc = L.Loc 
-                    AND L.Facility = @cFacility 
-                    AND L.LocationCategory = 'VNA' 
-                    AND L.LocAisle IN (
-                       SELECT LocAisle FROM @tAisleInUsed
-                    )
-              )
-           )
-           BEGIN
-             SET @cErrMsg = 'Aisle in use'
-           END
-        END
+               AND Status = '0' 
+               AND EXISTS(
+                  SELECT 1 
+                  FROM dbo.LOC L WITH(NOLOCK) 
+                  WHERE TD.ToLoc = L.Loc 
+                     AND L.Facility = @cFacility 
+                     AND L.LocationCategory = 'VNA' 
+                     AND L.LocAisle IN (
+                        SELECT LocAisle FROM @tAisleInUsed
+                     )
+               )
+            )
+            BEGIN
+               SET @cErrMsg = 'Aisle in use'
+            END
+         END
 
          SET @nScn = @nScn - 3            --Area Screen
          SET @nStep = @nStep - 3          --Step 2
@@ -1843,9 +1843,9 @@ BEGIN
       END
       ELSE 
       BEGIN
-         IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+        IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
          BEGIN
-            UPDATE dbo.TaskDetail WITH (ROWLOCK)
+           UPDATE dbo.TaskDetail WITH (ROWLOCK)
             SET Status = '0',
                ReasonKey = '',
                UserKey = '',
@@ -2120,6 +2120,7 @@ BEGIN
                            AND LOC.LocationGroup = @cTaskDetailMsg02
                            AND LOC.LocationCategory = @cTaskDetailMsg03
                            AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                           AND LOC.CommingleSku = '1'
                            AND NOT EXISTS(SELECT 1 
                                        FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
                                        WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
@@ -2186,6 +2187,7 @@ BEGIN
                         WHERE Facility = @cFacility
                            AND LOC.Loc <> @cSuggToLoc
                            AND AD.AreaKey = @cToLocAreaKey
+                           AND LOC.CommingleSku = '1'
                            AND Loc.PutawayZone = @cToLocPutawayZone
                            AND LOC.LocLevel <= @nToLocLevel
                            AND (LOC.Floor = @cToLocFloor OR LOC.LocationCategory <> 'VNA')
@@ -2194,7 +2196,7 @@ BEGIN
                            AND (EB.LocationRoom IS NOT NULL OR LOC.LocationCategory = 'VNA' OR ISNULL(P.PalletType,'') NOT LIKE 'D%')
                            AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
                            AND NOT EXISTS(SELECT 1 FROM dbo.LOTxLOCxID LLI (NOLOCK) 
-                           WHERE LLI.Loc = LOC.Loc AND QTY-QtyPicked+PendingMoveIN > 0 
+                           WHERE LLI.Loc = LOC.Loc AND QTY-QtyPicked+PendingMoveIN > 0
                            GROUP BY LLI.Loc HAVING COUNT(DISTINCT LLI.Id) >= LOC.MaxPallet)
                      END
 
@@ -2467,8 +2469,8 @@ BEGIN
                EditWho = 'RDTPA'
             WHERE TaskDetailKey = @cTaskdetailKey
 
-           SET @cSuggID = ''
-        END
+            SET @cSuggID = ''
+         END
 
          SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
          SET @cOutField02 = @cSuggID  --Suggested FromID
@@ -2586,3 +2588,4 @@ GO
 GRANT EXECUTE ON RDT.rdtfnc_TM_PutawayFrom_JCB TO NSQL
 
 GO
+

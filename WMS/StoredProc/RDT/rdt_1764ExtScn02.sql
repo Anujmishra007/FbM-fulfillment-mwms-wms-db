@@ -139,6 +139,7 @@ BEGIN
    DECLARE @nScn_ReasonCode INT = 6620  
    DECLARE @c_InventoryHoldKey NVARCHAR(10)
    DECLARE @nTranCount  INT
+   DECLARE @cFromLoc NVARCHAR(20)
    SELECT 
       @nMOBRECStep        = Step,
       @nMOBRECScn         = Scn,
@@ -147,8 +148,9 @@ BEGIN
       @cSuggFromLOC    = V_LOC,
       @cSuggID         = V_ID,
       @cSuggSKU        = V_SKU,
-      @nFromScn           = V_FromScn,
-      @nFromStep          = V_FromStep,
+      @nFromScn           = IIF(V_FromScn = '2682', V_FromScn-1, V_FromScn),
+      @nFromStep          = IIF(V_FromStep = '3', V_FromStep-1, V_FromStep),
+      @cAreaKey           = V_String1,
       @cDropID            = V_String3,
       @cPickMethod        = V_String4,
       @cSuggToloc         = V_String5,
@@ -169,10 +171,29 @@ BEGIN
    BEGIN
       IF @nMOBRECStep = 0 OR (@nMOBRECStep = 7 AND @nStep <> 7) -- StartTM or ExitTM back to start
       BEGIN
+         IF @nMOBRECStep = 0
+         BEGIN
+             IF @cInField01 = '9'
+             BEGIN
+                SET @nErrNo = 239666
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
+                SET @nAfterStep = @nMOBRECStep
+                SET @nAfterScn = @nMOBRECScn
+                SET @cOutField01 = ''
+                GOTO Quit
+             END
+
+             IF @cInField01 = 'MOTHERSONS'
+             UPDATE dbo.TaskDetail
+             SET Status = '3', TrafficCop = NULL
+             WHERE (UserKey = @cUserName OR UserKeyOverRide = @cUserName)
+             AND Status = '0'
+         END
+
          SET @cTaskDetailKey = @cOutField06
 
          SELECT
-            @cUDF01 = CASE WHEN TD.PickMethod = 'PP' THEN LA.Lottable11 ELSE TD.ToID END,
+            @cUDF01 = CASE WHEN TD.PickMethod = 'PP' THEN LA.Lottable11 ELSE IIF(TD.ToID = '', TD.FromID, TD.ToID) END,
             @cOutField01 = TD.PickMethod,
             @cOutField03 = TD.FromLOC
          FROM dbo.TaskDetail TD WITH(NOLOCK)
@@ -193,6 +214,15 @@ BEGIN
          SET @nAfterScn = @nScn_ReasonCode
          GOTO QUIT
       END
+      IF @nScn = @nScn_ToLOC
+      BEGIN
+         SELECT TOP 1 @cFromLoc = FromLoc FROM dbo.TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
+         
+         IF @cAreaKey = 'MOTHERSONS' AND @cPickMethod = 'PP' AND @cFromLoc <> 'INTRANSIT'
+         BEGIN
+            SET @cOutField02 = 'INTRANSIT'
+         END
+      END
       IF @nMOBRECStep = 99 -- Customize screens  
       BEGIN  
          IF @nScn = @nScn_ReasonCode -- Reason Code screen  
@@ -208,6 +238,26 @@ BEGIN
                BEGIN
                   SET @nErrNo = 51377
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reason needed
+                  GOTO Step_Reason_Fail
+               END
+
+               IF @cSuggFromLOC = 'INTRANSIT' AND @cReasonCode <> ''
+               BEGIN
+                  SET @nErrNo = 239670
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pls end replen first
+                  GOTO Step_Reason_Fail
+               END
+
+               IF NOT EXISTS (
+                  SELECT 1 
+                  FROM dbo.CODELKUP WITH(NOLOCK) 
+                  WHERE LISTNAME = 'JCBREPLENR' 
+                     AND Short = @cReasonCode 
+                     AND Storerkey = @cStorerKey
+               )
+               BEGIN
+                  SET @nErrNo = 239671
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not allowed reason
                   GOTO Step_Reason_Fail
                END
 
@@ -231,12 +281,12 @@ BEGIN
                      AND C.StorerKey = @cStorerKey
                      AND L.Facility = @cFacility
                      AND L.Loc = @cSuggFromLOC
-               )
-               BEGIN
-                     SET @nErrNo = 218259
+                  )
+                  BEGIN
+                        SET @nErrNo = 218259
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                         GOTO Step_Reason_Fail
-               END
+                  END
                END
 
                -- Extended validate
@@ -356,12 +406,25 @@ BEGIN
                            ,EditWho  = SUSER_SNAME()
                            ,TrafficCop = NULL
                         WHERE TaskDetailKey = @cTaskDetailKey
+                           AND FromLoc <> 'INTRANSIT'
                         IF @@ERROR <> 0
                         BEGIN
                         SET @nErrNo = 72294
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail
                            GOTO Step_Reason_Fail
                         END
+                     END
+
+                     IF @cReasonCode <> ''
+                        AND @cPickMethod = 'PP'
+                     BEGIN
+                        UPDATE dbo.TaskDetail
+                        SET Status = 0
+                        WHERE Status = '3'
+                           AND UserKey = @cUserName
+                           AND PickMethod = 'PP'
+                           AND AreaKey = 'MOTHERSONS'
+                           AND TaskType IN ('RPF','RP1','RPF1')
                      END
 
                      -- Cancel task
@@ -595,14 +658,21 @@ BEGIN
                   SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cSuggFromLOC
                   IF ISNULL( @cLocDescr, '') = ''
                      SET @cLocDescr = @cSuggFromLOC
+                  
+                  SELECT
+                     @cUDF01 = CASE WHEN TD.PickMethod = 'PP' THEN LA.Lottable11 ELSE IIF(TD.ToID = '', TD.FromID, TD.ToID) END,
+                     @cOutField01 = TD.PickMethod,
+                     @cOutField03 = TD.FromLOC
+                  FROM dbo.TaskDetail TD WITH(NOLOCK)
+                  JOIN LOTAttribute LA WITH(NOLOCK) ON TD.LOT = LA.LOT AND TD.StorerKey = LA.StorerKey
+                  WHERE TD.TaskDetailKey = @cTaskDetailKey
 
                   -- Prepare next screen variable
                   SET @cOutField01 = @cPickMethod
-                  SET @cOutField02 = @cDropID
+                  SET @cOutField02 = @cUDF01
                   SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
                   SET @cOutField04 = '' -- FromLOC
                   SET @cOutField10 = '' -- ExtendedInfo
-                  SET @cUDF01 = @cDropID
                END
 
                -- Go to short pick screen
@@ -637,6 +707,21 @@ BEGIN
          BEGIN
             IF @cInField01 = '9' -- Close Pallet
             BEGIN
+               UPDATE RDT.RDTMOBREC
+               SET V_String70 = '9'
+               WHERE Mobile = @nMobile
+
+               IF @cSuggFromLOC <> 'INTRANSIT' AND @cPickMethod = 'PP'
+               BEGIN
+                  UPDATE TaskDetail
+                  SET StatusMsg = CONVERT(NVARCHAR(20), GETDATE(), 120)
+                  WHERE TaskDetailKey = @cTaskDetailKey
+
+                  UPDATE TaskDetail
+                  SET Status = '0', UserKey = '', UserKeyOverride = ''
+                  WHERE UserKey = @cUserName AND Status = '3' AND TaskType LIKE 'R%' AND FromLoc <> 'INTRANSIT' AND PickMethod = 'PP' AND TaskDetailKey <> @cTaskDetailKey
+               END
+
                IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
                AND EXISTS (SELECT 1 FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = '0')
                BEGIN
@@ -656,10 +741,65 @@ BEGIN
                   GOTO Quit
                END
             END
+            IF @cInField01 = '1' -- Next TASK
+            BEGIN
+               UPDATE RDT.RDTMOBREC
+               SET V_String70 = '1'
+               WHERE Mobile = @nMobile
+
+               IF @cSuggFromLOC <> 'INTRANSIT' AND @cPickMethod = 'PP'
+               BEGIN
+                  UPDATE TaskDetail
+                  SET StatusMsg = CONVERT(NVARCHAR(20), GETDATE(), 120)
+                  WHERE TaskDetailKey = @cTaskDetailKey
+               END
+
+               IF @nStep = 1
+               BEGIN
+                  SELECT @cTaskDetailKey = Value FROM @tExtScnData WHERE Variable = '@cNextTaskDetailKey'
+
+                  SELECT
+                     @cUDF01 = CASE WHEN TD.PickMethod = 'PP' THEN LA.Lottable11 ELSE IIF(TD.ToID = '', TD.FromID, TD.ToID) END,
+                     @cOutField01 = TD.PickMethod,
+                     @cOutField03 = TD.FromLOC
+                  FROM dbo.TaskDetail TD WITH(NOLOCK)
+                  JOIN LOTAttribute LA WITH(NOLOCK) ON TD.LOT = LA.LOT AND TD.StorerKey = LA.StorerKey
+                  WHERE TD.TaskDetailKey = @cTaskDetailKey
+
+                  SET @cOutField02 = @cUDF01
+                  SET @cOutField04 = '' -- FromLOC
+                  SET @cOutField10 = '' -- ExtendedInfo
+
+                  SET @nAfterStep = @nStep_FromLOC
+                  SET @nAfterScn = @nScn_FromLOC
+               END
+               ELSE IF @nStep IN (2,3)
+               BEGIN
+                  SELECT @cTaskDetailKey = Value FROM @tExtScnData WHERE Variable = '@cNextTaskDetailKey'
+
+                  SELECT
+                     @cUDF01 = CASE WHEN TD.PickMethod = 'PP' THEN LA.Lottable11 ELSE IIF(TD.ToID = '', TD.FromID, TD.ToID) END
+                  FROM dbo.TaskDetail TD WITH(NOLOCK)
+                  JOIN LOTAttribute LA WITH(NOLOCK) ON TD.LOT = LA.LOT AND TD.StorerKey = LA.StorerKey
+                  WHERE TD.TaskDetailKey = @cTaskDetailKey
+
+                  SET @cOutField02 = @cUDF01
+               END
+               ELSE IF @nStep = 4
+               BEGIN
+                  SELECT @cTaskDetailKey = Value FROM @tExtScnData WHERE Variable = '@cNextTaskDetailKey'
+
+                  SELECT
+                     @cUDF01 = CASE WHEN TD.PickMethod = 'PP' THEN LA.Lottable11 ELSE IIF(TD.ToID = '', TD.FromID, TD.ToID) END
+                  FROM dbo.TaskDetail TD WITH(NOLOCK)
+                  JOIN LOTAttribute LA WITH(NOLOCK) ON TD.LOT = LA.LOT AND TD.StorerKey = LA.StorerKey
+                  WHERE TD.TaskDetailKey = @cTaskDetailKey
+               END
+            END
          END
          IF @nInputKey = 0 -- ESC
          BEGIN
-            IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND STATUS = 'S')
+            --IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND STATUS = 'S')
             BEGIN
                SET @nErrNo = 239665
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pls choose an option

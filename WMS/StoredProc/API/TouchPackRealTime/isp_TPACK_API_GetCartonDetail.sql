@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-22   1.0  GCH225     Created                                          */
 /* 2026-02-06   2.0  GCH225     UWP-48119: 1 tote, 1 carton, 1 sku Scenario      */
+/* 2026-03-16   2.1  GCH225     FCR-11632: Check AuditLog with Status PENDAUDIT  */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetCartonDetail] (
@@ -160,6 +161,25 @@ BEGIN
        , nPageIndex           INT
    )
 
+   IF @cType = 'toteid' 
+   BEGIN
+      IF @cPickSlipNo = '' 
+      AND @cOrderKey = '' 
+      AND @cLoadKey = ''
+      AND @nCartonNo > 0
+      BEGIN
+         SELECT @cPickSlipNo = PH.PickSlipNo
+               , @cOrderKey = PH.OrderKey
+         FROM PACKHEADER PH (NOLOCK)
+         WHERE EXISTS ( SELECT 1 
+                        FROM PACKDETAIL PD (NOLOCK)
+                        WHERE PD.PickSlipNo = PH.PickSlipNo
+                        AND PD.DropID = @cDropID
+                        AND PD.CartonNo = @nCartonNo
+                     )
+      END
+   END
+
    IF NOT EXISTS (SELECT 1
                   FROM PACKDETAIL (NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
@@ -183,6 +203,11 @@ BEGIN
                WHERE StorerKey = @cStorerKey
                AND ConfigKey = 'TPS-AutoCloseCarton'
                AND sValue = '1'
+   ) AND NOT EXISTS (SELECT 1 
+                     FROM PACKINFO_AUDITLOG (NOLOCK)
+                     WHERE PickSlipNo = @cPickSlipNo
+                     AND CartonNo = @nCartonNo
+                     AND CartonStatus = 'PENDAUDIT'
    )
    BEGIN
       SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
@@ -345,10 +370,8 @@ BEGIN
                            ),'')
 
 EXIT_SP:
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
+   IF @b_sp_ExecuteAs = 1 REVERT
+   EXEC [WM].[lsp_ResetUser]
 
    IF @n_Continue = 3  -- Error Occured - Process And Return      
    BEGIN      

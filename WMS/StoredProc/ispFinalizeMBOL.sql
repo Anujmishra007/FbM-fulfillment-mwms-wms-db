@@ -28,6 +28,8 @@ GO
 /* 12-DEC-2021 Wan02    1.5   LFWM-3249 - UAT RG  Dock door booking     */
 /*                            backend + SP                              */
 /*                            DevOps Combine Order                      */
+/* 04-MAR-2026 Wan03    1.6   FCR-11314 - FinalizeMBOL trigger MBOLUpdate*/
+/*                            Trigger for ITF                           */
 /************************************************************************/
 CREATE OR ALTER PROC ispFinalizeMBOL 
       @c_MBOLkey        NVARCHAR(10) 
@@ -50,8 +52,11 @@ BEGIN
          , @c_FNZMBOLStatus         NVARCHAR(10)   -- (WAN01)
          , @c_PostFinalizeMBOL_SP   NVARCHAR(30)   --NJOW01
          , @c_SQL                   NVARCHAR(2000) --NJOW01
+         , @c_SQLParms              NVARCHAR(1000) = ''                             --(Wan03)      
 
-         , @c_MBOLToTransportOrder  NVARCHAR(30) = ''             --(Wan02)
+         , @c_MBOLToTransportOrder  NVARCHAR(30)   = ''  --(Wan02)
+         , @c_FNZMBOLEnbUpdTrigger  NVARCHAR(10)   = ''                             --(Wan03)
+
    SET @n_StartTranCnt = @@TRANCOUNT
    SET @n_Continue = 1
    
@@ -145,6 +150,13 @@ BEGIN
  
    CONTINUE_FNZ:
 
+   --(Wan03) - START
+   IF @n_Continue IN ( 1, 2 )
+   BEGIN
+      SELECT @c_FNZMBOLEnbUpdTrigger = dbo.FNC_GetRight(@c_Facility, @c_Storerkey, '', 'FNZMBOLEnbUpdTrigger')
+   END
+   --(Wan03) - END
+
    --(Wan02) - START
    IF @n_Continue IN ( 1, 2 )
    BEGIN
@@ -186,7 +198,6 @@ BEGIN
       GOTO QUIT
    END
  
-
    IF NOT EXISTS ( SELECT 1
                    FROM CODELKUP WITH (NOLOCK)
                    WHERE ListName = 'STATUS'
@@ -200,18 +211,31 @@ BEGIN
    END
  
    SET @c_FNZMBOLStatus = CASE @c_FNZMBOLStatus WHEN '9' THEN '' 
-                                                         WHEN '0' THEN ''
-                                                         ELSE @c_FNZMBOLStatus 
-                                                         END 
+                                                WHEN '0' THEN ''
+                                                ELSE @c_FNZMBOLStatus 
+                                                END 
    -- (WAN01) - END
  
-   UPDATE MBOL WITH (ROWLOCK)
-   SET FinalizeFlag = 'Y'
-      ,Status = CASE WHEN @c_FNZMBOLStatus = '' THEN Status ELSE @c_FNZMBOLStatus END  --(Wan01)  
-      ,EditWho = SUSER_NAME()
-      ,EditDate= GETDATE()
-      ,Trafficcop = NULL
-   WHERE MBOLKey = @c_MBOLKey
+   --(Wan03) - START
+   SET @c_SQL = N'UPDATE MBOL WITH (ROWLOCK)'
+              + ' SET FinalizeFlag = ''Y'''
+              +    ' ,Status = CASE WHEN @c_FNZMBOLStatus = '''''
+              +                   ' THEN Status ELSE @c_FNZMBOLStatus END'  --(Wan01)  
+              +    ' ,EditWho = dbo.fnc_GetUserName()'
+              +    ' ,EditDate= GETDATE()'
+              + CASE WHEN @c_FNZMBOLEnbUpdTrigger = '1' THEN ''         
+                     ELSE ' ,Trafficcop = NULL'
+                     END
+              + ' WHERE MBOLKey = @c_MBOLKey'
+
+   SET @c_SQLParms = N'@c_FNZMBOLStatus   NVARCHAR(10)'
+                   + ',@c_MBOLKey         NVARCHAR(10)'
+
+   EXEC sp_ExecuteSQL @c_SQL
+                     ,@c_SQLParms
+                     ,@c_FNZMBOLStatus
+                     ,@c_MBOLKey 
+   --(Wan03) - END
 
    IF @@ERROR <> 0
    BEGIN

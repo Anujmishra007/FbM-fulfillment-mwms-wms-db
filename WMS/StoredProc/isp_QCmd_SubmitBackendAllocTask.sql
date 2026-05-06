@@ -1,13 +1,7 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_QCmd_SubmitBackendAllocTask]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[isp_QCmd_SubmitBackendAllocTask]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-
 
 /************************************************************************/
 /* Stored Procedure: isp_QCmd_SubmitBackendAllocTask                    */
@@ -36,8 +30,10 @@ GO
 /* 2019-05-16   SHONG   1.5   Bug Fixing                                */
 /* 06-May-2020  Shong   1.6   Addding Priority to Q-Cmd Task (SWT02)    */
 /* 15-Jun-2022  SYCHUA  1.7   JSM-74630 - Align Datastream name (SY01)  */
+/* 07-APR-2025  Wan01   1.5   FCR-11826 - IN - Maersk WMS v2 - DAIMLER  */
+/*                            TRUCK AG - Auto Alloaction                */
 /************************************************************************/
-CREATE PROC [dbo].[isp_QCmd_SubmitBackendAllocTask] (
+CREATE OR ALTER PROC [dbo].[isp_QCmd_SubmitBackendAllocTask] (
      @bSuccess      INT = 1            OUTPUT
    , @nErr          INT = ''           OUTPUT
    , @cErrMsg       NVARCHAR(250) = '' OUTPUT
@@ -106,6 +102,12 @@ BEGIN
            ,@c_CmdType             NVARCHAR(10)=''
            ,@c_TaskType            NVARCHAR(1)=''
            ,@n_Priority            INT = 0 -- (SWT02)
+
+   DECLARE @c_PendingAllocSOByQty   CHAR(1)       = 'N'                         --(Wan01)
+         , @c_ExcludeLoadplanCheck  CHAR(1)       = 'N'                         --(Wan01)
+         , @c_FeatureKeys           NVARCHAR(1000)= ''                          --(Wan01)
+         , @c_SQL                   NVARCHAR(4000)= ''                          --(Wan01)
+         , @c_SQLParms              NVARCHAR(500) = ''                          --(Wan01)
 
     SELECT @c_APP_DB_Name = APP_DB_Name
           ,@c_DataStream          = DataStream
@@ -276,15 +278,88 @@ BEGIN
       END
       ELSE
       BEGIN
-         SELECT @nAllocatedOrders = SUM(CASE WHEN ORDERS.[STATUS] = '2' THEN 1 ELSE 0 END),
-                @nNonAllocatedOrders = SUM(CASE WHEN ORDERS.[STATUS] = '0' THEN 1 ELSE 0 END)
-         FROM   ORDERS WITH (NOLOCK)
-         WHERE  StorerKey = @cStorerKey
-         AND    Facility  = @cFacility
-         AND    [Status]  IN ('2','0')
-         AND NOT EXISTS (SELECT 1 FROM LoadPlanDetail AS lpd WITH(NOLOCK)
-                         WHERE lpd.OrderKey = ORDERS.OrderKey)
-         --AND   (LoadKey = '' OR LoadKey IS NULL)
+         SET @c_SQL = ''                                                            --(Wan01) - START  
+         SET @c_SQLParms = ''
+         SET @c_FeatureKeys = ''                                                                                    
+         SELECT @c_FeatureKeys = gr.Option5  
+         FROM dbo.fnc_GetRight2(@cFacility, @cStorerkey, '', 'BackEndAutoAllocCfg') gr
+         WHERE gr.Authority = '1'
+
+         SET @c_PendingAllocSOByQty  = 'N'
+         SET @c_ExcludeLoadplanCheck = 'N'
+         IF @c_FeatureKeys > ''
+         BEGIN
+            SELECT @c_PendingAllocSOByQty = dbo.fnc_GetParamValueFromString('@c_PendingAllocSOByQty'
+                                                                           , @c_Featurekeys
+                                                                           , @c_PendingAllocSOByQty)
+
+            SELECT @c_ExcludeLoadplanCheck = dbo.fnc_GetParamValueFromString('@c_ExcludeLoadplanCheck'
+                                                                           , @c_Featurekeys
+                                                                           , @c_ExcludeLoadplanCheck)
+
+            SET @c_SQL = N'SELECT @nAllocatedOrders = SUM(CASE WHEN ORDERS.[STATUS] = ''2'' THEN 1 ELSE 0 END)'
+                     + ',@nNonAllocatedOrders = SUM(CASE WHEN ORDERS.[STATUS] = ''0'' THEN 1 ELSE 0 END)'
+                     + ' FROM ORDERS WITH (NOLOCK)'
+                     + ' WHERE ORDERS.StorerKey = @cStorerKey'
+                     + ' AND   ORDERS.Facility  = @cFacility'
+                     + ' AND   ORDERS.[Status]  IN (''2'',''0'')'
+
+            IF @c_PendingAllocSOByQty = 'Y' 
+            BEGIN 
+              SET @c_SQL = N'SELECT @nAllocatedOrders = SUM(CASE WHEN ORDERDETAIL.[STATUS] = ''2'' THEN 1 ELSE 0 END)'
+                          + ',@nNonAllocatedOrders = SUM(CASE WHEN ORDERS.[STATUS] = ''0'' THEN 1 ELSE 0 END)'
+                          + ' FROM ORDERS WITH (NOLOCK)'
+                          + ' OUTER APPLY ( SELECT TOP 1 Status = ''2'' '
+                          +               ' FROM ORDERDETAIL sod1 WITH (NOLOCK)'
+                          +               ' WHERE sod1.Orderkey = ORDERS.Orderkey'
+                          +               ' AND   sod1.OpenQty > 0'
+                          +               ' AND   sod1.OpenQty = sod1.QtyAllocated+sod1.QtyPicked'
+                          +               ' AND   sod1.[status] < ''9'''
+                          +               ' AND NOT EXISTS (SELECT 1 '
+                          +                               ' FROM ORDERDETAIL sod2 WITH (NOLOCK)'
+                          +                               ' WHERE sod2.Orderkey = sod1.Orderkey'
+                          +                               ' AND   sod2.OrderLineNumber <> sod1.OrderLineNumber'                          
+                          +                               ' AND   sod2.OpenQty > 0'
+                          +                               ' AND   sod2.OpenQty > sod2.QtyAllocated+sod2.QtyPicked'
+                          +                               ' AND   sod2.[status] < ''9'''
+                          +                               ')'
+                          +               ') ORDERDETAIL'
+                          + ' WHERE ORDERS.StorerKey = @cStorerKey'
+                          + ' AND   ORDERS.Facility  = @cFacility'
+                          + ' AND   ORDERS.[Status]  < ''9'''
+            END
+
+            IF @c_ExcludeLoadplanCheck = 'N' 
+            BEGIN
+               SET @c_SQL = @c_SQL
+                          + ' AND NOT EXISTS (SELECT 1 FROM LoadPlanDetail AS lpd WITH(NOLOCK)'
+                          +                 ' WHERE lpd.OrderKey = ORDERS.OrderKey)'
+            END
+
+            SET @c_SQLParms = N'@cStorerKey  NVARCHAR(15)'
+                            + ',@cFacility   NVARCHAR(5)'
+                            + ',@nAllocatedOrders     INT   OUTPUT'
+                            + ',@nNonAllocatedOrders  INT   OUTPUT'
+
+            EXEC sp_ExecuteSQL @c_SQL
+                              ,@c_SQLParms
+                              ,@cStorerKey
+                              ,@cFacility
+                              ,@nAllocatedOrders      OUTPUT
+                              ,@nNonAllocatedOrders   OUTPUT
+         END
+         ELSE 
+         BEGIN                                                                      --(Wan01) - END          
+            SELECT @nAllocatedOrders = SUM(CASE WHEN ORDERS.[STATUS] = '2' THEN 1 ELSE 0 END),
+                   @nNonAllocatedOrders = SUM(CASE WHEN ORDERS.[STATUS] = '0' THEN 1 ELSE 0 END)
+            FROM   ORDERS WITH (NOLOCK)
+            WHERE  StorerKey = @cStorerKey
+            AND    Facility  = @cFacility
+            AND    [Status]  IN ('2','0')
+            AND NOT EXISTS (SELECT 1 FROM LoadPlanDetail AS lpd WITH(NOLOCK)
+                            WHERE lpd.OrderKey = ORDERS.OrderKey)
+            --AND   (LoadKey = '' OR LoadKey IS NULL)
+         END                                                                        --(Wan01)  
 
          IF @nNonAllocatedOrders > 0
          BEGIN
@@ -328,7 +403,6 @@ BEGIN
           SET @nRevisePriority = 4
          END
       END
-
 
       IF NOT EXISTS (SELECT 1 FROM @t_TaskPriority
                      WHERE Facility = @cFacility AND StorerKey = @cStorerKey)

@@ -1,0 +1,8 @@
+-- FCR-10831 (NYE018)
+-- rdt_855ExtUpd23 - 262051 - 262100
+
+rdt.rdtDropMsg 262051, 262100
+
+EXECUTE rdt.rdtAddMsg 262051, 10, '262051^UpdRDTPPAFail',      'us_english', 855, 0, '262051: Update RDTPPA failed'
+
+SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 262051 AND 262100

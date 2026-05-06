@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date         Rev   Author      Purposes                              */
 /* 2024-11-05   1.0   TLE109      FCR-917 Serial Unpack and Unpick      */
+/* 2026-02-20   2.0   NYE018      UWP-48932 corrected the ErrNo & ErrMsg*/
 /************************************************************************/
 
 
@@ -78,8 +79,8 @@ BEGIN
       ' @cSKU           NVARCHAR( 40), ' +
       ' @cToLOC         NVARCHAR( 20), ' +
       ' @cLoadKey       NVARCHAR( 20), ' +
-      ' @nErrNo         INT,           ' +
-      ' @cErrMsg        NVARCHAR( 20)  ' 
+      ' @nErrNo         INT  OUTPUT,   ' +
+      ' @cErrMsg        NVARCHAR( 20)  OUTPUT  ' 
 
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
          @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,

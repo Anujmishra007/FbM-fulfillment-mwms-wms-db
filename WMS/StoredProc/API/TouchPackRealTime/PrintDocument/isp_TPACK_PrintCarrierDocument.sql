@@ -11,6 +11,8 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-02-23   1.0  GCH225     UWP-48263 Created                                */
+/* 2026-03-16   2.0  GCH225     FCR-11595: New Query logic UserSessionActivityLog*/
+/* 2026-03-25   2.1  GCH225     FCR-11991 Handle print carrier logic             */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintCarrierDocument] (
@@ -81,46 +83,17 @@ BEGIN
    SET @cLabelPrinter   = ''
    SET @cLangCode       = 'ENG'
 
-   SELECT @cUserID = EditWho
-        , @cPickSlipNo = PickSlipNo
-        , @nCartonNo = CartonNo
-   FROM PACKDETAIL (NOLOCK)
+   SELECT TOP 1 @cUserID = AddWho
+         , @cPickSlipNo = PickSlipNo
+         , @nCartonNo = CartonNo
+         , @cFacility = Facility
+         , @cLabelPrinter = LabelPrinter
+   FROM API.TPACK_UserSessionActivityLog (NOLOCK)
    WHERE StorerKey = @cStorerKey
-   AND LabelNo = @cLabelNo
-   
-   IF EXISTS(SELECT 1
-              FROM PACKHEADER (NOLOCK)
-              WHERE PickSlipNo = @cPickSlipNo
-              AND OrderKey = @cOrderKey
-   )
-   BEGIN
-      SELECT @cFacility = Facility
-      FROM ORDERS (NOLOCK)
-      WHERE OrderKey = @cOrderKey
-   END
-   ELSE
-   BEGIN
-      SELECT @cFacility = O.Facility
-      FROM ORDERS O (NOLOCK)
-      WHERE EXISTS (SELECT 1 
-                    FROM LOADPLANDETAIL LPD (NOLOCK)
-                    WHERE LPD.OrderKey = @cOrderKey
-                    AND LPD.LoadKey = O.ExternOrderKey
-      )
-   END
-
-   SELECT @cLabelPrinter = PrinterID
-   FROM API.AppPrinter P (NOLOCK)
-   WHERE EXISTS ( SELECT 1 
-                  FROM API.AppWorkstation W (NOLOCK) 
-                  WHERE W.Workstation = P.Workstation
-                  AND EXISTS (SELECT 1 
-                              FROM API.AppSection S (NOLOCK) 
-                              WHERE S.DeviceID = W.DeviceID
-                              AND S.UserID = @cUserID
-                              AND S.ScanNo = @cPickSlipNo
-                              )
-               )
+   AND (@cLabelNo = '' OR LabelNo = @cLabelNo)
+   AND OrderKey = @cOrderKey
+   AND CartonNo <> 0
+   ORDER BY RowRefNo DESC
             
    IF NOT EXISTS (SELECT 1
                   FROM WMREPORT WMR (NOLOCK) 
@@ -129,7 +102,7 @@ BEGIN
                   WHERE WMRD.StorerKey = @cStorerKey 
                   AND EXISTS(SELECT 1
                              FROM CODELKUP CLK (NOLOCK)
-                             WHERE CLK.LISTNAME = 'TPACK-ReportType'
+                             WHERE CLK.LISTNAME = 'TPRptType'
                              AND CLK.Code = WMR.ReportType
                              AND CLK.StorerKey = WMRD.StorerKey
                   )
@@ -140,7 +113,7 @@ BEGIN
    )  
    BEGIN 
       SET @n_Continue = 3
-      SET @nErrNo = 11851
+      SET @nErrNo = 15301
       SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Label: No records found in WMReport.'
       GOTO EXIT_SP
    END
@@ -152,7 +125,7 @@ BEGIN
                WHERE WMRD.StorerKey = @cStorerKey
                AND EXISTS( SELECT 1
                            FROM CODELKUP CLK (NOLOCK)
-                           WHERE CLK.LISTNAME = 'TPACK-ReportType'
+                           WHERE CLK.LISTNAME = 'TPRptType'
                            AND CLK.Code = WMR.ReportType
                            AND CLK.StorerKey = WMRD.StorerKey
                         )
@@ -164,7 +137,7 @@ BEGIN
    )
    BEGIN
       SET @n_Continue = 3
-      SET @nErrNo = 11852
+      SET @nErrNo = 15302
       SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Label: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
       GOTO EXIT_SP
    END
@@ -183,7 +156,7 @@ BEGIN
    WHERE WMRD.StorerKey = @cStorerKey
    AND EXISTS( SELECT 1
                FROM CODELKUP CLK (NOLOCK)
-               WHERE CLK.LISTNAME = 'TPACK-ReportType'
+               WHERE CLK.LISTNAME = 'TPRptType'
                AND CLK.Code = WMR.ReportType
                AND CLK.StorerKey = WMRD.StorerKey
             )
@@ -243,7 +216,7 @@ BEGIN
                   + ' FROM PACKDETAIL (NOLOCK) '
                   + ' WHERE StorerKey = @cStorerKey '
                   + ' AND PickSlipNo = @cPickSlipNo '
-                  + ' AND CartonNo = @nCartonNo '
+                  + IIF(@cLabelNo <> '', ' AND CartonNo = @nCartonNo ', '')
 
       SET @groupByFields = ''
 
@@ -313,7 +286,7 @@ BEGIN
             WHERE WMRD.StorerKey = @cStorerKey  
             AND EXISTS( SELECT 1
                         FROM CODELKUP CLK (NOLOCK)
-                        WHERE CLK.LISTNAME = 'TPACK-ReportType'
+                        WHERE CLK.LISTNAME = 'TPRptType'
                         AND CLK.Code = WMR.ReportType
                         AND CLK.StorerKey = WMRD.StorerKey
                      )
@@ -333,7 +306,7 @@ BEGIN
             IF @cPrinterInGroup = ''  
             BEGIN  
                SET @n_Continue = 3
-               SET @nErrNo = 11853    
+               SET @nErrNo = 15303    
                SET @cErrMsg = API.TouchPadGetMessage( @nErrNo, @cLangCode, 'DSP')--'Not found PrinterID in PrinterGroup.'  
                GOTO EXIT_SP  
             END
@@ -359,15 +332,15 @@ BEGIN
             , @c_KeyValue2    = @cParams2        
             , @c_KeyValue3    = @cParams3     
             , @c_KeyValue4    = @cParams4    
-            , @bSuccess       = @bSuccess         OUTPUT      
+            , @b_Success      = @bSuccess         OUTPUT      
             , @n_Err          = @nErrNo           OUTPUT
             , @c_ErrMsg       = @cErrMsg          OUTPUT
             , @c_PrintSource  = @cPrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs       = @ctempLabelJobIDs  OUTPUT    
+            , @c_JobIDs       = @ctempLabelJobIDs OUTPUT    
             , @c_AutoPrint    = 'N'     
             
-      IF @nErrNo <> 0   
+      IF @bSuccess = 0 
       BEGIN  
          SET @n_Continue = 3 
          GOTO EXIT_SP  

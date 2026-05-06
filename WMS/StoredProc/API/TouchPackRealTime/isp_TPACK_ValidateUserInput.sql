@@ -20,6 +20,8 @@ GO
 /* 2026-02-04   2.1  JWF011     UWP-48247: Add Recartonization check rule        */
 /* 2026-02-24   2.2  GCH225     UWP-49353: Fix for Scan SKU into new Carton      */
 /* 2026-03-03   2.3  GCH225     UWP-49786: Fix for Block Recartonization         */
+/* 2026-03-12   2.4  GCH225     UWP-XXXXX: Skip UCC Carton Check for PreCartonize*/
+/* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -93,6 +95,8 @@ BEGIN
          , @bIsUCCPack           BIT
          , @nTtlQty              INT
          , @nTtlExpQty           INT
+         , @bIsPreCartonize      BIT
+         , @bAutoPickOrderFlag BIT
 
    DECLARE @cVASCodeUDF2         NVARCHAR(60)   = ''
          , @cVASCodeUDF3         NVARCHAR(60)   = ''
@@ -100,6 +104,10 @@ BEGIN
 
    DECLARE @oSKUList TABLE (
       SKU NVARCHAR(20) PRIMARY KEY
+   )
+
+   CREATE TABLE #oOrderKeyList (
+      OrderKey NVARCHAR(10) PRIMARY KEY
    )
 
    DECLARE @tLottableList TABLE (    
@@ -142,6 +150,57 @@ BEGIN
    SET @bIsUCCPack            = 0
    SET @nTtlQty               = 0
    SET @nTtlExpQty            = 0
+   SET @bIsPreCartonize       = 0
+   SET @bAutoPickOrderFlag    = 0
+
+   IF @cLoadKey <> ''
+   BEGIN
+      INSERT INTO #oOrderKeyList (OrderKey)
+      SELECT DISTINCT OrderKey
+      FROM LOADPLANDETAIL (NOLOCK)
+      WHERE LoadKey = @cLoadKey
+   END
+
+   --For Tote Conso Order and required to auto pick the orderkey and pickslip when user scan the SKU.
+   IF @cType = 'toteid'
+   AND @cPickSlipNo = '' 
+   AND @cOrderKey = '' 
+   AND @cLoadKey = ''
+   AND @cDropID <> ''
+   BEGIN
+      SELECT TOP 1 @cPickSlipNo = PIF.PickSlipNo
+      FROM PACKINFO PIF(NOLOCK)
+      WHERE PIF.CartonNo = @nCartonNo
+      AND PIF.EditWho = @c_UserID
+      AND EXISTS (SELECT 1
+                  FROM PACKDETAIL PD (NOLOCK)
+                  WHERE PD.PickSlipNo = PIF.PickSlipNo
+                  AND PD.CartonNo = PIF.CartonNo
+                  AND PD.DropID = @cDropID
+      )
+
+      IF @@ROWCOUNT = 0 OR @cPickSlipNo = ''
+      BEGIN
+         SET @bAutoPickOrderFlag = 1
+         IF @cScanType <> ''
+         BEGIN
+            GOTO SKIP_CARTON_CHECK
+         END
+         ELSE
+         BEGIN
+            GOTO SKIP_2ND_CHECK
+         END
+      END
+      ELSE
+      BEGIN
+         IF @cOrderKey = ''
+         BEGIN
+            SELECT @cOrderKey = OrderKey
+            FROM PICKHEADER (NOLOCK)
+            WHERE PickHeaderKey = @cPickSlipNo
+         END
+      END
+   END
 
    --Check is the carton under inprogress status or closed status.
    IF @nCartonNo > 0 
@@ -164,6 +223,16 @@ BEGIN
          SET @n_ErrNo = 11519
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'No PackInfo Detail Found(Abnoraml process). Kindly seek help from support team.'
          GOTO EXIT_SP
+      END
+
+      IF EXISTS(SELECT 1
+                FROM PACKDETAIL (NOLOCK)
+                WHERE PickSlipNo = @cPickSlipNo
+                AND CartonNo = @nCartonNo
+                AND ExpQty > 0
+      )
+      BEGIN
+         SET @bIsPreCartonize = 1
       END
 
       IF @cCartonStatus <> 'INPROGRESS' AND LEN(@cCartonStatus) > 0
@@ -270,7 +339,8 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      IF @bIsUCCPack = 1
+      IF @bIsUCCPack = 1 
+      AND @bIsPreCartonize = 0
       BEGIN
          SET @n_Continue  = 3
          SET @n_ErrNo = 11522
@@ -278,6 +348,8 @@ BEGIN
          GOTO EXIT_SP
       END
    END
+
+SKIP_CARTON_CHECK:
 
    --Determine whether is SKU or UPC or UCC or SerialNo or AD
    --After that determine whether need to prompt the AD screen
@@ -311,6 +383,8 @@ BEGIN
          GOTO SKIP_FINDSCANTYPE
       END
    END
+
+SKIP_2ND_CHECK:
 
    IF EXISTS(SELECT 1
              FROM SKU (NOLOCK)
@@ -490,19 +564,24 @@ BEGIN
                , @cStorerKey        = @cStorerKey        
                , @cFacility         = @cFacility      
                , @cInputValue1      = @cInputValue1
+               , @cInputValue2      = @cInputValue2   OUTPUT
+               , @cInputValue3      = @cInputValue3   OUTPUT
                , @c_UserID          = @c_UserID
                , @cLangCode         = @cLangCode
-               , @cSKU              = @cSKU        OUTPUT
-               , @nQty              = @nQty        OUTPUT
-               , @b_Success         = @b_Success   OUTPUT
-               , @n_ErrNo           = @n_ErrNo     OUTPUT
-               , @c_ErrMsg          = @c_ErrMsg    OUTPUT
+               , @cSKU              = @cSKU           OUTPUT
+               , @nQty              = @nQty           OUTPUT
+               , @b_Success         = @b_Success      OUTPUT
+               , @n_ErrNo           = @n_ErrNo        OUTPUT
+               , @c_ErrMsg          = @c_ErrMsg       OUTPUT
 
             IF @b_Success = 0
             BEGIN
                SET @n_Continue  = 3    
                GOTO EXIT_SP
             END
+
+            INSERT INTO @oSKUList (SKU)
+            VALUES (@cSKU)
          END
       END
    END
@@ -532,30 +611,87 @@ VALIDATE_SKU:
    --Check the SKU make sure it exists in PickDetail with the orderkey
    IF @bIsDiscrete = 1
    BEGIN
-      DELETE t
-      FROM @oSKUList t 
-      WHERE NOT EXISTS (SELECT 1 
-                     FROM PICKDETAIL PD (NOLOCK)
-                     WHERE PD.OrderKey = @cOrderKey
-                     AND (@cDropID = '' OR PD.DropID = @cDropID)
-                     AND PD.SKU = t.SKU)
+      IF @cType = 'toteid'
+      BEGIN
+         -- only tote and b2c
+         DELETE t
+         FROM @oSKUList t 
+         WHERE NOT EXISTS (SELECT 1 
+                           FROM PICKDETAIL PD (NOLOCK)
+                           WHERE PD.DropID = @cDropID
+                           AND (@cOrderKey = '' OR PD.OrderKey = @cOrderKey)
+                           AND PD.StorerKey = @cStorerKey
+                           AND PD.SKU = t.SKU
+                           AND NOT (
+                              (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                              AND PD.[Status] = '9'
+                           )
+         )
+      END
+      ELSE
+      BEGIN
+         DELETE t
+         FROM @oSKUList t 
+         WHERE NOT EXISTS (SELECT 1 
+                        FROM PICKDETAIL PD (NOLOCK)
+                        WHERE PD.OrderKey = @cOrderKey
+                        AND (@cDropID = '' OR PD.DropID = @cDropID)
+                        AND PD.StorerKey = @cStorerKey
+                        AND PD.SKU = t.SKU)
+      END
    END
    ELSE
    BEGIN
-      DELETE t 
-      FROM @oSKUList t 
-      WHERE NOT EXISTS (SELECT 1 
-                       FROM PICKDETAIL PD (NOLOCK)
-                       WHERE EXISTS (SELECT 1 
-                                     FROM LOADPLANDETAIL LPD (NOLOCK)
-                                     WHERE LPD.OrderKey = PD.OrderKey
-                                     AND LPD.LoadKey = @cLoadKey
-                                    )
-                       AND (@cDropID = '' OR PD.DropID = @cDropID)
-                       AND t.SKU = PD.SKU
-                      )
+      IF @cLoadKey = '' AND @cDropID = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_ErrNo = 11529
+         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Failed to Perform Check SKU, LoadKey and DropID both are empty.
+         GOTO EXIT_SP
+      END
+
+      IF @cType = 'toteid'
+      BEGIN
+         -- only tote and b2c
+         DELETE t 
+         FROM @oSKUList t 
+         WHERE NOT EXISTS (SELECT 1 
+                           FROM PICKDETAIL PD (NOLOCK)
+                           WHERE (@cLoadKey = ''
+                              OR EXISTS ( SELECT 1 
+                                          FROM #oOrderKeyList OB
+                                          WHERE OB.OrderKey = PD.OrderKey
+                                       )
+                              )
+                           AND (@cOrderKey = '' OR PD.OrderKey = @cOrderKey)
+                           AND PD.DropID = @cDropID
+                           AND PD.StorerKey = @cStorerKey
+                           AND t.SKU = PD.SKU
+                           AND NOT (
+                              (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                              AND PD.[Status] = '9'
+                           )
+         )
+      END
+      ELSE
+      BEGIN
+         DELETE t 
+         FROM @oSKUList t 
+         WHERE NOT EXISTS (SELECT 1 
+                           FROM PICKDETAIL PD (NOLOCK)
+                           WHERE (@cLoadKey = ''
+                              OR EXISTS ( SELECT 1 
+                                          FROM #oOrderKeyList OB
+                                          WHERE OB.OrderKey = PD.OrderKey
+                                       )
+                              )
+                           AND (@cDropID = '' OR PD.DropID = @cDropID)
+                           AND PD.StorerKey = @cStorerKey
+                           AND t.SKU = PD.SKU
+                           )
+      END
    END
-     
+
    SELECT @nActualSKUCnt = COUNT(1) 
    FROM @oSKUList
 
@@ -585,7 +721,7 @@ VALIDATE_SKU:
 
    --Check Multi SKU Selection
    EXEC [API].[isp_TPACK_CheckMultiSKUSelection]
-         @cType             = @cType            
+        @cType             = @cType            
       , @bIsDiscrete       = @bIsDiscrete      
       , @bIsCustom         = @bIsCustom        
       , @cPickSlipNo       = @cPickSlipNo       
@@ -634,6 +770,39 @@ SKIP_VALIDATE:
       AND SKU = @cSKU
    END
 
+   --If @bAutoPickOrderFlag is turn on, means need to temporarily auto assign the orderkey and pickslipno for subsequent packing process.
+   IF @bAutoPickOrderFlag = 1
+   BEGIN
+      SELECT TOP 1 
+         @cOrderKey = ISNULL(PH.OrderKey, '')
+       , @cPickSlipNo = ISNULL(PH.PickHeaderKey, '')
+      FROM PICKHEADER PH (NOLOCK)
+      WHERE EXISTS ( SELECT 1 
+                     FROM PICKDETAIL PD (NOLOCK)
+                     WHERE PD.OrderKey = PH.OrderKey
+                     AND PD.DropID = @cDropID
+                     AND PD.SKU = @cSKU
+                     AND NOT (
+                        (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
+                        AND PD.[Status] = '9'
+                     )
+                  )
+      AND NOT EXISTS (SELECT 1
+                      FROM PACKHEADER PH2 (NOLOCK)
+                      WHERE PH2.OrderKey = PH.OrderKey
+                      AND PH2.PickSlipNo = PH.PickHeaderKey        
+                      AND PH2.[Status] = '9'              
+                  )
+      ORDER BY PH.OrderKey ASC
+      
+      IF @@ROWCOUNT = 0 OR @cOrderKey = '' OR @cPickSlipNo = ''
+      BEGIN
+         SET @n_Continue  = 3
+         SET @n_ErrNo = 11530
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to auto assign Order and PickSlip for current Tote. No matching record found in PickDetail.'
+         GOTO EXIT_SP
+      END
+   END
    -- Perform Check the Qty
    EXEC [API].[isp_TPACK_ValidateQtyPack]
         @cType             = @cType            
@@ -1222,6 +1391,32 @@ SKIP_LOTTABLE:
    END
    ELSE
    BEGIN
+      IF @cType = 'toteid'
+      AND @nCartonNo > 0
+      AND (EXISTS (SELECT 1
+                  FROM ORDERS (NOLOCK)
+                  WHERE OrderKey = @cOrderKey
+                  AND DocType = 'E'
+                  AND ECOM_SINGLE_Flag ='S'
+         )
+         OR
+         (( SELECT SUM(QTY) 
+            FROM PICKDETAIL (NOLOCK) 
+            WHERE DropID = @cDropID
+            AND OrderKey = @cOrderKey
+         ) = 1
+         AND  
+         (( SELECT SUM(QTY) 
+            FROM PACKDETAIL (NOLOCK) 
+            WHERE PickSlipNo = @cPickSlipNo
+            AND CartonNo = @nCartonNo
+         ) = 1
+         )
+      ))
+      BEGIN
+         SET @bAutoCloseCarton = 1
+      END
+
       GOTO GET_PACKDETAIL_LIST
    END
 
@@ -1261,7 +1456,9 @@ GET_PACKDETAIL_LIST:
    END
 
    -- Wait until capture the AD only close the carton only for ucc scan type.
-   IF (@bShowADScreen = 0 OR @bShowLottableScreen = 0) AND @cScanType = 'ucc'
+   IF @bShowADScreen = 0 
+   AND @bShowLottableScreen = 0 
+   AND @cScanType = 'ucc'
    BEGIN
       SET @bAutoCloseCarton = 1 
    END
@@ -1287,6 +1484,8 @@ GET_PACKDETAIL_LIST:
                            ),'')
 
 EXIT_SP:
+   DROP TABLE IF EXISTS #oOrderKeyList
+
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      

@@ -64,6 +64,13 @@ BEGIN
       SerialNoKey NVARCHAR(10) PRIMARY KEY
    )
 
+   DECLARE @tReceiptDetail TABLE
+   (
+      ReceiptKey           NVARCHAR(10),
+      ReceiptLineNumber    NVARCHAR(5),
+      PRIMARY KEY CLUSTERED (ReceiptKey, ReceiptLineNumber)
+   )
+
    DECLARE @nTranCount        INT
    SELECT @nTranCount = @@TRANCOUNT
 
@@ -76,6 +83,36 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
+            DELETE FROM @tReceiptDetail
+
+            INSERT INTO @tReceiptDetail (ReceiptKey, ReceiptLineNumber)
+            SELECT RD.ReceiptKey, RD.ReceiptLineNumber
+            FROM dbo.ReceiptDetail RD WITH(NOLOCK)
+            INNER JOIN dbo.Receipt R WITH(NOLOCK) ON RD.StorerKey = R.StorerKey AND RD.ReceiptKey = R.ReceiptKey
+            WHERE RD.ReceiptKey = @cReceiptKey 
+               AND RD.StorerKey = @cStorerKey
+               AND RD.SKU = IIF( @cOption = '1', RD.SKU, @cSKU)
+               AND RD.BeforeReceivedQty = 0
+               AND RD.QtyReceived = 0
+               AND RD.QtyAdjusted = 0
+               AND RD.FinalizeFlag = 'N'
+               AND R.Status = '0'
+               AND R.ASNStatus = '0'
+
+            BEGIN TRY
+               UPDATE RD
+                  SET ToId = '',
+                  EditDate = GetDate(),
+                  EditWho = SUSER_SNAME()
+               FROM dbo.ReceiptDetail RD WITH(ROWLOCK)
+               INNER JOIN @tReceiptDetail TRD ON TRD.ReceiptKey = RD.ReceiptKey AND TRD.ReceiptLineNumber = RD.ReceiptLineNumber
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 248953
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update  Receipt Detail Failed
+               GOTO ROLLBACK_TRAN
+            END CATCH
+            
             DELETE FROM @tReceiptSerialNo
 
             INSERT INTO @tReceiptSerialNo (ReceiptSerialNoKey)

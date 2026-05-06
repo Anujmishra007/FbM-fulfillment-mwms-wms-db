@@ -64,7 +64,7 @@ BEGIN
       @nCurrentScn            INT,
       @nCurrentStep           INT,
       @nRowCount              INT,
-      @cEntryDropID           NVARCHAR( 10),
+      @cEntryDropID           NVARCHAR( 20),
       @cOption                NVARCHAR( 10),
       @cSuggUCC               NVARCHAR( 20),
       @cSuggLOC               NVARCHAR( 10),
@@ -162,6 +162,7 @@ BEGIN
       @nTranCount             INT,
       @nLoopIndex             INT = -1,
       @cRemarks               NVARCHAR( 30),
+      @cWaveKey               NVARCHAR( 10),
 
       @cChkLottable01 NVARCHAR( 18),   @cChkLottable02 NVARCHAR( 18),   @cChkLottable03 NVARCHAR( 18),
       @dChkLottable04 DATETIME,        @dChkLottable05 DATETIME,        @cChkLottable06 NVARCHAR( 30),
@@ -545,7 +546,7 @@ BEGIN
                BEGIN
                   SET @nErrNo = 255529
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Reason code is required
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END
 
                IF NOT EXISTS(SELECT 1 
@@ -556,7 +557,7 @@ BEGIN
                BEGIN
                   SET @nErrNo = 255501
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid reason code
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END
                
                SET @cRealloMethod = rdt.rdtGetConfig( @nFunc, 'RealloMethod', @cStorerKey)
@@ -626,7 +627,7 @@ BEGIN
 
                      SET @nErrNo = 255528
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update rdtPickLog failed
-                     GOTO Quit
+                     GOTO UPD_RDTMOBREC
                   END CATCH
                END
 
@@ -656,7 +657,7 @@ BEGIN
                   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                      COMMIT TRAN
 
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END
                   
                -- 2. Hold the location
@@ -697,7 +698,7 @@ BEGIN
 
                   SET @nErrNo = 255502
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Hold Loc failed
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END CATCH
 
                IF @nErrNo <> 0  
@@ -707,19 +708,39 @@ BEGIN
                   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                      COMMIT TRAN
 
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END  
 
                -- 3. Send supervisor alert message
+
+               -- Get SKU description
+               DECLARE @cDispStyleColorSize  NVARCHAR( 20)
+               SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)
+
+               DECLARE @cDispExtValue  NVARCHAR( 20)
+               SET @cDispExtValue = rdt.RDTGetConfig( @nFunc, 'DispExtValues', @cStorerKey)  --(yeekung03)
+
+               IF @cDispStyleColorSize = '0'
+                  SELECT @cSKUDescr = Descr FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSuggSKU
+               ELSE IF @cDispStyleColorSize = '1'
+                  SELECT @cSKUDescr =
+                     CAST( Style AS NCHAR(20)) +
+                     CAST( Color AS NCHAR(10)) +
+                     CAST( Size  AS NCHAR(10))
+                  FROM SKU WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND SKU = @cSuggSKU
+
                BEGIN TRY
                   DECLARE @cVarianceQty NVARCHAR(10) = ISNULL(TRY_CAST((@nSuggQTY - @nActQTY) AS NVARCHAR(10)), '')
                   SET @cAlertMessage =
                         'Short happens while picking(FN839), Loc: ' + @cSuggLOC 
                         + ' ,SKU: ' + @cSuggSKU 
+                        + ' ,SKU Descr: ' + @cSKUDescr
                         + ' ,UCC/SerialNo: ' + @cSuggUCC 
                         + ' ,VARIANCE QTY: ' + @cVarianceQty
                   EXEC nspLogAlert
-                        @c_modulename       = 'rdt_839ExtScn06'
+                        @c_modulename       = 'Pick Piece'
                         , @c_AlertMessage     = @cAlertMessage
                         , @n_Severity         = '5'
                         , @b_success          = @bSuccess
@@ -745,7 +766,7 @@ BEGIN
 
                   SET @nErrNo = 255503
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Send alert message failed
-                  GOTO Quit
+                  GOTO UPD_RDTMOBREC
                END CATCH
 
                -- 4. Re-allocate the pick task
@@ -766,9 +787,10 @@ BEGIN
 
                DECLARE @curPD CURSOR
                SET @curPD = CURSOR FOR
-                  SELECT DISTINCT PD.PickDetailKey
+                  SELECT DISTINCT WD.WaveKey, PD.SKU, PD.Loc
                   FROM dbo.PickDetail PD WITH(NOLOCK)
                   INNER JOIN @tRDTPickLog TRPL ON ( (PD.OrderKey = TRPL.OrderKey AND PD.OrderLineNumber = TRPL.OrderLineNumber AND ISNULL(PD.SourceType, '') = TRPL.PickDetailKey) OR (PD.PickDetailKey = TRPL.PickDetailKey) )
+                  INNER JOIN dbo.WaveDetail WD WITH(NOLOCK) ON WD.OrderKey = PD.OrderKey
                   WHERE PD.StorerKey = @cStorerKey
                      AND PD.Status = '4'
 
@@ -785,64 +807,76 @@ BEGIN
                   @cTaskType            = TaskType,
                   @cExecStatements      = StoredProcName
                FROM dbo.QCmd_TransmitlogConfig WITH (NOLOCK)
-               WHERE TableName = 'RealloPickDetail'
+               WHERE TableName = '839ShortPickHold'
                   AND App_Name = 'WMS'
                   AND  StorerKey =  @cStorerKey
 
+               DECLARE 
+                  @cLoopSKU      NVARCHAR(20),
+                  @cLoopLoc      NVARCHAR(10)
+
                OPEN @curPD
-               FETCH NEXT FROM @curPD INTO @cPickDetailKey
+               FETCH NEXT FROM @curPD INTO @cWaveKey, @cLoopSKU, @cLoopLoc
                WHILE @@FETCH_STATUS = 0
                BEGIN
                   IF @cRealloMethod = 'Sync'
                   BEGIN
-                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExecStatements) +
-                           ' @cPickDetailKey, ' +
-                           ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
-                        SET @cSQLParam =
-                           ' @cPickDetailKey         NVARCHAR( 18) ' +
-                           ',@nErrNo          INT           OUTPUT     ' +
-                           ',@cErrMsg         NVARCHAR(250) OUTPUT     '
+                     SET @cSQL = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements) +
+                            ' @c_Wavekey, @c_SKU, @c_InputValue, @c_Taskdetailkey, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '
 
-                        BEGIN TRY
-                           EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                              @cPickDetailKey,
-                              @nErrNo OUTPUT, @cErrMsg OUTPUT
-                        END TRY
-                        BEGIN CATCH
-                           IF XACT_STATE() = -1
-                              ROLLBACK TRAN rdt_839ExtScn06_6773
-                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                              COMMIT TRAN
-                              
-                           SET @nErrNo = 255534
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec Reallocate SP failed
+                     SET @cSQLParam =
+                        '  @c_Wavekey          NVARCHAR(10) ' +
+                        ' ,@c_SKU              NVARCHAR(20) ' +
+                        ' ,@c_InputValue       NVARCHAR(20) ' +
+                        ' ,@c_Taskdetailkey    NVARCHAR(10) ' +
+                        ' ,@b_Success          INT     OUTPUT ' +
+                        ' ,@n_Err              INT     OUTPUT ' +
+                        ' ,@c_ErrMsg           NVARCHAR(225) OUTPUT  '
 
-                           CLOSE @curPD
-                           DEALLOCATE @curPD
-                           GOTO Quit
-                        END CATCH
+                     BEGIN TRY
+                        EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                           @cWaveKey, @cLoopSKU, @cLoopLoc, '',
+                           @bSuccess OUTPUT,
+                           @nErrNo OUTPUT, @cErrMsg OUTPUT
+                     END TRY
+                     BEGIN CATCH
+                        IF XACT_STATE() = -1
+                           ROLLBACK TRAN rdt_839ExtScn06_6773
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+                           
+                        SET @nErrNo = 255534
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec Reallocate SP failed
 
-                        IF @nErrNo <> 0
-                        BEGIN
-                           IF XACT_STATE() = -1
-                              ROLLBACK TRAN rdt_839ExtScn06_6773
-                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                              COMMIT TRAN
+                        CLOSE @curPD
+                        DEALLOCATE @curPD
+                        GOTO UPD_RDTMOBREC
+                     END CATCH
 
-                           CLOSE @curPD
-                           DEALLOCATE @curPD
-                           GOTO Quit
-                        END
+                     IF @nErrNo <> 0
+                     BEGIN
+                        IF XACT_STATE() = -1
+                           ROLLBACK TRAN rdt_839ExtScn06_6773
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+
+                        CLOSE @curPD
+                        DEALLOCATE @curPD
+                        GOTO UPD_RDTMOBREC
+                     END
                   END
                   ELSE IF @cRealloMethod = 'Async'
                   BEGIN
                      SET @cExecStatements = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements)
-                                          + ' @cPickDetailKey = ''' + @cPickDetailKey + ''''
+                                             + ' @c_Wavekey = ''' + ISNULL(@cWaveKey,'') + ''''
+                                             + ', @c_SKU = ''' + @cLoopSKU + ''''
+                                             + ', @c_InputValue = ''' + @cLoopLoc + ''''
+                                             + ', @c_TaskDetailKey = '''''
 
                      -- Submit task to QCommander
                      BEGIN TRY
                         EXEC isp_QCmd_SubmitTaskToQCommander
-                           @cTaskType           = 'D'                  -- 'T' - TransmitlogKey, 'D' - Data Stream 
+                           @cTaskType           = 'O'                  -- 'T' - TransmitlogKey, 'D' - Data Stream 
                            , @cStorerKey          = @cStorerKey
                            , @cDataStream         = @cDataStream
                            , @cCmdType            = @cCmdType 
@@ -871,7 +905,7 @@ BEGIN
 
                         CLOSE @curPD
                         DEALLOCATE @curPD
-                        GOTO Quit
+                        GOTO UPD_RDTMOBREC
                      END CATCH
 
                      IF @nErrNo <> 0
@@ -883,10 +917,10 @@ BEGIN
 
                         CLOSE @curPD
                         DEALLOCATE @curPD
-                        GOTO Quit
+                        GOTO UPD_RDTMOBREC
                      END
                   END
-                  FETCH NEXT FROM @curPD INTO @cPickDetailKey
+                  FETCH NEXT FROM @curPD INTO @cWaveKey, @cLoopSKU, @cLoopLoc
                END
                CLOSE @curPD
                DEALLOCATE @curPD
@@ -2925,6 +2959,50 @@ BEGIN
                   SET @nErrNo = 255511
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToID is needed
                   GOTO UPD_RDTMOBREC
+               END
+
+               DECLARE @cListFacility NVARCHAR(5) = ''
+               DECLARE @iMatch   INT = 1
+               DECLARE @cPattern NVARCHAR(250) = ''
+               DECLARE @cCode    NVARCHAR(30) = ''
+
+               SET @iMatch = 1 -- True
+               SET @cCode = RTRIM( CAST( @nFunc AS NVARCHAR(5))) + '-DropID' 
+
+               SELECT @cListFacility = code2,
+                     @cPattern = ISNULL( Long, '')
+               FROM CodeLkup WITH (NOLOCK) 
+               WHERE ListName = 'DRIDFormat' 
+                  AND Code = @cCode 
+                  AND StorerKey = @cStorerKey
+
+               IF @@ROWCOUNT > 1 OR                               -- Multi record means facility config exist or  
+                  (@cListFacility <> '' AND @cListFacility IS NOT NULL)   -- Single record with facility config  
+               BEGIN 
+                  -- Retrieve own facility config  
+                  IF @cFacility <> @cListFacility  
+                  BEGIN   
+                     -- Get config by facility, then by storer  
+                     SET @cPattern = ''
+                     SELECT @cPattern = ISNULL( Long, '')
+                     FROM CodeLkup WITH (NOLOCK) 
+                     WHERE ListName = 'DRIDFormat' 
+                        AND Code = @cCode 
+                        AND StorerKey = @cStorerKey
+                        AND (code2 = '' OR code2 = @cFacility) 
+                  END
+               END
+               
+               IF ISNULL(@cPattern, '') <> ''
+               BEGIN
+                  SELECT @iMatch = master.dbo.RegExIsMatch( @cPattern, @cDropID, 0) -- 0=RegexOptions.None
+
+                  IF @iMatch = 0
+                  BEGIN
+                     SET @nErrNo = 255544
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid DropID format
+                     GOTO Quit
+                  END
                END
 
                IF @cDropID = '' AND @cScannedDropID <> ''

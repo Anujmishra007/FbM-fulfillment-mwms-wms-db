@@ -19,6 +19,7 @@
 /* Date           Author   Purposes                                     */
 /* 15-Feb-2023    Alex     #JIRA PAC-4 Initial                          */
 /* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
+/* 24-Mar-2026    Sean01   #UWP-52654 - replace RevertUser with ResetUser*/
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_SearchPackOrder](
      @b_Debug           INT            = 0
@@ -362,10 +363,8 @@ BEGIN
 
    QUIT:
 
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
+   IF @b_sp_ExecuteAs = 1 REVERT --Sean01
+   EXEC [WM].[lsp_ResetUser] --Sean01
 
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      

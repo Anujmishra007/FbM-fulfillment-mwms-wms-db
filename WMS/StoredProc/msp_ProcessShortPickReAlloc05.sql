@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.1                                                  */
+/* GitHub Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 09-Jan-2026 WLChooi  1.0   Initial Version                           */
 /* 25-Feb-2026 WLChooi  1.1   UWP-49450 Clear Userdefine01 value (WL01) */
+/* 30-Mar-2026 WLChooi  1.2   FCR-12094 Delete shorted PICKDETAIL line  */
+/*                            if reallocation succeed (WL02)            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc05] (    
@@ -58,6 +60,10 @@ BEGIN
          , @c_WVRCMConfigCode          NVARCHAR(30) = ''
          , @n_SkipProcess              INT = 0
          , @c_PickCondition_SQL        NVARCHAR(MAX) = ''
+         , @c_PickDetailKey            NVARCHAR(10)  = ''   --WL02
+         , @CUR_UNALLOC                CURSOR               --WL02
+         , @n_RemoveShort              INT = 0              --WL02
+         , @n_ShortQty                 INT = 0              --WL02
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -81,57 +87,61 @@ BEGIN
           , PRIMARY KEY (Orderkey, Storerkey, SKU)
       )
 
-      CREATE TABLE #PickDetail_WIP
-      (
-         [PickDetailKey]        [NVARCHAR](18)   NOT NULL PRIMARY KEY
-       , [CaseID]               [NVARCHAR](20)   NOT NULL DEFAULT (' ')
-       , [PickHeaderKey]        [NVARCHAR](18)   NOT NULL
-       , [OrderKey]             [NVARCHAR](10)   NOT NULL
-       , [OrderLineNumber]      [NVARCHAR](5)    NOT NULL
-       , [Lot]                  [NVARCHAR](10)   NOT NULL
-       , [Storerkey]            [NVARCHAR](15)   NOT NULL
-       , [Sku]                  [NVARCHAR](20)   NOT NULL
-       , [AltSku]               [NVARCHAR](20)   NOT NULL DEFAULT (' ')
-       , [UOM]                  [NVARCHAR](10)   NOT NULL DEFAULT (' ')
-       , [UOMQty]               [INT]            NOT NULL DEFAULT ((0))
-       , [Qty]                  [INT]            NOT NULL DEFAULT ((0))
-       , [QtyMoved]             [INT]            NOT NULL DEFAULT ((0))
-       , [Status]               [NVARCHAR](10)   NOT NULL DEFAULT ('0')
-       , [DropID]               [NVARCHAR](20)   NOT NULL DEFAULT ('')
-       , [Loc]                  [NVARCHAR](10)   NOT NULL DEFAULT ('UNKNOWN')
-       , [ID]                   [NVARCHAR](18)   NOT NULL DEFAULT (' ')
-       , [PackKey]              [NVARCHAR](10)   NULL DEFAULT (' ')
-       , [UpdateSource]         [NVARCHAR](10)   NULL DEFAULT ('0')
-       , [CartonGroup]          [NVARCHAR](10)   NULL
-       , [CartonType]           [NVARCHAR](10)   NULL
-       , [ToLoc]                [NVARCHAR](10)   NULL DEFAULT (' ')
-       , [DoReplenish]          [NVARCHAR](1)    NULL DEFAULT ('N')
-       , [ReplenishZone]        [NVARCHAR](10)   NULL DEFAULT (' ')
-       , [DoCartonize]          [NVARCHAR](1)    NULL DEFAULT ('N')
-       , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
-       , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
-       , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [TrafficCop]           [NVARCHAR](1)    NULL
-       , [ArchiveCop]           [NVARCHAR](1)    NULL
-       , [OptimizeCop]          [NVARCHAR](1)    NULL
-       , [ShipFlag]             [NVARCHAR](1)    NULL DEFAULT ('0')
-       , [PickSlipNo]           [NVARCHAR](10)   NULL
-       , [TaskDetailKey]        [NVARCHAR](10)   NULL
-       , [TaskManagerReasonKey] [NVARCHAR](10)   NULL
-       , [Notes]                [NVARCHAR](4000) NULL
-       , [MoveRefKey]           [NVARCHAR](10)   NULL DEFAULT ('')
-       , [WIP_Refno]            [NVARCHAR](30)   NULL DEFAULT ('')
-       , [Channel_ID]           [BIGINT]         NULL DEFAULT ((0))
-       , [TmpReplenKey]         [NVARCHAR](10)   NOT NULL DEFAULT ('')
-      )
-
-      CREATE INDEX IX_PickDetail_WIP_OrderKey_Status ON #PickDetail_WIP (OrderKey, [Status]) INCLUDE (Qty, QtyMoved, PickDetailKey)
-      CREATE INDEX IX_PickDetail_WIP_WaveKey_UOM_Status ON #PickDetail_WIP (WaveKey, UOM, [Status]) INCLUDE (OrderKey, Storerkey, SKU, TaskDetailKey)
-      CREATE INDEX IX_PickDetail_WIP_TaskUpdate ON #PickDetail_WIP (UOM, PickMethod, Lot, Loc, ID, DropID) INCLUDE (PickDetailKey)
+      --WL02
+      IF OBJECT_ID('tempdb..#PickDetail_WIP ','u') IS NULL
+      BEGIN
+         CREATE TABLE #PickDetail_WIP
+         (
+            [PickDetailKey]        [NVARCHAR](18)   NOT NULL PRIMARY KEY
+          , [CaseID]               [NVARCHAR](20)   NOT NULL DEFAULT (' ')
+          , [PickHeaderKey]        [NVARCHAR](18)   NOT NULL
+          , [OrderKey]             [NVARCHAR](10)   NOT NULL
+          , [OrderLineNumber]      [NVARCHAR](5)    NOT NULL
+          , [Lot]                  [NVARCHAR](10)   NOT NULL
+          , [Storerkey]            [NVARCHAR](15)   NOT NULL
+          , [Sku]                  [NVARCHAR](20)   NOT NULL
+          , [AltSku]               [NVARCHAR](20)   NOT NULL DEFAULT (' ')
+          , [UOM]                  [NVARCHAR](10)   NOT NULL DEFAULT (' ')
+          , [UOMQty]               [INT]            NOT NULL DEFAULT ((0))
+          , [Qty]                  [INT]            NOT NULL DEFAULT ((0))
+          , [QtyMoved]             [INT]            NOT NULL DEFAULT ((0))
+          , [Status]               [NVARCHAR](10)   NOT NULL DEFAULT ('0')
+          , [DropID]               [NVARCHAR](20)   NOT NULL DEFAULT ('')
+          , [Loc]                  [NVARCHAR](10)   NOT NULL DEFAULT ('UNKNOWN')
+          , [ID]                   [NVARCHAR](18)   NOT NULL DEFAULT (' ')
+          , [PackKey]              [NVARCHAR](10)   NULL DEFAULT (' ')
+          , [UpdateSource]         [NVARCHAR](10)   NULL DEFAULT ('0')
+          , [CartonGroup]          [NVARCHAR](10)   NULL
+          , [CartonType]           [NVARCHAR](10)   NULL
+          , [ToLoc]                [NVARCHAR](10)   NULL DEFAULT (' ')
+          , [DoReplenish]          [NVARCHAR](1)    NULL DEFAULT ('N')
+          , [ReplenishZone]        [NVARCHAR](10)   NULL DEFAULT (' ')
+          , [DoCartonize]          [NVARCHAR](1)    NULL DEFAULT ('N')
+          , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
+          , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
+          , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
+          , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
+          , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+          , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
+          , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+          , [TrafficCop]           [NVARCHAR](1)    NULL
+          , [ArchiveCop]           [NVARCHAR](1)    NULL
+          , [OptimizeCop]          [NVARCHAR](1)    NULL
+          , [ShipFlag]             [NVARCHAR](1)    NULL DEFAULT ('0')
+          , [PickSlipNo]           [NVARCHAR](10)   NULL
+          , [TaskDetailKey]        [NVARCHAR](10)   NULL
+          , [TaskManagerReasonKey] [NVARCHAR](10)   NULL
+          , [Notes]                [NVARCHAR](4000) NULL
+          , [MoveRefKey]           [NVARCHAR](10)   NULL DEFAULT ('')
+          , [WIP_Refno]            [NVARCHAR](30)   NULL DEFAULT ('')
+          , [Channel_ID]           [BIGINT]         NULL DEFAULT ((0))
+          , [TmpReplenKey]         [NVARCHAR](10)   NOT NULL DEFAULT ('')
+         )
+   
+         CREATE INDEX IX_PickDetail_WIP_OrderKey_Status ON #PickDetail_WIP (OrderKey, [Status]) INCLUDE (Qty, QtyMoved, PickDetailKey)
+         CREATE INDEX IX_PickDetail_WIP_WaveKey_UOM_Status ON #PickDetail_WIP (WaveKey, UOM, [Status]) INCLUDE (OrderKey, Storerkey, SKU, TaskDetailKey)
+         CREATE INDEX IX_PickDetail_WIP_TaskUpdate ON #PickDetail_WIP (UOM, PickMethod, Lot, Loc, ID, DropID) INCLUDE (PickDetailKey)
+      END
 
       CREATE TABLE #T_CaseID (
             Storerkey   NVARCHAR(15)
@@ -436,6 +446,32 @@ BEGIN
       END
    END
 
+   --WL02 S
+   -- If partial reallocation, do not delete the shorted pickdetail lines
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
+   BEGIN
+      SELECT @n_ShortQty = SUM(Qty) 
+      FROM #T_ShortPick
+
+      IF EXISTS ( SELECT 1
+                  FROM #PickDetail_WIP P
+                  WHERE P.Storerkey = @c_StorerKey
+                  AND   P.Sku = @c_SKU
+                  AND   P.[Status] < '4' 
+                  AND   EXISTS ( SELECT 1 
+                                 FROM #T_ShortOrders T
+                                 WHERE T.OrderKey = P.OrderKey )
+                  AND NOT EXISTS ( SELECT 1
+                                    FROM #T_PICKDETAIL_CURRENT T
+                                    WHERE T.Pickdetailkey = P.PickDetailKey )
+                  HAVING SUM(P.Qty) = @n_ShortQty
+                )
+      BEGIN
+         SET @n_RemoveShort = 1
+      END
+   END
+   --WL02 E
+   
    -- Confirm Replenishment via RCMConfig
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
@@ -570,7 +606,7 @@ BEGIN
       FROM #PickDetail_WIP SP
       JOIN MatchingRows MR ON SP.PickDetailKey = MR.PickDetailKey
    END
-
+   
    -- Update to PICKDETAIL first before redo Pre-cartonization
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
    BEGIN
@@ -588,7 +624,7 @@ BEGIN
          SET @n_Continue = 3
       END
    END
-
+   
    --Wave Release - Redo Pre-cartonization
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0           
    BEGIN
@@ -603,25 +639,6 @@ BEGIN
          SET @n_Continue = 3
          SET @c_ErrMsg = ERROR_MESSAGE()
       END CATCH
-   END
-
-   -- Re-initialize #PICKDETAIL_WIP after redo Pre-cartonization
-   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_SkipProcess = 0
-   BEGIN
-      --Initialize Pickdetail work in progress staging table   
-      EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
-                                  , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
-                                  , @c_Action = 'I' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
-                                  , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
-                                  , @b_Success = @b_Success OUTPUT
-                                  , @n_Err = @n_err OUTPUT
-                                  , @c_ErrMsg = @c_errmsg OUTPUT
-   
-      IF @b_Success <> 1
-      BEGIN
-         SET @n_Continue = 3
-      END
    END
 
    -- Update TaskDetail Message02 for reallocated tasks
@@ -652,23 +669,36 @@ BEGIN
       END
    END
 
-   --Update pickdetail_WIP work in progress staging table back to pickdetail 
-   IF (@n_Continue = 1 or @n_Continue = 2) AND @n_SkipProcess = 0
+   --WL02 S
+   -- Delete shorted pickdetail line if able to reallocate
+   IF (@n_Continue = 1 OR @n_Continue = 2) AND @n_RemoveShort = 1
    BEGIN
-      EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
-                                  , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
-                                  , @c_Action = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
-                                  , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
-                                  , @b_Success = @b_Success OUTPUT
-                                  , @n_Err = @n_err OUTPUT
-                                  , @c_ErrMsg = @c_errmsg OUTPUT
+      SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT T.Pickdetailkey
+      FROM #T_ShortPick T
+      ORDER BY T.Pickdetailkey
 
-      IF @b_Success <> 1
+      OPEN @CUR_UNALLOC
+
+      FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
       BEGIN
-         SET @n_Continue = 3
+         BEGIN TRY
+            DELETE FROM PICKDETAIL
+            WHERE PickDetailKey = @c_PickDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @c_ErrMsg = ERROR_MESSAGE()
+         END CATCH
+
+         FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
       END
+      CLOSE @CUR_UNALLOC
+      DEALLOCATE @CUR_UNALLOC
    END
+   --WL02 E
 
    --Delete pickdetail_WIP work in progress staging table    
    IF (@n_Continue = 1 or @n_Continue = 2)

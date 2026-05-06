@@ -7,6 +7,7 @@
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-04   1.0  GCH225     Created                                          */
+/* 2026-03-05   2.0  GCH225     UWP-49985: Support Decode InputValue 2 and 3     */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_PackDecode_Wrapper] (
      @cType             NVARCHAR(30)      = ''
@@ -19,6 +20,8 @@ CREATE OR ALTER PROC [API].[isp_TPACK_PackDecode_Wrapper] (
    , @cStorerKey        NVARCHAR(15)      = ''
    , @cFacility         NVARCHAR(5)       = ''
    , @cInputValue1      NVARCHAR(128)     = ''
+   , @cInputValue2      NVARCHAR(MAX)     = ''  OUTPUT
+   , @cInputValue3      NVARCHAR(128)     = ''  OUTPUT
    , @c_UserID          NVARCHAR(256)     = ''
    , @cLangCode         NVARCHAR(3)       = ''
    , @cSKU              NVARCHAR(20)      = ''  OUTPUT
@@ -46,7 +49,6 @@ BEGIN
    SET @n_ErrNo         = 0  
    SET @c_ErrMsg        = ''  
 
-   --TPS-GetKeyPadInput
    SET @cConfigKey = 'TPS-PackDecode'
    SET @cConfigVal = ''
 
@@ -73,7 +75,9 @@ BEGIN
                    + ', @cDropID                  ' + CHAR(13)
                    + ', @cStorerKey               ' + CHAR(13)
                    + ', @cFacility                ' + CHAR(13)
-                   + ', @cInputValue1             ' + CHAR(13)   
+                   + ', @cInputValue1             ' + CHAR(13)
+                   + ', @cInputValue2      OUTPUT ' + CHAR(13)
+                   + ', @cInputValue3      OUTPUT ' + CHAR(13)
                    + ', @c_UserID                 ' + CHAR(13)   
                    + ', @cLangCode                ' + CHAR(13)   
                    + ', @cSKU              OUTPUT ' + CHAR(13)
@@ -92,6 +96,8 @@ BEGIN
                          + ', @cStorerKey       NVARCHAR(15)         ' + CHAR(13)
                          + ', @cFacility        NVARCHAR(5)          ' + CHAR(13)
                          + ', @cInputValue1     NVARCHAR(128)        ' + CHAR(13)  
+                         + ', @cInputValue2     NVARCHAR(MAX) OUTPUT ' + CHAR(13)
+                         + ', @cInputValue3     NVARCHAR(128) OUTPUT ' + CHAR(13)
                          + ', @c_UserID         NVARCHAR(256)        ' + CHAR(13) 
                          + ', @cLangCode        NVARCHAR(3)          ' + CHAR(13) 
                          + ', @cSKU             NVARCHAR(20)  OUTPUT ' + CHAR(13)
@@ -112,6 +118,8 @@ BEGIN
                            , @cStorerKey
                            , @cFacility
                            , @cInputValue1
+                           , @cInputValue2      OUTPUT
+                           , @cInputValue3      OUTPUT
                            , @c_UserID
                            , @cLangCode
                            , @cSKU              OUTPUT

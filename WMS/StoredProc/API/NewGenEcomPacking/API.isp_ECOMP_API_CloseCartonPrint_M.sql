@@ -15,11 +15,12 @@
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date           Author   Purposes										*/
+/* Date           Author   Purposes									         	*/
 /* 15-AUG-2023    Alex     #JIRA PAC-7 Initial                          */
 /* 03-JAN-2024    Alex01   #JIRA PAC-176 Pass ComputerName to Print SP  */
 /* 14-MAY-2024    Alex02   #JIRA PAC-341 LogiReport Printing            */
-/* 23-Jul-2025     Sean       #UWP-38247 - Compatible with Login User   */
+/* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
+/* 24-Mar-2026    Sean01   #UWP-52654 - remove not used code            */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_CloseCartonPrint_M](
      @b_Debug           INT            = 0
@@ -441,10 +442,8 @@ BEGIN
 
    QUIT:
 
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
+   IF @b_sp_ExecuteAs = 1 REVERT -- Sean04
+   EXEC [WM].[lsp_ResetUser] -- Sean04
 
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      

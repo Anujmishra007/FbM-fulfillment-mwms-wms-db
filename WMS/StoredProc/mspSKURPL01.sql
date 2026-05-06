@@ -25,8 +25,8 @@ GO
 /* 10-Feb-2026 SSA01    1.0   Create UWP-47046                             */
 /***************************************************************************/
 CREATE OR ALTER   PROC [dbo].[mspSKURPL01]
-   @c_Facility   NVARCHAR(5)    = '',
    @c_Storerkey  NVARCHAR(15)   = '',
+   @c_Facility   NVARCHAR(5)    = '',
    @c_PickLocType  NVARCHAR(15),
    @c_DynamicPickLocType  NVARCHAR(15),
    @c_ReplGroup  NVARCHAR(15),
@@ -148,7 +148,7 @@ BEGIN
 
 
 
-		 Update sQty set QtyToReplen = Max from #skuQtyVivo sQty
+		    Update sQty set QtyToReplen = Max-sQty.QtyAvailable  from #skuQtyVivo sQty
         WHERE  sQty.QtyAvailable < sQty.Qty AND sQty.QtyAvailable > Min AND sQty.Priority = '9'
 
         Update sQty set sQty.Priority = 5 from #skuQtyVivo sQty
@@ -157,7 +157,21 @@ BEGIN
         Update sQty set QtyToReplen = sQty.Qty-sQty.QtyAvailable from #skuQtyVivo sQty
         WHERE sQty.Loc = '' AND sQty.QtyAvailable < sQty.Qty AND sQty.Priority = '7'
 
-
+        DELETE s
+        FROM #skuQtyVivo s
+        WHERE EXISTS (
+            SELECT 1
+            FROM (
+                SELECT t.Sku, SUM(t.Qty) AS TotalQty
+                FROM TaskDetail t WITH (NOLOCK)
+                WHERE StorerKey = @c_StorerKey
+                      AND TaskType = 'RPF'
+                      AND Status IN ('Q', '0', '1', '3')
+                GROUP BY t.Sku
+            ) agg
+            WHERE agg.Sku = s.Sku
+             AND agg.TotalQty >= s.QtyToReplen
+        )
 
        IF OBJECT_ID('tempdb..#replenVivo','u') IS NOT NULL
            BEGIN
@@ -175,6 +189,7 @@ BEGIN
            , UOM NVARCHAR(10) NOT NULL DEFAULT('')
            , PackKey NVARCHAR(20) NOT NULL DEFAULT('')
            , Priority int NOT NULL DEFAULT(0)
+           , Status NVARCHAR(10) NOT NULL DEFAULT('')
           )
 
 
@@ -196,13 +211,12 @@ BEGIN
                    AND LOC.Status = 'OK'
                    AND LOC.Facility = @c_Facility
                    AND LOC.LocationType = @c_DynamicPickLocType
-                   AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC)
+                   AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC )
                    GROUP BY LOC.LOC
                    ORDER BY LOC.LOC
 
                   IF EXISTS(SELECT 1 FROM LOTxLOCxID LLI (NOLOCK)
                        WHERE LLI.STORERKEY =  @c_StorerKey
-                       AND LLI.Sku = @c_Sku
                        AND LLI.Loc = @c_DynamicPickLoc
                       )
                   BEGIN
@@ -218,7 +232,6 @@ BEGIN
                        AND LOC.Facility = @c_Facility
                        AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) = 0
                        AND LLI.STORERKEY =  @c_StorerKey
-                       AND LLI.Sku = @c_Sku
                        AND LLI.Loc = @c_DynamicPickLoc
                        AND LOC.LocationType = @c_DynamicPickLocType
                        GROUP BY LLI.Storerkey, LLI.sku)
@@ -323,34 +336,33 @@ BEGIN
    IF @n_continue = 1
    BEGIN
       -- Do not execute it Replenishment Task not done yet
-
-        IF EXISTS(SELECT 1
-                  FROM Replenishment RP WITH (NOLOCK)
-                  JOIN #replenVivo rpl ON RP.Sku = rpl.Sku AND RP.ToLoc = rpl.Loc
-                  WHERE RP.StorerKey = @c_StorerKey
-                  AND RP.Confirmed = 'N')
-        BEGIN
-            PRINT '>>>>>> Replenishment Exists, Do nothing'
-            GOTO QUIT_SP
-        END
-
-        IF EXISTS(SELECT 1
-                  FROM TaskDetail TD WITH (NOLOCK)
-                  JOIN #replenVivo rpl ON TD.Sku = rpl.Sku AND TD.ToLoc = rpl.Loc
-                  WHERE TD.Storerkey = @c_Storerkey
-                  AND TD.Status IN ('Q', '0','1', '3')
-                  AND TD.TaskType = 'RPF')
-        BEGIN
-            PRINT '>>>>>> Replenishment Task Exists, Do nothing'
-            GOTO QUIT_SP
-        END
-
+               UPDATE r
+                SET r.Status = 'ELIGIBLE' -- or any column you want to update
+                FROM #replenVivo r
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM TaskDetail WITH (NOLOCK)
+                    WHERE Sku = r.Sku
+                      AND ToLoc = r.Loc
+                      AND StorerKey = @c_StorerKey
+                      AND TaskType = 'RPF'
+                      AND Status IN ('Q', '0', '1', '3')
+                )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM Replenishment RP WITH (NOLOCK)
+                    WHERE RP.Sku = r.Sku
+                      AND RP.ToLoc = r.Loc
+                      AND RP.StorerKey = @c_StorerKey
+                      AND RP.Confirmed = 'N'
+                );
 
     /* Insert Into Replenishment Table Now */
 
-
         DECLARE CUR_REPLENISH CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
         SELECT  Sku, fromLoc, Loc, fromId, fromLot, Qty,UOM,PackKey,priority FROM #replenVivo
+        WHERE Status = 'ELIGIBLE'
+
         OPEN CUR_REPLENISH
 
        FETCH NEXT FROM CUR_REPLENISH INTO @c_Sku,@c_FromLOC , @c_Loc, @c_FromId,@c_FromLot,@n_Qty, @c_UOM, @c_PackKey,@c_Priority
@@ -384,7 +396,7 @@ BEGIN
              ,@c_PickMethod            = '?TASKQTY' --?TASKQTY=(Qty available - taskqty)
              ,@c_Priority              = @c_Priority
              ,@c_SourcePriority        = @c_Priority
-             ,@c_SourceType            = 'isp_VIVORPL01'
+             ,@c_SourceType            = 'mspSKURPL01'
              ,@c_SourceKey             = @c_Replenishmentkey
              ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey
              ,@c_Groupkey              = @c_ReplGroup
@@ -405,7 +417,6 @@ BEGIN
                      +' ( '+' SQLSvr MESSAGE='+ TRIM(@c_ErrMsg) +' ) '
           END
 
-
           FETCH NEXT FROM CUR_REPLENISH INTO  @c_Sku,@c_FromLOC , @c_Loc, @c_FromId,@c_FromLot,@n_Qty, @c_UOM, @c_PackKey,@c_Priority
        END
        CLOSE CUR_REPLENISH
@@ -417,14 +428,14 @@ BEGIN
   BEGIN
             BEGIN TRY
             UPDATE TD
-            SET TD.Priority = sqv.Priority
+            SET TD.Priority = '5',TD.SourcePriority = '5'
             FROM TASKDETAIL TD WITH (ROWLOCK)
             JOIN #skuQtyVivo sqv ON
                 TD.Sku = sqv.Sku AND
                 TD.ToLoc = sqv.Loc AND
                 TD.StorerKey = @c_StorerKey
             WHERE
-                sqv.Priority = '5' AND
+                sqv.Priority =  '9' AND
                 TD.TaskType = 'RPF' AND
                 TD.Status NOT IN ('X','9') AND
                 TD.SourcePriority = '9'

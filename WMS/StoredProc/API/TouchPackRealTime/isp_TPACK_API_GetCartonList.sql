@@ -223,6 +223,14 @@ BEGIN
    END
    ELSE
    BEGIN
+      IF @cPickSlipNo = '' AND @cDropID = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_ErrNo = 10051
+         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Failed to Perform Check Carton, PickSlipNo and DropID both are empty.
+         GOTO EXIT_SP
+      END
+
       SET @c_ResponseString = ISNULL ((SELECT X.nCartonNo
                                             , X.cLabelNo
                                             , X.cCartonStatus
@@ -245,7 +253,7 @@ BEGIN
                                           LEFT JOIN PACKDETAIL PD (NOLOCK)
                                           ON PD.PickSlipNo = PKI.PickSlipNo
                                           AND PD.CartonNo = PKI.CartonNo
-                                          WHERE PKI.PickSlipNo = @cPickSlipNo
+                                          WHERE (@cPickSlipNo = '' OR PKI.PickSlipNo = @cPickSlipNo)
                                           AND (@cDropID = '' OR PD.DropID = @cDropID)
                                           GROUP BY PKI.PickSlipNo
                                                  , PKI.CartonNo

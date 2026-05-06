@@ -122,8 +122,8 @@ BEGIN
                 + ' WHERE StorerKey = @cStorerKey ' + CHAR(13)    
                 + ' AND ' + IIF(@bIsDiscrete = 1, ' OrderKey = @cOrderKey ', ' LoadKey = @cLoadkey ') + CHAR(13)    
       
-      SET @cSQLParams = ', @cStorerKey  NVARCHAR(20)          ' + CHAR(13)        
-                      + '  @cOrderKey   NVARCHAR(20)          ' + CHAR(13)  
+      SET @cSQLParams = '  @cStorerKey  NVARCHAR(20)          ' + CHAR(13)        
+                      + ', @cOrderKey   NVARCHAR(20)          ' + CHAR(13)  
                       + ', @cLoadKey    NVARCHAR(20)          ' + CHAR(13)    
                       + ', @cfieldvalue NVARCHAR(1000) OUTPUT ' + CHAR(13)     
 
@@ -137,56 +137,6 @@ BEGIN
       INSERT INTO @DynamicData (fieldname, fieldvalue)
       VALUES (@cfieldname, @cfieldvalue)
    END  
-
-   
-   --SELECT TOP 1 @cVasSP = sValue 
-   --FROM STORERCONFIG (NOLOCK) 
-   --WHERE StorerKey = @cStorerKey 
-   --AND ConfigKey ='TPS-ExtInfoVAS'
-   --AND sValue <> ''
-
-   --IF @@ROWCOUNT = 1 
-   --AND @cVasSP <> '' 
-   --AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE [Name] = @cVasSP AND [type] = 'P')    
-   --BEGIN  
-   --   SET @cSQL = 'EXEC API.' + @cVasSP 
-   --             + ' @cStorerKey=@cStorerKey '
-   --             + ', @cOrderKey=@cOrderKey '
-   --             + ', @b_Success=@b_Success OUTPUT '
-   --             + ', @n_Err=@n_ErrNo OUTPUT '
-   --             + ', @c_ErrMsg=@c_ErrMsg OUTPUT '
-   --             + ', @cNotes=@cWorkIns OUTPUT '
-   --             + ', @cLong=@cVasCol1Val OUTPUT '    
-   
-   --   SET @cSQLParams = N'@cStorerKey NVARCHAR(15) '
-   --                   + N', @cOrderKey NVARCHAR(15) '
-   --                   + N', @b_Success INT OUTPUT '
-   --                   + N', @n_ErrNo INT OUTPUT '
-   --                   + N', @c_ErrMsg NVARCHAR(255) OUTPUT '
-   --                   + N', @cWorkIns NVARCHAR(4000) OUTPUT '
-   --                   + N', @cVasCol1Val NVARCHAR(250) OUTPUT '   
-                      
-   --   EXEC sp_executesql  @cSQL    
-   --                     , @cSQLParams
-   --                     , @cStorerKey    
-   --                     , @cOrderKey    
-   --                     , @b_Success      OUTPUT    
-   --                     , @n_ErrNo        OUTPUT    
-   --                     , @c_ErrMsg       OUTPUT    
-   --                     , @cWorkIns       OUTPUT    
-   --                     , @cVasCol1Val    OUTPUT    
-   
-   --   IF @b_Success = 0    
-   --   BEGIN    
-   --   SELECT @n_ErrNo,@c_ErrMsg
-   --      SET @n_ErrNo = @n_ErrNo    
-   --      SET @c_ErrMsg = @c_ErrMsg    
-   --      GOTO EXIT_SP    
-   --   END    
-
-   --   INSERT INTO @DynamicData(fieldname, fieldvalue)
-   --   VALUES (@cVasCol1Val, @cWorkIns)
-   --END    
 
    -- sean01 start
    -- Pack Type Determination, Call new SP to determine Single/Multi/MPOC
@@ -248,7 +198,7 @@ BEGIN
                 + ', @cFacility     = @cFacility             '
                 + ', @cLangCode     = @cLangCode             '
                 + ', @b_Success     = @b_Success      OUTPUT '
-                + ', @n_ErrNo         = @n_ErrNo      OUTPUT '
+                + ', @n_ErrNo       = @n_ErrNo        OUTPUT '
                 + ', @c_ErrMsg      = @c_ErrMsg       OUTPUT '
                 + ', @cExtFieldCol  = @cExtFieldCol   OUTPUT '
                 + ', @cExtFieldVal  = @cExtFieldVal   OUTPUT '
@@ -295,8 +245,11 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      INSERT INTO @DynamicData(fieldname, fieldvalue)
-      VALUES (@cExtFieldCol, @cExtFieldVal)
+      IF ISNULL(@cExtFieldCol,'') <> '' AND ISNULL(@cExtFieldVal,'') <> ''
+      BEGIN
+         INSERT INTO @DynamicData(fieldname, fieldvalue)
+         VALUES (@cExtFieldCol, @cExtFieldVal)
+      END
    END
    -- Ext Field Display (END)
 
@@ -310,7 +263,7 @@ BEGIN
                                           , fieldValue 
                                     FROM @DynamicData 
                                     FOR JSON PATH
-                                    ),'')
+                                    ),'[]')
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      

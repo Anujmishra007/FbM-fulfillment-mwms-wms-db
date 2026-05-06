@@ -69,6 +69,7 @@ GO
 /* 2025-11-14 4.10.0 NickT    UWP-43847 Fix issue: PickDetail status is not updated*/
 /* 2025-12-04 4.11  Dennis    FCR-3959 ExtScnSp                               */
 /* 2026-01-13 4.12  Jackc     FCR-10031 Add extscn entry to step_shortpick    */
+/* 2026-04-13 4.13  NickT     FCR-12136 Support PickMode, for USA levis       */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -1584,6 +1585,14 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
    GOTO Quit
 
    Step_FromID_Fail:
@@ -2083,7 +2092,7 @@ BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 15 -- MQTY
                ELSE
                   EXEC rdt.rdtSetFocusField @nMobile, 14 -- PQTY
-            GOTO Quit
+            GOTO Step_SKU_ExtScn
          END
       END
 
@@ -2191,6 +2200,7 @@ BEGIN
       END
    END
    
+   Step_SKU_ExtScn:
    IF @cExtScnSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
@@ -3146,7 +3156,14 @@ BEGIN
       SET @nStep = @nToStep
 
       IF @cTTMTaskType IN ('RPF', 'RP1')
+      BEGIN
+         UPDATE rdt.rdtMobRec WITH (ROWLOCK) SET
+            EditDate     = GETDATE(),
+            Step         = @nStep_Start
+         WHERE Mobile = @nMobile
+         
          GOTO Step_Start
+      END
       ELSE
       BEGIN
          SET @cOutField09 = @cTTMTasktype      
@@ -3715,7 +3732,11 @@ BEGIN
 
          INSERT INTO @tExtScnData (Variable, Value) 
          VALUES
-            ('@cDropID',     @cDropID)
+            ('@cDropID',     @cDropID),
+            ('@cTaskDetailKey', @cTaskDetailKey),
+            ('@cNextTaskDetailKey',@cNextTaskDetailKey),
+            ('@nQTY', CAST(@nQTY AS NVARCHAR(10))),
+            ('@nQTY_RPL', CAST(@nQTY_RPL AS NVARCHAR(10)))
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP,
@@ -3751,7 +3772,26 @@ BEGIN
             @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
          IF @nErrNo <> 0
+         BEGIN
+            IF @cExtScnSP = 'rdt_1764ExtScn01'
+            BEGIN
+               IF @nCurrentStep = @nStep_SKU
+               BEGIN
+                  DECLARE @cPickModeFlag NVARCHAR(5)
+                  SELECT @cPickModeFlag = C_String1
+                  FROM rdt.RDTMOBREC WITH(NOLOCK)
+                  WHERE Mobile = @nMobile
+
+                  IF ISNULL(@cPickModeFlag, '') = '1'
+                  BEGIN
+                     SET @nQTY = IIF( @nQTY - @nUCCQTY < 0, 0, @nQTY - @nUCCQTY)
+                     SET @nMQTY = IIF( @nMQTY - @nUCCQTY < 0, 0, @nMQTY - @nUCCQTY)
+                     SET @cOutField15 = CAST(@nMQTY AS NVARCHAR(5))
+                  END
+               END
+            END
             GOTO Step_99_Fail
+         END
 
          IF @cExtScnSP = 'rdt_1764ExtScn01'
          BEGIN
@@ -3771,8 +3811,39 @@ BEGIN
                SET @cListKey        = @cUDF12
                SET @cTaskDetailKey  = @cUDF13
             END
+            ELSE IF @nStep = @nStep_FromLOC AND @nPreviousStep = 0
+            BEGIN
+               IF TRIM(ISNULL(@cUDF11, '')) <> ''
+                  SET @cDropID         = TRIM(ISNULL(@cUDF11, ''))
+            END
             ELSE 
             BEGIN
+               IF @nPreviousStep = @nStep_FromLOC
+               BEGIN
+                  IF @cUDF13 = 'BackToTaskManagement'
+                  BEGIN
+                     EXEC RDT.rdt_STD_EventLog
+                        @cActionType = '9', -- Sign Out function
+                        @cUserID     = @cUserName,
+                        @nMobileNo   = @nMobile,
+                        @nFunctionID = @nFunc,
+                        @cFacility   = @cFacility,
+                        @cStorerKey  = @cStorerKey
+
+                     -- Enable field
+                     SET @cFieldAttr14 = '' -- @nPQTY
+                     SET @cFieldAttr15 = '' -- @nMQTY
+
+                     -- Go back to Task Manager Main Screen
+                     SET @nFunc = 1756
+                     SET @nScn = 2100
+                     SET @nStep = 1
+
+                     SET @cAreaKey = ''
+                     SET @cOutField01 = ''  -- Area
+                  END
+               END
+
                IF @nPreviousStep = @nStep_ShortPick -- From Short Pick Screen and Skip reason screen
                BEGIN
                   IF @cOption = '1' AND @nInputKey = 1 -- ENTER
@@ -3813,6 +3884,31 @@ BEGIN
                   GOTO Step_Exit
                END
             END  
+         END
+         ELSE IF @cExtScnSP = 'rdt_1764ExtScn02'
+         BEGIN
+            IF (@nPreviousStep IN (0,5,7) AND @nStep = 2)
+            OR (@nPreviousScn = 6620 AND @nStep = 2)
+            OR (@nPreviousStep = 5 AND @nStep IN (2,3,4))
+            BEGIN
+               SET @cDropID = @cUDF01
+            END
+            ELSE IF @nPreviousStep = 2 AND @nInputKey = 0
+            BEGIN
+               SET @nFromStep = 2
+               SET @nFromScn = @nPreviousScn
+            END
+            IF @nStep = 4 AND @cSuggFromLOC = 'INTRANSIT'
+            BEGIN
+               SET @nQTY = @nQTY_RPL
+               -- Prepare next screen var
+               SET @cOption = ''
+               SET @cOutField01 = CASE WHEN ISNULL(@cDefaultOption,'')  <> '' THEN @cDefaultOption ELSE '' END -- Option -- (ChewKP02)
+               SET @cOutField10 = '' -- ExtendedInfo
+
+               SET @nScn = @nScn_NextTask
+               SET @nStep = @nStep_NextTask
+            END
          END
       END
    END

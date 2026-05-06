@@ -13,6 +13,11 @@ GO
 /* 2025-08-01   1.0  GCH225     Created                                          */
 /* 2025-11-17   1.1  JWF011     UWP-43858: VAS Tote PreCartonize check rule      */
 /* 2026-02-05   2.0  GCH225     UWP-48237: Handle PenAudit status                */
+/* 2026-03-13   2.1  GCH225     FCR-11619: Fix No. of precartonize per pickslip     */
+/* 2026-03-14   2.2  GCH225     FCR-11632: Fix No. of precartonize per pickslip     */
+/* 2026-03-16   2.3  GCH225     FCR-11595: New Insert logic UserSessionActivityLog  */
+/* 2026-03-19   2.4  Sean01     UWP-42468: ToteID for multi orders               */
+/* 2026-03-19   2.5  Sean02     UWP-42468: Reuse ToteID                          */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetPackTask] (
@@ -54,6 +59,13 @@ BEGIN
          , @cScanNo              NVARCHAR(20)
          , @cExtPackInfoJson     NVARCHAR(MAX)
          , @cPackTaskConfigJson  NVARCHAR(MAX)
+         , @nCartonNo            INT
+         , @nTtlExpQty           INT
+         , @nCartonNoCount       INT
+         , @nMaxCartonNo         INT
+         , @cLabelPrinter        NVARCHAR(20)
+         , @cPaperPrinter        NVARCHAR(20)
+         , @cWorkstation         NVARCHAR(30)
 
    DECLARE @cCartonType          NVARCHAR(20)   = ''
          , @fWeight              FLOAT          = 0
@@ -65,10 +77,18 @@ BEGIN
    SET @c_ResponseString   = '' 
    SET @bIsDiscrete        = 1
    SET @bIsCustom          = 0
-   SET @cDropID            = ''
+   SET @cPickSlipNo        = ''
    SET @cOrderKey          = ''
    SET @cLoadKey           = ''
-
+   SET @cDropID            = ''
+   SET @nCartonNo          = 0
+   SET @nTtlExpQty         = 0
+   SET @nCartonNoCount     = 0
+   SET @nMaxCartonNo       = 0
+   SET @cLabelPrinter      = ''
+   SET @cPaperPrinter      = ''
+   SET @cWorkstation       = ''
+   
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
       , @c_DBUserName  = @DBUserName OUTPUT
@@ -332,12 +352,13 @@ BEGIN
             END 
          END
       END
-      ELSE IF @cType = 'toteid'
+      -- Sean01 S
+      ELSE IF @cType = 'toteid' 
       BEGIN
+
          IF NOT EXISTS (SELECT 1 
-                        FROM PICKDETAIL (NOLOCK)
-                        WHERE DropID = @cScanNo
-                        AND [Status] <= '9'
+                        FROM PICKDETAIL PD (NOLOCK)
+                        WHERE PD.DropID = @cScanNo
          )
          BEGIN
             SET @n_Continue = 3
@@ -346,117 +367,251 @@ BEGIN
             GOTO EXIT_SP
          END
 
-         SELECT TOP 1
-                 @cOrderKey   = OrderKey
-                ,@cDropID     = DropID
-         FROM PICKDETAIL (NOLOCK)
-         WHERE DropID = @cScanNo
-         AND [Status] <= '9'
+         SET @cDropID = @cScanNo
 
-         IF NOT EXISTS( SELECT 1
-                        FROM PICKHEADER (NOLOCK)
-                        WHERE OrderKey = @cOrderKey 
-         )
+         -- Check if ToteID has more than one OrderKey
+         IF (SELECT COUNT(DISTINCT PD.OrderKey) 
+            FROM PICKDETAIL PD (NOLOCK)
+            WHERE PD.DropID = @cScanNo
+            ) > 1
          BEGIN
-            IF NOT EXISTS( SELECT 1
+            SET @bIsDiscrete = 0
+
+            ;WITH B2COrders AS (
+            SELECT DISTINCT
+               PD.DropID,
+               PD.OrderKey
+            FROM PICKDETAIL PD (NOLOCK)
+            INNER JOIN ORDERS O (NOLOCK)
+               ON O.OrderKey = PD.OrderKey
+               AND O.DocType = 'E'
+            WHERE PD.DropID = @cScanNo
+            ),
+            OrderStatus AS (
+               SELECT
+                  b.DropID,
+                  b.OrderKey,
+                  CASE
+                        WHEN NOT EXISTS (
+                           SELECT 1
+                           FROM PACKHEADER PH (NOLOCK)
+                           WHERE PH.OrderKey = b.OrderKey
+                        ) THEN 'MISSING'
+
+                        WHEN EXISTS (
+                           SELECT 1
+                           FROM PACKHEADER PH (NOLOCK)
+                           WHERE PH.OrderKey = b.OrderKey
+                              AND PH.Status = '0'
+                        ) THEN 'ZERO'
+
+                        WHEN EXISTS (
+                           SELECT 1
+                           FROM PACKHEADER PH (NOLOCK)
+                           WHERE PH.OrderKey = b.OrderKey
+                              AND PH.Status = '9'
+                        ) THEN 'NINE'
+                        ELSE 'OTHER'
+                  END AS order_status
+               FROM B2COrders b
+            ),
+            ValidTote AS (
+               SELECT DropID
+               FROM OrderStatus
+               GROUP BY DropID
+               HAVING 
+                  COUNT(*) >= 2
+                  AND SUM(CASE WHEN order_status IN ('MISSING', 'ZERO') THEN 1 ELSE 0 END) = 1
+                  AND SUM(CASE WHEN order_status = 'NINE' THEN 1 ELSE 0 END) = COUNT(*) - 1
+                  AND SUM(CASE WHEN order_status = 'OTHER' THEN 1 ELSE 0 END) = 0
+            )
+            SELECT @cOrderKey = os.OrderKey
+            FROM OrderStatus os
+            INNER JOIN ValidTote vt
+               ON vt.DropID = os.DropID
+            WHERE os.order_status IN ('MISSING', 'ZERO')
+
+            IF @cOrderKey <> ''
+            BEGIN
+               SET @bIsDiscrete = 1
+            END
+         END
+         
+         IF @bIsDiscrete = 0
+         BEGIN 
+            IF EXISTS( SELECT 1
                            FROM PICKHEADER PH (NOLOCK)
                            WHERE EXISTS(SELECT 1 
-                                        FROM LOADPLANDETAIL LPD (NOLOCK)
-                                        WHERE LPD.LoadKey = PH.ExternOrderKey
-                                        AND LPD.OrderKey = @cOrderKey
+                                          FROM LOADPLANDETAIL LPD (NOLOCK)
+                                          INNER JOIN PICKDETAIL PD (NOLOCK)
+                                             ON LPD.OrderKey = PD.OrderKey
+                                          WHERE LPD.LoadKey = PH.ExternOrderKey
+                                          AND PD.DropID = @cScanNo
                            )
-            
             )
             BEGIN
-               SET @n_Continue = 3
-               SET @n_ErrNo = 10216
-               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'No PickHeader found with the scanned ToteID.'
-               GOTO EXIT_SP
-            END
-            ELSE
-            BEGIN
-               SET @bIsCustom = 1
                SELECT TOP 1
                        @cPickSlipNo = PH.PickHeaderKey
                      , @cLoadKey    = PH.ExternOrderKey
                FROM PICKHEADER PH (NOLOCK)
                WHERE EXISTS(SELECT 1 
-                            FROM LOADPLANDETAIL LPD (NOLOCK)
-                            WHERE LPD.LoadKey = PH.ExternOrderKey
-                            AND LPD.OrderKey = @cOrderKey
+                              FROM LOADPLANDETAIL LPD (NOLOCK)
+                              INNER JOIN PICKDETAIL PD (NOLOCK)
+                                 ON LPD.OrderKey = PD.OrderKey
+                              WHERE LPD.LoadKey = PH.ExternOrderKey
+                              AND PD.DropID = @cScanNo
                )
+               
+               IF (SELECT TOP 1 StorerKey FROM ORDERS (NOLOCK) WHERE LoadKey = @cLoadKey ) <> @cStorerKey
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_ErrNo = 10221
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Scanned Consol ToteId No is from a different storer. Please use another valid Consol Pickslip No.'
+                  GOTO EXIT_SP
+               END
+
+               IF (SELECT TOP 1 Facility FROM ORDERS (NOLOCK) WHERE LoadKey = @cLoadKey ) <> @cFacility
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_ErrNo = 10222
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Scanned Consol ToteId No is from a different facility. Please use another valid Consol Pickslip No.'
+                  GOTO EXIT_SP
+               END
             END
-         END
+         END 
          ELSE
-         BEGIN
-            SELECT TOP 1
-                    @cPickSlipNo = PickHeaderKey
-                  , @cLoadKey    = ExternOrderKey
-            FROM PICKHEADER (NOLOCK)
-            WHERE OrderKey = @cOrderKey     
-         END
-
-         IF (SELECT TOP 1 StorerKey FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey ) <> @cStorerKey
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_ErrNo = 10217
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Scanned ToteID is from a different storer. Please use another valid ToteID.'
-            GOTO EXIT_SP
-         END
-
-         IF (SELECT TOP 1 Facility FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey ) <> @cFacility
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_ErrNo = 10218
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Scanned ToteID is from a different facility. Please use another valid ToteID.'
-            GOTO EXIT_SP
-         END
-
-         SELECT @cCartonType     = CartonType
-              , @fWeight         = [Weight]
-              , @fCube           = [Cube]
-         FROM PACKINFO (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo
-         AND CartonStatus IN ('', 'PenAudit')
-
-         -- VAS PreCartonize Check
-         IF @@ROWCOUNT = 1
-         AND (SELECT ISNULL(SUM(ExpQty), 0)
-         FROM PACKDETAIL (NOLOCK) 
-         WHERE DropID = @cDropID) > 0
-
-         BEGIN
-            EXEC [API].[isp_TPACK_UpdatePackInfo]
-                 @cType                = @cType            
-               , @bIsDiscrete          = @bIsDiscrete      
-               , @bIsCustom            = @bIsCustom        
-               , @cPickSlipNo          = @cPickSlipNo       
-               , @cOrderKey            = @cOrderKey         
-               , @cLoadKey             = @cLoadKey          
-               , @cDropID              = @cDropID           
-               , @cStorerKey           = @cStorerKey        
-               , @cFacility            = @cFacility         
-               , @nCartonNo            = 1
-               , @cCartonStatus        = 'INPROGRESS'
-               , @cCartonType          = @cCartonType
-               , @fWeight              = @fWeight
-               , @fCube                = @fCube
-               , @cLabelNo             = ''
-               , @c_UserID             = @c_UserID
-               , @cLangCode            = @cLangCode
-               , @b_Success            = @b_Success         OUTPUT
-               , @n_ErrNo              = @n_ErrNo           OUTPUT
-               , @c_ErrMsg             = @c_ErrMsg          OUTPUT
+         BEGIN -- @bIsDiscrete = 1
             
-            IF @b_Success = 0
+            IF @cOrderKey = ''
+            BEGIN
+               SELECT TOP 1
+                  @cOrderKey   = OrderKey
+                  ,@cDropID     = DropID
+               FROM PICKDETAIL PD (NOLOCK)
+               WHERE PD.DropID = @cScanNo
+            END
+
+            IF NOT EXISTS( SELECT 1
+                  FROM PICKHEADER (NOLOCK)
+                  WHERE OrderKey = @cOrderKey 
+            )
+            BEGIN
+               IF NOT EXISTS( SELECT 1
+                              FROM PICKHEADER PH (NOLOCK)
+                              WHERE EXISTS(SELECT 1 
+                                          FROM LOADPLANDETAIL LPD (NOLOCK)
+                                          WHERE LPD.LoadKey = PH.ExternOrderKey
+                                          AND LPD.OrderKey = @cOrderKey
+                              )
+               )
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_ErrNo = 10216
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'No PickHeader found with the scanned ToteID.'
+                  GOTO EXIT_SP
+               END
+               ELSE
+               BEGIN
+                  SET @bIsCustom = 1
+                  SELECT TOP 1
+                        @cPickSlipNo = PH.PickHeaderKey
+                        , @cLoadKey    = PH.ExternOrderKey
+                  FROM PICKHEADER PH (NOLOCK)
+                  WHERE EXISTS(SELECT 1 
+                              FROM LOADPLANDETAIL LPD (NOLOCK)
+                              WHERE LPD.LoadKey = PH.ExternOrderKey
+                              AND LPD.OrderKey = @cOrderKey
+                  )
+               END
+            END
+            ELSE
+            BEGIN
+               SELECT TOP 1
+                     @cPickSlipNo = PickHeaderKey
+                     , @cLoadKey    = ExternOrderKey
+               FROM PICKHEADER (NOLOCK)
+               WHERE OrderKey = @cOrderKey     
+            END
+
+            IF (SELECT TOP 1 StorerKey FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey ) <> @cStorerKey
             BEGIN
                SET @n_Continue = 3
+               SET @n_ErrNo = 10217
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Scanned ToteID is from a different storer. Please use another valid ToteID.'
                GOTO EXIT_SP
             END
-         END
-         -- VAS PreCartonize Check (END)
+
+            IF (SELECT TOP 1 Facility FROM ORDERS (NOLOCK) WHERE OrderKey = @cOrderKey ) <> @cFacility
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_ErrNo = 10218
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Scanned ToteID is from a different facility. Please use another valid ToteID.'
+               GOTO EXIT_SP
+            END
+
+            IF EXISTS (SELECT 1
+                     FROM PACKINFO (NOLOCK)
+                     WHERE PickSlipNo = @cPickSlipNo
+                     AND CartonStatus IN ('', 'PENDAUDIT')
+            )
+            BEGIN
+               SELECT @nTtlExpQty = ISNULL(SUM(ExpQty), 0)
+                  , @nCartonNoCount = COUNT(DISTINCT CartonNo)
+                  , @nMaxCartonNo = ISNULL(MAX(CartonNo), 0)
+               FROM PACKDETAIL (NOLOCK) 
+               WHERE PickSlipNo = @cPickSlipNo
+               AND DropID = @cDropID
+               
+            
+               SELECT  @cCartonType = CartonType
+                     , @fWeight     = [Weight]
+                     , @fCube       = [Cube]
+                     , @nCartonNo    = CartonNo
+               FROM PACKINFO (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+               AND CartonNo = @nMaxCartonNo
+               AND CartonStatus IN ('', 'PENDAUDIT')
+
+               -- VAS PreCartonize Check
+               IF @@ROWCOUNT = 1
+               AND @nCartonNoCount = 1
+               AND @nTtlExpQty > 0
+               BEGIN
+                  EXEC [API].[isp_TPACK_UpdatePackInfo]
+                     @cType                = @cType            
+                     , @bIsDiscrete          = @bIsDiscrete      
+                     , @bIsCustom            = @bIsCustom        
+                     , @cPickSlipNo          = @cPickSlipNo       
+                     , @cOrderKey            = @cOrderKey         
+                     , @cLoadKey             = @cLoadKey          
+                     , @cDropID              = @cDropID           
+                     , @cStorerKey           = @cStorerKey        
+                     , @cFacility            = @cFacility         
+                     , @nCartonNo            = @nCartonNo
+                     , @cCartonStatus        = 'INPROGRESS'
+                     , @cCartonType          = @cCartonType
+                     , @fWeight              = @fWeight
+                     , @fCube                = @fCube
+                     , @cLabelNo             = ''
+                     , @c_UserID             = @c_UserID
+                     , @cLangCode            = @cLangCode
+                     , @b_Success            = @b_Success         OUTPUT
+                     , @n_ErrNo              = @n_ErrNo           OUTPUT
+                     , @c_ErrMsg             = @c_ErrMsg          OUTPUT
+                  
+                  IF @b_Success = 0
+                  BEGIN
+                     SET @n_Continue = 3
+                     GOTO EXIT_SP
+                  END
+               END 
+            END
+            -- VAS PreCartonize Check (END) 
+         END 
+         -- @cType = 'toteid' & @bIsDiscrete = 1 END 
       END
-   END
+      -- -- Sean01 E  @cType = 'toteid' end
+   END 
 
    IF @bIsDiscrete = 1
    BEGIN
@@ -518,6 +673,7 @@ BEGIN
       , @cStorerKey           = @cStorerKey        
       , @cFacility            = @cFacility  
       , @c_UserID             = @c_UserID
+      , @cLangCode            = @cLangCode
       , @cPackTaskConfigJson  = @cPackTaskConfigJson  OUTPUT
       , @b_Success            = @b_Success            OUTPUT
       , @n_ErrNo              = @n_ErrNo              OUTPUT
@@ -528,6 +684,77 @@ BEGIN
       SET @n_Continue = 3   
       GOTO EXIT_SP
    END
+
+   SELECT TOP 1 @cLabelPrinter = PrinterID
+               ,@cWorkstation = Workstation
+   FROM API.AppPrinter P (NOLOCK)
+   WHERE PrinterType ='Label'
+   AND EXISTS ( SELECT 1 
+                  FROM API.AppWorkstation W (NOLOCK) 
+                  WHERE W.Workstation = P.Workstation
+                  AND EXISTS (SELECT 1 
+                              FROM API.AppSection S (NOLOCK) 
+                              WHERE S.DeviceID = W.DeviceID
+                              AND S.UserID = @c_UserID
+                              AND (S.ScanNo = @cPickSlipNo
+                                     OR S.ScanNo = @cOrderKey
+                                     OR S.ScanNo = @cDropID
+                                 )
+                              )
+               )
+
+   SELECT TOP 1 @cPaperPrinter = PrinterID
+   FROM API.AppPrinter P (NOLOCK)
+   WHERE PrinterType ='Paper'
+   AND EXISTS ( SELECT 1 
+                  FROM API.AppWorkstation W (NOLOCK) 
+                  WHERE W.Workstation = P.Workstation
+                  AND EXISTS (SELECT 1 
+                              FROM API.AppSection S (NOLOCK) 
+                              WHERE S.DeviceID = W.DeviceID
+                              AND S.UserID = @c_UserID
+                              AND (S.ScanNo = @cPickSlipNo
+                                     OR S.ScanNo = @cOrderKey
+                                     OR S.ScanNo = @cDropID
+                                 )
+                              )
+               )
+
+   INSERT INTO API.TPACK_UserSessionActivityLog 
+   (
+        PickSlipNo
+      , CartonNo
+      , LabelNo
+      , OrderKey
+      , LoadKey
+      , DropID
+      , StorerKey
+      , Facility
+      , Workstation
+      , LabelPrinter
+      , PaperPrinter
+      , AddWho
+      , AddDate
+      , EditWho
+      , EditDate
+   )
+   VALUES (
+        @cPickSlipNo
+      , @nCartonNo
+      , ''
+      , @cOrderKey
+      , @cLoadKey
+      , @cDropID
+      , @cStorerKey
+      , @cFacility 
+      , @cWorkstation
+      , @cLabelPrinter
+      , @cPaperPrinter
+      , @c_UserID
+      , GETDATE()
+      , @c_UserID
+      , GETDATE()
+   )
 
    SET @c_ResponseString = ISNULL ((SELECT  @cType                AS cType
                                           , @bIsDiscrete          AS bIsDiscrete

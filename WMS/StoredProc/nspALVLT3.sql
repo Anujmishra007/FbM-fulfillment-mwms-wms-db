@@ -82,7 +82,8 @@ BEGIN
    (SELECT code FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'VNAZONHUSQ' and storerkey = @c_Storerkey and PutawayZone = code)
    THEN 1
    WHEN exists (SELECT code FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'WAZONEHUSQ' and storerkey = @c_Storerkey and PutawayZone = code) THEN 1 ELSE 2 END
-   ,case when Lottable05 is null then 'XX'+minlot else convert(nvarchar,Lottable05)end, qtyinloc DESC, Loc, Lot)RollingSum
+      --,case when Lottable05 is null then 'XX'+minlot else convert(nvarchar,Lottable05)end, qtyinloc DESC, Loc, Lot)RollingSum
+   ,case when Lottable05 is null then 'XX'+minlot else convert(nvarchar,Lottable05)end, Loc, Lot)RollingSum
    ,(SELECT OpenQty - QtyAllocated - QtyPicked - QtyPreAllocated - ShippedQty FROM ORDERDETAIL (NOLOCK)
    WHERE storerkey = @c_StorerKey and OrderKey = left(@c_OtherParms,10) AND orderlinenumber = right(left(@c_OtherParms,15),5))TotalQtyToPick
    FROM
@@ -129,7 +130,9 @@ BEGIN
    (SELECT code FROM CODELKUP (NOLOCK) WHERE PutawayZone = code and LISTNAME = 'VNAZONHUSQ' and Storerkey = @c_StorerKey)
    THEN 1
    WHEN exists (SELECT code FROM CODELKUP (NOLOCK) WHERE PutawayZone = code and LISTNAME = 'WAZONEHUSQ' and Storerkey = @c_StorerKey) THEN 1 ELSE 2 END
-   , case when Lottable05 is null then 'XX'+minlot else convert(nvarchar,Lottable05)end, qtyinloc DESC, Loc, Lot
+   , case when Lottable05 is null then 'XX'+minlot else convert(nvarchar,Lottable05)end,  Loc , Lot
+
+      --, case when Lottable05 is null then 'XX'+minlot else convert(nvarchar,Lottable05)end, qtyinloc DESC, Loc, Lot
    OPEN CURSOR_AVAILABLE
    FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_LOC, @c_ID, @n_QtyAvailable
    WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)

@@ -13,13 +13,15 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.1                                                          */    
+/* Version: 1.2                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 10-Mar-2026 WLChooi  1.1   FCR-11514 Update UOM to 6 for PU VAS (WL01)*/
+/* 20-Apr-2026 WLChooi  1.2   FCR-12598 Check for ASTCPK (WL02)          */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_DATA]        
    @c_Wavekey     NVARCHAR(10)
@@ -60,7 +62,7 @@ BEGIN
                             + ' AND NOT EXISTS (SELECT 1'
                             +                '  FROM TASKDETAIL td (NOLOCK)' 
                             +                '  WHERE td.TaskdetailKey = PICKDETAIL.TaskdetailKey'
-                            +                '  AND td.Tasktype = ''CPK'''
+                            +                '  AND td.Tasktype IN (''CPK'', ''ASTCPK'')'   --WL02
                             +                '  AND td.SourceType    = ''mspRLWAV10'''
                             +                '  AND td.[Status]      <> ''X'''
                             +                ' )'
@@ -75,6 +77,21 @@ BEGIN
    ,  @b_Success = @b_Success OUTPUT
    ,  @n_Err     = @n_err     OUTPUT
    ,  @c_ErrMsg  = @c_errmsg  OUTPUT
+
+   --WL01 S
+   IF @n_Continue = 1
+   BEGIN
+      UPDATE #PickDetail_WIP 
+      SET UOM = '6'
+        , PickMethod = '3'
+      FROM #PickDetail_WIP pd
+      JOIN dbo.WorkOrderDetail wod (NOLOCK) ON wod.ExternWorkOrderKey = pd.Orderkey
+                                           AND wod.ExternLineNo = pd.OrderLineNumber
+      WHERE pd.UOM = '2'
+      AND wod.[Type] IN ( 'PU' )
+      AND wod.Qty > 0
+   END
+   --WL01 E
  
    IF @b_Success <> 1
    BEGIN

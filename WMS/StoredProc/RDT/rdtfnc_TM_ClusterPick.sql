@@ -23,6 +23,7 @@ GO
 /* 2023-04-19   1.5  James    WMS-22212 Allow blank suggested cart id and  */
 /*                            assign cart id to the available groupkey     */
 /*                            Allow different UOM qty input (james04)      */
+/* 2026-04-10   1.6  Dennis   Check status='5' task go to ToLoc screen     */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_ClusterPick](  
@@ -3852,6 +3853,43 @@ BEGIN
 
             IF @nErrNo <> 0   -- Still no task, go to picking completed screen
             BEGIN
+               -- Check if there are tasks with status='5' (picked but not confirmed to ToLoc)
+               IF EXISTS (
+                  SELECT 1 FROM dbo.TASKDETAIL WITH (NOLOCK)
+                  WHERE Groupkey = @cGroupKey
+                  AND   DeviceID = @cCartID
+                  AND   [Status] = '5'
+                  AND   StorerKey = @cStorerKey
+                  AND   UserKey = @cUserName
+                  AND   Qty > 0
+               )
+               BEGIN
+                  -- Scan out    
+                  -- Clear 'No Task' error from previous get task    
+                  SET @nErrNo = 0    
+                  SET @cErrMsg = ''  
+                  EXEC rdt.rdt_TM_ClusterPick_ScanOut @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey    
+                     ,@cTaskDetailKey    
+                     ,@nErrNo       OUTPUT    
+                     ,@cErrMsg      OUTPUT    
+                  IF @nErrNo <> 0    
+                     GOTO Quit    
+
+                  SELECT @cSuggToLOC = ToLoc
+                  FROM dbo.TaskDetail WITH (NOLOCK)
+                  WHERE TaskDetailKey = @cTaskDetailKey
+                        
+                  -- Prepare next screen var    
+                  SET @cOutField01 = @cSuggToLOC -- To LOC    
+                  SET @cOutField02 = CASE WHEN @cConfirmToLoc = '1' THEN '' ELSE @cSuggToLOC END  
+                  SET @cOutField03 = @cCartPickMethod
+                           
+                  -- Go to To LOC screen    
+                  SET @nScn = @nScn_ToLoc    
+                  SET @nStep = @nStep_ToLoc
+                  GOTO Quit
+               END
+
                SET @cSuggFromLOC = ''
          
                -- Prepare next screen var    

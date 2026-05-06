@@ -34,6 +34,7 @@ GO
 /* 2023-11-22 2.6  YeeKung  UWP-11213 Fix Bug   (yeekung05)                   */
 /* 2023-12-03 2.7  YeeKung  UWP-11635 Fix Bug   (yeekung06)                   */
 /* 2024-12-02 3.0.0 LJQ006  FCR-1406. Created                                 */
+/* 2026-03-19 3.0.1 JACKC   UWP-52474 Fix DefaultToLoc = 0 issue (jackc01)    */
 /* 2026-02-16 4.0.0 NYE018  FCR-10366 add loc check digit                     */
 /* 2026-03-01 4.0.1 Dennis  DefaultLoc init value should be ''                */
 /******************************************************************************/
@@ -1974,6 +1975,8 @@ BEGIN
                SET @nScn  = @nMenu
                SET @nStep = 0
             END
+            IF @cExtendedInfoSP = ''
+               SET @cExtendedInfo1 = ''
          END
       END
    END

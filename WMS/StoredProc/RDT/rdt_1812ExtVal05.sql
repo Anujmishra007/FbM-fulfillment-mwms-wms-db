@@ -15,6 +15,7 @@ GO
 /* 2025-10-20  1.0.2   SOMA        Added ID Zero Weight validation      */ 
 /* 2026-02-12  1.0.3   PPA374      Adding 'INLOCKED' flag for picking   */
 /* 2026-02-17  1.0.4   PPA374      Only allowing to enter required qty  */
+/* 2026-03-05  1.0.5   PPA374      Amend @cToLoc if passed with chkdgt  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtVal05]
@@ -68,6 +69,15 @@ BEGIN
    SELECT TOP 1 @cFacility = Facility, @cVID = V_ID, @cSKUVerified = ISNULL(V_String25,0) FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
    SELECT TOP 1 @cCompany = C_Company FROM dbo.ORDERS WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey
 
+   IF @cToLOC LIKE 'ESM%' --1.0.5 PPA374
+   BEGIN
+      IF NOT EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE Facility = @cFacility AND LOC = @cToLOC)
+      AND EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE Facility = @cFacility AND LOC + LocCheckDigit = @cToLOC)
+      BEGIN
+         SELECT TOP 1 @cToLOC = LOC FROM dbo.LOC WITH(NOLOCK) WHERE Facility = @cFacility AND LOC + LocCheckDigit = @cToLOC
+      END
+   END
+
    IF @nFunc = 1812 -- PickSKU
    BEGIN
       --Step 3 FromID validation--
@@ -79,17 +89,17 @@ BEGIN
          IF @nInputKey = 1
          BEGIN
             IF EXISTS(
-		    SELECT 1 
-			FROM SKU S WITH(NOLOCK) 
-			   INNER JOIN LOTxLOCxID LLI WITH(NOLOCK) 
-			      ON LLI.SKU = S.SKU 
-				  AND LLI.StorerKey = S.StorerKey
-			WHERE ISNULL(STDGROSSWGT,0) = 0 
-			   AND LLI.Qty > 0 
-			   AND LLI.StorerKey = @cStorerKey
-			   AND LLI.ID = @cVID
-			   AND ID <> ''
-			)
+            SELECT 1 
+            FROM SKU S WITH(NOLOCK) 
+               INNER JOIN LOTxLOCxID LLI WITH(NOLOCK) 
+                  ON LLI.SKU = S.SKU 
+               AND LLI.StorerKey = S.StorerKey
+            WHERE ISNULL(STDGROSSWGT,0) = 0 
+               AND LLI.Qty > 0 
+               AND LLI.StorerKey = @cStorerKey
+               AND LLI.ID = @cVID
+               AND ID <> ''
+            )
 
             BEGIN
                SET @nErrNo = 218264
@@ -112,7 +122,7 @@ BEGIN
                SELECT @nQty AS Qty, @nTaskQty AS TaskQty
             
             IF (@cSKUVerified <> '1' AND @nQty <> 0 AND @nQty <> @nTaskQTY)
-			OR (@cSKUVerified = '1' AND @nQty <> @nTaskQTY)
+         OR (@cSKUVerified = '1' AND @nQty <> @nTaskQTY)
             BEGIN
                SET @nErrNo = 239651
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')

@@ -12,7 +12,8 @@ GO
 /* Purpose:       For Unilever                                          */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
-/* 2024-10-08 1.0  Vikas   Created                                      */
+/* 2024-10-08 1.0  Vikas    Created                                     */
+/* 2026-04-07 1.1  JackC    FCR-9125 Pass toLoc to RcvCfm SP            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_605ExtScn03] (
@@ -566,6 +567,7 @@ BEGIN
             EXEC rdt.rdt_PalletReceive_Confirm @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility,
                @cActReceiptKey,
                @cID,
+               '', --ToLoc V1.1
                @nErrNo  OUTPUT,
                @cErrMsg OUTPUT
             IF @nErrNo <> 0

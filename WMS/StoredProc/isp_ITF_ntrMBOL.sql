@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_ITF_ntrMBOL]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_ITF_ntrMBOL]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -40,9 +36,12 @@ GO
 /* 04-Feb-2019  MCTang    2.2   Add GVTITF (MC02)                       */
 /* 13-Mar-2019  YTKuek    2.3   Add GVTITF Event (YT01)                 */
 /* 26-Apr-2019  MCTang    2.4   Add OTM MBLUPDOTM (MC03)                */
+/* 29-Jan-2024  YTKuek    2.9   Add GVTITF LOGIGH (CY01)                */
+/* 10-Jan-2025  YTKuek    3.0   Add GVTITF Trigger (YT02)               */
+/* 09-Mar-2026  Michael   3.1   FCR-11043 New Trigger enhancement (ML01)*/
 /************************************************************************/  
   
-CREATE PROC isp_ITF_ntrMBOL  
+CREATE OR ALTER PROC isp_ITF_ntrMBOL
             @c_TriggerName          nvarchar(120)  
           , @c_SourceTable          nvarchar(60)  
           , @c_StorerKey            nvarchar(15)  
@@ -68,6 +67,7 @@ BEGIN
    DECLARE @c_ConfigKey             nvarchar(30)  
          , @c_Tablename             nvarchar(30) 
          , @c_Tablename2            nvarchar(30)   --(YT01) 
+         , @c_TablenameLOGIGH       NVARCHAR(30)  -- (CY01)
          , @c_RecordType            nvarchar(10)  
          , @c_RecordStatus          nvarchar(10)  
          , @c_sValue                nvarchar(10)  
@@ -75,6 +75,13 @@ BEGIN
          , @c_StoredProc            nvarchar(200)  
          , @c_ConfigFacility        nvarchar(5)
          , @c_UpdatedColumns        NVARCHAR(250)      
+         --ML01-S
+         , @c_Authority             NVARCHAR(30)
+         , @c_Option5               NVARCHAR(4000)
+         , @c_SQL                   NVARCHAR(MAX)
+         , @c_Key1                  NVARCHAR(10)
+         , @c_Key2                  NVARCHAR(30)
+         --ML01-E
   
    DECLARE @c_Status                nvarchar(10)  
          , @c_FinalizeFlag          NVARCHAR(1)   
@@ -201,6 +208,95 @@ BEGIN
              
             IF @b_Success = 1
             BEGIN
+               --ML01-S
+               IF ISNULL(@c_ConfigKey,'')<>'' AND @c_TargetTable IN ('TRANSMITLOG3', 'TRANSMITLOG2')
+               BEGIN
+                  SELECT @c_Authority = ''
+                       , @c_Option5   = ''
+                       , @c_SQL       = ''
+                       , @c_Key1      = ''
+                       , @c_Key2      = ''
+   
+                  SELECT @c_Authority = Authority
+                       , @c_Option5   = Option5
+                    FROM dbo.fnc_GetRight2('', @c_Storerkey, '', @c_ConfigKey)
+
+                  IF @c_Authority = '1'
+                  BEGIN
+                     SET @c_SQL = dbo.fnc_GetParamValueFromString('@c_TLogKey1SQL', @c_Option5, '')
+                     
+                     IF ISNULL(@c_SQL,'')<>''
+                     BEGIN
+                        IF OBJECT_ID('tempdb..#TEMP_TRANSMITLOG') IS NULL
+                           CREATE TABLE #TEMP_TRANSMITLOG (
+                                SeqNo    INT IDENTITY(1,1) NOT NULL PRIMARY KEY
+                              , Key1     NVARCHAR(10) NULL
+                              , Key2     NVARCHAR(30) NULL
+                           )
+                        ELSE
+                           TRUNCATE TABLE #TEMP_TRANSMITLOG
+
+                        SET @c_SQL = N'INSERT INTO #TEMP_TRANSMITLOG (Key1, Key2) ' + @c_SQL
+
+                        EXEC sys.sp_executesql @c_SQL, N'@c_TriggerName NVARCHAR(120), @c_SourceTable NVARCHAR(60), @c_Storerkey NVARCHAR(15), @c_MBOLKey NVARCHAR(10)'
+                           , @c_TriggerName
+                           , @c_SourceTable
+                           , @c_StorerKey
+                           , @c_MBOLKey
+
+                        DECLARE CUR_TRANSMITLOG CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                        SELECT Key1, Key2
+                        FROM #TEMP_TRANSMITLOG
+                        GROUP BY Key1, Key2
+                        ORDER BY MIN(SeqNo)
+
+                        OPEN CUR_TRANSMITLOG
+                        FETCH NEXT FROM CUR_TRANSMITLOG INTO @c_Key1, @c_Key2
+
+                        WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)
+                        BEGIN
+                           IF @c_TargetTable = 'TRANSMITLOG3'
+                           BEGIN
+                              EXEC ispGenTransmitLog3 @c_Tablename, @c_Key1, @c_Key2, @c_StorerKey, ''
+                                                    , @b_success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
+                              IF @b_success <> 1
+                              BEGIN
+                                 SET @n_continue = 3
+                                 SET @n_Err = 68003
+                                 SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_Err,0)) +
+                                                ': Insert into TRANSMITLOG3 Failed. (isp_ITF_ntrMBOL) ( SQLSvr MESSAGE = ' +
+                                                ISNULL(LTRIM(RTRIM(@c_ErrMsg)),'') + ' ) '
+                                 BREAK
+                              END
+                           END
+                           ELSE IF @c_TargetTable = 'TRANSMITLOG2'
+                           BEGIN
+                              EXEC ispGenTransmitLog2 @c_Tablename, @c_Key1, @c_Key2, @c_StorerKey, ''
+                                                    , @b_success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
+                              IF @b_success <> 1
+                              BEGIN
+                                 SET @n_continue = 3
+                                 SET @n_Err = 68004
+                                 SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@n_Err,0)) +
+                                                ': Insert into TRANSMITLOG2 Failed. (isp_ITF_ntrMBOL) ( SQLSvr MESSAGE = ' +
+                                                ISNULL(LTRIM(RTRIM(@c_ErrMsg)),'') + ' ) '
+                                 BREAK
+                              END
+                           END
+                     
+                           FETCH NEXT FROM CUR_TRANSMITLOG INTO @c_Key1, @c_Key2
+                        END
+                        CLOSE CUR_TRANSMITLOG
+                        DEALLOCATE CUR_TRANSMITLOG
+
+                        IF @n_continue = 3
+                           GOTO QUIT
+                        GOTO GET_NEXT_Record
+                     END
+                  END
+               END
+               --ML01-E
+
                IF @c_TargetTable = 'TRANSMITLOG3'   
                BEGIN  
                   EXEC ispGenTransmitLog3 @c_Tablename, @c_MBOLKey, '', @c_StorerKey, ''  
@@ -352,11 +448,13 @@ BEGIN
                SET @b_Success = 0
                SET @c_TableName = ''   --(YT01)
                SET @c_TableName2 = ''  --(YT01)
+               SET @c_TablenameLOGIGH = ''  --(CY01)
 
                IF @c_Status = '9' 
                BEGIN
                   SET @c_TableName = 'GVTMBOLSHP'
                   SET @c_TableName2 = 'GVTEMBLSHP' --(YT01)
+                  SET @c_TablenameLOGIGH = 'GVTMBOLSHPLOGIGH' --(CY01)
                   SET @b_Success = 1
                END
 
@@ -397,6 +495,44 @@ BEGIN
                      END
                   END
                   --(YT01)-E
+
+                  --(CY01)-S
+   	            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)            
+   	                        WHERE STC.StorerKey = @c_Storerkey 
+                              AND   STC.ConfigKey = @c_TablenameLOGIGH
+   	                        AND   STC.SValue    = '1' )
+                  BEGIN
+                     EXEC ispGenGVTLog @c_TablenameLOGIGH, @c_MBOLKey, @c_Status, @c_StorerKey, ''  
+                                     , @b_success   OUTPUT  
+                                     , @n_err       OUTPUT  
+                                     , @c_errmsg    OUTPUT 
+
+                     IF @b_success <> 1
+                     BEGIN
+                        SET @n_continue = 3
+                        GOTO QUIT 
+                     END
+                  END
+                  --(CY01)-E
+
+                  --(YT02)-S
+   	            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)            
+   	                        WHERE STC.StorerKey = @c_Storerkey 
+                              AND   STC.ConfigKey = 'GVTMBOLSHPLG'
+   	                        AND   STC.SValue    = '1' )
+                  BEGIN
+                     EXEC ispGenGVTLog 'GVTMBOLSHPLG', @c_MBOLKey, @c_Status, @c_StorerKey, ''  
+                                     , @b_success   OUTPUT  
+                                     , @n_err       OUTPUT  
+                                     , @c_errmsg    OUTPUT 
+
+                     IF @b_success <> 1
+                     BEGIN
+                        SET @n_continue = 3
+                        GOTO QUIT 
+                     END
+                  END
+                  --(YT02)-E
                END -- IF @b_Success = 1
             END -- ColValue IN ('STATUS','SOSTATUS')
          END -- IF (ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderUpdate')  

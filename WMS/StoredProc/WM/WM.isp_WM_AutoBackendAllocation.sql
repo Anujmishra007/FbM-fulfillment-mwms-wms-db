@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[WM].[isp_WM_AutoBackendAllocation]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [WM].[isp_WM_AutoBackendAllocation]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,15 +15,17 @@ GO
 /*                                                                      */  
 /* PVCS Version: 1.7 (Unicode)                                          */  
 /*                                                                      */  
-/* Version: 5.4                                                         */  
+/* Version: 1.1                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author  Rev   Purposes                                  */  
 /* 11-Mar-2021  Shong   1.0   Migrate from isp_WM_AutoBackendAllocation */  
+/* 07-APR-2025  Wan02   1.1   FCR-11826 - IN - Maersk WMS v2 - DAIMLER  */
+/*                            TRUCK AG - Auto Alloaction                */
 /************************************************************************/  
-CREATE PROC [WM].[isp_WM_AutoBackendAllocation] (   
+CREATE OR ALTER PROC [WM].[isp_WM_AutoBackendAllocation] (   
      @cParameterCode NVARCHAR(10) = ''  
    , @bSuccess       INT = 1            OUTPUT  
    , @nErr           INT = ''           OUTPUT  
@@ -34,7 +33,6 @@ CREATE PROC [WM].[isp_WM_AutoBackendAllocation] (
    , @bDebug         INT = 0   
    , @cStartOrderKey NVARCHAR(10) = ''  
    , @cEndOrderKey   NVARCHAR(10) = ''  
-     
 )  
 AS  
 BEGIN  
@@ -92,7 +90,13 @@ BEGIN
          , @cMax_SKU_Per_Order      NVARCHAR(1000)    
   
    DECLARE @n_SafetyAllocateOrderCtn INT = 0   
-         , @n_TaskPriorityByStorer   INT = 0  
+         , @n_TaskPriorityByStorer   INT = 0 
+         
+   DECLARE @n_Cnt                      INT = 0                                     --(Wan02)   
+         , @n_NoOfOrders               INT = 0                                     --(Wan02)
+         , @c_PendingAllocSOByQty      CHAR(1)       = 'N'                         --(Wan02)
+         , @c_FeatureKeys              NVARCHAR(1000)= ''                          --(Wan02)
+         , @c_SQLWhereStatus           NVARCHAR(500) = ''                          --(Wan02)
   
    --(Wan01) - START  
    DECLARE @nPriority    INT = 9  
@@ -146,15 +150,17 @@ BEGIN
       CREATE TABLE #TMP_ORDERS ( OrderKey NVARCHAR(10) )     
       SET @b_NewTmpOrders = 1                                                                                                                                                          
    END   
-     
+   
+
+   --(Wan01) 
    INSERT INTO #StorerWIP(StorerKey, Facility, NoOfOrders)  
    SELECT o.StorerKey, o.Facility, COUNT(*)   
    FROM AutoAllocBatchDetail aabd (NOLOCK)   
-   JOIN ORDERS AS o WITH(NOLOCK) ON o.OrderKey = aabd.OrderKey   
+   JOIN ORDERS AS o WITH(NOLOCK) ON o.OrderKey = aabd.OrderKey  
    WHERE o.[Status] IN ('0','1')   
    AND   aabd.[Status] IN ('0','1')  
-   GROUP BY o.StorerKey, o.Facility   
-  
+   GROUP BY o.StorerKey, o.Facility
+     
    IF @cParameterCode = ''  
    BEGIN  
       DECLARE C_BuiLoadParameters CURSOR LOCAL FAST_FORWARD READ_ONLY   
@@ -261,11 +267,44 @@ BEGIN
       BEGIN
          PRINT '  >> Safety Allocate Order Ctn: ' + CAST(@n_SafetyAllocateOrderCtn AS VARCHAR) 
       END
-        
-      IF EXISTS(SELECT 1 FROM #StorerWIP  
-                WHERE StorerKey = @cStorerKey   
-                AND   Facility = @cFacility   
-                AND   NoOfOrders > @n_SafetyAllocateOrderCtn)  
+
+      SET @c_FeatureKeys = ''                                                       --(Wan02) - START
+      SELECT @c_FeatureKeys = gr.Option5 
+      FROM dbo.fnc_GetRight2(@cFacility, @cStorerkey, '', 'BackEndAutoAllocCfg') gr
+      WHERE gr.Authority = '1'
+
+      SET @c_PendingAllocSOByQty = 'N'                                              
+      IF @c_FeatureKeys > ''
+      BEGIN
+         SELECT @c_PendingAllocSOByQty = dbo.fnc_GetParamValueFromString('@c_PendingAllocSOByQty'
+                                                                        , @c_Featurekeys
+                                                                        , @c_PendingAllocSOByQty)
+      END
+      
+      IF @c_PendingAllocSOByQty = 'Y'
+      BEGIN
+         SET @n_NoOfOrders = 0
+         SELECT @n_NoOfOrders = COUNT(1) 
+         FROM ORDERS o  (NOLOCK) 
+         WHERE o.Facility = @cFacility
+         AND   o.Storerkey= @cStorerKey
+         AND   o.[Status] < '9'
+         AND   EXISTS ( SELECT 1
+                        FROM ORDERDETAIL od (NOLOCK) 
+                        WHERE od.Orderkey = o.Orderkey
+                        AND od.OpenQty - od.QtyAllocated - od.QtyPicked - ShippedQty > 0
+                        ) 
+
+         IF @n_NoOfOrders > @n_SafetyAllocateOrderCtn
+         BEGIN
+            GOTO FETCH_NEXT  
+         END
+      END
+      ELSE IF EXISTS( SELECT 1 FROM #StorerWIP                                      --(Wan02) - END
+                      WHERE StorerKey = @cStorerKey   
+                      AND   Facility = @cFacility   
+                      AND   NoOfOrders > @n_SafetyAllocateOrderCtn
+                      )          
       BEGIN  
          IF @bDebug=1
          BEGIN
@@ -375,9 +414,18 @@ BEGIN
       SET @nOrderCnt  = 0  
       SET @cSQLSelect = N'SELECT @nOrderCnt = COUNT(DISTINCT ORDERS.OrderKey) ' +   
                         N', @dOrderAddDate = MIN(ORDERS.AddDate) ' + @cSQLCondition 
+      --(Wan02) - START
+      SET @c_SQLWhereStatus = N' AND ( ORDERS.Status = ''0'' OR ( ORDERS.OpenQty > 1 AND ORDERS.Status = ''1'' ) ) '
+      IF @c_PendingAllocSOByQty = 'Y'        
+      BEGIN
+         SET @c_SQLWhereStatus = ''          -- By Orderdetail qty filter return from isp_WM_Gen_BuildOrderSelect
+      END
+      --(Wan02) - END
+      --NJOW01  
       
-      --NJOW01                    
-      SET @cSQLSelect = @cSQLSelect + N' AND ( ORDERS.Status = ''0'' OR ( ORDERS.OpenQty > 1 AND ORDERS.Status = ''1'' ) ) ' + CHAR(13) +  
+      --(Wan02)
+      --SET @cSQLSelect = @cSQLSelect + N' AND ( ORDERS.Status = ''0'' OR ( ORDERS.OpenQty > 1 AND ORDERS.Status = ''1'' ) ) ' + CHAR(13) +   
+      SET @cSQLSelect = @cSQLSelect + @c_SQLWhereStatus + CHAR(13) +  
                      CASE WHEN ISNULL(@cStartOrderKey,'') <> '' THEN ' AND ORDERS.OrderKey >= ''' +  @cStartOrderKey + ''' ' ELSE '' END +   
                      CASE WHEN ISNULL(@cEndOrderKey,'') <> '' THEN ' AND ORDERS.OrderKey <= ''' +  @cEndOrderKey + ''' ' ELSE '' END +              
                      N' AND NOT EXISTS(SELECT 1 FROM AutoAllocBatchDetail AS aabd WITH (NOLOCK) ' + CHAR(13) +                        
@@ -516,8 +564,10 @@ BEGIN
             END  
                     
             IF @n_TempOrderCount > 0   
-            BEGIN  
-               SET @cSQLSelect = @cSQLSelect + N' AND ( ORDERS.Status = ''0'' OR ( ORDERS.OpenQty > 1 AND ORDERS.Status = ''1'' ) ) ' + CHAR(13) +   
+            BEGIN 
+               --(Wan02)
+               --SET @cSQLSelect = @cSQLSelect + N' AND ( ORDERS.Status = ''0'' OR ( ORDERS.OpenQty > 1 AND ORDERS.Status = ''1'' ) ) ' + CHAR(13) +
+               SET @cSQLSelect = @cSQLSelect + @c_SQLWhereStatus + CHAR(13) +
                               CASE WHEN ISNULL(@cStartOrderKey,'') <> '' THEN ' AND ORDERS.OrderKey >= ''' +  @cStartOrderKey + ''' ' ELSE '' END +   
                               CASE WHEN ISNULL(@cEndOrderKey,'') <> '' THEN ' AND ORDERS.OrderKey <= ''' +  @cEndOrderKey + ''' ' ELSE '' END +     
                               N' AND EXISTS(SELECT 1 FROM #TMP_ORDERS ORD WHERE ORD.OrderKey = ORDERS.OrderKey)' + CHAR(13) +
@@ -527,8 +577,10 @@ BEGIN
                ISNULL(@cMax_SKU_Per_Order, '')                
             END  
             ELSE  
-            BEGIN  
-               SET @cSQLSelect = @cSQLSelect + N' AND ( ORDERS.Status = ''0'' OR ( ORDERS.OpenQty > 1 AND ORDERS.Status = ''1'' ) ) ' + CHAR(13) +   
+            BEGIN
+               --(Wan02)
+               --SET @cSQLSelect = @cSQLSelect + N' AND ( ORDERS.Status = ''0'' OR ( ORDERS.OpenQty > 1 AND ORDERS.Status = ''1'' ) ) ' + CHAR(13) +   
+               SET @cSQLSelect = @cSQLSelect + @c_SQLWhereStatus + CHAR(13) +               
                               CASE WHEN ISNULL(@cStartOrderKey,'') <> '' THEN ' AND ORDERS.OrderKey >= ''' +  @cStartOrderKey + ''' ' ELSE '' END +   
                               CASE WHEN ISNULL(@cEndOrderKey,'') <> '' THEN ' AND ORDERS.OrderKey <= ''' +  @cEndOrderKey + ''' ' ELSE '' END +                        
                               N' AND NOT EXISTS(SELECT 1 FROM AutoAllocBatchDetail AS aabd WITH (NOLOCK) ' + CHAR(13) + --NJOW01    

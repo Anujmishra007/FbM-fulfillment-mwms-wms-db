@@ -79,6 +79,8 @@ BEGIN
    FROM dbo.MBOLDETAIL WITH (NOLOCK)
    WHERE OrderKey = @cOrderKey
 
+   SET @cPalletKey = ''
+
    IF @cMBOLKey = ''
    BEGIN
       SELECT @cPalletKey = Palletkey
@@ -116,7 +118,6 @@ BEGIN
       END
 
       --FCR-950 --BEGIN
-      SET @cPalletKey = ''
       SELECT @cWaveKey = ISNULL(UserDefine09, '')
       FROM dbo.ORDERS WITH(NOLOCK)
       WHERE OrderKey = @cOrderKey

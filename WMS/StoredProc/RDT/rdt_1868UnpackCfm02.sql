@@ -71,8 +71,8 @@ BEGIN
       AND StorerKey=@cStorerKey
    IF @cSKU = ''
    BEGIN
-      SET @nErrNo = 228265 
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --28265^SKU Not Exists
+      SET @nErrNo = 259601 
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --259601^SKU Not Exists
       GOTO RollBackTran
    END
 
@@ -103,6 +103,9 @@ BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 1
       GOTO RollBackTran
    END
+
+   DECLARE @cDropId NVARCHAR(30)
+   SELECT @cDropId = DropId FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND CaseID = @cLabelNo
 
    UPDATE dbo.PackDetail WITH(ROWLOCK)
    SET 
@@ -177,6 +180,10 @@ BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 1
       GOTO RollBackTran
    END
+
+   UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropId = @cDropId
+   WHERE StorerKey = @cStorerKey AND CaseID = @cLabelNo
+
    COMMIT TRAN tran_SerialUnpack
    GOTO Quit
   

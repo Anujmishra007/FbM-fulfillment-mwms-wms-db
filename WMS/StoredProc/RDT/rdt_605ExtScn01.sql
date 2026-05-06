@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-09-19 1.0  JHU151   Created                                     */
+/* 2026-04-07 1.1  JackC    FCR-9125 Pass toLoc to RcvCfm SP            */
 /************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdt_605ExtScn01] (
@@ -517,6 +518,7 @@ BEGIN
             EXEC rdt.rdt_PalletReceive_Confirm @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility,
                @cActReceiptKey,
                @cID,
+               '', -- ToLoc V1.1
                @nErrNo  OUTPUT,
                @cErrMsg OUTPUT
             IF @nErrNo <> 0

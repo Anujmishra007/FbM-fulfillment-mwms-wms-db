@@ -30,6 +30,10 @@
 /* 23-Jul-2025    Sean01     #UWP-38247 - Compatible with Login User    */
 /* 20-Aug-2025    Jiawen   #UWP-39649 - Add CCTV Configs                */
 /* 15-Sep-2025    JWF011   #UWP-41185 - Update OrderKey for CCTV Config */
+/* 15-Dec-2025    Sean02   FCR-8269 - tracking no refresh in the UI     */
+/* 07-Jan-2026    JWF011   #FCR-10065 - Add SKU to get CCTV configs     */
+/* 29-Jan-2026    Sean03   UWP-47754 - Merge the unified SP             */
+/* 24-Mar-2026    Sean04   #UWP-52654 - replace RevertUser with ResetUser*/
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU_M](
      @b_Debug           INT            = 0
@@ -296,8 +300,8 @@ BEGIN
       SET @b_sp_Success    = 1
       SET @n_sp_err        = 0
       SET @c_sp_errmsg     = ''
-
-      EXEC [dbo].[isp_Ecom_GetPackSku]
+      
+      EXEC [API].[isp_ECOMP_GetPackSku] --Sean03
          @c_OrderKey    = @c_OrderKey   
       ,  @c_StorerKey   = @c_StorerKey  
       ,  @c_Sku         = @c_SKU         OUTPUT
@@ -538,18 +542,76 @@ BEGIN
       , @c_DropID                = @c_DropID
       , @c_MultiPackResponse     = @c_MultiPackResponse OUTPUT
 
-   ----get order info
-   --EXEC [API].[isp_ECOMP_GetOrderInfo_v2] @c_Orderkey = @c_PHOrderKey, @c_OrderInfoJson = @c_OrderInfoJson OUTPUT
-   ----get order status
-   --EXEC [API].[isp_ECOMP_GetOrderStatus] @c_Orderkey = @c_PHOrderKey, @c_OrderStatusJson = @c_OrderStatusJson OUTPUT
 
-   --INSERT INTO @t_PackTaskOrder( TaskBatchNo, OrderKey, DeviceOrderkey, [Status], INProgOrderkey, Color )
-   --EXEC [API].[isp_ECOMP_GetPackTaskOrders_M]  
-   --      @c_TaskBatchNo    = @c_TaskBatchID
-   --   ,  @c_PickSlipNo     = @c_PickSlipNo
-   --   ,  @c_Orderkey       = @c_PHOrderKey   OUTPUT  
-   --   ,  @b_packcomfirm    = 0
-   --   ,  @c_DropID         = @c_DropID
+   --CCTV Configs Start
+   IF @c_OrderKey = ''
+   BEGIN
+      IF @c_PickSlipNo <> '' 
+      BEGIN 
+         SELECT TOP 1 @c_OrderKey = ISNULL(RTRIM(OrderKey), '')
+         FROM dbo.PackHeader (NOLOCK) 
+         WHERE PickSlipNo = @c_PickSlipNo
+      END
+
+      IF @c_OrderKey = ''
+      BEGIN
+         SELECT
+            @n_OrderCount = COUNT(*),
+            @c_OrderKey = CASE
+                              WHEN COUNT(*) = 1 THEN MAX(ISNULL(RTRIM(OrderKey), ''))
+                              ELSE ''
+                          END
+         FROM dbo.PackTaskDetail (NOLOCK) 
+         WHERE TaskBatchNo = @c_TaskBatchID
+         AND SKU = @c_SKU
+      END
+   END
+   
+   -- Sean02 Start
+   -- Get EPACK CCTV Config Start
+   EXEC [API].[isp_ECOMP_GetEPackConfigs]
+         @c_StorerKey       = @c_StorerKey   
+      ,  @c_Facility        = @c_Facility    
+      ,  @c_UserId          = @c_UserID      
+      ,  @c_ComputerName    = @c_ComputerName
+      ,  @c_PackMode        = @c_OrderMode    
+      ,  @c_TaskBatchID     = @c_TaskBatchID 
+      ,  @c_OrderKey        = @c_OrderKey    
+      ,  @c_DropID          = @c_DropID      
+      ,  @c_SKU             = @c_SKU
+      ,  @c_EPACKConfigJSON = @c_EPACKConfigJSON OUTPUT
+
+
+   DECLARE @c_EPACKCCTVREFRESHTRACKNO     NVARCHAR(1)  = ''
+      , @c_EPACKCCTVJDONLINE           NVARCHAR(1)  = ''
+
+   IF @c_EPACKConfigJSON <> ''
+   BEGIN
+      SELECT @c_EPACKCCTVREFRESHTRACKNO = ISNULL(RTRIM([value]), '')
+      FROM OPENJSON (@c_EPACKConfigJSON)
+      WITH ( 
+            ConfigName NVARCHAR(60) '$.ConfigName',
+            [Value] NVARCHAR(120) '$.Value'
+      )
+      WHERE ConfigName = 'CCTV_Refresh_TrackNo'
+
+      SELECT @c_EPACKCCTVJDONLINE = ISNULL(RTRIM([value]), '')
+      FROM OPENJSON (@c_EPACKConfigJSON)
+      WITH ( 
+            ConfigName NVARCHAR(60) '$.ConfigName',
+            [Value] NVARCHAR(120) '$.Value'
+      )
+      WHERE ConfigName = 'CCTV_JD_Online'
+   END
+
+   DECLARE @b_CCTV_JD_Online INT = 0;
+   DECLARE @b_CCTVREFRESHTRACKNO INT = 0;
+
+   SET @b_CCTV_JD_Online = CASE WHEN @c_EPACKCCTVJDONLINE = '1' THEN 1 ELSE 0 END;
+   SET @b_CCTVREFRESHTRACKNO = CASE WHEN @c_EPACKCCTVREFRESHTRACKNO = '1' THEN 1 ELSE 0 END;
+
+   -- Get EPACK CCTV Config End
+   -- Sean02 End
 
    SET @c_TrackingNumber = ''
 
@@ -558,6 +620,8 @@ BEGIN
          @b_Debug                   = @b_Debug
        , @c_PickSlipNo              = @c_PickSlipNo
        , @n_CartonNo                = @n_CartonNo
+       , @b_CCTV_JD_Online          = @b_CCTV_JD_Online -- Sean02
+       , @b_CCTVREFRESHTRACKNO      = @b_CCTVREFRESHTRACKNO -- Sean02
        , @b_Success                 = @b_sp_Success         OUTPUT
        , @n_ErrNo                   = @n_sp_err             OUTPUT
        , @c_ErrMsg                  = @c_sp_errmsg          OUTPUT
@@ -596,41 +660,7 @@ BEGIN
       SET @b_AutoCloseCarton = 0
    END
 
-   --CCTV Configs Start
-   IF @c_OrderKey = ''
-   BEGIN
-      IF @c_PickSlipNo <> '' 
-      BEGIN 
-         SELECT TOP 1 @c_OrderKey = ISNULL(RTRIM(OrderKey), '')
-         FROM dbo.PackHeader (NOLOCK) 
-         WHERE PickSlipNo = @c_PickSlipNo
-      END
-
-      IF @c_OrderKey = ''
-      BEGIN
-         SELECT
-            @n_OrderCount = COUNT(*),
-            @c_OrderKey = CASE
-                              WHEN COUNT(*) = 1 THEN MAX(ISNULL(RTRIM(OrderKey), ''))
-                              ELSE ''
-                          END
-         FROM dbo.PackTaskDetail (NOLOCK) 
-         WHERE TaskBatchNo = @c_TaskBatchID
-         AND SKU = @c_SKU
-      END
-   END
-
-   EXEC [API].[isp_ECOMP_GetEPackConfigs]
-         @c_StorerKey       = @c_StorerKey   
-      ,  @c_Facility        = @c_Facility    
-      ,  @c_UserId          = @c_UserID      
-      ,  @c_ComputerName    = @c_ComputerName
-      ,  @c_PackMode        = @c_OrderMode    
-      ,  @c_TaskBatchID     = @c_TaskBatchID 
-      ,  @c_OrderKey        = @c_OrderKey    
-      ,  @c_DropID          = @c_DropID      
-      ,  @c_EPACKConfigJSON = @c_EPACKConfigJSON OUTPUT
-   --CCTV Configs End
+   
 
    SET @c_ResponseString = ISNULL(( 
                               SELECT
@@ -663,10 +693,8 @@ BEGIN
 
    QUIT:
 
-   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
-   BEGIN
-      EXEC [WM].[lsp_RevertUser]
-   END
+   IF @b_sp_ExecuteAs = 1 REVERT --Sean04
+   EXEC [WM].[lsp_ResetUser] --Sean04
 
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      

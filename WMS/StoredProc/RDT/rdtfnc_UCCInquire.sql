@@ -16,7 +16,8 @@ GO
 /* 16-Feb-2017 1.0  James    WMS1074 - Created                          */
 /* 09-Oct-2018 1.1  Gan      Performance tuning                         */
 /* 11-Sep-2023 1.2  James    WMS-23534 Add custom reference (james01)   */
-/* 29-01-2026  1.3  SSR259   FCR-9907 - Add DecodeSP call               */
+/* 29-01-2026  1.3  SSR259   FCR-9907 - Add DecodeSP call and corrected */
+/*                                        row count check               */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCInquire] (
@@ -318,13 +319,19 @@ BEGIN
          WHERE UCCNo = @cUCC
          AND   StorerKey = @cStorerKey
 
-         IF @@ROWCOUNT = 0
+         SET @nRowCount = @@ROWCOUNT
+
+         IF @nRowCount = 0
          BEGIN
             SET @nErrNo = 106102
             SET @cErrMsg = rdt.rdtgetmessage( 106102, @cLangCode, 'DSP') --'Invalid UCC'
             GOTO Step_1_Fail
          END
-         ELSE  --@@ROWCOUNT > 1
+         ELSE IF @nRowCount = 1  -- Valid UCC with single SKU (FCR-9907)
+         BEGIN
+            SET @nMultiSKU = 0
+         END
+         ELSE  --@nRowCount > 1
          BEGIN
             SELECT @nQTY = ISNULL( SUM( Qty), 0)
             FROM dbo.UCC WITH (NOLOCK)

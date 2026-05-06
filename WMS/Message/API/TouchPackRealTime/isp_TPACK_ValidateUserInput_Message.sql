@@ -30,4 +30,7 @@ EXEC API.TouchPadAddMsg 11525, 10, 'Number of different SKU in a carton is more 
 EXEC API.TouchPadAddMsg 11526, 10, 'Not allow to pack different SKU in a carton',    'us_english'
 EXEC API.TouchPadAddMsg 11527, 10, 'Not Allow Recartonization',    'us_english'
 EXEC API.TouchPadAddMsg 11528, 10, 'Not allow to pack into a new carton. Please pack into the original pre carton.',    'us_english'
-EXEC API.TouchPadAddMsg 11529, 10, '',    'us_english'
+EXEC API.TouchPadAddMsg 11529, 10, 'Failed to Perform Check SKU, LoadKey and DropID both are empty.',    'us_english'
+EXEC API.TouchPadAddMsg 11530, 10, 'Failed to auto assign Order and PickSlip for current Tote. No matching record found in PickDetail.',    'us_english'
+
+EXEC API.TouchPadAddMsg 11531, 10, '',    'us_english'

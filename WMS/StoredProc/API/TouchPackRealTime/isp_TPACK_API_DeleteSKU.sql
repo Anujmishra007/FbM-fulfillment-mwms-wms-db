@@ -10,7 +10,7 @@ GO
 /* Purpose        : Delete SKU in PackDetail/PackInfo/PackSerialNo and etc.      */
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
-/* 2025-XX-XX   1.0             Created                                          */
+/* 2026-03-22   1.0  GCH225     Created                                          */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_DeleteSKU] (
@@ -132,26 +132,51 @@ BEGIN
        , cSKU                 NVARCHAR(20)
    )
 
-   IF @cPickSlipNo = ''
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_ErrNo = 11901
-      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'PickSlipNo cannot be empty.'
-      GOTO EXIT_SP
-   END
-
    IF @nCartonNo = 0
    BEGIN
       SET @n_Continue = 3
-      SET @n_ErrNo = 11901
+      SET @n_ErrNo = 12104
       SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Carton No. cannot be empty.'
+      GOTO EXIT_SP
+   END
+
+   IF @cType = 'toteid' 
+   BEGIN
+      IF @cPickSlipNo = '' 
+      AND @cOrderKey = '' 
+      AND @cLoadKey = ''
+      BEGIN
+         SELECT @cPickSlipNo = PH.PickSlipNo
+               , @cOrderKey = PH.OrderKey
+         FROM PACKHEADER PH (NOLOCK)
+         WHERE EXISTS ( SELECT 1 
+                        FROM PACKDETAIL PD (NOLOCK)
+                        WHERE PD.PickSlipNo = PH.PickSlipNo
+                        AND PD.DropID = @cDropID
+                        AND PD.CartonNo = @nCartonNo
+                        AND EXISTS (SELECT 1 
+                                    FROM PACKINFO PIF (NOLOCK)
+                                    WHERE PIF.PickSlipNo = PD.PickSlipNo
+                                    AND PIF.CartonNo = PD.CartonNo
+                                    AND PIF.EditWho = @c_UserID
+                                    AND PIF.CartonStatus = 'INPROGRESS'
+                        )
+                     )
+      END
+   END
+   
+   IF @cPickSlipNo = ''
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_ErrNo = 12105
+      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'PickSlipNo cannot be empty.'
       GOTO EXIT_SP
    END
 
    IF @cSKU = ''
    BEGIN
       SET @n_Continue = 3
-      SET @n_ErrNo = 11901
+      SET @n_ErrNo = 12106
       SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'SKU cannot be empty.'
       GOTO EXIT_SP
    END
@@ -163,7 +188,7 @@ BEGIN
    )  
    BEGIN  
       SET @n_Continue = 3
-      SET @n_ErrNo = 1000714  
+      SET @n_ErrNo = 12107
       SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Current pickslip already status 9 cannot perform delete sku.'  
       GOTO EXIT_SP  
    END 
@@ -176,7 +201,7 @@ BEGIN
    )  
    BEGIN  
       SET @n_Continue = 3
-      SET @n_ErrNo = 1000714  
+      SET @n_ErrNo = 12108
       SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Current carton status is not InProgress. Not allow to delete SKU.'  
       GOTO EXIT_SP  
    END

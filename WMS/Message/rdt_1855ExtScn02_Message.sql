@@ -1,0 +1,36 @@
+--rdt_1855ExtScn02
+--FCR-10824
+EXECUTE rdt.rdtDropMsg 260401, 260450
+
+EXECUTE rdt.rdtAddMsg 260401, 10, '260401 NeedPickZone',          'us_english', 1855, 0, '260401 Need PickZone'
+EXECUTE rdt.rdtAddMsg 260402, 10, '260402 NoTask',                'us_english', 1855, 0, '260402 No task in PickZone'
+EXECUTE rdt.rdtAddMsg 260403, 10, '260403 NeedCartID',            'us_english', 1855, 0, '260403 Need CartID'
+EXECUTE rdt.rdtAddMsg 260404, 10, '260404 InvCartID',             'us_english', 1855, 0, '260404 Invalid CartID'
+EXECUTE rdt.rdtAddMsg 260405, 10, '260405 CartInUse',             'us_english', 1855, 0, '260405 Cart is in use by other user'
+EXECUTE rdt.rdtAddMsg 260406, 10, '260406 NeedMethod',            'us_english', 1855, 0, '260406 Need Method'
+EXECUTE rdt.rdtAddMsg 260407, 10, '260407 InvMethod',             'us_english', 1855, 0, '260407 Invalid Method'
+EXECUTE rdt.rdtAddMsg 260408, 10, '260408 NoTask',                'us_english', 1855, 0, '260408 No task for the Method'
+EXECUTE rdt.rdtAddMsg 260409, 10, '260409 NoTask',                'us_english', 1855, 0, '260409 No task is found'
+EXECUTE rdt.rdtAddMsg 260410, 10, '260410 UpdTskFail',            'us_english', 1855, 0, '260410 Update task failed'
+EXECUTE rdt.rdtAddMsg 260411, 10, '260411 NoTask',                'us_english', 1855, 0, '260411 No task is found'
+EXECUTE rdt.rdtAddMsg 260412, 10, '260412 UpdTskFail',            'us_english', 1855, 0, '260412 Update task failed'
+EXECUTE rdt.rdtAddMsg 260413, 10, '260413 NoToteID',              'us_english', 1855, 0, '260413 No ToteID is scanned'
+EXECUTE rdt.rdtAddMsg 260414, 10, '260414 NeedMoreToteID',        'us_english', 1855, 0, '260414 Need More ToteID'
+EXECUTE rdt.rdtAddMsg 260415, 10, '260415 ToteIDScanned',         'us_english', 1855, 0, '260415 ToteID is scanned already'
+EXECUTE rdt.rdtAddMsg 260416, 10, '260416 ToteIDInUse',           'us_english', 1855, 0, '260416 ToteID is in use by other user'
+EXECUTE rdt.rdtAddMsg 260417, 10, '260417 NoNeedToteID',          'us_english', 1855, 0, '260417 All ToteID is assigned'
+EXECUTE rdt.rdtAddMsg 260418, 10, '260418 ToteIDInUse',           'us_english', 1855, 0, '260418 ToteID is in use by other user'
+EXECUTE rdt.rdtAddMsg 260419, 10, '260419 UpdTaskFail',           'us_english', 1855, 0, '260419 Update task failed'
+EXECUTE rdt.rdtAddMsg 260420, 10, '260420 InsDataFail',           'us_english', 1855, 0, '260420 Insert @tOrderCartonID data failed'
+EXECUTE rdt.rdtAddMsg 260421, 10, '260421 UpdTaskFail',           'us_english', 1855, 0, '260421 Update task failed'
+EXECUTE rdt.rdtAddMsg 260422, 10, '260422 InvConfig',             'us_english', 1855, 0, '260422 Invalid carton limit configuration for method 2'
+EXECUTE rdt.rdtAddMsg 260423, 10, '260423 InvMethod',             'us_english', 1855, 0, '260423 Methond must be 1 or 2'
+EXECUTE rdt.rdtAddMsg 260424, 10, '260424 MoreOrderQty',          'us_english', 1855, 0, '260424 More orders than max totes allowed for method 2'
+EXECUTE rdt.rdtAddMsg 260425, 10, '260425 NeedOption',            'us_english', 1855, 0, '260425 Need Option'
+EXECUTE rdt.rdtAddMsg 260426, 10, '260426 InvOption',             'us_english', 1855, 0, '260426 Invalid Option'
+EXECUTE rdt.rdtAddMsg 260427, 10, '260427 UpdTskFail',            'us_english', 1855, 0, '260427 Update TaskDetail failed'
+EXECUTE rdt.rdtAddMsg 260428, 10, '260428 UpdTskFail',            'us_english', 1855, 0, '260428 Update TaskDetail failed'
+EXECUTE rdt.rdtAddMsg 260429, 10, '260429 NoToteIDNeeded',        'us_english', 1855, 0, '260429 No need more ToteID'
+EXECUTE rdt.rdtAddMsg 260430, 10, '260430 WaveKeyMissing',        'us_english', 1855, 0, '260430 Wavekey is missing'
+
+SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 260401 AND 260450

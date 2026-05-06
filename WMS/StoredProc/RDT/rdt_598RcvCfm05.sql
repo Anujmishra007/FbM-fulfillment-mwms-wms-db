@@ -70,6 +70,10 @@ BEGIN
    DECLARE @nQTY         INT
    DECLARE @cExternReceiptKey NVARCHAR( 20)
    DECLARE @nStep	     INT
+   DECLARE @curReceiptSNo CURSOR
+   DECLARE @cContainerKey NVARCHAR(20)
+   DECLARE @cReceiptLineNumber NVARCHAR(5)
+   DECLARE @nScan INT
 
    SELECT @nStep = Step
    FROM Rdt.RdtMobRec (NOLOCK)
@@ -84,6 +88,47 @@ BEGIN
          SET @nQTY_Bal = @nBulkSNOQTY
       ELSE
          SET @nQTY_Bal = @nSerialQTY
+   END
+
+   IF @nStep =  6
+   BEGIN
+      SELECT   @cContainerKey = V_String1
+      FROM RDT.RDTMOBREC (NOLOCK)
+      WHERE Mobile = @nMobile
+
+      SET @curReceiptSNo = CURSOR FOR
+      SELECT      ReceiptLineNumber,
+                  ReceiptKey
+      FROM ReceiptDetail (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND ReceiptKey IN (  SELECT ReceiptKey
+                     FROM RECEIPT (NOLOCK)
+                     WHERE ContainerKey = @cContainerKey
+                        AND StorerKey = @cStorerKey)
+         AND SKU = @cSKUCode
+         AND TOID = @cToID
+      GROUP BY ReceiptLineNumber,ReceiptKey
+      OPEN @curReceiptSNo
+      FETCH NEXT FROM @curReceiptSNo INTO @cReceiptLineNumber,@cReceiptKey
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+
+         SELECT @nScan = @nScan + COUNT( DISTINCT SerialNo)
+         FROM ReceiptSerialNO (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND ReceiptKey = @cReceiptKey
+            AND ReceiptLineNumber = @cReceiptLineNumber
+            AND SKU = @cSKUCode
+
+         FETCH NEXT FROM @curReceiptSNo INTO @cReceiptLineNumber,@cReceiptKey
+      END
+
+      IF @nScan = @nSKUQTY
+      BEGIN
+         GOTO QUIT
+      END
+
+
    END
 
    -- Handling transaction
@@ -117,7 +162,7 @@ BEGIN
       WHERE CRL.Mobile = @nMobile
          AND RD.StorerKey = @cStorerKey
          AND RD.SKU = @cSKUCode
-      GROUP BY CRL.ReceiptKey,RD.SKU,RD.Lottable03
+      GROUP BY CRL.ReceiptKey,RD.SKU,RD.Lottable03,ReceiptLineNumber
       ORDER BY CRL.ReceiptKey
    OPEN @curReceipt
    FETCH NEXT FROM @curReceipt INTO @cReceiptKey, @nQTY,@cLottable03

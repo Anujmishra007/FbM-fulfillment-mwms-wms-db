@@ -21,6 +21,7 @@ GO
 /* Date         Author   Ver. Purposes                                  */
 /* 20-Nov-2024  WLChooi  1.1  DevOps Combine Script                     */
 /* 20-Nov-2024  WLChooi  1.1  WMS-26556-Support Multi Facilities(WL01)  */
+/* 11-MAR-2026  surya    1.2  Reverse the eirlier chages                */
 /************************************************************************/
 CREATE OR ALTER PROC nspALSTD06
 @c_lot NVARCHAR(10) ,
@@ -29,10 +30,10 @@ CREATE OR ALTER PROC nspALSTD06
 @c_Facility NVARCHAR(5),
 @n_uombase int ,
 @n_qtylefttofulfill int,
-@c_OtherParms       NVARCHAR(200) = ''     
+@c_OtherParms       NVARCHAR(200) = ''
 AS
 BEGIN
-   SET NOCOUNT ON 
+   SET NOCOUNT ON
 
    DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY
    FOR SELECT LOTxLOCxID.LOC, LOTxLOCxID.ID,
@@ -53,6 +54,6 @@ BEGIN
    -- Changed by June 17.Jul.03 SOS12446, sort by Logicalloc first
    ORDER BY F.FacSort, LOC.LogicalLocation, LOC.LOC   --WL01
 END
-GO 
-GRANT EXECUTE ON nspALSTD06 TO NSQL 
+GO
+GRANT EXECUTE ON nspALSTD06 TO NSQL
 GO

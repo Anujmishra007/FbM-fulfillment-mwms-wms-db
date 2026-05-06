@@ -688,7 +688,13 @@ BEGIN
       -- Screen mapping
       SET @cSKU = @cInField03
       DECLARE @cDecodedSKU NVARCHAR(20)
- 
+
+      -- FCR-9582: Reset lottables before decode SP (moved from line 906)
+      SELECT
+         @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL, @dLottable05 = NULL,
+         @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',   @cLottable10 = '',
+         @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL, @dLottable15 = NULL
+
       -- Decode barcode/QR code for SKU
       IF @cDecodeSP <> ''
       BEGIN
@@ -903,10 +909,11 @@ BEGIN
          WHERE StorerKey = @cStorerKey
             AND SKU = @cSKU
 
-      SELECT
-         @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL, @dLottable05 = NULL,
-         @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',   @cLottable10 = '',
-         @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL, @dLottable15 = NULL
+      -- FCR-9582: Lottable reset moved to before decode SP (line ~692)
+      -- SELECT
+      --    @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL, @dLottable05 = NULL,
+      --    @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',   @cLottable10 = '',
+      --    @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL, @dLottable15 = NULL
 
       -- Dynamic lottable
       EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1,

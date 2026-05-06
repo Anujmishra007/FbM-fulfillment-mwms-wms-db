@@ -31,6 +31,7 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument10] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
+   -- , @cReportType          NVARCHAR(30)      = ''
    , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
    , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
    , @nContinuePrint       INT               = 0   OUTPUT
@@ -54,7 +55,6 @@ BEGIN
          , @b_sp_ExecuteAs    BIT  
 
    DECLARE @cModuleID         NVARCHAR(30)
-         , @cReportType       NVARCHAR(30)
          , @cSQL              NVARCHAR(MAX)
          , @cSQLParam         NVARCHAR(MAX)
          , @cReportID         NVARCHAR(10)
@@ -63,6 +63,7 @@ BEGIN
          , @groupByFields     NVARCHAR(MAX)
          , @cPrinterInGroup   NVARCHAR(10)
          , @cCustomLabelSP    NVARCHAR(30)
+         , @cReportType       NVARCHAR(30)
 
    DECLARE @cFieldName1       NVARCHAR(MAX)
          , @cFieldName2       NVARCHAR(MAX)
@@ -82,6 +83,7 @@ BEGIN
          , @cLabelNo          NVARCHAR(20)
          , @cTemplateCode     NVARCHAR(50)
          , @cReportLineNo     NVARCHAR(5)
+         , @bPrintStdLabel    BIT
 
    SET @b_Success       = 0  
    SET @n_ErrNo         = 0  
@@ -103,6 +105,17 @@ BEGIN
    SET @cModuleID       = 'TPPACK'
    SET @cCustomLabelSP  = ''
    SET @cReportType     = 'TPFULLCTNLBL'
+   SET @bPrintStdLabel  = 0
+
+   IF EXISTS (SELECT 1
+   FROM ORDERS O (NOLOCK)
+   WHERE O.OrderKey = @cOrderKey
+   AND O.DocType = 'N'
+   )
+   BEGIN
+      SET @bPrintStdLabel = 1
+      SET @cReportType = 'TPSHIPPLBL'
+   END
 
    IF NOT EXISTS (SELECT 1 
                   FROM ORDERS O (NOLOCK)
@@ -111,11 +124,11 @@ BEGIN
                   WHERE O.OrderKey = @cOrderKey
                   AND O.OrderGroup = 'B2B'
                   AND PD.UOM = '2'
-   )
+   ) AND @bPrintStdLabel <> 1
    BEGIN
       GOTO EXIT_SP
    END
-
+   
    IF @bPrintLabelFlag = 1
    BEGIN
       IF NOT EXISTS ( SELECT 1
@@ -131,7 +144,7 @@ BEGIN
       )  
       BEGIN 
          SET @n_Continue = 3
-         SET @n_ErrNo = 11851
+         SET @n_ErrNo = 15401
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No records found in WMReport.'
          GOTO EXIT_SP
       END
@@ -150,11 +163,11 @@ BEGIN
       )
       BEGIN
          SET @n_Continue = 3
-         SET @n_ErrNo = 11852
+         SET @n_ErrNo = 15402
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
          GOTO EXIT_SP
       END
-
+      
       DECLARE CUR_LBL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT  WMR.ReportID
             , IIF(WMRD.PrintType ='LOGIREPORT', 'JReport', 'WMReport')
@@ -330,7 +343,7 @@ BEGIN
                IF @cPrinterInGroup = ''  
                BEGIN  
                   SET @n_Continue = 3
-                  SET @n_ErrNo = 11853    
+                  SET @n_ErrNo = 15403    
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not found PrinterID in PrinterGroup.'  
                   GOTO EXIT_SP  
                END
@@ -414,7 +427,7 @@ BEGIN
       )  
       BEGIN
          SET @n_Continue = 3
-         SET @n_ErrNo = 11854
+         SET @n_ErrNo = 15404
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Paper: No records found in WMReport.'
          GOTO EXIT_SP
       END
@@ -432,7 +445,7 @@ BEGIN
       )
       BEGIN
          SET @n_Continue = 3
-         SET @n_ErrNo = 11855
+         SET @n_ErrNo = 15405
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Paper: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
          GOTO EXIT_SP
       END 
@@ -593,7 +606,7 @@ BEGIN
                IF @cPrinterInGroup = ''  
                BEGIN  
                   SET @n_Continue = 3
-                  SET @n_ErrNo = 11856    
+                  SET @n_ErrNo = 15406    
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Paper: Not found PrinterID in PrinterGroup.'  
                   GOTO EXIT_SP  
                END
@@ -628,7 +641,7 @@ BEGIN
                , @c_JobIDs       = @cPrintPaperJobIDs    OUTPUT    
                , @c_AutoPrint    = 'N'     
       
-         IF @n_ErrNo <> 0   
+         IF @b_Success = 0   
          BEGIN  
             SET @n_Continue = 3 
             GOTO EXIT_SP  

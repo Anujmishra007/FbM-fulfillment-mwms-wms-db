@@ -13,24 +13,51 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.7                                                          */    
+/* Version: 4.0                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
-/* Date        Author   Ver   Purposes                                   */
-/* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
-/* 19-Feb-2026 USH022   1.1   (FCR-11060) Bug Fixed (ush022-1)           */
-/* 20-Feb-2026 USH022   1.2   (FCR-10124) Added CodeLkpConf for          */
-/*                            UOM and ORDERGROUP on marking              */
-/*                            PackInfor.CartonStatus=ORDERAUDIT(ush022-2)*/
-/* 23-Feb-2026 WLChooi  1.3   FCR-11069 Fix Incorrect CartonType (WL01)  */
-/* 25-Feb-2026 WLChooi  1.4   FCR-11069 Fix Incorrect CartonType (WL02)  */
-/* 27-Feb-2026 WLChooi  1.5   FCR-11069 Fix Incorrect CartonType (WL03)  */
-/* 27-Feb-2026 WLChooi  1.6   FCR-11204 Fix VAS Qty (WL04)               */
-/* 02-Mar-2026 WLChooi  1.6   FCR-11204 VAS API Check (WL05)             */
-/* 04-Mar-2026 WLChooi  1.7   FCR-11069 Fix Last Carton Closure (WL06)   */
-/*************************************************************************/      
+/* Date        Author   Ver   Purposes                                   */    
+/* 10-Feb-2026 WLChooi  1.0   Initial Version                            */    
+/* 19-Feb-2026 USH022   1.1   (FCR-11060) Bug Fixed (ush022-1)           */    
+/* 20-Feb-2026 USH022   1.2   (FCR-10124) Added CodeLkpConf for          */    
+/*                            UOM and ORDERGROUP on marking              */    
+/*                            PackInfor.CartonStatus=ORDERAUDIT(ush022-2)*/    
+/* 23-Feb-2026 WLChooi  1.3   FCR-11069 Fix Incorrect CartonType (WL01)  */    
+/* 25-Feb-2026 WLChooi  1.4   FCR-11069 Fix Incorrect CartonType (WL02)  */    
+/* 27-Feb-2026 WLChooi  1.5   FCR-11069 Fix Incorrect CartonType (WL03)  */    
+/* 27-Feb-2026 WLChooi  1.6   FCR-11204 Fix VAS Qty (WL04)               */    
+/* 02-Mar-2026 WLChooi  1.6   FCR-11204 VAS API Check (WL05)             */    
+/* 04-Mar-2026 WLChooi  1.7   FCR-11069 Fix Last Carton Closure (WL06)   */    
+/* 05-Mar-2026 WLChooi  1.8   FCR-11365 Fix floating-point error (WL07)  */    
+/* 05-Mar-2026 WLChooi  1.9   FCR-11365 Fix wrong CartonType when closing*/
+/*                            (WL08)                                     */
+/* 05-Mar-2026 WLChooi  2.0   FCR-11378 Stamp CaseID to DropID for Loose */
+/*                            (WL09)                                     */
+/* 06-Mar-2026 WLChooi  2.1   FCR-11402 Truncate #OptimizeItemToPack     */
+/*                            after carton close (WL10)                  */
+/* 09-Mar-2026 WLChooi  2.2   FCR-11459 Fix API Infinite Loop (WL11)     */
+/* 10-Mar-2026 WLChooi  2.3   FCR-11471 Fix CartonGroup NULL issue (WL12)*/
+/* 10-Mar-2026 WLChooi  2.4   FCR-11471 Fix VAS Packinfo Qty (WL13)      */
+/* 10-Mar-2026 WLChooi  2.5   FCR-11511 Generate PICKHEADER for B2C(WL14)*/
+/* 11-Mar-2026 WLChooi  2.6   FCR-11514 Fix VAS Incorrect Qty (WL15)     */
+/* 12-Mar-2026 WLChooi  2.7   FCR-11558 Fix VAS scenario (WL16)          */
+/* 12-Mar-2026 WLChooi  2.8   FCR-11566 Remove VAS filter for audit(WL17)*/
+/* 12-Mar-2026 WLChooi  2.9   FCR-10124 Fix Inifinite Loop (WL18)        */
+/* 12-Mar-2026 WLChooi  3.0   FCR-11584 & FCR-11586 UPS Shipperkey (WL19)*/
+/* 12-Mar-2026 WLChooi  3.1   FCR-11581 Footwear API Fix Height (WL20)   */
+/* 13-Mar-2026 WLChooi  3.2   FCR-11615 Fix Inifinite Loop (WL21)        */
+/* 16-Mar-2026 WLChooi  3.3   FCR-11586 Fix ECOM & Packing mapping (WL22)*/
+/* 16-Mar-2026 WLChooi  3.4   FCR-11586 Fix AutoPackCfm condition (WL23) */
+/* 16-Mar-2026 WLChooi  3.5   FCR-11586 Fix DropID linkage (WL24)        */
+/* 19-Mar-2026 WLChooi  3.6   FCR-11586 Add new condition for Packdetail */
+/*                            QTY mapping (WL25)                         */
+/* 19-Mar-2026 WLChooi  3.7   FCR-11841 Fix algorithm (WL26)             */
+/* 01-Apr-2026 WLChooi  3.8   FCR-12170 Fix CSCORDTYPE logic (WL27)      */
+/* 01-Apr-2026 WLChooi  3.9   FCR-12172 Change CartonWeight logic (WL28) */
+/* 10-Apr-2026 WLChooi  4.0   FCR-12447 Tote Assignment for B2C (WL29)   */
+/*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
 ,  @b_Success     INT            = 1   OUTPUT
@@ -162,9 +189,19 @@ BEGIN
          , @c_Option5               NVARCHAR(4000) = ''     --WL01
          , @c_PackECOM              NVARCHAR(10)   = 'N'    --WL01
          , @c_OtherParms            NVARCHAR(MAX)  = ''     --WL02
-
-   DECLARE @c_OrderGroupAllowed  NVARCHAR(20) = ''    --ush022-2
-         , @c_DocTypeAllowed     NVARCHAR(20) = ''    --ush022-2
+         , @b_IsVAS_P               BIT            = 0      --WL15
+         , @n_UPSCtnCnt             INT            = 0      --WL19
+         , @n_TTLCtn                INT            = 0      --WL19
+         , @c_UserDefine01          NVARCHAR(50)   = ''     --WL19
+         , @c_Shipperkey            NVARCHAR(15)   = ''     --WL19
+         , @c_Algorithm             NVARCHAR(10)   = ''     --WL20
+         , @n_RowID_pre             INT            = 0      --WL21
+         , @c_VAS_P                 NVARCHAR(10)   = ''     --WL21
+         , @b_AutoPackCFM           BIT            = 0      --WL22
+         , @b_HasAnyVAS             BIT            = 0      --WL25
+         , @b_IsAudit               BIT            = 0      --WL25
+         , @n_SumQty                INT            = 0      --WL25
+         , @c_ECOMPackingByTote     NVARCHAR(10)   = 'Y'    --WL29
 
    DECLARE @cur_PCKGRPH          CURSOR
          , @cur_PCKGRPS          CURSOR
@@ -185,6 +222,7 @@ BEGIN
       ,  Dim2                 DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
       ,  Dim3                 DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
       ,  FillTolerance        INT            NOT NULL DEFAULT (0)
+      ,  CartonWeight         FLOAT          NOT NULL DEFAULT (0.00)   --WL28
       )
 
     DECLARE @TMP_CL              TABLE
@@ -271,6 +309,20 @@ BEGIN
                           WHEN @b_Success = 2 THEN 4
                           END
 
+   --WL29 S
+   IF @n_Continue = 1
+   BEGIN
+      IF NOT EXISTS ( SELECT 1
+                      FROM #PickDetail_WIP pw
+                      WHERE pw.WaveKey = @c_Wavekey
+                      AND (pw.CaseID = '' OR pw.CaseID IS NULL) 
+                    )
+      BEGIN
+         SET @n_Continue = 4
+      END
+   END
+   --WL29 E
+
    IF @n_Continue = 1
    BEGIN
       IF OBJECT_ID('tempdb..#CTNZ ','U') IS NOT NULL
@@ -293,6 +345,26 @@ BEGIN
       ,  CartonDefault        BIT            NOT NULL DEFAULT (0)
       )
 
+      --WL08 S
+      IF OBJECT_ID('tempdb..#CTNZ_P','U') IS NOT NULL
+         DROP TABLE #CTNZ_P
+
+      CREATE TABLE #CTNZ_P
+      (  RowID                INT
+      ,  CartonizationGroup   NVARCHAR(10)   NOT NULL DEFAULT ('')
+      ,  CartonType           NVARCHAR(10)   NOT NULL DEFAULT ('')
+      ,  [Cube]               FLOAT          NOT NULL DEFAULT (0.00)
+      ,  MaxWeight            FLOAT          NOT NULL DEFAULT (0.00)
+      ,  CartonLength         FLOAT          NOT NULL DEFAULT (0.00)
+      ,  CartonWidth          FLOAT          NOT NULL DEFAULT (0.00)
+      ,  CartonHeight         FLOAT          NOT NULL DEFAULT (0.00)
+      ,  Dim1                 DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
+      ,  Dim2                 DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
+      ,  Dim3                 DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
+      ,  CartonDefault        BIT            NOT NULL DEFAULT (0)
+      )
+      --WL08 E
+
       IF OBJECT_ID('tempdb..#OptimizeItemToPack','U') IS NOT NULL
       BEGIN
          DROP TABLE #OptimizeItemToPack
@@ -307,6 +379,7 @@ BEGIN
          ,  Dim2        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
          ,  Dim3        DECIMAL(10,6)  NOT NULL DEFAULT(0.00)
          ,  Quantity    INT            NOT NULL DEFAULT(0)
+         ,  CZNCheck    INT            NOT NULL DEFAULT(0)   --WL21
          )
 
       IF OBJECT_ID('tempdb..#PRECTN') IS NOT NULL
@@ -336,9 +409,9 @@ BEGIN
       ,  [StdCube]         [FLOAT]        NOT NULL DEFAULT (0.00)
       ,  [StdGrossWgt]     [FLOAT]        NOT NULL DEFAULT (0.00)
       ,  [Weight]          [REAL]         NOT NULL DEFAULT (0.00)
-      ,  Dim1              [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
-      ,  Dim2              [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
-      ,  Dim3              [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
+      ,  [Dim1]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
+      ,  [Dim2]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
+      ,  [Dim3]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)
       ,  [PackQtyIndicator][int]          NOT NULL DEFAULT (0)
       ,  [UOM]             [nvarchar](10) NOT NULL DEFAULT (' ')
       ,  [Qty]             [int]          NOT NULL DEFAULT (0)
@@ -351,6 +424,9 @@ BEGIN
       ,  [VASQty_PI]       [int]          NOT NULL DEFAULT (0)
       ,  [SkuAccessQty]    [int]          NOT NULL DEFAULT (0)
       ,  [Status]          [nvarchar](1)  NOT NULL DEFAULT ('0')
+      ,  [UserDefine01]    [nvarchar](50) NOT NULL DEFAULT ('')   --WL19
+      ,  [Shipperkey]      [nvarchar](15) NOT NULL DEFAULT ('')   --WL19
+      ,  [HasAnyVAS]       [bit]          NOT NULL DEFAULT (0)    --WL25
       )
 
       IF OBJECT_ID('tempdb..#CartonDetail') IS NOT NULL
@@ -393,6 +469,9 @@ BEGIN
       ,  [RowRef_pcz]      [int]          NOT NULL DEFAULT (0)
       ,  [IsVAS]           [bit]          NOT NULL DEFAULT (0)
       ,  [IsApi]           [BIT]          NOT NULL DEFAULT (0)
+      ,  [Dim1]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)   --WL22
+      ,  [Dim2]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)   --WL22
+      ,  [Dim3]            [DECIMAL](10,6)NOT NULL DEFAULT(0.00)   --WL22
       )
       CREATE INDEX IDX_CartonSeqNo ON #CartonDetail (Orderkey, CartonSeqNo, RefPickKey)
 
@@ -423,6 +502,7 @@ BEGIN
 
       SET @c_PackType     = 'ORDERS.Orderkey'
       SET @c_HardCTNGroup = 'ORDERS.Orderkey, ISNULL(SKU.BUSR7,'''')'
+      SET @c_Algorithm    = 'HEIGHT'   --WL20
 
       SET @c_SortCTNGroup = @c_HardCTNGroup +
                           + ',CASE WHEN PICKDETAIL.UOM = ''2'' THEN 2 ELSE 6 END'
@@ -455,8 +535,31 @@ BEGIN
       IF ISNULL(@c_Option5, '') <> ''
       BEGIN
          SELECT @c_PackECOM = dbo.fnc_GetParamValueFromString('@c_PackECOM', @c_Option5, @c_PackECOM)
+         SELECT @c_ECOMPackingByTote = dbo.fnc_GetParamValueFromString('@c_ECOMPackingByTote', @c_Option5, @c_ECOMPackingByTote)   --WL29
       END
    END
+
+   --WL14 S
+   IF @n_Continue = 1
+   BEGIN
+      EXEC [dbo].[isp_CreatePickSlip]
+          @c_Orderkey              = ''
+         ,@c_Wavekey               = @c_Wavekey
+         ,@c_PickslipType          = '3'
+         ,@c_ConsolidateByLoad     = 'N'
+         ,@c_Refkeylookup          = 'N'
+         ,@c_LinkPickSlipToPick    = 'Y'
+         ,@c_AutoScanIn            = 'N'
+         ,@b_Success               = @b_Success  OUTPUT
+         ,@n_Err                   = @n_Err      OUTPUT
+         ,@c_ErrMsg                = @c_ErrMsg   OUTPUT
+
+      IF @b_Success = 0
+      BEGIN
+         SET @n_Continue = 3
+      END
+   END
+   --WL14 E
 
    IF @n_Continue = 1
    BEGIN
@@ -477,12 +580,13 @@ BEGIN
       ,  Dim2
       ,  Dim3
       ,  FillTolerance
+      ,  CartonWeight   --WL28
       )
       SELECT
          c.CartonizationGroup
       ,  c.CartonType
       ,  c.[Cube]
-      ,  c.MaxWeight
+      ,  ISNULL(c.MaxWeight, 0.00) - ISNULL(c.CartonWeight, 0.00)   --WL28
       ,  CartonLength = ISNULL(c.CartonLength,0.00)
       ,  CartonWidth  = ISNULL(c.CartonWidth,0.00)
       ,  CartonHeight = ISNULL(c.CartonHeight,0.00)
@@ -490,6 +594,7 @@ BEGIN
       ,  Dim2 = cds.MidVal
       ,  Dim3 = cds.MaxVal
       ,  FillTolerance= 100.00                                       --Not using FillTolerance
+      ,  ISNULL(c.CartonWeight, 0.00)   --WL28
       FROM dbo.CARTONIZATION AS c (NOLOCK)
       CROSS APPLY (SELECT MIN(val) AS MinVal
                         , SUM(val) - MIN(val) - MAX(val) AS MidVal
@@ -522,6 +627,7 @@ BEGIN
       WHERE CODELKUP.Listname IN (  'CSCUK01CFG', 'CSCUK01GCR',
                                     'CSCUK01PT', 'ORDERAUDIT'
                                  ,  'CSCORDTYPE', 'CSCAUDUOM'  -- (ush022)
+                                 ,  'SHIPERCODE'   --WL19
                                  )
       AND   CODELKUP.Storerkey = @c_Storerkey
       ORDER BY CODELKUP.Listname
@@ -531,10 +637,16 @@ BEGIN
       FROM @TMP_CL AS cl
       WHERE cl.Listname = 'CSCUK01CFG'
 
+      --WL19
+      SELECT @n_UPSCtnCnt = CASE WHEN ISNUMERIC(cl.UDF03) = 1 THEN cl.UDF03 ELSE 0 END
+      FROM @TMP_CL AS cl
+      WHERE cl.Listname = 'SHIPERCODE'
+      AND cl.Code = 'UPS'
+
       -- Set optional configuration
       SET @c_SQLCond = ' WHERE (PICKDETAIL.CaseID = '''' OR PICKDETAIL.CaseID IS NULL)'
 
-      IF @c_PackECOM = 'N'
+      IF @c_PackECOM = 'N' OR @c_ECOMPackingByTote = 'Y'   --WL29
       BEGIN
          SET @c_SQLCond = @c_SQLCond + ' AND ORDERS.DocType = ''N'''
       END
@@ -577,7 +689,12 @@ BEGIN
                  +  ', VASQty= ISNULL(WORKORDERDETAIL.VASQty,0)'
                  +  ', SkuAccessQty = CASE WHEN PICKDETAIL.UOM >= ''6'''
                  +                       ' AND  PICKSKU.SumSKUQty > @n_AccessQty'
+                 +                       ' THEN 0 '
+                 +                       ' WHEN PICKDETAIL.UOM = ''2'''
                  +                       ' THEN 0 ELSE 1 END'
+                 +  ', UserDefine01 = ISNULL(ORDERS.UserDefine01, '''')'   --WL19
+                 +  ', Shipperkey = ISNULL(ORDERS.Shipperkey, '''')'   --WL19
+                 +  ', HasAnyVas = CASE WHEN WO.WorkOrderKey IS NULL THEN 0 ELSE 1 END'   --WL25
                  +  ' FROM #PickDetail_WIP PICKDETAIL'
                  +  ' JOIN ORDERS (NOLOCK) ON ORDERS.Orderkey = PICKDETAIL.Orderkey'
                  +  ' JOIN SKU (NOLOCK) ON  SKU.Storerkey = PICKDETAIL.Storerkey'
@@ -587,7 +704,7 @@ BEGIN
                  +  ' CROSS APPLY (SELECT MIN(val) AS MinVal'
                  +                    ' , SUM(val) - MIN(val) - MAX(val) AS MidVal'
                  +                    ' , MAX(val) AS MaxVal'
-                 +               ' FROM (VALUES (SKU.Length), (SKU.Width), (SKU.Height)) AS x(val)'
+                 +               ' FROM (VALUES (PACK.LengthUOM3), (PACK.WidthUOM3), (PACK.HeightUOM3)) AS x(val)'
                  +               ') sds'
                  +  ' CROSS APPLY ( SELECT PackQtyIndicator = CASE WHEN SKU.PackQtyIndicator > 0'
                  +                                               ' THEN SKU.PackQtyIndicator ELSE 1 END'
@@ -606,6 +723,19 @@ BEGIN
                  +                ' AND PD.Storerkey = PICKDETAIL.Storerkey'
                  +                ' AND PD.SKU = PICKDETAIL.SKU'
                  +              ' ) AS PICKSKU'
+                 --WL25 S
+                 +  ' OUTER APPLY ( SELECT WorkOrderkey = MIN(w.WorkOrderKey)'
+                 +                ' FROM WORKORDERDETAIL w (NOLOCK)'
+                 +                ' WHERE w.ExternWorkOrderKey = PICKDETAIL.Orderkey'
+                 +                ' AND w.ExternLineNo = PICKDETAIL.OrderLineNumber'
+                 +                ' AND NOT EXISTS ( SELECT 1'
+                 +                '                  FROM CODELKUP c (NOLOCK)'
+                 +                '                  WHERE c.Listname = ''WKORDTYPE'''
+                 +                '                  AND c.Code = w.[Type]'
+                 +                '                  AND c.Storerkey = w.Storerkey'
+                 +                '                  AND c.UDF01 = ''N'')'
+                 +                ' ) AS WO'
+                 --WL25 E
                  +  @c_SQLCond
                  +  ' ORDER BY PackGrpNo'
                  +         ' , HardCTNGrpNo'
@@ -623,6 +753,8 @@ BEGIN
                            ,  [PackQtyIndicator]
                            ,  [UOM], [Qty], [DropID]
                            ,  [IsVAS], [VAS], [VASQty], [SkuAccessQty]
+                           ,  [UserDefine01], [Shipperkey]   --WL19
+                           ,  [HasAnyVAS]   --WL25
                            )
       EXEC sp_ExecuteSQL @c_SQL
                         ,@c_SQLParms
@@ -647,19 +779,32 @@ BEGIN
    IF @n_Continue = 1
    BEGIN
       SET @cur_PCKGRPH = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT
-            pcz.Orderkey
-         ,  pcz.DocType
-         ,  pcz.BillToKey
-         ,  pcz.Storerkey
-         ,  pcz.PackGrpNo
+      SELECT pcz.Orderkey
+          ,  pcz.DocType
+          ,  pcz.BillToKey
+          ,  pcz.Storerkey
+          ,  pcz.PackGrpNo
+          ,  pcz.UserDefine01   --WL19
+          ,  pcz.Shipperkey     --WL19
+          ,  HasAnyVAS = CAST(ISNULL(MAX(pcz.HasAnyVAS * 1), 0) AS BIT)   --WL25
       FROM #PRECTN AS pcz
+      --WL25 S
+      GROUP BY pcz.Orderkey
+            ,  pcz.DocType
+            ,  pcz.BillToKey
+            ,  pcz.Storerkey
+            ,  pcz.PackGrpNo
+            ,  pcz.UserDefine01
+            ,  pcz.Shipperkey
+      --WL25 E 
       ORDER BY pcz.PackGrpNo
 
       OPEN @cur_PCKGRPH
 
       FETCH NEXT FROM @cur_PCKGRPH INTO @c_Orderkey, @c_DocType, @c_BillToKey, @c_Storerkey
-                                       ,@n_PackGrpNo
+                                      , @n_PackGrpNo
+                                      , @c_UserDefine01, @c_Shipperkey   --WL19
+                                      , @b_HasAnyVAS   --WL25
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
@@ -690,7 +835,6 @@ BEGIN
                ,cz.Dim3
                ,CartonDefault = 1
          FROM @t_CTNZ AS cz
-
          WHERE cz.CartonizationGroup = @c_CTNGroup
          ORDER BY cz.RowID
 
@@ -703,7 +847,7 @@ BEGIN
          ORDER BY cz.RowID
 
          -- B2C
-         IF @c_DocType = 'E'
+         IF @c_DocType = 'E' AND @c_ECOMPackingByTote = 'N'   --WL29
          BEGIN
             INSERT INTO #CTNZ
             (
@@ -725,7 +869,7 @@ BEGIN
                                        THEN cz.MaxWeight
                                        WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
                                        THEN cz.MaxWeight
-                                       ELSE cl1.UDF02
+                                       ELSE CONVERT(FLOAT, cl1.UDF02) - cz.CartonWeight   --WL28
                                        END
                   ,cz.CartonLength
                   ,cz.CartonWidth
@@ -769,7 +913,7 @@ BEGIN
                                           THEN cz.MaxWeight
                                           WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
                                           THEN cz.MaxWeight
-                                          ELSE cl1.UDF02
+                                          ELSE CONVERT(FLOAT, cl1.UDF02) - cz.CartonWeight   --WL28
                                           END
                      ,cz.CartonLength
                      ,cz.CartonWidth
@@ -821,6 +965,19 @@ BEGIN
                   ORDER BY cz.RowID
                END
             END
+
+            --WL22 S
+            IF @n_RowCount > 0
+            BEGIN
+               SELECT TOP 1
+                        @c_CartonType_Max = cz.CartonType
+                     ,  @n_CartonCube_Max = cz.[Cube]
+                     ,  @n_CartonWeight_Max = cz.MaxWeight
+               FROM #CTNZ AS cz
+               WHERE CartonDefault = 0
+               ORDER BY cz.RowID
+            END
+            --WL22 E
          END
          ------------------------
          -- UOM = '2'
@@ -857,17 +1014,20 @@ BEGIN
             ,  [Notes]
             ,  [Status]
             ,  [IsApi]
+            ,  [Dim1]   --WL22
+            ,  [Dim2]   --WL22
+            ,  [Dim3]   --WL22
             )
          SELECT
                pcz.PickDetailKey
             ,  pcz.OrderKey
             ,  pcz.OrderGroup                                              --(ush022-2)
             ,  pcz.DocType                                                 --(ush022-2)
-            ,  CartonGroup = COALESCE(czb.CartonizationGroup,cze.CartonizationGroup,czs.CartonizationGroup)    --WL02
-            ,  CartonType  = COALESCE(czb.CartonType,cze.CartonType,czs.CartonType)                            --WL02
+            ,  CartonGroup = COALESCE(czb.CartonizationGroup,cze.CartonizationGroup,czs.CartonizationGroup,czm.CartonizationGroup)    --WL02   --WL12
+            ,  CartonType  = COALESCE(czb.CartonType,cze.CartonType,czs.CartonType,czm.CartonType)                                    --WL02   --WL12
             ,  CartonSeqNo = DENSE_RANK() OVER (ORDER BY pcz.DropID)
-            ,  CartonCube  = COALESCE(czb.[Cube],cze.[Cube],czs.[Cube])                                        --WL02
-            ,  CartonWeight= COALESCE(czb.MaxWeight,cze.MaxWeight,czs.MaxWeight)                               --WL02
+            ,  CartonCube  = COALESCE(czb.[Cube],cze.[Cube],czs.[Cube],czm.[Cube])                                                    --WL02   --WL12
+            ,  CartonWeight= COALESCE(czb.MaxWeight,cze.MaxWeight,czs.MaxWeight,czm.MaxWeight)                                        --WL02   --WL12
             ,  LabelNo = ''
             ,  pcz.Storerkey
             ,  pcz.Sku
@@ -889,6 +1049,9 @@ BEGIN
             ,  Notes      = ''
             ,  [Status]   = '9'
             ,  IsApi = 0
+            ,  pcz.[Length]   --WL22
+            ,  pcz.Width      --WL22
+            ,  pcz.Height     --WL22
          FROM #PRECTN AS pcz
          CROSS APPLY (  SELECT TotalPackCube = SUM(pcz1.StdCube*pcz1.Qty_PI)
                         FROM #PRECTN AS pcz1
@@ -912,7 +1075,7 @@ BEGIN
                         AND   cl1.Storerkey = pcz.Storerkey
                         AND   cl1.UDF01 > ''
                         AND   cz.[Cube] >= cs.TotalPackCube
-                        ORDER BY cz.RowID   --WL02
+                        ORDER BY cz.RowID DESC   --WL02   --WL11
                      ) czb
          --WL02
          OUTER APPLY (  SELECT TOP 1
@@ -933,7 +1096,7 @@ BEGIN
                         AND   cl1.Storerkey = pcz.Storerkey
                         AND   cl1.UDF01 > ''
                         AND   cz.[Cube] >= cs.TotalPackCube
-                        ORDER BY cz.RowID
+                        ORDER BY cz.RowID DESC   --WL11
                      ) cze
          OUTER APPLY (  SELECT TOP 1
                               cz.CartonizationGroup
@@ -942,8 +1105,17 @@ BEGIN
                            ,  cz.MaxWeight
                         FROM @t_CTNZ AS cz
                         WHERE cz.[Cube] >= cs.TotalPackCube
-                        ORDER BY cz.RowID
+                        ORDER BY cz.RowID DESC   --WL11
                       ) czs
+         --WL12
+         OUTER APPLY (  SELECT TOP 1
+                              cz.CartonizationGroup
+                           ,  cz.CartonType
+                           ,  cz.[Cube]
+                           ,  cz.MaxWeight
+                        FROM @t_CTNZ AS cz
+                        ORDER BY cz.RowID
+                      ) czm
          WHERE pcz.PackGrpNo = @n_PackGrpNo
          AND   pcz.UOM = '2'
          ORDER BY pcz.RowID
@@ -1040,9 +1212,32 @@ BEGIN
             BEGIN
                SET @b_NewCarton = 1
 
-               -- B2B
-               IF @c_DocType <> 'E'
+               --WL22 S
+               IF @c_DocType = 'E' AND @c_ECOMPackingByTote = 'N'   --WL29
                BEGIN
+                  SELECT @b_API = IIF(ISNUMERIC(cl1.UDF02) = 1, cl1.UDF02, 0)
+                  FROM @TMP_CL cl1
+                  WHERE cl1.ListName = 'CSCUK01PT'
+                  AND   cl1.Code     = @c_BUSR7
+                  AND   cl1.Storerkey= @c_Storerkey
+               END
+               --WL22 E
+               -- B2B
+               ELSE --IF @c_DocType <> 'E'
+               BEGIN
+                  --WL08 S
+                  IF EXISTS ( SELECT 1 FROM #CartonDetail AS cd 
+                              WHERE cd.Orderkey = @c_Orderkey
+                              AND   cd.CartonSeqNo = @n_CartonSeqNo   --WL10
+                              AND   cd.[Status] = '0' )
+                  BEGIN
+                     TRUNCATE TABLE #CTNZ_P
+                     INSERT INTO #CTNZ_P (RowID, CartonizationGroup, CartonType, [Cube], MaxWeight, CartonLength, CartonWidth, CartonHeight, Dim1, Dim2, Dim3, CartonDefault)
+                     SELECT RowID, CartonizationGroup, CartonType, [Cube], MaxWeight, CartonLength, CartonWidth, CartonHeight, Dim1, Dim2, Dim3, CartonDefault 
+                     FROM #CTNZ
+                  END
+                  --WL08 E
+
                   TRUNCATE TABLE #CTNZ;
                   INSERT INTO #CTNZ
                      (
@@ -1114,7 +1309,7 @@ BEGIN
                                                 THEN cz.MaxWeight
                                                 WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
                                                 THEN cz.MaxWeight
-                                                ELSE cl1.UDF02
+                                                ELSE CONVERT(FLOAT, cl1.UDF02) - cz.CartonWeight   --WL28
                                                 END
                            ,cz.CartonLength
                            ,cz.CartonWidth
@@ -1158,7 +1353,7 @@ BEGIN
                                                    THEN cz.MaxWeight
                                                    WHEN CONVERT(FLOAT, cl1.UDF02) = 0.0000
                                                    THEN cz.MaxWeight
-                                                   ELSE cl1.UDF02
+                                                   ELSE CONVERT(FLOAT, cl1.UDF02) - cz.CartonWeight   --WL28
                                                    END
                               ,cz.CartonLength
                               ,cz.CartonWidth
@@ -1191,25 +1386,6 @@ BEGIN
                         ORDER BY cz.RowID
                      END
                      --WL01 E
-
-                     --WL02 S
-                     IF @n_debug = 3
-                     BEGIN
-                        PRINT ' | SKU=' + ISNULL(@c_Sku, '')
-                            + ' | StdCube=' + ISNULL(CAST(@n_StdCube AS NVARCHAR(30)), '')
-                            + ' | StdGrossWgt=' + ISNULL(CAST(@n_StdGrossWgt AS NVARCHAR(30)), '')
-                            + ' | CTNGroup_BTK=' + ISNULL(@c_CTNGroup_BTK, '')
-                            + ' | API=' + ISNULL(CAST(@b_API AS NVARCHAR(1)), '')
-                            + ' | Qty=' + ISNULL(CAST(@n_Qty AS NVARCHAR(20)), '')
-                            + ' | QtyPI=' + ISNULL(CAST(@n_Qty_PI AS NVARCHAR(20)), '')
-                        PRINT ' | MaxCartonType=' + ISNULL(CAST(@c_CartonType_Max AS NVARCHAR(10)), '')
-
-                        SET @c_OtherParms = (STUFF((SELECT ', ' + TRIM(CartonType) 
-                                                    FROM #CTNZ 
-                                                    WHERE CartonDefault = 0 ORDER BY RowID FOR XML PATH('')),1,2,'' ))
-                        PRINT ' | CartonType=' + ISNULL(CAST(@c_OtherParms AS NVARCHAR(MAX)), '') + CHAR(13)
-                     END
-                     --WL02 E
                   END
 
                   IF @n_RowCount = 0 OR (@n_RowCount = 1 AND @c_CTNGroup_BTK = '')
@@ -1244,15 +1420,57 @@ BEGIN
                END
             END
 
-            -- VAS - Open new carton even same SKUs
-            IF @b_NewCarton = 0 AND @b_IsVAS = 1 AND @c_Sku_P  = @c_Sku
+            --WL02 S
+            IF @n_debug = 3
             BEGIN
-               SET @b_NewCarton = 1
+               PRINT ' | Orderkey=' + ISNULL(@c_Orderkey, '')
+                   + ' | SKU=' + ISNULL(@c_Sku, '')
+                   + ' | StdCube=' + ISNULL(CAST(@n_StdCube AS NVARCHAR(30)), '')
+                   + ' | StdGrossWgt=' + ISNULL(CAST(@n_StdGrossWgt AS NVARCHAR(30)), '')
+                   + ' | CTNGroup_BTK=' + ISNULL(@c_CTNGroup_BTK, '')
+                   + ' | API=' + ISNULL(CAST(@b_API AS NVARCHAR(1)), '')
+                   + ' | Qty=' + ISNULL(CAST(@n_Qty AS NVARCHAR(20)), '')
+                   + ' | QtyPI=' + ISNULL(CAST(@n_Qty_PI AS NVARCHAR(20)), '')
+               PRINT ' | MaxCartonType=' + ISNULL(CAST(@c_CartonType_Max AS NVARCHAR(10)), '')
+            
+               SET @c_OtherParms = (STUFF((SELECT ', ' + TRIM(CartonType) 
+                                           FROM #CTNZ 
+                                           WHERE CartonDefault = 0 ORDER BY RowID FOR XML PATH('')),1,2,'' ))
+               PRINT ' | CartonType=' + ISNULL(CAST(@c_OtherParms AS NVARCHAR(MAX)), '') + CHAR(13)
+            END
+            --WL02 E
+
+            -- VAS - Open new carton even same SKUs
+            -- PA - One SKU per Carton
+            -- PU - Per Pack Qty
+            -- PA + PU must work together -> @c_VAS = PA (not PU)
+            --WL15
+            IF @b_NewCarton = 0
+            BEGIN
+               IF @b_IsVAS = 1
+               BEGIN
+                  -- PA + No Per Pack Qty + Different SKU --> New Carton (only when prev line exists)
+                  -- PA + PU + Per Pack Qty --> New Carton
+                  -- PA (Prev) + Different SKU --> New Carton (only when prev line exists)
+                  --WL21
+                  IF (@c_VAS = 'PA' AND @n_VASQty_PI = 0 AND @c_Sku_P <> '' AND @c_Sku_P <> @c_Sku) OR
+                     (@c_VAS IN ('PA', 'PU') AND @n_VASQty_PI > 0) OR
+                     (@c_VAS_P = 'PA' AND @c_Sku_P <> '' AND @c_Sku_P <> @c_Sku)
+                  BEGIN
+                     SET @b_NewCarton = 1
+                  END
+               END
+
+               IF @b_IsVAS <> @b_IsVAS_P
+               BEGIN
+                  SET @b_NewCarton = 1
+               END
             END
 
-            SET @n_RowID_pcz = 0
+            --SET @n_RowID_pcz = 0   --WL21
             --SET @n_Qty_pd    = 0
             --SET @c_RefPickMode = ''
+            SET @n_RowID_pre = 0   --WL21
             WHILE @n_Qty > 0 AND @n_Continue = 1
             BEGIN
                SET @n_GetSmaller = 1
@@ -1263,7 +1481,7 @@ BEGIN
 
                IF @b_NewCarton = 0 AND @n_SkuAccessQty = 0
                BEGIN
-                  IF @c_VAS = 'PA'  AND @n_QtyLeftToFulFill_PI = 0
+                  IF @n_VASQty_PI > 0 AND @n_QtyLeftToFulFill_PI = 0   --WL15
                   BEGIN
                      SET @b_NewCarton = 1
                   END
@@ -1271,8 +1489,8 @@ BEGIN
                   -- Non-VAS
                   -- If current open box already contains sku and next sku
                   -- to pack has different Sku.Itemclass
-                  IF @c_VAS <> 'PA' AND
-                     @c_ItemClass <> @c_ItemClass_P
+                  IF @b_IsVAS = 0 AND   --WL15
+                     @c_ItemClass <> @c_ItemClass_P AND @c_ItemClass_P > ''   --WL18
                   BEGIN
                      SET @n_ItemCBM_Sum = 0.00
                      SET @n_ItemWgt_Sum = 0.00
@@ -1298,8 +1516,8 @@ BEGIN
                      IF @b_NewCarton = 0 AND @b_API = 1
                      BEGIN
                         SET @b_CZN_Check = 1
-                        INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
-                        SELECT Storerkey, Sku, pcz.[Length], pcz.Width, pcz.Height, Qty_PI
+                        INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity, CZNCheck)   --WL21
+                        SELECT Storerkey, Sku, pcz.[Height], pcz.[Width], pcz.[Length], Qty_PI, 1   --WL20   --WL21   --WL26
                         FROM #PRECTN AS pcz
                         WHERE pcz.PackGrpNo    = @n_PackGrpNo
                         AND   pcz.HardCTNGrpNo = @n_HardCTNGrpNo
@@ -1307,7 +1525,7 @@ BEGIN
                         AND   pcz.UOM         >= '6'
                         AND   pcz.SkuAccessQty = @n_SkuAccessQty
                         AND   pcz.Status       = '0'
-                        AND   pcz.RowID        > @n_RowID_pcz   --WL03
+                        AND   pcz.RowID       >= @n_RowID_pcz
 
                         GOTO CTZ_API
                         CZN_CHECKED:
@@ -1315,6 +1533,13 @@ BEGIN
                         BEGIN
                            SET @b_NewCarton = 1
                         END
+                        --WL21 S
+                        ELSE
+                        BEGIN
+                           DELETE FROM #OptimizeItemToPack
+                           WHERE CZNCheck = 1
+                        END
+                        --WL21 E
                      END
                   END
 
@@ -1367,7 +1592,7 @@ BEGIN
                                         FROM #OptimizeItemToPack )
                         BEGIN
                            INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
-                           SELECT Storerkey, Sku, cd.[Length], cd.Width, cd.Height, cd.Qty
+                           SELECT Storerkey, Sku, cd.[Height], cd.[Width], cd.[Length], cd.Qty   --WL22   --WL26
                            FROM #CartonDetail AS cd
                            WHERE cd.Orderkey = @c_Orderkey
                            AND   cd.CartonSeqNo = @n_CartonSeqNo
@@ -1403,22 +1628,13 @@ BEGIN
                      SET @n_CBMLeftToFulFill = @n_CartonCube
                      SET @n_WgtLeftToFulFill = @n_CartonWeight
 
-                     IF @c_VAS = 'PA' AND @n_SkuAccessQty = 0
+                     IF @n_VASQty_PI > 0 AND @n_SkuAccessQty = 0   --WL15
                      BEGIN
                         SET @n_QtyLeftToFulFill_PI = @n_VASQty_PI
                      END
                   END
 
-                  IF @c_VAS = 'PA' AND @n_SkuAccessQty = 0
-                  BEGIN
-                     --SET @b_API = 0   --WL05
-                     SET @n_QtyToPack_PI = @n_Qty_PI
-                     IF @n_Qty_PI > @n_VASQty_PI
-                     BEGIN
-                        SET @n_QtyToPack_PI = @n_VASQty_PI
-                     END
-                  END
-                  ELSE
+                  IF @n_Continue = 1
                   BEGIN
                      SET @n_QtyToPack_PI = 0
                      IF @b_API = 0 OR
@@ -1433,16 +1649,18 @@ BEGIN
                         SET @n_ItemWgt = 0.00
                         SET @n_ItemCBM = @n_StdCube*@n_Qty_PI
                         SET @n_ItemWgt = @n_StdGrossWgt*@n_Qty_PI
+                        SET @n_QtyCBM_PI = 0   --WL16
+                        SET @n_QtyWgt_PI = 0   --WL16
 
                         IF @n_StdCube > 0
                         BEGIN
                            IF @n_CBMLeftToFulFill > @n_ItemCBM
                            BEGIN
-                              SET @n_QtyCBM_PI = FLOOR(@n_ItemCBM/@n_StdCube)
+                              SET @n_QtyCBM_PI = FLOOR(ROUND(@n_ItemCBM / @n_StdCube, 6))   --WL07
                            END
                            ELSE
                            BEGIN
-                              SET @n_QtyCBM_PI = FLOOR(@n_CBMLeftToFulFill/@n_StdCube)
+                              SET @n_QtyCBM_PI = FLOOR(ROUND(@n_CBMLeftToFulFill / @n_StdCube, 6))   --WL07
                            END
                         END
 
@@ -1450,14 +1668,14 @@ BEGIN
                         BEGIN
                            IF @n_WgtLeftToFulFill > @n_ItemWgt
                            BEGIN
-                              SET @n_QtyWgt_PI = FLOOR(@n_ItemWgt/@n_StdGrossWgt)
+                              SET @n_QtyWgt_PI = FLOOR(ROUND(@n_ItemWgt / @n_StdGrossWgt, 6))   --WL07
                            END
                            ELSE
                            BEGIN
-                              SET @n_QtyWgt_PI = FLOOR(@n_WgtLeftToFulFill/@n_StdGrossWgt)
+                              SET @n_QtyWgt_PI = FLOOR(ROUND(@n_WgtLeftToFulFill / @n_StdGrossWgt, 6))   --WL07
                            END
                         END
-
+                        
                         IF @n_QtyWgt_PI < @n_QtyCBM_PI
                         BEGIN
                            SET @n_QtyToPack_PI = @n_QtyWgt_PI
@@ -1470,7 +1688,18 @@ BEGIN
                   END
 
                   SET @n_QtyToPack_PI = IIF(@n_QtyToPack_PI < 0, 0, @n_QtyToPack_PI)
-
+                  
+                  --WL16 S
+                  IF @n_VASQty_PI > 0 AND @n_SkuAccessQty = 0   --WL15
+                  BEGIN
+                     --SET @n_QtyToPack_PI = @n_Qty_PI
+                     IF @n_QtyToPack_PI > @n_VASQty_PI
+                     BEGIN
+                        SET @n_QtyToPack_PI = @n_VASQty_PI
+                     END
+                  END
+                  --WL16 E
+                  
                   IF @n_QtyToPack_PI = 0 AND @b_NewCarton = 0
                   BEGIN
                      SET @b_NewCarton = 1
@@ -1499,8 +1728,9 @@ BEGIN
 
                      IF @b_API = 1
                      BEGIN
+                        SET @b_CZN_Check = 0   --WL21
                         INSERT INTO @t_ItemToPack (Storerkey, Sku, [Length], Width, Height, Qty)
-                        VALUES (@c_Storerkey, @c_Sku, @n_Length, @n_Width, @n_Height, @n_QtyToPack)
+                        VALUES (@c_Storerkey, @c_Sku, @n_Height, @n_Width, @n_Length, @n_QtyToPack)   --WL20   --WL26
 
                         TRUNCATE TABLE #OptimizeItemToPack;
                         INSERT INTO #OptimizeItemToPack (Storerkey, Sku, Dim1, Dim2, Dim3, Quantity)
@@ -1518,7 +1748,7 @@ BEGIN
                            EXEC isp_SubmitToCartonizeAPI
                                 @c_CartonGroup = @c_CTNGroup
                               , @c_CartonType  = @c_CartonType
-                              , @c_Algorithm   = ''
+                              , @c_Algorithm   = @c_Algorithm   --WL20
                               , @b_Success     = @b_Success       OUTPUT
                               , @n_Err         = @n_Err           OUTPUT
                               , @c_ErrMsg      = @c_ErrMsg        OUTPUT
@@ -1535,6 +1765,11 @@ BEGIN
                               SET @c_IsCompletePack = ''
                               SELECT @c_IsCompletePack = orn.IsCompletePack
                               FROM @t_OptimizeResult AS orn
+
+                              --WL11
+                              -- Cannot fit even 1 qty, it returns nothing
+                              IF NOT EXISTS ( SELECT 1 FROM @t_OptimizeResult )
+                                 SET @c_IsCompletePack = 'false'
 
                               IF @b_CZN_Check IN (1,2)
                               BEGIN
@@ -1600,7 +1835,7 @@ BEGIN
                               SET @c_RefPickMode = ''
                               SET @c_RefPickKey  = ''
                               SELECT TOP 1
-                                     @n_RowID_pcz = pcz.RowID
+                                     @n_RowID_pre = pcz.RowID   --WL21
                                     ,@c_RefPickKey= pcz.PickDetailKey
                                     ,@n_Qty_pd    = pcz.Qty
                               FROM #PRECTN AS pcz
@@ -1610,7 +1845,7 @@ BEGIN
                               AND   pcz.Storerkey= @c_Storerkey
                               AND   pcz.Sku      = @c_Sku
                               AND   pcz.[Status] = '0'
-                              AND   pcz.RowID   > @n_RowID_pcz   --WL03
+                              AND   pcz.RowID   > @n_RowID_pre   --WL03   --WL21
                               ORDER BY pcz.RowID
 
                               SET @n_RowCount = @@ROWCOUNT
@@ -1689,6 +1924,10 @@ BEGIN
                               ,  [Status]
                               ,  [RowRef_pcz]
                               ,  [IsApi]
+                              ,  [IsVAS]   --WL15
+                              ,  [Dim1]    --WL22
+                              ,  [Dim2]    --WL22
+                              ,  [Dim3]    --WL22
                               )
                            SELECT
                                  pcz.PickDetailKey
@@ -1722,6 +1961,10 @@ BEGIN
                               ,  [Status]   = '0'
                               ,  RowRef_pcz = pcz.RowID
                               ,  IsApi = @b_API
+                              ,  IsVAS = pcz.IsVAS   --WL15
+                              ,  pcz.Dim1   --WL22
+                              ,  pcz.Dim2   --WL22
+                              ,  pcz.Dim3   --WL22
                            FROM #PRECTN AS pcz
                            WHERE pcz.Pickdetailkey = @c_RefPickKey
                         END
@@ -1746,36 +1989,74 @@ BEGIN
                         BEGIN
                            IF NOT EXISTS ( SELECT 1 FROM #OptimizeItemToPack)   --WL03
                            BEGIN
-                              SELECT TOP 1
-                                   @c_CartonType   = cz.CartonType
-                                 , @n_CartonCube   = cz.[Cube]
-                                 , @n_CartonWeight = cz.MaxWeight
-                                 , @n_FillTolerance= 100.00
-                              FROM #CTNZ cz
-                              WHERE cz.CartonizationGroup = @c_CTNGroup
-                              AND   cz.[Cube]    >= @n_TotalCBM
-                              AND   cz.MaxWeight >= @n_TotalWgt
-                              AND   cz.CartonDefault = 0
-                              ORDER BY cz.RowID DESC
-                           END
-                           ELSE
-                           BEGIN
-                              SET @c_IsCompletePack = ''
-                              WHILE @c_IsCompletePack <> 'TRUE'
+                              --WL08
+                              IF EXISTS ( SELECT 1 FROM #CTNZ_P )
                               BEGIN
                                  SELECT TOP 1
                                       @c_CartonType   = cz.CartonType
                                     , @n_CartonCube   = cz.[Cube]
                                     , @n_CartonWeight = cz.MaxWeight
                                     , @n_FillTolerance= 100.00
-                                    , @n_RowID_cz     = cz.RowID
+                                 FROM #CTNZ_P cz
+                                 WHERE cz.CartonizationGroup = @c_CTNGroup
+                                 AND   cz.[Cube]    >= @n_TotalCBM
+                                 AND   cz.MaxWeight >= @n_TotalWgt
+                                 AND   cz.CartonDefault = 0
+                                 ORDER BY cz.RowID DESC
+                              END
+                              ELSE
+                              BEGIN
+                                 SELECT TOP 1
+                                      @c_CartonType   = cz.CartonType
+                                    , @n_CartonCube   = cz.[Cube]
+                                    , @n_CartonWeight = cz.MaxWeight
+                                    , @n_FillTolerance= 100.00
                                  FROM #CTNZ cz
                                  WHERE cz.CartonizationGroup = @c_CTNGroup
                                  AND   cz.[Cube]    >= @n_TotalCBM
                                  AND   cz.MaxWeight >= @n_TotalWgt
                                  AND   cz.CartonDefault = 0
-                                 AND   cz.RowID > @n_RowID_cz
-                                 ORDER BY cz.RowID
+                                 ORDER BY cz.RowID DESC
+                              END
+                           END
+                           ELSE
+                           BEGIN
+                              SET @c_IsCompletePack = ''
+                              WHILE @c_IsCompletePack <> 'TRUE'
+                              BEGIN
+                                 --WL08
+                                 IF EXISTS ( SELECT 1 FROM #CTNZ_P )
+                                 BEGIN
+                                    SELECT TOP 1
+                                         @c_CartonType   = cz.CartonType
+                                       , @n_CartonCube   = cz.[Cube]
+                                       , @n_CartonWeight = cz.MaxWeight
+                                       , @n_FillTolerance= 100.00
+                                       , @n_RowID_cz     = cz.RowID
+                                    FROM #CTNZ_P cz
+                                    WHERE cz.CartonizationGroup = @c_CTNGroup
+                                    AND   cz.[Cube]    >= @n_TotalCBM
+                                    AND   cz.MaxWeight >= @n_TotalWgt
+                                    AND   cz.CartonDefault = 0
+                                    AND   cz.RowID > @n_RowID_cz
+                                    ORDER BY cz.RowID
+                                 END
+                                 ELSE
+                                 BEGIN
+                                    SELECT TOP 1
+                                         @c_CartonType   = cz.CartonType
+                                       , @n_CartonCube   = cz.[Cube]
+                                       , @n_CartonWeight = cz.MaxWeight
+                                       , @n_FillTolerance= 100.00
+                                       , @n_RowID_cz     = cz.RowID
+                                    FROM #CTNZ cz
+                                    WHERE cz.CartonizationGroup = @c_CTNGroup
+                                    AND   cz.[Cube]    >= @n_TotalCBM
+                                    AND   cz.MaxWeight >= @n_TotalWgt
+                                    AND   cz.CartonDefault = 0
+                                    AND   cz.RowID > @n_RowID_cz
+                                    ORDER BY cz.RowID
+                                 END
 
                                  IF @@ROWCOUNT = 0
                                  BEGIN
@@ -1792,19 +2073,39 @@ BEGIN
                                     SET @c_IsCompletePack = 'FALSE'
                                  ELSE
                                  BEGIN
-                                    SELECT TOP 1
-                                         @c_CartonType   = cz.CartonType
-                                       , @n_CartonCube   = cz.[Cube]
-                                       , @n_CartonWeight = cz.MaxWeight
-                                       , @n_FillTolerance= 100.00
-                                       , @n_RowID_cz     = cz.RowID
-                                    FROM #CTNZ cz
-                                    WHERE cz.CartonizationGroup = @c_CTNGroup
-                                    AND   cz.[Cube]    >= @n_TotalCBM
-                                    AND   cz.MaxWeight >= @n_TotalWgt
-                                    AND   cz.CartonDefault = 0
-                                    AND   cz.RowID < @n_RowID_cz
-                                    ORDER BY cz.RowID DESC
+                                    --WL08
+                                    IF EXISTS ( SELECT 1 FROM #CTNZ_P )
+                                    BEGIN
+                                       SELECT TOP 1
+                                            @c_CartonType   = cz.CartonType
+                                          , @n_CartonCube   = cz.[Cube]
+                                          , @n_CartonWeight = cz.MaxWeight
+                                          , @n_FillTolerance= 100.00
+                                          , @n_RowID_cz     = cz.RowID
+                                       FROM #CTNZ_P cz
+                                       WHERE cz.CartonizationGroup = @c_CTNGroup
+                                       AND   cz.[Cube]    >= @n_TotalCBM
+                                       AND   cz.MaxWeight >= @n_TotalWgt
+                                       AND   cz.CartonDefault = 0
+                                       AND   cz.RowID < @n_RowID_cz
+                                       ORDER BY cz.RowID DESC
+                                    END
+                                    ELSE
+                                    BEGIN
+                                       SELECT TOP 1
+                                            @c_CartonType   = cz.CartonType
+                                          , @n_CartonCube   = cz.[Cube]
+                                          , @n_CartonWeight = cz.MaxWeight
+                                          , @n_FillTolerance= 100.00
+                                          , @n_RowID_cz     = cz.RowID
+                                       FROM #CTNZ cz
+                                       WHERE cz.CartonizationGroup = @c_CTNGroup
+                                       AND   cz.[Cube]    >= @n_TotalCBM
+                                       AND   cz.MaxWeight >= @n_TotalWgt
+                                       AND   cz.CartonDefault = 0
+                                       AND   cz.RowID < @n_RowID_cz
+                                       ORDER BY cz.RowID DESC
+                                    END
 
                                     SET @c_IsCompletePack = 'TRUE'
                                  END
@@ -1821,6 +2122,14 @@ BEGIN
                         FROM #CartonDetail AS cd
                         WHERE cd.OrderKey = @c_Orderkey
                         AND   cd.CartonSeqNo = @n_CartonSeqNo
+
+                        --WL08
+                        IF EXISTS ( SELECT 1 FROM #CTNZ_P )
+                           TRUNCATE TABLE #CTNZ_P
+
+                        --WL10
+                        IF EXISTS ( SELECT 1 FROM #OptimizeItemToPack )
+                           TRUNCATE TABLE #OptimizeItemToPack
                      END
                   END
                END
@@ -1830,6 +2139,8 @@ BEGIN
             SET @c_ItemClass_P = @c_ItemClass
             SET @c_Size_P = @c_Size
             SET @c_Sku_P  = @c_Sku
+            SET @b_IsVAS_P  = @b_IsVAS   --WL15
+            SET @c_VAS_P = @c_VAS   --WL21
             FETCH NEXT FROM @cur_PCKGRPS INTO   @n_RowID_pcz
                                              ,  @n_HardCTNGrpNo
                                              ,  @n_SortCTNGrpNo
@@ -1925,7 +2236,7 @@ BEGIN
                         EXEC isp_SubmitToCartonizeAPI
                              @c_CartonGroup = @c_CTNGroup
                            , @c_CartonType  = @c_CartonType
-                           , @c_Algorithm   = ''
+                           , @c_Algorithm   = @c_Algorithm   --WL26
                            , @b_Success     = @b_Success       OUTPUT
                            , @n_Err         = @n_Err           OUTPUT
                            , @c_ErrMsg      = @c_ErrMsg        OUTPUT
@@ -1942,6 +2253,11 @@ BEGIN
                            SET @c_IsCompletePack = ''
                            SELECT @c_IsCompletePack = orn.IsCompletePack
                            FROM @t_OptimizeResult AS orn
+
+                           --WL11
+                           -- Cannot fit even 1 qty, it returns nothing
+                           IF NOT EXISTS ( SELECT 1 FROM @t_OptimizeResult )
+                              SET @c_IsCompletePack = 'false'
 
                            BREAK
                         END
@@ -2018,16 +2334,6 @@ BEGIN
                        ELSE 9
                        END
 
-         --Lookup OrderType
-         --(ush022-2) start
-         SELECT TOP 1
-                  @c_OrderGroupAllowed = CL.Code,
-                  @c_DocTypeAllowed    = CL.Long
-         FROM @TMP_CL cl
-         WHERE CL.LISTNAME = 'CSCORDTYPE'
-         AND CL.Storerkey = @c_Storerkey
-         AND cl.Short = 'Y'
-         --(ush022-2) end
 
          IF @c_AuditPercent > ''
          BEGIN
@@ -2054,7 +2360,7 @@ BEGIN
             AND cl.Storerkey = @c_Storerkey
             )
             AND cd.[Status] = '9'
-            AND cd.IsVas = 0
+            --AND cd.IsVas = 0   --WL17
 
             IF @n_CartonNo_Cnt > 0
             BEGIN
@@ -2082,13 +2388,20 @@ BEGIN
                                              AND cl.Storerkey = @c_Storerkey                    --(ush022-2)
                               )
                               AND cd.[Status] = '9'
-                              AND cd.IsVas    = 0
+                              --AND cd.IsVas    = 0   --WL17
                               GROUP BY cd.OrderKey, cd.CartonSeqNo
                               ORDER BY cd.CartonSeqNo DESC
                            ) aud
                WHERE cd.Orderkey = @c_Orderkey
                AND cd.CartonSeqNo = aud.CartonSeqNo
-               AND (cd.OrderGroup = @c_OrderGroupAllowed AND cd.DocType = @c_DocTypeAllowed)   --(ush022-2)
+               AND EXISTS ( SELECT 1
+                            FROM @TMP_CL clc
+                            WHERE clc.LISTNAME = 'CSCORDTYPE'
+                            AND clc.Storerkey = @c_Storerkey
+                            AND clc.Short = 'Y'
+                            AND clc.Code = cd.OrderGroup
+                            AND clc.Long = cd.DocType
+                          )   --WL27
             END
          END
 
@@ -2106,23 +2419,25 @@ BEGIN
                         AND cd.[Status] = '9'
                       )
             BEGIN
-               EXEC [dbo].[isp_CreatePickSlip]
-                   @c_Orderkey              = @c_Orderkey
-                  ,@c_Wavekey               = @c_Wavekey
-                  ,@c_PickslipType          = '3'
-                  ,@c_ConsolidateByLoad     = 'N'
-                  ,@c_Refkeylookup          = 'N'
-                  ,@c_LinkPickSlipToPick    = 'Y'
-                  ,@c_AutoScanIn            = 'N'
-                  ,@b_Success               = @b_Success  OUTPUT
-                  ,@n_Err                   = @n_Err      OUTPUT
-                  ,@c_ErrMsg                = @c_ErrMsg   OUTPUT
+               --WL14 S
+               --EXEC [dbo].[isp_CreatePickSlip]
+               --    @c_Orderkey              = @c_Orderkey
+               --   ,@c_Wavekey               = @c_Wavekey
+               --   ,@c_PickslipType          = '3'
+               --   ,@c_ConsolidateByLoad     = 'N'
+               --   ,@c_Refkeylookup          = 'N'
+               --   ,@c_LinkPickSlipToPick    = 'Y'
+               --   ,@c_AutoScanIn            = 'N'
+               --   ,@b_Success               = @b_Success  OUTPUT
+               --   ,@n_Err                   = @n_Err      OUTPUT
+               --   ,@c_ErrMsg                = @c_ErrMsg   OUTPUT
 
-               IF @b_Success = 0
-               BEGIN
-                  SET @n_Continue = 3
-                  GOTO PACK_END
-               END
+               --IF @b_Success = 0
+               --BEGIN
+               --   SET @n_Continue = 3
+               --   GOTO PACK_END
+               --END
+               --WL14 E
 
                SET @c_PickSlipNo = ''
                SELECT @c_PickSlipNo = p.PickHeaderKey
@@ -2291,7 +2606,7 @@ BEGIN
                               , cd.Qty
                               , pd.QtyMoved
                               , pd.[Status]
-                              , pd.DropID
+                              , IIF((ISNULL(U.UCCNo, '') = '' OR ISNULL(pd.DropID, '') = '') AND pd.UOM >= '6', @c_LabelNo, pd.DropID)   --WL09
                               , pd.Loc
                               , pd.ID
                               , pd.PackKey
@@ -2314,6 +2629,9 @@ BEGIN
                               , pd.Channel_ID
                         FROM #CartonDetail AS cd
                         JOIN PickDetail AS pd (NOLOCK) ON pd.PickDetailKey = cd.RefPickKey
+                        LEFT JOIN UCC U (NOLOCK) ON U.UCCNo = pd.DropID          --WL09
+                                                AND U.Storerkey = pd.Storerkey   --WL09
+                                                AND U.SKU = pd.SKU               --WL09
                         WHERE cd.RowID = @n_RowID_cd
 
                         SET @n_err = @@ERROR
@@ -2329,7 +2647,9 @@ BEGIN
                         UPDATE cd
                            SET cd.PickDetailKey = @c_PickDetailKey
                              , cd.LabelNo       = @c_LabelNo
+                             , cd.DropID        = ISNULL(pd.DropID, '')   --WL24
                         FROM #CartonDetail AS cd
+                        JOIN PickDetail AS pd (NOLOCK) ON pd.PickDetailKey = @c_PickDetailKey   --WL24
                         WHERE cd.RowID = @n_RowID_cd
                         AND   cd.[Status] = '9'
                      END
@@ -2343,6 +2663,7 @@ BEGIN
                               ,pd.Trafficcop = NULL
                               ,pd.EditWho    = SUSER_SNAME()
                               ,pd.EditDate   = GETDATE()
+                              ,pd.DropID     = IIF(ISNULL(pd.DropID, '') = '' AND pd.UOM >= '6', @c_LabelNo, pd.DropID)   --WL09
                         FROM #CartonDetail AS cd
                         JOIN PickDetail AS pd ON pd.PickDetailKey = cd.RefPickkey
                         WHERE cd.RowID = @n_RowID_cd
@@ -2357,6 +2678,15 @@ BEGIN
                                         +': Update PICKDETAIL Failed. (mspRLWAV10_PACK)'
                            GOTO PACK_END
                         END
+
+                        --WL24 S
+                        UPDATE cd
+                           SET cd.DropID = ISNULL(pd.DropID, '')
+                        FROM #CartonDetail AS cd
+                        JOIN PickDetail AS pd (NOLOCK) ON pd.PickDetailKey = cd.RefPickkey
+                        WHERE cd.RowID = @n_RowID_cd
+                        AND   cd.[Status] = '9'
+                        --WL24 E
                      END
 
                      FETCH NEXT FROM @cur_SPLPD INTO  @n_RowID_cd
@@ -2378,7 +2708,7 @@ BEGIN
                -----------------------------------------------------
                -- Gen Label#,Stamp CaseID and Split PickDetail - END
                -----------------------------------------------------
-               IF @n_debug >= 1
+               IF @n_debug = 9
                BEGIN
                   SELECT @c_PickSlipNo
                         ,CartonNo   = cd.CartonSeqNo
@@ -2437,9 +2767,23 @@ BEGIN
 
                SET @n_CartonNo_Last = 0
                SELECT TOP 1 @n_CartonNo_Last = pd.CartonNo
-               FROM dbo.PackDetail pd
+               FROM dbo.PackDetail pd (NOLOCK)   --WL25
                WHERE pd.PickSlipNo = @c_PickSlipNo
                ORDER BY pd.CartonNo DESC
+
+               --WL25 S
+               SET @n_TTLCtn = 0
+               SET @b_IsAudit = 0
+               SET @n_SumQty = 0
+               SELECT @n_TTLCtn  = ISNULL(@n_CartonNo_Last, 0) 
+                                 + COUNT(DISTINCT cd.CartonSeqNo)
+                    , @b_IsAudit = CAST(ISNULL(MAX(cd.[Audit] * 1), 0) AS BIT)
+                    , @n_SumQty  = ISNULL(SUM(cd.Qty),0)
+               FROM #CartonDetail cd
+               WHERE cd.Orderkey = @c_Orderkey
+               AND cd.CartonType > ''
+               AND cd.[Status] = '9'
+               --WL25 E
 
                INSERT INTO dbo.PackDetail
                   (  PickSlipNo
@@ -2450,6 +2794,7 @@ BEGIN
                   ,  Sku
                   ,  Qty
                   ,  ExpQty
+                  ,  DropID   --WL22
                   )
                SELECT PickSlipNo = @c_PickSlipNo
                      ,CartonNo = cd.CartonSeqNo + @n_CartonNo_Last
@@ -2462,16 +2807,33 @@ BEGIN
                                       ,5)
                      ,cd.Storerkey
                      ,cd.Sku
-                     ,Qty    = CASE WHEN cd.IsVas = 1 AND cd.UOM >= '6'
+                     ,Qty    = CASE WHEN @b_IsAudit = 1   --WL25
                                     THEN 0
-                                    WHEN cd.[Audit] = 1
+                                    WHEN cd.DocType = 'E'   --WL22
+                                    THEN 0                  --WL22
+                                    --WL25 S
+                                    -- Any VAS 
+                                    WHEN @b_HasAnyVAS = 1 AND cd.DocType = 'N'
                                     THEN 0
+                                    -- Total Carton <= 14
+                                    WHEN @n_TTLCtn <= @n_UPSCtnCnt AND cd.DocType = 'N'
+                                    THEN 0
+                                    --WL25 E
                                     ELSE SUM(cd.Qty) END
-                     ,ExpQty = CASE WHEN cd.IsVas = 1 AND cd.UOM >= '6'
+                     ,ExpQty = CASE WHEN @b_IsAudit = 1   --WL25
                                     THEN SUM(cd.Qty)
-                                    WHEN cd.[Audit] = 1
+                                    WHEN cd.DocType = 'E'   --WL22
+                                    THEN SUM(cd.Qty)        --WL22
+                                    --WL25 S
+                                    -- Any VAS 
+                                    WHEN @b_HasAnyVAS = 1 AND cd.DocType = 'N'
                                     THEN SUM(cd.Qty)
+                                    -- Total Carton <= 14
+                                    WHEN @n_TTLCtn <= @n_UPSCtnCnt AND cd.DocType = 'N'
+                                    THEN SUM(cd.Qty)
+                                    --WL25 E
                                     ELSE 0 END
+                     ,cd.DropID   --WL22
                FROM #CartonDetail AS cd
                WHERE cd.Orderkey = @c_Orderkey
                AND cd.CartonType > ''
@@ -2483,6 +2845,8 @@ BEGIN
                      ,  cd.IsVAS
                      ,  cd.UOM
                      ,  cd.[Audit]
+                     ,  cd.DropID    --WL22
+                     ,  cd.DocType   --WL22
                ORDER BY cd.CartonSeqNo
                      ,  cd.Storerkey
                      ,  cd.Sku
@@ -2513,9 +2877,20 @@ BEGIN
                SELECT @c_PickSlipNo
                      ,CartonNo   = cd.CartonSeqNo  + @n_CartonNo_Last
                      ,[Weight]   = ISNULL(SUM((cd.Qty / cd.PackQtyIndicator) * cd.StdGrossWgt), 0.00)
+                                 + ISNULL(cz.CartonWeight, 0.00)   --WL28
                      ,[Cube]     = cz.[Cube]
-                     ,Qty        = CASE WHEN cd.[Audit] = 1
+                     ,Qty        = CASE WHEN @b_IsAudit = 1   --WL25
                                         THEN 0
+                                        WHEN cd.DocType = 'E'   --WL22
+                                        THEN 0                  --WL22
+                                        --WL25 S
+                                        -- Any VAS 
+                                        WHEN @b_HasAnyVAS = 1 AND cd.DocType = 'N'
+                                        THEN 0
+                                        -- Total Carton <= 14
+                                        WHEN @n_TTLCtn <= @n_UPSCtnCnt AND cd.DocType = 'N'
+                                        THEN 0
+                                        --WL25 E
                                         ELSE ISNULL(SUM(cd.Qty),0) END
                      ,CartonType = cd.CartonType
                      ,[Length]   = cz.CartonLength
@@ -2530,6 +2905,7 @@ BEGIN
                                  ,  cz1.CartonWidth
                                  ,  cz1.CartonHeight
                                  ,  cz1.[Cube]
+                                 ,  cz1.CartonWeight   --WL28
                             FROM @t_CTNZ AS cz1
                             WHERE cz1.CartonizationGroup = cd.CartonGroup
                             AND cz1.CartonType = cd.CartonType
@@ -2543,8 +2919,12 @@ BEGIN
                      ,  cz.CartonLength
                      ,  cz.CartonWidth
                      ,  cz.CartonHeight
+                     ,  cd.IsVas   --WL13
+                     ,  cd.UOM     --WL13
                      ,  CASE WHEN cd.UOM = '2' THEN cd.LabelNo ELSE '' END
                      ,  cd.[Audit]
+                     ,  cd.DocType   --WL22
+                     ,  ISNULL(cz.CartonWeight, 0.00)   --WL28
 
                SET @n_err = @@ERROR
                IF @n_err <> 0
@@ -2677,8 +3057,69 @@ BEGIN
             END
          END
 
+         --WL19 S
+         POST_PACK:
+         SET @b_AutoPackCFM = 0   --WL22
+
+         IF @c_DocType = 'N'
+         BEGIN
+            -- Update Shipperkey
+            IF ISNULL(@c_Shipperkey, '') <> 'UPS'
+            AND @n_TTLCtn <= @n_UPSCtnCnt
+            BEGIN
+               BEGIN TRY
+                  UPDATE dbo.ORDERS
+                  SET ShipperKey = 'UPS'
+                  WHERE OrderKey = @c_Orderkey
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  GOTO QUIT_SP
+               END CATCH
+            END
+
+            -- Auto Pack Confirm
+            IF @b_HasAnyVAS = 0   --WL25
+            AND NOT EXISTS ( SELECT 1 
+                             FROM #CartonDetail cd
+                             WHERE cd.Orderkey = @c_Orderkey
+                             AND (cd.IsVas = 1 OR cd.[Audit] = 1)   --WL23   --WL25
+                           )
+            --WL25 S
+            AND EXISTS ( SELECT 1 
+                         FROM PACKDETAIL PD WITH (NOLOCK)
+                         WHERE PD.Pickslipno = @c_PickSlipNo
+                         HAVING SUM(PD.Qty) = @n_SumQty
+                       )
+            --WL25 E
+            AND @n_TTLCtn > @n_UPSCtnCnt
+            BEGIN
+               SET @b_AutoPackCFM = 1   --WL22
+            END
+         END
+         --WL19 E
+
+         --WL22 S
+         IF @b_AutoPackCFM = 1
+         BEGIN
+            BEGIN TRY
+               UPDATE dbo.PackHeader
+               SET [Status] = '9'
+               WHERE PickSlipNo = @c_PickSlipNo
+            END TRY
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               GOTO QUIT_SP
+            END CATCH
+         END
+         --WL22 E
+
          FETCH NEXT FROM @cur_PCKGRPH INTO @c_Orderkey, @c_DocType, @c_BillToKey, @c_Storerkey
-                                          ,@n_PackGrpNo
+                                         , @n_PackGrpNo
+                                         , @c_UserDefine01, @c_Shipperkey   --WL19
+                                         , @b_HasAnyVAS   --WL25
       END
       CLOSE @cur_PCKGRPH
       DEALLOCATE @cur_PCKGRPH
@@ -2698,6 +3139,11 @@ QUIT_SP:
    IF OBJECT_ID('tempdb..#CTNZ') IS NOT NULL
    BEGIN
       DROP TABLE #CTNZ
+   END
+
+   IF OBJECT_ID('tempdb..#CTNZ_P') IS NOT NULL
+   BEGIN
+      DROP TABLE #CTNZ_P
    END
 
    IF OBJECT_ID('tempdb..#OptimizeItemToPack') IS NOT NULL

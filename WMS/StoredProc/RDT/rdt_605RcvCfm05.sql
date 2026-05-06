@@ -303,7 +303,7 @@ BEGIN
                   SELECT 'Gen TransmigLo2 per line', @cReceiptKey AS ReceiptKey, @cLoopReceiptLineNumber AS ASNLine
 
                EXEC dbo.ispGenTransmitLog2
-                  @c_TableName = N'WSMSRECCFM ',
+                  @c_TableName = N'WSNSCPRECCFM ',
                   @c_Key1 = @cReceiptKey,
                   @c_Key2 = @cLoopReceiptLineNumber,
                   @c_Key3 = @cStorerKey,
@@ -330,7 +330,7 @@ BEGIN
                   SELECT 'Gen TransmitLog3 per line', @cReceiptKey AS ReceiptKey, @cLoopReceiptLineNumber AS ASNLine
 
                EXEC dbo.ispGenTransmitLog3
-                  @c_TableName = N'WSMSRECCFM ',
+                  @c_TableName = N'RCPTLOG ',
                   @c_Key1 = @cReceiptKey,
                   @c_Key2 = @cLoopReceiptLineNumber,
                   @c_Key3 = @cStorerKey,
@@ -367,76 +367,97 @@ BEGIN
       END --gen transmitlog2/3 by each line when config = 2
    END --All asnline are finalized
 
-   --Generate transmit by finaliezd line
-   SET @cReceiptLineNumber = ''
-
-   SELECT TOP 1 
-      @cReceiptLineNumber = ReceiptLineNumber
-   FROM dbo.ReceiptDetail WITH (NOLOCK) 
-   WHERE ReceiptKey = @cReceiptKey 
-      AND ToID = @cToID
-      AND FinalizeFlag = 'Y'
-
-   IF ISNULL(@cReceiptLineNumber, '') <> '' --asn line finalized
+   --Generate transmit by finalized line
+   IF @cTransmitLog2Config = '1' OR @cTransmitLog3Config = '1'
    BEGIN
-      IF @cTransmitLog2Config = '1'
+      IF @nDebugFlag = 1
+            SELECT 'Gen Transmitlog2/3 by ASN Line'
+
+      DECLARE @curReceiptLine2 CURSOR
+      DECLARE @cCurrentReceiptLine2 NVARCHAR(10)
+
+      SET @curReceiptLine2 = CURSOR FOR
+         SELECT ReceiptLineNumber
+         FROM dbo.ReceiptDetail WITH (NOLOCK)
+         WHERE ReceiptKey = @cReceiptKey
+            AND ToID = @cToID
+            AND FinalizeFlag = 'Y'
+         ORDER BY ReceiptLineNumber
+
+      OPEN @curReceiptLine2
+      FETCH NEXT FROM @curReceiptLine2 INTO @cCurrentReceiptLine2
+
+      WHILE @@FETCH_STATUS = 0
       BEGIN
-         IF @nDebugFlag = 1
-            SELECT 'Gen TransmigLo2 by ASN line'
-
-         EXEC dbo.ispGenTransmitLog2 
-            @c_TableName = N'WSMSRECCFM ',   
-            @c_Key1 = @cReceiptKey,     
-            @c_Key2 = @cReceiptLineNumber,      
-            @c_Key3 = @cStorerKey,   
-            @c_TransmitBatch = '',         
-            @b_Success = @bSuccess OUTPUT,  
-            @n_err = @nErrNo OUTPUT,         
-            @c_errmsg = @cErrMsg OUTPUT 
-
-         IF @bSuccess <> 1 OR @nErrNo <> 0
+         IF @cTransmitLog2Config = '1'
          BEGIN
-            SET @cMsg1 = ''
-            SET @cMsg2 = ''
-            SET @cMsg3 = ''
+            IF @nDebugFlag = 1
+               SELECT 'Gen TransmitLog2 by ASN line: ' + @cCurrentReceiptLine2
 
-            SET @cMsg1 = '259907:'
-            SET @cMsg2 = rdt.rdtgetmessage( 259907, @cLangCode, 'DSP')
-            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cMsg1, @cMsg2,@cMsg3
+            EXEC dbo.ispGenTransmitLog2
+               @c_TableName = N'WSNSCPRECCFM ',
+               @c_Key1 = @cReceiptKey,
+               @c_Key2 = @cCurrentReceiptLine2,
+               @c_Key3 = @cStorerKey,
+               @c_TransmitBatch = '',
+               @b_Success = @bSuccess OUTPUT,
+               @n_err = @nErrNo OUTPUT,
+               @c_errmsg = @cErrMsg OUTPUT
 
-            SET @nErrNo = 0 -- not block process
+            IF @bSuccess <> 1 OR @nErrNo <> 0
+            BEGIN
+               SET @cMsg1 = ''
+               SET @cMsg2 = ''
+               SET @cMsg3 = ''
+
+               SET @cMsg1 = '259907:'
+               SET @cMsg2 = rdt.rdtgetmessage( 259907, @cLangCode, 'DSP')
+               SET @cMsg3 = 'ASN-' + @cReceiptKey + ' Line-' + @cCurrentReceiptLine2
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cMsg1, @cMsg2,@cMsg3
+
+               SET @nErrNo = 0 -- not block process
+            END
          END
-      END --gen transmitlog2 by line
 
-      IF @cTransmitLog3Config = '1'
-      BEGIN
-         IF @nDebugFlag = 1
-            SELECT 'Gen TransmigLog3 by ASN line'
-
-         EXEC dbo.ispGenTransmitLog3 
-            @c_TableName = N'WSMSRECCFM ',   
-            @c_Key1 = @cReceiptKey,     
-            @c_Key2 = @cReceiptLineNumber,      
-            @c_Key3 = @cStorerKey,   
-            @c_TransmitBatch = '',         
-            @b_Success = @bSuccess OUTPUT,  
-            @n_err = @nErrNo OUTPUT,         
-            @c_errmsg = @cErrMsg OUTPUT 
-
-         IF @bSuccess <> 1 OR @nErrNo <> 0
+         IF @cTransmitLog3Config = '1'
          BEGIN
-            SET @cMsg1 = ''
-            SET @cMsg2 = ''
-            SET @cMsg3 = ''
+            IF @nDebugFlag = 1
+               SELECT 'Gen TransmitLog3 by ASN line: ' + @cCurrentReceiptLine2
 
-            SET @cMsg1 = '259908:'
-            SET @cMsg2 = rdt.rdtgetmessage( 259908, @cLangCode, 'DSP')
-            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cMsg1, @cMsg2,@cMsg3
+            EXEC dbo.ispGenTransmitLog3
+               @c_TableName = N'RCPTLOG ',
+               @c_Key1 = @cReceiptKey,
+               @c_Key2 = @cCurrentReceiptLine2,
+               @c_Key3 = @cStorerKey,
+               @c_TransmitBatch = '',
+               @b_Success = @bSuccess OUTPUT,
+               @n_err = @nErrNo OUTPUT,
+               @c_errmsg = @cErrMsg OUTPUT
 
-            SET @nErrNo = 0 -- not block process
+            IF @bSuccess <> 1 OR @nErrNo <> 0
+            BEGIN
+               SET @cMsg1 = ''
+               SET @cMsg2 = ''
+               SET @cMsg3 = ''
+
+               SET @cMsg1 = '259908:'
+               SET @cMsg2 = rdt.rdtgetmessage( 259908, @cLangCode, 'DSP')
+               SET @cMsg3 = 'ASN-' + @cReceiptKey + ' Line-' + @cCurrentReceiptLine2
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cMsg1, @cMsg2,@cMsg3
+
+               SET @nErrNo = 0 -- not block process
+            END
          END
-      END --gen transmitlog3 by line
 
+         FETCH NEXT FROM @curReceiptLine2 INTO @cCurrentReceiptLine2
+      END
+
+      CLOSE @curReceiptLine2
+      DEALLOCATE @curReceiptLine2
+   END -- send iml by asn line
+
+   IF EXISTS (SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND ToID = @cToID AND FinalizeFlag = 'Y')
+   BEGIN
       IF NOT EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) 
                      WHERE StorerKey = @cStorerKey
                         AND TaskType = 'ASTPA'

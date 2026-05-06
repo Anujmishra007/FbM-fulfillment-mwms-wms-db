@@ -149,7 +149,7 @@ BEGIN
       UCCNo                NVARCHAR(20),
       OriUCCNo             NVARCHAR(20),
       UCCQty               INT,
-      Dropid               NVARCHAR(18),
+      Dropid               NVARCHAR(20),
       Status               NVARCHAR(5) DEFAULT ('0')
    )
 
@@ -159,7 +159,7 @@ BEGIN
       PickDetailKey        NVARCHAR( 18),
       Loc                  NVARCHAR( 10),
       Id                   NVARCHAR(18),
-      DropID               NVARCHAR(18),
+      DropID               NVARCHAR(20),
       Qty                  INT,
       Lot                  NVARCHAR( 10),
       PickedQty            INT,
@@ -334,6 +334,8 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = '4',
+                  QtyMoved = Qty,
+                  Qty = 0,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -352,7 +354,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET
-                  Status = '6',
+                  Status = '5',
                   OrderKey = @cLoopOrderKey,
                   OrderLineNumber = @cLoopOrderKeyLineNumber,
                   EditDate = GETDATE(),
@@ -445,7 +447,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET
-                  Status = '6',
+                  Status = '5',
                   OrderKey = @cLoopOrderKey,
                   OrderLineNumber = @cLoopOrderKeyLineNumber,
                   EditDate = GETDATE(),
@@ -534,6 +536,8 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = '4',
+                  QtyMoved = Qty,
+                  Qty = 0,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -616,6 +620,8 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = '4',
+                  QtyMoved = Qty,
+                  Qty = 0,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cNewPickDetailKey
@@ -830,7 +836,10 @@ BEGIN
 
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
-               SET Status = '6'
+               SET 
+                  Status = '5',
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
                WHERE UCCNo = @cPieceLotUCC
             END TRY
             BEGIN CATCH

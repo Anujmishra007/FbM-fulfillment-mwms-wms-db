@@ -251,12 +251,19 @@ BEGIN
       ELSE IF @cType = 'SKU'
       BEGIN
          DECLARE @cCaseID     NVARCHAR(20)
-         IF @nMPOCFlag <> 1
+         IF @nMPOCFlag = 0
          BEGIN
             IF NOT EXISTS(SELECT 1 FROM dbo.PickDetail WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey AND SKU = @cSKU)
             BEGIN
                SET @nErrNo = 251752
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Not In Order
+               GOTO Quit
+            END
+
+            IF NOT EXISTS(SELECT 1 FROM dbo.PickDetail WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey AND SKU = @cSKU AND Status = '5')
+            BEGIN
+               SET @nErrNo = 251756
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Order is not picked yet
                GOTO Quit
             END
 
@@ -300,7 +307,7 @@ BEGIN
       END
       ELSE IF @cType = 'QTY'
       BEGIN
-         IF @nMPOCFlag <> 1
+         IF @nMPOCFlag = 0
          BEGIN
             SELECT @nPickQTY = SUM(Qty)
             FROM dbo.PickDetail WITH(NOLOCK)

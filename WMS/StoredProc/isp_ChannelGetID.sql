@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    ver   Purposes                                */
 /* 09-Jul-2019  Leong     1.1   INC0769944 - Revise ErrMsg.             */
+/* 09-04-2026   ppa371    1.2   UWP-49431- Commented raise error in Exit */
 /************************************************************************/
 
 CREATE PROC isp_ChannelGetID (
@@ -238,7 +239,7 @@ BEGIN
       ELSE
       BEGIN
          EXECUTE nsp_LogError @n_ErrNo, @c_ErrMsg, 'isp_ChannelGetID'
-         RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR
+         --RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR
          RETURN
       END
    END

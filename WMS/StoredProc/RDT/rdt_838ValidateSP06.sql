@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 2026-01-03 1.0  Dennis      FCR-8931  Created                        */
+/* 2026-03-27 1.1  NLT013      FCR-11343 B2C Single Flex Pack           */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ValidateSP06 (
@@ -55,6 +56,8 @@ BEGIN
    DECLARE @nPickQTY    INT
    DECLARE @cPackByFromDropID NVARCHAR( 1)
    DECLARE @cDocType       NVARCHAR( 10)
+   DECLARE @cB2CSingleCheck NVARCHAR( 1)  -- FCR-11343: B2C Single check flag
+   DECLARE @cB2CSingleFlexPack  NVARCHAR(5) = '0'
 
    SET @cOrderKey = ''
    SET @cLoadKey = ''
@@ -69,6 +72,8 @@ BEGIN
       @cZone = Zone
    FROM dbo.PickHeader WITH (NOLOCK)
    WHERE PickHeaderKey = @cPickSlipNo
+
+   SET @cB2CSingleFlexPack = rdt.rdtGetConfig(@nFunc, 'B2CSingleFlexPack', @cStorerKey)
 
    SELECT
       @cDocType = DocType
@@ -309,18 +314,31 @@ BEGIN
 
       ELSE IF @cType = 'SKU'
       BEGIN
-         IF @cFromDropID = '' 
+         -- FCR-11343: For B2C Single, validate SKU exists in DropID (not specific order)
+         SET @cB2CSingleCheck = '0'
+         IF @cDocType = 'E' AND @cFromDropID <> ''
          BEGIN
-            -- Check SKU in PickSlipNo
+            SELECT @cB2CSingleCheck = ISNULL(ECOM_SINGLE_Flag, '')
+            FROM ORDERS WITH (NOLOCK)
+            WHERE OrderKey = @cOrderKey
+         END
+
+         IF @cB2CSingleCheck = 'S'
+         BEGIN
+            -- B2C Single: Validate SKU exists in any B2C Single order within the DropID
             IF NOT EXISTS( SELECT TOP 1 1
-               FROM dbo.PickDetail PD WITH (NOLOCK) 
-               WHERE PD.OrderKey = @cOrderKey
+               FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+               JOIN dbo.ORDERS O WITH (NOLOCK) ON PD.OrderKey = O.OrderKey
+               WHERE PD.DropID = @cFromDropID
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
-                  AND PD.QTY > 0)
+                  AND PD.QTY > 0
+                  AND PD.Status <= '5'
+                  AND O.DocType = 'E'
+                  AND O.ECOM_SINGLE_Flag = 'S')
             BEGIN
-               SET @nErrNo = 100358
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
+               SET @nErrNo = 100380  --B2C SKU NotInDropID
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
                SET @cErrMsg = ''
                GOTO Quit
@@ -328,24 +346,45 @@ BEGIN
          END
          ELSE
          BEGIN
-            -- Check SKU in PickSlipNo
-            IF NOT EXISTS( SELECT TOP 1 1
-               FROM dbo.PickDetail PD WITH (NOLOCK) 
-               WHERE PD.OrderKey = @cOrderKey
-                  AND PD.StorerKey = @cStorerKey
-                  AND PD.SKU = @cSKU
-                  AND PD.QTY > 0
-                  AND PD.DropID = @cFromDropID)
+            -- Original logic for non-B2C Single orders
+            IF @cFromDropID = ''
             BEGIN
-               SET @nErrNo = 100370
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
-               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
-               SET @cErrMsg = ''
-               GOTO Quit
+               -- Check SKU in PickSlipNo
+               IF NOT EXISTS( SELECT TOP 1 1
+                  FROM dbo.PickDetail PD WITH (NOLOCK)
+                  WHERE PD.OrderKey = @cOrderKey
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.SKU = @cSKU
+                     AND PD.QTY > 0)
+               BEGIN
+                  SET @nErrNo = 100358
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
+                  EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+                  SET @cErrMsg = ''
+                  GOTO Quit
+               END
+            END
+            ELSE
+            BEGIN
+               -- Check SKU in PickSlipNo
+               IF NOT EXISTS( SELECT TOP 1 1
+                  FROM dbo.PickDetail PD WITH (NOLOCK)
+                  WHERE PD.OrderKey = @cOrderKey
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.SKU = @cSKU
+                     AND PD.QTY > 0
+                     AND PD.DropID = @cFromDropID)
+               BEGIN
+                  SET @nErrNo = 100370
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
+                  EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+                  SET @cErrMsg = ''
+                  GOTO Quit
+               END
             END
          END
       END
-      
+
       ELSE IF @cType = 'QTY'
       BEGIN
          /*

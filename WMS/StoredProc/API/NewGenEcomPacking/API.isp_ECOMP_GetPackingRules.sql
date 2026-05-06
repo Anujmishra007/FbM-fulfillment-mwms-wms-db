@@ -22,6 +22,8 @@
 /* 02-APR-2023    Alex02   #JIRA PAC-182 Display SKU Images             */
 /* 12-AUG-2024    Alex03   #JIRA PAC-351 Regular exp to validate Serial#*/
 /* 14-NOV-2024    Alex04   #JIRA PAC-363 New Rules for IsSysSuggCtnType */
+/* 09-JAN-2026    CSC166   #FCR9149 									*/
+/* 13-FEB-2026    CSC166   #FCR9928 									*/
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackingRules](
      @c_StorerKey                NVARCHAR(15)   = ''
@@ -126,6 +128,9 @@ BEGIN
          , @c_SerialNo_Regex              NVARCHAR(200)  = ''  --Alex03
          , @c_IsSystemSugCartonType       NVARCHAR(1)    = ''  --Alex04
 
+		 , @c_EPACKSummaryPrompt		  NVARCHAR(1)	 = '0' --CSC166
+		 , @c_EPACKValidateCustCTNType	  NVARCHAR(1)	 = '0' --FCR-9928
+
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
    SET @c_ErrMsg                          = ''
@@ -166,6 +171,30 @@ BEGIN
       SET @n_Continue = 3 
       SET @n_ErrNo = 52000
       SET @c_ErrMsg = CONVERT(CHAR(5),@n_sc_err) + '. Error Executing nspGetRight(ECOMPShowSKUIMAGE). '  
+      GOTO QUIT
+   END
+
+   --FCR9149 - EPACKSummaryPrompt
+   SET @c_EPACKSummaryPrompt = '0'
+   SET @n_sc_Success = 0
+   SET @n_sc_err = 0
+   SET @c_sc_errmsg = ''
+
+   EXEC [dbo].[nspGetRight]
+            @c_Facility          = @c_Facility
+         ,  @c_StorerKey         = @c_StorerKey
+         ,  @c_sku               = ''
+         ,  @c_ConfigKey         = 'EPACKSummaryPrompt'
+         ,  @b_Success           = @n_sc_Success               OUTPUT     
+         ,  @c_authority         = @c_EPACKSummaryPrompt       OUTPUT    
+         ,  @n_err               = @n_sc_err                   OUTPUT    
+         ,  @c_errmsg            = @c_sc_errmsg                OUTPUT  
+   
+   IF @n_sc_Success <> 1   
+   BEGIN   
+      SET @n_Continue = 3 
+      SET @n_ErrNo = 52000
+      SET @c_ErrMsg = CONVERT(CHAR(5),@n_sc_err) + '. Error Executing nspGetRight(EPACKSummaryPrompt). '  
       GOTO QUIT
    END
 
@@ -507,6 +536,8 @@ BEGIN
 
       SET @c_IsSystemSugCartonType = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKSuggestCartonType') -- Alex04
 
+      SET @c_EPACKValidateCustCTNType = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKValidateCustCTNType') -- FCR-9928
+
       SELECT 'IsSerialNoMandatory'     , @c_IsSerialNoMandatory         UNION ALL
       SELECT 'IsPackQRFMandatory'      , @c_IsPackQRFMandatory          UNION ALL
       SELECT 'PackQRF_RegEx'           , @c_PackQRF_RegEx               UNION ALL
@@ -526,8 +557,9 @@ BEGIN
       SELECT 'ECOMPShowSKUIMG'         , @c_ECOMPShowSKUIMG             UNION ALL
       SELECT 'ECOMPNoOfIMG'            , @c_ECOMPNoOfIMG                UNION ALL
       SELECT 'SerialNo_RegEx'          , @c_SerialNo_Regex              UNION ALL      --Alex03 
-      SELECT 'IsSystemSugCartonType'   , @c_IsSystemSugCartonType                      --Alex04
-
+      SELECT 'IsSystemSugCartonType'   , @c_IsSystemSugCartonType       UNION ALL      --Alex04
+	  SELECT 'EPACKSummaryPrompt'      , @c_EPACKSummaryPrompt			UNION ALL
+      SELECT 'EPACKValidateCustCTNType', @c_EPACKValidateCustCTNType			       --FCR-9928
 
    END
    IF @c_PackMode = 'M'
@@ -859,6 +891,8 @@ BEGIN
 
          SET @c_IsSystemSugCartonType = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKSuggestCartonType') -- Alex04
 
+		 SET @c_EPACKValidateCustCTNType = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKValidateCustCTNType') -- FCR-9928
+
          SELECT 'EpackForceMultiPackByOrd', @c_EpackForceMultiPackByOrd    UNION ALL
          SELECT 'EPACKCloseCartonPrint '  , @c_EPACKCloseCartonPrint       UNION ALL
          SELECT 'EPACKNewCartonSkipPrint' , @c_EPACKNewCartonSkipPrint     UNION ALL
@@ -875,7 +909,9 @@ BEGIN
          SELECT 'PackChkCartonWeight'     , @c_PackChkCartonWeightValue    UNION ALL
          SELECT 'ECOMPShowSKUIMG'         , @c_ECOMPShowSKUIMG             UNION ALL
          SELECT 'ECOMPNoOfIMG'            , @c_ECOMPNoOfIMG                UNION ALL
-         SELECT 'IsSystemSugCartonType'   , @c_IsSystemSugCartonType                      --Alex04
+         SELECT 'IsSystemSugCartonType'   , @c_IsSystemSugCartonType       UNION ALL        --Alex04
+		 SELECT 'EPACKSummaryPrompt'	  , @c_EPACKSummaryPrompt		   UNION ALL
+         SELECT 'EPACKValidateCustCTNType', @c_EPACKValidateCustCTNType				        --Alex04
       END
       --PAC-7 Get Packing Rules After SKU Validation
       ELSE

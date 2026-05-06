@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-12-05   1.0  Sean       Cloned from isp_TPS_ExtUpd03                     */
+/* 2026-03-27   1.1  JWF011     UWP-52830: Fix logic                             */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtPreUpd03] (
@@ -70,12 +71,6 @@ BEGIN
    SET @cSerialNo         = ''
    SET @cOrderLineNumber  = ''
    SET @cDuplicateVal     = ''
-
-   IF ISJSON(@cInputValue2) = 0
-   OR @cInputValue2 = ''
-   BEGIN
-      GOTO EXIT_SP
-   END
 
    -- Get current OrderKey from PickHeader if not provided
    SELECT @cCurOrderKey = OrderKey  
@@ -208,6 +203,12 @@ BEGIN
    ELSE  
    BEGIN  
       -- Non-UCC mode: process serial numbers from @cInputValue2 JSON array
+      IF ISJSON(@cInputValue2) = 0
+      OR @cInputValue2 = ''
+      BEGIN
+         GOTO EXIT_SP
+      END
+
       IF @cOrderKey = ''      
       BEGIN  
          SET @n_Continue = 3

@@ -22,6 +22,7 @@
 /* 28-Jul-2025    Sean01      #UWP-37808 bug fixed - pickdetail.status  */
 /*                             couldn't update to 5 after unpack and    */
 /*                             reconfirm                                */
+/* 29-Jan-2026    Sean02      UWP-47754 - Merge the unified SP          */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_GenLabelNo] (  
      @b_Debug                    INT            = 0  
@@ -68,7 +69,7 @@ BEGIN
    BEGIN  
       SET @n_continue = 3      
       SET @n_ErrNo = 66001       
-      SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_sp_err)+': NewPickSlipNo cannot be blank. ([dbo].[isp_ECOM_GenPickHeader])'    
+      SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_sp_err)+': NewPickSlipNo cannot be blank. ([API].[isp_ECOMP_GenLabelNo])'    
       GOTO QUIT     
    END  
   
@@ -135,7 +136,7 @@ BEGIN
          END  
          ELSE   
          BEGIN
-            EXEC [dbo].[isp_ECOM_GenPickHeader]  
+            EXEC [API].[isp_ECOMP_GenPickHeader]  -- Sean02
                  @c_OrderKey       = @c_PHOrderKey  
                , @c_TempPickSlipNo = @c_PickSlipNo  
                , @c_NewPickSlipNo  = @c_NewPickSlipNo  
@@ -147,7 +148,7 @@ BEGIN
             BEGIN      
                SET @n_continue = 3      
                SET @n_ErrNo = 66001       
-               SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_sp_err)+': Unable to Generate Pick Header. ([dbo].[isp_ECOM_GenPickHeader])'       
+               SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_sp_err)+': Unable to Generate Pick Header. ([API].[isp_ECOMP_GenPickHeader])'       
                             + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_sp_errmsg),'') + ' ) '       
                GOTO QUIT      
             END  

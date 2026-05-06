@@ -356,7 +356,7 @@ BEGIN
                   , @c_JobIDs       = @ctempLabelJobIDs  OUTPUT    
                   , @c_AutoPrint    = 'N'     
             
-            IF @n_ErrNo <> 0   
+            IF @b_Success = 0 
             BEGIN  
                SET @n_Continue = 3 
                GOTO EXIT_SP  
@@ -462,7 +462,7 @@ BEGIN
           , @c_JobIDs       = @ctempLabelJobIDs  OUTPUT    
           , @c_AutoPrint    = 'N'    
   
-         IF @n_ErrNo <> 0   
+         IF @b_Success = 0 
          BEGIN  
             SET @n_Continue = 3 
             GOTO EXIT_SP  
@@ -666,7 +666,7 @@ BEGIN
                AND WMR.ModuleID = @cModuleID
                WHERE WMRD.StorerKey = @cStorerKey  
                AND WMR.ReportType = @cReportType
-               AND RTP.PrinterGroup = @cLabelPrinter  
+               AND RTP.PrinterGroup = @cPaperPrinter  
                -- UWP-43135 End
                AND WMRD.ReportLineNo = @cReportLineNo -- 1.2
 
@@ -718,7 +718,7 @@ BEGIN
                , @c_JobIDs       = @cPrintPaperJobIDs    OUTPUT    
                , @c_AutoPrint    = 'N'     
       
-         IF @n_ErrNo <> 0   
+         IF @b_Success = 0 
          BEGIN  
             SET @n_Continue = 3 
             GOTO EXIT_SP  

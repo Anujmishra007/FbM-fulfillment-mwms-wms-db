@@ -88,6 +88,7 @@ BEGIN
       @cMarShallLoc           NVARCHAR(10),
       @cDefaultLoc            NVARCHAR(20),
       @cPriority              NVARCHAR(1),  
+      @cWavekey               NVARCHAR(10),
       @cDefaultClosePalletOption NVARCHAR( 1),
       @cUCCNo              NVARCHAR(20),
       @cPltBuildNotInsDropID     NVARCHAR( 20), -- (james01)
@@ -96,11 +97,21 @@ BEGIN
       @nSuccess               INT,
       @nCurrentStep           INT,
       @nRowCount              INT,
+      @cDropID             NVARCHAR(20),
       @nCurrentScn            INT
+   DECLARE @cMoveQTYPick   NVARCHAR( 1),
+   @nLoopIndex             INT = -1,
+   @nTranCount             INT
+   DECLARE @tUccNo TABLE
+   (
+      ID    INT IDENTITY(1,1),
+      UCC   NVARCHAR(20)
+   )
 
    SELECT 
       @nCurrentStep = Step,
       @nCurrentScn = Scn,
+      @cDropID          = V_String1,
       @cDropLOC         = V_String5,
       @cPalletCriteria     = V_String11,
       @cParam1             = V_String12,
@@ -135,9 +146,9 @@ BEGIN
          BEGIN
             IF @nInputKey = 1
             BEGIN
-               SET @cFromDropID = TRIM(ISNULL(@cInField01, ''))
+               SET @cFromID = TRIM(ISNULL(@cInField01, ''))
 
-               IF @cFromDropID = ''
+               IF @cFromID = ''
                BEGIN
                   SET @nErrNo = 258951
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID is needed
@@ -151,8 +162,9 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.Orders O WITH (NOLOCK) ON PD.OrderKey = O.OrderKey
                WHERE PD.StorerKey = @cStorerKey 
-                  AND PD.DropID = @cFromDropID
+                  AND PD.ID = @cFromID
                   AND CASE WHEN @cParam1 <> '' THEN O.ConsigneeKey ELSE '' END = @cParam1 -- If consignee criteria exist, validate consignee, otherwise skip this check
+               ORDER BY PD.STATUS
                SET @nRowCount = @@ROWCOUNT
 
                IF @nRowCount = 0
@@ -183,24 +195,16 @@ BEGIN
                   GOTO Quit
                END
 
-               IF EXISTS (SELECT 1 FROM rdt.rdtMasterPackLog WITH(NOLOCK) WHERE DropID = @cFromDropID AND AddWho <> @cUserName)
-               BEGIN
-                  SET @nErrNo = 258953
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID is in use
-                  GOTO Quit
-               END
-
                SELECT
-                  @cOutField02 = LEFT(DOCINFO.Data, CHARINDEX('-',DOCINFO.Data)-1), --Vas Task Code
-                  @cOutField03 = RIGHT(DOCINFO.Data, LEN(DOCINFO.Data) - CHARINDEX('-', DOCINFO.Data)) -- Vas Task Description
+                  @cOutField02 =  LEFT(DOCINFO.Data,20) --Vas Task Code
                FROM dbo.DocInfo WITH(NOLOCK)
                WHERE DOCINFO.Key2 = @cOrderKey
                   AND DOCINFO.StorerKey = @cStorerKey
                   AND DOCINFO.TableName = 'ORDERS'   
                   AND DocInfo.Key3 = 'Z017'
 
-               SET @cScannedDropID = @cFromDropID
-               SET @cOutField01 = @cFromDropID
+               SET @cScannedDropID = @cFromID
+               SET @cOutField01 = @cFromID
                SET @nAfterStep = 99
                SET @nAfterScn = 6826
                GOTO QUIT     
@@ -290,47 +294,70 @@ BEGIN
          BEGIN
             IF @cScannedDropID = @cInField01
             BEGIN
-               SELECT @cUCCNo = CASEID 
+               -- All UCC on this ip should be added
+               INSERT INTO @tUccNo(UCC)
+               SELECT CASEID 
                FROM PickDetail (NOLOCK)
-               WHERE DROPID = @cScannedDropID
+               WHERE ID = @cScannedDropID
                   AND StorerKey = @cStorerKey 
                -- Check UCC build on multi pallets
-               IF EXISTS (SELECT 1
-                  FROM DropID D WITH (NOLOCK)
-                     JOIN dbo.DropIDDetail DID WITH (NOLOCK) ON (D.DropID = DID.DropID)
-                  WHERE D.DropIDType = 'B'
-                     AND DID.ChildID = @cUCCNo)
+
+               SET @nTranCount = @@TRANCOUNT
+               BEGIN TRAN  -- Begin our own transaction
+               SAVE TRAN rdt_1641ExtScn02 -- For rollback or commit only our own transaction
+
+               WHILE (1=1)
                BEGIN
-                  SET @nErrNo = 69201
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC# Exists
-                  EXEC rdt.rdtSetFocusField @nMobile, 3
-                  GOTO Step_1_Fail
-               END
-               -- Create DropID
-               IF NOT EXISTS (SELECT 1 FROM dbo.DROPID WITH (NOLOCK) WHERE DropID = @cScannedDropID)
-               BEGIN
-                  IF @cPalletCriteria <> ''
-                     INSERT INTO dbo.DROPID (Dropid, Droploc, DropIDType, Status, UDF01, UDF02, UDF03, UDF04, UDF05)
-                     VALUES (@cScannedDropID, @cDropLOC, 'B', '0', @cParam1, @cParam2, @cParam3, @cParam4, @cParam5)
-                  ELSE
-                     INSERT INTO dbo.DROPID (Dropid, Droploc, DropIDType, Status)
-                     VALUES (@cScannedDropID, @cDropLOC, 'B', '0')
+                  SELECT @cUCCNo = UCC,
+                  @nLoopIndex = ID
+                  FROM @tUccNo
+                  WHERE ID > @nLoopIndex
+                  ORDER BY id
+                  SET @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount = 0
+                     BREAK
+
+                  IF EXISTS (SELECT 1
+                     FROM DropID D WITH (NOLOCK)
+                        JOIN dbo.DropIDDetail DID WITH (NOLOCK) ON (D.DropID = DID.DropID)
+                     WHERE D.DropIDType = 'B'
+                        AND DID.ChildID = @cUCCNo)
+                  BEGIN
+                     SET @nErrNo = 69201
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC# Exists
+                     EXEC rdt.rdtSetFocusField @nMobile, 3
+                     GOTO Step_1_Fail
+                  END
+                  -- Create DropID
+                  IF NOT EXISTS (SELECT 1 FROM dbo.DROPID WITH (NOLOCK) WHERE DropID = @cScannedDropID)
+                  BEGIN
+                     IF @cPalletCriteria <> ''
+                        INSERT INTO dbo.DROPID (Dropid, Droploc, DropIDType, Status, UDF01, UDF02, UDF03, UDF04, UDF05)
+                        VALUES (@cScannedDropID, @cDropLOC, 'B', '0', @cParam1, @cParam2, @cParam3, @cParam4, @cParam5)
+                     ELSE
+                        INSERT INTO dbo.DROPID (Dropid, Droploc, DropIDType, Status)
+                        VALUES (@cScannedDropID, @cDropLOC, 'B', '0')
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 69202
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins DROPIDFail
+                        GOTO Step_1_Fail
+                     END
+                  END
+
+                  -- Create DropIDDetail
+                  INSERT INTO dbo.DropIDDetail (Dropid, ChildID) VALUES (@cScannedDropID, @cUCCNo )
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 69202
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins DROPIDFail
+                     SET @nErrNo = 69203
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins DPDtl Fail
                      GOTO Step_1_Fail
                   END
                END
+               UPDATE PICKDETAIL SET DROPID = @cScannedDropID WHERE ID = @cScannedDropID AND StorerKey = @cStorerKey
+               COMMIT TRAN rdt_1641ExtScn02
 
-               -- Create DropIDDetail
-               INSERT INTO dbo.DropIDDetail (Dropid, ChildID) VALUES (@cScannedDropID, @cUCCNo )
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 69203
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins DPDtl Fail
-                  GOTO Step_1_Fail
-               END
                SET @cOutField01 = ''
                SET @nAfterScn = 2323
                SET @nAfterStep = 4
@@ -346,6 +373,7 @@ BEGIN
          END
          GOTO QUIT
          Step_1_Fail:
+            ROLLBACK TRAN
             SET @COutField01=''
             SET @nAfterStep = 1
             SET @nAfterScn = 2320
@@ -367,11 +395,11 @@ BEGIN
          BEGIN
             IF ISNULL(RTRIM(@cInField01), '') = '1'
             BEGIN
-               SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.ID
+               SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.ID,@cWaveKey = O.USERDEFINE09
                FROM PickDetail PD (NOLOCK) 
                LEFT JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
                LEFT JOIN MBOL M WITH(NOLOCK) ON O.MBOLKey = M.MBOLKey
-               WHERE PD.DropID = @cScannedDropID AND PD.StorerKey = @cStorerKey
+               WHERE PD.ID = @cDropID AND PD.StorerKey = @cStorerKey
 
                -- Get new TaskDetailKeys      
                SET @nSuccess = 1
@@ -399,8 +427,8 @@ BEGIN
                         QTY, CaseID, AreaKey, UOMQty, PickMethod, StorerKey, SKU, LOT, ListKey, SourceType, SourceKey, WaveKey, 
                         Priority, TrafficCop)
                      VALUES (
-                        @cNewTaskDetailKey, 'ASTMV', '0', '', @cFromLOC, @cFromLOC, @cFromID, @cMarShallLoc, @cMarShallLoc, @cFromID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', '', 
+                        @cNewTaskDetailKey, 'ASTMV', '0', '', @cFromLOC, @cFromLOC, @cDropID, @cMarShallLoc, @cMarShallLoc, @cDropID, 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END TRY
                   BEGIN CATCH
@@ -420,8 +448,8 @@ BEGIN
                         QTY, CaseID, AreaKey, UOMQty, PickMethod, StorerKey, SKU, LOT, ListKey, SourceType, SourceKey, WaveKey, 
                         Priority, TrafficCop)
                      VALUES (
-                        @cNewTaskDetailKey, 'ASTPA', '0', '', @cFromLOC, @cFromLOC, @cFromID, @cMarShallLoc, @cMarShallLoc, @cFromID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', '', 
+                        @cNewTaskDetailKey, 'ASTPA', '0', '', @cFromLOC, @cFromLOC, @cDropID, @cMarShallLoc, @cMarShallLoc, @cDropID, 
+                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', @cWaveKey, 
                         @cPriority, NULL)
                   END TRY
                   BEGIN CATCH

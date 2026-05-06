@@ -11,6 +11,8 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-07   1.0  GCH225     Created                                          */
+/* 2026-03-18   1.1  JWF011     UWP-52263: Add config to check UPC QTY           */
+/* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ValidateQtyPack] (
@@ -52,6 +54,7 @@ BEGIN
          , @nCartonNo            INT
          , @nAvailableQty        INT
          , @nInPackedQty         INT
+         , @cShowShortPickQty    NVARCHAR(10)
    
    DECLARE @PickQtyStatus TABLE(
         TtlPickedQty INT
@@ -70,28 +73,45 @@ BEGIN
    SET @nCartonNo          = 0
    SET @nAvailableQty      = 0
    SET @nInPackedQty       = 0
+   SET @cShowShortPickQty  = ''
+   
+   IF @cLoadKey <> '' AND OBJECT_ID('tempdb..#oOrderKeyList') IS NULL
+   BEGIN
+      SET @n_Continue  = 3
+         SET @n_ErrNo = 11457
+         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--#oOrderKeyList temp table is missing. Make sure to call via ParentSP.
+         GOTO EXIT_SP
+   END
 
    IF @cScanType = 'upc'
    BEGIN
-      IF EXISTS ( SELECT 1
-                  FROM PACKDETAIL(NOLOCK)
-                  WHERE StorerKey = @cStorerKey 
-                  AND SKU = @cSKU
-                  AND PickSlipNo = @cPickSlipNo
-                  AND UPC = @cInputValue1
-                  HAVING COALESCE(SUM(Qty), 0) 
-                  + @nQty > (SELECT Qty 
-                             FROM UPC (NOLOCK)
-                             WHERE StorerKey = @cStorerKey
-                             AND SKU = @cSKU
-                             AND UPC = @cInputValue1 
-                            ) 
+      IF EXISTS( SELECT 1 
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE Storerkey = @cStorerKey
+                  AND ConfigKey = 'TPS-CheckUPCQTY'
+                  AND SValue = '1'
       )
       BEGIN
-         SET @n_Continue  = 3
-         SET @n_ErrNo = 11451
-         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Exceed Total Pack Qty versus UPC Qty.'
-         GOTO EXIT_SP
+         IF EXISTS ( SELECT 1
+                     FROM PACKDETAIL(NOLOCK)
+                     WHERE StorerKey = @cStorerKey 
+                     AND SKU = @cSKU
+                     AND PickSlipNo = @cPickSlipNo
+                     AND UPC = @cInputValue1
+                     HAVING COALESCE(SUM(Qty), 0) 
+                     + @nQty > (SELECT Qty 
+                              FROM UPC (NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                              AND SKU = @cSKU
+                              AND UPC = @cInputValue1 
+                              ) 
+         )
+         BEGIN
+            SET @n_Continue  = 3
+            SET @n_ErrNo = 11451
+            SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Exceed Total Pack Qty versus UPC Qty.'
+            GOTO EXIT_SP
+         END
       END
    END
 
@@ -204,49 +224,65 @@ BEGIN
    IF @bIsDiscrete = 1
    BEGIN
       INSERT INTO @PickQtyStatus (TtlPickedQty, [Status])
-      SELECT SUM(Qty), [Status] 
-      FROM PICKDETAIL (NOLOCK)
-      WHERE OrderKey = @cOrderKey
-      AND (@cDropID = '' OR DropID = @cDropID)
-      AND SKU = @cSKU
-      AND [Status] < 9
-      GROUP BY [Status]
+      SELECT SUM(PD.Qty), PD.[Status] 
+      FROM PICKDETAIL PD (NOLOCK)
+      WHERE PD.OrderKey = @cOrderKey
+      AND (@cDropID = '' OR PD.DropID = @cDropID)
+      AND PD.StorerKey = @cStorerKey
+      AND PD.SKU = @cSKU
+      AND PD.[Status] < 9
+      GROUP BY PD.[Status]
    END
    ELSE
    BEGIN
       IF @bIsCustom = 0
       BEGIN
          INSERT INTO @PickQtyStatus (TtlPickedQty, [Status])
-         SELECT SUM(Qty), [Status] 
+         SELECT SUM(PD.Qty), PD.[Status] 
          FROM PICKDETAIL PD (NOLOCK)
-         WHERE EXISTS ( SELECT 1 
-                        FROM LOADPLANDETAIL LPD (NOLOCK)
-                        WHERE LPD.OrderKey = PD.OrderKey
-                        AND LPD.LoadKey = @cLoadKey
+         WHERE (@cLoadKey = '' 
+            OR EXISTS ( SELECT 1
+                        FROM #oOrderKeyList OB
+                        WHERE OB.OrderKey = PD.OrderKey
                         )
-         AND (@cDropID = '' OR DropID = @cDropID)
-         AND SKU = @cSKU
-         AND [Status] < 9
-         GROUP BY [Status]
+            )
+         AND (@cDropID = '' OR PD.DropID = @cDropID)
+         AND (@cOrderKey = '' OR PD.OrderKey = @cOrderKey)
+         AND PD.StorerKey = @cStorerKey
+         AND PD.SKU = @cSKU
+         AND PD.[Status] < 9
+         GROUP BY PD.[Status]
       END
       ELSE
       BEGIN
          INSERT INTO @PickQtyStatus (TtlPickedQty, [Status])
-         SELECT SUM(Qty), [Status] 
+         SELECT SUM(PD.Qty), PD.[Status]
          FROM PICKDETAIL PD (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
-         AND SKU = @cSKU
-         AND [Status] < 9
-         GROUP BY [Status]
+         AND PD.SKU = @cSKU
+         AND PD.StorerKey = @cStorerKey
+         AND PD.[Status] < 9
+         GROUP BY PD.[Status]
       END
    END
 
-   IF NOT EXISTS (SELECT 1
-                  FROM STORERCONFIG (NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                  AND ConfigKey = 'TPS-ShowShortPickQty' 
-                  AND sValue = '1'
-   )
+   EXEC nspGetRight    
+        @c_Facility  = @cFacility    
+      , @c_StorerKey = @cStorerKey   
+      , @c_sku       = ''    
+      , @c_ConfigKey = 'TPS-ShowShortPickQty'    
+      , @c_authority = @cShowShortPickQty OUTPUT    
+      , @b_Success   = @b_Success         OUTPUT
+      , @n_err       = @n_ErrNo           OUTPUT
+      , @c_errmsg    = @c_ErrMsg          OUTPUT
+
+   IF @b_Success = 0
+   BEGIN    
+      SET @n_Continue  = 3  
+      GOTO EXIT_SP
+   END
+   
+   IF @cShowShortPickQty <> '1'
    BEGIN
       DELETE FROM  @PickQtyStatus WHERE [Status] = '4'
    END

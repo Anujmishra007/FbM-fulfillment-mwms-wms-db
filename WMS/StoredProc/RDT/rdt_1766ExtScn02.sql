@@ -3,15 +3,16 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/**************************************************************************/
-/* Store procedure: rdt_1766ExtScn02                                      */
-/*                                                                        */
-/* Modifications log:                                                     */
-/* Customer: Granite                                                      */
-/*                                                                        */
-/* Date       Rev    Author     Purposes                                  */
-/* 2024-06-13 1.0.0  NLT013     UWP-46877. Created                        */
-/**************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_1766ExtScn02                                             */
+/*                                                                               */
+/* Modifications log:                                                            */
+/* Customer: Granite                                                             */
+/*                                                                               */
+/* Date       Rev    Author     Purposes                                         */
+/* 2024-06-13 1.0.0  NLT013     UWP-46877. Created                               */
+/* 2026-03-18 1.1.0  NLT013     UWP-52261 Filnalize the CCDetail for empty Loc   */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1766ExtScn02] (
    @nMobile      INT,
@@ -141,11 +142,11 @@ BEGIN
                      BEGIN TRY
                         INSERT dbo.CCDETAIL (cckey, ccdetailkey, StorerKey, sku, lot, loc, id, qty, ccsheetno, Lottable01,
                            Lottable02, Lottable03, Lottable04, Lottable05,Lottable06, Lottable07, Lottable08, Lottable09,
-                           Lottable10, Lottable11, Lottable12, Lottable13,Lottable14, Lottable15,SystemQty, RefNo)
+                           Lottable10, Lottable11, Lottable12, Lottable13,Lottable14, Lottable15,SystemQty, RefNo, FinalizeFlag, Status)
                         VALUES (@cCCKey, @cCCDetailKey, @cStorerKey, '', '', @cLoc, '', 0, @cCCSheetNo,
                               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, @cLottable11,
-                              @cLottable12, @dLottable13, @dLottable14, @dLottable15, 0, '')
+                              @cLottable12, @dLottable13, @dLottable14, @dLottable15, 0, '', 'Y', '2')
                      END TRY
                      BEGIN CATCH
                         SET @nErrNo = 256252

@@ -75,7 +75,16 @@ BEGIN
    DECLARE @b_success      INT  
    DECLARE @tCARTONLBL AS VariableTable
    DECLARE @cUserDefine02  NVARCHAR(100)
-   DECLARE @cShort         NVARCHAR(10)
+   DECLARE @cShort         NVARCHAR(10),
+   @nLoopIndex             INT = -1,
+   @nRowCount              INT = 0
+
+   DECLARE @tCaseid TABLE
+   (
+      id INT IDENTITY,
+      caseid NVARCHAR(20),
+      priority int
+   )
 
    SET @nNoOfLabel = 0  
    SET @cCurOrderKey = ''  
@@ -84,7 +93,7 @@ BEGIN
    SELECT @cLabelPrinter = Printer  
    FROM RDT.RDTMOBREC WITH (NOLOCK)  
    WHERE Mobile = @nMobile  
-  
+
    SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
    IF @cShipLabel = '0'
       SET @cShipLabel = ''
@@ -142,6 +151,12 @@ BEGIN
       END                      
       ELSE
       BEGIN
+         IF @cGroupKey = ''
+         BEGIN
+            SET @nErrNo = 180051
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No Task Found
+            GOTO RollBackTran
+         END
          IF OBJECT_ID('tempdb..#LabelPrinted') IS NOT NULL  
             DROP TABLE #LabelPrinted
       
@@ -149,16 +164,25 @@ BEGIN
             RowRef        BIGINT IDENTITY(1,1)  Primary Key,  
             LabelNo       NVARCHAR( 20))  
                   
-         SET @curGetTask = CURSOR FOR 
+         DELETE FROM @tCaseid
+         INSERT INTO @tCaseid (CaseID,Priority)
          SELECT DISTINCT Caseid, Priority
-         FROM dbo.TaskDetail WITH (NOLOCK)
-         WHERE Groupkey = @cGroupKey
-         AND   [Status] = '0'
-         ORDER BY Priority, Caseid
-         OPEN @curGetTask
-         FETCH NEXT FROM @curGetTask INTO @cCaseID, @cPriority
-         WHILE @@FETCH_STATUS = 0
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE Groupkey = @cGroupKey
+            AND   [Status] = '0'
+            ORDER BY Priority, Caseid
+         WHILE (1=1)
          BEGIN
+            SELECT TOP 1
+               @cCaseID = CaseID,
+               @nLoopIndex = ID
+            FROM @tCaseid
+            WHERE ID > @nLoopIndex
+            ORDER BY ID
+            SET @nRowCount = @@ROWCOUNT
+            IF @nRowCount = 0
+               BREAK
+
             SET @curPrintLabel = CURSOR FOR
             SELECT DISTINCT OrderKey, CaseID, DropID
             FROM dbo.PICKDETAIL WITH (NOLOCK)
@@ -209,6 +233,47 @@ BEGIN
                FETCH NEXT FROM @curPrintLabel INTO @cOrderKey, @cLabelNo, @cDropID
             END
 
+            SET @cOrderKey = ''
+
+            SELECT @cOrderKey = O.OrderKey,@cUserDefine02 = O.USERDEFINE02,@cShort = CL.Short
+            FROM TaskDetail TD WITH(NOLOCK)
+            JOIN ORDERS O WITH(NOLOCK) ON TD.OrderKey = O.OrderKey AND TD.StorerKey = O.StorerKey 
+            AND O.doctype <> 'E' AND O.ordergroup <> 'Ecom' AND O.USERDEFINE02 <> 'C9'
+            JOIN CODELKUP CL WITH(NOLOCK) ON CL.ListName = 'CSCLBLPRT' AND CL.CODE = O.USERDEFINE02 AND CL.StorerKey = O.StorerKey
+            WHERE TD.Storerkey = @cStorerKey 
+            AND   TD.TaskType = @cTaskType 
+            AND   TD.Groupkey = @cGroupKey
+            AND   TD.Caseid = @cCaseID 
+            AND   TD.[Status] = '0'
+
+            SELECT @nCartonNo = CartonNo
+            FROM PACKDETAIL WITH(NOLOCK)
+            WHERE LabelNo = @cLabelNo
+
+            IF ISNULL(@cOrderKey, '') <> '' AND ISNULL(@cUserDefine02, '') <> '' AND ISNULL(@cShort, '') <> ''
+            BEGIN
+               DELETE FROM @tCARTONLBL
+               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cPickSlipNo',   @cPickSlipNo)
+               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@nFromCartonNo', @nCartonNo)
+               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@nToCartonNo',   @nCartonNo)
+               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cFromLabelNo', @cLabelNo)
+               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cToLabelNo',   @cLabelNo)
+               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cDropID',   @cDropID)
+
+               -- Print label
+               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '', 
+                  @cShort,  -- Report type
+                  @tCARTONLBL, -- Report params
+                  'rdt_646ExtPrint03', 
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT 
+
+               IF @nErrNo <> 0
+                  GOTO RollBackTran
+
+               SET @nNoOfLabel = @nNoOfLabel + 1
+            END
+
             SET @curUpdTask = CURSOR FOR 
             SELECT TaskDetailKey 
             FROM dbo.TaskDetail WITH (NOLOCK) 
@@ -224,6 +289,7 @@ BEGIN
                UPDATE dbo.TaskDetail SET 
                   DeviceID = @cCartID,
                   UserKeyOverRide = @cUserID,
+                  TRAFFICCOP = NULL,
                   EditDate = GETDATE(),
                   EditWho = @cUserID
                WHERE TaskDetailKey = @cTaskDetailKey
@@ -287,57 +353,20 @@ BEGIN
                   GOTO RollBackTran
 
                SET @nNoOfLabel = @nNoOfLabel + 1
-            END
-
-            SET @cOrderKey = ''
-            SELECT @cOrderKey = O.OrderKey,@cUserDefine02 = O.USERDEFINE02,@cShort = CL.Short
-            FROM TaskDetail TD WITH(NOLOCK)
-            JOIN ORDERS O WITH(NOLOCK) ON TD.OrderKey = O.OrderKey AND TD.StorerKey = O.StorerKey
-            JOIN CODELKUP CL WITH(NOLOCK) ON CL.ListName = 'CSCLBLPRT' AND CL.CODE = O.USERDEFINE02 AND CL.StorerKey = O.StorerKey
-            WHERE TD.Storerkey = @cStorerKey 
-            AND   TD.TaskType = @cTaskType 
-            AND   TD.Groupkey = @cGroupKey
-            AND   TD.Caseid = @cCaseID 
-            AND   TD.[Status] = '0'
-
-            IF ISNULL(@cOrderKey, '') <> '' AND ISNULL(@cUserDefine02, '') <> '' AND ISNULL(@cShort, '') <> ''
-            BEGIN
-               DELETE FROM @tCARTONLBL
-               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cPickSlipNo',   @cPickSlipNo)
-               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@nFromCartonNo', @nCartonNo)
-               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@nToCartonNo',   @nCartonNo)
-               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cFromLabelNo', @cLabelNo)
-               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cToLabelNo',   @cLabelNo)
-               INSERT INTO @tCARTONLBL (Variable, Value) VALUES ( '@cDropID',   @cDropID)
-
-               -- Print label
-               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '', 
-                  @cShort,  -- Report type
-                  @tCARTONLBL, -- Report params
-                  'rdt_646ExtPrint03', 
-                  @nErrNo  OUTPUT,
-                  @cErrMsg OUTPUT 
-
-               IF @nErrNo <> 0
-                  GOTO RollBackTran
-
-               SET @nNoOfLabel = @nNoOfLabel + 1
-            END
-
-            FETCH NEXT FROM @curGetTask INTO @cCaseID, @cPriority
-
-            SET @nNoOfTask = @nNoOfTask - 1      
-
-            IF @nNoOfTask = 0
-               GOTO Quit
+            END           
          END
+         SET @nNoOfTask = @nNoOfTask - 1      
+
+         IF @nNoOfTask = 0
+            GOTO Quit
       END
    END
    GOTO QUIT           
             
    RollBackTran:          
-      ROLLBACK TRAN rdt_646ExtPrint03 -- Only rollback change made here          
-         
+      ROLLBACK TRAN -- Only rollback change made here  
+      GOTO Fail        
+
    Quit:          
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started          
          COMMIT TRAN rdt_646ExtPrint03     

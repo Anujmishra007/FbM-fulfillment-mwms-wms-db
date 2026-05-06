@@ -80,6 +80,8 @@ GO
 /* 05-Nov-2025  SSA04     FCR-8415 - update PalletType in pallet table    */
 /* 08-Dec-2025  VNI01     UWP-44614 - Add validation for Multiple         */
 /*                            LOTs and No SKU provided                    */
+/* 20-Apr-2026  SSA05     FCR-12159 -  CHANNEL TRANSFER                   */
+/*                                         CREATION ON MOVEMENT (SCE UI)  */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -234,10 +236,12 @@ BEGIN
    DECLARE @c_UniqueHostWHCode      NVARCHAR(10)
          , @c_FromLocHostWHCode     NVARCHAR(10)
          , @c_ToLocHostWHCode       NVARCHAR(10)
+         , @c_CreateCTFForDiffHostWHCode        NVARCHAR(10)    --(SSA05)
 
    SET @c_UniqueHostWHCode = '0'
    SET @c_FromLocHostWHCode= ''
    SET @c_ToLocHostWHCode  = ''
+   SET @c_CreateCTFForDiffHostWHCode = '0'    --(SSA05)
    --(Wan03) - END
 
    --(Wan08) - START
@@ -2633,6 +2637,55 @@ BEGIN
       END
    END
    --NJOW05 E --SSA03 -End
+   --SSA05 start---
+   IF @n_continue = 1 OR @n_continue = 2
+    BEGIN
+
+    SET @c_CreateCTFForDiffHostWHCode = '0'
+                SET @b_success = 0
+                Execute nspGetRight2
+                   @c_Facility
+                ,  @c_StorerKey            -- Storer
+                ,  ''                      -- Sku
+                ,  'CreateCTFForDiffHostWHCode'  -- ConfigKey
+                ,  @b_success                    OUTPUT
+                ,  @c_CreateCTFForDiffHostWHCode   OUTPUT
+                ,  @n_err                        OUTPUT
+                ,  @c_ErrMsg                     OUTPUT
+
+                IF @b_success <> 1
+                BEGIN
+                   SET @n_continue = 3
+                   SET @n_err = 62074
+                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing nspGetRight. (nspItrnAddMoveCheck) ' + ISNULL(RTRIM(@c_ErrMsg),'')
+                END
+    END
+    IF (@n_continue = 1 OR @n_continue = 2) AND @c_CreateCTFForDiffHostWHCode = '1'
+         BEGIN
+               BEGIN TRY
+                  EXEC mspCreateChannelTransfer
+                      @c_StorerKey  = @c_StorerKey
+                     ,@c_Facility   = @c_Facility
+                     ,@c_Itrnkey = @c_itrnkey
+                     ,@c_Sku        = @c_Sku
+                     ,@c_Fromloc    = @c_fromloc
+                     ,@c_ToLoc        = @c_ToLoc
+                     ,@n_Qty =  @n_Qty
+                     ,@c_Lottable01 = @c_lottable01
+                     ,@b_Success    = @b_Success      OUTPUT
+                     ,@n_Err      = @n_Err          OUTPUT
+                     ,@c_ErrMsg     = @c_ErrMsg       OUTPUT
+               END TRY
+               BEGIN CATCH
+                     SET @n_err = ERROR_NUMBER()
+                     SET @c_ErrMsg = ERROR_MESSAGE()
+
+                     SET @n_continue = 3
+                     SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)'
+               END CATCH
+            END
+
+  -- SSA05 END---
 
    --(Wan11) - Move Sequence in between Lotxlocxid and Pickdetail Update
    /* SWT04 FCR-822 - Merge Pallets with Serial Numbers 

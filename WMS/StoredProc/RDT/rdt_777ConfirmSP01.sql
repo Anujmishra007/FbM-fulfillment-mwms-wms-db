@@ -110,7 +110,7 @@ BEGIN
    SAVE TRAN rdt_777ConfirmSP01 -- For rollback or commit only our own transaction
    
    -- Normal Order
-   IF @nMPOCFlag <> 1
+   IF @nMPOCFlag = 0
    BEGIN
       -- PackHeader
       IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo)
@@ -783,7 +783,7 @@ BEGIN
 
    SET @InputQty = @nQty
    -- Handle PickDetail
-   IF @nMPOCFlag <> 1
+   IF @nMPOCFlag = 0
    BEGIN
       WHILE 1 = 1
       BEGIN
@@ -803,7 +803,7 @@ BEGIN
          IF @nRowCount = 0 OR @InputQty <= 0
             BREAK
 
-         IF @nPickQTY > @nQTY
+         IF @nPickQTY > @InputQty
          BEGIN
             EXECUTE nspg_GetKey
                'PICKDETAILKEY'
@@ -859,9 +859,9 @@ BEGIN
                EditWho = SUSER_NAME(),
                TrafficCop = NULL
             WHERE PickDetailKey = @cPickDetailKey
-
-            SET @InputQty = @InputQty - @nPickQTY
          END
+
+         SET @InputQty = @InputQty - @nPickQTY
       END
 
       UPDATE dbo.PackInfo WITH(ROWLOCK)

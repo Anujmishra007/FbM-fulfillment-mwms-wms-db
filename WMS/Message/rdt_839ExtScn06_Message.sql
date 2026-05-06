@@ -45,7 +45,7 @@ EXECUTE rdt.rdtAddMsg 255540, 10, '255540 OptionReq',          'us_english', 839
 EXECUTE rdt.rdtAddMsg 255541, 10, '255541 InvOption',          'us_english', 839, 0, '255541 Invalid Option'
 EXECUTE rdt.rdtAddMsg 255542, 10, '255542 DelPickSerialNoFail','us_english', 839, 0, '255542 Delete PickSerialNo failed'
 EXECUTE rdt.rdtAddMsg 255543, 10, '255543 UpdSNFail',          'us_english', 839, 0, '255543 Update SerialNo failedd'
-
+EXECUTE rdt.rdtAddMsg 255544, 10, '255544 InvDropID',          'us_english', 839, 0, '255544 Invalid DropID format'
 
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 255501 AND 255550

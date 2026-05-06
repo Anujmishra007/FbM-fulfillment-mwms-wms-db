@@ -9,9 +9,11 @@ GO
 /*                                                                            */  
 /* Date       Rev  Author   Purposes                                          */
 /* 2025-11-27 1.0.0  Cuize    FCR-9003 Created                                */
+/* 2026-02-20 1.0.1  NickT    FCR-9003 unassign the station only on step 4    */
+/* 2026-03-10 1.0.2  Cuize    UWP-49877 unassign Only wave complete           */
 /******************************************************************************/
   
-ALTER   PROC [RDT].[rdt_PTLPiece_Assign_DropID05_ONBR] (
+CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID05_ONBR] (
    @nMobile          INT,   
    @nFunc            INT,   
    @cLangCode        NVARCHAR( 3),   
@@ -58,10 +60,7 @@ BEGIN
    DECLARE @cLogicalName      NVARCHAR( 10)
    DECLARE @cCartID           NVARCHAR( 10)
    DECLARE @bSuccess          INT
-   DECLARE @cDeviceID        NVARCHAR( 20)
-
-
-
+   DECLARE @cDeviceID         NVARCHAR( 20)
 
    SELECT
       @cDeviceID  = DeviceID,
@@ -104,36 +103,61 @@ BEGIN
    IF @cType = 'POPULATE-OUT'
    BEGIN
 
-      UPDATE DeviceProfile SET STATUS = 'IDLE'
-      WHERE DeviceType = 'STATION'
-        AND DeviceID = @cStation
-        AND StorerKey = @cStorerKey
+      IF @nStep = 4 AND @nInputKey = 1 AND @cInField01 = '1'
+      BEGIN
+
+         SELECT TOP 1
+            @cWaveKey = WaveKey
+         FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
+         WHERE Station = @cStation
+           AND   Method = @cMethod
+           AND   SourceKey <> ''
+
+         --Check if there are pickdetails not yet moved to cart slot
+         IF ISNULL(@cWaveKey,'') <> '' -- At least assigned on DropID
+            AND EXISTS(
+               SELECT 1
+               FROM PICKDETAIL AS PD WITH (NOLOCK)
+                       JOIN Orders O WITH (NOLOCK) ON O.orderkey = PD.orderkey
+               WHERE PD.wavekey = @cwavekey
+                 AND PD.DropID NOT LIKE 'CART%'
+                 AND O.UserDefine04 = @cStation
+            )
+            BEGIN
+               SET @nErrNo = 252861
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --WaveNotComplete
+               GOTO Quit
+            END
 
 
-      -- Off all lights
-      EXEC PTL.isp_PTL_TerminateModule
-           @cStorerKey
-         ,@nFunc
-         ,@cStation
-         ,'STATION'
-         ,@bSuccess    OUTPUT
-         ,@nErrNo       OUTPUT
-         ,@cErrMsg      OUTPUT
-      IF @nErrNo <> 0
+         UPDATE DeviceProfile SET STATUS = 'IDLE'
+         WHERE DeviceType = 'STATION'
+         AND DeviceID = @cStation
+         AND StorerKey = @cStorerKey
+
+         -- Off all lights
+         EXEC PTL.isp_PTL_TerminateModule
+            @cStorerKey
+            ,@nFunc
+            ,@cStation
+            ,'STATION'
+            ,@bSuccess    OUTPUT
+            ,@nErrNo       OUTPUT
+            ,@cErrMsg      OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+
+         DELETE FROM PTL.PTLTran
+         WHERE IPAddress = @cIPAddress
+         AND DeviceID = @cStation
+         AND Func = 803
+         AND Status = '1' -- Lighted up
+         AND LightUp= '1'
+
+         SET @cStation = ''
+
          GOTO Quit
-
-      DELETE FROM PTL.PTLTran
-      WHERE IPAddress = @cIPAddress
-        AND DeviceID = @cStation
-        AND Func = 803
-        AND Status = '1' -- Lighted up
-        AND LightUp= '1'
-
-      SET @cStation = ''
-
-      GOTO Quit
-
-
+      END
   -- Go to station screen
    END
 
@@ -191,7 +215,6 @@ BEGIN
       DECLARE @OrderPosition NVARCHAR(10)
       DECLARE @OrderLoc NVARCHAR(10)
 
---
       SELECT TOP 1 @cOrderKey = PD.OrderKey,
                    @cWaveKey = PD.Wavekey,
                    @OrderStation = Orders.UserDefine04,

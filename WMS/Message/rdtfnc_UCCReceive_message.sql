@@ -69,4 +69,5 @@ execute rdt.rdtAddMsg 63174, 10, '63174^Invalid Qty   ',   'us_english', 898
 
 -- UWP-29593
 execute rdt.rdtAddMsg 63175, 10, '63175^GenTaskFail   ',   'us_english', 898
-execute rdt.rdtAddMsg 63176, 10, '63176^TaskNotCreated',   'us_english', 898, 0, '63176 Only create task one ID one SKU.'
+execute rdt.rdtAddMsg 63176, 10, '63176^MultiSKUs',        'us_english', 898, 0, '63176: ID must have single SKU'
+execute rdt.rdtAddMsg 63177, 10, '63177^MultiSKUs',        'us_english', 898, 0, '63177: ID must have single SKU'

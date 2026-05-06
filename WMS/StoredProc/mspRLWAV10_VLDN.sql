@@ -1,4 +1,4 @@
-SET QUOTED_IDENTIFIER OFF 
+﻿SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
@@ -52,6 +52,11 @@ BEGIN
 
          , @c_SQL                NVARCHAR(4000) = ''
          , @c_SQLParms           NVARCHAR(4000) = ''
+         , @c_Option5            NVARCHAR(MAX) = ''
+         , @c_PackECOM           NVARCHAR(10)   = 'N'
+         , @c_CartonGroup_B2C    NVARCHAR(10)   = ''
+         , @n_MaxCube_B2C        FLOAT          = 0.00
+         , @c_ECOMPackingByTote  NVARCHAR(10)   = 'Y'
 
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NULL
    BEGIN
@@ -141,6 +146,16 @@ BEGIN
       FROM #PickDetail_WIP AS pw
       JOIN ORDERS o (NOLOCK) On o.OrderKey = pw.OrderKey
       ORDER BY pickdetailkey
+
+      SELECT @c_Option5 = ISNULL(fgr.Option5,'')
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
+
+      IF ISNULL(@c_Option5, '') <> ''
+      BEGIN
+         SELECT @c_PackECOM = dbo.fnc_GetParamValueFromString('@c_PackECOM', @c_Option5, @c_PackECOM)
+         SELECT @c_CartonGroup_B2C = dbo.fnc_GetParamValueFromString('@c_CartonGroup_B2C', @c_Option5, @c_CartonGroup_B2C)
+         SELECT @c_ECOMPackingByTote = dbo.fnc_GetParamValueFromString('@c_ECOMPackingByTote', @c_Option5, @c_ECOMPackingByTote)
+      END
    END
 
    IF @n_Continue = 1
@@ -168,18 +183,75 @@ BEGIN
                       + ', OrderLine#: ' + @c_OrderLineNumber                     
                       +'. (mspRLWAV10_VLDN)'                                                                                                    
          GOTO QUIT_SP    
-      END  
-   END
-
-   IF @n_Continue = 1
-   BEGIN
-      IF @c_Sku > ''  
+      END
+      
+      IF @n_Continue = 1 AND @c_PackECOM = 'Y' AND @c_ECOMPackingByTote = 'Y'
       BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 63040
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
-                        + 'Sku LxWxH not setup. Sku: ' 
-                        + @c_Sku + ' . (mspRLWAV10_VLDN)'
+         IF @n_Continue = 1
+         AND EXISTS ( SELECT 1
+                      FROM #PickDetail_WIP AS pw
+                      JOIN ORDERS o WITH (NOLOCK) ON o.OrderKey = pw.OrderKey
+                      WHERE pw.WaveKey = @c_Wavekey
+                      AND o.Doctype = 'E' ) 
+         BEGIN
+            IF @n_Continue = 1 AND ISNULL(@c_CartonGroup_B2C, '') = ''
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 63040
+               SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+                              + 'Cartonization Group for B2C not set up in Storerconfig. ' 
+                              + 'Wave#: ' + @c_Wavekey + ' . (mspRLWAV10_VLDN)'
+            END
+
+            IF @n_Continue = 1
+            AND NOT EXISTS ( SELECT 1
+                             FROM dbo.CARTONIZATION (NOLOCK)
+                             WHERE CartonizationGroup = @c_CartonGroup_B2C )
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 63045
+               SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+                              + 'Cartonization Group for B2C: ' + TRIM(@c_CartonGroup_B2C) + ' is not valid. ' 
+                              + 'Wave#: ' + @c_Wavekey + ' . (mspRLWAV10_VLDN)'
+            END
+
+            IF @n_Continue = 1
+            BEGIN
+               SELECT TOP 1 @n_MaxCube_B2C = cz.[Cube]
+               FROM dbo.CARTONIZATION cz WITH (NOLOCK)
+               WHERE cz.CartonizationGroup = @c_CartonGroup_B2C
+               ORDER BY cz.[Cube] DESC
+
+               IF @n_MaxCube_B2C <= 0.00
+               BEGIN
+                  SET @n_Continue = 3  
+                  SET @n_err = 63046  
+                  SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+                                + 'Max Cube for B2C Carton Group: ' + TRIM(@c_CartonGroup_B2C) + ' is 0. ' 
+                                + 'Wave#: ' + @c_Wavekey + ' . (mspRLWAV10_VLDN)' 
+               END
+            END
+
+            --IF @n_Continue = 1
+            --BEGIN
+            --   SET @c_Sku = ''
+            --   SELECT TOP 1 @c_Sku = pw.Sku
+            --   FROM #PICKDETAIL_WIP AS pw  
+            --   JOIN dbo.SKU AS s WITH (NOLOCK) ON s.StorerKey = pw.Storerkey AND s.Sku = pw.Sku  
+            --   JOIN dbo.PACK AS p WITH (NOLOCK) ON p.Packkey = s.Packkey
+            --   WHERE @n_MaxCube_B2C < CASE WHEN ISNULL(p.CubeUOM3, 0.00) = 0.00 THEN s.StdCube ELSE p.CubeUOM3 END
+            --   AND pw.UOM >= '6'
+            
+            --   IF @c_Sku > ''
+            --   BEGIN
+            --      SET @n_Continue = 3  
+            --      SET @n_err = 63047  
+            --      SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+            --                    + 'Sku: ' + TRIM(@c_Sku) + '''s cube > Tote''s cube. ' 
+            --                    + 'Wave#: ' + @c_Wavekey + ' . (mspRLWAV10_VLDN)' 
+            --   END
+            --END
+         END
       END
    END
 

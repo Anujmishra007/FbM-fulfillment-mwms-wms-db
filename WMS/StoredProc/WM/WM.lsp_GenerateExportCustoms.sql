@@ -22,6 +22,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
 /*25-02-2026   VNI056   1.0   UWP-49058 => CREATE PROC                  */
+/*10-03-2026   VNI056   1.1   ADD STORERCONFIG(VNI01)                   */
+/*19-03-2026   VNI056   1.2   UPDATE MBOL.DEPOTSTATUS (VNI02)           */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_GenerateExportCustoms]
       @c_WaveKey              NVARCHAR(10) = ''
@@ -37,12 +39,13 @@ BEGIN
     SET QUOTED_IDENTIFIER OFF
     SET CONCAT_NULL_YIELDS_NULL OFF
 
-    DECLARE  @n_StartTCnt      INT = @@TRANCOUNT
-          ,  @n_Continue       INT = 1
-          ,  @n_OrderCnt       INT = 0
-		  ,  @c_Storerkey      NVARCHAR(15)
-		  ,  @c_MBolkey        NVARCHAR(10)
-		  ,  @n_WarningNo      INT = 0
+    DECLARE  @n_StartTCnt                      INT = @@TRANCOUNT
+          ,  @n_Continue                       INT = 1
+          ,  @n_OrderCnt                       INT = 0
+		  ,  @c_Storerkey                      NVARCHAR(15)
+		  ,  @c_MBolkey                        NVARCHAR(10)
+		  ,  @n_WarningNo                      INT = 0
+          ,  @c_customsExportDeclForMbolFlag   NVARCHAR(30)
 
     SET @b_Success = 1
     SET @n_Err     = 0
@@ -82,9 +85,22 @@ BEGIN
         FROM ORDERS WITH (NOLOCK)
         JOIN WAVEDETAIL WITH (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey
         WHERE WAVEDETAIL.WaveKey = @c_WaveKey
-
+                                                                    --VNI01(START)
+        SELECT @c_customsExportDeclForMbolFlag = ISNULL(SValue, '0')
+        FROM STORERCONFIG WITH (NOLOCK)
+        WHERE STORERCONFIG.StorerKey = @c_StorerKey
+        AND STORERCONFIG.ConfigKey = 'CustomsExportDecl_MBL_XD'
       --VALIDATIONS FOR EXPORT DECLARATION (START)
 
+        IF @c_customsExportDeclForMbolFlag <> '1'
+        BEGIN
+            SET @n_continue = 3
+			SET @n_err = 555816
+			SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+							+'Please set up STORER CONFIG for this storer '+@c_StorerKey+' to enable Export Customs (lsp_GenerateExportCustoms)'
+			GOTO EXIT_SP
+        END
+                                                                     --VNI01(END)
         IF  @c_WaveKey = ''
         BEGIN
 			SET @n_continue = 3
@@ -187,13 +203,11 @@ BEGIN
                             ISNULL(LTRIM(RTRIM(@c_ErrMsg)),'') + ' ) '
             GOTO EXIT_SP
         END
-
-        UPDATE ORDERS
-        SET ORDERS.SOStatus = '51'
-        FROM ORDERS WITH (NOLOCK)
-		JOIN WAVEDETAIL WITH (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey
-        WHERE WAVEDETAIL.WaveKey = @c_WaveKey
-
+                                                                             --VNI02(START)
+        UPDATE MBOL WITH (ROWLOCK)
+        SET DepotStatus = 'CusSubmit'
+        WHERE MBOLKey = @c_MBolKey
+                                                                             --VNI02(END)
 --MAIN PROCESSING (END)
     END TRY
 

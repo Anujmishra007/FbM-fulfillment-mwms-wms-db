@@ -12,6 +12,7 @@ GO
 /* Date        Rev     Author   Purposes                                      */  
 /* 2025-10-28  1.0.0   Dennis   FCR-8472 Created                              */  
 /* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields    */  
+/* 2026-04-14  1.2     Sreeja   FCR-11052 Add DecodeSP for Step_99              */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC  [RDT].[rdt_898ExtScn03] (
@@ -74,7 +75,7 @@ BEGIN
       @cReceiveAllowAddNewUCC          NVARCHAR(10),
       @cUCCWithDynamicCaseCnt          NVARCHAR(10),
       @cTempAddNewUCC                  NVARCHAR(10),
-      @cUCC                            NVARCHAR(20),
+      @cUCC                            NVARCHAR(MAX),
       @cTempUCC                        NVARCHAR(20),
       @cListName                       NVARCHAR(20),
       @cLottableCode                   NVARCHAR( 30),
@@ -86,8 +87,8 @@ BEGIN
       @dTempLottable04                 DATETIME,
       @dTempLottable09                 DATETIME,
       @nSKUCnt                         INT,
-      @cSQL                            NVARCHAR(1000),
-      @cSQLParam                       NVARCHAR(1000),
+      @cSQL                            NVARCHAR(MAX),
+      @cSQLParam                       NVARCHAR(MAX),
       @cParam1                         NVARCHAR(20),                                       
       @cParam2                         NVARCHAR(20),
       @cParam3                         NVARCHAR(20),
@@ -155,7 +156,17 @@ BEGIN
       @cUCCLabel          NVARCHAR(20), --(cc01)
 
       @cRetUCCCreate     NVARCHAR(1),    --(WSA099))
-      @cRetUCCNoMixSKU   NVARCHAR(1)     --(WSA099)
+      @cRetUCCNoMixSKU   NVARCHAR(1),    --(WSA099)
+
+      @cUserDefine01     NVARCHAR(30),
+      @cUserDefine02     NVARCHAR(30),
+      @cUserDefine03     NVARCHAR(30),
+      @cUserDefine04     NVARCHAR(30),
+      @cUserDefine05     NVARCHAR(30),
+      @cUserDefine06     NVARCHAR(30),
+      @cUserDefine07     NVARCHAR(30),
+      @cUserDefine08     NVARCHAR(30),
+      @cUserDefine09     NVARCHAR(30)
 
    -- Screen constant  
    DECLARE  
@@ -271,6 +282,82 @@ BEGIN
             SET @cLottable01 = @cInField01
             SET @cLottable02 = @cInField02
             SET @cLottable03 = @cInField03
+
+            IF @cDecodeSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1
+                            FROM sys.objects
+                           WHERE name = RTRIM( @cDecodeSP)
+                             AND type = 'P'
+                             AND schema_id = SCHEMA_ID( 'rdt'))
+               BEGIN
+                  DECLARE @nUCCQTY INT
+                  
+                  -- @cLottable02 is only NVARCHAR(18) and truncates the barcode
+                  SET @cUCC = @cInField02
+                  SET @cSQL = 'EXEC rdt.' + QUOTENAME( RTRIM( @cDecodeSP)) +
+                              ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
+                              ' @cUCC        OUTPUT, @nUCCQTY     OUTPUT,' +
+                              ' @cUserDefine01 OUTPUT, @cUserDefine02 OUTPUT, @cUserDefine03 OUTPUT, @cUserDefine04 OUTPUT, @cUserDefine05 OUTPUT, ' +
+                              ' @cUserDefine06 OUTPUT, @cUserDefine07 OUTPUT, @cUserDefine08 OUTPUT, @cUserDefine09 OUTPUT, ' +
+                              ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
+                              ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
+                              ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
+                              ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+                  SET @cSQLParam =
+                        ' @nMobile         INT,                    ' +
+                        ' @nFunc           INT,                    ' +
+                        ' @cLangCode       NVARCHAR( 3),           ' +
+                        ' @nStep           INT,                    ' +
+                        ' @nInputKey       INT,                    ' +
+                        ' @cStorerKey      NVARCHAR( 15),          ' +
+                        ' @cReceiptKey     NVARCHAR( 10),          ' +
+                        ' @cPOKey          NVARCHAR( 10),          ' +
+                        ' @cLOC            NVARCHAR( 10),          ' +
+                        ' @cUCC            NVARCHAR( MAX)  OUTPUT,  ' +
+                        ' @nUCCQTY         INT            OUTPUT,  ' +
+                        ' @cUserDefine01   NVARCHAR(30)   OUTPUT,  ' +
+                        ' @cUserDefine02   NVARCHAR(30)   OUTPUT,  ' +
+                        ' @cUserDefine03   NVARCHAR(30)   OUTPUT,  ' +
+                        ' @cUserDefine04   NVARCHAR(30)   OUTPUT,  ' +
+                        ' @cUserDefine05   NVARCHAR(30)   OUTPUT,  ' +
+                        ' @cUserDefine06   NVARCHAR(30)   OUTPUT,  ' +
+                        ' @cUserDefine07   NVARCHAR(30)   OUTPUT,  ' +
+                        ' @cUserDefine08   NVARCHAR(30)   OUTPUT,  ' +
+                        ' @cUserDefine09   NVARCHAR(30)   OUTPUT,  ' +
+                        ' @cLottable01     NVARCHAR( 18)  OUTPUT,  ' +
+                        ' @cLottable02     NVARCHAR( 18)  OUTPUT,  ' +
+                        ' @cLottable03     NVARCHAR( 18)  OUTPUT,  ' +
+                        ' @dLottable04     DATETIME       OUTPUT,  ' +
+                        ' @dLottable05     DATETIME       OUTPUT,  ' +
+                        ' @cLottable06     NVARCHAR( 30)  OUTPUT,  ' +
+                        ' @cLottable07     NVARCHAR( 30)  OUTPUT,  ' +
+                        ' @cLottable08     NVARCHAR( 30)  OUTPUT,  ' +
+                        ' @cLottable09     NVARCHAR( 30)  OUTPUT,  ' +
+                        ' @cLottable10     NVARCHAR( 30)  OUTPUT,  ' +
+                        ' @cLottable11     NVARCHAR( 30)  OUTPUT,  ' +
+                        ' @cLottable12     NVARCHAR( 30)  OUTPUT,  ' +
+                        ' @dLottable13     DATETIME       OUTPUT,  ' +
+                        ' @dLottable14     DATETIME       OUTPUT,  ' +
+                        ' @dLottable15     DATETIME       OUTPUT,  ' +
+                        ' @nErrNo          INT            OUTPUT,  ' +
+                        ' @cErrMsg         NVARCHAR( 1024)  OUTPUT   '
+
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
+                     @cUCC              OUTPUT, @nUCCQTY     OUTPUT,
+                     @cUserDefine01 OUTPUT, @cUserDefine02 OUTPUT, @cUserDefine03 OUTPUT, @cUserDefine04 OUTPUT, @cUserDefine05 OUTPUT,
+                     @cUserDefine06 OUTPUT, @cUserDefine07 OUTPUT, @cUserDefine08 OUTPUT, @cUserDefine09 OUTPUT,
+                     @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
+                     @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
+                     @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
+                     @nErrNo      OUTPUT, @cErrMsg     OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO Quit
+               END
+            END
+            
             IF ISDATE(@cLottable03) <> 1
             BEGIN
                SET @nErrNo = 250751
@@ -278,7 +365,7 @@ BEGIN
                GOTO Quit
             END
             SELECT @dLottable04 = DateADD(DAY,ISNULL(ShelfLife,0),@cLottable03) FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
-
+            
             -- Extended validate SP
             IF @cExtendedValidateSP <> ''
             BEGIN

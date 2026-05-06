@@ -29,6 +29,7 @@ execute rdt.rdtAddMsg 249224, 10, '249224 UCCNotValid',    'us_english', 957
 execute rdt.rdtAddMsg 249225, 10, '249225 NeedDropID',    'us_english', 957
 execute rdt.rdtAddMsg 249226, 10, '249226 UCCLOCNotValid',    'us_english', 957
 execute rdt.rdtAddMsg 249227, 10, '249227 UCCIDNotValid',    'us_english', 957
+execute rdt.rdtAddMsg 249228, 10, '249228 ToLocNeeded',     'us_english', 957   -- FCR-10631
 
 
 

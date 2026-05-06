@@ -7,3 +7,5 @@ EXEC API.TouchPadAddMsg 10654, 10, 'The selected workstation already been in use
 EXEC API.TouchPadAddMsg 10655, 10, 'Invalid setup. Current device has been assigned to a workstation.',    'us_english'
 EXEC API.TouchPadAddMsg 10656, 10, 'Invalid Workstation, Not Found in AppWorkstation.',    'us_english'
 EXEC API.TouchPadAddMsg 10657, 10, 'Failed to Update into AppWorkstation.',    'us_english'
+EXEC API.TouchPadAddMsg 10658, 10, 'Current DeviceID already assigned to the workstation.',    'us_english'
+EXEC API.TouchPadAddMsg 10659, 10, '',    'us_english'

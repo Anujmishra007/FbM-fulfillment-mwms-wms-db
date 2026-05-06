@@ -11,7 +11,8 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-29   1.0  GCH225     Created                                          */
-/* 2025-12-24   1.1  YLI237     Updated for UWP-43950                            */                                                                              
+/* 2025-12-24   1.1  YLI237     Updated for UWP-43950                            */   
+/* 2026-03-25   1.2  GCH225     FCR-11991 Handle print carrier logic             */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_GetPrintFlag] (
@@ -45,12 +46,15 @@ BEGIN
 
    DECLARE @n_Continue           INT            = 1  
          , @n_StartCnt           INT            = @@TRANCOUNT 
-         , @c_FunID                NVARCHAR(50)   = ''
-         , @nStep                  INT            = 0
+         , @c_FunID              NVARCHAR(50)   = ''
+         , @nStep                INT            = 0
+         , @cPrintCarrierLevel   NVARCHAR(20)   = ''
    
-   SET @b_Success          = 0  
-   SET @n_ErrNo            = 0  
-   SET @c_ErrMsg           = '' 
+   SET @b_Success             = 0  
+   SET @n_ErrNo               = 0  
+   SET @c_ErrMsg              = '' 
+   SET @c_FunID               = '996' -- Default for TouchPack Function ID
+   SET @cPrintCarrierLevel    = ''
 
    IF EXISTS(SELECT 1 
              FROM STORERCONFIG (NOLOCK)
@@ -116,29 +120,26 @@ BEGIN
               )
    ORDER BY Facility
 
-   IF @bIsLastCarton = 1
-   BEGIN
-      SELECT  @c_FunID = SHORT
-      FROM CODELKUP (NOLOCK) 
-      WHERE LISTNAME = 'MDWCARRIER'
-      AND (Storerkey='ALL' or Storerkey=@cStorerKey) 
+   SELECT @cPrintCarrierLevel = ISNULL(OPTION1, '')
+   FROM STORERCONFIG (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+   AND ConfigKey = 'TPS-PrintCarrierFlag'
+   AND sValue = '1'
 
-      IF ISNULL(@c_FunID,'')  <> ''
-      BEGIN
-         EXEC [dbo].[isp_Carrier_Middleware_Interface]            
-            @c_OrderKey      = @cOrderKey         
-            , @c_Mbolkey     = ''      
-            , @c_FunctionID  = @c_FunID          
-            , @n_CartonNo    = nCartonNo      
-            , @n_Step        = @nStep      
-            , @b_Success     = @b_Success OUTPUT            
-            , @n_Err         = @n_ErrNo   OUTPUT            
-            , @c_ErrMsg      = @c_ErrMsg  OUTPUT   
-      END 
+   IF (@cPrintCarrierLevel = 'ORDER' AND @bIsLastCarton = 1)
+   OR @cPrintCarrierLevel = 'CARTON'
+   BEGIN
+      EXEC [dbo].[isp_Carrier_Middleware_Interface]            
+         @c_OrderKey      = @cOrderKey         
+         , @c_Mbolkey     = ''      
+         , @c_FunctionID  = @c_FunID          
+         , @n_CartonNo    = @nCartonNo      
+         , @n_Step        = @nStep      
+         , @b_Success     = @b_Success OUTPUT            
+         , @n_Err         = @n_ErrNo   OUTPUT            
+         , @c_ErrMsg      = @c_ErrMsg  OUTPUT   
    END
 
-
-  
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
    BEGIN      

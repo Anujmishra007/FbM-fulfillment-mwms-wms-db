@@ -11,6 +11,7 @@ GO
 /* Date       Rev    Author    Purposes                                         */
 /* 2024-12-06 1.0    JCH507    FCR-1157 for levis (based on rdt_1764SwapUCC07)  */
 /* 2025-09-10 1.1.0  NICKT     FCR-7730 Check lottables by "SwapUCC"            */
+/* 2026-04-14 1.2.0  NICKT     UWP-54220 Update PackDetail.RefNo                */
 /********************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764SwapUCC09
@@ -68,6 +69,7 @@ BEGIN
    DECLARE @cPickDetailKey NVARCHAR( 10)
    DECLARE @cPickSlipNo    NVARCHAR( 10)
    DECLARE @nCartonNo      INT
+   DECLARE @cLabelNo       NVARCHAR( 20)
    DECLARE @cLabelLine     NVARCHAR( 5)
    DECLARE @cDocType       NVARCHAR( 1)
    DECLARE @nQTY           INT
@@ -354,6 +356,50 @@ BEGIN
    6. UCC to pick, swap UCC with alloc
 */
 
+   SELECT TOP 1
+      @cPickSlipNo = PH.PickHeaderKey
+   FROM dbo.PickDetail PD WITH(NOLOCK)
+   INNER JOIN dbo.TaskDetail TD WITH (NOLOCK) ON TD.CaseID IS NOT NULL AND PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey AND PD.DropID = TD.CaseID
+   INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON PD.StorerKey = PH.StorerKey AND PD.OrderKey = PH.OrderKey
+   WHERE TD.TaskDetailKey = @cTaskDetailKey
+      AND TD.StorerKey = @cStorerKey
+
+   DECLARE @tTaskUCCPackDetail TABLE
+   (
+      RowRef   INT IDENTITY(1,1),
+      PickSlipNo     NVARCHAR (10),
+      CartonNo       INT,
+      LabelNo        NVARCHAR (20),
+      LabelLine      NVARCHAR (5)
+   )
+
+   DECLARE @tActualUCCPackDetail TABLE
+   (
+      RowRef   INT IDENTITY(1,1),
+      PickSlipNo     NVARCHAR (10),
+      CartonNo       INT,
+      LabelNo        NVARCHAR (20),
+      LabelLine      NVARCHAR (5)
+   )
+
+   IF @cTaskUOM = '2' AND @cTaskUCCNo <> @cActUCCNo
+   BEGIN
+      INSERT INTO @tTaskUCCPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+      SELECT @cPickSlipNo, CartonNo, LabelNo, LabelLine
+      FROM dbo.PackDetail WITH(NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+         AND StorerKey = @cStorerKey
+         AND RefNo IS NOT NULL
+         AND RefNo = @cTaskUCCNo
+
+      INSERT INTO @tActualUCCPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+      SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+      FROM dbo.PackDetail WITH(NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND RefNo IS NOT NULL
+         AND RefNo = @cActUCCNo
+   END
+
    DECLARE @cTaskUCCType   NVARCHAR(10)
    DECLARE @cActUCCType    NVARCHAR(10)
 
@@ -588,8 +634,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 3. UCC to replenish, swap UCC with alloc
@@ -908,8 +952,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 4. UCC to pick, swap UCC free
@@ -1154,8 +1196,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    --5. UCC to pick, swap UCC with replenish
@@ -1449,8 +1489,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- 6. UCC to pick, swap UCC with alloc
@@ -1893,8 +1931,6 @@ BEGIN
             GOTO RollBackTran
          END
       END
-
-      GOTO CommitTran
    END
 
    -- Data error (not in the 7 scenarios)
@@ -1905,10 +1941,88 @@ BEGIN
       GOTO RollBackTran
    END
 
-CommitTran:
-   -- Log UCC swap
    IF @cTaskUCCNo <> @cActUCCNo
    BEGIN
+      IF @cTaskUOM = '2'
+      BEGIN
+         DECLARE @nLoopIndex INT = -1
+
+         SET @nCartonNo = 0
+         SET @cLabelNo = ''
+         SET @cLabelLine = ''
+
+         WHILE 1 = 1
+         BEGIN
+            SELECT TOP 1
+               @nLoopIndex = RowRef,
+               @nCartonNo = CartonNo,
+               @cLabelNo = LabelNo,
+               @cLabelLine = LabelLine
+            FROM @tTaskUCCPackDetail
+            WHERE RowRef > @nLoopIndex
+            ORDER BY RowRef
+
+            IF @@ROWCOUNT = 0
+               BREAK
+
+            BEGIN TRY
+               UPDATE dbo.PackDetail 
+               SET
+                  RefNo = @cActUCCNo,
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND LabelNo = @cLabelNo
+                  AND LabelLine = @cLabelLine
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 230401
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PackDetail Failed
+               GOTO RollBackTran
+            END CATCH
+         END
+
+         SET @nLoopIndex = -1
+         SET @cPickSlipNo = ''
+         SET @nCartonNo = 0
+         SET @cLabelNo = ''
+         SET @cLabelLine = ''
+
+         WHILE 1 = 1
+         BEGIN
+            SELECT TOP 1
+               @nLoopIndex = RowRef,
+               @cPickSlipNo = PickSlipNo,
+               @nCartonNo = CartonNo,
+               @cLabelNo = LabelNo,
+               @cLabelLine = LabelLine
+            FROM @tActualUCCPackDetail
+            WHERE RowRef > @nLoopIndex
+            ORDER BY RowRef
+
+            IF @@ROWCOUNT = 0
+               BREAK
+
+            BEGIN TRY
+               UPDATE dbo.PackDetail 
+               SET
+                  RefNo = @cTaskUCCNo,
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND LabelNo = @cLabelNo
+                  AND LabelLine = @cLabelLine
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 230403
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PackDetail Failed
+               GOTO RollBackTran
+            END CATCH
+         END
+      END
+
       DECLARE @cTaskUCCStatus NVARCHAR(1)
       SELECT @cTaskUCCStatus = Status FROM UCC WITH (NOLOCK) WHERE UCCNo = @cTaskUCCNo AND StorerKey = @cStorerkey
 
@@ -1916,6 +2030,7 @@ CommitTran:
       VALUES (1764, @cTaskUCCNo, @cActUCCNo, @cTaskDetailKey, @cTaskUCCStatus, @cActUCCStatus)
    END
 
+CommitTran:
    SET @cSKU = @cActUCCSKU
    SET @nUCCQTY = @nActUCCQTY
    SET @cUCC = @cActUCCNo

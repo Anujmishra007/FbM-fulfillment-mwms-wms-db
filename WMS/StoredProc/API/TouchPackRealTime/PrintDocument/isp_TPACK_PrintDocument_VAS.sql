@@ -12,9 +12,10 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-12-24   1.0  YLI237     UWP-43509                                        */
 /* 2026-02-25   2.0  GCH225     UWP-49257 Enhancement.                           */
+/* 2026-03-05   3.0  GCH225     UWP-50005 Fix Continue Print Logic               */
 /*********************************************************************************/
 
-CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_VAS] (
+CREATE OR ALTER PROC [API].[isp_TPACK_PrintDocument_VAS] (
      @cType                NVARCHAR(30)      = ''
    , @bIsDiscrete          BIT               = 0
    , @bIsCustom            BIT               = 0
@@ -84,13 +85,13 @@ BEGIN
          , @IsAggregate2      BIT = 0
          , @IsAggregate3      BIT = 0
          , @IsAggregate4      BIT = 0
-         , @bIsCartonLevel    BIT = 0
          , @bIsSKUReport      BIT = 0
          
    -- Variables for workflow implementation
    -- DECLARE @cTypeFromWOD      NVARCHAR(30)
    --       , @cUDF01Value       NVARCHAR(MAX)
 
+   
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
    SET @c_ErrMsg           = '' 
@@ -109,7 +110,6 @@ BEGIN
    SET @IsAggregate3       = 0
    SET @IsAggregate4       = 0
    SET @cModuleID          = 'TPPACK'
-   SET @bIsCartonLevel     = 0
    SET @cWODSKU            = ''
    SET @cWODType           = ''
    SET @cJobIDs            = ''
@@ -119,14 +119,9 @@ BEGIN
    SET @cFinalSKU          = ''
    SET @cUDF01_WK          = ''
    SET @cUDF04_WK          = ''
+   SET @nContinuePrint     = 0
 
     -- Get PRICELB configuration from CodeLkup based on WorkOrder type
-   
-   SELECT @bIsCartonLevel = IIF(OPTION2 = 'Carton', 1, 0)
-   FROM STORERCONFIG (NOLOCK) 
-   WHERE ConfigKey = 'TPS-VAS' 
-   AND StorerKey = @cStorerKey
-   AND sValue IN('1', '3')
 
    DECLARE @VASReports TABLE (
       ReportID         NVARCHAR(10)
@@ -144,67 +139,124 @@ BEGIN
    --if is SKU level and SKU is provided, print specific SKU label or
    --if is Carton level and SKU is not provided, print SKU label for all SKUs under the carton; 
    --otherwise, skip the condition.
-   IF (@bIsCartonLevel = 0 AND @cSKU <> '') 
-   OR (@bIsCartonLevel = 1 AND @cSKU = '')
+   IF @cSKU <> ''
    BEGIN
-      IF @cSKU <> ''
-      BEGIN
-         DECLARE sku_cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT  ISNULL(WOD.SKU, '')
-               , ISNULL(WOD.[Type], '')
-               , ISNULL(CLK.UDF01,'')
-               , ISNULL(CLK.UDF04,'')
-         FROM WORKORDERDETAIL WOD (NOLOCK)
-         INNER JOIN CODELKUP CLK (NOLOCK)
-         ON CLK.Code = WOD.[Type]
-         AND CLK.StorerKey = WOD.StorerKey
-         WHERE EXISTS ( SELECT 1
-                        FROM WORKORDER WO (NOLOCK)
-                        WHERE WO.ExternWorkOrderKey = @cOrderKey
-                        AND WO.StorerKey = @cStorerKey
-                        AND WO.Facility = @cFacility
-                        AND WO.[Type] IN('PACK', 'VAS')
-                        AND WO.WorkOrderKey = WOD.WorkOrderKey
-                        )
-         AND CLK.UDF04 = 'PRICELB'
-      END
-      ELSE
-      BEGIN
-         DECLARE sku_cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT  ISNULL(WOD.SKU, '')
-               , ISNULL(WOD.[Type], '')
-               , ISNULL(CLK.UDF01,'')
-               , ISNULL(CLK.UDF04,'')
-         FROM WORKORDERDETAIL WOD (NOLOCK)
-         INNER JOIN CODELKUP CLK (NOLOCK)
-         ON CLK.Code = WOD.[Type]
-         AND CLK.StorerKey = WOD.StorerKey
-         WHERE EXISTS ( SELECT 1
-                        FROM WORKORDER WO (NOLOCK)
-                        WHERE WO.ExternWorkOrderKey = @cOrderKey
-                        AND WO.StorerKey = @cStorerKey
-                        AND WO.Facility = @cFacility
-                        AND WO.[Type] IN('PACK', 'VAS')
-                        AND WO.WorkOrderKey = WOD.WorkOrderKey
-                        )
-         AND EXISTS ( SELECT 1
-                      FROM PACKDETAIL PD (NOLOCK)
-                      WHERE PD.SKU = WOD.SKU
-                      AND PD.PickSlipNo = @cPickSlipNo
-                      AND PD.CartonNo = @nCartonNo
+      DECLARE sku_cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT  ISNULL(WOD.SKU, '')
+            , ISNULL(WOD.[Type], '')
+            , ISNULL(CLK.UDF01,'')
+            , ISNULL(CLK.UDF04,'')
+      FROM WORKORDERDETAIL WOD (NOLOCK)
+      INNER JOIN CODELKUP CLK (NOLOCK)
+      ON CLK.Code = WOD.[Type]
+      AND CLK.StorerKey = @cStorerKey
+      WHERE EXISTS ( SELECT 1
+                     FROM WORKORDER WO (NOLOCK)
+                     WHERE WO.ExternWorkOrderKey = @cOrderKey
+                     AND WO.StorerKey = @cStorerKey
+                     AND WO.Facility = @cFacility
+                     AND WO.[Type] IN('PACK', 'VAS')
+                     AND WO.WorkOrderKey = WOD.WorkOrderKey
                      )
-         AND CLK.UDF04 IN ('PRICELB', '')
-      END
-      OPEN sku_cursor
-      FETCH NEXT FROM sku_cursor INTO @cWODSKU
-                                    , @cWODType
-                                    , @cUDF01_WK
-                                    , @cUDF04_WK
-      WHILE @@FETCH_STATUS = 0
+      AND CLK.UDF04 = 'PRICELB'
+      AND CLK.LISTName = 'WKORDTYPE'
+   END
+   ELSE
+   BEGIN
+      DECLARE sku_cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT  ISNULL(WOD.SKU, '')
+            , ISNULL(WOD.[Type], '')
+            , ISNULL(CLK.UDF01,'')
+            , ISNULL(CLK.UDF04,'')
+      FROM WORKORDERDETAIL WOD (NOLOCK)
+      INNER JOIN CODELKUP CLK (NOLOCK)
+      ON CLK.Code = WOD.[Type]
+      AND CLK.StorerKey = @cStorerKey
+      WHERE EXISTS ( SELECT 1
+                     FROM WORKORDER WO (NOLOCK)
+                     WHERE WO.ExternWorkOrderKey = @cOrderKey
+                     AND WO.StorerKey = @cStorerKey
+                     AND WO.Facility = @cFacility
+                     AND WO.[Type] IN('PACK', 'VAS')
+                     AND WO.WorkOrderKey = WOD.WorkOrderKey
+                     )
+      AND EXISTS ( SELECT 1
+                     FROM PACKDETAIL PD (NOLOCK)
+                     WHERE 
+                     --PD.SKU = WOD.SKU
+                     PD.PickSlipNo = @cPickSlipNo
+                     AND PD.CartonNo = @nCartonNo
+                  )
+      AND CLK.UDF04 <> 'PRICELB'
+      AND CLK.LISTName = 'WKORDTYPE'
+   END
+
+   OPEN sku_cursor
+   FETCH NEXT FROM sku_cursor INTO @cWODSKU
+                                 , @cWODType
+                                 , @cUDF01_WK
+                                 , @cUDF04_WK
+   WHILE @@FETCH_STATUS = 0
+   BEGIN
+      IF @cWODSKU = @cSKU OR @cWODSKU = ''
       BEGIN
-         IF @cWODSKU = @cSKU OR @cWODSKU = ''
+         SET @cFinalSKU = COALESCE(@cWODSKU, @cSKU)
+         
+         IF @cFinalSKU = ''
+         BEGIN
+            SELECT TOP 1 @cFinalSKU = SKU
+            FROM PACKDETAIL (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo 
+            AND CartonNo = @nCartonNo
+         END
+
+         INSERT INTO @VASReports ( ReportID
+                                 , ReportLineNo
+                                 , PrintSource
+                                 , DefaultPrinterID
+                                 , IsPaperPrinter
+                                 , KeyFieldName1
+                                 , KeyFieldName2
+                                 , KeyFieldName3
+                                 , KeyFieldName4
+                                 , IsSKUReport)
+         EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
+            @cWODType        = @cWODType
+            , @cStorerKey    = @cStorerKey
+            , @cFacility     = @cFacility
+            , @cOrderKey     = @cOrderKey
+            , @cPickSlipNo   = @cPickSlipNo
+            , @nCartonNo     = @nCartonNo
+            , @cSKU          = @cFinalSKU
+            , @cUDF01_WK     = @cUDF01_WK
+            , @cUDF04_WK     = @cUDF04_WK
+            , @bPrintLabelFlag = @bPrintLabelFlag
+            , @bPrintPaperFlag = @bPrintPaperFlag
+            , @cReportType   = 'TPVAS'
+            , @cLangCode     = @cLangCode
+            , @b_Success     = @b_Success       OUTPUT
+            , @n_ErrNo       = @n_ErrNo         OUTPUT
+            , @c_ErrMsg      = @c_ErrMsg        OUTPUT
+
+         IF @b_Success = 0 
+         BEGIN
+            SET @n_Continue = 3 
+            GOTO EXIT_SP  
+         END
+
+         -- UDF04 empty is for any other reports, UDF04 = 'PRICELB' is for SKU label report only
+         IF @cUDF04_WK = '' 
          BEGIN
             SET @cFinalSKU = COALESCE(@cWODSKU, @cSKU)
+            
+            IF @cFinalSKU = ''
+            BEGIN
+               SELECT TOP 1 @cFinalSKU = SKU
+               FROM PACKDETAIL PD (NOLOCK)
+               WHERE PD.PickSlipNo = @cPickSlipNo
+               AND PD.CartonNo = @nCartonNo
+               AND PD.SKU <> ''
+            END
            
             INSERT INTO @VASReports ( ReportID
                                     , ReportLineNo
@@ -226,14 +278,16 @@ BEGIN
                , @cSKU          = @cFinalSKU
                , @cUDF01_WK     = @cUDF01_WK
                , @cUDF04_WK     = @cUDF04_WK
+               , @bPrintLabelFlag = @bPrintLabelFlag
+               , @bPrintPaperFlag = @bPrintPaperFlag
                , @cReportType   = 'TPVAS'
                , @cLangCode     = @cLangCode
                , @b_Success     = @b_Success       OUTPUT
                , @n_ErrNo       = @n_ErrNo         OUTPUT
                , @c_ErrMsg      = @c_ErrMsg        OUTPUT
 
-            IF @n_ErrNo <> 0   
-            BEGIN  
+            IF @n_ErrNo <> 0
+            BEGIN
                SET @n_Continue = 3 
                GOTO EXIT_SP  
             END
@@ -261,37 +315,40 @@ BEGIN
                   , @cSKU          = @cFinalSKU
                   , @cUDF01_WK     = @cUDF01_WK
                   , @cUDF04_WK     = @cUDF04_WK
+                  , @bPrintLabelFlag = @bPrintLabelFlag
+                  , @bPrintPaperFlag = @bPrintPaperFlag
                   , @cReportType   = 'TPVASCarton'
                   , @cLangCode     = @cLangCode
                   , @b_Success     = @b_Success       OUTPUT
                   , @n_ErrNo       = @n_ErrNo         OUTPUT
                   , @c_ErrMsg      = @c_ErrMsg        OUTPUT
 
-               IF @n_ErrNo <> 0   
-               BEGIN  
+               IF @n_ErrNo <> 0
+               BEGIN
                   SET @n_Continue = 3 
                   GOTO EXIT_SP  
                END
             END
          END
-         FETCH NEXT FROM sku_cursor INTO @cWODSKU
-                                       , @cWODType
-                                       , @cUDF01_WK
-                                       , @cUDF04_WK
       END
-      CLOSE sku_cursor
-      DEALLOCATE sku_cursor
+      FETCH NEXT FROM sku_cursor INTO @cWODSKU
+                                    , @cWODType
+                                    , @cUDF01_WK
+                                    , @cUDF04_WK
    END
+   CLOSE sku_cursor
+   DEALLOCATE sku_cursor
 
-   -- if is Carton level or SKU is not provided, print carton label;
-   IF @bIsCartonLevel = 1 OR @cSKU = '' 
+   IF @cSKU = '' 
    BEGIN
       IF NOT EXISTS (SELECT 1 
                      FROM @VASReports
                      WHERE IsSKUReport = 0
-      )
+      ) 
       BEGIN
          SET @nContinuePrint = 1
+		 GOTO EXIT_SP
+
       END
    END
    
@@ -397,6 +454,17 @@ BEGIN
                      , @cPickSlipNo
                      , @nCartonNo 
 
+      IF @cParams1 = '' 
+      AND @cParams2 = '' 
+      AND @cParams3 = '' 
+      AND @nCartonNo = 0
+      AND @bIsSKUReport = 1
+      BEGIN
+         SET @cParams1 = @cStorerKey
+         SET @cParams2 = @cPickSlipNo
+         SET @cParams3 = CAST(@nCartonNo AS NVARCHAR(10))
+      END
+      
       IF @cDefaultPrinterID = ''
       BEGIN
          IF EXISTS(  SELECT 1 
@@ -405,11 +473,34 @@ BEGIN
          )
          BEGIN  
             SET @cPrinterInGroup = ''  
-            SELECT Top 1 @cPrinterInGroup = RTP.PrinterID FROM rdt.RdtReportToPrinter RTP (NOLOCK) 
-            INNER JOIN WMReportDetail WMRD ON RTP.reportType = WMRD.ReportID AND RTP.storerkey = WMRD.storerkey AND RTP.ReportLineNo = WMRD.ReportLineNo
-            INNER JOIN WMReport WMR ON WMR.reportID = WMRD.reportID AND WMR.ModuleID = @cModuleID 
+            SELECT TOP 1 @cPrinterInGroup = RTP.PrinterID 
+            FROM rdt.RdtReportToPrinter RTP (NOLOCK) 
+            INNER JOIN WMReportDetail WMRD (NOLOCK)
+            ON RTP.ReportType = WMRD.ReportID 
+            AND RTP.StorerKey = WMRD.StorerKey 
+            AND RTP.ReportLineNo = WMRD.ReportLineNo
+            INNER JOIN WMReport WMR (NOLOCK) 
+            ON WMR.ReportID = WMRD.ReportID 
+            AND WMR.ModuleID = @cModuleID 
             WHERE WMRD.StorerKey = @cStorerKey  
             AND RTP.PrinterGroup = IIF(@cIsPaperPrinter = '1', @cPaperPrinter, @cLabelPrinter)
+            AND WMRD.ReportID = @cReportID
+            AND WMRD.ReportLineNo = @cReportLine
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+               SELECT TOP 1 @cPrinterInGroup = RTP.PrinterID 
+               FROM rdt.RdtReportToPrinter RTP (NOLOCK) 
+               INNER JOIN WMReportDetail WMRD (NOLOCK)
+               ON RTP.ReportType = WMRD.ReportID 
+               AND RTP.StorerKey = WMRD.StorerKey 
+               AND RTP.ReportLineNo = WMRD.ReportLineNo
+               INNER JOIN WMReport WMR (NOLOCK) 
+               ON WMR.ReportID = WMRD.ReportID 
+               AND WMR.ModuleID = @cModuleID 
+               WHERE WMRD.StorerKey = @cStorerKey  
+               AND RTP.PrinterGroup = IIF(@cIsPaperPrinter = '1', @cPaperPrinter, @cLabelPrinter)
+            END
             IF @cPrinterInGroup = ''  
             BEGIN  
                SELECT @cPrinterInGroup = PrinterID  
@@ -420,7 +511,7 @@ BEGIN
             IF @cPrinterInGroup = ''  
             BEGIN  
                SET @n_Continue = 3
-               SET @n_ErrNo = 14256    
+               SET @n_ErrNo = 14251    
                SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')
                GOTO EXIT_SP  
             END
@@ -455,7 +546,8 @@ BEGIN
             , @b_SCEPreView   = 0         
             , @c_JobIDs       = @cJobIDs        OUTPUT    
             , @c_AutoPrint    = 'N'     
-      IF @n_ErrNo <> 0   
+            
+      IF @b_Success = 0 
       BEGIN  
          SET @n_Continue = 3 
          GOTO EXIT_SP  
@@ -499,8 +591,7 @@ EXIT_SP:
    END      
    ELSE      
    BEGIN      
-      SELECT @b_Success = 1  
-      SET @nContinuePrint = 0    
+      SELECT @b_Success = 1    
       WHILE @@TRANCOUNT > @n_StartCnt      
       BEGIN      
          COMMIT TRAN      

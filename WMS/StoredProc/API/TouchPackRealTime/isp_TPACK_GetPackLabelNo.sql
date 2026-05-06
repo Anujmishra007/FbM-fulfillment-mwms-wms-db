@@ -70,7 +70,6 @@ BEGIN
    SET @c_ErrMsg        = ''  
    SET @nFunc           = 838
 
-   --TPS-GetKeyPadInput
    SET @cConfigKey = 'TPS-ExtendedGenLBLSP'
    SET @cConfigVal = ''
 

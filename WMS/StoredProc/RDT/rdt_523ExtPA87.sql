@@ -10,8 +10,9 @@ GO
 /*                                                                            */
 /* Customer: DAIMLER TRUCK AG                                                 */
 /*                                                                            */
-/* Date        Rev  Author    Purposes                                        */
-/* 2026-01-29  1.0  Jackc     FCR-9756. Created                               */
+/* Date        Rev    Author    Purposes                                        */
+/* 2026-01-29  1.0.0  Jackc     FCR-9756. Created                               */
+/* 2026-03-09  1.0.1  Jackc     FCR-9756. Update the listname                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_523ExtPA87] (
@@ -63,7 +64,7 @@ BEGIN
          @cSuggestedLOC = LOC.LOC
       FROM dbo.LOC WITH (NOLOCK)
       JOIN dbo.CODELKUP CL WITH (NOLOCK)
-         ON CL.LISTNAME = 'VORZONE' 
+         ON CL.LISTNAME = '523ZONE' --v1.0.1
          AND CL.Code =LOC.PUTAWAYZONE
       WHERE LOC.Facility = @cFacility
 
@@ -115,9 +116,8 @@ BEGIN
          ,@nPABookingKey = @nPABookingKey OUTPUT
       IF @nErrNo <> 0
          GOTO RollBackTran
-
-      COMMIT TRAN rdt_523ExtPA87 -- Only commit change made here
    END
+   COMMIT TRAN rdt_523ExtPA87 -- Only commit change made here
    GOTO Quit
 
 RollBackTran:
