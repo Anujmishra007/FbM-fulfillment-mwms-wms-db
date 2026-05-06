@@ -70,7 +70,8 @@ GO
 /*                               and QtyReplen                          */
 /* 17-Apl-2025  3.7     Wan03    UWP-32707 - FCR-3957 - JCB Putaway Using*/
 /*                               TM SCE                                 */
-/* 06-Oct-2025  1.0     AK01     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
+/* 06-Oct-2025  3.8     AK01     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
+/* 06-May-2026  3.9     AYD01    UWP-54594: Allow release for shorted lines */
 /************************************************************************/ 
        
 CREATE OR ALTER TRIGGER [dbo].[ntrTaskDetailUpdate]        
@@ -104,6 +105,8 @@ BEGIN
    ,  @c_ReservedID     NVARCHAR(18) --NJOW04
    ,  @c_Facility                   NVARCHAR(5)  = ''                         --(Wan03)
    ,  @c_TaskMultiLotLPNLockPMI     NVARCHAR(10) = '0'                        --(Wan03)
+   ,  @c_storerkey NVARCHAR(15)        --AYD01
+   ,  @c_AllowReleaseShortedLine NVARCHAR(10) --AYD01
        
    DECLARE @c_LocationCategy NVARCHAR(10) -- (Vicky02)        
         
@@ -142,12 +145,32 @@ BEGIN
            
    IF @n_continue=1 or @n_continue=2        
    BEGIN        
-      IF EXISTS (SELECT * FROM deleted WHERE Status='9' )        
-      BEGIN        
-         SELECT @n_continue = 3        
-         SELECT @n_err = 67818 --81301        
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Item(s) Are Completed - Update Failed. (ntrTaskDetailUpdate)'        
-      END        
+      IF EXISTS (SELECT 1
+         FROM storerconfig s WITH (NOLOCK) 
+         JOIN DELETED d ON s.storerkey = d.storerkey
+         WHERE s.configkey = 'AllowReleaseShortedLine'
+         AND s.SValue = '1')
+      BEGIN
+         IF EXISTS (SELECT 1 
+            FROM deleted d
+            JOIN PickDetail pd 
+            ON d.TaskDetailKey = pd.TaskDetailKey
+            WHERE d.Status='9')        
+         BEGIN        
+            SELECT @n_continue = 3        
+            SELECT @n_err = 67848 --81301        
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Item(s) Are Completed - Update Failed. (ntrTaskDetailUpdate)'        
+         END      
+      END
+      ELSE
+      BEGIN
+         IF EXISTS (SELECT * FROM deleted WHERE Status='9' )        
+         BEGIN        
+            SELECT @n_continue = 3        
+            SELECT @n_err = 67818 --81301        
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Item(s) Are Completed - Update Failed. (ntrTaskDetailUpdate)'        
+         END      
+      END  
    END        
 
    --NJOW02
@@ -196,7 +219,8 @@ BEGIN
    BEGIN        
       DECLARE @c_taskdetailkey NVARCHAR(10), @c_tasktype NVARCHAR(10), @c_newtaskdetailkey NVARCHAR(10)        
       DECLARE @c_pickdetailkey NVARCHAR(10)        
-      DECLARE @c_storerkey NVARCHAR(15), @c_sku NVARCHAR(20), @c_fromloc NVARCHAR(10), @c_fromid NVARCHAR(18),        
+      DECLARE --@c_storerkey NVARCHAR(15), 
+              @c_sku NVARCHAR(20), @c_fromloc NVARCHAR(10), @c_fromid NVARCHAR(18),        
               @c_toloc NVARCHAR(10), @c_toid NVARCHAR(18), @c_lot NVARCHAR(10), @n_qty int, @c_packkey NVARCHAR(10), @c_uom NVARCHAR(10),        
               @c_caseid NVARCHAR(10), @c_sourcekey NVARCHAR(30), @c_sourcetype NVARCHAR(30), @c_Status NVARCHAR(10), @c_reasonkey NVARCHAR(10),        
               @c_wavekey NVARCHAR(10), @c_userposition NVARCHAR(10), @c_userkey NVARCHAR(18), @c_childid NVARCHAR(18)        

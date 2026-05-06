@@ -94,21 +94,21 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
    WHERE WD.Wavekey = @c_Wavekey
 
    ------Loadplan Validation
-   IF  (@n_Continue = 1 OR @n_Continue = 2)
-   BEGIN
-      IF EXISTS ( SELECT TOP 1 lpd.Loadkey
-                  FROM WAVE W (NOLOCK)
-                  JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
-                  JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
-                  LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
-                  WHERE W.Wavekey = @c_Wavekey
-                  AND lpd.Loadkey IS NULL)
-      BEGIN
-        SET @n_Continue = 3
-        SET @n_Err = 83010
-        SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadplan has not generated yet. (mspRLWAV11)'
-      END
-   END
+   -- IF  (@n_Continue = 1 OR @n_Continue = 2)
+   -- BEGIN
+   --    IF EXISTS ( SELECT TOP 1 lpd.Loadkey
+   --                FROM WAVE W (NOLOCK)
+   --                JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
+   --                JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+   --                LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
+   --                WHERE W.Wavekey = @c_Wavekey
+   --                AND lpd.Loadkey IS NULL)
+   --    BEGIN
+   --      SET @n_Continue = 3
+   --      SET @n_Err = 83010
+   --      SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadplan has not generated yet. (mspRLWAV11)'
+   --    END
+   -- END
    --(SSA01) start -----
    IF  (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN 
@@ -402,13 +402,13 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          WHERE lpd.Loadkey = @c_Loadkey
          AND   lpld.LocationCategory = 'STAGING'
  
-         IF @c_ToLoc = ''
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_Err   = 83020
-            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': To Loc not found. (mspRLWAV11)'
-         END
+         -- IF @c_ToLoc = ''
+         -- BEGIN
+         --    SET @n_Continue = 3
+         --    SET @n_Err   = 83021
+         --    SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+         --                 +': To Loc not found. (mspRLWAV11)'
+         -- END
 
          SELECT TOP 1 
             @c_TaskDetailkey = pd.TaskDetailKey,
