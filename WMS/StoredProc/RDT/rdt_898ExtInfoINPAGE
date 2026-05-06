@@ -4,7 +4,7 @@
 /* Copyright      : Maersk                                              */      
 /*                                                                      */      
 /* Date        Rev  Author      Purposes                                */      
-/* 27-01-2026  1.0  TCO-IBS     Lottable01/Channel Info                 */      
+/* 27-01-2026  1.0  TCO-IBS     Lottable01/Channel/Received & Total UCC */      
 /************************************************************************/      
       
 CREATE PROCEDURE [RDT].[rdt_898ExtInfoINPAGE]      
@@ -41,21 +41,49 @@ BEGIN
    SET ANSI_NULLS OFF      
    SET CONCAT_NULL_YIELDS_NULL OFF      
    SET @cExtendedInfo = ''      
-   IF @nFunc = 898 -- UCC receiving      
+   IF @nFunc = 898 -- UCC receiving   
+    BEGIN  
+      IF @nAfterStep = 3 -- palletID  
+      BEGIN  
+         IF @nInputKey = 1 -- ENTER  
+         BEGIN  
+		      DECLARE @RUCC       NVARCHAR(10)
+            DECLARE @BUCC       NVARCHAR(10)
+			   DECLARE @cStorerKey NVARCHAR(15)
+
+            SELECT @cStorerKey = StorerKey FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey 
+
+			   SELECT @BUCC = COUNT(USERDEFINE01) FROM Receiptdetail WITH (NOLOCK) WHERE Storerkey = @cStorerKey 
+			   And ReceiptKey = @cReceiptKey AND BeforeReceivedQty = 0
+   
+			   SELECT @RUCC = COUNT(USERDEFINE01) FROM Receiptdetail WITH (NOLOCK) WHERE Storerkey = @cStorerKey 
+			   And ReceiptKey = @cReceiptKey AND BeforeReceivedQty > 0
+
+            -- Output balance/total  
+            SET @cExtendedInfo = CONCAT('REC:',@RUCC,'','BAL:',@BUCC) 
+         END  
+      END  
+   END 
    BEGIN      
       IF @nAfterStep = 6 -- UCC      
       BEGIN      
          IF @nInputKey = 1 -- ENTER      
          BEGIN      
-      DECLARE @cStorerKey NVARCHAR(15)      
-            -- Get StorerKey      
+            
+			SET @cExtendedInfo = ''
+			SET @BUCC = ''
+			
+			-- Get StorerKey      
             SELECT @cStorerKey = StorerKey FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey      
-                   
+						
+			   SELECT @BUCC = COUNT(USERDEFINE01) FROM Receiptdetail WITH (NOLOCK) WHERE Storerkey = @cStorerKey 
+			   And ReceiptKey = @cReceiptKey AND BeforeReceivedQty = 0
+            	
             -- Get ASN Lottables    
-            SELECT @cExtendedInfo = Concat('1:',LOTTABLE01,'| C:',CHANNEL)    
+            SELECT @cExtendedInfo = Concat(LOTTABLE01,'|',CHANNEL,'|',@BUCC)    
             FROM ReceiptDetail WITH (NOLOCK)       
             WHERE storerkey = @cStorerKey    
-   AND ReceiptKey = @cReceiptKey      
+			   AND ReceiptKey = @cReceiptKey      
             AND Userdefine01 = @cUCC    
      
          END      
