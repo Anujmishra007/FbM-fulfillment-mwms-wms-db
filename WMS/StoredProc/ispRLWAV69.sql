@@ -43,6 +43,7 @@ GO
 /* 10-Oct-2025  SSA02   2.0   UWP-42248 -Enhanced session management     */
 /* 20-Nov-2025  AndyWu01 2.1  FCR-9066 - BRF BRASIL FOODS SA - Change the*/
 /*                                       grouping logic for FCP tasks    */
+/* 16-Mar-2026  AndyWu02 2.2  FCR-11279 - Wave Release Enhancement       */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -146,6 +147,15 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
    DECLARE @c_FCPGroupFieldList          NVARCHAR(2000) = ''  --field to determine the grouping of conso pallet/carton. e.g. ORDERS.ECOM_SINGLE_Flag,ORDERS.Userdefine01
    DECLARE @c_FCPGroupFlag               NVARCHAR(2) = 'N' 
    --AndyWu01 END
+
+   --AndyWu02 Start
+   DECLARE @c_ExistingTaskDetailKey      NVARCHAR(10) = ''
+   DECLARE @n_TotalPalletQty             INT = 0
+   DECLARE @n_TotalAllocatedQty          INT= 0
+   DECLARE @b_IsFullPalletAllocation     BIT = 0
+   DECLARE @c_ConsolidateTask            NVARCHAR(10) = ''
+   DECLARE @c_FCPToFPKTask               NVARCHAR(10) = ''
+   --AndyWu02 END
 
    SET @c_SourceType = 'ispRLWAV69'
             
@@ -1304,7 +1314,104 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             SET @n_Qty_Pick = @n_Qty
             SET @n_Qty_Avail = 0
             SET @n_Qty_Task  = 0
+
+            --AndyWu02 Start            
+            --Check if need to consolidate pick task
+            SET @c_ConsolidateTask = 'N'
+			SELECT @c_ConsolidateTask =
+              dbo.fnc_GetParamValueFromString('@c_ConsolidateTask', @c_RLWav_Opt5, @c_ConsolidateTask)
+
+            IF @c_ConsolidateTask = 'Y'
+			BEGIN
+               -- get total pallet QTY
+               SELECT @n_TotalPalletQty = lli.Qty
+               FROM LOTxLOCxID lli (NOLOCK)
+               WHERE lli.Lot = @c_Lot
+               AND lli.Loc = @c_FromLoc
+               AND lli.ID = @c_ID
                
+               --get total pallet allocated QTY
+               SELECT @n_TotalAllocatedQty = ISNULL(SUM(pd.Qty), 0)
+               FROM #PickDetail_WIP pd
+               WHERE pd.Wavekey = @c_Wavekey
+               AND pd.Storerkey = @c_Storerkey
+               AND pd.Sku = @c_SKU
+               AND pd.Lot = @c_Lot
+               AND pd.Loc = @c_FromLoc
+               AND pd.ID = @c_ID
+               AND pd.[Status] = '0'
+               AND pd.WIP_Refno = @c_SourceType
+
+               --Reset @b_IsFullPalletAllocation
+               SET @b_IsFullPalletAllocation = 0
+               IF @n_TotalAllocatedQty >= @n_TotalPalletQty
+               BEGIN
+                  SET @b_IsFullPalletAllocation = 1
+               END
+               
+               -- Check if exists TaskDetail on (Loc+ID)
+               SELECT TOP 1 @c_ExistingTaskDetailKey = td.TaskDetailKey
+               FROM TASKDETAIL td (NOLOCK)
+               WHERE td.Wavekey = @c_Wavekey
+               AND td.TaskType IN ('FCP', 'FPK')
+               AND td.Storerkey = @c_Storerkey
+               AND td.Sku = @c_SKU
+               AND td.Lot = @c_Lot
+               AND td.FromLoc = @c_FromLoc
+               AND td.FromID = @c_ID
+               AND td.[Status] NOT IN ('9', 'X')
+               
+               IF @c_ExistingTaskDetailKey > ''
+               BEGIN
+                  -- If Exists TaskDetail, use existing TaskDetailKey
+                  SET @c_Taskdetailkey = @c_ExistingTaskDetailKey
+                  SET @b_Success = 1
+                  
+                  -- update Pickdetail for the same TaskDetailKey
+                  UPDATE #PickDetail_WIP
+                  SET TaskDetailKey = @c_Taskdetailkey
+                  WHERE Wavekey = @c_Wavekey
+                  AND Storerkey = @c_Storerkey
+                  AND Sku = @c_SKU
+                  AND Lot = @c_Lot
+                  AND Loc = @c_FromLoc
+                  AND ID = @c_ID
+                  AND UOM IN ('2','3','6')
+                  AND [Status] = '0'
+                  AND WIP_Refno = @c_SourceType
+			   
+                  -- update qty in TaskDetail on (Loc+ID)
+                  UPDATE TASKDETAIL WITH (ROWLOCK)
+                  SET QTY = QTY + @n_Qty
+			   	  ,   SystemQty = SystemQty + @n_Qty
+			   	  WHERE TaskDetailKey = @c_ExistingTaskDetailKey
+			   
+                  --Check if need to switch task type as FPK
+                  SET @c_FCPToFPKTask = 'N'
+   			      SELECT @c_FCPToFPKTask =
+                    dbo.fnc_GetParamValueFromString('@c_FCPToFPKTask', @c_RLWav_Opt5, @c_FCPToFPKTask)
+
+                  -- If full pallet allocated，set task type as FPK
+                  IF @b_IsFullPalletAllocation = 1 and @c_FCPToFPKTask = 'Y'
+                  BEGIN
+					 UPDATE TASKDETAIL WITH (ROWLOCK)
+                        SET TaskType = N'FPK'
+						  , PickMethod = N'FP'
+                      WHERE TaskDetailKey = @c_ExistingTaskDetailKey
+                  END
+
+				  SET @n_Qty_Pick =0
+				  SET @c_ExistingTaskDetailKey=''
+                  --Reset @b_IsFullPalletAllocation
+                  SET @b_IsFullPalletAllocation = 0
+
+                  -- goto next
+                  GOTO NEXT_PICK_FCP
+               END
+
+            END
+            --AndyWu02 END
+
             IF @c_AllowOverAllocations = '1'                                        --(Wan03) - START 
             BEGIN                                                                    
                SELECT @n_Qty_Avail = lli.Qty - lli.Qtypicked
@@ -1550,6 +1657,119 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             SET @n_Qty_Task  = 0
             SET @c_ReplTaskKey = ''                                                 --2025-09-03
 
+            --AndyWu02 Start
+            --Check if need to consolidate pick task
+            SET @c_ConsolidateTask = 'N'
+			SELECT @c_ConsolidateTask =
+              dbo.fnc_GetParamValueFromString('@c_ConsolidateTask', @c_RLWav_Opt5, @c_ConsolidateTask)
+
+            IF @c_ConsolidateTask = 'Y'
+			BEGIN
+               -- get total pallet QTY
+               SELECT @n_TotalPalletQty = lli.Qty
+               FROM LOTxLOCxID lli (NOLOCK)
+               WHERE lli.Lot = @c_Lot
+               AND lli.Loc = @c_FromLoc
+               AND lli.ID = @c_ID
+               
+               --get total pallet allocated QTY
+               SELECT @n_TotalAllocatedQty = ISNULL(SUM(pd.Qty), 0)
+               FROM #PickDetail_WIP pd
+               WHERE pd.Wavekey = @c_Wavekey
+               AND pd.Storerkey = @c_Storerkey
+               AND pd.Sku = @c_SKU
+               AND pd.Lot = @c_Lot
+               AND pd.Loc = @c_FromLoc
+               AND pd.ID = @c_ID
+               AND pd.[Status] = '0'
+               AND pd.WIP_Refno = @c_SourceType
+
+               --Reset @b_IsFullPalletAllocation
+               SET @b_IsFullPalletAllocation = 0
+               IF @n_TotalAllocatedQty >= @n_TotalPalletQty
+               BEGIN
+                   SET @b_IsFullPalletAllocation = 1
+               END
+               
+               -- Check if exists TaskDetail on (Loc+ID)
+               SELECT TOP 1 @c_ExistingTaskDetailKey = td.TaskDetailKey
+               FROM TASKDETAIL td (NOLOCK)
+               WHERE td.Wavekey = @c_Wavekey
+               AND td.TaskType IN ('FCP', 'FPK')
+               AND td.Storerkey = @c_Storerkey
+               AND td.Sku = @c_SKU
+               AND td.Lot = @c_Lot
+               AND td.FromLoc = @c_FromLoc
+               AND td.FromID = @c_ID
+               AND td.[Status] NOT IN ('9', 'X')
+               
+               IF @c_ExistingTaskDetailKey > ''
+               BEGIN
+                  -- If Exists TaskDetail, use existing TaskDetailKey
+                  SET @c_Taskdetailkey = @c_ExistingTaskDetailKey
+                  SET @b_Success = 1
+                  
+                  -- update Pickdetail for the same TaskDetailKey
+                  UPDATE #PickDetail_WIP
+                  SET TaskDetailKey = @c_Taskdetailkey
+                  WHERE Wavekey = @c_Wavekey
+                  AND Storerkey = @c_Storerkey
+                  AND Sku = @c_SKU
+                  AND Lot = @c_Lot
+                  AND Loc = @c_FromLoc
+                  AND ID = @c_ID
+                  AND UOM IN ('2','3','6')
+                  AND [Status] = '0'
+                  AND WIP_Refno = @c_SourceType
+			   
+                  -- update qty in TaskDetail on (Loc+ID)
+                  UPDATE TASKDETAIL WITH (ROWLOCK)
+                  SET QTY = QTY + @n_Qty
+			   	  ,   SystemQty = SystemQty + @n_Qty
+				  ,   UOMQty = UOMQty + @n_Qty
+			   	  WHERE TaskDetailKey = @c_ExistingTaskDetailKey
+
+                  --Check if need to switch task type as FPK
+                  SET @c_FCPToFPKTask = 'N'
+   			      SELECT @c_FCPToFPKTask =
+                    dbo.fnc_GetParamValueFromString('@c_FCPToFPKTask', @c_RLWav_Opt5, @c_FCPToFPKTask)
+
+			      -- If full pallet allocated，set task type as FPK
+                  IF @b_IsFullPalletAllocation = 1 and @c_FCPToFPKTask = 'Y'
+                  BEGIN
+					 UPDATE TASKDETAIL WITH (ROWLOCK)
+                        SET TaskType = N'FPK'
+						  , PickMethod = N'FP'
+                      WHERE TaskDetailKey = @c_ExistingTaskDetailKey
+                  END
+
+                  --To advoid duplicate
+                  UPDATE #PickDetail_WIP
+                  SET [Status] = '1', 
+                      EditDate = dbo.fnc_GetDate(),
+                      EditWho = dbo.fnc_GetUserName()
+                  WHERE Wavekey = @c_Wavekey
+                  AND Storerkey = @c_Storerkey
+                  AND Sku = @c_SKU
+                  AND Lot = @c_Lot
+                  AND Loc = @c_FromLoc
+                  AND ID = @c_ID
+                  AND UOM IN ('2','3','6')
+                  AND [Status] = '0'
+                  AND WIP_Refno = @c_SourceType
+
+				  SET @n_Qty_Pick =0
+				  SET @c_ExistingTaskDetailKey=''
+                  --Reset @b_IsFullPalletAllocation
+                  SET @b_IsFullPalletAllocation = 0
+
+                  -- goto next
+                  GOTO NEXT_PICK_NONVNA_SKIP_CREATE
+               END
+
+            END
+            --AndyWu02 END
+
             IF @c_UOM IN ('2','3','6') AND @c_AllowOverAllocations = '0'            --2025-07-09 --(Wan03) - START
             BEGIN
                IF EXISTS ( SELECT 1 FROM LOC l (NOLOCK)    --If from manual allocation
@@ -1719,6 +1939,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             END                                                      --(Wan02) - END
          END
 
+         NEXT_PICK_NONVNA_SKIP_CREATE: --AndyWu02
          FETCH NEXT FROM CUR_PICK_NONVNA INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID
                                              ,@c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
       END
