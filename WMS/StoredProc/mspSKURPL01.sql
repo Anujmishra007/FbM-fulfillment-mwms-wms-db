@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /***************************************************************************/
-/* Stored Procedure: mspSkuRPL01                                         */
+/* Stored Procedure: mspSkuRPL01                                           */
 /* Creation Date:  27-Feb-2026                                             */
 /* Copyright: Maersk                                                       */
 /* Written by:Supriya S                                                    */
@@ -259,8 +259,6 @@ BEGIN
 
           WHILE @n_QtyToReplen > 0
           BEGIN
-
-
                   SELECT Top 1 @c_FromLOC = LLI.LOC,
                                   @c_FromID = LLI.ID,
                                   @c_FromLot = LLI.Lot
@@ -369,6 +367,14 @@ BEGIN
 
        WHILE @@FETCH_STATUS <> -1
        BEGIN
+        -- Generate a new replenishment group
+        EXECUTE nspg_GetKey
+                @keyname       = 'REPLENISHGROUP',
+                @fieldlength   = 10,
+                @keystring     = @c_ReplGroup OUTPUT,
+                @b_success     = @b_success OUTPUT,
+                @n_err         = @n_err OUTPUT,
+                @c_errmsg      = @c_errmsg OUTPUT
 
        EXECUTE nspg_GetKey
                   'REPLENISHKEY'
@@ -377,6 +383,7 @@ BEGIN
                ,  @b_success          OUTPUT
                ,  @n_err              OUTPUT
                ,  @c_errmsg           OUTPUT
+
           INSERT INTO REPLENISHMENT (Replenishmentgroup
                    , ReplenishmentKey,StorerKey, Sku, FromLoc, Id, Lot, ToLoc, Qty, UOM, PackKey, Confirmed)
           VALUES (@c_ReplGroup,@c_ReplenishmentKey,@c_StorerKey, @c_Sku, @c_FromLoc, @c_FromId, @c_FromLot, @c_Loc, @n_Qty, @c_UOM, @c_PackKey,'N')
