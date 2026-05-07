@@ -16,6 +16,7 @@ GO
 /* Updates:                                                                                             */
 /* Date         Author          Purpose                                                                 */
 /* 2026-04-13   AKH114          UWP-53936                                                               */
+/* 2026-05-07   AKH114          UWP-55963                                                               */
 /********************************************************************************************************/
 CREATE OR ALTER PROC [RDT].[isp_ArchiveDropId_rdt](
    @cToteID       NVARCHAR(20)
@@ -28,7 +29,6 @@ CREATE OR ALTER PROC [RDT].[isp_ArchiveDropId_rdt](
 AS
 BEGIN
    SET NOCOUNT ON
-   SET XACT_ABORT OFF
 
    DECLARE
       @n_PackDetail_Cnt       INT = 0,
@@ -104,8 +104,8 @@ BEGIN
    BEGIN
       BEGIN TRY
          UPDATE PAD
-         SET PAD.DropID = 'ARC' + PAD.DropID
-         FROM dbo.PackDetail PAD
+         SET PAD.DropID = CONCAT(@cPrefix, PAD.DropID) 
+         FROM dbo.PackDetail PAD WITH (ROWLOCK)
          INNER JOIN @tPackDetail T
             ON PAD.PickSlipNo = T.PickSlipNo
            AND PAD.CartonNo   = T.CartonNo
@@ -150,13 +150,13 @@ BEGIN
    IF EXISTS (SELECT 1 FROM @tPickDetail)
    BEGIN
       BEGIN TRY
-         UPDATE PID
-         SET PID.DropID = CONCAT('ARC', PID.DropID)
+         UPDATE PID   
+         SET PID.DropID = CONCAT(@cPrefix, PID.DropID)
          FROM dbo.PICKDETAIL PID WITH (ROWLOCK)
          INNER JOIN @tPickDetail TPD
             ON PID.PickDetailKey = TPD.PickDetailKey
 
-         SET @n_PickDetail_Cnt   = @@ROWCOUNT
+       SET @n_PickDetail_Cnt   = @@ROWCOUNT
        SELECT @cPickDetail_Keys = STRING_AGG(pickdetailkey, '|')   FROM @tPickDetail
 
       END TRY
@@ -171,6 +171,15 @@ BEGIN
       PRINT 'No records found in @tPickDetail'
    END
 
+   --------------------------------------------------------------------------------------
+   -- In case @n_PackDetail_Cnt = 0 AND @n_PickDetail_Cnt = 0
+   --------------------------------------------------------------------------------------
+   IF (@n_PackDetail_Cnt = 0 AND @n_PickDetail_Cnt = 0)
+   BEGIN
+         SET @nErrNo  = 264759
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         GOTO ROLLBACK_UPD
+   END
    --------------------------------------------------------------------------------------
    -- Audit Insert + WCS Release
    --------------------------------------------------------------------------------------
@@ -203,7 +212,7 @@ BEGIN
       END CATCH
 
       BEGIN TRY
-         DECLARE @bSuccess INT
+         DECLARE @bSuccess INT = 0
 
          EXECUTE ispGenTransmitLog2
             @c_TableName     = 'WSSortTotRel',
@@ -229,8 +238,8 @@ BEGIN
       @cStorerKey                   AS StorerKey,
       @cToteID                      AS OriginalDropId,
       CONCAT(@cPrefix, @cToteID)    AS NewDropId,
-      @cPackDetail_Keys             AS PickDetailExists,
-      @cPickDetail_Keys             AS PackDetailExists,
+      @cPackDetail_Keys             AS PackDetailExists,
+      @cPickDetail_Keys             AS PickDetailExists,
       @n_PickDetail_Cnt             AS PickDetailUpdated,
       @n_PackDetail_Cnt             AS PackDetailUpdated,
       @bSuccess                     AS SorterToteRelease
