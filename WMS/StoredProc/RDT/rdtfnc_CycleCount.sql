@@ -15255,7 +15255,8 @@ BEGIN
                      IF ISNULL(@nErrNo, 0) <> 0 -- FCR-9688
                      BEGIN
                         SET @cValidateSKU = ''
-                        GOTO SINGLE_SKU_Increase_Qty_Fail
+                        EXEC rdt.rdtSetFocusField @nMobile, 3
+                        GOTO Quit
                      END
                   END
                END   -- End for DecodeSP
@@ -15406,7 +15407,8 @@ BEGIN
                   IF ISNULL(@nErrNo, 0) <> 0 -- FCR-9688
                   BEGIN
                      SET @cValidateSKU = ''
-                     GOTO SINGLE_SKU_Increase_Qty_Fail
+                     EXEC rdt.rdtSetFocusField @nMobile, 3
+                     GOTO Quit
                   END
 
                END
