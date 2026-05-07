@@ -514,6 +514,14 @@ BEGIN
                VALUES
                   (@cPickSlipNo, @nCartonNo, @fStdGrossWgt, 0, @nQTY, '', @cDropID, 0, 0, 0, '', '')
             END
+            ELSE
+            BEGIN
+               UPDATE dbo.PackInfo
+               SET QTY = Qty + @nQty,
+                  Weight = Weight + @fStdGrossWgt
+               WHERE PickslipNo = @cPickslipNo
+               AND CartonNo = @nCartonNo
+            END
          END
          ELSE IF NOT EXISTS(SELECT 1 FROM dbo.PackDetail WITH(NOLOCK)
                             WHERE PickslipNo = @cPickslipNo
@@ -558,6 +566,14 @@ BEGIN
                   (PickslipNo, CartonNo, Weight, Cube, QTY, CartonType, RefNo, Length, Width, Height, UCCNo, TrackingNo)
                VALUES
                   (@cPickSlipNo, @nCartonNo, @fStdGrossWgt, 0, @nQTY, '', @cDropID, 0, 0, 0, '', '')
+            END
+            ELSE
+            BEGIN
+               UPDATE dbo.PackInfo
+               SET QTY = Qty + @nQty,
+                  Weight = Weight + @fStdGrossWgt
+               WHERE PickslipNo = @cPickslipNo
+               AND CartonNo = @nCartonNo
             END
          END
          ELSE
