@@ -29,6 +29,7 @@ CREATE OR ALTER PROC [RDT].[isp_ArchiveDropId_rdt](
 AS
 BEGIN
    SET NOCOUNT ON
+   SET XACT_ABORT ON
 
    DECLARE
       @n_PackDetail_Cnt       INT = 0,
@@ -247,7 +248,7 @@ BEGIN
    COMMIT TRAN
 
 ROLLBACK_UPD:
-   IF (XACT_STATE()) = -1
+   IF XACT_STATE() <> 0
       ROLLBACK
 
 END
