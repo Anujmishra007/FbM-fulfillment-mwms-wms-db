@@ -250,11 +250,17 @@ BEGIN
         --  SET @cExtendedInfo1 = ISNULL(@cPackCaseType,'')+' '+ISNULL(@cPackMethod,'') 
          -- Build packing message based on Pickcode and OrderUserDefine01
          SET @cPackingMessage = ''
-         IF @cPickCode = 'CS Only' AND @cOrderUserDefine01 = 'Specialised'
+         IF @cPickCode = 'CS Only' AND @cOrderUserDefine01 IN (SELECT DISTINCT code FROM dbo.CODELKUP   
+             (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'AUTO' AND STORERKEY = @cStorerkey
+         )
             SET @cPackingMessage = 'Do Not Break Case'
-         ELSE IF @cPickCode = 'CS or EA' AND @cOrderUserDefine01 = 'Specialised'
+         ELSE IF @cPickCode = 'CS or EA' AND @cOrderUserDefine01 IN (SELECT DISTINCT code FROM dbo.CODELKUP   
+             (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'AUTO' AND STORERKEY = @cStorerkey
+         )
             SET @cPackingMessage = 'Break the case'
-         ELSE IF ISNULL(@cOrderUserDefine01,'') <> 'Specialised'
+         ELSE IF ISNULL(@cOrderUserDefine01,'') IN (SELECT DISTINCT code FROM dbo.CODELKUP 
+            (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'NOAUTO' AND STORERKEY = @cStorerkey
+         )
             SET @cPackingMessage = 'Consolidate @ PK Stn'
 
          -- Display: Pickcode + Message (limited to 20 chars)
