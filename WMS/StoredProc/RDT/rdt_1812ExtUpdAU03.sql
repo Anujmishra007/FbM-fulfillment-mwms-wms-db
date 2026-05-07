@@ -74,307 +74,470 @@ BEGIN
    -- TM Case Pick
    IF @nFunc = 1812
    BEGIN
-      -- Step 4: SKU/QTY confirmed - Create PACKDETAIL based on conditions
-      IF @nAfterStep = 4
-      BEGIN
-         IF @nInputKey = 1 -- ENTER
-         BEGIN
-            DECLARE @cOrderUserDefine01  NVARCHAR(30) = ''
-            DECLARE @cPickCode           NVARCHAR(10) = ''
-            DECLARE @nCaseCnt            INT = 0
-            DECLARE @fSKULength          FLOAT = 0
-            DECLARE @fSKUWidth           FLOAT = 0
-            DECLARE @fSKUHeight          FLOAT = 0
-            DECLARE @fPackLength         FLOAT = 0
-            DECLARE @fPackWidth          FLOAT = 0
-            DECLARE @fPackHeight         FLOAT = 0
-            DECLARE @cPackKey            NVARCHAR(50) = ''
+      -- -- Step 4: SKU/QTY confirmed - Create PACKDETAIL based on conditions
+      -- IF @nAfterStep = 4
+      -- BEGIN
+      --    IF @nInputKey = 1 -- ENTER
+      --    BEGIN
+      --       DECLARE @cOrderUserDefine01  NVARCHAR(30) = ''
+      --       DECLARE @cPickCode           NVARCHAR(10) = ''
+      --       DECLARE @nCaseCnt            INT = 0
+      --       DECLARE @fSKULength          FLOAT = 0
+      --       DECLARE @fSKUWidth           FLOAT = 0
+      --       DECLARE @fSKUHeight          FLOAT = 0
+      --       DECLARE @fPackLength         FLOAT = 0
+      --       DECLARE @fPackWidth          FLOAT = 0
+      --       DECLARE @fPackHeight         FLOAT = 0
+      --       DECLARE @cPackKey            NVARCHAR(50) = ''
 
-            DECLARE @cPickSlipNo         NVARCHAR(10) = ''
-            DECLARE @nCartonNo           INT = 0
-            DECLARE @nMaxCartonNo        INT = 0
-            DECLARE @cLabelNo            NVARCHAR(20) = ''
-            DECLARE @nLoopCnt            INT = 0
-            DECLARE @nNumRecords         INT = 0
-            DECLARE @cCartonType         NVARCHAR(10) = ''
-            DECLARE @cReportType         NVARCHAR(10) = ''
+      --       DECLARE @cPickSlipNo         NVARCHAR(10) = ''
+      --       DECLARE @nCartonNo           INT = 0
+      --       DECLARE @nMaxCartonNo        INT = 0
+      --       DECLARE @cLabelNo            NVARCHAR(20) = ''
+      --       DECLARE @nLoopCnt            INT = 0
+      --       DECLARE @nNumRecords         INT = 0
+      --       DECLARE @cCartonType         NVARCHAR(10) = ''
+      --       DECLARE @cReportType         NVARCHAR(10) = ''
+      --       DECLARE @cTransmitLogKey     NVARCHAR(10) = ''
 
-            -- Get Orders.UserDefine01
-            IF @cOrderKey <> ''
-               SELECT @cOrderUserDefine01 = ISNULL(UserDefine01, '')
-               FROM dbo.Orders WITH (NOLOCK)
-               WHERE OrderKey = @cOrderKey
+      --       -- Get Orders.UserDefine01
+      --       IF @cOrderKey <> ''
+      --          SELECT @cOrderUserDefine01 = ISNULL(UserDefine01, '')
+      --          FROM dbo.Orders WITH (NOLOCK)
+      --          WHERE OrderKey = @cOrderKey
 
-            -- Get SKU.PickCode, SKU dimensions, and PackKey
-            IF @cSKU <> '' AND @cStorerKey <> ''
-               SELECT @cPickCode = ISNULL(Pickcode, ''),
-                      @fSKULength = ISNULL([Length], 0),
-                      @fSKUWidth = ISNULL(Width, 0),
-                      @fSKUHeight = ISNULL(Height, 0),
-                      @cPackKey = ISNULL(PackKey, '')
-               FROM dbo.SKU WITH (NOLOCK)
-               WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+      --       -- Get SKU.PickCode, SKU dimensions, and PackKey
+      --       IF @cSKU <> '' AND @cStorerKey <> ''
+      --          SELECT @cPickCode = ISNULL(Pickcode, ''),
+      --                 @fSKULength = ISNULL([Length], 0),
+      --                 @fSKUWidth = ISNULL(Width, 0),
+      --                 @fSKUHeight = ISNULL(Height, 0),
+      --                 @cPackKey = ISNULL(PackKey, '')
+      --          FROM dbo.SKU WITH (NOLOCK)
+      --          WHERE StorerKey = @cStorerKey AND SKU = @cSKU
 
-            -- Get Pack.CaseCnt and Pack dimensions
-            IF @cPackKey <> ''
-               SELECT @nCaseCnt = ISNULL(CaseCnt, 0),
-                      @fPackLength = ISNULL(LengthUOM1, 0),
-                      @fPackWidth = ISNULL(WidthUOM1, 0),
-                      @fPackHeight = ISNULL(HeightUOM1, 0)
-               FROM dbo.PACK WITH (NOLOCK)
-               WHERE PackKey = @cPackKey
+      --       -- Get Pack.CaseCnt and Pack dimensions
+      --       IF @cPackKey <> ''
+      --          SELECT @nCaseCnt = ISNULL(CaseCnt, 0),
+      --                 @fPackLength = ISNULL(LengthUOM1, 0),
+      --                 @fPackWidth = ISNULL(WidthUOM1, 0),
+      --                 @fPackHeight = ISNULL(HeightUOM1, 0)
+      --          FROM dbo.PACK WITH (NOLOCK)
+      --          WHERE PackKey = @cPackKey
 
-            -- Get PickSlipNo from PackHeader
-            SELECT @cPickSlipNo = PH.PICKSLIPNO
-            FROM PACKHEADER PH WITH (NOLOCK)
-            WHERE PH.ORDERKEY = @cOrderKey
+      --       -- Get PickSlipNo from PackHeader (or create if not exists)
+      --       SELECT @cPickSlipNo = PH.PICKSLIPNO
+      --       FROM PACKHEADER PH WITH (NOLOCK)
+      --       WHERE PH.ORDERKEY = @cOrderKey
 
-            -- Get max CartonNo for the PickSlipNo
-            SELECT @nMaxCartonNo = ISNULL(MAX(CartonNo), 0)
-            FROM PACKDETAIL WITH (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
+      --       -- -- If PACKHEADER doesn't exist, create PICKHEADER, PICKINGINFO, and PACKHEADER
+      --       -- IF ISNULL(@cPickSlipNo, '') = ''
+      --       -- BEGIN
+      --       --    BEGIN TRAN
+      --       --    SAVE TRAN rdt_1812Header
 
-            -- Get report type from CODELKUP
-            SELECT @cReportType = ISNULL(Code2, '')
-            FROM CODELKUP WITH (NOLOCK)
-            WHERE ListName = 'RDTLBLRPT'
-              AND Code = '3'
-              AND StorerKey = @cStorerKey
+      --       --    -- Generate new PickSlipNo
+      --       --    EXEC nspg_GetKey
+      --       --       @KeyName     = 'PICKSLIP',
+      --       --       @fieldlength = 9,
+      --       --       @keystring   = @cPickSlipNo  OUTPUT,
+      --       --       @b_success   = @bSuccess     OUTPUT,
+      --       --       @n_err       = @nErrNo       OUTPUT,
+      --       --       @c_errmsg    = @cErrMsg      OUTPUT,
+      --       --       @b_resultset = 0,
+      --       --       @n_batch     = 1
+      --       --    IF @bSuccess <> 1 OR @nErrNo <> 0
+      --       --    BEGIN
+      --       --       SET @nErrNo = 263259
+      --       --       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get PickSlipNo Failed
+      --       --       GOTO RollBackHeaderTran
+      --       --    END
 
-            -- Scenario 1: Specialised + CS or EA - Split each unit
-            IF @cOrderUserDefine01 = 'Specialised' AND @cPickCode = 'CS or EA'
-            BEGIN
-               SET @nNumRecords = @nQTY -- Create one record per unit
-               SET @cCartonType = 'EACH'
+      --       --    DECLARE @cPickHeaderKey NVARCHAR(10) = 'P' + @cPickSlipNo
 
-               SET @nLoopCnt = 1
-               WHILE @nLoopCnt <= @nNumRecords
-               BEGIN
-                  BEGIN TRAN
-                  SAVE TRAN rdt_1812ExtUpdAU03
+      --       --    -- Insert PICKHEADER
+      --       --    IF NOT EXISTS (SELECT 1 FROM dbo.PICKHEADER WITH (NOLOCK) WHERE OrderKey = @cOrderKey)
+      --       --    BEGIN
+      --       --       BEGIN TRY
+      --       --          INSERT INTO PICKHEADER (
+      --       --             PickHeaderKey, Orderkey, Storerkey, 
+      --       --             Priority, Type, Zone, Status, PickType
+      --       --          )
+      --       --          SELECT
+      --       --             @cPickHeaderKey, Orderkey, Storerkey, 
+      --       --             Priority, '5', '3', '0', '0'
+      --       --          FROM dbo.ORDERS WITH (NOLOCK)
+      --       --          WHERE Orderkey = @cOrderKey
+      --       --       END TRY
+      --       --       BEGIN CATCH
+      --       --          SET @nErrNo = 263261
+      --       --          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PickHeader Failed
+      --       --          GOTO RollBackHeaderTran
+      --       --       END CATCH
+      --       --    END
 
-                  SET @nCartonNo = @nMaxCartonNo + @nLoopCnt
+      --       --    -- Insert PICKINGINFO
+      --       --    IF NOT EXISTS (SELECT 1 FROM dbo.PICKINGINFO WITH (NOLOCK) WHERE PickSlipNo = @cPickHeaderKey)
+      --       --    BEGIN
+      --       --       BEGIN TRY
+      --       --          INSERT INTO PICKINGINFO (PickSlipNo, ScanInDate, ScanOutDate, PickerID)
+      --       --          VALUES (@cPickHeaderKey, GETDATE(), NULL, @cUserName)
+      --       --       END TRY
+      --       --       BEGIN CATCH
+      --       --          SET @nErrNo = 263262
+      --       --          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PickingInfo Failed
+      --       --          GOTO RollBackHeaderTran
+      --       --       END CATCH
+      --       --    END
 
-                  -- Generate new LabelNo
-                  EXEC dbo.nsp_GenerateKey 'LABELNO', @cStorerKey, @cLabelNo OUTPUT
+      --       --    -- Update PICKDETAIL with PickSlipNo for this order and task
+      --       --    BEGIN TRY
+      --       --       UPDATE PICKDETAIL WITH (ROWLOCK)
+      --       --       SET PickSlipNo = @cPickHeaderKey,
+      --       --           EditWho = @cUserName,
+      --       --           EditDate = GETDATE()
+      --       --       WHERE OrderKey = @cOrderKey
+      --       --         AND TaskDetailKey = @cTaskdetailKey
+      --       --    END TRY
+      --       --    BEGIN CATCH
+      --       --       SET @nErrNo = 263263
+      --       --       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PickDetail Failed
+      --       --       GOTO RollBackHeaderTran
+      --       --    END CATCH
 
-                  -- Insert PACKDETAIL with Qty = 1
-                  BEGIN TRY
-                     INSERT INTO PACKDETAIL (
-                        PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Lot, Qty,
-                        DropID, Status, AddWho, AddDate, EditWho, EditDate
-                     )
-                     VALUES (
-                        @cPickSlipNo, @nCartonNo, @cLabelNo, '00001', @cStorerKey, @cSKU, @cLot, 1,
-                        @cDropID, '0', @cUserName, GETDATE(), @cUserName, GETDATE()
-                     )
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 263251
-                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackDetail Failed
-                     GOTO RollBackTran
-                  END CATCH
+      --       --    -- Insert PACKHEADER
+      --       --    BEGIN TRY
+      --       --       INSERT INTO PACKHEADER (
+      --       --          PickSlipNo, Storerkey, Orderkey, 
+      --       --          LoadKey,  Status, CartonGroup, ManifestPrinted, ConsoOrderKey,
+      --       --          AddWho, AddDate, EditWho, EditDate
+      --       --       )
+      --       --       SELECT
+      --       --          @cPickHeaderKey, O.Storerkey, O.Orderkey,
+      --       --          O.LoadKey,  '0', S.CartonGroup, '', '',
+      --       --          @cUserName, GETDATE(), @cUserName, GETDATE()
+      --       --       FROM ORDERS O WITH (NOLOCK)
+      --       --       JOIN STORER S WITH (NOLOCK) ON O.Storerkey = S.Storerkey
+      --       --       WHERE O.Orderkey = @cOrderKey
+      --       --    END TRY
+      --       --    BEGIN CATCH
+      --       --       SET @nErrNo = 263260
+      --       --       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackHeader Failed
+      --       --       GOTO RollBackHeaderTran
+      --       --    END CATCH
 
-                  -- Update PACKINFO with SKU dimensions
-                  BEGIN TRY
-                     UPDATE PACKINFO
-                     SET [Length] = @fSKULength,
-                         Width = @fSKUWidth,
-                         Height = @fSKUHeight,
-                         CartonType = @cCartonType,
-                         EditWho = @cUserName,
-                         EditDate = GETDATE()
-                     WHERE PickSlipNo = @cPickSlipNo
-                       AND CartonNo = @nCartonNo
+      --       --    SET @cPickSlipNo = @cPickHeaderKey
 
-                     -- If PACKINFO doesn't exist, insert it
-                     IF @@ROWCOUNT = 0
-                     BEGIN
-                        INSERT INTO PACKINFO (
-                           PickSlipNo, CartonNo, StorerKey, [Length], Width, Height, CartonType,
-                           AddWho, AddDate, EditWho, EditDate
-                        )
-                        VALUES (
-                           @cPickSlipNo, @nCartonNo, @cStorerKey, @fSKULength, @fSKUWidth, @fSKUHeight, @cCartonType,
-                           @cUserName, GETDATE(), @cUserName, GETDATE()
-                        )
-                     END
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 263252
-                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PackInfo Failed
-                     GOTO RollBackTran
-                  END CATCH
+      --       --    COMMIT TRAN rdt_1812Header
+      --       -- END
 
-                  -- Insert Transmitlog2 for Specialised orders
-                  BEGIN TRY
-                     INSERT INTO Transmitlog2 (
-                        Key1, Key2, Key3, TableName, AddWho, AddDate
-                     )
-                     VALUES (
-                        @cPickSlipNo, CAST(@nCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
-                     )
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 263253
-                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed
-                     GOTO RollBackTran
-                  END CATCH
+      --       -- Get max CartonNo for the PickSlipNo
+      --       SELECT @nMaxCartonNo = ISNULL(MAX(CartonNo), 0)
+      --       FROM PACKDETAIL WITH (NOLOCK)
+      --       WHERE PickSlipNo = @cPickSlipNo
 
-                  -- Print SSCC Label for each PACKDETAIL.LabelNo
-                  IF @cReportType <> '' AND ISNULL(@cLabelPrinter, '') <> ''
-                  BEGIN
-                     DECLARE @tSSCCLabel AS VariableTable
-                     DELETE FROM @tSSCCLabel
+      --       -- Get report type from CODELKUP
+      --       SELECT @cReportType = ISNULL(Code2, '')
+      --       FROM CODELKUP WITH (NOLOCK)
+      --       WHERE ListName = 'RDTLBLRPT'
+      --         AND Code = '3'
+      --         AND StorerKey = @cStorerKey
 
-                     INSERT INTO @tSSCCLabel (Variable, Value) VALUES
-                        ('@cStorerKey', @cStorerKey),
-                        ('@cLabelNo', @cLabelNo)
+      --       -- Scenario 1: Specialised + CS or EA - Split each unit
+      --       IF @cOrderUserDefine01 = 'Specialised' AND @cPickCode = 'CS or EA'
+      --       BEGIN
+      --          SET @nNumRecords = @nQTY -- Create one record per unit
+      --          SET @cCartonType = 'EACH'
 
-                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-                        @cReportType,
-                        @tSSCCLabel,
-                        'rdt_1812ExtUpdAU03',
-                        @nErrNo OUTPUT,
-                        @cErrMsg OUTPUT
-                  END
+      --          SET @nLoopCnt = 1
+      --          WHILE @nLoopCnt <= @nNumRecords
+      --          BEGIN
+      --             BEGIN TRAN
+      --             SAVE TRAN rdt_1812ExtUpdAU03
 
-                  COMMIT TRAN rdt_1812ExtUpdAU03
+      --             SET @nCartonNo = @nMaxCartonNo + @nLoopCnt
 
-                  SET @nLoopCnt = @nLoopCnt + 1
-               END
-            END
-            -- Scenario 2: Specialised + CS only - Split by case count
-            ELSE IF @cOrderUserDefine01 = 'Specialised' AND @cPickCode = 'CS Only'
-            BEGIN
-               -- Calculate number of cases (round up if partial case)
-               IF @nCaseCnt > 0
-                  SET @nNumRecords = CEILING(CAST(@nQTY AS FLOAT) / CAST(@nCaseCnt AS FLOAT))
-               ELSE
-                  SET @nNumRecords = 1
+      --             -- Generate new LabelNo
+      --             EXEC isp_GenUCCLabelNo
+      --                @cStorerKey,
+      --                @cLabelNo      OUTPUT,
+      --                @bSuccess      OUTPUT,
+      --                @nErrNo        OUTPUT,
+      --                @cErrMsg       OUTPUT
+      --             IF @nErrNo <> 0
+      --                GOTO RollBackTran
 
-               SET @cCartonType = 'MFCARTON'
+      --             -- Insert PACKDETAIL with Qty = 1
+      --             BEGIN TRY
+      --                INSERT INTO PACKDETAIL (
+      --                   PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty,
+      --                   DropID, AddWho, AddDate, EditWho, EditDate
+      --                )
+      --                VALUES (
+      --                   @cPickSlipNo, @nCartonNo, @cLabelNo, '00001', @cStorerKey, @cSKU, 1,
+      --                   @cDropID, @cUserName, GETDATE(), @cUserName, GETDATE()
+      --                )
+      --             END TRY
+      --             BEGIN CATCH
+      --                SET @nErrNo = 263251
+      --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackDetail Failed
+      --                GOTO RollBackTran
+      --             END CATCH
 
-               SET @nLoopCnt = 1
-               DECLARE @nRemainingQty INT = @nQTY
-               DECLARE @nCaseQty INT = 0
+      --             -- Update PACKINFO with SKU dimensions
+      --             BEGIN TRY
+      --                UPDATE PACKINFO
+      --                SET [Length] = @fSKULength,
+      --                    Width = @fSKUWidth,
+      --                    Height = @fSKUHeight,
+      --                    CartonType = @cCartonType,
+      --                    EditWho = @cUserName,
+      --                    EditDate = GETDATE()
+      --                WHERE PickSlipNo = @cPickSlipNo
+      --                  AND CartonNo = @nCartonNo
 
-               WHILE @nLoopCnt <= @nNumRecords AND @nRemainingQty > 0
-               BEGIN
-                  BEGIN TRAN
-                  SAVE TRAN rdt_1812ExtUpdAU03
+      --                -- If PACKINFO doesn't exist, insert it
+      --                IF @@ROWCOUNT = 0
+      --                BEGIN
+      --                   INSERT INTO PACKINFO (
+      --                      PickSlipNo, CartonNo, [Length], Width, Height, CartonType,
+      --                      AddWho, AddDate, EditWho, EditDate
+      --                   )
+      --                   VALUES (
+      --                      @cPickSlipNo, @nCartonNo, @fSKULength, @fSKUWidth, @fSKUHeight, @cCartonType,
+      --                      @cUserName, GETDATE(), @cUserName, GETDATE()
+      --                   )
+      --                END
+      --             END TRY
+      --             BEGIN CATCH
+      --                SET @nErrNo = 263252
+      --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PackInfo Failed
+      --                GOTO RollBackTran
+      --             END CATCH
 
-                  SET @nCartonNo = @nMaxCartonNo + @nLoopCnt
+      --             -- Insert Transmitlog2 for Specialised orders
+      --             EXEC nspg_GetKey 'TRANSMITLOGKEY2', 10, @cTransmitLogKey OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+      --             IF @bSuccess <> 1 OR @nErrNo <> 0
+      --             BEGIN
+      --                SET @nErrNo = 263257
+      --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get TransmitKey Failed
+      --                GOTO RollBackTran
+      --             END
 
-                  -- Calculate qty for this case
-                  IF @nRemainingQty >= @nCaseCnt
-                     SET @nCaseQty = @nCaseCnt
-                  ELSE
-                     SET @nCaseQty = @nRemainingQty
+      --             BEGIN TRY
+      --                INSERT INTO Transmitlog2 (
+      --                   TransmitLogKey, Key1, Key2, Key3, TableName, AddWho, AddDate
+      --                )
+      --                VALUES (
+      --                   @cTransmitLogKey, @cPickSlipNo, CAST(@nCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
+      --                )
+      --             END TRY
+      --             BEGIN CATCH
+      --                SET @nErrNo = 263253
+      --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed
+      --                GOTO RollBackTran
+      --             END CATCH
 
-                  SET @nRemainingQty = @nRemainingQty - @nCaseQty
+      --             -- Print SSCC Label for each PACKDETAIL.LabelNo
+      --             IF @cReportType <> '' AND ISNULL(@cLabelPrinter, '') <> ''
+      --             BEGIN
+      --                DECLARE @tSSCCLabel AS VariableTable
+      --                DELETE FROM @tSSCCLabel
 
-                  -- Generate new LabelNo
-                  EXEC dbo.nsp_GenerateKey 'LABELNO', @cStorerKey, @cLabelNo OUTPUT
+      --                INSERT INTO @tSSCCLabel (Variable, Value) VALUES
+      --                   ('@cStorerKey', @cStorerKey),
+      --                   ('@cLabelNo', @cLabelNo)
 
-                  -- Insert PACKDETAIL with case qty
-                  BEGIN TRY
-                     INSERT INTO PACKDETAIL (
-                        PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Lot, Qty,
-                        DropID, Status, AddWho, AddDate, EditWho, EditDate
-                     )
-                     VALUES (
-                        @cPickSlipNo, @nCartonNo, @cLabelNo, '00001', @cStorerKey, @cSKU, @cLot, @nCaseQty,
-                        @cDropID, '0', @cUserName, GETDATE(), @cUserName, GETDATE()
-                     )
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 263254
-                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackDetail Failed (CS Only)
-                     GOTO RollBackTran
-                  END CATCH
+      --                EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+      --                   @cReportType,
+      --                   @tSSCCLabel,
+      --                   'rdt_1812ExtUpdAU03',
+      --                   @nErrNo OUTPUT,
+      --                   @cErrMsg OUTPUT
+      --                IF @nErrNo <> 0
+      --                   GOTO RollBackTran
+      --             END
 
-                  -- Update PACKINFO with PACK dimensions
-                  BEGIN TRY
-                     UPDATE PACKINFO
-                     SET [Length] = @fPackLength,
-                         Width = @fPackWidth,
-                         Height = @fPackHeight,
-                         CartonType = @cCartonType,
-                         EditWho = @cUserName,
-                         EditDate = GETDATE()
-                     WHERE PickSlipNo = @cPickSlipNo
-                       AND CartonNo = @nCartonNo
+      --             COMMIT TRAN rdt_1812ExtUpdAU03
 
-                     -- If PACKINFO doesn't exist, insert it
-                     IF @@ROWCOUNT = 0
-                     BEGIN
-                        INSERT INTO PACKINFO (
-                           PickSlipNo, CartonNo, StorerKey, [Length], Width, Height, CartonType,
-                           AddWho, AddDate, EditWho, EditDate
-                        )
-                        VALUES (
-                           @cPickSlipNo, @nCartonNo, @cStorerKey, @fPackLength, @fPackWidth, @fPackHeight, @cCartonType,
-                           @cUserName, GETDATE(), @cUserName, GETDATE()
-                        )
-                     END
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 263255
-                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PackInfo Failed (CS Only)
-                     GOTO RollBackTran
-                  END CATCH
+      --             SET @nLoopCnt = @nLoopCnt + 1
+      --          END
+      --       END
+      --       -- Scenario 2: Specialised + CS only - Split by case count
+      --       ELSE IF @cOrderUserDefine01 = 'Specialised' AND @cPickCode = 'CS Only'
+      --       BEGIN
+      --          -- Calculate number of cases (round up if partial case)
+      --          IF @nCaseCnt > 0
+      --             SET @nNumRecords = CEILING(CAST(@nQTY AS FLOAT) / CAST(@nCaseCnt AS FLOAT))
+      --          ELSE
+      --             SET @nNumRecords = 1
 
-                  -- Insert Transmitlog2 for Specialised orders
-                  BEGIN TRY
-                     INSERT INTO Transmitlog2 (
-                        Key1, Key2, Key3, TableName, AddWho, AddDate
-                     )
-                     VALUES (
-                        @cPickSlipNo, CAST(@nCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
-                     )
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 263256
-                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed (CS Only)
-                     GOTO RollBackTran
-                  END CATCH
+      --          SET @cCartonType = 'MFCARTON'
 
-                  -- Print SSCC Label for each PACKDETAIL.LabelNo
-                  IF @cReportType <> '' AND ISNULL(@cLabelPrinter, '') <> ''
-                  BEGIN
-                     DECLARE @tSSCCLabel2 AS VariableTable
-                     DELETE FROM @tSSCCLabel2
+      --          SET @nLoopCnt = 1
+      --          DECLARE @nRemainingQty INT = @nQTY
+      --          DECLARE @nCaseQty INT = 0
 
-                     INSERT INTO @tSSCCLabel2 (Variable, Value) VALUES
-                        ('@cStorerKey', @cStorerKey),
-                        ('@cLabelNo', @cLabelNo)
+      --          WHILE @nLoopCnt <= @nNumRecords AND @nRemainingQty > 0
+      --          BEGIN
+      --             BEGIN TRAN
+      --             SAVE TRAN rdt_1812ExtUpdAU03
 
-                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-                        @cReportType,
-                        @tSSCCLabel2,
-                        'rdt_1812ExtUpdAU03',
-                        @nErrNo OUTPUT,
-                        @cErrMsg OUTPUT
-                  END
+      --             SET @nCartonNo = @nMaxCartonNo + @nLoopCnt
 
-                  COMMIT TRAN rdt_1812ExtUpdAU03
+      --             -- Calculate qty for this case
+      --             IF @nRemainingQty >= @nCaseCnt
+      --                SET @nCaseQty = @nCaseCnt
+      --             ELSE
+      --                SET @nCaseQty = @nRemainingQty
 
-                  SET @nLoopCnt = @nLoopCnt + 1
-               END
-            END
-            -- Scenario 3: NOT Specialised - Do NOT insert anything into PACKDETAIL
-            -- (No action needed)
+      --             SET @nRemainingQty = @nRemainingQty - @nCaseQty
 
-         END
-      END
+      --             -- Generate new LabelNo
+      --             EXEC isp_GenUCCLabelNo
+      --                @cStorerKey,
+      --                @cLabelNo      OUTPUT,
+      --                @bSuccess      OUTPUT,
+      --                @nErrNo        OUTPUT,
+      --                @cErrMsg       OUTPUT
+      --             IF @nErrNo <> 0
+      --                GOTO RollBackTran
+
+      --             -- Insert PACKDETAIL with case qty
+      --             BEGIN TRY
+      --                INSERT INTO PACKDETAIL (
+      --                   PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty,
+      --                   DropID, AddWho, AddDate, EditWho, EditDate
+      --                )
+      --                VALUES (
+      --                   @cPickSlipNo, @nCartonNo, @cLabelNo, '00001', @cStorerKey, @cSKU, @nCaseQty,
+      --                   @cDropID, @cUserName, GETDATE(), @cUserName, GETDATE()
+      --                )
+      --             END TRY
+      --             BEGIN CATCH
+      --                SET @nErrNo = 263254
+      --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackDetail Failed (CS Only)
+      --                GOTO RollBackTran
+      --             END CATCH
+
+      --             -- Update PACKINFO with PACK dimensions
+      --             BEGIN TRY
+      --                UPDATE PACKINFO
+      --                SET [Length] = @fPackLength,
+      --                    Width = @fPackWidth,
+      --                    Height = @fPackHeight,
+      --                    CartonType = @cCartonType,
+      --                    EditWho = @cUserName,
+      --                    EditDate = GETDATE()
+      --                WHERE PickSlipNo = @cPickSlipNo
+      --                  AND CartonNo = @nCartonNo
+
+      --                -- If PACKINFO doesn't exist, insert it
+      --                IF @@ROWCOUNT = 0
+      --                BEGIN
+      --                   INSERT INTO PACKINFO (
+      --                      PickSlipNo, CartonNo, [Length], Width, Height, CartonType,
+      --                      AddWho, AddDate, EditWho, EditDate
+      --                   )
+      --                   VALUES (
+      --                      @cPickSlipNo, @nCartonNo, @fPackLength, @fPackWidth, @fPackHeight, @cCartonType,
+      --                      @cUserName, GETDATE(), @cUserName, GETDATE()
+      --                   )
+      --                END
+      --             END TRY
+      --             BEGIN CATCH
+      --                SET @nErrNo = 263255
+      --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PackInfo Failed (CS Only)
+      --                GOTO RollBackTran
+      --             END CATCH
+
+      --             -- Insert Transmitlog2 for Specialised orders
+      --             EXEC nspg_GetKey 'TRANSMITLOGKEY2', 10, @cTransmitLogKey OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+      --             IF @bSuccess <> 1 OR @nErrNo <> 0
+      --             BEGIN
+      --                SET @nErrNo = 263258
+      --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Get TransmitKey Failed (CS Only)
+      --                GOTO RollBackTran
+      --             END
+
+      --             BEGIN TRY
+      --                INSERT INTO Transmitlog2 (
+      --                   TransmitLogKey, Key1, Key2, Key3, TableName, AddWho, AddDate
+      --                )
+      --                VALUES (
+      --                   @cTransmitLogKey, @cPickSlipNo, CAST(@nCartonNo AS NVARCHAR(10)), @cStorerKey, 'WSCRCTNMW', @cUserName, GETDATE()
+      --                )
+      --             END TRY
+      --             BEGIN CATCH
+      --                SET @nErrNo = 263256
+      --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert TransmitLog Failed (CS Only)
+      --                GOTO RollBackTran
+      --             END CATCH
+
+      --             -- Print SSCC Label for each PACKDETAIL.LabelNo
+      --             IF @cReportType <> '' AND ISNULL(@cLabelPrinter, '') <> ''
+      --             BEGIN
+      --                DECLARE @tSSCCLabel2 AS VariableTable
+      --                DELETE FROM @tSSCCLabel2
+
+      --                INSERT INTO @tSSCCLabel2 (Variable, Value) VALUES
+      --                   ('@cStorerKey', @cStorerKey),
+      --                   ('@cLabelNo', @cLabelNo)
+
+      --                EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+      --                   @cReportType,
+      --                   @tSSCCLabel2,
+      --                   'rdt_1812ExtUpdAU03',
+      --                   @nErrNo OUTPUT,
+      --                   @cErrMsg OUTPUT
+      --                IF @nErrNo <> 0
+      --                   GOTO RollBackTran
+      --             END
+
+      --             COMMIT TRAN rdt_1812ExtUpdAU03
+
+      --             SET @nLoopCnt = @nLoopCnt + 1
+      --          END
+      --       END
+      --       -- Scenario 3: NOT Specialised - Do NOT insert PACKDETAIL, but print label by TaskDetailKey
+      --       ELSE
+      --       BEGIN
+      --          -- Get report type from CODELKUP Code = 4 (for TaskDetailKey printing)
+      --          DECLARE @cReportType4 NVARCHAR(10) = ''
+      --          SELECT @cReportType4 = ISNULL(Code2, '')
+      --          FROM CODELKUP WITH (NOLOCK)
+      --          WHERE ListName = 'RDTLBLRPT'
+      --            AND Code = '4'
+      --            AND StorerKey = @cStorerKey
+
+      --          -- Print label by TaskDetailKey
+      --          IF @cReportType4 <> '' AND ISNULL(@cLabelPrinter, '') <> ''
+      --          BEGIN
+      --             DECLARE @tTaskLabel AS VariableTable
+      --             DELETE FROM @tTaskLabel
+
+      --             INSERT INTO @tTaskLabel (Variable, Value) VALUES
+      --                ('@cStorerKey', @cStorerKey),
+      --                ('@cTaskDetailKey', @cTaskdetailKey)
+
+      --             EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+      --                @cReportType4,
+      --                @tTaskLabel,
+      --                'rdt_1812ExtUpdAU03',
+      --                @nErrNo OUTPUT,
+      --                @cErrMsg OUTPUT
+      --          END
+      --       END
+
+      --    END
+      -- END
 
       IF @nStep = 6 -- ToLOC
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            DECLARE @cLabelNo          NVARCHAR(20) = ''
-            DECLARE @cPickSlipNo       NVARCHAR(10) = ''
+            DECLARE @cLabelNo01          NVARCHAR(20) = ''
+            DECLARE @cPickSlipNo01       NVARCHAR(10) = ''
             DECLARE @cLoadKey          NVARCHAR(10) = ''
 
             DECLARE @cPalletLabel        NVARCHAR( 10)
@@ -566,7 +729,7 @@ BEGIN
                AND ISNULL(@cLabelPrinter,'') <> ''
             BEGIN
 
-               SELECT TOP 1 @cLabelNo = PD.LABELNO, @cPickSlipNo =  PD.PICKSLIPNO, @nCartonNo6 = PD.CARTONNO
+               SELECT TOP 1 @cLabelNo01 = PD.LABELNO, @cPickSlipNo01 =  PD.PICKSLIPNO, @nCartonNo6 = PD.CARTONNO
                FROM PACKDETAIL PD (NOLOCK)
                JOIN PACKHEADER PH (NOLOCK) ON PD.PICKSLIPNO = PH.PICKSLIPNO
                WHERE PH.ORDERKEY = @cOrderKey
@@ -575,10 +738,10 @@ BEGIN
 
                INSERT INTO @tShipLabel (Variable, Value) VALUES
                   ( '@cStorerKey',     @cStorerKey),
-                  ( '@cPickSlipNo',    @cPickSlipNo),
+                  ( '@cPickSlipNo',    @cPickSlipNo01),
                   ( '@cFromDropID',    @cDropID),
                   ( '@cPackDtlDropID', @cDropID),
-                  ( '@cLabelNo',       @cLabelNo),
+                  ( '@cLabelNo',       @cLabelNo01),
                   ( '@nCartonNo',      CAST( @nCartonNo6 AS NVARCHAR(10)))
 
          -- Print label
@@ -615,7 +778,7 @@ BEGIN
             END
             */
 
-            SELECT @cPickSlipNo = PH.PICKSLIPNO,
+            SELECT @cPickSlipNo01 = PH.PICKSLIPNO,
                    @cOrderKey   = ISNULL(PH.ORDERKEY,''),
                    @cLoadKey    = ISNULL(O.LOADKEY,'')
             FROM PACKHEADER PH (NOLOCK)
@@ -623,7 +786,7 @@ BEGIN
             WHERE O.ORDERKEY = @cOrderKey
 
             IF EXISTS (
-               SELECT TOP 1 1 FROM PACKHEADER (NOLOCK) WHERE PICKSLIPNO = @cPickSlipNo AND STATUS = '9')
+               SELECT TOP 1 1 FROM PACKHEADER (NOLOCK) WHERE PICKSLIPNO = @cPickSlipNo01 AND STATUS = '9')
             BEGIN
                DECLARE @cPackList NVARCHAR( 10)
 
@@ -636,7 +799,7 @@ BEGIN
                   DECLARE @tPackList AS VariableTable
                   INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
                   INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                  INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+                  INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo01)
                END
 
                IF @cPackList <> '' AND ISNULL(@cLabelPrinter,'') <> ''
@@ -649,7 +812,7 @@ BEGIN
                      --DECLARE @tPackList AS VariableTable
                      --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
                      --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                     --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+                     --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo01)
 
                      -- Print label
                      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
@@ -664,7 +827,7 @@ BEGIN
                      --DECLARE @tPackList AS VariableTable
                      --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
                      --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                     --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+                     --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo01)
 
                     -- Print label
                      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
@@ -680,7 +843,7 @@ BEGIN
                   --DECLARE @tPackList AS VariableTable
                   --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
                   --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                  --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+                  --INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo01)
 
                  -- Print label
                   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,
@@ -695,6 +858,10 @@ BEGIN
       END
    END
 
+   GOTO Quit
+
+RollBackHeaderTran:
+   ROLLBACK TRAN rdt_1812Header
    GOTO Quit
 
 RollBackTran:
