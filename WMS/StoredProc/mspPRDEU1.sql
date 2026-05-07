@@ -349,11 +349,9 @@ END
         N' AND SKUxLOC.LOC = LOTxLOCxID.LOC ' +
         N' GROUP BY LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 ' +
         N' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked) - MIN(LOT.QtyPreAllocated)) >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
-        N' ORDER BY ' + 
-        -- N' CASE WHEN (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) >= ' + @c_UOMBase + N' ' +
-        -- N' AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) % ' + @c_UOMBase + N' = 0 ' +
-        -- N' THEN 1 ELSE 0 END, ' +
-        N' SUM(LOTXLOCXID.QTY) DESC, ' +
+        N' AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) % ' + @c_UOMBase + N' > 0 ' +
+        N' ORDER BY ' +
+        N' (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) DESC, ' +
         N' LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 ) T2'
         --AYD01 END
         -- Execute Manual=N Query
@@ -528,11 +526,9 @@ END
         N'AND (SKUxLOC.LocationType NOT IN (''PICK'', ''CASE'') OR SKUxLOC.LocationType IN (''PICK'', ''CASE'')) ' +
         N'GROUP BY LOT.LOT, SKUxLOC.LocationType, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.LOTTABLE05 ' +
         N' HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked) - MIN(LOT.QtyPreAllocated)) >= ' + CAST(@n_uombase AS NVARCHAR) + ' ' +
+        N' AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) % ' + @c_UOMBase + N' > 0 ' +
         N' ORDER BY ' +
-        -- N' CASE WHEN (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) >= ' + @c_UOMBase + N' ' +
-        -- N'                     AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) % ' + @c_UOMBase + N' = 0 ' +
-        -- N'               THEN 1 ELSE 0 END, ' +
-        N' SUM(LOTXLOCXID.QTY) DESC, ' +
+        N' (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) DESC, ' +
         N' SKUxLOC.LocationType, LOTATTRIBUTE.Lottable04,LOTATTRIBUTE.LOTTABLE02, LOTATTRIBUTE.Lottable05 ' +
         N') T2'
         --AYD01 END
