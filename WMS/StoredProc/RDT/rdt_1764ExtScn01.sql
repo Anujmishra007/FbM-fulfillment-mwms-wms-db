@@ -666,6 +666,27 @@ BEGIN
             COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
          END
       END
+      ELSE IF @nCurrentStep = @nStep_NextTask -- Continue Next Task/ClosePallet
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            SET @cOption = @cInField01
+            IF @cOption = '9' -- Close Pallet
+            BEGIN
+               IF @cPickModeFlag = '1'
+               BEGIN
+                  SET @nAfterScn = @nScn_NewExit
+                  SET @nAfterStep = @nStep_99
+
+                  SET @cOutField01 = @cToLoc
+                  SET @cOutField02 = '1'
+                  SET @cOutField03 = 'UCC Moved'
+                  SET @cOutField04 = ''
+                  GOTO Quit
+               END
+            END
+         END
+      END
       ELSE IF @nCurrentStep = @nStep_ShortPick -- Short Pick
       BEGIN
          IF @nInputKey = 1 -- ENTER
