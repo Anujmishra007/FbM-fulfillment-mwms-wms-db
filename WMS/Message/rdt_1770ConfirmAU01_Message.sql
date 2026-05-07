@@ -1,32 +1,32 @@
--- 262601 - 262650
+-- 263351 - 263400
 --rdt_1770ConfirmAU01
-execute rdt.rdtdropmsg 262601, 262650
+execute rdt.rdtdropmsg 263351, 263400
 
-execute rdt.rdtAddMsg 262601, 10, '262601IncorrectSetup', 'us_english', 1770
-execute rdt.rdtAddMsg 262602, 10, '262602IncorrectSetup', 'us_english', 1770
-execute rdt.rdtAddMsg 262603, 10, '262603UpdPickDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262604, 10, '262604UpdPickDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262605, 10, '262605UpdPickDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262606, 10, '262606GetDetKey Fail', 'us_english', 1770
-execute rdt.rdtAddMsg 262607, 10, '262607Ins PDtl Fail ', 'us_english', 1770
-execute rdt.rdtAddMsg 262608, 10, '262608InsRefKeyFail ', 'us_english', 1770
-execute rdt.rdtAddMsg 262609, 10, '262609UpdPickDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262610, 10, '262610UpdPickDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262611, 10, '262611UpdPickDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262612, 10, '262612Offset error  ', 'us_english', 1770
-execute rdt.rdtAddMsg 262613, 10, '262613UpdTaskdetFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262614, 10, '262614UpdTaskdetFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262615, 10, '262615InsPHdrFail   ', 'us_english', 1770
-execute rdt.rdtAddMsg 262616, 10, '262616GenLabelNoFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262617, 10, '262617INSPackDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262618, 10, '262618UPDPackDtlFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262619, 10, '262619INS PDInfoFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262620, 10, '262620UPD PDInfoFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262621, 10, '262621INSPackInfFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262622, 10, '262622UPDPackInfFail', 'us_english', 1770
-execute rdt.rdtAddMsg 262623, 10, '262623INSPLTDtlFail ', 'us_english', 1770
-execute rdt.rdtAddMsg 262624, 10, '262624INS MBOL Fail ', 'us_english', 1770
-execute rdt.rdtAddMsg 262625, 10, '262625INS MBDtl Fail', 'us_english', 1770
-execute rdt.rdtAddMsg 262626, 10, '262626INSPKHdrFail  ', 'us_english', 1770
-execute rdt.rdtAddMsg 262627, 10, '262627UPD PLTDL Err ', 'us_english', 1770
-execute rdt.rdtAddMsg 262628, 10, '262628UPDPLTHdrFail ', 'us_english', 1770
+execute rdt.rdtAddMsg 263351, 10, '263351IncorrectSetup', 'us_english', 1770
+execute rdt.rdtAddMsg 263352, 10, '263352IncorrectSetup', 'us_english', 1770
+execute rdt.rdtAddMsg 263353, 10, '263353UpdPickDtlFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263354, 10, '263354UpdPickDtlFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263355, 10, '263355UpdPickDtlFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263356, 10, '263356GetDetKey Fail', 'us_english', 1770
+execute rdt.rdtAddMsg 263357, 10, '263357Ins PDtl Fail ', 'us_english', 1770
+execute rdt.rdtAddMsg 263358, 10, '263358InsRefKeyFail ', 'us_english', 1770
+execute rdt.rdtAddMsg 263359, 10, '263359UpdPickDtlFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263360, 10, '263360UpdPickDtlFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263361, 10, '263361UpdPickDtlFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263362, 10, '263362Offset error  ', 'us_english', 1770
+execute rdt.rdtAddMsg 263363, 10, '263363UpdTaskdetFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263364, 10, '263364UpdTaskdetFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263365, 10, '263365InsPHdrFail   ', 'us_english', 1770
+execute rdt.rdtAddMsg 263366, 10, '263366GenLabelNoFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263367, 10, '263367INSPackDtlFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263368, 10, '263368UPDPackDtlFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263369, 10, '263369INS PDInfoFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263370, 10, '263370UPD PDInfoFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263371, 10, '263371INSPackInfFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263372, 10, '263372UPDPackInfFail', 'us_english', 1770
+execute rdt.rdtAddMsg 263373, 10, '263373INSPLTDtlFail ', 'us_english', 1770
+execute rdt.rdtAddMsg 263374, 10, '263374INS MBOL Fail ', 'us_english', 1770
+execute rdt.rdtAddMsg 263375, 10, '263375INS MBDtl Fail', 'us_english', 1770
+execute rdt.rdtAddMsg 263376, 10, '263376INSPKHdrFail  ', 'us_english', 1770
+execute rdt.rdtAddMsg 263377, 10, '263377UPD PLTDL Err ', 'us_english', 1770
+execute rdt.rdtAddMsg 263378, 10, '263378UPDPLTHdrFail ', 'us_english', 1770
