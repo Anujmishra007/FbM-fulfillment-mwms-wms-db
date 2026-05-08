@@ -140,8 +140,8 @@ BEGIN
       @cExtendedScreenSP    NVARCHAR(20) ,--(wsa099)
 
       @cTempLottable01   NVARCHAR(18), --input field lottable01 from lottable screen
-      @cTempLottable02   NVARCHAR(18), --input field lottable02 from lottable screen
-      @cTempLottable03   NVARCHAR(18), --input field lottable03 from lottable screen
+      -- @cTempLottable02   NVARCHAR(18), --input field lottable02 from lottable screen
+      -- @cTempLottable03   NVARCHAR(18), --input field lottable03 from lottable screen
       @cTempLottable04   NVARCHAR(16), --input field lottable04 from lottable screen
 
       @cTempLotLabel01   NVARCHAR(20),
@@ -220,8 +220,8 @@ BEGIN
       @cPQIndicator     = ISNULL(RTRIM(V_String8),'0'),
       @cPPK             = ISNULL(RTRIM(V_String9),'0'),
       @cTempLottable01  = V_String12,
-      @cTempLottable02  = V_String13,
-      @cTempLottable03  = V_String14,
+      -- @cTempLottable02  = V_String13,
+      -- @cTempLottable03  = V_String14,
       @cTempLottable04  = V_String15,
       @cUCCWithMultiSKU = V_String16,
       @cReceiveAllowAddNewUCC = V_String17,
