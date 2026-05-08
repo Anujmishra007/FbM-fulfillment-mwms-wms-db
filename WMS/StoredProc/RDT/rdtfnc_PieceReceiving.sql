@@ -169,6 +169,7 @@ GO
 /* 2025-03-25 12.1 YeeKung    FCR-3145 Add Out for rdt_serialNo Params   */
 /* 2025-07-14 12.2 Cuize      FCR-990 Chang Errno = -2                    */
 /* 2025-07-28 0.0  JackC      !!!Cutover!!! Use V2 version in V0 repo for work */
+/* 2026-04-15 12.3 NYE018     FCR-12224 Clear SN field on validation error*/
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -4883,7 +4884,11 @@ BEGIN
       END
 
       IF @nErrNo <> 0 -- (james31)
+      BEGIN
+         SET @cMax = ''        -- FCR-12224: Clear serial number on error
+
          GOTO Quit
+      END
 
       DECLARE @nRDQTY INT
       IF @nBulkSNO > 0
