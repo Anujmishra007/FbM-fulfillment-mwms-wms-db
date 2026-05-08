@@ -62,7 +62,8 @@ BEGIN
    DECLARE @nPackQTY  INT  
    DECLARE @nPickQTY  INT  
    DECLARE @cPickStatus  NVARCHAR( 20) = '5'  -- Status 5 = Picked
-   DECLARE @cPackConfirm NVARCHAR( 1)  
+   DECLARE @cPackConfirm NVARCHAR( 1)
+   DECLARE @cFullyPickedCheck NVARCHAR( 1)
 
    SELECT @nScn = SCN FROM RDT.rdtMobRec WHERE Mobile = @nMobile
 
@@ -70,79 +71,85 @@ BEGIN
    BEGIN
       IF @nScn = 6861
       BEGIN
-         -- Get PickHeader info  
-         SELECT TOP 1  
-            @cOrderKey = OrderKey,  
-            @cLoadKey = ExternOrderKey,  
-            @cZone = Zone  
-         FROM dbo.PickHeader WITH (NOLOCK)  
-         WHERE PickHeaderKey = @cPickSlipNo  
+         -- Get FullyPickedCheck config
+         SET @cFullyPickedCheck = rdt.RDTGetConfig( @nFunc, 'FullyPickedCheck', @cStorerKey)
 
-         -- Cross dock PickSlip  
-         IF @cZone IN ('XD', 'LB', 'LP')  
-         BEGIN  
-            -- Check outstanding PickDetail  
-            IF EXISTS( SELECT TOP 1 1  
-               FROM dbo.RefKeyLookup RKL WITH (NOLOCK)  
-                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)  
-               WHERE RKL.PickSlipNo = @cPickSlipNo  
-                  AND PD.Status < '5'  
-                  AND PD.QTY > 0  
-                  AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
-               SET @cPackConfirm = 'N'  
-            ELSE  
-               SET @cPackConfirm = 'Y' 
-         END  
-         -- Discrete PickSlip  
-         ELSE IF @cOrderKey <> ''  
-         BEGIN  
-            -- Check outstanding PickDetail  
-            IF EXISTS( SELECT TOP 1 1  
-               FROM dbo.PickDetail PD WITH (NOLOCK)  
-               WHERE PD.OrderKey = @cOrderKey  
-                  AND PD.Status < '5'  
-                  AND PD.QTY > 0  
-                  AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
-               SET @cPackConfirm = 'N'  
-            ELSE  
-               SET @cPackConfirm = 'Y'  
-         END 
-         -- Conso PickSlip  
-         ELSE IF @cLoadKey <> ''  
-         BEGIN  
-            -- Check outstanding PickDetail  
-            IF EXISTS( SELECT TOP 1 1   
-               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)   
-                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)  
-               WHERE LPD.LoadKey = @cLoadKey  
-                  AND PD.Status < '5'  
-                  AND PD.QTY > 0  
-                  AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
-               SET @cPackConfirm = 'N'  
-            ELSE  
-               SET @cPackConfirm = 'Y'  
-         END  
-      
-         -- Custom PickSlip  
-         ELSE  
-         BEGIN  
-            -- Check outstanding PickDetail  
-            IF EXISTS( SELECT TOP 1 1   
-               FROM PickDetail PD WITH (NOLOCK)   
-               WHERE PD.PickSlipNo = @cPickSlipNo  
-                  AND PD.Status < '5'  
-                  AND PD.QTY > 0  
-                  AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
-               SET @cPackConfirm = 'N'  
-            ELSE  
-               SET @cPackConfirm = 'Y'   
-         END  
-
-         IF @cPackConfirm = 'N'
+         IF @cFullyPickedCheck = '1'
          BEGIN
-            SET @nErrNo = 255752
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --255752NotFullyPicked
-            GOTO QUIT
+            -- Get PickHeader info
+            SELECT TOP 1
+               @cOrderKey = OrderKey,
+               @cLoadKey = ExternOrderKey,
+               @cZone = Zone
+            FROM dbo.PickHeader WITH (NOLOCK)
+            WHERE PickHeaderKey = @cPickSlipNo
+
+            -- Cross dock PickSlip
+            IF @cZone IN ('XD', 'LB', 'LP')
+            BEGIN
+               -- Check outstanding PickDetail
+               IF EXISTS( SELECT TOP 1 1
+                  FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                     JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+                  WHERE RKL.PickSlipNo = @cPickSlipNo
+                     AND PD.Status < '5'
+                     AND PD.QTY > 0
+                     AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick
+                  SET @cPackConfirm = 'N'
+               ELSE
+                  SET @cPackConfirm = 'Y'
+            END
+            -- Discrete PickSlip
+            ELSE IF @cOrderKey <> ''
+            BEGIN
+               -- Check outstanding PickDetail
+               IF EXISTS( SELECT TOP 1 1
+                  FROM dbo.PickDetail PD WITH (NOLOCK)
+                  WHERE PD.OrderKey = @cOrderKey
+                     AND PD.Status < '5'
+                     AND PD.QTY > 0
+                     AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick
+                  SET @cPackConfirm = 'N'
+               ELSE
+                  SET @cPackConfirm = 'Y'
+            END
+            -- Conso PickSlip
+            ELSE IF @cLoadKey <> ''
+            BEGIN
+               -- Check outstanding PickDetail
+               IF EXISTS( SELECT TOP 1 1
+                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                     JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
+                  WHERE LPD.LoadKey = @cLoadKey
+                     AND PD.Status < '5'
+                     AND PD.QTY > 0
+                     AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick
+                  SET @cPackConfirm = 'N'
+               ELSE
+                  SET @cPackConfirm = 'Y'
+            END
+
+            -- Custom PickSlip
+            ELSE
+            BEGIN
+               -- Check outstanding PickDetail
+               IF EXISTS( SELECT TOP 1 1
+                  FROM PickDetail PD WITH (NOLOCK)
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                     AND PD.Status < '5'
+                     AND PD.QTY > 0
+                     AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick
+                  SET @cPackConfirm = 'N'
+               ELSE
+                  SET @cPackConfirm = 'Y'
+            END
+
+            IF @cPackConfirm = 'N'
+            BEGIN
+               SET @nErrNo = 255752
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --255752NotFullyPicked
+               GOTO QUIT
+            END
          END
 
          IF EXISTS (SELECT 1 FROM PACKDETAIL PD (NOLOCK) 

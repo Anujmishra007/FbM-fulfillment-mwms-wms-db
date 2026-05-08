@@ -415,6 +415,19 @@ BEGIN
                GOTO Quit
             END
 
+            -- Check if PickSlipNo has valid OrderKey
+            IF @cScannedPickSlipNo <> '' AND EXISTS (
+               SELECT 1 FROM dbo.PickHeader WITH (NOLOCK)
+               WHERE PickHeaderKey = @cScannedPickSlipNo
+                 AND ISNULL(OrderKey, '') = ''
+            )
+            BEGIN
+               SET @nErrNo = 180068
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidPickSlipNo
+               EXEC rdt.rdtSetFocusField @nMobile, 1
+               GOTO Quit
+            END
+
             -- Check blank
             IF @cScannedDropID = '' AND NOT EXISTS (
                SELECT 1 FROM RDT.rdtPickLog WITH (NOLOCK)
@@ -426,6 +439,21 @@ BEGIN
                SET @nErrNo = 100247
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need DropID
                EXEC rdt.rdtSetFocusField @nMobile, 2
+               GOTO Quit
+            END
+
+            -- Check if cPackDtlDropID exists in PackDetail under same PickSlipNo (when scanning PickSlipNo)
+            IF @cPackDtlDropID <> ''
+            AND @cScannedPickSlipNo <> ''
+            AND NOT EXISTS (
+               SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
+               WHERE LabelNo = @cPackDtlDropID
+                 AND PickSlipNo = @cScannedPickSlipNo
+            )
+            BEGIN
+               SET @nErrNo = 180069
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidToDropid
+               EXEC rdt.rdtSetFocusField @nMobile, 3
                GOTO Quit
             END
 
@@ -683,6 +711,20 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need PickHdr
                EXEC rdt.rdtSetFocusField @nMobile, 2  -- ToDropID
                SET @cOutField02 = ''
+               GOTO Quit
+            END
+
+            -- Check if cPackDtlDropID exists in PackDetail under same PickSlipNo (when scanning DropID)
+            IF @cPackDtlDropID <> ''
+            AND NOT EXISTS (
+               SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
+               WHERE LabelNo = @cPackDtlDropID
+                 AND PickSlipNo = @cPickSlipNo
+            )
+            BEGIN
+               SET @nErrNo = 180069
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidToDropid
+               EXEC rdt.rdtSetFocusField @nMobile, 3
                GOTO Quit
             END
 
@@ -1036,6 +1078,21 @@ BEGIN
                AND CL.UDF01 = 'Y'
                AND CAST(CZ.Cube AS FLOAT) >= @fTotalCube
                ORDER BY CAST(CZ.Cube AS FLOAT) ASC
+
+               -- Fallback: If no carton found, select largest carton with inventory
+               IF ISNULL(@cOutField01, '') = ''
+               BEGIN
+                  SELECT TOP 1 @cOutField01 = Code
+                  FROM CodeLKUP CL (NOLOCK)
+                  JOIN Cartonization CZ WITH (NOLOCK) ON CL.Code = CZ.CartonType
+                  JOIN Storer S WITH (NOLOCK) ON (S.CartonGroup = CZ.CartonizationGroup AND S.StorerKey = CL.StorerKey)
+                  JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND BUSR8 = CZ.CartonType
+                  JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = SKU.SKU AND (QTY-QtyPicked-QTYAllocated) > 0
+                  WHERE CL.ListName = 'PAGECARTON'
+                  AND S.StorerKey = @cStorerKey
+                  AND CL.UDF01 = 'Y'
+                  ORDER BY CAST(CZ.Cube AS FLOAT) DESC
+               END
             END
          END
 
@@ -1487,6 +1544,21 @@ BEGIN
                AND CL.UDF01 = 'Y'
                AND CAST(CZ.Cube AS FLOAT) >= @fTotalCube
                ORDER BY CAST(CZ.Cube AS FLOAT) ASC
+
+               -- Fallback: If no carton found, select largest carton with inventory
+               IF ISNULL(@cOutField01, '') = ''
+               BEGIN
+                  SELECT TOP 1 @cOutField01 = Code
+                  FROM CodeLKUP CL (NOLOCK)
+                  JOIN Cartonization CZ WITH (NOLOCK) ON CL.Code = CZ.CartonType
+                  JOIN Storer S WITH (NOLOCK) ON (S.CartonGroup = CZ.CartonizationGroup AND S.StorerKey = CL.StorerKey)
+                  JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND BUSR8 = CZ.CartonType
+                  JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = SKU.SKU AND (QTY-QtyPicked-QTYAllocated) > 0
+                  WHERE CL.ListName = 'PAGECARTON'
+                  AND S.StorerKey = @cStorerKey
+                  AND CL.UDF01 = 'Y'
+                  ORDER BY CAST(CZ.Cube AS FLOAT) DESC
+               END
             END
          END
 
