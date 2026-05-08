@@ -414,8 +414,8 @@ BEGIN
 
 
             SET @cOutField06 = CASE WHEN @cLottable01 <> '' THEN @cLottable01 ELSE @cTempLottable01 END
-            SET @cOutField07 = CASE WHEN @cLottable02 <> '' THEN @cLottable02 ELSE @cTempLottable02 END
-            SET @cOutField08 = CASE WHEN @cLottable03 <> '' THEN @cLottable03 ELSE @cTempLottable03 END
+            SET @cOutField07 = @cLottable02
+            SET @cOutField08 = @cLottable03
             SET @cOutField09 = CASE WHEN @dLottable04 <> 0  THEN rdt.rdtFormatDate( @dLottable04) ELSE @cTempLottable04 END
 
             SET @cOutField01 = @cUCC
