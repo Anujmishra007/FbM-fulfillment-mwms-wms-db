@@ -4,14 +4,14 @@ SET ANSI_NULLS OFF
 GO
 
 /*********************************************************************************/
-/* Store procedure: rdt_838ConfirmSP32                                           */
+/* Store procedure: rdt_838ConfirmSP33                                           */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
 /* Date        Rev    Author       Purposes                                      */
 /* 2026-05-08  1.0    WSE016       RIMAN ShipConf                                */
 /*********************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_838ConfirmSP32] (
+CREATE OR ALTER PROC [RDT].[rdt_838ConfirmSP33] (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
@@ -70,7 +70,7 @@ BEGIN
     DECLARE @nTranCount  INT
     SET @nTranCount = @@TRANCOUNT
     BEGIN TRAN  -- Begin our own transaction
-    SAVE TRAN rdt_838ConfirmSP32 -- For rollback or commit only our own transaction
+    SAVE TRAN rdt_838ConfirmSP33 -- For rollback or commit only our own transaction
     
     -- PackHeader
     IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo)
@@ -533,12 +533,12 @@ BEGIN
     @cPickSlipNo         = @cPickSlipNo,   -- ZG01
     @cLabelNo            = @cLabelNo       -- ZG01
 
-    COMMIT TRAN rdt_838ConfirmSP32
+    COMMIT TRAN rdt_838ConfirmSP33
     GOTO Quit
 
 RollBackTran:
 BEGIN
-    ROLLBACK TRAN rdt_838ConfirmSP32 -- Only rollback change made here
+    ROLLBACK TRAN rdt_838ConfirmSP33 -- Only rollback change made here
     IF @cNewCarton = 'Y'
     BEGIN
         SET @nCartonNo = 0
@@ -557,5 +557,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_838ConfirmSP32 TO NSQL
+GRANT EXECUTE ON RDT.rdt_838ConfirmSP33 TO NSQL
 GO
