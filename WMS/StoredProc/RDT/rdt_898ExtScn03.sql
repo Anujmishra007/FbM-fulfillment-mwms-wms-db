@@ -140,8 +140,8 @@ BEGIN
       @cExtendedScreenSP    NVARCHAR(20) ,--(wsa099)
 
       @cTempLottable01   NVARCHAR(18), --input field lottable01 from lottable screen
-      @cTempLottable02   NVARCHAR(18), --input field lottable02 from lottable screen
-      @cTempLottable03   NVARCHAR(18), --input field lottable03 from lottable screen
+      -- @cTempLottable02   NVARCHAR(18), --input field lottable02 from lottable screen
+      -- @cTempLottable03   NVARCHAR(18), --input field lottable03 from lottable screen
       @cTempLottable04   NVARCHAR(16), --input field lottable04 from lottable screen
 
       @cTempLotLabel01   NVARCHAR(20),
@@ -220,8 +220,8 @@ BEGIN
       @cPQIndicator     = ISNULL(RTRIM(V_String8),'0'),
       @cPPK             = ISNULL(RTRIM(V_String9),'0'),
       @cTempLottable01  = V_String12,
-      @cTempLottable02  = V_String13,
-      @cTempLottable03  = V_String14,
+      -- @cTempLottable02  = V_String13,
+      -- @cTempLottable03  = V_String14,
       @cTempLottable04  = V_String15,
       @cUCCWithMultiSKU = V_String16,
       @cReceiveAllowAddNewUCC = V_String17,
@@ -414,8 +414,8 @@ BEGIN
 
 
             SET @cOutField06 = CASE WHEN @cLottable01 <> '' THEN @cLottable01 ELSE @cTempLottable01 END
-            SET @cOutField07 = CASE WHEN @cLottable02 <> '' THEN @cLottable02 ELSE @cTempLottable02 END
-            SET @cOutField08 = CASE WHEN @cLottable03 <> '' THEN @cLottable03 ELSE @cTempLottable03 END
+            SET @cOutField07 = @cLottable02
+            SET @cOutField08 = @cLottable03
             SET @cOutField09 = CASE WHEN @dLottable04 <> 0  THEN rdt.rdtFormatDate( @dLottable04) ELSE @cTempLottable04 END
 
             SET @cOutField01 = @cUCC
