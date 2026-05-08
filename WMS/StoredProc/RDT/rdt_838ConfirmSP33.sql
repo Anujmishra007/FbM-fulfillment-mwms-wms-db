@@ -64,6 +64,7 @@ BEGIN
     DECLARE @cPackDetailCartonID  NVARCHAR( 20)
     DECLARE @cPackByFromDropID    NVARCHAR( 1)
     DECLARE @cOrderKey            NVARCHAR( 10)
+    DECLARE @cLoadKey          NVARCHAR( 10)
 
     -- Handling transaction
     DECLARE @nTranCount  INT
@@ -74,7 +75,6 @@ BEGIN
     -- PackHeader
     IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo)
     BEGIN
-        DECLARE @cLoadKey  NVARCHAR( 10)
         SET @cOrderKey = ''
         SET @cLoadKey = ''
 
