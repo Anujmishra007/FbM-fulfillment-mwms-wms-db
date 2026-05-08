@@ -4,18 +4,19 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/******************************************************************************/
-/* Store procedure: rdt_838PackCfmSP12                                        */
-/* Copyright      : Maersk                                                    */
-/*                                                                            */
-/* Purpose: ONBR BRA                                                          */
-/*                                                                            */
-/* Date       Rev  Author      Purposes                                       */
-/* 2026-02-12 1.0  NLT013      UWP-48240. Created                             */
-/* 2026-03-31 1.1  JackC       FCR-11193 Move Inv from FromDropID to LabelNo  */
-/* 2026-04-08 1.2  NLT013      FCR-11343. Update Packheader for single        */
-/* 2026-04-14 1.3  JackC       FCR-12450 Update PKD status & merge duplicates */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_838PackCfmSP12                                          */
+/* Copyright      : Maersk                                                      */
+/*                                                                              */
+/* Purpose: ONBR BRA                                                            */
+/*                                                                              */
+/* Date       Rev    Author      Purposes                                       */
+/* 2026-02-12 1.0    NLT013      UWP-48240. Created                             */
+/* 2026-03-31 1.1    JackC       FCR-11193 Move Inv from FromDropID to LabelNo  */
+/* 2026-04-08 1.2    NLT013      FCR-11343. Update Packheader for single        */
+/* 2026-04-14 1.3    JackC       FCR-12450 Update PKD status & merge duplicates */
+/* 2026-05-08 1.3.1  JackC       UWP-55429 Hotfix for PICK-TRF config on Prod   */
+/********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838PackCfmSP12] (
     @nMobile      INT
@@ -467,7 +468,7 @@ BEGIN
       BEGIN TRY
          UPDATE pd WITH (ROWLOCK)
          SET DropID = pd.CaseId,
-             Status = '5',
+             -- Status = '5', -- V1.3.1
              EditWho = SUSER_SNAME(),
              EditDate = GETDATE()
          FROM dbo.PickDetail pd
@@ -573,6 +574,24 @@ BEGIN
             GOTO RollBackTran
          END CATCH
       END -- handle duplicate pkd
+      
+      --V1.3.1 start
+      BEGIN TRY  
+         UPDATE pd WITH (ROWLOCK)  
+         SET  Status = '5',  
+             EditWho = SUSER_SNAME(),  
+             EditDate = GETDATE()  
+         FROM dbo.PickDetail pd  
+         JOIN #AffectedPKD a ON pd.PickDetailKey = a.PickDetailKey  
+      END TRY  
+      BEGIN CATCH  
+         DROP TABLE #AffectedPKD
+         DROP TABLE #MergeAction 
+         SET @nErrNo = 262664  
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  
+         GOTO RollBackTran  
+      END CATCH
+      --V1.3.1 end
 
       DROP TABLE #MergeAction
       DROP TABLE #AffectedPKD
