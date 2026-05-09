@@ -57,7 +57,7 @@ BEGIN
             DECLARE @tMBOL TABLE 
             (
                Rowref INT IDENTITY(1,1),
-               MbolKey INT PRIMARY KEY
+               MbolKey NVARCHAR( 10) PRIMARY KEY
             )
 
             INSERT INTO @tMBOL (MbolKey)
