@@ -8,7 +8,7 @@ GO
 /* Copyright: Maersk                                                    */
 /*                                                                      */
 /* Date         Rev  Author   Purposes                                  */
-/* 2025-Dec-15  1.0  Cuize    FCR-7458 Created                          */
+/* 2026-05-09   1.0  NickT    FCR-12388 Created                          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1718ExtUpd01] (
@@ -30,59 +30,72 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @nTranCount INT
+
+   DECLARE    
+      @cConfirmStatus          NVARCHAR( 20),
+      @cUserName               NVARCHAR( 18),
+      @cMBOLKey                NVARCHAR( 10),
+      @nLoopIndex              INT
+
+   SELECT
+      @cUserName  = UserName
+   FROM RDTMOBREC (NOLOCK)
+   WHERE Mobile = @nMobile
+
+   SET @cConfirmStatus = rdt.RDTGetConfig( @nFunc, 'ConfirmStatus', @cStorerKey)
+
+   IF ISNULL(@cConfirmStatus,'') = ''
+      SET @cConfirmStatus = '7'
+
    IF @nFunc = 1718
+   BEGIN
+      IF @nStep = 3
       BEGIN
-         IF @nStep = 3
+         IF @nInputKey = 1 -- ENTER
          BEGIN
-            IF @nInputKey = 1 -- ENTER
-            BEGIN
+            DECLARE @tMBOL TABLE 
+            (
+               Rowref INT IDENTITY(1,1),
+               MbolKey NVARCHAR( 10) PRIMARY KEY
+            )
 
-               DECLARE    @cConfirmStatus          NVARCHAR( 20)
-               DECLARE    @cUserName               NVARCHAR( 18)
+            INSERT INTO @tMBOL (MbolKey)
+            SELECT DISTINCT MD.MbolKey
+            FROM dbo.CONTAINERDETAIL CD WITH(NOLOCK)
+            INNER JOIN dbo.CONTAINER CT WITH(NOLOCK) ON CT.ContainerKey = CD.ContainerKey
+            INNER JOIN dbo.PALLETDETAIL PD WITH(NOLOCK) ON PD.PalletKey = CD.PalletKey
+            INNER JOIN dbo.MBOLDETAIL MD WITH(NOLOCK) ON MD.OrderKey = PD.UserDefine01
+            WHERE CT.Vessel = @cTruckID
+               AND CT.Status <> '9'
 
-
-               SELECT
-                  @cUserName  = UserName
-               FROM RDTMOBREC (NOLOCK)
-               WHERE Mobile = @nMobile
-
-               SET @cConfirmStatus = rdt.RDTGetConfig( @nFunc, 'ConfirmStatus', @cStorerKey)
-
-               IF ISNULL(@cConfirmStatus,'') = ''
-                  SET @cConfirmStatus = '7'
-
-               --CLOSE MBOL
-               UPDATE MBOL
+            SET @nTranCount = @@TRANCOUNT  
+            BEGIN TRAN  
+            SAVE TRAN rdt_1718ExtUpd01
+            BEGIN TRY
+               UPDATE M WITH(ROWLOCK)
                SET
                   Status = @cConfirmStatus,
                   EditWho = @cUserName,
                   EditDate = GETDATE()
-               WHERE MbolKey IN (
-                  SELECT DISTINCT MD.MbolKey
-                  FROM CONTAINERDETAIL CD
-                     JOIN CONTAINER C  ON C.ContainerKey = CD.ContainerKey
-                     JOIN PALLETDETAIL PD ON PD.PalletKey = CD.PalletKey
-                     JOIN MBOLDETAIL MD ON MD.OrderKey = PD.UserDefine01
-                  WHERE C.Vessel = @cTruckID
-               )
-
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 254003
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Close Mbol Err
-                  GOTO Quit
-               END
-
-            END
+               FROM dbo.MBOL M
+               INNER JOIN @tMBOL T ON M.MbolKey = T.MbolKey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 266001  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Close MBOL failed
+               GOTO RollBackTran
+            END CATCH
          END
-
-
       END
-
-
-
-
-   Quit:
+   END
+   GOTO Quit  
+  
+RollBackTran:  
+   ROLLBACK TRAN rdt_1718ExtUpd01  
+Quit:  
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
+      COMMIT TRAN
 END
 GO
 
