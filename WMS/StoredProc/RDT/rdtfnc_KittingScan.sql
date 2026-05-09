@@ -421,7 +421,10 @@ BEGIN
       SET @cOutField02 = '' -- To ID
 
       IF @cDefaultToLoc <> ''
+      BEGIN
          SET @cOutField01 = @cDefaultToLoc
+         EXEC rdt.rdtSetFocusField @nMobile, 2  -- Focus on To ID
+      END
 
       -- Go to next To LOC/ID screen
       SET @nScn = 6881
@@ -531,16 +534,12 @@ BEGIN
          GOTO Step_2_Fail
       END
 
-      -- TO ID is optional, but if scanned, validate RDT Format
-      IF @cToID <> '' AND @cToID IS NOT NULL
+      IF RDT.rdtIsValidFormat(@nFunc, @cStorerKey, 'TOID', @cToID) = 0
       BEGIN
-         IF RDT.rdtIsValidFormat(@nFunc, @cStorerKey, 'TOID', @cToID) = 0
-         BEGIN
-            SET @nErrNo = 263814
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID format
-            EXEC rdt.rdtSetFocusField @nMobile, 2
-            GOTO Step_2_Fail
-         END
+         SET @nErrNo = 263814
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID format
+         EXEC rdt.rdtSetFocusField @nMobile, 2
+         GOTO Step_2_Fail
       END
 
       -- Extended validate
@@ -672,6 +671,11 @@ BEGIN
       SET @cToID = ''
       SET @cOutField01 = '' -- To LOC
       SET @cOutField02 = '' -- To ID
+      IF @cDefaultToLoc <> ''
+      BEGIN
+         SET @cOutField01 = @cDefaultToLoc
+         EXEC rdt.rdtSetFocusField @nMobile, 2  -- Focus on To ID
+      END
    END
 END
 GOTO Quit
@@ -1178,6 +1182,15 @@ BEGIN
          GOTO Step_4_Fail
       END
 
+      -- Validate Child SKU matches expected Child SKU
+      IF @cChildSKU <> @cExpectedChildSKU
+      BEGIN
+         SET @nErrNo = 263817
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU mismatch
+         EXEC rdt.rdtSetFocusField @nMobile, 5
+         GOTO Step_4_Fail
+      END
+
       -- Validate Child SKU exists in KITDETAIL (Type = 'F')
       IF NOT EXISTS (
          SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
@@ -1187,7 +1200,7 @@ BEGIN
            AND StorerKey = @cStorerKey
       )
       BEGIN
-         SET @nErrNo = 263817
+         SET @nErrNo = 263815
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not in Kit
          EXEC rdt.rdtSetFocusField @nMobile, 5
          GOTO Step_4_Fail
@@ -2219,7 +2232,7 @@ BEGIN
       IF @cChildSKU <> @cExpectedChildSKU
       BEGIN
          SET @nErrNo = 263817
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not in BOM
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Mismatch
          EXEC rdt.rdtSetFocusField @nMobile, 5
          GOTO Step_6_Fail
       END
@@ -2233,8 +2246,8 @@ BEGIN
            AND StorerKey = @cStorerKey
       )
       BEGIN
-         SET @nErrNo = 263817
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not in BOM
+         SET @nErrNo = 263815
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not in Kit
          EXEC rdt.rdtSetFocusField @nMobile, 5
          GOTO Step_6_Fail
       END
