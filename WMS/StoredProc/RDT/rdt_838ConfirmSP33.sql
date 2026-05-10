@@ -63,8 +63,8 @@ BEGIN
     DECLARE @cGenLabelNo_SP       NVARCHAR( 20)
     DECLARE @cPackDetailCartonID  NVARCHAR( 20)
     DECLARE @cPackByFromDropID    NVARCHAR( 1)
-    DECLARE @cOrderKey            NVARCHAR( 10)
-    DECLARE @cLoadKey          NVARCHAR( 10)
+    DECLARE @cOrderKey            NVARCHAR( 10) = ''
+    DECLARE @cLoadKey             NVARCHAR( 10) = ''   
 
     -- Handling transaction
     DECLARE @nTranCount  INT
