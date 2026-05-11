@@ -366,7 +366,7 @@ BEGIN
             BEGIN
                 
                 SELECT TOP 1 @cPickDetailKey = PD.PICKDETAILKEY
-                FROM dbo.PackDetail PD WITH (NOLOCK)
+                FROM dbo.PickDetail PD WITH (NOLOCK)
                 LEFT JOIN dbo.PackSerialNo PS WITH (NOLOCK) ON PD.StorerKey = PS.StorerKey AND PD.SKU = PS.SKU AND PS.PickSlipNo = @cPickSlipNo
                 JOIN dbo.SerialNo SN WITH (NOLOCK) ON PD.StorerKey = SN.StorerKey AND PD.SKU = SN.SKU AND SN.SerialNo = @cSerialNo
                 WHERE PD.DROPID = @cFromDropID AND PD.StorerKey = @cStorerKey AND PD.Status <= '5'
