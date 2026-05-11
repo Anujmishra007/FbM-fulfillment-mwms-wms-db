@@ -476,7 +476,7 @@ BEGIN
       FROM #TASKDETAIL_WIP AS tw
       CROSS APPLY ( SELECT tw1.RowID
                         ,  SortNo = ROW_NUMBER() OVER ( ORDER BY tw1.AreaKey
-                                                               , tw1.PickLocLevel
+                                                               --, tw1.PickLocLevel   --WL11
                                                                , tw1.CartonPerLoc DESC  
                                                                , tw1.SkuPerCarton
                                                                , tw1.LogicalFromLoc
@@ -493,7 +493,7 @@ BEGIN
       (
           SELECT 
                 tw.RowID  
-              , rno = DENSE_RANK() OVER (PARTITION BY tw.AreaKey ORDER BY tw.PickLocLevel, tw.CaseID)   --WL11
+              , rno = DENSE_RANK() OVER (PARTITION BY tw.AreaKey ORDER BY tw.CaseID)   --WL11
           FROM #TASKDETAIL_WIP tw
           WHERE tw.DocType <> 'E'   --WL04
       )
