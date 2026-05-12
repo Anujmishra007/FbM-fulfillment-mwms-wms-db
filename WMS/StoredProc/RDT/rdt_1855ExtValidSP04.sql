@@ -10,7 +10,7 @@ GO
 /* Modifications log:                                                   */    
 /*                                                                      */    
 /* Date       Rev   Author      Purposes                                */    
-/* 2024-12-16 1.0.0  NLT013     FCR-1755 Created                        */    
+/* 2024-12-16 1.0.0  NLT013     FCR-10824 Created                       */    
 /************************************************************************/    
     
 CREATE OR ALTER PROC rdt.rdt_1855ExtValidSP04 (    
