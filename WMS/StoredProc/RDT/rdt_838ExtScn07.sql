@@ -1025,6 +1025,13 @@ BEGIN
       IF (@nCurrentStep = 2 AND @nAfterStep = 3)
       OR (@nCurrentStep = 7 AND @nAfterStep = 3)
       BEGIN
+         -- Option 2: Skip CartonType selection, go directly to quit
+         IF @nCurrentStep = 2 AND EXISTS (
+            SELECT 1 FROM RDT.RDTMOBREC WITH (NOLOCK)
+            WHERE Mobile = @nMobile AND C_STRING1 = '2'
+         )
+            GOTO Quit
+
          SET @cOutField01 = ''
          -- Check if any DropID scanned in rdtPickLog
          DECLARE @nDropIDCount INT = 0
