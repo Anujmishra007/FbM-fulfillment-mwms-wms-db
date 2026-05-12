@@ -608,6 +608,7 @@ BEGIN
          END
       END
 
+      EXEC rdt.rdtSetFocusField @nMobile, 1
       -- Prep next screen var
       SET @cOutField01 = '' -- Parent SKU
       SET @cOutField02 = '' -- QTY
@@ -927,9 +928,10 @@ BEGIN
 
       IF @cDYNBOM = '1'
       BEGIN
-         -- DYNBOM mode: Get first distinct SKU with SUM(ExpectedQty)
+         -- DYNBOM mode: Get first distinct SKU with SUM(ExpectedQty), BOMQty from Channel
          ;WITH DistinctSKU AS (
             SELECT SKU, SUM(ISNULL(ExpectedQty, 0)) AS TotalExpectedQty,
+                   COALESCE(MIN(TRY_CAST(Channel AS INT)), 0) AS BOMQty,
                    ROW_NUMBER() OVER (ORDER BY MIN(KITLineNumber)) AS RowNum
             FROM dbo.KITDETAIL WITH (NOLOCK)
             WHERE KITKey = @cKitKey
@@ -938,7 +940,8 @@ BEGIN
             GROUP BY SKU
          )
          SELECT @cExpectedChildSKU = SKU,
-                @nQTYExp = TotalExpectedQty
+                @nQTYExp = TotalExpectedQty,
+                @nBOMQty = BOMQty
          FROM DistinctSKU
          WHERE RowNum = 1
 
@@ -1187,6 +1190,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 263817
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU mismatch
+         SET @cBarcode = ''
          EXEC rdt.rdtSetFocusField @nMobile, 5
          GOTO Step_4_Fail
       END
@@ -1506,9 +1510,10 @@ BEGIN
 
       IF @cDYNBOM = '1'
       BEGIN
-         -- DYNBOM mode: Get next distinct SKU from KITDETAIL with SUM(ExpectedQty)
+         -- DYNBOM mode: Get next distinct SKU from KITDETAIL with SUM(ExpectedQty), BOMQty from Channel
          ;WITH DistinctSKU AS (
             SELECT SKU, SUM(ISNULL(ExpectedQty, 0)) AS TotalExpectedQty,
+                   COALESCE(MIN(TRY_CAST(NULLIF(Channel, '') AS INT)), 0) AS BOMQty,
                    ROW_NUMBER() OVER (ORDER BY MIN(KITLineNumber)) AS RowNum
             FROM dbo.KITDETAIL WITH (NOLOCK)
             WHERE KITKey = @cKitKey
@@ -1517,7 +1522,8 @@ BEGIN
             GROUP BY SKU
          )
          SELECT @cExpectedChildSKU = SKU,
-                @nQTYExp = TotalExpectedQty
+                @nQTYExp = TotalExpectedQty,
+                @nBOMQty = BOMQty
          FROM DistinctSKU
          WHERE RowNum = @nChildSKUIndex
       END
@@ -1953,6 +1959,7 @@ BEGIN
       BEGIN
          ;WITH DistinctSKU AS (
             SELECT SKU, SUM(ISNULL(ExpectedQty, 0)) AS TotalExpectedQty,
+                   COALESCE(MIN(TRY_CAST(Channel AS INT)), 0) AS BOMQty,
                    ROW_NUMBER() OVER (ORDER BY MIN(KITLineNumber)) AS RowNum
             FROM dbo.KITDETAIL WITH (NOLOCK)
             WHERE KITKey = @cKitKey
@@ -1961,7 +1968,8 @@ BEGIN
             GROUP BY SKU
          )
          SELECT @cExpectedChildSKU = SKU,
-                @nQTYExp = TotalExpectedQty
+                @nQTYExp = TotalExpectedQty,
+                @nBOMQty = CASE WHEN @cDYNBOM = '1' THEN BOMQty ELSE @nBOMQty END
          FROM DistinctSKU
          WHERE RowNum = @nChildSKUIndex
       END
@@ -2233,6 +2241,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 263817
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Mismatch
+         SET @cBarcode = ''
          EXEC rdt.rdtSetFocusField @nMobile, 5
          GOTO Step_6_Fail
       END
