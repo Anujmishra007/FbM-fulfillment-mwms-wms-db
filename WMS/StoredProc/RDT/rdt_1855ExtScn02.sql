@@ -862,7 +862,7 @@ BEGIN
                               AND Status IN ('3', '5'))
                BEGIN
                   SET @nErrNo = 260431
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --260431 ToteID is in use by other user
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToteID is used in other wave/group
                   GOTO UPD_RDTMOBREC
                END
 
