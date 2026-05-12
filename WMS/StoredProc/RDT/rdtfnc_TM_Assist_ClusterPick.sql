@@ -3575,6 +3575,15 @@ BEGIN
 
             IF ISNULL(@cExtScnUDF03, '') <> ''
                SET @nSuggQty        = CAST(@cExtScnUDF03 AS INT)
+
+            IF ISNULL(@cExtScnUDF04, '') <> ''
+            BEGIN
+               IF @nStep = @nStep_ToLoc
+               BEGIN
+                  SET @cSuggToLOC = @cExtScnUDF04
+                  SET @cOutField02 = @cSuggToLOC -- To LOC
+               END
+            END
          END
 
          IF @nErrNo <> 0
