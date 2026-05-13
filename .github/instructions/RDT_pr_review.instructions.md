@@ -19,7 +19,6 @@ When reviewing PRs that contain changes to RDT stored procedures, follow this an
 **Fresh Review Every Time:**
 - **DO NOT provide incremental or summary reviews** like "reviewed X commits" or "changes look good"
 - **IGNORE any previous review comments** on this PR - treat each review request as a fresh analysis
-- **Analyze ALL changes** in the PR compared to base branch, not just the latest commits
 - **DISCARD the old review** and replace it with the new review
 
 If asked to review again after new commits, regenerate the report from scratch covering ALL changes in the PR.
