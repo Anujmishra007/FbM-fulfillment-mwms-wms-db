@@ -8,16 +8,21 @@ When reviewing PRs that contain changes to RDT stored procedures, follow this an
 
 ---
 
-## IMPORTANT: Full Review Required Every Time
+## IMPORTANT: Review Output Rules
 
 **CRITICAL INSTRUCTION**: 
-- **ALWAYS generate the COMPLETE impact analysis report** as defined in this instruction file
-- **DO NOT provide incremental or summary reviews** like "reviewed X commits" or "changes look good"
-- **IGNORE any previous review comments** on this PR - treat each review request as a fresh, complete analysis
-- **Every review MUST include ALL mandatory sections**: Severity Assessment, Deployment Recommendation, Affected Storers, and Severity Classification
-- **DISCARD the old review comment** and replace it with the new complete review
 
-If asked to review again after new commits, regenerate the FULL report from scratch covering all changes.
+**What to OUTPUT (ONLY these sections):**
+- Output ONLY the sections defined in "PR Summary Requirements" below
+- Do NOT output anything beyond those 4 mandatory sections
+
+**Fresh Review Every Time:**
+- **DO NOT provide incremental or summary reviews** like "reviewed X commits" or "changes look good"
+- **IGNORE any previous review comments** on this PR - treat each review request as a fresh analysis
+- **Analyze ALL changes** in the PR compared to base branch, not just the latest commits
+- **DISCARD the old review** and replace it with the new review
+
+If asked to review again after new commits, regenerate the report from scratch covering ALL changes in the PR.
 
 ---
 
