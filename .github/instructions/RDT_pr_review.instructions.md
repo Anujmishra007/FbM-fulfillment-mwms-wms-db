@@ -6,6 +6,21 @@ applyTo: "WMS/StoredProc/RDT/rdt*.sql,WMS/Message/rdt*.sql,WMS/Screen/rdt*.sql"
 
 When reviewing PRs that contain changes to RDT stored procedures, follow this analysis methodology.
 
+---
+
+## IMPORTANT: Full Review Required Every Time
+
+**CRITICAL INSTRUCTION**: 
+- **ALWAYS generate the COMPLETE impact analysis report** as defined in this instruction file
+- **DO NOT provide incremental or summary reviews** like "reviewed X commits" or "changes look good"
+- **IGNORE any previous review comments** on this PR - treat each review request as a fresh, complete analysis
+- **Every review MUST include ALL mandatory sections**: Severity Assessment, Deployment Recommendation, Affected Storers, and Severity Classification
+- **DISCARD the old review comment** and replace it with the new complete review
+
+If asked to review again after new commits, regenerate the FULL report from scratch covering all changes.
+
+---
+
 ## Configuration
 
 **Production Config Path**: `.github/instructions/data/V2_RDT_Production_Config.csv`
