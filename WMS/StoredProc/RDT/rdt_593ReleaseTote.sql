@@ -37,9 +37,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
 DECLARE 
-   @cDropID       NVARCHAR(20),
-   @cStatus       NVARCHAR(10),
-   @nRowCount     INT
+   @cDropID       NVARCHAR(20)
 
    SET @cDropID = ISNULL(TRIM(@cParam1), '')
 
