@@ -80,7 +80,7 @@ DECLARE
          ,@cErrMsg            = @cErrMsg OUTPUT
    END TRY
    BEGIN CATCH
-      SET @nErrNo  = 266256
+      SET @nErrNo  = 266254
       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --  Execute isp_ArchiveDropId_rdt failed
       GOTO Quit
    END CATCH
@@ -99,8 +99,8 @@ DECLARE
       DECLARE 
             @cMsg01 NVARCHAR(20) = @cDropID,
             @cMsg02 NVARCHAR(20) = 'Tote has been', 
-            @cMsg03 NVARCHAR(20) = 'archived and released.', 
-            @cMsg04 NVARCHAR(20) = '', 
+            @cMsg03 NVARCHAR(20) = 'archived and ', 
+            @cMsg04 NVARCHAR(20) = 'released.', 
             @cMsg05 NVARCHAR(20) = '',
             @cMsg06 NVARCHAR(20) = '', 
             @cMsg07 NVARCHAR(20) = '', 
