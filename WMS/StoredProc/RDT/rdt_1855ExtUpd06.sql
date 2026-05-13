@@ -148,7 +148,8 @@ BEGIN
             BEGIN TRY
                INSERT INTO dbo.DropID(DropID, DropLoc, AdditionalLoc, DropIDType, LabelPrinted, Loadkey, Status)
                SELECT DropID, DropLoc, AdditionalLoc, DropIDType, LabelPrinted, Loadkey, Status
-               FROM @tDropIDInfo
+               FROM @tDropIDInfo AS TDI
+               WHERE NOT EXISTS(SELECT 1 FROM dbo.DropID WITH(NOLOCK) WHERE DropID = TDI.DropID)
             END TRY
             BEGIN CATCH
                SET @nErrNo = 261253

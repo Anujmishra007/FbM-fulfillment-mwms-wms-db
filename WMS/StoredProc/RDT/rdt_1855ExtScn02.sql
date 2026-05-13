@@ -115,6 +115,7 @@ BEGIN
       @nNextPage           INT,
       @nCartonScanned      INT,
       @nRowCount           INT,
+      @nPickShortage       INT,
 
       @nStep_CartID           INT,  @nScn_CartID            INT,
       @nStep_CartMatrix       INT,  @nScn_CartMatrix        INT,
@@ -925,6 +926,47 @@ BEGIN
                   AND TD.DropID = ''
                ORDER BY LOC.PALogicalLoc, LOC.Loc, TD.TaskDetailKey, TD.Sku
 
+               SET @nPickShortage = 0
+               DECLARE @cOrderKeyInToteID NVARCHAR(10) 
+
+               IF EXISTS(SELECT 1 FROM dbo.DropID WITH(NOLOCK)
+                          WHERE DropID = @cCartonID)
+               BEGIN
+                  SELECT TOP 1 @cOrderKeyInToteID = PD.OrderKey
+                  FROM dbo.TaskDetail TD1 WITH(NOLOCK)
+                  INNER JOIN dbo.TaskDetail TD2 WITH(NOLOCK) 
+                     ON TD1.StorerKey = TD2.StorerKey 
+                     AND TD1.WaveKey = TD2.WaveKey 
+                     AND TD1.GroupKey = TD2.Groupkey 
+                     AND TD1.TaskType = TD2.TaskType
+                  INNER JOIN dbo.PickDetail PD WITH(NOLOCK) 
+                     ON TD1.StorerKey = PD.StorerKey 
+                     AND TD1.TaskDetailKey = PD.TaskDetailKey 
+                  WHERE TD1.Storerkey = @cStorerKey
+                     AND TD1.TaskType = 'ASTCPK'
+                     AND TD1.Status = '9'
+                     AND TD1.DropID IS NOT NULL
+                     AND TD1.DropID = @cCartonID
+                     AND TD1.WaveKey = @cWaveKey 
+                     AND TD1.GroupKey = @cGroupKey
+                     AND TD2.Status < '5'
+                  ORDER BY TD1.TaskDetailKey
+
+                  SET @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount > 0 AND ISNULL(@cOrderKeyInToteID, '') <> ''
+                  BEGIN
+                     IF NOT EXISTS(SELECT 1 FROM @tTaskDetail WHERE OrderKey = @cOrderKeyInToteID)
+                     BEGIN
+                        SET @nErrNo = 260433
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToteID is used by order not in the current pick list
+                        GOTO UPD_RDTMOBREC
+                     END
+
+                     SET @nPickShortage = 1
+                  END
+               END
+
                SET @nTranCount = @@TRANCOUNT
                BEGIN TRAN
                SAVE TRAN rdt_1855ExtScn02_6845
@@ -967,12 +1009,22 @@ BEGIN
                   DECLARE @tOrderTaskDetail TABLE (RowRef INT IDENTITY(1,1), TaskDetailKey NVARCHAR( 10))
                   DECLARE @cStatsuMsg NVARCHAR( 50)
 
-                  SET @nLoopIndex = -1
-                  SELECT TOP 1
-                     @cLoopOrderKey = OrderKey
-                  FROM @tTaskDetail
-                  WHERE RowRef > @nLoopIndex
-                  ORDER BY RowRef
+                  IF @nPickShortage = 1 AND @cOrderKeyInToteID <> ''
+                  BEGIN
+                     SELECT TOP 1
+                        @cLoopOrderKey = OrderKey
+                     FROM @tTaskDetail
+                     WHERE OrderKey = @cOrderKeyInToteID
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nLoopIndex = -1
+                     SELECT TOP 1
+                        @cLoopOrderKey = OrderKey
+                     FROM @tTaskDetail
+                     WHERE RowRef > @nLoopIndex
+                     ORDER BY RowRef
+                  END
 
                   SET @cStatsuMsg = CAST( @nCartonScanned + 1 AS NVARCHAR( 5)) + '-' + ISNULL(@cCartonType, '')
 

@@ -34,5 +34,6 @@ EXECUTE rdt.rdtAddMsg 260429, 10, '260429 NoToteIDNeeded',        'us_english', 
 EXECUTE rdt.rdtAddMsg 260430, 10, '260430 WaveKeyMissing',        'us_english', 1855, 0, '260430 Wavekey is missing'
 EXECUTE rdt.rdtAddMsg 260431, 10, '260431 ToteIDInUse',           'us_english', 1855, 0, '260431 ToteID is used in other wave/group'
 EXECUTE rdt.rdtAddMsg 260432, 10, '260432 ToteIDInUse',           'us_english', 1855, 0, '260432 ToteID is used in other wave/group'
+EXECUTE rdt.rdtAddMsg 260433, 10, '260433 ToteIDNotInPickList',   'us_english', 1855, 0, '260433 ToteID is used by order not in the current pick list'
 
 SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 260401 AND 260450
