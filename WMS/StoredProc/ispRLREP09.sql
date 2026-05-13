@@ -49,6 +49,7 @@ BEGIN
          , @n_starttcnt              INT = @@TRANCOUNT
          , @b_Success                INT = 0
          , @c_Replenishmentkey       NVARCHAR(10) = ''
+         , @c_ReplenishmentGroup     NVARCHAR(10) = ''   --ML01
          , @c_Storer                 NVARCHAR(15) = ''
          , @c_Sku                    NVARCHAR(20) = ''
          , @c_Lot                    NVARCHAR(10) = ''
@@ -79,11 +80,13 @@ BEGIN
          , @c_TaskType_Exp           NVARCHAR(MAX)= ''
          , @c_PickMethod_Exp         NVARCHAR(MAX)= ''
          , @c_ToID_Exp               NVARCHAR(MAX)= ''   --ML01
+         , @c_NoQtyReplen_Exp        NVARCHAR(MAX)= ''   --ML01
          , @c_TaskType_Val           NVARCHAR(10) = ''
          , @c_PickMethod_Val         NVARCHAR(10) = ''
          , @c_TaskPriority_Val       NVARCHAR(10) = ''
+         , @c_NoQtyReplen_Val        NVARCHAR(10) = ''   --ML01
+         , @c_NoQtyReplen_SC         NVARCHAR(10) = ''   --ML01
          , @c_NoQtyReplen            NVARCHAR(10) = ''   --ML01
-         , @c_NoQtyReplen2           NVARCHAR(10) = ''   --ML01
          , @c_SetTransitLoc          NVARCHAR(10) = ''   --ML01
          , @c_TaskType               NVARCHAR(10) = ''
          , @c_PickMethod             NVARCHAR(10) = ''
@@ -91,24 +94,25 @@ BEGIN
 
    CREATE TABLE #TEMP_REPLENISHMENT
    (
-      Replenishmentkey NVARCHAR(10) NULL DEFAULT ('')
-    , StorerKey        NVARCHAR(15) NULL DEFAULT ('')
-    , Sku              NVARCHAR(20) NULL DEFAULT ('')
-    , Lot              NVARCHAR(10) NULL DEFAULT ('')
-    , Qty              INT          NULL DEFAULT (0)
-    , FromLOC          NVARCHAR(10) NULL DEFAULT ('')
-    , ID               NVARCHAR(18) NULL DEFAULT ('')
-    , ToLOC            NVARCHAR(10) NULL DEFAULT ('')
-    , ToID             NVARCHAR(18) NULL DEFAULT ('')   --ML01
-    , UCCNo            NVARCHAR(20) NULL DEFAULT ('')
-    , Priority         NVARCHAR(10) NULL DEFAULT ('')
-    , TransitLOC       NVARCHAR(10) NULL DEFAULT ('')
+      Replenishmentkey   NVARCHAR(10) NULL DEFAULT ('')
+    , ReplenishmentGroup NVARCHAR(10) NULL DEFAULT ('')   --ML01
+    , StorerKey          NVARCHAR(15) NULL DEFAULT ('')
+    , Sku                NVARCHAR(20) NULL DEFAULT ('')
+    , Lot                NVARCHAR(10) NULL DEFAULT ('')
+    , Qty                INT          NULL DEFAULT (0)
+    , FromLOC            NVARCHAR(10) NULL DEFAULT ('')
+    , ID                 NVARCHAR(18) NULL DEFAULT ('')
+    , ToLOC              NVARCHAR(10) NULL DEFAULT ('')
+    , ToID               NVARCHAR(18) NULL DEFAULT ('')   --ML01
+    , UCCNo              NVARCHAR(20) NULL DEFAULT ('')
+    , Priority           NVARCHAR(10) NULL DEFAULT ('')
+    , TransitLOC         NVARCHAR(10) NULL DEFAULT ('')
    )
 
    SELECT @n_err=0, @c_errmsg=''
 
    SELECT @c_OPTION5 = ISNULL(OPTION5,'') FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseReplenTaskCode')   --ML01
-   SELECT @c_NoQtyReplen = dbo.fnc_GetParamValueFromString('@c_NoQtyReplen', @c_OPTION5, @c_NoQtyReplen)                   --ML01
+   SELECT @c_NoQtyReplen_SC = dbo.fnc_GetParamValueFromString('@c_NoQtyReplen', @c_OPTION5, '')                            --ML01
 
    SELECT @c_ReplCond_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'Condition'         THEN Notes END)),'')
         , @c_ReplJoin_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN'          THEN Notes END)),'')
@@ -119,10 +123,11 @@ BEGIN
         , @c_TaskPriority_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Notes END)),'')
         , @c_PickMethod_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Notes END)),'')
         , @c_ToID_Exp           = ISNULL(TRIM(MAX(CASE WHEN Code = 'ToID'              THEN Notes END)),'')   --ML01
+        , @c_NoQtyReplen_Exp    = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoQtyReplen'       THEN Notes END)),'')   --ML01
         , @c_TaskType_Val       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Short END)),'')
         , @c_PickMethod_Val     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Short END)),'')
         , @c_TaskPriority_Val   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Short END)),'')
-        , @c_NoQtyReplen2       = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoQtyReplen'       THEN Short END)),'')   --ML01
+        , @c_NoQtyReplen_Val    = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoQtyReplen'       THEN Short END)),'')   --ML01
         , @c_SetTransitLoc      = ISNULL(TRIM(MAX(CASE WHEN Code = 'SetTransitLoc'     THEN Short END)),'')   --ML01
      FROM dbo.CODELKUP WITH(NOLOCK)
     WHERE ListName = 'REPLENCFG'
@@ -131,9 +136,6 @@ BEGIN
 
    IF @c_ReplCond_Exp LIKE 'AND %'
       SET @c_ReplCond_Exp = SUBSTRING(@c_ReplCond_Exp, 5, LEN(@c_ReplCond_Exp))
-
-   IF ISNULL(@c_NoQtyReplen,'') NOT IN ('1','Y') AND ISNULL(@c_NoQtyReplen2,'') IN ('1','Y')   --ML01
-      SET @c_NoQtyReplen = @c_NoQtyReplen2                                                     --ML01
 
    IF @c_Zone02 <> 'ALL' AND ISNULL(@c_ReplCond_Exp,'') = ''
    BEGIN
@@ -151,8 +153,9 @@ BEGIN
            + RTRIM(ISNULL(@c_Zone12,'')) +''')'
    END
 
-   SET @c_SQLStatement = 'INSERT INTO #TEMP_REPLENISHMENT(Replenishmentkey, StorerKey, Sku, Lot, Qty, FromLOC, ID, ToLOC, ToID, UCCNo, Priority, TransitLOC)'
+   SET @c_SQLStatement = 'INSERT INTO #TEMP_REPLENISHMENT(Replenishmentkey, ReplenishmentGroup, StorerKey, Sku, Lot, Qty, FromLOC, ID, ToLOC, ToID, UCCNo, Priority, TransitLOC)'
      + ' SELECT RPL.Replenishmentkey'
+     +       ', RPL.ReplenishmentGroup'   --ML01
      +       ', RPL.StorerKey'
      +       ', RPL.Sku'
      +       ', RPL.Lot'
@@ -206,6 +209,7 @@ BEGIN
    -- Loop #TEMP_REPLENISHMENT
    SET @c_SQLStatement = 'DECLARE CUR_REPLEN CURSOR FAST_FORWARD READ_ONLY FOR'
      + ' SELECT RPL.Replenishmentkey'
+     +       ', RPL.ReplenishmentGroup'   --ML01
      +       ', RPL.StorerKey'
      +       ', RPL.Sku'
      +       ', RPL.Lot'
@@ -235,10 +239,21 @@ BEGIN
                                       WHEN ISNULL(@c_PickMethod_Val  ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_PickMethod_Val),'''','''''') + ''''
                                       ELSE '''PP'''
                                  END
-   SET @c_SQLStatement = @c_SQLStatement                                                         --ML01
-     +       ', ToID='         + CASE WHEN ISNULL(@c_ToID_Exp        ,'')<>'' THEN @c_ToID_Exp   --ML01
-                                      ELSE 'RPL.ID'                                              --ML01
-                                 END                                                             --ML01
+
+   --ML01-S
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', ToID='         + CASE WHEN ISNULL(@c_ToID_Exp        ,'')<>'' THEN @c_ToID_Exp
+                                      ELSE 'RPL.ID'
+                                 END
+
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', NoQtyReplen='  + CASE WHEN ISNULL(@c_NoQtyReplen_Exp ,'')<>'' THEN @c_NoQtyReplen_Exp
+                                      WHEN ISNULL(@c_NoQtyReplen_Val ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_NoQtyReplen_Val),'''','''''') + ''''
+                                      WHEN ISNULL(@c_NoQtyReplen_SC  ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_NoQtyReplen_SC),'''','''''') + ''''
+                                      ELSE 'Y'
+                                 END
+   --ML01-E
+
    SET @c_SQLStatement = @c_SQLStatement
      + ' FROM #TEMP_REPLENISHMENT RPL'
 
@@ -264,9 +279,9 @@ BEGIN
    WHILE @n_continue IN (1,2)
    BEGIN
       FETCH NEXT FROM CUR_REPLEN
-      INTO @c_Replenishmentkey, @c_Storer, @c_Sku, @c_Lot, @n_Qty, @c_FromLOC, @c_FromLogicalLoc, @c_ID, @c_ToLOC, @c_ToLogicalLoc
+      INTO @c_Replenishmentkey, @c_ReplenishmentGroup, @c_Storer, @c_Sku, @c_Lot, @n_Qty, @c_FromLOC, @c_FromLogicalLoc, @c_ID, @c_ToLOC, @c_ToLogicalLoc
          , @c_UCCNo, @c_TransitLOC, @c_TaskGrouping, @c_Priority, @c_TaskType, @c_PickMethod
-         , @c_ToID   --ML01
+         , @c_ToID, @c_NoQtyReplen   --ML01
 
       IF @@FETCH_STATUS <> 0
          BREAK
