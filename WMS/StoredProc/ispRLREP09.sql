@@ -19,6 +19,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 2025-12-12   Michael  1.0  DevOps Combine Script                     */
+/* 2026-04-30   Michael  1.1  FCR-8087 New REPLENCFG SQL_JOIN_TASK,ToID,*/
+/*                            NoQtyReplen,SetTransitLoc (ML01)          */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLREP09]
    @c_Facility  NVARCHAR(10) = ''
@@ -51,11 +53,13 @@ BEGIN
          , @c_Sku                    NVARCHAR(20) = ''
          , @c_Lot                    NVARCHAR(10) = ''
          , @n_Qty                    INT          = 0
+         , @n_QtyReplen              INT          = 0    --ML01
          , @c_FromLOC                NVARCHAR(10) = ''
          , @c_FromLogicalLoc         NVARCHAR(10) = ''
          , @c_ID                     NVARCHAR(18) = ''
          , @c_ToLOC                  NVARCHAR(10) = ''
          , @c_ToLogicalLoc           NVARCHAR(10) = ''
+         , @c_ToID                   NVARCHAR(18) = ''   --ML01
          , @c_FinalLOC               NVARCHAR(10) = ''
          , @c_Priority               NVARCHAR(5)  = ''
          , @c_UCCNo                  NVARCHAR(20) = ''
@@ -68,17 +72,22 @@ BEGIN
          , @c_SQLParms               NVARCHAR(MAX)= ''
          , @c_ReplCond_Exp           NVARCHAR(MAX)= ''
          , @c_ReplJoin_Exp           NVARCHAR(MAX)= ''
+         , @c_TaskJoin_Exp           NVARCHAR(MAX)= ''   --ML01
          , @c_TransitLOC_Exp         NVARCHAR(MAX)= ''
          , @c_TaskGrouping_Exp       NVARCHAR(MAX)= ''
          , @c_TaskPriority_Exp       NVARCHAR(MAX)= ''
          , @c_TaskType_Exp           NVARCHAR(MAX)= ''
          , @c_PickMethod_Exp         NVARCHAR(MAX)= ''
+         , @c_ToID_Exp               NVARCHAR(MAX)= ''   --ML01
          , @c_TaskType_Val           NVARCHAR(10) = ''
          , @c_PickMethod_Val         NVARCHAR(10) = ''
-         , @c_TaskPriority           NVARCHAR(10) = ''
-         , @c_DelPendingTask         NVARCHAR(10) = ''
+         , @c_TaskPriority_Val       NVARCHAR(10) = ''
+         , @c_NoQtyReplen            NVARCHAR(10) = ''   --ML01
+         , @c_NoQtyReplen2           NVARCHAR(10) = ''   --ML01
+         , @c_SetTransitLoc          NVARCHAR(10) = ''   --ML01
          , @c_TaskType               NVARCHAR(10) = ''
          , @c_PickMethod             NVARCHAR(10) = ''
+         , @c_OPTION5                NVARCHAR(MAX)= ''   --ML01
 
    CREATE TABLE #TEMP_REPLENISHMENT
    (
@@ -90,6 +99,7 @@ BEGIN
     , FromLOC          NVARCHAR(10) NULL DEFAULT ('')
     , ID               NVARCHAR(18) NULL DEFAULT ('')
     , ToLOC            NVARCHAR(10) NULL DEFAULT ('')
+    , ToID             NVARCHAR(18) NULL DEFAULT ('')   --ML01
     , UCCNo            NVARCHAR(20) NULL DEFAULT ('')
     , Priority         NVARCHAR(10) NULL DEFAULT ('')
     , TransitLOC       NVARCHAR(10) NULL DEFAULT ('')
@@ -97,17 +107,23 @@ BEGIN
 
    SELECT @n_err=0, @c_errmsg=''
 
+   SELECT @c_OPTION5 = ISNULL(OPTION5,'') FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseReplenTaskCode')   --ML01
+   SELECT @c_NoQtyReplen = dbo.fnc_GetParamValueFromString('@c_NoQtyReplen', @c_OPTION5, @c_NoQtyReplen)                   --ML01
+
    SELECT @c_ReplCond_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'Condition'         THEN Notes END)),'')
         , @c_ReplJoin_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN'          THEN Notes END)),'')
+        , @c_TaskJoin_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN_TASK'     THEN Notes END)),'')   --ML01
         , @c_TransitLOC_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'TransitLOC'        THEN Notes END)),'')
         , @c_TaskGrouping_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskGrouping'      THEN Notes END)),'')
         , @c_TaskType_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Notes END)),'')
         , @c_TaskPriority_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Notes END)),'')
         , @c_PickMethod_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Notes END)),'')
+        , @c_ToID_Exp           = ISNULL(TRIM(MAX(CASE WHEN Code = 'ToID'              THEN Notes END)),'')   --ML01
         , @c_TaskType_Val       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Short END)),'')
         , @c_PickMethod_Val     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Short END)),'')
-        , @c_TaskPriority       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Short END)),'')
-        , @c_DelPendingTask     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' THEN Short END)),'')
+        , @c_TaskPriority_Val   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Short END)),'')
+        , @c_NoQtyReplen2       = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoQtyReplen'       THEN Short END)),'')   --ML01
+        , @c_SetTransitLoc      = ISNULL(TRIM(MAX(CASE WHEN Code = 'SetTransitLoc'     THEN Short END)),'')   --ML01
      FROM dbo.CODELKUP WITH(NOLOCK)
     WHERE ListName = 'REPLENCFG'
       AND Code2 = 'ispRLREP09'
@@ -115,6 +131,9 @@ BEGIN
 
    IF @c_ReplCond_Exp LIKE 'AND %'
       SET @c_ReplCond_Exp = SUBSTRING(@c_ReplCond_Exp, 5, LEN(@c_ReplCond_Exp))
+
+   IF ISNULL(@c_NoQtyReplen,'') NOT IN ('1','Y') AND ISNULL(@c_NoQtyReplen2,'') IN ('1','Y')   --ML01
+      SET @c_NoQtyReplen = @c_NoQtyReplen2                                                     --ML01
 
    IF @c_Zone02 <> 'ALL' AND ISNULL(@c_ReplCond_Exp,'') = ''
    BEGIN
@@ -132,7 +151,7 @@ BEGIN
            + RTRIM(ISNULL(@c_Zone12,'')) +''')'
    END
 
-   SET @c_SQLStatement = 'INSERT INTO #TEMP_REPLENISHMENT(Replenishmentkey, StorerKey, Sku, Lot, Qty, FromLOC, ID, ToLOC, UCCNo, Priority, TransitLOC)'
+   SET @c_SQLStatement = 'INSERT INTO #TEMP_REPLENISHMENT(Replenishmentkey, StorerKey, Sku, Lot, Qty, FromLOC, ID, ToLOC, ToID, UCCNo, Priority, TransitLOC)'
      + ' SELECT RPL.Replenishmentkey'
      +       ', RPL.StorerKey'
      +       ', RPL.Sku'
@@ -141,17 +160,18 @@ BEGIN
      +       ', RPL.FromLoc'
      +       ', RPL.ID'
      +       ', RPL.ToLoc'
+     +       ', RPL.ToID'   --ML01
      +       ', RPL.RefNo'
      +       ', RPL.Priority'
      +       ', TransitLOC=' + CASE WHEN ISNULL(@c_TransitLOC_Exp  ,'')<>'' THEN @c_TransitLOC_Exp   ELSE 'ISNULL(PA.InLoc,'''')' END
      +   ' FROM dbo.REPLENISHMENT RPL WITH(NOLOCK)'
      +   ' JOIN dbo.LOC LOC WITH(NOLOCK) ON RPL.ToLoc=LOC.Loc'
-     +   ' LEFT JOIN dbo.PUTAWAYZONE PA WITH(NOLOCK) ON LOC.PutawayZone=PA.PutawayZone'
 
    IF ISNULL(@c_ReplJoin_Exp,'') <> ''
       SET @c_SQLStatement = @c_SQLStatement + ' ' + @c_ReplJoin_Exp
 
    SET @c_SQLStatement = @c_SQLStatement
+     +   ' LEFT JOIN dbo.PUTAWAYZONE PA WITH(NOLOCK) ON LOC.PutawayZone=PA.PutawayZone'
      +   ' LEFT JOIN dbo.LOC FRLOC WITH(NOLOCK) ON RPL.FromLoc=FRLOC.Loc'
      +   ' LEFT JOIN dbo.LOC TOLOC WITH(NOLOCK) ON RPL.ToLoc=TOLOC.Loc'
      +   ' LEFT JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON RPL.Lot=LA.Lot'
@@ -177,13 +197,13 @@ BEGIN
                    +', @c_Zone11 NVARCHAR(10)'
                    +', @c_Zone12 NVARCHAR(10)'
                    +', @c_Storerkey NVARCHAR(15)'
-                   +', @c_DelPendingTask NVARCHAR(10)'
 
    EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms
       , @c_Facility, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
-      , @c_Zone11, @c_Zone12, @c_Storerkey, @c_DelPendingTask
+      , @c_Zone11, @c_Zone12, @c_Storerkey
 
 
+   -- Loop #TEMP_REPLENISHMENT
    SET @c_SQLStatement = 'DECLARE CUR_REPLEN CURSOR FAST_FORWARD READ_ONLY FOR'
      + ' SELECT RPL.Replenishmentkey'
      +       ', RPL.StorerKey'
@@ -201,7 +221,7 @@ BEGIN
 
    SET @c_SQLStatement = @c_SQLStatement
      +       ', Priority='     + CASE WHEN ISNULL(@c_TaskPriority_Exp,'')<>'' THEN @c_TaskPriority_Exp
-                                      WHEN ISNULL(@c_TaskPriority    ,'')<>'' THEN '''' + REPLACE(@c_TaskPriority,'''','''''') + ''''
+                                      WHEN ISNULL(@c_TaskPriority_Val,'')<>'' THEN '''' + REPLACE(@c_TaskPriority_Val,'''','''''') + ''''
                                       ELSE 'RPL.Priority' END
 
    SET @c_SQLStatement = @c_SQLStatement
@@ -215,9 +235,17 @@ BEGIN
                                       WHEN ISNULL(@c_PickMethod_Val  ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_PickMethod_Val),'''','''''') + ''''
                                       ELSE '''PP'''
                                  END
-
+   SET @c_SQLStatement = @c_SQLStatement                                                         --ML01
+     +       ', ToID='         + CASE WHEN ISNULL(@c_ToID_Exp        ,'')<>'' THEN @c_ToID_Exp   --ML01
+                                      ELSE 'RPL.ID'                                              --ML01
+                                 END                                                             --ML01
    SET @c_SQLStatement = @c_SQLStatement
      + ' FROM #TEMP_REPLENISHMENT RPL'
+
+   IF ISNULL(@c_TaskJoin_Exp,'') <> ''                                --ML01
+      SET @c_SQLStatement = @c_SQLStatement + ' ' + @c_TaskJoin_Exp   --ML01
+
+   SET @c_SQLStatement = @c_SQLStatement
      + ' LEFT JOIN dbo.LOC FRLOC WITH(NOLOCK) ON RPL.FromLoc=FRLOC.Loc'
      + ' LEFT JOIN dbo.LOC TOLOC WITH(NOLOCK) ON RPL.ToLoc=TOLOC.Loc'
      + ' LEFT JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON RPL.Lot=LA.Lot'
@@ -226,7 +254,7 @@ BEGIN
 
    EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms
       , @c_Facility, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
-      , @c_Zone11, @c_Zone12, @c_Storerkey, @c_DelPendingTask
+      , @c_Zone11, @c_Zone12, @c_Storerkey
 
    OPEN CUR_REPLEN
 
@@ -238,6 +266,7 @@ BEGIN
       FETCH NEXT FROM CUR_REPLEN
       INTO @c_Replenishmentkey, @c_Storer, @c_Sku, @c_Lot, @n_Qty, @c_FromLOC, @c_FromLogicalLoc, @c_ID, @c_ToLOC, @c_ToLogicalLoc
          , @c_UCCNo, @c_TransitLOC, @c_TaskGrouping, @c_Priority, @c_TaskType, @c_PickMethod
+         , @c_ToID   --ML01
 
       IF @@FETCH_STATUS <> 0
          BREAK
@@ -264,24 +293,29 @@ BEGIN
       IF ISNULL(@c_TransitLOC,'') <> ''
       BEGIN
          SET @c_FinalLOC = @c_ToLOC
-         SET @c_ToLOC    = @c_TransitLOC
-         SET @c_ToLogicalLoc = @c_ToLOC
 
-         SELECT @c_ToLogicalLoc = LogicalLocation
-         FROM LOC(NOLOCK)
-         WHERE Loc = @c_ToLOC
+         IF ISNULL(@c_SetTransitLoc,'') NOT IN ('1','Y')   --ML01
+         BEGIN                                             --ML01
+            SET @c_ToLOC    = @c_TransitLOC
+            SET @c_ToLogicalLoc = @c_ToLOC
+            SET @c_TransitLOC = ''                         --ML01
+
+            SELECT @c_ToLogicalLoc = LogicalLocation
+            FROM LOC(NOLOCK)
+            WHERE Loc = @c_ToLOC
+         END                                               --ML01
       END
       ELSE
       BEGIN
-         SET @c_ToLOC    = @c_ToLOC
          SET @c_FinalLOC = ''
       END
 
       SET @c_UOM = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN '2' ELSE '6' END
+      SET @n_QtyReplen = CASE WHEN ISNULL(@c_NoQtyReplen,'') IN ('1','Y') THEN 0 ELSE @n_Qty END   --ML01
 
       EXEC isp_InsertTaskDetail
            @c_TaskType              = @c_TaskType
-         , @c_Storerkey             = @c_Storerkey
+         , @c_Storerkey             = @c_Storer
          , @c_Sku                   = @c_Sku
          , @c_Lot                   = @c_Lot
          , @c_UOM                   = @c_UOM
@@ -292,7 +326,7 @@ BEGIN
          , @c_FromID                = @c_ID
          , @c_ToLoc                 = @c_ToLOC
          , @c_LogicalToLoc          = @c_ToLogicalLoc
-         , @c_ToID                  = @c_ID
+         , @c_ToID                  = @c_ToID   --ML01
          , @c_CaseID                = @c_UCCNo
          , @c_DropID                = @c_UCCNo
          , @c_PickMethod            = @c_PickMethod
@@ -303,12 +337,13 @@ BEGIN
          , @c_OrderKey              = ''
          , @c_GroupKey              = @c_GroupKey
          , @c_CallSource            = 'REPLENISHMENT'
-         , @n_QtyReplen             = @n_Qty
+         , @n_QtyReplen             = @n_QtyReplen   --ML01
          , @n_PendingMoveIn         = @n_Qty
          , @c_Loadkey               = ''
          , @c_AreaKey               = '?F'  -- ?F=Get from location areakey
          , @c_LinkTaskToReplen      = 'Y'
          , @c_ZeroSystemQty         = 'Y'
+         , @c_TransitLOC            = @c_TransitLOC  --ML01
          , @c_FinalLOC              = @c_FinalLOC
          , @c_Message03             = ''
          , @c_SplitTaskByCase       = 'N'
