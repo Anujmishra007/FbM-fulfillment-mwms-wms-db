@@ -413,12 +413,13 @@ BEGIN
                       @d_Delivery_Date = O.DeliveryDate,
                       @c_Route = O.[Route],
                       @n_totweight = SUM((OD.Qtyallocated + OD.QtyPicked + OD.ShippedQty) * SKU.StdGrossWgt),
-                      @n_totcube = SUM((OD.Qtyallocated + OD.QtyPicked + OD.ShippedQty) * SKU.StdCube),
+                      @n_totcube = SUM((OD.Qtyallocated + OD.QtyPicked + OD.ShippedQty) * ISNULL(PACK.CubeUOM3, 0.00)),
                       @c_ExternOrderkey = O.ExternOrderkey,
                       @c_Loadkey = ISNULL(O.Loadkey,'')
                FROM Orders O WITH (NOLOCK)
                JOIN Orderdetail OD WITH (NOLOCK) ON (O.Orderkey = OD.Orderkey)
                JOIN SKU WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku)
+               JOIN PACK WITH (NOLOCK) ON (PACK.PACKKey = SKU.PACKKey)
                WHERE O.OrderKey = @c_OrderKey
                GROUP BY O.OrderDate,
                         O.DeliveryDate,
