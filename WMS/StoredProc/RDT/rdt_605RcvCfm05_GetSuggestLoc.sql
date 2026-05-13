@@ -218,9 +218,9 @@ BEGIN
    END
 
    -- Check if any dimension exceeds threshold (cast to DECIMAL for numeric comparison)
-   IF (ISNULL(TRY_CAST(@cUserDefine08 AS DECIMAL(5,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold01 AS DECIMAL(5,2)), 0))
-      OR (ISNULL(TRY_CAST(@cUserDefine09 AS DECIMAL(5,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold02 AS DECIMAL(5,2)), 0))
-      OR (ISNULL(TRY_CAST(@cUserDefine10 AS DECIMAL(5,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold03 AS DECIMAL(5,2)), 0))
+   IF (ISNULL(TRY_CAST(@cUserDefine08 AS DECIMAL(7,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold01 AS DECIMAL(7,2)), 0))
+      OR (ISNULL(TRY_CAST(@cUserDefine09 AS DECIMAL(7,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold02 AS DECIMAL(7,2)), 0))
+      OR (ISNULL(TRY_CAST(@cUserDefine10 AS DECIMAL(7,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold03 AS DECIMAL(7,2)), 0))
    BEGIN
       IF @nDebugFlag = 1
          SELECT 'Scenario Oversize'
