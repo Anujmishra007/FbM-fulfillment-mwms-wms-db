@@ -71,9 +71,9 @@ BEGIN
       , @n_err               INT           = 0
       , @c_errmsg            NVARCHAR(255) = ''
       , @c_SQL               NVARCHAR(MAX) = ''
+      , @c_SQL_Zones         NVARCHAR(MAX) = ''
       , @c_SQL_Rule1         NVARCHAR(MAX) = ''
       , @c_SQL_Rule2         NVARCHAR(MAX) = ''
-      , @c_Params            NVARCHAR(MAX) = ''
       , @c_Params_FindToLoc  NVARCHAR(MAX) = ''
       , @n_CartonCube        BIGINT        = ''
       , @c_Sku               NVARCHAR(20)  = ''
@@ -166,76 +166,61 @@ BEGIN
     , SourceType     NVARCHAR(30) NULL
     , GroupKey       NVARCHAR(10) NULL
     , AddDate        DATETIME DEFAULT (GETDATE())
+    , SelectFlag     NVARCHAR(1)  NULL DEFAULT('')
    )
 
+   -- Optional zone filters if provided (these are appended to the WHERE clause)
+   SET @c_SQL_Zones = ''
+   IF ISNULL(@c_Zone02,'') <> 'ALL'
+      SET @c_SQL_Zones += N' AND LOC.PutawayZone IN ('
+                  + '''' + ISNULL(REPLACE(RTRIM(@c_Zone02),'''',''''''),'') + ''','
+                  + '''' + ISNULL(REPLACE(RTRIM(@c_Zone03),'''',''''''),'') + ''','
+                  + '''' + ISNULL(REPLACE(RTRIM(@c_Zone04),'''',''''''),'') + ''','
+                  + '''' + ISNULL(REPLACE(RTRIM(@c_Zone05),'''',''''''),'') + ''','
+                  + '''' + ISNULL(REPLACE(RTRIM(@c_Zone06),'''',''''''),'') + ''','
+                  + '''' + ISNULL(REPLACE(RTRIM(@c_Zone07),'''',''''''),'') + ''','
+                  + '''' + ISNULL(REPLACE(RTRIM(@c_Zone08),'''',''''''),'') + ''','
+                  + '''' + ISNULL(REPLACE(RTRIM(@c_Zone09),'''',''''''),'') + ''')'
+
+   IF ISNULL(@c_Zone10,'') NOT IN ('', 'ALL')
+      SET @c_SQL_Zones += N' AND LOC.LocAisle = ''' + ISNULL(REPLACE(@c_Zone10,'''',''''''),'') + ''''
+
+   IF ISNULL(@c_Zone11,'') NOT IN ('', 'ALL')
+      SET @c_SQL_Zones += N' AND LOC.LocBay = ''' + ISNULL(REPLACE(@c_Zone11,'''',''''''),'') + ''''
+
+   IF ISNULL(@c_Zone12,'') <> '' AND TRY_PARSE(ISNULL(@c_Zone12,'') AS INT) IS NOT NULL
+      SET @c_SQL_Zones += N' AND LOC.LocLevel = ' + CONVERT(NVARCHAR(10), ISNULL(TRY_PARSE(ISNULL(@c_Zone12,'''') AS INT),0))
 
    ----------------------------------------------------------------
    -- Step 2: Build list of SKUs that exist in more than one location
    ----------------------------------------------------------------
    SET @c_SQL = N'INSERT INTO #TEMP_CandidateSKUs (Storerkey, Sku)'
-     +' SELECT SL.StorerKey, SL.Sku'
-     +  ' FROM dbo.SKUxLOC SL WITH (NOLOCK)'
-     +  ' JOIN dbo.LOC LOC WITH (NOLOCK) ON SL.Loc = LOC.Loc'
-     +  ' OUTER APPLY (SELECT TOP 1 LocType = RTRIM(Long) FROM CODELKUP (NOLOCK)'
-     +      ' WHERE Listname=''REPLENCFG'' AND Code=''DynPick_LocType'' AND Code2=''isp_GeneratePutBackTasks'' AND Storerkey=SL.Storerkey'
-     +  ' ) DP'
-     + ' WHERE (SL.LocationType = ''PICK'''
-     +    ' OR (SL.Qty > 0 AND LOC.LocationType = ISNULL(NULLIF(DP.LocType,''''),''DYNPPICK'')))'
-      +   ' AND LOC.Facility = ''' + ISNULL(REPLACE(@c_Facility,'''',''''''),'') + ''''
+     +' SELECT SL2.Storerkey, SL2.Sku'
+     +' FROM dbo.SKUxLOC SL2 WITH(NOLOCK)'
+     +' JOIN dbo.LOC LOC2 WITH (NOLOCK) ON SL2.Loc = LOC2.Loc'
+     +' JOIN ('
+     +   ' SELECT DISTINCT SL.StorerKey, SL.Sku'
+     +     ' FROM dbo.SKUxLOC SL WITH (NOLOCK)'
+     +     ' JOIN dbo.LOC LOC WITH (NOLOCK) ON SL.Loc = LOC.Loc'
+     +    ' WHERE LOC.Facility = ''' + ISNULL(REPLACE(@c_Facility,'''',''''''),'') + ''''
 
    IF ISNULL(@c_Storerkey,'') <> 'ALL'
       SET @c_SQL += ' AND SL.StorerKey = ''' + ISNULL(REPLACE(@c_Storerkey,'''',''''''),'') + ''''
 
-   -- Add optional zone filters if provided (these are appended to the WHERE clause)
-   IF (@c_Zone02 IS NOT NULL AND @c_Zone02 <> 'ALL')
-      SET @c_SQL += N' AND LOC.PutawayZone IN (@c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09) '
-   IF (@c_Zone10 IS NOT NULL AND @c_Zone10 <> 'ALL' AND @c_Zone10 <> '')
-      SET @c_SQL += N' AND LOC.LocAisle = @c_Zone10 '
-   IF (@c_Zone11 IS NOT NULL AND @c_Zone11 <> 'ALL' AND @c_Zone11 <> '')
-      SET @c_SQL += N' AND LOC.LocBay = @c_Zone11 '
-   IF (@c_Zone12 IS NOT NULL AND @c_Zone12 <> '999' AND ISNUMERIC(@c_Zone12) = 1)
-      SET @c_SQL += N' AND LOC.LocLevel = CAST(@c_Zone12 AS INT) '
+   IF ISNULL(@c_SQL_Zones,'') <> ''
+      SET @c_SQL = @c_SQL + @c_SQL_Zones
 
    SET @c_SQL = @c_SQL
-     + ' GROUP BY SL.StorerKey, SL.SKU'
-     +' HAVING COUNT(DISTINCT SL.LOC) > 1'
+     + ') X ON SL2.Storerkey = X.Storerkey AND SL2.Sku = X.Sku'
+     +' OUTER APPLY (SELECT TOP 1 LocType = RTRIM(Long) FROM CODELKUP a(NOLOCK)'
+     +    ' WHERE a.Listname=''REPLENCFG'' AND a.Code=''DynPick_LocType'' AND a.Code2=''isp_GeneratePutBackTasks'' AND a.Storerkey=SL2.Storerkey'
+     +' ) DP'
+     +' WHERE (SL2.LocationType = ''PICK'''
+     +    ' OR (SL2.Qty > 0 AND LOC2.LocationType = ISNULL(NULLIF(DP.LocType,''''),''DYNPPICK'')))'
+     + ' GROUP BY SL2.StorerKey, SL2.SKU'
+     +' HAVING COUNT(DISTINCT SL2.LOC) > 1'
 
-   SET @c_Params =
-       N'@c_Facility NVARCHAR(10)'
-     + ',@c_Storerkey NVARCHAR(15)'
-     + ',@c_ReplGrp NVARCHAR(10)'
-     + ',@c_Zone02 NVARCHAR(10)'
-     + ',@c_Zone03 NVARCHAR(10)'
-     + ',@c_Zone04 NVARCHAR(10)'
-     + ',@c_Zone05 NVARCHAR(10)'
-     + ',@c_Zone06 NVARCHAR(10)'
-     + ',@c_Zone07 NVARCHAR(10)'
-     + ',@c_Zone08 NVARCHAR(10)'
-     + ',@c_Zone09 NVARCHAR(10)'
-     + ',@c_Zone10 NVARCHAR(10)'
-     + ',@c_Zone11 NVARCHAR(10)'
-     + ',@c_Zone12 NVARCHAR(10)'
-     + ',@c_ReplenType NVARCHAR(10)'
-
-
-   EXEC sp_executesql
-        @c_SQL
-      , @c_Params
-      , @c_Facility = @c_Facility
-      , @c_Storerkey = @c_Storerkey
-      , @c_Zone02 = @c_Zone02
-      , @c_Zone03 = @c_Zone03
-      , @c_Zone04 = @c_Zone04
-      , @c_Zone05 = @c_Zone05
-      , @c_Zone06 = @c_Zone06
-      , @c_Zone07 = @c_Zone07
-      , @c_Zone08 = @c_Zone08
-      , @c_Zone09 = @c_Zone09
-      , @c_Zone10 = @c_Zone10
-      , @c_Zone11 = @c_Zone11
-      , @c_Zone12 = @c_Zone12
-      , @c_ReplGrp = @c_ReplGrp
-      , @c_ReplenType = @c_ReplenType
+   EXEC (@c_SQL)
 
    SET @c_Params_FindToLoc
      = N'@c_Facility       NVARCHAR(5)'
@@ -782,10 +767,32 @@ BEGIN
 
    IF EXISTS(SELECT TOP 1 1 FROM #TEMP_TASK)
    BEGIN
+      IF ISNULL(@c_SQL_Zones,'') <> ''
+      BEGIN
+         SET @c_SQL = 'UPDATE T SET SelectFlag = ''Y'''
+           + ' FROM #TEMP_TASK T'
+           + ' JOIN LOC WITH(NOLOCK) ON T.FromLoc = LOC.Loc'
+           + ' WHERE ISNULL(T.SelectFlag,'''')<>''Y'''
+           + ISNULL(@c_SQL_Zones,'')
+         EXEC (@c_SQL)
+
+         SET @c_SQL = 'UPDATE T SET SelectFlag = ''Y'''
+           + ' FROM #TEMP_TASK T'
+           + ' JOIN LOC WITH(NOLOCK) ON T.ToLoc = LOC.Loc'
+           + ' WHERE ISNULL(T.SelectFlag,'''')<>''Y'''
+           + ISNULL(@c_SQL_Zones,'')
+         EXEC (@c_SQL)
+      END
+      ELSE
+      BEGIN
+         UPDATE #TEMP_TASK SET SelectFlag = 'Y'
+      END
+
       DECLARE CUR_TASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT TaskType, Storerkey, Sku, Lot, Qty, FromLoc, FromLogicalLoc, FromID, ToLoc, ToLogicalLoc, ToID,
              UOM, PackKey, Priority, PickMethod, SourceType, GroupKey
       FROM #TEMP_TASK
+      WHERE SelectFlag = 'Y'
       ORDER BY RowNo
 
       OPEN CUR_TASK
