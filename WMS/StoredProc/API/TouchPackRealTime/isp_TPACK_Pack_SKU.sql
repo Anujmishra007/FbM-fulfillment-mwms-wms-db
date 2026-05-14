@@ -13,6 +13,7 @@ GO
 /* 2025-08-05   1.0  GCH225     Created                                          */
 /* 2026-02-11   2.0  GCH225     UWP:45984: Fix for PreCartonize issue            */
 /* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
+/* 2026-05-14   3.1  GCH225     FCR-13198: Fix Update Multi Line PackDetail      */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_Pack_SKU] (
@@ -56,7 +57,18 @@ BEGIN
          , @bIsINS               BIT
          , @cUCCtoUPC            NVARCHAR(10)
          , @cUCCtoDropID         NVARCHAR(10)
+         , @nExpQty              INT
+         , @nTMP_PDQty           INT
+         , @nCountTLN            INT
    
+   DECLARE @tLineNo TABLE (
+        RowID     INT IDENTITY(1,1) PRIMARY KEY 
+      , LabelLine NVARCHAR(20)
+      , Qty       INT
+      , ExpQty    INT
+      , TMP_PDQty INT
+   )
+
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
    SET @c_ErrMsg           = '' 
@@ -68,6 +80,9 @@ BEGIN
    SET @bIsINS             = 1
    SET @cUCCtoUPC          = ''
    SET @cUCCtoDropID       = ''
+   SET @nExpQty            = 0
+   SET @nTMP_PDQty         = 0
+   SET @nCountTLN          = 0
 
    IF @cScanType = 'ucc'
    BEGIN
@@ -196,7 +211,8 @@ BEGIN
      
       IF @cScanType IN( 'upc', 'altsku', 'manusku', 'retailsku') 
       BEGIN
-         SELECT @cLabelLine = LabelLine
+         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty, TMP_PDQty)
+         SELECT LabelLine, @nQty, ExpQty, Qty
          FROM PACKDETAIL (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
@@ -204,10 +220,12 @@ BEGIN
          AND SKU = @cSKU
          AND UPC = @cInputValue1
          AND (@cInputValue3 = '' OR LOTTABLEVALUE = @cInputValue3)
+         ORDER BY LabelLine ASC
       END
       ELSE IF @cInputValue3 <> ''
       BEGIN
-         SELECT @cLabelLine = LabelLine
+         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty, TMP_PDQty)
+         SELECT LabelLine, @nQty, ExpQty, Qty
          FROM PACKDETAIL (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
@@ -215,10 +233,12 @@ BEGIN
          AND SKU = @cSKU
          AND UPC = ''
          AND LOTTABLEVALUE = @cInputValue3
+         ORDER BY LabelLine ASC
       END
       ELSE -- all other scan type
       BEGIN
-         SELECT @cLabelLine = LabelLine
+         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty, TMP_PDQty)
+         SELECT LabelLine, @nQty, ExpQty, Qty
          FROM PACKDETAIL (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
@@ -226,10 +246,45 @@ BEGIN
          AND SKU = @cSKU
          AND (UPC = '' OR UPC IS NULL)
          AND (LOTTABLEVALUE = '' OR LOTTABLEVALUE IS NULL)
+         ORDER BY LabelLine ASC
       END
 
-      IF @@ROWCOUNT = 1
+      SELECT @nCountTLN = COUNT(1) 
+      FROM @tLineNo
+
+      IF @@ROWCOUNT > 0
       BEGIN
+         IF @nCountTLN > 1
+         BEGIN
+            SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
+                  , @nTMP_PDQty = ISNULL(SUM(TMP_PDQty), 0)
+            FROM @tLineNo
+
+            IF @nExpQty <> 0
+            BEGIN
+               IF @nExpQty <> @nQty + @nTMP_PDQty
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_ErrNo = 11157
+                  SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'The total quantity pack is not matched with the expected quantity.'
+                  GOTO EXIT_SP
+               END
+               ELSE
+               BEGIN
+                  UPDATE @tLineNo
+                  SET Qty = ExpQty
+                  WHERE Qty <> ExpQty
+               END
+            END
+            ELSE
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_ErrNo = 11158
+               SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Multiple lines are found, system cannot determine which line to update.
+               GOTO EXIT_SP
+            END
+         END
+
          SET @bIsINS = 0 
       END
       ELSE
@@ -297,14 +352,16 @@ BEGIN
    END
    ELSE
    BEGIN
-      UPDATE PACKDETAIL WITH (ROWLOCK)
-      SET Qty = Qty + @nQty
-         , EditWho = @c_UserID
-         , EditDate = GETDATE()
+      UPDATE PD
+      SET PD.Qty = PD.Qty + TLN.Qty
+         , PD.EditWho = @c_UserID
+         , PD.EditDate = GETDATE()
+      FROM PACKDETAIL PD WITH (ROWLOCK)
+      INNER JOIN @tLineNo TLN
+      ON PD.LabelLine = TLN.LabelLine
       WHERE PickSlipNo = @cPickSlipNo
       AND CartonNo = @nCartonNo
       AND LabelNo = @cLabelNo
-      AND LabelLine = @cLabelLine
 
       IF @@ERROR <> 0
       BEGIN
@@ -458,6 +515,3 @@ EXIT_SP:
       RETURN      
    END
 END
-
-
-
