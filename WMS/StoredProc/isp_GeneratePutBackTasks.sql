@@ -51,10 +51,12 @@ BEGIN
       , @c_UOM               NVARCHAR(5)   = ''
       , @c_Priority          NVARCHAR(10)  = ''
       , @c_GroupKey          NVARCHAR(10)  = ''
+      , @c_SelectFlag        NVARCHAR(1)   = ''
       , @c_CartonType        NVARCHAR(10)  = ''
       , @c_NoCommingleSku    NVARCHAR(10)  = ''
       , @c_MoveAllocQty      NVARCHAR(10)  = ''
       , @c_MovePickedQty     NVARCHAR(10)  = ''
+      , @c_TaskFilterZone    NVARCHAR(10)  = ''
       , @c_DynPick_LocType   NVARCHAR(10)  = ''
       , @n_DftCartonCube     FLOAT         = 0
       , @n_DftSkuStdCube     FLOAT         = 0
@@ -166,7 +168,7 @@ BEGIN
     , SourceType     NVARCHAR(30) NULL
     , GroupKey       NVARCHAR(10) NULL
     , AddDate        DATETIME DEFAULT (GETDATE())
-    , SelectFlag     NVARCHAR(1)  NULL DEFAULT('')
+    , SelectFlag     NVARCHAR(1)  NULL
    )
 
    -- Optional zone filters if provided (these are appended to the WHERE clause)
@@ -286,6 +288,7 @@ BEGIN
               , @c_NoCommingleSku     = ISNULL(RTRIM(MAX(CASE WHEN Code='NoCommingleSku'     THEN Long END)), '1'      )
               , @c_MoveAllocQty       = ISNULL(RTRIM(MAX(CASE WHEN Code='MoveAllocQty'       THEN Long END)), '0'      )
               , @c_MovePickedQty      = ISNULL(RTRIM(MAX(CASE WHEN Code='MovePickedQty'      THEN Long END)), '0'      )
+              , @c_TaskFilterZone     = ISNULL(RTRIM(MAX(CASE WHEN Code='TaskFilterZone'     THEN Long END)), ''       )
               , @c_DynPick_LocType    = ISNULL(NULLIF(RTRIM(MAX(CASE WHEN Code='DynPick_LocType'    THEN Long END)),''), 'DYNPPICK')
               , @n_DftCartonCube      = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='DftCartonCube' THEN Long END),'') AS FLOAT), 50020)
               , @n_DftSkuStdCube      = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='DftSkuStdCube' THEN Long END),'') AS FLOAT), 1000 )
@@ -742,6 +745,7 @@ BEGIN
 
             SET @c_Packkey = ''
             SET @c_UOM     = ''
+            SET @c_SelectFlag = CASE WHEN @c_TaskFilterZone IN ('1','Y') THEN '' ELSE 'Y' END
 
             IF @c_ReplenType = 'R'
             BEGIN
@@ -754,9 +758,9 @@ BEGIN
             END
 
             INSERT INTO #TEMP_TASK (TaskType, Storerkey, Sku, Lot, Qty, FromLoc, FromLogicalLoc, FromID, ToLoc, ToLogicalLoc, ToID,
-                                    UOM, PackKey, Priority, PickMethod, SourceType, GroupKey)
+                                    UOM, PackKey, Priority, PickMethod, SourceType, GroupKey, SelectFlag)
             VALUES(@c_TaskType, @c_Storerkey, @c_Sku, @c_Lot, @n_Qty, @c_FromLoc, @c_FromLogicalLoc, @c_FromID, @c_ToLoc, @c_ToLogicalLoc, @c_FromID,
-                   @c_UOM, @c_PackKey, @c_Priority, @c_PickMethod, @c_SourceType, @c_GroupKey)
+                   @c_UOM, @c_PackKey, @c_Priority, @c_PickMethod, @c_SourceType, @c_GroupKey, @c_SelectFlag)
          END
       END
       CLOSE CUR_FROMLOC
@@ -767,25 +771,28 @@ BEGIN
 
    IF EXISTS(SELECT TOP 1 1 FROM #TEMP_TASK)
    BEGIN
-      IF ISNULL(@c_SQL_Zones,'') <> ''
+      IF EXISTS(SELECT TOP 1 1 FROM #TEMP_TASK WHERE ISNULL(SelectFlag,'')<>'Y')
       BEGIN
-         SET @c_SQL = 'UPDATE T SET SelectFlag = ''Y'''
-           + ' FROM #TEMP_TASK T'
-           + ' JOIN LOC WITH(NOLOCK) ON T.FromLoc = LOC.Loc'
-           + ' WHERE ISNULL(T.SelectFlag,'''')<>''Y'''
-           + ISNULL(@c_SQL_Zones,'')
-         EXEC (@c_SQL)
-
-         SET @c_SQL = 'UPDATE T SET SelectFlag = ''Y'''
-           + ' FROM #TEMP_TASK T'
-           + ' JOIN LOC WITH(NOLOCK) ON T.ToLoc = LOC.Loc'
-           + ' WHERE ISNULL(T.SelectFlag,'''')<>''Y'''
-           + ISNULL(@c_SQL_Zones,'')
-         EXEC (@c_SQL)
-      END
-      ELSE
-      BEGIN
-         UPDATE #TEMP_TASK SET SelectFlag = 'Y'
+         IF ISNULL(@c_SQL_Zones,'') <> ''
+         BEGIN
+            SET @c_SQL = 'UPDATE T SET SelectFlag = ''Y'''
+              + ' FROM #TEMP_TASK T'
+              + ' JOIN LOC WITH(NOLOCK) ON T.FromLoc = LOC.Loc'
+              + ' WHERE ISNULL(T.SelectFlag,'''')<>''Y'''
+              + ISNULL(@c_SQL_Zones,'')
+            EXEC (@c_SQL)
+         
+            SET @c_SQL = 'UPDATE T SET SelectFlag = ''Y'''
+              + ' FROM #TEMP_TASK T'
+              + ' JOIN LOC WITH(NOLOCK) ON T.ToLoc = LOC.Loc'
+              + ' WHERE ISNULL(T.SelectFlag,'''')<>''Y'''
+              + ISNULL(@c_SQL_Zones,'')
+            EXEC (@c_SQL)
+         END
+         ELSE
+         BEGIN
+            UPDATE #TEMP_TASK SET SelectFlag = 'Y'
+         END
       END
 
       DECLARE CUR_TASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
