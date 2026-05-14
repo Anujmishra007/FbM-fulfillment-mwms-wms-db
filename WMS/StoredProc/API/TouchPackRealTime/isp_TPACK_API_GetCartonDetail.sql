@@ -213,7 +213,7 @@ BEGIN
    BEGIN
       SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
             , @nTtlQty = ISNULL(SUM(Qty), 0)
-            , @nSKUCount = COUNT(SKU)
+            , @nSKUCount = COUNT(DISTINCT SKU)
             , @cSKU = MAX(SKU)
       FROM PACKDETAIL (NOLOCK) 
       WHERE PickSlipNo = @cPickSlipNo
