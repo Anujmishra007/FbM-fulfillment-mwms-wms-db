@@ -247,7 +247,8 @@ INSERT INTO #TEMPSKU
       --        INTO #Inventory
               FROM Lotxlocxid LLI (NOLOCK), Lotattribute LA (NOLOCK), Loc (NOLOCK), LOT (NOLOCK), ID (NOLOCK)   --(USH022 -01) - START-UWP-18028
              WHERE LA.Storerkey = @c_StorerKey
-            AND LA.SKU IN (SELECT SKU FROM #TEMPSKU)
+            --AND LA.SKU IN (SELECT SKU FROM #TEMPSKU)
+               AND EXISTS(SELECT 1 FROM #TEMPSKU WHERE #TEMPSKU.Sku = LA.Sku) --NJOW02
                AND LA.Lottable03 = @c_ExternPOKey
                AND Loc.Facility = @c_facility
                AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
