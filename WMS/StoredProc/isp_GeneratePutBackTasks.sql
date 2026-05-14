@@ -478,8 +478,7 @@ BEGIN
            +      ' FROM #TEMP_TASK a'
            +     ' WHERE a.Storerkey = @c_Storerkey AND a.Sku = @c_Sku AND a.ToLoc = LOC.Loc'
            +  ') TS'
-           +' WHERE LOC.Loc <> @c_FromLoc'
-           +  ' AND LOC.Loc NOT IN (SELECT Loc FROM #TEMP_UsedFromLoc)'
+           +' WHERE LOC.Loc NOT IN (SELECT Loc FROM #TEMP_UsedFromLoc)'
            +  ' AND NOT EXISTS(SELECT TOP 1 1'
            +         ' FROM dbo.LOTxLOCxID a WITH (NOLOCK)'
            +         ' JOIN dbo.SKU        b WITH (NOLOCK) ON a.Storerkey = b.Storerkey AND a.Sku = b.Sku'
@@ -736,7 +735,7 @@ BEGIN
          ----------------------------------------------------------------
          -- Insert PUTBACK Task using provided proc
          ----------------------------------------------------------------
-         IF @n_continue IN (1,2) AND ISNULL(@c_FromLoc,'')<>'' AND ISNULL(@c_ToLoc,'')<>''
+         IF @n_continue IN (1,2) AND ISNULL(@c_FromLoc,'')<>'' AND ISNULL(@c_ToLoc,'')<>'' AND ISNULL(@c_FromLoc,'') <> ISNULL(@c_ToLoc,'')
          BEGIN
             IF NOT EXISTS(SELECT TOP 1 1 FROM #TEMP_UsedFromLoc WHERE Loc=@c_FromLoc)
                INSERT INTO #TEMP_UsedFromLoc (Loc) VALUES(@c_FromLoc)
