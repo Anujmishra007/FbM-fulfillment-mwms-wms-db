@@ -49,7 +49,6 @@ BEGIN
          , @n_starttcnt              INT = @@TRANCOUNT
          , @b_Success                INT = 0
          , @c_Replenishmentkey       NVARCHAR(10) = ''
-         , @c_ReplenishmentGroup     NVARCHAR(10) = ''   --ML01
          , @c_Storer                 NVARCHAR(15) = ''
          , @c_Sku                    NVARCHAR(20) = ''
          , @c_Lot                    NVARCHAR(10) = ''
@@ -94,19 +93,41 @@ BEGIN
 
    CREATE TABLE #TEMP_REPLENISHMENT
    (
-      Replenishmentkey   NVARCHAR(10) NULL DEFAULT ('')
-    , ReplenishmentGroup NVARCHAR(10) NULL DEFAULT ('')   --ML01
-    , StorerKey          NVARCHAR(15) NULL DEFAULT ('')
-    , Sku                NVARCHAR(20) NULL DEFAULT ('')
-    , Lot                NVARCHAR(10) NULL DEFAULT ('')
-    , Qty                INT          NULL DEFAULT (0)
-    , FromLOC            NVARCHAR(10) NULL DEFAULT ('')
-    , ID                 NVARCHAR(18) NULL DEFAULT ('')
-    , ToLOC              NVARCHAR(10) NULL DEFAULT ('')
-    , ToID               NVARCHAR(18) NULL DEFAULT ('')   --ML01
-    , UCCNo              NVARCHAR(20) NULL DEFAULT ('')
-    , Priority           NVARCHAR(10) NULL DEFAULT ('')
-    , TransitLOC         NVARCHAR(10) NULL DEFAULT ('')
+      Replenishmentkey   NVARCHAR(10)  NULL DEFAULT ('')
+    , StorerKey          NVARCHAR(15)  NULL DEFAULT ('')
+    , Sku                NVARCHAR(20)  NULL DEFAULT ('')
+    , Lot                NVARCHAR(10)  NULL DEFAULT ('')
+    , Qty                INT           NULL DEFAULT (0)
+    , FromLOC            NVARCHAR(10)  NULL DEFAULT ('')
+    , ID                 NVARCHAR(18)  NULL DEFAULT ('')
+    , ToLOC              NVARCHAR(10)  NULL DEFAULT ('')
+    , UCCNo              NVARCHAR(20)  NULL DEFAULT ('')
+    , Priority           NVARCHAR(10)  NULL DEFAULT ('')
+    , TransitLOC         NVARCHAR(10)  NULL DEFAULT ('')
+    --ML01-S
+    , ReplenishmentGroup NVARCHAR(10)  NULL DEFAULT ('')
+    , ToID               NVARCHAR(18)  NULL DEFAULT ('')
+    , QtyMoved           INT           NULL DEFAULT (0)
+    , QtyInPickLoc       INT           NULL DEFAULT (0)
+    , UOM                NVARCHAR(10)  NULL DEFAULT ('')
+    , PackKey            NVARCHAR(10)  NULL DEFAULT ('')
+    , Confirmed          NVARCHAR(1)   NULL DEFAULT ('')
+    , ReplenNo           NVARCHAR(10)  NULL DEFAULT ('')
+    , Remark             NVARCHAR(255) NULL DEFAULT ('')
+    , AddDate            DATETIME      NULL
+    , AddWho             NVARCHAR(128) NULL DEFAULT ('')
+    , EditDate           DATETIME      NULL
+    , EditWho            NVARCHAR(128) NULL DEFAULT ('')
+    , RefNo              NVARCHAR(20)  NULL DEFAULT ('')
+    , DropID             NVARCHAR(20)  NULL DEFAULT ('')
+    , LoadKey            NVARCHAR(10)  NULL DEFAULT ('')
+    , Wavekey            NVARCHAR(10)  NULL DEFAULT ('')
+    , OriginalFromLoc    NVARCHAR(10)  NULL DEFAULT ('')
+    , OriginalQty        INT           NULL DEFAULT (0)
+    , MoveRefKey         NVARCHAR(10)  NULL DEFAULT ('')
+    , PendingMoveIn      INT           NULL DEFAULT (0)
+    , QtyReplen          INT           NULL DEFAULT (0)
+    --ML01-E
    )
 
    SELECT @n_err=0, @c_errmsg=''
@@ -153,9 +174,10 @@ BEGIN
            + RTRIM(ISNULL(@c_Zone12,'')) +''')'
    END
 
-   SET @c_SQLStatement = 'INSERT INTO #TEMP_REPLENISHMENT(Replenishmentkey, ReplenishmentGroup, StorerKey, Sku, Lot, Qty, FromLOC, ID, ToLOC, ToID, UCCNo, Priority, TransitLOC)'
+   SET @c_SQLStatement = 'INSERT INTO #TEMP_REPLENISHMENT(Replenishmentkey, StorerKey, Sku, Lot, Qty, FromLOC, ID, ToLOC, UCCNo, Priority, TransitLOC'
+     + ', ReplenishmentGroup, ToID, QtyMoved, QtyInPickLoc, UOM, PackKey, Confirmed, ReplenNo, Remark, AddDate, AddWho'              --ML01
+     + ', EditDate, EditWho, RefNo, DropID, LoadKey, Wavekey, OriginalFromLoc, OriginalQty, MoveRefKey, PendingMoveIn, QtyReplen)'   --ML01
      + ' SELECT RPL.Replenishmentkey'
-     +       ', RPL.ReplenishmentGroup'   --ML01
      +       ', RPL.StorerKey'
      +       ', RPL.Sku'
      +       ', RPL.Lot'
@@ -163,10 +185,34 @@ BEGIN
      +       ', RPL.FromLoc'
      +       ', RPL.ID'
      +       ', RPL.ToLoc'
-     +       ', RPL.ToID'   --ML01
      +       ', RPL.RefNo'
      +       ', RPL.Priority'
      +       ', TransitLOC=' + CASE WHEN ISNULL(@c_TransitLOC_Exp  ,'')<>'' THEN @c_TransitLOC_Exp   ELSE 'ISNULL(PA.InLoc,'''')' END
+     --ML01-S
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', RPL.ReplenishmentGroup'
+     +       ', RPL.ToID'
+     +       ', RPL.QtyMoved'
+     +       ', RPL.QtyInPickLoc'
+     +       ', RPL.UOM'
+     +       ', RPL.PackKey'
+     +       ', RPL.Confirmed'
+     +       ', RPL.ReplenNo'
+     +       ', RPL.Remark'
+     +       ', RPL.AddDate'
+     +       ', RPL.AddWho'
+     +       ', RPL.EditDate'
+     +       ', RPL.EditWho'
+     +       ', RPL.RefNo'
+     +       ', RPL.DropID'
+     +       ', RPL.LoadKey'
+     +       ', RPL.Wavekey'
+     +       ', RPL.OriginalFromLoc'
+     +       ', RPL.OriginalQty'
+     +       ', RPL.MoveRefKey'
+     +       ', RPL.PendingMoveIn'
+     +       ', RPL.QtyReplen'
+     --ML01-E
      +   ' FROM dbo.REPLENISHMENT RPL WITH(NOLOCK)'
      +   ' JOIN dbo.LOC LOC WITH(NOLOCK) ON RPL.ToLoc=LOC.Loc'
 
@@ -209,7 +255,6 @@ BEGIN
    -- Loop #TEMP_REPLENISHMENT
    SET @c_SQLStatement = 'DECLARE CUR_REPLEN CURSOR FAST_FORWARD READ_ONLY FOR'
      + ' SELECT RPL.Replenishmentkey'
-     +       ', RPL.ReplenishmentGroup'   --ML01
      +       ', RPL.StorerKey'
      +       ', RPL.Sku'
      +       ', RPL.Lot'
@@ -279,7 +324,7 @@ BEGIN
    WHILE @n_continue IN (1,2)
    BEGIN
       FETCH NEXT FROM CUR_REPLEN
-      INTO @c_Replenishmentkey, @c_ReplenishmentGroup, @c_Storer, @c_Sku, @c_Lot, @n_Qty, @c_FromLOC, @c_FromLogicalLoc, @c_ID, @c_ToLOC, @c_ToLogicalLoc
+      INTO @c_Replenishmentkey, @c_Storer, @c_Sku, @c_Lot, @n_Qty, @c_FromLOC, @c_FromLogicalLoc, @c_ID, @c_ToLOC, @c_ToLogicalLoc
          , @c_UCCNo, @c_TransitLOC, @c_TaskGrouping, @c_Priority, @c_TaskType, @c_PickMethod
          , @c_ToID, @c_NoQtyReplen   --ML01
 

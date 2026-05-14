@@ -45,6 +45,8 @@ BEGIN
         @c_Facility          NVARCHAR(10)  = ISNULL(@c_Zone01,'')
       , @c_SourceType        NVARCHAR(30)  = 'isp_GeneratePutBackTasks'
       , @c_TaskType          NVARCHAR(10)  = ''
+      , @c_Clear_SourceType  NVARCHAR(250) = ''
+      , @c_Clear_TaskType    NVARCHAR(250) = ''
       , @c_PickMethod        NVARCHAR(10)  = ''
       , @c_UOM               NVARCHAR(5)   = ''
       , @c_Priority          NVARCHAR(10)  = ''
@@ -289,6 +291,8 @@ BEGIN
          SET @c_PrevStorerkey = ISNULL(@c_Storerkey,'')
 
          SELECT @c_TaskType           = ISNULL(RTRIM(MAX(CASE WHEN Code='TaskType'           THEN Long END)), 'PUTBACK')
+              , @c_Clear_SourceType   = ISNULL(RTRIM(MAX(CASE WHEN Code='Clear_SourceType'   THEN Long END)), ''       )   -- allow multi value seperated by comma
+              , @c_Clear_TaskType     = ISNULL(RTRIM(MAX(CASE WHEN Code='Clear_TaskType'     THEN Long END)), ''       )   -- allow multi value seperated by comma
               , @c_PickMethod         = ISNULL(RTRIM(MAX(CASE WHEN Code='PickMethod'         THEN Long END)), 'PP'     )
               , @c_UOM                = ISNULL(RTRIM(MAX(CASE WHEN Code='UOM'                THEN Long END)), '6'      )
               , @c_Priority           = ISNULL(RTRIM(MAX(CASE WHEN Code='Priority'           THEN Long END)), '5'      )
@@ -369,16 +373,22 @@ BEGIN
             CLOSE CUR_REPLEN
             DEALLOCATE CUR_REPLEN
          END
-         ELSE IF @c_ReplenType = 'T'
+
+         IF @c_ReplenType = 'T' OR
+           (@c_ReplenType = 'R' AND ISNULL(@c_Clear_SourceType,'')<>'' AND ISNULL(@c_Clear_TaskType,'')<>'')
          BEGIN
             DECLARE CUR_TASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT TD.TaskDetailKey
             FROM dbo.TASKDETAIL TD  WITH (NOLOCK)
             JOIN dbo.LOC        LOC WITH (NOLOCK) ON TD.FromLoc = LOC.Loc
             WHERE TD.Status IN ('0', '3')
-              AND TD.TaskType = @c_TaskType
-              AND TD.StorerKey = @c_Storerkey
-              AND LOC.Facility = @c_Facility
+              AND TD.StorerKey  = @c_Storerkey
+              AND LOC.Facility  = @c_Facility
+              AND CASE WHEN @c_ReplenType = 'R'
+                       THEN IIF(EXISTS(SELECT TOP 1 1 FROM STRING_SPLIT(@c_Clear_SourceType,',') WHERE value<>'' AND value=TD.SourceType) AND
+                                EXISTS(SELECT TOP 1 1 FROM STRING_SPLIT(@c_Clear_TaskType  ,',') WHERE value<>'' AND value=TD.TaskType), 1, 0)
+                       ELSE IIF(TD.SourceType=@c_SourceType AND TD.TaskType=@c_TaskType, 1, 0)
+                  END = 1
 
             OPEN CUR_TASK
 
