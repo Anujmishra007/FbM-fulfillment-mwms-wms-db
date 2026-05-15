@@ -400,7 +400,7 @@ BEGIN
    ELSE
    BEGIN
       UPDATE PD
-      SET PD.Qty = PD.Qty + TLN.Qty
+      SET PD.Qty = TLN.Qty
          , PD.EditWho = @c_UserID
          , PD.EditDate = GETDATE()
       FROM PACKDETAIL PD WITH (ROWLOCK)
