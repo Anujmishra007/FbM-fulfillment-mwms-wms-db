@@ -288,7 +288,7 @@ BEGIN
               , @c_NoCommingleSku     = ISNULL(RTRIM(MAX(CASE WHEN Code='NoCommingleSku'     THEN Long END)), '1'      )
               , @c_MoveAllocQty       = ISNULL(RTRIM(MAX(CASE WHEN Code='MoveAllocQty'       THEN Long END)), '0'      )
               , @c_MovePickedQty      = ISNULL(RTRIM(MAX(CASE WHEN Code='MovePickedQty'      THEN Long END)), '0'      )
-              , @c_TaskFilterZone     = ISNULL(RTRIM(MAX(CASE WHEN Code='TaskFilterZone'     THEN Long END)), ''       )
+              , @c_TaskFilterZone     = ISNULL(RTRIM(MAX(CASE WHEN Code='TaskFilterZone'     THEN Long END)), 'Y'      )
               , @c_DynPick_LocType    = ISNULL(NULLIF(RTRIM(MAX(CASE WHEN Code='DynPick_LocType'    THEN Long END)),''), 'DYNPPICK')
               , @n_DftCartonCube      = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='DftCartonCube' THEN Long END),'') AS FLOAT), 50020)
               , @n_DftSkuStdCube      = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='DftSkuStdCube' THEN Long END),'') AS FLOAT), 1000 )
@@ -514,8 +514,8 @@ BEGIN
             SET @c_SQL_Rule2 = @c_SQL_Rule2 + ' AND (' + @c_ToDPLoc_Cond_Exp + ')'
          ELSE
             SET @c_SQL_Rule2 = @c_SQL_Rule2
-              +  ' AND ((ISNULL(@c_PickLoc,'''')<>'''' AND LOC.LocAisle=@c_PickAisle)'
-              +    ' OR (ISNULL(@c_StylePickLoc,'''')<>'''' AND LOC.LocAisle=@c_StylePickAisle)'
+              +  ' AND ((ISNULL(@c_PickLoc,'''')<>'''' AND LOC.Loc=@c_PickLoc AND LOC.LocAisle=@c_PickAisle)'
+              +    ' OR (ISNULL(@c_StylePickLoc,'''')<>'''' AND ISNULL(@c_PickLoc,'''')='''' AND LOC.LocAisle=@c_StylePickAisle)'
               +    ' OR (ISNULL(LLI.Qty,0)-ISNULL(LLI.QtyPicked,0)+ISNULL(TS.PendingQty,0)>0))'
               +  ' AND LOC.PutawayZone = @c_FromPAZone'
               +  ' AND CASE WHEN @c_SkuClass=''Bigger'' THEN IIF(ISNULL(TRY_PARSE(ISNULL(LOC.LocationRoom,'''') AS FLOAT),1)>=2,1,0) ELSE 1 END=1'
@@ -525,10 +525,10 @@ BEGIN
          ELSE
             SET @c_SQL_Rule2 = @c_SQL_Rule2
               +' ORDER BY CASE WHEN ISNULL(LLI.Qty,0)-ISNULL(LLI.QtyPicked,0)+ISNULL(TS.PendingQty,0)>0 THEN 10 ELSE 20 END'
-              +        ', CASE WHEN ISNULL(@c_PickLoc,'''')<>'''' AND LOC.LocAisle=@c_PickAisle THEN 10'
-              +              ' WHEN ISNULL(@c_StylePickLoc,'''')<>'''' AND LOC.LocAisle=@c_StylePickAisle THEN 20'
+              +        ', CASE WHEN ISNULL(@c_PickLoc,'''')<>'''' AND LOC.Loc=@c_PickLoc AND LOC.LocAisle=@c_PickAisle THEN 10'
+              +              ' WHEN ISNULL(@c_StylePickLoc,'''')<>'''' AND ISNULL(@c_PickLoc,'''')='''' AND LOC.LocAisle=@c_StylePickAisle THEN 20'
               +         ' ELSE 30 END'
-              +        ', ABS(ISNULL(TRY_PARSE(ISNULL(IIF(ISNULL(@c_PickLoc,'''')<>'''',@c_PickLogicalLoc,@c_StylePickLgLoc),'''') AS FLOAT),0)'
+              +        ', ABS(ISNULL(TRY_PARSE(ISNULL(IIF(ISNULL(@c_PickLoc,'''')<>'''' AND LOC.Loc=@c_PickLoc,@c_PickLogicalLoc,@c_StylePickLgLoc),'''') AS FLOAT),0)'
               +           ' - ISNULL(TRY_PARSE(ISNULL(LOC.LogicalLocation,'''') AS FLOAT),0))'
               +        ', LOC.LogicalLocation'
               +        ', LOC.Loc'
