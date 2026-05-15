@@ -128,6 +128,8 @@ BEGIN
             END
 
             SET @cLottable01 = @cL01P1 + @cL01P2
+            SET @cLottable02 = @cL01P1
+            SET @cLottable03 = @cL01P2
             
             -- Check lottable01 in ASN and has balance
             IF NOT EXISTS( SELECT TOP 1 1 
