@@ -58,15 +58,16 @@ BEGIN
          , @cUCCtoUPC            NVARCHAR(10)
          , @cUCCtoDropID         NVARCHAR(10)
          , @nExpQty              INT
-         , @nTMP_PDQty           INT
+         , @nSUMQty              INT
+         , @nTMPQty              INT
+         , @nRemainingQty        INT
          , @nCountTLN            INT
    
    DECLARE @tLineNo TABLE (
         RowID     INT IDENTITY(1,1) PRIMARY KEY 
-      , LabelLine NVARCHAR(20)
+      , LabelLine NVARCHAR(20) NOT NULL
       , Qty       INT
       , ExpQty    INT
-      , TMP_PDQty INT
    )
 
    SET @b_Success          = 0  
@@ -81,7 +82,9 @@ BEGIN
    SET @cUCCtoUPC          = ''
    SET @cUCCtoDropID       = ''
    SET @nExpQty            = 0
-   SET @nTMP_PDQty         = 0
+   SET @nSUMQty            = 0
+   SET @nTMPQty            = 0
+   SET @nRemainingQty      = 0
    SET @nCountTLN          = 0
 
    IF @cScanType = 'ucc'
@@ -211,8 +214,8 @@ BEGIN
      
       IF @cScanType IN( 'upc', 'altsku', 'manusku', 'retailsku') 
       BEGIN
-         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty, TMP_PDQty)
-         SELECT LabelLine, @nQty, ExpQty, Qty
+         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty)
+         SELECT LabelLine, Qty, ExpQty
          FROM PACKDETAIL (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
@@ -224,8 +227,8 @@ BEGIN
       END
       ELSE IF @cInputValue3 <> ''
       BEGIN
-         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty, TMP_PDQty)
-         SELECT LabelLine, @nQty, ExpQty, Qty
+         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty)
+         SELECT LabelLine, Qty, ExpQty
          FROM PACKDETAIL (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
@@ -237,8 +240,8 @@ BEGIN
       END
       ELSE -- all other scan type
       BEGIN
-         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty, TMP_PDQty)
-         SELECT LabelLine, @nQty, ExpQty, Qty
+         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty)
+         SELECT LabelLine, Qty, ExpQty 
          FROM PACKDETAIL (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
@@ -252,37 +255,81 @@ BEGIN
       SELECT @nCountTLN = COUNT(1) 
       FROM @tLineNo
 
-      IF @@ROWCOUNT > 0
+      IF @nCountTLN >= 1
       BEGIN
          IF @nCountTLN > 1
          BEGIN
             SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
-                  , @nTMP_PDQty = ISNULL(SUM(TMP_PDQty), 0)
+                  , @nSUMQty = ISNULL(SUM(Qty), 0)
             FROM @tLineNo
 
-            IF @nExpQty <> 0
+            IF @nExpQty > 0
             BEGIN
-               IF @nExpQty <> @nQty + @nTMP_PDQty
-               BEGIN
-                  SET @n_Continue = 3
-                  SET @n_ErrNo = 11157
-                  SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'The total quantity pack is not matched with the expected quantity.'
-                  GOTO EXIT_SP
-               END
-               ELSE
+               IF @nExpQty = (@nSUMQty + @nQty)
                BEGIN
                   UPDATE @tLineNo
                   SET Qty = ExpQty
-                  WHERE Qty <> ExpQty
+               END 
+               ELSE IF @nExpQty > (@nSUMQty + @nQty)
+               BEGIN
+                  SET @nTMPQty = @nQty
+                  WHILE @nTMPQty > 0
+                  BEGIN               
+                     SET @cLabelLine = NULL;
+                     SET @nRemainingQty = 0;
+
+                     SELECT TOP 1 @cLabelLine = LabelLine
+                                , @nRemainingQty = ExpQty - Qty
+                     FROM @tLineNo
+                     WHERE Qty < ExpQty
+                     ORDER BY LabelLine ASC
+
+                     IF @cLabelLine IS NULL OR @nRemainingQty <= 0
+                        BREAK;
+
+                     IF @nRemainingQty >= @nTMPQty
+                     BEGIN
+                        UPDATE @tLineNo
+                        SET Qty = Qty + @nTMPQty
+                        WHERE LabelLine = @cLabelLine
+
+                        SET @nTMPQty = 0
+                     END
+                     ELSE
+                     BEGIN
+                        UPDATE @tLineNo
+                        SET Qty = ExpQty
+                        WHERE LabelLine = @cLabelLine
+
+                        SET @nTMPQty = @nTMPQty - @nRemainingQty
+                     END
+                  END
+               END
+               ELSE
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_ErrNo    = 11157
+                  SET @c_ErrMsg   =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Abnormal: Total packed quantity exceeds expected quantity. Please check with supervisor.'
+                  GOTO EXIT_SP
                END
             END
             ELSE
             BEGIN
-               SET @n_Continue = 3
-               SET @n_ErrNo = 11158
-               SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Multiple lines are found, system cannot determine which line to update.
-               GOTO EXIT_SP
+               UPDATE @tLineNo
+               SET Qty = Qty + @nQty
+               WHERE RowID = 1
             END
+
+            SET @cLabelLine = ''
+         END
+         ELSE IF @nCountTLN = 1
+         BEGIN
+            SELECT @cLabelLine = LabelLine
+            FROM @tLineNo
+
+            UPDATE @tLineNo
+            SET Qty = Qty + @nQty
+            WHERE RowID = 1
          END
 
          SET @bIsINS = 0 
