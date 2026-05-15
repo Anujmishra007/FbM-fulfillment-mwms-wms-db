@@ -412,8 +412,8 @@ BEGIN
                SELECT @d_OrderDate = O.OrderDate,
                       @d_Delivery_Date = O.DeliveryDate,
                       @c_Route = O.[Route],
-                      @n_totweight = SUM((OD.Qtyallocated + OD.QtyPicked + OD.ShippedQty) * SKU.StdGrossWgt),
-                      @n_totcube = SUM((OD.Qtyallocated + OD.QtyPicked + OD.ShippedQty) * ISNULL(PACK.CubeUOM3, 0.00)),
+                      @n_totweight = ISNULL(SUM((OD.OriginalQty) * SKU.StdGrossWgt), 0.00),
+                      @n_totcube = ISNULL(SUM((OD.OriginalQty) * ISNULL(PACK.CubeUOM3, 0.00)), 0.00),
                       @c_ExternOrderkey = O.ExternOrderkey,
                       @c_Loadkey = ISNULL(O.Loadkey,'')
                FROM Orders O WITH (NOLOCK)
