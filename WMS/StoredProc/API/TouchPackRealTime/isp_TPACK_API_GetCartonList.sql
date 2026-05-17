@@ -63,14 +63,14 @@ BEGIN
 
    CREATE TABLE #tCartonList (
         nCartonNo      INT
-      , cLabelNo       NVARCHAR(20)
-      , cCartonStatus  NVARCHAR(20)
-      , cIsUCC         NVARCHAR(5)
-      , nSKUCount      INT
-      , nPackedQty     INT
-      , cDate          DATE
-      , cTime          VARCHAR(8)
-      , cPackedBy      NVARCHAR(50)
+      , cLabelNo       NVARCHAR(20) NULL DEFAULT ''
+      , cCartonStatus  NVARCHAR(20) NULL DEFAULT ''
+      , cIsUCC         NVARCHAR(5)  NULL DEFAULT ''
+      , nSKUCount      INT          NULL DEFAULT 0
+      , nPackedQty     INT          NULL DEFAULT 0
+      , cDate          DATE         NULL DEFAULT NULL
+      , cTime          VARCHAR(8)   NULL DEFAULT ''
+      , cPackedBy      NVARCHAR(50) NULL DEFAULT ''
    )
 
    SET @b_Success             = 0  
@@ -182,7 +182,7 @@ BEGIN
             , X.cPackedBy
       FROM (
          SELECT  PKI.CartonNo AS nCartonNo
-               , MAX(PD.LabelNo) AS cLabelNo
+               , ISNULL(MAX(PD.LabelNo), '') AS cLabelNo
                , IIF(PKI.CartonStatus IN ('INPROGRESS','HOLD','CLOSED'), UPPER(PKI.CartonStatus), 'CLOSED') AS cCartonStatus
                , IIF(ISNULL(PKI.UCCNo,'') <> '', 'Yes','No') AS cIsUCC
                , COUNT(DISTINCT PD.SKU) AS nSKUCount
@@ -209,7 +209,7 @@ BEGIN
                   , PKI.EditWho
          UNION ALL
          SELECT  PKI.CartonNo AS nCartonNo
-               , MAX(PD.LabelNo) AS cLabelNo
+               , ISNULL(MAX(PD.LabelNo), '') AS cLabelNo
                , IIF(PKI.CartonStatus IN ('INPROGRESS','HOLD','CLOSED'), UPPER(PKI.CartonStatus), 'CLOSED') AS cCartonStatus
                , IIF(ISNULL(PKI.UCCNo,'') <> '', 'Yes','No') AS cIsUCC
                , COUNT(DISTINCT PD.SKU) AS nSKUCount
@@ -283,7 +283,7 @@ BEGIN
             , X.cPackedBy
       FROM (
          SELECT  PKI.CartonNo AS nCartonNo
-               , MAX(PD.LabelNo) AS cLabelNo
+               , ISNULL(MAX(PD.LabelNo), '') AS cLabelNo
                , IIF(PKI.CartonStatus IN ('INPROGRESS','HOLD','CLOSED','PendAudit'), UPPER(PKI.CartonStatus), 'CLOSED') AS cCartonStatus
                , IIF(ISNULL(PKI.UCCNo,'') <> '', 'Yes','No') AS cIsUCC
                , COUNT(DISTINCT PD.SKU) AS nSKUCount

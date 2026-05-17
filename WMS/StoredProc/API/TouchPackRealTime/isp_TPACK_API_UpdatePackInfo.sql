@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-21   1.0  GCH225     Created                                          */
+/* 2026-05-12   1.1  JWF011     UWP-54223: Add Cartonization entry point         */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_UpdatePackInfo] (
@@ -308,6 +309,52 @@ BEGIN
    BEGIN
       SET @n_Continue = 3  
       GOTO EXIT_SP
+   END
+
+   --Cartonization Entry Point
+   IF @cCartonStatus IN ('HOLD', 'CLOSED')
+   AND EXISTS (SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-CtnRec'
+               AND SValue = '1'
+   )
+   AND @cType = 'toteid'
+   AND EXISTS (SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-SinglePKStation'
+               AND SValue = '1'
+   ) 
+   AND EXISTS (SELECT 1
+               FROM CODELKUP (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ListName = 'TPSCtnRec'
+   )
+   AND @bIsLastCarton = 0
+   BEGIN
+      EXEC [API].[isp_TPACK_Cartonization_Wrapper]
+         @cType         = @cType            
+       , @bIsDiscrete   = @bIsDiscrete      
+       , @bIsCustom     = @bIsCustom        
+       , @cPickSlipNo   = @cPickSlipNo       
+       , @cOrderKey     = @cOrderKey
+       , @cLoadKey      = @cLoadKey          
+       , @cDropID       = @cDropID
+       , @cStorerKey    = @cStorerKey        
+       , @cFacility     = @cFacility
+       , @c_UserID      = @c_UserID
+       , @cLangCode     = @cLangCode
+       , @nCartonNo     = 0
+       , @b_Success     = @b_Success      OUTPUT
+       , @n_ErrNo       = @n_ErrNo        OUTPUT
+       , @c_ErrMsg      = @c_ErrMsg       OUTPUT
+
+      IF @b_Success = 0
+      BEGIN
+         SET @n_Continue = 3   
+         GOTO EXIT_SP
+      END
    END
 
    SET @c_ResponseString = ISNULL ((SELECT CAST(@b_Success AS BIT)   AS Success 

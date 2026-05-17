@@ -24,7 +24,7 @@ CREATE OR ALTER PROC [API].[isp_TPACK_GetExtendedPackInfo] (
    , @cStorerKey           NVARCHAR(15)      = ''
    , @cFacility            NVARCHAR(5)       = ''
    , @cLangCode            NVARCHAR(10)      = ''
-   , @cExtPackInfoJson     NVARCHAR(MAX)     = ''  OUTPUT
+   , @cExtPackTaskJson     NVARCHAR(MAX)     = ''  OUTPUT
    , @b_Success            INT               = 0   OUTPUT
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
@@ -59,7 +59,7 @@ BEGIN
    SET @b_Success        = 0  
    SET @n_ErrNo          = 0  
    SET @c_ErrMsg         = ''  
-   SET @cExtPackInfoJson = ''
+   SET @cExtPackTaskJson = ''
 
    IF NOT EXISTS (SELECT 1  
                   FROM STORERCONFIG (NOLOCK)  
@@ -258,7 +258,7 @@ BEGIN
       GOTO EXIT_SP
    END  
 
-   SET @cExtPackInfoJson = ISNULL ((SELECT  rowRef
+   SET @cExtPackTaskJson = ISNULL ((SELECT  rowRef
                                           , fieldName
                                           , fieldValue 
                                     FROM @DynamicData 

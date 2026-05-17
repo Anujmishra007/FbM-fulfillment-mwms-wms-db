@@ -152,7 +152,7 @@ BEGIN
          , @bIsAutoPrint      = bIsAutoPrint
          , @nCopy             = nCopy
          , @cSKU              = cSKU
-         -- , @cReportType       = cReportType
+         , @cReportType       = cReportType
    FROM OPENJSON(@c_RequestString)
    WITH (
 	      cType                NVARCHAR(30)
@@ -175,7 +175,7 @@ BEGIN
        , bIsAutoPrint         BIT
        , nCopy                INT
        , cSKU                 NVARCHAR(20)
-      --  , cReportType          NVARCHAR(30)
+       , cReportType          NVARCHAR(30)
    )
 
    IF @cType = 'toteid' 

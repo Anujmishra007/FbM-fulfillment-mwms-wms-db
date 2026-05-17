@@ -9,6 +9,7 @@
 /* 2025-08-01   1.0  GCH225     Created                                          */
 /* 2026-02-05   2.0  GCH225     UWP-48241: Support Show Closed Carton status     */
 /* 2026-02-11   3.0  GCH225     UWP-48267: Fix AllocQty and PickQty Null issue   */
+/* 2026-04-27   3.1  GCH225     UWP-54975: Fix ToteConso display PackInfo issue  */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_GetPackInfoSummary] (
      @cType                NVARCHAR(30)      = ''
@@ -49,6 +50,7 @@ BEGIN
          , @nIsFilterFlag           INT
          , @nPrecedingCartonNo      INT
          , @cPrecedingCartonStatus  NVARCHAR(20)
+         , @cExtPackInfoJson        NVARCHAR(MAX)
    
    DECLARE @PickQtyStatus TABLE(
         TtlPickedQty INT
@@ -71,6 +73,7 @@ BEGIN
    SET @nIsFilterFlag            = 0
    SET @nPrecedingCartonNo       = 0
    SET @cPrecedingCartonStatus   = ''
+   SET @cExtPackInfoJson         = '[]'
 
    --Get Default Total Packed Carton Count & Total Packed Qty
    IF @cPickSlipNo <> ''
@@ -91,13 +94,30 @@ BEGIN
          BEGIN
             IF @nCartonNo > 0
             BEGIN
-               SELECT TOP 1 @cPickSlipNo = ISNULL(PickSlipNo,'')
-                              , @cOrderKey = ISNULL(OrderKey,'')
-               FROM API.TPACK_UserSessionActivityLog (NOLOCK)
-               WHERE DropID = @cDropID
-               AND EditWho = dbo.fnc_GetUserName()
-               AND CartonNo = @nCartonNo
+               SELECT TOP 1 @cPickSlipNo = ISNULL(L.PickSlipNo,'')
+                              , @cOrderKey = ISNULL(L.OrderKey,'')
+               FROM API.TPACK_UserSessionActivityLog L (NOLOCK)
+               WHERE L.DropID = @cDropID
+               AND L.EditWho = dbo.fnc_GetUserName()
+               AND L.CartonNo = @nCartonNo
+               -- AND NOT EXISTS (SELECT 1 
+               --               FROM PACKHEADER PH (NOLOCK)
+               --               WHERE PH.PickSlipNo = L.PickSlipNo
+               --               AND PH.OrderKey = L.OrderKey
+               --               AND PH.Status = '9'
+               --      )
                ORDER BY RowRefNo DESC
+
+               IF EXISTS (SELECT 1
+                          FROM PACKHEADER PH (NOLOCK)
+                          WHERE PH.PickSlipNo = @cPickSlipNo
+                          AND PH.OrderKey = @cOrderKey
+                          AND PH.Status = '9'
+               )
+               BEGIN
+                  SET @cPickSlipNo = ''
+                  SET @cOrderKey = ''
+               END
             END
 
             IF @cPickSlipNo = '' AND @cOrderKey = ''
@@ -515,6 +535,31 @@ BEGIN
    END
 
 PROCEED:
+
+   EXEC [API].[isp_TPACK_ExtPackInfo_Wrapper]
+     @cType                = @cType            
+   , @bIsDiscrete          = @bIsDiscrete      
+   , @bIsCustom            = @bIsCustom        
+   , @cPickSlipNo          = @cPickSlipNo       
+   , @cOrderKey            = @cOrderKey         
+   , @cLoadKey             = @cLoadKey          
+   , @cDropID              = @cDropID           
+   , @cStorerKey           = @cStorerKey        
+   , @cFacility            = @cFacility
+   , @nCartonNo            = @nCartonNo
+   , @c_UserID             = @c_UserID
+   , @cLangCode            = @cLangCode
+   , @cExtPackInfoJson     = @cExtPackInfoJson OUTPUT
+   , @b_Success            = @b_Success        OUTPUT
+   , @n_ErrNo              = @n_ErrNo          OUTPUT
+   , @c_ErrMsg             = @c_ErrMsg         OUTPUT
+
+   IF @b_Success = 0
+   BEGIN
+      SET @n_Continue = 3  
+      GOTO EXIT_SP
+   END
+   
    SET @b_Success = 1
    SET @cPackInfoJson = ISNULL ((SELECT     @nTtlCurCtnPackedQty AS nTtlCurCtnPackedQty
                                           , @nTtlPackedCtnCount AS nTtlPackedCtnCount
@@ -525,7 +570,36 @@ PROCEED:
                                           , @nPrecedingCartonNo AS nPrecedingCartonNo
                                           , @cPrecedingCartonStatus AS cPrecedingCartonStatus
                                           , @cCurrentCartonStatus AS cCurrentCartonStatus
+                                          , JSON_QUERY(CASE WHEN ISJSON(@cExtPackInfoJson) = 1 
+                                                               THEN @cExtPackInfoJson
+                                                            ELSE '[]'
+                                                            END) AS cExtPackInfoJson
                                     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                                     ),'')
 EXIT_SP:
-END -- procedure 
+   IF @n_Continue = 3  -- Error Occured - Process And Return      
+   BEGIN      
+      SET @b_Success = 0      
+      IF @@TRANCOUNT > @n_StartCnt AND @@TRANCOUNT = 1 
+      BEGIN               
+         ROLLBACK TRAN      
+      END      
+      ELSE      
+      BEGIN      
+         WHILE @@TRANCOUNT > @n_StartCnt      
+         BEGIN      
+            COMMIT TRAN      
+         END      
+      END   
+      RETURN      
+   END      
+   ELSE      
+   BEGIN      
+      SELECT @b_Success = 1      
+      WHILE @@TRANCOUNT > @n_StartCnt      
+      BEGIN      
+         COMMIT TRAN      
+      END      
+      RETURN      
+   END
+END

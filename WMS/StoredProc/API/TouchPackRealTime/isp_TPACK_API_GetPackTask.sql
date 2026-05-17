@@ -18,6 +18,7 @@ GO
 /* 2026-03-16   2.3  GCH225     FCR-11595: New Insert logic UserSessionActivityLog  */
 /* 2026-03-19   2.4  Sean01     UWP-42468: ToteID for multi orders               */
 /* 2026-03-19   2.5  Sean02     UWP-42468: Reuse ToteID                          */
+/* 2026-05-12   2.6  JWF011     UWP-54223: Add Cartonization entry point         */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetPackTask] (
@@ -57,7 +58,7 @@ BEGIN
          , @cStorerKey           NVARCHAR(15)
          , @cFacility            NVARCHAR(5)
          , @cScanNo              NVARCHAR(20)
-         , @cExtPackInfoJson     NVARCHAR(MAX)
+         , @cExtPackTaskJson     NVARCHAR(MAX)
          , @cPackTaskConfigJson  NVARCHAR(MAX)
          , @nCartonNo            INT
          , @nTtlExpQty           INT
@@ -66,6 +67,7 @@ BEGIN
          , @cLabelPrinter        NVARCHAR(20)
          , @cPaperPrinter        NVARCHAR(20)
          , @cWorkstation         NVARCHAR(30)
+         , @bIsPreCartonize      BIT
 
    DECLARE @cCartonType          NVARCHAR(20)   = ''
          , @fWeight              FLOAT          = 0
@@ -88,7 +90,8 @@ BEGIN
    SET @cLabelPrinter      = ''
    SET @cPaperPrinter      = ''
    SET @cWorkstation       = ''
-   
+   SET @bIsPreCartonize    = 0
+
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
       , @c_DBUserName  = @DBUserName OUTPUT
@@ -577,6 +580,8 @@ BEGIN
                AND @nCartonNoCount = 1
                AND @nTtlExpQty > 0
                BEGIN
+                  SET @bIsPreCartonize = 1
+
                   EXEC [API].[isp_TPACK_UpdatePackInfo]
                      @cType                = @cType            
                      , @bIsDiscrete          = @bIsDiscrete      
@@ -650,7 +655,7 @@ BEGIN
       , @cStorerKey        = @cStorerKey        
       , @cFacility         = @cFacility    
       , @cLangCode         = @cLangCode
-      , @cExtPackInfoJson  = @cExtPackInfoJson  OUTPUT
+      , @cExtPackTaskJson  = @cExtPackTaskJson  OUTPUT
       , @b_Success         = @b_Success         OUTPUT
       , @n_ErrNo           = @n_ErrNo           OUTPUT
       , @c_ErrMsg          = @c_ErrMsg          OUTPUT
@@ -683,6 +688,51 @@ BEGIN
    BEGIN
       SET @n_Continue = 3   
       GOTO EXIT_SP
+   END
+
+   --Cartonization Entry Point
+   IF EXISTS ( SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-CtnRec'
+               AND SValue = '1'
+   )
+   AND @cType = 'toteid'
+   AND EXISTS (SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-SinglePKStation'
+               AND SValue = '1'
+   ) 
+   AND EXISTS (SELECT 1
+               FROM CODELKUP (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ListName = 'TPSCtnRec'
+   )
+   AND @bIsPreCartonize = 0
+   BEGIN
+      EXEC [API].[isp_TPACK_Cartonization_Wrapper]
+         @cType         = @cType            
+       , @bIsDiscrete   = @bIsDiscrete      
+       , @bIsCustom     = @bIsCustom        
+       , @cPickSlipNo   = @cPickSlipNo       
+       , @cOrderKey     = @cOrderKey
+       , @cLoadKey      = @cLoadKey          
+       , @cDropID       = @cDropID
+       , @cStorerKey    = @cStorerKey        
+       , @cFacility     = @cFacility
+       , @c_UserID      = @c_UserID
+       , @cLangCode     = @cLangCode
+       , @nCartonNo     = 0 
+       , @b_Success     = @b_Success      OUTPUT
+       , @n_ErrNo       = @n_ErrNo        OUTPUT
+       , @c_ErrMsg      = @c_ErrMsg       OUTPUT
+
+      IF @b_Success = 0
+      BEGIN
+         SET @n_Continue = 3   
+         GOTO EXIT_SP
+      END
    END
 
    SELECT TOP 1 @cLabelPrinter = PrinterID
@@ -763,10 +813,10 @@ BEGIN
                                           , @cOrderKey            AS cOrderKey
                                           , @cLoadKey             AS cLoadKey
                                           , @cDropID              AS cDropID
-                                          , JSON_QUERY(CASE WHEN ISJSON(@cExtPackInfoJson) = 1 
-                                                               THEN @cExtPackInfoJson
+                                          , JSON_QUERY(CASE WHEN ISJSON(@cExtPackTaskJson) = 1 
+                                                               THEN @cExtPackTaskJson
                                                             ELSE '[]'
-                                                            END) AS cExtPackInfoJson
+                                                            END) AS cExtPackTaskJson
                                           , JSON_QUERY(CASE WHEN ISJSON(@cPackTaskConfigJson) = 1 
                                                                THEN @cPackTaskConfigJson
                                                             ELSE '[]'

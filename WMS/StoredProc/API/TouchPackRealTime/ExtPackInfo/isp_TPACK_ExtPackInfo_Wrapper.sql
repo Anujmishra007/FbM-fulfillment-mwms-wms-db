@@ -24,7 +24,7 @@ CREATE OR ALTER PROC [API].[isp_TPACK_ExtPackInfo_Wrapper] (
    , @nCartonNo            INT               = 0
    , @c_UserID             NVARCHAR(256)     = ''
    , @cLangCode            NVARCHAR(10)      = ''
-   , @cExtPackInfoJson     NVARCHAR(MAX)     = 0   OUTPUT
+   , @cExtPackInfoJson     NVARCHAR(MAX)     = ''  OUTPUT
    , @b_Success            INT               = 0   OUTPUT
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT

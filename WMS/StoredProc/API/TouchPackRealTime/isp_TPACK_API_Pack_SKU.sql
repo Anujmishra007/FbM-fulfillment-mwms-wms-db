@@ -55,7 +55,7 @@ BEGIN
          , @cInputValue3      NVARCHAR(128)
          , @cSKU              NVARCHAR(20)
          , @nQty              INT
-         , @bIsADInput        BIT
+         , @bIsVASDone        BIT
          , @cScanType         NVARCHAR(30)
          , @cResponseJson     NVARCHAR(MAX)
 
@@ -78,7 +78,7 @@ BEGIN
    SET @cInputValue3       = ''
    SET @cSKU               = ''
    SET @nQty               = 0
-   SET @bIsADInput         = 0
+   SET @bIsVASDone         = 0
    SET @cScanType          = ''
    SET @cResponseJson      = ''
 
@@ -129,6 +129,7 @@ BEGIN
          , @cScanType            = cScanType
          , @cSKU                 = cSKU
          , @nQty                 = nQty
+         , @bIsVASDone           = bIsVASDone
    FROM OPENJSON(@c_RequestString)
    WITH (
          cType                NVARCHAR(30)
@@ -148,6 +149,7 @@ BEGIN
        , cScanType            NVARCHAR(20)
        , cSKU                 NVARCHAR(20)
        , nQty                 INT
+       , bIsVASDone           BIT
    )
    
    --Validate Standard Request Payload
@@ -199,6 +201,7 @@ BEGIN
        , @cSKU              = @cSKU
        , @nCartonNo         = @nCartonNo
        , @nQty              = @nQty
+       , @bIsVASDone        = @bIsVASDone
        , @c_UserID          = @c_UserID
        , @cLangCode         = @cLangCode
        , @nPageIndex        = 0

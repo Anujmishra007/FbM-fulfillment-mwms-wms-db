@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-01   1.0  GCH225     Created                                          */
 /* 2026-02-05   2.0  GCH225     UWP-48097: Recommended CartonType from PackInfo  */
+/* 2026-05-07   3.0  GCH225     UWP-55973: Wrapper to support custom and standard*/
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_API_GetCartonTypeList] (
@@ -40,12 +41,6 @@ BEGIN
          , @DBUserName     NVARCHAR(100)
          , @b_sp_ExecuteAs BIT
 
-   DECLARE @storer TABLE (
-      StorerKey     NVARCHAR( 15),
-      catchWeight   INT,
-      catchCube     INT
-   )
-
    DECLARE @cType       NVARCHAR(30)
          , @bIsDiscrete BIT
          , @bIsCustom   BIT
@@ -56,7 +51,7 @@ BEGIN
          , @cDropID     NVARCHAR(20)
          , @cStorerKey  NVARCHAR(15)
          , @cFacility   NVARCHAR(5)
-         , @cConfigVal  NVARCHAR(30)
+         , @nCartonNo   INT
 
    SET @b_Success        = 0  
    SET @n_ErrNo          = 0  
@@ -71,6 +66,7 @@ BEGIN
    SET @cDropID          = ''
    SET @cStorerKey       = ''
    SET @cFacility        = ''
+   SET @nCartonNo        = 0
 
    --Decode Json Format
    SELECT  @cType       = cType
@@ -83,6 +79,7 @@ BEGIN
          , @cLangCode   = cLangCode
          , @cStorerKey  = cStorerKey
          , @cFacility   = cFacility
+         , @nCartonNo   = nCartonNo
    FROM OPENJSON(@c_RequestString)
    WITH (
         cType       NVARCHAR(30)
@@ -95,74 +92,57 @@ BEGIN
       , cLangCode   NVARCHAR(3)
       , cStorerKey  NVARCHAR(15)
       , cFacility   NVARCHAR(5)
+      , nCartonNo   INT
    )
 
-   SELECT TOP 1 @cConfigVal = ISNULL(sValue,'0')
-   FROM STORERCONFIG (NOLOCK)  
-   WHERE StorerKey = @cStorerKey
-   AND ConfigKey = 'DefaultCartonType'
-   
-   IF @cType = 'toteid' AND @bIsDiscrete = 1
-   BEGIN
-      IF ( SELECT ISNULL(SUM(ExpQty), 0)
-            FROM PACKDETAIL (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-         ) > 0
-      AND ( SELECT ISNULL(COUNT(CartonNo), 0)
-            FROM PACKINFO (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-            AND CartonStatus = 'INPROGRESS'
-         ) = 1
-      BEGIN
-         SELECT TOP 1 @cConfigVal = CartonType
-         FROM PACKINFO (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo
-         AND CartonStatus = 'INPROGRESS'
-      END
-   END
-   
-   INSERT INTO @storer
-   SELECT @cStorerKey
-        , IIF(sValue LIKE '%W%', 1, 0)
-        , IIF(sValue LIKE '%C%', 1, 0)
-   FROM STORERCONFIG  WITH (NOLOCK)  
-   WHERE StorerKey = @cStorerKey
-   AND ConfigKey = 'TPS-captureWeight'
+   EXEC [API].[isp_TPACK_GetCartonType_Wrapper]
+     @cType             = @cType            
+   , @bIsDiscrete       = @bIsDiscrete      
+   , @bIsCustom         = @bIsCustom        
+   , @cPickSlipNo       = @cPickSlipNo       
+   , @cOrderKey         = @cOrderKey         
+   , @cLoadKey          = @cLoadKey          
+   , @cDropID           = @cDropID           
+   , @cStorerKey        = @cStorerKey        
+   , @cFacility         = @cFacility  
+   , @c_UserID          = @c_UserID
+   , @cLangCode         = @cLangCode
+   , @nCartonNo         = @nCartonNo
+   , @c_ResponseString  = @c_ResponseString  OUTPUT
+   , @b_Success         = @b_Success         OUTPUT
+   , @n_ErrNo           = @n_ErrNo           OUTPUT
+   , @c_ErrMsg          = @c_ErrMsg          OUTPUT
 
-   IF NOT EXISTS (SELECT 1 FROM @storer)
+   IF @b_Success = 0 OR ISNULL(@c_ResponseString, '') = ''
    BEGIN
-      INSERT INTO @storer (StorerKey, catchWeight, catchCube)
-      VALUES (@cStorerKey, 0, 0)
+      SET @n_Continue = 3  
+      GOTO EXIT_SP
    END
 
-   --Json Format Output
-   SET @b_Success = 1
-   SET @c_ResponseString = ISNULL((
-                              SELECT  vs.StorerKey
-                                    , vs.catchWeight
-                                    , vs.catchCube 
-                                    , Carton.cartonType
-                                    , Carton.CartonDescription
-                                    , Carton.Barcode
-                                    , CAST(ISNULL(Carton.CartonLength,0) AS DECIMAL(10,3)) AS CartonLength
-                                    , CAST(ISNULL(Carton.CartonWidth,0) AS DECIMAL(10,3)) AS CartonWidth
-                                    , CAST(ISNULL(Carton.CartonHeight,0) AS DECIMAL(10,3)) AS CartonHeight
-                                    , CAST(ISNULL(Carton.MaxWeight,0) AS DECIMAL(10,3)) AS MaxWeight
-                                    , CAST(Carton.[CUBE] AS DECIMAL(10,3)) AS [Cube]
-                                    , Carton.UseSequence AS UseSequence
-                                    , CAST(IIF(RTRIM(Carton.cartonType) = RTRIM(@cConfigVal), 1, 0) AS BIT) AS Recommended
-                              FROM @storer vs
-                              JOIN STORER S WITH (NOLOCK)  ON vs.StorerKey = s.StorerKey
-                              JOIN CARTONIZATION Carton WITH (NOLOCK) 
-                              ON S.cartonGroup = Carton.CartonizationGroup
-                              WHERE S.StorerKey = @cStorerKey
-                              AND Carton.cartonType <> ''
-                              ORDER BY Carton.[Cube] ASC
-                              FOR JSON AUTO, WITHOUT_ARRAY_WRAPPER
-                           ), '') 
-   EXIT_SP:
-      REVERT
-
+EXIT_SP:
+   IF @n_Continue = 3  -- Error Occured - Process And Return      
+   BEGIN      
+      SET @b_Success = 0      
+      IF @@TRANCOUNT > @n_StartCnt AND @@TRANCOUNT = 1 
+      BEGIN               
+         ROLLBACK TRAN      
+      END      
+      ELSE      
+      BEGIN      
+         WHILE @@TRANCOUNT > @n_StartCnt      
+         BEGIN      
+            COMMIT TRAN      
+         END      
+      END   
+      RETURN      
+   END      
+   ELSE      
+   BEGIN      
+      SET @b_Success = 1      
+      WHILE @@TRANCOUNT > @n_StartCnt      
+      BEGIN      
+         COMMIT TRAN      
+      END      
+      RETURN      
+   END
 END
-
-

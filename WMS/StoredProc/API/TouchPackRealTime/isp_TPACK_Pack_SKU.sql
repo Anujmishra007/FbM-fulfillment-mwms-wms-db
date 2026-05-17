@@ -66,8 +66,8 @@ BEGIN
    DECLARE @tLineNo TABLE (
         RowID     INT IDENTITY(1,1) PRIMARY KEY 
       , LabelLine NVARCHAR(20) NOT NULL
-      , Qty       INT
-      , ExpQty    INT
+      , Qty       INT DEFAULT(0)
+      , ExpQty    INT DEFAULT(0)
    )
 
    SET @b_Success          = 0  

@@ -30,6 +30,7 @@ GO
 /* 2026-03-16   3.6  GCH225     FCR-11632: Fix for AuditLog part when Status change */
 /* 2026-03-16   3.7  JWF011     FCR-11639: Update for ExtMeasurement                */
 /* 2026-03-19   3.8  JWF011     FCR-11818: Update TPACK_UserSessionActivityLog      */
+/* 2026-05-11   3.9  JWF011     UWP-52781: Fix weight config                        */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_UpdatePackInfo] (
@@ -239,7 +240,7 @@ BEGIN
                   FROM STORERCONFIG (NOLOCK)
                   WHERE Storerkey = @cStorerKey
                   AND ConfigKey = 'TPS-captureWeight'
-                  AND SValue IN ('WC',',W', 'C')
+                  AND SValue IN ('WC','W','C')
       )
       BEGIN
          SET @fTtlWeight = @fWeight

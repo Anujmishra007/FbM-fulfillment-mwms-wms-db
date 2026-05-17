@@ -221,6 +221,55 @@ BEGIN
       GOTO EXIT_SP
    END
 
+   --Cartonization Entry Point
+   IF EXISTS ( SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-CtnRec'
+               AND SValue = '1'
+   )
+   AND @cType = 'toteid'
+   AND EXISTS (SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-SinglePKStation'
+               AND SValue = '1'
+   ) 
+   AND EXISTS (SELECT 1
+               FROM CODELKUP (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ListName = 'TPSCtnRec'
+   )
+   BEGIN
+      IF @bResetAll = 1
+      BEGIN
+         SET @nCartonNo = 0
+      END
+
+      EXEC [API].[isp_TPACK_Cartonization_Wrapper]
+         @cType         = @cType            
+       , @bIsDiscrete   = @bIsDiscrete      
+       , @bIsCustom     = @bIsCustom        
+       , @cPickSlipNo   = @cPickSlipNo       
+       , @cOrderKey     = @cOrderKey
+       , @cLoadKey      = @cLoadKey          
+       , @cDropID       = @cDropID
+       , @cStorerKey    = @cStorerKey        
+       , @cFacility     = @cFacility
+       , @c_UserID      = @c_UserID
+       , @cLangCode     = @cLangCode
+       , @nCartonNo     = @nCartonNo
+       , @b_Success     = @b_Success      OUTPUT
+       , @n_ErrNo       = @n_ErrNo        OUTPUT
+       , @c_ErrMsg      = @c_ErrMsg       OUTPUT
+
+      IF @b_Success = 0
+      BEGIN
+         SET @n_Continue = 3   
+         GOTO EXIT_SP
+      END
+   END
+
    SET @c_ResponseString = ISNULL ((SELECT CAST(@b_Success AS BIT)   AS Success 
                                     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                            ),'')
