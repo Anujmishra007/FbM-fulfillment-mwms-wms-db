@@ -33,6 +33,8 @@ GO
 /* 12-Mar-2026 WLChooi  1.8   FCR-11579 Fix missing taskdetailkey (WL08) */
 /* 16-Mar-2026 WLChooi  1.9   FCR-11624 Fix TaskToPick linkage (WL09)    */
 /* 18-Mar-2026 WLChooi  2.0   FCR-11805 Conso task for ECOM (WL10)       */
+/* 11-May-2026 WLChooi  2.1   UWP-56216 Bug Fix - Groupkey should group  */
+/*                            by Areakey (WL11)                          */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -474,7 +476,7 @@ BEGIN
       FROM #TASKDETAIL_WIP AS tw
       CROSS APPLY ( SELECT tw1.RowID
                         ,  SortNo = ROW_NUMBER() OVER ( ORDER BY tw1.AreaKey
-                                                               , tw1.PickLocLevel
+                                                               --, tw1.PickLocLevel   --WL11
                                                                , tw1.CartonPerLoc DESC  
                                                                , tw1.SkuPerCarton
                                                                , tw1.LogicalFromLoc
@@ -491,7 +493,7 @@ BEGIN
       (
           SELECT 
                 tw.RowID  
-              , rno = DENSE_RANK() OVER (ORDER BY tw.AreaKey, tw.PickLocLevel, tw.CaseID) 
+              , rno = DENSE_RANK() OVER (PARTITION BY tw.AreaKey ORDER BY tw.CaseID)   --WL11
           FROM #TASKDETAIL_WIP tw
           WHERE tw.DocType <> 'E'   --WL04
       )
@@ -504,8 +506,15 @@ BEGIN
       -- Assign Actual Groupkey
       --------------------------------------------------------------------
       SET @n_BatchGrpKey = 0
-      SELECT @n_BatchGrpKey = COUNT(DISTINCT GroupKey)
-      FROM #TASKDETAIL_WIP tw
+      --WL11 S
+      --SELECT @n_BatchGrpKey = COUNT(DISTINCT GroupKey)
+      --FROM #TASKDETAIL_WIP tw
+      ;WITH BATCHGRPKEY AS ( SELECT DISTINCT tw.AreaKey, tw.GroupKey
+                             FROM #TASKDETAIL_WIP tw
+                             WHERE tw.DocType <> 'E' )
+      SELECT @n_BatchGrpKey = COUNT(1)
+      FROM BATCHGRPKEY
+      --WL11 E
 
       IF @n_BatchGrpKey > 0
       BEGIN
@@ -519,9 +528,21 @@ BEGIN
 
          IF @b_Success = 1 AND ISNULL(TRIM(@c_GroupKey_New), '') <> ''
          BEGIN
-            UPDATE #TASKDETAIL_WIP
-            SET Groupkey = RIGHT(REPLICATE('0', 10) + CAST(CAST(TRIM(@c_GroupKey_New) AS INT) + CAST(GroupKey AS INT) AS NVARCHAR(10)), 10)
-            WHERE Groupkey > ''
+            --WL11 S
+            --UPDATE #TASKDETAIL_WIP
+            --SET Groupkey = RIGHT(REPLICATE('0', 10) + CAST(CAST(TRIM(@c_GroupKey_New) AS INT) + CAST(GroupKey AS INT) AS NVARCHAR(10)), 10)
+            --WHERE Groupkey > ''
+            ;WITH MapGroupkey AS ( SELECT tw.RowID
+                                        , rno = DENSE_RANK() OVER (ORDER BY tw.AreaKey, tw.GroupKey)
+                                   FROM #TASKDETAIL_WIP tw
+                                   WHERE tw.DocType <> 'E'
+                                   AND ISNULL(TRIM(tw.Groupkey), '') <> '' )
+            UPDATE tw
+            SET Groupkey = RIGHT(REPLICATE('0', 10)
+                         + CAST(CAST(TRIM(@c_GroupKey_New) AS INT) + mg.rno - 1 AS NVARCHAR(10)), 10)
+            FROM #TASKDETAIL_WIP tw
+            JOIN MapGroupkey mg ON mg.RowID = tw.RowID
+            --WL11 E
          END
       END
 

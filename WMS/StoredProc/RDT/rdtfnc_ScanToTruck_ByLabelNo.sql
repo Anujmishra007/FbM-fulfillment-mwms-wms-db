@@ -67,6 +67,7 @@ GO
 /****************************Migrated into V0****************************/
 /* 2025-07-28 3.9  YeeKung  FCR-2901 Add AutoMBOL (yeekung01)           */
 /* 2025-11-12 4.0  Jackc    FCR-8675 Extend DropID barcode length       */
+/* 2026-04-21 4.1  Jackc    FCR-11588 add extscn                        */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_ByLabelNo] (
    @nMobile    INT,
@@ -147,21 +148,36 @@ DECLARE
    @cConfirmStatus          NVARCHAR( 20),
    @cMobBarcode             NVARCHAR( MAX), --V4.0
 
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
+   @cExtScnSP               NVARCHAR(20),--V4.1
+   @tExtScnData			    VariableTable,--V4.1
+   @nAction                 INT,--V4.1
+
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),   @cLottable01  NVARCHAR( 18),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),   @cLottable02  NVARCHAR( 18),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),   @cLottable03  NVARCHAR( 18),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),   @dLottable04  DATETIME,
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),   @dLottable05  DATETIME,
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),   @cLottable06  NVARCHAR( 30),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),   @cLottable07  NVARCHAR( 30),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),   @cLottable08  NVARCHAR( 30),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),   @cLottable09  NVARCHAR( 30),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),   @cLottable10  NVARCHAR( 30),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),   @cLottable11  NVARCHAR( 30),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),   @cLottable12  NVARCHAR( 30),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),   @dLottable13  DATETIME,
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),   @dLottable14  DATETIME,
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1),   @dLottable15  DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Load RDT.RDTMobRec
 SELECT
@@ -210,7 +226,8 @@ SELECT
    @cDecodeSP               = V_String24,
    @cManifestReport         = V_String25,
    @cCloseMBOL              = V_String26,
-   @cConfirmStatus          = V_String27,  
+   @cConfirmStatus          = V_String27,
+   @cExtScnSP               = V_String28,  
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -239,8 +256,9 @@ BEGIN
    IF @nStep = 2 GOTO Step_2   -- Scn = 3431. LabelNo/DropID
    IF @nStep = 3 GOTO Step_3   -- Scn = 3432. Weight, Cube, CartonType
    IF @nStep = 4 GOTO Step_4   -- Scn = 3433. Door, RefNo
-   IF @nStep = 5 GOTO Step_5   -- Scn = 3434. Print manifest?   
-   IF @nStep = 6 GOTO Step_6   -- Scn = 3434. Print manifest?
+   IF @nStep = 5 GOTO Step_5   -- Scn = 3434. Print manifest?
+   IF @nStep = 6 GOTO Step_6   -- Scn = 3435. MBOL Close
+   IF @nStep = 99 GOTO Step_99 -- ExtScn
 END
 RETURN -- Do nothing if incorrect step
 
@@ -287,6 +305,12 @@ BEGIN
    IF @cManifestReport = '0'
       SET @cManifestReport = ''
    SET @cConfirmStatus = rdt.RDTGetConfig( @nFunc, 'ConfirmStatus', @cStorerKey)
+
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtScnSP = '0'
+   BEGIN
+      SET @cExtScnSP = ''
+   END
    
     -- Storer config 'OTMITF'   --(cc01)
    EXECUTE dbo.nspGetRight
@@ -712,6 +736,13 @@ BEGIN
             SET @cOutField15 = @cExtendedInfo
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_1_Fail:
@@ -1710,7 +1741,7 @@ BEGIN
       -- Screen mapping
       SET @cDoor = @cInField01
       SET @cRefNo = @cInField02
-/*
+      /*
       -- Check Door format
       IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'DOOR', @cDoor) = 0
       BEGIN
@@ -1728,7 +1759,7 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 2
          GOTO Quit
       END
-*/
+      */
       -- Extended validate
       IF @cExtendedValidateSP <> ''
       BEGIN
@@ -1814,6 +1845,12 @@ BEGIN
       -- Go to prev screen
       SET @nScn  = @nScn - 3
       SET @nStep = @nStep - 3
+   END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         GOTO Step_99
    END
 END
 GOTO Quit
@@ -2047,6 +2084,72 @@ BEGIN
 END
 GOTO Quit
 
+Step_99:
+BEGIN
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+
+         DECLARE  @nPreSCn       INT,
+                  @nPreStep      INT,
+                  @nPreInputKey  INT
+
+         SET @nPreSCn = @nScn
+         SET @nPreStep = @nStep
+         SET @nPreInputKey = @nInputKey
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtScnSP, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         IF @cExtScnSP = 'rdt_922ExtScn01'
+         BEGIN
+            IF @cUDF01 = 'NO UPD RDTMOBREC'
+               RETURN
+         END
+
+         GOTO Quit
+      END
+   END -- Ext scn sp <> ''
+
+   Step_99_Fail:
+      GOTO Quit
+END -- End step99
+
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
@@ -2096,6 +2199,7 @@ BEGIN
       V_String25 = @cManifestReport,
       V_String26 = @cCloseMBOL,
       V_String27 = @cConfirmStatus,
+      V_String28 = @cExtScnSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

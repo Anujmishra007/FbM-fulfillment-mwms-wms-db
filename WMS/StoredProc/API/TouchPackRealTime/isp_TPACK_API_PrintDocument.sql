@@ -65,6 +65,7 @@ BEGIN
          , @cSKU                 NVARCHAR(20)
          , @cStayBehavior        NVARCHAR(20)
          , @cTitle               NVARCHAR(100)
+         , @cReportType          NVARCHAR(30)
 
    SET @b_Success             = 0  
    SET @n_ErrNo               = 0  
@@ -93,6 +94,7 @@ BEGIN
    SET @cSKU                  = ''
    SET @cStayBehavior         = 'STAY'
    SET @cTitle                = ''
+   SET @cReportType           = ''
 
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
@@ -150,6 +152,7 @@ BEGIN
          , @bIsAutoPrint      = bIsAutoPrint
          , @nCopy             = nCopy
          , @cSKU              = cSKU
+         -- , @cReportType       = cReportType
    FROM OPENJSON(@c_RequestString)
    WITH (
 	      cType                NVARCHAR(30)
@@ -172,6 +175,7 @@ BEGIN
        , bIsAutoPrint         BIT
        , nCopy                INT
        , cSKU                 NVARCHAR(20)
+      --  , cReportType          NVARCHAR(30)
    )
 
    IF @cType = 'toteid' 
@@ -203,7 +207,18 @@ BEGIN
                 WHERE O.OrderKey = @cOrderKey
                 AND O.DocType = 'E'
                 AND O.ECOM_SINGLE_Flag = 'S'
-      ) AND @bIslastCarton = 1
+      ) 
+      AND @bIsLastCarton = 1
+      AND 
+      (SELECT SUM(Qty)
+      FROM PICKDETAIL (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND DropID = @cDropID) 
+      <> 
+      (SELECT SUM(Qty)
+      FROM PACKDETAIL (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND DropID = @cDropID)
       BEGIN
          SET @cStayBehavior = 'CLEAR'
          SET @cTitle =  API.TouchPadGetMessage( 11754, @cLangCode, 'DSP') + ' (' + @cOrderKey + ') ' + API.TouchPadGetMessage( 11755, @cLangCode, 'DSP')
@@ -226,7 +241,7 @@ BEGIN
    --    GOTO EXIT_SP
    -- END
 
-   EXEC [API].[isp_TPACK_PrintDocument_Wrapper]
+   EXEC [API].[isp_TPACK_PrintVASDocument_Wrapper]
      @cType                = @cType            
    , @bIsDiscrete          = @bIsDiscrete      
    , @bIsCustom            = @bIsCustom        
@@ -240,14 +255,15 @@ BEGIN
    , @c_UserID             = @c_UserID
    , @cLangCode            = @cLangCode
    , @bIsLastCarton        = @bIsLastCarton
-   , @bPrintLabelFlag      = @bPrintLabelFlag
-   , @bPrintPaperFlag      = @bPrintPaperFlag
+   , @bPrintLabelFlag      = @bPrintLabelFlag   OUTPUT
+   , @bPrintPaperFlag      = @bPrintPaperFlag   OUTPUT
    , @cLabelPrinter        = @cLabelPrinter
    , @cPaperPrinter        = @cPaperPrinter
    , @oPrintConfigJson     = @oPrintConfigJson
    , @bIsAutoPrint         = @bIsAutoPrint
    , @nCopy                = @nCopy
    , @cSKU                 = @cSKU
+   , @cReportType          = @cReportType
    , @cPrintLabelJobIDs    = @cPrintLabelJobIDs OUTPUT
    , @cPrintPaperJobIDs    = @cPrintPaperJobIDs OUTPUT
    , @b_Success            = @b_Success         OUTPUT
@@ -260,10 +276,54 @@ BEGIN
       
       IF @n_ErrNo = 0
       BEGIN
-         SET @n_ErrNo = 11753
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + @c_ErrMsg --'Print document failed.'
+         SET @n_ErrNo = 11757
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + @c_ErrMsg --'Print VAS document failed.'
       END
       GOTO EXIT_SP
+   END
+
+   IF @cSKU = ''
+   BEGIN
+      EXEC [API].[isp_TPACK_PrintDocument_Wrapper]
+      @cType                = @cType            
+      , @bIsDiscrete          = @bIsDiscrete      
+      , @bIsCustom            = @bIsCustom        
+      , @cPickSlipNo          = @cPickSlipNo       
+      , @cOrderKey            = @cOrderKey         
+      , @cLoadKey             = @cLoadKey          
+      , @cDropID              = @cDropID           
+      , @cStorerKey           = @cStorerKey        
+      , @cFacility            = @cFacility         
+      , @nCartonNo            = @nCartonNo
+      , @c_UserID             = @c_UserID
+      , @cLangCode            = @cLangCode
+      , @bIsLastCarton        = @bIsLastCarton
+      , @bPrintLabelFlag      = @bPrintLabelFlag
+      , @bPrintPaperFlag      = @bPrintPaperFlag
+      , @cLabelPrinter        = @cLabelPrinter
+      , @cPaperPrinter        = @cPaperPrinter
+      , @oPrintConfigJson     = @oPrintConfigJson
+      , @bIsAutoPrint         = @bIsAutoPrint
+      , @nCopy                = @nCopy
+      , @cSKU                 = @cSKU
+      , @cReportType          = @cReportType
+      , @cPrintLabelJobIDs    = @cPrintLabelJobIDs OUTPUT
+      , @cPrintPaperJobIDs    = @cPrintPaperJobIDs OUTPUT
+      , @b_Success            = @b_Success         OUTPUT
+      , @n_ErrNo              = @n_ErrNo           OUTPUT
+      , @c_ErrMsg             = @c_ErrMsg          OUTPUT
+
+      IF @b_Success = 0
+      BEGIN
+         SET @n_Continue = 3  
+         
+         IF @n_ErrNo = 0
+         BEGIN
+            SET @n_ErrNo = 11753
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + @c_ErrMsg --'Print document failed.'
+         END
+         GOTO EXIT_SP
+      END
    END
 
 

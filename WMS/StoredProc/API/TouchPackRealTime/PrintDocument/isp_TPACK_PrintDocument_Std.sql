@@ -34,8 +34,9 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_Std] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
-   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
-   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
+   , @cReportType          NVARCHAR(30)      = ''
+   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
+   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @b_Success            INT               = 0   OUTPUT  
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
@@ -51,7 +52,6 @@ BEGIN
          , @n_StartCnt           INT            = @@TRANCOUNT  
 
    DECLARE @cModuleID            NVARCHAR(30)
-         , @cReportType          NVARCHAR(30)
          , @cSQL                 NVARCHAR(MAX)
          , @cSQLParam            NVARCHAR(MAX)
          , @cReportID            NVARCHAR(10)

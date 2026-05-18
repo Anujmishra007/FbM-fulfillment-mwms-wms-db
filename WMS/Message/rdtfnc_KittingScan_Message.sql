@@ -24,7 +24,7 @@ EXECUTE rdt.rdtAddMsg 263813, 10, '263813^Invalid Loc type',     'us_english', 1
 EXECUTE rdt.rdtAddMsg 263814, 10, '263814^Invalid ID format',    'us_english', 1880, 0, '263814 Invalid ID format'
 EXECUTE rdt.rdtAddMsg 263815, 10, '263815^SKU not in Kit',       'us_english', 1880, 0, '263815 SKU not in Kit'
 EXECUTE rdt.rdtAddMsg 263816, 10, '263816^QTY exceed expected',  'us_english', 1880, 0, '263816 QTY exceed expected'
-EXECUTE rdt.rdtAddMsg 263817, 10, '263817^SKU not in BOM',       'us_english', 1880, 0, '263817 SKU not in BOM'
+EXECUTE rdt.rdtAddMsg 263817, 10, '263817^SKU Mismatch',         'us_english', 1880, 0, '263817 SKU Mismatch'
 EXECUTE rdt.rdtAddMsg 263818, 10, '263818^QTY exceeds expected', 'us_english', 1880, 0, '263818 QTY exceeds expected'
 EXECUTE rdt.rdtAddMsg 263819, 10, '263819^QTY mismatch',         'us_english', 1880, 0, '263819 QTY mismatch'
 EXECUTE rdt.rdtAddMsg 263820, 10, '263820^QTY exceeds max',      'us_english', 1880, 0, '263820 QTY exceeds max'

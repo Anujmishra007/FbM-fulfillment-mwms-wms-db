@@ -45,7 +45,9 @@ GO
 /* 2025-05-14  JH01     1.8   UWP-31657 - Change to map Receipt/ReceiptDetail*/
 /* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
 /* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */ 
-/* 2026-02-11  NJOW01   2.1   UWP-48746 Performance tuning                 */   
+/* 2025-09-04  JH04     2.1   Fix for duplicate OrderKey Issue             */ 
+/* 2025-12-10  JH05     2.2   UWP-44219 Fix issue if externreceiptkey empty*/
+/* 2026-02-11  NJOW01   2.3   UWP-48746 Performance tuning                 */   
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
@@ -98,6 +100,7 @@ BEGIN
          , @c_Id                 NVARCHAR(36)                  --(SSA06)
          , @CUR_RECDET           CURSOR
          , @c_NewTran            NVARCHAR(1) = 'N'  --NJOW01
+         , @c_Option5            NVARCHAR(500) = '' --NJOW01
 
    SET @b_Success= 1
    SET @n_Err    = 0
@@ -259,7 +262,23 @@ BEGIN
       ,  ExternPOKey       NVARCHAR(20)   NULL  DEFAULT('')
       ,  ID                NVARCHAR(36)   NULL                 --(SSA06)
       )
-
+      
+   --NJOW01 (B)
+   /*
+   CREATE TABLE #TMP_CURRORD 
+   (  RowID              INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
+     ,Orderkey           NVARCHAR(10)   NOT NULL   DEFAULT('')
+     ,Status             NVARCHAR(10)   NULL       DEFAULT ('0')
+     ,StorerKey          NVARCHAR(15)   NULL
+     ,ExternOrderKey     NVARCHAR(50)   NOT NULL   DEFAULT ('')
+     ,DeliveryDate       DATETIME       NULL       DEFAULT (GETDATE())
+     ,Consigneekey       NVARCHAR(15)   NULL       DEFAULT ('')
+     ,Door               NVARCHAR(10)   NULL       DEFAULT ('99')     
+   )   
+   
+   CREATE INDEX IDX_TMP_CURRORD ON #TMP_CURRORD (Storerkey, ExternOrderKey, Consigneekey, Door, DeliveryDate)    --NJOW01 (B)
+   */
+              
    SET @n_Cnt = 0
    SELECT @c_Storerkey      = RECEIPT.Storerkey
          ,@c_Facility       = RECEIPT.Facility
@@ -296,7 +315,15 @@ BEGIN
    
    --NJOW01 S
    SET @c_NewTran = 'Y'
-
+   
+   SELECT @c_Option5 = SC.Option5
+   FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '','PostFinalizeReceiptSP') AS SC 
+   
+   SET @c_NewTran = dbo.fnc_GetParamValueFromString ('@c_NewTran', @c_Option5, @c_NewTran)
+   
+   IF ISNULL(@c_NewTran,'') = ''
+      SET @c_NewTran = 'Y'
+        
    IF @c_NewTran = 'Y'
    BEGIN
       WHILE @@TRANCOUNT > 0  
@@ -311,6 +338,25 @@ BEGIN
    --Construct order records
    IF @n_continue IN(1,2)
    BEGIN
+   	  --NJOW01 (B)
+   	  /*
+   	  INSERT INTO #TMP_CURRORD (Orderkey, Status, StorerKey, ExternOrderKey,
+                                DeliveryDate, Consigneekey, Door)
+   	  SELECT DISTINCT O.Orderkey, O.Status, O.Storerkey, O.ExternOrderKey, O.DeliveryDate, O.Consigneekey, O.Door
+   	  FROM RECEIPT R (NOLOCK)
+   	  JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
+   	  JOIN ORDERS O (NOLOCK) ON O.Storerkey = RD.Storerkey 
+   	                         AND O.ExternOrderKey = RD.ExternReceiptkey
+   	                         AND O.Consigneekey = ISNULL(RD.Userdefine02, '')
+   	                         AND O.DeliveryDate = ISNULL(RD.UserDefine06,'1900-01-01')
+   	                         AND O.Door = ISNULL(RD.PutawayLoc, '')
+                          	 AND O.ExternOrderKey <> ''
+   	                         AND O.ExternOrderKey IS NOT NULL
+   	                         AND O.Status <> '9'
+   	  WHERE R.Receiptkey = @c_Receiptkey
+   	  AND RD.QtyExpected > 0
+   	  */
+   	     	     	
       --creating cursor for receiptdetail
       DECLARE CUR_RECDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT RD.ReceiptKey
@@ -333,11 +379,23 @@ BEGIN
             ,  Door         = ISNULL(RD.PutawayLoc  ,'')
             ,  RD.ExternPOKey                                  --(SSA04)
             ,  RD.ToId                                         --(SSA06)
+            ,  ISNULL(ORD.Orderkey,'')                         --NJOW01 (B)
+            ,  ISNULL(ORD.Status,'')                           --NJOW01 (B)
          FROM  RECEIPT RH WITH (NOLOCK)
          JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)
        --  JOIN  PODETAIL POD WITH (NOLOCK) ON (RD.Pokey = POD.Pokey)                     --(JH01)
       --                                    AND (RD.POLineNumber = POD.POLineNumber)      --(JH01)
       --                                    AND (RH.FACILITY = POD.FACILITY)              --(SSA01)  --(JH01)
+         OUTER APPLY ( SELECT TOP 1 O.Orderkey, O.Status
+                       FROM ORDERS O (NOLOCK) 
+					             WHERE O.Storerkey = RD.Storerkey 
+   	                   AND O.ExternOrderKey = RD.ExternReceiptkey
+   	                   AND O.Consigneekey = ISNULL(RD.Userdefine02, '')
+   	                   AND O.DeliveryDate = ISNULL(RD.UserDefine06,'1900-01-01')
+   	                   AND O.Door = ISNULL(RD.PutawayLoc, '')
+                       AND O.ExternOrderKey <> ''
+   	                   AND O.ExternOrderKey IS NOT NULL
+   	                   AND O.Status <> '9') ORD --NJOW01 (B)
          WHERE RH.ReceiptKey = @c_Receiptkey
          AND RD.QtyExpected > 0
          ORDER BY ISNULL(RD.Userdefine02,'')
@@ -349,14 +407,29 @@ BEGIN
 
          FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
          @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,    -- (SSA03)
-         @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id                                                                                         -- (SSA04),(SSA06)
+         @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id
+         ,@c_ExistingOrderKey, @c_ExistingOrderStatus --NJOW01 (B)                                                                                          -- (SSA04),(SSA06)
 
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN
              /*Check if existing externorderkey created SO - Start*/ /*JH01*/    
-             SET @c_ExistingOrderKey = ''
-             Set @c_ExistingOrderStatus = ''
+             --NJOW01 (B) Removed
+             --SET @c_ExistingOrderKey = ''
+             --Set @c_ExistingOrderStatus = ''
              
+             --NJOW01 (B)
+             /*
+             SELECT TOP 1 @c_ExistingOrderKey = OH.OrderKey
+                        , @c_ExistingOrderStatus  = OH.Status    
+             FROM #TMP_CURRORD OH WITH (NOLOCK)                  
+             WHERE OH.Storerkey = @c_Storerkey                  
+             AND OH.ExternOrderKey = @c_ExternReceiptkey     
+             AND OH.Consigneekey = @c_Consigneekey
+             AND OH.DeliveryDate = @c_DeliveryDate                
+             AND OH.Door = @c_Door     
+             */
+             
+             /*
              SELECT TOP 1 @c_ExistingOrderKey = ISNULL(OH.OrderKey,''), @c_ExistingOrderStatus  = OH.Status    --NJOW01 add top 1                                        
              FROM  ORDERS OH WITH (NOLOCK)                  
              --JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (OH.StorerKey = RD.StorerKey AND RD.ExternReceiptkey = OH.ExternOrderKey)   --NJOW01 removed
@@ -365,7 +438,8 @@ BEGIN
              AND ISNULL(OH.ExternOrderKey,'') <> ''  --JH05
              AND OH.Consigneekey = @c_Consigneekey
              AND OH.DeliveryDate = @c_DeliveryDate                
-             AND OH.Door = @c_Door      /*JH01*/
+             AND OH.Door = @c_Door*/      /*JH01*/
+             
             
             IF @c_ExistingOrderKey <> ''
             BEGIN
@@ -395,7 +469,8 @@ BEGIN
                END
                ELSE 
                BEGIN
-                  CONTINUE; 
+                  --CONTINUE; 
+                  GOTO NEXT_RECD --NJOW01 (B)
                END
             END            
              /*Check if existing externorderkey created SO - End*/ /*JH01*/    
@@ -525,6 +600,9 @@ BEGIN
                   LEFT JOIN  STORER S WITH (NOLOCK) ON (S.StorerKey = RD.UserDefine02 AND S.Type = '2'  AND S.ConsigneeFor = RD.StorerKey)
                   WHERE RD.ExternReceiptkey = @c_ExternReceiptkey                                        --(JH01)
 			            AND RD.ReceiptKey = @c_Receiptkey                                                      --(JH03)
+                     AND RD.UserDefine02 = @c_Consigneekey  --(JH04)
+                     AND ISNULL(RD.UserDefine06,'1900-01-01') = @c_DeliveryDate --(JH04)
+                     AND RD.PutawayLoc = @c_Door  --(JH04)
                   -- FROM  PO  (NOLOCK)                                                                  --(JH01)
                   -- WHERE PO.Pokey = @c_POKey                                                           --(JH01)
                   GROUP BY S.Company, S.Address1, S.Address2, S.Address3, RH.SellerCompany, RH.CarrierReference, RH.SellerName, RH.SellerAddress1, --(JH01)
@@ -557,10 +635,13 @@ BEGIN
             ) values (@c_Orderkey,@c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
             @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11,                      -- (SSA03)
             @c_Consigneekey,@c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id)                                                                         -- (SSA04),(SSA06)
+            
+            NEXT_RECD: --NJOW01 (B)
 
             FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
             @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,     -- (SSA03)
             @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id                                                                                          -- (SSA04),(SSA06)
+           ,@c_ExistingOrderKey, @c_ExistingOrderStatus --NJOW01 (B)                                                                                          -- (SSA04),(SSA06)            
          -- (SSA01) end ---
          END
          CLOSE CUR_RECDET

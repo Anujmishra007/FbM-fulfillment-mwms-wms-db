@@ -1,0 +1,76 @@
+--rdt_922ExtScn01
+
+-- 6869 = Carton ID screen
+DELETE rdt.RDTScn WHERE Scn = 6869 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6869, 'ENG'
+   ,@cLine01 = 'MBOLKEY:  %10d01'
+   ,@cLine02 = ''
+   ,@cLine03 = 'ORDERKEY: %10d03'
+   ,@cLine04 = 'REF NO:'      
+   ,@cLine05 = '%20d08'      
+   ,@cLine06 = 'LABELNO/DROPID:'
+   ,@cLine07 = '%2000iV_Barcode' 
+   ,@cLine08 = '%20d05'
+   ,@cLine09 = ''
+   ,@cLine10 = 'SCANNED: %10d06'
+   ,@cLine11 = 'TOTAL:   %10d07'
+   ,@cLine13 = '%20d09' 
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5"],"2":["6","7","8"],"3":["10","11","13"]}' 
+   ,@nFunc = 922
+
+-- 6866 = UCC screen
+DELETE rdt.RDTScn WHERE Scn = 6866 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6866, 'ENG'
+   ,@cLine01 = 'MBOLKEY:  %10d01'
+   ,@cLine02 = 'LOADKEY:  %10d02'
+   ,@cLine03 = 'ORDERKEY: %10d03'
+   ,@cLine04 = 'DROPID:   %20d04'
+   ,@cLine05 = ''
+   ,@cLine06 = 'UCC: '
+   ,@cLine07 = '%20i05'   
+   ,@cLine08 = ''
+   ,@cLine09 = 'SCANNED: %10d06'
+   ,@cLine10 = 'TOTAL: %10d07' 
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5"],"2":["6", "7"],"3":["9","10"]}'
+   ,@nFunc = 922
+   
+-- 6867. MBOL mismatch
+DELETE rdt.RDTScn WHERE Scn = 6867 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6867, 'ENG'
+   ,@cLine01 = 'MBOL mismatch'
+   ,@cLine02 = 'Move pallet SO'
+   ,@cLine03 = 'to scanned MBOL'
+   ,@cLine04 = ''
+   ,@cLine05 = 'Scanned MBOL'
+   ,@cLine06 = '%10d01'
+   ,@cLine07 = 'Truck No: %10d02'
+   ,@cLine08 = 'Pallet MBOL'
+   ,@cLine09 = '%10d03'
+   ,@cLine10 = 'PLT SO: %10d04'
+   ,@cLine11 = ''
+   ,@cLine12 = 'Confirm?'
+   ,@cLine13 = '1=Yes, 2=No: %01i05'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["5","6","7","8","9","10"],"3":["11","12","13"]}'
+   ,@nFunc = 922
+
+--6868 Continue UCC screen
+DELETE rdt.RDTScn WHERE Scn = 6868 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6868, 'ENG'
+   ,@cLine01 = 'All cartons on'
+   ,@cLine02 = 'PALLET: %20d01'
+   ,@cLine03 = 'are not scanned'
+   ,@cLine04 = ''
+   ,@cLine05 = 'Back to UCC Scan?'
+   ,@cLine06 = ''
+   ,@cLine07 = 'Scanned Qty: %07d02'
+   ,@cLine08 = 'Total Qty: %07d03'
+   ,@cLine09 = ''
+   ,@cLine10 = 'Confirm?'
+   ,@cLine11 = '1=Yes, 9=No: %01i04'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["5","6","7","8","9"],"3":["10","11"]}'
+   ,@nFunc = 922
+

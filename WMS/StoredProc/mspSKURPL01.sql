@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /***************************************************************************/
-/* Stored Procedure: mspSkuRPL01                                         */
+/* Stored Procedure: mspSkuRPL01                                           */
 /* Creation Date:  27-Feb-2026                                             */
 /* Copyright: Maersk                                                       */
 /* Written by:Supriya S                                                    */
@@ -259,8 +259,6 @@ BEGIN
 
           WHILE @n_QtyToReplen > 0
           BEGIN
-
-
                   SELECT Top 1 @c_FromLOC = LLI.LOC,
                                   @c_FromID = LLI.ID,
                                   @c_FromLot = LLI.Lot
@@ -278,8 +276,9 @@ BEGIN
                                   (LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED) > 0
                                   AND LLI.STORERKEY =  @c_StorerKey
                                   AND LLI.Sku = @c_Sku
-                                  AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE Sku = @c_Sku AND fromLoc = LLI.LOC)
-
+                                  AND NOT EXISTS (SELECT 1 FROM #replenVivo
+                                  WHERE Sku = @c_Sku AND fromLoc = LLI.LOC
+                                  AND fromLot = LLI.LOT AND fromId = LLI.ID)
                          ORDER BY
                           CASE WHEN LOC.LocationCategory <> 'shelving' THEN 0 ELSE 1 END,
                           CASE WHEN LOC.LocationType = 'PICK' THEN 0 ELSE 1 END,
@@ -302,9 +301,12 @@ BEGIN
                                   AND LLI.STORERKEY =  @c_StorerKey
                                   AND LLI.Sku = @c_Sku
                                   AND LOC.loc = ISNULL(@c_FromLoc,'')
+                                  AND LLI.LOT = ISNULL(@c_FromLot,'')
+                                  AND LLI.ID = ISNULL(@c_FromID,'')
 
 
-                  IF @n_QtyAvailable > 0 AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE Sku = @c_Sku AND fromLoc = @c_FromLoc)
+                  IF @n_QtyAvailable > 0 AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE Sku = @c_Sku AND fromLoc = @c_FromLoc
+                  AND fromLot = @c_FromLot AND fromId = @c_FromID)
                   BEGIN
                   SET @n_Qty = CASE WHEN @n_QtyAvailable >= @n_QtyToReplen THEN @n_QtyToReplen ELSE @n_QtyAvailable END
                    insert into #replenVivo (Sku, fromLoc, Loc, fromId, fromLot, Qty, UOM, PackKey,Priority)
@@ -365,10 +367,41 @@ BEGIN
 
         OPEN CUR_REPLENISH
 
+         DECLARE @prevFromLoc NVARCHAR(10) = '',
+       @prevToLoc   NVARCHAR(10) = '',
+       @prevSKU     NVARCHAR(20) = '',
+       @prevGroup   NVARCHAR(10) = ''
+
        FETCH NEXT FROM CUR_REPLENISH INTO @c_Sku,@c_FromLOC , @c_Loc, @c_FromId,@c_FromLot,@n_Qty, @c_UOM, @c_PackKey,@c_Priority
 
        WHILE @@FETCH_STATUS <> -1
        BEGIN
+
+        -- Check if the same FromLoc, ToLoc, SKU combination repeats
+          IF @c_FromLoc = @prevFromLoc
+             AND @c_Loc = @prevToLoc
+             AND @c_Sku = @prevSKU
+          BEGIN
+              -- Reuse previous replenishment group
+              SET  @c_ReplGroup = @prevGroup
+          END
+          ELSE
+          BEGIN
+              -- Generate a new replenishment group
+              EXECUTE nspg_GetKey
+                      @keyname       = 'REPLENISHGROUP',
+                      @fieldlength   = 10,
+                      @keystring     =   @c_ReplGroup OUTPUT,
+                      @b_success     = @b_success OUTPUT,
+                      @n_err         = @n_err OUTPUT,
+                      @c_errmsg      = @c_errmsg OUTPUT
+
+              -- Save current as previous
+              SET @prevFromLoc = @c_FromLoc
+              SET @prevToLoc   = @c_Loc
+              SET @prevSKU     = @c_Sku
+              SET @prevGroup   =   @c_ReplGroup
+          END
 
        EXECUTE nspg_GetKey
                   'REPLENISHKEY'
@@ -377,6 +410,7 @@ BEGIN
                ,  @b_success          OUTPUT
                ,  @n_err              OUTPUT
                ,  @c_errmsg           OUTPUT
+
           INSERT INTO REPLENISHMENT (Replenishmentgroup
                    , ReplenishmentKey,StorerKey, Sku, FromLoc, Id, Lot, ToLoc, Qty, UOM, PackKey, Confirmed)
           VALUES (@c_ReplGroup,@c_ReplenishmentKey,@c_StorerKey, @c_Sku, @c_FromLoc, @c_FromId, @c_FromLot, @c_Loc, @n_Qty, @c_UOM, @c_PackKey,'N')

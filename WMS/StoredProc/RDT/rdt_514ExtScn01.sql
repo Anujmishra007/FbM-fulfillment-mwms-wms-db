@@ -12,6 +12,7 @@ GO
 /*                                                                                              */
 /* Date       Rev    Author   Purposes                                                          */
 /* 2026-04-08 1.0    NLT013   FCR-11631 Create                                                  */
+/* 2026-05-06 1.1    NLT013   UWP-55674 Clear ToLoc, ToID                                       */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_514ExtScn01] (
@@ -649,8 +650,8 @@ BEGIN
                -- (system will return back to this screen to indicate which UCC encounter the error)
                -- SET @cToID = '' 
                -- SET @cToLOC = ''
-               SET @cOutField01 = @cToID
-               SET @cOutField02 = @cToLOC
+               SET @cOutField01 = ''
+               SET @cOutField02 = ''
 
                IF rdt.rdtGetConfig( @nFunc, 'MoveByUCCDefaultCursorToID', @cStorerKey) = '1'
                   EXEC rdt.rdtSetFocusField @nMobile, 1 --ToID

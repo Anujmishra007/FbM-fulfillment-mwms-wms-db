@@ -102,7 +102,7 @@ BEGIN
    END
    ELSE
    BEGIN
-      IF @cScanType IN ('altsku', 'manufacturersku', 'retailsku')
+      IF @cScanType IN ('altsku', 'manusku', 'retailsku')
       BEGIN
          IF LEFT(@cInputValue1,2) <> '69'
          BEGIN

@@ -39,9 +39,10 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_Wrapper] (
    , @oPrintConfigJson     NVARCHAR(MAX)     = ''
    , @bIsAutoPrint         BIT               = 0
    , @nCopy                INT               = 1   
-   , @cSKU                 NVARCHAR(20)     = ''
-   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
-   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
+   , @cSKU                 NVARCHAR(20)      = ''
+   , @cReportType          NVARCHAR(30)      = ''
+   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
+   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @b_Success            INT               = 0   OUTPUT  
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
@@ -62,7 +63,6 @@ BEGIN
          , @cConfigKey        NVARCHAR(30)
          , @cSPName           NVARCHAR(50)
          , @nContinuePrint    INT
-         , @bCartonLevelPrint BIT
 
 
    SET @b_Success          = 0  
@@ -75,7 +75,6 @@ BEGIN
    SET @cConfigKey         = ''
    SET @cSPName            = ''
    SET @nContinuePrint     = 1 -- Default to call the standard print SP if Extended Print SP is not configured or print config JSON is not provided.
-   SET @bCartonLevelPrint  = 0
 
    IF @oPrintConfigJson <> ''
    BEGIN
@@ -122,6 +121,7 @@ BEGIN
                      + ', @bPrintPaperFlag            ' + CHAR(13)
                      + ', @cLabelPrinter              ' + CHAR(13)
                      + ', @cPaperPrinter              ' + CHAR(13)
+                     + ', @cReportType                ' + CHAR(13)
                      + ', @cPrintLabelJobIDs   OUTPUT ' + CHAR(13)
                      + ', @cPrintPaperJobIDs   OUTPUT ' + CHAR(13)
                      + ', @nContinuePrint      OUTPUT ' + CHAR(13)
@@ -146,6 +146,7 @@ BEGIN
                         + ', @bPrintPaperFlag   BIT                  ' + CHAR(13)
                         + ', @cLabelPrinter     NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPaperPrinter     NVARCHAR(30)         ' + CHAR(13)
+                        + ', @cReportType       NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPrintLabelJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
                         + ', @cPrintPaperJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
                         + ', @nContinuePrint    INT           OUTPUT ' + CHAR(13)
@@ -172,6 +173,7 @@ BEGIN
                            , @bPrintPaperFlag
                            , @cLabelPrinter    
                            , @cPaperPrinter    
+                           , @cReportType
                            , @cPrintLabelJobIDs OUTPUT
                            , @cPrintPaperJobIDs OUTPUT
                            , @nContinuePrint    OUTPUT
@@ -191,9 +193,7 @@ BEGIN
       CLOSE CUR_PRINT
       DEALLOCATE CUR_PRINT
    END
-
-   IF @nContinuePrint = 1
-   AND @cSKU = ''
+   ELSE
    BEGIN
       SELECT @cExtendedPrintSP = ISNULL(sValue,'')
       FROM STORERCONFIG (NOLOCK)
@@ -232,6 +232,7 @@ BEGIN
                    + ', @bPrintPaperFlag            ' + CHAR(13)
                    + ', @cLabelPrinter              ' + CHAR(13)
                    + ', @cPaperPrinter              ' + CHAR(13)
+                   + ', @cReportType                ' + CHAR(13)
                    + ', @cPrintLabelJobIDs   OUTPUT ' + CHAR(13)
                    + ', @cPrintPaperJobIDs   OUTPUT ' + CHAR(13)
                    + ', @nContinuePrint      OUTPUT ' + CHAR(13)
@@ -256,6 +257,7 @@ BEGIN
                         + ', @bPrintPaperFlag   BIT                  ' + CHAR(13)
                         + ', @cLabelPrinter     NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPaperPrinter     NVARCHAR(30)         ' + CHAR(13)
+                        + ', @cReportType       NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPrintLabelJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
                         + ', @cPrintPaperJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
                         + ', @nContinuePrint    INT           OUTPUT ' + CHAR(13)
@@ -282,6 +284,7 @@ BEGIN
                            , @bPrintPaperFlag
                            , @cLabelPrinter    
                            , @cPaperPrinter    
+                           , @cReportType
                            , @cPrintLabelJobIDs OUTPUT
                            , @cPrintPaperJobIDs OUTPUT
                            , @nContinuePrint    OUTPUT
@@ -294,100 +297,41 @@ BEGIN
             SET @n_Continue = 3   
             GOTO EXIT_SP
          END
-         SET @bCartonLevelPrint = 1
-
       END  
-   END
-
-   IF EXISTS ( SELECT 1
-               FROM STORERCONFIG (NOLOCK) 
-               WHERE StorerKey = @cStorerKey 
-               AND ConfigKey = 'TPS-VAS'
-               AND sValue IN('1', '3')
-   ) 
-   AND @nContinuePrint = 1 
-   BEGIN
-      EXEC [API].[isp_TPACK_PrintDocument_VAS]
-        @cType             = @cType            
-      , @bIsDiscrete       = @bIsDiscrete      
-      , @bIsCustom         = @bIsCustom        
-      , @cPickSlipNo       = @cPickSlipNo       
-      , @cOrderKey         = @cOrderKey
-      , @cLoadKey          = @cLoadKey          
-      , @cDropID           = @cDropID
-      , @cStorerKey        = @cStorerKey        
-      , @cFacility         = @cFacility   
-      , @nCartonNo         = @nCartonNo
-      , @c_UserID          = @c_UserID
-      , @cLangCode         = @cLangCode
-      , @bIsLastCarton     = @bIsLastCarton
-      , @bPrintLabelFlag   = @bPrintLabelFlag
-      , @bPrintPaperFlag   = @bPrintPaperFlag
-      , @cLabelPrinter     = @cLabelPrinter    
-      , @cPaperPrinter     = @cPaperPrinter    
-      , @bIsAutoPrint      = @bIsAutoPrint
-      , @nCopy             = @nCopy
-      , @cSKU              = @cSKU
-      , @cPrintLabelJobIDs = @cPrintLabelJobIDs   OUTPUT
-      , @cPrintPaperJobIDs = @cPrintPaperJobIDs   OUTPUT
-      , @nContinuePrint    = @nContinuePrint      OUTPUT
-      , @b_Success         = @b_Success           OUTPUT
-      , @n_ErrNo           = @n_ErrNo             OUTPUT
-      , @c_ErrMsg          = @c_ErrMsg            OUTPUT
-
-      IF @b_Success = 0
+      ELSE
       BEGIN
-         SET @n_Continue  = 3    
-         GOTO EXIT_SP
+         EXEC [API].[isp_TPACK_PrintDocument_Std]
+         @cType             = @cType            
+         , @bIsDiscrete       = @bIsDiscrete      
+         , @bIsCustom         = @bIsCustom        
+         , @cPickSlipNo       = @cPickSlipNo       
+         , @cOrderKey         = @cOrderKey
+         , @cLoadKey          = @cLoadKey          
+         , @cDropID           = @cDropID
+         , @cStorerKey        = @cStorerKey        
+         , @cFacility         = @cFacility   
+         , @nCartonNo         = @nCartonNo
+         , @c_UserID          = @c_UserID
+         , @cLangCode         = @cLangCode
+         , @bIsLastCarton     = @bIsLastCarton
+         , @bPrintLabelFlag   = @bPrintLabelFlag
+         , @bPrintPaperFlag   = @bPrintPaperFlag
+         , @cLabelPrinter     = @cLabelPrinter    
+         , @cPaperPrinter     = @cPaperPrinter    
+         , @cReportType       = @cReportType
+         , @cPrintLabelJobIDs = @cPrintLabelJobIDs   OUTPUT
+         , @cPrintPaperJobIDs = @cPrintPaperJobIDs   OUTPUT
+         , @b_Success         = @b_Success           OUTPUT
+         , @n_ErrNo           = @n_ErrNo             OUTPUT
+         , @c_ErrMsg          = @c_ErrMsg            OUTPUT
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue  = 3    
+            GOTO EXIT_SP
+         END
       END
    END
-   
-   IF @nContinuePrint = 1 AND @bCartonLevelPrint = 0
-   BEGIN
-      EXEC [API].[isp_TPACK_PrintDocument_Std]
-        @cType             = @cType            
-      , @bIsDiscrete       = @bIsDiscrete      
-      , @bIsCustom         = @bIsCustom        
-      , @cPickSlipNo       = @cPickSlipNo       
-      , @cOrderKey         = @cOrderKey
-      , @cLoadKey          = @cLoadKey          
-      , @cDropID           = @cDropID
-      , @cStorerKey        = @cStorerKey        
-      , @cFacility         = @cFacility   
-      , @nCartonNo         = @nCartonNo
-      , @c_UserID          = @c_UserID
-      , @cLangCode         = @cLangCode
-      , @bIsLastCarton     = @bIsLastCarton
-      , @bPrintLabelFlag   = @bPrintLabelFlag
-      , @bPrintPaperFlag   = @bPrintPaperFlag
-      , @cLabelPrinter     = @cLabelPrinter    
-      , @cPaperPrinter     = @cPaperPrinter    
-      , @cPrintLabelJobIDs = @cPrintLabelJobIDs   OUTPUT
-      , @cPrintPaperJobIDs = @cPrintPaperJobIDs   OUTPUT
-      , @b_Success         = @b_Success           OUTPUT
-      , @n_ErrNo           = @n_ErrNo             OUTPUT
-      , @c_ErrMsg          = @c_ErrMsg            OUTPUT
-
-      IF @b_Success = 0
-      BEGIN
-         SET @n_Continue  = 3    
-         GOTO EXIT_SP
-      END
-   END
-   
-   --IF @bPrintLabelFlag = 1 AND @cPrintLabelJobIDs = ''
-   --BEGIN
-   --   SET @n_Continue  = 3
-   --   SET @n_ErrNo = 11802    
-   --   SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Label printing was unsuccessful as the PrintLabelJobID was not found.
-   --END
-
-   --IF @bPrintPaperFlag = 1 AND @cPrintPaperJobIDs = ''
-   --BEGIN
-   --   SET @n_Continue  = 3
-   --   SET @n_ErrNo = 11803    
-   --   SET @c_ErrMsg = IIF(@c_ErrMsg <> '', ' | ', '') + API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Paper printing was unsuccessful as the PrintPaperJobID was not found.
-   --END
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      

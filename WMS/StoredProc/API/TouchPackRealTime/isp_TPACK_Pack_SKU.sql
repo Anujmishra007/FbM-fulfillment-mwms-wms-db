@@ -13,6 +13,7 @@ GO
 /* 2025-08-05   1.0  GCH225     Created                                          */
 /* 2026-02-11   2.0  GCH225     UWP:45984: Fix for PreCartonize issue            */
 /* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
+/* 2026-05-14   3.1  GCH225     FCR-13198: Fix Update Multi Line PackDetail      */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_Pack_SKU] (
@@ -56,7 +57,19 @@ BEGIN
          , @bIsINS               BIT
          , @cUCCtoUPC            NVARCHAR(10)
          , @cUCCtoDropID         NVARCHAR(10)
+         , @nExpQty              INT
+         , @nSUMQty              INT
+         , @nTMPQty              INT
+         , @nRemainingQty        INT
+         , @nCountTLN            INT
    
+   DECLARE @tLineNo TABLE (
+        RowID     INT IDENTITY(1,1) PRIMARY KEY 
+      , LabelLine NVARCHAR(20) NOT NULL
+      , Qty       INT
+      , ExpQty    INT
+   )
+
    SET @b_Success          = 0  
    SET @n_ErrNo            = 0  
    SET @c_ErrMsg           = '' 
@@ -68,6 +81,11 @@ BEGIN
    SET @bIsINS             = 1
    SET @cUCCtoUPC          = ''
    SET @cUCCtoDropID       = ''
+   SET @nExpQty            = 0
+   SET @nSUMQty            = 0
+   SET @nTMPQty            = 0
+   SET @nRemainingQty      = 0
+   SET @nCountTLN          = 0
 
    IF @cScanType = 'ucc'
    BEGIN
@@ -196,7 +214,8 @@ BEGIN
      
       IF @cScanType IN( 'upc', 'altsku', 'manusku', 'retailsku') 
       BEGIN
-         SELECT @cLabelLine = LabelLine
+         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty)
+         SELECT LabelLine, Qty, ExpQty
          FROM PACKDETAIL (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
@@ -204,10 +223,12 @@ BEGIN
          AND SKU = @cSKU
          AND UPC = @cInputValue1
          AND (@cInputValue3 = '' OR LOTTABLEVALUE = @cInputValue3)
+         ORDER BY LabelLine ASC
       END
       ELSE IF @cInputValue3 <> ''
       BEGIN
-         SELECT @cLabelLine = LabelLine
+         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty)
+         SELECT LabelLine, Qty, ExpQty
          FROM PACKDETAIL (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
@@ -215,10 +236,12 @@ BEGIN
          AND SKU = @cSKU
          AND UPC = ''
          AND LOTTABLEVALUE = @cInputValue3
+         ORDER BY LabelLine ASC
       END
       ELSE -- all other scan type
       BEGIN
-         SELECT @cLabelLine = LabelLine
+         INSERT INTO @tLineNo (LabelLine, Qty, ExpQty)
+         SELECT LabelLine, Qty, ExpQty 
          FROM PACKDETAIL (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
@@ -226,10 +249,89 @@ BEGIN
          AND SKU = @cSKU
          AND (UPC = '' OR UPC IS NULL)
          AND (LOTTABLEVALUE = '' OR LOTTABLEVALUE IS NULL)
+         ORDER BY LabelLine ASC
       END
 
-      IF @@ROWCOUNT = 1
+      SELECT @nCountTLN = COUNT(1) 
+      FROM @tLineNo
+
+      IF @nCountTLN >= 1
       BEGIN
+         IF @nCountTLN > 1
+         BEGIN
+            SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
+                  , @nSUMQty = ISNULL(SUM(Qty), 0)
+            FROM @tLineNo
+
+            IF @nExpQty > 0
+            BEGIN
+               IF @nExpQty = (@nSUMQty + @nQty)
+               BEGIN
+                  UPDATE @tLineNo
+                  SET Qty = ExpQty
+               END 
+               ELSE IF @nExpQty > (@nSUMQty + @nQty)
+               BEGIN
+                  SET @nTMPQty = @nQty
+                  WHILE @nTMPQty > 0
+                  BEGIN               
+                     SET @cLabelLine = NULL;
+                     SET @nRemainingQty = 0;
+
+                     SELECT TOP 1 @cLabelLine = LabelLine
+                                , @nRemainingQty = ExpQty - Qty
+                     FROM @tLineNo
+                     WHERE Qty < ExpQty
+                     ORDER BY LabelLine ASC
+
+                     IF @cLabelLine IS NULL OR @nRemainingQty <= 0
+                        BREAK;
+
+                     IF @nRemainingQty >= @nTMPQty
+                     BEGIN
+                        UPDATE @tLineNo
+                        SET Qty = Qty + @nTMPQty
+                        WHERE LabelLine = @cLabelLine
+
+                        SET @nTMPQty = 0
+                     END
+                     ELSE
+                     BEGIN
+                        UPDATE @tLineNo
+                        SET Qty = ExpQty
+                        WHERE LabelLine = @cLabelLine
+
+                        SET @nTMPQty = @nTMPQty - @nRemainingQty
+                     END
+                  END
+               END
+               ELSE
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_ErrNo    = 11157
+                  SET @c_ErrMsg   =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Abnormal: Total packed quantity exceeds expected quantity. Please check with supervisor.'
+                  GOTO EXIT_SP
+               END
+            END
+            ELSE
+            BEGIN
+               UPDATE @tLineNo
+               SET Qty = Qty + @nQty
+               WHERE RowID = 1
+            END
+
+            SET @cLabelLine = ''
+         END
+         ELSE IF @nCountTLN = 1
+         BEGIN
+            SELECT @cLabelLine = LabelLine
+            FROM @tLineNo
+
+            UPDATE @tLineNo
+            SET Qty = Qty + @nQty
+            WHERE RowID = 1
+         END
+
          SET @bIsINS = 0 
       END
       ELSE
@@ -297,14 +399,16 @@ BEGIN
    END
    ELSE
    BEGIN
-      UPDATE PACKDETAIL WITH (ROWLOCK)
-      SET Qty = Qty + @nQty
-         , EditWho = @c_UserID
-         , EditDate = GETDATE()
+      UPDATE PD
+      SET PD.Qty = TLN.Qty
+         , PD.EditWho = @c_UserID
+         , PD.EditDate = GETDATE()
+      FROM PACKDETAIL PD WITH (ROWLOCK)
+      INNER JOIN @tLineNo TLN
+      ON PD.LabelLine = TLN.LabelLine
       WHERE PickSlipNo = @cPickSlipNo
       AND CartonNo = @nCartonNo
       AND LabelNo = @cLabelNo
-      AND LabelLine = @cLabelLine
 
       IF @@ERROR <> 0
       BEGIN
@@ -458,6 +562,3 @@ EXIT_SP:
       RETURN      
    END
 END
-
-
-

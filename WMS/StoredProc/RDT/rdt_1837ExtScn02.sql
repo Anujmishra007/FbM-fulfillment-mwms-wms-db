@@ -399,16 +399,11 @@ BEGIN
                      IF EXISTS (
                         SELECT 1 FROM PICKDETAIL PD (NOLOCK)
                         WHERE PD.StorerKey = @cStorerKey
+                        AND PD.STATUS = '4'
                         AND (
                            (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
                            OR
                            (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
-                        )
-                        AND EXISTS (
-                           SELECT 1 FROM PICKDETAIL PD1
-                           WHERE PD1.STATUS = '4'
-                           AND PD1.OrderKey = PD.OrderKey
-                           AND PD1.StorerKey = PD.StorerKey
                         )
                      )
                      BEGIN
@@ -515,16 +510,11 @@ BEGIN
                      IF EXISTS (
                         SELECT 1 FROM PICKDETAIL PD (NOLOCK)
                         WHERE PD.StorerKey = @cStorerKey
+                        AND PD.STATUS = '4'
                         AND (
                            (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
                            OR
                            (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
-                        )
-                        AND EXISTS (
-                           SELECT 1 FROM PICKDETAIL PD1
-                           WHERE PD1.STATUS = '4'
-                           AND PD1.OrderKey = PD.OrderKey
-                           AND PD1.StorerKey = PD.StorerKey
                         )
                      )
                      BEGIN
@@ -701,10 +691,6 @@ BEGIN
                SET @cOutField03 = @cPPS_Loc
                SET @cOutField04 = ''
 
-               -- Go to next screen
-               SET @nAfterScn = @nScn_ToPallet
-               SET @nAfterStep = 99
-
                IF @cExtendedInfoSP <> ''
                BEGIN
                   IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
@@ -714,7 +700,7 @@ BEGIN
                      VALUES ( '@cDocType', @cDocType ),
                             ( '@cWAVEKey', @cWAVEKey ),
                             ( '@cConsigneeKey', @cConsigneeKey ),
-                            ( '@nScn', CONCAT(@nAfterScn,'') )
+                            ( '@nScn', CONCAT(@nMOBRECScn,'') )
                      SET @cExtendedInfo = ''
                      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
                         ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
@@ -749,6 +735,10 @@ BEGIN
                      END
                   END
                END
+
+               -- Go to next screen
+               SET @nAfterScn = @nScn_ToPallet
+               SET @nAfterStep = 99
             END
          END
          IF @nMOBRECScn = @nScn_ToPallet -- to Pallet
@@ -846,16 +836,11 @@ BEGIN
                   IF EXISTS (
                      SELECT 1 FROM PICKDETAIL PD (NOLOCK)
                      WHERE PD.StorerKey = @cStorerKey
+                     AND PD.STATUS = '4'
                      AND (
                         (@cPickDetailCartonID = 'DROPID' AND PD.DROPID = @cCartonID)
                         OR
                         (@cPickDetailCartonID = 'CASEID' AND PD.CaseID = @cCartonID)
-                     )
-                     AND EXISTS (
-                        SELECT 1 FROM PICKDETAIL PD1
-                        WHERE PD1.STATUS = '4'
-                        AND PD1.OrderKey = PD.OrderKey
-                        AND PD1.StorerKey = PD.StorerKey
                      )
                   )
                   BEGIN

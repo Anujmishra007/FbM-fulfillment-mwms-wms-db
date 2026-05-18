@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdtfnc_TM_PutawayFrom]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_TM_PutawayFrom]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -31,8 +27,9 @@ GO
 /* 18-04-2024  1.8   Dennis    Check Digit                                     */
 /* 22-04-2024  1.8   NLT013    UWP-13706 UWP-18596 add DB Schedule rdt for     */
 /*                             ExtendedUpdateSP                                */
+/* 30-04-2026  1.9   NLT013    FCR-11750 Add ExtUpdSP in step5                 */
 /*******************************************************************************/
-CREATE  PROC [RDT].[rdtfnc_TM_PutawayFrom](
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_PutawayFrom](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -1263,6 +1260,32 @@ BEGIN
          -- Go to next task screen
          IF @nFromStep = 1
          BEGIN
+            -- Extended update
+            IF @cExtendedUpdateSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cExtendedUpdateSP AND type = 'P')
+               BEGIN
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                  SET @cSQLParam =
+                     '@nMobile         INT,        ' +
+                     '@nFunc           INT,        ' +
+                     '@cLangCode       NVARCHAR( 3),   ' +
+                     '@nStep           INT,        ' +
+                     '@cTaskdetailKey  NVARCHAR( 10),  ' +
+                     '@nErrNo          INT OUTPUT, ' +
+                     '@cErrMsg         NVARCHAR( 20) OUTPUT'
+   
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+   
+                  IF @nErrNo <> 0
+                  BEGIN
+                     GOTO Quit
+                  END
+               END
+            END
+
             SET @nScn = @nFromScn + 3
             SET @nStep = @nFromStep + 3
          END

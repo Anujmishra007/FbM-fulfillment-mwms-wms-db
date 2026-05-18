@@ -29,15 +29,16 @@ CREATE OR ALTER PROC [API].[isp_TPACK_PrintDocument_VAS] (
    , @c_UserID             NVARCHAR(256)     = ''  
    , @cLangCode            NVARCHAR(3)       = ''
    , @bIsLastCarton        BIT               = 0
-   , @bPrintLabelFlag      BIT               = 0
-   , @bPrintPaperFlag      BIT               = 0
+   , @bPrintLabelFlag      BIT               = 0   OUTPUT
+   , @bPrintPaperFlag      BIT               = 0   OUTPUT
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
    , @bIsAutoPrint         BIT               = 0
    , @nCopy                INT               = 0
    , @cSKU                 NVARCHAR(20)      = ''
-   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
-   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
+   , @cReportType          NVARCHAR(30)      = ''
+   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
+   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @nContinuePrint       INT               = 0   OUTPUT
    , @b_Success            INT               = 0   OUTPUT  
    , @n_ErrNo              INT               = 0   OUTPUT
@@ -85,7 +86,6 @@ BEGIN
          , @IsAggregate2      BIT = 0
          , @IsAggregate3      BIT = 0
          , @IsAggregate4      BIT = 0
-         , @bIsSKUReport      BIT = 0
          
    -- Variables for workflow implementation
    -- DECLARE @cTypeFromWOD      NVARCHAR(30)
@@ -115,13 +115,10 @@ BEGIN
    SET @cJobIDs            = ''
    SET @cIsPaperPrinter    = '0'
    SET @cPrinterID         = ''
-   SET @bIsSKUReport       = 0
    SET @cFinalSKU          = ''
    SET @cUDF01_WK          = ''
    SET @cUDF04_WK          = ''
    SET @nContinuePrint     = 0
-
-    -- Get PRICELB configuration from CodeLkup based on WorkOrder type
 
    DECLARE @VASReports TABLE (
       ReportID         NVARCHAR(10)
@@ -133,7 +130,7 @@ BEGIN
     , KeyFieldName2    NVARCHAR(MAX)
     , KeyFieldName3    NVARCHAR(MAX)
     , KeyFieldName4    NVARCHAR(MAX)
-    , IsSKUReport      BIT
+    , ReportType       NVARCHAR(30)
    )
    
    --if is SKU level and SKU is provided, print specific SKU label or
@@ -158,7 +155,8 @@ BEGIN
                      AND WO.[Type] IN('PACK', 'VAS')
                      AND WO.WorkOrderKey = WOD.WorkOrderKey
                      )
-      AND CLK.UDF04 = 'PRICELB'
+      AND (WOD.SKU = @cSKU OR WOD.SKU = '')
+      AND CLK.UDF04 IN ('PRICELB', 'SKULB')
       AND CLK.LISTName = 'WKORDTYPE'
    END
    ELSE
@@ -187,7 +185,7 @@ BEGIN
                      PD.PickSlipNo = @cPickSlipNo
                      AND PD.CartonNo = @nCartonNo
                   )
-      AND CLK.UDF04 <> 'PRICELB'
+      AND CLK.UDF04 NOT IN('PRICELB', 'SKULB')
       AND CLK.LISTName = 'WKORDTYPE'
    END
 
@@ -198,138 +196,37 @@ BEGIN
                                  , @cUDF04_WK
    WHILE @@FETCH_STATUS = 0
    BEGIN
-      IF @cWODSKU = @cSKU OR @cWODSKU = ''
+      INSERT INTO @VASReports ( ReportID
+                              , ReportLineNo
+                              , PrintSource
+                              , DefaultPrinterID
+                              , IsPaperPrinter
+                              , KeyFieldName1
+                              , KeyFieldName2
+                              , KeyFieldName3
+                              , KeyFieldName4
+                              , ReportType)
+      EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
+         @cWODType          = @cWODType
+         , @cStorerKey      = @cStorerKey
+         , @cFacility       = @cFacility
+         , @cOrderKey       = @cOrderKey
+         , @cPickSlipNo     = @cPickSlipNo
+         , @nCartonNo       = @nCartonNo
+         , @cSKU            = @cWODSKU
+         , @cUDF01_WK       = @cUDF01_WK
+         , @cUDF04_WK       = @cUDF04_WK
+         , @bPrintLabelFlag = @bPrintLabelFlag
+         , @bPrintPaperFlag = @bPrintPaperFlag
+         , @cLangCode       = @cLangCode
+         , @b_Success       = @b_Success       OUTPUT
+         , @n_ErrNo         = @n_ErrNo         OUTPUT
+         , @c_ErrMsg        = @c_ErrMsg        OUTPUT
+
+      IF @b_Success = 0 
       BEGIN
-         SET @cFinalSKU = COALESCE(@cWODSKU, @cSKU)
-         
-         IF @cFinalSKU = ''
-         BEGIN
-            SELECT TOP 1 @cFinalSKU = SKU
-            FROM PACKDETAIL (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo 
-            AND CartonNo = @nCartonNo
-         END
-
-         INSERT INTO @VASReports ( ReportID
-                                 , ReportLineNo
-                                 , PrintSource
-                                 , DefaultPrinterID
-                                 , IsPaperPrinter
-                                 , KeyFieldName1
-                                 , KeyFieldName2
-                                 , KeyFieldName3
-                                 , KeyFieldName4
-                                 , IsSKUReport)
-         EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
-            @cWODType        = @cWODType
-            , @cStorerKey    = @cStorerKey
-            , @cFacility     = @cFacility
-            , @cOrderKey     = @cOrderKey
-            , @cPickSlipNo   = @cPickSlipNo
-            , @nCartonNo     = @nCartonNo
-            , @cSKU          = @cFinalSKU
-            , @cUDF01_WK     = @cUDF01_WK
-            , @cUDF04_WK     = @cUDF04_WK
-            , @bPrintLabelFlag = @bPrintLabelFlag
-            , @bPrintPaperFlag = @bPrintPaperFlag
-            , @cReportType   = 'TPVAS'
-            , @cLangCode     = @cLangCode
-            , @b_Success     = @b_Success       OUTPUT
-            , @n_ErrNo       = @n_ErrNo         OUTPUT
-            , @c_ErrMsg      = @c_ErrMsg        OUTPUT
-
-         IF @b_Success = 0 
-         BEGIN
-            SET @n_Continue = 3 
-            GOTO EXIT_SP  
-         END
-
-         -- UDF04 empty is for any other reports, UDF04 = 'PRICELB' is for SKU label report only
-         IF @cUDF04_WK = '' 
-         BEGIN
-            SET @cFinalSKU = COALESCE(@cWODSKU, @cSKU)
-            
-            IF @cFinalSKU = ''
-            BEGIN
-               SELECT TOP 1 @cFinalSKU = SKU
-               FROM PACKDETAIL PD (NOLOCK)
-               WHERE PD.PickSlipNo = @cPickSlipNo
-               AND PD.CartonNo = @nCartonNo
-               AND PD.SKU <> ''
-            END
-           
-            INSERT INTO @VASReports ( ReportID
-                                    , ReportLineNo
-                                    , PrintSource
-                                    , DefaultPrinterID
-                                    , IsPaperPrinter
-                                    , KeyFieldName1
-                                    , KeyFieldName2
-                                    , KeyFieldName3
-                                    , KeyFieldName4
-                                    , IsSKUReport)
-            EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
-               @cWODType        = @cWODType
-               , @cStorerKey    = @cStorerKey
-               , @cFacility     = @cFacility
-               , @cOrderKey     = @cOrderKey
-               , @cPickSlipNo   = @cPickSlipNo
-               , @nCartonNo     = @nCartonNo
-               , @cSKU          = @cFinalSKU
-               , @cUDF01_WK     = @cUDF01_WK
-               , @cUDF04_WK     = @cUDF04_WK
-               , @bPrintLabelFlag = @bPrintLabelFlag
-               , @bPrintPaperFlag = @bPrintPaperFlag
-               , @cReportType   = 'TPVAS'
-               , @cLangCode     = @cLangCode
-               , @b_Success     = @b_Success       OUTPUT
-               , @n_ErrNo       = @n_ErrNo         OUTPUT
-               , @c_ErrMsg      = @c_ErrMsg        OUTPUT
-
-            IF @n_ErrNo <> 0
-            BEGIN
-               SET @n_Continue = 3 
-               GOTO EXIT_SP  
-            END
-
-            -- UDF04 empty is for any other reports, UDF04 = 'PRICELB' is for SKU label report only
-            IF @cUDF04_WK = '' 
-            BEGIN
-               INSERT INTO @VASReports ( ReportID
-                                       , ReportLineNo
-                                       , PrintSource
-                                       , DefaultPrinterID
-                                       , IsPaperPrinter
-                                       , KeyFieldName1
-                                       , KeyFieldName2
-                                       , KeyFieldName3
-                                       , KeyFieldName4
-                                       , IsSKUReport)
-               EXEC [API].[isp_TPACK_PrintDocument_VAS_BySKU]
-                  @cWODType        = @cWODType
-                  , @cStorerKey    = @cStorerKey
-                  , @cFacility     = @cFacility
-                  , @cOrderKey     = @cOrderKey
-                  , @cPickSlipNo   = @cPickSlipNo
-                  , @nCartonNo     = @nCartonNo
-                  , @cSKU          = @cFinalSKU
-                  , @cUDF01_WK     = @cUDF01_WK
-                  , @cUDF04_WK     = @cUDF04_WK
-                  , @bPrintLabelFlag = @bPrintLabelFlag
-                  , @bPrintPaperFlag = @bPrintPaperFlag
-                  , @cReportType   = 'TPVASCarton'
-                  , @cLangCode     = @cLangCode
-                  , @b_Success     = @b_Success       OUTPUT
-                  , @n_ErrNo       = @n_ErrNo         OUTPUT
-                  , @c_ErrMsg      = @c_ErrMsg        OUTPUT
-
-               IF @n_ErrNo <> 0
-               BEGIN
-                  SET @n_Continue = 3 
-                  GOTO EXIT_SP  
-               END
-            END
-         END
+         SET @n_Continue = 3 
+         GOTO EXIT_SP  
       END
       FETCH NEXT FROM sku_cursor INTO @cWODSKU
                                     , @cWODType
@@ -339,17 +236,14 @@ BEGIN
    CLOSE sku_cursor
    DEALLOCATE sku_cursor
 
-   IF @cSKU = '' 
+   IF @cReportType = '' AND 
+   EXISTS ( SELECT 1 
+            FROM @VASReports
+            WHERE ReportType = 'TPVASCarton'
+   )
    BEGIN
-      IF NOT EXISTS (SELECT 1 
-                     FROM @VASReports
-                     WHERE IsSKUReport = 0
-      ) 
-      BEGIN
-         SET @nContinuePrint = 1
-		 GOTO EXIT_SP
-
-      END
+      -- If TPVASCarton exists, then no need to continue print the standard or custom carton label.
+      SET @bPrintLabelFlag = 0
    END
    
    DECLARE CUR_VASALL CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
@@ -362,8 +256,9 @@ BEGIN
          , KeyFieldName3
          , KeyFieldName4
          , IsPaperPrinter
-         , IsSKUReport
+         , ReportType
    FROM @VASReports
+   WHERE (@cReportType = '' OR ReportType = @cReportType)
    ORDER BY ReportID
 
    OPEN CUR_VASALL
@@ -376,7 +271,7 @@ BEGIN
                                  , @cFieldName3
                                  , @cFieldName4
                                  , @cIsPaperPrinter
-                                 , @bIsSKUReport
+                                 , @cReportType
    WHILE @@FETCH_STATUS = 0
    BEGIN
       SET @IsAggregate1 = CASE WHEN @cFieldName1 <> '' AND (
@@ -458,7 +353,7 @@ BEGIN
       AND @cParams2 = '' 
       AND @cParams3 = '' 
       AND @nCartonNo = 0
-      AND @bIsSKUReport = 1
+      AND @cSKU <> ''
       BEGIN
          SET @cParams1 = @cStorerKey
          SET @cParams2 = @cPickSlipNo
@@ -517,13 +412,17 @@ BEGIN
             END
             SET @cPrinterID = @cPrinterInGroup
          END
+         ELSE
+         BEGIN
+            SET @cPrinterID = IIF(@cIsPaperPrinter = '1', @cPaperPrinter, @cLabelPrinter)
+         END
       END
       ELSE
       BEGIN
          SET @cPrinterID = @cDefaultPrinterID
       END
 
-      SET @nCopy = IIF(@bIsSKUReport = 1, @nCopy, 1) 
+      SET @nCopy = IIF(@cSKU <> '', @nCopy, 1) 
       
       EXEC  [WM].[lsp_WM_Print_Report]
                @c_ModuleID     = @cModuleID           
@@ -567,7 +466,7 @@ BEGIN
                                     , @cFieldName3
                                     , @cFieldName4
                                     , @cIsPaperPrinter
-                                    , @bIsSKUReport
+                                    , @cReportType
    END
    CLOSE CUR_VASALL
    DEALLOCATE CUR_VASALL

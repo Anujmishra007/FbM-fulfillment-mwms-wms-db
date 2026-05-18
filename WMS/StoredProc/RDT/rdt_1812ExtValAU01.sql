@@ -11,7 +11,6 @@ GO
 /*                                                                      */  
 /* Date         Author    Ver.  Purposes                                */  
 /* 2026-04-03   NYE018    1.0   FCR-11492 Created                       */
-/* 2026-04-05   NYE018    1.1   FCR-12113 Add Step 5 validation         */
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtValAU01]  

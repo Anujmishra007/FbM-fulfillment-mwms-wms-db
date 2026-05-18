@@ -19,7 +19,7 @@ GO
 /* 2025-11-08 1.4.0  NLT013   UWP-43838 Skip InProgress/Completed Task                          */
 /* 2025-11-14 1.5.0  NLT013   UWP-43847 Fix issue: PickDetail status is not updated             */ 
 /* 2025-01-29 1.6.0  NLT013   UWP-47931 Fix issue: QCmd is not proceed in some scenarios        */
-/* 2025-04-10 1.7.0  NLT013   FCR-12136 Support Pick Mode                                       */
+/* 2025-04-10 1.7.0  NLT013   FCR-12136 Support Pick Mode                                       */ 
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn01] (
@@ -491,6 +491,18 @@ BEGIN
 
                IF @nQTY = @nQTY_RPL
                BEGIN
+                  -- Need sync @nQTY to rdtMobRec for later use, such as short pick
+                  BEGIN TRY
+                     UPDATE rdt.rdtMobRec WITH(ROWLOCK)
+                     SET V_Integer4 = @nQTY
+                     WHERE Mobile = @nMobile
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 234867
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update RDTMOBREC Failed
+                     GOTO RollBack_rdt_1764ExtScn01
+                  END CATCH
+
                   EXEC rdt.rdt_TM_Replen_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
                      @cTaskDetailKey,
                      @cDropID,
@@ -652,6 +664,27 @@ BEGIN
 
             COMMIT_1764ExtScn01:
             COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
+         END
+      END
+      ELSE IF @nCurrentStep = @nStep_NextTask -- Continue Next Task/ClosePallet
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            SET @cOption = @cInField01
+            IF @cOption = '9' -- Close Pallet
+            BEGIN
+               IF @cPickModeFlag = '1'
+               BEGIN
+                  SET @nAfterScn = @nScn_NewExit
+                  SET @nAfterStep = @nStep_99
+
+                  SET @cOutField01 = @cToLoc
+                  SET @cOutField02 = '1'
+                  SET @cOutField03 = 'UCC Moved'
+                  SET @cOutField04 = ''
+                  GOTO Quit
+               END
+            END
          END
       END
       ELSE IF @nCurrentStep = @nStep_ShortPick -- Short Pick
@@ -909,6 +942,20 @@ BEGIN
                SET @nAfterScn = @nScn_NextTask
                SET @nAfterStep = @nStep_NextTask
                SET @cUDF01 = @cDefaultSkipReason
+            END
+            ELSE IF @cOption = '9'
+            BEGIN
+               IF @cPickModeFlag = '1'
+               BEGIN
+                  SET @nAfterScn = @nScn_NewExit
+                  SET @nAfterStep = @nStep_99
+
+                  SET @cOutField01 = @cToLoc
+                  SET @cOutField02 = '1'
+                  SET @cOutField03 = 'UCC Moved'
+                  SET @cOutField04 = ''
+                  GOTO Quit
+               END
             END
          END
       END

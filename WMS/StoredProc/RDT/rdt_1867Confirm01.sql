@@ -80,7 +80,8 @@ BEGIN
    DECLARE @nRowCount            INT
 
    SELECT 
-      @cUserName = UserName 
+      @cUserName = UserName,
+      @cMethod = V_String25
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
    
@@ -384,44 +385,43 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD  
          WHILE @@FETCH_STATUS = 0  
          BEGIN
-
-            -- Exact match  
-            IF @nQTY_PD = @nQTY_Bal  
-            BEGIN  
-               -- Confirm PickDetail  
-               UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
-                  Status = @cPickConfirmStatus, 
+            -- Exact match
+            IF @nQTY_PD = @nQTY_Bal
+            BEGIN
+               -- Confirm PickDetail
+               UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                  Status = @cPickConfirmStatus,
                   DropID = @cDropID,
-                  EditDate = GETDATE(),  
-                  EditWho  = SUSER_SNAME()  
-               WHERE PickDetailKey = @cPickDetailKey  
-               IF @@ERROR <> 0  
-               BEGIN  
-                  SET @nErrNo = 227261  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                  GOTO RollBackTran  
-               END  
-   
-               SET @nQTY_Bal = 0 -- Reduce balance  
+                  EditDate = GETDATE(),
+                  EditWho  = SUSER_SNAME()
+               WHERE PickDetailKey = @cPickDetailKey
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 227261
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                  GOTO RollBackTran
+               END
+
+               SET @nQTY_Bal = 0 -- Reduce balance
             END  
    
             -- PickDetail have less  
             ELSE IF @nQTY_PD < @nQTY_Bal  
             BEGIN  
                -- Confirm PickDetail  
-               UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
+               UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                   Status = @cPickConfirmStatus,
                   DropID = @cDropID,
-                  EditDate = GETDATE(),  
-                  EditWho  = SUSER_SNAME()  
-               WHERE PickDetailKey = @cPickDetailKey  
-               IF @@ERROR <> 0  
-               BEGIN  
-                  SET @nErrNo = 227262  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                  GOTO RollBackTran  
-               END  
-   
+                  EditDate = GETDATE(),
+                  EditWho  = SUSER_SNAME()
+               WHERE PickDetailKey = @cPickDetailKey
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 227262
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                  GOTO RollBackTran
+               END
+
                SET @nQTY_Bal = @nQTY_Bal - @nQTY_PD -- Reduce balance  
             END  
    
@@ -540,9 +540,6 @@ BEGIN
                            GOTO RollBackTran  
                         End
                      END
-
-
-
                   END  
                END  
                ELSE  
@@ -624,19 +621,19 @@ BEGIN
                      GOTO RollBackTran  
                   END  
    
-                  -- Confirm orginal PickDetail with exact QTY  
-                  UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
-                     Status = @cPickConfirmStatus,  
+                  -- Confirm orginal PickDetail with exact QTY
+                  UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                     Status = @cPickConfirmStatus,
                      DropID = @cDropID,
-                     EditDate = GETDATE(),  
-                     EditWho  = SUSER_SNAME()  
-                  WHERE PickDetailKey = @cPickDetailKey  
-                  IF @@ERROR <> 0  
-                  BEGIN  
-                     SET @nErrNo = 227267  
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                     GOTO RollBackTran  
-                  END  
+                     EditDate = GETDATE(),
+                     EditWho  = SUSER_SNAME()
+                  WHERE PickDetailKey = @cPickDetailKey
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 227267
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                     GOTO RollBackTran
+                  END
 
                   --Commented by NLT013-01
                   IF @cType = 'SHORT' AND @nQTY_Bal  > 0
@@ -760,9 +757,29 @@ BEGIN
                   -- END
                   --Commented by NLT013-02
 
-                  SET @nQTY_Bal = 0 -- Reduce balance  
-               END  
-            END  
+                  SET @nQTY_Bal = 0 -- Reduce balance
+               END
+            END
+
+            -- Insert into rdtPickLog if status changed to PickConfirmStatus
+            IF EXISTS (SELECT 1 FROM dbo.PickDetail WITH (NOLOCK)
+                       WHERE PickDetailKey = @cPickDetailKey AND Status = @cPickConfirmStatus)
+            AND @cMethod = '3'
+            BEGIN
+               INSERT INTO RDT.rdtPickLog
+                  (WaveKey, OrderKey, OrderLineNumber, PickDetailKey, StorerKey, Sku, Descr,
+                   Loc, Lot, Id, ActQty, PickQty, UOM, PackKey,
+                   PickSlipNo, Status, AddWho, AddDate, DropID, Mobile)
+               SELECT
+                  PD.WaveKey, PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey, PD.StorerKey, PD.Sku, S.Descr,
+                  PD.Loc, PD.Lot, PD.ID, PD.Qty, PD.Qty, PD.UOM, PD.PackKey,
+                  PD.PickSlipNo, @cPickConfirmStatus, @cUserName, GETDATE(), @cDropID, @nMobile
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+               LEFT JOIN dbo.SKU S WITH (NOLOCK) ON S.StorerKey = PD.StorerKey AND S.SKU = PD.SKU
+               LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = PD.StorerKey
+                  AND LLI.SKU = PD.SKU AND LLI.Loc = PD.Loc AND LLI.Lot = PD.Lot AND LLI.ID = PD.ID
+               WHERE PD.PickDetailKey = @cPickDetailKey
+            END
 
             FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD  
          END  

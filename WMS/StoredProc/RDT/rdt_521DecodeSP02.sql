@@ -21,8 +21,8 @@ CREATE OR ALTER PROC [RDT].[rdt_521DecodeSP02] (
    @nInputKey         INT,           
    @cFacility         NVARCHAR( 5),  
    @cStorerKey        NVARCHAR( 15), 
-   @cBarcodeUCC       NVARCHAR( 200), 
-   @cUCC              NVARCHAR( 20)  OUTPUT, 
+   @cBarcode          NVARCHAR( MAX), 
+   @cUCCNo            NVARCHAR( 20)  OUTPUT, 
    @nErrNo            INT            OUTPUT, 
    @cErrMsg           NVARCHAR( 120)  OUTPUT    
 )
@@ -34,33 +34,33 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cUCCSKU  NVARCHAR (20)
-   SET @cBarcodeUCC = replace(TRIM(@cBarcodeUCC),' ','')
+   SET @cBarcode = replace(TRIM(@cBarcode),' ','')
    IF @nFunc = 521
    BEGIN
       IF @nStep = 1
       BEGIN
-         IF LEN(@cBarcodeUCC) IN (40,44)
+         IF LEN(@cBarcode) IN (40,44)
          BEGIN
             SELECT 
-            @cUCC = CASE 
-               WHEN CHARINDEX('(240)', @cBarcodeUCC) > 0 THEN
+            @cUCCNo = CASE 
+               WHEN CHARINDEX('(240)', @cBarcode) > 0 THEN
                      SUBSTRING(
-                        @cBarcodeUCC,
-                        CHARINDEX('(240)', @cBarcodeUCC) + 5,
-                        LEN(@cBarcodeUCC)
+                        @cBarcode,
+                        CHARINDEX('(240)', @cBarcode) + 5,
+                        LEN(@cBarcode)
                      )
                ELSE NULL
             END
          END
-         ELSE IF LEN(@cBarcodeUCC) = 34
+         ELSE IF LEN(@cBarcode) = 34
          BEGIN
             SELECT 
-               @cUCC = RIGHT(@cBarcodeUCC, 20)
+               @cUCCNo = RIGHT(@cBarcode, 20)
          END
-         ELSE IF LEN(@cBarcodeUCC) = 67
+         ELSE IF LEN(@cBarcode) = 67
          BEGIN
             SELECT 
-               @cUCC = SUBSTRING(@cBarcodeUCC, 19, 19)
+               @cUCCNo = SUBSTRING(@cBarcode, 19, 19)
          END
       END
    END

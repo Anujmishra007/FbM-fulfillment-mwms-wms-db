@@ -31,9 +31,9 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument10] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
-   -- , @cReportType          NVARCHAR(30)      = ''
-   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
-   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = 0   OUTPUT
+   , @cReportType          NVARCHAR(30)      = ''
+   , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
+   , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @nContinuePrint       INT               = 0   OUTPUT
    , @b_Success            INT               = 0   OUTPUT  
    , @n_ErrNo              INT               = 0   OUTPUT
@@ -63,7 +63,6 @@ BEGIN
          , @groupByFields     NVARCHAR(MAX)
          , @cPrinterInGroup   NVARCHAR(10)
          , @cCustomLabelSP    NVARCHAR(30)
-         , @cReportType       NVARCHAR(30)
 
    DECLARE @cFieldName1       NVARCHAR(MAX)
          , @cFieldName2       NVARCHAR(MAX)

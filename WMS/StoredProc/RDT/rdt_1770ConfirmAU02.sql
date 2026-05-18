@@ -147,7 +147,7 @@ BEGIN
                 WHERE PickDetailKey = @cPickDetailKey  
                 IF @@ERROR <> 0  
                     BEGIN  
-                    SET @nErrNo = 221453  
+                    SET @nErrNo = 263003 
                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail  
                     GOTO RollBackTran  
                 END  

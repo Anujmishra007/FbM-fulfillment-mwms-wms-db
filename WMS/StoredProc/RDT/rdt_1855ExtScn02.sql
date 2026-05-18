@@ -114,6 +114,7 @@ BEGIN
       @nPickedQty          INT,
       @nNextPage           INT,
       @nCartonScanned      INT,
+      @nRowCount           INT,
 
       @nStep_CartID           INT,  @nScn_CartID            INT,
       @nStep_CartMatrix       INT,  @nScn_CartMatrix        INT,
@@ -178,6 +179,7 @@ BEGIN
    SET @cUDF01 = ''
    SET @cUDF02 = ''
    SET @cUDF03 = ''
+   SET @cUDF04 = ''
 
    IF @nFunc = 1855
    BEGIN
@@ -852,6 +854,41 @@ BEGIN
                   GOTO UPD_RDTMOBREC
                END
 
+               IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                           WHERE Storerkey = @cStorerKey
+                              AND DropID = @cCartonID
+                              AND TaskType = 'ASTCPK'
+                              AND (Groupkey <> @cGroupKey OR WaveKey <> @cWaveKey)
+                              AND Status IN ('3', '5'))
+               BEGIN
+                  SET @nErrNo = 260431
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToteID is used in other wave/group
+                  GOTO UPD_RDTMOBREC
+               END
+
+               IF EXISTS(SELECT 1 FROM dbo.DropID WITH(NOLOCK)
+                          WHERE DropID = @cCartonID)
+               BEGIN
+                  IF EXISTS(SELECT 1 FROM TaskDetail TD1 WITH(NOLOCK)
+                           INNER JOIN TaskDetail TD2 WITH(NOLOCK) 
+                              ON TD1.StorerKey = TD2.StorerKey 
+                              AND TD1.WaveKey = TD2.WaveKey 
+                              AND TD1.GroupKey = TD2.Groupkey 
+                              AND TD1.TaskType = TD2.TaskType
+                           WHERE TD1.Storerkey = @cStorerKey
+                              AND TD1.TaskType = 'ASTCPK'
+                              AND TD1.Status = '9'
+                              AND TD1.DropID IS NOT NULL
+                              AND TD1.DropID = @cCartonID
+                              AND (TD1.WaveKey <> @cWaveKey OR TD1.GroupKey <> @cGroupKey)
+                              AND TD2.Status < '5')
+                  BEGIN
+                     SET @nErrNo = 260432
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToteID is used in other wave/group
+                     GOTO UPD_RDTMOBREC
+                  END
+               END
+
                IF @nCartonScanned >= @nCartLimit
                BEGIN
                   SET @nErrNo = 260429
@@ -1342,6 +1379,39 @@ BEGIN
 
          SET @cOutField05 = 'TOTE:' + ISNULL(@cSuggToteId, '')
       END
+      ELSE IF @nAfterStep = 7 -- ToLoc
+      BEGIN
+         DECLARE @cToLoc   NVARCHAR(10)
+
+         SELECT TOP 1 @cToLoc = DI.DropLoc
+         FROM TaskDetail TD1 WITH(NOLOCK)
+         INNER JOIN TaskDetail TD2 WITH(NOLOCK) 
+            ON TD1.StorerKey = TD2.StorerKey 
+            AND TD1.WaveKey = TD2.WaveKey 
+            AND TD1.GroupKey = TD2.Groupkey 
+            AND TD1.TaskType = TD2.TaskType
+         INNER JOIN dbo.DropID DI WITH(NOLOCK) ON TD2.DropID = DI.DropID
+         WHERE TD1.Storerkey = @cStorerKey
+            AND TD1.TaskType = 'ASTCPK'
+            AND TD1.Status = '9'
+            AND TD1.DropID IS NOT NULL
+            AND TD1.WaveKey = @cWaveKey
+            AND TD1.GroupKey = @cGroupKey
+            AND TD2.Status = '5'
+            AND TD2.DeviceID = @cCartID
+            AND TD2.Qty > 0
+            AND TD2.TaskDetailKey = @cTaskDetailKey
+
+         SET @nRowCount = @@ROWCOUNT
+
+         IF @nRowCount > 0
+         BEGIN
+            SET @cUDF04 = @cToLoc
+         END
+         ELSE
+            SET @cUDF04 = ''
+      END
+
    END -- 1855
 
    GOTO Quit

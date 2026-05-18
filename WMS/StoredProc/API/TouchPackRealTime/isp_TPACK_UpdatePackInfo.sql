@@ -701,6 +701,7 @@ BEGIN
       , @nCartonNo            = @nCartonNo
       , @nPrecedingCartonNo   = @nPrecedingCartonNo
       , @cCartonStatus        = @cCartonStatus
+      , @bIsLastCarton        = @bIsLastCarton
       , @c_UserID             = @c_UserID
       , @cLangCode            = @cLangCode
       , @b_Success            = @b_Success         OUTPUT

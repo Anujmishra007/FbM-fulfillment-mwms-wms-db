@@ -36,6 +36,7 @@ CREATE OR ALTER PROC [API].[isp_TPACK_ExtCtnPostUpd_Std] (
    , @nCartonNo            INT               = 0
    , @nPrecedingCartonNo   INT               = 0   
    , @cCartonStatus        NVARCHAR(20)      = ''
+   , @bIsLastCarton        BIT               = 0
    , @c_UserID             NVARCHAR(256)     = ''  
    , @cLangCode            NVARCHAR(3)       = ''
    , @b_Success            INT               = 0   OUTPUT
@@ -570,7 +571,7 @@ BEGIN
             SET [Status] = @cStatusUpdate
             WHERE WorkOrderKey = @cWorkOrderKey
             AND WorkOrderLineNumber = @cWorkOrderLineNumber
-
+ 
             IF @@ERROR <> 0
             BEGIN
                SET @n_Continue = 3
@@ -585,6 +586,21 @@ BEGIN
          END
          CLOSE CUR_UPDVAS
          DEALLOCATE CUR_UPDVAS
+
+         IF @cWorkOrderKey <> '' AND @bIsLastCarton = 1
+         BEGIN
+            UPDATE WORKORDER WITH (ROWLOCK)
+            SET Status = '9'
+            WHERE WorkOrderKey = @cWorkOrderKey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_ErrNo = 13356
+               SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to update Status in WorkOrder Table.'
+               GOTO EXIT_SP 
+            END
+         END
       END
 
       IF @bChangeCartonFlag = 1

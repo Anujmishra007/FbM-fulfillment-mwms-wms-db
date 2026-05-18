@@ -127,13 +127,13 @@ BEGIN
          FETCH NEXT FROM @curUpdOrd INTO @cOrderKey    
          WHILE @@FETCH_STATUS = 0    
          BEGIN    
-         	IF EXISTS ( SELECT 1 
-         	            FROM dbo.ORDERS WITH (NOLOCK)
-         	            WHERE OrderKey = @cOrderKey
-         	            AND   SOStatus = 'PENDCANC')
+             IF EXISTS ( SELECT 1 
+                         FROM dbo.ORDERS WITH (NOLOCK)
+                         WHERE OrderKey = @cOrderKey
+                         AND   SOStatus = 'PENDCANC')
             BEGIN  
-            	IF @nPENDCANC = 0
-            	BEGIN
+                IF @nPENDCANC = 0
+                BEGIN
                   SET @nErrNo = 0  
                   SET @cErrMsg1 = 'ORDERS PENDCANC'  
                   EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1  
@@ -212,20 +212,51 @@ BEGIN
          SELECT @cCartonId2Confirm = value FROM @tExtUpdate WHERE Variable = '@cCartonId2Confirm'
          -- overwrite original dropid
          IF @cCartonId <> @cCartonId2Confirm
-         Begin
-            UPDATE PICKDETAIL
-            SET DropID = @cCartonId2Confirm               
-            WHERE Storerkey = @cStorerKey
-            AND TaskDetailKey = @cTaskdetailKey
-            AND DropID = @cCartonId
+         BEGIN
+            IF @cMethod = '3'
+            BEGIN
+               -- Get PickDetailKey from rdtPickLog, then update PickDetail
+               UPDATE PICKDETAIL
+               SET DropID = @cCartonId2Confirm
+               WHERE PickDetailKey IN
+               (
+                  SELECT PL.PickDetailKey
+                  FROM RDT.rdtPickLog PL WITH(NOLOCK)
+                  INNER JOIN PICKDETAIL PD WITH(NOLOCK) ON PL.PickDetailKey = PD.PickDetailKey
+                  WHERE PL.StorerKey = @cStorerKey
+                     AND PL.DropID = @cCartonId
+                     AND PD.TaskDetailKey = @cTaskdetailKey
+               )
+            END
+
+            ELSE
+            BEGIN
+               UPDATE PICKDETAIL
+               SET DropID = @cCartonId2Confirm
+               WHERE Storerkey = @cStorerKey
+                  AND TaskDetailKey = @cTaskdetailKey
+                  AND DropID = @cCartonId
+            END
 
             UPDATE TaskDetail
             SET DropID = @cCartonId2Confirm
             WHERE Storerkey = @cStorerKey
             AND TaskDetailKey = @cTaskdetailKey
             AND DropID = @cCartonId
-
          END
+
+         -- Delete rdtPickLog
+         DELETE FROM RDT.rdtPickLog
+         WHERE Mobile = @nMobile
+            AND StorerKey = @cStorerKey
+            AND DropID = @cCartonId
+            AND PickDetailKey IN
+            (
+               SELECT PickDetailKey
+               FROM PICKDETAIL WITH(NOLOCK)
+               WHERE Storerkey = @cStorerKey
+                  AND TaskDetailKey = @cTaskdetailKey
+            )
       End
    END
 
@@ -283,11 +314,8 @@ BEGIN
    Quit:                   
    IF @nErrNo <> 0    
       SET @nErrNo = -1    
-END      
-SET QUOTED_IDENTIFIER OFF 
+END   
 GO
-
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON

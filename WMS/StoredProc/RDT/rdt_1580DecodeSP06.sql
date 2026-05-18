@@ -128,6 +128,8 @@ BEGIN
             END
 
             SET @cLottable01 = @cL01P1 + @cL01P2
+            SET @cLottable02 = @cL01P1
+            SET @cLottable03 = @cL01P2
             
             -- Check lottable01 in ASN and has balance
             IF NOT EXISTS( SELECT TOP 1 1 
@@ -143,6 +145,31 @@ BEGIN
             END
             
             SET @nQTY = 1
+
+            -- Check SKU and Lottable01 are different for ID
+            IF LEFT( @cID, 2) <> 'DM'
+            BEGIN
+               SELECT TOP 1 1
+               FROM dbo.ReceiptDetail WITH (NOLOCK)
+               WHERE ReceiptKey = @cReceiptKey
+                  AND ToID = @cID
+                  AND BeforeReceivedQTY > 0
+
+               IF @@ROWCOUNT > 0
+               BEGIN
+                  IF NOT EXISTS( SELECT 1
+                     FROM dbo.ReceiptDetail WITH (NOLOCK)
+                     WHERE ReceiptKey = @cReceiptKey
+                        AND ToID = @cID
+                        AND SKU = @cSKU
+                        AND Lottable01 = @cLottable01)
+                  BEGIN
+                     SET @nErrNo = 248206
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Mix SKU on ID
+                     GOTO Quit
+                  END
+               END
+            END
 
             -- Retain in same screen
             -- SET @nErrNo = -1

@@ -13,6 +13,7 @@ GO
 /* 2025-08-22   1.0  GCH225     Created                                          */
 /* 2026-02-06   2.0  GCH225     UWP-48119: 1 tote, 1 carton, 1 sku Scenario      */
 /* 2026-03-16   2.1  GCH225     FCR-11632: Check AuditLog with Status PENDAUDIT  */
+/* 2026-05-14   2.2  GCH225     FCR-13198: Fix Update Multi Line PackDetail      */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetCartonDetail] (
@@ -61,7 +62,7 @@ BEGIN
          , @bClickAll            BIT  
          , @bClickFirstOnly      BIT
          , @bAutoCloseCarton     BIT
-         , @nLabelLineCount      INT
+         , @nSKUCount            INT
          , @nTtlQty              INT
          , @cSKU                 NVARCHAR(20)
          , @nExpQty              INT
@@ -96,7 +97,7 @@ BEGIN
    SET @bClickAll          = 0
    SET @bClickFirstOnly    = 1
    SET @bAutoCloseCarton   = 0
-   SET @nLabelLineCount    = 0
+   SET @nSKUCount          = 0
    SET @nTtlQty            = 0
    SET @cSKU               = ''
    SET @nExpQty            = 0
@@ -212,7 +213,7 @@ BEGIN
    BEGIN
       SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
             , @nTtlQty = ISNULL(SUM(Qty), 0)
-            , @nLabelLineCount = COUNT(DISTINCT LabelLine)
+            , @nSKUCount = COUNT(DISTINCT SKU)
             , @cSKU = MAX(SKU)
       FROM PACKDETAIL (NOLOCK) 
       WHERE PickSlipNo = @cPickSlipNo
@@ -228,7 +229,7 @@ BEGIN
       IF @@ROWCOUNT = 1  
       AND @nExpQty > 0
       AND @nTtlQty = 0  
-      AND @nLabelLineCount = 1 
+      AND @nSKUCount = 1 
       AND EXISTS (SELECT 1 
                   FROM ORDERS (NOLOCK)
                   WHERE OrderKey = @cOrderKey
