@@ -52,7 +52,7 @@ BEGIN
    -- If OrderKey is empty, return error
    IF ISNULL(@cOrderKey, '') = ''
    BEGIN
-      SET @nErrNo = 180071
+      SET @nErrNo = 266701
       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- OrderNotFound
       GOTO Quit
    END
@@ -104,21 +104,21 @@ BEGIN
 
          IF @@ROWCOUNT <> 1
          BEGIN
-            SET @nErrNo = 218501
+            SET @nErrNo = 266702
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Setup CodeLKUP
             GOTO Quit
          END
 
          IF ( @nSequenceLen IS NULL OR @nSequenceLen NOT IN (7,9))
             BEGIN
-               SET @nErrNo = 218502
+               SET @nErrNo = 266703
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidCode2Value
                GOTO Quit
             END
 
          IF ( @nCompanyPrefix = '' OR ( LEN(@nCompanyPrefix) <> (17 - @nSequenceLen) ))
          BEGIN
-            SET @nErrNo = 218503
+            SET @nErrNo = 266704
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidCodeValue
             GOTO Quit
          END
@@ -128,7 +128,7 @@ BEGIN
 
          IF (  @dMaxSequence <= @dMinSequence)
          BEGIN
-            SET @nErrNo = 218504
+            SET @nErrNo = 266705
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UDF01/UDF02 Error
             GOTO Quit
          END
@@ -158,7 +158,7 @@ BEGIN
 
             IF @@ROWCOUNT = 0
             BEGIN
-               SET @nErrNo = 218505
+               SET @nErrNo = 266706
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reset nCounter failed
                GOTO Quit
             END
@@ -176,7 +176,7 @@ BEGIN
                , @cErrMsg           OUTPUT
          IF @bSuccess <> 1
          BEGIN
-            SET @nErrNo = 218506
+            SET @nErrNo = 266707
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Getkey Error
             GOTO Quit
          END
@@ -206,7 +206,7 @@ BEGIN
          @cErrMsg       OUTPUT
       IF @nErrNo <> 0
       BEGIN
-         SET @nErrNo = 180074
+         SET @nErrNo = 266708
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
          GOTO QUIT
       END
