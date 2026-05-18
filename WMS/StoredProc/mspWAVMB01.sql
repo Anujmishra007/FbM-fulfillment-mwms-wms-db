@@ -413,7 +413,10 @@ BEGIN
                       @d_Delivery_Date = O.DeliveryDate,
                       @c_Route = O.[Route],
                       @n_totweight = ISNULL(SUM((OD.OriginalQty) * SKU.StdGrossWgt), 0.00),
-                      @n_totcube = ISNULL(SUM((OD.OriginalQty) * ISNULL(PACK.CubeUOM3, 0.00)), 0.00),
+                      @n_totcube = ISNULL(SUM(CASE WHEN ISNULL(PACK.CaseCnt, 0) > 0 
+                                                   THEN (FLOOR(OD.OriginalQty / CAST(PACK.CaseCnt AS INT)) * ISNULL(PACK.CubeUOM1, 0.00))
+                                                      + ((OD.OriginalQty % CAST(PACK.CaseCnt AS INT)) * ISNULL(PACK.CubeUOM3, 0.00))
+                                                   ELSE (OD.OriginalQty * ISNULL(PACK.CubeUOM3, 0.00)) END) , 0.00),
                       @c_ExternOrderkey = O.ExternOrderkey,
                       @c_Loadkey = ISNULL(O.Loadkey,'')
                FROM Orders O WITH (NOLOCK)
