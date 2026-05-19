@@ -35,6 +35,8 @@ GO
 /* 18-Mar-2026 WLChooi  2.0   FCR-11805 Conso task for ECOM (WL10)       */
 /* 11-May-2026 WLChooi  2.1   UWP-56216 Bug Fix - Groupkey should group  */
 /*                            by Areakey (WL11)                          */
+/* 18-May-2026 WLChooi  2.2   UWP-56880 Consolidate Picking task for same*/
+/*                            caseid, Remove WL08 (WL12)                 */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -80,8 +82,7 @@ BEGIN
       ,  @c_UserKeyOverRide      NVARCHAR(18)   = ''        
       ,  @d_StartTime            DATETIME       = NULL        
       ,  @d_EndTime              DATETIME       = NULL  
-      ,  @c_SourceType           NVARCHAR(30)   = 'mspRLWAV10'         
-      ,  @c_SourceKey            NVARCHAR(30)   = ''        
+      ,  @c_SourceType           NVARCHAR(30)   = 'mspRLWAV10'              
       ,  @c_PickDetailKey        NVARCHAR(10)   = ''        
       ,  @c_OrderKey             NVARCHAR(10)   = ''        
       ,  @c_OrderLineNumber      NVARCHAR(5)    = ''        
@@ -113,17 +114,23 @@ BEGIN
       ,  @c_CasecntbyLocUCC      NVARCHAR(5)    = 'N'    
       ,  @c_SplitTaskByCase      NVARCHAR(5)    = 'N'    
       ,  @c_ZeroSystemQty        NVARCHAR(5)    = 'N'    
-      ,  @c_MergedTaskPriority   NVARCHAR(10)   = '2'
-      ,  @c_Groupkey_P           NVARCHAR(10)   = ''       
+      ,  @c_MergedTaskPriority   NVARCHAR(10)   = '2'      
       ,  @c_Groupkey_New         NVARCHAR(10)   = ''
       ,  @c_DocType              NVARCHAR(10)   = ''   --WL01
       ,  @c_Facility             NVARCHAR(5)    = ''
       ,  @c_Option5              NVARCHAR(MAX)  = ''
       ,  @n_BatchGrpKey          INT            = 0
-      ,  @c_OriginalFromLoc      NVARCHAR(10)   = ''   --WL08
-      ,  @c_TaskFromLoc          NVARCHAR(10)   = ''   --WL08
-      
       ,  @CUR_TW                 CURSOR
+
+    --WL12 S
+    DECLARE 
+         @n_TaskQty              INT = 0
+       , @c_CurrPickdetailkey    NVARCHAR(18)   = ''
+       , @n_PickQty              INT = 0
+       , @n_SplitQty             INT = 0
+       , @c_NewPickdetailKey     NVARCHAR(18)   = ''
+       , @CUR_PICK               CURSOR
+    --WL12 E
 
     DECLARE @TMP_CL              TABLE                                                                                
       ( [RowID]                  INT               IDENTITY(1,1) PRIMARY KEY                   
@@ -208,7 +215,6 @@ BEGIN
       ,  SortNo            INT            NOT NULL DEFAULT(0)
       ,  DocType           NVARCHAR(10)   NOT NULL DEFAULT('')   --WL01
       ,  ECOM_SINGLE_Flag  NVARCHAR(1)    NOT NULL DEFAULT('')   --WL06
-      ,  OriginalFromLoc   NVARCHAR(10)   NOT NULL DEFAULT('')   --WL08
       ) 
 
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NULL
@@ -366,7 +372,6 @@ BEGIN
          ,  SkuPerCarton
          ,  DocType   --WL01
          ,  ECOM_SINGLE_Flag   --WL06
-         ,  OriginalFromLoc   --WL08
          ,  [Priority]   --WL10
          )
       SELECT 
@@ -388,7 +393,6 @@ BEGIN
          ,  p2.SkuPerCarton
          ,  MAX(O.DocType)   --WL01   --WL10
          ,  MAX(ISNULL(O.ECOM_SINGLE_Flag, ''))   --WL06   --WL10
-         ,  pw.Loc   --WL08
          ,  MIN(o.TaskPriority)   --WL10
       FROM #PICKDETAIL_WIP AS pw
       JOIN LOC l (NOLOCK) ON l.loc = pw.Toloc
@@ -412,26 +416,15 @@ BEGIN
          ,  pw.UOM               
          ,  pw.CaseID   
          ,  pw.Lot
-         ,  pw.ID
+         ,  CASE WHEN l.LoseId = '1'   --WL12 
+                 THEN ''               --WL12
+                 ELSE pw.ID            --WL12
+                 END                   --WL12
          ,  pw.ToLoc
          ,  pw.UpdateSource 
-         ,  l.LoseId         
+         --,  l.LoseId                 --WL12
          ,  p1.CartonPerLoc
          ,  p2.SkuPerCarton
-         ,  pw.Loc   --WL08
-
-      --WL10 S
-      --------------------------------------------------------------------  
-      -- Update Task Priority Base on ORDERS.Priority 
-      -------------------------------------------------------------------- 
-      --UPDATE tw 
-      --   SET tw.Priority = ISNULL(cl.Short,'')
-      --FROM #TASKDETAIL_WIP AS tw 
-      --JOIN ORDERS o (NOLOCK) ON o.Orderkey = tw.Orderkey
-      --LEFT OUTER JOIN @TMP_CL cl ON  cl.LISTNAME = 'CSCUK01OPY'  
-      --                           AND cl.Code = o.Priority
-      --                           AND cl.Storerkey = o.Storerkey
-      --WL10 E
 
       --------------------------------------------------------------------  
       -- Update ToLoc Base on FromLoc Inform 
@@ -507,8 +500,6 @@ BEGIN
       --------------------------------------------------------------------
       SET @n_BatchGrpKey = 0
       --WL11 S
-      --SELECT @n_BatchGrpKey = COUNT(DISTINCT GroupKey)
-      --FROM #TASKDETAIL_WIP tw
       ;WITH BATCHGRPKEY AS ( SELECT DISTINCT tw.AreaKey, tw.GroupKey
                              FROM #TASKDETAIL_WIP tw
                              WHERE tw.DocType <> 'E' )
@@ -529,9 +520,6 @@ BEGIN
          IF @b_Success = 1 AND ISNULL(TRIM(@c_GroupKey_New), '') <> ''
          BEGIN
             --WL11 S
-            --UPDATE #TASKDETAIL_WIP
-            --SET Groupkey = RIGHT(REPLICATE('0', 10) + CAST(CAST(TRIM(@c_GroupKey_New) AS INT) + CAST(GroupKey AS INT) AS NVARCHAR(10)), 10)
-            --WHERE Groupkey > ''
             ;WITH MapGroupkey AS ( SELECT tw.RowID
                                         , rno = DENSE_RANK() OVER (ORDER BY tw.AreaKey, tw.GroupKey)
                                    FROM #TASKDETAIL_WIP tw
@@ -597,6 +585,7 @@ BEGIN
 
    IF @n_Continue = 1
    BEGIN
+      --WL12 S
       SET @CUR_TW = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
       SELECT tw.Storerkey
             ,tw.Sku
@@ -608,22 +597,40 @@ BEGIN
             ,tw.LogicalToLoc
             ,tw.ToID
             ,tw.UOM
-            ,tw.UOMQty
-            ,tw.Qty
+            ,SUM(tw.Qty)
             ,tw.CaseID
             ,tw.Wavekey
             ,tw.Orderkey
             ,tw.Priority
             ,tw.PickMethod
-            ,tw.RefTaskKey
+            ,MIN(tw.RefTaskKey)
             ,tw.AreaKey
             ,tw.GroupKey
             ,tw.Status
             ,tw.DocType   --WL01
-            ,tw.OriginalFromLoc   --WL08
       FROM #TASKDETAIL_WIP tw
-      ORDER BY tw.SortNo
+      GROUP BY tw.Storerkey
+              ,tw.Sku
+              ,tw.Lot
+              ,tw.FromLoc
+              ,tw.LogicalFromLoc
+              ,tw.FromID
+              ,tw.ToLoc
+              ,tw.LogicalToLoc
+              ,tw.ToID
+              ,tw.UOM
+              ,tw.CaseID
+              ,tw.Wavekey
+              ,tw.Orderkey
+              ,tw.Priority
+              ,tw.PickMethod
+              ,tw.AreaKey
+              ,tw.GroupKey
+              ,tw.Status
+              ,tw.DocType
+      ORDER BY MIN(tw.SortNo)
             ,  tw.GroupKey
+      --WL12 E
             
       OPEN @CUR_TW  
   
@@ -637,7 +644,6 @@ BEGIN
                                  ,  @c_LogicalToLoc
                                  ,  @c_ToID
                                  ,  @c_UOM
-                                 ,  @n_UOMQty
                                  ,  @n_Qty
                                  ,  @c_CaseID
                                  ,  @c_Wavekey
@@ -649,51 +655,23 @@ BEGIN
                                  ,  @c_GroupKey
                                  ,  @c_Status
                                  ,  @c_DocType   --WL01
-                                 ,  @c_OriginalFromLoc   --WL08
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN  
          SET @c_TaskType  = IIF(@c_DocType = 'E', 'ASTCPK', 'CPK')   --WL01
-         SET @c_SourceKey = @c_Wavekey
-         SET @c_LinkTaskToPick_SQL = ' AND PICKDETAIL.UOM = @c_UOM'
-                                   --+ IIF(@c_TaskType = 'CPK', ' AND PICKDETAIL.CaseID = @c_CaseID', '')   --WL05
-                                   + ' AND PICKDETAIL.CaseID = @c_CaseID'   --WL09
+         --WL12
+         --SET @c_LinkTaskToPick_SQL = ' AND PICKDETAIL.UOM = @c_UOM'
+         --                          --+ IIF(@c_TaskType = 'CPK', ' AND PICKDETAIL.CaseID = @c_CaseID', '')   --WL05
+         --                          + ' AND PICKDETAIL.CaseID = @c_CaseID'   --WL09
 
          --WL04
          IF ISNULL(@c_PickMethod, '') = ''
             SET @c_PickMethod = '?'
 
-         --IF  @c_Groupkey_P <> @c_Groupkey
-         --BEGIN
-         --   SET @c_GroupKey_New = ''
-         --   EXECUTE nspg_getkey    
-         --           @KeyName   = 'GroupKey'    
-         --         , @fieldlength = 10       
-         --         , @KeyString   = @c_GroupKey_New    OUTPUT    
-         --         , @b_success   = @b_success         OUTPUT    
-         --         , @n_err       = @n_err             OUTPUT    
-         --         , @c_errmsg    = @c_errmsg          OUTPUT  
-         --          
-         --   IF @b_success = 0   
-         --   BEGIN    
-         --      SET @n_Continue = 3  
-         --   END    
-         --END
-
          IF @n_Continue = 1
          BEGIN
             SET @c_Taskdetailkey = ''
             SET @c_LogicalToLoc  = '?'
-            SET @c_TaskFromLoc = ''   --WL08
-
-            --WL08 S
-            SET @c_TaskFromLoc = @c_FromLoc
-
-            IF @c_OriginalFromLoc <> @c_FromLoc
-            BEGIN
-               SET @c_TaskFromLoc = @c_OriginalFromLoc
-            END
-            --WL08 E
 
             EXEC isp_InsertTaskDetail
                @c_TaskDetailKey       = @c_TaskDetailKey OUTPUT       
@@ -704,7 +682,7 @@ BEGIN
             ,  @c_UOM                 = @c_UOM           
             ,  @n_UOMQty              = @n_Qty        
             ,  @n_Qty                 = @n_Qty        
-            ,  @c_FromLoc             = @c_TaskFromLoc   --WL08  
+            ,  @c_FromLoc             = @c_FromLoc
             ,  @c_LogicalFromLoc      = @c_LogicalFromLoc    
             ,  @c_FromID              = @c_FromID     
             ,  @c_ToLoc               = @c_ToLoc        
@@ -746,8 +724,8 @@ BEGIN
             ,  @n_PendingMoveIn       = 0        
             ,  @n_QtyReplen           = 0     
             ,  @c_CallSource          = 'WAVE' 
-            ,  @c_LinkTaskToPick      = 'WIP'    
-            ,  @c_LinkTaskToPick_SQL  = @c_LinkTaskToPick_SQL  
+            --,  @c_LinkTaskToPick      = 'WIP'   --WL12
+            --,  @c_LinkTaskToPick_SQL  = @c_LinkTaskToPick_SQL   --WL12
             ,  @c_WIP_RefNo           = @c_SourceType   
             ,  @c_RoundUpQty          = ''     
             ,  @c_ReserveQtyReplen    = 'N'    
@@ -767,14 +745,136 @@ BEGIN
                SET @n_Continue = 3
             END
 
-            --WL08 S
-            UPDATE TASKDETAIL
-            SET FromLoc = IIF(@c_OriginalFromLoc <> @c_FromLoc, @c_FromLoc, FromLoc)
-            WHERE Taskdetailkey = @c_TaskdetailKey
-            --WL08 E
+            --WL12 S
+            -- Manual link Taskdetailkey to Pickdetail
+            IF @n_Continue IN (1, 2)
+            BEGIN
+               SET @n_TaskQty = @n_Qty
+
+               SET @CUR_PICK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+               SELECT PICKDETAIL.PickDetailKey
+                    , PICKDETAIL.Qty
+               FROM #PickDetail_WIP PICKDETAIL (NOLOCK)
+               JOIN ORDERS (NOLOCK) ON PICKDETAIL.OrderKey = ORDERS.OrderKey
+               JOIN LOC (NOLOCK) ON PICKDETAIL.ToLoc = LOC.Loc
+               JOIN SKUxLOC (NOLOCK) ON  PICKDETAIL.Storerkey = SKUxLOC.StorerKey
+                                     AND PICKDETAIL.Sku = SKUxLOC.Sku
+                                     AND PICKDETAIL.Loc = SKUxLOC.Loc
+               JOIN WAVEDETAIL (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey
+               WHERE (PICKDETAIL.TaskDetailKey IS NULL OR PICKDETAIL.TaskDetailKey = '')
+               AND   PICKDETAIL.Storerkey = @c_Storerkey
+               AND   (PICKDETAIL.Sku = @c_Sku OR ISNULL(@c_Sku, '') = '')
+               AND   (PICKDETAIL.Lot = @c_Lot OR ISNULL(@c_Lot, '') = '')
+               AND   PICKDETAIL.ToLoc = @c_FromLoc
+               AND   PICKDETAIL.ID = IIF(LOC.LoseId = '1', '', @c_FromID)
+               AND   PICKDETAIL.WIP_Refno = @c_SourceType
+               AND   WAVEDETAIL.WaveKey = @c_Wavekey
+               AND   PICKDETAIL.UOM = @c_UOM
+               AND   PICKDETAIL.CaseID = @c_Caseid
+               ORDER BY ORDERS.LoadKey
+                      , ORDERS.OrderKey
+                      , PICKDETAIL.PickDetailKey
+
+               OPEN @CUR_PICK  
+      
+               FETCH NEXT FROM @CUR_PICK INTO @c_CurrPickdetailkey, @n_PickQty
+               
+               WHILE @@FETCH_STATUS = 0 AND @n_TaskQty > 0 AND @n_Continue IN (1, 2)
+               BEGIN
+                  IF @n_PickQty <= @n_TaskQty
+                  BEGIN
+                     UPDATE #PickDetail_WIP
+                     SET TaskDetailKey = @c_TaskdetailKey
+                       , EditDate = GETDATE()
+                       , TrafficCop = NULL
+                     WHERE PickDetailKey = @c_CurrPickdetailkey
+                     AND WIP_Refno = @c_SourceType
+
+                     SELECT @n_TaskQty = @n_TaskQty - @n_PickQty
+                  END
+                  ELSE
+                  BEGIN  -- pickqty > taskqty   
+                     SELECT @n_SplitQty = @n_PickQty - @n_TaskQty
+                     
+                     EXECUTE nspg_GetKey 'PICKDETAILKEY'
+                                       , 10
+                                       , @c_NewPickdetailKey OUTPUT
+                                       , @b_Success OUTPUT
+                                       , @n_Err OUTPUT
+                                       , @c_ErrMsg OUTPUT   
+                  
+                     IF NOT @b_success = 1      
+                     BEGIN
+                        SELECT @n_continue = 3      
+                     END
+                     
+                     IF @n_Continue IN (1, 2)
+                     BEGIN
+                        INSERT INTO #PickDetail_WIP ( PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, Storerkey, Sku
+                                                    , AltSku, UOM, UOMQty, Qty, QtyMoved, [Status], DropID, Loc, ID, PackKey, UpdateSource
+                                                    , CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod
+                                                    , WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, TaskDetailKey
+                                                    , TaskManagerReasonKey, Notes, MoveRefKey, WIP_Refno )
+                        SELECT @c_NewPickdetailKey
+                             , CaseID
+                             , PickHeaderKey
+                             , OrderKey
+                             , OrderLineNumber
+                             , Lot
+                             , Storerkey
+                             , Sku
+                             , AltSku
+                             , UOM
+                             , CASE UOM WHEN '6' THEN @n_SplitQty
+                                        ELSE UOMQty END
+                             , @n_SplitQty
+                             , QtyMoved
+                             , Status
+                             , ''
+                             , Loc
+                             , ID
+                             , PackKey
+                             , UpdateSource
+                             , CartonGroup
+                             , CartonType
+                             , ToLoc
+                             , DoReplenish
+                             , ReplenishZone
+                             , DoCartonize
+                             , PickMethod
+                             , WaveKey
+                             , EffectiveDate
+                             , '9'
+                             , ShipFlag
+                             , PickSlipNo
+                             , TaskDetailKey
+                             , TaskManagerReasonKey
+                             , Notes
+                             , MoveRefKey
+                             , WIP_Refno
+                        FROM #PickDetail_WIP (NOLOCK)
+                        WHERE PickDetailKey = @c_CurrPickdetailkey
+                        
+                        UPDATE #PickDetail_WIP
+                        SET TaskDetailKey = @c_TaskdetailKey
+                          , EditDate = GETDATE()
+                          , TrafficCop = NULL
+                          , UOMQTY = CASE UOM WHEN '6' THEN @n_TaskQty ELSE UOMQty END
+                          , Qty = @n_TaskQty
+                        WHERE PickDetailKey = @c_CurrPickdetailkey
+                        AND WIP_Refno = @c_SourceType
+                        
+                        SELECT @n_taskQty = 0
+                     END
+                  END
+                  FETCH NEXT FROM @CUR_PICK INTO @c_CurrPickdetailkey, @n_PickQty
+               END
+               CLOSE @CUR_PICK
+               DEALLOCATE @CUR_PICK
+            END
+            --WL12 E
          END
 
-         SET @c_Groupkey_P = @c_Groupkey
          FETCH NEXT FROM @CUR_TW INTO  @c_Storerkey
                                     ,  @c_Sku
                                     ,  @c_Lot
@@ -785,7 +885,6 @@ BEGIN
                                     ,  @c_LogicalToLoc
                                     ,  @c_ToID
                                     ,  @c_UOM
-                                    ,  @n_UOMQty
                                     ,  @n_Qty
                                     ,  @c_CaseID
                                     ,  @c_Wavekey
@@ -797,7 +896,6 @@ BEGIN
                                     ,  @c_GroupKey
                                     ,  @c_Status
                                     ,  @c_DocType   --WL01
-                                    ,  @c_OriginalFromLoc   --WL08 
       END  
       CLOSE @CUR_TW  
       DEALLOCATE @CUR_TW
