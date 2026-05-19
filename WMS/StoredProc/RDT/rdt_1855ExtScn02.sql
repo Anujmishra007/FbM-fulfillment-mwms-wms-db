@@ -962,7 +962,8 @@ BEGIN
 
                   IF @nRowCount > 0 AND ISNULL(@cOrderKeyInToteID, '') <> ''
                   BEGIN
-                     IF NOT EXISTS(SELECT 1 FROM @tTaskDetail WHERE OrderKey = @cOrderKeyInToteID)
+                     IF @cMethod = '2'
+                        AND NOT EXISTS(SELECT 1 FROM @tTaskDetail WHERE OrderKey = @cOrderKeyInToteID)
                      BEGIN
                         SET @nErrNo = 260433
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToteID is used by order not in the current pick list
@@ -1167,6 +1168,23 @@ BEGIN
 
                IF @cOption = '1'
                BEGIN
+                  DECLARE @cPickTaskDetailKey NVARCHAR(10) = ''
+                  SELECT TOP 1 @cPickTaskDetailKey = TD.TaskDetailKey
+                  FROM dbo.TaskDetail TD WITH (NOLOCK)
+                  INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey
+                  WHERE TD.Storerkey = @cStorerKey
+                     AND TD.TaskType = 'ASTCPK'
+                     AND TD.Status = '5'
+                     AND TD.Qty > 0
+                     AND TD.Groupkey = @cGroupKey
+                     AND TD.WaveKey = @cWaveKey
+                     AND TD.UserKey = @cUserName
+                     AND TD.DeviceID = @cCartID
+                     AND PD.Status <> '4'
+                     AND PD.Qty > 0
+                  ORDER BY TD.EditDate DESC
+                  SET @cPickTaskDetailKey = ISNULL(@cPickTaskDetailKey, '')
+
                   DELETE FROM @tTaskDetail
 
                   INSERT INTO @tTaskDetail (TaskDetailKey)
@@ -1228,16 +1246,17 @@ BEGIN
                      WHILE @@TRANCOUNT > @nTranCount
                         COMMIT TRAN
 
-                  IF EXISTS(SELECT TOP 1 1
-                           FROM dbo.TaskDetail WITH (NOLOCK)
-                           WHERE Storerkey = @cStorerKey
-                              AND TaskType = 'ASTCPK'
-                              AND Status = '5'
-                              AND Groupkey = @cGroupKey
-                              AND WaveKey = @cWaveKey
-                              AND UserKey = @cUserName
-                              AND DeviceID = @cCartID)
+                  IF @cPickTaskDetailKey <> ''
                   BEGIN
+                     -- If current task is not picked yet, set @cTaskDetailKey as the last picked task
+                     IF EXISTS(SELECT 1 FROM dbo.TaskDetail WITH(NOLOCK)
+                               WHERE Storerkey = @cStorerKey
+                                  AND TaskType = 'ASTCPK'
+                                  AND Status < '5'
+                                  AND TaskDetailKey = @cTaskDetailKey)
+                     BEGIN
+                        SET @cTaskDetailKey = @cPickTaskDetailKey
+                     END
                      DECLARE @cSuggToLOC NVARCHAR(10)
 
                      -- Check if there is any completed task with drop ID, if yes, get the To LOC from that task; otherwise, get the To LOC from current task
