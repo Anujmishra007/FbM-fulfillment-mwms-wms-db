@@ -42,6 +42,7 @@ BEGIN
   DECLARE @c_ConvertedColumnStr NVARCHAR(MAX)
 
   SET @c_ColumnNewValue = ISNULL(TRIM(@c_ColumnNewValue), '')
+  SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, ', ORDERS.SOStatus,', ', ')
   
   SET @c_ConvertedColumnStr = 
       'SELECT CASE
@@ -188,7 +189,7 @@ BEGIN
       ELSE ORDERS.SOStatus
       END
 
-      AS CONVERTED_SOSTATUS, ' 
+      AS SOSTATUS, ' 
   
   SET @c_ConvertedSQLStr = CONCAT(@c_ConvertedColumnStr, RIGHT(@c_SQLStr, LEN(@c_SQLStr) - 6))
 
