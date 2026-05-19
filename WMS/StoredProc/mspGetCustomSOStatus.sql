@@ -189,7 +189,7 @@ BEGIN
       ELSE ORDERS.SOStatus
       END
 
-      AS SOSTATUS, ' 
+      AS SOStatus, ' 
   
   SET @c_ConvertedSQLStr = CONCAT(@c_ConvertedColumnStr, RIGHT(@c_SQLStr, LEN(@c_SQLStr) - 6))
 
