@@ -100,6 +100,7 @@ BEGIN
       @cDisableQTYField    NVARCHAR( 1),
       @cPickConfirmStatus  NVARCHAR( 1),
       @cOption             NVARCHAR( 5),
+      @cConfirmToLoc       NVARCHAR( 1),
       @cContinuePickOnAssignedCart  NVARCHAR( 1),
       @tGetTask            VariableTable,
       @cCartPickMethod     NVARCHAR( 40),
@@ -115,19 +116,23 @@ BEGIN
       @nNextPage           INT,
       @nCartonScanned      INT,
       @nRowCount           INT,
+      @nPickShortage       INT,
 
       @nStep_CartID           INT,  @nScn_CartID            INT,
       @nStep_CartMatrix       INT,  @nScn_CartMatrix        INT,
       @nStep_Loc              INT,  @nScn_Loc               INT,
       @nStep_UnAssign         INT,  @nScn_UnAssign          INT,
-      @nStep_ContTask         INT,  @nScn_ContTask          INT
+      @nStep_ContTask         INT,  @nScn_ContTask          INT,
+      @nStep_ToLoc            INT,  @nScn_ToLoc             INT
 
    SELECT
       @nStep_CartID           = 1,  @nScn_CartID            = 6844,
       @nStep_CartMatrix       = 2,  @nScn_CartMatrix        = 6845,
       @nStep_Loc              = 3,  @nScn_Loc               = 5922,
       @nStep_UnAssign         = 8,  @nScn_UnAssign          = 5927,
+      @nStep_ToLoc            = 7,  @nScn_ToLoc             = 5926,
       @nStep_ContTask         = 10, @nScn_ContTask          = 5929
+
 
    DECLARE @tTaskDetail TABLE 
    (
@@ -156,6 +161,7 @@ BEGIN
       @cSuggCartonID       = V_String10,
       @cSuggSKU            = V_String11,
       @cGroupKey           = V_String12,
+      @cConfirmToLoc       = V_String23,
       @cPickZone           = V_String24,
       @cMethod             = V_String25,
       @cResult01           = V_String26,
@@ -180,6 +186,7 @@ BEGIN
    SET @cUDF02 = ''
    SET @cUDF03 = ''
    SET @cUDF04 = ''
+   SET @cUDF05 = ''
 
    IF @nFunc = 1855
    BEGIN
@@ -925,6 +932,47 @@ BEGIN
                   AND TD.DropID = ''
                ORDER BY LOC.PALogicalLoc, LOC.Loc, TD.TaskDetailKey, TD.Sku
 
+               SET @nPickShortage = 0
+               DECLARE @cOrderKeyInToteID NVARCHAR(10) 
+
+               IF EXISTS(SELECT 1 FROM dbo.DropID WITH(NOLOCK)
+                          WHERE DropID = @cCartonID)
+               BEGIN
+                  SELECT TOP 1 @cOrderKeyInToteID = PD.OrderKey
+                  FROM dbo.TaskDetail TD1 WITH(NOLOCK)
+                  INNER JOIN dbo.TaskDetail TD2 WITH(NOLOCK) 
+                     ON TD1.StorerKey = TD2.StorerKey 
+                     AND TD1.WaveKey = TD2.WaveKey 
+                     AND TD1.GroupKey = TD2.Groupkey 
+                     AND TD1.TaskType = TD2.TaskType
+                  INNER JOIN dbo.PickDetail PD WITH(NOLOCK) 
+                     ON TD1.StorerKey = PD.StorerKey 
+                     AND TD1.TaskDetailKey = PD.TaskDetailKey 
+                  WHERE TD1.Storerkey = @cStorerKey
+                     AND TD1.TaskType = 'ASTCPK'
+                     AND TD1.Status = '9'
+                     AND TD1.DropID IS NOT NULL
+                     AND TD1.DropID = @cCartonID
+                     AND TD1.WaveKey = @cWaveKey 
+                     AND TD1.GroupKey = @cGroupKey
+                     AND TD2.Status < '5'
+                  ORDER BY TD1.TaskDetailKey
+
+                  SET @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount > 0 AND ISNULL(@cOrderKeyInToteID, '') <> ''
+                  BEGIN
+                     IF NOT EXISTS(SELECT 1 FROM @tTaskDetail WHERE OrderKey = @cOrderKeyInToteID)
+                     BEGIN
+                        SET @nErrNo = 260433
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToteID is used by order not in the current pick list
+                        GOTO UPD_RDTMOBREC
+                     END
+
+                     SET @nPickShortage = 1
+                  END
+               END
+
                SET @nTranCount = @@TRANCOUNT
                BEGIN TRAN
                SAVE TRAN rdt_1855ExtScn02_6845
@@ -967,12 +1015,22 @@ BEGIN
                   DECLARE @tOrderTaskDetail TABLE (RowRef INT IDENTITY(1,1), TaskDetailKey NVARCHAR( 10))
                   DECLARE @cStatsuMsg NVARCHAR( 50)
 
-                  SET @nLoopIndex = -1
-                  SELECT TOP 1
-                     @cLoopOrderKey = OrderKey
-                  FROM @tTaskDetail
-                  WHERE RowRef > @nLoopIndex
-                  ORDER BY RowRef
+                  IF @nPickShortage = 1 AND @cOrderKeyInToteID <> ''
+                  BEGIN
+                     SELECT TOP 1
+                        @cLoopOrderKey = OrderKey
+                     FROM @tTaskDetail
+                     WHERE OrderKey = @cOrderKeyInToteID
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nLoopIndex = -1
+                     SELECT TOP 1
+                        @cLoopOrderKey = OrderKey
+                     FROM @tTaskDetail
+                     WHERE RowRef > @nLoopIndex
+                     ORDER BY RowRef
+                  END
 
                   SET @cStatsuMsg = CAST( @nCartonScanned + 1 AS NVARCHAR( 5)) + '-' + ISNULL(@cCartonType, '')
 
@@ -1162,51 +1220,6 @@ BEGIN
                      END
                   END
 
-                  DELETE FROM @tTaskDetail
-
-                  INSERT INTO @tTaskDetail (TaskDetailKey)
-                  SELECT TaskDetailKey
-                  FROM dbo.TaskDetail WITH (NOLOCK)
-                  WHERE Storerkey = @cStorerKey
-                     AND TaskType = 'ASTCPK'
-                     AND Status = '5'
-                     AND Groupkey = @cGroupKey
-                     AND WaveKey = @cWaveKey
-                     AND UserKey = @cUserName
-                     AND DeviceID = @cCartID
-
-                  IF EXISTS(SELECT 1 FROM @tTaskDetail)
-                  BEGIN
-                     SET @nLoopIndex = -1
-                     WHILE 1 = 1
-                     BEGIN
-                        SELECT TOP 1 
-                           @cLockTaskKey = TaskDetailKey,
-                           @nLoopIndex = RowRef
-                        FROM @tTaskDetail
-                        WHERE RowRef > @nLoopIndex
-                        ORDER BY RowRef
-
-                        IF @@ROWCOUNT = 0
-                           BREAK
-
-                        BEGIN TRY
-                           UPDATE dbo.TaskDetail WITH(ROWLOCK)
-                           SET
-                              Status = '9',
-                              EditWho = @cUserName,
-                              EditDate = GETDATE()
-                           WHERE Storerkey = @cStorerKey
-                              AND TaskDetailKey = @cLockTaskKey
-                        END TRY
-                        BEGIN CATCH
-                           SET @nErrNo = 260428
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update task failed
-                           GOTO COMMIT_UNASSIGN_CART_RollBackTran
-                        END CATCH
-                     END
-                  END
-
                   GOTO COMMIT_UNASSIGN_CART
 
                   COMMIT_UNASSIGN_CART_RollBackTran:
@@ -1215,12 +1228,77 @@ BEGIN
                      WHILE @@TRANCOUNT > @nTranCount
                         COMMIT TRAN
 
-                  SET @nAfterScn = @nScn_CartID
-                  SET @nAfterStep = 99
+                  IF EXISTS(SELECT TOP 1 1
+                           FROM dbo.TaskDetail WITH (NOLOCK)
+                           WHERE Storerkey = @cStorerKey
+                              AND TaskType = 'ASTCPK'
+                              AND Status = '5'
+                              AND Groupkey = @cGroupKey
+                              AND WaveKey = @cWaveKey
+                              AND UserKey = @cUserName
+                              AND DeviceID = @cCartID)
+                  BEGIN
+                     DECLARE @cSuggToLOC NVARCHAR(10)
 
-                  SET @cOutField01 = ''
-                  SET @cOutField02 = ''
-                  SET @cOutField03 = ''
+                     -- Check if there is any completed task with drop ID, if yes, get the To LOC from that task; otherwise, get the To LOC from current task
+                     SELECT TOP 1 @cSuggToLOC = LOC.Loc
+                     FROM dbo.TaskDetail TD WITH(NOLOCK)
+                     INNER JOIN dbo.TaskDetail TD1 WITH(NOLOCK) 
+                        ON TD.StorerKey = TD1.StorerKey 
+                        AND TD.WaveKey = TD1.WaveKey 
+                        AND TD.GroupKey = TD1.GroupKey 
+                        AND TD.TaskType = TD1.TaskType 
+                        AND TD1.Status = '9'
+                        AND TD1.DropID IS NOT NULL
+                        AND TD1.TaskType = 'ASTCPK'
+                     INNER JOIN dbo.DropID DI WITH(NOLOCK) ON TD1.DropID = DI.DropID
+                     INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON DI.DropLOC = LOC.Loc AND LOC.Facility = @cFacility
+                     WHERE TD.Storerkey = @cStorerKey
+                        AND TD.TaskDetailKey = @cTaskDetailKey
+
+                     SET @nRowCount = @@ROWCOUNT
+
+                     IF @nRowCount = 0 OR @cSuggToLOC = ''
+                     BEGIN
+                        SELECT TOP 1 @cSuggToLOC = TD.ToLoc
+                        FROM dbo.TaskDetail TD WITH(NOLOCK)
+                        WHERE TD.Storerkey = @cStorerKey
+                           AND TD.TaskDetailKey = @cTaskDetailKey
+                     END
+
+                     IF @cConfirmToLoc = '1'
+                     BEGIN
+                        -- Prepare next screen var
+                        SET @cOutField01 = @cCartPickMethod
+                        SET @cOutField02 = @cSuggToLOC -- To LOC
+                        SET @cOutField03 = ''
+
+                        -- Go to To LOC screen
+                        SET @nAfterScn = @nScn_ToLoc
+                        SET @nAfterStep = @nStep_ToLoc
+                     END
+                     ELSE
+                     BEGIN
+                        SET @cOutField01 = @cCartPickMethod
+                        SET @cOutField02 = @cSuggToLOC -- To LOC
+                        SET @cInField03 = @cSuggToLOC
+
+                        -- Go to To LOC screen
+                        SET @nAfterScn = @nScn_ToLoc
+                        SET @nAfterStep = @nStep_ToLoc
+
+                        SET @cUDF05 = 'GOTO Step_ToLoc'
+                     END
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nAfterScn = @nScn_CartID
+                     SET @nAfterStep = 99
+
+                     SET @cOutField01 = ''
+                     SET @cOutField02 = ''
+                     SET @cOutField03 = ''
+                  END
                   GOTO UPD_RDTMOBREC
                END
                ELSE IF @cOption = '2'
@@ -1390,7 +1468,7 @@ BEGIN
             AND TD1.WaveKey = TD2.WaveKey 
             AND TD1.GroupKey = TD2.Groupkey 
             AND TD1.TaskType = TD2.TaskType
-         INNER JOIN dbo.DropID DI WITH(NOLOCK) ON TD2.DropID = DI.DropID
+         INNER JOIN dbo.DropID DI WITH(NOLOCK) ON TD1.DropID = DI.DropID
          WHERE TD1.Storerkey = @cStorerKey
             AND TD1.TaskType = 'ASTCPK'
             AND TD1.Status = '9'

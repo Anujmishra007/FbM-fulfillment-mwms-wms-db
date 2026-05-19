@@ -75,6 +75,7 @@ AS
 
             DECLARE @cSuggestLoc NVARCHAR(10)
 
+            -- re-use the tote id
             SELECT TOP 1 @cSuggestLoc = DI.DropLoc
             FROM TaskDetail TD1 WITH(NOLOCK)
             INNER JOIN TaskDetail TD2 WITH(NOLOCK) 
@@ -82,7 +83,8 @@ AS
                AND TD1.WaveKey = TD2.WaveKey 
                AND TD1.GroupKey = TD2.Groupkey 
                AND TD1.TaskType = TD2.TaskType
-            INNER JOIN dbo.DropID DI WITH(NOLOCK) ON TD2.DropID = DI.DropID
+            INNER JOIN dbo.DropID DI WITH(NOLOCK) ON TD1.DropID = DI.DropID
+            INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON DI.DropLOC = LOC.Loc AND LOC.Facility = @cFacility
             WHERE TD1.Storerkey = @cStorerKey
                AND TD1.TaskType = 'ASTCPK'
                AND TD1.Status = '9'
