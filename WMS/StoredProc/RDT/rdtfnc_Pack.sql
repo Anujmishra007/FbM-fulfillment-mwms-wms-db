@@ -751,7 +751,7 @@ BEGIN
       -- Check blank
       IF @cPackDtlDropID = '' AND @cPackByToDropID = '1'
       BEGIN
-         SET @nErrNo = 100251
+         SET @nErrNo = 267001
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ToDropID
          EXEC rdt.rdtSetFocusField @nMobile, 3  -- ToDropID
          GOTO Quit
@@ -914,7 +914,7 @@ BEGIN
                SET @cType = 'CURRENT'
             ELSE
             BEGIN
-               SET @nErrNo = 100252
+               SET @nErrNo = 267002
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad ToDropID
                EXEC rdt.rdtSetFocusField @nMobile, 3  -- ToDropID
                SET @cOutField03 = ''
@@ -1014,7 +1014,11 @@ BEGIN
 
       IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '2') -- Statistic screen 
       BEGIN
-         SET @cInField09 = '1' -- Option
+         IF @nCartonNo > 0
+            SET @cInField09 = '2' -- EDIT
+         ELSE
+            SET @cInField09 = '1' -- NEW
+
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
          GOTO Step_2
