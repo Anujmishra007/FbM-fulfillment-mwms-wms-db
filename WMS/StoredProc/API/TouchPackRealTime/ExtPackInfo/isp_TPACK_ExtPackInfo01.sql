@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /*********************************************************************************/    
-/* Stored Proc: isp_TPACK_ExtPackInfo_Std                                        */    
+/* Stored Proc: isp_TPACK_ExtPackInfo01                                          */    
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
 /* Purpose        : Get custom extended pack info Columbia Storer                */
@@ -11,7 +11,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-05-18   1.0  GCH225     FCR-13243 - Display PendAudit as label           */
 /*********************************************************************************/
-CREATE OR ALTER PROC [API].[isp_TPACK_ExtPackInfo_Std] (
+CREATE OR ALTER PROC [API].[isp_TPACK_ExtPackInfo01] (
      @cType                NVARCHAR(30)      = ''
    , @bIsDiscrete          BIT               = 0
    , @bIsCustom            BIT               = 0
