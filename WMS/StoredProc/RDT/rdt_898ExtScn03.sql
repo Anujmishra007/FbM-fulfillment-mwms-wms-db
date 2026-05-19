@@ -295,9 +295,15 @@ BEGIN
                   
                   -- @cLottable02 is only NVARCHAR(18) and truncates the barcode
                   SET @cUCC = @cInField02
+
+                  DECLARE @cBarcode NVARCHAR(MAX)
+                  
+                  --  Use separate @cBarcode variable for DecodeSP input
+                  SET @cBarcode = @cInField02
+
                   SET @cSQL = 'EXEC rdt.' + QUOTENAME( RTRIM( @cDecodeSP)) +
                               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
-                              ' @cUCC        OUTPUT, @nUCCQTY     OUTPUT,' +
+                              ' @cBarcode   OUTPUT, @nUCCQTY     OUTPUT,' +
                               ' @cUserDefine01 OUTPUT, @cUserDefine02 OUTPUT, @cUserDefine03 OUTPUT, @cUserDefine04 OUTPUT, @cUserDefine05 OUTPUT, ' +
                               ' @cUserDefine06 OUTPUT, @cUserDefine07 OUTPUT, @cUserDefine08 OUTPUT, @cUserDefine09 OUTPUT, ' +
                               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
@@ -314,7 +320,7 @@ BEGIN
                         ' @cReceiptKey     NVARCHAR( 10),          ' +
                         ' @cPOKey          NVARCHAR( 10),          ' +
                         ' @cLOC            NVARCHAR( 10),          ' +
-                        ' @cUCC            NVARCHAR( MAX)  OUTPUT,  ' +
+                        ' @cBarcode        NVARCHAR( MAX)  OUTPUT,  ' +
                         ' @nUCCQTY         INT            OUTPUT,  ' +
                         ' @cUserDefine01   NVARCHAR(30)   OUTPUT,  ' +
                         ' @cUserDefine02   NVARCHAR(30)   OUTPUT,  ' +
@@ -345,7 +351,7 @@ BEGIN
 
                   EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                      @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
-                     @cUCC              OUTPUT, @nUCCQTY     OUTPUT,
+                     @cBarcode      OUTPUT, @nUCCQTY     OUTPUT,
                      @cUserDefine01 OUTPUT, @cUserDefine02 OUTPUT, @cUserDefine03 OUTPUT, @cUserDefine04 OUTPUT, @cUserDefine05 OUTPUT,
                      @cUserDefine06 OUTPUT, @cUserDefine07 OUTPUT, @cUserDefine08 OUTPUT, @cUserDefine09 OUTPUT,
                      @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
