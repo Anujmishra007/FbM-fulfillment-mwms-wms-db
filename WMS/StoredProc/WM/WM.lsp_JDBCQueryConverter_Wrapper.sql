@@ -21,6 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 18-May-2026 AYD      1.0   Creation for FCR-11918, FCR-11923         */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_JDBCQueryConverter_Wrapper]
    @c_SQLStr NVARCHAR(MAX),

@@ -1,3 +1,31 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+/************************************************************************/
+/* Stored Procedure: dbo.mspGetCustomSOStatus                           */
+/* Creation Date: 18-May-2026                                           */
+/* Copyright: Maersk                                                    */
+/* Written by: AYD                                                      */
+/*                                                                      */
+/* Purpose: Convert JDBC Query Statement for Customization              */
+/*                                                                      */
+/* Called By: WM.lsp_JDBCQueryConverter_Wrapper                         */
+/* ConfigKey: GetAddOrderStatus                                         */
+/* SValue:    mspGetCustomSOStatus                                      */
+/*                                                                      */
+/* PVCS Version: 1.2                                                    */
+/*                                                                      */
+/* Version: 8.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver   Purposes                                  */
+/* 18-May-2026 AYD      1.0   Creation for FCR-11918, FCR-11923         */
+/************************************************************************/
+
 CREATE OR ALTER PROC dbo.mspGetCustomSOStatus 
 @c_SQLStr NVARCHAR(MAX),
 -- @c_StorerKey NVARCHAR(10),
