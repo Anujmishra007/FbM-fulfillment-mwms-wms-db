@@ -962,7 +962,8 @@ BEGIN
 
                   IF @nRowCount > 0 AND ISNULL(@cOrderKeyInToteID, '') <> ''
                   BEGIN
-                     IF NOT EXISTS(SELECT 1 FROM @tTaskDetail WHERE OrderKey = @cOrderKeyInToteID)
+                     IF @cMethod = '2'
+                        AND NOT EXISTS(SELECT 1 FROM @tTaskDetail WHERE OrderKey = @cOrderKeyInToteID)
                      BEGIN
                         SET @nErrNo = 260433
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToteID is used by order not in the current pick list
