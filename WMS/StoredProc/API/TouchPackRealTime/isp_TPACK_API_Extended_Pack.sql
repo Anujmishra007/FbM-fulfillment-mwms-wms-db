@@ -247,6 +247,7 @@ BEGIN
        , @cSKU              = @cSKU
        , @nCartonNo         = @nCartonNo
        , @nQty              = @nQty
+       , @bIsVASDone        = 0
        , @c_UserID          = @c_UserID
        , @cLangCode         = @cLangCode
        , @nPageIndex        = 0

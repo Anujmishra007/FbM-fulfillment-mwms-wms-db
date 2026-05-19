@@ -175,6 +175,7 @@ BEGIN
       , @cSKU              = ''
       , @nCartonNo         = @nCartonNo
       , @nQty              = 1
+      , @bIsVASDone        = 0
       , @c_UserID          = @c_UserID
       , @cLangCode         = @cLangCode
       , @nPageIndex        = 0

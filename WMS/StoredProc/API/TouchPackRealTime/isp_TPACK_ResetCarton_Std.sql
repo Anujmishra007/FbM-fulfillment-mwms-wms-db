@@ -359,6 +359,10 @@ BEGIN
             END
             CLOSE CUR_UPDVAS
             DEALLOCATE CUR_UPDVAS
+
+            UPDATE WORKORDER
+            SET [Status] = '0'
+            WHERE WorkOrderKey = @cWorkOrderKey
          END
       END
 
@@ -555,6 +559,49 @@ BEGIN
          END
       END
 
+      -- Reset WorkOrderDetail Status to 3
+      IF EXISTS(  SELECT 1
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND ConfigKey = 'TPS-VAS'
+                  AND sValue IN ('1', '3')
+      )
+      BEGIN
+         SELECT TOP 1 @cWorkOrderKey = WorkOrderKey
+                     FROM WORKORDERDETAIL WOD (NOLOCK)
+                     LEFT JOIN CODELKUP CLK (NOLOCK)
+                     ON WOD.[Type] = CLK.Code
+                     WHERE CLK.LISTNAME = 'WKOrdType'
+                     AND EXISTS (SELECT 1
+                                 FROM WORKORDER WO (NOLOCK)
+                                 WHERE EXISTS ( SELECT 1 
+                                                FROM @OrderList t
+                                                WHERE t.OrderKey = WO.ExternWorkOrderKey
+                                                )
+                                 AND StorerKey = @cStorerKey
+                                 AND Facility = @cFacility
+                                 AND WO.[Type] IN('PACK', 'VAS')
+                                 AND WO.WorkOrderKey = WOD.WorkOrderKey
+                                 )
+                     AND EXISTS (SELECT 1 
+                                 FROM PACKDETAIL PD(NOLOCK)
+                                 WHERE PD.PickSlipNo = @cPickSlipNo
+                                 AND PD.SKU = WOD.Sku
+                                )
+
+         IF ISNULL(@cWorkOrderKey, '') <> ''
+         AND EXISTS (SELECT 1
+                     FROM WORKORDER WO (NOLOCK)
+                     WHERE WO.WorkOrderKey = @cWorkOrderKey
+                     AND WO.[Status] = '9'
+         )
+         BEGIN
+            UPDATE WORKORDER
+            SET [Status] = '0'
+            WHERE WorkOrderKey = @cWorkOrderKey
+         END
+      END
+      
       DELETE FROM PACKDETAIL
       WHERE PickSlipNo = @cPickSlipNo
       AND CartonNo = @nCartonNo

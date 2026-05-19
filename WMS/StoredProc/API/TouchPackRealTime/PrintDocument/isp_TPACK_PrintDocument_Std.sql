@@ -13,7 +13,8 @@ GO
 /* 2025-09-10   1.0  GCH225     Created                                          */
 /* 2025-11-11   1.1  YLI237     UWP-43135                                        */
 /* 2026-01-27   1.2  YLI237     Add ReportLineNo support for                     */
-/*                              Multi Reports in PrinterGroup                    */                                                                          
+/*                              Multi Reports in PrinterGroup                    */
+/* 2026-05-14   1.3  GCH225     Add existing config feature TPS-PrintAllLbl      */                                                                          
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_Std] (
@@ -34,6 +35,7 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument_Std] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
+   , @bIsAutoPrint         BIT               = 0
    , @cReportType          NVARCHAR(30)      = ''
    , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
@@ -48,20 +50,22 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
 
-   DECLARE @n_Continue           INT            = 1  
-         , @n_StartCnt           INT            = @@TRANCOUNT  
+   DECLARE @n_Continue        INT            = 1  
+         , @n_StartCnt        INT            = @@TRANCOUNT  
 
-   DECLARE @cModuleID            NVARCHAR(30)
-         , @cSQL                 NVARCHAR(MAX)
-         , @cSQLParam            NVARCHAR(MAX)
-         , @cReportID            NVARCHAR(10)
-         , @cPrintSource         NVARCHAR(30)
-         , @cDefaultPrinterID    NVARCHAR(30)
-         , @groupByFields        NVARCHAR(MAX)
-         , @cPrinterInGroup      NVARCHAR(10)
-         , @cCustomLabelSP       NVARCHAR(30)
-         , @ctempLabelJobIDs     NVARCHAR(MAX)
-         , @cReportLineNo        NVARCHAR(20) = ''
+   DECLARE @cModuleID         NVARCHAR(30)
+         , @cSQL              NVARCHAR(MAX)
+         , @cSQLParam         NVARCHAR(MAX)
+         , @cReportID         NVARCHAR(10)
+         , @cPrintSource      NVARCHAR(30)
+         , @cDefaultPrinterID NVARCHAR(30)
+         , @groupByFields     NVARCHAR(MAX)
+         , @cPrinterInGroup   NVARCHAR(10)
+         , @cCustomLabelSP    NVARCHAR(30)
+         , @ctempLabelJobIDs  NVARCHAR(MAX)
+         , @cReportLineNo     NVARCHAR(20)
+         , @cPrintAllLabel    NVARCHAR(1)
+         , @nTMPCartonNo      INT
    
    DECLARE @cFieldName1       NVARCHAR(MAX)
          , @cFieldName2       NVARCHAR(MAX)
@@ -76,31 +80,67 @@ BEGIN
          , @IsAggregate3      BIT = 0
          , @IsAggregate4      BIT = 0
 
-   SET @b_Success          = 0  
-   SET @n_ErrNo            = 0  
-   SET @c_ErrMsg           = '' 
-   SET @cSQL               = ''
-   SET @cSQLParam          = ''
-   SET @cModuleID          = 'TPPACK'
-   SET @cCustomLabelSP     = ''
+   DECLARE @tCartonList TABLE (
+      CartonNo INT
+   )
 
-   SET @cSQL         = ''
-   SET @cSQLParam    = ''
-   SET @cFieldName1  = ''
-   SET @cFieldName2  = ''
-   SET @cFieldName3  = ''
-   SET @cFieldName4  = ''
-   SET @cParams1     = ''
-   SET @cParams2     = ''
-   SET @cParams3     = ''
-   SET @cParams4     = ''
-   SET @IsAggregate1 = 0
-   SET @IsAggregate2 = 0
-   SET @IsAggregate3 = 0
-   SET @IsAggregate4 = 0
+   SET @b_Success       = 0  
+   SET @n_ErrNo         = 0  
+   SET @c_ErrMsg        = '' 
+   SET @cSQL            = ''
+   SET @cSQLParam       = ''
+   SET @cModuleID       = 'TPPACK'
+   SET @cCustomLabelSP  = ''
+
+   SET @cSQL            = ''
+   SET @cSQLParam       = ''
+   SET @cFieldName1     = ''
+   SET @cFieldName2     = ''
+   SET @cFieldName3     = ''
+   SET @cFieldName4     = ''
+   SET @cParams1        = ''
+   SET @cParams2        = ''
+   SET @cParams3        = ''
+   SET @cParams4        = ''
+   SET @IsAggregate1    = 0
+   SET @IsAggregate2    = 0
+   SET @IsAggregate3    = 0
+   SET @IsAggregate4    = 0
+   SET @cReportLineNo   = ''
+   SET @cPrintAllLabel  = ''
+   SET @nTMPCartonNo    = 0
    
    IF @bPrintLabelFlag = 1
    BEGIN
+      EXEC nspGetRight    
+        @c_Facility  = @cFacility    
+      , @c_StorerKey = @cStorerKey
+      , @c_sku       = ''    
+      , @c_ConfigKey = 'TPS-PrintAllLbl'    
+      , @c_authority = @cPrintAllLabel OUTPUT    
+      , @b_Success   = @b_Success      OUTPUT
+      , @n_err       = @n_ErrNo        OUTPUT
+      , @c_errmsg    = @c_ErrMsg       OUTPUT
+
+      IF @b_Success = 0
+      BEGIN    
+         SET @n_Continue  = 3  
+         GOTO EXIT_SP
+      END
+
+      IF @cPrintAllLabel = '1'
+      BEGIN
+         INSERT INTO @tCartonList (CartonNo)
+         SELECT CartonNo
+         FROM PACKINFO (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+      END
+      ELSE
+      BEGIN
+         INSERT INTO @tCartonList (CartonNo)
+         VALUES (@nCartonNo)
+      END
+
       SELECT @cCustomLabelSP = sValue
       FROM  STORERCONFIG (NOLOCK)
       WHERE StorerKey = @cStorerKey
@@ -267,102 +307,111 @@ BEGIN
                            + ', @cPickSlipNo NVARCHAR(20) '
                            + ', @nCartonNo   INT '
 
-            EXEC sp_ExecuteSQL  @cSQL
-                              , @cSQLParam
-                              , @cFieldName1
-                              , @cFieldName2
-                              , @cFieldName3
-                              , @cFieldName4
-                              , @cParams1     OUTPUT
-                              , @cParams2     OUTPUT
-                              , @cParams3     OUTPUT
-                              , @cParams4     OUTPUT
-                              , @cStorerKey
-                              , @cPickSlipNo
-                              , @nCartonNo 
-
-            IF @cDefaultPrinterID = ''
+            WHILE EXISTS (SELECT 1 FROM @tCartonList)
             BEGIN
-               -- Check if printer is a group  
-               IF EXISTS(  SELECT 1 
-                           FROM rdt.RDTPRINTERGROUP (NOLOCK) 
-                           WHERE PrinterGroup = @cLabelPrinter
-               )  
-               BEGIN  
-                  SET @cPrinterInGroup = ''  
+               SELECT TOP 1 @nTMPCartonNo = CartonNo 
+               FROM @tCartonList
 
-                  -- Check if report print to a specific printer in group  
-                  -- UWP-43135 Start
-                  SELECT TOP 1 @cPrinterInGroup = RTP.PrinterID 
-                  FROM rdt.RDTREPORTTOPRINTER RTP (NOLOCK) 
-                  INNER JOIN WMREPORTDETAIL WMRD (NOLOCK)
-                  ON RTP.ReportType = WMRD.ReportID 
-                  AND RTP.StorerKey = WMRD.StorerKey 
-                  AND RTP.ReportLineNo = WMRD.ReportLineNo
-                  INNER JOIN WMREPORT WMR (NOLOCK)
-                  ON WMR.ReportID = WMRD.ReportID 
-                  AND WMR.ModuleID = @cModuleID
-                  WHERE WMRD.StorerKey = @cStorerKey  
-                  AND WMR.ReportType = @cReportType
-                  AND RTP.PrinterGroup = @cLabelPrinter  
-                  AND WMRD.ReportLineNo = @cReportLineNo  --1.2
-                  -- UWP-43135 End
+               EXEC sp_ExecuteSQL  @cSQL
+                                 , @cSQLParam
+                                 , @cFieldName1
+                                 , @cFieldName2
+                                 , @cFieldName3
+                                 , @cFieldName4
+                                 , @cParams1     OUTPUT
+                                 , @cParams2     OUTPUT
+                                 , @cParams3     OUTPUT
+                                 , @cParams4     OUTPUT
+                                 , @cStorerKey
+                                 , @cPickSlipNo
+                                 , @nTMPCartonNo 
 
-                  IF @cPrinterInGroup = ''  
+               IF @cDefaultPrinterID = ''
+               BEGIN
+                  -- Check if printer is a group  
+                  IF EXISTS(  SELECT 1 
+                              FROM rdt.RDTPRINTERGROUP (NOLOCK) 
+                              WHERE PrinterGroup = @cLabelPrinter
+                  )  
                   BEGIN  
-                     -- Get default printer in the group  
-                     SELECT @cPrinterInGroup = PrinterID  
-                     FROM rdt.RDTPRINTERGROUP (NOLOCK)  
-                     WHERE PrinterGroup = @cLabelPrinter  
-                     AND DefaultPrinter = 1  
-                  END  
+                     SET @cPrinterInGroup = ''  
 
-                  -- Check no default printer
-                  IF @cPrinterInGroup = ''  
-                  BEGIN  
-                     SET @n_Continue = 3
-                     SET @n_ErrNo = 11853    
-                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not found PrinterID in PrinterGroup.'  
-                     GOTO EXIT_SP  
+                     -- Check if report print to a specific printer in group  
+                     -- UWP-43135 Start
+                     SELECT TOP 1 @cPrinterInGroup = RTP.PrinterID 
+                     FROM rdt.RDTREPORTTOPRINTER RTP (NOLOCK) 
+                     INNER JOIN WMREPORTDETAIL WMRD (NOLOCK)
+                     ON RTP.ReportType = WMRD.ReportID 
+                     AND RTP.StorerKey = WMRD.StorerKey 
+                     AND RTP.ReportLineNo = WMRD.ReportLineNo
+                     INNER JOIN WMREPORT WMR (NOLOCK)
+                     ON WMR.ReportID = WMRD.ReportID 
+                     AND WMR.ModuleID = @cModuleID
+                     WHERE WMRD.StorerKey = @cStorerKey  
+                     AND WMR.ReportType = @cReportType
+                     AND RTP.PrinterGroup = @cLabelPrinter  
+                     AND WMRD.ReportLineNo = @cReportLineNo  --1.2
+                     -- UWP-43135 End
+
+                     IF @cPrinterInGroup = ''  
+                     BEGIN  
+                        -- Get default printer in the group  
+                        SELECT @cPrinterInGroup = PrinterID  
+                        FROM rdt.RDTPRINTERGROUP (NOLOCK)  
+                        WHERE PrinterGroup = @cLabelPrinter  
+                        AND DefaultPrinter = 1  
+                     END  
+
+                     -- Check no default printer
+                     IF @cPrinterInGroup = ''  
+                     BEGIN  
+                        SET @n_Continue = 3
+                        SET @n_ErrNo = 11853    
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Not found PrinterID in PrinterGroup.'  
+                        GOTO EXIT_SP  
+                     END
+
+                     SET @cLabelPrinter = @cPrinterInGroup
                   END
-
-                  SET @cLabelPrinter = @cPrinterInGroup
                END
-            END
-            ELSE
-            BEGIN
-               SET @cLabelPrinter = @cDefaultPrinterID
-            END
+               ELSE
+               BEGIN
+                  SET @cLabelPrinter = @cDefaultPrinterID
+               END
 
-            EXEC  [WM].[lsp_WM_Print_Report]
-                    @c_ModuleID     = @cModuleID           
-                  , @c_ReportID     = @cReportID         
-                  , @c_Storerkey    = @cStorerKey         
-                  , @c_Facility     = @cFacility        
-                  , @c_UserName     = @c_UserID   
-                  , @c_ComputerName = ''
-                  , @c_PrinterID    = @cLabelPrinter         
-                  , @n_NoOfCopy     = '1'     
-                  , @c_KeyValue1    = @cParams1        
-                  , @c_KeyValue2    = @cParams2        
-                  , @c_KeyValue3    = @cParams3     
-                  , @c_KeyValue4    = @cParams4    
-                  , @c_KeyValue5    = @cReportLineNo
-                  , @b_Success      = @b_Success         OUTPUT      
-                  , @n_Err          = @n_ErrNo           OUTPUT
-                  , @c_ErrMsg       = @c_ErrMsg          OUTPUT
-                  , @c_PrintSource  = @cPrintSource        
-                  , @b_SCEPreView   = 0         
-                  , @c_JobIDs       = @ctempLabelJobIDs  OUTPUT    
-                  , @c_AutoPrint    = 'N'     
-            
-            IF @b_Success = 0 
-            BEGIN  
-               SET @n_Continue = 3 
-               GOTO EXIT_SP  
-            END
+               EXEC  [WM].[lsp_WM_Print_Report]
+                     @c_ModuleID     = @cModuleID           
+                     , @c_ReportID     = @cReportID         
+                     , @c_Storerkey    = @cStorerKey         
+                     , @c_Facility     = @cFacility        
+                     , @c_UserName     = @c_UserID   
+                     , @c_ComputerName = ''
+                     , @c_PrinterID    = @cLabelPrinter         
+                     , @n_NoOfCopy     = '1'     
+                     , @c_KeyValue1    = @cParams1        
+                     , @c_KeyValue2    = @cParams2        
+                     , @c_KeyValue3    = @cParams3     
+                     , @c_KeyValue4    = @cParams4    
+                     , @c_KeyValue5    = @cReportLineNo
+                     , @b_Success      = @b_Success         OUTPUT      
+                     , @n_Err          = @n_ErrNo           OUTPUT
+                     , @c_ErrMsg       = @c_ErrMsg          OUTPUT
+                     , @c_PrintSource  = @cPrintSource        
+                     , @b_SCEPreView   = 0         
+                     , @c_JobIDs       = @ctempLabelJobIDs  OUTPUT    
+                     , @c_AutoPrint    = 'N'     
+               
+               IF @b_Success = 0 
+               BEGIN  
+                  SET @n_Continue = 3 
+                  GOTO EXIT_SP  
+               END
 
-            SET @cPrintLabelJobIDs = IIF(@cPrintLabelJobIDs <> '', @cPrintLabelJobIDs + '|' + @ctempLabelJobIDs, @ctempLabelJobIDs)
+               SET @cPrintLabelJobIDs = IIF(@cPrintLabelJobIDs <> '', @cPrintLabelJobIDs + '|' + @ctempLabelJobIDs, @ctempLabelJobIDs)
+               
+               DELETE FROM @tCartonList 
+               WHERE CartonNo = @nTMPCartonNo
+            END
 
             FETCH NEXT FROM CUR_LBL INTO @cReportID
                                        , @cPrintSource

@@ -13,7 +13,6 @@ GO
 /* 2025-08-22   1.0  GCH225     Created                                          */
 /* 2026-02-06   2.0  GCH225     UWP-48119: 1 tote, 1 carton, 1 sku Scenario      */
 /* 2026-03-16   2.1  GCH225     FCR-11632: Check AuditLog with Status PENDAUDIT  */
-/* 2026-05-14   2.2  GCH225     FCR-13198: Fix Update Multi Line PackDetail      */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetCartonDetail] (
@@ -356,6 +355,8 @@ BEGIN
                                                        , @bClickFirstOnly     AS bClickFirstOnly
                                                        , CAST(0 AS BIT)       AS bShowADScreen
                                                        , CAST(0 AS BIT)       AS bShowLottableScreen
+                                                       , CAST(0 AS BIT)       AS bShowNumpadScreen
+                                                       , CAST(0 AS BIT)       AS bShowVASScreen
                                                        , @bAutoCloseCarton    AS bAutoCloseCarton
                                                        , @nCartonNo           AS nCartonNo
                                                        , 0                    AS nNumberOfADField

@@ -121,6 +121,7 @@ BEGIN
                      + ', @bPrintPaperFlag            ' + CHAR(13)
                      + ', @cLabelPrinter              ' + CHAR(13)
                      + ', @cPaperPrinter              ' + CHAR(13)
+                     + ', @bIsAutoPrint               ' + CHAR(13)
                      + ', @cReportType                ' + CHAR(13)
                      + ', @cPrintLabelJobIDs   OUTPUT ' + CHAR(13)
                      + ', @cPrintPaperJobIDs   OUTPUT ' + CHAR(13)
@@ -146,6 +147,7 @@ BEGIN
                         + ', @bPrintPaperFlag   BIT                  ' + CHAR(13)
                         + ', @cLabelPrinter     NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPaperPrinter     NVARCHAR(30)         ' + CHAR(13)
+                        + ', @bIsAutoPrint      BIT                  ' + CHAR(13)
                         + ', @cReportType       NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPrintLabelJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
                         + ', @cPrintPaperJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
@@ -172,7 +174,8 @@ BEGIN
                            , @bPrintLabelFlag
                            , @bPrintPaperFlag
                            , @cLabelPrinter    
-                           , @cPaperPrinter    
+                           , @cPaperPrinter
+                           , @bIsAutoPrint    
                            , @cReportType
                            , @cPrintLabelJobIDs OUTPUT
                            , @cPrintPaperJobIDs OUTPUT
@@ -232,6 +235,7 @@ BEGIN
                    + ', @bPrintPaperFlag            ' + CHAR(13)
                    + ', @cLabelPrinter              ' + CHAR(13)
                    + ', @cPaperPrinter              ' + CHAR(13)
+                   + ', @bIsAutoPrint               ' + CHAR(13)
                    + ', @cReportType                ' + CHAR(13)
                    + ', @cPrintLabelJobIDs   OUTPUT ' + CHAR(13)
                    + ', @cPrintPaperJobIDs   OUTPUT ' + CHAR(13)
@@ -257,6 +261,7 @@ BEGIN
                         + ', @bPrintPaperFlag   BIT                  ' + CHAR(13)
                         + ', @cLabelPrinter     NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPaperPrinter     NVARCHAR(30)         ' + CHAR(13)
+                        + ', @bIsAutoPrint      BIT                  ' + CHAR(13)
                         + ', @cReportType       NVARCHAR(30)         ' + CHAR(13)
                         + ', @cPrintLabelJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
                         + ', @cPrintPaperJobIDs NVARCHAR(MAX) OUTPUT ' + CHAR(13)
@@ -284,6 +289,7 @@ BEGIN
                            , @bPrintPaperFlag
                            , @cLabelPrinter    
                            , @cPaperPrinter    
+                           , @bIsAutoPrint
                            , @cReportType
                            , @cPrintLabelJobIDs OUTPUT
                            , @cPrintPaperJobIDs OUTPUT
@@ -318,6 +324,7 @@ BEGIN
          , @bPrintPaperFlag   = @bPrintPaperFlag
          , @cLabelPrinter     = @cLabelPrinter    
          , @cPaperPrinter     = @cPaperPrinter    
+         , @bIsAutoPrint      = @bIsAutoPrint
          , @cReportType       = @cReportType
          , @cPrintLabelJobIDs = @cPrintLabelJobIDs   OUTPUT
          , @cPrintPaperJobIDs = @cPrintPaperJobIDs   OUTPUT

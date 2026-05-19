@@ -301,8 +301,10 @@ BEGIN
                                        , cPrintDocID 
                                        , bIsMandatory
                                        , cStatus     
-                                       , bShowFlag   
+                                       , bShowFlag 
+                                       , CAST(IIF(cExternLineNo = '0H', 1, 0) AS BIT) AS bOrderHeaderFlag   
                                  FROM @VASInfo
+                                 ORDER BY CASE cExternLineNo WHEN '0H' THEN 0 ELSE 1 END, nRowRef
                                  FOR JSON AUTO, ROOT('VASs')
                         ),'{"VASs":[]}')
 EXIT_SP:

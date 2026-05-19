@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-04-30   1.0  JWF011     FCR-12745: Created                               */
+/* 2026-05-07   1.1  JWF011     FCR-12745: Add SerialNo validation               */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_PackDecode12] (
@@ -91,6 +92,24 @@ BEGIN
       END
    END
    
+   IF EXISTS ( SELECT 1
+               FROM SERIALNO (NOLOCK)
+               WHERE SerialNo = @cFirstValue
+               AND StorerKey = @cStorerKey
+               AND SKU = @cSKU            
+   ) OR EXISTS (  SELECT 1
+                  FROM PACKSERIALNO (NOLOCK)
+                  WHERE SerialNo = @cFirstValue
+                  AND PickSlipNo = @cPickSlipNo
+                  AND StorerKey = @cStorerKey
+                  AND SKU = @cSKU   
+   )
+   BEGIN
+      SET @n_ErrNo = 15754
+      SET @c_ErrMsg = '(' + @cSecondValue + ')' + API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Current SerialNo is existed in SerialNo/PACKSERIALNO table.' 
+      GOTO QUIT
+   END
+
    SET @cInputValue2 = '["' + @cInputValue1 + '"]'
    SET @cInputValue3 = ''
    SET @b_Success = 1

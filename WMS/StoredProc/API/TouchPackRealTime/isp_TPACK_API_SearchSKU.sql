@@ -668,8 +668,8 @@ BEGIN
                                                        , @bClickFirstOnly     AS bClickFirstOnly
                                                        , CAST(0 AS BIT)       AS bShowADScreen
                                                        , CAST(0 AS BIT)       AS bShowLottableScreen
-                                                      --  , CAST(0 AS BIT)       AS bShowNumpadScreen
-                                                      --  , CAST(0 AS BIT)       AS bShowVASScreen
+                                                       , CAST(0 AS BIT)       AS bShowNumpadScreen
+                                                       , CAST(0 AS BIT)       AS bShowVASScreen
                                                        , CAST(0 AS BIT)       AS bAutoCloseCarton
                                                        , @nCartonNo           AS nCartonNo
                                                        , 0                    AS nNumberOfADField
