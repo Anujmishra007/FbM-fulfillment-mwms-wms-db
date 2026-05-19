@@ -24,7 +24,7 @@ EXECUTE rdt.rdtAddMsg 260419, 10, '260419 UpdTaskFail',           'us_english', 
 EXECUTE rdt.rdtAddMsg 260420, 10, '260420 InsDataFail',           'us_english', 1855, 0, '260420 Insert @tOrderCartonID data failed'
 EXECUTE rdt.rdtAddMsg 260421, 10, '260421 UpdTaskFail',           'us_english', 1855, 0, '260421 Update task failed'
 EXECUTE rdt.rdtAddMsg 260422, 10, '260422 InvConfig',             'us_english', 1855, 0, '260422 Invalid carton limit configuration for method 2'
-EXECUTE rdt.rdtAddMsg 260423, 10, '260423 InvMethod',             'us_english', 1855, 0, '260423 Methond must be 1 or 2'
+EXECUTE rdt.rdtAddMsg 260423, 10, '260423 InvMethod',             'us_english', 1855, 0, '260423 Method must be 1 or 2'
 EXECUTE rdt.rdtAddMsg 260424, 10, '260424 MoreOrderQty',          'us_english', 1855, 0, '260424 More orders than max totes allowed for method 2'
 EXECUTE rdt.rdtAddMsg 260425, 10, '260425 NeedOption',            'us_english', 1855, 0, '260425 Need Option'
 EXECUTE rdt.rdtAddMsg 260426, 10, '260426 InvOption',             'us_english', 1855, 0, '260426 Invalid Option'

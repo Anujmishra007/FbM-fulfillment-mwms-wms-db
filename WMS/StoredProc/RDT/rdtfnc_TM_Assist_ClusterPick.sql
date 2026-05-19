@@ -3568,7 +3568,12 @@ BEGIN
          ELSE IF @cExtendedScnSP = 'rdt_1855ExtScn02'
          BEGIN
             IF ISNULL(@cExtScnUDF01, '') = 'NO UPD RDTMOBREC'
-               RETURN
+            BEGIN
+               IF ISNULL(@cExtScnUDF05, '') = 'GOTO Step_ToLoc'
+                  GOTO Step_ToLoc
+               ELSE
+                  RETURN
+            END
 
             IF ISNULL(@cExtScnUDF02, '') <> ''
                SET @nPickedQty        = CAST(@cExtScnUDF02 AS INT)
