@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date           Author    Ver.       Purposes                               */
 /* 2026-04-16     Cuize     1.0.0      FCR-12508 Created From rdt_600ExtUpd15 */
+/* 2026-05-14     Cuize     1.1.0      FCR-12508 Add transaction handling     */
 /******************************************************************************/
 
    CREATE OR ALTER PROC rdt.rdt_600ExtUpd15BRF (
@@ -63,6 +64,7 @@ BEGIN
    DECLARE @nRemainingQTY        INT
    DECLARE @cNewReceiptLineNumber NVARCHAR( 5)
    DECLARE @cActualLineNumber    NVARCHAR( 5)
+   DECLARE @nTranCount           INT
 
    BEGIN
 
@@ -118,52 +120,79 @@ BEGIN
                         FROM dbo.ReceiptDetail WITH (NOLOCK)
                         WHERE ReceiptKey = @cReceiptKey
 
-                        -- Insert new receipt line for the RECEIVED portion (with CaseID)
-                        INSERT INTO dbo.ReceiptDetail (
-                           ReceiptKey, ReceiptLineNumber, POKey, StorerKey, SKU, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,
-                           Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
-                           Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
-                           Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
-                           Status, DateReceived, UOM, PackKey, ConditionCode, EffectiveDate, TariffKey, FinalizeFlag, SplitPalletFlag,
-                           ExternReceiptKey, ExternLineNo, AltSku, VesselKey,
-                           VoyageKey, XdockKey, ContainerKey, UnitPrice, ExtendedPrice, FreeGoodQtyExpected,
-                           FreeGoodQtyReceived, ExportStatus, LoadKey, ExternPoKey,
-                           Notes, Notes2, GrossWgt, Cube,
-                           UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05,
-                           UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10,
-                           POLineNumber, SubReasonCode, DuplicateFrom, Channel,
-                           AddDate, AddWho, EditDate, EditWho
-                        )
-                        SELECT
-                           @cReceiptKey, @cNewReceiptLineNumber, POKey, @cStorerKey, @cSKU,
-                           @nBeforeReceivedQTY, @nBeforeReceivedQTY, ToID, ToLOC,
-                           Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
-                           Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
-                           Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
-                           Status, DateReceived, UOM, PackKey, ConditionCode, EffectiveDate, TariffKey, 'N', SplitPalletFlag,
-                           ISNULL(ExternReceiptKey,''), ISNULL(ExternLineNo,''), ISNULL(AltSku,''), ISNULL(VesselKey,''),
-                           ISNULL(VoyageKey,''), ISNULL(XdockKey,''), ISNULL(ContainerKey,''), ISNULL(UnitPrice,0), ISNULL(ExtendedPrice,0), ISNULL(FreeGoodQtyExpected,0),
-                           ISNULL(FreeGoodQtyReceived,0), ISNULL(ExportStatus,'0'), LoadKey, ExternPoKey,
-                           ISNULL(Notes,''), ISNULL(Notes2,''), ISNULL(GrossWgt,0), ISNULL(Cube,0),
-                           ISNULL(UserDefine01,''), ISNULL(UserDefine02,''), ISNULL(UserDefine03,''), ISNULL(UserDefine04,''), ISNULL(UserDefine05,''),
-                           UserDefine06, UserDefine07, ISNULL(UserDefine08,''), ISNULL(UserDefine09,''), @cCaseID,
-                           ISNULL(POLineNumber,''), SubReasonCode, @cActualLineNumber, Channel,
-                           GETDATE(), SUSER_SNAME(), GETDATE(), SUSER_SNAME()
-                        FROM dbo.ReceiptDetail WITH (NOLOCK)
-                        WHERE ReceiptKey = @cReceiptKey
-                          AND ReceiptLineNumber = @cActualLineNumber
+                        -- Wrap INSERT + UPDATE in transaction to prevent partial split
+                        -- Use savepoint pattern to avoid rolling back outer transaction
+                        SET @nTranCount = @@TRANCOUNT
 
-                        -- Update original line: REMAINING portion
-                        -- Set ToID='#' to prevent Exact Match and Blank Line selection
-                        -- This forces next receive to use Step 3.2 (borrow from this line)
-                        UPDATE dbo.ReceiptDetail
-                        SET QTYExpected = @nRemainingQTY,
-                            BeforeReceivedQTY = 0,
-                            ToID = '#',
-                            EditWho = SUSER_SNAME(),
-                            EditDate = GETDATE()
-                        WHERE ReceiptKey = @cReceiptKey
-                          AND ReceiptLineNumber = @cActualLineNumber
+                        IF @nTranCount = 0
+                           BEGIN TRAN
+                        ELSE
+                           SAVE TRAN rdt_600ExtUpd15BRF
+
+                        BEGIN TRY
+                           -- Insert new receipt line for the RECEIVED portion (with CaseID)
+                           INSERT INTO dbo.ReceiptDetail (
+                              ReceiptKey, ReceiptLineNumber, POKey, StorerKey, SKU, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,
+                              Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
+                              Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+                              Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+                              Status, DateReceived, UOM, PackKey, ConditionCode, EffectiveDate, TariffKey, FinalizeFlag, SplitPalletFlag,
+                              ExternReceiptKey, ExternLineNo, AltSku, VesselKey,
+                              VoyageKey, XdockKey, ContainerKey, UnitPrice, ExtendedPrice, FreeGoodQtyExpected,
+                              FreeGoodQtyReceived, ExportStatus, LoadKey, ExternPoKey,
+                              Notes, Notes2, GrossWgt, Cube,
+                              UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05,
+                              UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10,
+                              POLineNumber, SubReasonCode, DuplicateFrom, Channel,
+                              AddDate, AddWho, EditDate, EditWho
+                           )
+                           SELECT
+                              @cReceiptKey, @cNewReceiptLineNumber, POKey, @cStorerKey, @cSKU,
+                              @nBeforeReceivedQTY, @nBeforeReceivedQTY, ToID, ToLOC,
+                              Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
+                              Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+                              Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+                              Status, DateReceived, UOM, PackKey, ConditionCode, EffectiveDate, TariffKey, 'N', SplitPalletFlag,
+                              ISNULL(ExternReceiptKey,''), ISNULL(ExternLineNo,''), ISNULL(AltSku,''), ISNULL(VesselKey,''),
+                              ISNULL(VoyageKey,''), ISNULL(XdockKey,''), ISNULL(ContainerKey,''), ISNULL(UnitPrice,0), ISNULL(ExtendedPrice,0), ISNULL(FreeGoodQtyExpected,0),
+                              ISNULL(FreeGoodQtyReceived,0), ISNULL(ExportStatus,'0'), LoadKey, ExternPoKey,
+                              ISNULL(Notes,''), ISNULL(Notes2,''), ISNULL(GrossWgt,0), ISNULL(Cube,0),
+                              ISNULL(UserDefine01,''), ISNULL(UserDefine02,''), ISNULL(UserDefine03,''), ISNULL(UserDefine04,''), ISNULL(UserDefine05,''),
+                              UserDefine06, UserDefine07, ISNULL(UserDefine08,''), ISNULL(UserDefine09,''), @cCaseID,
+                              ISNULL(POLineNumber,''), SubReasonCode, @cActualLineNumber, Channel,
+                              GETDATE(), SUSER_SNAME(), GETDATE(), SUSER_SNAME()
+                           FROM dbo.ReceiptDetail WITH (NOLOCK)
+                           WHERE ReceiptKey = @cReceiptKey
+                             AND ReceiptLineNumber = @cActualLineNumber
+
+                           -- Update original line: REMAINING portion
+                           -- Set ToID='#' to prevent Exact Match and Blank Line selection
+                           -- This forces next receive to use Step 3.2 (borrow from this line)
+                           UPDATE dbo.ReceiptDetail
+                           SET QTYExpected = @nRemainingQTY,
+                               BeforeReceivedQTY = 0,
+                               ToID = '#',
+                               EditWho = SUSER_SNAME(),
+                               EditDate = GETDATE()
+                           WHERE ReceiptKey = @cReceiptKey
+                             AND ReceiptLineNumber = @cActualLineNumber
+
+                           IF @nTranCount = 0
+                              COMMIT TRAN
+                        END TRY
+                        BEGIN CATCH
+                           IF @nTranCount > 0 AND XACT_STATE() <> -1
+                              ROLLBACK TRAN rdt_600ExtUpd15BRF
+                           ELSE IF @@TRANCOUNT > 0
+                              ROLLBACK TRAN
+
+                           SET @nErrNo = 267151
+                           SET @cErrMsg = rdt.rdtgetmessage(267151, @cLangCode, 'DSP')
+
+                           CLOSE curLines
+                           DEALLOCATE curLines
+                           GOTO Quit
+                        END CATCH
                      END
                      ELSE
                      BEGIN
@@ -174,6 +203,15 @@ BEGIN
                             EditDate = GETDATE()
                         WHERE ReceiptKey = @cReceiptKey
                           AND ReceiptLineNumber = @cActualLineNumber
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN
+                           SET @nErrNo = 267152
+                           SET @cErrMsg = rdt.rdtgetmessage(267152, @cLangCode, 'DSP')
+                           CLOSE curLines
+                           DEALLOCATE curLines
+                           GOTO Quit
+                        END
                      END
 
                      FETCH NEXT FROM curLines INTO @cActualLineNumber, @nQTYExpected, @nBeforeReceivedQTY
@@ -194,6 +232,13 @@ BEGIN
                     AND SKU = @cSKU
                     AND BeforeReceivedQTY > 0
                     AND (UserDefine10 IS NULL OR UserDefine10 = '' OR UserDefine10 = 'KG' OR UserDefine10 = 'CX')
+
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @nErrNo = 267153
+                     SET @cErrMsg = rdt.rdtgetmessage(267153, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
                END
             END
          END
