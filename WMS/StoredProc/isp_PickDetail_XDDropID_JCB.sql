@@ -68,8 +68,11 @@ BEGIN
            NCHAR(0x202D), N''),
            NCHAR(0x202C), N'')
        ))
-   WHERE Lottable09 LIKE N'%' + NCHAR(0x202C) + N'%' COLLATE Latin1_General_BIN2
-      OR Lottable09 LIKE N'%' + NCHAR(0x202D) + N'%' COLLATE Latin1_General_BIN2;
+    WHERE StorerKey = @cStorerKey
+      AND (
+          Lottable09 LIKE N'%' + NCHAR(0x202C) + N'%' COLLATE Latin1_General_BIN2
+       OR Lottable09 LIKE N'%' + NCHAR(0x202D) + N'%' COLLATE Latin1_General_BIN2
+      );
    -- ============================================================
 
    -- Housekeping
