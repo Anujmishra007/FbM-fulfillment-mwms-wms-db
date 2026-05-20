@@ -138,7 +138,7 @@ BEGIN
    END
    -- (SSA02) - END
 
-   BEGIN TRY
+   BEGIN TRY 
         IF NOT EXISTS (
             SELECT 1
             FROM dbo.ADJUSTMENT WITH (NOLOCK)

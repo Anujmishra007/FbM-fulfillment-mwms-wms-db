@@ -36,6 +36,10 @@ GO
 /* 2024-05-28  NJOW02   1.6   WMS-24558 - Fix @c_Lot Null in checking     */
 /* 2024-08-02  Wan07    1.7   LFWM-4397 - RG [GIT] Serial Number Solution */
 /*                            - Adjustment by Serial Number               */
+/* 2024-08-15  NJOW03   1.7   WMS-24558 - Fix new lot validation failed   */
+/*                            due to new lot only exist in lotattribute   */
+/*                            table but not in lot table. Need to check   */
+/*                            lotattribute instead of lot table           */
 /* 2025-10-21  Michael  1.8   FCR-8377- Add SerialNoUpdateLotLocID (ML01) */
 /**************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_AdjustmentDetail_Std] (
@@ -71,6 +75,7 @@ BEGIN
    ,  @n_XMLHandle         INT                  --NJOW01
    ,  @c_SQLSchema_OXML    NVARCHAR(MAX) = N''  --NJOW01
    ,  @c_TableColumns_OXML NVARCHAR(MAX) = N''  --NJOW01
+   ,  @c_SQLParam          NVARCHAR(MAX) = N''  --ML01
 
    --(mingle01) - START
    BEGIN TRY
@@ -282,7 +287,8 @@ BEGIN
             GOTO EXIT_SP
          END
       END                                                                           --(Wan06) - END
-  
+
+/* ML01-S
       SELECT TOP 1 
             @c_AdjustmentKey     = AD.AdjustmentKey
          ,  @c_AdjustmentLineNo  = AD.AdjustmentLineNumber
@@ -315,6 +321,115 @@ BEGIN
          ,  @c_Channel           = ad.channel                  --(Wan05) 
          ,  @c_SerialNo          = ad.SerialNo                 --(Wan07)           
       FROM  #VALDN AD  --NJOW01
+ML01-E */
+      --ML01-S
+      SET @c_SQL = N'SELECT TOP 1'
+        + ' @c_AdjustmentKey     = AD.AdjustmentKey'
+        +', @c_AdjustmentLineNo  = AD.AdjustmentLineNumber'
+        +', @c_Storerkey         = AD.Storerkey'
+        +', @c_Sku               = AD.Sku'
+        +', @c_FinalizedFlag_Ins = AD.FinalizedFlag'
+        +', @c_Lot               = ISNULL(AD.Lot,'')'
+        +', @c_Loc               = ISNULL(AD.Loc,'')'
+        +', @c_ID                = ad.ID'
+        +', @c_Lottable01        = AD.Lottable01'
+        +', @c_Lottable02        = AD.Lottable02'
+        +', @c_Lottable03        = AD.Lottable03'
+        +', @dt_Lottable04       = AD.Lottable04'
+        +', @dt_Lottable05       = AD.Lottable05'
+        +', @c_Lottable06        = AD.Lottable06'
+        +', @c_Lottable07        = AD.Lottable07'
+        +', @c_Lottable08        = AD.Lottable08'
+        +', @c_Lottable09        = AD.Lottable09'
+        +', @c_Lottable10        = AD.Lottable10'
+        +', @c_Lottable11        = AD.Lottable11'
+        +', @c_Lottable12        = AD.Lottable12'
+        +', @dt_Lottable13       = AD.Lottable13'
+        +', @dt_Lottable14       = AD.Lottable14'
+        +', @dt_Lottable15       = AD.Lottable15'
+        +', @c_UDF05             = ISNULL(AD.UserDefine05,'''')'
+        +', @c_UCCNo             = ISNULL(AD.UCCNo,'''')'
+        +', @c_Packkey           = ISNULL(AD.Packkey,'''')'
+        +', @c_ReasonCode        = ISNULL(AD.ReasonCode,'''')'
+        +', @n_Qty               = ISNULL(AD.Qty,0)'
+        +', @c_Channel           = ad.channel'
+
+      IF EXISTS ( SELECT TOP 1 1
+                 FROM tempdb.INFORMATION_SCHEMA.COLUMNS c
+                 JOIN tempdb.dbo.SysObjects AS s ON s.[name] = c.TABLE_NAME
+                 WHERE s.id = OBJECT_ID('tempdb..#VALDN')
+                 AND   c.[COLUMN_NAME] = 'SerialNo')
+         SET @c_SQL = @c_SQL + ', @c_SerialNo = ad.SerialNo'
+      ELSE
+         SET @c_SQL = @c_SQL + ', @c_SerialNo = '''''
+
+      SET @c_SQL = @c_SQL
+        +' FROM  #VALDN AD'
+
+      SET @c_SQLParam = 
+         N'@c_AdjustmentKey          NVARCHAR(10) OUTPUT'
+        +',@c_AdjustmentLineNo       NVARCHAR(5)  OUTPUT'
+        +',@c_Storerkey              NVARCHAR(15) OUTPUT'
+        +',@c_Sku                    NVARCHAR(20) OUTPUT'
+        +',@c_FinalizedFlag_Ins      NVARCHAR(10) OUTPUT'
+        +',@c_Lot                    NVARCHAR(10) OUTPUT'
+        +',@c_Loc                    NVARCHAR(10) OUTPUT'
+        +',@c_ID                     NVARCHAR(18) OUTPUT'
+        +',@c_Lottable01             NVARCHAR(18) OUTPUT'
+        +',@c_Lottable02             NVARCHAR(18) OUTPUT'
+        +',@c_Lottable03             NVARCHAR(18) OUTPUT'
+        +',@dt_Lottable04            DATETIME     OUTPUT'
+        +',@dt_Lottable05            DATETIME     OUTPUT'
+        +',@c_Lottable06             NVARCHAR(30) OUTPUT'
+        +',@c_Lottable07             NVARCHAR(30) OUTPUT'
+        +',@c_Lottable08             NVARCHAR(30) OUTPUT'
+        +',@c_Lottable09             NVARCHAR(30) OUTPUT'
+        +',@c_Lottable10             NVARCHAR(30) OUTPUT'
+        +',@c_Lottable11             NVARCHAR(30) OUTPUT'
+        +',@c_Lottable12             NVARCHAR(30) OUTPUT'
+        +',@dt_Lottable13            DATETIME     OUTPUT'
+        +',@dt_Lottable14            DATETIME     OUTPUT'
+        +',@dt_Lottable15            DATETIME     OUTPUT'
+        +',@c_UDF05                  NVARCHAR(20) OUTPUT'
+        +',@c_UCCNo                  NVARCHAR(20) OUTPUT'
+        +',@c_Packkey                NVARCHAR(10) OUTPUT'           
+        +',@c_ReasonCode             NVARCHAR(30) OUTPUT' 
+        +',@n_Qty                    INT          OUTPUT'
+        +',@c_Channel                NVARCHAR(20) OUTPUT'
+        +',@c_SerialNo               NVARCHAR(50) OUTPUT'
+
+      EXEC sp_ExecuteSQL @c_SQL, @c_SQLParam
+         , @c_AdjustmentKey     OUTPUT
+         , @c_AdjustmentLineNo  OUTPUT
+         , @c_Storerkey         OUTPUT
+         , @c_Sku               OUTPUT
+         , @c_FinalizedFlag_Ins OUTPUT
+         , @c_Lot               OUTPUT
+         , @c_Loc               OUTPUT
+         , @c_ID                OUTPUT
+         , @c_Lottable01        OUTPUT
+         , @c_Lottable02        OUTPUT
+         , @c_Lottable03        OUTPUT
+         , @dt_Lottable04       OUTPUT
+         , @dt_Lottable05       OUTPUT
+         , @c_Lottable06        OUTPUT
+         , @c_Lottable07        OUTPUT
+         , @c_Lottable08        OUTPUT
+         , @c_Lottable09        OUTPUT
+         , @c_Lottable10        OUTPUT
+         , @c_Lottable11        OUTPUT
+         , @c_Lottable12        OUTPUT
+         , @dt_Lottable13       OUTPUT
+         , @dt_Lottable14       OUTPUT
+         , @dt_Lottable15       OUTPUT
+         , @c_UDF05             OUTPUT
+         , @c_UCCNo             OUTPUT
+         , @c_Packkey           OUTPUT
+         , @c_ReasonCode        OUTPUT
+         , @n_Qty               OUTPUT
+         , @c_Channel           OUTPUT
+         , @c_SerialNo          OUTPUT
+      --ML01-E
       
       SELECT TOP 1 
             @c_FinalizedFlag_Del = AD.FinalizedFlag
@@ -656,7 +771,8 @@ BEGIN
       IF ISNULL(@c_Lot,'') <> ''   --NJOW01
       BEGIN
          IF NOT EXISTS (SELECT 1 
-                        FROM LOT WITH (NOLOCK)
+                        --FROM LOT WITH (NOLOCK)
+                        FROM LOTATTRIBUTE WITH (NOLOCK) --NJOW03
                         WHERE Lot = @c_lot
                         )
          BEGIN
