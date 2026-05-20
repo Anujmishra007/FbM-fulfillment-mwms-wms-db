@@ -75,7 +75,7 @@ GO
 /* 10-Oct-2025  SSA02     UWP-42248 -Enhanced session management          */
 /* 21-Oct-2025  Michael   FCR-8378 -StrCfg SerialNoUpdateLotLocID (ML01)  */
 /*              Ung       Not update serial no when SerialNoUpdateLotLocID*/
-/* 05-Nov-2025  SSA03     2.2 UWP-43625- updated sequence of update       */
+/* 05-Nov-2025  SSA03     UWP-43625- updated sequence of update           */
 /*                            channelInv table to avoid deadlock          */
 /* 05-Nov-2025  SSA04     FCR-8415 - update PalletType in pallet table    */
 /* 08-Dec-2025  VNI01     UWP-44614 - Add validation for Multiple         */
@@ -1993,7 +1993,7 @@ BEGIN
    --TLTING02
    SET @n_cnt = 0
    SELECT @n_cnt = COUNT(1) FROM  ID with (NOLOCK) WHERE ID = @c_toid
-   IF @n_cnt = 0
+IF @n_cnt = 0
    BEGIN
       SELECT @n_continue = 3
       SELECT @n_err = 62034 --62219
@@ -2465,7 +2465,7 @@ BEGIN
       END
    END
 
-   --NJOW05 S --SSA03 -Start
+ --NJOW05 S --SSA03 -Start
    IF (@n_continue = 1 or @n_continue = 2) AND ISNULL(@c_Channel, '') <> ''
    BEGIN
       SELECT @c_FromFacility = LOC.Facility
@@ -2636,7 +2636,7 @@ BEGIN
          END
       END
    END
-   --NJOW05 E --SSA03 -End
+   --NJOW05 E  -- SSA03 -End
    --SSA05 start---
    IF @n_continue = 1 OR @n_continue = 2
     BEGIN
@@ -2699,7 +2699,7 @@ BEGIN
                 AND SerialNoCapture IN ('1','2','3'))   --ML01
       BEGIN
          IF @n_Qty > 0 AND @n_Qty = @n_Qty_ID                                       --(Wan12)
-            AND dbo.fnc_GetRight( @c_Facility, @c_StorerKey, '', 'SerialNoUpdateLotLocID') = '0' -- 0=off, update serial no here; 1=On, update at RDT
+            AND dbo.fnc_GetRight( @c_Facility, @c_StorerKey, '', 'SerialNoUpdateLotLocID') = '0' -- 0=off, update serial no here; 1=On, update at RDT   --ML01
          BEGIN
             BEGIN TRY
                EXEC dbo.msp_SerialNoMoveCheck 
@@ -3075,4 +3075,3 @@ GO
 
 GRANT EXECUTE ON [dbo].[nspItrnAddMoveCheck] TO NSQL  
 GO 
-
