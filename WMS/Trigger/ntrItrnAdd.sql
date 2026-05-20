@@ -1,4 +1,4 @@
-﻿SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -114,6 +114,8 @@ GO
 /* 26-JUN-2025  SSA01        3.5   UWP-3982- Added PalletType in inventory when*/
 /*                                 Finalize QC and Adjustment                  */
 /* 09-Oct-2025  SPC040       3.6   Replace SUSER_SNAME with fnc_GetUserName    */
+/* 06-Jan-2026  KHChan       3.7    FCR-4314 - Add Configkey WSINVMOVE2LOG,    */
+/*                                  WSINVMOVE3LOG (KH03)                       */
 /*******************************************************************************/  
 CREATE OR ALTER TRIGGER [dbo].[ntrItrnAdd]  
 ON  [dbo].[ITRN]  
@@ -302,6 +304,8 @@ BEGIN
           , @c_authority_OMSITRNLOGMOV   NVARCHAR(1)  --(MC02)
           , @c_authority_hwcdmv2log NVARCHAR(1)       --(LL01)
 		    , @c_authority_hwcdmv3log NVARCHAR(1)       --(LL02)
+          , @c_authority_wsinvmov2log NVARCHAR(1)     --(KH03)
+          , @c_authority_wsinvmov3log NVARCHAR(1)     --(KH03)
   
     DECLARE @c_authority_tblhkitf  NVARCHAR(1)  
     DECLARE @c_authority_utlitf    NVARCHAR(1)  
@@ -393,6 +397,8 @@ BEGIN
    SET @c_authority_OMSITRNLOGMOV = ''    --(MC02)
    SET @c_authority_hwcdmv2log = ''      --(LL01)
    SET @c_authority_hwcdmv3log = ''		  --(LL02)
+   SET @c_authority_wsinvmov2log = ''     --(KH03)
+   SET @c_authority_wsinvmov3log = ''     --(KH03)
   
    DECLARE CUR_Rights CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
     SELECT ConfigKey, sValue  
@@ -407,6 +413,8 @@ BEGIN
                   ,'OMSITRNLOGMOV'        --(MC02)
               ,'HWCDMV2LOG'       --(LL01)
 				  ,'HWCDMV3LOG'			  --(LL02)
+                  ,'WSINVMOVE2LOG'        --(KH03)
+                  ,'WSINVMOVE3LOG'        --(KH03)
                   )
   
    OPEN CUR_Rights  
@@ -437,6 +445,14 @@ BEGIN
         --(KH01)
       IF @c_ConfigKey = 'WSINVMOVELOG' AND @c_sValue = '1'  
          SET @c_authority_wsinvmovlog = '1'  
+
+      --(KH03) - S
+      IF @c_ConfigKey = 'WSINVMOVE2LOG' AND @c_sValue = '1'  
+         SET @c_authority_wsinvmov2log = '1'  
+
+      IF @c_ConfigKey = 'WSINVMOVE3LOG' AND @c_sValue = '1'  
+         SET @c_authority_wsinvmov3log = '1'  
+      --(KH03) - E
 
       --(KH02)
       IF @c_ConfigKey = 'WSINVMOVEWHCDLOG' AND @c_sValue = '1'  
@@ -2316,6 +2332,7 @@ BEGIN
 
             --(KH01) - Start
             IF @c_authority_wsinvmovlog = '1'
+               OR @c_authority_wsinvmov2log = '1' OR @c_authority_wsinvmov3log = '1' --(KH03)
             BEGIN  
                SET @c_FromLocationCategory = ''  
                SET @c_FromLocationflag = ''  
@@ -2336,19 +2353,62 @@ BEGIN
                BEGIN  
                   IF @c_trantype='MV'  
                   BEGIN  
-                     EXEC dbo.ispGenTransmitLog2 'WSITRNLOGMOV', @c_itrnkey, '', @c_InsertStorerKey, ''  
-                           , @b_success OUTPUT  
-                           , @n_err OUTPUT  
-                           , @c_errmsg OUTPUT 
+                     IF @c_authority_wsinvmovlog = '1' --(KH03)
+                     BEGIN --(KH03)
+                        EXEC dbo.ispGenTransmitLog2 'WSITRNLOGMOV', @c_itrnkey, '', @c_InsertStorerKey, ''  
+                              , @b_success OUTPUT  
+                              , @n_err OUTPUT  
+                              , @c_errmsg OUTPUT 
   
-                     IF @b_success <> 1  
-                     BEGIN  
-                        SELECT @n_continue = 3  
-                        SELECT @n_err= 61150  
-                        SELECT @c_errmsg= 'NSQL'+ISNULL(CONVERT(char(5), @n_err),'')+  
-                                          ':Insert failed on TransmitLog2. (ntrItrnAdd)'+  
-                                          '(SQLSvr MESSAGE='+ISNULL(LTRIM(RTRIM(@c_errmsg)),'')+')'  
-                     END  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SELECT @n_continue = 3  
+                           SELECT @n_err= 61150  
+                           SELECT @c_errmsg= 'NSQL'+ISNULL(CONVERT(char(5), @n_err),'')+  
+                                             ':Insert failed on TransmitLog2. (ntrItrnAdd)'+  
+                                             '(SQLSvr MESSAGE='+ISNULL(LTRIM(RTRIM(@c_errmsg)),'')+')'  
+                        END  
+                     END --(KH03)
+
+                     --(KH03) - S
+                     IF @c_authority_wsinvmov2log = '1' 
+                     BEGIN
+                        EXEC dbo.ispGenTransmitLog2 'WSITRNLOGMOV2', @c_itrnkey, '', @c_InsertStorerKey, ''  
+                              , @b_success OUTPUT  
+                              , @n_err OUTPUT  
+                              , @c_errmsg OUTPUT 
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SELECT @n_continue = 3  
+                           SELECT @n_err= 61150  
+                           SELECT @c_errmsg= 'NSQL'+ISNULL(CONVERT(char(5), @n_err),'')+  
+                                             ':Insert failed on TransmitLog2. (ntrItrnAdd)'+  
+                                             '(SQLSvr MESSAGE='+ISNULL(LTRIM(RTRIM(@c_errmsg)),'')+')'  
+                        END  
+                     END
+                     --(KH03) - E
+
+                     --(KH03) - S
+                     IF @c_authority_wsinvmov3log = '1' 
+                     BEGIN
+                        EXEC dbo.ispGenTransmitLog2 'WSITRNLOGMOV3', @c_itrnkey, '', @c_InsertStorerKey, ''  
+                              , @b_success OUTPUT  
+                              , @n_err OUTPUT  
+                              , @c_errmsg OUTPUT 
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SELECT @n_continue = 3  
+                           SELECT @n_err= 61150  
+                           SELECT @c_errmsg= 'NSQL'+ISNULL(CONVERT(char(5), @n_err),'')+  
+                                             ':Insert failed on TransmitLog2. (ntrItrnAdd)'+  
+                                             '(SQLSvr MESSAGE='+ISNULL(LTRIM(RTRIM(@c_errmsg)),'')+')'  
+                        END  
+                     END
+                     --(KH03) - E
+
+
                   END -- trantype = MV  
                END -- (@c_FromLocationCategory <> @c_ToLocationCategory) OR (@c_FromLocationflag <> @c_ToLocationflag)  
             END -- if @c_authority_wsinvmovlog = '1'  
@@ -2940,3 +3000,6 @@ BEGIN
    /* End Return Statement */  
 END     
 GO              
+
+ALTER TABLE [dbo].[ITRN] ENABLE TRIGGER [ntrItrnAdd]
+GO
