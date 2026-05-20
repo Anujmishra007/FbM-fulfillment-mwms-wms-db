@@ -40,8 +40,13 @@ GO
 /*                                  update in script instead of PB (ZG01)      */
 /* 28-Aug-2019  NJOW03       2.1    Fix move validation up before check lot    */
 /* 01-Jun-2020  Wan03        2.2    WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/
-/* 01-AUG-2024  Wan04        2.3    LFWM-4397 - RG [GIT] Serial Number Solution*/
+/* 24-Nov-2023  NJOW04       2.3    WMS-23053 Skip check ucc qty if adj is     */
+/*                                  created from CC UCC adj posting            */
+/* 24-Nov-2023  NJOW04       2.3    DEVOPS Combine Script                      */
+/* 01-AUG-2024  Wan04        2.4    LFWM-4397 - RG [GIT] Serial Number Solution*/
 /*                                  - Adjustment by Serial Number              */
+/* 03-JAN-2024  Wan05        2.5    LFWM-4405 - [GIT] Serial Number Solution-Post*/
+/*                                  Cycle Count by Adjustment Serialnon - Fix  */
 /* 12-NOV-2024  Satyam      2.4    UWP-23314 - Duplicate ID validation wrt     */
 /*                                           locations                         */
 /* 24-Nov-2024  NJOW04       2.5    WMS-23053 Skip check ucc qty if adj is     */
