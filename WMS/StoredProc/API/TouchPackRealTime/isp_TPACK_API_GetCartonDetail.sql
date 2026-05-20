@@ -13,6 +13,7 @@ GO
 /* 2025-08-22   1.0  GCH225     Created                                          */
 /* 2026-02-06   2.0  GCH225     UWP-48119: 1 tote, 1 carton, 1 sku Scenario      */
 /* 2026-03-16   2.1  GCH225     FCR-11632: Check AuditLog with Status PENDAUDIT  */
+/* 2026-05-19   2.2  GCH225     FCR-13354: Fix for auto close carton scenario    */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetCartonDetail] (
@@ -67,6 +68,7 @@ BEGIN
          , @nExpQty              INT
          , @nActualQty           INT
          , @cResponseJson        NVARCHAR(MAX)
+         , @bShowVASScreen       BIT
    
    DECLARE @oSKUList TABLE (
       SKU NVARCHAR(20) PRIMARY KEY
@@ -102,6 +104,7 @@ BEGIN
    SET @nExpQty            = 0
    SET @nActualQty         = 0
    SET @cResponseJson      = ''
+   SET @bShowVASScreen     = 0
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
@@ -235,7 +238,6 @@ BEGIN
                   AND DocType <> 'E'
       )
       BEGIN 
-         SET @bAutoCloseCarton = 1
          SET @nActualQty = @nExpQty
          IF NOT EXISTS (SELECT 1
                         FROM STORERCONFIG (NOLOCK)
@@ -276,7 +278,7 @@ BEGIN
                SET @n_Continue = 3  
                GOTO EXIT_SP
             END
-            
+            SET @bAutoCloseCarton = 1
             IF (TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bAutoCloseCarton') AS BIT) = 0 
             AND TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bShowLottableScreen') AS BIT) = 0
             )
@@ -286,6 +288,10 @@ BEGIN
             
             SET @c_ResponseString = ISNULL ((JSON_QUERY(@cResponseJson)),'')
             GOTO EXIT_SP
+         END
+         ELSE
+         BEGIN
+            SET @bShowVASScreen = 1
          END
       END
    END
@@ -356,7 +362,7 @@ BEGIN
                                                        , CAST(0 AS BIT)       AS bShowADScreen
                                                        , CAST(0 AS BIT)       AS bShowLottableScreen
                                                        , CAST(0 AS BIT)       AS bShowNumpadScreen
-                                                       , CAST(0 AS BIT)       AS bShowVASScreen
+                                                       , @bShowVASScreen      AS bShowVASScreen
                                                        , @bAutoCloseCarton    AS bAutoCloseCarton
                                                        , @nCartonNo           AS nCartonNo
                                                        , 0                    AS nNumberOfADField
