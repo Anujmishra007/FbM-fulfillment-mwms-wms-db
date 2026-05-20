@@ -5,7 +5,7 @@ GO
 /*************************************************************************/  
 /* Stored Procedure: WM.lsp_TRFPopulateSOH_Wrapper                       */  
 /* Creation Date: 16-OCT-2018                                            */  
-/* Copyright: Maersk Logistics                                           */  
+/* Copyright: Maersk                                                     */  
 /* Written by: Wan                                                       */  
 /*                                                                       */  
 /* Purpose: LFWM-307 - Inventory - Transfer Ticket Clarifications        */
