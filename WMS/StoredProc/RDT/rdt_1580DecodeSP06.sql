@@ -174,6 +174,13 @@ BEGIN
             -- Retain in same screen
             -- SET @nErrNo = -1
          END
+         ELSE
+         BEGIN
+            -- Invalid barcode
+            SET @nErrNo = 248207
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid barcode
+            GOTO Quit
+         END
       END
    END
 
