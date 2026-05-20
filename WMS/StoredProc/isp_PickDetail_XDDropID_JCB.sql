@@ -60,19 +60,30 @@ BEGIN
    -- Unicode control character cleanup (U+202D, U+202C)
    -- Cleans hidden bidi chars from Lottable09 to normalize stored values
    -- ============================================================
-   UPDATE lotattribute
-   SET Lottable09 = LTRIM(RTRIM(
-       REPLACE(
-       REPLACE(
-           CONVERT(NVARCHAR(MAX), Lottable09) COLLATE Latin1_General_BIN2,
-           NCHAR(0x202D), N''),
-           NCHAR(0x202C), N'')
-       ))
-    WHERE StorerKey = @cStorerKey
-      AND (
-          Lottable09 LIKE N'%' + NCHAR(0x202C) + N'%' COLLATE Latin1_General_BIN2
-       OR Lottable09 LIKE N'%' + NCHAR(0x202D) + N'%' COLLATE Latin1_General_BIN2
-      );
+   IF EXISTS (
+       SELECT 1
+         FROM lotattribute
+        WHERE StorerKey = @cStorerKey
+          AND (
+              Lottable09 LIKE N'%' + NCHAR(0x202C) + N'%' COLLATE Latin1_General_BIN2
+           OR Lottable09 LIKE N'%' + NCHAR(0x202D) + N'%' COLLATE Latin1_General_BIN2
+          )
+   )
+   BEGIN
+      UPDATE lotattribute
+      SET Lottable09 = LTRIM(RTRIM(
+          REPLACE(
+          REPLACE(
+              CONVERT(NVARCHAR(MAX), Lottable09) COLLATE Latin1_General_BIN2,
+              NCHAR(0x202D), N''),
+              NCHAR(0x202C), N'')
+          ))
+       WHERE StorerKey = @cStorerKey
+         AND (
+             Lottable09 LIKE N'%' + NCHAR(0x202C) + N'%' COLLATE Latin1_General_BIN2
+          OR Lottable09 LIKE N'%' + NCHAR(0x202D) + N'%' COLLATE Latin1_General_BIN2
+         );
+   END
    -- ============================================================
 
    -- Housekeping
