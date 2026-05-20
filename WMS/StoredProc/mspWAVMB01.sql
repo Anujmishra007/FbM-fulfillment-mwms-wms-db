@@ -487,7 +487,7 @@ BEGIN
                              FROM #TMP_MBOL
                              GROUP BY MbolKey )
          UPDATE MB
-         SET MB.[Cube] = UPD_MBOL.OrderCube
+         SET MB.[Cube] = ROUND(UPD_MBOL.OrderCube, 3)
            , MB.TrafficCop = NULL
            , MB.EditDate = GETDATE()
            , MB.EditWho = SUSER_SNAME()
