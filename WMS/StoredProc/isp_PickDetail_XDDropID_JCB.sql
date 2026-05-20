@@ -58,7 +58,7 @@ BEGIN
 
    -- ============================================================
    -- Unicode control character cleanup (U+202D, U+202C)
-   -- Cleans hidden bidi chars from Lottable09 before XML generation
+   -- Cleans hidden bidi chars from Lottable09 to normalize stored values
    -- ============================================================
    UPDATE lotattribute
    SET Lottable09 = LTRIM(RTRIM(
