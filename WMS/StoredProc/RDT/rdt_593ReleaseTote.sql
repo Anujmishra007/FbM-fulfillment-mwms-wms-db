@@ -12,6 +12,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author   Purposes                                       */
 /* 2026-05-12 1.0  NickT    FCR-12667  Created                             */
+/* 2026-05-20 2.0  AKH114   UWP-57077                                      */
 /***************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_593ReleaseTote (
@@ -48,25 +49,6 @@ DECLARE
       GOTO Quit
    END
 
-   IF NOT EXISTS(SELECT 1
-               FROM dbo.PICKDETAIL WITH (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-                  AND DropID    = @cDropID)
-   BEGIN
-      SET @nErrNo  = 266252
-      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Invalid DropID
-      GOTO Quit
-   END
-
-   IF NOT EXISTS(SELECT 1 
-               FROM dbo.PackDetail PD WITH (NOLOCK)
-               WHERE PD.StorerKey = @cStorerKey
-                  AND PD.DropID    = @cDropID)
-   BEGIN
-      SET @nErrNo  = 266253
-      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Invalid DropID
-      GOTO Quit
-   END
 
    BEGIN TRY
       EXEC RDT.isp_ArchiveDropId_rdt

@@ -17,6 +17,7 @@ GO
 /* Date         Author          Purpose                                                                 */
 /* 2026-04-13   AKH114          UWP-53936                                                               */
 /* 2026-05-07   AKH114          UWP-55963                                                               */
+/* 2026-05-20   AKH114          UWP-57077                                                               */
 /********************************************************************************************************/
 CREATE OR ALTER PROC [RDT].[isp_ArchiveDropId_rdt](
    @cToteID       NVARCHAR(20)
@@ -31,11 +32,13 @@ BEGIN
    SET NOCOUNT ON
    SET XACT_ABORT ON
 
+
    DECLARE
       @n_PackDetail_Cnt       INT = 0,
       @n_PickDetail_Cnt       INT = 0,
       @cPackDetail_Keys       NVARCHAR(2000) = '',
-      @cPickDetail_Keys       NVARCHAR(2000) = ''
+      @cPickDetail_Keys       NVARCHAR(2000) = '',
+      @bSuccess               INT = 0
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -51,14 +54,14 @@ BEGIN
    BEGIN
       SET @nErrNo  = 264757
       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-      GOTO ROLLBACK_UPD   
+      RETURN
    END
 
    IF SUBSTRING(@cToteID, 1, 4) <> '0000'
    BEGIN
       SET @nErrNo  = 264758
       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-      GOTO ROLLBACK_UPD      
+      RETURN
    END
 
    --------------------------------------------------------------------------------------
@@ -175,16 +178,17 @@ BEGIN
    --------------------------------------------------------------------------------------
    -- In case @n_PackDetail_Cnt = 0 AND @n_PickDetail_Cnt = 0
    --------------------------------------------------------------------------------------
-   IF (@n_PackDetail_Cnt = 0 AND @n_PickDetail_Cnt = 0)
-   BEGIN
-         SET @nErrNo  = 264759
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-         GOTO ROLLBACK_UPD
-   END
+   --IF (@n_PackDetail_Cnt = 0 AND @n_PickDetail_Cnt = 0)
+   --BEGIN
+   --      SET @nErrNo  = 264759
+   --      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+   --      GOTO ROLLBACK_UPD
+   --END
+
    --------------------------------------------------------------------------------------
    -- Audit Insert + WCS Release
    --------------------------------------------------------------------------------------
-   IF (@n_PackDetail_Cnt > 0 OR @n_PickDetail_Cnt > 0)
+   --IF (@n_PackDetail_Cnt > 0 OR @n_PickDetail_Cnt > 0)
    BEGIN
       BEGIN TRY
          INSERT INTO RDT.rdtArchiveTote_Audit
@@ -213,9 +217,8 @@ BEGIN
       END CATCH
 
       BEGIN TRY
-         DECLARE @bSuccess INT = 0
 
-         EXECUTE ispGenTransmitLog2
+         EXECUTE dbo.ispGenTransmitLog2
             @c_TableName     = 'WSSortTotRel',
             @c_Key1          = @cToteID,
             @c_Key2          = '',
@@ -235,6 +238,9 @@ BEGIN
    --------------------------------------------------------------------------------------
    -- Output
    --------------------------------------------------------------------------------------
+   IF @@TRANCOUNT > 0
+      COMMIT TRAN
+
    SELECT
       @cStorerKey                   AS StorerKey,
       @cToteID                      AS OriginalDropId,
@@ -245,11 +251,13 @@ BEGIN
       @n_PackDetail_Cnt             AS PackDetailUpdated,
       @bSuccess                     AS SorterToteRelease
 
-   COMMIT TRAN
+   RETURN 
 
 ROLLBACK_UPD:
    IF XACT_STATE() <> 0
       ROLLBACK
+   
+   RETURN
 
 END
 GO
