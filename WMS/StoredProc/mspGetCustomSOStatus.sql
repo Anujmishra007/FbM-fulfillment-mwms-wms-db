@@ -28,7 +28,6 @@ GO
 
 CREATE OR ALTER PROC dbo.mspGetCustomSOStatus 
 @c_SQLStr NVARCHAR(MAX),
--- @c_StorerKey NVARCHAR(10),
 @c_ColumnNewValue NVARCHAR(100),
 @c_ConvertedSQLStr NVARCHAR(MAX) OUTPUT
 
@@ -39,11 +38,26 @@ BEGIN
   SET ANSI_NULLS OFF
   SET QUOTED_IDENTIFIER OFF
 
-  DECLARE @c_ConvertedColumnStr NVARCHAR(MAX)
+  DECLARE 
+  @c_ConvertedColumnStr NVARCHAR(MAX) = @c_SQLStr,
+  @c_TargetStr NVARCHAR(MAX) = '( ( ORDERS.SOStatus ',
+  @c_ReplaceStr NVARCHAR(MAX) = '( ( 1=1 OR ORDERS.SOStatus '
+
+  --debug 
+  print 'COUNT: ' +  CONVERT(NVARCHAR(9), ((LEN(@c_SQLStr) - LEN(REPLACE(@c_SQLStr, @c_TargetStr, ''))) / LEN(@c_TargetStr))) 
+
+   -- Check if the target string exists and only appears once in the original SQL string
+  IF ((LEN(@c_SQLStr) - LEN(REPLACE(@c_SQLStr, @c_TargetStr, ''))) / LEN(@c_TargetStr)) <> 1
+  BEGIN
+    GOTO QUIT_SP
+  END
 
   SET @c_ColumnNewValue = ISNULL(TRIM(@c_ColumnNewValue), '')
-  SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, ', ORDERS.SOStatus,', ', ')
+  SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, 'ORDERS.ContainerQty, ORDERS.SOStatus, ORDERS.MBOLKey,', 'ORDERS.ContainerQty, ORDERS.MBOLKey,')
   
+  --debug
+  print @c_ConvertedSQLStr
+
   SET @c_ConvertedColumnStr = 
       'SELECT CASE
 
@@ -191,55 +205,51 @@ BEGIN
 
       AS SOStatus, ' 
   
-  SET @c_ConvertedSQLStr = CONCAT(@c_ConvertedColumnStr, RIGHT(@c_SQLStr, LEN(@c_SQLStr) - 6))
+  SET @c_ConvertedSQLStr = CONCAT(@c_ConvertedColumnStr, RIGHT(@c_ConvertedSQLStr, LEN(@c_ConvertedSQLStr) - 6))
 
   IF @c_ColumnNewValue = '0'
   BEGIN   
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
-      '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
-      AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
+      '(EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND ORDERS.Status = ''0''
       AND ORDERS.SOStatus NOT IN (''0'', ''9'', ''CANC'')
-      ))' )
+      )) AND ' + @c_ReplaceStr)
   END
   ELSE IF @c_ColumnNewValue = 'PA'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
-      '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
-      AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
+      '(EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND ORDERS.Status = ''1''
       AND ORDERS.SOStatus NOT IN (''PA'', ''9'', ''CANC'')
-      ))' )
+      )) AND ' + @c_ReplaceStr)
   END
   ELSE IF @c_ColumnNewValue = 'FA'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
-      '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
-      AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
+      '(EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND ORDERS.Status = ''2''
       AND ORDERS.SOStatus NOT IN (''FA'', ''9'', ''CANC'')
-      ))' )
+      )) AND ' + @c_ReplaceStr)
   END
   ELSE IF @c_ColumnNewValue = 'IPK'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
-      '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
-      AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
+      '(EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND ORDERS.Status = ''3''
       AND ORDERS.SOStatus NOT IN (''IPK'', ''9'', ''CANC'')
-      ))' )
+      )) AND ' + @c_ReplaceStr)
   END
   ELSE IF @c_ColumnNewValue = 'PC'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
@@ -250,7 +260,7 @@ BEGIN
   END
   ELSE IF @c_ColumnNewValue = 'IPKD'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey
@@ -267,7 +277,7 @@ BEGIN
   END  
   ELSE IF @c_ColumnNewValue = 'PKD'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey
@@ -282,7 +292,7 @@ BEGIN
   END 
   ELSE IF @c_ColumnNewValue = 'INV'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
@@ -297,7 +307,7 @@ BEGIN
   END 
   ELSE IF @c_ColumnNewValue = 'IEG'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
@@ -312,7 +322,7 @@ BEGIN
   END 
   ELSE IF @c_ColumnNewValue = 'ILR'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
@@ -327,7 +337,7 @@ BEGIN
   END 
   ELSE IF @c_ColumnNewValue = 'ELR'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
@@ -342,7 +352,7 @@ BEGIN
   END 
   ELSE IF @c_ColumnNewValue = 'MBL'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey
@@ -357,7 +367,7 @@ BEGIN
   END 
   ELSE IF @c_ColumnNewValue = 'IL'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey
@@ -374,7 +384,7 @@ BEGIN
   END 
   ELSE IF @c_ColumnNewValue = 'LD'
   BEGIN
-    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, '( ( ORDERS.SOStatus = ?  ) )', 
+    SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, 
       '( ( 1=1 OR ORDERS.SOStatus = ?  ) )
       AND (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey
@@ -392,6 +402,8 @@ BEGIN
   SELECT @c_ConvertedSQLStr AS CONVERTED_SQL INTO #TMP_SQL_CONVERT
   SELECT * FROM #TMP_SQL_CONVERT
   ----------------
+
+  QUIT_SP:
 END
 GO
 GRANT EXECUTE ON dbo.mspGetCustomSOStatus TO NSQL
