@@ -21,6 +21,10 @@ GO
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 2026-03-09  AYD      1.0   FCR-10825: Vivo - Wave Reverse SP          */
+/* 2026-03-30  AYD01    1.1   Handle duplicated TaskDetailKey.           */
+/* 2026-04-27  AYD02    1.2   UWP-54594: Remove wave released validation */
+/* 2026-04-28  AYD03    1.3   UWP-54594: Gen tasks for pickdetail with   */
+/*                            no taskdetailkey                           */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
   @c_Wavekey      NVARCHAR(10)
@@ -65,6 +69,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          , @c_PickMethod               NVARCHAR(10)   = ''
          , @c_LinkTaskToPick_SQL       NVARCHAR(4000) = ''
          , @c_Taskdetailkey            NVARCHAR(10)   = ''
+         , @c_PickDetailKey            NVARCHAR(18)   = ''
          , @c_ReplenishmentKey         NVARCHAR(10)   = ''
          , @c_ReplenishmentGroup       NVARCHAR(10)   = ''
          , @n_TaskQty                  INT            = 0          
@@ -91,21 +96,21 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
    WHERE WD.Wavekey = @c_Wavekey
 
    ------Loadplan Validation
-   IF  (@n_Continue = 1 OR @n_Continue = 2)
-   BEGIN
-      IF EXISTS ( SELECT TOP 1 lpd.Loadkey
-                  FROM WAVE W (NOLOCK)
-                  JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
-                  JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
-                  LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
-                  WHERE W.Wavekey = @c_Wavekey
-                  AND lpd.Loadkey IS NULL)
-      BEGIN
-        SET @n_Continue = 3
-        SET @n_Err = 83010
-        SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadplan has not generated yet. (mspRLWAV11)'
-      END
-   END
+   -- IF  (@n_Continue = 1 OR @n_Continue = 2)
+   -- BEGIN
+   --    IF EXISTS ( SELECT TOP 1 lpd.Loadkey
+   --                FROM WAVE W (NOLOCK)
+   --                JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
+   --                JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+   --                LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
+   --                WHERE W.Wavekey = @c_Wavekey
+   --                AND lpd.Loadkey IS NULL)
+   --    BEGIN
+   --      SET @n_Continue = 3
+   --      SET @n_Err = 83010
+   --      SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadplan has not generated yet. (mspRLWAV11)'
+   --    END
+   -- END
    --(SSA01) start -----
    IF  (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN 
@@ -183,19 +188,21 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
    IF @@TRANCOUNT = 0
       BEGIN TRAN
 
-   IF @n_Continue = 1 OR @n_Continue = 2
-   BEGIN
-      IF EXISTS ( SELECT 1 FROM TASKDETAIL td (NOLOCK)
-                  WHERE td.Wavekey = @c_Wavekey
-                  AND td.TaskType IN ('RPF', 'FPK', 'FCP', 'ASTCPK')
-                  AND td.[Status] <= '9'
-                )
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 83030
-         SET @c_Errmsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Task has been released. (mspRLWAV11)'
-      END
-   END
+   --AYD02 START: Remove wave released validation, as per UWP-54594
+   -- IF @n_Continue = 1 OR @n_Continue = 2
+   -- BEGIN
+   --    IF EXISTS ( SELECT 1 FROM TASKDETAIL td (NOLOCK)
+   --                WHERE td.Wavekey = @c_Wavekey
+   --                AND td.TaskType IN ('RPF', 'FPK', 'FCP', 'ASTCPK')
+   --                AND td.[Status] <= '9'
+   --              )
+   --    BEGIN
+   --       SET @n_Continue = 3
+   --       SET @n_Err = 83030
+   --       SET @c_Errmsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Task has been released. (mspRLWAV11)'
+   --    END
+   -- END
+   --AYD02 END
 
    --Initialize Pickdetail work in progress staging table
    IF @n_Continue = 1 OR @n_Continue = 2
@@ -217,6 +224,16 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
       END
       ELSE
       BEGIN
+         --AYD03 Start: Only process records with Taskdetailkey is null, which means those records are not being processed by other wave release process, to avoid duplicated processing for same pickdetail record when multiple wave release happen at the same time for same order
+         DELETE FROM #PICKDETAIL_WIP
+         WHERE WaveKey = @c_Wavekey
+         AND [Status] > '4' --Only keep records with status 5 or above, as those records are being processed, and will be updated to taskdetailkey in pickdetail table, so we can use taskdetailkey to identify those records and avoid duplicated processing
+         --AND ISNULL(TRIM(Taskdetailkey), '') <> ''
+
+         --debug
+         SELECT * FROM #PICKDETAIL_WIP WHERE WaveKey = @c_Wavekey
+         --AYD03 End
+
          UPDATE #PICKDETAIL_WIP
          SET #PICKDETAIL_WIP.Taskdetailkey = ''
          FROM #PICKDETAIL_WIP
@@ -227,6 +244,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          WHERE TD.Taskdetailkey IS NULL
       END
    END
+
 
    IF @n_Continue IN(1,2)
    BEGIN
@@ -305,6 +323,36 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
  
    IF @n_Continue IN(1,2)
    BEGIN
+      --debug
+      SELECT p.Orderkey
+            ,p.OrderLineNumber
+            ,ISNULL(lpd.Loadkey,'')
+            ,p.Storerkey
+            ,p.Sku
+            ,p.Lot
+            ,p.loc
+            ,p.ID
+            ,p.DropID
+            ,p.UOM
+            ,Qty = SUM(p.Qty)
+      FROM #PickDetail_WIP p
+      LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.orderkey = p.orderkey
+      WHERE p.WaveKey = @c_Wavekey
+      AND   p.[Status] = '0'
+      AND   p.UOM IN ('1','2','3','6')    
+      GROUP BY p.Orderkey
+            ,  ISNULL(lpd.Loadkey,'')
+            ,  p.Storerkey
+            ,  p.Sku
+            ,  p.Lot
+            ,  p.loc
+            ,  p.ID
+            ,  p.DropID
+            ,  p.UOM
+            ,  p.OrderLineNumber 
+      ORDER BY p.UOM 
+            ,  MIN(p.PickDetailKey)
+      ----------------------------------------------------------------
       SET @CUR_PICK = CURSOR LOCAL FAST_FORWARD READ_ONLY  FOR
       SELECT p.Orderkey
             ,p.OrderLineNumber
@@ -350,6 +398,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          WHERE O.Orderkey = @c_Orderkey
          AND O.Storerkey = @c_Storerkey
          AND O.Facility = @c_Facility
+
+         
          --AYD END
 
          SET @c_TaskType = 'FCP'
@@ -367,6 +417,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          BEGIN
             SET @c_TaskType   = 'ASTCPK'
          END
+         --debug
+         PRINT 'Processing Orderkey=' + @c_Orderkey + ', @c_DocType=' + @c_DocType + 
+         ', @c_EcomSingleFlag=' + @c_EcomSingleFlag + ', @c_TaskType=' + @c_TaskType
+
 
          IF EXISTS ( SELECT 1 FROM TaskDetail td (NOLOCK)
                         WHERE td.WaveKey = @c_Wavekey
@@ -390,45 +444,85 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          WHERE lpd.Loadkey = @c_Loadkey
          AND   lpld.LocationCategory = 'STAGING'
  
-         IF @c_ToLoc = ''
-         BEGIN
-            SET @n_Continue = 3
-            SET @n_Err   = 83020
-            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': To Loc not found. (mspRLWAV11)'
-         END
+         -- IF @c_ToLoc = ''
+         -- BEGIN
+         --    SET @n_Continue = 3
+         --    SET @n_Err   = 83021
+         --    SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+         --                 +': To Loc not found. (mspRLWAV11)'
+         -- END
 
-         IF @c_TaskType = 'ASTCPK'
+         SELECT TOP 1 
+            @c_TaskDetailkey = pd.TaskDetailKey,
+            @c_PickDetailKey = pd.PickDetailKey   --AYDO1
+            FROM PickDetail pd (NOLOCK) 
+            WHERE pd.OrderKey = @c_Orderkey
+            AND pd.OrderLineNumber = @c_OrderLineNumber
+            AND pd.StorerKey = @c_Storerkey
+
+         --AYD01 START: Handle duplicated TaskDetailKey issue
+         IF EXISTS (SELECT 1 FROM TASKDETAIL td (NOLOCK) WHERE td.TaskDetailKey = @c_TaskDetailkey)
          BEGIN
-            SELECT TOP 1 @c_TaskDetailkey = pdw.TaskDetailKey
-            FROM TASKDETAIL td (NOLOCK)
-            JOIN #PICKDETAIL_WIP pdw (NOLOCK) 
-               ON pdw.OrderKey = td.OrderKey 
-               AND pdw.OrderLineNumber = td.OrderLineNumber 
-               AND pdw.StorerKey = td.Storerkey
-            WHERE td.WaveKey = @c_Wavekey
-            AND td.Storerkey = @c_Storerkey
-            AND td.OrderKey = @c_Orderkey
-            AND td.OrderLineNumber = @c_OrderLineNumber
-         END 
-         ELSE
-         BEGIN
-            SET @c_TaskDetailkey = ''
+            SELECT @b_success = 1  
+            EXECUTE nspg_getkey  
+               "TaskDetailKey"  
+               , 10  
+               , @c_taskdetailkey OUTPUT  
+               , @b_success OUTPUT  
+               , @n_err OUTPUT  
+               , @c_errmsg OUTPUT  
+            
+            IF @b_success <> 1  
+            BEGIN  
+               SELECT @n_continue = 3  
+               SET @n_Err = 83051
+               SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Generate TaskDetailKey Fail. (mspRLWAV11)'
+                              + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'
+               GOTO QUIT_SP
+            END
+
+            UPDATE #PICKDETAIL_WIP WITH (ROWLOCK)
+            SET TaskDetailKey = @c_TaskDetailkey
+            WHERE PickDetailKey = @c_PickDetailKey
+
+            UPDATE PICKDETAIL WITH (ROWLOCK)
+            SET TaskDetailKey = @c_TaskDetailkey
+            WHERE PickDetailKey = @c_PickDetailKey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 83050
+               SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Update TaskDetailKey Fail. (mspRLWAV11)'
+                              + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'
+               GOTO QUIT_SP
+            END
          END
+         --AYD01 END
 
          IF @n_Continue IN (1,2)
          BEGIN
-
             SET @c_Priority = '9'
             SET @c_GroupKey = ''
-            IF @c_TaskType = 'ATSCPK'
+            IF @c_TaskType = 'ASTCPK'
             BEGIN
                SET @c_GroupKey = @c_Wavekey
             END
-
+            
             IF @c_DocType = 'E' AND @c_EcomSingleFlag = 'S'
-            AND EXISTS (SELECT 1 FROM TaskDetail td WHERE td.TaskType = @c_TaskType AND td.FromLoc = @c_FromLoc AND td.SKU = @c_Sku)
+            AND EXISTS (SELECT 1 FROM TaskDetail td 
+               WHERE td.Wavekey = @c_Wavekey AND td.TaskType = @c_TaskType 
+               AND td.FromLoc = @c_FromLoc AND td.SKU = @c_Sku
+               AND td.STATUS NOT IN ('X','9'))  
             BEGIN
+               --debug
+               SELECT * FROM TaskDetail WITH (NOLOCK)
+               WHERE FromLoc = @c_FromLoc 
+               AND SKU = @c_Sku
+               AND TaskType = @c_TaskType
+               AND WaveKey = @c_Wavekey
+               AND Storerkey = @c_Storerkey
+               
                UPDATE TaskDetail WITH (ROWLOCK)
                SET Qty = ISNULL(Qty, 0) + ISNULL(@n_Qty, 0)
                WHERE FromLoc = @c_FromLoc 
@@ -436,6 +530,16 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
                AND TaskType = @c_TaskType
                AND WaveKey = @c_Wavekey
                AND Storerkey = @c_Storerkey
+               AND [STATUS] NOT IN ('X','9')
+
+               --debug
+               SELECT * FROM TaskDetail WITH (NOLOCK)
+               WHERE FromLoc = @c_FromLoc 
+               AND SKU = @c_Sku
+               AND TaskType = @c_TaskType
+               AND WaveKey = @c_Wavekey
+               AND Storerkey = @c_Storerkey
+
 
                IF @@ERROR <> 0  
                BEGIN  
@@ -446,9 +550,38 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
                                  + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'
                   GOTO QUIT_SP
                END   
+
+               IF ISNULL(TRIM(@c_taskdetailkey),'') = ''
+               BEGIN
+                  
+                  SELECT TOP 1 @c_TaskDetailkey = TaskDetailKey
+                  FROM TaskDetail WITH (NOLOCK)
+                  WHERE FromLoc = @c_FromLoc
+                  AND SKU = @c_Sku
+                  AND TaskType = @c_TaskType
+                  AND WaveKey = @c_Wavekey
+                  AND Storerkey = @c_Storerkey
+                  AND ISNULL(TRIM(TaskDetailKey),'') <> ''
+
+                  UPDATE #PICKDETAIL_WIP WITH (ROWLOCK)
+                  SET TaskDetailKey = @c_TaskDetailkey
+                  WHERE PickDetailKey = @c_PickDetailKey
+
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @n_Continue = 3
+                     SET @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err) 
+                     SET @n_Err = 83052
+                     SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update TaskDetailKey Fail. (mspRLWAV11)'
+                                    + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'
+                     GOTO QUIT_SP   
+                  END            
+               END
             END
             ELSE
             BEGIN
+               --debug
+               PRINT 'Insert TaskDetail with TaskDetailKey: ' + @c_TaskDetailkey + ', Orderkey: ' + @c_Orderkey + ', Sku: ' + @c_Sku + ', FromLoc: ' + @c_FromLoc
                EXEC isp_InsertTaskDetail     
                   @c_TaskDetailkey          = @c_TaskDetailkey
                   ,@c_TaskType              = @c_TaskType            
@@ -487,6 +620,15 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
                   SET @n_Continue = 3    
                END      
             END
+
+            --debug
+               SELECT * FROM TaskDetail WITH (NOLOCK)
+               WHERE 1=1 
+               --AND FromLoc = @c_FromLoc 
+               --AND SKU = @c_Sku
+               AND TaskType = @c_TaskType
+               AND WaveKey = @c_Wavekey
+               AND Storerkey = @c_Storerkey
          END
 
          FETCH NEXT FROM @CUR_PICK INTO @c_Orderkey, @c_OrderLineNumber, @c_Loadkey
