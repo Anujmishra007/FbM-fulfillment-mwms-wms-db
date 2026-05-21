@@ -228,10 +228,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          DELETE FROM #PICKDETAIL_WIP
          WHERE WaveKey = @c_Wavekey
          AND [Status] > '4' --Only keep records with status 5 or above, as those records are being processed, and will be updated to taskdetailkey in pickdetail table, so we can use taskdetailkey to identify those records and avoid duplicated processing
-         --AND ISNULL(TRIM(Taskdetailkey), '') <> ''
 
-         --debug
-         SELECT * FROM #PICKDETAIL_WIP WHERE WaveKey = @c_Wavekey
          --AYD03 End
 
          UPDATE #PICKDETAIL_WIP
@@ -323,36 +320,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
  
    IF @n_Continue IN(1,2)
    BEGIN
-      --debug
-      SELECT p.Orderkey
-            ,p.OrderLineNumber
-            ,ISNULL(lpd.Loadkey,'')
-            ,p.Storerkey
-            ,p.Sku
-            ,p.Lot
-            ,p.loc
-            ,p.ID
-            ,p.DropID
-            ,p.UOM
-            ,Qty = SUM(p.Qty)
-      FROM #PickDetail_WIP p
-      LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.orderkey = p.orderkey
-      WHERE p.WaveKey = @c_Wavekey
-      AND   p.[Status] = '0'
-      AND   p.UOM IN ('1','2','3','6')    
-      GROUP BY p.Orderkey
-            ,  ISNULL(lpd.Loadkey,'')
-            ,  p.Storerkey
-            ,  p.Sku
-            ,  p.Lot
-            ,  p.loc
-            ,  p.ID
-            ,  p.DropID
-            ,  p.UOM
-            ,  p.OrderLineNumber 
-      ORDER BY p.UOM 
-            ,  MIN(p.PickDetailKey)
-      ----------------------------------------------------------------
+      
       SET @CUR_PICK = CURSOR LOCAL FAST_FORWARD READ_ONLY  FOR
       SELECT p.Orderkey
             ,p.OrderLineNumber
@@ -417,10 +385,6 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
          BEGIN
             SET @c_TaskType   = 'ASTCPK'
          END
-         --debug
-         PRINT 'Processing Orderkey=' + @c_Orderkey + ', @c_DocType=' + @c_DocType + 
-         ', @c_EcomSingleFlag=' + @c_EcomSingleFlag + ', @c_TaskType=' + @c_TaskType
-
 
          IF EXISTS ( SELECT 1 FROM TaskDetail td (NOLOCK)
                         WHERE td.WaveKey = @c_Wavekey
@@ -515,13 +479,6 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
                AND td.FromLoc = @c_FromLoc AND td.SKU = @c_Sku
                AND td.STATUS NOT IN ('X','9'))  
             BEGIN
-               --debug
-               SELECT * FROM TaskDetail WITH (NOLOCK)
-               WHERE FromLoc = @c_FromLoc 
-               AND SKU = @c_Sku
-               AND TaskType = @c_TaskType
-               AND WaveKey = @c_Wavekey
-               AND Storerkey = @c_Storerkey
                
                UPDATE TaskDetail WITH (ROWLOCK)
                SET Qty = ISNULL(Qty, 0) + ISNULL(@n_Qty, 0)
@@ -531,15 +488,6 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
                AND WaveKey = @c_Wavekey
                AND Storerkey = @c_Storerkey
                AND [STATUS] NOT IN ('X','9')
-
-               --debug
-               SELECT * FROM TaskDetail WITH (NOLOCK)
-               WHERE FromLoc = @c_FromLoc 
-               AND SKU = @c_Sku
-               AND TaskType = @c_TaskType
-               AND WaveKey = @c_Wavekey
-               AND Storerkey = @c_Storerkey
-
 
                IF @@ERROR <> 0  
                BEGIN  
@@ -580,8 +528,6 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
             END
             ELSE
             BEGIN
-               --debug
-               PRINT 'Insert TaskDetail with TaskDetailKey: ' + @c_TaskDetailkey + ', Orderkey: ' + @c_Orderkey + ', Sku: ' + @c_Sku + ', FromLoc: ' + @c_FromLoc
                EXEC isp_InsertTaskDetail     
                   @c_TaskDetailkey          = @c_TaskDetailkey
                   ,@c_TaskType              = @c_TaskType            
@@ -620,15 +566,6 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV11]
                   SET @n_Continue = 3    
                END      
             END
-
-            --debug
-               SELECT * FROM TaskDetail WITH (NOLOCK)
-               WHERE 1=1 
-               --AND FromLoc = @c_FromLoc 
-               --AND SKU = @c_Sku
-               AND TaskType = @c_TaskType
-               AND WaveKey = @c_Wavekey
-               AND Storerkey = @c_Storerkey
          END
 
          FETCH NEXT FROM @CUR_PICK INTO @c_Orderkey, @c_OrderLineNumber, @c_Loadkey
