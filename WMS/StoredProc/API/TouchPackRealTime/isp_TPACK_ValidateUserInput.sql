@@ -22,6 +22,7 @@ GO
 /* 2026-03-03   2.3  GCH225     UWP-49786: Fix for Block Recartonization         */
 /* 2026-03-12   2.4  GCH225     UWP-XXXXX: Skip UCC Carton Check for PreCartonize*/
 /* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
+/* 2026-05-19   3.1  GCH225     FCR-13354: Fix for auto close carton scenario    */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -101,6 +102,7 @@ BEGIN
          , @bIsPreCartonize      BIT
          , @bAutoPickOrderFlag   BIT
          , @cAuthority           NVARCHAR(30)
+         , @nSKUCount            INT
 
    DECLARE @cVASCodeUDF2         NVARCHAR(60)   = ''
          , @cVASCodeUDF3         NVARCHAR(60)   = ''
@@ -159,6 +161,7 @@ BEGIN
    SET @bIsPreCartonize       = 0
    SET @bAutoPickOrderFlag    = 0
    SET @cAuthority            = ''
+   SET @nSKUCount             = 0
 
    IF @cLoadKey <> ''
    BEGIN
@@ -1516,6 +1519,42 @@ SKIP_VAS:
       ))
       BEGIN
          SET @bAutoCloseCarton = 1
+      END
+
+      IF EXISTS ( SELECT 1 
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND ConfigKey = 'TPS-AutoCloseCarton'
+                  AND sValue = '1'
+      ) AND NOT EXISTS (SELECT 1 
+                        FROM PACKINFO_AUDITLOG (NOLOCK)
+                        WHERE PickSlipNo = @cPickSlipNo
+                        AND CartonNo = @nCartonNo
+                        AND CartonStatus = 'PENDAUDIT'
+      )
+      BEGIN
+         SET @nTtlQty = 0
+         SET @nTtlExpQty = 0
+
+         SELECT  @nTtlExpQty = ISNULL(SUM(ExpQty), 0)
+               , @nTtlQty = ISNULL(SUM(Qty), 0)
+               , @nSKUCount = COUNT(DISTINCT SKU)
+         FROM PACKDETAIL (NOLOCK) 
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+         AND DropID = @cDropID
+         
+         IF  @nTtlQty = @nTtlExpQty  
+         AND @nSKUCount = 1 
+         AND EXISTS (SELECT 1 
+                     FROM ORDERS (NOLOCK)
+                     WHERE OrderKey = @cOrderKey
+                     AND DocType <> 'E'
+         )
+         AND @bIsVASDone = 1
+         BEGIN 
+            SET @bAutoCloseCarton = 1
+         END
       END
 
       GOTO GET_PACKDETAIL_LIST
