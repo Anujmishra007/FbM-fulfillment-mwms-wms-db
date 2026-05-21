@@ -72,6 +72,7 @@ GO
 /*                               TM SCE                                 */
 /* 06-Oct-2025  3.8     AK01     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /* 06-May-2026  3.9     AYD01    FCR-10825: Allow release for shorted lines */
+/*                               ConfigKey: AllowReleaseShortedLine     */
 /************************************************************************/ 
        
 CREATE OR ALTER TRIGGER [dbo].[ntrTaskDetailUpdate]        
