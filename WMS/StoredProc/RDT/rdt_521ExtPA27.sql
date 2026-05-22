@@ -120,6 +120,7 @@ BEGIN
       SELECT TOP 1 @cSuggestedLOC = LOC.Loc
       FROM dbo.LOC WITH(NOLOCK)
       WHERE LOC.Facility = @cFacility
+         AND LOC <> @cLoc
          AND LOC.PutawayZone = 'AEOMX_DAM'
       ORDER BY LOC.LogicalLocation, LOC.Loc
    END
