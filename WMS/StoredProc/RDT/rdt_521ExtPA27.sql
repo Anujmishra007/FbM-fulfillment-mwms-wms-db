@@ -115,26 +115,14 @@ BEGIN
       IF @nRowCount > 0 AND ISNULL(@cSuggestedLOC, '') <> ''
          GOTO BOOK_LOC
 
-      -- 2. If no empty location is found, find a location with space in damage area
-      DELETE FROM #TempLocUCCQty
-
-      INSERT INTO #TempLocUCCQty (LOC, LogicalLocation, MaxCarton, PendingMoveInUCCQty, UCCQty)
-      SELECT LOC.Loc, LOC.LogicalLocation, LOC.MaxCarton, COUNT(DISTINCT UCC2.UCCNo), COUNT(DISTINCT UCC.UCCNo)
-      FROM dbo.LOC WITH(NOLOCK)
-      INNER JOIN LOTxLOCxID LLI WITH(NOLOCK) ON LOC.Loc = LLI.Loc AND LLI.StorerKey = @cStorerKey AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
-      LEFT JOIN dbo.UCC WITH(NOLOCK) ON LOC.Loc = UCC.Loc AND UCC.StorerKey = @cStorerKey AND UCC.Status IN ('1', '3', '4')
-      LEFT JOIN dbo.RFPutaway RFP WITH(NOLOCK) ON LLI.StorerKey = RFP.StorerKey AND LLI.Loc = RFP.SuggestedLOC
-      LEFT JOIN dbo.UCC UCC2 WITH(NOLOCK) ON RFP.StorerKey = UCC2.StorerKey AND RFP.FromLOC = UCC2.Loc AND RFP.CaseID = UCC2.ID AND RFP.SKU = UCC2.SKU
-      WHERE LOC.Facility = @cFacility
-         AND LOC.Loc <> @cLOC
-         AND LOC.PutawayZone = 'AEOMX_DAM'
-      GROUP BY LOC.Loc, LOC.LogicalLocation, LOC.MaxCarton
-
+      -- 2. If no empty location is found, find top 1 location in AEOMX_DAM
       SET @cSuggestedLOC = ''
-      SELECT TOP 1 @cSuggestedLOC = Loc
-      FROM #TempLocUCCQty
-      WHERE MaxCarton > ISNULL(UCCQty, 0) + ISNULL(PendingMoveInUCCQty, 0)
-      ORDER BY LogicalLocation, Loc
+      SELECT TOP 1 @cSuggestedLOC = LOC.Loc
+      FROM dbo.LOC WITH(NOLOCK)
+      WHERE LOC.Facility = @cFacility
+         AND LOC <> @cLoc
+         AND LOC.PutawayZone = 'AEOMX_DAM'
+      ORDER BY LOC.LogicalLocation, LOC.Loc
    END
    ELSE IF @cLottable02 = 'GOO'
    BEGIN
