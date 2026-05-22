@@ -220,7 +220,7 @@ BEGIN
                        AND LLI.Loc = @c_DynamicPickLoc
                       )
                   BEGIN
-                     IF EXISTS (SELECT 1 FROM LOTxLOCxID LLI (NOLOCK)
+                     IF NOT EXISTS (SELECT 1 FROM LOTxLOCxID LLI (NOLOCK)
                        JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
                        JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
                        JOIN LOT (NOLOCK) ON (LLI.LOT = LOT.LOT)
@@ -230,7 +230,7 @@ BEGIN
                        AND LOT.Status = 'OK'
                        AND ID.Status = 'OK'
                        AND LOC.Facility = @c_Facility
-                       AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) = 0
+                       AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) > 0
                        AND LLI.STORERKEY =  @c_StorerKey
                        AND LLI.Loc = @c_DynamicPickLoc
                        AND LOC.LocationType = @c_DynamicPickLocType
