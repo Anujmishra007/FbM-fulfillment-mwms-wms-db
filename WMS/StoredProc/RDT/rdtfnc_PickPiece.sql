@@ -84,7 +84,8 @@ GO
 /* 2025-09-22   6.4.0   PPA374      UWP-41253 Adding ExtUpd to step 2 inputkey 0 */
 /* 2026-01-04   6.5.0   NickT       FCR-9040 Add ExtScnSP in some steps          */
 /* 2026-02-02   6.6.0   Jackc       FCR-10041 ExtScn07 special jump logic        */
-/* 2026-02-16   6.7.0  NYE018       FCR-10366 add loc check digit                */
+/* 2026-02-16   6.7.0   NYE018      FCR-10366 add loc check digit                */
+/* 2026-05-22   6.8.0   JackC       UWP-57005 Fix issue in ExtScn02,05 (jack01)  */
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -6862,6 +6863,8 @@ BEGIN
                -- Go to PickSlipNo screen
                SET @nScn = @nScn_PickSlipNo
                SET @nStep = @nStep_PickSlipNo
+
+               SET @nPre_Step = -1 --(jack01)
                GOTO Quit
             END
             ELSE IF @nPre_Step = @nStep_NoMoreTask
@@ -6882,6 +6885,8 @@ BEGIN
                SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
                SET @cOutField03 = ''
                SET @cOutField15 = ''
+
+               SET @nPre_Step = -1 --(jack01)
 
                SET @nScn = @nScn_PickZone
                SET @nStep = @nStep_PickZone
@@ -6913,6 +6918,8 @@ BEGIN
                -- Go to PickSlipNo screen
                SET @nScn = @nScn_PickSlipNo
                SET @nStep = @nStep_PickSlipNo
+
+               SET @nPre_Step = -1 --(jack01)
                GOTO Quit
             END
             ELSE IF @nPre_Step = @nStep_NoMoreTask
@@ -6934,6 +6941,8 @@ BEGIN
                SET @cOutField03 = ''
                SET @cOutField15 = ''
 
+               SET @nPre_Step = -1 --(jack01)
+               
                SET @nScn = @nScn_PickZone
                SET @nStep = @nStep_PickZone
 
