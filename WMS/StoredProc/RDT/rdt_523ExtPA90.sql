@@ -93,7 +93,7 @@ BEGIN
          AND LOC.PutawayZone = @cDamagePutawayZone
          AND LOC.Loc <> @cLOC
          AND NOT EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
-                        INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON LLI.Loc = LOC1.Loc AND LOC1.PutawayZone = 'AEOMX_DAM'
+                        INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON LLI.Loc = LOC1.Loc AND LOC1.PutawayZone = @cDamagePutawayZone
                         WHERE LLI.StorerKey = @cStorerKey 
                            AND (LLI.Qty - LLI.QtyPicked - LLI.QTYPickInProcess > 0 OR LLI.PendingMoveIN > 0 OR LLI.QTYExpected > 0)
                            AND LOC.Loc = LOC1.Loc)

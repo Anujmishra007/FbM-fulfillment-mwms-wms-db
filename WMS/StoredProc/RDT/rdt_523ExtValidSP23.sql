@@ -113,7 +113,7 @@ BEGIN
                   IF @cFinalLocCategory <> 'AEOMX_MEZ'
                   BEGIN
                      SET @nErrNo = 267353
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Putaway Zone shoud be AEOMX_MEZ
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Location Category should be AEOMX_MEZ
                      GOTO Quit
                   END
                END
