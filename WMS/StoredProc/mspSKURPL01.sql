@@ -228,7 +228,6 @@ BEGIN
                           AND LLI.StorerKey = @c_StorerKey
                           AND (LLI.QTY - LLI.QTYPICKED - LLI.QtyReplen) > 0
                             )
-                        GROUP BY LOC.LOC
                         ORDER BY LOC.LOC;
 
 
