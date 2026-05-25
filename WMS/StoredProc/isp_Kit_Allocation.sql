@@ -31,7 +31,7 @@ GO
 /* 16-Apr-2025  Ansuman01 1.3 UWP-30689 Pallet Allocation for KIT       */
 /* 23-Apr-2025  Ansuman02 1.4 UWP-33237 PalletType addition             */
 /* 06-May-2025  Ansuman03 1.5 UWP-30689 Partial Pallet Allocation       */
-/* 19-May-2026  Preetham1 1.6 FCR-11186 Bypass Pallet Type              */
+/* 25-May-2026  Preetham1 1.6 FCR-11186 Bypass Pallet Type              */
 /************************************************************************/
 CREATE OR ALTER PROC  isp_Kit_Allocation
 @c_KitKey              NVARCHAR(10)
