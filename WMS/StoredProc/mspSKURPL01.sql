@@ -227,7 +227,6 @@ BEGIN
                        AND LLI.Loc = @c_DynamicPickLoc
                       )
                   BEGIN
-                  --ADW035 start
                      IF NOT EXISTS (SELECT 1 FROM LOTxLOCxID LLI (NOLOCK)
                        JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
                        JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
@@ -250,7 +249,7 @@ BEGIN
                         BEGIN
                           SET @c_Loc = ''
                         END
-                    END --ADW035 end
+                    END
                     ELSE
                     BEGIN
                       SET @c_Loc = @c_DynamicPickLoc
