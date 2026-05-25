@@ -41,6 +41,8 @@ BEGIN
       @cSKUPutawayZone                    NVARCHAR(10),
       @cLottable02                        NVARCHAR( 18),
       @cSKU                               NVARCHAR(20),
+      @cFinalLocCommingleSKU              NVARCHAR( 1) = '',
+      @cFinalLocNoMixLottable02           NVARCHAR( 1) = '',
       @cLOT                               NVARCHAR(10)
 
    SET @nErrNo = 0
@@ -70,7 +72,9 @@ BEGIN
                AND Sku = @cSKU
                AND Lot = @cLOT
 
-            SELECT @cToLocPutawayZone = PutawayZone
+            SELECT @cToLocPutawayZone = PutawayZone,
+               @cFinalLocCommingleSKU = CommingleSKU,
+               @cFinalLocNoMixLottable02 = NoMixLottable02
             FROM dbo.LOC WITH (NOLOCK) 
             WHERE LOC = @cToLOC 
                AND Facility = @cFacility
@@ -101,6 +105,74 @@ BEGIN
                   SET @nErrNo = 267202
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Wrong Putaway Zone
                   GOTO QUIT
+               END
+            END
+
+            IF @cFinalLocCommingleSKU IN( '0', 'N' )
+            BEGIN
+               IF EXISTS(SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND Sku <> @cSKU
+                           AND Loc = @cToLOC
+                           AND (Qty - QtyPicked - QtyPickInProcess > 0 OR PendingMoveIN + QtyExpected > 0)
+                        )
+               BEGIN
+                  SET @nErrNo = 267203
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  No Mix SKU allowed in the location
+                  GOTO Quit
+               END
+            END
+
+            IF @cFinalLocNoMixLottable02 IN ('1', 'Y')
+            BEGIN
+               IF EXISTS(SELECT 1 FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+                        INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LA.Lot = LLI.Lot AND LA.Sku = LLI.Sku AND LA.StorerKey = LLI.StorerKey
+                        WHERE LLI.StorerKey = @cStorerKey
+                           AND LLI.Loc = @cToLOC
+                           AND LA.Lottable02 <> @cLottable02
+                           AND (LLI.Qty - LLI.QtyPicked - LLI.QtyPickInProcess > 0 OR LLI.PendingMoveIN + LLI.QtyExpected > 0)
+                        )
+               BEGIN
+                  SET @nErrNo = 267204
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  No Mix Lottable02 allowed in the location
+                  GOTO Quit
+               END
+            END
+
+            IF EXISTS(SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND Loc = @cToLOC
+                        AND (Qty - QtyPicked - QtyPickInProcess > 0 OR PendingMoveIN + QtyExpected > 0)
+                     )
+            BEGIN
+               DECLARE 
+                     @nAvailableSpace   INT,
+                     @nExistingCartons   INT,
+                     @nPendingCartons    INT
+
+               SELECT @nExistingCartons = COUNT(DISTINCT UCC.UCCNo)
+               FROM dbo.UCC WITH(NOLOCK)
+               INNER JOIN LOTxLOCxID LLI WITH(NOLOCK) ON UCC.Loc = LLI.Loc AND UCC.StorerKey = LLI.StorerKey AND UCC.SKU = LLI.Sku AND UCC.Lot = LLI.Lot
+               WHERE UCC.StorerKey = @cStorerKey
+                  AND UCC.Loc = @cToLOC
+                  AND Status IN ('1', '3', '4')
+
+               SELECT @nPendingCartons = COUNT(DISTINCT UCC2.UCCNo)
+               FROM dbo.RFPutaway RFP WITH(NOLOCK)
+               INNER JOIN dbo.UCC UCC2 WITH(NOLOCK) ON RFP.FromLOC = UCC2.Loc AND RFP.StorerKey = UCC2.StorerKey AND RFP.CaseID = UCC2.ID
+               WHERE RFP.StorerKey = @cStorerKey
+                  AND RFP.SuggestedLOC = @cToLOC
+
+               SELECT @nAvailableSpace = IIF(ISNULL(LOC.MaxCarton, 0) = 0, 999999, LOC.MaxCarton) - ISNULL(@nExistingCartons, 0) - ISNULL(@nPendingCartons, 0)
+               FROM dbo.LOC WITH(NOLOCK)
+               WHERE Facility = @cFacility
+                  AND Loc = @cToLOC
+
+               IF @nAvailableSpace < 1
+               BEGIN
+                  SET @nErrNo = 267205
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  No enough available space in the location
+                  GOTO Quit
                END
             END
          END
