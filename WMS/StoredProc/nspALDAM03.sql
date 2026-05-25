@@ -120,18 +120,7 @@ BEGIN
         AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase
         AND LOTxLOCxID.STORERKEY = @c_StorerKey
         AND LOTxLOCxID.SKU = @c_SKU
-        AND NOT EXISTS (SELECT 1
-                  FROM KIT K (NOLOCK)
-                  JOIN KITDETAIL KD (NOLOCK) ON K.Kitkey = KD.Kitkey
-                  WHERE K.Status <> ''9''
-                  AND KD.Status <> ''9''
-                  AND KD.Type = ''F''
-                  AND KD.STORERKEY = LOTxLOCxID.STORERKEY
-                  AND KD.SKU = LOTxLOCxID.SKU
-                  AND KD.Lot = LOT.Lot
-                  AND KD.LOC = LOTxLOCxID.LOC
-                  AND KD.ID = LOTxLOCxID.ID)
-                  AND LOC.LocationFlag = ''NONE'' ' +
+        AND LOC.LocationFlag = ''NONE'' ' +
      CASE WHEN ISNULL(RTRIM(@c_LotFromKitDetail),'') = '' THEN ' AND LOTxLOCxID.LOT IS NOT NULL ' ELSE ' AND LOTxLOCxID.LOT = @c_LotFromKitDetail ' END +
      CASE WHEN ISNULL(RTRIM(@c_LocFromKitDetail),'') = '' THEN ' AND LOTxLOCxID.LOC IS NOT NULL ' ELSE ' AND LOTxLOCxID.LOC = @c_LocFromKitDetail ' END +
      CASE WHEN ISNULL(RTRIM(@c_IDFromKitDetail),'') = ''  THEN ' AND LOTxLOCxID.ID IS NOT NULL ' ELSE ' AND LOTxLOCxID.ID = @c_IDFromKitDetail ' END +
