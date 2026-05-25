@@ -213,6 +213,7 @@ BEGIN
                           AND LOC.Status = 'OK'
                           AND LOC.Facility = @c_Facility
                           AND LOC.LocationType = @c_DynamicPickLocType
+                          AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC )
                           AND NOT EXISTS (
                             SELECT 1
                             FROM LOTxLOCxID LLI WITH (NOLOCK)
