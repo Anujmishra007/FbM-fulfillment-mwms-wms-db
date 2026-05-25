@@ -11,9 +11,8 @@ GO
 /* Purpose: UWP-54447 - MWMS Retrigger RCMConfig SP                     */
 /*        :                                                             */
 /* Called By:    lsp_RCMConfigSP_ASN_Wrapper                            */
-/*          :                                                           */
 /*                                                                      */
-/* Version: 1.1                                                         */
+/* Version: 2.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
