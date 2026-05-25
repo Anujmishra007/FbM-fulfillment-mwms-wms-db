@@ -20,6 +20,7 @@ GO
 /* Updates:                                                             */
 /* Date               Author      Ver   Purposes                        */
 /* 2026-04-28         SSA01      1.0   Created.                         */
+/* 2026-05-25         Preetham   2.0   inserting directly to GVTLog     */
 /************************************************************************/
 CREATE OR ALTER   PROC [dbo].[msp_RCM_ASN_GVT_Info]
    @c_Receiptkey  NVARCHAR(10)
@@ -72,21 +73,21 @@ BEGIN
                       AND   STC.SValue    = '1' )
           BEGIN
                 IF @c_Status = '0'
-                BEGIN
-                        EXEC ispGenGVTLog @c_Tablename, @c_ReceiptKey, @c_ASNStatus, @c_StorerKey, ''
-                                 , @b_success   OUTPUT
-                                 , @n_err       OUTPUT
-                                 , @c_errmsg    OUTPUT
+                BEGIN                                                        --Preetham1(Start)
+                    BEGIN TRY
+                        INSERT INTO GVTLog (tablename, key1, key2, key3, transmitflag, TransmitBatch)
+                        VALUES (@c_Tablename, @c_ReceiptKey, @c_ASNStatus, @c_StorerKey, '0', '')
+                    END TRY
+                    BEGIN CATCH
+                        SET @n_Continue = 3
+                        SET @n_Err = 68011
+                        SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
+                                        + ': Exception while inserting ASN_INFO to GVTLog. (msp_RCM_ASN_GVT_Info)'
+                                        + ' ERR' + ERROR_MESSAGE()
 
-                            IF @b_success <> 1
-                            BEGIN
-                                SET @n_continue = 3
-                                SET @n_Err = 68011
-                                SET @c_ErrMsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)
-                              + ': Exception while insertiing  ASN_INFO  to GVTLog . (msp_RCM_ASN_GVT_Info)'
-                               GOTO QUIT_SP
-                            END
-                 END
+                            GOTO QUIT_SP
+                    END CATCH
+                 END                                                        --Preetham1(end)
           END
       END
 
