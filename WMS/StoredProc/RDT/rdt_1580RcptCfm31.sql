@@ -9,6 +9,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author  Purposes                                        */
 /* 2024-08-08 1.0  Dennis  FCR-627    Created                              */
+/* 2026-04-20 1.1  Cuize   UWP-44298  Lottable01 length problem            */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_1580RcptCfm31](
    @nFunc          INT,
@@ -72,8 +73,14 @@ BEGIN
    @dLottable14 = V_Lottable14,
    @dLottable15 = V_Lottable15
    FROM RDT.RDTMOBREC WITH (NOLOCK)
-   WHERE Mobile = @nMobile 
+   WHERE Mobile = @nMobile
 
+   -- Unwrap braces added by rdt_1580DecodeSP03, e.g. {38B} -> 38B
+   -- Check both leading { AND trailing } with min length 3 to avoid malformed values
+   IF @cLottable01 LIKE '{%}' AND LEN(@cLottable01) >= 3 AND RIGHT(@cLottable01, 1) = '}'
+   BEGIN
+      SET @cLottable01 = SUBSTRING(@cLottable01, 2, LEN(@cLottable01) - 2)
+   END
    -- Receive
    EXEC rdt.rdt_Receive_V7
       @nFunc         = @nFunc,

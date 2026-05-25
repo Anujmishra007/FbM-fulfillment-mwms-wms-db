@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 5.6                                                  */
+/* GitHub Version: 5.9                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -215,7 +215,8 @@ BEGIN
          , @c_WCSPack                  NVARCHAR(10) = 'Y'                           --(Wan02)
          , @c_OrderType                NVARCHAR(10) = ''                            --WL16
 
-   DECLARE @c_AllowCrossWaveTaskLinking   NVARCHAR(10) = 'N'                        --WL20          
+   DECLARE @c_AllowCrossWaveTaskLinking   NVARCHAR(10) = 'N'                        --WL20
+         , @c_PDSourceType                NVARCHAR(10) = 'N'                        --WL20
          
    SELECT @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 1, @n_err = 0, @c_errmsg = '', @c_SourceType = 'mspRLWAV03'
     
@@ -3522,6 +3523,7 @@ BEGIN
                      WHERE TD.Storerkey = @c_Storerkey
                      AND TD.TaskType = 'RPF'
                      AND TD.Caseid = CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END
+                     AND TD.FromLoc = @c_FromLoc
                      AND (TD.[Status] < '5' OR TD.[Status] = 'H')
 
                      IF @c_TaskdetailKey > ''
@@ -3638,24 +3640,58 @@ BEGIN
                IF @n_Continue IN (1, 2) AND @b_InsertTask IN (1, 2)   --WL12   --WL20 
                BEGIN
                   DECLARE CUR_UDPATEPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-                  SELECT P.PickDetailKey
+                  SELECT PickDetailKey = P.PickDetailKey, PDSourceType = '1'
                   FROM #PickDetail_WIP P
                   WHERE P.UOM = @c_UOM
                   AND   P.PickMethod = @c_PickMethod
-                  AND   p.Lot = @c_Lot
-                  AND   p.Loc = @c_FromLoc
-                  AND   p.ID  = @c_ID
-                  AND   p.DropID  = @c_DropID
+                  AND   P.Lot = @c_Lot
+                  AND   P.Loc = @c_FromLoc
+                  AND   P.ID  = @c_ID
+                  AND   P.DropID = @c_DropID
+                  --WL20 S
+                  UNION
+                  SELECT PickDetailKey = P.PickDetailKey, PDSourceType = '2'
+                  FROM dbo.PICKDETAIL P WITH (NOLOCK)
+                  WHERE P.UOM = @c_UOM
+                  AND   P.PickMethod = @c_PickMethod
+                  AND   P.Lot = @c_Lot
+                  AND   P.Loc = @c_FromLoc
+                  AND   P.ID  = @c_ID
+                  AND   P.DropID = @c_DropID
+                  AND   P.[Status] < '5'
+                  AND   P.Storerkey = @c_Storerkey
+                  AND   P.SKU = @c_SKU
+                  AND   @c_AllowCrossWaveTaskLinking = 'Y'
+                  AND   (P.TaskDetailKey IS NULL OR P.TaskDetailKey = '')
+                  AND   NOT EXISTS ( SELECT 1
+                                     FROM #PickDetail_WIP pw
+                                     WHERE pw.PickDetailKey = P.PickDetailKey )
+                  ORDER BY PDSourceType, PickDetailKey
+                  --WL20 E
 
                   OPEN CUR_UDPATEPD
 
-                  FETCH NEXT FROM CUR_UDPATEPD INTO @c_PickDetailKey
+                  FETCH NEXT FROM CUR_UDPATEPD INTO @c_PickDetailKey, @c_PDSourceType   --WL20
          
                   WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
                   BEGIN
-                     UPDATE #PickDetail_WIP  
-                        SET TaskDetailKey=@c_TaskDetailKey 
-                     WHERE PickDetailKey=@c_PickDetailKey
+                     --WL20 S
+                     IF @c_PDSourceType = '1'
+                     BEGIN
+                        UPDATE #PickDetail_WIP  
+                        SET TaskDetailKey = @c_TaskDetailKey 
+                        WHERE PickDetailKey = @c_PickDetailKey
+                     END
+                     ELSE IF @c_PDSourceType = '2'
+                     BEGIN
+                        UPDATE PickDetail
+                        SET TaskDetailKey = @c_TaskDetailKey
+                          , TrafficCop = NULL
+                          , EditDate = dbo.fnc_GetDate()
+                          , EditWho = dbo.fnc_GetUserName()
+                        WHERE PickDetailKey = @c_PickDetailKey
+                     END
+                     --WL20 E
 
                      -- (SWT999) Only update temp table.
                      --UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
@@ -3671,7 +3707,7 @@ BEGIN
                         SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) + ': Updating PickDetail Failed (mspRLWAV03)'  
                                        + ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
                      END
-                     FETCH NEXT FROM CUR_UDPATEPD INTO @c_PickDetailKey
+                     FETCH NEXT FROM CUR_UDPATEPD INTO @c_PickDetailKey, @c_PDSourceType   --WL20
                   END
                   CLOSE CUR_UDPATEPD
                   DEALLOCATE CUR_UDPATEPD
