@@ -118,7 +118,8 @@ BEGIN
                         INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
                         WHERE LOC1.Facility = @cFacility
                            AND LOC1.PutawayZone = @cDamagePutawayZone
-                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND LOC1.CommingleSku IN ( '0', 'N' )
+                           AND LLI1.SKU <> @cSKU
                            AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
                            AND LOC.Loc = LOC1.Loc
                         )
@@ -127,7 +128,8 @@ BEGIN
                         INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
                         WHERE LOC2.Facility = @cFacility
                            AND LOC2.PutawayZone = @cDamagePutawayZone
-                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND LOC2.NoMixLottable02 IN ( '1', 'Y' )
+                           AND LA.Lottable02 <> @cLottable02
                            AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
                            AND LOC.Loc = LOC2.Loc
                         )
@@ -167,7 +169,8 @@ BEGIN
                         INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
                         WHERE LOC1.Facility = @cFacility
                            AND LOC1.LocationCategory = @cAEOMX_MEZ
-                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND LOC1.CommingleSku IN ( '0', 'N' )
+                           AND LLI1.SKU <> @cSKU
                            AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
                            AND LOC.Loc = LOC1.Loc
                         )
@@ -176,7 +179,8 @@ BEGIN
                         INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
                         WHERE LOC2.Facility = @cFacility
                            AND LOC2.LocationCategory = @cAEOMX_MEZ
-                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND LOC2.NoMixLottable02 IN ( '1', 'Y' )
+                           AND LA.Lottable02 <> @cLottable02
                            AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
                            AND LOC.Loc = LOC2.Loc
                         )
@@ -246,7 +250,8 @@ BEGIN
                         INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
                         WHERE LOC1.Facility = @cFacility
                            AND LOC1.LocationCategory = @cAEOMX_MEZ
-                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND LOC1.CommingleSku IN ( '0', 'N' )
+                           AND LLI1.SKU <> @cSKU
                            AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
                            AND LOC.Loc = LOC1.Loc
                         )
@@ -255,7 +260,8 @@ BEGIN
                         INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
                         WHERE LOC2.Facility = @cFacility
                            AND LOC2.LocationCategory = @cAEOMX_MEZ
-                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND LOC2.NoMixLottable02 IN ( '1', 'Y' )
+                           AND LA.Lottable02 <> @cLottable02
                            AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
                            AND LOC.Loc = LOC2.Loc
                         )
@@ -308,19 +314,16 @@ BEGIN
          INSERT INTO #TempLocCube (LOC, LogicalLocation, LocCube)
          SELECT DISTINCT LOC.Loc, LOC.LogicalLocation, LOC.CubicCapacity
          FROM dbo.LOC WITH(NOLOCK)
-         LEFT JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
-            ON LLI.Loc = LOC.Loc
-            AND LLI.StorerKey = @cStorerKey
          WHERE LOC.Facility = @cFacility
             AND LOC.Loc <> @cLOC
             AND LOC.LocationCategory = @cAEOMX_MEZ
             AND LOC.SectionKey = ISNULL(@cBUSR2, '')
-            AND (LLI.Qty - LLI.QtyPicked - LLI.QTYPickInProcess = 0 OR LLI.SKU IS NULL)
             AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
                         INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
                         WHERE LOC1.Facility = @cFacility
                            AND LOC1.LocationCategory = @cAEOMX_MEZ
-                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND LOC1.CommingleSku IN ( '0', 'N' )
+                           AND LLI1.SKU <> @cSKU
                            AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
                            AND LOC.Loc = LOC1.Loc
                         )
@@ -329,9 +332,17 @@ BEGIN
                         INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
                         WHERE LOC2.Facility = @cFacility
                            AND LOC2.LocationCategory = @cAEOMX_MEZ
-                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND LOC2.NoMixLottable02 IN ( '1', 'Y' ) 
+                           AND LA.Lottable02 <> @cLottable02
                            AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
                            AND LOC.Loc = LOC2.Loc
+                        )
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC3 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI3 WITH(NOLOCK) ON LLI3.Loc = LOC3.Loc AND LLI3.StorerKey = @cStorerKey
+                        WHERE LOC3.Facility = @cFacility
+                           AND LOC3.LocationCategory = @cAEOMX_MEZ
+                           AND (LLI3.Qty - LLI3.QtyPicked - LLI3.QtyPickInProcess > 0)
+                           AND LOC.Loc = LOC3.Loc
                         )
          ORDER BY LOC.LogicalLocation, LOC.Loc
 
