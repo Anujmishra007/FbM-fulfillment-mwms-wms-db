@@ -47,6 +47,11 @@ BEGIN
       @cAEOMX_MEZ                NVARCHAR( 10) = 'AEOMX_MEZ',
       @fSKUCube                  FLOAT
 
+   SET @cSuggestedLOC = ''
+   SET @nPABookingKey = 0
+   SET @nErrNo = 0
+   SET @cErrMsg = ''
+
    IF OBJECT_ID('tempdb..#TempLocCube') IS NOT NULL
       DROP TABLE #TempLocCube
 
@@ -109,6 +114,23 @@ BEGIN
          WHERE LOC.Facility = @cFacility
             AND LOC.Loc <> @cLOC
             AND LOC.PutawayZone = @cDamagePutawayZone
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
+                        WHERE LOC1.Facility = @cFacility
+                           AND LOC1.PutawayZone = @cDamagePutawayZone
+                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
+                           AND LOC.Loc = LOC1.Loc
+                        )
+         AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
+                        INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
+                        WHERE LOC2.Facility = @cFacility
+                           AND LOC2.PutawayZone = @cDamagePutawayZone
+                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
+                           AND LOC.Loc = LOC2.Loc
+                        )
          ORDER BY LogicalLocation, Loc
          SELECT @nRowCount = @@ROWCOUNT
       END
@@ -141,6 +163,23 @@ BEGIN
       WHERE LOC.Facility = @cFacility
          AND LOC.Loc <> @cLOC
          AND LOC.LocationCategory = @cAEOMX_MEZ
+         AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
+                        WHERE LOC1.Facility = @cFacility
+                           AND LOC1.LocationCategory = @cAEOMX_MEZ
+                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
+                           AND LOC.Loc = LOC1.Loc
+                        )
+         AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
+                        INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
+                        WHERE LOC2.Facility = @cFacility
+                           AND LOC2.LocationCategory = @cAEOMX_MEZ
+                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
+                           AND LOC.Loc = LOC2.Loc
+                        )
       ORDER BY LOC.LogicalLocation, LOC.Loc
 
       -- Get the occupied cubic capacity of all home locations
@@ -203,6 +242,23 @@ BEGIN
             AND LOC.Loc <> @cLOC
             AND LOC.LocationCategory = @cAEOMX_MEZ
             AND (LLI.Qty - LLI.QtyPicked - LLI.QTYPickInProcess > 0 OR LLI.PendingMoveIN + LLI.QTYExpected > 0)
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
+                        WHERE LOC1.Facility = @cFacility
+                           AND LOC1.LocationCategory = @cAEOMX_MEZ
+                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
+                           AND LOC.Loc = LOC1.Loc
+                        )
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
+                        INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
+                        WHERE LOC2.Facility = @cFacility
+                           AND LOC2.LocationCategory = @cAEOMX_MEZ
+                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
+                           AND LOC.Loc = LOC2.Loc
+                        )
          ORDER BY LOC.LogicalLocation, LOC.Loc
 
          -- Get the occupied cubic capacity of all dynamic locations with same SKU
@@ -260,6 +316,23 @@ BEGIN
             AND LOC.LocationCategory = @cAEOMX_MEZ
             AND LOC.SectionKey = ISNULL(@cBUSR2, '')
             AND (LLI.Qty - LLI.QtyPicked - LLI.QTYPickInProcess = 0 OR LLI.SKU IS NULL)
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
+                        WHERE LOC1.Facility = @cFacility
+                           AND LOC1.LocationCategory = @cAEOMX_MEZ
+                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
+                           AND LOC.Loc = LOC1.Loc
+                        )
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
+                        INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
+                        WHERE LOC2.Facility = @cFacility
+                           AND LOC2.LocationCategory = @cAEOMX_MEZ
+                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
+                           AND LOC.Loc = LOC2.Loc
+                        )
          ORDER BY LOC.LogicalLocation, LOC.Loc
 
          -- Get the occupied cubic capacity of all Empty dynamic locations
@@ -297,22 +370,22 @@ BEGIN
          SELECT @nRowCount = @@ROWCOUNT
       END
    END
-   ELSE
-   BEGIN
-      -- Suggest LOC
-      EXEC @nErrNo = [dbo].[nspRDTPASTD]
-           @c_userid          = 'RDT'
-         , @c_storerkey       = @cStorerKey
-         , @c_lot             = @cLOT
-         , @c_sku             = @cSKU
-         , @c_id              = @cID
-         , @c_fromloc         = @cLOC
-         , @n_qty             = @nQTY
-         , @c_uom             = '' -- not used
-         , @c_packkey         = '' -- optional, if pass-in SKU
-         , @n_putawaycapacity = 0
-         , @c_final_toloc     = @cSuggestedLOC OUTPUT
-   END
+   -- ELSE
+   -- BEGIN
+   --    -- Suggest LOC
+   --    EXEC @nErrNo = [dbo].[nspRDTPASTD]
+   --         @c_userid          = 'RDT'
+   --       , @c_storerkey       = @cStorerKey
+   --       , @c_lot             = @cLOT
+   --       , @c_sku             = @cSKU
+   --       , @c_id              = @cID
+   --       , @c_fromloc         = @cLOC
+   --       , @n_qty             = @nQTY
+   --       , @c_uom             = '' -- not used
+   --       , @c_packkey         = '' -- optional, if pass-in SKU
+   --       , @n_putawaycapacity = 0
+   --       , @c_final_toloc     = @cSuggestedLOC OUTPUT
+   -- END
 
    /*-------------------------------------------------------------------------------
                                  Book suggested location
