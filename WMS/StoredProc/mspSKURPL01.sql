@@ -206,14 +206,31 @@ BEGIN
 
               IF ISNULL(@c_Loc,'') = ''
               BEGIN
-                  SELECT TOP 1 @c_DynamicPickLoc = LOC from LOC WITH (NOLOCK)
-                   WHERE LOC.LocationFlag = 'NONE'
-                   AND LOC.Status = 'OK'
-                   AND LOC.Facility = @c_Facility
-                   AND LOC.LocationType = @c_DynamicPickLocType
-                   AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC )
-                   GROUP BY LOC.LOC
-                   ORDER BY LOC.LOC
+--                   SELECT TOP 1 @c_DynamicPickLoc = LOC from LOC WITH (NOLOCK)
+--                    WHERE LOC.LocationFlag = 'NONE'
+--                    AND LOC.Status = 'OK'
+--                    AND LOC.Facility = @c_Facility
+--                    AND LOC.LocationType = @c_DynamicPickLocType
+--                    AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC )
+--                    GROUP BY LOC.LOC
+--                    ORDER BY LOC.LOC
+
+                     SELECT TOP 1 @c_DynamicPickLoc = LOC.LOC
+                        FROM LOC WITH (NOLOCK)
+                        WHERE LOC.LocationFlag = 'NONE'
+                          AND LOC.Status = 'OK'
+                          AND LOC.Facility = @c_Facility
+                          AND LOC.LocationType = @c_DynamicPickLocType
+                          AND NOT EXISTS (
+                            SELECT 1
+                            FROM LOTxLOCxID LLI WITH (NOLOCK)
+                            WHERE LLI.Loc = LOC.LOC
+                          AND LLI.StorerKey = @c_StorerKey
+                          AND (LLI.QTY - LLI.QTYPICKED - LLI.QtyReplen) > 0
+                            )
+                        GROUP BY LOC.LOC
+                        ORDER BY LOC.LOC;
+
 
                   IF EXISTS(SELECT 1 FROM LOTxLOCxID LLI (NOLOCK)
                        WHERE LLI.STORERKEY =  @c_StorerKey
