@@ -45,16 +45,14 @@ BEGIN
       @cPutawayZone           NVARCHAR( 10),
       @cTempLogicalLocation   NVARCHAR( 18),
       @cTempLoc               NVARCHAR( 10),
-      @nRowRefID              INT,
-
-      @cPAStrategyKey    NVARCHAR( 10),
-      @cParam1           NVARCHAR( 20),
-      @cParam2           NVARCHAR( 20),
-      @cParam3           NVARCHAR( 20),
-      @cParam4           NVARCHAR( 20),
-      @cParam5           NVARCHAR( 20)
+      @cAEOMX_DAM             NVARCHAR( 10) = 'AEOMX_DAM',
+      @nRowRefID              INT
 
    SET @nPABookingKey = 0
+   SET @cSuggestedLOC = ''
+   SET @cPickAndDropLoc = ''
+   SET @nErrNo = 0
+   SET @cErrMsg = ''
 
    IF OBJECT_ID('tempdb..#TempLocUCCQty') IS NOT NULL
       DROP TABLE #TempLocUCCQty
@@ -72,14 +70,6 @@ BEGIN
    FROM dbo.UCC WITH(NOLOCK)
    WHERE UCCNo = @cUCC
       AND StorerKey = @cStorerKey
-
-   SET @cPAStrategyKey = ''  
-   SELECT @cPAStrategyKey = Short   
-   FROM dbo.CodeLKUP WITH (NOLOCK)  
-   WHERE ListName = 'RDTExtPA'  
-      AND StorerKey = @cStorerKey  
-      AND Code2 = @cFacility  
-      AND Code = @nFunc
 
    -- the putaway logic only works for the case which all the items in the same UCC are the same SKU, 
    --if there are more than 1 SKU, just return and let user handle it manually, as this is a very rare case and usually due to data issue.
@@ -102,11 +92,11 @@ BEGIN
       SELECT TOP 1 @cSuggestedLOC = LOC.Loc
       FROM dbo.LOC WITH(NOLOCK)
       WHERE LOC.Facility = @cFacility
-         AND LOC.PutawayZone = 'AEOMX_DAM'
+         AND LOC.PutawayZone = @cAEOMX_DAM
          AND NOT EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
-                        INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON LLI.Loc = LOC1.Loc AND LOC1.PutawayZone = 'AEOMX_DAM'
+                        INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON LLI.Loc = LOC1.Loc AND LOC1.PutawayZone = @cAEOMX_DAM
                         WHERE LLI.StorerKey = @cStorerKey 
-                           AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
+                           AND (LLI.Qty - LLI.QtyPicked - LLI.QtyPickInProcess > 0 OR LLI.PendingMoveIN + LLI.QtyExpected > 0)
                            AND LOC.Loc = LOC1.Loc)
       ORDER BY LOC.LogicalLocation, LOC.Loc
       
@@ -116,12 +106,31 @@ BEGIN
          GOTO BOOK_LOC
 
       -- 2. If no empty location is found, find top 1 location in AEOMX_DAM
+      -- should consider CommingleSku and NoMixLottable02 to make sure the suggested location is suitable for the damage UCC which has Lottable02 = 'DAM'
       SET @cSuggestedLOC = ''
       SELECT TOP 1 @cSuggestedLOC = LOC.Loc
       FROM dbo.LOC WITH(NOLOCK)
       WHERE LOC.Facility = @cFacility
-         AND LOC <> @cLoc
-         AND LOC.PutawayZone = 'AEOMX_DAM'
+         AND LOC.Loc <> @cLoc
+         AND LOC.PutawayZone = @cAEOMX_DAM
+         AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
+                        WHERE LOC1.Facility = @cFacility
+                           AND LOC1.PutawayZone = @cAEOMX_DAM
+                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
+                           AND LOC.Loc = LOC1.Loc
+                        )
+         AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
+                        INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
+                        WHERE LOC2.Facility = @cFacility
+                           AND LOC2.PutawayZone = @cAEOMX_DAM
+                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
+                           AND LOC.Loc = LOC2.Loc
+                        )
+
       ORDER BY LOC.LogicalLocation, LOC.Loc
    END
    ELSE IF @cLottable02 = 'GOO'
@@ -154,6 +163,25 @@ BEGIN
       WHERE LOC.Facility = @cFacility
          AND LOC.Loc <> @cLOC
          AND LOC.PutawayZone = @cPutawayZone
+         AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
+                        WHERE LOC1.Facility = @cFacility
+                           AND LOC1.PutawayZone = @cPutawayZone
+                           AND LOC1.CommingleSku = '0' 
+                           AND LLI1.SKU <> @cSKU
+                           AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
+                           AND LOC.Loc = LOC1.Loc
+                        )
+         AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
+                        INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
+                        INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
+                        WHERE LOC2.Facility = @cFacility
+                           AND LOC2.PutawayZone = @cPutawayZone
+                           AND LOC2.NoMixLottable02 = '1' 
+                           AND LA.Lottable02 <> @cLottable02
+                           AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
+                           AND LOC.Loc = LOC2.Loc
+                        )
       GROUP BY LOC.Loc, LOC.LogicalLocation, LOC.MaxCarton
       ORDER BY LOC.LogicalLocation, LOC.Loc
 
@@ -212,39 +240,10 @@ BEGIN
             AND NOT EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
                            INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON LLI.Loc = LOC1.Loc AND LOC1.PutawayZone = @cPutawayZone
                            WHERE LLI.StorerKey = @cStorerKey 
-                              AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
+                              AND (LLI.Qty - LLI.QtyPicked - LLI.QtyPickInProcess > 0 OR LLI.PendingMoveIN + LLI.QtyExpected > 0)
                               AND LOC.Loc = LOC1.Loc)
          ORDER BY LOC.LogicalLocation, LOC.Loc
       END
-   END
-   ELSE
-   BEGIN
-      BEGIN TRY
-         EXEC @nErrNo = [dbo].[nspRDTPASTD]
-              @c_userid          = @cUserName
-            , @c_storerkey       = @cStorerkey
-            , @c_lot             = ''
-            , @c_sku             = @cSKU
-            , @c_id              = @cID
-            , @c_fromloc         = @cLOC
-            , @n_qty             = @nQty
-            , @c_uom             = ''
-            , @c_packkey         = ''
-            , @n_putawaycapacity = 0
-            , @c_final_toloc     = @cSuggestedLOC     OUTPUT
-            , @c_PickAndDropLoc  = @cPickAndDropLoc   OUTPUT
-            , @c_Param1          = @cParam1
-            , @c_Param2          = @cParam2
-            , @c_Param3          = @cParam3
-            , @c_Param4          = @cParam4
-            , @c_Param5          = @cParam5
-            , @c_PAStrategyKey   = @cPAStrategyKey
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 267052
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --267052 Execute Putaway Strategy Failed
-         GOTO QUIT
-      END CATCH
    END
 
    BOOK_LOC:
