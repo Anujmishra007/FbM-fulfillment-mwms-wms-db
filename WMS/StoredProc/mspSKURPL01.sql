@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
 /* 10-Feb-2026 SSA01    1.0   Create UWP-47046                             */
+/* 25-May-2026 ADW035   1.1   Fix check for dynamicpick locations tasks    */
 /***************************************************************************/
 CREATE OR ALTER   PROC [dbo].[mspSKURPL01]
    @c_Storerkey  NVARCHAR(15)   = '',
@@ -205,16 +206,7 @@ BEGIN
        BEGIN
 
               IF ISNULL(@c_Loc,'') = ''
-              BEGIN
---                   SELECT TOP 1 @c_DynamicPickLoc = LOC from LOC WITH (NOLOCK)
---                    WHERE LOC.LocationFlag = 'NONE'
---                    AND LOC.Status = 'OK'
---                    AND LOC.Facility = @c_Facility
---                    AND LOC.LocationType = @c_DynamicPickLocType
---                    AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC )
---                    GROUP BY LOC.LOC
---                    ORDER BY LOC.LOC
-
+              BEGIN      --ADW035 start
                      SELECT TOP 1 @c_DynamicPickLoc = LOC.LOC
                         FROM LOC WITH (NOLOCK)
                         WHERE LOC.LocationFlag = 'NONE'
@@ -228,14 +220,14 @@ BEGIN
                           AND LLI.StorerKey = @c_StorerKey
                           AND (LLI.QTY - LLI.QTYPICKED - LLI.QtyReplen) > 0
                             )
-                        ORDER BY LOC.LOC;
-
+                        ORDER BY LOC.LOC; --ADW035 end
 
                   IF EXISTS(SELECT 1 FROM LOTxLOCxID LLI (NOLOCK)
                        WHERE LLI.STORERKEY =  @c_StorerKey
                        AND LLI.Loc = @c_DynamicPickLoc
                       )
                   BEGIN
+                  --ADW035 start
                      IF NOT EXISTS (SELECT 1 FROM LOTxLOCxID LLI (NOLOCK)
                        JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
                        JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
@@ -258,7 +250,7 @@ BEGIN
                         BEGIN
                           SET @c_Loc = ''
                         END
-                    END
+                    END --ADW035 end
                     ELSE
                     BEGIN
                       SET @c_Loc = @c_DynamicPickLoc
