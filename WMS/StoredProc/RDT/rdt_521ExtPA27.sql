@@ -117,7 +117,8 @@ BEGIN
                         INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
                         WHERE LOC1.Facility = @cFacility
                            AND LOC1.PutawayZone = @cAEOMX_DAM
-                           AND LOC1.CommingleSku = '0' AND LLI1.SKU <> @cSKU
+                           AND LOC1.CommingleSku IN( '0', 'N' )
+                           AND LLI1.SKU <> @cSKU
                            AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
                            AND LOC.Loc = LOC1.Loc
                         )
@@ -126,7 +127,8 @@ BEGIN
                         INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
                         WHERE LOC2.Facility = @cFacility
                            AND LOC2.PutawayZone = @cAEOMX_DAM
-                           AND LOC2.NoMixLottable02 = '1' AND LA.Lottable02 <> @cLottable02
+                           AND LOC2.NoMixLottable02 IN ('1', 'Y')
+                           AND LA.Lottable02 <> @cLottable02
                            AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
                            AND LOC.Loc = LOC2.Loc
                         )
@@ -156,18 +158,19 @@ BEGIN
       INSERT INTO #TempLocUCCQty (LOC, LogicalLocation, MaxCarton, PendingMoveInUCCQty, UCCQty)
       SELECT LOC.Loc, LOC.LogicalLocation, LOC.MaxCarton, COUNT(DISTINCT UCC2.UCCNo), COUNT(DISTINCT UCC.UCCNo)
       FROM dbo.LOC WITH(NOLOCK)
-      INNER JOIN LOTxLOCxID LLI WITH(NOLOCK) ON LOC.Loc = LLI.Loc AND LLI.StorerKey = @cStorerKey AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
+      INNER JOIN LOTxLOCxID LLI WITH(NOLOCK) ON LOC.Loc = LLI.Loc AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
       LEFT JOIN dbo.UCC WITH(NOLOCK) ON LOC.Loc = UCC.Loc AND UCC.StorerKey = @cStorerKey AND UCC.Status IN ('1', '3', '4')
       LEFT JOIN dbo.RFPutaway RFP WITH(NOLOCK) ON LLI.StorerKey = RFP.StorerKey AND LLI.Loc = RFP.SuggestedLOC
       LEFT JOIN dbo.UCC UCC2 WITH(NOLOCK) ON RFP.StorerKey = UCC2.StorerKey AND RFP.FromLOC = UCC2.Loc AND RFP.CaseID = UCC2.ID AND RFP.SKU = UCC2.SKU
       WHERE LOC.Facility = @cFacility
          AND LOC.Loc <> @cLOC
          AND LOC.PutawayZone = @cPutawayZone
+         AND LLI.StorerKey = @cStorerKey
          AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
                         INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
                         WHERE LOC1.Facility = @cFacility
                            AND LOC1.PutawayZone = @cPutawayZone
-                           AND LOC1.CommingleSku = '0' 
+                           AND LOC1.CommingleSku IN( '0', 'N' )
                            AND LLI1.SKU <> @cSKU
                            AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
                            AND LOC.Loc = LOC1.Loc
@@ -177,7 +180,7 @@ BEGIN
                         INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
                         WHERE LOC2.Facility = @cFacility
                            AND LOC2.PutawayZone = @cPutawayZone
-                           AND LOC2.NoMixLottable02 = '1' 
+                           AND LOC2.NoMixLottable02 IN ('1', 'Y')
                            AND LA.Lottable02 <> @cLottable02
                            AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
                            AND LOC.Loc = LOC2.Loc
