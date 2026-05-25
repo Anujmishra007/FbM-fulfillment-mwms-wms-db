@@ -46,14 +46,7 @@ BEGIN
       @cTempLogicalLocation   NVARCHAR( 18),
       @cTempLoc               NVARCHAR( 10),
       @cAEOMX_DAM             NVARCHAR( 10) = 'AEOMX_DAM',
-      @nRowRefID              INT,
-
-      @cPAStrategyKey    NVARCHAR( 10),
-      @cParam1           NVARCHAR( 20),
-      @cParam2           NVARCHAR( 20),
-      @cParam3           NVARCHAR( 20),
-      @cParam4           NVARCHAR( 20),
-      @cParam5           NVARCHAR( 20)
+      @nRowRefID              INT
 
    SET @nPABookingKey = 0
    SET @cSuggestedLOC = ''
@@ -77,14 +70,6 @@ BEGIN
    FROM dbo.UCC WITH(NOLOCK)
    WHERE UCCNo = @cUCC
       AND StorerKey = @cStorerKey
-
-   SET @cPAStrategyKey = ''  
-   SELECT @cPAStrategyKey = Short   
-   FROM dbo.CodeLKUP WITH (NOLOCK)  
-   WHERE ListName = 'RDTExtPA'  
-      AND StorerKey = @cStorerKey  
-      AND Code2 = @cFacility  
-      AND Code = @nFunc
 
    -- the putaway logic only works for the case which all the items in the same UCC are the same SKU, 
    --if there are more than 1 SKU, just return and let user handle it manually, as this is a very rare case and usually due to data issue.
@@ -260,35 +245,6 @@ BEGIN
          ORDER BY LOC.LogicalLocation, LOC.Loc
       END
    END
-   -- ELSE
-   -- BEGIN
-   --    BEGIN TRY
-   --       EXEC @nErrNo = [dbo].[nspRDTPASTD]
-   --            @c_userid          = @cUserName
-   --          , @c_storerkey       = @cStorerkey
-   --          , @c_lot             = ''
-   --          , @c_sku             = @cSKU
-   --          , @c_id              = @cID
-   --          , @c_fromloc         = @cLOC
-   --          , @n_qty             = @nQty
-   --          , @c_uom             = ''
-   --          , @c_packkey         = ''
-   --          , @n_putawaycapacity = 0
-   --          , @c_final_toloc     = @cSuggestedLOC     OUTPUT
-   --          , @c_PickAndDropLoc  = @cPickAndDropLoc   OUTPUT
-   --          , @c_Param1          = @cParam1
-   --          , @c_Param2          = @cParam2
-   --          , @c_Param3          = @cParam3
-   --          , @c_Param4          = @cParam4
-   --          , @c_Param5          = @cParam5
-   --          , @c_PAStrategyKey   = @cPAStrategyKey
-   --    END TRY
-   --    BEGIN CATCH
-   --       SET @nErrNo = 267052
-   --       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --267052 Execute Putaway Strategy Failed
-   --       GOTO QUIT
-   --    END CATCH
-   -- END
 
    BOOK_LOC:
    IF ISNULL( @cSuggestedLOC, '') = ''
