@@ -777,16 +777,16 @@ BEGIN
                END CATCH
 
                SELECT TOP 1 @cAlertKey = AlertKey 
-               FROM dbo.AlertLog WITH(NOLOCK) 
+               FROM dbo.ALERT WITH(NOLOCK) 
                WHERE TaskDetailKey IS NOT NULL
-                  AND TaskDetailKey = @cAlertMessage 
+                  AND TaskDetailKey = @cPickDetailKeyTemp 
                   AND StorerKey = @cStorerKey
                ORDER BY LogDate DESC
 
                IF @cAlertKey IS NOT NULL
                BEGIN
                   BEGIN TRY
-                     UPDATE dbo.AlertLog WITH(ROWLOCK)
+                     UPDATE dbo.ALERT WITH(ROWLOCK)
                      SET Resolution = @cReasonCode
                      WHERE AlertKey = @cAlertKey
                         AND StorerKey = @cStorerKey
@@ -798,7 +798,7 @@ BEGIN
                         COMMIT TRAN
 
                      SET @nErrNo = 255545
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update AlertLog failed
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update ALERT failed
                      GOTO UPD_RDTMOBREC
                   END CATCH
                END
@@ -3069,9 +3069,33 @@ BEGIN
                   AND ISNULL(Remarks, '') = IIF(@cUOM = '2', @cSuggUCC, @cScannedSN)
                   AND OrderKey = @cCurrentOrderKey
 
-               UPDATE rdt.rdtPickLog WITH(ROWLOCK)
-               SET DropID = @cDropID
-               WHERE RowRef = @cRowRefTemp
+               SET @nTranCount = @@TRANCOUNT
+               BEGIN TRAN  -- Begin our own transaction
+               SAVE TRAN rdt_839ExtScn06_6775 -- For rollback or commit only our own transaction
+
+               BEGIN TRY
+                  UPDATE rdt.rdtPickLog WITH(ROWLOCK)
+                  SET DropID = @cDropID
+                  WHERE RowRef = @cRowRefTemp
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255546
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update RDT Pick Log failed
+                   
+                  IF XACT_STATE() = -1
+                  BEGIN
+                     ROLLBACK TRAN
+                  END
+                  ELSE IF XACT_STATE() = 1
+                  BEGIN
+                     ROLLBACK TRAN rdt_839ExtScn06_6775
+
+                     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                        COMMIT TRAN
+                  END
+
+                  GOTO UPD_RDTMOBREC
+               END CATCH
 
                IF @cCloseDropIDFlag = 'Y'
                BEGIN
@@ -3095,8 +3119,23 @@ BEGIN
                      ,@nBulkSNOQTY = 0
                      ,@nErrNo      = @nErrNo  OUTPUT
                      ,@cErrMsg     = @cErrMsg OUTPUT
+
                   IF @nErrNo <> 0
+                  BEGIN
+                     IF XACT_STATE() = -1
+                     BEGIN
+                        ROLLBACK TRAN
+                     END
+                     ELSE IF XACT_STATE() = 1
+                     BEGIN
+                        ROLLBACK TRAN rdt_839ExtScn06_6775
+
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+                     END
+
                      GOTO UPD_RDTMOBREC
+                  END
 
                   -- Need clear dropid
                   SET @cDropID = ''
@@ -3129,10 +3168,19 @@ BEGIN
                                                 ELSE '' END -- QTY
 
                         SET @cOutField13 = LTRIM(CAST((@nBalQty - @nActQTY) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6)) 
+
+                        COMMIT TRAN rdt_839ExtScn06_6775 -- Only commit change made here
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+
                         GOTO UPD_RDTMOBREC
                      END
                   END
                END
+
+               COMMIT TRAN rdt_839ExtScn06_6775 -- Only commit change made here
+               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                  COMMIT TRAN
 
                -- Get task in same LOC
                SET @cSKUValidated = '0'
@@ -3569,7 +3617,7 @@ BEGIN
                SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                  WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                        ELSE '' END -- QTY
-               SET @cOutField13 = LTRIM(CAST(@nBalQty - @nActQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+               SET @cOutField13 = LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
 
                IF @cFieldAttr07='O'
                   SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
@@ -3579,56 +3627,6 @@ BEGIN
                   SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
                
                SET @cBarcode = ''
-
-               SELECT TOP 1 @cSuggUCC  = Descr
-               FROM rdt.rdtPickLog WITH(NOLOCK)
-               WHERE PickSlipNo = @cPickSlipNo
-                  AND Mobile = @nMobile
-                  AND AddWho = @cUserName
-                  AND PickMethod = 'GetTask-U'
-                  AND Status = '0'
-               ORDER BY AddDate DESC
-
-               SELECt @nRowCount = @@ROWCOUNT
-
-               -- Display UCC
-               IF @nRowCount > 0
-               BEGIN
-                  SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
-
-                  SET @cOutField08 = 'UCC:'
-                  SET @cOutField09 = @cSuggUCC
-                  SET @cOutField10 = 'LOT:'
-                  SET @cOutField11 = @cSuggLOT
-               END
-               ELSE
-               -- Display Piece info, Lottable01, UOM, UOM Desc
-               BEGIN
-                  SELECT TOP 1 @cSuggLOT  = Descr
-                  FROM rdt.rdtPickLog WITH(NOLOCK)
-                  WHERE PickSlipNo = @cPickSlipNo
-                     AND Mobile = @nMobile
-                     AND AddWho = @cUserName
-                     AND PickMethod = 'GetTask-P'
-                     AND Status = '0'
-                  ORDER BY AddDate DESC
-                  
-                  SELECT @cLottable01 = Lottable01 FROM dbo.LOTATTRIBUTE WITH(NOLOCK) WHERE LOT = ISNULL(@cSuggLOT, '')
-
-                  SELECT
-                     @cPackUOM = Pack.PackUOM3
-                  FROM dbo.SKU S WITH (NOLOCK)
-                  INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (S.PackKey = Pack.PackKey)
-                  WHERE StorerKey = @cStorerKey
-                     AND SKU = @cSuggSKU
-
-                  SET @cOutField08 = ISNULL(@cLottable01, '')
-                  SET @cOutField09 = 'UOM: 6'
-                  SET @cOutField10 = @cPackUOM
-                  SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
-               END
-               
-               EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
                -- Go to SKU/Qty screen
                SET @nAfterScn = 6774
@@ -3766,6 +3764,56 @@ BEGIN
 
                   GOTO UPD_RDTMOBREC
                END
+
+               SELECT TOP 1 @cSuggUCC  = Descr
+               FROM rdt.rdtPickLog WITH(NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND Mobile = @nMobile
+                  AND AddWho = @cUserName
+                  AND PickMethod = 'GetTask-U'
+                  AND Status = '0'
+               ORDER BY AddDate DESC
+
+               SELECt @nRowCount = @@ROWCOUNT
+
+               -- Display UCC
+               IF @nRowCount > 0
+               BEGIN
+                  SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+
+                  SET @cOutField08 = 'UCC:'
+                  SET @cOutField09 = @cSuggUCC
+                  SET @cOutField10 = 'LOT:'
+                  SET @cOutField11 = @cSuggLOT
+               END
+               ELSE
+               -- Display Piece info, Lottable01, UOM, UOM Desc
+               BEGIN
+                  SELECT TOP 1 @cSuggLOT  = Descr
+                  FROM rdt.rdtPickLog WITH(NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                     AND Mobile = @nMobile
+                     AND AddWho = @cUserName
+                     AND PickMethod = 'GetTask-P'
+                     AND Status = '0'
+                  ORDER BY AddDate DESC
+                  
+                  SELECT @cLottable01 = Lottable01 FROM dbo.LOTATTRIBUTE WITH(NOLOCK) WHERE LOT = ISNULL(@cSuggLOT, '')
+
+                  SELECT
+                     @cPackUOM = Pack.PackUOM3
+                  FROM dbo.SKU S WITH (NOLOCK)
+                  INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (S.PackKey = Pack.PackKey)
+                  WHERE StorerKey = @cStorerKey
+                     AND SKU = @cSuggSKU
+
+                  SET @cOutField08 = ISNULL(@cLottable01, '')
+                  SET @cOutField09 = 'UOM: 6'
+                  SET @cOutField10 = @cPackUOM
+                  SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
+               END
+               
+               EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
                GOTO UPD_RDTMOBREC
             END
@@ -4498,6 +4546,32 @@ BEGIN
 
                      SET @nPre_Step = @nCurrentStep
                   END
+                  ELSE IF @nPre_Step = @nStep_SKUQTY
+                  BEGIN
+                     -- Prepare SKU QTY screen var
+                     SET @cOutField01 = @cSuggLOC
+                     SET @cOutField02 = @cSuggSKU
+                     SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
+                     SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20) -- SKU desc 2
+                     SET @cOutField05 = '' -- SKU/UPC
+                     SET @cOutField06 = RTRIM(CAST( @nSuggQTY AS NVARCHAR(6)))
+                     SET @cOutField07 = CAST( @nActQTY AS NVARCHAR(6))
+                     SET @cOutField13 =LTRIM(CAST(@nBalQty - @nActQTY AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+
+                     -- Disable QTY field
+                     SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
+
+                     SET @cBarcode = ''
+                     
+                     IF @cFieldAttr07 = 'O'
+                        EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+                     ELSE
+                        EXEC rdt.rdtSetFocusField @nMobile, 7 -- QTY
+
+                     -- Go to SKU QTY screen
+                     SET @nAfterScn = 6774
+                     SET @nAfterStep = 99
+                  END
                   ELSE IF @nPre_Step = @nStep_ConfirmLOC
                   BEGIN
                      -- Prepare next screen var
@@ -4572,6 +4646,41 @@ BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
 
                   SET @nPre_Step = @nCurrentStep
+               END
+               ELSE IF @nPre_Step = @nStep_SKUQTY
+               BEGIN
+                   -- Prepare SKU QTY screen var
+                  SET @cOutField01 = @cSuggLOC
+                  SET @cOutField02 = @cSuggSKU
+                  SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
+                  SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20) -- SKU desc 2
+                  SET @cOutField05 = '' -- SKU/UPC
+                  SET @cOutField06 = RTRIM(CAST( @nSuggQTY AS NVARCHAR(6)))
+                  SET @cOutField07 = CAST( @nActQTY AS NVARCHAR(6))
+                  SET @cOutField13 =LTRIM(CAST(@nBalQty - @nActQTY AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+
+                  -- Disable QTY field
+                  SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
+
+                  SET @cBarcode = ''
+                  
+                  IF @cFieldAttr07 = 'O'
+                     EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+                  ELSE
+                     EXEC rdt.rdtSetFocusField @nMobile, 7 -- QTY
+
+                  -- Go to SKU QTY screen
+                  SET @nAfterScn = 6774
+                  SET @nAfterStep = 99
+               END
+               ELSE IF @nPre_Step = @nStep_ConfirmLOC
+               BEGIN
+                  -- Prepare next screen var
+                  SET @cOutField01 = @cSuggLOC
+                  SET @cOutField02 = '' -- LOC
+
+                  SET @nAfterScn = @nScn_ConfirmLOC
+                  SET @nAfterStep = @nStep_ConfirmLOC
                END
             END
          END

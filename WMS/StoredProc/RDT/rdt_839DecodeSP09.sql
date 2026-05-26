@@ -134,6 +134,7 @@ BEGIN
                @cSegment6     NVARCHAR(30),
                @cSegment7     NVARCHAR(30),
                @cSegment8     NVARCHAR(30),
+               @cSegment9     NVARCHAR(30),
                @cSegment      NVARCHAR(30),
                @cScannedUCC   NVARCHAR(20),
                @cTempBarcode  NVARCHAR(MAX),
@@ -152,7 +153,7 @@ BEGIN
             WHILE 1 = 1
             BEGIN
                SET @nLoopIndex = @nLoopIndex + 1
-               IF @nLoopIndex > 8 BREAK
+               IF @nLoopIndex > 9 BREAK
 
                IF CHARINDEX('&', @cTempBarcode) > 0
                BEGIN
@@ -165,14 +166,15 @@ BEGIN
                   SET @cTempBarcode = ''
                END
 
-               IF @nLoopIndex = 1 SET @cSegment1 = @cSegment
-               IF @nLoopIndex = 2 SET @cSegment2 = @cSegment
-               IF @nLoopIndex = 3 SET @cSegment3 = @cSegment
-               IF @nLoopIndex = 4 SET @cSegment4 = @cSegment
-               IF @nLoopIndex = 5 SET @cSegment5 = @cSegment
-               IF @nLoopIndex = 6 SET @cSegment6 = @cSegment
-               IF @nLoopIndex = 7 SET @cSegment7 = @cSegment
-               IF @nLoopIndex = 8 SET @cSegment8 = @cSegment
+               IF @nLoopIndex = 1 SET @cSegment1 = ISNULL(@cSegment, '')
+               IF @nLoopIndex = 2 SET @cSegment2 = ISNULL(@cSegment, '')
+               IF @nLoopIndex = 3 SET @cSegment3 = ISNULL(@cSegment, '')
+               IF @nLoopIndex = 4 SET @cSegment4 = ISNULL(@cSegment, '')
+               IF @nLoopIndex = 5 SET @cSegment5 = ISNULL(@cSegment, '')
+               IF @nLoopIndex = 6 SET @cSegment6 = ISNULL(@cSegment, '')
+               IF @nLoopIndex = 7 SET @cSegment7 = ISNULL(@cSegment, '')
+               IF @nLoopIndex = 8 SET @cSegment8 = ISNULL(@cSegment, '')
+               IF @nLoopIndex = 9 SET @cSegment9 = ISNULL(@cSegment, '')
             END
 
             -- UCC
@@ -255,6 +257,22 @@ BEGIN
                      SET @nErrNo = 255455
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- LOT does not match
                      GOTO Quit
+                  END
+                  ELSE
+                  BEGIN
+                     SELECT @cSuggUCCLottable01 = Lottable01
+                     FROM dbo.LotAttribute WITH(NOLOCK)
+                     WHERE Lot = @cSuggLOT
+                        AND StorerKey = @cStorerKey
+
+                     SELECT @cScannedUCCLottable01 = @cSegment6 + @cSegment9
+
+                     IF @cSuggUCCLottable01 <> @cScannedUCCLottable01
+                     BEGIN
+                        SET @nErrNo = 255477
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different Lottable01
+                        GOTO Quit
+                     END
                   END
 
                   IF @nScannedUCCQty <> @nSuggQty
@@ -355,20 +373,43 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Multi SKU UCC
                      GOTO Quit
                   END
+               END
 
-                  IF @cScannedUCCLoc <> @cLOC
+               IF @cScannedUCCLoc <> @cLOC
+               BEGIN
+                  SET @nErrNo = 255462
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Loc does not match
+                  GOTO Quit
+               END
+
+               IF @cScannedUCCLot <> @cSuggLOT
+               BEGIN
+                  SET @nErrNo = 255465
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Lot does not match
+                  GOTO Quit
+               END
+               ELSE
+               BEGIN
+                  SELECT @cSuggUCCLottable01 = Lottable01
+                  FROM dbo.LotAttribute WITH(NOLOCK)
+                  WHERE Lot = @cSuggLOT
+                     AND StorerKey = @cStorerKey
+
+                  SELECT @cScannedUCCLottable01 = @cSegment6 + @cSegment8
+
+                  IF @cSuggUCCLottable01 <> @cScannedUCCLottable01
                   BEGIN
-                     SET @nErrNo = 255462
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Loc does not match
+                     SET @nErrNo = 255476
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different Lottable01
                      GOTO Quit
                   END
+               END
 
-                  IF @cScannedUCCSKU <> @cSuggSKU
-                  BEGIN
-                     SET @nErrNo = 255463
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU does not match
-                     GOTO Quit
-                  END
+               IF @cScannedUCCSKU <> @cSuggSKU
+               BEGIN
+                  SET @nErrNo = 255463
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU does not match
+                  GOTO Quit
                END
 
                IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE Mobile = @nMobile AND PickSlipNo = @cPickSlipNo AND Remarks = @cSerialNo AND PickMethod = 'Pick-P')
@@ -378,85 +419,98 @@ BEGIN
                   GOTO Quit
                END
 
+               SET @cUPC = @cSuggSKU
+               SET @nQTY = @nSuggQTY
+
+               UPDATE RDT.RDTMOBREC WITH(ROWLOCK)
+               SET
+                  C_String3 = @cScannedUCC,
+                  C_String4 = @cScannedUCCLottable01,
+                  C_String7 = @cSerialNo,
+                  C_String8 = @cScannedUCCLot
+               WHERE Mobile = @nMobile
+
+               RETURN
+
                -- If serial number match, validation passed
-               IF @cScannedUCCLot = @cSuggLOT
-               BEGIN
-                  SET @cUPC = @cSuggSKU
-                  SET @nQTY = @nSuggQTY
+               -- IF @cScannedUCCLot = @cSuggLOT
+               -- BEGIN
+               --    SET @cUPC = @cSuggSKU
+               --    SET @nQTY = @nSuggQTY
 
-                  UPDATE RDT.RDTMOBREC WITH(ROWLOCK)
-                  SET
-                     C_String3 = @cScannedUCC,
-                     C_String4 = @cScannedUCCLottable01,
-                     C_String7 = @cSerialNo,
-                     C_String8 = @cScannedUCCLot
-                  WHERE Mobile = @nMobile
+               --    UPDATE RDT.RDTMOBREC WITH(ROWLOCK)
+               --    SET
+               --       C_String3 = @cScannedUCC,
+               --       C_String4 = @cScannedUCCLottable01,
+               --       C_String7 = @cSerialNo,
+               --       C_String8 = @cScannedUCCLot
+               --    WHERE Mobile = @nMobile
 
-                  RETURN
-               END
+               --    RETURN
+               -- END
                -- If LOT does not match, need to check lLottable01
-               ELSE
-               BEGIN
-                  IF @cScannedUCCLot <> @cSuggLOT
-                  BEGIN
-                     SELECT @cScannedUCCLottable01 = Lottable01
-                     FROM dbo.LotAttribute WITH(NOLOCK)
-                     WHERE Lot = @cScannedUCCLot
-                        AND StorerKey = @cStorerKey
+               -- ELSE
+               -- BEGIN
+               --    IF @cScannedUCCLot <> @cSuggLOT
+               --    BEGIN
+               --       SELECT @cScannedUCCLottable01 = Lottable01
+               --       FROM dbo.LotAttribute WITH(NOLOCK)
+               --       WHERE Lot = @cScannedUCCLot
+               --          AND StorerKey = @cStorerKey
 
-                     SELECT @cSuggUCCLottable01 = Lottable01
-                     FROM dbo.LotAttribute WITH(NOLOCK)
-                     WHERE Lot = @cSuggLOT
-                        AND StorerKey = @cStorerKey
+               --       SELECT @cSuggUCCLottable01 = Lottable01
+               --       FROM dbo.LotAttribute WITH(NOLOCK)
+               --       WHERE Lot = @cSuggLOT
+               --          AND StorerKey = @cStorerKey
 
-                     IF @cScannedUCCLottable01 <> @cSuggUCCLottable01
-                     BEGIN
-                        SET @nErrNo = 255465
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Lottable01 does not match
-                        GOTO Quit
-                     END
+               --       IF @cScannedUCCLottable01 <> @cSuggUCCLottable01
+               --       BEGIN
+               --          SET @nErrNo = 255465
+               --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Lottable01 does not match
+               --          GOTO Quit
+               --       END
 
-                     DECLARE @nAvailableQty INT = 0
+               --       DECLARE @nAvailableQty INT = 0
 
-                     SELECT @nAvailableQty = SUM(Qty - QtyAllocated - QtyPicked )
-                     FROM LOTXLOCXID WITH(NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                        AND Loc = @cLOC
-                        AND LOT = @cScannedUCCLot
+               --       SELECT @nAvailableQty = SUM(Qty - QtyAllocated - QtyPicked )
+               --       FROM LOTXLOCXID WITH(NOLOCK)
+               --       WHERE StorerKey = @cStorerKey
+               --          AND Loc = @cLOC
+               --          AND LOT = @cScannedUCCLot
 
-                     IF ISNULL(@nAvailableQty, 0) < 1
-                     BEGIN
-                        SET @nErrNo = 255471
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Stock is allocated
-                        GOTO Quit
-                     END
+               --       IF ISNULL(@nAvailableQty, 0) < 1
+               --       BEGIN
+               --          SET @nErrNo = 255471
+               --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Stock is allocated
+               --          GOTO Quit
+               --       END
 
-                     SELECT @nAvailableQty = SUM(Qty - QtyAllocated - QtyPicked )
-                     FROM LOTXLOCXID WITH(NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                        AND Loc = @cLOC
-                        AND LOT = @cScannedUCCLot
-                        AND ID = @cScannedID
+               --       SELECT @nAvailableQty = SUM(Qty - QtyAllocated - QtyPicked )
+               --       FROM LOTXLOCXID WITH(NOLOCK)
+               --       WHERE StorerKey = @cStorerKey
+               --          AND Loc = @cLOC
+               --          AND LOT = @cScannedUCCLot
+               --          AND ID = @cScannedID
 
-                     IF ISNULL(@nAvailableQty, 0) < 1
-                     BEGIN
-                        SET @nErrNo = 255472
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Stock is allocated
-                        GOTO Quit
-                     END
-                  END
+               --       IF ISNULL(@nAvailableQty, 0) < 1
+               --       BEGIN
+               --          SET @nErrNo = 255472
+               --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Stock is allocated
+               --          GOTO Quit
+               --       END
+               --    END
 
-                  UPDATE RDT.RDTMOBREC WITH(ROWLOCK)
-                  SET
-                     C_String3 = @cScannedUCC,
-                     C_String4 = @cScannedUCCLottable01,
-                     C_String7 = @cSerialNo,
-                     C_String8 = @cScannedUCCLot
-                  WHERE Mobile = @nMobile
+               --    UPDATE RDT.RDTMOBREC WITH(ROWLOCK)
+               --    SET
+               --       C_String3 = @cScannedUCC,
+               --       C_String4 = @cScannedUCCLottable01,
+               --       C_String7 = @cSerialNo,
+               --       C_String8 = @cScannedUCCLot
+               --    WHERE Mobile = @nMobile
 
-                  SET @cUPC = @cScannedUCCSKU
-                  SET @nQTY = 1
-               END
+               --    SET @cUPC = @cScannedUCCSKU
+               --    SET @nQTY = 1
+               -- END
             END
          END
       END
