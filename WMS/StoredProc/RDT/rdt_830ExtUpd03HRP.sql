@@ -356,14 +356,16 @@ BEGIN
 
             END TRY
             BEGIN CATCH
-                -- Rollback: full rollback if we started, otherwise rollback to savepoint
+                -- Rollback based on transaction state
+                -- XACT_STATE() = -1: transaction is doomed (e.g. deadlock), must fully rollback
+                -- XACT_STATE() = 1: transaction is committable, can rollback to savepoint
                 IF @@TRANCOUNT > 0
                 BEGIN
-                    IF @nTranStarted = 1
+                    IF XACT_STATE() = -1 OR @nTranStarted = 1
                     BEGIN
                         ROLLBACK TRANSACTION;
                     END
-                    ELSE
+                    ELSE IF XACT_STATE() = 1
                     BEGIN
                         ROLLBACK TRANSACTION @cSavePoint;
                     END;
