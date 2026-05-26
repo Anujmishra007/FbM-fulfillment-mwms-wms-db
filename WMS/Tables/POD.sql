@@ -1,3 +1,7 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[POD]') AND type in (N'U'))
 BEGIN
 CREATE TABLE [dbo].[POD]
@@ -69,7 +73,11 @@ CREATE TABLE [dbo].[POD]
 [TrackCol06] [nvarchar] (100) NULL,
 [TrackCol07] [nvarchar] (100) NULL,
 [TrackCol08] [nvarchar] (100) NULL,
-[TrackCol09] [nvarchar] (100) NULL
+[TrackCol09] [nvarchar] (100) NULL,
+[ActualGrossWeight] DECIMAL (9,3) NULL CONSTRAINT [DF_POD_ActualGrossWeight] DEFAULT (''),
+[ActualGrossVolume] DECIMAL (9,3) NULL CONSTRAINT [DF_POD_ActualGrossVolume] DEFAULT (''),
+[ActualShipUnitCount] DECIMAL (9,0) NULL CONSTRAINT [DF_POD_ActualShipUnitCount] DEFAULT (''),
+[ActualPieceCount] DECIMAL (9,0) NULL CONSTRAINT [DF_POD_ActualPieceCount] DEFAULT ('')
 ) ON [PRIMARY]
 
 
@@ -219,6 +227,38 @@ BEGIN
 END
 
 
+--FCR-12859
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'ActualGrossWeight' AND Object_ID = Object_ID('dbo.POD'))
+BEGIN
+	ALTER TABLE dbo.POD ADD [ActualGrossWeight] DECIMAL (9,3) NULL CONSTRAINT [DF_POD_ActualGrossWeight] DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Actual gross weight in KG during pickup/delivery.', 'SCHEMA', N'dbo', 'TABLE', N'POD', 'COLUMN', N'ActualGrossWeight'
+				
 END
 
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'ActualGrossVolume' AND Object_ID = Object_ID('dbo.POD'))
+BEGIN
+	ALTER TABLE dbo.POD ADD [ActualGrossVolume] DECIMAL (9,3) NULL CONSTRAINT [DF_POD_ActualGrossVolume] DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Actual gross volume in CBM during pickup/delivery.', 'SCHEMA', N'dbo', 'TABLE', N'POD', 'COLUMN', N'ActualGrossVolume'
+				
+END
+
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'ActualShipUnitCount' AND Object_ID = Object_ID('dbo.POD'))
+BEGIN
+	ALTER TABLE dbo.POD ADD [ActualShipUnitCount] DECIMAL (9,0) NULL CONSTRAINT [DF_POD_ActualShipUnitCount] DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Actual PALLET/CARTON count during pickup/delivery.', 'SCHEMA', N'dbo', 'TABLE', N'POD', 'COLUMN', N'ActualShipUnitCount'
+				
+END
+
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'ActualPieceCount' AND Object_ID = Object_ID('dbo.POD'))
+BEGIN
+	ALTER TABLE dbo.POD ADD [ActualPieceCount] DECIMAL (9,0) NULL CONSTRAINT [DF_POD_ActualPieceCount] DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Actual piece count during pickup/delivery.', 'SCHEMA', N'dbo', 'TABLE', N'POD', 'COLUMN', N'ActualPieceCount'
+				
+END
+
+END
+GO
 
