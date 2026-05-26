@@ -339,6 +339,7 @@ SELECT
    @cFlowThruScreen        = V_String40,
    @cExtScnSP              = V_String41,
    @cGenPATaskSP           = V_String42,
+   --C_String is used in extscn
 
    @nQTY             = V_Integer1,
    @nCaseCntQty      = V_Integer2,
@@ -4938,6 +4939,7 @@ BEGIN
       V_String40 = @cFlowThruScreen,
       V_String41 = @cExtScnSP,
       V_String42 = @cGenPATaskSP,
+      --C_String is used in extscn
 
       V_Lottable01 = @cLottable01,
       V_Lottable02 = @cLottable02,
