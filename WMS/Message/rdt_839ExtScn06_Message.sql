@@ -18,7 +18,6 @@ EXECUTE rdt.rdtAddMsg 255513, 10, '255513 InvalidOption',      'us_english', 839
 EXECUTE rdt.rdtAddMsg 255514, 10, '255514 SuggUCCMissed',      'us_english', 839, 0, '255514 Suggested UCC is missing in rdtPickLog'
 EXECUTE rdt.rdtAddMsg 255515, 10, '255515 SuggSNMissed',       'us_english', 839, 0, '255515 Suggested SN is missing in rdtPickLog'
 EXECUTE rdt.rdtAddMsg 255516, 10, '255516 UpdRPLFail',         'us_english', 839, 0, '255516 Update rdtPickLog failed'
-EXECUTE rdt.rdtAddMsg 255517, 10, '255517 GenPKDKeyFail',      'us_english', 839, 0, '255517 Generate PickDetailKey failed'
 EXECUTE rdt.rdtAddMsg 255518, 10, '255518 InsRPLFail',         'us_english', 839, 0, '255518 Insert rdtPickLog failed'
 EXECUTE rdt.rdtAddMsg 255519, 10, '255519 UpdRPLFail',         'us_english', 839, 0, '255519 Update rdtPickLog failed'
 EXECUTE rdt.rdtAddMsg 255520, 10, '255520 UpdRPLFail',         'us_english', 839, 0, '255520 Update rdtPickLog failed'
@@ -46,6 +45,7 @@ EXECUTE rdt.rdtAddMsg 255541, 10, '255541 InvOption',          'us_english', 839
 EXECUTE rdt.rdtAddMsg 255542, 10, '255542 DelPickSerialNoFail','us_english', 839, 0, '255542 Delete PickSerialNo failed'
 EXECUTE rdt.rdtAddMsg 255543, 10, '255543 UpdSNFail',          'us_english', 839, 0, '255543 Update SerialNo failedd'
 EXECUTE rdt.rdtAddMsg 255544, 10, '255544 InvDropID',          'us_english', 839, 0, '255544 Invalid DropID format'
-EXECUTE rdt.rdtAddMsg 255545, 10, '255545 UPDAlertFail',       'us_english', 839, 0, '255545 Update AlertLog failed'
+EXECUTE rdt.rdtAddMsg 255545, 10, '255545 UPDAlertFail',       'us_english', 839, 0, '255545 Update ALERT failed'
+EXECUTE rdt.rdtAddMsg 255546, 10, '255546 UPDRdtPickLogFail',  'us_english', 839, 0, '255546 Update RDT Pick Log failed'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 255501 AND 255550

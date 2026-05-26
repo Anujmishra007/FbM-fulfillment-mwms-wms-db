@@ -1005,7 +1005,9 @@ BEGIN
                   Status = CASE WHEN Notes = 'Picked' THEN @cPickConfirmStatus
                                  ELSE Status
                               END,
-                  DropID = @cPieceLotDropId
+                  DropID = CASE WHEN Notes = 'Picked' THEN @cPieceLotDropId
+                                 ELSE DropID
+                              END
                WHERE PickDetailKey = @cPickDetailKey
             END TRY
             BEGIN CATCH
