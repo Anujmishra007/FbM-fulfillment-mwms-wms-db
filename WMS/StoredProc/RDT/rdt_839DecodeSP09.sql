@@ -126,16 +126,16 @@ BEGIN
             END
             
             DECLARE
-               @cSegment1     NVARCHAR(30),
-               @cSegment2     NVARCHAR(30),
-               @cSegment3     NVARCHAR(30),
-               @cSegment4     NVARCHAR(30),
-               @cSegment5     NVARCHAR(30),
-               @cSegment6     NVARCHAR(30),
-               @cSegment7     NVARCHAR(30),
-               @cSegment8     NVARCHAR(30),
-               @cSegment9     NVARCHAR(30),
-               @cSegment      NVARCHAR(30),
+               @cSegment1     NVARCHAR(30) = '',
+               @cSegment2     NVARCHAR(30) = '',
+               @cSegment3     NVARCHAR(30) = '',
+               @cSegment4     NVARCHAR(30) = '',
+               @cSegment5     NVARCHAR(30) = '',
+               @cSegment6     NVARCHAR(30) = '',
+               @cSegment7     NVARCHAR(30) = '',
+               @cSegment8     NVARCHAR(30) = '',
+               @cSegment9     NVARCHAR(30) = '',
+               @cSegment      NVARCHAR(30) = '',
                @cScannedUCC   NVARCHAR(20),
                @cTempBarcode  NVARCHAR(MAX),
                @nLoopIndex    INT = 0,
@@ -431,86 +431,6 @@ BEGIN
                WHERE Mobile = @nMobile
 
                RETURN
-
-               -- If serial number match, validation passed
-               -- IF @cScannedUCCLot = @cSuggLOT
-               -- BEGIN
-               --    SET @cUPC = @cSuggSKU
-               --    SET @nQTY = @nSuggQTY
-
-               --    UPDATE RDT.RDTMOBREC WITH(ROWLOCK)
-               --    SET
-               --       C_String3 = @cScannedUCC,
-               --       C_String4 = @cScannedUCCLottable01,
-               --       C_String7 = @cSerialNo,
-               --       C_String8 = @cScannedUCCLot
-               --    WHERE Mobile = @nMobile
-
-               --    RETURN
-               -- END
-               -- If LOT does not match, need to check lLottable01
-               -- ELSE
-               -- BEGIN
-               --    IF @cScannedUCCLot <> @cSuggLOT
-               --    BEGIN
-               --       SELECT @cScannedUCCLottable01 = Lottable01
-               --       FROM dbo.LotAttribute WITH(NOLOCK)
-               --       WHERE Lot = @cScannedUCCLot
-               --          AND StorerKey = @cStorerKey
-
-               --       SELECT @cSuggUCCLottable01 = Lottable01
-               --       FROM dbo.LotAttribute WITH(NOLOCK)
-               --       WHERE Lot = @cSuggLOT
-               --          AND StorerKey = @cStorerKey
-
-               --       IF @cScannedUCCLottable01 <> @cSuggUCCLottable01
-               --       BEGIN
-               --          SET @nErrNo = 255465
-               --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Lottable01 does not match
-               --          GOTO Quit
-               --       END
-
-               --       DECLARE @nAvailableQty INT = 0
-
-               --       SELECT @nAvailableQty = SUM(Qty - QtyAllocated - QtyPicked )
-               --       FROM LOTXLOCXID WITH(NOLOCK)
-               --       WHERE StorerKey = @cStorerKey
-               --          AND Loc = @cLOC
-               --          AND LOT = @cScannedUCCLot
-
-               --       IF ISNULL(@nAvailableQty, 0) < 1
-               --       BEGIN
-               --          SET @nErrNo = 255471
-               --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Stock is allocated
-               --          GOTO Quit
-               --       END
-
-               --       SELECT @nAvailableQty = SUM(Qty - QtyAllocated - QtyPicked )
-               --       FROM LOTXLOCXID WITH(NOLOCK)
-               --       WHERE StorerKey = @cStorerKey
-               --          AND Loc = @cLOC
-               --          AND LOT = @cScannedUCCLot
-               --          AND ID = @cScannedID
-
-               --       IF ISNULL(@nAvailableQty, 0) < 1
-               --       BEGIN
-               --          SET @nErrNo = 255472
-               --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Stock is allocated
-               --          GOTO Quit
-               --       END
-               --    END
-
-               --    UPDATE RDT.RDTMOBREC WITH(ROWLOCK)
-               --    SET
-               --       C_String3 = @cScannedUCC,
-               --       C_String4 = @cScannedUCCLottable01,
-               --       C_String7 = @cSerialNo,
-               --       C_String8 = @cScannedUCCLot
-               --    WHERE Mobile = @nMobile
-
-               --    SET @cUPC = @cScannedUCCSKU
-               --    SET @nQTY = 1
-               -- END
             END
          END
       END
