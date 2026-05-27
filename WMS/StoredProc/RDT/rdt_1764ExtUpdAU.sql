@@ -579,7 +579,12 @@ BEGIN
     END  
   
     GOTO Quit  
-RollBackTran:  
+RollBackTran: 
+    IF CURSOR_STATUS('global','cur_pick') >= 0
+    BEGIN
+        CLOSE cur_pick
+        DEALLOCATE cur_pick
+    END
     ROLLBACK TRAN rdt_1764ExtUpdAU -- Only rollback change made here  
 Fail:  
 Quit:  
