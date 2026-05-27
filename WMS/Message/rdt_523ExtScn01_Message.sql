@@ -16,6 +16,6 @@ execute rdt.rdtAddMsg 257208, 10, '257208^QTYPWY NotEnuf', 'us_english', 523
 execute rdt.rdtAddMsg 257209, 10, '257209^NoSuitableLOC ', 'us_english', 523
 execute rdt.rdtAddMsg 257210, 10, '257210^NoSuggestedLOC', 'us_english', 523
 execute rdt.rdtAddMsg 257211, 10, '257211^OptionRequired', 'us_english', 523
-execute rdt.rdtAddMsg 257212, 10, '257212^SuggLocNotLoseID', 'us_english', 523, 0, '257202: SuggestLoc must be lose ID'
+execute rdt.rdtAddMsg 257212, 10, '257212^SuggLocNotLoseID', 'us_english', 523, 0, '257212: SuggestLoc must be lose ID'
 
 select * from rdt.rdtmsg with (nolock) where message_id between 257201 and 257250
