@@ -671,7 +671,7 @@ BEGIN
 
 
       SET @cCheckDigitLOC = @cInField03
-      IF @cLOCCheckDigitSP = '1'
+      IF @cLOCCheckDigitSP = '1' AND ISNULL(@cCheckDigitLOC, '') <> ''
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility,
             @cCheckDigitLOC    OUTPUT,
