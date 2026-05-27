@@ -43,6 +43,7 @@ BEGIN
       @nTranCount                INT,
       @cLottable02               NVARCHAR( 18),
       @cDamagePutawayZone        NVARCHAR( 10) = 'AEOMX_DAM',
+      @cPICK                     NVARCHAR( 5) = 'PICK',
       @cDYNPPICK                 NVARCHAR( 10) = 'DYNPPICK',
       @cAEOMX_MEZ                NVARCHAR( 10) = 'AEOMX_MEZ',
       @fSKUCube                  FLOAT
@@ -160,7 +161,7 @@ BEGIN
       INNER JOIN dbo.SKUxLOC SL WITH(NOLOCK) 
          ON SL.StorerKey = @cStorerKey 
          AND SL.SKU = @cSKU
-         AND SL.LocationType = @cDYNPPICK
+         AND SL.LocationType = @cPICK
          AND SL.Loc = LOC.Loc
       WHERE LOC.Facility = @cFacility
          AND LOC.Loc <> @cLOC
@@ -195,7 +196,7 @@ BEGIN
       INNER JOIN dbo.SKUxLOC SL WITH(NOLOCK) 
          ON SL.StorerKey = @cStorerKey 
          AND SL.SKU = @cSKU
-         AND SL.LocationType = @cDYNPPICK
+         AND SL.LocationType = @cPICK
          AND SL.Loc = LOC.Loc
       INNER JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
          ON LLI.Loc = LOC.Loc
@@ -234,15 +235,10 @@ BEGIN
          FROM dbo.LOC WITH(NOLOCK)
          INNER JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
             ON LLI.Loc = LOC.Loc
-            AND LLI.StorerKey = @cStorerKey
-         INNER JOIN dbo.SKU WITH(NOLOCK)
-            ON SKU.StorerKey = LLI.StorerKey
-            AND SKU.SKU = LLI.SKU
-         INNER JOIN dbo.Pack WITH(NOLOCK)
-            ON Pack.PackKey = SKU.PackKey
          WHERE LOC.Facility = @cFacility
-            AND SKU.StorerKey = @cStorerKey
-            AND SKU.SKU = @cSKU
+            AND LLI.StorerKey = @cStorerKey
+            AND LLI.SKU = @cSKU
+            AND LOC.LocationType = @cDYNPPICK
             AND LOC.Loc <> @cLOC
             AND LOC.LocationCategory = @cAEOMX_MEZ
             AND (LLI.Qty - LLI.QtyPicked - LLI.QTYPickInProcess > 0 OR LLI.PendingMoveIN + LLI.QTYExpected > 0)
@@ -309,95 +305,29 @@ BEGIN
             AND SKU.SKU = @cSKU
 
          -- Get the cubic capacity of all Empty dynamic locations
-         DELETE FROM #TempLocCube
-
-         INSERT INTO #TempLocCube (LOC, LogicalLocation, LocCube)
-         SELECT DISTINCT LOC.Loc, LOC.LogicalLocation, LOC.CubicCapacity
+         SET @cSuggestedLOC = ''
+         SELECT TOP 1 @cSuggestedLOC = LOC.Loc
          FROM dbo.LOC WITH(NOLOCK)
          WHERE LOC.Facility = @cFacility
             AND LOC.Loc <> @cLOC
+            AND LOC.LocationType = @cDYNPPICK
             AND LOC.LocationCategory = @cAEOMX_MEZ
             AND LOC.SectionKey = ISNULL(@cBUSR2, '')
+            AND LOC.CubicCapacity >= @fSKUCube
             AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
-                        INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
+                        INNER JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK) ON LLI.Loc = LOC1.Loc
                         WHERE LOC1.Facility = @cFacility
+                           AND LLI.StorerKey = @cStorerKey
                            AND LOC1.LocationCategory = @cAEOMX_MEZ
-                           AND LOC1.CommingleSku IN ( '0', 'N' )
-                           AND LLI1.SKU <> @cSKU
-                           AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
+                           AND (LLI.Qty - LLI.QtyPicked - LLI.QtyPickInProcess > 0 OR LLI.PendingMoveIN + LLI.QtyExpected > 0)
                            AND LOC.Loc = LOC1.Loc
                         )
-            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
-                        INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
-                        INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
-                        WHERE LOC2.Facility = @cFacility
-                           AND LOC2.LocationCategory = @cAEOMX_MEZ
-                           AND LOC2.NoMixLottable02 IN ( '1', 'Y' ) 
-                           AND LA.Lottable02 <> @cLottable02
-                           AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
-                           AND LOC.Loc = LOC2.Loc
-                        )
-            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC3 WITH(NOLOCK)
-                        INNER JOIN dbo.LOTxLOCxID LLI3 WITH(NOLOCK) ON LLI3.Loc = LOC3.Loc AND LLI3.StorerKey = @cStorerKey
-                        WHERE LOC3.Facility = @cFacility
-                           AND LOC3.LocationCategory = @cAEOMX_MEZ
-                           AND (LLI3.Qty - LLI3.QtyPicked - LLI3.QtyPickInProcess > 0)
-                           AND LOC.Loc = LOC3.Loc
-                        )
          ORDER BY LOC.LogicalLocation, LOC.Loc
-
-         -- Get the occupied cubic capacity of all Empty dynamic locations
-         DELETE FROM #TempLocOccupiedCube
-
-         INSERT INTO #TempLocOccupiedCube (LOC, LogicalLocation, LocOccupiedCube)
-         SELECT LOC.Loc, LOC.LogicalLocation, SUM( Pack.CubeUOM3 * ISNULL((LLI.PendingMoveIN + LLI.QTYExpected), 0) )
-         FROM dbo.LOC WITH(NOLOCK)
-         INNER JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
-            ON LLI.Loc = LOC.Loc
-            AND LLI.StorerKey = @cStorerKey
-         INNER JOIN dbo.SKU WITH(NOLOCK)
-            ON SKU.StorerKey = LLI.StorerKey
-            AND SKU.SKU = LLI.SKU
-         INNER JOIN dbo.Pack WITH(NOLOCK)
-            ON Pack.PackKey = SKU.PackKey
-         WHERE LOC.Facility = @cFacility
-            AND LLI.Qty - LLI.QtyPicked - LLI.QTYPickInProcess = 0
-            AND LLI.PendingMoveIN + LLI.QTYExpected > 0
-            AND SKU.StorerKey = @cStorerKey
-            AND LOC.Loc <> @cLOC
-            AND LOC.LocationCategory = @cAEOMX_MEZ
-            AND LOC.SectionKey = ISNULL(@cBUSR2, '')
-         GROUP BY LOC.Loc, LOC.LogicalLocation
-         ORDER BY LOC.LogicalLocation, LOC.Loc
-
-         SET @cSuggestedLOC = ''
-         SELECT TOP 1 @cSuggestedLOC = TLC.LOC
-         FROM #TempLocCube TLC
-         LEFT JOIN #TempLocOccupiedCube TLOC
-            ON TLOC.LOC = TLC.LOC
-         WHERE TLC.LocCube >= ISNULL(TLOC.LocOccupiedCube, 0) + @fSKUCube
-         ORDER BY TLC.RowRefID
 
          SELECT @nRowCount = @@ROWCOUNT
       END
    END
-   -- ELSE
-   -- BEGIN
-   --    -- Suggest LOC
-   --    EXEC @nErrNo = [dbo].[nspRDTPASTD]
-   --         @c_userid          = 'RDT'
-   --       , @c_storerkey       = @cStorerKey
-   --       , @c_lot             = @cLOT
-   --       , @c_sku             = @cSKU
-   --       , @c_id              = @cID
-   --       , @c_fromloc         = @cLOC
-   --       , @n_qty             = @nQTY
-   --       , @c_uom             = '' -- not used
-   --       , @c_packkey         = '' -- optional, if pass-in SKU
-   --       , @n_putawaycapacity = 0
-   --       , @c_final_toloc     = @cSuggestedLOC OUTPUT
-   -- END
-
+ 
    /*-------------------------------------------------------------------------------
                                  Book suggested location
    -------------------------------------------------------------------------------*/
