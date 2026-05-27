@@ -360,8 +360,8 @@ BEGIN
       @cWaveKey = WaveKey        
    FROM dbo.TaskDetail WITH (NOLOCK)          
    WHERE TaskDetailKey = @cTaskDetailKey         
-  
-  insert into traceinfo (tracename,timein,step1,step2) values ('rmt1',getdate(),@cTaskDetailKey,'' )    
+
+   --insert into traceinfo (tracename,timein,step1,step2) values ('rmt1',getdate(),@cTaskDetailKey,'' )    
 
    -- Get storer config        
    SET @cOverwriteToLOC = rdt.rdtGetConfig( @nFunc, 'OverwriteToLOC', @cStorerKey)          
@@ -664,10 +664,22 @@ BEGIN
                      AND   TD.UserKey = ''      
                      AND   TD.DeviceID = ''
                      AND   TD.AreaKey = @cPickZone
-                     --AND   (
-                           --(@cMethod <> '' AND ORD.UserDefine10 = @cShort4CDLKUp)
-                           --OR (1=1)
-                           --)
+					 AND   NOT EXISTS
+					       (
+						      SELECT 1
+							  FROM TaskDetail TD2 WITH(NOLOCK) 
+							  WHERE TD.WaveKey = TD2.WaveKey 
+							     AND 
+								    (
+									   (UserKey <> '' AND UserKey <> @cUserName)
+								       OR 
+									   (UserKeyOverRide <> '' AND UserKeyOverRide <> @cUserName)
+									   OR
+									   (DeviceID <> '' AND DeviceID <> @cCartID)
+									)
+								 AND Status NOT IN ('X','9')
+								 AND @cMethod = '1'
+						   )
                      AND   (
                             (EXISTS(SELECT 1 FROM @tMethodShort MS WHERE ORD.UserDefine10 = MS.MethodShort) AND @cMethod <> '')
                             OR
@@ -1074,8 +1086,6 @@ BEGIN
       IF @nErrNo <> 0      
          GOTO Quit      
             
-
-      
       SET @cMax = ''
 
       IF @cMethod = '3'
@@ -1087,6 +1097,13 @@ BEGIN
          FROM Taskdetail TD WITH(NOLOCK)
          WHERE TD.storerkey = @cStorerkey
          AND TD.Groupkey = @cGroupKey
+
+		 UPDATE Taskdetail
+		 SET Message03 = '2'
+		 WHERE Groupkey = @cGroupKey
+		    AND StorerKey = @cStorerKey
+
+		 SET @cMessage03 = '2'
 
          SET @cOutField01 = @cMessage01
          SET @cOutField02 = @cMessage02
@@ -1291,7 +1308,7 @@ BEGIN
                IF @nMaxCartonCnt <> CAST(@cMessage03 AS INT)
                BEGIN
                   SET @nErrNo = 229605
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Carton Cnt Mismatch
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --229605^Scan More DropIDs
                   GOTO Quit
                END
             END
