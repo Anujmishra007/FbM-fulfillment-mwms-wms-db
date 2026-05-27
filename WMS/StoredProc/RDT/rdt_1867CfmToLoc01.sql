@@ -333,11 +333,15 @@ BEGIN
 
                FETCH NEXT FROM @curMV INTO @cFromLot, @cFromID, @nQTY, @cFromLoc, @cDropID, @cSKU
             END
+            CLOSE @curMV
+            DEALLOCATE @curMV
          END
       END
 
       FETCH NEXT FROM @cur INTO @cTaskKey
    END
+   CLOSE @cur
+   DEALLOCATE @cur
 
    /*--------------------------------------------------------------------------------------------------
       Step 4: Update TaskDetail to Status='9' and create PackHeader/PackDetail
@@ -370,36 +374,36 @@ BEGIN
          GOTO RollBackTran
       END
 
+      -- Update PickDetail status once per task (moved outside cursor loop for performance)
+      IF NOT EXISTS ( SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
+                      WHERE TaskDetailKey = @cTaskKey
+                        AND Status = '4')
+      BEGIN
+         UPDATE dbo.PickDetail
+         SET Status = '5',
+             EditWho = @cUserName,
+             EditDate = GETDATE()
+         WHERE TaskDetailKey = @cTaskKey
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 227202
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd CaseID Err
+            GOTO RollBackTran
+         END
+      END
+
       SET @cur2 = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT DropID, SKU, SUM( Qty)
          FROM dbo.PICKDETAIL WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskKey
            AND DropID <> ''
-         GROUP BY LOT, ID, DropID, Loc, SKU
+         GROUP BY DropID, SKU
 
       OPEN @cur2
       FETCH NEXT FROM @cur2 INTO @cDropID, @cSKU, @nQTY
       WHILE @@FETCH_STATUS = 0
       BEGIN
-         IF NOT EXISTS ( SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
-                         WHERE TaskDetailKey = @cTaskKey
-                           AND Status = '4')
-         BEGIN
-            UPDATE dbo.PickDetail
-            SET Status = '5',
-                EditWho = @cUserName,
-                EditDate = GETDATE()
-            WHERE TaskDetailKey = @cTaskKey
-
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 227202
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd CaseID Err
-               SET @cErrMsg = 'Upd Pick confirm'
-               GOTO RollBackTran
-            END
-         END
-
          -- Get PickHeader info
          SELECT @cLoadKey = LoadKey
          FROM dbo.ORDERS WITH (NOLOCK)
@@ -578,6 +582,16 @@ BEGIN
          END
          ELSE
          BEGIN
+            -- Get CartonNo and LabelLine from existing PackDetail for PackSerialNo insert
+            SELECT TOP 1
+               @nCartonNo = CartonNo,
+               @cLabelLine = LabelLine
+            FROM dbo.PackDetail WITH(NOLOCK)
+            WHERE PickslipNo = @cPickslipNo
+              AND StorerKey = @cStorerKey
+              AND Sku = @cSKU
+              AND DropID = @cDropID
+
             SELECT @fStdGrossWgt = @nQty * StdGrossWgt
             FROM SKU WITH(NOLOCK)
             WHERE SKU = @csku
@@ -613,7 +627,8 @@ BEGIN
             FROM dbo.PICKDETAIL PD WITH(NOLOCK)
             INNER JOIN PickSerialNo PSN WITH(NOLOCK)
                ON PD.PickDetailKey = PSN.PickDetailKey AND PD.Sku = PSN.Sku
-            WHERE TaskDetailKey = @cTaskKey
+            WHERE PD.TaskDetailKey = @cTaskKey
+              AND PD.DropID = @cDropID
               AND PSN.SKU = @cSku
               AND NOT EXISTS(SELECT 1 FROM PackSerialNo WITH(NOLOCK)
                              WHERE SerialNo = PSN.SerialNo
@@ -631,7 +646,8 @@ BEGIN
                FROM dbo.PICKDETAIL PD WITH(NOLOCK)
                INNER JOIN PickSerialNo PSN WITH(NOLOCK)
                   ON PD.PickDetailKey = PSN.PickDetailKey AND PD.Sku = PSN.Sku
-               WHERE TaskDetailKey = @cTaskKey
+               WHERE PD.TaskDetailKey = @cTaskKey
+                 AND PD.DropID = @cDropID
                  AND PSN.SKU = @cSku
                  AND PSN.PickSerialNoKey > @cPickSerialNoKey
                ORDER BY PSN.PickSerialNoKey ASC
@@ -714,7 +730,6 @@ BEGIN
 
                IF @bSuccess <> 1
                BEGIN
-                  ROLLBACK TRAN
                   SET @nErrNo = 227206
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKey TransmitLogKey2 Fail
                   GOTO RollBackTran
@@ -726,7 +741,6 @@ BEGIN
                SET @nErrNo = @@ERROR
                IF @nErrNo <> 0
                BEGIN
-                  ROLLBACK TRAN
                   SET @nErrNo = 227207
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSERT TRANSMITLOG2 Fail
                   GOTO RollBackTran
@@ -748,9 +762,13 @@ BEGIN
 
          FETCH NEXT FROM @cur2 INTO @cDropID, @cSKU, @nQTY
       END
+      CLOSE @cur2
+      DEALLOCATE @cur2
 
       FETCH NEXT FROM @cur INTO @cTaskKey, @cOrderKey
    END
+   CLOSE @cur
+   DEALLOCATE @cur
 
    GOTO Quit
 

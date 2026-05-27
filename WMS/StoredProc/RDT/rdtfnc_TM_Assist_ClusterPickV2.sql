@@ -671,13 +671,13 @@ BEGIN
 							  WHERE TD.WaveKey = TD2.WaveKey 
 							     AND 
 								    (
-									   (UserKey <> '' AND UserKey <> @cUserName)
+									   (TD2.UserKey <> '' AND TD2.UserKey <> @cUserName)
 								       OR 
-									   (UserKeyOverRide <> '' AND UserKeyOverRide <> @cUserName)
+									   (TD2.UserKeyOverRide <> '' AND TD2.UserKeyOverRide <> @cUserName)
 									   OR
-									   (DeviceID <> '' AND DeviceID <> @cCartID)
+									   (TD2.DeviceID <> '' AND TD2.DeviceID <> @cCartID)
 									)
-								 AND Status NOT IN ('X','9')
+								 AND TD2.Status NOT IN ('X','9')
 								 AND @cMethod = '1'
 						   )
                      AND   (
@@ -1292,7 +1292,7 @@ BEGIN
             DECLARE @nMaxCartonCnt INT = 0
             SELECT @nMaxCartonCnt = COUNT(1) FROM STRING_SPLIT(@cMax, '|')
 
-            SELECT @cMessage03 = Message03
+            SELECT TOP 1 @cMessage03 = Message03
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE Storerkey = @cStorerKey
             AND   TaskType = 'ASTCPK'
