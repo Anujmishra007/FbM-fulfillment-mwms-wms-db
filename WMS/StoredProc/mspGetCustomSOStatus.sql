@@ -348,16 +348,19 @@ BEGIN
   --debug
   SELECT ssc.[column], ssc.[operation], ssc.[value], ssc.[logicalOperation], cc.[condition]
   FROM #TMP_SCE_SEARCHING_CRITERIAS SSC
-  JOIN #TMP_SUPPORTED_CONDITIONS CC ON SSC.[column] = CC.[column] AND SSC.[value] = CC.[value]
+  LEFT JOIN #TMP_SUPPORTED_CONDITIONS CC ON SSC.[column] = CC.[column] AND SSC.[value] = CC.[value]
   WHERE SSC.[column] = 'sostatus'
-  AND ISNULL(TRIM(CC.[condition]), '') <> ''
+  AND SSC.[operation] <> 'IN'
+  --AND ISNULL(TRIM(CC.[condition]), '') <> ''
 
   DECLARE CUR CURSOR READ_ONLY FAST_FORWARD FOR
   SELECT ssc.[column], ssc.[operation], ssc.[value], ssc.[logicalOperation], cc.[condition]
   FROM #TMP_SCE_SEARCHING_CRITERIAS SSC
-  JOIN #TMP_SUPPORTED_CONDITIONS CC ON SSC.[column] = CC.[column] AND SSC.[value] = CC.[value]
+  --Left join with supported conditions to make sure only the searching criteria with supported conditions will be converted, for those criteria without supported conditions, no change will be made to avoid potential issue.
+  LEFT JOIN #TMP_SUPPORTED_CONDITIONS CC ON SSC.[column] = CC.[column] AND SSC.[value] = CC.[value]
   WHERE SSC.[column] = 'sostatus'
-  AND ISNULL(TRIM(CC.[condition]), '') <> ''
+  AND SSC.[operation] <> 'IN'
+  --AND ISNULL(TRIM(CC.[condition]), '') <> ''
 
   OPEN CUR
   FETCH NEXT FROM CUR INTO @c_Column, @c_Operation, @c_Value, @c_LogicalOperation, @c_Condition
@@ -373,6 +376,11 @@ BEGIN
     IF @c_Operation = '<>'
     BEGIN
       SET @c_ConditionBuilder = @c_ConditionBuilder + ' NOT '
+    END
+
+    IF ISNULL(TRIM(@c_Condition), '') = ''
+    BEGIN 
+      SET @c_Condition = ' (ORDERS.SOStatus = ''' + @c_Value + ''' )' 
     END
 
     SET @c_ConditionBuilder = @c_ConditionBuilder + ' ' + @c_Condition
@@ -418,8 +426,15 @@ BEGIN
     END
 
     -- add extra parentheses to make sure the logic is correct after replacement  
+    IF ISNULL(TRIM(@c_Condition), '') <> ''
+    BEGIN 
+      SET @c_Condition = ' (ORDERS.SOStatus IN ('''+ REPLACE(@c_Value, ',', ''',''') +''') OR ' + @c_Condition + ' )' 
+    END
+    ELSE
+    BEGIN
+      SET @c_Condition = ' (ORDERS.SOStatus IN ('''+ REPLACE(@c_Value, ',', ''',''') +''')) '
+    END 
 
-    SET @c_Condition = '(ORDERS.SOStatus IN ('''+ REPLACE(@c_Value, ',', ''',''') +''') OR ' + @c_Condition + ' )' 
     SET @c_ConditionBuilder = @c_ConditionBuilder + ' ' + @c_Condition
 
     FETCH NEXT FROM CUR INTO @c_Column, @c_Operation, @c_Value, @c_LogicalOperation, @c_Condition
