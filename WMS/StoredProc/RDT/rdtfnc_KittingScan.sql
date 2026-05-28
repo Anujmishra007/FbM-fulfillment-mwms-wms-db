@@ -1528,8 +1528,12 @@ BEGIN
          ORDER BY SEQUENCE
          OFFSET (@nChildSKUIndex - 1) ROWS FETCH NEXT 1 ROWS ONLY
 
-         -- Ensure @nBOMQty >= 1 to avoid issues from integer division truncation
-         IF @nBOMQty < 1 SET @nBOMQty = 1
+         -- Ensure @nBOMQty >= 1 and recalculate @nQTYExp to stay consistent
+         IF @nBOMQty < 1
+         BEGIN
+            SET @nBOMQty = 1
+            SET @nQTYExp = @nParentSKUQty * @nBOMQty
+         END
       END
 
       -- Validate @nQTYExp is set when there is a child SKU to process
@@ -2121,8 +2125,12 @@ BEGIN
               AND StorerKey = @cStorerKey
               AND BOMONLY = 'Y'
 
-            -- Ensure @nBOMQty >= 1 to avoid issues from integer division truncation
-            IF @nBOMQty < 1 SET @nBOMQty = 1
+            -- Ensure @nBOMQty >= 1 and recalculate @nQTYExp to stay consistent
+            IF @nBOMQty < 1
+            BEGIN
+               SET @nBOMQty = 1
+               SET @nQTYExp = @nParentSKUQty * @nBOMQty
+            END
          END
          ELSE
          BEGIN
@@ -2147,8 +2155,12 @@ BEGIN
          ORDER BY SEQUENCE
          OFFSET (@nChildSKUIndex - 1) ROWS FETCH NEXT 1 ROWS ONLY
 
-         -- Ensure @nBOMQty >= 1 to avoid issues from integer division truncation
-         IF @nBOMQty < 1 SET @nBOMQty = 1
+         -- Ensure @nBOMQty >= 1 and recalculate @nQTYExp to stay consistent
+         IF @nBOMQty < 1
+         BEGIN
+            SET @nBOMQty = 1
+            SET @nQTYExp = @nParentSKUQty * @nBOMQty
+         END
       END
 
       -- Validate @nQTYExp is set when there is a child SKU to process
