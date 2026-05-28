@@ -3066,7 +3066,7 @@ BEGIN
                WHERE PickSlipNo = @cPickSlipNo
                   AND Mobile = @nMobile
                   AND AddWho = @cUserName
-                  AND ISNULL(Remarks, '') = IIF(@cUOM = '2', @cSuggUCC, @cScannedSN)
+                  AND ISNULL(Remarks, '') = IIF(@cUOM = '2', @cScannedUCC, @cScannedSN)
                   AND OrderKey = @cCurrentOrderKey
 
                SET @nTranCount = @@TRANCOUNT
