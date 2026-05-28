@@ -3288,58 +3288,6 @@ BEGIN
          SET @cLOC = @cSuggLOC
          SET @cSKU = @cSuggSKU
 
-         -- Get SKU description
-         DECLARE @cDispStyleColorSize  NVARCHAR( 20)
-         SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)
-
-         --yeekung05
-         DECLARE @cDispExtValue  NVARCHAR( 20)
-         SET @cDispExtValue = rdt.RDTGetConfig( @nFunc, 'DispExtValues', @cStorerKey)  --(yeekung03)
-
-         IF @cDispStyleColorSize = '0'
-            SELECT @cSKUDescr = Descr FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
-
-         ELSE IF @cDispStyleColorSize = '1'
-            SELECT @cSKUDescr =
-               CAST( Style AS NCHAR(20)) +
-               CAST( Color AS NCHAR(10)) +
-               CAST( Size  AS NCHAR(10))
-            FROM SKU WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND SKU = @cSKU
-
-         IF @cDispExtValue ='1' --(yeekung05)
-         BEGIN
-            DECLARE @cTable NVARCHAR(20)
-            DECLARE @cNotes NVARCHAR(MAX)
-            DECLARE @cColumnName NVARCHAR(20)
-
-            SELECT @cTable=long,
-                  @cNotes = notes,
-                  @cColumnName=udf01
-            FROM codelkup (NOLOCK)
-            where storerkey=@cStorerKey
-            AND LISTNAME='RefColLkup'
-
-         SET @cSQL =
-            '    SELECT @cSKUDescr = ' + @cNotes +
-            '    FROM dbo.'+@cTable + ' WITH (NOLOCK)' +
-            '    WHERE storerkey=@cStorerkey ' +
-            '       AND ' + @cColumnName + '= @c' + @cColumnName
-
-            SET @cSQLParam =
-               '@cOrderKey   NVARCHAR( 10) , ' +
-               '@cStorerkey  NVARCHAR( 20) , ' +
-               '@cSKU        NVARCHAR( 20) , ' +
-               '@cSKUDescr   NVARCHAR( 60)   '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @cStorerKey = @cStorerKey,
-               @cOrderKey   = @cOrderKey,
-               @cSKU        = @cSuggSKU,
-               @cSKUDescr   = @cSKUDescr OUTPUT
-         END
-
          UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
          SET C_String2 = @cLOT,
             C_String6 = '6'
@@ -3373,6 +3321,62 @@ BEGIN
          WHERE Mobile = @nMobile
       END
       SET @cLottableCode = ''
+   END
+
+   IF ISNULL( @cSKU, '') <> ''
+   BEGIN
+      SET @cSKUDescr = ''
+      -- Get SKU description
+      DECLARE @cDispStyleColorSize  NVARCHAR( 20)
+      SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)
+
+      --yeekung05
+      DECLARE @cDispExtValue  NVARCHAR( 20)
+      SET @cDispExtValue = rdt.RDTGetConfig( @nFunc, 'DispExtValues', @cStorerKey)  --(yeekung03)
+
+      IF @cDispStyleColorSize = '0'
+         SELECT @cSKUDescr = Descr FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+
+      ELSE IF @cDispStyleColorSize = '1'
+         SELECT @cSKUDescr =
+            CAST( Style AS NCHAR(20)) +
+            CAST( Color AS NCHAR(10)) +
+            CAST( Size  AS NCHAR(10))
+         FROM SKU WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND SKU = @cSKU
+
+      IF @cDispExtValue ='1' --(yeekung05)
+      BEGIN
+         DECLARE @cTable NVARCHAR(20)
+         DECLARE @cNotes NVARCHAR(MAX)
+         DECLARE @cColumnName NVARCHAR(20)
+
+         SELECT @cTable=long,
+               @cNotes = notes,
+               @cColumnName=udf01
+         FROM codelkup (NOLOCK)
+         where storerkey=@cStorerKey
+         AND LISTNAME='RefColLkup'
+
+      SET @cSQL =
+         '    SELECT @cSKUDescr = ' + @cNotes +
+         '    FROM dbo.'+@cTable + ' WITH (NOLOCK)' +
+         '    WHERE storerkey=@cStorerkey ' +
+         '       AND ' + @cColumnName + '= @c' + @cColumnName
+
+         SET @cSQLParam =
+            '@cOrderKey   NVARCHAR( 10) , ' +
+            '@cStorerkey  NVARCHAR( 20) , ' +
+            '@cSKU        NVARCHAR( 20) , ' +
+            '@cSKUDescr   NVARCHAR( 60)   '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @cStorerKey = @cStorerKey,
+            @cOrderKey   = @cOrderKey,
+            @cSKU        = @cSuggSKU,
+            @cSKUDescr   = @cSKUDescr OUTPUT
+      END
    END
 
    EXEC rdt.rdt_839GetBalQty
