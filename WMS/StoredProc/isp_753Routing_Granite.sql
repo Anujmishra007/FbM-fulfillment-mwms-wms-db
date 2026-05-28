@@ -1,9 +1,7 @@
-
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-
 
 /***************************************************************************************/
 /* Store Procedure:  isp_753Routing_Granite                                            */
@@ -25,8 +23,10 @@ GO
 /* 2024-10-14   Shong       1.1         Adding Valication for Pickup date Userdefine02 */
 /* 2024-10-15   Shong       1.2         Changing Update By Dynamic group setup         */
 /* 2024-11-18   Shong       1.3         New validation logic before actual SP begins   */
+/* 26-May-2026  WLChooi     1.4         FCR-13104 Added Validation for early submission*/
+/*                                      for 753 (WL01)                                 */
 /***************************************************************************************/
-ALTER   PROCEDURE [dbo].[isp_753Routing_Granite]
+CREATE OR ALTER PROCEDURE [dbo].[isp_753Routing_Granite]
    @c_WaveKey NVARCHAR(10),
    @b_Success INT OUTPUT,
    @n_err     INT OUTPUT,
@@ -51,7 +51,7 @@ BEGIN
          , @n_Continue        INT = 1
          , @n_StartTranCnt    INT
          , @b_Debug           INT = 0 
-         , @d_PickupDate       DATETIME
+         , @d_PickupDate      DATETIME
          , @c_UserDefine02    NVARCHAR(20)
 
    DECLARE @c_SortOrder     NVARCHAR(10)
@@ -64,6 +64,21 @@ BEGIN
          , @b_RecordFound   BIT           = 0
          , @c_TMReleaseFlag NVARCHAR(20) = 'N'
          , @cTransmitLogSubmitDate NVARCHAR(10) = ''; --(Ver 1.3)
+
+   --WL01 S
+   DECLARE @c_TableName       NVARCHAR(30) = N'WSWAVELOG'
+
+   IF OBJECT_ID('tempdb..#TMP_WaveOrders') IS NOT NULL
+      DROP TABLE #TMP_WaveOrders
+
+   CREATE TABLE #TMP_WaveOrders
+   (
+         OrderKey   NVARCHAR(10) PRIMARY KEY
+       , StorerKey  NVARCHAR(15) NOT NULL
+       , [Status]   NVARCHAR(10) NOT NULL
+       , BillToKey  NVARCHAR(15) NOT NULL
+   );
+   --WL01 E
 
    SET @n_Continue = 1
    SELECT @n_StartTranCnt = @@TRANCOUNT
@@ -141,11 +156,70 @@ BEGIN
 
    -- (Ver 1.3) End
 
+   --WL01 S
+   -- 753 Early Submission
+   IF @n_Continue IN (1, 2)
+   BEGIN
+      INSERT #TMP_WaveOrders (OrderKey, StorerKey, [Status], BillToKey)
+      SELECT DISTINCT
+             O.OrderKey
+           , O.StorerKey
+           , ISNULL(O.[Status], '')
+           , ISNULL(O.BillToKey, '')
+      FROM dbo.WAVEDETAIL WD WITH (NOLOCK)
+      JOIN dbo.ORDERS O WITH (NOLOCK) ON O.OrderKey = WD.OrderKey
+      WHERE WD.WaveKey = @c_WaveKey
+      
+      SELECT TOP 1 @c_StorerKey = O.StorerKey
+      FROM #TMP_WaveOrders O
+
+      IF NOT EXISTS ( SELECT 1
+                      FROM dbo.TRANSMITLOG2 TL2 WITH (NOLOCK)
+                      WHERE TL2.Tablename = @c_TableName
+                      AND TL2.Key1 = @c_WaveKey
+                      AND TL2.Key2 = ''
+                      AND TL2.Key3 = @c_StorerKey )
+      BEGIN
+         SELECT @n_continue = 3;
+         SELECT @n_err = 500257;
+         SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err) + ': Wave#: ' + @c_WaveKey
+                          + ' not released to WCS. (isp_753Routing_Granite)';
+         GOTO RETURN_SP;
+      END
+
+      SET @c_OrderKey = N''
+      SELECT TOP 1 @c_OrderKey = O.OrderKey
+      FROM #TMP_WaveOrders O
+      WHERE O.[Status] IN ('CANC')
+
+      IF @c_OrderKey > ''
+      BEGIN
+         SELECT @n_continue = 3;
+         SELECT @n_err = 500258;
+         SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err) + ': Cancelled Order Exists in Wave#: ' + @c_WaveKey
+                          + '. ' + 'Order#: ' + @c_OrderKey + '. (isp_753Routing_Granite)';
+         GOTO RETURN_SP;
+      END
+
+      IF EXISTS ( SELECT 1
+                  FROM #TMP_WaveOrders O
+                  HAVING COUNT(DISTINCT O.[Status]) > 1 )
+      BEGIN
+         SELECT @n_continue = 3;
+         SELECT @n_err = 500259;
+         SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err) + ': Wave#: ' + @c_WaveKey
+                          + ' Orders in different Status. (isp_753Routing_Granite)';
+         GOTO RETURN_SP;
+      END
+   END
+   --WL01 E
+
    DECLARE CUR_BillToKey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-   SELECT Distinct O.BillToKey, O.StorerKey 
-   FROM dbo.WaveDetail WD (NOLOCK)
-   JOIN dbo.ORDERS O (NOLOCK) on WD.OrderKey = O.OrderKey 
-   WHERE WD.WaveKey = @c_WaveKey
+   SELECT DISTINCT O.BillToKey, O.StorerKey
+   FROM #TMP_WaveOrders O                                     --WL01
+   --FROM dbo.WaveDetail WD (NOLOCK)                          --WL01
+   --JOIN dbo.ORDERS O (NOLOCK) on WD.OrderKey = O.OrderKey   --WL01
+   --WHERE WD.WaveKey = @c_WaveKey                            --WL01
 
    OPEN CUR_BillToKey
 
@@ -163,10 +237,10 @@ BEGIN
 
       IF @c_FirstString = ''
       BEGIN 
-			SELECT @n_continue = 3;
-			SELECT @n_err = 562751;
-			SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Codelkup Not Setup for ' + @c_BillToKey + '. (isp_753Routing_Granite)';
-			GOTO RETURN_SP; 
+         SELECT @n_continue = 3;
+         SELECT @n_err = 562751;
+         SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Codelkup Not Setup for ' + @c_BillToKey + '. (isp_753Routing_Granite)';
+         GOTO RETURN_SP; 
       END 
       
       --DECLARE CUR_OrderKey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -251,10 +325,10 @@ BEGIN
       --   END 
       --   ELSE
       --   BEGIN 
-			   --SELECT @n_continue = 3;
-			   --SELECT @n_err = 562752;
-			   --SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Generate 735 Routing Number Failed. (isp_753Routing_Granite)';
-			   --GOTO RETURN_SP;            
+            --SELECT @n_continue = 3;
+            --SELECT @n_err = 562752;
+            --SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Generate 735 Routing Number Failed. (isp_753Routing_Granite)';
+            --GOTO RETURN_SP;            
       --   END 
 
       --   FETCH NEXT FROM CUR_OrderKey INTO @c_OrderKey, @c_Col01Value, @c_Col02Value, @c_M_Contact1, @c_C_Contact1
@@ -321,10 +395,10 @@ BEGIN
 
          IF CURSOR_STATUS('global','CUR_TRANSMITLOG_REC') = -3
          BEGIN
-			   SELECT @n_continue = 3;
-			   SELECT @n_err = 562753;
-			   SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Declare Cursor Failed. (isp_753Routing_Granite)';
-			   GOTO RETURN_SP; 
+            SELECT @n_continue = 3;
+            SELECT @n_err = 562753;
+            SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Declare Cursor Failed. (isp_753Routing_Granite)';
+            GOTO RETURN_SP; 
          END
 
          OPEN CUR_TRANSMITLOG_REC
@@ -426,10 +500,10 @@ BEGIN
 
                   IF CURSOR_STATUS('global','CUR_ORDERKEY') = -3
                   BEGIN
-			            SELECT @n_continue = 3;
-			            SELECT @n_err = 562753;
-			            SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Declare CUR_ORDERKEY Cursor Failed. (isp_753Routing_Granite)';
-			            GOTO RETURN_SP; 
+                     SELECT @n_continue = 3;
+                     SELECT @n_err = 562753;
+                     SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Declare CUR_ORDERKEY Cursor Failed. (isp_753Routing_Granite)';
+                     GOTO RETURN_SP; 
                   END
 
                   OPEN CUR_ORDERKEY
@@ -450,10 +524,10 @@ BEGIN
                END 
                ELSE
                BEGIN 
-			         SELECT @n_continue = 3;
-			         SELECT @n_err = 562752;
-			         SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Generate 735 Routing Number Failed. (isp_753Routing_Granite)';
-			         GOTO RETURN_SP;            
+                  SELECT @n_continue = 3;
+                  SELECT @n_err = 562752;
+                  SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Generate 735 Routing Number Failed. (isp_753Routing_Granite)';
+                  GOTO RETURN_SP;            
                END 
 
                SET @b_RecordFound = 1
@@ -486,6 +560,7 @@ BEGIN
       FETCH NEXT FROM CUR_BillToKey INTO @c_BillToKey, @c_StorerKey
    END 
    CLOSE CUR_BillToKey
+   DEALLOCATE CUR_BillToKey   --WL01
 
    IF @n_Continue IN (1,2)
    BEGIN
@@ -498,31 +573,60 @@ BEGIN
    END
 
    RETURN_SP:
-	IF @n_continue = 3  -- Error Occurred - Process And Return
-	BEGIN
-		SELECT @b_Success = 0;
-		IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_StartTranCnt
-		BEGIN
-			ROLLBACK TRAN;
-		END
-		ELSE
-		BEGIN
-			WHILE @@TRANCOUNT > @n_StartTranCnt
-			BEGIN
-				COMMIT TRAN
-			END
-		END
-		EXECUTE dbo.nsp_LogError @n_err, @c_errmsg, 'isp_753Routing_Granite'
-		RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
-		RETURN -1
-	END
-	ELSE
-	BEGIN
-		SELECT @b_Success = 1;
-		IF @@TRANCOUNT > @n_StartTranCnt
-		BEGIN
-			COMMIT TRAN;
-		END;
-		RETURN 0;
-	END;
+   --WL01 S
+   IF OBJECT_ID('tempdb..#TMP_WaveOrders') IS NOT NULL
+      DROP TABLE #TMP_WaveOrders
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_BillToKey') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_BillToKey
+      DEALLOCATE CUR_BillToKey   
+   END
+   
+   IF CURSOR_STATUS('LOCAL', 'CUR_CODELKUP_QUERY') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_CODELKUP_QUERY
+      DEALLOCATE CUR_CODELKUP_QUERY   
+   END
+
+   IF CURSOR_STATUS('GLOBAL', 'CUR_TRANSMITLOG_REC') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_TRANSMITLOG_REC
+      DEALLOCATE CUR_TRANSMITLOG_REC   
+   END
+   
+   IF CURSOR_STATUS('GLOBAL', 'CUR_ORDERKEY') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_ORDERKEY
+      DEALLOCATE CUR_ORDERKEY   
+   END
+   --WL01 E
+
+   IF @n_continue = 3  -- Error Occurred - Process And Return
+   BEGIN
+      SELECT @b_Success = 0;
+      IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_StartTranCnt
+      BEGIN
+         ROLLBACK TRAN;
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTranCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+      EXECUTE dbo.nsp_LogError @n_err, @c_errmsg, 'isp_753Routing_Granite'
+      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+      RETURN -1
+   END
+   ELSE
+   BEGIN
+      SELECT @b_Success = 1;
+      IF @@TRANCOUNT > @n_StartTranCnt
+      BEGIN
+         COMMIT TRAN;
+      END;
+      RETURN 0;
+   END;
 END -- Procedure
