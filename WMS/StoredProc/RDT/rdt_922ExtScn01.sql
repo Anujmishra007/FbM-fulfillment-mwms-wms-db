@@ -15,6 +15,7 @@ GO
 /* Date        Rev    Author     Purposes                                  */
 /* 2026-04-21  1.0.0  Jackc      FCR-11588 created                         */
 /* 2026-05-09  1.0.1  Jackc      FCR-11588 V1.3 FBR                        */
+/* 2026-05-27  1.0.2  Jackc      FCR-11588 V1.5 FBR                        */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_922ExtScn01] (
@@ -44,10 +45,10 @@ CREATE OR ALTER PROC [RDT].[rdt_922ExtScn01] (
    @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT,  @dLottable13 DATETIME      OUTPUT,
    @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT,  @dLottable14 DATETIME      OUTPUT,
    @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT,  @dLottable15 DATETIME      OUTPUT,
-   @nAction      INT,
-   @nAfterScn    INT OUTPUT, @nAfterStep    INT OUTPUT,
-   @nErrNo             INT            OUTPUT,
-   @cErrMsg            NVARCHAR( 20)  OUTPUT,
+   @nAction          INT,
+   @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT,
+   @nErrNo           INT            OUTPUT,
+   @cErrMsg          NVARCHAR( 20)  OUTPUT,
    @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
    @cUDF04  NVARCHAR( 250) OUTPUT, @cUDF05 NVARCHAR( 250) OUTPUT, @cUDF06 NVARCHAR( 250) OUTPUT,
    @cUDF07  NVARCHAR( 250) OUTPUT, @cUDF08 NVARCHAR( 250) OUTPUT, @cUDF09 NVARCHAR( 250) OUTPUT,
@@ -252,8 +253,8 @@ BEGIN
 
          BEGIN TRY
             UPDATE dbo.MBOL WITH (ROWLOCK)
-            SET Vessel = @cInField01,
-               Vehicle_Type = @cInField02
+            SET Vessel = LEFT(@cInField01, 30),
+               Vehicle_Type = LEFT(@cInField02, 20)
             WHERE MBOLKey = @cMBOLKey
          END TRY
          BEGIN CATCH
@@ -995,8 +996,8 @@ BEGIN
                      Status = '5',
                      OrderKey = ISNULL(@cOrderKey, ''),
                      OrderLineNumber = ISNULL(@cOrderLineNumber, ''),
-                     PickDetailKey = ISNULL(@cPickDetailKey, ''),
-                     UserDefined02 = ISNULL(@cDoor, '') --truck type
+                     PickDetailKey = ISNULL(@cPickDetailKey, '')
+                     --UserDefined02 = ISNULL(@cDoor, '') --V1.0.2
                   WHERE StorerKey = @cStorerKey
                      AND UCCNo = @cUCCNo
                END TRY
@@ -1029,7 +1030,7 @@ BEGIN
                         INSERT INTO rdt.rdtScanToTruck
                            (MBOLKey, LoadKey, OrderKey, URNNo, Door, RefNo, Status, CartonType, AddWho, AddDate, EditWho, EditDate)
                         VALUES
-                           (@cMBOLKey, @cLoadKey, @cOrderKey, '', @cDoor, @cLabelNo, '0', @cRefNo, SUSER_NAME(), GETDATE(), SUSER_NAME(), GETDATE())
+                           (@cMBOLKey, @cLoadKey, @cOrderKey, '', '', @cLabelNo, '0', '', SUSER_NAME(), GETDATE(), SUSER_NAME(), GETDATE())
 
                         SET @nRowRef = SCOPE_IDENTITY()
                      END TRY
@@ -1044,9 +1045,9 @@ BEGIN
                      BEGIN TRY
                         UPDATE rdt.rdtScanToTruck WITH (ROWLOCK) SET
                            Status = '0',
-                           Door = @cDoor,
+                           --Door = @cDoor, --V1.0.2
                            RefNo = @cLabelNo,
-                           CartonType = @cRefNo,
+                           --CartonType = @cRefNo, --V1.0.2
                            EditWho = SUSER_NAME(),
                            EditDate = GETDATE()
                         WHERE RowRef = @nRowRef
@@ -1065,8 +1066,8 @@ BEGIN
                   BEGIN TRY
                      UPDATE rdt.rdtScanToTruck WITH (ROWLOCK) SET
                         Status = '9',
-                        Door = @cDoor,
-                        CartonType = @cRefNo,
+                        --Door = @cDoor, --V1.0.2
+                        --CartonType = @cRefNo, --V1.0.2
                         EditWho = @cUserName,
                         EditDate = GETDATE()
                      WHERE RowRef = @nRowRef
