@@ -43,7 +43,7 @@ CREATE OR ALTER PROC [RDT].[rdt_839DecodeSP09] (
    @dLottable14  DATETIME       OUTPUT, 
    @dLottable15  DATETIME       OUTPUT, 
    @nErrNo       INT            OUTPUT, 
-   @cErrMsg      NVARCHAR( 20)  OUTPUT
+   @cErrMsg      NVARCHAR( 250)  OUTPUT
 )
 AS
 BEGIN
@@ -220,6 +220,20 @@ BEGIN
                -- Compare with suggested UCC
                IF @cSuggUCC = @cScannedUCC
                BEGIN
+                   SELECT @cSuggUCCLottable01 = Lottable01
+                  FROM dbo.LotAttribute WITH(NOLOCK)
+                  WHERE Lot = @cSuggLOT
+                     AND StorerKey = @cStorerKey
+
+                  SELECT @cScannedUCCLottable01 = @cSegment6 + @cSegment9
+
+                  IF @cSuggUCCLottable01 <> ISNULL(@cScannedUCCLottable01, '')
+                  BEGIN
+                     SET @nErrNo = 255461
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different Lottable01
+                     GOTO Quit
+                  END
+                  
                   SET @cUPC = @cScannedUCCSKU
                   SET @nQTY = @nScannedUCCQty
 
@@ -397,7 +411,7 @@ BEGIN
 
                   SELECT @cScannedUCCLottable01 = @cSegment6 + @cSegment8
 
-                  IF @cSuggUCCLottable01 <> @cScannedUCCLottable01
+                  IF @cSuggUCCLottable01 <> ISNULL(@cScannedUCCLottable01, '')
                   BEGIN
                      SET @nErrNo = 255476
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different Lottable01
