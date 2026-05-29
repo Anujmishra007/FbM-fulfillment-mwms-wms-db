@@ -193,6 +193,7 @@ GO
 /* 12-May-2025  2.9.0 Dennis    FCR-3774 Add Extended Scn                  */
 /* 21-Aug-2025  0.0   Jackc     !!!Cutover!!! Use V0 repo for work         */
 /* 15-Oct-2025  3.0.0 NickT     UWP-42483 Optimize transaction             */
+/* 28-May-2026  4.0.0 NYE018    FCR-12622 Add extscn at step 13 and step 15*/
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Cluster_Pick](
@@ -705,6 +706,7 @@ BEGIN
    IF @nStep = 19  GOTO Step_19 -- Scn = 1892. Get Carton Size
    IF @nStep = 20  GOTO Step_20 -- Scn = 4790. Picking on hold
    IF @nStep = 21  GOTO Step_21 -- Scn = 3570. Multi SKU Barocde
+   IF @nStep = 99  GOTO Step_99
 END
 
 RETURN -- Do nothing if incorrect step
@@ -16397,6 +16399,13 @@ BEGIN
       SET @nStep = 6
    END
 
+   -- Ext Scn SP (FCR-12622)
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END -- ExtendedScreenSP <> ''
+
    GOTO Quit
 
    Step_13_Fail:
@@ -18578,6 +18587,13 @@ BEGIN
 
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                COMMIT TRAN
+
+            -- Ext Scn SP (FCR-12622) - Before going to Picking Completed
+            IF @cExtendedScnSP <> ''
+            BEGIN
+               SET @nAction = 0
+               GOTO Step_99
+            END -- ExtendedScreenSP <> ''
 
             GOTO Quit
          END
