@@ -71,12 +71,15 @@ BEGIN
    WHERE UCCNo = @cUCC
       AND StorerKey = @cStorerKey
 
-   -- the putaway logic only works for the case which all the items in the same UCC are the same SKU, 
-   --if there are more than 1 SKU, just return and let user handle it manually, as this is a very rare case and usually due to data issue.
-   IF ISNULL(@nSKUQty, 0) > 1
-      GOTO BOOK_LOC
+   SELECT TOP 1 
+      @cSKU = SKU,
+      @cLOT = Lot
+   FROM dbo.UCC WITH(NOLOCK)
+   WHERE UCCNo = @cUCC
+      AND StorerKey = @cStorerKey
+   ORDER BY SKU, Lot
 
-   SELECT TOP 1 @cLottable02 = Lottable02
+   SELECT @cLottable02 = Lottable02
    FROM dbo.LOTATTRIBUTE WITH(NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND Sku = @cSKU
@@ -108,32 +111,64 @@ BEGIN
       -- 2. If no empty location is found, find top 1 location in AEOMX_DAM
       -- should consider CommingleSku and NoMixLottable02 to make sure the suggested location is suitable for the damage UCC which has Lottable02 = 'DAM'
       SET @cSuggestedLOC = ''
-      SELECT TOP 1 @cSuggestedLOC = LOC.Loc
-      FROM dbo.LOC WITH(NOLOCK)
-      WHERE LOC.Facility = @cFacility
-         AND LOC.Loc <> @cLoc
-         AND LOC.PutawayZone = @cAEOMX_DAM
-         AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
-                        INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
-                        WHERE LOC1.Facility = @cFacility
-                           AND LOC1.PutawayZone = @cAEOMX_DAM
-                           AND LOC1.CommingleSku IN( '0', 'N' )
-                           AND LLI1.SKU <> @cSKU
-                           AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
-                           AND LOC.Loc = LOC1.Loc
-                        )
-         AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
-                        INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
-                        INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
-                        WHERE LOC2.Facility = @cFacility
-                           AND LOC2.PutawayZone = @cAEOMX_DAM
-                           AND LOC2.NoMixLottable02 IN ('1', 'Y')
-                           AND LA.Lottable02 <> @cLottable02
-                           AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
-                           AND LOC.Loc = LOC2.Loc
-                        )
 
-      ORDER BY LOC.LogicalLocation, LOC.Loc
+      IF @nSKUQty = 1
+      BEGIN
+         SELECT TOP 1 @cSuggestedLOC = LOC.Loc
+         FROM dbo.LOC WITH(NOLOCK)
+         WHERE LOC.Facility = @cFacility
+            AND LOC.Loc <> @cLoc
+            AND LOC.PutawayZone = @cAEOMX_DAM
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
+                           INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
+                           WHERE LOC1.Facility = @cFacility
+                              AND LOC1.PutawayZone = @cAEOMX_DAM
+                              AND LOC1.CommingleSku IN( '0', 'N' )
+                              AND LLI1.SKU <> @cSKU
+                              AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
+                              AND LOC.Loc = LOC1.Loc
+                           )
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
+                           INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
+                           INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
+                           WHERE LOC2.Facility = @cFacility
+                              AND LOC2.PutawayZone = @cAEOMX_DAM
+                              AND LOC2.NoMixLottable02 IN ('1', 'Y')
+                              AND LA.Lottable02 <> @cLottable02
+                              AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
+                              AND LOC.Loc = LOC2.Loc
+                           )
+
+         ORDER BY LOC.LogicalLocation, LOC.Loc
+      END
+      ELSE IF @nSKUQty > 1
+      BEGIN
+         SELECT TOP 1 @cSuggestedLOC = LOC.Loc
+         FROM dbo.LOC WITH(NOLOCK)
+         WHERE LOC.Facility = @cFacility
+            AND LOC.Loc <> @cLoc
+            AND LOC.PutawayZone = @cAEOMX_DAM
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
+                           INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
+                           WHERE LOC1.Facility = @cFacility
+                              AND LOC1.PutawayZone = @cAEOMX_DAM
+                              AND LOC1.CommingleSku IN( '0', 'N' )
+                              AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
+                              AND LOC.Loc = LOC1.Loc
+                           )
+            AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
+                           INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
+                           INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey
+                           WHERE LOC2.Facility = @cFacility
+                              AND LOC2.PutawayZone = @cAEOMX_DAM
+                              AND LOC2.NoMixLottable02 IN ('1', 'Y')
+                              AND LA.Lottable02 <> @cLottable02
+                              AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
+                              AND LOC.Loc = LOC2.Loc
+                           )
+
+         ORDER BY LOC.LogicalLocation, LOC.Loc
+      END
    END
    ELSE IF @cLottable02 = 'GOO'
    BEGIN

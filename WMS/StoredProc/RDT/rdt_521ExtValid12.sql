@@ -43,7 +43,10 @@ BEGIN
       @cSKU                               NVARCHAR(20),
       @cFinalLocCommingleSKU              NVARCHAR( 1) = '',
       @cFinalLocNoMixLottable02           NVARCHAR( 1) = '',
-      @cLOT                               NVARCHAR(10)
+      @cLOT                               NVARCHAR(10),
+      @nRowCount                          INT
+
+   DECLARE @tSKULot TABLE (RowRef INT IDENTITY(1,1) PRIMARY KEY, SKU NVARCHAR(20), Lottable02 NVARCHAR(18) )
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -52,7 +55,50 @@ BEGIN
    FROM rdt.rdtMOBREC WITH (NOLOCK) 
    WHERE Mobile = @nMobile
 
-   IF @nStep = 2 -- ToLOC
+   IF @nStep = 1
+   BEGIN
+      IF @nInputKey = 1
+      BEGIN
+         DELETE FROM @tSKULot
+         INSERT INTO @tSKULot (SKU, Lottable02)
+         SELECT DISTINCT UCC.SKU, LA.Lottable02
+         FROM dbo.UCC WITH(NOLOCK)
+         INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LA.Lot = UCC.Lot AND LA.Sku = UCC.Sku AND LA.StorerKey = UCC.StorerKey
+         WHERE UCC.StorerKey = @cStorerKey
+            AND UCC.UCCNo = @cUCCNo
+
+         IF (SELECT COUNT(DISTINCT Lottable02) FROM @tSKULot) > 1
+         BEGIN
+            SET @nErrNo = 267206
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Multiple Lottable02 values found for the same UCC
+            GOTO QUIT
+         END
+
+         IF EXISTS (SELECT 1 FROM @tSKULot WHERE ISNULL(Lottable02, '') NOT IN ('DAM', 'GOO'))
+         BEGIN
+            SET @nErrNo = 267207
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Lottable02 must be DAM or GOO for the UCC
+            GOTO QUIT
+         END
+
+         DECLARE @cLottable02Temp NVARCHAR(18)
+         SELECT TOP 1 @cLottable02Temp = Lottable02 FROM @tSKULot ORDER BY RowRef
+
+         IF @cLottable02Temp = 'GOO'
+         BEGIN
+            IF (SELECT COUNT(DISTINCT SKU)
+               FROM dbo.UCC WITH(NOLOCK) 
+                  WHERE UCC.StorerKey = @cStorerKey
+                     AND UCC.UCCNo = @cUCCNo) > 1
+            BEGIN
+               SET @nErrNo = 267208
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Cannot mix SKU for GOO UCC
+               GOTO QUIT
+            END
+         END
+      END
+   END
+   ELSE IF @nStep = 2 -- ToLOC
    BEGIN
       IF @nInputKey = 1
       BEGIN
@@ -64,6 +110,7 @@ BEGIN
             FROM dbo.UCC WITH(NOLOCK)
             WHERE UCCNo = @cUCCNo
                AND StorerKey = @cStorerKey
+            ORDER BY SKU, Lot
 
             SELECT TOP 1 
                @cLottable02 = Lottable02
@@ -92,6 +139,36 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Wrong Putaway Zone
                   GOTO QUIT
                END
+
+               IF @cFinalLocCommingleSKU IN ( '0', 'N' )
+               BEGIN
+                  -- MIX SKU
+                  SELECT @nRowCount = COUNT(DISTINCT SKU)
+                  FROM dbo.UCC WITH(NOLOCK)
+                  WHERE UCCNo = @cUCCNo
+                     AND StorerKey = @cStorerKey
+
+                  IF @nRowCount > 1
+                  BEGIN
+                     SET @nErrNo = 267203
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  No Mix SKU allowed in the location
+                     GOTO Quit
+                  END
+                  ELSE IF @nRowCount = 1
+                  BEGIN
+                     IF EXISTS(SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND Sku <> @cSKU
+                                 AND Loc = @cToLOC
+                                 AND (Qty - QtyPicked - QtyPickInProcess > 0 OR PendingMoveIN + QtyExpected > 0)
+                              )
+                     BEGIN
+                        SET @nErrNo = 267210
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  No Mix SKU allowed in the location
+                        GOTO Quit
+                     END
+                  END
+               END
             END
             ELSE IF @cLottable02 = 'GOO'
             BEGIN
@@ -106,20 +183,20 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Wrong Putaway Zone
                   GOTO QUIT
                END
-            END
 
-            IF @cFinalLocCommingleSKU IN( '0', 'N' )
-            BEGIN
-               IF EXISTS(SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK)
-                        WHERE StorerKey = @cStorerKey
-                           AND Sku <> @cSKU
-                           AND Loc = @cToLOC
-                           AND (Qty - QtyPicked - QtyPickInProcess > 0 OR PendingMoveIN + QtyExpected > 0)
-                        )
+               IF @cFinalLocCommingleSKU IN ( '0', 'N' )
                BEGIN
-                  SET @nErrNo = 267203
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  No Mix SKU allowed in the location
-                  GOTO Quit
+                  IF EXISTS(SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                              AND Sku <> @cSKU
+                              AND Loc = @cToLOC
+                              AND (Qty - QtyPicked - QtyPickInProcess > 0 OR PendingMoveIN + QtyExpected > 0)
+                           )
+                  BEGIN
+                     SET @nErrNo = 267209
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  No Mix SKU allowed in the location
+                     GOTO Quit
+                  END
                END
             END
 
