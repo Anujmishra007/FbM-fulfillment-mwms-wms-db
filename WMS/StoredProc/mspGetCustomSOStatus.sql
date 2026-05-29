@@ -37,7 +37,7 @@ BEGIN
   SET QUOTED_IDENTIFIER OFF
 
   DECLARE 
-  @c_ConvertedColumnStr NVARCHAR(MAX) = @c_SQLStr,
+  @c_ConvertedColumnStr NVARCHAR(MAX),
   @c_TargetStr NVARCHAR(MAX) = ' ( ORDERS.SOStatus ',
   @c_ReplaceStr NVARCHAR(MAX) = ' ( 1=1 OR ORDERS.SOStatus ',
   @c_Column NVARCHAR(30),
@@ -45,7 +45,8 @@ BEGIN
   @c_Value NVARCHAR(100),
   @c_LogicalOperation NVARCHAR(10),
   @c_ConditionBuilder NVARCHAR(MAX),
-  @c_Condition NVARCHAR(MAX)
+  @c_Condition NVARCHAR(MAX),
+  @c_SQLOperator NVARCHAR(10)
 
   IF OBJECT_ID('tempdb..#TMP_SUPPORTED_CONDITIONS','u') IS NOT NULL
   BEGIN
@@ -188,7 +189,7 @@ BEGIN
 
   --debug
   SELECT * FROM #TMP_SUPPORTED_CONDITIONS
-
+  SET @c_ConvertedSQLStr = @c_SQLStr
   SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, 'ORDERS.ContainerQty, ORDERS.SOStatus, ORDERS.MBOLKey,', 'ORDERS.ContainerQty, ORDERS.MBOLKey,')
   SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, @c_ReplaceStr)
   
@@ -344,15 +345,6 @@ BEGIN
 
   SET @c_ConditionBuilder = ' (1=1' -- default condition, will be updated based on the operation
 
-
-  --debug
-  SELECT ssc.[column], ssc.[operation], ssc.[value], ssc.[logicalOperation], cc.[condition]
-  FROM #TMP_SCE_SEARCHING_CRITERIAS SSC
-  LEFT JOIN #TMP_SUPPORTED_CONDITIONS CC ON SSC.[column] = CC.[column] AND SSC.[value] = CC.[value]
-  WHERE SSC.[column] = 'sostatus'
-  AND SSC.[operation] <> 'IN'
-  --AND ISNULL(TRIM(CC.[condition]), '') <> ''
-
   DECLARE CUR CURSOR READ_ONLY FAST_FORWARD FOR
   SELECT ssc.[column], ssc.[operation], ssc.[value], ssc.[logicalOperation], cc.[condition]
   FROM #TMP_SCE_SEARCHING_CRITERIAS SSC
@@ -360,44 +352,35 @@ BEGIN
   LEFT JOIN #TMP_SUPPORTED_CONDITIONS CC ON SSC.[column] = CC.[column] AND SSC.[value] = CC.[value]
   WHERE SSC.[column] = 'sostatus'
   AND SSC.[operation] <> 'IN'
-  --AND ISNULL(TRIM(CC.[condition]), '') <> ''
 
   OPEN CUR
   FETCH NEXT FROM CUR INTO @c_Column, @c_Operation, @c_Value, @c_LogicalOperation, @c_Condition
   WHILE @@FETCH_STATUS = 0
   BEGIN
     
-    SELECT @c_ConditionBuilder = @c_ConditionBuilder + 
-    CASE 
-    WHEN @c_LogicalOperation IN ('OR') THEN ' OR '
-    ELSE ' AND '
-    END 
+    SELECT @c_ConditionBuilder = CONCAT(
+      @c_ConditionBuilder,
+      IIF(@c_LogicalOperation IN ('OR'), ' OR ', ' AND ')
+    )
 
     IF @c_Operation = '<>'
     BEGIN
-      SET @c_ConditionBuilder = @c_ConditionBuilder + ' NOT '
+      SET @c_ConditionBuilder = CONCAT(@c_ConditionBuilder, ' NOT ')
     END
+
+    SET @c_SQLOperator = IIF(@c_Operation = 'contains', ' LIKE ', @c_Operation)
 
     IF ISNULL(TRIM(@c_Condition), '') = ''
     BEGIN 
-      SET @c_Condition = ' (ORDERS.SOStatus = ''' + @c_Value + ''' )' 
+      SET @c_Condition = CONCAT(' (ORDERS.SOStatus ', @c_SQLOperator, ' ''', @c_Value, ''' )') 
     END
 
-    SET @c_ConditionBuilder = @c_ConditionBuilder + ' ' + @c_Condition
+    SET @c_ConditionBuilder = CONCAT(@c_ConditionBuilder, ' ', @c_Condition)
 
     FETCH NEXT FROM CUR INTO @c_Column, @c_Operation, @c_Value, @c_LogicalOperation, @c_Condition
   END
   CLOSE CUR
   DEALLOCATE CUR
-
-  --debug
-  SELECT ssc.[column], ssc.[operation], ssc.[value], ssc.[logicalOperation], cc.[condition]
-  FROM #TMP_SCE_SEARCHING_CRITERIAS SSC
-  JOIN #TMP_SUPPORTED_CONDITIONS CC ON SSC.[column] = CC.[column] 
-  WHERE SSC.[column] = 'sostatus'
-  AND SSC.[operation] = 'IN'
-  AND (ssc.[value] LIKE '%,'+cc.[value] + ',%' OR ssc.[value] LIKE cc.[value] + ',%' OR ssc.[value] LIKE '%,' + cc.[value] OR ssc.[value] = cc.[value])
-  AND ISNULL(TRIM(CC.[condition]), '') <> ''
 
   --For 'IN' operation, the condition is expected to be like "ORDERS.SOStatus IN ('A', 'B', 'C')", no need to add extra parentheses
   DECLARE CUR CURSOR READ_ONLY FAST_FORWARD FOR
@@ -414,38 +397,54 @@ BEGIN
   WHILE @@FETCH_STATUS = 0
   BEGIN
     
-    SELECT @c_ConditionBuilder = @c_ConditionBuilder + 
-    CASE 
-    WHEN @c_LogicalOperation IN ('OR') THEN ' OR '
-    ELSE ' AND '
-    END 
+    SELECT @c_ConditionBuilder = CONCAT(
+      @c_ConditionBuilder,
+      IIF(@c_LogicalOperation IN ('OR'), ' OR ', ' AND ')
+    ) 
 
     IF @c_Operation = '<>'
     BEGIN
-      SET @c_ConditionBuilder = @c_ConditionBuilder + ' NOT '
+      SET @c_ConditionBuilder = CONCAT(@c_ConditionBuilder, ' NOT ')
     END
 
     -- add extra parentheses to make sure the logic is correct after replacement  
     IF ISNULL(TRIM(@c_Condition), '') <> ''
     BEGIN 
-      SET @c_Condition = ' (ORDERS.SOStatus IN ('''+ REPLACE(@c_Value, ',', ''',''') +''') OR ' + @c_Condition + ' )' 
+      SET @c_Condition = CONCAT
+      (
+        ' (ORDERS.SOStatus IN (''', 
+        REPLACE(@c_Value, ',', ''','''), ''') OR ',
+        @c_Condition, 
+        ' )' 
+      )
     END
     ELSE
     BEGIN
-      SET @c_Condition = ' (ORDERS.SOStatus IN ('''+ REPLACE(@c_Value, ',', ''',''') +''')) '
+      SET @c_Condition = CONCAT
+      (
+        ' (ORDERS.SOStatus IN (''',
+        REPLACE(@c_Value, ',', ''','''),
+        ''')) ' 
+      )
     END 
 
-    SET @c_ConditionBuilder = @c_ConditionBuilder + ' ' + @c_Condition
+    SET @c_ConditionBuilder = CONCAT(@c_ConditionBuilder, ' ', @c_Condition)
 
     FETCH NEXT FROM CUR INTO @c_Column, @c_Operation, @c_Value, @c_LogicalOperation, @c_Condition
   END
   CLOSE CUR
   DEALLOCATE CUR
 
-  SET @c_ConditionBuilder = @c_ConditionBuilder + ' ) '
+  SET @c_ConditionBuilder = CONCAT(@c_ConditionBuilder, ' ) ')
 
+  --debug
+  print @c_ConditionBuilder
 
-  SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, 'ORDER BY', ' AND ' + @c_ConditionBuilder + ' ORDER BY')
+  SET @c_ConvertedSQLStr = REPLACE(
+    @c_ConvertedSQLStr, 
+    'ORDER BY', 
+    CONCAT(' AND ', @c_ConditionBuilder, ' ORDER BY')
+  )
 
   QUIT_SP:
 END
