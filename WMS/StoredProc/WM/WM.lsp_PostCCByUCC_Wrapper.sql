@@ -21,9 +21,10 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
-/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
+/* 2025-09-02   SWT01    1.1  Enhanced session management pattern        */
+/* 2026-05-29   Michael  1.2  UWP-52575 - Fix endless loop (ML01)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_PostCCByUCC_Wrapper]
    @c_StockTakeKey      NVARCHAR(10)
@@ -235,6 +236,11 @@ BEGIN
    END CATCH
    --(mingle01) - END
 EXIT_SP:
+   --ML01-S
+   IF XACT_STATE() = -1   --(-1 = uncommittable)
+      ROLLBACK TRAN
+   --ML01-E
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -269,5 +275,5 @@ EXIT_SP:
    EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_PostCCByUCC_Wrapper] TO nSQL 
+GRANT EXECUTE ON  [WM].[lsp_PostCCByUCC_Wrapper] TO [NSQL]
 GO
