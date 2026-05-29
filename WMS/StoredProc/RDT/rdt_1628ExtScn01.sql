@@ -78,7 +78,8 @@ BEGIN
       @cSKU                NVARCHAR( 20),
       @cLOT                NVARCHAR( 10),
       @nQty                INT,
-      @cID                 NVARCHAR( 20)
+      @cID                 NVARCHAR( 20),
+      @cPickDetailKey      NVARCHAR( 18)
 
    SELECT
       @nCurrentStep  = Step,
@@ -189,7 +190,7 @@ BEGIN
                -- Cursor through picked inventory for this DropID
                DECLARE @curPickDetail CURSOR
                SET @curPickDetail = CURSOR LOCAL FAST_FORWARD FOR
-                  SELECT PD.SKU, PD.LOT, PD.LOC, PD.Qty, PD.ID
+                  SELECT PD.PickDetailKey, PD.SKU, PD.LOT, PD.LOC, PD.Qty, PD.ID
                   FROM dbo.PICKDETAIL PD WITH (NOLOCK)
                   WHERE PD.StorerKey = @cStorerKey
                      AND PD.DropID = @cDropID
@@ -197,7 +198,7 @@ BEGIN
                      AND PD.Qty > 0
 
                OPEN @curPickDetail
-               FETCH NEXT FROM @curPickDetail INTO @cSKU, @cLOT, @cFromLOC, @nQty, @cID
+               FETCH NEXT FROM @curPickDetail INTO @cPickDetailKey, @cSKU, @cLOT, @cFromLOC, @nQty, @cID
 
                WHILE @@FETCH_STATUS = 0
                BEGIN
@@ -228,19 +229,13 @@ BEGIN
                      GOTO ROLLBACK_TOLOC
                   END
 
-                  -- Update PICKDETAIL with new location
+                  -- Update PICKDETAIL with new location (use PickDetailKey for exact row)
                   BEGIN TRY
                      UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
                      SET LOC = @cScannedTOLOC,
                          EditDate = GETDATE(),
                          EditWho = @cUserName
-                     WHERE StorerKey = @cStorerKey
-                       AND SKU = @cSKU
-                       AND LOT = @cLOT
-                       AND LOC = @cFromLOC
-                       AND ID = @cID
-                       AND DropID = @cDropID
-                       AND [Status] = '5'
+                     WHERE PickDetailKey = @cPickDetailKey
                   END TRY
                   BEGIN CATCH
                      SET @nErrNo = 268005
@@ -250,7 +245,7 @@ BEGIN
                      GOTO ROLLBACK_TOLOC
                   END CATCH
 
-                  FETCH NEXT FROM @curPickDetail INTO @cSKU, @cLOT, @cFromLOC, @nQty, @cID
+                  FETCH NEXT FROM @curPickDetail INTO @cPickDetailKey, @cSKU, @cLOT, @cFromLOC, @nQty, @cID
                END
 
                CLOSE @curPickDetail
