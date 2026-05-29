@@ -4,17 +4,16 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /*********************************************************************************/
-/* Store procedure: isp_TPACK_ResetCarton_Std                                    */
+/* Store procedure: isp_TPACK_ExtResetCtn05                                      */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
-/* Purpose        : Generic Reset Carton Function                                */
+/* Purpose        : Custom Reset Carton Function                                 */
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
-/* 2025-09-22   1.0  GCH225     Created                                          */
-/* 2026-01-21   2.0  GCH225     UWP-46886: Handling for WOD.Status               */
+/* 2026-05-20   1.0  JWF011     FCR-12745: Extend isp_TPACK_ExtResetCtn03        */
 /*********************************************************************************/
 
-CREATE OR ALTER PROC [API].[isp_TPACK_ResetCarton_Std] (
+CREATE OR ALTER PROC [API].[isp_TPACK_ExtResetCtn05] (
 	  @cType                NVARCHAR(30)      = ''
    , @bIsDiscrete          BIT               = 0
    , @bIsCustom            BIT               = 0
@@ -48,44 +47,40 @@ BEGIN
          , @cSerialNoCapture     NVARCHAR(1)
          , @cSKU                 NVARCHAR(20)
          , @cUCCNo               NVARCHAR(20)
-         , @cWorkOrderKey        NVARCHAR(10)
-         , @cWorkOrderLineNumber NVARCHAR(5)
 
-   DECLARE @OrderList TABLE(
-      OrderKey NVARCHAR(10) PRIMARY KEY
-   )
-
-   SET @b_Success             = 0  
-   SET @n_ErrNo               = 0  
-   SET @c_ErrMsg              = '' 
-   SET @cWorkOrderKey         = ''
-   SET @cWorkOrderLineNumber  = ''
-
-   IF @bIsDiscrete = 1 AND @cLoadKey = ''
-   BEGIN
-      INSERT INTO @OrderList (OrderKey)
-      VALUES (@cOrderKey)
-   END
-   ELSE
-   BEGIN
-      INSERT INTO @OrderList (OrderKey)
-      SELECT OrderKey
-      FROM LOADPLANDETAIL (NOLOCK)
-      WHERE LoadKey = @cLoadKey
-   END
+   SET @b_Success          = 0  
+   SET @n_ErrNo            = 0  
+   SET @c_ErrMsg           = '' 
 
    BEGIN TRAN
 
    IF @bResetAll = 1
    BEGIN
-      IF EXISTS(SELECT 1 
-                FROM PACKSERIALNO PSN (NOLOCK)
-                WHERE PSN.PickSlipNo = @cPickSlipNo
-                AND EXISTS (SELECT 1 
-                     FROM PACKDETAIL PD(NOLOCK)
-                     WHERE PD.PickSlipNo = PSN.PickSlipNo
-                     AND (@cDropID = '' OR PD.DropID = @cDropID)
-                    )
+      DELETE CT
+      FROM CARTONTRACK CT
+      WHERE EXISTS ( SELECT 1 
+                     FROM PACKDETAIL P (NOLOCK)
+                     WHERE P.PickSlipNo = @cPickSlipNo
+                     AND P.LabelNo = CT.LabelNo
+      )
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @n_Continue = 3  
+         SET @n_ErrNo = 16001    
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Delete from CartonTrack Table.'  
+         GOTO EXIT_SP  
+      END
+
+      --Delete PACKSERIALNO and SerialNo
+      IF EXISTS ( SELECT 1 
+                  FROM PACKSERIALNO PSN (NOLOCK)
+                  WHERE PSN.PickSlipNo = @cPickSlipNo
+                  AND EXISTS (SELECT 1 
+                              FROM PACKDETAIL PD(NOLOCK)
+                              WHERE PD.PickSlipNo = PSN.PickSlipNo
+                              AND (@cDropID = '' OR PD.DropID = @cDropID)
+                  )
       )
       BEGIN
          DECLARE CURSOR_PSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
@@ -102,7 +97,7 @@ BEGIN
                      FROM PACKDETAIL PD(NOLOCK)
                      WHERE PD.PickSlipNo = PSN.PickSlipNo
                      AND (@cDropID = '' OR PD.DropID = @cDropID)
-                    )
+         )
 
          OPEN CURSOR_PSN
          FETCH NEXT FROM CURSOR_PSN INTO @cPackSerialNoKey, @cSerialNo, @cSKU, @cSerialNoCapture
@@ -140,7 +135,7 @@ BEGIN
                IF @@ERROR <> 0
                BEGIN
                   SET @n_Continue = 3  
-                  SET @n_ErrNo = 12051    
+                  SET @n_ErrNo = 16002
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Update the SerialNo Table.'  
                   GOTO EXIT_SP  
                END
@@ -169,7 +164,7 @@ BEGIN
                IF @@ERROR <> 0
                BEGIN
                   SET @n_Continue = 3  
-                  SET @n_ErrNo = 12052    
+                  SET @n_ErrNo = 16003
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Delete the SerialNo Table.'  
                   GOTO EXIT_SP  
                END
@@ -187,12 +182,12 @@ BEGIN
                      FROM PACKDETAIL PD(NOLOCK)
                      WHERE PD.PickSlipNo = PSN.PickSlipNo
                      AND (@cDropID = '' OR PD.DropID = @cDropID)
-                    )
+         )
 
          IF @@ERROR <> 0
          BEGIN
             SET @n_Continue = 3  
-            SET @n_ErrNo = 12053    
+            SET @n_ErrNo = 16004
             SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Delete the PACKSERIALNO Table.'  
             GOTO EXIT_SP  
          END
@@ -206,13 +201,13 @@ BEGIN
                               FROM PACKDETAIL PD(NOLOCK)
                               WHERE PD.PickSlipNo = P.PickSlipNo
                               AND (@cDropID = '' OR PD.DropID = @cDropID)
-                             )
+                  )
       )
       BEGIN
          UPDATE U WITH (ROWLOCK)
          SET U.[Status] = '3'
-           , U.EditDate = GETDATE()
-           , U.EditWho = @c_UserID
+            ,U.EditDate = GETDATE()
+            ,U.EditWho = @c_UserID
          FROM UCC U
          WHERE EXISTS ( SELECT 1 
                         FROM PACKINFO P(NOLOCK)
@@ -222,154 +217,18 @@ BEGIN
                                     FROM PACKDETAIL PD(NOLOCK)
                                     WHERE PD.PickSlipNo = P.PickSlipNo
                                     AND (@cDropID = '' OR PD.DropID = @cDropID)
-                                   )
-                      )
+                        )
+         )
 
          IF @@ERROR <> 0
          BEGIN
             SET @n_Continue = 3  
-            SET @n_ErrNo = 12054    
+            SET @n_ErrNo = 16005
             SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Update the UCC Table.'  
             GOTO EXIT_SP  
          END
       END
       
-      --Reset PickDetail CaseID if TPS-UPD_PICKDET config enabled
-      IF EXISTS(SELECT 1 
-                FROM STORERCONFIG (NOLOCK)
-                WHERE StorerKey = @cStorerKey
-                AND ConfigKey = 'TPS-UPD_PICKDET'
-                AND sValue = '1'
-      )
-      BEGIN
-         IF @bIsDiscrete = 1
-         BEGIN
-            UPDATE PD WITH(ROWLOCK)
-            SET PD.CaseID = ''
-              , PD.TrafficCop = NULL
-            FROM PICKDETAIL PD
-            WHERE OrderKey = @cOrderKey
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND EXISTS ( SELECT 1 
-                         FROM PACKDETAIL PD2 (NOLOCK)
-                         WHERE PD2.PickSlipNo = @cPickSlipNo
-                         AND (@cDropID = '' OR PD2.DropID = @cDropID)
-                         AND PD2.LabelNo = PD.CaseID
-                       )
-            AND PD.[Status] < '5'
-         END
-         ELSE
-         BEGIN
-            UPDATE PD WITH(ROWLOCK)
-            SET PD.CaseID = ''
-              , PD.TrafficCop = NULL
-            FROM PICKDETAIL PD
-            WHERE EXISTS (SELECT 1
-                          FROM LOADPLANDETAIL LPD (NOLOCK)
-                          WHERE LPD.LoadKey = @cLoadKey
-                          AND LPD.OrderKey = PD.OrderKey
-                          )
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND EXISTS ( SELECT 1 
-                         FROM PACKDETAIL PD2 (NOLOCK)
-                         WHERE PD2.PickSlipNo = @cPickSlipNo
-                         AND (@cDropID = '' OR PD2.DropID = @cDropID)
-                         AND PD2.LabelNo = PD.CaseID
-                       )
-            AND PD.[Status] < '5'
-         END
-      END
-
-      -- Reset WorkOrderDetail Status to 3
-      IF EXISTS(  SELECT 1
-                  FROM STORERCONFIG (NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                  AND ConfigKey = 'TPS-VAS'
-                  AND sValue IN ('1', '3')
-      )
-      BEGIN
-         IF EXISTS ( SELECT 1
-                     FROM WORKORDERDETAIL WOD (NOLOCK)
-                     LEFT JOIN CODELKUP CLK (NOLOCK)
-                     ON WOD.[Type] = CLK.Code
-                     WHERE CLK.LISTNAME = 'WKOrdType'
-                     AND EXISTS (SELECT 1
-                                 FROM WORKORDER WO (NOLOCK)
-                                 WHERE EXISTS ( SELECT 1 
-                                                FROM @OrderList t
-                                                WHERE t.OrderKey = WO.ExternWorkOrderKey
-                                                )
-                                 AND StorerKey = @cStorerKey
-                                 AND Facility = @cFacility
-                                 AND WO.[Type] IN('PACK', 'VAS')
-                                 AND WO.WorkOrderKey = WOD.WorkOrderKey
-                                 )
-                     AND EXISTS (SELECT 1 
-                                 FROM PACKDETAIL PD(NOLOCK)
-                                 WHERE PD.PickSlipNo = @cPickSlipNo
-                                 AND PD.SKU = WOD.Sku
-                                )
-         )
-         BEGIN
-            DECLARE CUR_UPDVAS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT  WorkOrderKey
-                  , WorkOrderLineNumber
-            FROM WORKORDERDETAIL WOD (NOLOCK)
-            LEFT JOIN CODELKUP CLK (NOLOCK)
-            ON WOD.[Type] = CLK.Code
-            WHERE CLK.LISTNAME = 'WKOrdType'
-            AND WOD.[Status] = '9'
-            AND EXISTS (SELECT 1
-                        FROM WORKORDER WO (NOLOCK)
-                        WHERE EXISTS ( SELECT 1 
-                                       FROM @OrderList t
-                                       WHERE t.OrderKey = WO.ExternWorkOrderKey
-                                       )
-                        AND StorerKey = @cStorerKey
-                        AND Facility = @cFacility
-                        AND WO.[Type] IN('PACK', 'VAS')
-                        AND WO.WorkOrderKey = WOD.WorkOrderKey
-                        )
-            AND EXISTS (SELECT 1 
-                        FROM PACKDETAIL PD(NOLOCK)
-                        WHERE PD.PickSlipNo = @cPickSlipNo
-                        AND PD.SKU = WOD.Sku
-                        )
-
-            OPEN CUR_UPDVAS
-            FETCH NEXT FROM CUR_UPDVAS INTO @cWorkOrderKey
-                                          , @cWorkOrderLineNumber
-            WHILE @@FETCH_STATUS = 0
-            BEGIN
-               UPDATE WORKORDERDETAIL WITH (ROWLOCK)
-               SET [Status] = '3'
-               WHERE WorkOrderKey = @cWorkOrderKey
-               AND WorkOrderLineNumber = @cWorkOrderLineNumber
-
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @n_Continue = 3
-                  SET @n_ErrNo = 12061
-                  SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to update Status in WorkOrderDetail Table.'
-                  GOTO EXIT_SP 
-               END
-
-               FETCH NEXT FROM CUR_UPDVAS INTO @cWorkOrderKey
-                                             , @cWorkOrderLineNumber
-            END
-            CLOSE CUR_UPDVAS
-            DEALLOCATE CUR_UPDVAS
-
-            UPDATE WORKORDERDETAIL 
-            SET [Status] = '3'
-            WHERE WorkOrderKey = @cWorkOrderKey
-
-            UPDATE WORKORDER
-            SET [Status] = '0'
-            WHERE WorkOrderKey = @cWorkOrderKey
-         END
-      END
-
       DELETE FROM PACKDETAIL
       WHERE PickSlipNo = @cPickSlipNo
       AND (@cDropID = '' OR DropID = @cDropID)
@@ -377,20 +236,37 @@ BEGIN
       IF @@ERROR <> 0
       BEGIN
          SET @n_Continue = 3  
-         SET @n_ErrNo = 12055    
+         SET @n_ErrNo = 16006
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Delete the PACKDETAIL Table.'  
          GOTO EXIT_SP  
       END
    END
    ELSE
    BEGIN
-      IF EXISTS(SELECT 1 
-                FROM PACKSERIALNO (NOLOCK)
-                WHERE PickSlipNo = @cPickSlipNo
-                AND CartonNo = @nCartonNo
+      DELETE CT
+      FROM CARTONTRACK CT
+      WHERE EXISTS ( SELECT 1 
+                     FROM PACKDETAIL P (NOLOCK)
+                     WHERE P.PickSlipNo = @cPickSlipNo
+                     AND P.CartonNo = @nCartonNo
+                     AND P.LabelNo = CT.LabelNo
+      )
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @n_Continue = 3  
+         SET @n_ErrNo = 16007
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Delete from CartonTrack Table.'  
+         GOTO EXIT_SP  
+      END
+
+      --Delete PACKSERIALNO and SerialNo
+      IF EXISTS ( SELECT 1 
+                  FROM PACKSERIALNO (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
       )
       BEGIN
-         
          DECLARE CURSOR_PSN CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT  PSN.PackSerialNoKey
                , PSN.SerialNo
@@ -439,7 +315,7 @@ BEGIN
                IF @@ERROR <> 0
                BEGIN
                   SET @n_Continue = 3  
-                  SET @n_ErrNo = 12056    
+                  SET @n_ErrNo = 16008
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Update the SerialNo Table.'  
                   GOTO EXIT_SP  
                END
@@ -468,7 +344,7 @@ BEGIN
                IF @@ERROR <> 0
                BEGIN
                   SET @n_Continue = 3  
-                  SET @n_ErrNo = 12057    
+                  SET @n_ErrNo = 16009
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Delete the SerialNo Table.'  
                   GOTO EXIT_SP  
                END
@@ -486,7 +362,7 @@ BEGIN
          IF @@ERROR <> 0
          BEGIN
             SET @n_Continue = 3  
-            SET @n_ErrNo = 12058    
+            SET @n_ErrNo = 16010
             SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Delete the PACKSERIALNO Table.'  
             GOTO EXIT_SP  
          END
@@ -502,111 +378,16 @@ BEGIN
       BEGIN
          UPDATE UCC WITH (ROWLOCK)
          SET [Status] = '3'
-           , EditDate = GETDATE()
-           , EditWho = @c_UserID
+            ,EditDate = GETDATE()
+            ,EditWho = @c_UserID
          WHERE UCCNo = @cUCCNo
 
          IF @@ERROR <> 0
          BEGIN
             SET @n_Continue = 3  
-            SET @n_ErrNo = 12059    
+            SET @n_ErrNo = 16011
             SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Update the UCC Table.'  
             GOTO EXIT_SP  
-         END
-      END
-      
-      --Reset PickDetail CaseID if TPS-UPD_PICKDET config enabled
-      IF EXISTS(SELECT 1 
-                FROM STORERCONFIG (NOLOCK)
-                WHERE StorerKey = @cStorerKey
-                AND ConfigKey = 'TPS-UPD_PICKDET'
-                AND sValue = '1'
-      )
-      BEGIN
-         IF @bIsDiscrete = 1
-         BEGIN
-            UPDATE PD WITH(ROWLOCK)
-            SET PD.CaseID = ''
-              , PD.TrafficCop = NULL
-            FROM PICKDETAIL PD
-            WHERE OrderKey = @cOrderKey
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND EXISTS ( SELECT 1 
-                         FROM PACKDETAIL PD2 (NOLOCK)
-                         WHERE PD2.PickSlipNo = @cPickSlipNo
-                         AND PD2.CartonNo = @nCartonNo
-                         AND (@cDropID = '' OR PD2.DropID = @cDropID)
-                         AND PD2.LabelNo = PD.CaseID
-                       )
-            AND PD.[Status] < '5'
-         END
-         ELSE
-         BEGIN
-            UPDATE PD WITH(ROWLOCK)
-            SET PD.CaseID = ''
-              , PD.TrafficCop = NULL
-            FROM PICKDETAIL PD
-            WHERE EXISTS (SELECT 1
-                          FROM LOADPLANDETAIL LPD (NOLOCK)
-                          WHERE LPD.LoadKey = @cLoadKey
-                          AND LPD.OrderKey = PD.OrderKey
-                          )
-            AND (@cDropID = '' OR PD.DropID = @cDropID)
-            AND EXISTS ( SELECT 1 
-                         FROM PACKDETAIL PD2 (NOLOCK)
-                         WHERE PD2.PickSlipNo = @cPickSlipNo
-                         AND PD2.CartonNo = @nCartonNo
-                         AND (@cDropID = '' OR PD2.DropID = @cDropID)
-                         AND PD2.LabelNo = PD.CaseID
-                       )
-            AND PD.[Status] < '5'
-         END
-      END
-
-      -- Reset WorkOrderDetail Status to 3
-      IF EXISTS(  SELECT 1
-                  FROM STORERCONFIG (NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                  AND ConfigKey = 'TPS-VAS'
-                  AND sValue IN ('1', '3')
-      )
-      BEGIN
-         SELECT TOP 1 @cWorkOrderKey = WorkOrderKey
-                     FROM WORKORDERDETAIL WOD (NOLOCK)
-                     LEFT JOIN CODELKUP CLK (NOLOCK)
-                     ON WOD.[Type] = CLK.Code
-                     WHERE CLK.LISTNAME = 'WKOrdType'
-                     AND EXISTS (SELECT 1
-                                 FROM WORKORDER WO (NOLOCK)
-                                 WHERE EXISTS ( SELECT 1 
-                                                FROM @OrderList t
-                                                WHERE t.OrderKey = WO.ExternWorkOrderKey
-                                                )
-                                 AND StorerKey = @cStorerKey
-                                 AND Facility = @cFacility
-                                 AND WO.[Type] IN('PACK', 'VAS')
-                                 AND WO.WorkOrderKey = WOD.WorkOrderKey
-                                 )
-                     AND EXISTS (SELECT 1 
-                                 FROM PACKDETAIL PD(NOLOCK)
-                                 WHERE PD.PickSlipNo = @cPickSlipNo
-                                 AND PD.SKU = WOD.Sku
-                                )
-
-         IF ISNULL(@cWorkOrderKey, '') <> ''
-         AND EXISTS (SELECT 1
-                     FROM WORKORDER WO (NOLOCK)
-                     WHERE WO.WorkOrderKey = @cWorkOrderKey
-                     AND WO.[Status] = '9'
-         )
-         BEGIN
-            UPDATE WORKORDERDETAIL 
-            SET [Status] = '3'
-            WHERE WorkOrderKey = @cWorkOrderKey
-            
-            UPDATE WORKORDER
-            SET [Status] = '0'
-            WHERE WorkOrderKey = @cWorkOrderKey
          END
       END
       
@@ -617,7 +398,7 @@ BEGIN
       IF @@ERROR <> 0
       BEGIN
          SET @n_Continue = 3  
-         SET @n_ErrNo = 12060    
+         SET @n_ErrNo = 16012
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Delete the PACKDETAIL Table.'  
          GOTO EXIT_SP  
       END

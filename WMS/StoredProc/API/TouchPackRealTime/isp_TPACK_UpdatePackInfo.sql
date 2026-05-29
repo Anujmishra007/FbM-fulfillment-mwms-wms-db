@@ -744,9 +744,9 @@ BEGIN
       , L.Workstation
       , L.LabelPrinter
       , L.PaperPrinter
-      , dbo.fnc_GetUserName()
+      , @c_UserID
       , dbo.fnc_GetDate()
-      , dbo.fnc_GetUserName()
+      , @c_UserID
       , dbo.fnc_GetDate()
    FROM API.TPACK_UserSessionActivityLog L WITH (NOLOCK)
    LEFT JOIN PACKDETAIL PD WITH (NOLOCK)

@@ -710,23 +710,25 @@ BEGIN
                AND ListName = 'TPSCtnRec'
    )
    AND @bIsPreCartonize = 0
+   AND (@cOrderKey <> '' OR @cLoadKey <> '')
    BEGIN
       EXEC [API].[isp_TPACK_Cartonization_Wrapper]
-         @cType         = @cType            
-       , @bIsDiscrete   = @bIsDiscrete      
-       , @bIsCustom     = @bIsCustom        
-       , @cPickSlipNo   = @cPickSlipNo       
-       , @cOrderKey     = @cOrderKey
-       , @cLoadKey      = @cLoadKey          
-       , @cDropID       = @cDropID
-       , @cStorerKey    = @cStorerKey        
-       , @cFacility     = @cFacility
-       , @c_UserID      = @c_UserID
-       , @cLangCode     = @cLangCode
-       , @nCartonNo     = 0 
-       , @b_Success     = @b_Success      OUTPUT
-       , @n_ErrNo       = @n_ErrNo        OUTPUT
-       , @c_ErrMsg      = @c_ErrMsg       OUTPUT
+         @cType          = @cType            
+       , @bIsDiscrete    = @bIsDiscrete      
+       , @bIsCustom      = @bIsCustom        
+       , @cPickSlipNo    = @cPickSlipNo       
+       , @cOrderKey      = @cOrderKey
+       , @cLoadKey       = @cLoadKey          
+       , @cDropID        = @cDropID
+       , @cStorerKey     = @cStorerKey        
+       , @cFacility      = @cFacility
+       , @c_UserID       = @c_UserID
+       , @cLangCode      = @cLangCode
+       , @nCartonNo      = 0 
+       , @nCartonizeStep = 1
+       , @b_Success      = @b_Success      OUTPUT
+       , @n_ErrNo        = @n_ErrNo        OUTPUT
+       , @c_ErrMsg       = @c_ErrMsg       OUTPUT
 
       IF @b_Success = 0
       BEGIN

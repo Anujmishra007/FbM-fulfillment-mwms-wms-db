@@ -24,6 +24,7 @@ CREATE OR ALTER PROC [API].[isp_TPACK_Cartonization_Std] (
    , @c_UserID             NVARCHAR(256)     = ''
    , @cLangCode            NVARCHAR(10)      = ''
    , @nCartonNo            INT               = 0
+   , @nCartonizeStep       INT               = 0
    , @b_Success            INT               = 0   OUTPUT
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
@@ -63,15 +64,15 @@ BEGIN
          , @cCartonType       NVARCHAR(20)
          , @nRowCount         INT
    
-   IF OBJECT_ID('tempdb..#tRemPickItem','U') IS NOT NULL
+   IF OBJECT_ID('tempdb..#tItemForCartonize','U') IS NOT NULL
    BEGIN
-      DROP TABLE #tRemPickItem
+      DROP TABLE #tItemForCartonize
    END
 
-   CREATE TABLE #tRemPickItem (
+   CREATE TABLE #tItemForCartonize (
         Batch    INT
       , SKU      NVARCHAR(20)
-      , RemQty   INT
+      , Qty      INT
       , [Weight] DECIMAL(18, 4) DEFAULT(0) 
       , [Cube]   DECIMAL(18, 4) DEFAULT(0) 
       , [Height] DECIMAL(18, 4) DEFAULT(0) 
@@ -143,8 +144,8 @@ BEGIN
    SET @c_CTNGroup         = ''
    SET @c_IsCompletePack   = ''
    SET @nRowCount          = 0
-    -- Get configuration values
-
+    
+   -- Get configuration values
    SELECT @cOrdDocType  = CASE WHEN Code = 'OrdDocType'  THEN Short ELSE @cOrdDocType END
         , @cRecommendBy = CASE WHEN Code = 'RecommendBy' THEN Short ELSE @cRecommendBy END
         , @cIncWeight   = CASE WHEN Code = 'IncWeight'   THEN Short ELSE @cIncWeight END
@@ -159,9 +160,6 @@ BEGIN
    
    IF @cOrdDocType NOT IN ('All', 'N', 'E')
    BEGIN
-      SET @n_Continue = 3
-      SET @n_ErrNo = 15901
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Invalid order document type criteria configuration. Only All, N or E is allowed.'
       GOTO EXIT_SP
    END
 
@@ -187,46 +185,44 @@ BEGIN
 
    IF @cOrdDocType <> 'All'
    BEGIN
-      IF @bIsDiscrete = 1
+      IF @cOrderKey <> ''
       BEGIN
          IF EXISTS ( SELECT 1
-                         FROM ORDERS (NOLOCK)
-                         WHERE OrderKey = @cOrderKey
-                         AND DocType <> @cOrdDocType
+                     FROM ORDERS (NOLOCK)
+                     WHERE OrderKey = @cOrderKey
+                     AND DocType <> @cOrdDocType
          )
          BEGIN
-            SET @n_Continue = 3
-            SET @n_ErrNo = 15904
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'The order is not eligible for cartonization based on document type criteria.'
             GOTO EXIT_SP
          END
       END
-      ELSE
+      ELSE IF @cLoadKey <> ''
       BEGIN
          IF EXISTS ( SELECT 1
-                         FROM ORDERS O (NOLOCK)
-                         INNER JOIN LOADPLANDETAIL LPD (NOLOCK)
-                         ON O.OrderKey = LPD.OrderKey
-                         WHERE LPD.LoadKey = @cLoadKey
-                         AND O.DocType <> @cOrdDocType
+                     FROM ORDERS O (NOLOCK)
+                     INNER JOIN LOADPLANDETAIL LPD (NOLOCK)
+                     ON O.OrderKey = LPD.OrderKey
+                     WHERE LPD.LoadKey = @cLoadKey
+                     AND O.DocType <> @cOrdDocType
          )
          BEGIN
-            SET @n_Continue = 3
-            SET @n_ErrNo = 15905
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'One or more orders in the loadkey are not eligible for cartonization based on document type criteria.'
             GOTO EXIT_SP
          END
       END
    END
 
-   SET @cSQLSelectClause = 'SELECT 2 AS Batch, T.SKU, T.RemQty ' + CHAR(13)
+   SELECT @c_CTNGroup = CartonGroup
+   FROM STORER (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+
+   SET @cSQLSelectClause = 'SELECT 2 AS Batch, T.SKU, T.Qty ' + CHAR(13)
                          + ', ' + @cSKUWeight   + ' AS Weight ' + CHAR(13)
                          + ', ' + @cSKUCube     + ' AS Cube ' + CHAR(13)
                          + ', ' + @cSKUHeight   + ' AS Height ' + CHAR(13)
                          + ', ' + @cSKULength   + ' AS Length ' + CHAR(13)
                          + ', ' + @cSKUWidth    + ' AS Width ' + CHAR(13)
 
-   SET @cSQLFromClause = 'FROM #tRemPickItem T (NOLOCK) ' + CHAR(13)
+   SET @cSQLFromClause = 'FROM #tItemForCartonize T (NOLOCK) ' + CHAR(13)
                        + 'INNER JOIN SKU (NOLOCK) ' + CHAR(13)
                        + 'ON T.SKU = SKU.SKU ' + CHAR(13)
                        + 'AND SKU.StorerKey = ''' + @cStorerKey + ''' ' + CHAR(13)
@@ -242,113 +238,131 @@ BEGIN
                           + 'ON PACK.PACKKey = SKU.PackKey ' + CHAR(13)
    END
 
-   IF @cPickSlipNo <> ''
+   IF @nCartonizeStep = 1
    BEGIN
-      INSERT INTO @tPackedItem (OrderKey, LoadKey, SKU, Qty)
-      SELECT @cOrderKey
-           , @cLoadKey
-           , SKU
-           , SUM(Qty) AS Qty
-      FROM PACKDETAIL (NOLOCK)
-      WHERE PickSlipNo = @cPickSlipNo
-      AND (@cDropID = '' OR DropID = @cDropID)
-      GROUP BY SKU
-   END
-   ELSE
-   BEGIN
-      IF @cType = 'toteid'
-      AND @cPickSlipNo = ''
-      AND @cOrderKey = ''
-      AND @cLoadKey = ''
-      AND @cDropID <> ''
+      IF @cPickSlipNo <> ''
       BEGIN
          INSERT INTO @tPackedItem (OrderKey, LoadKey, SKU, Qty)
-         SELECT ISNULL(PH.OrderKey, '') AS OrderKey
-              , ISNULL(PH.Loadkey, '') AS Loadkey
-              , PD.SKU
-              , SUM(PD.Qty) AS Qty
-         FROM PACKDETAIL PD (NOLOCK)
-         INNER JOIN PACKHEADER PH (NOLOCK) 
-         ON PD.PickSlipNo = PH.PickSlipNo
-         WHERE PD.DropID = @cDropID
-         GROUP BY ISNULL(PH.OrderKey, '')
-                , ISNULL(PH.Loadkey, '')
-                , PD.SKU
+         SELECT  @cOrderKey
+               , @cLoadKey
+               , SKU
+               , SUM(Qty) AS Qty
+         FROM PACKDETAIL (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+         AND (@cDropID = '' OR DropID = @cDropID)
+         GROUP BY SKU
       END
-   END
+      ELSE
+      BEGIN
+         IF @cType = 'toteid'
+         AND @cPickSlipNo = ''
+         AND @cOrderKey = ''
+         AND @cLoadKey = ''
+         AND @cDropID <> ''
+         BEGIN
+            INSERT INTO @tPackedItem (OrderKey, LoadKey, SKU, Qty)
+            SELECT  ISNULL(PH.OrderKey, '') AS OrderKey
+                  , ISNULL(PH.Loadkey, '') AS Loadkey
+                  , PD.SKU
+                  , SUM(PD.Qty) AS Qty
+            FROM PACKDETAIL PD (NOLOCK)
+            INNER JOIN PACKHEADER PH (NOLOCK) 
+            ON PD.PickSlipNo = PH.PickSlipNo
+            WHERE PD.DropID = @cDropID
+            GROUP BY ISNULL(PH.OrderKey, '')
+                  , ISNULL(PH.Loadkey, '')
+                  , PD.SKU
+         END
+      END
 
-   IF @bIsDiscrete = 1
-   BEGIN
-      INSERT INTO #tRemPickItem (Batch, SKU, RemQty)
-      SELECT 1 AS Batch
-           , PD1.SKU AS SKU
-           , ISNULL(SUM(PD1.Qty), 0) - ISNULL(SUM(PD2.Qty), 0) AS RemQty 
-      FROM PICKDETAIL PD1 (NOLOCK)
-      LEFT JOIN @tPackedItem PD2
-      ON PD1.SKU = PD2.SKU
-      AND PD1.OrderKey = PD2.OrderKey
-      WHERE PD1.OrderKey = @cOrderKey
-      AND (@cDropID = '' OR PD1.DropID = @cDropID)
-      GROUP BY PD1.SKU
-   END
-   ELSE
-   BEGIN
-      INSERT INTO #tRemPickItem (Batch, SKU, RemQty)
-      SELECT 1 AS Batch
-           , PD1.SKU AS SKU
-           , ISNULL(SUM(PD1.Qty), 0) - ISNULL(SUM(PD2.Qty), 0) AS RemQty
-      FROM PICKDETAIL PD1 (NOLOCK)
-      INNER JOIN LOADPLANDETAIL LPD (NOLOCK)
-      ON LPD.OrderKey = PD1.OrderKey
-      LEFT JOIN @tPackedItem PD2
-      ON PD1.SKU = PD2.SKU
-      AND LPD.LoadKey = PD2.LoadKey
-      WHERE LPD.LoadKey = @cLoadKey
-      AND (@cDropID = '' OR PD1.DropID = @cDropID)
-      GROUP BY PD1.SKU
-   END
+      IF @cOrderKey <> ''
+      BEGIN
+         INSERT INTO #tItemForCartonize (Batch, SKU, Qty)
+         SELECT  1 AS Batch
+               , PD1.SKU AS SKU
+               , ISNULL(SUM(PD1.Qty), 0) - ISNULL(SUM(PD2.Qty), 0) AS Qty
+         FROM PICKDETAIL PD1 (NOLOCK)
+         LEFT JOIN @tPackedItem PD2
+         ON PD1.SKU = PD2.SKU
+         AND PD1.OrderKey = PD2.OrderKey
+         WHERE PD1.OrderKey = @cOrderKey
+         AND (@cDropID = '' OR PD1.DropID = @cDropID)
+         GROUP BY PD1.SKU
+      END
+      ELSE IF @cLoadKey <> ''
+      BEGIN
+         INSERT INTO #tItemForCartonize (Batch, SKU, Qty)
+         SELECT  1 AS Batch
+               , PD1.SKU AS SKU
+               , ISNULL(SUM(PD1.Qty), 0) - ISNULL(SUM(PD2.Qty), 0) AS Qty
+         FROM PICKDETAIL PD1 (NOLOCK)
+         INNER JOIN LOADPLANDETAIL LPD (NOLOCK)
+         ON LPD.OrderKey = PD1.OrderKey
+         LEFT JOIN @tPackedItem PD2
+         ON PD1.SKU = PD2.SKU
+         AND LPD.LoadKey = PD2.LoadKey
+         WHERE LPD.LoadKey = @cLoadKey
+         AND (@cDropID = '' OR PD1.DropID = @cDropID)
+         GROUP BY PD1.SKU
+      END
 
-   IF @@ROWCOUNT = 0
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_ErrNo = 15906
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'No items found for cartonization after calculating remaining pick quantities.'
-      GOTO EXIT_SP
-   END
+      IF NOT EXISTS (SELECT 1 
+                     FROM #tItemForCartonize (NOLOCK)
+      )
+      BEGIN
+         GOTO EXIT_SP
+      END
 
-   IF EXISTS ( SELECT 1 FROM #tRemPickItem (NOLOCK) WHERE RemQty < 0)
+      IF EXISTS ( SELECT 1 
+                  FROM #tItemForCartonize (NOLOCK) 
+                  WHERE Qty < 0
+      )
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_ErrNo = 15907
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Packed quantity is greater than picked quantity for one or more SKUs.'
+         GOTO EXIT_SP
+      END
+      ELSE IF (SELECT SUM(Qty) AS TotalQty
+      FROM #tItemForCartonize (NOLOCK)
+      ) = 0
+      BEGIN
+         GOTO EXIT_SP
+      END 
+   END
+   ELSE IF @nCartonizeStep = 2
    BEGIN
-      SET @n_Continue = 3
-      SET @n_ErrNo = 15907
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Packed quantity is greater than picked quantity for one or more SKUs.'
-      GOTO EXIT_SP
+      INSERT INTO #tItemForCartonize (Batch, SKU, Qty)
+      SELECT  1 AS Batch
+            , SKU
+            , SUM(Qty) AS SUMQty
+      FROM PACKDETAIL (NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+      AND CartonNo = @nCartonNo
+      GROUP BY SKU
    END
 
    SET @cSQLQuery = @cSQLSelectClause
                   + @cSQLFromClause
    
-   INSERT INTO #tRemPickItem (Batch
-                            , SKU
-                            , RemQty
-                            , [Weight]
-                            , [Cube]
-                            , [Height]
-                            , [Length]
-                            , [Width]
+   INSERT INTO #tItemForCartonize (Batch
+                           , SKU
+                           , Qty
+                           , [Weight]
+                           , [Cube]
+                           , [Height]
+                           , [Length]
+                           , [Width]
    )
    EXEC sp_executesql @cSQLQuery
 
-   DELETE FROM #tRemPickItem
+   DELETE FROM #tItemForCartonize
    WHERE Batch = 1
+   
+   SELECT @nTotalCube = SUM(Qty * ISNULL([Cube], 0))
+      , @nTotalWeight = SUM(Qty * ISNULL([Weight], 0))
+   FROM #tItemForCartonize
 
-   SELECT @nTotalCube = SUM(RemQty * ISNULL([Cube], 0))
-        , @nTotalWeight = SUM(RemQty * ISNULL([Weight], 0))
-   FROM #tRemPickItem
-   
-   SELECT @c_CTNGroup = CartonGroup
-   FROM STORER (NOLOCK)
-   WHERE StorerKey = @cStorerKey
-   
    IF @bIncWeight = 1
    BEGIN
       INSERT INTO @tCartonType (CartonType)
@@ -378,22 +392,28 @@ BEGIN
                , C.[Cube] * (ISNULL(C.FillTolerance, 100) / 100.0) ASC
    END
 
-   IF @@ROWCOUNT = 0
+   --If no carton type returned based on cube criteria, 
+   --then try get the last carton type which has cube less than total cube without considering fill tolerance
+   --, this is to make sure we can get at least one carton type for the recommendation result and avoid no recommendation result returned to user.
+   IF NOT EXISTS (SELECT 1 FROM @tCartonType)
    BEGIN
       SELECT TOP 1 @cCartonType =ISNULL(RTRIM(C.CartonType), '')
       FROM CARTONIZATION C (NOLOCK)
       WHERE C.CartonizationGroup = @c_CTNGroup
       AND (C.[Cube] * (ISNULL(C.FillTolerance, 100) / 100.0)) <= @nTotalCube
-      ORDER BY   C.UseSequence ASC
-               , C.[Cube] * (ISNULL(C.FillTolerance, 100) / 100.0) ASC
-
+      ORDER BY   C.UseSequence DESC
+               , C.[Cube] * (ISNULL(C.FillTolerance, 100) / 100.0) DESC
    END
 
    IF @cRecommendBy = 'Cube'
    BEGIN
-      SELECT TOP 1 @cCartonType = CartonType
-      FROM @tCartonType
-      ORDER BY RowID ASC
+      IF ISNULL(@cCartonType, '') = '' 
+      AND EXISTS (SELECT 1 FROM @tCartonType)
+      BEGIN
+         SELECT TOP 1 @cCartonType = CartonType
+         FROM @tCartonType
+         ORDER BY RowID ASC
+      END
    END
    ELSE
    BEGIN
@@ -410,8 +430,8 @@ BEGIN
             , Height
             , Width
             , [Length]
-            , RemQty
-      FROM #tRemPickItem (NOLOCK)
+            , Qty
+      FROM #tItemForCartonize (NOLOCK)
 
       DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT CartonType
@@ -434,12 +454,13 @@ BEGIN
             , SKU
             , Qty
          )
-         EXEC isp_SubmitToCartonizeAPI
+         EXEC [API].[isp_TPACK_GetCartonizationResult]
               @c_CartonGroup = @c_CTNGroup
             , @c_CartonType  = @cCartonType
             , @c_Algorithm   = @c_Algorithm
+            , @cLangCode     = @cLangCode
             , @b_Success     = @b_Success       OUTPUT
-            , @n_Err         = @n_ErrNo         OUTPUT
+            , @n_ErrNo       = @n_ErrNo         OUTPUT
             , @c_ErrMsg      = @c_ErrMsg        OUTPUT
             , @b_debug       = 0
 
@@ -468,39 +489,29 @@ BEGIN
       DEALLOCATE CUR_LOOP
    END
    
-   IF @cCartonType <> ''
+   IF ISNULL(@cCartonType,'') <> ''
    BEGIN
-      SELECT @nMaxCartonNo = CartonNo
-      FROM PACKINFO (NOLOCK)
-      WHERE PickSlipNo = @cPickSlipNo
-      AND CartonStatus = 'INPROGRESS'
-      AND CartonType <> ''
-      ORDER BY CartonNo DESC
-      
-      SET @nRowCount = @@ROWCOUNT
-
-      IF @nRowCount = 1
+      IF @nCartonizeStep = 1
       BEGIN
-         UPDATE PACKINFO WITH (ROWLOCK)
-         SET CartonType = @cCartonType
-         WHERE PickSlipNo = @cPickSlipNo
-         AND CartonNo = @nMaxCartonNo 
-      END
-      ELSE
-      BEGIN
-         IF @nRowCount > 1
+         IF EXISTS ( SELECT 1 
+                     FROM PACKINFO (NOLOCK)
+                     WHERE PickSlipNo = @cPickSlipNo
+                     AND CartonType <> ''
+                     AND Qty = 0
+                     AND [Weight] = 0
+                     AND [Cube] = 0  
+         )
          BEGIN
-            -- Only when user after reset carton and does not want to keep the existing carton, 
-            -- then delete the existing carton and create new carton with the same carton no and new carton type.
             DELETE FROM PACKINFO
             WHERE PickSlipNo = @cPickSlipNo
-            AND CartonStatus = 'INPROGRESS'
             AND CartonType <> ''
+            AND Qty = 0
+            AND [Weight] = 0
+            AND [Cube] = 0  
          END
-
+         
          IF @nCartonNo > 0
          BEGIN
-            -- Only applicable for reset carton scenario, if user wants to keep the existing carton no, then use the same carton no for new carton.
             SET @nMaxCartonNo = @nCartonNo
          END
          ELSE
@@ -527,15 +538,15 @@ BEGIN
             , CartonStatus
          )
          VALUES(
-              @cPickSlipNo
+            @cPickSlipNo
             , @nMaxCartonNo
             , 0
             , 0
             , 0
             , dbo.fnc_GetDate()
-            , dbo.fnc_GetUserName()
+            , @c_UserID
             , dbo.fnc_GetDate()
-            , dbo.fnc_GetUserName()
+            , @c_UserID
             , @cCartonType
             , ''
             , ''
@@ -548,6 +559,21 @@ BEGIN
             SET @n_Continue = 3
             SET @n_ErrNo = 15909
             SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Failed to insert cartonization result into PACKINFO table.'
+            GOTO EXIT_SP
+         END
+      END
+      ELSE IF @nCartonizeStep = 2
+      BEGIN
+         UPDATE PACKINFO WITH (ROWLOCK)
+         SET CartonType = @cCartonType
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_ErrNo = 15906
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Failed to update cartonization result to PACKINFO table.'
             GOTO EXIT_SP
          END
       END

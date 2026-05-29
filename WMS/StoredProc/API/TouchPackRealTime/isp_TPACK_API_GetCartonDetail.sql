@@ -69,6 +69,7 @@ BEGIN
          , @nActualQty           INT
          , @cResponseJson        NVARCHAR(MAX)
          , @bShowVASScreen       BIT
+         , @cAuthority           NVARCHAR(256)
    
    DECLARE @oSKUList TABLE (
       SKU NVARCHAR(20) PRIMARY KEY
@@ -105,6 +106,7 @@ BEGIN
    SET @nActualQty         = 0
    SET @cResponseJson      = ''
    SET @bShowVASScreen     = 0
+   SET @cAuthority         = ''
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
@@ -183,12 +185,32 @@ BEGIN
       END
    END
 
+   EXEC nspGetRight    
+         @c_Facility   = @cFacility    
+      ,  @c_StorerKey  = @cStorerKey   
+      ,  @c_sku        = ''    
+      ,  @c_ConfigKey  = 'TPS-CtnRec'    
+      ,  @c_authority  = @cAuthority   OUTPUT    
+      ,  @b_Success    = @b_Success    OUTPUT    
+      ,  @n_err        = @n_ErrNo      OUTPUT    
+      ,  @c_errmsg     = @c_ErrMsg     OUTPUT
+
+   IF @b_Success = 0
+   BEGIN    
+      SET @n_Continue  = 3  
+      GOTO EXIT_SP
+   END
+   
    IF NOT EXISTS (SELECT 1
                   FROM PACKDETAIL (NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
                   AND CartonNo = @nCartonNo
-                 )
+   )
    BEGIN
+      IF @cAuthority = '1'
+      BEGIN
+         GOTO SKIP_GET_DETAIL
+      END
       SET @n_Continue = 3
       SET @n_ErrNo = 11701      
       SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'No PackDetail Records Found. '
@@ -355,6 +377,7 @@ BEGIN
       GOTO EXIT_SP
    END
 
+SKIP_GET_DETAIL:
    SET @c_ResponseString = ISNULL ((SELECT 
                                      JSON_QUERY((SELECT  @cScanType           AS cScanType
                                                        , @bClickAll           AS bClickAll

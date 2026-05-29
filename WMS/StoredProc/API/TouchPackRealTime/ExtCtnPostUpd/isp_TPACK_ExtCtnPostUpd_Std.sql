@@ -589,14 +589,26 @@ BEGIN
 
          IF @cWorkOrderKey <> '' AND @bIsLastCarton = 1
          BEGIN
+            UPDATE WORKORDERDETAIL WITH (ROWLOCK)
+            SET [Status] = '9'
+            WHERE WorkOrderKey = @cWorkOrderKey
+            
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_ErrNo = 13356
+               SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to update Status in WorkOrderDetail Table.'
+               GOTO EXIT_SP 
+            END
+
             UPDATE WORKORDER WITH (ROWLOCK)
-            SET Status = '9'
+            SET [Status] = '9'
             WHERE WorkOrderKey = @cWorkOrderKey
 
             IF @@ERROR <> 0
             BEGIN
                SET @n_Continue = 3
-               SET @n_ErrNo = 13356
+               SET @n_ErrNo = 13357
                SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to update Status in WorkOrder Table.'
                GOTO EXIT_SP 
             END

@@ -453,7 +453,7 @@ SKIP_2ND_CHECK:
              FROM UPC (NOLOCK)
              WHERE StorerKey = @cStorerKey
              AND UPC = @cInputValue1
-             AND UOM IN ('EA','EACH','PCS', '6')
+             AND UOM IN ('EA','EACH','PCS', '6', 'CS', 'CASE', 'CSE')
    )
    BEGIN
       SET @cScanType = 'upc'
@@ -463,7 +463,7 @@ SKIP_2ND_CHECK:
       FROM UPC (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND UPC = @cInputValue1
-      AND UOM IN ('EA','EACH','PCS', '6')
+      AND UOM IN ('EA','EACH','PCS', '6', 'CS', 'CASE', 'CSE')
    END
    ELSE
    BEGIN
@@ -617,16 +617,6 @@ SKIP_FINDSCANTYPE:
    IF @nExpectedSKUCnt > 1 
    BEGIN
       SET @bIsMultiSKU = 1
-
-      IF @cScanType = 'altsku'
-      BEGIN
-         GOTO VALIDATE_SKU
-      END
-
-      SET @n_Continue  = 3
-      SET @n_ErrNo = 11506
-      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + @cScanType --'Not allow more than 1 SKU found in following ScanType. '
-      GOTO EXIT_SP
    END
 
 VALIDATE_SKU:

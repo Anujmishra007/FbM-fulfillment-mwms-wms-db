@@ -62,12 +62,12 @@ BEGIN
    SET @cSQLParams            = ''
    SET @bConfigVal            = 1
 
-   IF @cScanType = 'altsku' AND 
+   IF @cScanType IN ('altsku', 'retailsku', 'manusku', 'upc') AND 
    @bIsMultiSKU = 1 AND
    EXISTS ( SELECT 1 
             FROM STORERCONFIG (NOLOCK) 
             WHERE StorerKey = @cStorerKey 
-            AND Configkey = 'TPS-AltSkuSelection' 
+            AND Configkey IN ('TPS-AltSkuSelection', 'TPS-SkuSelection') 
             AND sValue = '1'
    )
    BEGIN

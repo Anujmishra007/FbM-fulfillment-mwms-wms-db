@@ -55,6 +55,7 @@ BEGIN
          , @cSQL                 NVARCHAR(MAX)
          , @cSQLParam            NVARCHAR(MAX)
          , @cExtResetCartonSP    NVARCHAR(30)
+         , @nTempCartonNo        INT
 
    SET @b_Success             = 0  
    SET @n_ErrNo               = 0  
@@ -72,6 +73,7 @@ BEGIN
    SET @nCartonNo             = 0
    SET @bResetAll             = 0
    SET @cExtResetCartonSP     = ''
+   SET @nTempCartonNo         = 0
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
@@ -241,32 +243,49 @@ BEGIN
                AND ListName = 'TPSCtnRec'
    )
    BEGIN
-      IF @bResetAll = 1
+      IF @bResetAll = 0
       BEGIN
-         SET @nCartonNo = 0
+         EXEC [API].[isp_TPACK_Cartonization_Wrapper]
+            @cType          = @cType            
+         , @bIsDiscrete    = @bIsDiscrete      
+         , @bIsCustom      = @bIsCustom        
+         , @cPickSlipNo    = @cPickSlipNo       
+         , @cOrderKey      = @cOrderKey
+         , @cLoadKey       = @cLoadKey          
+         , @cDropID        = @cDropID
+         , @cStorerKey     = @cStorerKey        
+         , @cFacility      = @cFacility
+         , @c_UserID       = @c_UserID
+         , @cLangCode      = @cLangCode
+         , @nCartonNo      = @nCartonNo
+         , @nCartonizeStep = 1
+         , @b_Success      = @b_Success      OUTPUT
+         , @n_ErrNo        = @n_ErrNo        OUTPUT
+         , @c_ErrMsg       = @c_ErrMsg       OUTPUT
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3   
+            GOTO EXIT_SP
+         END
       END
-
-      EXEC [API].[isp_TPACK_Cartonization_Wrapper]
-         @cType         = @cType            
-       , @bIsDiscrete   = @bIsDiscrete      
-       , @bIsCustom     = @bIsCustom        
-       , @cPickSlipNo   = @cPickSlipNo       
-       , @cOrderKey     = @cOrderKey
-       , @cLoadKey      = @cLoadKey          
-       , @cDropID       = @cDropID
-       , @cStorerKey    = @cStorerKey        
-       , @cFacility     = @cFacility
-       , @c_UserID      = @c_UserID
-       , @cLangCode     = @cLangCode
-       , @nCartonNo     = @nCartonNo
-       , @b_Success     = @b_Success      OUTPUT
-       , @n_ErrNo       = @n_ErrNo        OUTPUT
-       , @c_ErrMsg      = @c_ErrMsg       OUTPUT
-
-      IF @b_Success = 0
+      ELSE
       BEGIN
-         SET @n_Continue = 3   
-         GOTO EXIT_SP
+         SELECT @nTempCartonNo = ISNULL(CartonNo, 0)
+         FROM PACKINFO (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonStatus IN ('INPROGRESS', 'HOLD')
+         AND CartonType <> ''
+         AND Qty = 0
+         AND [Weight] = 0
+         AND [Cube] = 0
+         
+         IF @nTempCartonNo > 0
+         BEGIN
+            DELETE FROM PACKINFO
+            WHERE PickSlipNo = @cPickSlipNo
+            AND CartonNo = @nTempCartonNo
+         END
       END
    END
 

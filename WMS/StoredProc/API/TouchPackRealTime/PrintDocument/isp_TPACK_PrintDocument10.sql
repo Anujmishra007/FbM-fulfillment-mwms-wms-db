@@ -104,17 +104,16 @@ BEGIN
    SET @IsAggregate4    = 0
    SET @cModuleID       = 'TPPACK'
    SET @cCustomLabelSP  = ''
-   SET @cReportType     = 'TPFULLCTNLBL'
-   SET @bPrintStdLabel  = 0
+   SET @cReportType     = 'TPSHIPPLBL'
+   SET @bPrintStdLabel  = 1
 
    IF EXISTS (SELECT 1
    FROM ORDERS O (NOLOCK)
    WHERE O.OrderKey = @cOrderKey
-   AND O.DocType = 'N'
+   AND O.DocType = 'E'
    )
    BEGIN
-      SET @bPrintStdLabel = 1
-      SET @cReportType = 'TPSHIPPLBL'
+      GOTO EXIT_SP
    END
 
    IF NOT EXISTS (SELECT 1 
