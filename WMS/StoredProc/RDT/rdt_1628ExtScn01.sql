@@ -255,12 +255,8 @@ BEGIN
             BEGIN CATCH
                SET @nErrNo = 268004
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Move Failed
-
-               IF CURSOR_STATUS('local', '@curPickDetail') >= 0
-               BEGIN
-                  CLOSE @curPickDetail
-                  DEALLOCATE @curPickDetail
-               END
+               CLOSE @curPickDetail
+               DEALLOCATE @curPickDetail
 
                GOTO ROLLBACK_TOLOC
             END CATCH

@@ -193,7 +193,7 @@ GO
 /* 12-May-2025  2.9.0 Dennis    FCR-3774 Add Extended Scn                  */
 /* 21-Aug-2025  0.0   Jackc     !!!Cutover!!! Use V0 repo for work         */
 /* 15-Oct-2025  3.0.0 NickT     UWP-42483 Optimize transaction             */
-/* 28-May-2026  4.0.0 NYE018    FCR-12622 Add extscn at step 15 and step 10*/
+/* 28-May-2026  4.0.0 NYE018    FCR-12622 Add extscn at step 13 and step 15*/
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Cluster_Pick](
