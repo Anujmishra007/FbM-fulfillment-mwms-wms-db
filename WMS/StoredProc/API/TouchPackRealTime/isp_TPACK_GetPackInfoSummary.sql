@@ -98,7 +98,7 @@ BEGIN
                               , @cOrderKey = ISNULL(L.OrderKey,'')
                FROM API.TPACK_UserSessionActivityLog L (NOLOCK)
                WHERE L.DropID = @cDropID
-               AND L.EditWho = dbo.fnc_GetUserName()
+               AND L.EditWho = @c_UserID
                AND L.CartonNo = @nCartonNo
                -- AND NOT EXISTS (SELECT 1 
                --               FROM PACKHEADER PH (NOLOCK)
@@ -136,7 +136,7 @@ BEGIN
                                  FROM PACKINFO PIF (NOLOCK)
                                  WHERE PIF.PickSlipNo = PD.PickSlipNo
                                  AND PIF.CartonNo = PD.CartonNo
-                                 AND PIF.EditWho = dbo.fnc_GetUserName()
+                                 AND PIF.EditWho = @c_UserID
                                  AND PIF.CartonStatus = 'INPROGRESS'
                              )
                     )
@@ -443,12 +443,13 @@ BEGIN
          WHERE P.PickSlipNo = @cPickSlipNo
          AND P.EditWho = @c_UserID
          AND P.CartonStatus = 'INPROGRESS'
-         AND EXISTS (SELECT 1 
+         AND (EXISTS (SELECT 1 
                      FROM PACKDETAIL PD (NOLOCK)
                      WHERE PD.PickSlipNo = P.PickSlipNo
                      AND PD.CartonNo = P.CartonNo
                      AND PD.DropID = @cDropID
-         )
+         ) OR P.CartonType <> '' )
+         -- if carton type is not empty, it means the carton is auto created by system, we also want to show the carton status on UI, even there is no pickslip and order info captured in PACKINFO table.
       END
       ELSE
       BEGIN
@@ -461,7 +462,7 @@ BEGIN
                      WHERE PD.PickSlipNo = P.PickSlipNo
                      AND PD.CartonNo = P.CartonNo
                      AND PD.DropID = @cDropID
-         )
+         ) 
       END
    END
    ELSE

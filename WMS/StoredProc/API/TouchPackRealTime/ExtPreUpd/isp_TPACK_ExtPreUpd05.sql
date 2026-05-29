@@ -84,9 +84,23 @@ BEGIN
                WITH ([value] NVARCHAR(100) '$')
    ) = 1
    BEGIN
+
       SELECT @cEPC = [value]
-      FROM OPENJSON(@cInputValue2)
-      WITH ([value] NVARCHAR(100) '$') J
+               FROM OPENJSON(@cInputValue2) 
+               WITH ([value] NVARCHAR(100) '$')
+
+      IF EXISTS ( SELECT 1
+                  FROM PACKSERIALNO (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                  AND StorerKey  = @cStorerKey
+                  AND SerialNo   = @cEPC
+      )
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_ErrNo = 15652;
+         SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo ,@cLangCode ,'DSP')  --' EPC already scanned for this pickslip.';
+         GOTO EXIT_SP;
+      END
 
       INSERT INTO PACKSERIALNO( PickSlipNo
                               , CartonNo
@@ -97,6 +111,7 @@ BEGIN
                               , SerialNo
                               , Qty
                               , PickDetailKey
+                              , Barcode
                               , AddWho
                               , AddDate
                               , EditWho
@@ -110,6 +125,7 @@ BEGIN
                               , @cEPC
                               , 1
                               , ''
+                              , @cInputValue1
                               , @c_UserID
                               , GETDATE()
                               , @c_UserID
@@ -117,7 +133,7 @@ BEGIN
 
       IF @@ERROR <> 0         
       BEGIN         
-         SET @b_Success = 0;
+         SET @n_Continue = 3
          SET @n_ErrNo = 15651        
          SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo ,@cLangCode ,'DSP') -- 'Failed to insert into PACKSERIALNO
          GOTO EXIT_SP        

@@ -26,6 +26,7 @@ CREATE OR ALTER PROC [API].[isp_TPACK_Cartonization_Wrapper] (
    , @c_UserID       NVARCHAR(256)     = ''  
    , @cLangCode      NVARCHAR(3)       = ''
    , @nCartonNo      INT               = 0
+   , @nCartonizeStep INT               = 0
    , @b_Success      INT               = 0   OUTPUT
    , @n_ErrNo        INT               = 0   OUTPUT
    , @c_ErrMsg       NVARCHAR(250)     = ''  OUTPUT
@@ -81,6 +82,7 @@ BEGIN
        , @c_UserID      = @c_UserID
        , @cLangCode     = @cLangCode
        , @nCartonNo     = @nCartonNo
+       , @nCartonizeStep = @nCartonizeStep
        , @b_Success     = @b_Success      OUTPUT
        , @n_ErrNo       = @n_ErrNo        OUTPUT
        , @c_ErrMsg      = @c_ErrMsg       OUTPUT
@@ -112,6 +114,7 @@ BEGIN
                    + ', @c_UserID             ' + CHAR(13)
                    + ', @cLangCode            ' + CHAR(13)
                    + ', @nCartonNo            ' + CHAR(13)
+                   + ', @nCartonizeStep       ' + CHAR(13)
                    + ', @b_Success     OUTPUT ' + CHAR(13)
                    + ', @n_ErrNo       OUTPUT ' + CHAR(13)
                    + ', @c_ErrMsg      OUTPUT ' + CHAR(13)
@@ -128,6 +131,7 @@ BEGIN
                         + ', @c_UserID       NVARCHAR(256)        ' + CHAR(13)
                         + ', @cLangCode      NVARCHAR(3)          ' + CHAR(13)
                         + ', @nCartonNo      INT                  ' + CHAR(13)
+                        + ', @nCartonizeStep INT                  ' + CHAR(13)
                         + ', @b_Success      INT           OUTPUT ' + CHAR(13)
                         + ', @n_ErrNo        INT           OUTPUT ' + CHAR(13)
                         + ', @c_ErrMsg       NVARCHAR(250) OUTPUT ' + CHAR(13)
@@ -146,6 +150,7 @@ BEGIN
                            , @c_UserID         
                            , @cLangCode 
                            , @nCartonNo
+                           , @nCartonizeStep
                            , @b_Success      OUTPUT
                            , @n_ErrNo        OUTPUT
                            , @c_ErrMsg       OUTPUT

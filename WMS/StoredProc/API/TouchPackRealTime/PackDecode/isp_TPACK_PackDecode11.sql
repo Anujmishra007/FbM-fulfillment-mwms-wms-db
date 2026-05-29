@@ -43,62 +43,49 @@ BEGIN
    
    DECLARE @cUPC  NVARCHAR(100)
          , @cEPC  NVARCHAR(100)
+         , @cSeparator NVARCHAR(5)  -- UPC+EPC separator; read from StorerConfig.Option1 (required)
+         , @nPos  INT
 
    SET @b_Success = 0  
 
-   SET @cUPC = @cInputValue1
+   EXEC [dbo].[ispSKUDC18] 
+         @c_Storerkey = @cStorerKey
+       , @c_Sku = @cInputValue1
+       , @c_NewSku = @cSKU       OUTPUT
+       , @b_Success = @b_Success OUTPUT
+       , @n_Err = @n_ErrNo       OUTPUT
+       , @c_ErrMsg = @c_ErrMsg   OUTPUT
 
-   IF  CHARINDEX(';', @cInputValue1) > 0
+   IF @b_Success = 0 OR @cSKU = ''
    BEGIN
-      SET @cUPC = LEFT(@cInputValue1, CHARINDEX(';', @cInputValue1) - 1)
-      SET @cEPC = RIGHT(@cInputValue1, LEN(@cInputValue1) - CHARINDEX(';', @cInputValue1))
-   END
-
-   SELECT @cSKU = ISNULL(RTRIM(SKU), '')
-   FROM UPC (NOLOCK)
-   WHERE StorerKey = @cStorerKey
-   AND UPC = @cUPC
-
-   IF @@ROWCOUNT = 0 OR @cSKU = ''
-   BEGIN
-      SET @n_ErrNo = 15701
-	   SET @c_ErrMsg = '(' + @cUPC + ')' + API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Current UPC is not found in UPC table.
+      SET @b_Success = 0
+      IF @n_ErrNo = 0
+      BEGIN
+         SET @n_ErrNo = 15701
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Not able to decode SKU for current barcode.
+      END
       GOTO QUIT
    END
 
-   IF EXISTS ( SELECT 1
-               FROM SKU (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-               AND SKU = @cSKU
-               AND BUSR5 = 'Y'
-   )
+   SELECT @cSeparator = NULLIF(RTRIM(Option1), '')
+    FROM STORERCONFIG (NOLOCK)
+    WHERE StorerKey = @cStorerKey 
+    AND ConfigKey = 'SKUDecode';
+ 
+   IF @cSeparator IS NULL
    BEGIN
-      IF @cEPC = ''
-      BEGIN
-         SET @n_ErrNo = 15702
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Current SKU requires EPC value, but no EPC value is provided.
-         GOTO QUIT
-      END
-      ELSE
-      BEGIN
-         IF LEN(@cEPC) <> 24
-         BEGIN
-            SET @n_ErrNo = 15703
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --The length of EPC value is not correct. Expected length is 24.
-             GOTO QUIT
-         END
-      END
+      SET @b_Success = 0
+      SET @n_ErrNo = 15702;
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'UPC+EPC separator not configured in StorerConfig.Option1'
+      GOTO QUIT
    END
-   ELSE
+
+   SET @nPos = CHARINDEX(@cSeparator, @cInputValue1);
+   IF  @nPos > 0
    BEGIN
-      IF @cEPC <> ''
-      BEGIN
-         SET @n_ErrNo = 15704
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --Current SKU does not require EPC scan, but got EPC value.
-         GOTO QUIT
-      END
+       SET @cUPC = LEFT(@cInputValue1, @nPos - 1);
+       SET @cEPC = SUBSTRING(@cInputValue1, @nPos + LEN(@cSeparator), LEN(@cInputValue1));
    END
-   
    SET @cInputValue2 = '["' + @cEPC + '"]'
    SET @cInputValue3 = ''
    SET @b_Success = 1

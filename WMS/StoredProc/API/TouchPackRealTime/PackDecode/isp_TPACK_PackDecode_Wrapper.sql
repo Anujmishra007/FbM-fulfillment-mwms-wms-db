@@ -8,6 +8,7 @@
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-04   1.0  GCH225     Created                                          */
 /* 2026-03-05   2.0  GCH225     UWP-49985: Support Decode InputValue 2 and 3     */
+/* 2026-05-18   2.1  JWF011     FCR-12745: Extend ErrMsg Length                  */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_PackDecode_Wrapper] (
      @cType             NVARCHAR(30)      = ''
@@ -104,7 +105,7 @@ BEGIN
                          + ', @nQty             INT           OUTPUT ' + CHAR(13) 
                          + ', @b_Success        INT           OUTPUT ' + CHAR(13) 
                          + ', @n_ErrNo          INT           OUTPUT ' + CHAR(13)
-                         + ', @c_ErrMsg         NVARCHAR(20)  OUTPUT ' + CHAR(13)   
+                         + ', @c_ErrMsg         NVARCHAR(250) OUTPUT ' + CHAR(13)   
 
          EXEC sp_ExecuteSQL  @cSQL
                            , @cSQLParams

@@ -57,7 +57,7 @@ BEGIN
    WHERE StorerKey = @cStorerKey
    AND ConfigKey = 'DefaultCartonType'
    
-   IF @cType = 'toteid' AND @bIsDiscrete = 1
+   IF @cType = 'toteid'
    BEGIN
       IF ( SELECT ISNULL(SUM(ExpQty), 0)
             FROM PACKDETAIL (NOLOCK)
@@ -105,11 +105,11 @@ BEGIN
                                     , Carton.cartonType
                                     , Carton.CartonDescription
                                     , Carton.Barcode
-                                    , CAST(ISNULL(Carton.CartonLength,0) AS DECIMAL(10,3)) AS CartonLength
-                                    , CAST(ISNULL(Carton.CartonWidth,0) AS DECIMAL(10,3)) AS CartonWidth
-                                    , CAST(ISNULL(Carton.CartonHeight,0) AS DECIMAL(10,3)) AS CartonHeight
-                                    , CAST(ISNULL(Carton.MaxWeight,0) AS DECIMAL(10,3)) AS MaxWeight
-                                    , CAST(Carton.[CUBE] AS DECIMAL(10,3)) AS [Cube]
+                                    , TRY_CAST(ISNULL(Carton.CartonLength,0) AS DECIMAL(18,3)) AS CartonLength
+                                    , TRY_CAST(ISNULL(Carton.CartonWidth,0) AS DECIMAL(18,3)) AS CartonWidth
+                                    , TRY_CAST(ISNULL(Carton.CartonHeight,0) AS DECIMAL(18,3)) AS CartonHeight
+                                    , TRY_CAST(ISNULL(Carton.MaxWeight,0) AS DECIMAL(18,3)) AS MaxWeight
+                                    , TRY_CAST(Carton.[CUBE] AS DECIMAL(18,3)) AS [Cube]
                                     , Carton.UseSequence AS UseSequence
                                     , CAST(IIF(RTRIM(Carton.cartonType) = RTRIM(@cConfigVal), 1, 0) AS BIT) AS Recommended
                               FROM @storer vs

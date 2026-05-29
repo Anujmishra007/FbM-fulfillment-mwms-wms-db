@@ -61,6 +61,10 @@ BEGIN
          , @bIsMultiSKU          BIT
          , @cCartonStatus        NVARCHAR(20)
    
+   DECLARE @oUOMList TABLE (
+      UOM NVARCHAR(20) PRIMARY KEY
+   )
+   
    DECLARE @oSKUList TABLE (
       SKU NVARCHAR(20) PRIMARY KEY
    )
@@ -192,6 +196,8 @@ BEGIN
       GOTO EXIT_SP
    END
 
+   INSERT INTO @oUOMList (UOM)
+   VALUES ('EA'),('EACH'),('PCS'),('6'),('CS'),('CASE'),('CSE')
    IF @cLoadKey <> ''
    BEGIN
       INSERT INTO @oOrderKeyList (OrderKey)
@@ -290,7 +296,7 @@ BEGIN
                         WHERE U.StorerKey = PD.StorerKey
                         AND U.SKU = PD.SKU
                         AND U.UPC LIKE @cKeyboardVal + '%'
-                        AND U.UOM IN ('EA','EACH','PCS', '6')
+                        AND U.UOM IN (SELECT UOM FROM @oUOMList)
                         )        
       )x
       GROUP BY x.SKU
@@ -378,7 +384,7 @@ BEGIN
                            WHERE U.StorerKey = PD.StorerKey
                            AND U.SKU = PD.SKU
                            AND U.UPC LIKE @cKeyboardVal + '%'
-                           AND U.UOM IN ('EA','EACH','PCS', '6')
+                           AND U.UOM IN (SELECT UOM FROM @oUOMList)
                            )
                AND NOT (
                   (SELECT TOP 1 O.DocType FROM ORDERS O (NOLOCK) WHERE O.OrderKey = PD.OrderKey) = 'E'
@@ -442,7 +448,7 @@ BEGIN
                            WHERE U.StorerKey = PD.StorerKey
                            AND U.SKU = PD.SKU
                            AND U.UPC LIKE @cKeyboardVal + '%'
-                           AND U.UOM IN ('EA','EACH','PCS', '6')
+                           AND U.UOM IN (SELECT UOM FROM @oUOMList)
                            )
             )x
             GROUP BY x.SKU
@@ -528,7 +534,7 @@ BEGIN
                           WHERE U.StorerKey = @cStorerKey
                           AND U.SKU = t.SKU
                           AND U.UPC LIKE @cKeyboardVal + '%'
-                          AND U.UOM IN ('EA','EACH','PCS', '6')
+                          AND U.UOM IN (SELECT UOM FROM @oUOMList)
                          )
          )x
          GROUP BY x.SKU
@@ -576,7 +582,7 @@ BEGIN
                 FROM UPC (NOLOCK)
                 WHERE StorerKey = @cStorerKey
                 AND UPC = @cKeyboardVal
-                AND UOM IN ('EA','EACH','PCS', '6')
+                AND UOM IN (SELECT UOM FROM @oUOMList)
       ) 
       BEGIN
          SET @cScanType = 'upc'
