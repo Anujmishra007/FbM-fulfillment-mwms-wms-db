@@ -5,13 +5,14 @@ GO
 
 
 /******************************************************************************/
-/* Store procedure: rdt_610DecodeSP04                                         */
+/* Store procedure: rdt_610DecodeSP05                                         */
 /* Copyright: MAERSK                                                          */
 /*                                                                            */
 /* Purpose: Decode For PMI                                                    */
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2025-11-10  Cuize     1.0   FCR-8407. Created                              */
+/* 2026-05-29  Sreeja    1.1   FCR-13447  Pallet ID Decode in Step-5          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_610DecodeSP05] (
@@ -71,6 +72,31 @@ BEGIN
 
    IF @nFunc = 610
    BEGIN
+      -- FCR-13755: Pallet ID Decode - Take rightmost 18 characters
+      IF @nStep = 8
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            IF @cBarcode <> ''
+            BEGIN
+               SET @cBarcode = LTRIM(RTRIM(@cBarcode))
+
+               -- Only decode if barcode is more than 18 characters
+               IF LEN(@cBarcode) > 18
+               BEGIN
+                  SET @cID = RIGHT(@cBarcode, 18)
+               END
+               ELSE
+               BEGIN
+                  -- If 18 characters or less, use as-is
+                  SET @cID = @cBarcode
+               END
+
+               GOTO Quit
+            END
+         END
+      END
+
       IF @nStep IN ( 9, 10)
       BEGIN
          IF @nInputKey = 1 -- ENTER
