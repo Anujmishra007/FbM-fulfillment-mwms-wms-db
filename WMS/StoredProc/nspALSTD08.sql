@@ -45,7 +45,6 @@ BEGIN
 
    IF OBJECT_ID('tempdb..##TMP_PREALLOCATE_CURSOR_CANDIDATES','u') IS NOT NULL
       AND EXISTS (SELECT 1 FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES)
-      AND @c_UOM NOT IN ('1')
    BEGIN
 
       SELECT TOP 1
@@ -81,7 +80,7 @@ BEGIN
       AND LOC.Facility = @c_Facility   
       AND LOC.Facility = F.Facility   
       ORDER BY 
-      IIF(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED < @n_PalletQty, 0, 1),
+      (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED),
       LOTATTRIBUTE.Lottable05, 
       F.FacSort, LOC.LogicalLocation, LOC.LOC   
 
