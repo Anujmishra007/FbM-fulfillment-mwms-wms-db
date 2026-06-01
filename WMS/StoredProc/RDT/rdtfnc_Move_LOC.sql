@@ -877,7 +877,7 @@ BEGIN
 
       -- Validate ToLOC check digit (FCR-10368, Sreeja)
       SET @cCheckDigitLOC = @cInField11
-      IF @cLOCCheckDigitSP = '1'
+      IF @cLOCCheckDigitSP = '1' AND @nCounter<1
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cCheckDigitLOC    OUTPUT,
