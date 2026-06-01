@@ -152,6 +152,7 @@ GO
 /* 18-Sep-2025 6.8  James    FCR-2614 Fix uom conversion issue (james34)*/
 /*                           Add decodesp to add new ucc step           */
 /* 17-04-2026  6.9  NYE018  FCR-9688 error handling after decode        */
+/* 29-05-2026  7.0  Sreeja  FCR-13447 Change IdBarcode to Barcode       */                      */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -3014,7 +3015,7 @@ BEGIN
                ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cCheckStorer, @cCCRefNo, @cCCSheetNo, @cIDBarcode,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cCheckStorer, @cCCRefNo, @cCCSheetNo, @cBarcode,
                @cLOC          OUTPUT, @cID_In         OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
                @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
                @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,

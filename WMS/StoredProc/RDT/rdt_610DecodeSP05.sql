@@ -12,7 +12,7 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2025-11-10  Cuize     1.0   FCR-8407. Created                              */
-/* 2026-05-29  Sreeja    1.1   FCR-13447  Pallet ID Decode in Step-5          */
+/* 2026-05-29  Sreeja    1.1   FCR-13447  Pallet ID Decode in Screen-5        */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_610DecodeSP05] (
@@ -72,15 +72,25 @@ BEGIN
 
    IF @nFunc = 610
    BEGIN
-      -- FCR-13755: Pallet ID Decode - Take rightmost 18 characters
+         -- FCR-13755: Pallet ID Decode - Take rightmost 18 characters
       IF @nStep = 8
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
+            -- DEBUG: Check what values we're receiving
+         INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)
+         VALUES ('DecodeSP05_Debug', GETDATE(), 
+                 'Barcode=' + ISNULL(@cBarcode, 'NULL'), 
+                 'ID=' + ISNULL(@cID, 'NULL'), 
+                 'UD1=' + ISNULL(@cUserDefine01, 'NULL'), 
+                 'UD2=' + ISNULL(@cUserDefine02, 'NULL'), 
+                 'UD3=' + ISNULL(@cUserDefine03, 'NULL'))
+
+            -- Fall back to @cID if @cBarcode is empty (main SP passes value in @cID)
+            SET @cBarcode = LTRIM(RTRIM(COALESCE(NULLIF(@cBarcode, ''), @cID, '')))
+
             IF @cBarcode <> ''
             BEGIN
-               SET @cBarcode = LTRIM(RTRIM(@cBarcode))
-
                -- Only decode if barcode is more than 18 characters
                IF LEN(@cBarcode) > 18
                BEGIN
