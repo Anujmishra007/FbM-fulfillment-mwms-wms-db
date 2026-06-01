@@ -1,4 +1,4 @@
-﻿SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -116,6 +116,7 @@ GO
 /* 09-Oct-2025  SPC040       3.6   Replace SUSER_SNAME with fnc_GetUserName    */
 /* 06-Jan-2026  KHChan       3.7    FCR-4314 - Add Configkey WSINVMOVE2LOG,    */
 /*                                  WSINVMOVE3LOG (KH03)                       */
+/* 20-May-2026  Michael      3.8    FCR-8378- Handle SP w/o @c_PalletType(ML01)*/
 /*******************************************************************************/  
 CREATE OR ALTER TRIGGER [dbo].[ntrItrnAdd]  
 ON  [dbo].[ITRN]  
@@ -577,7 +578,9 @@ BEGIN
            FROM ITRN WITH (NOLOCK)  
            JOIN INSERTED ON ( itrn.itrnkey = inserted.itrnkey ) 
   
-         EXECUTE nspItrnAddDepositCheck  
+         IF EXISTS(SELECT TOP 1 1 from sys.procedures a, sys.parameters b                                          --ML01
+                   WHERE a.object_id=b.object_id and a.name='nspItrnAddDepositCheck' and b.name='@c_PalletType')   --ML01
+            EXECUTE nspItrnAddDepositCheck  
                  @c_itrnkey      = @c_itrnkey  
             ,    @c_StorerKey    = @c_InsertStorerKey  
             ,    @c_Sku          = @c_InsertSku  
@@ -618,6 +621,49 @@ BEGIN
             ,    @b_Success      = @b_success         OUTPUT  
             ,    @n_err          = @n_err             OUTPUT  
             ,    @c_errmsg       = @c_errmsg          OUTPUT  
+         --ML01-S
+         ELSE
+            EXECUTE nspItrnAddDepositCheck
+                 @c_itrnkey      = @c_itrnkey
+            ,    @c_StorerKey    = @c_InsertStorerKey
+            ,    @c_Sku          = @c_InsertSku
+            ,    @c_Lot          = @c_InsertLot
+            ,    @c_ToLoc        = @c_InsertToLoc
+            ,    @c_ToID         = @c_InsertToID
+            ,    @c_packkey      = @c_InsertPackKey
+            ,    @c_Status       = @c_status
+            ,    @n_casecnt      = @n_casecnt
+            ,    @n_innerpack    = @n_innerpack
+            ,    @n_Qty          = @n_Qty
+            ,    @n_pallet       = @n_pallet
+            ,    @f_cube         = @f_cube
+            ,    @f_grosswgt     = @f_grosswgt
+            ,    @f_netwgt       = @f_netwgt
+            ,    @f_otherunit1   = @f_otherunit1
+            ,    @f_otherunit2   = @f_otherunit2
+            ,    @c_lottable01   = @c_lottable01
+            ,    @c_lottable02   = @c_lottable02
+            ,    @c_lottable03   = @c_lottable03
+            ,    @d_lottable04   = @d_lottable04
+            ,    @d_lottable05   = @d_lottable05
+            ,    @c_lottable06   = @c_lottable06
+            ,    @c_lottable07   = @c_lottable07
+            ,    @c_lottable08   = @c_lottable08
+            ,    @c_lottable09   = @c_lottable09
+            ,    @c_lottable10   = @c_lottable10
+            ,    @c_lottable11   = @c_lottable11
+            ,    @c_lottable12   = @c_lottable12
+            ,    @d_lottable13   = @d_lottable13
+            ,    @d_lottable14   = @d_lottable14
+            ,    @d_lottable15   = @d_lottable15
+            ,    @c_SourceKey    = @c_sourcekey
+            ,    @c_SourceType   = @c_sourcetype
+            ,    @c_Channel      = @c_Channel
+            ,    @n_Channel_ID   = @n_Channel_ID      OUTPUT
+            ,    @b_Success      = @b_success         OUTPUT
+            ,    @n_err          = @n_err             OUTPUT
+            ,    @c_errmsg       = @c_errmsg          OUTPUT
+         --ML01-E
   
          IF @b_success <> 1  
          BEGIN  
@@ -1411,7 +1457,9 @@ BEGIN
            FROM ITRN WITH (NOLOCK)  
            JOIN INSERTED ON ( ITRN.itrnkey = INSERTED.itrnkey )  
   
-         EXECUTE nspItrnAddAdjustmentCheck  
+         IF EXISTS(SELECT TOP 1 1 from sys.procedures a, sys.parameters b                                             --ML01
+                   WHERE a.object_id=b.object_id and a.name='nspItrnAddAdjustmentCheck' and b.name='@c_PalletType')   --ML01
+            EXECUTE nspItrnAddAdjustmentCheck  
                  @c_itrnkey      = @c_itrnkey  
                , @c_StorerKey    = @c_InsertStorerKey  
                , @c_Sku          = @c_InsertSku  
@@ -1450,6 +1498,47 @@ BEGIN
                , @n_err          = @n_err             OUTPUT  
                , @c_errmsg       = @c_errmsg          OUTPUT
                ,@c_PalletType    = @c_PalletType
+         --ML01-S
+         ELSE
+            EXECUTE nspItrnAddAdjustmentCheck
+                 @c_itrnkey      = @c_itrnkey
+               , @c_StorerKey    = @c_InsertStorerKey
+               , @c_Sku          = @c_InsertSku
+               , @c_Lot          = @c_InsertLot
+               , @c_ToLoc        = @c_InsertToLoc
+               , @c_ToID         = @c_InsertToID
+               , @c_packkey      = @c_InsertPackKey
+               , @c_Status       = @c_status
+               , @n_casecnt      = @n_casecnt
+               , @n_innerpack    = @n_innerpack
+               , @n_Qty          = @n_Qty
+               , @n_pallet       = @n_pallet
+               , @f_cube         = @f_cube
+               , @f_grosswgt     = @f_grosswgt
+               , @f_netwgt       = @f_netwgt
+               , @f_otherunit1   = @f_otherunit1
+               , @f_otherunit2   = @f_otherunit2
+               , @c_lottable01   = @c_lottable01
+               , @c_lottable02   = @c_lottable02
+               , @c_lottable03   = @c_lottable03
+               , @d_lottable04   = @d_lottable04
+               , @d_lottable05   = @d_lottable05
+               , @c_lottable06   = @c_lottable06
+               , @c_lottable07   = @c_lottable07
+               , @c_lottable08   = @c_lottable08
+               , @c_lottable09   = @c_lottable09
+               , @c_lottable10   = @c_lottable10
+               , @c_lottable11   = @c_lottable11
+               , @c_lottable12   = @c_lottable12
+               , @d_lottable13   = @d_lottable13
+               , @d_lottable14   = @d_lottable14
+               , @d_lottable15   = @d_lottable15
+               , @c_Channel      = @c_Channel
+               , @n_Channel_ID   = @n_Channel_ID      OUTPUT
+               , @b_Success      = @b_success         OUTPUT
+               , @n_err          = @n_err             OUTPUT
+               , @c_errmsg       = @c_errmsg          OUTPUT
+         --ML01-E
   
          IF @b_success <> 1  
          BEGIN  
@@ -1983,7 +2072,9 @@ BEGIN
                FROM ITRN WITH (NOLOCK)  
                JOIN INSERTED ON ( ITRN.itrnkey = INSERTED.itrnkey )  
   
-         EXECUTE nspItrnAddMoveCheck  
+         IF EXISTS(SELECT TOP 1 1 from sys.procedures a, sys.parameters b                                       --ML01
+                   WHERE a.object_id=b.object_id and a.name='nspItrnAddMoveCheck' and b.name='@c_PalletType')   --ML01
+            EXECUTE nspItrnAddMoveCheck  
                  @c_itrnkey      = @c_itrnkey  
                , @c_StorerKey    = @c_InsertStorerKey  
                , @c_Sku          = @c_InsertSku  
@@ -2025,6 +2116,50 @@ BEGIN
                , @c_Channel      = @c_Channel                  --(Wan03)
                , @n_Channel_ID   = @n_Channel_ID      OUTPUT   --(Wan03)
                , @c_PalletType    = @c_PalletType
+         --ML01-S
+         ELSE
+            EXECUTE nspItrnAddMoveCheck
+                 @c_itrnkey      = @c_itrnkey
+               , @c_StorerKey    = @c_InsertStorerKey
+               , @c_Sku          = @c_InsertSku
+               , @c_Lot          = @c_InsertLot
+               , @c_fromloc      = @c_InsertFromLoc
+               , @c_fromid       = @c_InsertFromID
+               , @c_ToLoc        = @c_InsertToLoc
+               , @c_ToID         = @c_InsertToID
+               , @c_packkey      = @c_InsertPackKey
+               , @c_Status       = @c_status
+               , @n_casecnt      = @n_casecnt
+               , @n_innerpack    = @n_innerpack
+               , @n_Qty          = @n_Qty
+               , @n_pallet       = @n_pallet
+               , @f_cube         = @f_cube
+               , @f_grosswgt     = @f_grosswgt
+               , @f_netwgt       = @f_netwgt
+               , @f_otherunit1   = @f_otherunit1
+               , @f_otherunit2   = @f_otherunit2
+               , @c_lottable01   = @c_lottable01
+               , @c_lottable02   = @c_lottable02
+               , @c_lottable03   = @c_lottable03
+               , @d_lottable04   = @d_lottable04
+               , @d_lottable05   = @d_lottable05
+               , @c_lottable06   = @c_lottable06
+               , @c_lottable07   = @c_lottable07
+               , @c_lottable08   = @c_lottable08
+               , @c_lottable09   = @c_lottable09
+               , @c_lottable10   = @c_lottable10
+               , @c_lottable11   = @c_lottable11
+               , @c_lottable12   = @c_lottable12
+               , @d_lottable13   = @d_lottable13
+               , @d_lottable14   = @d_lottable14
+               , @d_lottable15   = @d_lottable15
+               , @b_Success      = @b_success         OUTPUT
+               , @n_err          = @n_err             OUTPUT
+               , @c_errmsg       = @c_errmsg          OUTPUT
+               , @c_MoveRefKey   = @c_MoveRefKey
+               , @c_Channel      = @c_Channel
+               , @n_Channel_ID   = @n_Channel_ID      OUTPUT
+         --ML01-E
 
          IF @b_success <> 1  
          BEGIN  
