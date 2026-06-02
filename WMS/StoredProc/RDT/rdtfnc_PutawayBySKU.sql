@@ -91,6 +91,7 @@ GO
 /*                          Add rdt format for ID                             */
 /* 2026-01-26 5.7  Jackc    FCR-9756 Add ExtScn                               */ 
 /* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                     */
+/* 2026-06-02 5.9  Dennis   UWP-52316 Remove Barcode in RDTMOBREC             */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
@@ -282,7 +283,6 @@ SELECT
    @cQTY_Avail    = V_String7,
    @cQTY_Alloc    = V_String8,
    @cQTY_PMoveIn  = V_String9,
-   @cSKUBarcode   = V_String11,
    @cFlowThruQtyScn = V_String12,
    @cPieceScanSKU = V_String13,
    @cExtScnSP     = V_String14,
@@ -3375,7 +3375,6 @@ BEGIN
       V_String7  = @cQTY_Avail,
       V_String8  = @cQTY_Alloc,
       V_String9  = @cQTY_PMoveIn,
-      V_String11 = @cSKUBarcode,
       V_String12 = @cFlowThruQtyScn,
       V_String13 = @cPieceScanSKU,
       V_String14 = @cExtScnSP,      
