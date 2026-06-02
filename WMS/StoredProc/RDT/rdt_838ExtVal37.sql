@@ -155,8 +155,9 @@ BEGIN
          IF EXISTS (SELECT 1 FROM PACKDETAIL PD (NOLOCK) 
             JOIN PICKHEADER PH (NOLOCK) ON PD.PickSlipNo = PH.PickHeaderKey
             JOIN ORDERS O (NOLOCK) ON PH.ORDERKEY = O.ORDERKEY AND O.SOStatus <> 'CANC'
-            WHERE PD.LabelNo = @cPackDtlDropID)
-            AND ISNULL(@cPackDtlDropID ,'') <> ''
+            WHERE PD.LabelNo = @cPackDtlDropID
+            AND PD.QTY > 0)
+         AND ISNULL(@cPackDtlDropID ,'') <> ''
          BEGIN
             SET @nErrNo = 255755
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --255755ToDropIDScanned

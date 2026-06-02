@@ -58,6 +58,8 @@ GO
 /* 2026-01-07  1.0.0  Dennis     FCR-7820 Created                          */
 /* 2026-03-26  1.1.0  Dennis     FCR-7820 Step1 loop scan DropID to        */
 /*                               RDT.rdtPickLog                            */
+/* 2026-06-01  1.2.0  Dennis     FCR-7820 Get CartonType from PackInfo     */
+/*                               when only PickSlipNo + ToDropID scanned   */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn07] (
@@ -1102,6 +1104,16 @@ BEGIN
                END
             END
          END
+         -- No FromDropID scanned, but ToDropID provided - get CartonType from PackInfo
+         ELSE IF ISNULL(@cPackDtlDropID, '') <> ''
+         BEGIN
+            SELECT TOP 1 @cOutField01 = PI.CartonType
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.PackInfo PI WITH (NOLOCK) ON PI.PickSlipNo = PD.PickSlipNo AND PI.CartonNo = PD.CartonNo
+            WHERE PD.LabelNo = @cPackDtlDropID
+              AND PD.PickSlipNo = @cPickSlipNo
+              AND PD.StorerKey = @cStorerKey
+         END
 
          SET @cOutField02 = ''
          SET @nAfterStep = 99
@@ -1567,6 +1579,16 @@ BEGIN
                   ORDER BY CAST(CZ.Cube AS FLOAT) DESC
                END
             END
+         END
+         -- No FromDropID scanned, but ToDropID provided - get CartonType from PackInfo
+         ELSE IF ISNULL(@cPackDtlDropID, '') <> ''
+         BEGIN
+            SELECT TOP 1 @cOutField01 = PI.CartonType
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.PackInfo PI WITH (NOLOCK) ON PI.PickSlipNo = PD.PickSlipNo AND PI.CartonNo = PD.CartonNo
+            WHERE PD.LabelNo = @cPackDtlDropID
+              AND PD.PickSlipNo = @cPickSlipNo
+              AND PD.StorerKey = @cStorerKey
          END
 
          SET @cOutField02 = ''
