@@ -163,6 +163,8 @@ GO
 /* 29-Jan-2024  Wan03        2.7    UWP-14379-Implement pre-save ASN standard  */
 /*                                  validation check                           */
 /* 06-Oct-2025  AK01         2.8    UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
+/* 28-May-2026  USH022       2.9    UWP-49056 - Avoid to reset status, asnstatus =0 */
+/*                                  when openQty>0 and UPDATE(ASNStatus) = 51 */
 /*******************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
 ON  [dbo].[RECEIPT]
@@ -681,26 +683,48 @@ BEGIN
    --(Wan02) - END
    IF @n_continue = 1 or @n_continue=2
    BEGIN
-      -- Modify by ricky (Feb,2005) to prevent the ASNstatus rollback to 0 when 9 
-      UPDATE RECEIPT with (ROWLOCK)
-      SET  Status = '0', ASNStatus = '0'
-      FROM RECEIPT , INSERTED, DELETED
-      WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
-      AND INSERTED.ReceiptKey = DELETED.ReceiptKey
-      AND INSERTED.OpenQty > 0
-      AND DELETED.Status = '9'
-      --AND DELETED.ASNStatus <> '9'           
-      AND INSERTED.ASNStatus <> '9' --NJOW04
-      
-   
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-      IF @n_err <> 0
-      BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err) --, @n_err=63801   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RECEIPT. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
-      END
-      
+        --start (ver-2.9)
+        DECLARE @b_CustomImportSubmit BIT = 0;
+
+        SELECT @b_CustomImportSubmit =
+          CASE
+              WHEN EXISTS
+              (
+                  SELECT 1
+                  FROM INSERTED I
+                  JOIN DELETED D
+                      ON I.ReceiptKey = D.ReceiptKey
+                  WHERE I.OpenQty > 0
+                  AND D.Status = '9'
+                  AND I.ASNStatus = '51'
+                  AND I.Status = '9'
+              )
+              THEN 1
+              ELSE 0
+          END;
+          -- end (ver-2.9)
+        IF (@b_CustomImportSubmit = 0) --(ver-2.9)
+        BEGIN
+          -- Modify by ricky (Feb,2005) to prevent the ASNstatus rollback to 0 when 9
+          UPDATE RECEIPT with (ROWLOCK)
+          SET  Status = '0', ASNStatus = '0'
+          FROM RECEIPT , INSERTED, DELETED
+          WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
+          AND INSERTED.ReceiptKey = DELETED.ReceiptKey
+          AND INSERTED.OpenQty > 0
+          AND DELETED.Status = '9'
+          --AND DELETED.ASNStatus <> '9'
+          AND INSERTED.ASNStatus <> '9' --NJOW04
+
+
+          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+          IF @n_err <> 0
+          BEGIN
+             SELECT @n_continue = 3
+             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err) --, @n_err=63801   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RECEIPT. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+          END
+       END
       SET @c_StatusUpdated = 'Y' -- (MC02)
 
    END
