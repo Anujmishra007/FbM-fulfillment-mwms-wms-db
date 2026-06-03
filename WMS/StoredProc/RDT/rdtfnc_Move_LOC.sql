@@ -877,7 +877,7 @@ BEGIN
 
       -- Validate ToLOC check digit (FCR-10368, Sreeja)
       SET @cCheckDigitLOC = @cInField11
-      IF @cLOCCheckDigitSP = '1' AND @nCounter<1
+      IF @cLOCCheckDigitSP = '1' 
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cCheckDigitLOC    OUTPUT,
@@ -891,7 +891,7 @@ BEGIN
 
 
       -- add loc prefix (cc01)
-     IF @cLOCLookupSP = 1   and @nCounter<1
+     IF @cLOCLookupSP = 1   --and @nCounter<1
      BEGIN
          EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cToLOC        OUTPUT,
@@ -928,7 +928,11 @@ BEGIN
 
       IF isnull(@cToID,'') = '' and @nCounter<1 --(yeekung01)
       BEGIN
-         SET @cOutField11=@cToLOC
+         -- FCR-11051: When check digit is enabled, preserve original input (with check digit)
+         IF @cLOCCheckDigitSP = '1'
+            SET @cOutField11 = @cInField11
+         ELSE
+            SET @cOutField11=@cToLOC
          SET @nCounter = @nCounter+1
          EXEC rdt.rdtSetFocusField @nMobile, 12 -- ID
          GOTO Quit
