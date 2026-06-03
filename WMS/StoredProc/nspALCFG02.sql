@@ -50,7 +50,7 @@ GO
 /* 03-Oct-2025 WLChooi  2.8  FCR-7828 Exclude UCC Hold - Status = H (WL03) */
 /* 14-Oct-2025 WLChooi  2.9  FCR-8009 Fix partial UCC Qty calculation(WL04)*/
 /* 25-May-2026 Wan03    3.0  FCR-8009 FCR-13242 - ID - MICHELIN - Allocation*/
-/*                           FULLPALLETBYID and FDOTFOBYMULTIUOM           */
+/* 03-Jun-2026               FULLPALLETBYID and FDOTFOBYMULTIUOM           */
 /***************************************************************************/
 
 CREATE OR ALTER   PROC [dbo].[nspALCFG02]
@@ -1410,7 +1410,7 @@ BEGIN
          BEGIN
               IF @c_AllocateByUCCFlag = 'Y' AND @c_UOM IN ('2','6','7')  --NJOW09
               BEGIN
-                IF @c_FIFOByMultiUOM = 'Y'
+                IF @c_FIFOByMultiUOM = 'Y' OR @c_FDTFOByMultiUOM= 'Y'                           --(Wan03)
                 BEGIN
                    IF(@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) <= 0             
                       SET @n_QtyToTake = 0 
@@ -1443,6 +1443,7 @@ BEGIN
                IF @n_UOMBase > 0       --(Wan01) Fixed divide by zero
                BEGIN
                     IF @c_FIFOByMultiUOM = 'Y'  --NJOW09
+                    OR @c_FDTFOByMultiUOM= 'Y'                                      --(Wan03)                    
                     BEGIN
                      IF (@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) >= @n_QtyAvailable  
                      BEGIN
