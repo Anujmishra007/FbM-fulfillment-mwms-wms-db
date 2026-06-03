@@ -1186,13 +1186,17 @@ BEGIN
                                    ELSE ''
                                    END +                                                                 --(Wan02) - END
                               CASE WHEN @c_AllocateQtyReplenFlag = 'Y' THEN
-                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' OR (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') THEN --NJOW07 --NJOW11
+                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' OR (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1')      --NJOW07 --NJOW11
+                                      OR   @c_FDTFOByMultiUOM= 'Y'                                       --(Wan03) 
+                                 THEN
                                     ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= 1 '
                                  ELSE
                                     ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_uombase '
                                  END 
                               ELSE
-                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' OR (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') THEN --NJOW07 --NJOW11                                
+                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' OR (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1')      --NJOW07 --NJOW11  
+                                       OR  @c_FDTFOByMultiUOM= 'Y'                                       --(Wan03) 
+                                 THEN                                       
                                     ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= 1 ' 
                                  ELSE
                                     ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= @n_uombase ' 
