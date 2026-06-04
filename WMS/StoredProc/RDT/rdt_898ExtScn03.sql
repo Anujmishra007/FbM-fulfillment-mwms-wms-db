@@ -75,7 +75,7 @@ BEGIN
       @cReceiveAllowAddNewUCC          NVARCHAR(10),
       @cUCCWithDynamicCaseCnt          NVARCHAR(10),
       @cTempAddNewUCC                  NVARCHAR(10),
-      @cUCC                            NVARCHAR(MAX),
+      @cUCC                            NVARCHAR(20),
       @cTempUCC                        NVARCHAR(20),
       @cListName                       NVARCHAR(20),
       @cLottableCode                   NVARCHAR( 30),
@@ -294,7 +294,7 @@ BEGIN
                   DECLARE @nUCCQTY INT
                   
                   -- @cLottable02 is only NVARCHAR(18) and truncates the barcode
-                  SET @cUCC = @cInField02
+                  --SET @cUCC = @cInField02
 
                   DECLARE @cBarcode NVARCHAR(MAX)
                   

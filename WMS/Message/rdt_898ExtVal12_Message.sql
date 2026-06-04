@@ -8,5 +8,6 @@ execute rdt.rdtAddMsg 263904, 10, '263904^Mix Lottable03 Not Allowed', 'us_engli
 execute rdt.rdtAddMsg 263905, 10, '263905^Mix Lottable04 Not Allowed', 'us_english', 898, 0, '263905 Mix Lottable04 Not Allowed On ID'
 execute rdt.rdtAddMsg 263906, 10, '263906^Mix SKU Not Allowed',        'us_english', 898, 0, '263906 Mix SKU Not Allowed'
 execute rdt.rdtAddMsg 263907, 10, '263907^Invalid Length Barcode',     'us_english', 898, 0, '263907 Invalid length barcode'
+execute rdt.rdtAddMsg 263908, 10, '263908^ID must be 10 characters',   'us_english', 898, 0, '263908 ID must be 10 characters'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 263901 AND 263950 ORDER BY Message_ID
