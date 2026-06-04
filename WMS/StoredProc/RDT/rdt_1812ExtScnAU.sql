@@ -134,6 +134,7 @@ BEGIN
     DECLARE @cLabelNo          NVARCHAR( 20)  
     
     DECLARE @tPalletLabel  AS VariableTable  
+    DECLARE @cSQL NVARCHAR(MAX)
     
     SET @cPalletLabel = rdt.RDTGetConfig( @nFunc, 'PalletLabel', @cStorerKey)  
     IF @cPalletLabel = '0'  
@@ -167,8 +168,7 @@ BEGIN
     SELECT @cDropID        = Value FROM @tExtScnData WHERE Variable = '@cDropID'  
     SELECT @cToLOC         = Value FROM @tExtScnData WHERE Variable = '@cToLOC'  
     SELECT @cQTY           = Value FROM @tExtScnData WHERE Variable = '@cQTY'  
-    SELECT @nQTY           = 0  
-    SELECT @nQTY           = CONVERT(INT,@cQTY)      WHERE ISNUMERIC(@cQTY)=1  
+    SELECT @nQTY           = ISNULL(TRY_CONVERT(INT, @cQTY), 0) 
   
     IF @nFunc = 1812 -- TM Case Pick  
     BEGIN  
@@ -331,21 +331,25 @@ BEGIN
     
                 -- Order not yet have lane (first pallet)  
                 IF @cSuggToLane = '' AND ISNULL(@cMBOLKey,'') = ''  
-                -- Suggest lane as abbreviated company name  
-                SELECT @cSuggToLane = LEFT( Long, 12)+ CONVERT(NVARCHAR(8),GETDATE(),112)  
-                FROM dbo.CodeLKUP WITH (NOLOCK)  
-                WHERE ListName = 'RDTCSTCODE'  
-                    AND Code = @cConsigneeKey  
-                    AND StorerKey = @cStorerKey  
+                BEGIN
+                    -- Suggest lane as abbreviated company name  
+                    SELECT @cSuggToLane = LEFT( Long, 12)+ CONVERT(NVARCHAR(8),GETDATE(),112)  
+                    FROM dbo.CodeLKUP WITH (NOLOCK)  
+                    WHERE ListName = 'RDTCSTCODE'  
+                        AND Code = @cConsigneeKey  
+                        AND StorerKey = @cStorerKey 
+                END 
     
                 -- Order not yet have lane (first pallet)  
-                IF @cSuggToLane = '' AND ISNULL(@cMBOLKey,'') = ''  
-                -- Suggest lane as abbreviated company name  
-                SELECT @cSuggToLane = LEFT( Long, 12)+ CONVERT(NVARCHAR(8),GETDATE(),112)  
-                FROM dbo.CodeLKUP WITH (NOLOCK)  
-                WHERE ListName = 'RDTCSTCODE'  
-                    AND Code = @cBillToKey  
-                    AND StorerKey = @cStorerKey  
+                IF @cSuggToLane = '' AND ISNULL(@cMBOLKey,'') = '' 
+                BEGIN 
+                    -- Suggest lane as abbreviated company name  
+                    SELECT @cSuggToLane = LEFT( Long, 12)+ CONVERT(NVARCHAR(8),GETDATE(),112)  
+                    FROM dbo.CodeLKUP WITH (NOLOCK)  
+                    WHERE ListName = 'RDTCSTCODE'  
+                        AND Code = @cBillToKey  
+                        AND StorerKey = @cStorerKey  
+                END
     
                 -- To Lane screen  
                 SET @cOutField01 = CASE WHEN ISNULL( @cSuggToLane, '') <> '' THEN @cSuggToLane ELSE '' END -- To Lane  
@@ -516,6 +520,7 @@ BEGIN
                     SELECT @nTaskQty = QTY  
                     FROM TASKDETAIL WITH (NOLOCK)  
                     WHERE TASKDETAILKEY = @cTaskdetailKey  
+                    AND STORERKEY = @cStorerKey
     
                     IF ISNULL(@nTaskQty,0) > @nQTY  
                     BEGIN  
@@ -580,21 +585,25 @@ BEGIN
     
                     -- Order not yet have lane (first pallet)  
                     IF @cSuggToLane = '' AND ISNULL(@cMBOLKey,'') = ''  
+                    BEGIN
                         -- Suggest lane as abbreviated company name  
                         SELECT @cSuggToLane = LEFT( Long, 12)+ CONVERT(NVARCHAR(8),GETDATE(),112)  
                         FROM dbo.CodeLKUP WITH (NOLOCK)  
                         WHERE ListName = 'RDTCSTCODE'  
                             AND Code = @cConsigneeKey  
                             AND StorerKey = @cStorerKey  
+                    END
     
                     -- Order not yet have lane (first pallet)  
                     IF @cSuggToLane = '' AND ISNULL(@cMBOLKey,'') = ''  
+                    BEGIN
                         -- Suggest lane as abbreviated company name  
                         SELECT @cSuggToLane = LEFT( Long, 12)+ CONVERT(NVARCHAR(8),GETDATE(),112)  
                         FROM dbo.CodeLKUP WITH (NOLOCK)  
                         WHERE ListName = 'RDTCSTCODE'  
                             AND Code = @cBillToKey  
                             AND StorerKey = @cStorerKey  
+                    END
     
                     -- To Lane screen  
                     SET @cOutField01 = CASE WHEN ISNULL( @cSuggToLane, '') <> '' THEN @cSuggToLane ELSE '' END -- To Lane  
