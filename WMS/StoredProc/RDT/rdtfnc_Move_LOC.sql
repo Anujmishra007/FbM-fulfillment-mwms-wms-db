@@ -342,7 +342,7 @@ BEGIN
       END
 
       -- Check digit validation if config exists (FCR-10368, Sreeja)
-      SET @cCheckDigitLOC = @cInField02
+      SET @cCheckDigitLOC = @cFromLOC
       IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
@@ -876,8 +876,8 @@ BEGIN
       END
 
       -- Validate ToLOC check digit (FCR-10368, Sreeja)
-      SET @cCheckDigitLOC = @cInField11
-      IF @cLOCCheckDigitSP = '1'
+      SET @cCheckDigitLOC = @cToLOC
+      IF @cLOCCheckDigitSP = '1' AND @nCounter < 1  
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cCheckDigitLOC    OUTPUT,
