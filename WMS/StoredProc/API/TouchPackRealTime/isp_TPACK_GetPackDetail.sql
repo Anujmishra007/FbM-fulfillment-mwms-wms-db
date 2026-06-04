@@ -363,7 +363,7 @@ BEGIN
 
    SET @cPackDetailList = @oDynamicJson
 
-   IF @cPackDetailList = ''
+   IF @cPackDetailList = '' AND @nPageIndex = 0
    BEGIN
       SET @n_Continue = 3
       SET @n_ErrNo = 10951      
