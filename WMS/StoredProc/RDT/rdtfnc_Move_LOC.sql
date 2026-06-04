@@ -342,7 +342,7 @@ BEGIN
       END
 
       -- Check digit validation if config exists (FCR-10368, Sreeja)
-      SET @cCheckDigitLOC = @cInField02
+      SET @cCheckDigitLOC = @cFromLOC
       IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
