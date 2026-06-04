@@ -196,7 +196,7 @@ BEGIN
       INNER JOIN LOTxLOCxID LLI WITH(NOLOCK) ON LOC.Loc = LLI.Loc AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
       LEFT JOIN dbo.UCC WITH(NOLOCK) ON LOC.Loc = UCC.Loc AND UCC.StorerKey = @cStorerKey AND UCC.Status IN ('1', '3', '4')
       LEFT JOIN dbo.RFPutaway RFP WITH(NOLOCK) ON LLI.StorerKey = RFP.StorerKey AND LLI.Loc = RFP.SuggestedLOC
-      LEFT JOIN dbo.UCC UCC2 WITH(NOLOCK) ON RFP.StorerKey = UCC2.StorerKey AND RFP.FromLOC = UCC2.Loc AND RFP.CaseID = UCC2.ID AND RFP.SKU = UCC2.SKU
+      LEFT JOIN dbo.UCC UCC2 WITH(NOLOCK) ON ISNULL(RFP.CaseID, '') <> '' AND RFP.StorerKey = UCC2.StorerKey AND RFP.FromLOC = UCC2.Loc AND RFP.CaseID = UCC2.UCCNo AND RFP.SKU = UCC2.SKU
       WHERE LOC.Facility = @cFacility
          AND LOC.Loc <> @cLOC
          AND LOC.PutawayZone = @cPutawayZone
