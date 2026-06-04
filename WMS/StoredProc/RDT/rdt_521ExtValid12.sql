@@ -236,7 +236,7 @@ BEGIN
 
                SELECT @nPendingCartons = COUNT(DISTINCT UCC2.UCCNo)
                FROM dbo.RFPutaway RFP WITH(NOLOCK)
-               INNER JOIN dbo.UCC UCC2 WITH(NOLOCK) ON RFP.FromLOC = UCC2.Loc AND RFP.StorerKey = UCC2.StorerKey AND RFP.CaseID = UCC2.ID
+               INNER JOIN dbo.UCC UCC2 WITH(NOLOCK) ON ISNULL(RFP.CaseID , '') <> '' AND RFP.FromLOC = UCC2.Loc AND RFP.StorerKey = UCC2.StorerKey AND RFP.CaseID = UCC2.UCCNo
                WHERE RFP.StorerKey = @cStorerKey
                   AND RFP.SuggestedLOC = @cToLOC
 
