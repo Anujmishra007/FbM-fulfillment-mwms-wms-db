@@ -1,7 +1,7 @@
 --rdt_898ExtVal12
 execute rdt.rdtdropmsg 263901, 263950
 
-execute rdt.rdtAddMsg 263901, 10, '263901^Invalid ID',                 'us_english', 898, 0, '263901 Invalid ID'
+execute rdt.rdtAddMsg 263901, 10, '263901^ID must be 10 characters',   'us_english', 898, 0, '263901 ID must be 10 characters'
 execute rdt.rdtAddMsg 263902, 10, '263902^Mix Lottable01 Not Allowed', 'us_english', 898, 0, '263902 Mix Lottable01 Not Allowed On ID'
 execute rdt.rdtAddMsg 263903, 10, '263903^Mix Lottable02 Not Allowed', 'us_english', 898, 0, '263903 Mix Lottable02 Not Allowed On ID'
 execute rdt.rdtAddMsg 263904, 10, '263904^Mix Lottable03 Not Allowed', 'us_english', 898, 0, '263904 Mix Lottable03 Not Allowed On ID'
