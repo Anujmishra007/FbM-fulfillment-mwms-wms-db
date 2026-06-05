@@ -6,7 +6,7 @@ INSERT INTO [dbo].[TBL_PURGECONFIG]
            ,[Date_Col]
            ,[Condition]
            ,[PurgeGroup])
-     VALUES
+VALUES
            ('TPACK_UserSessionActivityLog'
            ,'API.TPACK_UserSessionActivityLog'
            ,'Purge TouchPack UserSession Activity Log Table'
