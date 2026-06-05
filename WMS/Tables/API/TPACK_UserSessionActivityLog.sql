@@ -45,6 +45,5 @@ ALTER TABLE [API].[TPACK_UserSessionActivityLog] ADD  CONSTRAINT [DF_TPACK_UserS
 ALTER TABLE [API].[TPACK_UserSessionActivityLog] ADD  CONSTRAINT [DF_TPACK_UserSessionActivityLog_EditDate]  DEFAULT (getdate()) FOR [EditDate]
 
 ALTER TABLE [API].[TPACK_UserSessionActivityLog] ADD  CONSTRAINT [DF_TPACK_UserSessionActivityLog_EditWho]  DEFAULT (suser_sname()) FOR [EditWho]
-
 END
 GO
