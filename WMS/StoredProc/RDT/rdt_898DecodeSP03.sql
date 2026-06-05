@@ -79,7 +79,7 @@ BEGIN
       ,@nMOBRECScn  INT
 
       SELECT @nMOBRECScn = Scn
-      FROM rdt.RDTMOBREC WITH(NOLOCK)
+      FROM rdt.RDTMOBREC WITH (NOLOCK)
       WHERE Mobile = @nMobile
 
    SET @cBarcode = replace(TRIM(@cUCC),' ','')
