@@ -683,26 +683,29 @@ BEGIN
    --(Wan02) - END
    IF @n_continue = 1 or @n_continue=2
    BEGIN
-        --start (ver-2.9)
-        DECLARE @b_CustomImportSubmit BIT = 0;
+       --start (ver-2.9)
+      DECLARE @b_CustomImportSubmit BIT = 0;
 
-        SELECT @b_CustomImportSubmit =
-          CASE
-              WHEN EXISTS
-              (
-                  SELECT 1
-                  FROM INSERTED I
-                  JOIN DELETED D
-                      ON I.ReceiptKey = D.ReceiptKey
-                  WHERE I.OpenQty > 0
-                  AND D.Status = '9'
-                  AND I.ASNStatus = '51'
-                  AND I.Status = '9'
-              )
-              THEN 1
-              ELSE 0
-          END;
-          -- end (ver-2.9)
+      SELECT @b_CustomImportSubmit =
+       CASE
+           WHEN EXISTS
+               (
+                   SELECT 1
+                   FROM INSERTED I
+                            JOIN DELETED D
+                                 ON I.ReceiptKey = D.ReceiptKey
+                   WHERE I.OpenQty > 0
+                     AND (
+                       (I.ASNStatus = '51' AND I.Status = '9')
+                           OR
+                       (I.ASNStatus = '55' AND D.Status = '9')
+                       )
+               )
+               THEN 1
+           ELSE 0
+           END;
+        -- end (ver-2.9)
+
         IF (@b_CustomImportSubmit = 0) --(ver-2.9)
         BEGIN
           -- Modify by ricky (Feb,2005) to prevent the ASNstatus rollback to 0 when 9
