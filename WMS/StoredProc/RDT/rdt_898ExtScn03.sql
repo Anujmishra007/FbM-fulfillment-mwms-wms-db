@@ -12,7 +12,7 @@ GO
 /* Date        Rev     Author   Purposes                                      */  
 /* 2025-10-28  1.0.0   Dennis   FCR-8472 Created                              */  
 /* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields    */  
-/* 2026-04-14  1.2     Sreeja   FCR-11052 Add DecodeSP for Step_99              */
+/* 2026-04-14  1.2     Sreeja   FCR-11052 Add DecodeSP for Step_99            */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC  [RDT].[rdt_898ExtScn03] (
@@ -301,7 +301,7 @@ BEGIN
                   --  Use separate @cBarcode variable for DecodeSP input
                   SET @cBarcode = @cInField02
 
-                  SET @cSQL = 'EXEC rdt.' + QUOTENAME( RTRIM( @cDecodeSP)) +
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
                               ' @cBarcode   OUTPUT, @nUCCQTY     OUTPUT,' +
                               ' @cUserDefine01 OUTPUT, @cUserDefine02 OUTPUT, @cUserDefine03 OUTPUT, @cUserDefine04 OUTPUT, @cUserDefine05 OUTPUT, ' +
@@ -347,7 +347,7 @@ BEGIN
                         ' @dLottable14     DATETIME       OUTPUT,  ' +
                         ' @dLottable15     DATETIME       OUTPUT,  ' +
                         ' @nErrNo          INT            OUTPUT,  ' +
-                        ' @cErrMsg         NVARCHAR( 1024)  OUTPUT   '
+                        ' @cErrMsg         NVARCHAR( 20)  OUTPUT   '
 
                   EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                      @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
