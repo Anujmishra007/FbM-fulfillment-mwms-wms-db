@@ -12,6 +12,7 @@ EXECUTE rdt.rdtAddMsg 255457, 10, '255457 UCCAllocated',       'us_english', 839
 EXECUTE rdt.rdtAddMsg 255458, 10, '255458 InvSKU',             'us_english', 839, 0, '255458 BUSR5 or BUSR6 does not match'
 EXECUTE rdt.rdtAddMsg 255459, 10, '255459 InvSerialNo',        'us_english', 839, 0, '255459 Invalid Serial Number'
 EXECUTE rdt.rdtAddMsg 255460, 10, '255460 InvUCC',             'us_english', 839, 0, '255460 Invalid UCC'
+EXECUTE rdt.rdtAddMsg 255461, 10, '255461 DiffLot01',          'us_english', 839, 0, '255461 Different Lottable01'
 EXECUTE rdt.rdtAddMsg 255462, 10, '255462 LocNotMatch',        'us_english', 839, 0, '255462 Loc does not match'
 EXECUTE rdt.rdtAddMsg 255463, 10, '255463 SKUNotMatch',        'us_english', 839, 0, '255463 SKU does not match'
 EXECUTE rdt.rdtAddMsg 255465, 10, '255465 LotNotMatch',        'us_english', 839, 0, '255465 Lot does not match'
