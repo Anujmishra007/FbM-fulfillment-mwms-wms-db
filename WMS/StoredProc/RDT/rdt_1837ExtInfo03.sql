@@ -70,7 +70,7 @@ BEGIN
             JOIN dbo.LOC LOC WITH (NOLOCK) ON ( PD.LOC = LOC.LOC)
             JOIN dbo.ORDERS O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey AND O.StorerKey = PD.StorerKey AND O.ConsigneeKey = @cConsigneeKey AND O.LoadKey = @cLoadKey
             WHERE PD.StorerKey = @cStorerKey
-            AND   PD.Status = '0'
+            AND   PD.Status IN( '0','4')
             AND   PD.QTY > 0
             AND   LOC.Facility = @cFacility
          )
@@ -105,7 +105,7 @@ BEGIN
             JOIN dbo.LOC LOC WITH (NOLOCK) ON ( PD.LOC = LOC.LOC)
             JOIN dbo.ORDERS O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey AND O.StorerKey = PD.StorerKey AND O.USERDEFINE09 = @cWAVEKey
             WHERE PD.StorerKey = @cStorerKey
-            AND   PD.Status = '0'
+            AND   PD.Status IN( '0','4')
             AND   PD.QTY > 0
             AND   LOC.Facility = @cFacility
          )

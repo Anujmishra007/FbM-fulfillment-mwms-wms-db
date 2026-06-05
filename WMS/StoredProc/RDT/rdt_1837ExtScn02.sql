@@ -89,6 +89,7 @@ BEGIN
    DECLARE @nMOBRECStep         INT
    DECLARE @nMOBRECScn          INT,
    @cDocType                    NVARCHAR(10),
+   @cStatus                     NVARCHAR(10),
    @cWAVEKey                    NVARCHAR(10),
    @cDecodeSP           NVARCHAR( 20),
    @cExtendedInfo       NVARCHAR( 20),
@@ -112,7 +113,11 @@ BEGIN
    @nSuccess            INT,
    @cNewTaskDetailKey   NVARCHAR( 10),
    @cPriority           NVARCHAR( 10),
-   @cCheckOrderMustPickComplete  NVARCHAR( 1)
+   @cCheckOrderMustPickComplete  NVARCHAR( 1),
+   @cFromLOT      NVARCHAR( 10),
+   @cFromLOC      NVARCHAR( 10),
+   @cFromID       NVARCHAR( 20),
+   @cSKU          NVARCHAR( 20)
    DECLARE @cErrMsg01        NVARCHAR( 20),
            @cErrMsg02        NVARCHAR( 20),
            @cErrMsg03        NVARCHAR( 20)
@@ -301,7 +306,7 @@ BEGIN
                         ON PD.TaskDetailKey = TD.TaskDetailKey
                      WHERE PD.StorerKey = @cStorerKey
                        AND PD.CaseID    = @cCartonID
-                       AND TD.ReasonKey = 'SIZE'
+                       AND (TD.ReasonKey IN ('SIZE','PICK0') OR TD.Message01 = 'POST-HOSP')
                        AND TD.Status    = 'X'
                   )
                      SET @bSizeException = 1
@@ -323,7 +328,7 @@ BEGIN
                         ' SELECT TOP 1 @cOrderKey = OrderKey' +
                         ' FROM dbo.PickDetail WITH (NOLOCK) ' +
                         ' WHERE StorerKey = @cStorerKey ' +
-                           ' AND Status = ''' + @cPickConfirmStatus + '''' +
+                           --' AND Status = ''' + @cPickConfirmStatus + '''' +
                            ' AND QTY > 0 ' +
                            ' AND ' + RTRIM( @cPickDetailCartonID) + ' = @cCartonID ' +
                            ' ORDER BY 1 ' +
@@ -367,6 +372,14 @@ BEGIN
 
                   IF @cDocType = 'E' --B2C
                   BEGIN
+                     -- Check if B2C single order (DropID starts with 'S')
+                     IF @cCartonID LIKE 'S%'
+                     BEGIN
+                        SET @nErrNo = 256958
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PPS not allowed for single
+                        GOTO QUIT
+                     END
+
                      IF ISNULL(@cWaveKey ,'') = ''
                      BEGIN
                         SET @nErrNo = 256956
@@ -762,6 +775,42 @@ BEGIN
                   GOTO QUIT
                END
 
+               -- Extended validate
+               IF @cExtendedValidateSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+                  BEGIN
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                        ' @cCartonID, @cPalletID, @cLoadKey, @cLoc, @cOption, @tExtValidate, ' +
+                        ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+                     SET @cSQLParam =
+                        ' @nMobile        INT,           ' +
+                        ' @nFunc          INT,           ' +
+                        ' @cLangCode      NVARCHAR( 3),  ' +
+                        ' @nStep          INT,           ' +
+                        ' @nInputKey      INT,           ' +
+                        ' @cFacility      NVARCHAR( 5),  ' +
+                        ' @cStorerKey     NVARCHAR( 15), ' +
+                        ' @cCartonID      NVARCHAR( 20), ' +
+                        ' @cPalletID      NVARCHAR( 20), ' +
+                        ' @cLoadKey       NVARCHAR( 10), ' +
+                        ' @cLoc           NVARCHAR( 10), ' +
+                        ' @cOption        NVARCHAR( 1), ' +
+                        ' @tExtValidate   VariableTable READONLY, ' +
+                        ' @nErrNo         INT           OUTPUT, ' +
+                         ' @cErrMsg        NVARCHAR( 1024) OUTPUT  '
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                        @cCartonID, @cPalletID, @cLoadKey, @cPPS_Loc, @cOption, @tExtValidate,
+                        @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                     IF @nErrNo <> 0
+                        GOTO QUIT
+                  END
+               END
+
                -- Check if pallet id has inventory but not in PPS
                IF EXISTS ( SELECT 1 FROM dbo.LotxLocxID LLI WITH (NOLOCK)
                            JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC
@@ -779,14 +828,16 @@ BEGIN
                END
 
                SET @cSQL =
-                     ' SELECT @cDocType = DocType,
-                        @cWAVEKey = USERDEFINE09,
-                        @cLoadKey = LoadKey,
-                        @cConsigneeKey = ConsigneeKey
+                     ' SELECT TOP 1 @cDocType = O.DocType,
+                        @cWAVEKey = O.USERDEFINE09,
+                        @cLoadKey = O.LoadKey,
+                        @cConsigneeKey = O.ConsigneeKey,
+                        @cStatus = PD.Status
                      FROM ORDERS O WITH (NOLOCK)
                      JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey
                      WHERE PD.' + RTRIM( @cPickDetailCartonID) + '= @cCartonID
                      AND   O.StorerKey = @cStorerKey
+                     ORDER BY PD.PICKDETAILKEY DESC
 
                      SET @nRowCount = @@ROWCOUNT
                      '
@@ -798,6 +849,7 @@ BEGIN
                   ' @cWAVEKey   NVARCHAR( 10)   OUTPUT, ' +
                   ' @cLoadKey   NVARCHAR( 10)   OUTPUT, ' +
                   ' @cConsigneeKey   NVARCHAR( 10)   OUTPUT, ' +
+                  ' @cStatus    NVARCHAR( 10)   OUTPUT, ' +
                   ' @nRowCount   INT            OUTPUT '
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam
@@ -807,6 +859,7 @@ BEGIN
                   ,@cWAVEKey OUTPUT
                   ,@cLoadKey OUTPUT
                   ,@cConsigneeKey OUTPUT
+                  ,@cStatus OUTPUT
                   ,@nRowCount OUTPUT
 
                IF @cDocType = 'E' --B2C
@@ -901,7 +954,6 @@ BEGIN
                   @tPostPackSortCfm    = @tPostPackSortCfm,
                   @nErrNo              = @nErrNo            OUTPUT,
                   @cErrMsg             = @cErrMsg           OUTPUT
-
                IF @nErrNo <> 0
                   GOTO QUIT
 
@@ -1026,6 +1078,9 @@ BEGIN
                   JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey
                   WHERE PD.ID = @cPalletID AND PD.StorerKey = @cStorerKey
                   ORDER BY PD.EditDate DESC
+
+                  IF @cWAVEKey IS NULL
+                     SET @cWAVEKey = ''
 
                   --HOSPITAL PALLET
                   IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE @cPalletID = ID AND [Status] = '1' AND LoadKey = 'HOSPITAL')
