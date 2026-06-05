@@ -4466,8 +4466,7 @@ BEGIN
                         @cRemarks = Remarks
                      FROM RDT.rdtPickLog WITH(NOLOCK)
                      WHERE PickSlipNo = @cPickSlipNo
-                        AND Mobile = @nMobile
-                        AND AddWho = @cUserName
+                        AND (Mobile = @nMobile OR AddWho = @cUserName)
 
                      IF @@ROWCOUNT = 0
                         BREAK
