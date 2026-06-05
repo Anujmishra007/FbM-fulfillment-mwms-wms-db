@@ -1,4 +1,3 @@
-
 INSERT INTO [dbo].[TBL_PURGECONFIG]
            ([Item]
            ,[TBLName]
