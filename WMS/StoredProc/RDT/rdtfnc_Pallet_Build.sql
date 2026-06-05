@@ -740,6 +740,16 @@ BEGIN
       END
       -- FCR-10366
 
+      IF NOT EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
+                            WHERE Facility = @cFacility
+                             AND Loc = @cDropLOC )
+      BEGIN
+         SET @nErrNo = 69213
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Loc
+         GOTO Step_2_Fail
+      END
+      -- FCR-10366 bug fix to check the loc is valid or not
+
       SET @cOutField01 = @cDropID
       SET @cOutField02 = @cDropLOC
       SET @cMax = ''
