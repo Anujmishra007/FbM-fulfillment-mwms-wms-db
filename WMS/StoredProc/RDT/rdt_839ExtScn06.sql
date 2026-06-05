@@ -365,9 +365,8 @@ BEGIN
          BEGIN
             IF EXISTS(SELECT 1 
                      FROM rdt.rdtPickLog 
-                     WHERE Mobile = @nMobile
-                        AND PickSlipNo = @cPickSlipNo
-                        AND AddWho = @cUserName)
+                     WHERE (Mobile = @nMobile OR AddWho = @cUserName)
+                        AND PickSlipNo = @cPickSlipNo)
             BEGIN
                SET @nAfterScn = 6840
                SET @nAfterStep = 99
@@ -458,10 +457,9 @@ BEGIN
          IF @nInputKey = 0 -- ESC
          BEGIN
             IF EXISTS(SELECT 1 
-                     FROM rdt.rdtPickLog 
-                     WHERE Mobile = @nMobile
-                        AND PickSlipNo = @cPickSlipNo
-                        AND AddWho = @cUserName)
+                     FROM rdt.rdtPickLog WITH(NOLOCK)
+                     WHERE (Mobile = @nMobile OR AddWho = @cUserName)
+                        AND PickSlipNo = @cPickSlipNo)
             BEGIN
                SET @nAfterScn = 6840
                SET @nAfterStep = 99

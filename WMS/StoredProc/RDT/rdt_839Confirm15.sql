@@ -22,7 +22,7 @@ CREATE OR ALTER PROC rdt.rdt_839Confirm15 (
    @cStorerKey    NVARCHAR( 15),
    @cType         NVARCHAR( 10),
    @cPickSlipNo   NVARCHAR( 10),
-   @cPickZone     NVARCHAR( 1),
+   @cPickZone     NVARCHAR( 10),
    @cDropID       NVARCHAR( 20),
    @cLOC          NVARCHAR( 10),
    @cSKU          NVARCHAR( 20),
@@ -235,8 +235,7 @@ BEGIN
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.Status = '4'
          AND RPL.PickMethod = 'GetTask-U'
 
@@ -246,8 +245,7 @@ BEGIN
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.PickMethod = 'GetTask-P'
          AND RPL.Status = '4'
    END
@@ -260,8 +258,7 @@ BEGIN
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.PickMethod = 'GetTask-U'
 
       INSERT INTO @tPiecePickDetailKey ( PickDetailKey)
@@ -270,8 +267,7 @@ BEGIN
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.PickMethod = 'Pick-P'
 
       INSERT INTO @tPiecePickDetail ( PickDetailKey, Loc, Id, DropID, Qty, Lot, PickedQty, Status)
@@ -279,15 +275,15 @@ BEGIN
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       INNER JOIN @tPiecePickDetailKey TPPDK ON RPL.PickDetailKey = TPPDK.PickDetailKey
-      WHERE RPL.PickMethod = 'GetTask-P'
+      WHERE RPL.PickSlipNo = @cPickSlipNo
+         AND RPL.PickMethod = 'GetTask-P'
       UNION
       SELECT RPL.PickDetailKey, PD.Loc, PD.Id, PD.DropID, PD.Qty, PD.Lot, RPL.PickLockQty, RPL.Status
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.PickMethod = 'GetTask-P'
          AND RPL.Status = '4'
    END
@@ -492,7 +488,7 @@ BEGIN
       @cPieceLot              NVARCHAR( 10),
       @cPieceLotLoc           NVARCHAR( 10),
       @cPieceLotId            NVARCHAR( 18),
-      @cPieceLotDropId        NVARCHAR( 18),
+      @cPieceLotDropId        NVARCHAR( 20),
       @cPieceLotUCC           NVARCHAR( 20),
       @cPieceLotQty           INT,
       @cNewPickDetailKey      NVARCHAR( 10),
@@ -639,8 +635,7 @@ BEGIN
          FROM RDT.rdtPickLog WITH(NOLOCK)
          WHERE PickDetailKey = @cPickDetailKey
             AND PickSlipNo = @cPickSlipNo
-            AND Mobile = @nMobile
-            AND AddWho = @cUserName
+            AND (Mobile = @nMobile OR AddWho = @cUserName)
             AND PickMethod = 'GetTask-P'
          
          IF @@ROWCOUNT = 1
@@ -707,8 +702,7 @@ BEGIN
             INNER JOIN dbo.UCC WITH(NOLOCK) ON UCC.StorerKey = @cStorerKey AND SN.UCCNo = UCC.UCCNo
             WHERE RPL.PickDetailKey = @cPickDetailKey
                AND RPL.PickSlipNo = @cPickSlipNo
-               AND RPL.Mobile = @nMobile
-               AND RPL.AddWho = @cUserName
+               AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                AND RPL.PickMethod = 'Pick-P'
                AND ISNULL(RPL.Remarks, '') <> ''
                AND ISNULL(RPL.Status, '') <> '9'
@@ -728,8 +722,7 @@ BEGIN
                INNER JOIN dbo.SerialNo SN WITH(NOLOCK) ON SN.StorerKey = @cStorerKey AND RPL.Remarks = SN.SerialNo
                WHERE RPL.PickDetailKey = @cPickDetailKey
                   AND RPL.PickSlipNo = @cPickSlipNo
-                  AND RPL.Mobile = @nMobile
-                  AND RPL.AddWho = @cUserName
+                  AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                   AND RPL.PickMethod = 'Pick-P'
                   AND ISNULL(RPL.Remarks, '') <> ''
                   AND ISNULL(RPL.Status, '') <> '9'
@@ -1025,8 +1018,7 @@ BEGIN
       SELECT DISTINCT RPL.PickDetailKey
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       WHERE RPL.PickSlipNo = @cPickSlipNo
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
       --    AND ISNULL(RPL.Status, '') IN( '4', '9')
 
@@ -1039,8 +1031,7 @@ BEGIN
          FROM RDT.rdtPickLog RPL WITH(NOLOCK)
          INNER JOIN @tPiecePickDetailKey TPPDK ON RPL.PickDetailKey = TPPDK.PickDetailKey
          WHERE RPL.PickSlipNo = @cPickSlipNo
-            AND RPL.Mobile = @nMobile
-            AND RPL.AddWho = @cUserName
+            AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
             AND RowRef > @nLoopIndex
          ORDER BY RPL.RowRef
 
