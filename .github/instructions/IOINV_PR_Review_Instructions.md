@@ -119,7 +119,7 @@ Look up affected storers from `.github/instructions/data/V2_IO_Config.csv` where
 
 ## Exclusions - Do NOT Flag These Issues
 
-**Case sensitivity differences**: SQL Server is case-insensitive for identifiers, variables, column names, and keywords. Do not flag changes that only differ in letter casing as these are functionally identical and have no runtime impact.
+**Case sensitivity differences**: SQL Server keyword casing is always case-insensitive, but identifier/variable/column-name case-sensitivity depends on the database collation. If the target database uses a case-insensitive collation (CI), do not flag changes that only differ in letter casing as these are functionally identical and have no runtime impact.
 
 Examples:
 - `V_string41` vs `V_String41` - same variable
