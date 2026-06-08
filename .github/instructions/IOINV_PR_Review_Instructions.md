@@ -205,11 +205,11 @@ Identify:
 - Affected Step labels
 - Variable changes
 - GOTO flow changes
-- **Extension SPs with changes** (mark in Section 7)
+- **Extension SPs with changes** (mark in Section 6)
 
 **IMPORTANT**:
 - Extension SP changes should NOT generate separate reports
-- Extension SP changes should be marked in the Main SP report's "Extension SP Impact" section
+- Extension SP changes should be marked in the Main SP report's "Custom SP Impact" section
 - If an Extension SP has changes, analyze its diff and include impact in Main SP report
 
 ### Phase 5: Impact Analysis
