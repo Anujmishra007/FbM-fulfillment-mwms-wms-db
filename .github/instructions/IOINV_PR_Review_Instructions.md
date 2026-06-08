@@ -1,8 +1,6 @@
 ---
-applyTo: "WMS/Trigger/*.sql,WMS/Trigger/API/*.sql, WMS/StoredProc/WM/*.sql,WMS/StoredProc/API/*.sql, WMS/StoredProc/*.sql, WMS/Tables/*.sql, WMS/Tables/API/*.sql, WMS/Tables/WM/*.sql, WMS/Function/*.sql, WMS/Function/API/*.sql"
----
----
-exclude: "WMS/StoredProc/rdt*.sql,WMS/Message/rdt*.sql,WMS/Screen/rdt*.sql, WMS/Trigger/RDT/*.sql, WMS/Tables/RDT/*.sql"
+applyTo: "WMS/Trigger/*.sql,WMS/Trigger/API/*.sql,WMS/StoredProc/WM/*.sql,WMS/StoredProc/API/*.sql,WMS/StoredProc/*.sql,WMS/Tables/*.sql,WMS/Tables/API/*.sql,WMS/Tables/WM/*.sql,WMS/Function/*.sql,WMS/Function/API/*.sql"
+exclude: "WMS/StoredProc/rdt*.sql,WMS/Message/rdt*.sql,WMS/Screen/rdt*.sql,WMS/Trigger/RDT/*.sql,WMS/Tables/RDT/*.sql"
 ---
 
 
