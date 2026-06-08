@@ -197,7 +197,7 @@ Using the config file at `.github/instructions/data/V2_IO_Config.csv`:
     - Extension SPs with git changes MUST have Storer/WMS clearly marked in report
     - These are HIGH PRIORITY for impact assessment
 
-### Phase 5: Analyze Git Diff
+### Phase 4: Analyze Git Diff
 
 Identify:
 - Added lines (+)
