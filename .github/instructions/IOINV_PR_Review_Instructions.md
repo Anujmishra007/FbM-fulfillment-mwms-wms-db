@@ -212,7 +212,7 @@ Identify:
 - Extension SP changes should be marked in the Main SP report's "Extension SP Impact" section
 - If an Extension SP has changes, analyze its diff and include impact in Main SP report
 
-### Phase 6: Impact Analysis
+### Phase 5: Impact Analysis
 
 Check:
 1. **Skipped Logic**: What code is bypassed by the change?
