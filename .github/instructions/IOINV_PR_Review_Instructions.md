@@ -14,8 +14,7 @@ When reviewing PRs that contain changes to Inventory, Inbound & Outbound related
 
 **CRITICAL INSTRUCTION**:
 
-**Exclude the file format mentioned in RDT_pr_review.instructions.md, check line number 5 too for exclusions and clearly have a differentiation on what needs be reviewed**
-
+**Exclude any SQL files matched by `.github/instructions/RDT_pr_review.instructions.md` (its `applyTo` patterns), and also honor this file’s `exclude` patterns. Clearly differentiate which files are in-scope vs excluded.**
 **What to OUTPUT (ONLY these sections):**
 - Output ONLY the sections defined in "PR Summary Requirements" below
 - Do NOT output anything beyond those 4 mandatory sections
