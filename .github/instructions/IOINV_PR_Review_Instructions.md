@@ -191,7 +191,7 @@ Using the config file at `.github/instructions/data/V2_IO_Config.csv`:
    StoredProc, Trigger → { StorerKey: "xxx" }
    ```
 
-3. **For each Extension SP found in Phase 3**:
+3. **For each Extension SP found in Phase 2**:
     - Look up in mapping dictionary
     - If found: Record StorerKey
     - If NOT found: Mark as "Not Configured or might have been Mapped through Codelookup"
