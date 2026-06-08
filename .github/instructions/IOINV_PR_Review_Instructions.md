@@ -360,7 +360,7 @@ Check:
 {after_code}
 ```
 
-## 10. Confidence Level
+## 9. Confidence Level
 
 | Assessment            | Confidence                     |
 |-----------------------|--------------------------------|
@@ -368,7 +368,7 @@ Check:
 | Impact Scope          | **HIGH/MEDIUM/LOW** - {reason} |
 | Fix Suggestion        | **HIGH/MEDIUM/LOW** - {reason} |
 
-## 11. Deployment Recommendation
+## 10. Deployment Recommendation
 
 **CRITICAL SECTION - MUST PROVIDE CLEAR CONCLUSION**
 
