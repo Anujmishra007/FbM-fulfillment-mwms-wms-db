@@ -71,7 +71,7 @@ BEGIN
 
    SELECT @cConditionCode = ConditionCode
    FROM dbo.RECEIPTDETAIL WITH(NOLOCK)
-   WHERE ID = @cID
+   WHERE ToID = @cID
       AND StorerKey = @cStorerKey
   
    -- 1. For DAM inventory, only suggest VAS location
@@ -279,7 +279,7 @@ BEGIN
                AND LA.Sku = UCC.SKU
             WHERE UCC.StorerKey = @cStorerKey
                AND UCC.ID = @cID
-               AND (LLI.Qty - LLI.QtyPicked - LLI.QtyPickInProcess > 0)
+               AND UCC.Status IN ('1', '3', '4')
             ORDER BY UCC.UCCNo, UCC.SKU, UCC.Lot
 
             SET @cLottable02 = ISNULL(@cLottable02, '')

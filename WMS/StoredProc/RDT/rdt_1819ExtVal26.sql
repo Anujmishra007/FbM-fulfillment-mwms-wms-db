@@ -71,7 +71,7 @@ BEGIN
 
             SELECT @cConditionCode = ISNULL(ConditionCode, '')
             FROM dbo.RECEIPTDETAIL WITH(NOLOCK)
-            WHERE ID = @cFromID
+            WHERE ToID = @cFromID
                AND StorerKey = @cStorerKey
 
             SET @nRowCount = @@ROWCOUNT
@@ -122,13 +122,6 @@ BEGIN
 
             IF ISNULL(@nDAMPallet, 0) = 1
             BEGIN
-               IF @nContainGOO = 1
-               BEGIN
-                  SET @nErrNo = 268452
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Not allow mix GOO and DAM inventory
-                  GOTO Quit
-               END
-
                IF EXISTS(SELECT 1
                      FROM dbo.LOTATTRIBUTE LA WITH(NOLOCK)
                      INNER JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK) 
@@ -221,7 +214,7 @@ BEGIN
          BEGIN
             SELECT @cConditionCode = ConditionCode
             FROM dbo.RECEIPTDETAIL WITH(NOLOCK)
-            WHERE ID = @cFromID
+            WHERE ToID = @cFromID
                AND StorerKey = @cStorerKey
 
             -- 1. If both PickAndDropLOC and SuggLOC exist, validate against PickAndDropLOC, otherwise validate against SuggLOC
