@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2025-12-29  SSR259    1.0   FCR-9024 Created                               */
+/* 2025-10-16  Ung       1.1   FCR-8112 Add serial no                         */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_523DecodeSP09] (
    @nMobile           INT,           
