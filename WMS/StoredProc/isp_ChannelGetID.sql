@@ -24,7 +24,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author    ver   Purposes                                */
 /* 09-Jul-2019  Leong     1.1   INC0769944 - Revise ErrMsg.             */
-/* 09-04-2026   ppa371    1.2   UWP-49431- Commented raise error in Exit */
+/* 09-04-2026   ppa371    1.2   UWP-49431- Commented raise error in Exit and */
+/*                                add config check if channelinventorymgmt is enabled */
 /************************************************************************/
 
 CREATE PROC isp_ChannelGetID (
@@ -60,6 +61,13 @@ BEGIN
           ,@n_Continue             INT = 1
 
    SET @n_Continue = 1
+
+      IF NOT EXISTS(SELECT TOP 1 1 FROM dbo.fnc_SelectGetRight(@c_Facility,@c_StorerKey, '', 'ChannelInventoryMgmt')
+                            WHERE Authority='1')
+        BEGIN
+            set @n_Channel_ID=0
+                GOTO EXIT_SP
+        END
 
    IF ISNULL(@c_CreateIfNotExist,'') = ''
       SET @c_CreateIfNotExist = 'Y'
