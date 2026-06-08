@@ -344,21 +344,21 @@ Check:
 | Extension SP | Has Changes? | Will Execute? | Affected Storers | Change Impact |
 |--------------|--------------|---------------|------------------|---------------|
 
-## 8. Test Recommendations
+## 7. Test Recommendations
 
 | Test Scenario | Expected Result (Fixed) | Current Result (Bug) |
 |---------------|-------------------------|----------------------|
 | {scenario1}   | {expected}              | {actual}             |
 | {scenario2}   | {expected}              | {actual}             |
 
-## 9. Suggested Fix
+## 8. Suggested Fix
 
-```sql
+~~~sql
 -- Remove/Change the problematic code
 {before_code}
 -- Should be:
 {after_code}
-```
+~~~
 
 ## 9. Confidence Level
 
