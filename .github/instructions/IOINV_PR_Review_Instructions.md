@@ -222,8 +222,8 @@ Check:
 5. **Extension SP Changes**: For any Extension SP that also has changes:
     - Analyze its git diff
     - Determine impact on Main SP flow
-    - Mark "Has Changes? = YES" in Section 7
-    - Add change impact description in Section 7
+    - Mark "Has Changes? = YES" in Section 6
+    - Add change impact description in Section 6
 6. **Storer/WMS Impact**:
     - For each affected Extension SP, look up WMS and Storer from mapping
     - Group impacts by WMS/Storer for easy notification
