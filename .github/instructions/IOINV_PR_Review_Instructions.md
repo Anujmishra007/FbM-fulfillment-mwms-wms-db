@@ -15,9 +15,9 @@ When reviewing PRs that contain changes to Inventory, Inbound & Outbound related
 **CRITICAL INSTRUCTION**:
 
 **Exclude any SQL files matched by `.github/instructions/RDT_pr_review.instructions.md` (its `applyTo` patterns), and also honor this file’s `exclude` patterns. Clearly differentiate which files are in-scope vs excluded.**
-**What to OUTPUT (ONLY these sections):**
-- Output ONLY the sections defined in "PR Summary Requirements" below
-- Do NOT output anything beyond those 4 mandatory sections
+**What to OUTPUT (minimum required sections):**
+- Always include the 4 sections defined in "PR Summary Requirements" below at the top of the review comment.
+- If a full analysis report is requested, include additional sections using the "Report Template" below after those required sections.
 
 **Fresh Review Every Time:**
 - **DO NOT provide incremental or summary reviews** like "reviewed X commits" or "changes look good"
