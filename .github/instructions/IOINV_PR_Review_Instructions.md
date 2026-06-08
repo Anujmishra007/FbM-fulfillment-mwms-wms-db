@@ -337,7 +337,12 @@ Check:
 **Note**:
 - Custom SPs marked with "Has Changes? = YES" have their own modifications in this branch
 - **Storer owners must be notified for testing validation**
-- "Not Configured" means the Extension SP is not found in mapping file, recommend adding to mapping
+- "Not Configured" means the Extension SP is not found in the mapping file; recommend adding it to the mapping
+
+## 7. Extension SP Impact
+
+| Extension SP | Has Changes? | Will Execute? | Affected Storers | Change Impact |
+|--------------|--------------|---------------|------------------|---------------|
 
 ## 8. Test Recommendations
 
