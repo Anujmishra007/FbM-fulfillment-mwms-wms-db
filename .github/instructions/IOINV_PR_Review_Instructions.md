@@ -170,7 +170,7 @@ When a PR contains non-RDT SQL file changes, follow these steps:
 
 ### Phase 2: Extract Function Info
 
-From all changed SP's, extract **ConfigKeys**: All `dbo.fnc_GetRight`,`nspGetRight`,`nspGetRight2` or any such related calls that triggers customized SP.
+From all changed SPs, extract **ConfigKeys**: All `dbo.fnc_GetRight`,`nspGetRight`,`nspGetRight2` or any such related calls that trigger customized SP.
 - Extract the `ConfigKey` parameter value from these calls
 - This will be used to identify which Custom/ Extension SPs are executed and which Storers are affected
 - The output of these calls would be SValue which determines which SP is executed for which storer based on the mapping file or if the codeblock within the SP is executed at all (like in the case of return statement before the code block)
