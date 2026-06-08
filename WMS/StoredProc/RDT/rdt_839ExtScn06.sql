@@ -3027,7 +3027,7 @@ BEGIN
                
                IF ISNULL(@cPattern, '') <> ''
                BEGIN
-                  SELECT @iMatch = master.dbo.RegExIsMatch( @cPattern, @cDropID, 0) -- 0=RegexOptions.None
+                  SELECT @iMatch = master.dbo.RegExIsMatch( @cPattern, @cScannedDropID, 0) -- 0=RegexOptions.None
 
                   IF @iMatch = 0
                   BEGIN
