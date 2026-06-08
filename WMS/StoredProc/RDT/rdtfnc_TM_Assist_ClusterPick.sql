@@ -31,7 +31,7 @@ GO
 /*  ==========================================================================   */
 /* 2025-08-14   2.0.2   Cuize    FCR-7100 Goto STEP 99 for Mask SKU              */
 /* 2026-03-03   2.1.0   NickT    FCR-10824 Add @cExtendedScnSP='rdt_1855ExtScn02'*/
-/* 2026-06-08   2.2.0   NYE018   UWP-58369 Fix the option length for short pick  */
+/* 2026-06-08   2.2.0   NYE018   UWP-58369 Fix option checking in Step_Option    */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](
