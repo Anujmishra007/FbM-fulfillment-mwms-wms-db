@@ -3,7 +3,6 @@
 execute rdt.rdtDropMsg 268451, 268500
 
 execute rdt.rdtAddMsg 268451, 10, '268451 IDNotExistInRcptDetail',      'us_english', 1819, 0, '268451 ID does not exist in ReceiptDetail'
-execute rdt.rdtAddMsg 268452, 10, '268452 NotDAMorGOO',                 'us_english', 1819, 0, '268452 Not allow mix GOO and DAM inventory'
 execute rdt.rdtAddMsg 268453, 10, '268453 NotAllowMix',                 'us_english', 1819, 0, '268453 Not allow mix of Mono-SKU UCCs, Multi-SKU UCCs and Loose inventory'
 execute rdt.rdtAddMsg 268454, 10, '268454 NotAllowMix',                 'us_english', 1819, 0, '268454 Not allow mix GOO and non-GOO inventory'
 execute rdt.rdtAddMsg 268455, 10, '268455 NotAllowMix',                 'us_english', 1819, 0, '268455 Not allow mix None-DAM and DAM inventory'
