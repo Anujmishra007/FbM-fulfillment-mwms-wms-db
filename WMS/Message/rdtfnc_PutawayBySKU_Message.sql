@@ -41,3 +41,10 @@ execute rdt.rdtAddMsg 73884, 10, '73884^Invalid Option', 'us_english', 523
 execute rdt.rdtAddMsg 73888, 10, '73888^INVALID FORMAT', 'us_english', 523
 execute rdt.rdtAddMsg 73889, 10, '73888^INVALID FORMAT', 'us_english', 523
 
+execute rdt.rdtAddMsg 73890, 10, '73890^Option req    ', 'us_english', 523
+execute rdt.rdtAddMsg 73891, 10, '73891^Invalid Option', 'us_english', 523
+execute rdt.rdtAddMsg 73892, 10, '73892^NeedReasonCode', 'us_english', 523
+execute rdt.rdtAddMsg 73893, 10, '73893^Bad ReasonCode', 'us_english', 523
+execute rdt.rdtAddMsg 73894, 10, '73894^NoSuggLOC No99', 'us_english', 523
+
+
