@@ -55,7 +55,12 @@ If asked to review again after new commits, regenerate the report from scratch c
 | **CRITICAL** | Logic error affecting ALL storers, MOBREC corruption, data loss risk, session state corruption |
 | **HIGH** | Logic error affecting specific storers, execution flow break, Extension SP bypass |
 | **MEDIUM** | Non-critical behavior change, variable state change with limited impact |
-| **LOW** | Tech debt, code cleanup, no functional impact |
+| **LOW** | Tech debt, code cleanup, no functional impact, **new SP not yet configured** |
+
+**New SP Severity Rule**: When a **new SP is introduced** that does not exist in the production config (V2_RDT_Production_Config.csv), the severity should be **LOW** by default. Since the SP is not configured for any storer/WMS, it will not execute in production and cannot affect existing functionality. Only escalate severity if the new SP:
+- Modifies shared code paths that affect other SPs
+- Introduces changes to Main SP logic that impacts configured Extension SPs
+- Contains syntax errors that would cause deployment failures
 
 ### 2. Deployment Recommendation (REQUIRED)
 
@@ -109,6 +114,15 @@ Look up affected storers from `.github/instructions/data/V2_RDT_Production_Confi
 - **CONFIG_ISSUE**: SP configured but file missing (pre-existing, LOW)
 
 ---
+
+## Exclusions - Do NOT Flag These Issues
+
+**Case sensitivity differences**: SQL Server is case-insensitive for identifiers, variables, column names, and keywords. Do not flag changes that only differ in letter casing as these are functionally identical and have no runtime impact.
+
+Examples:
+- `V_string41` vs `V_String41` - same variable
+- `@cPickStatus = V_string41` vs `@cPickStatus = V_String41` - same assignment
+- `SELECT` vs `select` vs `Select` - same keyword
 
 ## Analysis Instructions
 
