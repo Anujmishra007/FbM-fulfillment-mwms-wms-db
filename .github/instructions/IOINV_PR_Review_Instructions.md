@@ -230,7 +230,7 @@ Check:
     - Highlight which Storers need to be notified for testing validation
     - If Custom SP not in mapping, flag as "Not Configured or might have been Mapped through Codelookup" and recommend adding to mapping
 
-### Phase 7: Generate Report
+### Phase 6: Generate Report
 
 **CRITICAL REQUIREMENTS:**
 1. **Language**: Report MUST be written entirely in **English**. No Chinese text in the report.
