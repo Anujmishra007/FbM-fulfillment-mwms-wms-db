@@ -31,6 +31,7 @@ GO
 /*  ==========================================================================   */
 /* 2025-08-14   2.0.2   Cuize    FCR-7100 Goto STEP 99 for Mask SKU              */
 /* 2026-03-03   2.1.0   NickT    FCR-10824 Add @cExtendedScnSP='rdt_1855ExtScn02'*/
+/* 2026-06-08   2.2.0   NYE018   UWP-58369 Fix the option length for short pick  */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](
@@ -2516,7 +2517,7 @@ BEGIN
       SET @cOption = @cInField02
 
       -- Validate blank
-      IF @cOption = ''
+      IF @cInField02 = ''
       BEGIN
          SET @nErrNo = 171825
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option required
@@ -2524,7 +2525,7 @@ BEGIN
       END
 
       -- Validate option
-      IF @cOption NOT IN ( '1', '2')
+      IF @cInField02 NOT IN ( '1', '2')
       BEGIN
          SET @nErrNo = 171826
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
