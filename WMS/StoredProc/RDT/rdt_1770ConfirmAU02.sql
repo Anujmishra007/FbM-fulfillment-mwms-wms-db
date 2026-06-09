@@ -2102,6 +2102,16 @@ BEGIN
     GOTO Quit  
     
     RollBackTran:  
+    -- Cleanup cursor if still open (error path)
+    IF CURSOR_STATUS('variable', '@curPD') = 1
+    BEGIN
+        CLOSE @curPD
+        DEALLOCATE @curPD
+    END
+    ELSE IF CURSOR_STATUS('variable', '@curPD') = -1
+    BEGIN
+        DEALLOCATE @curPD
+    END
     ROLLBACK TRAN rdt_1770ConfirmAU02 -- Only rollback change made here  
     Fail:  
     Quit:  

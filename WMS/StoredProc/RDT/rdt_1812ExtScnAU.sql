@@ -192,7 +192,7 @@ BEGIN
                 BEGIN  
                     SET @cOrderKey = ''  
                     SELECT @cOrderKey = Orderkey  
-                    FROM sbo.TASKDETAIL WITH (NOLOCK)  
+                    FROM dbo.TASKDETAIL WITH (NOLOCK)  
                     WHERE STORERKEY = @cStorerKey  
                     AND TASKDETAILKEY = @cTaskdetailKey  
     
