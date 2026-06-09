@@ -297,7 +297,7 @@ BEGIN
                IF @cMethod NOT IN ('1', '2')
                BEGIN
                   SET @nErrNo = 269123
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Methond must be 1 or 2
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Method must be 1 or 2
                   EXEC rdt.rdtSetFocusField @nMobile, 3
                   GOTO UPD_RDTMOBREC
                END
@@ -500,7 +500,7 @@ BEGIN
 
                SET @nTranCount = @@TRANCOUNT
                BEGIN TRAN
-               SAVE TRAN rdt_1855ExtScn02_6844
+               SAVE TRAN rdt_1855ExtScn03_6844
 
                UPDATE rdt.RDTMOBREC WITH(ROWLOCK) 
                SET 
@@ -608,7 +608,7 @@ BEGIN
                GOTO LockTask_Commit
 
                LockTask_RollBackTran:
-                     ROLLBACK TRAN rdt_1855ExtScn02_6844
+                     ROLLBACK TRAN rdt_1855ExtScn03_6844
                LockTask_Commit:
                   WHILE @@TRANCOUNT > @nTranCount
                      COMMIT TRAN

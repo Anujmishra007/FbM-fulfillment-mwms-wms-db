@@ -10,7 +10,6 @@ EXECUTE rdt.rdtAddMsg 269105, 10, '269105 CartInUse',             'us_english', 
 EXECUTE rdt.rdtAddMsg 269106, 10, '269106 NeedMethod',            'us_english', 1855, 0, '269106 Need Method'
 EXECUTE rdt.rdtAddMsg 269107, 10, '269107 InvMethod',             'us_english', 1855, 0, '269107 Invalid Method'
 EXECUTE rdt.rdtAddMsg 269108, 10, '269108 NoTask',                'us_english', 1855, 0, '269108 No task for the Method'
-EXECUTE rdt.rdtAddMsg 269109, 10, '269109 NoTask',                'us_english', 1855, 0, '269109 No task is found'
 EXECUTE rdt.rdtAddMsg 269110, 10, '269110 UpdTskFail',            'us_english', 1855, 0, '269110 Update task failed'
 EXECUTE rdt.rdtAddMsg 269111, 10, '269111 NoTask',                'us_english', 1855, 0, '269111 No task is found'
 EXECUTE rdt.rdtAddMsg 269112, 10, '269112 UpdTskFail',            'us_english', 1855, 0, '269112 Update task failed'
