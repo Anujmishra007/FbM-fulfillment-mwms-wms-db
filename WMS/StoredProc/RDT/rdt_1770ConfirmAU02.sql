@@ -55,7 +55,8 @@ BEGIN
     DECLARE @cClosePalletFlag  NVARCHAR(1)  
     DECLARE @cPalletLineNumber NVARCHAR(5)  --INC7331096  
     DECLARE @cOrderKey      NVARCHAR(10)    /* (JH01)*/  
-    DECLARE @cPLTUDF05      NVARCHAR(30)  
+    DECLARE @cPLTUDF05      NVARCHAR(30) 
+    DECLARE @cNewPickDetailKey NVARCHAR( 10) 
     
     DECLARE @nPalletLength   FLOAT = 116.0  
     DECLARE @nPalletWidth    FLOAT = 116.0  
@@ -203,7 +204,7 @@ BEGIN
                 BEGIN -- Have balance, need to split  
     
                 -- Get new PickDetailkey  
-                DECLARE @cNewPickDetailKey NVARCHAR( 10)  
+                SET @cNewPickDetailKey = ''  
                 EXECUTE dbo.nspg_GetKey  
                     'PICKDETAILKEY',  
                     10 ,  
@@ -250,12 +251,12 @@ BEGIN
                 END  
     
                 -- Split RefKeyLookup  
-                IF EXISTS( SELECT 1 FROM RefKeyLookup WITH (NOLOCK) WHERE PickDetailKey = @cPickDetailKey)  
+                IF EXISTS( SELECT 1 FROM dbo.RefKeyLookup WITH (NOLOCK) WHERE PickDetailKey = @cPickDetailKey)  
                 BEGIN  
                     -- Insert RefKeyLookup  
                     INSERT INTO dbo.RefKeyLookup (PickDetailkey, PickSlipNo, OrderKey, OrderLineNumber, Loadkey)  
                     SELECT @cNewPickDetailKey, PickSlipNo, OrderKey, OrderLineNumber, Loadkey  
-                    FROM RefKeyLookup WITH (NOLOCK)  
+                    FROM dbo.RefKeyLookup WITH (NOLOCK)  
                     WHERE PickDetailKey = @cPickDetailKey  
                     IF @@ERROR <> 0  
                     BEGIN  
@@ -315,6 +316,9 @@ BEGIN
     
             FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD, @cFromLOC, @cFromID, @cSKU  
         END  
+
+        CLOSE @curPD
+        DEALLOCATE @curPD
     
         -- Check offset  
         IF @nQTY_Bal <> 0  
@@ -351,7 +355,7 @@ BEGIN
                         AND LOC = @cFromLOC  
                         AND ID = @cFromID)  
                 BEGIN  
-                UPDATE dbo.UCC SET STATUS = '5'  
+                UPDATE dbo.UCC WITH (ROWLOCK) SET STATUS = '5'  
                 WHERE StorerKey = @cStorerKey  
                 AND OrderKey IN (SELECT Orderkey FROM dbo.PickDetail WITH (NOLOCK)  
                 WHERE PickDetailKey = @cPickDetailKey)  
@@ -403,7 +407,7 @@ BEGIN
         END  
     
         -- Update Task  
-    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET  
+        UPDATE dbo.TaskDetail WITH (ROWLOCK) SET  
             Status = '9', -- Closed  
             DropID = @cDropID,  
             QTY = @nQTY,  
@@ -567,8 +571,8 @@ BEGIN
         SELECT @cSKU = TD.SKU,  
                 @cLottable01 = LA.Lottable01,  
                 @cOrderKey = TD.OrderKey  
-        FROM TASKDETAIL TD (NOLOCK)  
-        JOIN LOTATTRIBUTE LA (NOLOCK) ON TD.LOT = LA.LOT AND TD.STORERKEY = LA.STORERKEY  
+        FROM dbo.TASKDETAIL TD WITH (NOLOCK)  
+        JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK) ON TD.LOT = LA.LOT AND TD.STORERKEY = LA.STORERKEY  
         WHERE TD.TASKDETAILKEY = @cTaskDetailKey  
     
         SET @cPackData1 = ''  
@@ -605,7 +609,7 @@ BEGIN
     
         SET @cLottable01 = ''  
         SELECT @cLottable01 = LA.LOTTABLE01  
-        FROM LOTATTRIBUTE LA (NOLOCK)  
+        FROM dbo.LOTATTRIBUTE LA WITH (NOLOCK)  
         WHERE LA.LOT = @cLot  
         AND LA.STORERKEY = @cStorerkey  
         AND LA.SKU = @cSKU  
@@ -617,8 +621,8 @@ BEGIN
     
         --Get Pack config  
         SELECT @fPDCaseCnt = ISNULL(CASECNT,0)  
-        FROM PACK WITH (NOLOCK)  
-        JOIN SKU WITH (NOLOCK) ON PACK.PACKKEY = SKU.PackKey  
+        FROM dbo.PACK WITH (NOLOCK)  
+        JOIN dbo.SKU WITH (NOLOCK) ON PACK.PACKKEY = SKU.PackKey  
         WHERE SKU.STORERKEY = @cStorerKey  
         AND SKU = @cSKU  
     
@@ -637,7 +641,7 @@ BEGIN
             IF @cPickSlipNo = ''  
             BEGIN  
                 SELECT TOP 1 @cPickSlipNo = PickHeaderKey  
-                FROM PICKHEADER WITH (NOLOCK)  
+                FROM dbo.PICKHEADER WITH (NOLOCK)  
                 WHERE OrderKey = @cOrderKey  
             END  
     
@@ -699,7 +703,7 @@ BEGIN
                         , @cCustomerType3 = UDF03  
                         , @cCustomerType4 = UDF04  
                         , @cCustomerType5 = UDF05  
-            FROM CODELKUP (NOLOCK)  
+            FROM dbo.CODELKUP  WITH (NOLOCK)  
             WHERE LISTNAME = 'ORDERTYPE'  
             AND STORERKEY = @cStorerKey  
             AND CODE = @cOrderType  
@@ -727,7 +731,7 @@ BEGIN
                         , @cCustomerType4 = PALLET  
                         , @cCustomerType5 = SUSR4  
                         , @cPrintCopy     = SUSR5  
-                FROM STORER WITH (NOLOCK)  
+                FROM dbo.STORER WITH (NOLOCK)  
                 WHERE CONSIGNEEFOR = @cStorerKey  
                 AND STORERKEY = @cConsigneeKey  
                 AND ISNULL(SUSR1,'') IN ('PALLET', 'CASE')  
@@ -741,7 +745,7 @@ BEGIN
                         , @cCustomerType4 = PALLET  
                         , @cCustomerType5 = SUSR4  
                         , @cPrintCopy     = SUSR5  
-                FROM STORER WITH (NOLOCK)  
+                FROM dbo.STORER WITH (NOLOCK)  
                 WHERE CONSIGNEEFOR = @cStorerKey  
                 AND STORERKEY = @cBillToKey  
                 AND ISNULL(SUSR1,'') IN ('PALLET', 'CASE')  
@@ -763,7 +767,7 @@ BEGIN
             SET @cCustomerType5 = ''  
     
             SELECT TOP 1 @cPlanningType = CODE  
-            FROM CODELKUP (NOLOCK)  
+            FROM dbo.CODELKUP  WITH (NOLOCK)  
             WHERE LISTNAME = 'AU830PLAN'  
             AND STORERKEY = @cStorerKey  
     
@@ -777,7 +781,7 @@ BEGIN
                         , @cCustomerType3   = UserDefine01  
                         , @cCustomerType4   = UserDefine02  
                         , @cCustomerType5   = UserDefine03  
-                FROM WAVE WITH (NOLOCK)  
+                FROM dbo.WAVE WITH (NOLOCK)  
                 WHERE WAVEKEY = @cPWaveKey  
                 END  
                 ELSE IF ISNULL(@cPlanningType,'') = 'LOAD' AND ISNULL(@cPLoadkey,'') <> ''  
@@ -788,7 +792,7 @@ BEGIN
                         , @cCustomerType3   = UserDefine01  
                         , @cCustomerType4   = UserDefine02  
                         , @cCustomerType5   = UserDefine03  
-                FROM LOADPLAN WITH (NOLOCK)  
+                FROM dbo.LOADPLAN WITH (NOLOCK)  
                 WHERE LOADKEY = @cPLoadkey  
                 END  
     
@@ -804,31 +808,31 @@ BEGIN
             SET @cPackCaseType = 'RAINBOW' --DEFAULT TO RAINBOW  
     
         IF EXISTS (SELECT TOP 1 1 FROM  
-                    CARTONIZATION C WITH (NOLOCK)  
-                    JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
+                    dbo.CARTONIZATION C WITH (NOLOCK)  
+                    JOIN dbo.Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
                     WHERE S.Storerkey = @cStorerKey  
                     AND C.CARTONTYPE = ISNULL(@cCustomerType4,''))  
                     
                     SET @cPalletType = @cCustomerType4  
                     
         ELSE IF EXISTS (SELECT TOP 1 1 FROM  
-                CARTONIZATION C WITH (NOLOCK)  
-                JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
+                dbo.CARTONIZATION C WITH (NOLOCK)  
+                JOIN dbo.Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
                 WHERE S.Storerkey = @cStorerKey  
                 AND C.CARTONTYPE = CASE WHEN ISNULL(@cCustomerType4,'') LIKE '%CHEP%' THEN 'CHEP'  
                                         WHEN ISNULL(@cCustomerType4,'') LIKE '%LOSC%' THEN 'LOSCAM'  
                                         ELSE 'PALLET' END)  
             SELECT TOP 1 @cPalletType = CARTONTYPE  
-            FROM CARTONIZATION C WITH (NOLOCK)  
-            JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
+            FROM dbo.CARTONIZATION C WITH (NOLOCK)  
+            JOIN dbo.Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
             WHERE S.Storerkey = @cStorerKey  
             AND C.CARTONTYPE = CASE WHEN ISNULL(@cCustomerType4,'') LIKE '%CHEP%' THEN 'CHEP'  
                                 WHEN ISNULL(@cCustomerType4,'') LIKE '%LOSC%' THEN 'LOSCAM'  
                                 ELSE 'PALLET' END  
         ELSE  
             SELECT @cPalletType = C.CartonType  --DEFAULT AS PLAIN PALLET  
-            FROM CARTONIZATION C WITH (NOLOCK)  
-            JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
+            FROM dbo.CARTONIZATION C WITH (NOLOCK)  
+            JOIN dbo.Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
             WHERE S.Storerkey = @cStorerKey  
             AND C.CARTONTYPE = CASE WHEN ISNULL(@cDefaultpallettype,'') <> '' THEN ISNULL(@cDefaultpallettype,'') ELSE 'PALLET' END  
     
@@ -844,9 +848,9 @@ BEGIN
             SET @nCaseCntOrd = 0  
     
             SELECT @nCaseCntOrd = ISNULL(SUM(CEILING(PD.QTY/CAST(ISNULL(PACK.CASECNT,1) AS INT))),0)  
-            FROM PICKDETAIL PD (NOLOCK)  
-            JOIN SKU (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.STORERKEY  
-            LEFT JOIN PACK (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY AND PACK.CASECNT > 0  
+            FROM dbo.PICKDETAIL PD WITH (NOLOCK)  
+            JOIN dbo.SKU WITH (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.STORERKEY  
+            LEFT JOIN dbo.PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY AND PACK.CASECNT > 0  
             WHERE PD.STORERKEY = @cStorerkey  
             AND PD.ORDERKEY = @cOrderKey  
     
@@ -892,7 +896,7 @@ BEGIN
                 SET @cLabelLine = '00001'  
                 ELSE  
                 SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)  
-                FROM dbo.PackDetail (NOLOCK)  
+                FROM dbo.PackDetail WITH (NOLOCK)  
                 WHERE Pickslipno = @cPickSlipNo  
                     AND DropID = @cFromID  
     
@@ -927,7 +931,7 @@ BEGIN
                     BEGIN  
                         SET @cLabelNo = '00'+@cFromID  
     
-                        IF EXISTS (SELECT TOP 1 1 FROM PACKDETAIL (NOLOCK) WHERE  
+                        IF EXISTS (SELECT TOP 1 1 FROM dbo.PACKDETAIL WITH (NOLOCK) WHERE  
                                     STORERKEY = @cStorerkey AND LABELNO = @cLabelNo)  
                         BEGIN  
                             SET @cLabelNo = ''  
@@ -965,7 +969,7 @@ BEGIN
                     BEGIN  
                         SET @cLabelNo = @cFromID  
     
-                        IF EXISTS (SELECT TOP 1 1 FROM PACKDETAIL (NOLOCK) WHERE  
+                        IF EXISTS (SELECT TOP 1 1 FROM dbo.PACKDETAIL WITH (NOLOCK) WHERE  
                                     STORERKEY = @cStorerkey AND LABELNO = @cLabelNo)  
                             GOTO Quit  
                     END  
@@ -990,7 +994,7 @@ BEGIN
                 SELECT TOP 1  
                 @nCartonNo = CartonNo  
                 ,@cLabelLine = LabelLine  
-                FROM PackDetail WITH (NOLOCK)  
+                FROM dbo.PackDetail WITH (NOLOCK)  
                 WHERE PickSlipNo = @cPickSlipNo  
                 AND SKU = @cSKU  
                 AND LabelNo = @cLabelNo  
@@ -1043,7 +1047,7 @@ BEGIN
                     AND UserDefine02 = @cPackData2  
                     AND UserDefine03 = @cPackData3  
     
-                IF @nPackDetailInfoKey = ''  
+                IF @nPackDetailInfoKey = 0
                 BEGIN  
                     -- Insert PackDetailInfo  
                     INSERT INTO dbo.PackDetailInfo (  
@@ -1089,8 +1093,8 @@ BEGIN
                 , @fHeight       = CartonHeight  
                 , @fCube         = CartonLength * CartonWidth * CartonHeight  
                 , @fCartonWeight = CartonWeight  
-            FROM Cartonization C WITH (NOLOCK)  
-            JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
+            FROM dbo.Cartonization C WITH (NOLOCK)  
+            JOIN dbo.Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
             WHERE S.StorerKey = @cStorerKey  
             AND C.CartonType = @cPalletType  
     
@@ -1309,14 +1313,14 @@ BEGIN
     
                 SELECT @nSumPackInfoWgt = ISNULL(SUM(ISNULL(PIF.WEIGHT,0)),0)  
                         , @nPalletHeight   = 12 + ISNULL(MAX(ISNULL(PACKD.ESTHEIGHT,0)),0)  
-                FROM PackInfo PIF (NOLOCK)  
+                FROM dbo.PackInfo PIF WITH (NOLOCK)  
                 CROSS APPLY (  
                     SELECT PICKSLIPNO,CARTONNO,  
                     SUM(CEILING(PD.QTY / IIF(PACK.CASECNT>0,PACK.CASECNT,1)/ IIF(PACK.PALLETTI>0,PACK.PALLETTI,1))  
                         *PACK.HEIGHTUOM1) AS ESTHEIGHT  
-                    FROM PACKDETAIL PD (NOLOCK)  
-                    JOIN SKU (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.StorerKey  
-                    JOIN PACK (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
+                    FROM dbo.PackDetail PD WITH (NOLOCK)  
+                    JOIN dbo.SKU WITH (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.StorerKey  
+                    JOIN dbo.PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
                     WHERE PD.STORERKEY = @cStorerKey  
                         AND   PD.DropID = @cFromID  
                         AND   PD.PICKSLIPNO = @cPickSlipNo  
@@ -1450,13 +1454,13 @@ BEGIN
                 BEGIN  
                 SET @nErrNo = 263017  
                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackDtlFail  
-    GOTO RollBackTran  
+                GOTO RollBackTran  
                 END  
     
                 SELECT TOP 1  
                 @nCartonNo = CartonNo  
                 ,@cLabelLine = LabelLine  
-                FROM PackDetail WITH (NOLOCK)  
+                FROM dbo.PackDetail WITH (NOLOCK)  
                 WHERE PickSlipNo = @cPickSlipNo  
                 AND SKU = @cSKU  
                 AND LabelNo = @cLabelNo  
@@ -1501,8 +1505,8 @@ BEGIN
                     , @fHeight       = CartonHeight  
                     , @fCube         = CartonLength * CartonWidth * CartonHeight  
                     , @fCartonWeight = CartonWeight  
-                FROM Cartonization C WITH (NOLOCK)  
-                JOIN Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
+                FROM dbo.Cartonization C WITH (NOLOCK)  
+                JOIN dbo.Storer S WITH (NOLOCK) ON (C.CartonizationGroup = S.CartonGroup)  
                 WHERE S.StorerKey = @cStorerKey  
                 AND C.CartonType = CASE WHEN ISNULL(@cDefaultcartontype,'') <> '' THEN @cDefaultcartontype ELSE 'MFCARTON' END  
     
@@ -1708,14 +1712,14 @@ BEGIN
     
                     SELECT @nSumPackInfoWgt = ISNULL(SUM(ISNULL(PIF.WEIGHT,0)),0)  
                         , @nPalletHeight   = 12 + ISNULL(MAX(ISNULL(PACKD.ESTHEIGHT,0)),0)  
-                    FROM PackInfo PIF (NOLOCK)  
+                    FROM dbo.PackInfo PIF WITH(NOLOCK)  
                     CROSS APPLY (  
                         SELECT PICKSLIPNO,CARTONNO,  
                         SUM(CEILING(PD.QTY / IIF(PACK.CASECNT>0,PACK.CASECNT,1)/ IIF(PACK.PALLETTI>0,PACK.PALLETTI,1))  
                             *PACK.HEIGHTUOM1) AS ESTHEIGHT  
-                        FROM PACKDETAIL PD (NOLOCK)  
-                        JOIN SKU (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.StorerKey  
-                        JOIN PACK (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
+                        FROM dbo.PackDetail PD WITH (NOLOCK)  
+                        JOIN dbo.SKU WITH (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.StorerKey  
+                        JOIN dbo.PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
                         WHERE PD.STORERKEY = @cStorerKey  
                         AND   PD.DropID = @cFromID  
                         AND   PD.PICKSLIPNO = @cPickSlipNo  
@@ -1764,14 +1768,14 @@ BEGIN
     
                 SELECT @nSumPackInfoWgt = ISNULL(SUM(ISNULL(PIF.WEIGHT,0)),0)  
                     , @nPalletHeight   = 12 + ISNULL(MAX(ISNULL(PACKD.ESTHEIGHT,0)),0)  
-                FROM PackInfo PIF (NOLOCK)  
+                FROM dbo.PackInfo PIF WITH (NOLOCK)  
                 CROSS APPLY (  
                 SELECT PICKSLIPNO,CARTONNO,  
                 SUM(CEILING(PD.QTY / IIF(PACK.CASECNT>0,PACK.CASECNT,1)/ IIF(PACK.PALLETTI>0,PACK.PALLETTI,1))  
                     *PACK.HEIGHTUOM1) AS ESTHEIGHT  
-                FROM PACKDETAIL PD (NOLOCK)  
-                JOIN SKU (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.StorerKey  
-                JOIN PACK (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
+                FROM dbo.PackDetail PD WITH (NOLOCK)  
+                JOIN dbo.SKU WITH (NOLOCK) ON PD.SKU = SKU.SKU AND PD.STORERKEY = SKU.StorerKey  
+                JOIN dbo.PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
                 WHERE PD.STORERKEY = @cStorerKey  
                 AND   PD.DropID = @cFromID  
                 AND   PD.PICKSLIPNO = @cPickSlipNo  
@@ -1845,7 +1849,7 @@ BEGIN
             BEGIN  
     
             SELECT @cExternOrderkey = EXTERNORDERKEY  
-            FROM ORDERS (NOLOCK)  
+            FROM dbo.ORDERS WITH (NOLOCK)  
             WHERE ORDERKEY = @cOrderKey  
     
             INSERT INTO @tManiLaneLBL (Variable, Value) VALUES  
@@ -1909,7 +1913,7 @@ BEGIN
     IF @nErrNo <> 0  
         GOTO RollBackTran  
     
-    IF EXISTS (SELECT TOP 1 1 FROM PACKHEADER (NOLOCK) WHERE PICKSLIPNO = @cPickSlipNo AND STATUS = '9')  
+    IF EXISTS (SELECT TOP 1 1 FROM dbo.PACKHEADER WITH (NOLOCK) WHERE PICKSLIPNO = @cPickSlipNo AND STATUS = '9')  
     BEGIN  
         DECLARE @cPackList NVARCHAR( 10)  
     
@@ -1927,7 +1931,7 @@ BEGIN
     
         IF @cPackList <> '' AND ISNULL(@cLabelPrinter,'') <> ''  
         BEGIN  
-            IF EXISTS (SELECT TOP 1 1 FROM RDT.RDTREPORTTOPRINTER (NOLOCK)  
+            IF EXISTS (SELECT TOP 1 1 FROM RDT.RDTREPORTTOPRINTER WITH (NOLOCK)  
                         WHERE PRINTERGROUP = ISNULL(@cLabelPrinter,'')  
                         AND FUNCTION_ID = @nFunc  
                         AND REPORTTYPE = @cPackList)  
@@ -1984,16 +1988,16 @@ BEGIN
         SET @cPLTUDF05 = ''  
     
         SELECT TOP 1 @cPLTUDF05 = P.PALLETKEY  
-        FROM PALLET P WITH (NOLOCK)  
-        JOIN PALLETDETAIL PLD WITH (NOLOCK) ON P.PALLETKEY = PLD.Palletkey  
+        FROM dbo.PALLET P WITH (NOLOCK)  
+        JOIN dbo.PALLETDETAIL PLD WITH (NOLOCK) ON P.PALLETKEY = PLD.Palletkey  
         WHERE PLD.USERDEFINE01 = @cOrderKey  
         AND P.STATUS = '9'  
         AND ISNULL(USERDEFINE05,'') = ''  
     
         IF ISNULL(@cPLTUDF05,'') = ''  
             SELECT TOP 1 @cPLTUDF05 = PLD.USERDEFINE05  
-            FROM PALLET P WITH (NOLOCK)  
-            JOIN PALLETDETAIL PLD WITH (NOLOCK) ON P.PALLETKEY = PLD.Palletkey  
+            FROM dbo.PALLET P WITH (NOLOCK)  
+            JOIN dbo.PALLETDETAIL PLD WITH (NOLOCK) ON P.PALLETKEY = PLD.Palletkey  
             WHERE PLD.USERDEFINE01 = @cOrderKey  
             AND P.STATUS = '9'  
             AND ISNULL(USERDEFINE05,'') <> ''  
@@ -2032,7 +2036,7 @@ BEGIN
     IF @cPalletLabel = '0'  
         SET @cPalletLabel = ''  
     
-    IF EXISTS (SELECT TOP 1 1 FROM PALLET WITH (NOLOCK) WHERE PALLETKEY = @cFromID)  
+    IF EXISTS (SELECT TOP 1 1 FROM dbo.PALLET WITH (NOLOCK) WHERE PALLETKEY = @cFromID)  
     BEGIN  
     
         IF ISNULL(@cPalletLabel,'') <> '' AND ISNULL(@cLabelPrinter,'') <> ''  

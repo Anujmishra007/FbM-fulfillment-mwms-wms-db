@@ -32,22 +32,17 @@ BEGIN
     SET CONCAT_NULL_YIELDS_NULL OFF  
     
     DECLARE @nTranCount  INT  
-    
-    DECLARE @cStorerKey     NVARCHAR( 15)  
-    DECLARE @cSKU           NVARCHAR( 20)  
-    DECLARE @cFromID        NVARCHAR( 18)  
-    DECLARE @cToLOC         NVARCHAR( 10)  
-    DECLARE @cToID          NVARCHAR( 18)  
-    DECLARE @cPickMethod    NVARCHAR( 10)  
-    DECLARE @cStatus        NVARCHAR( 10)  
-    
+
     DECLARE @cStorerkey            NVARCHAR(15)  
             ,@cTaskType            NVARCHAR(10)  
             ,@cSourceType          NVARCHAR(30)  
             ,@cSku                 NVARCHAR(20)  
             ,@cLot                 NVARCHAR(10)  
             ,@cFromLoc             NVARCHAR(10)  
+            ,@cFromID              NVARCHAR(18)  
             ,@cID                  NVARCHAR(18)  
+            ,@cToID                NVARCHAR(18)  
+            ,@cStatus              NVARCHAR(10)  
             ,@nQty                 INT  
             ,@cUOM                 NVARCHAR(10)  
             ,@nUOMQty              INT  
@@ -62,22 +57,22 @@ BEGIN
             ,@CZip                 NVARCHAR(18)  
             ,@cLinkTaskToPick_SQL  NVARCHAR(4000)  
             ,@cRoute               NVARCHAR(10)  
-            ,@cTaskdetailkey       NVARCHAR(10)  
+            ,@cTaskdetailkeyNew    NVARCHAR(10)  
             ,@cDefaultLoc          NVARCHAR(10)  
             ,@cLoadkey             NVARCHAR(10)  
             ,@dtdeliveryDate       DATETIME  
             ,@nLastPartial_Ctn     INT  
             ,@nCaseCNT             INT  
-            ,@cSTBMAXSKU            NVARCHAR(10)  
-            ,@cSTCMAXSKU            NVARCHAR(10)  
-            ,@cSKUBUSR2             NVARCHAR(10)  
-            ,@nPackMaxSKU           INT  
+            ,@cSTBMAXSKU           NVARCHAR(10)  
+            ,@cSTCMAXSKU           NVARCHAR(10)  
+            ,@cSKUBUSR2            NVARCHAR(10)  
+            ,@nPackMaxSKU          INT  
             ,@cwavekey             NVARCHAR(10)  
             ,@cUserKeyOverride     NVARCHAR(18)  
     
     DECLARE  @bSuccess      int = 0  
             ,@nErr          int = 0  
-            ,@cErrMsg       NVARCHAR(250) = ''  
+            ,@cInsertErrMsg NVARCHAR(250) = ''  
     
     
     SET @nTranCount = @@TRANCOUNT  
@@ -103,8 +98,8 @@ BEGIN
             IF @cStatus = '9'  
             BEGIN  
                 SELECT @cDefaultLoc = CL.Long  
-                FROM CODELKUP CL WITH (NOLOCK)  
-                JOIN LOC WITH (NOLOCK) ON CL.Long = LOC.Loc  
+                FROM dbo.CODELKUP CL WITH (NOLOCK)  
+                JOIN dbo.LOC LOC WITH (NOLOCK) ON CL.Long = LOC.Loc  
                 WHERE CL.Listname = 'TM_TOLOC'  
                 AND CL.Storerkey = @cStorerKey  
                 AND CL.Code = 'DEFAULT'  
@@ -129,26 +124,26 @@ BEGIN
                     ISNULL(TTMTYPE.SHORT,''),  
                     ISNULL(TTMTYPE.LONG,''),  
                     O.DeliveryDate  
-                FROM WAVEDETAIL WD WITH (NOLOCK)  
-                JOIN WAVE W WITH (NOLOCK) ON WD.Wavekey = W.Wavekey  
-                JOIN ORDERS O WITH (NOLOCK) ON WD.Orderkey = O.Orderkey  
-                JOIN PICKDETAIL PD WITH (NOLOCK) ON O.Orderkey = PD.Orderkey  
-                JOIN LOC WITH (NOLOCK) ON PD.Loc = LOC.Loc  
-                LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON PD.Taskdetailkey = TD.Taskdetailkey AND TD.Sourcetype = @cSourceType AND TD.Tasktype IN ('FPK','FCP','FPP') AND TD.Status <> 'X'  
+                FROM dbo.WAVEDETAIL WD WITH (NOLOCK)  
+                JOIN dbo.WAVE W WITH (NOLOCK) ON WD.Wavekey = W.Wavekey  
+                JOIN dbo.ORDERS O WITH (NOLOCK) ON WD.Orderkey = O.Orderkey  
+                JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON O.Orderkey = PD.Orderkey  
+                JOIN dbo.LOC LOC WITH (NOLOCK) ON PD.Loc = LOC.Loc  
+                LEFT JOIN dbo.TASKDETAIL TD WITH (NOLOCK) ON PD.Taskdetailkey = TD.Taskdetailkey AND TD.Sourcetype = @cSourceType AND TD.Tasktype IN ('FPK','FCP','FPP') AND TD.Status <> 'X'  
                 AND PD.STORERKEY = TD.STORERKEY --SY02  
-                LEFT JOIN STORERSODEFAULT SSO WITH (NOLOCK) ON SSO.Storerkey = O.Consigneekey  
-                --LEFT JOIN STORERSODEFAULT SSOB WITH (NOLOCK) ON SSO.Storerkey = O.Billtokey  --SY02  
-                LEFT JOIN STORERSODEFAULT SSOB WITH (NOLOCK) ON SSOB.Storerkey = O.Billtokey   --SY02  
-                LEFT JOIN LOADPLAN LP WITH (NOLOCK) ON LP.LOADKEY = O.LOADKEY  
-                LEFT JOIN STORER STC WITH (NOLOCK) ON STC.STORERKEY = O.CONSIGNEEKEY AND STC.CONSIGNEEFOR = O.STORERKEY  
-                LEFT JOIN STORER STB WITH (NOLOCK) ON STB.STORERKEY = O.BILLTOKEY AND STB.CONSIGNEEFOR = O.STORERKEY  
-                LEFT JOIN TASKDETAIL TDRPL WITH (NOLOCK) ON PD.Taskdetailkey = TDRPL.Taskdetailkey AND PD.STORERKEY = TDRPL.STORERKEY --SY01  
+                LEFT JOIN dbo.STORERSODEFAULT SSO WITH (NOLOCK) ON SSO.Storerkey = O.Consigneekey  
+                --LEFT JOIN dbo.STORERSODEFAULT SSOB WITH (NOLOCK) ON SSO.Storerkey = O.Billtokey  --SY02  
+                LEFT JOIN dbo.STORERSODEFAULT SSOB WITH (NOLOCK) ON SSOB.Storerkey = O.Billtokey   --SY02  
+                LEFT JOIN dbo.LOADPLAN LP WITH (NOLOCK) ON LP.LOADKEY = O.LOADKEY  
+                LEFT JOIN dbo.STORER STC WITH (NOLOCK) ON STC.STORERKEY = O.CONSIGNEEKEY AND STC.CONSIGNEEFOR = O.STORERKEY  
+                LEFT JOIN dbo.STORER STB WITH (NOLOCK) ON STB.STORERKEY = O.BILLTOKEY AND STB.CONSIGNEEFOR = O.STORERKEY  
+                LEFT JOIN dbo.TASKDETAIL TDRPL WITH (NOLOCK) ON PD.Taskdetailkey = TDRPL.Taskdetailkey AND PD.STORERKEY = TDRPL.STORERKEY --SY01  
                     AND TDRPL.Tasktype IN ('RPF','RPT','RP1') AND TDRPL.STATUS NOT IN ('9','X')  
-                LEFT JOIN REPLENISHMENT RP WITH (NOLOCK) ON PD.MoveRefKey = RP.MoveRefKey AND PD.STORERKEY = RP.STORERKEY --SY01  
+                LEFT JOIN dbo.REPLENISHMENT RP WITH (NOLOCK) ON PD.MoveRefKey = RP.MoveRefKey AND PD.STORERKEY = RP.STORERKEY --SY01  
                     AND PD.Storerkey = RP.Storerkey AND RP.CONFIRMED <> 'Y'  
-                LEFT JOIN CODELKUP TTMTYPE WITH (NOLOCK) ON TTMTYPE.LISTNAME = 'PKUOM2TTM' AND TTMTYPE.STORERKEY = O.STORERKEY AND TTMTYPE.CODE = PD.UOM  
-                LEFT JOIN CODELKUP CL WITH (NOLOCK) ON O.Storerkey = CL.Storerkey AND CL.Listname = 'TMPRIORITY' AND O.PRIORITY = CL.Short  
-                OUTER APPLY (SELECT TOP 1 TL.Loc FROM LOC TL WITH (NOLOCK) WHERE TL.Putawayzone <> '' AND (TL.Putawayzone = SSO.Route OR TL.Putawayzone = SSOB.Route OR TL.Putawayzone = LP.Route)  
+                LEFT JOIN dbo.CODELKUP TTMTYPE WITH (NOLOCK) ON TTMTYPE.LISTNAME = 'PKUOM2TTM' AND TTMTYPE.STORERKEY = O.STORERKEY AND TTMTYPE.CODE = PD.UOM  
+                LEFT JOIN dbo.CODELKUP CL WITH (NOLOCK) ON O.Storerkey = CL.Storerkey AND CL.Listname = 'TMPRIORITY' AND O.PRIORITY = CL.Short  
+                OUTER APPLY (SELECT TOP 1 TL.Loc FROM dbo.LOC TL WITH (NOLOCK) WHERE TL.Putawayzone <> '' AND (TL.Putawayzone = SSO.Route OR TL.Putawayzone = SSOB.Route OR TL.Putawayzone = LP.Route)  
                             ORDER BY CASE WHEN ISNULL(LP.Route,'') <> '' THEN 1 WHEN ISNULL(SSO.Route,'') <> '' THEN 2 ELSE 3 END) AS TOLOC  
                 WHERE PD.Status = '0'  
                 AND W.TMRELEASEFLAG = 'Y'  
@@ -174,7 +169,7 @@ BEGIN
                 WHILE @@FETCH_STATUS = 0  
                 BEGIN  
     
-                UPDATE PICKDETAIL WITH (ROWLOCK)  
+                UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
                 SET TASKDETAILKEY = ''  
                 WHERE TASKDETAILKEY = @cTaskdetailKey  
                 AND ORDERKEY = @cOrderkey  
@@ -188,7 +183,7 @@ BEGIN
                 SET @cLinkTaskToPick_SQL = ''  
                     --SET @n_UOMQty = 0  
                 SET @cGroupkey = ''  
-                SET @cTaskdetailkey = ''  
+                SET @cTaskdetailkeyNew = ''  
     
                 SET @nPackMaxSKU = 0  
                 IF ISNULL(@cSTCMAXSKU,'') <> '' AND ISNUMERIC(@cSTCMAXSKU) = 1  
@@ -209,10 +204,10 @@ BEGIN
                         SET @cPickMethod = 'FP'  
                     SET @cGroupKey = @cOrderkey  
                     SET @cLinkTaskToPick_SQL = 'PICKDETAIL.UOM = @cUOM AND ORDERS.Orderkey = @cOrderkey'  
-                    SET @cTaskdetailkey = ''  
+                    SET @cTaskdetailkeyNew = ''  
     
                     EXEC isp_InsertTaskDetail  
-                        @cTaskdetailkey         = @cTaskdetailkey OUTPUT  
+                        @cTaskdetailkey         = @cTaskdetailkeyNew OUTPUT  
                         ,@cTaskType              = @cTaskType  
                         ,@cStorerkey             = @cStorerkey  
                         ,@cSku                   = @cSku  
@@ -243,7 +238,7 @@ BEGIN
                         ,@cWIP_RefNo             = @cSourceType  
                         ,@bSuccess               = @bSuccess OUTPUT  
                         ,@nErr                   = @nErr OUTPUT  
-                        ,@cErrMsg                = @cErrMsg OUTPUT  
+                        ,@cErrMsg                = @cInsertErrMsg OUTPUT  
     
                     IF @bSuccess <> 1  
                     BEGIN  
@@ -255,20 +250,20 @@ BEGIN
                     BEGIN  
                         SET @cUserKeyOverride = ''  
                         SELECT TOP 1 @cUserKeyOverride = UserKeyOverride  
-                        FROM TASKDETAIL WITH (NOLOCK)  
+                        FROM dbo.TASKDETAIL WITH (NOLOCK)  
                         WHERE GROUPKEY = @cGroupkey  
                         AND ORDERKEY = @cOrderkey  
                         AND STORERKEY = @cStorerkey  
                         AND TASKTYPE = @cTaskType  
                         AND UOM = @cUOM  
-                        AND TASKDETAILKEY <> @cTaskdetailkey  
+                        AND TASKDETAILKEY <> @cTaskdetailkeyNew 
                         AND [STATUS] IN ('3','5')  
     
                         IF ISNULL(@cUserKeyOverride,'') <> ''  
-                            UPDATE TASKDETAIL WITH (ROWLOCK)  
-                            --SET Groupkey = @cTaskdetailkey  
+                            UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
+                            --SET Groupkey = @cTaskdetailkeyNew  
                             SET UserKeyOverride = @cUserKeyOverride  
-                            WHERE TaskDetailKey = @cTaskdetailkey  
+                            WHERE TaskDetailKey = @cTaskdetailkeyNew  
                     END  
                 END  
                 ELSE IF @cUOM = '2'  
@@ -290,7 +285,7 @@ BEGIN
                         SET @cSKUBUSR2 = ''  
     
                         SELECT @cSKUBUSR2 = ISNULL(BUSR2,'')  
-                        FROM SKU WITH (NOLOCK)  
+                        FROM dbo.SKU WITH (NOLOCK)  
                         WHERE STORERKEY = @cStorerkey  
                         AND SKU = @cSku  
     
@@ -303,23 +298,23 @@ BEGIN
                     SET @cLinkTaskToPick_SQL = 'PICKDETAIL.UOM = @cUOM AND ORDERS.Orderkey = @cOrderkey'  
     
                     SELECT @nCaseCNT = PACK.CASECNT  
-                    FROM SKU WITH (NOLOCK)  
-                    JOIN PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
+                    FROM dbo.SKU WITH (NOLOCK)  
+                    JOIN dbo.PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
                     WHERE SKU.STORERKEY = @cStorerkey  
                     AND SKU.SKU = @cSku  
     
-                    SET @n_LastPartial_Ctn = 0  
+                    SET @nLastPartial_Ctn = 0  
     
                     IF @nCaseCNT > 0  
-                        SET @nLastPartial_Ctn = @n_Qty % @nCaseCNT  
+                        SET @nLastPartial_Ctn = @nQty % @nCaseCNT  
     
                     IF @nLastPartial_Ctn > 0  
-                        SET @n_Qty = @n_Qty - @nLastPartial_Ctn  
+                        SET @nQty = @nQty - @nLastPartial_Ctn  
     
-                    SET @cTaskdetailkey = ''  
+                    SET @cTaskdetailkeyNew = ''  
     
                     EXEC isp_InsertTaskDetail  
-                        @cTaskdetailkey         = @cTaskdetailkey OUTPUT  
+                        @cTaskdetailkey         = @cTaskdetailkeyNew OUTPUT  
                         ,@cTaskType              = @cTaskType  
                         ,@cStorerkey             = @cStorerkey  
                         ,@cSku                   = @cSku  
@@ -334,7 +329,7 @@ BEGIN
                         ,@cLogicalToLoc          = @cToLoc  
                         ,@cToID                  = @cID  
                         ,@cPickMethod            = @cPickMethod  
-                        ,@cPriority  = @cPriority  
+                        ,@cPriority              = @cPriority  
                         ,@cSourcePriority        = '9'  
                         ,@cSourceType            = @cSourceType  
                         ,@cSourceKey             = @cWavekey  
@@ -351,7 +346,7 @@ BEGIN
                         ,@cWIP_RefNo             = @cSourceType  
                         ,@bSuccess               = @bSuccess OUTPUT  
                         ,@nErr                   = @nErr OUTPUT  
-                        ,@cErrMsg                = @cErrMsg OUTPUT  
+                        ,@cErrMsg                = @cInsertErrMsg OUTPUT  
     
                     IF @bSuccess <> 1  
                     BEGIN  
@@ -363,27 +358,27 @@ BEGIN
                     BEGIN  
                         SET @cUserKeyOverride = ''  
                         SELECT TOP 1 @cUserKeyOverride = UserKeyOverride  
-                        FROM TASKDETAIL WITH (NOLOCK)  
+                        FROM dbo.TASKDETAIL WITH (NOLOCK)  
                         WHERE GROUPKEY = @cGroupkey  
                         AND ORDERKEY = @cOrderkey  
                         AND STORERKEY = @cStorerkey  
                         AND TASKTYPE = @cTaskType  
                         AND UOM = @cUOM  
-                        AND TASKDETAILKEY <> @cTaskdetailkey  
+                        AND TASKDETAILKEY <> @cTaskdetailkeyNew  
                         AND [STATUS] IN ('3','5')  
     
                         IF ISNULL(@cUserKeyOverride,'') <> ''  
-                            UPDATE TASKDETAIL WITH (ROWLOCK)  
-                            --SET Groupkey = @cTaskdetailkey  
+                            UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
+                            --SET Groupkey = @cTaskdetailkeyNew  
                             SET UserKeyOverride = @cUserKeyOverride  
-                            WHERE TaskDetailKey = @cTaskdetailkey  
+                            WHERE TaskDetailKey = @cTaskdetailkeyNew  
     
                         IF @nLastPartial_Ctn > 0  
                         BEGIN  
                             --If found last partial carton, split to different task.  
                             --SET @c_TaskType = 'FPP'  
                             SELECT TOP 1 @cTaskType = SHORT, @cPickMethod = LONG  
-                            FROM CODELKUP WITH (NOLOCK)  
+                            FROM dbo.CODELKUP WITH (NOLOCK)  
                             WHERE LISTNAME = 'PKUOM2TTM'  
                             AND CODE = '6'  
     
@@ -401,7 +396,7 @@ BEGIN
                                 SET @cSKUBUSR2 = ''  
 
                                 SELECT @cSKUBUSR2 = ISNULL(BUSR2,'')  
-                                FROM SKU WITH (NOLOCK)  
+                                FROM dbo.SKU WITH (NOLOCK)  
                                 WHERE STORERKEY = @cStorerkey  
                                   AND SKU = @cSku  
 
@@ -411,10 +406,10 @@ BEGIN
                                     SET @cGroupKey = LEFT(@cSku,10)  
                             END  
     
-                            SET @cTaskdetailkey = ''  
+                            SET @cTaskdetailkeyNew = ''  
     
-                            EXEC isp_InsertTaskDetail  
-                                @cTaskdetailkey         = @cTaskdetailkey OUTPUT  
+                            EXEC dbo.isp_InsertTaskDetail  
+                                @cTaskdetailkey         = @cTaskdetailkeyNew OUTPUT  
                                ,@cTaskType              = @cTaskType  
                                ,@cStorerkey             = @cStorerkey  
                                ,@cSku                   = @cSku  
@@ -439,14 +434,14 @@ BEGIN
                                ,@cLoadkey               = @cLoadkey  
                                ,@cAreaKey               = '?F'  -- ?F=Get from location areakey  
                                ,@cMessage01             = 'Last Partial Carton'  
-                               ,@cMessage02             = @c_ExternOrderKey  
+                               ,@cMessage02             = @cExternOrderKey  
                                ,@cLinkTaskToPick        = 'Y' -- WIP=Update taskdetailkey to pickdetail_wip  
-                               ,@cLinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL  
+                               ,@cLinkTaskToPick_SQL    = @cLinkTaskToPick_SQL  
                                ,@cSplitTaskByCase       = 'N'   -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.  
                                ,@cWIP_RefNo             = @cSourceType  
                                ,@bSuccess               = @bSuccess OUTPUT  
                                ,@nErr                   = @nErr OUTPUT  
-                               ,@cErrMsg                = @cErrMsg OUTPUT  
+                               ,@cErrMsg                = @cInsertErrMsg OUTPUT  
     
                             IF @bSuccess <> 1  
                             BEGIN  
@@ -458,20 +453,20 @@ BEGIN
                             BEGIN  
                                 SET @cUserKeyOverride = ''  
                                 SELECT TOP 1 @cUserKeyOverride = UserKeyOverride  
-                                FROM TASKDETAIL WITH (NOLOCK)  
+                                FROM dbo.TASKDETAIL WITH (NOLOCK)  
                                 WHERE GROUPKEY = @cGroupkey  
                                   AND ORDERKEY = @cOrderkey  
                                   AND STORERKEY = @cStorerkey  
                                   AND TASKTYPE = @cTaskType  
                                   AND UOM = @cUOM  
-                                  AND TASKDETAILKEY <> @cTaskdetailkey  
+                                  AND TASKDETAILKEY <> @cTaskdetailkeyNew  
                                   AND [STATUS] IN ('3','5')  
 
                                 IF ISNULL(@cUserKeyOverride,'') <> ''  
-                                    UPDATE TASKDETAIL WITH (ROWLOCK)  
-                                    --SET Groupkey = @cTaskdetailkey  
+                                    UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
+                                    --SET Groupkey = @cTaskdetailkeyNew  
                                     SET UserKeyOverride = @cUserKeyOverride  
-                                    WHERE TaskDetailKey = @cTaskdetailkey  
+                                    WHERE TaskDetailKey = @cTaskdetailkeyNew  
                             END  
                         END  
                     END  
@@ -480,7 +475,7 @@ BEGIN
                 BEGIN  --UOM 6/7  
                     --SET @c_TaskType = 'FPP'  
                     IF ISNULL(@cTaskType,'') = ''  
-                    SET @cTaskType = 'FCP'  
+                        SET @cTaskType = 'FCP'  
     
                     IF ISNULL(@cPickMethod,'') = ''  
                         SET @cPickMethod = 'PP'  
@@ -494,7 +489,7 @@ BEGIN
                         SET @cSKUBUSR2 = ''  
     
                         SELECT @cSKUBUSR2 = ISNULL(BUSR2,'')  
-                        FROM SKU WITH (NOLOCK)  
+                        FROM dbo.SKU WITH (NOLOCK)  
                         WHERE STORERKEY = @cStorerkey  
                         AND SKU = @cSku  
     
@@ -504,10 +499,10 @@ BEGIN
                             SET @cGroupKey = LEFT(@cSku,10)  
                     END  
     
-                    SET @cTaskdetailkey = ''  
+                    SET @cTaskdetailkeyNew = ''  
     
                     EXEC isp_InsertTaskDetail  
-                        @cTaskdetailkey         = @cTaskdetailkey OUTPUT  
+                        @cTaskdetailkey         = @cTaskdetailkeyNew OUTPUT  
                         ,@cTaskType              = @cTaskType  
                         ,@cStorerkey             = @cStorerkey  
                         ,@cSku                   = @cSku  
@@ -538,7 +533,7 @@ BEGIN
                         ,@cWIP_RefNo             = @cSourceType  
                         ,@bSuccess               = @bSuccess OUTPUT  
                         ,@nErr                   = @nErr OUTPUT  
-                        ,@cErrMsg                = @cErrMsg OUTPUT  
+                        ,@cErrMsg                = @cInsertErrMsg OUTPUT  
     
                     IF @bSuccess <> 1  
                     BEGIN  
@@ -550,20 +545,20 @@ BEGIN
                     BEGIN  
                         SET @cUserKeyOverride = ''  
                         SELECT TOP 1 @cUserKeyOverride = UserKeyOverride  
-                        FROM TASKDETAIL WITH (NOLOCK)  
+                        FROM dbo.TASKDETAIL WITH (NOLOCK)  
                         WHERE GROUPKEY = @cGroupkey  
                         AND ORDERKEY = @cOrderkey  
                         AND STORERKEY = @cStorerkey  
                         AND TASKTYPE = @cTaskType  
                         AND UOM = @cUOM  
-                        AND TASKDETAILKEY <> @cTaskdetailkey  
+                        AND TASKDETAILKEY <> @cTaskdetailkeyNew  
                         AND [STATUS] IN ('3','5')  
     
                         IF ISNULL(@cUserKeyOverride,'') <> ''  
-                            UPDATE TASKDETAIL WITH (ROWLOCK)  
-                            --SET Groupkey = @cTaskdetailkey  
+                            UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
+                            --SET Groupkey = @cTaskdetailkeyNew  
                             SET UserKeyOverride = @cUserKeyOverride  
-                            WHERE TaskDetailKey = @cTaskdetailkey  
+                            WHERE TaskDetailKey = @cTaskdetailkeyNew  
                     END  
                 END  
     
@@ -580,7 +575,7 @@ BEGIN
   
     GOTO Quit  
 RollBackTran: 
-    IF CURSOR_STATUS('global','cur_pick') >= 0
+    IF CURSOR_STATUS('local','cur_pick') >= 0
     BEGIN
         CLOSE cur_pick
         DEALLOCATE cur_pick
