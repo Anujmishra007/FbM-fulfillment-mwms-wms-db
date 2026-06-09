@@ -31,7 +31,7 @@ GO
 /*  ==========================================================================   */
 /* 2025-08-14   2.0.2   Cuize    FCR-7100 Goto STEP 99 for Mask SKU              */
 /* 2026-03-03   2.1.0   NickT    FCR-10824 Add @cExtendedScnSP='rdt_1855ExtScn02'*/
-/* 2026-06-08   2.2.0   NYE018   UWP-58369 Fix option checking in Step_Option    */
+/* 2026-05-27   2.2.0   Jack Randell FCR-13356 Add rdt_1855ExtScn03              */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](
@@ -2517,7 +2517,7 @@ BEGIN
       SET @cOption = @cInField02
 
       -- Validate blank
-      IF @cInField02 = ''
+      IF @cOption = ''
       BEGIN
          SET @nErrNo = 171825
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option required
@@ -2525,7 +2525,7 @@ BEGIN
       END
 
       -- Validate option
-      IF @cInField02 NOT IN ( '1', '2')
+      IF @cOption NOT IN ( '1', '2')
       BEGIN
          SET @nErrNo = 171826
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
@@ -3566,7 +3566,7 @@ BEGIN
                GOTO Step_ConfirmTote
             END
          END -- rdt_1855ExtScn01
-         ELSE IF @cExtendedScnSP = 'rdt_1855ExtScn02'
+         ELSE IF @cExtendedScnSP IN ( 'rdt_1855ExtScn02','rdt_1855ExtScn03')
          BEGIN
             IF ISNULL(@cExtScnUDF01, '') = 'NO UPD RDTMOBREC'
             BEGIN
