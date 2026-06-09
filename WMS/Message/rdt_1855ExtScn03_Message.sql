@@ -1,0 +1,38 @@
+--rdt_1855ExtScn03
+--FCR-13356
+EXECUTE rdt.rdtDropMsg 269101, 269150
+
+EXECUTE rdt.rdtAddMsg 269101, 10, '269101 NeedPickZone',          'us_english', 1855, 0, '269101 Need PickZone'
+EXECUTE rdt.rdtAddMsg 269102, 10, '269102 NoTask',                'us_english', 1855, 0, '269102 No task in PickZone'
+EXECUTE rdt.rdtAddMsg 269103, 10, '269103 NeedCartID',            'us_english', 1855, 0, '269103 Need CartID'
+EXECUTE rdt.rdtAddMsg 269104, 10, '269104 InvCartID',             'us_english', 1855, 0, '269104 Invalid CartID'
+EXECUTE rdt.rdtAddMsg 269105, 10, '269105 CartInUse',             'us_english', 1855, 0, '269105 Cart is in use by other user'
+EXECUTE rdt.rdtAddMsg 269106, 10, '269106 NeedMethod',            'us_english', 1855, 0, '269106 Need Method'
+EXECUTE rdt.rdtAddMsg 269107, 10, '269107 InvMethod',             'us_english', 1855, 0, '269107 Invalid Method'
+EXECUTE rdt.rdtAddMsg 269108, 10, '269108 NoTask',                'us_english', 1855, 0, '269108 No task for the Method'
+EXECUTE rdt.rdtAddMsg 269110, 10, '269110 UpdTskFail',            'us_english', 1855, 0, '269110 Update task failed'
+EXECUTE rdt.rdtAddMsg 269111, 10, '269111 NoTask',                'us_english', 1855, 0, '269111 No task is found'
+EXECUTE rdt.rdtAddMsg 269112, 10, '269112 UpdTskFail',            'us_english', 1855, 0, '269112 Update task failed'
+EXECUTE rdt.rdtAddMsg 269113, 10, '269113 NoToteID',              'us_english', 1855, 0, '269113 No ToteID is scanned'
+EXECUTE rdt.rdtAddMsg 269114, 10, '269114 NeedMoreToteID',        'us_english', 1855, 0, '269114 Need More ToteID'
+EXECUTE rdt.rdtAddMsg 269115, 10, '269115 ToteIDScanned',         'us_english', 1855, 0, '269115 ToteID is scanned already'
+EXECUTE rdt.rdtAddMsg 269116, 10, '269116 ToteIDInUse',           'us_english', 1855, 0, '269116 ToteID is in use by other user'
+EXECUTE rdt.rdtAddMsg 269117, 10, '269117 NoNeedToteID',          'us_english', 1855, 0, '269117 All ToteID is assigned'
+EXECUTE rdt.rdtAddMsg 269118, 10, '269118 ToteIDInUse',           'us_english', 1855, 0, '269118 ToteID is in use by other user'
+EXECUTE rdt.rdtAddMsg 269119, 10, '269119 UpdTaskFail',           'us_english', 1855, 0, '269119 Update task failed'
+EXECUTE rdt.rdtAddMsg 269120, 10, '269120 InsDataFail',           'us_english', 1855, 0, '269120 Insert @tOrderCartonID data failed'
+EXECUTE rdt.rdtAddMsg 269121, 10, '269121 UpdTaskFail',           'us_english', 1855, 0, '269121 Update task failed'
+EXECUTE rdt.rdtAddMsg 269122, 10, '269122 InvConfig',             'us_english', 1855, 0, '269122 Invalid carton limit configuration for method 2'
+EXECUTE rdt.rdtAddMsg 269123, 10, '269123 InvMethod',             'us_english', 1855, 0, '269123 Method must be 1 or 2'
+EXECUTE rdt.rdtAddMsg 269124, 10, '269124 MoreOrderQty',          'us_english', 1855, 0, '269124 More orders than max totes allowed for method 2'
+EXECUTE rdt.rdtAddMsg 269125, 10, '269125 NeedOption',            'us_english', 1855, 0, '269125 Need Option'
+EXECUTE rdt.rdtAddMsg 269126, 10, '269126 InvOption',             'us_english', 1855, 0, '269126 Invalid Option'
+EXECUTE rdt.rdtAddMsg 269127, 10, '269127 UpdTskFail',            'us_english', 1855, 0, '269127 Update TaskDetail failed'
+EXECUTE rdt.rdtAddMsg 269128, 10, '269128 UpdTskFail',            'us_english', 1855, 0, '269128 Update TaskDetail failed'
+EXECUTE rdt.rdtAddMsg 269129, 10, '269129 NoToteIDNeeded',        'us_english', 1855, 0, '269129 No need more ToteID'
+EXECUTE rdt.rdtAddMsg 269130, 10, '269130 WaveKeyMissing',        'us_english', 1855, 0, '269130 Wavekey is missing'
+EXECUTE rdt.rdtAddMsg 269131, 10, '269131 ToteIDInUse',           'us_english', 1855, 0, '269131 ToteID is used in other wave/group'
+EXECUTE rdt.rdtAddMsg 269132, 10, '269132 ToteIDInUse',           'us_english', 1855, 0, '269132 ToteID is used in other wave/group'
+EXECUTE rdt.rdtAddMsg 269133, 10, '269133 ToteIDNotInPickList',   'us_english', 1855, 0, '269133 ToteID is used by order not in the current pick list'
+
+SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 269101 AND 269150
