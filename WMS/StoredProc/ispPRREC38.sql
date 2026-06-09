@@ -95,18 +95,20 @@ BEGIN
    /*          distinct Sku within this receipt.                       */
    /*-----------------------------------------------------------------*/
    DECLARE cur_Sku CURSOR LOCAL FAST_FORWARD FOR
-      SELECT DISTINCT RD.Sku, RD.StorerKey
-      FROM RECEIPTDETAIL RD WITH (NOLOCK)
-      WHERE RD.ReceiptKey = @c_Receiptkey
-      AND (RD.UserDefine01 IS NOT NULL AND RD.UserDefine01 <> '') 
-      AND RD.UserDefine01 IN ( -- mono-SKU UCCs only
-            SELECT M.UserDefine01
-            FROM RECEIPTDETAIL M WITH (NOLOCK)
-            WHERE M.ReceiptKey = @c_Receiptkey
-            AND (M.UserDefine01 IS NOT NULL AND M.UserDefine01 <> '')
-            GROUP BY M.UserDefine01
-            HAVING COUNT(DISTINCT M.Sku) = 1
-      )
+   ;WITH CTE_SingleSkuUCC AS
+    (
+       SELECT M.UserDefine01
+       FROM RECEIPTDETAIL M WITH (NOLOCK)
+       WHERE M.ReceiptKey = @c_Receiptkey
+       AND   M.UserDefine01 IS NOT NULL
+       AND   M.UserDefine01 <> ''
+       GROUP BY M.UserDefine01
+       HAVING COUNT(DISTINCT M.Sku) = 1
+    )
+    SELECT DISTINCT RD.Sku, RD.StorerKey
+    FROM RECEIPTDETAIL RD WITH (NOLOCK)
+    JOIN CTE_SingleSkuUCC S ON S.UserDefine01 = RD.UserDefine01
+    WHERE RD.ReceiptKey = @c_Receiptkey
  
    OPEN cur_Sku
    FETCH NEXT FROM cur_Sku INTO @c_Sku, @c_StorerKey
