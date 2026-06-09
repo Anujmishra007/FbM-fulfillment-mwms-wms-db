@@ -153,7 +153,7 @@ BEGIN
       @nShortQTY              INT        
 
    IF @nDebugFlag = 1
-      SELECT 'Runing rdt_1764ExtScn03', @nScn AS Scn, @nStep AS Step
+      SELECT 'Running rdt_1764ExtScn03', @nScn AS Scn, @nStep AS Step
 
    SELECT 
       @nMOBRECStep         = Step,
@@ -254,6 +254,7 @@ BEGIN
                         GOTO Ext_ShortPick_Fail
                      END
 
+                     SET @nShortQTY = @nQTY_RPL - @nQTY
                      EXEC dbo.nspRFRSN01
                         @c_sendDelimiter = NULL
                         ,@c_ptcid         = 'RDT'
