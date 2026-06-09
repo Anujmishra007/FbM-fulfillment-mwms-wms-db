@@ -95,9 +95,15 @@ BEGIN
         SET @cNewSuggToLOC = @cToLoc  
     END  
     
-        IF ISNULL(@cNewSuggToLOC,'') <> @cToLoc
+    IF ISNULL(@cNewSuggToLOC,'') <> @cToLoc
     BEGIN
+        DECLARE @nTranCount INT = @@TRANCOUNT;
         BEGIN TRY
+            IF @nTranCount = 0
+                BEGIN TRAN;
+            ELSE
+                SAVE TRAN rdt_1764SuggToLocAU;
+
             UPDATE dbo.TASKDETAIL WITH (ROWLOCK)
             SET TOLOC = @cNewSuggToLOC--, LOGICALTOLOC = @cNewSuggToLOC
             WHERE TASKDETAILKEY = @cTaskDetailKey
@@ -109,6 +115,7 @@ BEGIN
             INSERT INTO dbo.LOTxLOCxID (Lot,Loc,ID,Storerkey,Sku)
             SELECT @cFromLot, @cNewSuggToLOC, @cToID, @cStorerKey, @cSKU
 
+            -- Remove pending move-in for old location
             EXECUTE dbo.nspPendingMoveInUpdate
                     @c_storerkey    = ''
                     , @c_sku          = ''
@@ -124,10 +131,16 @@ BEGIN
                     , @c_errmsg       = @cErrMsg OUTPUT
                     , @c_tasktype     = @cTasktype
 
-            IF @bSuccess <> 0
+            IF @bSuccess = 0
             BEGIN
-                EXECUTE dbo.nspPendingMoveInUpdate
-                      @c_storerkey    = ''
+                SET @nErrNo = 269251  -- 'cant suggest loc'
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                ;THROW 50001, 'PendingMoveIn Remove failed', 1;
+            END
+
+            -- Insert pending move-in for new location
+            EXECUTE dbo.nspPendingMoveInUpdate
+                    @c_storerkey    = ''
                     , @c_sku          = ''
                     , @c_lot          = ''
                     , @c_Loc          = @cNewSuggToLOC
@@ -140,14 +153,30 @@ BEGIN
                     , @n_err          = @nErrNo OUTPUT
                     , @c_errmsg       = @cErrMsg OUTPUT
                     , @c_tasktype     = @cTasktype
+
+            IF @bSuccess = 0
+            BEGIN
+                SET @nErrNo = 269252  -- 'cant suggest loc'
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                ;THROW 50001, 'PendingMoveIn Insert failed', 1;
             END
+
+            IF @nTranCount = 0
+                COMMIT TRAN;
         END TRY
         BEGIN CATCH
-            SET @nErrNo = 269251
+            IF XACT_STATE() <> 0
+            BEGIN
+                IF @nTranCount = 0
+                    ROLLBACK TRAN;
+                ELSE
+                    ROLLBACK TRAN rdt_1764SuggToLocAU;
+            END
+            SET @nErrNo = 269253
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'cant suggest loc'
             RETURN
         END CATCH
-    END 
+    END
 END
 GO
 
