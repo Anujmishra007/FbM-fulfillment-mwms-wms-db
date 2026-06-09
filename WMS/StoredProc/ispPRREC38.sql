@@ -95,7 +95,7 @@ BEGIN
    /*          distinct Sku within this receipt.                       */
    /*-----------------------------------------------------------------*/
    DECLARE cur_Sku CURSOR LOCAL FAST_FORWARD FOR
-   ;WITH CTE_SingleSkuUCC AS
+   WITH CTE_SingleSkuUCC AS
     (
        SELECT M.UserDefine01
        FROM RECEIPTDETAIL M WITH (NOLOCK)
