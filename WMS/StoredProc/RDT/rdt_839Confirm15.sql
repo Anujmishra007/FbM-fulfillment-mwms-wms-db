@@ -293,7 +293,9 @@ BEGIN
                                               UCC confirm
    ***********************************************************************************************/
 
-   BEGIN TRAN  -- Begin our own transaction
+   IF @nTranCount = 0
+      BEGIN TRAN  -- Only begin transaction if not already in one
+
    SAVE TRAN rdt_839Confirm15 -- For rollback or commit only our own transaction
 
    SET @nLoopIndex = -1
@@ -1052,7 +1054,9 @@ BEGIN
 
    /*        New Logic End          */
 
-   COMMIT TRAN rdt_839Confirm15 -- Only commit change made here
+   -- Only commit if we started the transaction ourselves
+   IF @nTranCount = 0 AND @@TRANCOUNT > 0
+      COMMIT TRAN
 
    EXEC RDT.rdt_STD_EventLog
       @cActionType   = '3', -- Picking
@@ -1072,11 +1076,27 @@ BEGIN
    GOTO Quit
 
 RollBackTran:
-   ROLLBACK TRAN rdt_839Confirm15 -- Only rollback change made here
+   IF XACT_STATE() = -1
+   BEGIN
+      -- Transaction is uncommittable, must rollback entire transaction
+      ROLLBACK TRAN
+   END
+   ELSE IF XACT_STATE() = 1
+   BEGIN
+      -- Transaction is committable, rollback to savepoint only
+      ROLLBACK TRAN rdt_839Confirm15
+   END
+
+   INSERT INTO dbo.TraceInfo (TraceName, Step1, Step2, Step3, Step4, Step5, TimeIn, col1, Col2) 
+   VALUES ('rdt_839Confirm15', @cStorerKey, ISNULL(TRY_CAST(@nMobile AS NVARCHAR(20)), ''), @cUserName, @cPickSlipNo, @cDropID, GETDATE(), 'ErrorNo', ISNULL(TRY_CAST(@nErrNo AS NVARCHAR(20)), ''))
+
 Fail:
 Quit:
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN
+   IF XACT_STATE() = 1
+   BEGIN
+      WHILE @@TRANCOUNT > @nTranCount
+         COMMIT TRAN
+   END
 
 END
 GO

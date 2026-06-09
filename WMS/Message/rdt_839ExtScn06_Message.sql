@@ -43,9 +43,10 @@ EXECUTE rdt.rdtAddMsg 255539, 10, '255539 UpdSNFail',          'us_english', 839
 EXECUTE rdt.rdtAddMsg 255540, 10, '255540 OptionReq',          'us_english', 839, 0, '255540 Option required'
 EXECUTE rdt.rdtAddMsg 255541, 10, '255541 InvOption',          'us_english', 839, 0, '255541 Invalid Option'
 EXECUTE rdt.rdtAddMsg 255542, 10, '255542 DelPickSerialNoFail','us_english', 839, 0, '255542 Delete PickSerialNo failed'
-EXECUTE rdt.rdtAddMsg 255543, 10, '255543 UpdSNFail',          'us_english', 839, 0, '255543 Update SerialNo failedd'
+EXECUTE rdt.rdtAddMsg 255543, 10, '255543 UpdSNFail',          'us_english', 839, 0, '255543 Update SerialNo failed'
 EXECUTE rdt.rdtAddMsg 255544, 10, '255544 InvDropID',          'us_english', 839, 0, '255544 Invalid DropID format'
 EXECUTE rdt.rdtAddMsg 255545, 10, '255545 UPDAlertFail',       'us_english', 839, 0, '255545 Update ALERT failed'
 EXECUTE rdt.rdtAddMsg 255546, 10, '255546 UPDRdtPickLogFail',  'us_english', 839, 0, '255546 Update RDT Pick Log failed'
+EXECUTE rdt.rdtAddMsg 255547, 10, '255547 ExecConfirmFail',    'us_english', 839, 0, '255547 Execute confirm SP failed'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 255501 AND 255550
