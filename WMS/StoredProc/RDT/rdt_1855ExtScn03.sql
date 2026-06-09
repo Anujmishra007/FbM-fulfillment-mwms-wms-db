@@ -976,7 +976,7 @@ BEGIN
 
                SET @nTranCount = @@TRANCOUNT
                BEGIN TRAN
-               SAVE TRAN rdt_1855ExtScn02_6845
+               SAVE TRAN rdt_1855ExtScn03_6845
 
                -- B2C Singles
                /*IF @cMethod = '1'
@@ -1093,7 +1093,7 @@ BEGIN
                GOTO LockDropID_Commit
 
                LockDropID_RollBackTran:
-                     ROLLBACK TRAN rdt_1855ExtScn02_6845
+                     ROLLBACK TRAN rdt_1855ExtScn03_6845
                LockDropID_Commit:
                   WHILE @@TRANCOUNT > @nTranCount
                      COMMIT TRAN
@@ -1189,7 +1189,7 @@ BEGIN
 
                   SET @nTranCount = @@TRANCOUNT
                   BEGIN TRAN
-                  SAVE TRAN rdt_1855ExtScn02_5927
+                  SAVE TRAN rdt_1855ExtScn03_5927
 
                   IF EXISTS(SELECT 1 FROM @tTaskDetail)
                   BEGIN
@@ -1276,7 +1276,7 @@ BEGIN
                   GOTO COMMIT_UNASSIGN_CART
 
                   COMMIT_UNASSIGN_CART_RollBackTran:
-                        ROLLBACK TRAN rdt_1855ExtScn02_5927
+                        ROLLBACK TRAN rdt_1855ExtScn03_5927
                   COMMIT_UNASSIGN_CART:
                      WHILE @@TRANCOUNT > @nTranCount
                         COMMIT TRAN
