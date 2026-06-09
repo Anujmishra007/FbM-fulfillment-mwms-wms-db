@@ -138,9 +138,10 @@ BEGIN
       @cMessage05              NVARCHAR(125)
 
 
-   DECLARE @nScn_ReasonCode INT = 6620  
+   DECLARE @nScn_ReasonCode INT = 6620
 
    DECLARE @nTranCount  INT
+   DECLARE @bInTran     BIT = 0
 
    --10031
    DECLARE 
@@ -177,10 +178,6 @@ BEGIN
       @nQTY                = V_Integer4
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
-
-   SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN
-   SAVE TRAN rdt_1764ExtScn03
 
    IF @nFunc = 1764 -- TM Replen
    BEGIN
@@ -255,6 +252,13 @@ BEGIN
                      END
 
                      SET @nShortQTY = @nQTY_RPL - @nQTY
+
+                     -- Begin transaction before DML operations
+                     SET @nTranCount = @@TRANCOUNT
+                     BEGIN TRAN
+                     SAVE TRAN rdt_1764ExtScn03
+                     SET @bInTran = 1
+
                      EXEC dbo.nspRFRSN01
                         @c_sendDelimiter = NULL
                         ,@c_ptcid         = 'RDT'
@@ -437,18 +441,23 @@ BEGIN
             SET @cOutField01 = ''
             SET @nAfterScn = 2687
             SET @nAfterStep = 8
-         
+
+            IF @bInTran = 1
+               GOTO RollBackTran
+
          GOTO Quit
       END -- Extend Short Pick logic
    END
    GOTO Quit
 
 RollBackTran:
-   ROLLBACK TRAN rdt_1764ExtScn03 -- Only rollback change made here
-Fail:
+   ROLLBACK TRAN rdt_1764ExtScn03
 Quit:
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN
+   IF @bInTran = 1
+   BEGIN
+      WHILE @@TRANCOUNT > @nTranCount
+         COMMIT TRAN
+   END
 
 END
 GO
