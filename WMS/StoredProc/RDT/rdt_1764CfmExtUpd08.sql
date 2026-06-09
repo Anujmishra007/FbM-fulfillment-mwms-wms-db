@@ -137,15 +137,6 @@ BEGIN
 
    --not short
    IF ISNULL(@cReasonCode, '') = ''
-      RETURN
-
-   IF @cTMTaskType <> 'RPF'
-      RETURN
-
-   SET @cRealloFlag = '1'
-   SET @cUpdPKDFlag = '1'
-
-   IF @cReasonCode = ''
    BEGIN
       --not short do not trigger reallo and update pkd
       SET @cRealloFlag = '0'
@@ -161,7 +152,15 @@ BEGIN
          VALUES ('1764CfmUpd08', GETDATE(), @CUsername, CAST(@nmobile AS NVARCHAR(10)),
             @cTaskDetailKey, @cRealloFlag, @cUpdPKDFlag, '', 'RsnCodeEmpty')
       END
+
+      RETURN
    END
+
+   IF @cTMTaskType <> 'RPF'
+      RETURN
+
+   SET @cRealloFlag = '1'
+   SET @cUpdPKDFlag = '1'
 
    --Get related pickdetail
    INSERT INTO @tPickDetailList (PickDetailKey)

@@ -1369,6 +1369,7 @@ BEGIN
                      END
                      ELSE
                      BEGIN
+                        SET @cOutField01 = ''
                         -- Go to No More Task screen
                         SET @nAfterScn = 6828
                         SET @nAfterStep = 99
@@ -2859,6 +2860,7 @@ BEGIN
                                              AND Mobile = @nMobile
                                              AND AddWho = @cUserName)
                               BEGIN
+                                 SET @cOutField01 = ''
                                  -- No more task, complete pick slip
                                  SET @nAfterScn = 6828
                                  SET @nAfterStep = 99
@@ -3098,25 +3100,36 @@ BEGIN
                IF @cCloseDropIDFlag = 'Y'
                BEGIN
                    -- Confirm
-                  EXEC RDT.rdt_PickPiece_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
-                     ,@cPickSlipNo
-                     ,@cPickZone
-                     ,@cDropID
-                     ,@cSuggLOC
-                     ,@cSuggSKU
-                     ,@nActQTY
-                     ,@cLottableCode
-                     ,@cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05
-                     ,@cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10
-                     ,@cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
-                     ,@cPackData1,  @cPackData2,  @cPackData3 
-                     ,@cSuggID
-                     ,@cSerialNo   = '' 
-                     ,@nSerialQTY  = 0
-                     ,@nBulkSNO    = 0
-                     ,@nBulkSNOQTY = 0
-                     ,@nErrNo      = @nErrNo  OUTPUT
-                     ,@cErrMsg     = @cErrMsg OUTPUT
+                  BEGIN TRY
+                     EXEC RDT.rdt_PickPiece_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
+                        ,@cPickSlipNo
+                        ,@cPickZone
+                        ,@cDropID
+                        ,@cSuggLOC
+                        ,@cSuggSKU
+                        ,@nActQTY
+                        ,@cLottableCode
+                        ,@cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05
+                        ,@cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10
+                        ,@cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
+                        ,@cPackData1,  @cPackData2,  @cPackData3
+                        ,@cSuggID
+                        ,@cSerialNo   = ''
+                        ,@nSerialQTY  = 0
+                        ,@nBulkSNO    = 0
+                        ,@nBulkSNOQTY = 0
+                        ,@nErrNo      = @nErrNo  OUTPUT
+                        ,@cErrMsg     = @cErrMsg OUTPUT
+                  END TRY
+                  BEGIN CATCH
+                     -- Catch any unhandled error from child SP
+                     IF @nErrNo = 0
+                        SET @nErrNo = 255547 --Execute confirm SP failed
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+
+                     INSERT INTO dbo.TraceInfo (TraceName, Step1, Step2, Step3, Step4, Step5, TimeIn, col1, Col2) 
+                     VALUES ('rdt_839ExtScn06', @cStorerKey, ISNULL(TRY_CAST(@nMobile AS NVARCHAR(20)), ''), @cUserName, @cPickSlipNo, @cDropID, GETDATE(), 'ErrorNo', ISNULL(TRY_CAST(@nErrNo AS NVARCHAR(20)), ''))
+                  END CATCH
 
                   IF @nErrNo <> 0
                   BEGIN
@@ -3595,6 +3608,8 @@ BEGIN
                      END
                      ELSE
                      BEGIN
+                        SET @cOutField01 = ''
+
                         -- Go to No More Task screen
                         SET @nAfterScn = 6828
                         SET @nAfterStep = 99

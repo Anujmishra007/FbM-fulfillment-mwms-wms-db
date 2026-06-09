@@ -432,14 +432,14 @@ BEGIN
       IF @cZone IN ('XD', 'LB', 'LP')
       BEGIN
          IF @cPickZone = ''
-            SELECT  @nTtlBalQty= SUM(PD.QTY)
+            SELECT  @nTtlBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
          ELSE
-            SELECT  @nTtlBalQty= SUM(PD.QTY)
+            SELECT  @nTtlBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
@@ -451,13 +451,13 @@ BEGIN
       ELSE IF @cOrderKey <> ''
       BEGIN
          IF @cPickZone = ''
-            SELECT  @nTtlBalQty= SUM(PD.QTY)
+            SELECT  @nTtlBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
          ELSE
-            SELECT  @nTtlBalQty= SUM(PD.QTY)
+            SELECT  @nTtlBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PD.OrderKey = @cOrderKey
@@ -468,14 +468,14 @@ BEGIN
       ELSE IF @cLoadKey <> ''
       BEGIN
          IF @cPickZone = ''
-            SELECT  @nTtlBalQty= SUM(PD.QTY)
+            SELECT  @nTtlBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
             JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE LPD.LoadKey = @cLoadKey
                AND PD.QTY > 0
          ELSE
-            SELECT  @nTtlBalQty= SUM(PD.QTY)
+            SELECT  @nTtlBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
@@ -488,13 +488,13 @@ BEGIN
       ELSE
       BEGIN
          IF @cPickZone = ''
-            SELECT  @nTtlBalQty= SUM(PD.QTY)
+            SELECT  @nTtlBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
          ELSE
-         SELECT  @nTtlBalQty= SUM(PD.QTY)
+         SELECT  @nTtlBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PD.PickSlipNo = @cPickSlipNo
@@ -510,7 +510,7 @@ BEGIN
       BEGIN
          IF @cPickZone = ''
          BEGIN
-            SELECT  @nBalQty= SUM(PD.QTY)
+            SELECT  @nBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
@@ -522,7 +522,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            SELECT  @nBalQty= SUM(PD.QTY)
+            SELECT  @nBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
@@ -539,7 +539,7 @@ BEGIN
       ELSE IF @cOrderKey <> ''
       BEGIN
          IF @cPickZone = ''
-            SELECT  @nBalQty= SUM(PD.QTY)
+            SELECT  @nBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
@@ -549,7 +549,7 @@ BEGIN
                AND EPL.PickDetailKey IS NULL
 
          ELSE
-            SELECT  @nBalQty= SUM(PD.QTY)
+            SELECT  @nBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
@@ -564,7 +564,7 @@ BEGIN
       ELSE IF @cLoadKey <> ''
       BEGIN
          IF @cPickZone = ''
-            SELECT  @nBalQty= SUM(PD.QTY)
+            SELECT  @nBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
@@ -574,7 +574,7 @@ BEGIN
                AND PD.Status < '4'
                AND EPL.PickDetailKey IS NULL
          ELSE
-            SELECT  @nBalQty= SUM(PD.QTY)
+            SELECT  @nBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
@@ -591,7 +591,7 @@ BEGIN
       ELSE
       BEGIN
          IF @cPickZone = ''
-            SELECT  @nBalQty= SUM(PD.QTY)
+            SELECT  @nBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
@@ -601,7 +601,7 @@ BEGIN
                AND PD.Status < '4'
                AND EPL.PickDetailKey IS NULL
          ELSE
-            SELECT  @nBalQty= SUM(PD.QTY)
+            SELECT  @nBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey

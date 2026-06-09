@@ -45,7 +45,7 @@ EXECUTE rdt.rdtAddMsg 255640, 10, '255640 UpdPKDtlFail',                      'u
 EXECUTE rdt.rdtAddMsg 255641, 10, '255641 UpdPKDtlFail',                      'us_english', 839, 0, '255641 Update rdtPickLog failed'
 EXECUTE rdt.rdtAddMsg 255642, 10, '255642 DelPKDtlFail',                      'us_english', 839, 0, '255642 Delete rdtPickLog failed'
 EXECUTE rdt.rdtAddMsg 255643, 10, '255643 UpdUCCtlFail',                      'us_english', 839, 0, '255643 Update UCC failed'
-EXECUTE rdt.rdtAddMsg 255644, 10, '255644 UpdSNFail',                         'us_english', 839, 0, '255643 Update SerialNo failed'
+EXECUTE rdt.rdtAddMsg 255644, 10, '255644 UpdSNFail',                         'us_english', 839, 0, '255644 Update SerialNo failed'
 EXECUTE rdt.rdtAddMsg 255645, 10, '255645 UpdMasterSNFail',                   'us_english', 839, 0, '255645 Update MasterSerialNo failed'
 EXECUTE rdt.rdtAddMsg 255646, 10, '255646 UpdUCCFail',                        'us_english', 839, 0, '255646 Update UCC failed'
 
