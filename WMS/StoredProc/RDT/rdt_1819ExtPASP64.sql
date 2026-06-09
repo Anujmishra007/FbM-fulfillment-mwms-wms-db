@@ -332,30 +332,35 @@ BEGIN
                IF @nMultiSKU_UCCQty > 0
                BEGIN
                   DELETE FROM #TempLocUCCQty
-                  INSERT INTO #TempLocUCCQty (LOC, LogicalLocation, MaxCarton, PendingMoveInUCCQty, UCCQty)
-                  SELECT LOC.Loc, LOC.LogicalLocation, LOC.MaxCarton, COUNT(DISTINCT UCC2.UCCNo), COUNT(DISTINCT UCC.UCCNo)
-                  FROM dbo.LOC WITH(NOLOCK)
-                  LEFT JOIN LOTxLOCxID LLI WITH(NOLOCK) ON LLI.StorerKey = @cStorerKey AND LOC.Loc = LLI.Loc AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
-                  LEFT JOIN dbo.UCC WITH(NOLOCK) ON LOC.Loc = UCC.Loc AND UCC.StorerKey = @cStorerKey AND UCC.Status IN ('1', '3', '4')
-                  LEFT JOIN dbo.RFPutaway RFP WITH(NOLOCK) ON LLI.StorerKey = RFP.StorerKey AND LLI.Loc = RFP.SuggestedLOC
-                  LEFT JOIN dbo.UCC UCC2 WITH(NOLOCK) ON RFP.StorerKey = UCC2.StorerKey AND RFP.FromLOC = UCC2.Loc AND RFP.CaseID IS NOT NULL AND RFP.CaseID = UCC2.UCCNo AND RFP.SKU = UCC2.SKU
-                  WHERE LOC.Facility = @cFacility
-                     AND LOC.Loc <> @cFromLOC
-                     AND LOC.LocationType = @cPNDMEZZA
-                     AND LOC.CommingleSku IN ('1', 'Y')
-                     AND NOT EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
-                                    INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
-                                    INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey AND LLI2.SKU = LA.SKU
-                                    WHERE LOC2.Facility = @cFacility
-                                       AND LOC2.LocationType = @cPNDMEZZA
-                                       AND LOC2.NoMixLottable02 IN ('1', 'Y')
-                                       AND LA.Lottable02 <> @cLottable02
-                                       AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
-                                       AND LOC.Loc = LOC2.Loc
-                                    )
-                  GROUP BY LOC.Loc, LOC.LogicalLocation, LOC.MaxCarton
-                  ORDER BY LOC.LogicalLocation, LOC.Loc
-
+                  IF EXISTS(SELECT 1 FROM dbo.LOC LOC2 WITH(NOLOCK)
+                           INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
+                           INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey AND LLI2.SKU = LA.SKU
+                           WHERE LOC2.Facility = @cFacility
+                              AND LOC2.Loc = @cPNDMEZZA
+                              AND LOC2.NoMixLottable02 IN ('1', 'Y')
+                              AND LA.Lottable02 <> @cLottable02
+                              AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
+                           )
+                  BEGIN
+                     SET @nRowCount = 0
+                     SET @cSuggLOC = ''
+                  END
+                  ELSE
+                  BEGIN
+                     INSERT INTO #TempLocUCCQty (LOC, LogicalLocation, MaxCarton, PendingMoveInUCCQty, UCCQty)
+                     SELECT LOC.Loc, LOC.LogicalLocation, LOC.MaxCarton, COUNT(DISTINCT UCC2.UCCNo), COUNT(DISTINCT UCC.UCCNo)
+                     FROM dbo.LOC WITH(NOLOCK)
+                     LEFT JOIN LOTxLOCxID LLI WITH(NOLOCK) ON LLI.StorerKey = @cStorerKey AND LOC.Loc = LLI.Loc AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.PendingMoveIN > 0)
+                     LEFT JOIN dbo.UCC WITH(NOLOCK) ON LOC.Loc = UCC.Loc AND UCC.StorerKey = @cStorerKey AND UCC.Status IN ('1', '3', '4')
+                     LEFT JOIN dbo.RFPutaway RFP WITH(NOLOCK) ON LLI.StorerKey = RFP.StorerKey AND LLI.Loc = RFP.SuggestedLOC
+                     LEFT JOIN dbo.UCC UCC2 WITH(NOLOCK) ON RFP.StorerKey = UCC2.StorerKey AND RFP.FromLOC = UCC2.Loc AND RFP.CaseID IS NOT NULL AND RFP.CaseID = UCC2.UCCNo AND RFP.SKU = UCC2.SKU
+                     WHERE LOC.Facility = @cFacility
+                        AND LOC.Loc = @cPNDMEZZA
+                        AND LOC.Loc <> @cFromLOC
+                        AND LOC.CommingleSku IN ('1', 'Y')
+                     GROUP BY LOC.Loc, LOC.LogicalLocation, LOC.MaxCarton
+                     ORDER BY LOC.LogicalLocation, LOC.Loc
+                  END
 
                   SELECT TOP 1 @cSuggLOC = LOC.Loc
                   FROM dbo.LOC LOC WITH(NOLOCK)
@@ -383,14 +388,14 @@ BEGIN
                      SELECT TOP 1 @cSuggLOC = LOC.Loc
                      FROM dbo.LOC WITH(NOLOCK)
                      WHERE LOC.Facility = @cFacility
-                        AND LOC.LocationType = @cPNDMEZZA
+                        AND LOC.Loc = @cPNDMEZZA
                         AND LOC.Loc <> @cFromLOC
                         -- Respect CommingleSKU rule
                         AND NOT EXISTS(
                               SELECT 1 FROM dbo.LOC LOC1 WITH(NOLOCK)
                               INNER JOIN dbo.LOTxLOCxID LLI1 WITH(NOLOCK) ON LLI1.Loc = LOC1.Loc AND LLI1.StorerKey = @cStorerKey
                               WHERE LOC1.Facility = @cFacility
-                              AND LOC1.LocationType = @cPNDMEZZA
+                              AND LOC1.Loc = @cPNDMEZZA
                               AND LOC1.CommingleSku IN ('0', 'N')
                               AND LLI1.SKU <> @cSKU
                               AND (LLI1.Qty - LLI1.QtyPicked - LLI1.QtyPickInProcess > 0 OR LLI1.PendingMoveIN + LLI1.QtyExpected > 0)
@@ -402,7 +407,7 @@ BEGIN
                               INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
                               INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey AND LLI2.SKU = LA.SKU
                               WHERE LOC2.Facility = @cFacility
-                              AND LOC2.LocationType = @cPNDMEZZA
+                              AND LOC2.Loc = @cPNDMEZZA
                               AND LOC2.NoMixLottable02 IN ('1', 'Y')
                               AND LA.Lottable02 <> @cLottable02
                               AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
@@ -417,7 +422,7 @@ BEGIN
                      SELECT TOP 1 @cSuggLOC = LOC.Loc
                      FROM dbo.LOC WITH(NOLOCK)
                      WHERE LOC.Facility = @cFacility
-                        AND LOC.LocationType = @cPNDMEZZA
+                        AND LOC.Loc = @cPNDMEZZA
                         AND LOC.Loc <> @cFromLOC
                         AND LOC.CommingleSku IN ('1', 'Y')
                         -- Respect NoMixLottable02 rule
@@ -426,7 +431,7 @@ BEGIN
                               INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK) ON LLI2.Loc = LOC2.Loc AND LLI2.StorerKey = @cStorerKey
                               INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LLI2.Lot = LA.Lot AND LLI2.StorerKey = LA.StorerKey AND LLI2.SKU = LA.SKU
                               WHERE LOC2.Facility = @cFacility
-                              AND LOC2.LocationType = @cPNDMEZZA
+                              AND LOC2.Loc = @cPNDMEZZA
                               AND LOC2.NoMixLottable02 IN ('1', 'Y')
                               AND LA.Lottable02 <> @cLottable02
                               AND (LLI2.Qty - LLI2.QtyPicked - LLI2.QtyPickInProcess > 0 OR LLI2.PendingMoveIN + LLI2.QtyExpected > 0)
