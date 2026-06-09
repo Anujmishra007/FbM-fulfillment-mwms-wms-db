@@ -192,21 +192,21 @@ BEGIN
                 BEGIN  
                     SET @cOrderKey = ''  
                     SELECT @cOrderKey = Orderkey  
-                    FROM TASKDETAIL WITH (NOLOCK)  
+                    FROM sbo.TASKDETAIL WITH (NOLOCK)  
                     WHERE STORERKEY = @cStorerKey  
                     AND TASKDETAILKEY = @cTaskdetailKey  
     
                     SET @fCASECNT = 0.0  
                     SELECT @fCASECNT = PACK.CASECNT  
-                    FROM SKU WITH (NOLOCK)  
-                    JOIN PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
+                    FROM dbo.SKU WITH (NOLOCK)  
+                    JOIN dbo.PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
                     WHERE SKU.SKU = @cSKU  
                     AND SKU.STORERKEY = @cStorerkey  
     
                     IF NOT EXISTS (  
                         SELECT TOP 1 1  
-                        FROM ORDERS O WITH (NOLOCK)  
-                        JOIN CODELKUP C WITH (NOLOCK) ON O.[TYPE] = C.CODE AND O.STORERKEY = C.STORERKEY  
+                        FROM dbo.ORDERS O WITH (NOLOCK)  
+                        JOIN dbo.CODELKUP C WITH (NOLOCK) ON O.[TYPE] = C.CODE AND O.STORERKEY = C.STORERKEY  
                         WHERE ORDERKEY = @cOrderKey  
                         AND C.LISTNAME = 'PCSCTN1812'  
                         AND C.SHORT = '1')  
@@ -216,13 +216,13 @@ BEGIN
                     BEGIN  
                         SET @cPickslipNo = ''  
                         SELECT @cPickslipNo = PickSlipNo  
-                        FROM PACKHEADER WITH (NOLOCK)  
+                        FROM dbo.PACKHEADER WITH (NOLOCK)  
                         WHERE ORDERKEY = @cOrderKey  
     
                         IF ISNULL(@cPickslipNo,'') = ''  
                         BEGIN  
                             SELECT TOP 1 @cPickSlipNo = PickHeaderKey  
-                            FROM PICKHEADER WITH (NOLOCK)  
+                            FROM dbo.PICKHEADER WITH (NOLOCK)  
                             WHERE OrderKey = @cOrderKey  
                         END  
     
@@ -244,8 +244,8 @@ BEGIN
                         SELECT TOP 1 @cSuggLabelNo  = PD.LabelNo  
                                     , @nSuggCartonNo = PD.CartonNo  
                                     --, @cPickslipNo = PD.PickSlipNo  
-                        FROM PACKDETAIL PD WITH (NOLOCK)  
-                        JOIN PACKHEADER PH WITH (NOLOCK) ON PD.PICKSLIPNO = PH.PICKSLIPNO  
+                        FROM dbo.PACKDETAIL PD WITH (NOLOCK)  
+                        JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON PD.PICKSLIPNO = PH.PICKSLIPNO  
                         WHERE PH.ORDERKEY = @cOrderKey  
                         AND PH.STORERKEY = @cStorerkey  
                         AND PD.AddWho = 'rdt.' + SUSER_SNAME()  
@@ -274,7 +274,7 @@ BEGIN
                 SET @nPDSumQty = 0  
     
                 SELECT @nPDSumQty = SUM(QTY)  
-                FROM PICKDETAIL WITH (NOLOCK)  
+                FROM dbo.PICKDETAIL WITH (NOLOCK)  
                 WHERE STORERKEY = @cStorerkey  
                 AND STATUS = '5'  
                 AND DROPID = @cDropID  
@@ -289,7 +289,7 @@ BEGIN
                 SET @cMBOLKey = ''  
                 SET @cOrderKey = ''  
                 SELECT @cOrderKey = Orderkey  
-                FROM TASKDETAIL WITH (NOLOCK)  
+                FROM dbo.TASKDETAIL WITH (NOLOCK)  
                 WHERE STORERKEY = @cStorerKey  
                 AND TASKDETAILKEY = @cTaskdetailKey  
     
@@ -361,7 +361,7 @@ BEGIN
                     BEGIN  
     
                         SELECT @cExternOrderkey = EXTERNORDERKEY  
-                        FROM ORDERS WITH (NOLOCK)  
+                        FROM dbo.ORDERS WITH (NOLOCK)  
                         WHERE ORDERKEY = @cOrderKey  
     
                         INSERT INTO @tManiLaneLBL (Variable, Value) VALUES  
@@ -490,21 +490,31 @@ BEGIN
                     END  
                     ELSE IF @cPieceOpenCarton = '2'
                     BEGIN
+                        DECLARE @nTranCount1812 INT = @@TRANCOUNT;
                         BEGIN TRY
-                            BEGIN TRAN rdt_1812ExtScnAU
-                            
-                            UPDATE TASKDETAIL WITH (ROWLOCK)
+                            IF @nTranCount1812 = 0
+                                BEGIN TRAN;
+                            ELSE
+                                SAVE TRAN rdt_1812ExtScnAU;
+
+                            UPDATE dbo.TASKDETAIL WITH (ROWLOCK)
                             SET CASEID = ISNULL(@cActLabelNo,'')
-                            WHERE TASKDETAILKEY = @cTaskdetailKey
-                            
-                            COMMIT TRAN rdt_1812ExtScnAU
+                            WHERE TASKDETAILKEY = @cTaskdetailKey;
+
+                            IF @nTranCount1812 = 0
+                                COMMIT TRAN;
                         END TRY
                         BEGIN CATCH
-                            IF @@TRANCOUNT > 0
-                                ROLLBACK TRAN rdt_1812ExtScnAU
-                            SET @nErrNo = 267614
-                            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                            GOTO Quit
+                            IF XACT_STATE() <> 0
+                            BEGIN
+                                IF @nTranCount1812 = 0
+                                    ROLLBACK TRAN;
+                                ELSE
+                                    ROLLBACK TRAN rdt_1812ExtScnAU;
+                            END
+                            SET @nErrNo = 267614;
+                            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP');
+                            GOTO Quit;
                         END CATCH
                     END
     
@@ -518,7 +528,7 @@ BEGIN
                     DECLARE @nTaskQty INT = 0  
     
                     SELECT @nTaskQty = QTY  
-                    FROM TASKDETAIL WITH (NOLOCK)  
+                    FROM dbo.TASKDETAIL WITH (NOLOCK)  
                     WHERE TASKDETAILKEY = @cTaskdetailKey  
                     AND STORERKEY = @cStorerKey
     
@@ -543,7 +553,7 @@ BEGIN
                     SET @cMBOLKey = ''  
                     SET @cOrderKey = ''  
                     SELECT @cOrderKey = Orderkey  
-                    FROM TASKDETAIL WITH (NOLOCK)  
+                    FROM dbo.TASKDETAIL WITH (NOLOCK)  
                     WHERE STORERKEY = @cStorerKey  
                     AND TASKDETAILKEY = @cTaskdetailKey  
     
@@ -614,7 +624,7 @@ BEGIN
                         BEGIN  
     
                             SELECT @cExternOrderkey = EXTERNORDERKEY  
-                            FROM ORDERS WITH (NOLOCK)  
+                            FROM dbo.ORDERS WITH (NOLOCK)  
                             WHERE ORDERKEY = @cOrderKey  
     
                             INSERT INTO @tManiLaneLBL (Variable, Value) VALUES  
@@ -717,13 +727,13 @@ BEGIN
     
                     SET @cOrderKey = ''  
                     SELECT @cOrderKey = Orderkey  
-                    FROM TASKDETAIL WITH (NOLOCK)  
+                    FROM dbo.TASKDETAIL WITH (NOLOCK)  
                     WHERE STORERKEY = @cStorerKey  
                     AND TASKDETAILKEY = @cTaskdetailKey  
     
                     SET @cOrderType = ''  
                     SELECT @cOrderType = [TYPE]  
-                    FROM ORDERS WITH (NOLOCK)  
+                    FROM dbo.ORDERS WITH (NOLOCK)  
                     WHERE STORERKEY = @cStorerKey  
                     AND ORDERKEY = @cOrderKey  
     
@@ -846,7 +856,7 @@ BEGIN
                         BEGIN  
     
                         SELECT @cExternOrderkey = EXTERNORDERKEY  
-                        FROM ORDERS WITH (NOLOCK)  
+                        FROM dbo.ORDERS WITH (NOLOCK)  
                         WHERE ORDERKEY = @cOrderKey  
     
                         INSERT INTO @tManiLaneLBL (Variable, Value) VALUES  
@@ -871,7 +881,7 @@ BEGIN
                     END  
                     END  
     
-                    IF EXISTS (SELECT TOP 1 1 FROM PALLET WITH (NOLOCK) WHERE PALLETKEY = @cDropID)  
+                    IF EXISTS (SELECT TOP 1 1 FROM dbo.PALLET WITH (NOLOCK) WHERE PALLETKEY = @cDropID)  
                     BEGIN  
     
                         IF ISNULL(@cPalletLabel,'') <> '' AND ISNULL(@cLabelPrinter,'') <> ''  
