@@ -293,7 +293,6 @@ BEGIN
          ' WHERE PD.PickSlipNo = @cPickSlipNo ' +
             ' AND PD.StorerKey = @cStorerKey ' +
             ' AND PD.SKU = @cSKU '  +
-            CASE WHEN @cFromDropID <> '' AND @cPackByFromDropID = '1' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
             CASE WHEN @cPackFilter <> '' THEN @cPackFilter ELSE '' END
       SET @cSQLParam =
          ' @cPickSlipNo NVARCHAR( 10), ' +
@@ -389,7 +388,6 @@ BEGIN
                ' AND PD.StorerKey = @cStorerKey ' +
                ' AND PD.SKU = @cSKU ' +
                ' AND PD.Status IN (' + @cPickStatus + ') ' +
-               CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam =
             ' @cOrderKey   NVARCHAR( 10), ' +
@@ -470,7 +468,6 @@ BEGIN
                ' AND PD.StorerKey = @cStorerKey ' +
                ' AND PD.SKU = @cSKU ' +
                ' AND PD.Status IN (' + @cPickStatus + ') ' +
-               CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam =
             ' @cLoadKey    NVARCHAR( 10), ' +
@@ -545,7 +542,6 @@ BEGIN
                ' AND PD.StorerKey = @cStorerKey ' +
                ' AND PD.SKU = @cSKU ' +
                ' AND PD.Status IN (' + @cPickStatus + ') ' +
-               CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam =
             ' @cPickSlipNo NVARCHAR( 10), ' +

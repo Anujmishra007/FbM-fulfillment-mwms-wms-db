@@ -47,7 +47,9 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @nDebugFlag  INT = 0,
-   @cLottable01         NVARCHAR(30)
+   @cLottable01         NVARCHAR(30),
+   @cOption             NVARCHAR(2),
+   @cToDropID           NVARCHAR(20)
    
    DECLARE @tDecodeList TABLE
    (
@@ -89,18 +91,43 @@ BEGIN
                   GOTO Quit
                END
 
-               IF NOT EXISTS (SELECT 1 FROM SerialNo SN WITH (NOLOCK)
-                  JOIN PickDetail PD (NOLOCK) ON PD.StorerKey = @cStorerKey AND PD.Status <= '5' AND PD.SKU = SN.SKU
-                  JOIN RDT.rdtPickLog PL (NOLOCK) ON PD.DropID = PL.DropID AND PL.StorerKey = @cStorerKey AND PL.Mobile = @nMobile AND PL.Status = '0'
-                  JOIN LOTAttribute LA (NOLOCK) ON PD.LOT = LA.LOT AND PD.SKU = LA.SKU AND PD.StorerKey = LA.StorerKey
-                  WHERE SN.StorerKey = @cStorerKey
-                  AND SN.SerialNo = @cSerialNo
-                  AND LA.Lottable01 = @cLottable01
-               )
+               -- Get Option and ToDropID from RDTMOBREC
+               SELECT @cOption = C_String1, @cToDropID = V_String9
+               FROM RDT.RDTMOBREC WITH (NOLOCK)
+               WHERE Mobile = @nMobile
+
+               -- Option 1: Validate via rdtPickLog
+               IF @cOption = '1'
                BEGIN
-                  SET @nErrNo = 255759
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --255659 Invalid SerialNo
-                  GOTO Quit
+                  IF NOT EXISTS (SELECT 1 FROM SerialNo SN WITH (NOLOCK)
+                     JOIN PickDetail PD (NOLOCK) ON PD.StorerKey = @cStorerKey AND PD.Status <= '5' AND PD.SKU = SN.SKU
+                     JOIN RDT.rdtPickLog PL (NOLOCK) ON PD.DropID = PL.DropID AND PL.StorerKey = @cStorerKey AND PL.Mobile = @nMobile AND PL.Status = '0'
+                     JOIN LOTAttribute LA (NOLOCK) ON PD.LOT = LA.LOT AND PD.SKU = LA.SKU AND PD.StorerKey = LA.StorerKey
+                     WHERE SN.StorerKey = @cStorerKey
+                     AND SN.SerialNo = @cSerialNo
+                     AND LA.Lottable01 = @cLottable01
+                  )
+                  BEGIN
+                     SET @nErrNo = 255759
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --255659 Invalid SerialNo
+                     GOTO Quit
+                  END
+               END
+               ELSE
+               BEGIN
+                  IF NOT EXISTS (SELECT 1 FROM SerialNo SN WITH (NOLOCK)
+                     JOIN PackDetail PKD (NOLOCK) ON PKD.StorerKey = @cStorerKey AND PKD.LabelNo = @cToDropID
+                     JOIN PickDetail PD (NOLOCK) ON PD.StorerKey = @cStorerKey AND PD.DropID = PKD.DropID AND PD.Status <= '5' AND PD.SKU = SN.SKU
+                     JOIN LOTAttribute LA (NOLOCK) ON PD.LOT = LA.LOT AND PD.SKU = LA.SKU AND PD.StorerKey = LA.StorerKey
+                     WHERE SN.StorerKey = @cStorerKey
+                     AND SN.SerialNo = @cSerialNo
+                     AND LA.Lottable01 = @cLottable01
+                  )
+                  BEGIN
+                     SET @nErrNo = 255762
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --255762 Invalid SerialNo
+                     GOTO Quit
+                  END
                END
  
                SELECT @cSKU = SKU FROM SerialNo WHERE SerialNo = @cSerialNo AND StorerKey = @cStorerKey

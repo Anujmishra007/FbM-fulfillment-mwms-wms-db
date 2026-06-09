@@ -373,6 +373,7 @@ BEGIN
          SET @cOutField01 = ''  -- DropID input
          SET @cOutField02 = ''
          SET @cOutField03 = ''
+         SET @cOutField04 = '0'  -- Count of scanned DropIDs
          SET @nAfterStep = 99
          SET @nAfterScn = 6861
          GOTO QUIT
@@ -469,7 +470,6 @@ BEGIN
                IF @cScannedPickSlipNo <> ''
                   SET @cPickSlipNo = @cScannedPickSlipNo
 
-               SET @nCartonNo    = 0
                SET @cLabelNo     = ''
                SET @cCustomNo    = ''
                SET @cCustomID    = ''
@@ -479,7 +479,23 @@ BEGIN
                SET @nTotalPick   = 0
                SET @nTotalPack   = 0
                SET @nTotalShort  = 0
-               SET @cType        = 'NEXT'
+
+               -- If PickSlipNo and PackDtlDropID (LabelNo) both scanned, get CartonNo and use CURRENT
+               IF @cScannedPickSlipNo <> '' AND @cPackDtlDropID <> ''
+               BEGIN
+                  SELECT TOP 1 @nCartonNo = CartonNo
+                  FROM dbo.PackDetail WITH (NOLOCK)
+                  WHERE PickSlipNo = @cScannedPickSlipNo
+                    AND LabelNo = @cPackDtlDropID
+                    AND StorerKey = @cStorerKey
+
+                  SET @cType = 'CURRENT'
+               END
+               ELSE
+               BEGIN
+                  SET @nCartonNo = 0
+                  SET @cType = 'NEXT'
+               END
 
                -- Get task
                EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType
@@ -1002,6 +1018,12 @@ BEGIN
             SET @cOutField01 = ''
             SET @cOutField02 = ''  -- Clear for next scan
             SET @cOutField03 = ''
+            -- Get count of scanned DropIDs
+            SELECT @cOutField04 = CAST(COUNT(DISTINCT DropID) AS NVARCHAR(5))
+            FROM RDT.rdtPickLog WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND Mobile = @nMobile
+               AND Status = '0'
             SET @nAfterStep = 99
             SET @nAfterScn = 6861
             GOTO QUIT
