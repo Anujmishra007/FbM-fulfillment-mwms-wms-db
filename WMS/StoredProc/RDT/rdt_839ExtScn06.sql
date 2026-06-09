@@ -1369,6 +1369,7 @@ BEGIN
                      END
                      ELSE
                      BEGIN
+                        SET @cOutField01 = ''
                         -- Go to No More Task screen
                         SET @nAfterScn = 6828
                         SET @nAfterStep = 99
@@ -2859,6 +2860,7 @@ BEGIN
                                              AND Mobile = @nMobile
                                              AND AddWho = @cUserName)
                               BEGIN
+                                 SET @cOutField01 = ''
                                  -- No more task, complete pick slip
                                  SET @nAfterScn = 6828
                                  SET @nAfterStep = 99
@@ -3606,6 +3608,8 @@ BEGIN
                      END
                      ELSE
                      BEGIN
+                        SET @cOutField01 = ''
+
                         -- Go to No More Task screen
                         SET @nAfterScn = 6828
                         SET @nAfterStep = 99
