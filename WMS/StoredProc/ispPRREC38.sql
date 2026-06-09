@@ -98,12 +98,12 @@ BEGIN
       SELECT DISTINCT RD.Sku, RD.StorerKey
       FROM RECEIPTDETAIL RD WITH (NOLOCK)
       WHERE RD.ReceiptKey = @c_Receiptkey
-      AND ISNULL(RD.UserDefine01,'') <> ''
+      AND (RD.UserDefine01 IS NOT NULL AND RD.UserDefine01 <> '') 
       AND RD.UserDefine01 IN ( -- mono-SKU UCCs only
             SELECT M.UserDefine01
             FROM RECEIPTDETAIL M WITH (NOLOCK)
             WHERE M.ReceiptKey = @c_Receiptkey
-            AND ISNULL(M.UserDefine01,'') <> ''
+            AND (M.UserDefine01 IS NOT NULL AND M.UserDefine01 <> '')
             GROUP BY M.UserDefine01
             HAVING COUNT(DISTINCT M.Sku) = 1
       )
@@ -174,23 +174,25 @@ BEGIN
       /* STEP 5 : Pick the mono-SKU UCC with the HIGHEST EA qty for this  */
       /*          SKU and pull its Notes / Notes2.                        */
       /*-----------------------------------------------------------------*/
+      ;WITH CTE_SingleSkuUCC AS
+      (
+         SELECT M.UserDefine01
+         FROM RECEIPTDETAIL M WITH (NOLOCK)
+         WHERE M.ReceiptKey = @c_Receiptkey
+         AND (M.UserDefine01 IS NOT NULL AND M.UserDefine01 <> '')
+         GROUP BY M.UserDefine01
+         HAVING COUNT(DISTINCT M.Sku) = 1
+      )
       SELECT TOP 1
              @c_UCC    = RD.UserDefine01
            , @n_UCCQty = RD.QtyReceived
-           , @c_Notes  = ISNULL(RD.Notes,'')
-           , @c_Notes2 = ISNULL(RD.Notes2,'')
+           , @c_Notes  = ISNULL(RD.Notes, '')
+           , @c_Notes2 = ISNULL(RD.Notes2, '')
       FROM RECEIPTDETAIL RD WITH (NOLOCK)
+      JOIN CTE_SingleSkuUCC S ON S.UserDefine01 = RD.UserDefine01
       WHERE RD.ReceiptKey = @c_Receiptkey
-      AND RD.Sku = @c_Sku
-      AND ISNULL(RD.UserDefine01,'') <> ''
-      AND RD.UserDefine01 IN (
-            SELECT M.UserDefine01
-            FROM RECEIPTDETAIL M WITH (NOLOCK)
-            WHERE M.ReceiptKey = @c_Receiptkey
-            AND ISNULL(M.UserDefine01,'') <> ''
-            GROUP BY M.UserDefine01
-            HAVING COUNT(DISTINCT M.Sku) = 1
-      )
+      AND   RD.Sku = @c_Sku
+      AND   (RD.UserDefine01 IS NOT NULL AND RD.UserDefine01 <> '') 
       ORDER BY RD.QtyReceived DESC
  
       IF ISNULL(@c_UCC,'') = '' OR ISNULL(@n_UCCQty,0) <= 0
@@ -299,6 +301,12 @@ BEGIN
    DEALLOCATE cur_Sku
  
    QUIT_SP:
+   IF CURSOR_STATUS('LOCAL', 'cur_Sku') IN (0 , 1)
+   BEGIN
+      CLOSE cur_Sku
+      DEALLOCATE cur_Sku
+   END
+  
    IF @n_continue = 3  -- Error Occured - Process And Return
    BEGIN
       SET @b_success = 0
