@@ -1,16 +1,16 @@
-﻿--rdt_838ExtScn07_Message
+--rdt_838ExtScn07_Message
 --FCR-7820
-EXEC rdt.rdtdropmsg 180061 ,180070
+EXEC rdt.rdtdropmsg 269551 ,269600
 
-EXECUTE rdt.rdtAddMsg 180061, 10, '180061 InvalidCartonType',     'us_english', 838, 0, ''
-EXECUTE rdt.rdtAddMsg 180062, 10, '180062 AlreadyScanned',        'us_english', 838, 0, ''
-EXECUTE rdt.rdtAddMsg 180063, 10, '180063 InsertLogFailed',       'us_english', 838, 0, ''
-EXECUTE rdt.rdtAddMsg 180064, 10, '180064 CannotScanToDropid',       'us_english', 838, 0, ''
-EXECUTE rdt.rdtAddMsg 180065, 10, '180065 DiffPickSlipNo',          'us_english', 838, 0, ''
-EXECUTE rdt.rdtAddMsg 180068, 10, '180068 InvalidPickSlipNo',       'us_english', 838, 0, ''
-EXECUTE rdt.rdtAddMsg 180069, 10, '180069 InvalidToDropid',         'us_english', 838, 0, ''
-EXECUTE rdt.rdtAddMsg 180066, 10, '180066 GenPickSlipFail',         'us_english', 838, 0, ''
-EXECUTE rdt.rdtAddMsg 180067, 10, '180067 InsPickHdrFail',          'us_english', 838, 0, ''
-
+EXECUTE rdt.rdtAddMsg 269551, 10, '269551 InvalidCartonType',       'us_english', 838, 0, ''
+EXECUTE rdt.rdtAddMsg 269552, 10, '269552 AlreadyScanned',          'us_english', 838, 0, ''
+EXECUTE rdt.rdtAddMsg 269553, 10, '269553 InsertLogFailed',         'us_english', 838, 0, ''
+EXECUTE rdt.rdtAddMsg 269554, 10, '269554 CannotScanToDropid',      'us_english', 838, 0, ''
+EXECUTE rdt.rdtAddMsg 269555, 10, '269555 DiffPickSlipNo',          'us_english', 838, 0, ''
+EXECUTE rdt.rdtAddMsg 269556, 10, '269556 InvalidPickSlipNo',       'us_english', 838, 0, ''
+EXECUTE rdt.rdtAddMsg 269557, 10, '269557 InvalidToDropid',         'us_english', 838, 0, ''
+EXECUTE rdt.rdtAddMsg 269558, 10, '269558 GenPickSlipFail',         'us_english', 838, 0, ''
+EXECUTE rdt.rdtAddMsg 269559, 10, '269559 InsPickHdrFail',          'us_english', 838, 0, ''
+EXECUTE rdt.rdtAddMsg 269560, 10, '269560 InvalidOption',           'us_english', 838, 0, ''
 
 

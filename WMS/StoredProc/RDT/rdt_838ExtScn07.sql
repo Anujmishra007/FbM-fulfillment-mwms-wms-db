@@ -412,7 +412,7 @@ BEGIN
                HAVING COUNT(DropID)>1
             )
             BEGIN
-               SET @nErrNo = 180064
+               SET @nErrNo = 269554
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                EXEC rdt.rdtSetFocusField @nMobile, 2
                GOTO Quit
@@ -425,7 +425,7 @@ BEGIN
                  AND ISNULL(OrderKey, '') = ''
             )
             BEGIN
-               SET @nErrNo = 180068
+               SET @nErrNo = 269556
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidPickSlipNo
                EXEC rdt.rdtSetFocusField @nMobile, 1
                GOTO Quit
@@ -454,7 +454,7 @@ BEGIN
                  AND PickSlipNo = @cScannedPickSlipNo
             )
             BEGIN
-               SET @nErrNo = 180069
+               SET @nErrNo = 269557
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidToDropid
                EXEC rdt.rdtSetFocusField @nMobile, 3
                GOTO Quit
@@ -640,7 +640,7 @@ BEGIN
                   AND Status = '0'
             )
             BEGIN
-               SET @nErrNo = 180062
+               SET @nErrNo = 269552
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Already Scanned
                EXEC rdt.rdtSetFocusField @nMobile, 2
                SET @cOutField02 = ''
@@ -700,7 +700,7 @@ BEGIN
                      EXECUTE nspg_GetKey 'PICKSLIP', 9, @cNewPickSlipNo OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
                      IF @bSuccess <> 1
                      BEGIN
-                        SET @nErrNo = 180066
+                        SET @nErrNo = 269558
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- GenPickSlipFail
                         GOTO Quit
                      END
@@ -712,7 +712,7 @@ BEGIN
                         VALUES (@cNewPickSlipNo, '', @cOrderKey, '0', '', @cStorerKey, @cWaveKey)
                      END TRY
                      BEGIN CATCH
-                        SET @nErrNo = 180067
+                        SET @nErrNo = 269559
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- InsPickHdrFail
                         GOTO Quit
                      END CATCH
@@ -740,7 +740,7 @@ BEGIN
                  AND PickSlipNo = @cPickSlipNo
             )
             BEGIN
-               SET @nErrNo = 180069
+               SET @nErrNo = 269557
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidToDropid
                EXEC rdt.rdtSetFocusField @nMobile, 3
                GOTO Quit
@@ -756,7 +756,7 @@ BEGIN
 
             IF @cExistingPickSlipNo IS NOT NULL AND @cExistingPickSlipNo <> @cPickSlipNo
             BEGIN
-               SET @nErrNo = 180065
+               SET @nErrNo = 269555
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DiffPickSlipNo
                EXEC rdt.rdtSetFocusField @nMobile, 2
                SET @cOutField02 = ''
@@ -883,7 +883,7 @@ BEGIN
                   )
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 180063
+               SET @nErrNo = 269553
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert Failed
                GOTO Quit
             END CATCH
@@ -1190,7 +1190,7 @@ BEGIN
             AND CL.Code = @cCartonType
             AND CL.UDF01 = 'Y')
             BEGIN
-               SET @nErrNo = 180061
+               SET @nErrNo = 269551
                SET @cErrMsg = rdt.rdtgetmessageLong( @nErrNo, @cLangCode, 'DSP') --Invalid Carton Type
                EXEC rdt.rdtSetFocusField @nMobile, 2
                GOTO Quit

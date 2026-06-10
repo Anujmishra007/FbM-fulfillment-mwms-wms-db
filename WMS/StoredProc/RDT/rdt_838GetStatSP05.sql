@@ -11,7 +11,7 @@ GO
 /* 2026-01-07 1.0  Dennis      FCR-7820 Created                         */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_838GetStatSP05 (
+CREATE OR ALTER PROC rdt.rdt_838GetStatSP05 (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
@@ -42,10 +42,24 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
+
    DECLARE @cSQL           NVARCHAR(MAX)
    DECLARE @cSQLParam      NVARCHAR(MAX)
    DECLARE @cGetStatSP     NVARCHAR(20)
+   DECLARE @cOption        NVARCHAR(1)
+
+   -- Get Option from rdtMobRec
+   SELECT @cOption = ISNULL(RTRIM(I_Field09), '')
+   FROM rdt.rdtMobRec WITH (NOLOCK)
+   WHERE Mobile = @nMobile
+
+   -- Validate Option on Step 2 with InputKey 1
+   IF @nStep = 2 AND @nInputKey = 1 AND @cOption = ''
+   BEGIN
+      SET @nErrNo = 269560
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --'InvalidOption'
+      GOTO Quit
+   END
 
    /***********************************************************************************************
                                              Standard GetStat
