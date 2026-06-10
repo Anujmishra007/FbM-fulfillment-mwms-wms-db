@@ -56,6 +56,7 @@ BEGIN
       @nRowCount              INT = 0,
       @cPickDetailUOM         NVARCHAR( 10),
       @cSuggLOC               NVARCHAR( 10),
+      @cSuggID                NVARCHAR(20),
       @cSuggSKU               NVARCHAR( 20),
       @cSuggUCC               NVARCHAR( 20),
       @cSuggLot               NVARCHAR( 10),
@@ -106,6 +107,7 @@ BEGIN
                @cSuggSKU = V_SKU,
                @nSuggQTY = V_QTY,
                @cSuggLOC = V_LOC,
+               @cSuggID  = V_String38,
                @cSuggUCC = C_String1,
                @cSuggLot = C_String2
             FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
@@ -184,6 +186,7 @@ BEGIN
 
                SELECT 
                   @cScannedUCCLoc = Loc,
+                  @cScannedID     = ID,
                   @cScannedUCCLot = Lot,
                   @cScannedUCCSKU = SK.SKU,
                   @nScannedUCCQty = Qty,
@@ -256,6 +259,13 @@ BEGIN
                   BEGIN
                      SET @nErrNo = 255453
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Loc does not match
+                     GOTO Quit
+                  END
+
+                  IF ISNULL(@cSuggID, '') <> ISNULL(@cScannedID, '')
+                  BEGIN
+                     SET @nErrNo = 255468
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID does not match
                      GOTO Quit
                   END
 
@@ -393,6 +403,13 @@ BEGIN
                BEGIN
                   SET @nErrNo = 255462
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Loc does not match
+                  GOTO Quit
+               END
+
+               IF ISNULL(@cScannedID,'') <> ISNULL(@cSuggID, '')
+               BEGIN
+                  SET @nErrNo = 255464
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID does not match
                   GOTO Quit
                END
 
