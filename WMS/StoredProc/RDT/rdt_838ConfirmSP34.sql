@@ -605,6 +605,9 @@ BEGIN
       END
    END
 
+   DECLARE @cRefNo1  NVARCHAR(20) = ''
+   SET @cRefNo1 = ISNULL(TRY_CAST(@nCartonNo AS NVARCHAR(20)), '')
+
    --YeeKung      
    EXEC RDT.rdt_STD_EventLog           
       @cActionType         = '3',              
@@ -616,7 +619,7 @@ BEGIN
       @cUCC                = @cUCCNo,    
       @cOrderKey           = @cOrderKey,    
       @cSKU                = @cSKU,  
-      @cRefNo1             = ISNULL(TRY_CAST(@nCartonNo AS NVARCHAR(20)), ''),
+      @cRefNo1             = @cRefNo1,
       @cPickSlipNo         = @cPickSlipNo,
       @cLabelNo            = @cLabelNo
 
