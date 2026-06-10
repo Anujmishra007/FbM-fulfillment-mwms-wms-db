@@ -499,6 +499,23 @@ BEGIN
                END
                ELSE
                BEGIN
+                  -- Print pallet label
+                  DELETE FROM @tPrintParam
+                  INSERT INTO @tPrintParam (Variable, Value)
+                  VALUES
+                     ('@cToID', @cToID),
+                     ('@cReceiptKey', @cReceiptKey)
+
+                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+                     'PALLETLBL',      -- Report type
+                     @tPrintParam,     -- Report params
+                     'rdt_898ExtScn07',
+                     @nErrNo  OUTPUT,
+                     @cErrMsg OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO Quit
+
                   -- Go to TO ID screen (Screen 3)
                   UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
                   SET V_String50 = '', V_String49 = ''
@@ -1294,47 +1311,6 @@ BEGIN
    END
 
    /*==========================================================================
-   FCR-13584: Screen 3 (TO ID) - Print pallet label on ESC from step 4
-   Merged from rdt_898ExtScn10
-   ==========================================================================*/
-   IF @nScn = @nScn_3  -- 1302
-   BEGIN
-      -- Check if returning from step 4 (ESC from Estimate UCC screen)
-      IF @nCurrentStep = @nStep_4 AND @nInputKey = 0
-      BEGIN
-         -- Check if Receipt.ProcessType = 'C' or 'N' and has received qty on this pallet
-         IF EXISTS (
-            SELECT 1
-            FROM dbo.Receipt R WITH (NOLOCK)
-            JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey = RD.ReceiptKey AND R.StorerKey = RD.StorerKey
-            WHERE R.ReceiptKey = @cReceiptKey
-               AND R.StorerKey = @cStorerKey
-               AND R.ProcessType IN ('C', 'N')
-               AND RD.ToID = @cToID
-               AND RD.BeforeReceivedQTY > 0
-         )
-         BEGIN
-            -- Print pallet label
-            DELETE FROM @tPrintParam
-            INSERT INTO @tPrintParam (Variable, Value)
-            VALUES
-               ('@cID', @cToID),
-               ('@cReceiptKey', @cReceiptKey)
-
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-               'PALLETLBL',      -- Report type
-               @tPrintParam,     -- Report params
-               'rdt_898ExtScn07',
-               @nErrNo  OUTPUT,
-               @cErrMsg OUTPUT
-
-            IF @nErrNo <> 0
-               GOTO Quit
-         END
-      END
-   END
-
-   /*==========================================================================
    FCR-13584: Step 12 (Close pallet) - Print pallet label on option 2 or 3
    Merged from rdt_898ExtScn10
    ==========================================================================*/
@@ -1349,7 +1325,7 @@ BEGIN
          DELETE FROM @tPrintParam
          INSERT INTO @tPrintParam (Variable, Value)
          VALUES
-            ('@cID', @cToID),
+            ('@cToID', @cToID),
             ('@cReceiptKey', @cReceiptKey)
 
          -- Print pallet label
