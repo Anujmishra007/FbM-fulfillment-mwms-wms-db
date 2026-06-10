@@ -262,7 +262,7 @@ BEGIN
                      GOTO Quit
                   END
 
-                  IF @cSuggID <> @cScannedID
+                  IF ISNULL(@cSuggID, '') <> ISNULL(@cScannedID, '')
                   BEGIN
                      SET @nErrNo = 255468
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID does not match
