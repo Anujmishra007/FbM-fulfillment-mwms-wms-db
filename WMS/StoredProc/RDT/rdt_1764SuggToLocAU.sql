@@ -112,8 +112,10 @@ BEGIN
             SET SUGGESTEDLOC = @cNewSuggToLOC
             WHERE TASKDETAILKEY = @cTaskDetailKey
 
-            INSERT INTO dbo.LOTxLOCxID (Lot,Loc,ID,Storerkey,Sku)
-            SELECT @cFromLot, @cNewSuggToLOC, @cToID, @cStorerKey, @cSKU
+            IF NOT EXISTS (SELECT 1 FROM dbo.LOTxLOCxID WITH (UPDLOCK, HOLDLOCK) WHERE LOT = @cFromLot AND LOC = @cNewSuggToLOC AND ID = @cToID)
+                INSERT INTO dbo.LOTxLOCxID WITH (ROWLOCK)
+                (Lot,Loc,ID,Storerkey,Sku)
+                VALUES (@cFromLot, @cNewSuggToLOC, @cToID, @cStorerKey, @cSKU)
 
             -- Remove pending move-in for old location
             EXECUTE dbo.nspPendingMoveInUpdate
