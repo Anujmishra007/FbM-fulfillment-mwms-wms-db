@@ -5,7 +5,6 @@ execute rdt.rdtDropMsg 268451, 268500
 execute rdt.rdtAddMsg 268451, 10, '268451 IDNotExistInRcptDetail',      'us_english', 1819, 0, '268451 ID does not exist in ReceiptDetail'
 execute rdt.rdtAddMsg 268453, 10, '268453 NotAllowMix',                 'us_english', 1819, 0, '268453 Not allow mix of Mono-SKU UCCs, Multi-SKU UCCs and Loose inventory'
 execute rdt.rdtAddMsg 268454, 10, '268454 NotAllowMix',                 'us_english', 1819, 0, '268454 Not allow mix GOO and non-GOO inventory'
-execute rdt.rdtAddMsg 268455, 10, '268455 NotAllowMix',                 'us_english', 1819, 0, '268455 Not allow mix None-DAM and DAM inventory'
 execute rdt.rdtAddMsg 268456, 10, '268456 LocMustBeVAS',                'us_english', 1819, 0, '268456 Location must be VAS for DAM inventory'
 execute rdt.rdtAddMsg 268457, 10, '268457 NotAllowMixSKU',              'us_english', 1819, 0, '268457 Not allow to mix SKU on ToLoc'
 execute rdt.rdtAddMsg 268458, 10, '268458 NotAllowMixSKU',              'us_english', 1819, 0, '268458 Not allow to mix SKU on ToLoc'
