@@ -29,6 +29,7 @@ CREATE OR ALTER PROCEDURE [WM].[lsp_JDBCQueryConverter_Wrapper]
    @c_StorerKey NVARCHAR(10),
    @c_ConfigKey NVARCHAR(20),
    @c_ConvertedSQLStr NVARCHAR(MAX) OUTPUT,
+   @c_ConvertedCountSQLStr NVARCHAR(MAX) OUTPUT,
    @b_Success INT OUTPUT,
    @n_err INT OUTPUT,
    @c_ErrMsg NVARCHAR(215) OUTPUT,
@@ -107,15 +108,11 @@ BEGIN
          [logicalOperation] NVARCHAR(10) '$.logicalOperation'
       ) AS NonMandatorySearchClauses
 
-      --debug
-      SELECT * FROM #TMP_SCE_SEARCHING_CRITERIAS
-
-
       SET @c_SQL_CallSP = 'EXEC ' + @c_CustomSPName + 
-      ' @c_SQLStr = @c_SQLStr, @c_ConvertedSQLStr = @c_ConvertedSQLStr OUTPUT'
+      ' @c_SQLStr = @c_SQLStr, @c_ConvertedSQLStr = @c_ConvertedSQLStr OUTPUT, @c_ConvertedCountSQLStr = @c_ConvertedCountSQLStr OUTPUT'
       EXEC sp_executesql @c_SQL_CallSP, 
-         N'@c_SQLStr NVARCHAR(MAX), @c_ConvertedSQLStr NVARCHAR(MAX) OUTPUT', 
-         @c_SQLStr, @c_ConvertedSQLStr OUTPUT
+         N'@c_SQLStr NVARCHAR(MAX), @c_ConvertedSQLStr NVARCHAR(MAX) OUTPUT, @c_ConvertedCountSQLStr NVARCHAR(MAX) OUTPUT', 
+         @c_SQLStr, @c_ConvertedSQLStr OUTPUT, @c_ConvertedCountSQLStr OUTPUT
    END
    ELSE
    BEGIN
