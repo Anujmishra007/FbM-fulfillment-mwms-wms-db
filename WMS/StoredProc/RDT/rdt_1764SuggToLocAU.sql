@@ -47,7 +47,11 @@ BEGIN
     SELECT @cStorerKey = StorerKey,  
             @cFacility = Facility  
     FROM rdt.RDTMOBREC WITH (NOLOCK)  
-    WHERE Mobile = @nMobile  
+    WHERE Mobile = @nMobile 
+
+    SET @cNewSuggToLOC = ''
+    SET @nErrNo = 0
+    SET @cErrMsg = '' 
     
     SELECT @cToLoc = ToLoc  
             , @cFromLoc = FromLoc  

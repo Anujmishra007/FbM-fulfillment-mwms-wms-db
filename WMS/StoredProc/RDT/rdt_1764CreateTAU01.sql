@@ -12,7 +12,7 @@ GO
 /*                            allocated for an order in ToLoc                 */  
 /******************************************************************************/  
   
-CREATE PROC [RDT].[rdt_1764CreateTAU01] (  
+CREATE OR ALTER PROC [RDT].[rdt_1764CreateTAU01] (  
    @nMobile        INT,  
    @nFunc          INT,  
    @cLangCode      NVARCHAR( 3),  
@@ -183,12 +183,17 @@ BEGIN
    SET @cToLocAisle = ''  
    SET @cToLocType = ''  
    SET @cToLocCat  = ''  
-   SELECT @cToLOCPAZone = PutawayZone  
-        , @cToLocAisle = LocAisle  
-        , @cToLocType = LocationType  
-        , @cToLocCat  = LocationCategory  
-        , @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC  
-   SELECT @cToLOCAreaKey = AreaKey FROM AreaDetail WITH (NOLOCK) WHERE PutawayZone = @cToLOCPAZone  
+   SELECT @cToLOCPAZone = L.PutawayZone  
+        , @cToLocAisle  = L.LocAisle  
+        , @cToLocType   = L.LocationType  
+        , @cToLocCat    = L.LocationCategory  
+        , @cFacility    = L.Facility 
+   FROM dbo.LOC L WITH (NOLOCK) 
+   WHERE L.LOC = @cToLOC  
+
+   SELECT @cToLOCAreaKey = AD.AreaKey 
+   FROM dbo.AreaDetail AD WITH (NOLOCK) 
+   WHERE AD.PutawayZone = @cToLOCPAZone  
   
    --Get ToLoc as PICK Location based on:  
    --1. SKU+Lot exists in PICK Location  
@@ -199,34 +204,34 @@ BEGIN
    SET @cFinalLOC = ''  
   
    --GET SKU+LOT EXISTS RECORDS  
-   SELECT TOP 1 @cFinalLOC = LOC.LOC  
-   FROM @tTask task  
-   JOIN LOTATTRIBUTE TASKLA WITH (NOLOCK) ON TASKLA.LOT = TASK.LOT AND TASKLA.STORERKEY = TASK.STORERKEY  
-   JOIN LOTXLOCXID LLI WITH (NOLOCK) ON Task.Storerkey = LLI.Storerkey AND TASK.SKU = LLI.SKU  
-   JOIN LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC AND LOC.LOC <> task.ToLoc AND LOC.LOC <> TASK.FROMLOC  
-   JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.STORERKEY = LA.STORERKEY  
+   SELECT TOP 1 @cFinalLOC = L.LOC  
+   FROM @tTask Task  
+   JOIN dbo.LOTATTRIBUTE TASKLA WITH (NOLOCK) ON TASKLA.LOT = TASK.LOT AND TASKLA.STORERKEY = TASK.STORERKEY  
+   JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) ON Task.Storerkey = LLI.Storerkey AND TASK.SKU = LLI.SKU  
+   JOIN dbo.LOC L WITH (NOLOCK) ON LLI.LOC = L.LOC AND L.LOC <> task.ToLoc AND L.LOC <> TASK.FROMLOC  
+   JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.STORERKEY = LA.STORERKEY  
    WHERE LLI.STORERKEY = @cStorerKey  
-   AND LOC.LOCATIONTYPE = 'PICK'  
-   AND LOC.LOCATIONCATEGORY = CASE WHEN @cToLocType = 'PICK' AND ISNULL(@cSkipInnerTask,'') <> '1' THEN 'PICK'  
+   AND L.LOCATIONTYPE = 'PICK'  
+   AND L.LOCATIONCATEGORY = CASE WHEN @cToLocType = 'PICK' AND ISNULL(@cSkipInnerTask,'') <> '1' THEN 'PICK'  
                                    WHEN @cToLocType = 'CASE' THEN 'CLS'  
-                                   ELSE LOC.LOCATIONCATEGORY END  
-   AND LOC.STATUS = 'OK'  
-   AND LOC.LOCATIONFLAG = 'NONE'  
-   AND LOC.FACILITY = @cFacility  
+                                   ELSE L.LOCATIONCATEGORY END  
+   AND L.STATUS = 'OK'  
+   AND L.LOCATIONFLAG = 'NONE'  
+   AND L.FACILITY = @cFacility  
    AND LLI.QTY - LLI.QTYPICKED + LLI.PENDINGMOVEIN > 0  
-   ORDER BY CASE WHEN LOC.LOCAISLE = @cToLocAisle THEN 1 ELSE 2 END  
-   , LOC.PUTAWAYZONE  
+   ORDER BY CASE WHEN L.LOCAISLE = @cToLocAisle THEN 1 ELSE 2 END  
+   , L.PUTAWAYZONE  
   
    --CHECK PENDING TASKS THAT HAS THE SAME SKU+LOT  
    IF ISNULL(@cFinalLOC,'') = ''  
    BEGIN  
       SELECT TOP 1 @cFinalLOC = LOC.LOC  
       FROM @tTask task  
-      JOIN LOTATTRIBUTE TASKLA WITH (NOLOCK) ON TASKLA.LOT = TASK.LOT AND TASKLA.STORERKEY = TASK.STORERKEY  
-      JOIN TASKDETAIL TD WITH (NOLOCK) ON Task.Storerkey = TD.Storerkey AND TASK.SKU = TD.SKU  
+      JOIN dbo.LOTATTRIBUTE TASKLA WITH (NOLOCK) ON TASKLA.LOT = TASK.LOT AND TASKLA.STORERKEY = TASK.STORERKEY  
+      JOIN dbo.TASKDETAIL TD WITH (NOLOCK) ON Task.Storerkey = TD.Storerkey AND TASK.SKU = TD.SKU  
                                           AND TD.TASKDETAILKEY <> TASK.TASKDETAILKEY  
-      JOIN LOC WITH (NOLOCK) ON TD.TOLOC = LOC.LOC AND LOC.LOC <> task.ToLoc AND LOC.LOC <> TASK.FROMLOC  
-      JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON TD.LOT = LA.LOT AND TD.STORERKEY = LA.STORERKEY  
+      JOIN dbo.LOC WITH (NOLOCK) ON TD.TOLOC = LOC.LOC AND LOC.LOC <> task.ToLoc AND LOC.LOC <> TASK.FROMLOC  
+      JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK) ON TD.LOT = LA.LOT AND TD.STORERKEY = LA.STORERKEY  
       WHERE TD.STORERKEY = @cStorerKey  
       AND LOC.LOCATIONTYPE = 'PICK'  
       AND LOC.LOCATIONCATEGORY = CASE WHEN @cToLocType = 'PICK' AND ISNULL(@cSkipInnerTask,'') <> '1' THEN 'PICK'  
@@ -244,10 +249,10 @@ BEGIN
    BEGIN  
       SELECT TOP 1 @cFinalLOC = LOC.LOC  
       FROM @tTask task  
-      LEFT JOIN SKUXLOC SL WITH (NOLOCK) ON TASK.SKU = SL.SKU AND TASK.STORERKEY = SL.STORERKEY  
+      LEFT JOIN dbo.SKUXLOC SL WITH (NOLOCK) ON TASK.SKU = SL.SKU AND TASK.STORERKEY = SL.STORERKEY  
                                          AND SL.LOCATIONTYPE = 'PICK'  
-      JOIN LOTATTRIBUTE TASKLA WITH (NOLOCK) ON TASKLA.LOT = TASK.LOT AND TASKLA.STORERKEY = TASK.STORERKEY  
-      JOIN LOC WITH (NOLOCK) ON LOC.LOC <> task.ToLoc AND LOC.LOC <> TASK.FROMLOC  
+      JOIN dbo.LOTATTRIBUTE TASKLA WITH (NOLOCK) ON TASKLA.LOT = TASK.LOT AND TASKLA.STORERKEY = TASK.STORERKEY  
+      JOIN dbo.LOC WITH (NOLOCK) ON LOC.LOC <> task.ToLoc AND LOC.LOC <> TASK.FROMLOC  
       WHERE TASK.STORERKEY = @cStorerKey  
       AND LOC.LOCATIONTYPE = 'PICK'  
       AND LOC.LOCATIONCATEGORY = CASE WHEN @cToLocType = 'PICK' AND ISNULL(@cSkipInnerTask,'') <> '1' THEN 'PICK'  
@@ -257,9 +262,9 @@ BEGIN
       AND LOC.LOCATIONFLAG = 'NONE'  
       AND LOC.FACILITY = @cFacility  
       AND LOC.LOC = CASE WHEN ISNULL(SL.LOC,'') <> '' THEN SL.LOC ELSE LOC.LOC END  
-      AND NOT EXISTS (SELECT TOP 1 1 FROM LOTXLOCXID WITH (NOLOCK) WHERE LOC = LOC.LOC AND QTY-QTYPICKED+PENDINGMOVEIN > 0)  
-      AND NOT EXISTS (SELECT TOP 1 1 FROM TASKDETAIL WITH (NOLOCK) WHERE TOLOC = LOC.LOC AND STATUS NOT IN ('9','X','R'))  
-      AND NOT EXISTS (SELECT TOP 1 1 FROM REPLENISHMENT WITH (NOLOCK) WHERE TOLOC = LOC.LOC AND CONFIRMED NOT IN ('Y'))  
+      AND NOT EXISTS (SELECT TOP 1 1 FROM dbo.LOTXLOCXID WITH (NOLOCK) WHERE LOC = LOC.LOC AND QTY-QTYPICKED+PENDINGMOVEIN > 0)  
+      AND NOT EXISTS (SELECT TOP 1 1 FROM dbo.TASKDETAIL WITH (NOLOCK) WHERE TOLOC = LOC.LOC AND STATUS NOT IN ('9','X','R'))  
+      AND NOT EXISTS (SELECT TOP 1 1 FROM dbo.REPLENISHMENT WITH (NOLOCK) WHERE TOLOC = LOC.LOC AND CONFIRMED NOT IN ('Y'))  
       ORDER BY CASE WHEN LOC.LOCAISLE = @cToLocAisle THEN 1 ELSE 2 END  
              , CASE WHEN TRY_CONVERT(INT, LOC.LOCAISLE) IS NOT NULL AND TRY_CONVERT(INT, @cToLocAisle) IS NOT NULL --GET CLOSEST LOCAISLE
                     THEN ABS(TRY_CONVERT(INT, LOC.LOCAISLE) - TRY_CONVERT(INT, @cToLocAisle)) ELSE 999999 END
@@ -314,11 +319,11 @@ BEGIN
                      CASE WHEN (PD.QTY % CAST(P.InnerPack AS INT)) > 0 THEN PD.QTY % CAST(P.InnerPack AS INT) ELSE 0 END  
                      ELSE 0 END) AS LESSTHANINNER  
                , P.INNERPACK  
-           FROM PICKDETAIL PD  WITH (NOLOCK)  
-           JOIN ORDERS O WITH (NOLOCK) ON PD.ORDERKEY = O.ORDERKEY  
-           JOIN SKU S WITH (NOLOCK) ON PD.SKU = S.SKU AND PD.STORERKEY = S.STORERKEY  
-           JOIN PACK P WITH (NOLOCK) ON S.PACKKEY = P.PACKKEY  
-           LEFT JOIN LOADPLAN LP WITH (NOLOCK) ON O.LOADKEY = LP.LOADKEY  
+           FROM dbo.PICKDETAIL PD  WITH (NOLOCK)  
+           JOIN dbo.ORDERS O WITH (NOLOCK) ON PD.ORDERKEY = O.ORDERKEY  
+           JOIN dbo.SKU S WITH (NOLOCK) ON PD.SKU = S.SKU AND PD.STORERKEY = S.STORERKEY  
+           JOIN dbo.PACK P WITH (NOLOCK) ON S.PACKKEY = P.PACKKEY  
+           LEFT JOIN dbo.LOADPLAN LP WITH (NOLOCK) ON O.LOADKEY = LP.LOADKEY  
            WHERE PD.STORERKEY = @cStorerKey  
            AND PD.LOC = TASK.TOLOC  
            AND PD.STATUS IN ('0')  
@@ -332,8 +337,8 @@ BEGIN
       SET @cFinalLOCType = ''  
   
       SELECT @cFinalLOCCat = LOCATIONCATEGORY  
-           , @cFinalLocType = LOCATIONTYPE  
-      FROM LOC WITH (NOLOCK) WHERE  
+           , @cFinalLOCType = LOCATIONTYPE  
+      FROM dbo.LOC WITH (NOLOCK) WHERE  
       LOC = @cFinalLOC  
   
       IF ISNULL(@n_LessThanCaseQty,0) > 0 AND @cFinalLOCCat = 'CLS'  
@@ -355,7 +360,7 @@ BEGIN
   
          DECLARE CUR1_DET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT PD.PickdetailKey, PD.QTY  
-         FROM PICKDETAIL PD WITH (NOLOCK)  
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)  
          WHERE PD.STORERKEY = @cStorerKey  
          AND PD.TASKDETAILKEY = @cTaskDetailKey  
          --AND PD.QTY <  @n_CaseCnt  
@@ -365,67 +370,81 @@ BEGIN
   
          OPEN CUR1_DET  
          FETCH FROM CUR1_DET INTO @c_PickDetailKey, @n_PDQty  
-         WHILE @@FETCH_STATUS = 0  
+                  WHILE @@FETCH_STATUS = 0  
          BEGIN  
-  
+
             SET @n_SplitQty = 0  
             IF @n_PDQty < @n_CaseCnt  
             BEGIN  
-               UPDATE PICKDETAIL WITH (ROWLOCK)  
-               SET TaskDetailKey = @cNewTaskDetailKey, TRAFFICCOP = NULL, Editdate = getdate()  
-               WHERE PickdetailKey = @c_PickDetailKey  
-  
+               BEGIN TRY
+                  UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
+                  SET TaskDetailKey = @cNewTaskDetailKey, TRAFFICCOP = NULL, Editdate = getdate()  
+                  WHERE PickdetailKey = @c_PickDetailKey  
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 268854
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- UpdPickDtlFail
+                  GOTO RollBackTran
+               END CATCH
+
                SET @n_SystemQty = @n_SystemQty + @n_PDQty  
             END  
             ELSE IF @n_CaseCnt > 0  
                SET @n_SplitQty = @n_PDQty - (@n_CaseCnt * FLOOR(CAST(@n_PDQty AS FLOAT)/@n_CaseCnt))  
-  
+
             IF @n_SplitQty > 0 AND @n_SplitQty < @n_PDQty  
             BEGIN  
                SET @c_NewPickdetailKey = ''  
-  
-               EXECUTE nspg_GetKey  
+
+               EXECUTE dbo.nspg_GetKey  
                   'PICKDETAILKEY',  
                   10,  
                   @c_NewPickdetailKey OUTPUT,  
                   @nSuccess OUTPUT,  
                   @nErrNo   OUTPUT,  
                   @cErrMsg  OUTPUT  
-  
+
                IF ISNULL(@c_NewPickdetailKey,'') <> ''  
                BEGIN  
-                  INSERT INTO PICKDETAIL  (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
-                     Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, [Status],  
-                     DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
-                     ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
-                     WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo,  
-                     TaskDetailKey, TaskManagerReasonKey, Notes, MoveRefKey )  
-                  SELECT @c_NewpickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
-                         Storerkey, Sku, AltSku, UOM, CASE UOM WHEN '6' THEN @n_SplitQty ELSE UOMQty END , @n_SplitQty, QtyMoved, Status,  
-                         '', Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
-                         ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
-                         WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo,  
-                         @cNewTaskDetailKey, TaskManagerReasonKey, Notes, MoveRefKey  
-                  FROM PICKDETAIL WITH (NOLOCK)  
-                  WHERE PickdetailKey = @c_PickDetailKey  
-  
-                  UPDATE PICKDETAIL WITH (ROWLOCK)  
-                  SET QTY = QTY - @n_SplitQty, TRAFFICCOP = NULL, Editdate = getdate()  
-                  WHERE PickdetailKey = @c_PickDetailKey  
-  
+                  BEGIN TRY
+                     INSERT INTO dbo.PICKDETAIL WITH (ROWLOCK) (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
+                        Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, [Status],  
+                        DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
+                        ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
+                        WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo,  
+                        TaskDetailKey, TaskManagerReasonKey, Notes, MoveRefKey )  
+                     SELECT @c_NewpickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
+                            Storerkey, Sku, AltSku, UOM, CASE UOM WHEN '6' THEN @n_SplitQty ELSE UOMQty END , @n_SplitQty, QtyMoved, Status,  
+                            '', Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
+                            ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
+                            WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo,  
+                            @cNewTaskDetailKey, TaskManagerReasonKey, Notes, MoveRefKey  
+                     FROM dbo.PICKDETAIL WITH (NOLOCK)  
+                     WHERE PickdetailKey = @c_PickDetailKey  
+
+                     UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
+                     SET QTY = QTY - @n_SplitQty, TRAFFICCOP = NULL, Editdate = getdate()  
+                     WHERE PickdetailKey = @c_PickDetailKey  
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 268855
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- InsPickDtlFail
+                     GOTO RollBackTran
+                  END CATCH
+
                   SET @n_SystemQty = @n_SystemQty + @n_SplitQty  
-  
+
                END  
             END  
-  
+
          FETCH FROM CUR1_DET INTO @c_PickDetailKey, @n_PDQty  
-         END  
+         END    
          CLOSE CUR1_DET  
          DEALLOCATE CUR1_DET  
   
          SET @nLLITTLQty = 0  
          SELECT @nLLITTLQty = SUM(QTY-QTYALLOCATED-QTYPICKED) FROM  
-         LOTXLOCXID WITH (NOLOCK) WHERE LOC = @cToLOC  
+         dbo.LOTXLOCXID WITH (NOLOCK) WHERE LOC = @cToLOC  
          AND SKU = @cSKU AND LOT = @cLOT  
          AND ID = @cToID  
   
@@ -433,19 +452,19 @@ BEGIN
             SET @nToQTY = @n_SystemQty  
   
          -- Insert final task  
-         INSERT INTO TaskDetail (  
-            TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, TransitLOC, SystemQty,  
-            PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, SourceKey, TrafficCop)  
-         VALUES (  
-            @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, '', @nToQTY, @cToLOCAreaKey, @cFinalLOC, @n_SystemQty,  
-            'PP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, @cTaskDetailKey, NULL)  
-         IF @@ERROR <> 0  
-         BEGIN  
+         BEGIN TRY
+            INSERT INTO dbo.TaskDetail WITH (ROWLOCK) (  
+               TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, TransitLOC, SystemQty,  
+               PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, SourceKey, TrafficCop)  
+            VALUES (  
+               @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, '', @nToQTY, @cToLOCAreaKey, @cFinalLOC, @n_SystemQty,  
+               'PP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, @cTaskDetailKey, NULL)  
+         END TRY
+         BEGIN CATCH
             SET @nErrNo = 268852  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail  
             GOTO RollBackTran  
-         END  
-  
+         END CATCH
   
       END  
       ELSE IF ISNULL(@n_LessThanInnerQty,0) > 0 AND @cFinalLOCCat = 'PICK'  
@@ -466,7 +485,7 @@ BEGIN
   
          DECLARE CUR1_DET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT PD.PickdetailKey, PD.QTY  
-         FROM PICKDETAIL PD WITH (NOLOCK)  
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)  
          WHERE PD.STORERKEY = @cStorerKey  
          AND PD.TASKDETAILKEY = @cTaskDetailKey  
          --AND PD.QTY <  @n_InnerPack  
@@ -482,7 +501,7 @@ BEGIN
             SET @n_SplitQty = 0  
             IF @n_PDQty < @n_InnerPack  
             BEGIN  
-               UPDATE PICKDETAIL WITH (ROWLOCK)  
+               UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
                SET TaskDetailKey = @cNewTaskDetailKey, TRAFFICCOP = NULL, Editdate = getdate()  
                WHERE PickdetailKey = @c_PickDetailKey  
   
@@ -495,7 +514,7 @@ BEGIN
             BEGIN  
                SET @c_NewPickdetailKey = ''  
   
-               EXECUTE nspg_GetKey  
+               EXECUTE dbo.nspg_GetKey  
                   'PICKDETAILKEY',  
                   10,  
                   @c_NewPickdetailKey OUTPUT,  
@@ -505,7 +524,7 @@ BEGIN
   
                IF ISNULL(@c_NewPickdetailKey,'') <> ''  
                BEGIN  
-                  INSERT INTO PICKDETAIL  (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
+                  INSERT INTO dbo.PICKDETAIL  (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
                      Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, [Status],  
                      DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
                      ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
@@ -517,10 +536,10 @@ BEGIN
                          ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
                          WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo,  
                          @cNewTaskDetailKey, TaskManagerReasonKey, Notes, MoveRefKey  
-                  FROM PICKDETAIL WITH (NOLOCK)  
+                  FROM dbo.PICKDETAIL WITH (NOLOCK)  
                   WHERE PickdetailKey = @c_PickDetailKey  
   
-                  UPDATE PICKDETAIL WITH (ROWLOCK)  
+                  UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
                   SET QTY = QTY - @n_SplitQty, TRAFFICCOP = NULL, Editdate = getdate()  
                   WHERE PickdetailKey = @c_PickDetailKey  
   
@@ -536,7 +555,7 @@ BEGIN
   
          SET @nLLITTLQty = 0  
          SELECT @nLLITTLQty = SUM(QTY-QTYALLOCATED-QTYPICKED) FROM  
-         LOTXLOCXID WITH (NOLOCK) WHERE LOC = @cToLOC  
+         dbo.LOTXLOCXID WITH (NOLOCK) WHERE LOC = @cToLOC  
          AND SKU = @cSKU AND LOT = @cLOT  
          AND ID = @cToID  
   
@@ -544,18 +563,19 @@ BEGIN
             SET @nToQTY = @n_SystemQty  
   
          -- Insert final task  
-         INSERT INTO TaskDetail (  
-            TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, TransitLOC, SystemQty,  
-            PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, SourceKey, TrafficCop)  
-         VALUES (  
-            @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, '', @nToQTY, @cToLOCAreaKey, @cFinalLOC, @n_SystemQty,  
-            'PP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, @cTaskDetailKey, NULL)  
-         IF @@ERROR <> 0  
-         BEGIN  
+         BEGIN TRY
+            INSERT INTO dbo.TaskDetail WITH (ROWLOCK) (  
+               TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, TransitLOC, SystemQty,  
+               PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, SourceKey, TrafficCop)  
+            VALUES (  
+               @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, '', @nToQTY, @cToLOCAreaKey, @cFinalLOC, @n_SystemQty,  
+               'PP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, @cTaskDetailKey, NULL)  
+         END TRY
+         BEGIN CATCH
             SET @nErrNo = 268853  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail  
             GOTO RollBackTran  
-         END  
+         END CATCH
       END  
    END  
   
@@ -563,14 +583,25 @@ BEGIN
    COMMIT TRAN rdt_1764CreateTAU01 -- Only commit change made here  
    GOTO Quit  
   
-RollBackTran:  
-   ROLLBACK TRAN rdt_1764CreateTAU01 -- Only rollback change made here  
-Fail:  
-Quit:  
+   RollBackTran:  
+      -- Cleanup cursor if open
+      IF CURSOR_STATUS('local', 'CUR1_DET') = 1
+      BEGIN
+         CLOSE CUR1_DET
+         DEALLOCATE CUR1_DET
+      END
+      ELSE IF CURSOR_STATUS('local', 'CUR1_DET') = -1
+         DEALLOCATE CUR1_DET
+
+      ROLLBACK TRAN rdt_1764CreateTAU01 -- Only rollback change made here  
+   Fail:  
+
+   Quit:  
   
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
       COMMIT TRAN  
 END
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO

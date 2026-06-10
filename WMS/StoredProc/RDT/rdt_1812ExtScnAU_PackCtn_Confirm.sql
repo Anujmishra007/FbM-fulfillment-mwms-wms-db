@@ -204,9 +204,16 @@ BEGIN
     
     IF ISNULL(@cTaskPickMethod,'') = 'FP'  
     BEGIN  
-        UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
-        SET DROPID = @cDropID  
-        WHERE TASKDETAILKEY = @cTaskdetailKey  
+        BEGIN TRY
+            UPDATE dbo.TaskDetail WITH (ROWLOCK)  
+            SET DropID = @cDropID  
+            WHERE TaskDetailKey = @cTaskdetailKey  
+        END TRY
+        BEGIN CATCH
+            SET @nErrNo = 269510
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDTaskDtlFail
+            GOTO RollBackTran
+        END CATCH
     
         DECLARE CUR_PICK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
         SELECT PICKDETAILKEY  
@@ -273,14 +280,15 @@ BEGIN
         DECLARE @cLoadKey NVARCHAR( 10) = ''  
         SELECT @cLoadKey = LoadKey FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey  
     
-        INSERT INTO dbo.PackHeader WITH (ROWLOCK) (PickSlipNo, StorerKey, OrderKey, ConsigneeKey, LoadKey)  
-        VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, '', @cLoadKey)  
-        IF @@ERROR <> 0  
-        BEGIN  
+        BEGIN TRY
+            INSERT INTO dbo.PackHeader WITH (ROWLOCK) (PickSlipNo, StorerKey, OrderKey, ConsigneeKey, LoadKey)  
+            VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, '', @cLoadKey) 
+        END TRY
+        BEGIN CATCH 
             SET @nErrNo = 269501  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail  
             GOTO RollBackTran  
-        END  
+        END CATCH
     END  
     
     SET @cLabelLine = ''  
@@ -340,7 +348,7 @@ BEGIN
             BEGIN  
                 IF @cGenPackLabelNoSP = '1'  
                 BEGIN  
-                EXEC isp_GenUCCLabelNo  
+                EXEC dbo.isp_GenUCCLabelNo  
                     @cStorerKey,  
                     @cLabelNo      OUTPUT,  
                     @bSuccess      OUTPUT,  
@@ -361,7 +369,7 @@ BEGIN
                             STORERKEY = @cStorerkey AND LABELNO = @cLabelNo)  
                 BEGIN  
                     SET @cLabelNo = ''  
-                    EXEC isp_GenUCCLabelNo  
+                    EXEC dbo.isp_GenUCCLabelNo  
                         @cStorerKey,  
                         @cLabelNo      OUTPUT,  
                         @bSuccess      OUTPUT,  
@@ -403,19 +411,20 @@ BEGIN
             ELSE  
                 GOTO Quit  
         END  
-    
-        INSERT INTO dbo.PackDetail WITH (ROWLOCK)
-        (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
-            AddWho, AddDate, EditWho, EditDate, REFNO)  
-        VALUES  
-            (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY, @cDropID,  
-            'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE(), 'PIECEPICK')  
-        IF @@ERROR <> 0  
-        BEGIN  
+
+        BEGIN TRY
+            INSERT INTO dbo.PackDetail WITH (ROWLOCK)
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
+                AddWho, AddDate, EditWho, EditDate, REFNO)  
+            VALUES  
+                (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY, @cDropID,  
+                'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE(), 'PIECEPICK')  
+        END TRY
+        BEGIN CATCH
             SET @nErrNo = 269504  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackDtlFail  
             GOTO RollBackTran  
-        END  
+        END CATCH
     
         SELECT TOP 1  
             @nCartonNo = CartonNo  
@@ -429,22 +438,24 @@ BEGIN
     END  
     ELSE  
     BEGIN  
-        -- Update Packdetail  
-        UPDATE dbo.PackDetail WITH (ROWLOCK) SET  
-            SKU = @cSKU,  
-            QTY = QTY + @nQTY,  
-            EditWho = 'rdt.' + SUSER_SNAME(),  
-            EditDate = GETDATE(),  
-            ArchiveCop = NULL  
-        WHERE PickSlipNo = @cPickSlipNo  
-            AND CartonNo = @nCartonNo  
-            AND LabelNo = @cLabelNo  
-            AND LabelLine = @cLabelLine  
-        IF @@ERROR <> 0     BEGIN  
+        BEGIN TRY
+            -- Update Packdetail  
+            UPDATE dbo.PackDetail WITH (ROWLOCK) SET  
+                SKU = @cSKU,  
+                QTY = QTY + @nQTY,  
+                EditWho = 'rdt.' + SUSER_SNAME(),  
+                EditDate = GETDATE(),  
+                ArchiveCop = NULL  
+            WHERE PickSlipNo = @cPickSlipNo  
+                AND CartonNo = @nCartonNo  
+                AND LabelNo = @cLabelNo  
+                AND LabelLine = @cLabelLine 
+        END TRY
+        BEGIN CATCH
             SET @nErrNo = 269505  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackDtlFail  
             GOTO RollBackTran  
-        END  
+        END CATCH
     END  
     
     --PackDetailInfo  
@@ -474,37 +485,39 @@ BEGIN
     
             IF @nPackDetailInfoKey = 0  
             BEGIN  
-                -- Insert PackDetailInfo  
-                INSERT INTO dbo.PackDetailInfo WITH (ROWLOCK) (  
-                PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, UserDefine01, UserDefine02, UserDefine03,  
-                AddWho, AddDate, EditWho, EditDate)  
-                VALUES (  
-                @cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY, @cPackData1, @cPackData2, @cPackData3,  
-                'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())  
-                IF @@ERROR <> 0  
-                BEGIN  
-                SET @nErrNo = 269506  
-                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PDInfoFail  
-                GOTO RollBackTran  
-                END  
+                BEGIN TRY
+                    -- Insert PackDetailInfo  
+                    INSERT INTO dbo.PackDetailInfo WITH (ROWLOCK) (  
+                    PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, UserDefine01, UserDefine02, UserDefine03,  
+                    AddWho, AddDate, EditWho, EditDate)  
+                    VALUES (  
+                    @cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY, @cPackData1, @cPackData2, @cPackData3,  
+                    'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())  
+                END TRY
+                BEGIN CATCH
+                    SET @nErrNo = 269506  
+                    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PDInfoFail  
+                    GOTO RollBackTran  
+                END CATCH
             END  
             ELSE  
             BEGIN  
-                -- Update PackDetailInfo  
-                UPDATE dbo.PackDetailInfo WITH(ROWLOCK)  
-                SET  
-                QTY = QTY + @nQTY,  
-                EditWho = 'rdt.' + SUSER_SNAME(),  
-                EditDate = GETDATE(),  
-                ArchiveCop = NULL  
-                WHERE PackDetailInfoKey = @nPackDetailInfoKey  
+                BEGIN TRY
+                    -- Update PackDetailInfo  
+                    UPDATE dbo.PackDetailInfo WITH(ROWLOCK)  
+                    SET  
+                    QTY = QTY + @nQTY,  
+                    EditWho = 'rdt.' + SUSER_SNAME(),  
+                    EditDate = GETDATE(),  
+                    ArchiveCop = NULL  
+                    WHERE PackDetailInfoKey = @nPackDetailInfoKey  
+                END TRY
     
-                IF @@ERROR <> 0  
-                BEGIN  
-                SET @nErrNo = 269507  
-                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PDInfoFail  
-                GOTO RollBackTran  
-                END  
+                BEGIN CATCH
+                    SET @nErrNo = 269507  
+                    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PDInfoFail  
+                    GOTO RollBackTran  
+                END CATCH
             END  
     END  
     END  
@@ -554,44 +567,50 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)  
     BEGIN  
     
-        IF @cDefaultWeight = '3'  
-        BEGIN  
-            SET @fWeight = @fSKUWeight + @fCartonWeight  
-        END  
-        SET @cWeight = rdt.rdtFormatFloat( @fWeight)  
-    
-        SET @fWeight = CAST(@cWeight AS FLOAT)  
-    
-        INSERT INTO dbo.PackInfo WITH (ROWLOCK)(PickslipNo, CartonNo, Qty, Weight, Cube, CartonType, Length, Width, Height)  
-        VALUES (@cPickSlipNo, @nCartonNo, @nQTY, @fWeight, @fCube, @cCartonType, @fLength, @fWidth, @fHeight)  
-        --INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY)  
-        --VALUES (@cPickSlipNo, @nCartonNo, @nQTY)  
-        IF @@ERROR <> 0  
-        BEGIN  
+        IF @cDefaultWeight = '3'
+            BEGIN
+                SET @fWeight = @fSKUWeight + @fCartonWeight
+            END
+            ELSE IF @cDefaultWeight = '2'
+            BEGIN
+                SET @fWeight = @fSKUWeight
+            END
+            SET @cWeight = rdt.rdtFormatFloat(@fWeight)
+            SET @fWeight = ISNULL(TRY_CAST(@cWeight AS FLOAT), 0)
+        
+        BEGIN TRY
+            INSERT INTO dbo.PackInfo WITH (ROWLOCK)(PickslipNo, CartonNo, Qty, Weight, Cube, CartonType, Length, Width, Height)  
+            VALUES (@cPickSlipNo, @nCartonNo, @nQTY, @fWeight, @fCube, @cCartonType, @fLength, @fWidth, @fHeight)  
+            --INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY)  
+            --VALUES (@cPickSlipNo, @nCartonNo, @nQTY)  
+        END TRY
+        BEGIN CATCH
             SET @nErrNo = 269508  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail  
             GOTO RollBackTran  
-        END  
+        END CATCH
     END  
     ELSE  
     BEGIN  
         SET @cWeight = rdt.rdtFormatFloat( @fSKUWeight)  
-        SET @fSKUWeight = CAST(@cWeight AS FLOAT)  
-    
-        UPDATE dbo.PackInfo WITH (ROWLOCK) SET  
-            QTY = QTY + @nQTY,  
-            EditDate = GETDATE(),  
-            EditWho = SUSER_SNAME(),  
-            Weight = Weight + @fWeight,  
-            TrafficCop = NULL  
-        WHERE PickSlipNo = @cPickSlipNo  
-            AND CartonNo = @nCartonNo  
-        IF @@ERROR <> 0  
-        BEGIN  
+        SET @fSKUWeight = ISNULL(TRY_CAST(@cWeight AS FLOAT), 0)  
+        SET @fWeight = @fSKUWeight
+        
+        BEGIN TRY
+            UPDATE dbo.PackInfo WITH (ROWLOCK) SET  
+                QTY = QTY + @nQTY,  
+                EditDate = GETDATE(),  
+                EditWho = SUSER_SNAME(),  
+                Weight = Weight + @fWeight,  
+                TrafficCop = NULL  
+            WHERE PickSlipNo = @cPickSlipNo  
+                AND CartonNo = @nCartonNo
+        END TRY
+        BEGIN CATCH
             SET @nErrNo = 269509  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackInfFail  
             GOTO RollBackTran  
-        END  
+        END CATCH
     END  
     
     --SUBMIT PRINT JOB IF SANDWICH  

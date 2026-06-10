@@ -169,29 +169,33 @@ BEGIN
                 WHILE @@FETCH_STATUS = 0  
                 BEGIN  
     
-                UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
-                SET TASKDETAILKEY = ''  
-                WHERE TASKDETAILKEY = @cTaskdetailKey  
-                AND ORDERKEY = @cOrderkey  
-                AND STORERKEY = @cStorerkey  
-                AND LOC = @cFromloc  
-                AND LOT = @cLot  
-                AND ID = @cID  
-                AND SKU = @cSku  
-                AND UOM = @cUOM  
+                BEGIN TRY
+                    UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
+                    SET TASKDETAILKEY = ''  
+                    WHERE TASKDETAILKEY = @cTaskdetailKey  
+                    AND ORDERKEY = @cOrderkey  
+                    AND STORERKEY = @cStorerkey  
+                    AND LOC = @cFromloc  
+                    AND LOT = @cLot  
+                    AND ID = @cID  
+                    AND SKU = @cSku  
+                    AND UOM = @cUOM  
+                END TRY
+                BEGIN CATCH
+                    SET @nErrNo = 267555    -- UpdPickDtlFail
+                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                    GOTO RollBackTran
+                END CATCH  
     
                 SET @cLinkTaskToPick_SQL = ''  
                     --SET @n_UOMQty = 0  
                 SET @cGroupkey = ''  
                 SET @cTaskdetailkeyNew = ''  
     
-                SET @nPackMaxSKU = 0  
-                IF ISNULL(@cSTCMAXSKU,'') <> '' AND ISNUMERIC(@cSTCMAXSKU) = 1  
-                    SET @nPackMaxSKU = CAST(@cSTCMAXSKU AS INT)  
-    
-                IF @nPackMaxSKU = 0  
-                    IF ISNULL(@cSTBMAXSKU,'') <> '' AND ISNUMERIC(@cSTBMAXSKU) = 1  
-                        SET @nPackMaxSKU = CAST(@cSTBMAXSKU AS INT)  
+                SET @nPackMaxSKU = ISNULL(TRY_CAST(@cSTCMAXSKU AS INT), 0)
+
+                IF @nPackMaxSKU = 0
+                    SET @nPackMaxSKU = ISNULL(TRY_CAST(@cSTBMAXSKU AS INT), 0) 
     
                 IF ISNULL(@cDefaultLoc,'') <> '' AND ISNULL(@cToLoc,'') = ''  
                     SET @cToLoc = @cDefaultLoc  
@@ -206,7 +210,7 @@ BEGIN
                     SET @cLinkTaskToPick_SQL = 'PICKDETAIL.UOM = @cUOM AND ORDERS.Orderkey = @cOrderkey'  
                     SET @cTaskdetailkeyNew = ''  
     
-                    EXEC isp_InsertTaskDetail  
+                    EXEC dbo.isp_InsertTaskDetail  
                         @cTaskdetailkey         = @cTaskdetailkeyNew OUTPUT  
                         ,@cTaskType              = @cTaskType  
                         ,@cStorerkey             = @cStorerkey  
@@ -260,10 +264,19 @@ BEGIN
                         AND [STATUS] IN ('3','5')  
     
                         IF ISNULL(@cUserKeyOverride,'') <> ''  
-                            UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
-                            --SET Groupkey = @cTaskdetailkeyNew  
-                            SET UserKeyOverride = @cUserKeyOverride  
-                            WHERE TaskDetailKey = @cTaskdetailkeyNew  
+                        BEGIN
+                            BEGIN TRY
+                                UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
+                                --SET Groupkey = @cTaskdetailkeyNew  
+                                SET UserKeyOverride = @cUserKeyOverride  
+                                WHERE TaskDetailKey = @cTaskdetailkeyNew 
+                            END TRY
+                            BEGIN CATCH
+                                SET @nErrNo = 267556  -- UpdTaskDtlFail
+                                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                                GOTO RollBackTran
+                            END CATCH 
+                        END
                     END  
                 END  
                 ELSE IF @cUOM = '2'  
@@ -313,7 +326,7 @@ BEGIN
     
                     SET @cTaskdetailkeyNew = ''  
     
-                    EXEC isp_InsertTaskDetail  
+                    EXEC dbo.isp_InsertTaskDetail  
                         @cTaskdetailkey         = @cTaskdetailkeyNew OUTPUT  
                         ,@cTaskType              = @cTaskType  
                         ,@cStorerkey             = @cStorerkey  
@@ -368,10 +381,18 @@ BEGIN
                         AND [STATUS] IN ('3','5')  
     
                         IF ISNULL(@cUserKeyOverride,'') <> ''  
-                            UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
-                            --SET Groupkey = @cTaskdetailkeyNew  
-                            SET UserKeyOverride = @cUserKeyOverride  
-                            WHERE TaskDetailKey = @cTaskdetailkeyNew  
+                        BEGIN
+                            BEGIN TRY
+                                UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
+                                --SET Groupkey = @cTaskdetailkeyNew  
+                                SET UserKeyOverride = @cUserKeyOverride  
+                                WHERE TaskDetailKey = @cTaskdetailkeyNew  
+                            END TRY
+                            BEGIN CATCH
+                                SET @nErrNo = 267557  -- UpdTaskDtlFail
+                                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                                GOTO RollBackTran
+                            END CATCH
     
                         IF @nLastPartial_Ctn > 0  
                         BEGIN  
@@ -463,10 +484,19 @@ BEGIN
                                   AND [STATUS] IN ('3','5')  
 
                                 IF ISNULL(@cUserKeyOverride,'') <> ''  
-                                    UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
-                                    --SET Groupkey = @cTaskdetailkeyNew  
-                                    SET UserKeyOverride = @cUserKeyOverride  
-                                    WHERE TaskDetailKey = @cTaskdetailkeyNew  
+                                BEGIN
+                                    BEGIN TRY
+                                        UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
+                                        --SET Groupkey = @cTaskdetailkeyNew  
+                                        SET UserKeyOverride = @cUserKeyOverride  
+                                        WHERE TaskDetailKey = @cTaskdetailkeyNew
+                                    END TRY
+                                    BEGIN CATCH
+                                        SET @nErrNo = 267557  -- UpdTaskDtlFail
+                                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                                        GOTO RollBackTran
+                                    END CATCH
+                                END  
                             END  
                         END  
                     END  
@@ -501,7 +531,7 @@ BEGIN
     
                     SET @cTaskdetailkeyNew = ''  
     
-                    EXEC isp_InsertTaskDetail  
+                    EXEC dbo.isp_InsertTaskDetail  
                         @cTaskdetailkey         = @cTaskdetailkeyNew OUTPUT  
                         ,@cTaskType              = @cTaskType  
                         ,@cStorerkey             = @cStorerkey  
@@ -554,11 +584,20 @@ BEGIN
                         AND TASKDETAILKEY <> @cTaskdetailkeyNew  
                         AND [STATUS] IN ('3','5')  
     
-                        IF ISNULL(@cUserKeyOverride,'') <> ''  
-                            UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
-                            --SET Groupkey = @cTaskdetailkeyNew  
-                            SET UserKeyOverride = @cUserKeyOverride  
-                            WHERE TaskDetailKey = @cTaskdetailkeyNew  
+                        IF ISNULL(@cUserKeyOverride,'') <> '' 
+                        BEGIN
+                            BEGIN TRY 
+                                UPDATE dbo.TASKDETAIL WITH (ROWLOCK)  
+                                --SET Groupkey = @cTaskdetailkeyNew  
+                                SET UserKeyOverride = @cUserKeyOverride  
+                                WHERE TaskDetailKey = @cTaskdetailkeyNew 
+                            END TRY
+                            BEGIN CATCH
+                                SET @nErrNo = 267558  -- UpdTaskDtlFail
+                                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                                GOTO RollBackTran
+                            END CATCH
+                        END
                     END  
                 END  
     
@@ -575,9 +614,13 @@ BEGIN
   
     GOTO Quit  
 RollBackTran: 
-    IF CURSOR_STATUS('local','cur_pick') >= 0
+    IF CURSOR_STATUS('local','cur_pick') = 1
     BEGIN
         CLOSE cur_pick
+        DEALLOCATE cur_pick
+    END
+    ELSE IF CURSOR_STATUS('local','cur_pick') = -1
+    BEGIN
         DEALLOCATE cur_pick
     END
     ROLLBACK TRAN rdt_1764ExtUpdAU -- Only rollback change made here  

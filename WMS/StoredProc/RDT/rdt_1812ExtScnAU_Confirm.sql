@@ -258,15 +258,16 @@ BEGIN
         SET @nPalletHeight = CASE WHEN ISNULL(@nPalletHeight,116) > 140 THEN 140  
                                     WHEN ISNULL(@nPalletHeight,116) <= 13 THEN 120  
                                     ELSE ISNULL(@nPalletHeight,116) END  
-    
-        INSERT INTO dbo.Pallet WITH (ROWLOCK) (PalletKey, StorerKey, Status, PalletType, Length, Width, Height, GrossWgt)  
-        VALUES (@cDropID, @cStorerKey, '0', @cPalletType, @nPalletLength, @nPalletWidth, @nPalletHeight, @nPalletWeight)  
-        IF @@ERROR <> 0  
-        BEGIN  
+
+        BEGIN TRY
+            INSERT INTO dbo.Pallet WITH (ROWLOCK) (PalletKey, StorerKey, Status, PalletType, Length, Width, Height, GrossWgt)  
+            VALUES (@cDropID, @cStorerKey, '0', @cPalletType, @nPalletLength, @nPalletWidth, @nPalletHeight, @nPalletWeight)  
+        END TRY
+        BEGIN CATCH  
             SET @nErrNo = 269451  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPLTHdrFail  
             GOTO RollBackTran  
-        END  
+        END CATCH
     END  
     
     SET @curPltD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
@@ -295,15 +296,16 @@ BEGIN
             SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)  
             FROM dbo.PalletDetail WITH (NOLOCK)  
             WHERE PalletKey = @cDropID  
-    
-            INSERT INTO dbo.PalletDetail WITH (ROWLOCK) (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine02, UserDefine03, ArchiveCop)  
-            VALUES (@cDropID, @cPalletLineNumber, @cLabelNo, @cStorerKey, @cSKU, ISNULL( @cToLOC, ''), @nPackQty, '0', @cOrderKey, @cLabelNo, @cToLane, NULL)  
-            IF @@ERROR <> 0  
-            BEGIN  
+
+            BEGIN TRY
+                INSERT INTO dbo.PalletDetail WITH (ROWLOCK) (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine02, UserDefine03, ArchiveCop)  
+                VALUES (@cDropID, @cPalletLineNumber, @cLabelNo, @cStorerKey, @cSKU, ISNULL( @cToLOC, ''), @nPackQty, '0', @cOrderKey, @cLabelNo, @cToLane, NULL)  
+            END TRY
+            BEGIN CATCH
                 SET @nErrNo = 269452  
                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPLTDtlFail  
                 GOTO RollBackTran  
-            END  
+            END CATCH
         END  
     
         FETCH NEXT FROM @curPltD INTO @cPickSlipNo, @cLabelNo, @nCartonNo, @nPackQty  
@@ -314,7 +316,7 @@ BEGIN
     
     IF ISNULL(@cClosePalletFlag,'') = '1'  
     BEGIN  
-        SET @fPalletHeight = ISNULL( CAST( @cOutField03 AS FLOAT), 0)  
+        SET @fPalletHeight = ISNULL( TRY_CAST( @cOutField03 AS FLOAT), 0)
     
         IF @fPalletHeight > 0 AND  
             EXISTS( SELECT 1 FROM dbo.Pallet WITH (NOLOCK) WHERE PalletKey = @cDropID AND Status = '0')  
@@ -336,13 +338,20 @@ BEGIN
                 WHERE PLD.USERDEFINE01 = @cOrderKey  
                 AND P.STATUS = '9'  
                 AND ISNULL(USERDEFINE05,'') <> ''  
-    
-            UPDATE dbo.PALLETDETAIL WITH (ROWLOCK) SET  
-                UserDefine05 = @cPLTUDF05,  
-                TrafficCop = NULL,  
-                EditDate = GETDATE(),  
-                EditWho = SUSER_SNAME()  
-            WHERE PalletKey = @cDropID  
+
+            BEGIN TRY
+                UPDATE dbo.PALLETDETAIL WITH (ROWLOCK) SET  
+                    UserDefine05 = @cPLTUDF05,  
+                    TrafficCop = NULL,  
+                    EditDate = GETDATE(),  
+                    EditWho = SUSER_SNAME()  
+                WHERE PalletKey = @cDropID  
+            END TRY
+            BEGIN CATCH
+                SET @nErrNo = 269457  
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPDPLTDtlFail  
+                GOTO RollBackTran  
+            END CATCH
     
             IF @@ERROR <> 0  
             BEGIN  
@@ -351,18 +360,19 @@ BEGIN
                 GOTO RollBackTran  
             END  
     
-            UPDATE dbo.Pallet WITH (ROWLOCK) SET  
-                Status = '9',  
-                Height = @fPalletHeight,  
-                EditDate = GETDATE(),  
-                EditWho = @cUserName  
-            WHERE PalletKey = @cDropID  
-        IF @@ERROR <> 0  
-            BEGIN  
+            BEGIN TRY
+                UPDATE dbo.Pallet WITH (ROWLOCK) SET  
+                    Status = '9',  
+                    Height = @fPalletHeight,  
+                    EditDate = GETDATE(),  
+                    EditWho = @cUserName  
+                WHERE PalletKey = @cDropID 
+            END TRY 
+            BEGIN CATCH
                 SET @nErrNo = 269454  
                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPLTHdrFail  
                 GOTO RollBackTran  
-            END  
+            END CATCH
         END  
     END  
     
@@ -391,16 +401,17 @@ BEGIN
                 GOTO RollBackTran
             END
     
-        INSERT INTO dbo.MBOL WITH (ROWLOCK) (  
-            MBOLKey, ExternMBOLKey, Facility, Status, AddWho, AddDate, EditWho, EditDate)  
-        VALUES  
-            (@cMBOLKey, @cToLane, @cFacility, '0', 'rdt.' + @cUserName, GETDATE(), 'rdt.' + @cUserName, GETDATE())  
-        IF @@ERROR <> 0  
-        BEGIN  
+        BEGIN TRY
+            INSERT INTO dbo.MBOL WITH (ROWLOCK) (  
+                MBOLKey, ExternMBOLKey, Facility, Status, AddWho, AddDate, EditWho, EditDate)  
+            VALUES  
+                (@cMBOLKey, @cToLane, @cFacility, '0', 'rdt.' + @cUserName, GETDATE(), 'rdt.' + @cUserName, GETDATE())  
+        END TRY
+        BEGIN CATCH
             SET @nErrNo = 269455  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS MBOL Fail  
             GOTO RollBackTran  
-        END  
+        END CATCH
     END  
     
     SET @curMbolD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
@@ -423,16 +434,17 @@ BEGIN
         -- MBOLDetail  
         IF NOT EXISTS( SELECT 1 FROM dbo.MBOLDetail WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey AND OrderKey = @cOrderKey)  
         BEGIN  
-            INSERT INTO dbo.MBOLDetail WITH (ROWLOCK)  
-                (MBOLKey, MBOLLineNumber, OrderKey, LoadKey, AddWho, AddDate, EditWho, EditDate)  
-            VALUES  
-                (@cMBOLKey, '00000', @cOrderKey, '', 'rdt.' + @cUserName, GETDATE(), 'rdt.' + @cUserName, GETDATE())  
-            IF @@ERROR <> 0  
-            BEGIN  
+            BEGIN TRY
+                INSERT INTO dbo.MBOLDetail WITH (ROWLOCK)  
+                    (MBOLKey, MBOLLineNumber, OrderKey, LoadKey, AddWho, AddDate, EditWho, EditDate)  
+                VALUES  
+                    (@cMBOLKey, '00000', @cOrderKey, '', 'rdt.' + @cUserName, GETDATE(), 'rdt.' + @cUserName, GETDATE())  
+            END TRY
+            BEGIN CATCH
                 SET @nErrNo = 269456  
                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS MBDtl Fail  
                 GOTO RollBackTran  
-            END  
+            END CATCH
         END  
     
         FETCH NEXT FROM @curMbolD INTO @cOrderKey  

@@ -39,6 +39,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
             ,@cPrefix               NVARCHAR( 20)  
             ,@cSuffix               NVARCHAR( 20)  
             ,@cSequenceNo           NVARCHAR( 25)  
+            ,@cGeneratedAutoID      NVARCHAR( 65)  
             ,@cIDType               NVARCHAR( 30)  
             ,@cTaskDetailKey        NVARCHAR( 20)  
             ,@cCurrTaskDetailKey    NVARCHAR( 20)  
@@ -150,9 +151,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
         SELECT TOP 1  
             @cPrefix       = ISNULL([UDF01], N''),  
             @cSuffix       = ISNULL([UDF02], N''),  
-            @nSequenceLen  = CONVERT(INT, [Code2]),  
-            @dMinSequence  = ISNULL(CONVERT(INT,[UDF03]), 0),  
-            @dMaxSequence  = ISNULL(CONVERT(INT,[UDF04]), 0)  
+            @nSequenceLen  = ISNULL(TRY_CAST([Code2] AS INT), 0),  
+            @dMinSequence  = ISNULL(TRY_CAST([UDF03] AS INT), 0),  
+            @dMaxSequence  = ISNULL(TRY_CAST([UDF04] AS INT), 0)  
         FROM dbo.CODELKUP WITH (NOLOCK)  
         WHERE [ListName]     = N'GENERATEID'  
             AND [Code]        = @cIDType  
@@ -172,7 +173,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
         END  
 
         IF @dMaxSequence = 0  
-            SET @dMaxSequence = CONVERT(INT, REPLICATE('9',@nSequenceLen))  
+            SET @dMaxSequence = ISNULL(TRY_CAST(REPLICATE('9',@nSequenceLen) AS INT), 0)  
 
         IF ( @dMaxSequence <= @dMinSequence)  
         BEGIN  
@@ -232,7 +233,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
         SET @bSuccess = 1  
         EXECUTE [dbo].[nspg_getkey]  
-                @cCounterKey  
+              @cCounterKey  
             , @nSequenceLen  
             , @cSequenceNo       OUTPUT  
             , @bSuccess          OUTPUT  
@@ -245,7 +246,15 @@ SET CONCAT_NULL_YIELDS_NULL OFF
             GOTO Quit  
         END  
 
-        SET @cAutoID = LTRIM(RTRIM(@cPrefix)) + @cSequenceNo + LTRIM(RTRIM(@cSuffix))  
+        SET @cGeneratedAutoID = LTRIM(RTRIM(ISNULL(@cPrefix, N''))) + ISNULL(@cSequenceNo, N'') + LTRIM(RTRIM(ISNULL(@cSuffix, N'')))
+        IF LEN(@cGeneratedAutoID) > 18
+        BEGIN
+            SET @nErrNo = 269355
+            SET @cErrMsg = [rdt].[rdtGetMessage](@nErrNo, @cLangCode, N'DSP') -- Generated ID exceeds output length
+            GOTO Quit
+        END
+
+        SET @cAutoID = @cGeneratedAutoID  
         --SET @cOutField01 = @cAutoID  
 
         --Submit Print Job for DropID  

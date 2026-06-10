@@ -34,6 +34,11 @@ BEGIN
     SET QUOTED_IDENTIFIER OFF  
     SET ANSI_NULLS OFF  
     SET CONCAT_NULL_YIELDS_NULL OFF  
+
+    SET @cFromID = ''
+    SET @cSKU = ''
+    SET @nQTY = 0
+    SET @cDropID = ''
         
     SET @nErrNo = 0  
     SET @cErrMsg = ''  
@@ -46,6 +51,7 @@ BEGIN
       
 Quit:
 END
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO

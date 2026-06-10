@@ -159,6 +159,11 @@ BEGIN
         ,@cUserName          = [UserName]  
     FROM rdt.rdtMobRec WITH (NOLOCK)  
     WHERE Mobile = @nMobile  
+
+    SET @nErrNo = 0
+    SET @cErrMsg = ''
+    SET @nAfterScn = 0
+    SET @nAfterStep = 0
     
     SET @cManiLaneLBL = rdt.RDTGetConfig( @nFunc, 'ManiLaneLBL', @cStorerKey)  
     IF @cManiLaneLBL = '0'  
@@ -1018,6 +1023,7 @@ Quit:
     END  
     
 END  
+GO
   
 SET QUOTED_IDENTIFIER OFF 
 GO
