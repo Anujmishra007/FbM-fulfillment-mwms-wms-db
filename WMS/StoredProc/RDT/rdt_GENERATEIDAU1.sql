@@ -224,7 +224,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                 ELSE
                     ROLLBACK TRAN rdt_GENERATEIDAU1;
             END
-            SET @nErrNo = 269358  -- Reset NCounter Failed
+             IF @nErrNo = 0
+                SET @nErrNo = 269358  -- Reset NCounter Failed
             SET @cErrMsg = [rdt].[rdtGetMessage](@nErrNo, @cLangCode, N'DSP')
             GOTO Quit
         END CATCH

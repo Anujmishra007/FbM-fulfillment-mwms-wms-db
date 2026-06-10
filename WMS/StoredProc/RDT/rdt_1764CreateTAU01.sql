@@ -152,11 +152,11 @@ BEGIN
    -- 1) QtyAllocated is not less than casecnt  
    -- 2) ToLOC is not in Case Location (only replen from case to piece)  
    IF NOT EXISTS ( SELECT 1 FROM @tTask Task  
-                   JOIN SKU WITH (NOLOCK) ON SKU.SKU = Task.SKU AND SKU.STORERKEY = Task.StorerKey  
-                   JOIN PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
+                   JOIN dbo.SKU WITH (NOLOCK) ON SKU.SKU = Task.SKU AND SKU.STORERKEY = Task.StorerKey  
+                   JOIN dbo.PACK WITH (NOLOCK) ON SKU.PACKKEY = PACK.PACKKEY  
                    OUTER APPLY (  
                    SELECT SKU, SUM(QTY) as Qty  
-                   FROM PICKDETAIL WITH (NOLOCK) WHERE LOC = Task.ToLoc  
+                   FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE LOC = Task.ToLoc  
                    AND SKU = Task.SKU AND STATUS = '0'  
                    GROUP BY ORDERKEY, SKU) AS PD  
                    WHERE PACK.CASECNT > 0  
