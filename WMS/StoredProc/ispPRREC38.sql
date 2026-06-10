@@ -29,6 +29,7 @@ GO
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRREC38]
 (     @c_Receiptkey  NVARCHAR(10)
+  ,   @c_ReceiptLineNumber  NVARCHAR(5) = '' 
   ,   @b_Success     INT           OUTPUT
   ,   @n_Err         INT           OUTPUT
   ,   @c_ErrMsg      NVARCHAR(255) OUTPUT
