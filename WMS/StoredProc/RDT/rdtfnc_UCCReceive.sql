@@ -75,7 +75,8 @@ GO
 /*                         parameter                                       */
 /* 2025-10-29 5.7  Dennis  FCR-8472 Decoded SP                             */ 
 /* 2025-10-29 5.8  Dennis  FCR-9273 ExtScn04                               */ 
-/* 2026-03-02 5.9  NickT   FCR-10628 Add extended info at step 9, 13       */ 
+/* 2026-03-02 5.9  NickT   FCR-10628 Add extended info at step 9, 13       */
+/* 2026-06-10 6.0  Dennis  FCR-13584 AutoGenID and Pallet Label Printing   */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -948,6 +949,11 @@ BEGIN
       -- go to previous screen
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
+   END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      GOTO Step_99
    END
    GOTO Quit
 

@@ -7,6 +7,7 @@ GO
 /* Store procedure: rdt_898ExtScn07                                           */
 /*                                                                            */
 /* Purpose: FCR-11903 Columbia Malaysia (CFS) UCC Receiving                   */
+/*          FCR-13584 AutoGenID and Pallet Label Printing                     */
 /*                                                                            */
 /* ProcessType = 'CID': Only existing UCCs allowed                            */
 /* ProcessType = 'NORMAL': Allow new UCC, skip confirmations, use stored SKU  */
@@ -24,8 +25,14 @@ GO
 /* - If UCC count met: Go to Screen 3 (TO ID)                                 */
 /* - If ASN fully received: Go to Screen 1 (ASN)                              */
 /*                                                                            */
+/* FCR-13584 Features:                                                        */
+/* - Screen 3 (TO ID): AutoGenID from function 600 config                     */
+/* - Screen 3 (TO ID): Print pallet label on ESC from step 4                  */
+/* - Step 12 (Close pallet): Print pallet label on option 2 or 3              */
+/*                                                                            */
 /* Date        Rev     Author      Purposes                                   */
 /* 2026-04-24  1.0.0   NYE018      FCR-11903 Created                          */
+/* 2026-06-09  1.1.0   Dennis      FCR-13584 Merged ExtScn10 (AutoGenID+Print)*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_898ExtScn07] (
@@ -109,6 +116,14 @@ BEGIN
    DECLARE @nQtyExpected       DECIMAL(18,8)
    DECLARE @cSignatory         NVARCHAR(30)
 
+   -- FCR-13584: Variables for AutoGenID and Pallet Label Printing
+   DECLARE @cAutoGenID         NVARCHAR(20)
+   DECLARE @cAutoID            NVARCHAR(18)
+   DECLARE @tExtData           VariableTable
+   DECLARE @cLabelPrinter      NVARCHAR(10)
+   DECLARE @cPaperPrinter      NVARCHAR(10)
+   DECLARE @tPrintParam        VariableTable
+
    -- Screen/Step constants
    DECLARE @nStep_1 INT = 1, @nScn_1 INT = 1300  -- ASN Scan
    DECLARE @nStep_3 INT = 3, @nScn_3 INT = 1302  -- TO ID
@@ -140,7 +155,9 @@ BEGIN
       @cLoc            = ISNULL(V_Loc, ''),
       @cToID           = ISNULL(V_Id, ''),
       @cStoredSKU      = ISNULL(V_String50, ''),  -- Store first SKU in V_String50
-      @cStoredUCC      = ISNULL(V_String49, '')   -- Store current UCC in V_String49
+      @cStoredUCC      = ISNULL(V_String49, ''),  -- Store current UCC in V_String49
+      @cLabelPrinter   = ISNULL(Printer, ''),       -- FCR-13584
+      @cPaperPrinter   = ISNULL(Printer_Paper, '')  -- FCR-13584
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -1157,7 +1174,105 @@ BEGIN
       GOTO Quit
    END
 
+   /*==========================================================================
+   FCR-13584: Screen 3 (TO ID) - Print pallet label on ESC from step 4
+   Merged from rdt_898ExtScn10
+   ==========================================================================*/
+   IF @nScn = @nScn_3  -- 1302
+   BEGIN
+      -- Check if returning from step 4 (ESC from Estimate UCC screen)
+      IF @nCurrentStep = @nStep_4 AND @nInputKey = 0
+      BEGIN
+         -- Check if Receipt.ProcessType = 'C' or 'N' and has received qty on this pallet
+         IF EXISTS (
+            SELECT 1
+            FROM dbo.Receipt R WITH (NOLOCK)
+            JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey = RD.ReceiptKey AND R.StorerKey = RD.StorerKey
+            WHERE R.ReceiptKey = @cReceiptKey
+               AND R.StorerKey = @cStorerKey
+               AND R.ProcessType IN ('C', 'N')
+               AND RD.ToID = @cToID
+               AND RD.BeforeReceivedQTY > 0
+         )
+         BEGIN
+            -- Print pallet label
+            DELETE FROM @tPrintParam
+            INSERT INTO @tPrintParam (Variable, Value)
+            VALUES
+               ('@cID', @cToID),
+               ('@cReceiptKey', @cReceiptKey)
+
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+               'PALLETLBL',      -- Report type
+               @tPrintParam,     -- Report params
+               'rdt_898ExtScn07',
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+   END
+
+   /*==========================================================================
+   FCR-13584: Step 12 (Close pallet) - Print pallet label on option 2 or 3
+   Merged from rdt_898ExtScn10
+   ==========================================================================*/
+   IF @nCurrentStep = 12 AND @nInputKey = 1
+   BEGIN
+      -- Get Option from ExtScnData
+      SELECT @cOption = Value FROM @tExtScnData WHERE Variable = '@cOption'
+
+      IF @cOption IN ('2', '3')
+      BEGIN
+         -- Prepare print parameters
+         DELETE FROM @tPrintParam
+         INSERT INTO @tPrintParam (Variable, Value)
+         VALUES
+            ('@cID', @cToID),
+            ('@cReceiptKey', @cReceiptKey)
+
+         -- Print pallet label
+         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+            'PALLETLBL',      -- Report type
+            @tPrintParam,     -- Report params
+            'rdt_898ExtScn07',
+            @nErrNo  OUTPUT,
+            @cErrMsg OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
+   END
+
    Quit:
+
+   /*==========================================================================
+   FCR-13584: AutoGenID - Generate new ID when navigating to Screen 3 (TO ID)
+   Merged from rdt_898ExtScn10
+   ==========================================================================*/
+   IF @nAfterScn = @nScn_3  -- 1302
+   BEGIN
+      -- Get AutoGenID config
+      SET @cAutoGenID = rdt.RDTGetConfig(@nFunc, 'AutoGenID', @cStorerKey)
+      IF @cAutoGenID = '0'
+         SET @cAutoGenID = ''
+
+      IF @cAutoGenID <> ''
+      BEGIN
+         EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+            ,@cAutoGenID
+            ,@tExtData
+            ,@cAutoID  OUTPUT
+            ,@nErrNo   OUTPUT
+            ,@cErrMsg  OUTPUT
+
+         IF @nErrNo = 0
+            SET @cOutField04 = @cAutoID
+      END
+   END
+
    IF @nErrNo IS NULL OR (@nErrNo <> 0 AND @cErrMsg = '')
       SET @nErrNo = 0
    IF @cErrMsg IS NULL
