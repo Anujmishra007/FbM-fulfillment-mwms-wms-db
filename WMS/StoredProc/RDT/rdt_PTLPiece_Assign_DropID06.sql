@@ -11,7 +11,8 @@ GO
 /* 2023-02-10 1.0  James    Addhoc. Created                                   */      
 /* 2023-07-02 1.1  JHU151   FCR-477                                           */
 /* 2024-08-01 1.2  James    Perf tuning (james01)                             */
-/******************************************************************************/      
+/* 2026-03-16 1.3  Cuize    Remove Step2 Cache                                */
+/******************************************************************************/
       
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID06] (      
    @nMobile          INT,       
@@ -60,8 +61,15 @@ BEGIN
    DECLARE @cWaveKey     NVARCHAR( 10)    
    DECLARE @cWaveKey2cHK NVARCHAR( 10)    
    DECLARE @nCnt         INT    
-   DECLARE @nTranCount   INT    
-    
+   DECLARE @nTranCount   INT
+   DECLARE @cCheckPackedStatus           NVARCHAR( 20)
+
+
+   SET @cCheckPackedStatus = rdt.rdtGetConfig( @nFunc, 'CheckPackedStatus', @cStorerKey)
+   IF @cCheckPackedStatus = '0'
+      SET @cCheckPackedStatus = ''
+
+
    SET @nTranCount = @@TRANCOUNT    
     
    BEGIN TRAN    
@@ -77,9 +85,15 @@ BEGIN
             
   -- Prepare next screen var      
   SET @cOutField01 = ''      
-  SET @cOutField02 = CAST( @nTotalDropID AS NVARCHAR(5))      
-      
-  -- Go to batch screen      
+  SET @cOutField02 = CAST( @nTotalDropID AS NVARCHAR(5))
+
+   SET @cOutField03 = ''
+   SET @cOutField04 = ''
+   SET @cOutField05 = ''
+   SET @cOutField06 = ''
+   SET @cOutField07 = ''
+
+      -- Go to batch screen
   SET @nScn = 4602      
    END      
             
@@ -200,10 +214,12 @@ BEGIN
       -- Check dropid scanned onto the same cart must only have 1 wavekey    
       SELECT @cWaveKey = O.UserDefine09    
       FROM dbo.PICKDETAIL PD WITH (NOLOCK)    
-      JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey)    
+      JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey)
+      LEFT JOIN dbo.PackHeader ph WITH (NOLOCK) on (PD.OrderKey = PH.OrderKey)
       WHERE PD.Storerkey = @cStorerKey    
-      AND   PD.DropID LIKE RTRIM( @cStation) + '%'    
-      AND   PD.[Status] < '9'    
+      AND   PD.DropID LIKE RTRIM( @cStation) + '%'
+      AND   PD.[Status] < '9'
+      AND   ( @cCheckPackedStatus = '' OR ISNULL(PH.Status, '0') < '9' )
       GROUP BY O.UserDefine09    
           
       SET @nCnt = @@ROWCOUNT    

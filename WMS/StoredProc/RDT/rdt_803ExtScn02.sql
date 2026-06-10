@@ -11,38 +11,39 @@ GO
 /*                                                                        */
 /* Date       Rev    Author   Purposes                                    */
 /* 2025-11-03 1.0.0  NickT    FCR-8553 Created                            */
+/* 2026-01-23 1.0.1  Cuize    FCR-10095 PrintLabel                        */
 /**************************************************************************/
-  
+
 CREATE OR ALTER PROC [RDT].[rdt_803ExtScn02] (
-   @nMobile          INT,           
-   @nFunc            INT,           
-   @cLangCode        NVARCHAR( 3),  
-   @nStep            INT,           
-   @nScn             INT,           
-   @nInputKey        INT,           
-   @cFacility        NVARCHAR( 5),  
-   @cStorerKey       NVARCHAR( 15), 
+   @nMobile          INT,
+   @nFunc            INT,
+   @cLangCode        NVARCHAR( 3),
+   @nStep            INT,
+   @nScn             INT,
+   @nInputKey        INT,
+   @cFacility        NVARCHAR( 5),
+   @cStorerKey       NVARCHAR( 15),
 
    @tExtScnData      VariableTable READONLY,
 
-   @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT,  @cLottable01 NVARCHAR( 18) OUTPUT,  
-   @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT,  @cLottable02 NVARCHAR( 18) OUTPUT,  
-   @cInField03       NVARCHAR( 60) OUTPUT,  @cOutField03 NVARCHAR( 60) OUTPUT,  @cFieldAttr03 NVARCHAR( 1) OUTPUT,  @cLottable03 NVARCHAR( 18) OUTPUT,  
-   @cInField04       NVARCHAR( 60) OUTPUT,  @cOutField04 NVARCHAR( 60) OUTPUT,  @cFieldAttr04 NVARCHAR( 1) OUTPUT,  @dLottable04 DATETIME      OUTPUT,  
-   @cInField05       NVARCHAR( 60) OUTPUT,  @cOutField05 NVARCHAR( 60) OUTPUT,  @cFieldAttr05 NVARCHAR( 1) OUTPUT,  @dLottable05 DATETIME      OUTPUT,  
-   @cInField06       NVARCHAR( 60) OUTPUT,  @cOutField06 NVARCHAR( 60) OUTPUT,  @cFieldAttr06 NVARCHAR( 1) OUTPUT,  @cLottable06 NVARCHAR( 30) OUTPUT, 
-   @cInField07       NVARCHAR( 60) OUTPUT,  @cOutField07 NVARCHAR( 60) OUTPUT,  @cFieldAttr07 NVARCHAR( 1) OUTPUT,  @cLottable07 NVARCHAR( 30) OUTPUT, 
-   @cInField08       NVARCHAR( 60) OUTPUT,  @cOutField08 NVARCHAR( 60) OUTPUT,  @cFieldAttr08 NVARCHAR( 1) OUTPUT,  @cLottable08 NVARCHAR( 30) OUTPUT, 
-   @cInField09       NVARCHAR( 60) OUTPUT,  @cOutField09 NVARCHAR( 60) OUTPUT,  @cFieldAttr09 NVARCHAR( 1) OUTPUT,  @cLottable09 NVARCHAR( 30) OUTPUT, 
-   @cInField10       NVARCHAR( 60) OUTPUT,  @cOutField10 NVARCHAR( 60) OUTPUT,  @cFieldAttr10 NVARCHAR( 1) OUTPUT,  @cLottable10 NVARCHAR( 30) OUTPUT, 
+   @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT,  @cLottable01 NVARCHAR( 18) OUTPUT,
+   @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT,  @cLottable02 NVARCHAR( 18) OUTPUT,
+   @cInField03       NVARCHAR( 60) OUTPUT,  @cOutField03 NVARCHAR( 60) OUTPUT,  @cFieldAttr03 NVARCHAR( 1) OUTPUT,  @cLottable03 NVARCHAR( 18) OUTPUT,
+   @cInField04       NVARCHAR( 60) OUTPUT,  @cOutField04 NVARCHAR( 60) OUTPUT,  @cFieldAttr04 NVARCHAR( 1) OUTPUT,  @dLottable04 DATETIME      OUTPUT,
+   @cInField05       NVARCHAR( 60) OUTPUT,  @cOutField05 NVARCHAR( 60) OUTPUT,  @cFieldAttr05 NVARCHAR( 1) OUTPUT,  @dLottable05 DATETIME      OUTPUT,
+   @cInField06       NVARCHAR( 60) OUTPUT,  @cOutField06 NVARCHAR( 60) OUTPUT,  @cFieldAttr06 NVARCHAR( 1) OUTPUT,  @cLottable06 NVARCHAR( 30) OUTPUT,
+   @cInField07       NVARCHAR( 60) OUTPUT,  @cOutField07 NVARCHAR( 60) OUTPUT,  @cFieldAttr07 NVARCHAR( 1) OUTPUT,  @cLottable07 NVARCHAR( 30) OUTPUT,
+   @cInField08       NVARCHAR( 60) OUTPUT,  @cOutField08 NVARCHAR( 60) OUTPUT,  @cFieldAttr08 NVARCHAR( 1) OUTPUT,  @cLottable08 NVARCHAR( 30) OUTPUT,
+   @cInField09       NVARCHAR( 60) OUTPUT,  @cOutField09 NVARCHAR( 60) OUTPUT,  @cFieldAttr09 NVARCHAR( 1) OUTPUT,  @cLottable09 NVARCHAR( 30) OUTPUT,
+   @cInField10       NVARCHAR( 60) OUTPUT,  @cOutField10 NVARCHAR( 60) OUTPUT,  @cFieldAttr10 NVARCHAR( 1) OUTPUT,  @cLottable10 NVARCHAR( 30) OUTPUT,
    @cInField11       NVARCHAR( 60) OUTPUT,  @cOutField11 NVARCHAR( 60) OUTPUT,  @cFieldAttr11 NVARCHAR( 1) OUTPUT,  @cLottable11 NVARCHAR( 30) OUTPUT,
    @cInField12       NVARCHAR( 60) OUTPUT,  @cOutField12 NVARCHAR( 60) OUTPUT,  @cFieldAttr12 NVARCHAR( 1) OUTPUT,  @cLottable12 NVARCHAR( 30) OUTPUT,
    @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT,  @dLottable13 DATETIME      OUTPUT,
    @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT,  @dLottable14 DATETIME      OUTPUT,
    @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT,  @dLottable15 DATETIME      OUTPUT,
-   @nAction          INT, 
-   @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT, 
-   @nErrNo           INT            OUTPUT, 
+   @nAction          INT,
+   @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT,
+   @nErrNo           INT            OUTPUT,
    @cErrMsg          NVARCHAR( 20)  OUTPUT,
    @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
    @cUDF04  NVARCHAR( 250) OUTPUT, @cUDF05 NVARCHAR( 250) OUTPUT, @cUDF06 NVARCHAR( 250) OUTPUT,
@@ -63,15 +64,27 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE
-      @nCurrentScn      INT,
-      @nCurrentStep     INT,
-      @cOption          NVARCHAR( 10),
-      @cStation         NVARCHAR( 10)
+      @nCurrentScn               INT,
+      @nCurrentStep              INT,
+      @cOption                   NVARCHAR( 10),
+      @cStation                  NVARCHAR( 10),
+      @cOrderkey                 NVARCHAR( 20),
+      @cPosition                 NVARCHAR( 10),
+      @cDropId                   NVARCHAR( 30),
+      @cSKU                      NVARCHAR( 20),
+      @cQty                      NVARCHAR( 20),
+      @cLabelName                NVARCHAR(30),
+      @cLabelPrinterGroup        NVARCHAR(10),
+      @cPaperPrinter             NVARCHAR(10),
+      @cCheckShortPick           NVARCHAR( 20)
 
-   SELECT 
+
+      SELECT
       @nCurrentScn = Scn,
       @nCurrentStep = Step,
-      @cStation = V_String1
+      @cStation = V_String1,
+      @cLabelPrinterGroup = Printer,
+      @cPaperPrinter = Printer_Paper
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -80,16 +93,34 @@ BEGIN
    IF @nStep = 4 -- If Next Step is Confirm Unassign
    BEGIN
       -- If any dropid is not finished yet, jump to customize Unassign Station screen
-      IF EXISTS(SELECT 1 FROM rdt.rdtPTLPieceLog RPP WITH (NOLOCK)
-               INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON RPP.WaveKey = PD.WaveKey AND RPP.OrderKey = PD.OrderKey AND RPP.SourceKey = PD.DropID
-               WHERE RPP.Station = @cStation)
+      IF EXISTS(
+         SELECT 1 FROM rdt.rdtPTLPieceLog RPP WITH (NOLOCK)
+         INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON RPP.WaveKey = PD.WaveKey AND RPP.OrderKey = PD.OrderKey AND RPP.SourceKey = PD.DropID
+         WHERE RPP.Station = @cStation
+      )
+      BEGIN
+         SET @nAfterScn = 6713
+         SET @nAfterStep = 99
+         GOTO Quit
+      END
+
+      SET @cCheckShortPick = rdt.rdtGetConfig( @nFunc, 'CheckShortPick', @cStorerKey)
+      IF @cCheckShortPick = '0'
+         SET @cCheckShortPick = ''
+
+      IF @cCheckShortPick = '1'
+      AND EXISTS(
+         SELECT 1 FROM rdt.rdtPTLPieceLog RPP WITH (NOLOCK)
+            INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON RPP.WaveKey = PD.WaveKey AND RPP.OrderKey = PD.OrderKey
+         WHERE RPP.Station = @cStation AND PD.status = '4'
+      )
       BEGIN
          SET @nAfterScn = 6713
          SET @nAfterStep = 99
          GOTO Quit
       END
    END
-   
+
    IF @nCurrentStep = 99 -- Customize Step Screen
    BEGIN
       SET @cOption = @cInField01
@@ -103,6 +134,72 @@ BEGIN
 
       IF @cOption = '1' -- Unassign Station
       BEGIN
+
+         --Print QC label
+         SELECT @cLabelName = RDT.RDTGetConfig(@nFunc, 'QCLABEL', @cStorerkey)
+         IF @cLabelName = '0'
+            SET @cLabelName = ''
+
+         IF @cLabelName <> ''
+         BEGIN
+            DECLARE @tCQCLabelList VariableTable
+
+            DECLARE C_Orderkey CURSOR LOCAL FAST_FORWARD FOR
+
+               SELECT
+                  PD.sku,
+                  PD.orderkey,
+                  SUM(qty) FROM PICKDETAIL PD WITH (NOLOCK )
+               WHERE orderkey IN (
+                  SELECT DISTINCT ORDERKEY FROM RDT.rdtPTLPieceLog WITH (NOLOCK ) WHERE Station = @cStation)
+                 AND PD.DropID NOT LIKE @cStation+'%'
+               GROUP BY PD.sku, PD.orderkey, PD.DropID
+
+            OPEN C_Orderkey
+            FETCH NEXT FROM C_Orderkey INTO @cSKU, @cOrderkey, @cQty
+
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+               DELETE FROM @tCQCLabelList
+
+               SELECT TOP 1
+                  @cPosition = Position,
+                  @cDropId = Sourcekey
+               FROM RDT.rdtPTLPieceLog WITH (NOLOCK)
+               WHERE Station = @cStation
+                 AND   OrderKey = @cOrderKey   -- 1 Station 1 orderkey
+               ORDER BY 1
+
+               -- Common params
+               INSERT INTO @tCQCLabelList (Variable, Value)
+               VALUES
+                  ('@cStation', @cStation)
+                  ,('@cPosition', @cPosition)
+                  ,('@cOrderkey', @cOrderkey)
+                  ,('@cDropID', @cDropID)
+                  ,('@cSKU', @cSKU)
+                  ,('@cQty', @cQty)
+
+               -- Print label
+               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                    @cLabelName, -- Report type
+                    @tCQCLabelList, -- Report params
+                    'rdt_803ExtScn02',
+                    @nErrNo  OUTPUT,
+                    @cErrMsg OUTPUT
+
+               FETCH NEXT FROM C_Orderkey INTO @cSKU, @cOrderkey, @cQty
+            END
+            CLOSE C_Orderkey
+            DEALLOCATE C_Orderkey
+
+         END
+
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Quit
+         END
+
          -- Unassign Station Logic Here
          SET @cUDF01 = 'Unassign Confirmed'
          SET @nAfterScn = 4593
@@ -114,21 +211,21 @@ BEGIN
          SET @nAfterStep = 3
 
       SET @cOutField01 = '' --Result01
-      SET @cOutField02 = '' 
-      SET @cOutField03 = '' 
-      SET @cOutField04 = '' 
-      SET @cOutField05 = '' 
-      SET @cOutField06 = '' 
-      SET @cOutField07 = '' 
-      SET @cOutField08 = '' 
-      SET @cOutField09 = '' 
+      SET @cOutField02 = ''
+      SET @cOutField03 = ''
+      SET @cOutField04 = ''
+      SET @cOutField05 = ''
+      SET @cOutField06 = ''
+      SET @cOutField07 = ''
+      SET @cOutField08 = ''
+      SET @cOutField09 = ''
       SET @cOutField10 = '' --Result10
       SET @cOutField11 = '' --@cSKU
       SET @cOutField12 = '' --@cLastPos
       END
    END
 
-   
+
    GOTO Quit
 
 Quit:
