@@ -115,6 +115,7 @@ BEGIN
    DECLARE @nGrossWgt          DECIMAL(18,8)
    DECLARE @nQtyExpected       DECIMAL(18,8)
    DECLARE @cSignatory         NVARCHAR(30)
+   DECLARE @cSKUDesc           NVARCHAR(50)  -- SKU Description for display
 
    -- FCR-13584: Variables for AutoGenID and Pallet Label Printing
    DECLARE @cAutoGenID         NVARCHAR(20)
@@ -160,6 +161,38 @@ BEGIN
       @cPaperPrinter   = ISNULL(Printer_Paper, '')  -- FCR-13584
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
+
+   -- Reset count when transitioning FROM Screen 4 (main SP skips Screen 4 handler)
+   IF @nCurrentStep = @nStep_4 AND @nInputKey = 1
+   BEGIN
+      -- Get estimated count from @cInField05 and reset counters
+      SET @cTotalCarton = ISNULL(RTRIM(@cInField05), '0')
+
+      UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
+      SET V_String50 = '',
+          V_String49 = '',
+          V_String2 = @cTotalCarton,
+          V_String48 = '0'
+      WHERE Mobile = @nMobile
+
+      SET @cCartonCnt = '0'
+   END
+
+   -- Store UCC when transitioning from Screen 6 to Screen 8 (main SP skips Screen 6 handler)
+   IF @nStep = @nStep_8 AND @nCurrentStep = @nStep_6 AND @cStoredUCC = ''
+   BEGIN
+
+      SET @cUCC = ISNULL(RTRIM(@cOutField01), '')
+      IF @cUCC <> ''
+      BEGIN
+         UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
+         SET V_String49 = @cUCC
+         WHERE Mobile = @nMobile
+
+         -- Update local variable for this SP call
+         SET @cStoredUCC = @cUCC
+      END
+   END
 
    -- Get ProcessType, ExternReceiptKey and Signatory from RECEIPT
    SELECT @cProcessType = ISNULL(RTRIM(ProcessType), ''),
@@ -284,7 +317,7 @@ BEGIN
    ==========================================================================*/
    IF @nStep = @nStep_6
    BEGIN
-
+    
       IF @nCurrentStep = @nStep_11 
       BEGIN
          IF @nInputKey = 1
@@ -294,10 +327,17 @@ BEGIN
             IF @cOption = '2'
             BEGIN
                -- Option 2: NO - Go back to UCC screen (Screen 6)
+               IF ISNULL(@cStoredSKU, '') <> ''
+                  SELECT @cSKUDesc = ISNULL(Descr, '')
+                  FROM dbo.SKU WITH(NOLOCK)
+                  WHERE StorerKey = @cStorerKey AND SKU = @cStoredSKU
+
                SET @cCountDisplay = ISNULL(@cCartonCnt, '0') + '/' + ISNULL(@cTotalCarton, '0')
 
                SET @cOutField01 = ''  -- UCC (empty for input)
                SET @cOutField02 = ISNULL(@cStoredSKU, '')   -- SKU
+               SET @cOutField03 = SUBSTRING(ISNULL(@cSKUDesc, ''), 1, 20)
+               SET @cOutField04 = SUBSTRING(ISNULL(@cSKUDesc, ''), 21, 20)
                SET @cOutField11 = @cCountDisplay
 
                SET @nAfterStep = @nStep_6
@@ -309,10 +349,18 @@ BEGIN
          -- ESC on this screen - go back to UCC screen
          IF @nInputKey = 0
          BEGIN
+            -- Get SKU description for display
+            IF ISNULL(@cStoredSKU, '') <> ''
+               SELECT @cSKUDesc = ISNULL(Descr, '')
+               FROM dbo.SKU WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey AND SKU = @cStoredSKU
+
             SET @cCountDisplay = ISNULL(@cCartonCnt, '0') + '/' + ISNULL(@cTotalCarton, '0')
 
             SET @cOutField01 = ''
             SET @cOutField02 = ISNULL(@cStoredSKU, '')
+            SET @cOutField03 = SUBSTRING(ISNULL(@cSKUDesc, ''), 1, 20)
+            SET @cOutField04 = SUBSTRING(ISNULL(@cSKUDesc, ''), 21, 20)
             SET @cOutField11 = @cCountDisplay
 
             SET @nAfterStep = @nStep_6
@@ -326,10 +374,18 @@ BEGIN
          -- ESC on this screen - go back to UCC screen
          IF @nInputKey = 0
          BEGIN
+            -- Get SKU description for display
+            IF ISNULL(@cStoredSKU, '') <> ''
+               SELECT @cSKUDesc = ISNULL(Descr, '')
+               FROM dbo.SKU WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey AND SKU = @cStoredSKU
+
             SET @cCountDisplay = ISNULL(@cCartonCnt, '0') + '/' + ISNULL(@cTotalCarton, '0')
 
             SET @cOutField01 = ''
             SET @cOutField02 = ISNULL(@cStoredSKU, '')
+            SET @cOutField03 = SUBSTRING(ISNULL(@cSKUDesc, ''), 1, 20)
+            SET @cOutField04 = SUBSTRING(ISNULL(@cSKUDesc, ''), 21, 20)
             SET @cOutField11 = @cCountDisplay
 
             SET @nAfterStep = @nStep_6
@@ -345,7 +401,7 @@ BEGIN
          SET @cOutField11 = @cCountDisplay
       END
 
-      IF @nInputKey = 1
+      IF @nInputKey = 1 AND @nCurrentStep = @nStep_6
       BEGIN
          SET @cUCC = ISNULL(RTRIM(SUBSTRING(@cMax, 1, 20)), '')
 
@@ -357,13 +413,13 @@ BEGIN
             GOTO Quit
          END
 
-         -- Validate UCC is 20-digit number
-         IF LEN(@cUCC) <> 20 OR @cUCC LIKE '%[^0-9]%'
-         BEGIN
-            SET @nErrNo = 264815
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-            GOTO Quit
-         END
+         -- -- Validate UCC is 20-digit number
+         -- IF LEN(@cUCC) <> 20 OR @cUCC LIKE '%[^0-9]%'
+         -- BEGIN
+         --    SET @nErrNo = 264815
+         --    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         --    GOTO Quit
+         -- END
 
          -- Check if UCC exists
          SET @nUCCExists = 0
@@ -591,7 +647,8 @@ BEGIN
                   UPDATE dbo.UCC WITH(ROWLOCK)
                   SET ExternKey = @cExternReceiptKey,
                       SourceType = 'PO',
-                      Userdefined01 = 'N'
+                      Userdefined01 = 'N',
+                      Sourcekey = @cPOKeyValue
                   WHERE StorerKey = @cStorerKey
                     AND UCCNo = @cUCC
 
@@ -668,9 +725,17 @@ BEGIN
                   END
                   ELSE
                   BEGIN
+                     -- Get SKU description for display
+                     SELECT @cSKUDesc = ISNULL(Descr, '')
+                     FROM dbo.SKU WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+
                      -- More UCCs to receive, stay on Screen 6
                      SET @cCountDisplay = CAST(@nCurrentCnt AS NVARCHAR(4)) + '/' + CAST(@nTotalCnt AS NVARCHAR(4))
                      SET @cOutField01 = ''
+                     SET @cOutField02 = @cSKU
+                     SET @cOutField03 = SUBSTRING(ISNULL(@cSKUDesc, ''), 1, 20)
+                     SET @cOutField04 = SUBSTRING(ISNULL(@cSKUDesc, ''), 21, 20)
                      SET @cOutField11 = @cCountDisplay
 
                      SET @nAfterStep = @nStep_6
@@ -685,7 +750,8 @@ BEGIN
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET ExternKey = @cExternReceiptKey,
                    SourceType = 'PO',
-                   Userdefined01 = 'N'
+                   Userdefined01 = 'N',
+                   Sourcekey = @cPOKeyValue
                WHERE StorerKey = @cStorerKey
                  AND UCCNo = @cUCC
             END
@@ -750,10 +816,47 @@ BEGIN
    ==========================================================================*/
    IF @nStep = @nStep_8
    BEGIN
+      -- If coming from Screen 6 with NO stored SKU, skip (first UCC - let user enter SKU)
+      IF @nCurrentStep = @nStep_6 AND (@cStoredSKU = '' OR @cStoredSKU IS NULL)
+      BEGIN
+         -- ProcessType 'C': UCC must exist
+         IF UPPER(@cProcessType) = 'C'
+         BEGIN
+            SET @cUCC = ISNULL(RTRIM(@cOutField01), '')
+
+            -- Check if UCC exists
+            SET @nUCCExists = 0
+            IF EXISTS (SELECT 1 FROM dbo.UCC WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND UCCNo = @cUCC)
+               SET @nUCCExists = 1
+
+            IF @nUCCExists = 0
+            BEGIN
+               -- UCC doesn't exist - not allowed for ProcessType C
+               SET @nErrNo = 264801
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               SET @cOutField01 = ''
+               SET @cCountDisplay = ISNULL(@cCartonCnt, '0') + '/' + ISNULL(@cTotalCarton, '0')
+               SET @cOutField11 = @cCountDisplay
+
+               SET @nAfterStep = @nStep_6
+               SET @nAfterScn = @nScn_6
+               GOTO Quit
+            END
+         END
+
+         GOTO Quit
+      END
+
+      -- Process: either from Screen 6 with stored SKU (subsequent UCC) or user entered SKU on Screen 8
       IF @nInputKey = 1
       BEGIN
-         SET @cSKU = ISNULL(RTRIM(SUBSTRING(@cMax, 1, 20)), '')
-         -- Get UCC from stored value (V_String49), not from @cOutField01
+         -- Use stored SKU if exists (subsequent UCC), otherwise use @cMax (first UCC)
+         IF @cStoredSKU <> '' AND @cStoredSKU IS NOT NULL
+            SET @cSKU = @cStoredSKU
+         ELSE
+            SET @cSKU = ISNULL(RTRIM(SUBSTRING(@cMax, 1, 20)), '')
+
+         -- Get UCC from stored value (V_String49)
          SET @cUCC = ISNULL(@cStoredUCC, '')
 
          -- If no stored UCC, try from field
@@ -774,9 +877,10 @@ BEGIN
                GOTO Quit
             END
 
-            -- Store SKU for subsequent UCCs
+            -- Store SKU for subsequent UCCs and clear stored UCC (processed)
             UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
-            SET V_String50 = @cSKU
+            SET V_String50 = @cSKU,
+                V_String49 = ''
             WHERE Mobile = @nMobile
 
             -- ============================================================
@@ -863,7 +967,8 @@ BEGIN
             UPDATE dbo.UCC WITH(ROWLOCK)
             SET ExternKey = @cExternReceiptKey,
                 SourceType = 'PO',
-                Userdefined01 = 'N'
+                Userdefined01 = 'N',
+                Sourcekey = @cPOKeyValue
             WHERE StorerKey = @cStorerKey
               AND UCCNo = @cUCC
 
@@ -937,8 +1042,16 @@ BEGIN
             END
             ELSE
             BEGIN
+               -- Get SKU description for display
+               SELECT @cSKUDesc = ISNULL(Descr, '')
+               FROM dbo.SKU WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+
                SET @cCountDisplay = CAST(@nCurrentCnt AS NVARCHAR(4)) + '/' + CAST(@nTotalCnt AS NVARCHAR(4))
                SET @cOutField01 = ''
+               SET @cOutField02 = @cSKU
+               SET @cOutField03 = SUBSTRING(ISNULL(@cSKUDesc, ''), 1, 20)
+               SET @cOutField04 = SUBSTRING(ISNULL(@cSKUDesc, ''), 21, 20)
                SET @cOutField11 = @cCountDisplay
 
                SET @nAfterStep = @nStep_6
@@ -957,9 +1070,12 @@ BEGIN
    ==========================================================================*/
    IF @nStep = @nStep_9
    BEGIN
-      -- Get SKU from @tExtScnData (main SP passes validated values here)
-      SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
-      SELECT @cUCC = Value FROM @tExtScnData WHERE Variable = '@cUCC'
+      -- Get SKU - try @cMax first, then @cInField02, then @cOutField02
+      SET @cSKU = ISNULL(RTRIM(SUBSTRING(@cMax, 1, 20)), '')
+      IF @cSKU = ''
+         SET @cSKU = ISNULL(RTRIM(@cInField02), '')
+      IF @cSKU = ''
+         SET @cSKU = ISNULL(RTRIM(@cOutField02), '')
 
       -- If we have a stored UCC, this is our first UCC flow
       -- Process the UCC receive here
@@ -967,13 +1083,7 @@ BEGIN
       BEGIN
          SET @cUCC = @cStoredUCC
 
-         -- Get SKU - prefer from ExtScnData, fallback to stored
-         IF @cSKU = '' OR @cSKU IS NULL
-         BEGIN
-            -- Try to get from OutField02 (display field for SKU)
-            SET @cSKU = ISNULL(RTRIM(@cOutField02), '')
-         END
-
+        
          IF @cSKU = ''
          BEGIN
             SET @nErrNo = 264806
@@ -1069,7 +1179,8 @@ BEGIN
          UPDATE dbo.UCC WITH(ROWLOCK)
          SET ExternKey = @cExternReceiptKey,
              SourceType = 'PO',
-             Userdefined01 = 'N'
+             Userdefined01 = 'N',
+             Sourcekey = @cPOKeyValue
          WHERE StorerKey = @cStorerKey
            AND UCCNo = @cUCC
 
@@ -1141,8 +1252,16 @@ BEGIN
          END
          ELSE
          BEGIN
+            -- Get SKU description for display
+            SELECT @cSKUDesc = ISNULL(Descr, '')
+            FROM dbo.SKU WITH(NOLOCK)
+            WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+
             SET @cCountDisplay = CAST(@nCurrentCnt AS NVARCHAR(4)) + '/' + CAST(@nTotalCnt AS NVARCHAR(4))
             SET @cOutField01 = ''
+            SET @cOutField02 = @cSKU
+            SET @cOutField03 = SUBSTRING(ISNULL(@cSKUDesc, ''), 1, 20)
+            SET @cOutField04 = SUBSTRING(ISNULL(@cSKUDesc, ''), 21, 20)
             SET @cOutField11 = @cCountDisplay
 
             SET @nAfterStep = @nStep_6
