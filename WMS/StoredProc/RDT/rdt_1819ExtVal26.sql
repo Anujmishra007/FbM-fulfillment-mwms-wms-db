@@ -120,26 +120,6 @@ BEGIN
                SET @nContainOtherThanGOO = 1
             END
 
-            IF ISNULL(@nDAMPallet, 0) = 1
-            BEGIN
-               IF EXISTS(SELECT 1
-                     FROM dbo.LOTATTRIBUTE LA WITH(NOLOCK)
-                     INNER JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK) 
-                        ON LA.Lot = LLI.Lot
-                        AND LA.StorerKey = LLI.StorerKey
-                        AND LA.Sku = LLI.Sku
-                     WHERE LLI.StorerKey = @cStorerKey
-                        AND LLI.ID = @cFromID
-                        AND (LLI.Qty - LLI.QtyPicked - LLI.QtyPickInProcess > 0)
-                        AND ISNULL(LA.LOTTABLE02, '') <> @cDAM
-                     )
-               BEGIN
-                  SET @nErrNo = 268455
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Not allow mix None-DAM and DAM inventory
-                  GOTO Quit
-               END
-            END
-
             IF @nContainGOO = 1
             BEGIN
                IF @nContainOtherThanGOO = 1
