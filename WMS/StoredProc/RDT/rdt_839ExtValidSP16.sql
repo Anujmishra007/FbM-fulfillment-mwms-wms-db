@@ -132,7 +132,7 @@ BEGIN
          END
       END
    END
-   QUIT:
+   Quit:
 END
 GO
 SET QUOTED_IDENTIFIER OFF

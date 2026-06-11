@@ -97,6 +97,7 @@ BEGIN
       @cUOM                   NVARCHAR( 1),
       @cScannedUCC            NVARCHAR( 20),
       @cScannedLOC            NVARCHAR( 10),
+      @cScannedID             NVARCHAR( 18),
       @cScannedSKU            NVARCHAR( 20),
       @cScannedLOT            NVARCHAR( 10),
       @cScannedSN             NVARCHAR( 50),
@@ -447,6 +448,8 @@ BEGIN
                         AND ((Status = '9'AND PickMethod IN( 'GetTask-U', 'GetTask-P') ) OR PickMethod = 'PickTask-P' ) 
                      )
             BEGIN
+               SET @cOutField01 = ''
+
                SET @nAfterScn = 6828
                SET @nAfterStep = 99
             END
@@ -2016,6 +2019,14 @@ BEGIN
                      FROM dbo.LOTATTRIBUTE WITH(NOLOCK)
                      WHERE Lot = @cScannedLot
 
+                     SELECT 
+                        @cScannedLOC = Loc,
+                        @cScannedID = ID,
+                        @cScannedSKU = SKU
+                     FROM dbo.SerialNo WITH(NOLOCK)
+                     WHERE SerialNo = @cScannedSN
+                        AND StorerKey = @cStorerKey
+
                      SELECT TOP 1 
                         @nrdtPickLogID = RowRef,
                         @cCurrentOrderKey = RPL.OrderKey
@@ -2023,10 +2034,12 @@ BEGIN
                      INNER JOIN dbo.LOT WITH(NOLOCK) ON RPL.Descr IS NOT NULL AND RPL.Descr = LOT.Lot
                      INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LOT.Lot = LA.Lot
                      WHERE PickSlipNo = @cPickSlipNo 
-                        AND RPL.Mobile = @nMobile 
-                        AND RPL.AddWho = @cUserName
+                        AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                         AND RPL.PickMethod = 'GetTask-P'
                         AND RPL.Status = '0'
+                        AND RPL.Loc = @cScannedLOC
+                        AND RPL.ID = @cScannedID
+                        AND RPL.SKU = @cScannedSKU
                         AND RPL.PickLockQty < RPL.ActQty
                         AND (LOT.Lot = @cScannedLot OR (LOT.Lot <> @cScannedLot AND @cScannedLottable01 = LA.Lottable01))
                      ORDER BY RPL.OrderKey, IIF(LOT.Lot = @cScannedLot, 1, 2), RPL.PickLockQty DESC, RPL.PickDetailKey
@@ -3609,7 +3622,6 @@ BEGIN
                      ELSE
                      BEGIN
                         SET @cOutField01 = ''
-
                         -- Go to No More Task screen
                         SET @nAfterScn = 6828
                         SET @nAfterStep = 99
@@ -4383,7 +4395,7 @@ BEGIN
                                                    )
                         BEGIN
                            -- Prepare next screen var
-                           SET @cOutField01 = '' -- PickSlipNo
+                           SET @cOutField01 = ''
 
                            -- Go to No More Task, Close All DropID screen
                            SET @nAfterScn = 6828

@@ -97,7 +97,7 @@ BEGIN
    SET @cOrderKey = ''
    SET @cLoadKey = ''
    SET @cZone = ''
-   SET @cUserName = SUSER_NAME()
+   SET @cUserName = SUSER_SNAME()
 
    SET @cCurrLOC = @cLOC
    SET @cCurrSKU = CASE WHEN @cType = 'BALPICK' THEN @cSKU ELSE '' END
@@ -207,7 +207,7 @@ BEGIN
       '    SELECT TOP 1 @nQTY = ISNULL( SUM( PD.QTY), 0) ' +
       CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END +
       '    FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) ' +
-      '       JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
+      '       JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
       '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
       '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
       '    WHERE LPD.LoadKey = @cLoadKey ' +
@@ -340,7 +340,7 @@ BEGIN
          SET @cSQL =
          '    SELECT TOP 1 @nQTY = ISNULL( SUM( PD.QTY), 0) ' +
          '    FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) ' +
-         '       JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
+         '       JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
          '    WHERE LPD.LoadKey = @cLoadKey ' +
@@ -477,7 +477,7 @@ BEGIN
          ELSE
             SELECT  @nTtlBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE LPD.LoadKey = @cLoadKey
                AND LOC.PickZone = @cPickZone
@@ -576,7 +576,7 @@ BEGIN
          ELSE
             SELECT  @nBalQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                LEFT JOIN #ProcessedDetails EPL ON EPL.PickDetailKey = PD.PickDetailKey
             WHERE LPD.LoadKey = @cLoadKey
