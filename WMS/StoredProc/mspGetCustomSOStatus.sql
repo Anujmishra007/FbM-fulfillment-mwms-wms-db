@@ -202,8 +202,7 @@ BEGIN
       HAVING COUNT(pid.DropID) = COUNT(stt.URNNo)
       )) ')
 
-  --debug
-  SELECT * FROM #TMP_SUPPORTED_CONDITIONS
+
   SET @c_ConvertedSQLStr = @c_SQLStr
   SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, 'ORDERS.ContainerQty, ORDERS.SOStatus, ORDERS.MBOLKey,', 'ORDERS.ContainerQty, ORDERS.MBOLKey,')
   SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, @c_TargetStr, @c_ReplaceStr)
