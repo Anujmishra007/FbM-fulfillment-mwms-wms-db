@@ -2037,9 +2037,9 @@ BEGIN
                         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                         AND RPL.PickMethod = 'GetTask-P'
                         AND RPL.Status = '0'
-                        AND RPL.Loc = @cScannedLOC
-                        AND RPL.ID = @cScannedID
-                        AND RPL.SKU = @cScannedSKU
+                        AND ISNULL(RPL.Loc,'') = ISNULL(@cScannedLOC,'')
+                        AND ISNULL(RPL.ID,'') = ISNULL(@cScannedID,'')
+                        AND ISNULL(RPL.SKU,'') = ISNULL(@cScannedSKU,'')
                         AND RPL.PickLockQty < RPL.ActQty
                         AND (LOT.Lot = @cScannedLot OR (LOT.Lot <> @cScannedLot AND @cScannedLottable01 = LA.Lottable01))
                      ORDER BY RPL.OrderKey, IIF(LOT.Lot = @cScannedLot, 1, 2), RPL.PickLockQty DESC, RPL.PickDetailKey

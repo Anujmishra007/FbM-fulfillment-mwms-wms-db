@@ -455,8 +455,9 @@ BEGIN
                   WHERE PickSlipNo = @cPickSlipNo
                      AND Lot IS NOT NULL
                      AND Lot = @cSuggLOT
+                     AND LOC IS NOT NULL
                      AND LOC = @cLOC
-                     AND ID = ISNULL(@cScannedID,'')
+                     AND ISNULL(ID, '') = ISNULL(@cScannedID,'')
                      AND SKU = @cSuggSKU
                      AND PickMethod = 'GetTask-P'
                      AND (Mobile = @nMobile OR AddWho = @cUserName))
