@@ -1,6 +1,5 @@
 .idea
 
 # Markdown Files
-*.md
 !.github/instructions/RDT_pr_review.instructions.md
 !.github/instructions/IOINV_PR_Review.instructions.md
