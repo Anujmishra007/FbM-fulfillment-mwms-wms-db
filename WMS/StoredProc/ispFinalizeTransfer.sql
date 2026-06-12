@@ -2515,9 +2515,6 @@ ML02-E  */
                              , SourceKey = @c_Transferkey
                              , SourceType = 'TF'
                              , Status = CASE WHEN @c_LoseUCC = '1' THEN '6'
-                                             WHEN NOT ( Qty - @nFromQty + @nToQty > 0
-                                              AND @cFromStorerKey=@cToStorerKey AND @cFromSKU=@cToSKU
-                                              AND @cFromLOT=@cToLOT AND @cFromLOC=@cToLOC AND @cFromID=@cToID ) THEN '6'
                                              ELSE Status
                                         END
                          WHERE UCC_RowRef = @n_FromUCC_RowRef
