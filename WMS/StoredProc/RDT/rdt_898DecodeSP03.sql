@@ -93,11 +93,24 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
             GOTO QUIT
          END
-         SELECT @cLottable01 = EXTERNRECEIPTKEY FROM Receipt (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
+         SELECT @cLottable01 = ISNULL(EXTERNRECEIPTKEY, @cLottable01) FROM Receipt (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
+
+         -- Fallback: If not BAT barcode, try to fetch existing lottables for this UCC
+         IF LEN(@cBarcode) NOT IN (40, 44, 34, 67)
+         BEGIN
+            SELECT TOP 1 
+               @cLottable02 = ISNULL(Userdefined01, ''),  -- Maps to Lottable02 in UCCReceive
+               @cLottable03 = ISNULL(Userdefined02, ''),  -- Maps to Lottable03 
+               @dLottable04 = ISNULL(NULLIF(Userdefined03, ''), 0) -- Maps to Lottable04 
+            FROM dbo.UCC (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+              AND UCCNo = @cBarcode
+         END
+
          IF LEN(@cBarcode) IN( 40 , 44)
          BEGIN
             SELECT 
-            @cUCC = CASE 
+            @cUCC = ISNULL(CASE 
                WHEN CHARINDEX('(240)', @cBarcode) > 0 THEN
                      SUBSTRING(
                         @cBarcode,
@@ -105,8 +118,8 @@ BEGIN
                         LEN(@cBarcode)
                      )
                ELSE NULL
-            END,
-            @cLottable02 = 
+            END, @cUCC),
+            @cLottable02 = ISNULL(
             CASE 
                WHEN CHARINDEX('(10)', @cBarcode) > 0 AND CHARINDEX('(11)', @cBarcode) > CHARINDEX('(10)', @cBarcode) THEN
                      SUBSTRING(
@@ -115,8 +128,8 @@ BEGIN
                         CHARINDEX('(11)', @cBarcode) - CHARINDEX('(10)', @cBarcode) - 4
                      )
                ELSE NULL
-            END,
-            @cLottable03 = 
+            END, @cLottable02),
+            @cLottable03 = ISNULL(
             CASE 
                WHEN CHARINDEX('(11)', @cBarcode) > 0 AND CHARINDEX('(240)', @cBarcode) > CHARINDEX('(11)', @cBarcode) THEN
                      CASE 
@@ -159,7 +172,7 @@ BEGIN
                         ELSE NULL
                      END
                ELSE NULL
-            END
+            END, @cLottable03)
          END
          ELSE IF LEN(@cBarcode) = 34
          BEGIN
@@ -250,27 +263,17 @@ BEGIN
       BEGIN
          SET @cBarcode = REPLACE(TRIM(@cUCC), ' ', '')
 
-         -- Validation - If barcode contains parentheses, must be valid GS1
-         IF CHARINDEX('(', @cBarcode) > 0
+         -- Only validate and decode if barcode starts with (10) - BAT GS1 format
+         IF LEFT(@cBarcode, 4) = '(10)'
          BEGIN
-            IF LEFT(@cBarcode, 4) <> '(10)'
-            BEGIN
-               SET @nErrNo = 263852
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-               GOTO Quit
-            END
-            
+            -- Validation - length must be 40 or 44 for BAT barcodes
             IF LEN(@cBarcode) NOT IN (40, 44)
             BEGIN
                SET @nErrNo = 263853
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                GOTO Quit
             END
-         END
-
-         -- Only decode if barcode length is 40 or 44 AND starts with (10)
-         IF LEN(@cBarcode) IN (40, 44) AND LEFT(@cBarcode, 4) = '(10)'
-         BEGIN
+            
             -- Decode Batch: Value between (10) and (11)
             SET @cLottable02 = 
                CASE 
