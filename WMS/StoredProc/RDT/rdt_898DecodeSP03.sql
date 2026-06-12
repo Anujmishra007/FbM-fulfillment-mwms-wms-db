@@ -93,24 +93,11 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
             GOTO QUIT
          END
-         SELECT @cLottable01 = ISNULL(EXTERNRECEIPTKEY, @cLottable01) FROM Receipt (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
-
-         -- Fallback: If not BAT barcode, try to fetch existing lottables for this UCC
-         IF LEN(@cBarcode) NOT IN (40, 44, 34, 67)
-         BEGIN
-            SELECT TOP 1 
-               @cLottable02 = ISNULL(Userdefined01, @cLottable02),  -- Preserves existing value
-               @cLottable03 = ISNULL(Userdefined02, @cLottable03),  -- Preserves existing value
-               @dLottable04 = COALESCE(TRY_CONVERT(DATETIME, NULLIF(Userdefined03, '')), @dLottable04) -- Safe conversion   
-            FROM dbo.UCC (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-              AND UCCNo = @cBarcode
-         END
-
+         SELECT @cLottable01 = EXTERNRECEIPTKEY FROM Receipt (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
          IF LEN(@cBarcode) IN( 40 , 44)
          BEGIN
             SELECT 
-            @cUCC = ISNULL(CASE 
+            @cUCC = CASE 
                WHEN CHARINDEX('(240)', @cBarcode) > 0 THEN
                      SUBSTRING(
                         @cBarcode,
@@ -118,8 +105,8 @@ BEGIN
                         LEN(@cBarcode)
                      )
                ELSE NULL
-            END, @cUCC),
-            @cLottable02 = ISNULL(
+            END,
+            @cLottable02 = 
             CASE 
                WHEN CHARINDEX('(10)', @cBarcode) > 0 AND CHARINDEX('(11)', @cBarcode) > CHARINDEX('(10)', @cBarcode) THEN
                      SUBSTRING(
@@ -128,8 +115,8 @@ BEGIN
                         CHARINDEX('(11)', @cBarcode) - CHARINDEX('(10)', @cBarcode) - 4
                      )
                ELSE NULL
-            END, @cLottable02),
-            @cLottable03 = ISNULL(
+            END,
+            @cLottable03 = 
             CASE 
                WHEN CHARINDEX('(11)', @cBarcode) > 0 AND CHARINDEX('(240)', @cBarcode) > CHARINDEX('(11)', @cBarcode) THEN
                      CASE 
@@ -172,7 +159,7 @@ BEGIN
                         ELSE NULL
                      END
                ELSE NULL
-            END, @cLottable03)
+            END
          END
          ELSE IF LEN(@cBarcode) = 34
          BEGIN
@@ -309,6 +296,7 @@ BEGIN
                SET @cLottable03 = '20' + @cMfgDateRaw  -- 20 + YYMMDD = YYYYMMDD
             END
          END
+         -- If barcode doesn't start with (10), do nothing - preserves existing lottable values for other SKUs
       END
    END
 
