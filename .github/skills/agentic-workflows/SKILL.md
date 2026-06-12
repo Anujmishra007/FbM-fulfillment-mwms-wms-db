@@ -27,3 +27,6 @@ After loading the matching workflow prompt, follow it directly:
 - Optimize token usage and cost: `.github/aw/token-optimization.md`
 
 When the task involves OTEL, OTLP, traces, observability backends, or telemetry-driven analysis, also read and follow `skills/otel-queries/SKILL.md` after loading the matching workflow prompt.
+
+When the task involves authoring, reviewing, or triaging **WMS SQL** files (anything under `WMS/**/*.sql`, RDT stored procs, IO/INV SPs, triggers, tables, message catalogs), do **not** use this skill — instead use `.github/skills/wms-sql-development/SKILL.md`, which routes to the right T-SQL templates and PR-review playbooks for this repository.
+

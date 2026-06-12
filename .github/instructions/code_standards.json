@@ -1,0 +1,279 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-06-11",
+  "description": "RDT SQL Code Standards for automated validation",
+  "rules": {
+    "format": [
+      {
+        "id": "FORMAT-001",
+        "name": "Line Breaker",
+        "description": "Use Windows line break (CRLF), no Unix line break (LF)",
+        "severity": "error",
+        "category": "format",
+        "pattern": {
+          "type": "lineEnding",
+          "required": "CRLF",
+          "forbidden": "LF"
+        }
+      },
+      {
+        "id": "FORMAT-002",
+        "name": "TAB Size",
+        "description": "Use 3 spaces instead of TAB control",
+        "severity": "error",
+        "category": "format",
+        "pattern": {
+          "type": "indentation",
+          "required": "spaces",
+          "size": 3,
+          "forbidden": "tab"
+        }
+      }
+    ],
+    "general": [
+      {
+        "id": "GENERAL-001",
+        "name": "CREATE OR ALTER",
+        "description": "Must use CREATE OR ALTER in SP scripts",
+        "severity": "error",
+        "category": "syntax",
+        "pattern": {
+          "type": "regex",
+          "required": "CREATE\\s+OR\\s+ALTER\\s+PROC",
+          "forbidden": "^CREATE\\s+PROC(?!.*OR\\s+ALTER)"
+        },
+        "appliesTo": ["StoredProc"]
+      },
+      {
+        "id": "GENERAL-002",
+        "name": "TRY CATCH for Data Operations",
+        "description": "All DELETE, UPDATE, INSERT, MERGE must be wrapped in BEGIN TRY...BEGIN CATCH",
+        "severity": "error",
+        "category": "errorHandling",
+        "pattern": {
+          "type": "block",
+          "operations": ["DELETE", "UPDATE", "INSERT", "MERGE"],
+          "requiredWrapper": "BEGIN TRY...BEGIN CATCH"
+        }
+      },
+      {
+        "id": "GENERAL-003",
+        "name": "Schema Prefix",
+        "description": "All table references must include schema prefix",
+        "severity": "error",
+        "category": "naming",
+        "pattern": {
+          "type": "tableReference",
+          "requiredPrefix": ["dbo.", "rdt.", "RDT."]
+        }
+      },
+      {
+        "id": "GENERAL-004",
+        "name": "ROWLOCK for Updates",
+        "description": "Must add WITH (ROWLOCK) when updating data",
+        "severity": "error",
+        "category": "locking",
+        "pattern": {
+          "type": "regex",
+          "context": "UPDATE",
+          "required": "WITH\\s*\\(\\s*ROWLOCK\\s*\\)"
+        }
+      },
+      {
+        "id": "GENERAL-005",
+        "name": "TRY_CAST for Type Conversion",
+        "description": "Must use TRY_CAST for data type conversion, avoid implicit conversion",
+        "severity": "warning",
+        "category": "dataType",
+        "pattern": {
+          "type": "regex",
+          "preferred": "TRY_CAST",
+          "avoid": ["CAST\\s*\\(", "CONVERT\\s*\\("]
+        }
+      },
+      {
+        "id": "GENERAL-006",
+        "name": "GRANT Permission",
+        "description": "Grant execution permission to NSQL role at end of SP/function scripts",
+        "severity": "error",
+        "category": "security",
+        "pattern": {
+          "type": "regex",
+          "required": "GRANT\\s+EXECUTE\\s+ON\\s+.*\\s+TO\\s+NSQL",
+          "location": "end"
+        },
+        "appliesTo": ["StoredProc", "Function"]
+      },
+      {
+        "id": "GENERAL-007",
+        "name": "Unique Error Numbers",
+        "description": "Each error number must be unique in the system",
+        "severity": "error",
+        "category": "errorHandling",
+        "pattern": {
+          "type": "uniqueness",
+          "scope": "system",
+          "target": "errorNumber"
+        },
+        "requiresMessageFile": true
+      },
+      {
+        "id": "GENERAL-008",
+        "name": "NOLOCK for Queries",
+        "description": "Add WITH (NOLOCK) to all query statements unless specific reason",
+        "severity": "warning",
+        "category": "locking",
+        "pattern": {
+          "type": "regex",
+          "context": "SELECT.*FROM",
+          "required": "WITH\\s*\\(\\s*NOLOCK\\s*\\)"
+        }
+      },
+      {
+        "id": "GENERAL-009",
+        "name": "GO Statement",
+        "description": "GO statement must be appended to end of CREATE PROCEDURE and GRANT Permission",
+        "severity": "error",
+        "category": "syntax",
+        "pattern": {
+          "type": "sequence",
+          "after": ["CREATE OR ALTER PROC", "GRANT EXECUTE"],
+          "required": "^GO$"
+        }
+      }
+    ],
+    "extendedScreen": [
+      {
+        "id": "EXTSCN-001",
+        "name": "ExtScnSP Config Name",
+        "description": "RDT extended screen configuration must be named ExtScnSP",
+        "severity": "error",
+        "category": "naming",
+        "pattern": {
+          "type": "regex",
+          "required": "rdtGetConfig.*'ExtScnSP'"
+        },
+        "appliesTo": ["ExtendedScreen"]
+      },
+      {
+        "id": "EXTSCN-002",
+        "name": "Step_99 Label",
+        "description": "Extended screen section step label must be Step_99",
+        "severity": "error",
+        "category": "structure",
+        "pattern": {
+          "type": "regex",
+          "required": "Step_99:"
+        },
+        "appliesTo": ["ExtendedScreen"]
+      },
+      {
+        "id": "EXTSCN-003",
+        "name": "Unified Variable Names",
+        "description": "Use standard variable names in extended screen SPs",
+        "severity": "warning",
+        "category": "naming",
+        "variables": {
+          "@nMobRecScn": "Screen value from RDTMOBREC table",
+          "@nMobRecStep": "Step value from RDTMOBREC table",
+          "@nStep": "Step value passed to extended screen SP",
+          "@nScn": "Screen value passed to extended screen SP",
+          "@nAfterStep": "Next step value returned to main SP",
+          "@nAfterScn": "Next screen value returned to main SP",
+          "@nPreStep": "Previous step that calls extended screen SP",
+          "@nPreScn": "Previous screen that calls extended screen SP"
+        },
+        "appliesTo": ["ExtendedScreen"]
+      }
+    ],
+    "bestPractice": [
+      {
+        "id": "BEST-001",
+        "name": "Query Performance",
+        "description": "Hit primary key or index in conditions to avoid long queries",
+        "severity": "info",
+        "category": "performance",
+        "guidelines": [
+          "Use indexed columns in WHERE clause",
+          "Avoid LIKE with leading wildcard",
+          "Limit result sets with TOP"
+        ]
+      },
+      {
+        "id": "BEST-002",
+        "name": "Primary Key for Updates",
+        "description": "Use primary keys to update or delete data whenever possible",
+        "severity": "info",
+        "category": "performance"
+      },
+      {
+        "id": "BEST-003",
+        "name": "Table Variables for Batch Operations",
+        "description": "Use table variables or temp tables for batch updates/deletes instead of complex WHERE clauses",
+        "severity": "warning",
+        "category": "performance",
+        "guidelines": [
+          "Collect target records into table variable first",
+          "Loop through table variable to process in batches",
+          "Use EXISTS with table variable to limit UPDATE/DELETE scope",
+          "Avoid long-running locks on large tables"
+        ],
+        "example": {
+          "good": "UPDATE dbo.Table WITH(ROWLOCK) SET Col=@Val WHERE EXISTS(SELECT 1 FROM @tTableVar TV WHERE TV.Key = Table.Key)",
+          "bad": "UPDATE dbo.Table SET Col=@Val WHERE ComplexCondition1 AND ComplexCondition2 AND EXISTS(...)"
+        }
+      },
+      {
+        "id": "BEST-004",
+        "name": "Minimal Transactions",
+        "description": "Only include necessary operations in transactions",
+        "severity": "info",
+        "category": "performance",
+        "guidelines": [
+          "Validate data before transaction",
+          "Keep transaction scope minimal",
+          "Avoid SELECT inside transaction"
+        ]
+      },
+      {
+        "id": "BEST-005",
+        "name": "Comments for Complex Logic",
+        "description": "Add comments to help others understand complex logic",
+        "severity": "info",
+        "category": "documentation"
+      }
+    ]
+  },
+  "severityLevels": {
+    "error": {
+      "description": "Must fix before merge",
+      "blocksMerge": true
+    },
+    "warning": {
+      "description": "Should fix, review required",
+      "blocksMerge": false
+    },
+    "info": {
+      "description": "Best practice suggestion",
+      "blocksMerge": false
+    }
+  },
+  "fileTypes": {
+    "StoredProc": {
+      "patterns": ["**/StoredProc/**/*.sql", "rdt_*.sql", "rdtfnc_*.sql"],
+      "applicableRules": ["FORMAT-*", "GENERAL-*"]
+    },
+    "Function": {
+      "patterns": ["**/Function/**/*.sql"],
+      "applicableRules": ["FORMAT-*", "GENERAL-*"]
+    },
+    "ExtendedScreen": {
+      "patterns": ["rdt_*ExtScn*.sql", "rdt_*Scn*.sql"],
+      "applicableRules": ["FORMAT-*", "GENERAL-*", "EXTSCN-*"]
+    },
+    "Message": {
+      "patterns": ["*_message.sql", "*_Message.sql"],
+      "applicableRules": ["FORMAT-*"]
+    }
+  }
+}
