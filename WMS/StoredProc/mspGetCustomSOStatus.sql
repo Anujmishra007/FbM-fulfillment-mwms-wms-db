@@ -12,7 +12,7 @@ GO
 /* Purpose: Convert JDBC Query Statement for Customization              */
 /*                                                                      */
 /* Called By: WM.lsp_JDBCQueryConverter_Wrapper                         */
-/* ConfigKey: GetAddOrderStatus                                         */
+/* ConfigKey: CustomizeSOStatus                                         */
 /* SValue:    mspGetCustomSOStatus                                      */
 /*                                                                      */
 /* PVCS Version: 1.2                                                    */
@@ -440,8 +440,7 @@ BEGIN
     BEGIN 
       SET @c_Condition = CONCAT
       (
-        ' (ORDERS.SOStatus IN (''', 
-        REPLACE(@c_Value, ',', ''','''), ''') OR ',
+        ' (',
         @c_Condition, 
         ' )' 
       )
@@ -471,8 +470,8 @@ BEGIN
     CONCAT(' AND ', @c_ConditionBuilder, ' ORDER BY')
   )
 
-  SET @c_ConvertedCountSQLStr = SUBSTRING(@c_ConvertedSQLStr, 0, CHARINDEX('ORDER BY ORDERS.OrderKey ASC', @c_ConvertedSQLStr))
-  SET @c_ConvertedCountSQLStr = SUBSTRING(@c_ConvertedCountSQLStr, CHARINDEX('FROM ORDERS WITH (NOLOCK) LEFT OUTER JOIN STORER SHIPPER WITH (NOLOCK) ON (SHIPPER.STORERKEY = ORDERS.ShipperKey)', @c_ConvertedCountSQLStr), LEN(@c_ConvertedCountSQLStr)) 
+  SET @c_ConvertedCountSQLStr = SUBSTRING(@c_ConvertedSQLStr, 0, CHARINDEX('ORDER BY ORDERS.', @c_ConvertedSQLStr))
+  SET @c_ConvertedCountSQLStr = SUBSTRING(@c_ConvertedCountSQLStr, CHARINDEX('FROM ORDERS WITH (NOLOCK) LEFT OUTER JOIN STORER SHIPPER WITH (NOLOCK)', @c_ConvertedCountSQLStr), LEN(@c_ConvertedCountSQLStr)) 
   SET @c_ConvertedCountSQLStr = 'SELECT COUNT(1) ' + @c_ConvertedCountSQLStr
 
   QUIT_SP:
