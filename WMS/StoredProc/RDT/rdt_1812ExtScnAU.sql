@@ -13,7 +13,7 @@ GO
 /* 2025-05-31 1.0  SYC067   Created                                     */  
 /************************************************************************/  
   
-CREATE OR ALTER PROC [rdt].[rdt_1812ExtScnAU] (  
+CREATE OR ALTER PROC [RDT].[rdt_1812ExtScnAU] (  
     @nMobile          INT,  
     @nFunc            INT,  
     @cLangCode        NVARCHAR( 3),  
@@ -157,7 +157,7 @@ BEGIN
         ,@cExtendedInfoSP    = [V_String27]  
         ,@cLabelPrinter      = [Printer]  
         ,@cUserName          = [UserName]  
-    FROM rdt.rdtMobRec WITH (NOLOCK)  
+    FROM RDT.rdtMobRec WITH (NOLOCK)  
     WHERE Mobile = @nMobile  
 
     SET @nErrNo = 0
@@ -1030,5 +1030,5 @@ GO
 SET ANSI_NULLS ON 
 GO
 
-GRANT EXECUTE ON rdt.rdt_1812ExtScnAU TO NSQL 
+GRANT EXECUTE ON [RDT].[rdt_1812ExtScnAU] TO NSQL
 GO  

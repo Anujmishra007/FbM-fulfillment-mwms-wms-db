@@ -17,7 +17,7 @@ GO
 /*                          Close Pallet                                      */  
 /******************************************************************************/  
   
-CREATE OR ALTER PROC [rdt].[rdt_1812ExtScnAU_Confirm] (  
+CREATE OR ALTER PROC [RDT].[rdt_1812ExtScnAU_Confirm] (  
    @nMobile          INT,  
    @nFunc            INT,  
    @cLangCode        NVARCHAR( 3),  
@@ -85,7 +85,7 @@ BEGIN
     SAVE TRAN rdt_1812ExtScnAU_Confirm -- For rollback or commit only our own transaction  
     
     SELECT @cUserName = UserName  
-    FROM rdt.RDTMOBREC WITH (NOLOCK)  
+    FROM RDT.RDTMOBREC WITH (NOLOCK)  
     WHERE Mobile = @nMobile  
     
     IF ISNULL(@cDropID,'') = ''  
@@ -293,7 +293,7 @@ BEGIN
         -- PalletDetail  
         IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cDropID AND CaseId = @cLabelNo)  
         BEGIN  
-            SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)  
+            SELECT @cPalletLineNumber = RIGHT( '00000' + TRY_CAST( TRY_CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)  
             FROM dbo.PalletDetail WITH (NOLOCK)  
             WHERE PalletKey = @cDropID  
 
@@ -476,7 +476,10 @@ BEGIN
     ELSE IF CURSOR_STATUS('variable', '@curMbolD') = -1
         DEALLOCATE @curMbolD
 
-    ROLLBACK TRAN rdt_1812ExtScnAU_Confirm -- Only rollback change made here
+    IF XACT_STATE() = -1
+        ROLLBACK TRAN
+    ELSE IF XACT_STATE() = 1
+        ROLLBACK TRAN rdt_1812ExtScnAU_Confirm -- Only rollback change made here
 
     Fail:  
     Quit:  
@@ -490,5 +493,5 @@ GO
 SET ANSI_NULLS ON 
 GO
 
-GRANT EXECUTE ON rdt.rdt_1812ExtScnAU_Confirm TO NSQL 
+GRANT EXECUTE ON [RDT].[rdt_1812ExtScnAU_Confirm] TO NSQL 
 GO  

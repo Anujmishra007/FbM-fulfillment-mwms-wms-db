@@ -13,7 +13,7 @@ GO
 /* 2025-06-19 1.0  SYC067   Created                                           */  
 /******************************************************************************/  
   
-CREATE OR ALTER PROC [rdt].[rdt_1812ExtScnAU_PackCtn_Confirm] (  
+CREATE OR ALTER PROC [RDT].[rdt_1812ExtScnAU_PackCtn_Confirm] (  
    @nMobile          INT,  
    @nFunc            INT,  
    @cLangCode        NVARCHAR( 3),  
@@ -332,7 +332,7 @@ BEGIN
             IF @nCartonNo = 0  
                 SET @cLabelLine = '00001'  
             ELSE  
-                SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)  
+                SELECT @cLabelLine = RIGHT( '00000' + TRY_CAST( TRY_CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)  
                 FROM dbo.PackDetail WITH (NOLOCK)  
                 WHERE Pickslipno = @cPickSlipNo  
                 AND LabelNo = ISNULL(@cInField04,'')  
@@ -683,7 +683,7 @@ BEGIN
                 DELETE FROM @tShipLabel  
     
                 IF ISNULL(@cPrintCopy,'') <> '' AND TRY_CAST(@cPrintCopy AS INT) IS NOT NULL 
-                    SET @nNoOfCopy = CAST(@cPrintCopy AS INT)  
+                    SET @nNoOfCopy = TRY_CAST(@cPrintCopy AS INT)  
                 ELSE  
                     SET @nNoOfCopy = 1  
     
@@ -693,7 +693,7 @@ BEGIN
                 ( '@cFromDropID',    @cDropID),  
                 ( '@cPackDtlDropID', @cDropID),  
                 ( '@cLabelNo',       @cLabelNo),  
-                ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))  
+                ( '@nCartonNo',      TRY_CAST( @nCartonNo AS NVARCHAR(10)))  
     
                 -- Print label  
                 EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,  
@@ -720,7 +720,7 @@ BEGIN
                 ( '@cFromDropID',    @cDropID),  
             ( '@cPackDtlDropID', @cDropID),  
                 ( '@cLabelNo',       @cLabelNo),  
-                ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))  
+                ( '@nCartonNo',      TRY_CAST( @nCartonNo AS NVARCHAR(10)))  
     
             -- Print label  
             EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,  
@@ -762,5 +762,5 @@ GO
 SET ANSI_NULLS ON 
 GO
 
-GRANT EXECUTE ON rdt.rdt_1812ExtScnAU_PackCtn_Confirm TO NSQL 
+GRANT EXECUTE ON [RDT].[rdt_1812ExtScnAU_PackCtn_Confirm] TO NSQL 
 GO  

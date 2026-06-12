@@ -14,7 +14,7 @@ GO
 /* 2024-09-26  1.0.0  SYC067          Created                           */  
 /************************************************************************/  
   
-CREATE OR ALTER PROCEDURE [rdt].[rdt_GENERATEIDAU1]  
+CREATE OR ALTER PROCEDURE [RDT].[rdt_GENERATEIDAU1]  
    @nMobile     INT,  
    @nFunc       INT,  
    @nStep       INT,  
@@ -293,7 +293,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 END
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_GENERATEIDAU1] TO NSQL 
+GRANT EXECUTE ON [RDT].[rdt_GENERATEIDAU1] TO NSQL 
 GO   
 
 SET QUOTED_IDENTIFIER OFF 

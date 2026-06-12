@@ -14,7 +14,7 @@ GO
 /* 2025-06-13  1.0  SYC067      Created                                 */  
 /************************************************************************/  
   
-CREATE OR ALTER PROCEDURE rdt.rdt_1764DecodeSPAU  
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1764DecodeSPAU]
   @nMobile        INT,  
   @nFunc          INT,  
   @cLangCode      NVARCHAR( 3),  
@@ -49,7 +49,6 @@ BEGIN
             SET @cFromID = RIGHT(@cBarcode,18)  
     END  
       
-Quit:
 END
 GO
 
@@ -58,5 +57,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_1764DecodeSPAU TO NSQL
+GRANT EXECUTE ON [RDT].[rdt_1764DecodeSPAU] TO NSQL
 GO

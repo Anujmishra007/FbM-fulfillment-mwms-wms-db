@@ -46,7 +46,7 @@ BEGIN
     
     SELECT @cStorerKey = StorerKey,  
             @cFacility = Facility  
-    FROM rdt.RDTMOBREC WITH (NOLOCK)  
+    FROM RDT.RDTMOBREC WITH (NOLOCK)  
     WHERE Mobile = @nMobile 
 
     SET @cNewSuggToLOC = ''
@@ -191,5 +191,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_1764SuggToLocAU] TO NSQL
+GRANT EXECUTE ON [RDT].[rdt_1764SuggToLocAU] TO NSQL
 GO

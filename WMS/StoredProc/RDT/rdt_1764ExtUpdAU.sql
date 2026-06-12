@@ -109,7 +109,7 @@ BEGIN
                 BEGIN TRAN  
                 SAVE TRAN rdt_1764ExtUpdAU  
     
-                DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR  
+                DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                 SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
                     PD.UOM, SUM(PD.UOMQty) AS UOMQty,  
                     O.Route,  
@@ -612,21 +612,33 @@ BEGIN
     END  
   
     GOTO Quit  
-RollBackTran: 
-    IF CURSOR_STATUS('local','cur_pick') = 1
-    BEGIN
-        CLOSE cur_pick
-        DEALLOCATE cur_pick
-    END
-    ELSE IF CURSOR_STATUS('local','cur_pick') = -1
-    BEGIN
-        DEALLOCATE cur_pick
-    END
-    ROLLBACK TRAN rdt_1764ExtUpdAU -- Only rollback change made here  
-Fail:  
-Quit:  
-    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
-        COMMIT TRAN  
+    RollBackTran: 
+        IF CURSOR_STATUS('local','cur_pick') = 1
+        BEGIN
+            CLOSE cur_pick
+            DEALLOCATE cur_pick
+        END
+        ELSE IF CURSOR_STATUS('local','cur_pick') = -1
+        BEGIN
+            DEALLOCATE cur_pick
+        END
+
+        IF (XACT_STATE()) = -1
+        BEGIN
+            IF @nTranCount = 0
+                ROLLBACK TRANSACTION
+        END
+        IF (XACT_STATE()) = 1
+        BEGIN
+            IF @nTranCount > 0
+                ROLLBACK TRANSACTION rdt_1764ExtUpdAU
+            ELSE
+                ROLLBACK TRANSACTION
+        END
+    Fail:   
+    Quit:  
+        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
+            COMMIT TRAN  
 END
 GO
 
@@ -634,5 +646,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON RDT.rdt_1764ExtUpdAU TO NSQL
+GRANT EXECUTE ON [RDT].[rdt_1764ExtUpdAU] TO NSQL
 GO

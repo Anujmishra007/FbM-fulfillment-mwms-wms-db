@@ -160,7 +160,7 @@ BEGIN
                    AND SKU = Task.SKU AND STATUS = '0'  
                    GROUP BY ORDERKEY, SKU) AS PD  
                    WHERE PACK.CASECNT > 0  
-                   AND PD.QTY % CAST(PACK.CASECNT AS INT) > 0 )--means need to breakdown single case to fulfill single order  
+                   AND PD.QTY % TRY_CAST(PACK.CASECNT AS INT) > 0 )--means need to breakdown single case to fulfill single order  
    RETURN  
   
    IF EXISTS( SELECT 1 FROM @tTask Task JOIN dbo.LOC WITH (NOLOCK) ON (Task.ToLOC = LOC.LOC)  
@@ -312,11 +312,11 @@ BEGIN
       FROM @tTask TASK  
       CROSS APPLY (  
           SELECT SUM(CASE WHEN P.CASECNT>0 THEN  
-                     CASE WHEN (PD.QTY % CAST(P.CASECNT AS INT)) > 0 THEN PD.QTY % CAST(P.CASECNT AS INT) ELSE 0 END  
+                     CASE WHEN (PD.QTY % TRY_CAST(P.CASECNT AS INT)) > 0 THEN PD.QTY % TRY_CAST(P.CASECNT AS INT) ELSE 0 END  
                      ELSE 0 END) AS LESSTHANCASE  
                , P.CASECNT AS CASECNT  
                , SUM(CASE WHEN P.InnerPack > 0 THEN  
-                     CASE WHEN (PD.QTY % CAST(P.InnerPack AS INT)) > 0 THEN PD.QTY % CAST(P.InnerPack AS INT) ELSE 0 END  
+                     CASE WHEN (PD.QTY % TRY_CAST(P.InnerPack AS INT)) > 0 THEN PD.QTY % TRY_CAST(P.InnerPack AS INT) ELSE 0 END  
                      ELSE 0 END) AS LESSTHANINNER  
                , P.INNERPACK  
            FROM dbo.PICKDETAIL PD  WITH (NOLOCK)  
@@ -346,7 +346,7 @@ BEGIN
          --if casecnt > 0, convert qty to number of required case  
          --SET @nTransitCount = 0 --FOR PALLET REPLEN  
          IF @n_CaseCnt > 0  
-            SET @nToQTY = CEILING(CAST(@n_LessThanCaseQty AS FLOAT)/@n_CaseCnt) * @n_CaseCnt  
+            SET @nToQTY = CEILING(TRY_CAST(@n_LessThanCaseQty AS FLOAT)/@n_CaseCnt) * @n_CaseCnt  
          ELSE  
             SET @nToQTY = @n_LessThanCaseQty  
   
@@ -364,7 +364,7 @@ BEGIN
          WHERE PD.STORERKEY = @cStorerKey  
          AND PD.TASKDETAILKEY = @cTaskDetailKey  
          --AND PD.QTY <  @n_CaseCnt  
-         AND PD.QTY < CASE WHEN @n_CaseCnt > 0 THEN @n_CaseCnt* CEILING(CAST(PD.QTY AS FLOAT)/@n_CaseCnt)  
+         AND PD.QTY < CASE WHEN @n_CaseCnt > 0 THEN @n_CaseCnt* CEILING(TRY_CAST(PD.QTY AS FLOAT)/@n_CaseCnt)  
                            ELSE PD.QTY END  
          ORDER BY 1  
   
@@ -390,7 +390,7 @@ BEGIN
                SET @n_SystemQty = @n_SystemQty + @n_PDQty  
             END  
             ELSE IF @n_CaseCnt > 0  
-               SET @n_SplitQty = @n_PDQty - (@n_CaseCnt * FLOOR(CAST(@n_PDQty AS FLOAT)/@n_CaseCnt))  
+               SET @n_SplitQty = @n_PDQty - (@n_CaseCnt * FLOOR(TRY_CAST(@n_PDQty AS FLOAT)/@n_CaseCnt))  
 
             IF @n_SplitQty > 0 AND @n_SplitQty < @n_PDQty  
             BEGIN  
@@ -472,7 +472,7 @@ BEGIN
          --if casecnt > 0, convert qty to number of required case  
          --SET @nTransitCount = 0 --FOR PALLET REPLEN  
          IF @n_InnerPack > 0  
-            SET @nToQTY = CEILING(CAST(@n_LessThanInnerQty AS FLOAT)/@n_InnerPack) * @n_InnerPack  
+            SET @nToQTY = CEILING(TRY_CAST(@n_LessThanInnerQty AS FLOAT)/@n_InnerPack) * @n_InnerPack  
          ELSE  
             SET @nToQTY = @n_LessThanInnerQty  
   
@@ -489,7 +489,7 @@ BEGIN
          WHERE PD.STORERKEY = @cStorerKey  
          AND PD.TASKDETAILKEY = @cTaskDetailKey  
          --AND PD.QTY <  @n_InnerPack  
-         AND PD.QTY < CASE WHEN @n_InnerPack > 0 THEN @n_InnerPack* CEILING(CAST(PD.QTY AS FLOAT)/@n_InnerPack)  
+         AND PD.QTY < CASE WHEN @n_InnerPack > 0 THEN @n_InnerPack* CEILING(TRY_CAST(PD.QTY AS FLOAT)/@n_InnerPack)  
                            ELSE PD.QTY END  
          ORDER BY 1  
   
@@ -515,7 +515,7 @@ BEGIN
                SET @n_SystemQty = @n_SystemQty + @n_PDQty  
             END  
             ELSE IF @n_InnerPack > 0  
-               SET @n_SplitQty = @n_PDQty - (@n_InnerPack * FLOOR(CAST(@n_PDQty AS FLOAT)/@n_InnerPack))  
+               SET @n_SplitQty = @n_PDQty - (@n_InnerPack * FLOOR(TRY_CAST(@n_PDQty AS FLOAT)/@n_InnerPack))  
   
             IF @n_SplitQty > 0 AND @n_SplitQty < @n_PDQty  
             BEGIN  
@@ -531,24 +531,31 @@ BEGIN
   
                IF ISNULL(@c_NewPickdetailKey,'') <> ''  
                BEGIN  
-                  INSERT INTO dbo.PICKDETAIL  (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
-                     Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, [Status],  
-                     DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
-                     ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
-                     WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo,  
-                     TaskDetailKey, TaskManagerReasonKey, Notes, MoveRefKey )  
-                  SELECT @c_NewpickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
-                         Storerkey, Sku, AltSku, UOM, CASE UOM WHEN '6' THEN @n_SplitQty ELSE UOMQty END , @n_SplitQty, QtyMoved, Status,  
-                         '', Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
-                         ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
-                         WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo,  
-                         @cNewTaskDetailKey, TaskManagerReasonKey, Notes, MoveRefKey  
-                  FROM dbo.PICKDETAIL WITH (NOLOCK)  
-                  WHERE PickdetailKey = @c_PickDetailKey  
-  
-                  UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
-                  SET QTY = QTY - @n_SplitQty, TRAFFICCOP = NULL, Editdate = getdate()  
-                  WHERE PickdetailKey = @c_PickDetailKey  
+                  BEGIN TRY
+                     INSERT INTO dbo.PICKDETAIL  (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
+                        Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, [Status],  
+                        DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
+                        ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
+                        WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo,  
+                        TaskDetailKey, TaskManagerReasonKey, Notes, MoveRefKey )  
+                     SELECT @c_NewpickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,  
+                           Storerkey, Sku, AltSku, UOM, CASE UOM WHEN '6' THEN @n_SplitQty ELSE UOMQty END , @n_SplitQty, QtyMoved, Status,  
+                           '', Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
+                           ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
+                           WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo,  
+                           @cNewTaskDetailKey, TaskManagerReasonKey, Notes, MoveRefKey  
+                     FROM dbo.PICKDETAIL WITH (NOLOCK)  
+                     WHERE PickdetailKey = @c_PickDetailKey  
+   
+                     UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
+                     SET QTY = QTY - @n_SplitQty, TRAFFICCOP = NULL, Editdate = getdate()  
+                     WHERE PickdetailKey = @c_PickDetailKey  
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 268857
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- InsPickDtlFail
+                     GOTO RollBackTran
+                  END CATCH
   
                   SET @n_SystemQty = @n_SystemQty + @n_SplitQty  
   
@@ -590,7 +597,7 @@ BEGIN
    COMMIT TRAN rdt_1764CreateTAU01 -- Only commit change made here  
    GOTO Quit  
   
-   RollBackTran:  
+      RollBackTran:
       -- Cleanup cursor if open
       IF CURSOR_STATUS('local', 'CUR1_DET') = 1
       BEGIN
@@ -600,7 +607,18 @@ BEGIN
       ELSE IF CURSOR_STATUS('local', 'CUR1_DET') = -1
          DEALLOCATE CUR1_DET
 
-      ROLLBACK TRAN rdt_1764CreateTAU01 -- Only rollback change made here  
+      IF (XACT_STATE()) = -1
+      BEGIN
+         IF @nTranCount = 0
+            ROLLBACK TRANSACTION
+      END
+      IF (XACT_STATE()) = 1
+      BEGIN
+         IF @nTranCount > 0
+            ROLLBACK TRANSACTION rdt_1764CreateTAU01
+         ELSE
+            ROLLBACK TRANSACTION
+      END
    Fail:  
 
    Quit:  
