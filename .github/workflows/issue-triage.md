@@ -19,6 +19,8 @@ safe-outputs:
   add-labels:
   add-comment:
   assign-to-agent:
+    name: "copilot"
+    github-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
 ---
 
 # Issue Triage — WMS SQL Database
