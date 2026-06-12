@@ -192,7 +192,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                 SAVE TRAN rdt_GENERATEIDAU1;
 
             IF EXISTS (
-                SELECT 1 FROM dbo.[nCounter] WITH (NOLOCK)
+                SELECT 1 FROM dbo.[nCounter] 
                 WHERE [KeyName] = @cCounterKey
                 AND ([KeyCount] < @dMinSequence OR [KeyCount] >= @dMaxSequence)
             )
@@ -218,14 +218,16 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                 COMMIT TRAN;
         END TRY
         BEGIN CATCH
-            IF XACT_STATE() <> 0
+            IF XACT_STATE() = -1
+                ROLLBACK TRAN;  -- Full rollback required for uncommittable transaction
+            ELSE IF XACT_STATE() = 1
             BEGIN
                 IF @nTranCount = 0
                     ROLLBACK TRAN;
                 ELSE
                     ROLLBACK TRAN rdt_GENERATEIDAU1;
             END
-             IF @nErrNo = 0
+            IF @nErrNo = 0
                 SET @nErrNo = 269358  -- Reset NCounter Failed
             SET @cErrMsg = [rdt].[rdtGetMessage](@nErrNo, @cLangCode, N'DSP')
             GOTO Quit
