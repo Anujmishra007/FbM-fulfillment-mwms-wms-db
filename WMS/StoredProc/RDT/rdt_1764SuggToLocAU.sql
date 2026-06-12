@@ -170,7 +170,6 @@ BEGIN
             IF @nTranCount = 0
                 COMMIT TRAN;
         END TRY
-                END TRY
         BEGIN CATCH
             IF XACT_STATE() = -1
                 ROLLBACK TRAN; -- uncommittable transaction, must rollback fully
@@ -181,8 +180,9 @@ BEGIN
                 ELSE
                     ROLLBACK TRAN rdt_1764SuggToLocAU;
             END
+            IF @nErrNo = 0
             SET @nErrNo = 269253
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'cant suggest loc'
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 'cant suggest loc'
             RETURN
         END CATCH
     END
