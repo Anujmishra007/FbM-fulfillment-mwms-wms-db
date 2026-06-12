@@ -187,7 +187,7 @@ BEGIN
         -- Then the transit loc will be same  
         IF @cToPAZone <> @cFinalPAZone  
         BEGIN  
-            SELECT 'PAZoen not equal, next'  
+            IF @bDebugFlag = 1 SELECT 'PAZone not equal, next'  
             CONTINUE  
         END  
         /*  
@@ -237,7 +237,7 @@ BEGIN
     
         IF @bSkipTheTask = 1  
         BEGIN  
-            SELECT 'Task Skipped, next'  
+            IF @bDebugFlag = 1 SELECT 'Task Skipped, next'  
             CONTINUE  
         END  
     
@@ -259,12 +259,15 @@ BEGIN
             ,@c_errmsg = @cErrMsg OUTPUT  
         IF @bSuccess <> 1 OR @nErrNo <> 0  
         BEGIN  
-            SELECT 'Equipment not qualified, next'  
+            IF @bDebugFlag = 1 SELECT 'Equipment not qualified, next' 
             CONTINUE  
         END  
     
         BREAK -- Exit loop if found a task  
     END  
+
+    CLOSE @curRPTask
+    DEALLOCATE @curRPTask
     
     IF @cNewTaskKey = ''  
     BEGIN  
@@ -326,10 +329,6 @@ BEGIN
         SET @nErrNo = 269703  
         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskDtlFail  
     END CATCH  
-  
-    END CATCH
-    IF @nErrNo <> 0
-        GOTO Fail
 
     GOTO Quit
 
