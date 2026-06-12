@@ -98,7 +98,8 @@ BEGIN
       @nPickedQty             INT,
       @cReasonKey             NVARCHAR( 10),
       @cLoopOrderKey          NVARCHAR( 10),
-      @cLoopOrderKeyLineNumber NVARCHAR( 5)
+      @cLoopOrderKeyLineNumber NVARCHAR( 5),
+      @cLoopDropID             NVARCHAR( 20)
 
    --RDTMOBREC
    -- C_String1 -> SuggestedUCC (UCC)
@@ -309,7 +310,7 @@ BEGIN
          @cUCC = UCCNo,
          @cOriUCC = OriUCCNo,
          @cStatus = Status,
-         @cDropID = DropID,
+         @cLoopDropID = DropID,
          @nLoopIndex = RowIndex
       FROM @tUCCPickDetail
       WHERE RowIndex > @nLoopIndex
@@ -370,7 +371,7 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = @cPickConfirmStatus,
-                  DropID = @cDropID,
+                  DropID = @cLoopDropID,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -422,6 +423,7 @@ BEGIN
                @cScannedUCCLot = LOT
             FROM dbo.UCC WITH(NOLOCK)
             WHERE UCCNo = @cUCC
+               AND StorerKey = @cStorerKey
             
             -- re-allcoate to scanned UCC
             BEGIN TRY
@@ -463,7 +465,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                   Status = @cPickConfirmStatus,
-                  DropID = @cDropID,
+                  DropID = @cLoopDropID,
                   EditDate = GETDATE(),
                   EditWho  = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey

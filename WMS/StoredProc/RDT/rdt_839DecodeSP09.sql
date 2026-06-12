@@ -66,7 +66,8 @@ BEGIN
       @cOrderKey              NVARCHAR( 10),
       @cLoadKey               NVARCHAR( 10),
       @cZone                  NVARCHAR( 18),
-      @cPickConfirmStatus     NVARCHAR( 1)
+      @cPickConfirmStatus     NVARCHAR( 1),
+      @cUserName              NVARCHAR( 20)
 
    SET @cOrderKey = ''
    SET @cLoadKey = ''
@@ -109,7 +110,8 @@ BEGIN
                @cSuggLOC = V_LOC,
                @cSuggID  = V_String38,
                @cSuggUCC = C_String1,
-               @cSuggLot = C_String2
+               @cSuggLot = C_String2,
+               @cUserName = UserName
             FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
 
             IF ISNULL(@cSuggUCC, '') <> '' 
@@ -213,11 +215,23 @@ BEGIN
                   GOTO Quit
                END
 
-               IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE Mobile = @nMobile AND PickSlipNo = @cPickSlipNo AND Remarks = @cScannedUCC AND PickMethod = 'GetTask-U')
+               IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE (Mobile = @nMobile OR AddWho = @cUserName) AND PickSlipNo = @cPickSlipNo AND Remarks = @cScannedUCC AND PickMethod = 'GetTask-U')
                BEGIN
                   SET @nErrNo = 255473
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC is scanned
                   GOTO Quit
+               END
+
+               IF ISNULL(@cSuggID, '') = ''
+               BEGIN
+                  SELECT TOP 1 @cSuggID = ID
+                  FROM rdt.rdtPickLog WITH(NOLOCK) 
+                  WHERE PickSlipNo = @cPickSlipNo
+                     AND Descr IS NOT NULL
+                     AND Descr = @cSuggUCC
+                     AND PickMethod = 'GetTask-U'
+                     AND (Mobile = @nMobile OR AddWho = @cUserName)
+                  ORDER BY RowRef
                END
 
                -- Compare with suggested UCC
@@ -360,7 +374,7 @@ BEGIN
                   GOTO Quit
                END
 
-               IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE PickMethod = 'PickTask-P' AND Remarks = @cSerialNo)
+               IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE PickMethod = 'Pick-P' AND Remarks = @cSerialNo)
                BEGIN
                   SET @nErrNo = 255475
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  SerialNo is scanned
@@ -406,13 +420,6 @@ BEGIN
                   GOTO Quit
                END
 
-               IF ISNULL(@cScannedID,'') <> ISNULL(@cSuggID, '')
-               BEGIN
-                  SET @nErrNo = 255464
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID does not match
-                  GOTO Quit
-               END
-
                IF @cScannedUCCLot <> @cSuggLOT
                BEGIN
                   SET @nErrNo = 255465
@@ -443,7 +450,25 @@ BEGIN
                   GOTO Quit
                END
 
-               IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE Mobile = @nMobile AND PickSlipNo = @cPickSlipNo AND Remarks = @cSerialNo AND PickMethod = 'Pick-P')
+               IF NOT EXISTS (SELECT 1
+                  FROM rdt.rdtPickLog WITH(NOLOCK) 
+                  WHERE PickSlipNo = @cPickSlipNo
+                     AND Lot IS NOT NULL
+                     AND Lot = @cSuggLOT
+                     AND LOC IS NOT NULL
+                     AND LOC = @cLOC
+                     AND ISNULL(ID, '') = ISNULL(@cScannedID,'')
+                     AND SKU = @cSuggSKU
+                     AND PickMethod = 'GetTask-P'
+                     AND (Mobile = @nMobile OR AddWho = @cUserName))
+               BEGIN
+                  SET @nErrNo = 255464
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID does not match
+                  GOTO Quit
+               END
+
+
+               IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) WHERE (Mobile = @nMobile OR AddWho = @cUserName) AND PickSlipNo = @cPickSlipNo AND Remarks = @cSerialNo AND PickMethod = 'Pick-P')
                BEGIN
                   SET @nErrNo = 255474
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SerialNo is scanned

@@ -97,6 +97,7 @@ BEGIN
       @cUOM                   NVARCHAR( 1),
       @cScannedUCC            NVARCHAR( 20),
       @cScannedLOC            NVARCHAR( 10),
+      @cScannedID             NVARCHAR( 18),
       @cScannedSKU            NVARCHAR( 20),
       @cScannedLOT            NVARCHAR( 10),
       @cScannedSN             NVARCHAR( 50),
@@ -163,6 +164,7 @@ BEGIN
       @nLoopIndex             INT = -1,
       @cRemarks               NVARCHAR( 30),
       @cWaveKey               NVARCHAR( 10),
+      @cDisLottable01         NVARCHAR( 18),
 
       @cChkLottable01 NVARCHAR( 18),   @cChkLottable02 NVARCHAR( 18),   @cChkLottable03 NVARCHAR( 18),
       @dChkLottable04 DATETIME,        @dChkLottable05 DATETIME,        @cChkLottable06 NVARCHAR( 30),
@@ -392,9 +394,8 @@ BEGIN
             INSERT INTO @tRDTPickLog ( RowRef, Remarks )
             SELECT RowRef, Remarks
             FROM rdt.rdtPickLog WITH(NOLOCK)
-            WHERE Mobile = @nMobile
-               AND PickSlipNo = @cPickSlipNo
-               AND AddWho = @cUserName
+            WHERE PickSlipNo = @cPickSlipNo
+               AND (Mobile = @nMobile OR AddWho = @cUserName)
                AND Status = '0'
                AND PickMethod IN( 'GetTask-U', 'GetTask-P') 
                AND PickLockQty = 0
@@ -441,12 +442,13 @@ BEGIN
             IF @nStep = @nStep_NoMoreTask
                AND EXISTS(SELECT 1 
                      FROM rdt.rdtPickLog WITH(NOLOCK)
-                     WHERE Mobile = @nMobile
-                        AND PickSlipNo = @cPickSlipNo
-                        AND AddWho = @cUserName
-                        AND ((Status = '9'AND PickMethod IN( 'GetTask-U', 'GetTask-P') ) OR PickMethod = 'PickTask-P' ) 
+                     WHERE PickSlipNo = @cPickSlipNo
+                        AND (Mobile = @nMobile OR AddWho = @cUserName)
+                        AND ((Status = '9'AND PickMethod IN( 'GetTask-U', 'GetTask-P') ) OR PickMethod = 'Pick-P' ) 
                      )
             BEGIN
+               SET @cOutField01 = ''
+
                SET @nAfterScn = 6828
                SET @nAfterStep = 99
             END
@@ -467,28 +469,6 @@ BEGIN
             END
          END
          SET @nPre_Step = @nStep_ConfirmLOC
-      END
-      ELSE IF @nCurrentStep = @nStep_VerifyID
-      BEGIN
-         SELECT @cLottable01 = Lottable01 FROM dbo.LOTATTRIBUTE WITH(NOLOCK) WHERE LOT = ISNULL(@cSuggLOT, '')
-         SELECT @cSuggSKU = Value FROM @tExtScnData WHERE Variable = '@cSuggSKU'
-         SELECT @nSuggQty = CAST(Value AS INT) FROM @tExtScnData WHERE Variable = '@nSuggQty'
-
-         SELECT
-            @cPackUOM = Pack.PackUOM3
-         FROM dbo.SKU S WITH (NOLOCK)
-         INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (S.PackKey = Pack.PackKey)
-         WHERE StorerKey = @cStorerKey
-            AND SKU = @cSuggSKU
-
-         SET @cOutField08 = ISNULL(@cLottable01, '')
-         SET @cOutField09 = '6'
-         SET @cOutField10 = @cPackUOM
-         SET @cOutField11 = CAST(@nSuggQty AS NVARCHAR(10))
-
-         UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
-         SET C_String6 = '6'
-         WHERE Mobile = @nMobile
       END
       ELSE IF @nCurrentStep = 99
       BEGIN
@@ -577,12 +557,11 @@ BEGIN
                   SELECT RPL.RowRef, RPL.PickDetailKey, PD.OrderKey, PD.OrderLineNumber
                   FROM rdt.rdtPickLog RPL WITH(NOLOCK)
                   INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
-                  WHERE RPL.Mobile = @nMobile
+                  WHERE (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                      AND RPL.PickSlipNo = @cPickSlipNo
                      AND PD.SKU = @cSuggSKU
                      AND PD.LOC = @cSuggLOC
                      AND PD.LOT = @cSuggLOT
-                     AND RPL.AddWho = @cUserName
                      AND RPL.PickMethod = 'GetTask-P'
                END
                ELSE
@@ -591,10 +570,9 @@ BEGIN
                   SELECT RPL.RowRef, RPL.PickDetailKey, PD.OrderKey, PD.OrderLineNumber
                   FROM rdt.rdtPickLog RPL WITH(NOLOCK)
                   INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
-                  WHERE RPL.Mobile = @nMobile
+                  WHERE (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                      AND RPL.PickSlipNo = @cPickSlipNo
                      AND RPL.Descr = @cSuggUCC
-                     AND RPL.AddWho = @cUserName
                      AND RPL.PickMethod = 'GetTask-U'
                END
 
@@ -1081,8 +1059,7 @@ BEGIN
                   SELECT TOP 1 @cSuggUCC  = Descr
                   FROM rdt.rdtPickLog WITH(NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
-                     AND Mobile = @nMobile
-                     AND AddWho = @cUserName
+                     AND (Mobile = @nMobile OR AddWho = @cUserName)
                      AND PickMethod = 'GetTask-U'
                      AND Status = '0'
                   ORDER BY AddDate DESC
@@ -1092,12 +1069,17 @@ BEGIN
                   -- Display UCC
                   IF @nRowCount > 0
                   BEGIN
-                     SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                     SELECT 
+                        @cSuggLOT = LA.LOT,
+                        @cDisLottable01 = LA.Lottable01
+                     FROM dbo.UCC WITH(NOLOCK)
+                     INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                     WHERE UCC.UCCNo = @cSuggUCC
 
                      SET @cOutField08 = 'UCC:'
                      SET @cOutField09 = @cSuggUCC
-                     SET @cOutField10 = 'LOT:'
-                     SET @cOutField11 = @cSuggLOT
+                     SET @cOutField10 = 'LOT01:'
+                     SET @cOutField11 = ISNULL(@cDisLottable01, '')
                   END
                   ELSE
                   -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -1105,8 +1087,7 @@ BEGIN
                      SELECT TOP 1 @cSuggLOT  = Descr
                      FROM rdt.rdtPickLog WITH(NOLOCK)
                      WHERE PickSlipNo = @cPickSlipNo
-                        AND Mobile = @nMobile
-                        AND AddWho = @cUserName
+                        AND (Mobile = @nMobile OR AddWho = @cUserName)
                         AND PickMethod = 'GetTask-P'
                         AND Status = '0'
                      ORDER BY AddDate DESC
@@ -1276,8 +1257,7 @@ BEGIN
                         SELECT TOP 1 @cSuggUCC  = Descr
                   FROM rdt.rdtPickLog WITH(NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
-                     AND Mobile = @nMobile
-                     AND AddWho = @cUserName
+                     AND (Mobile = @nMobile OR AddWho = @cUserName)
                      AND PickMethod = 'GetTask-U'
                      AND Status = '0'
                   ORDER BY AddDate DESC
@@ -1287,12 +1267,17 @@ BEGIN
                   -- Display UCC
                   IF @nRowCount > 0
                   BEGIN
-                     SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                     SELECT 
+                        @cSuggLOT = LA.LOT,
+                        @cDisLottable01 = LA.Lottable01
+                     FROM dbo.UCC WITH(NOLOCK)
+                     INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                     WHERE UCC.UCCNo = @cSuggUCC
 
                      SET @cOutField08 = 'UCC:'
                      SET @cOutField09 = @cSuggUCC
-                     SET @cOutField10 = 'LOT:'
-                     SET @cOutField11 = @cSuggLOT
+                     SET @cOutField10 = 'LOT01:'
+                     SET @cOutField11 = ISNULL(@cDisLottable01, '')
                   END
                   ELSE
                   -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -1300,8 +1285,7 @@ BEGIN
                      SELECT TOP 1 @cSuggLOT  = Descr
                      FROM rdt.rdtPickLog WITH(NOLOCK)
                      WHERE PickSlipNo = @cPickSlipNo
-                        AND Mobile = @nMobile
-                        AND AddWho = @cUserName
+                        AND (Mobile = @nMobile OR AddWho = @cUserName)
                         AND PickMethod = 'GetTask-P'
                         AND Status = '0'
                      ORDER BY AddDate DESC
@@ -1403,8 +1387,7 @@ BEGIN
                SELECT TOP 1 @cSuggUCC  = Descr
                FROM rdt.rdtPickLog WITH(NOLOCK)
                WHERE PickSlipNo = @cPickSlipNo
-                  AND Mobile = @nMobile
-                  AND AddWho = @cUserName
+                  AND (Mobile = @nMobile OR AddWho = @cUserName)
                   AND PickMethod = 'GetTask-U'
                   AND Status = '0'
                ORDER BY AddDate DESC
@@ -1414,12 +1397,17 @@ BEGIN
                -- Display UCC
                IF @nRowCount > 0
                BEGIN
-                  SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                  SELECT 
+                     @cSuggLOT = LA.LOT,
+                     @cDisLottable01 = LA.Lottable01
+                  FROM dbo.UCC WITH(NOLOCK)
+                  INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                  WHERE UCC.UCCNo = @cSuggUCC
 
                   SET @cOutField08 = 'UCC:'
                   SET @cOutField09 = @cSuggUCC
-                  SET @cOutField10 = 'LOT:'
-                  SET @cOutField11 = @cSuggLOT
+                  SET @cOutField10 = 'LOT01:'
+                  SET @cOutField11 = ISNULL(@cDisLottable01, '')
                END
                ELSE
                -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -1427,8 +1415,7 @@ BEGIN
                   SELECT TOP 1 @cSuggLOT  = Descr
                   FROM rdt.rdtPickLog WITH(NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
-                     AND Mobile = @nMobile
-                     AND AddWho = @cUserName
+                     AND (Mobile = @nMobile OR AddWho = @cUserName)
                      AND PickMethod = 'GetTask-P'
                      AND Status = '0'
                   ORDER BY AddDate DESC
@@ -1494,16 +1481,14 @@ BEGIN
                BEGIN
                   IF NOT EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK)
                                  WHERE PickSlipNo = @cPickSlipNo
-                                    AND Mobile = @nMobile
-                                    AND AddWho = @cUserName
+                                    AND (Mobile = @nMobile OR AddWho = @cUserName)
                                     AND Loc = @cSuggLOC
                                     AND PickMethod IN ('GetTask-P', 'GetTask-U')
                                     AND Status IN ('4', '9') )
                      AND NOT EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK)
                                  WHERE PickSlipNo = @cPickSlipNo
-                                    AND Mobile = @nMobile
+                                    AND (Mobile = @nMobile OR AddWho = @cUserName)
                                     AND Loc = @cSuggLOC
-                                    AND AddWho = @cUserName
                                     AND PickMethod IN ('Pick-P')
                                     AND Status IN ('4', '9') )
                   BEGIN
@@ -1592,8 +1577,7 @@ BEGIN
                -- QTY short
                IF EXISTS(SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK)
                            WHERE PickSlipNo = @cPickSlipNo
-                              AND Mobile = @nMobile
-                              AND AddWho = @cUserName
+                              AND (Mobile = @nMobile OR AddWho = @cUserName)
                               AND PickMethod IN ('GetTask-P', 'GetTask-U')
                               AND Status <> '9')
                   AND @cBarcode = ''
@@ -1617,7 +1601,7 @@ BEGIN
                      SET @nErrNo = 255504
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need SKU
                      EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                     GOTO UPD_RDTMOBREC
+                     GOTO STEP_SKUQTY_FAIL
                   END
                END
 
@@ -1722,7 +1706,7 @@ BEGIN
                         IF @nErrNo <> 0
                         BEGIN
                            SET @cBarcode = ''
-                           GOTO UPD_RDTMOBREC
+                           GOTO STEP_SKUQTY_FAIL
                         END
                      END
 
@@ -1742,7 +1726,7 @@ BEGIN
                      BEGIN
                         SET @nErrNo = 255505
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SKU
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
                      END
 
                      -- Validate barcode return multiple SKU
@@ -1794,7 +1778,7 @@ BEGIN
                         BEGIN
                            SET @nErrNo = 255506
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiSKUBarcod
-                           GOTO UPD_RDTMOBREC
+                           GOTO STEP_SKUQTY_FAIL
                         END
                      END
 
@@ -1811,7 +1795,7 @@ BEGIN
                         SET @cQTY = @nUPCQty
 
                      IF @nErrNo <> 0
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
 
                      SET @cSKU = @cUPC
 
@@ -1821,7 +1805,7 @@ BEGIN
                         SET @nErrNo = 255507
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong SKU
                         EXEC rdt.rdtSetFocusField @nMobile, 11  -- SKU
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
                      END
 
                      -- Mark SKU as validated
@@ -1836,7 +1820,7 @@ BEGIN
                   SET @nErrNo = 255508
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid QTY
                   EXEC rdt.rdtSetFocusField @nMobile, 7 -- QTY
-                  GOTO UPD_RDTMOBREC
+                  GOTO STEP_SKUQTY_FAIL
                END
 
                -- Check full short with QTY
@@ -1845,7 +1829,7 @@ BEGIN
                   SET @nErrNo = 255509
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- AllShortWithQTY
                   EXEC rdt.rdtSetFocusField @nMobile, 7 -- QTY
-                  GOTO UPD_RDTMOBREC
+                  GOTO STEP_SKUQTY_FAIL
                END
 
                -- Top up QTY
@@ -1875,7 +1859,7 @@ BEGIN
                   SET @nErrNo = 255510
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Over pick
                   EXEC rdt.rdtSetFocusField @nMobile, 7 -- PQTY
-                  GOTO UPD_RDTMOBREC
+                  GOTO STEP_SKUQTY_FAIL
                END
 
                IF @cExtendedValidateSP <> ''
@@ -1912,7 +1896,7 @@ BEGIN
                         @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nQTY,@cPackData1, @cPackData2, @cPackData3,
                         @nErrNo OUTPUT, @cErrMsg OUTPUT
                      IF @nErrNo <> 0
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
                   END
                END
 
@@ -1951,8 +1935,7 @@ BEGIN
                         @cCurrentOrderKey = OrderKey
                      FROM RDT.rdtPickLog WITH(NOLOCK) 
                      WHERE PickSlipNo = @cPickSlipNo 
-                        AND Mobile = @nMobile 
-                        AND AddWho = @cUserName 
+                        AND (Mobile = @nMobile OR AddWho = @cUserName)
                         AND Descr = @cSuggUCC
                         AND PickMethod = 'GetTask-U'
 
@@ -1969,8 +1952,7 @@ BEGIN
                         FROM RDT.rdtPickLog RPL WITH(NOLOCK)
                         INNER JOIN dbo.UCC WITH(NOLOCK) ON RPL.Descr = UCC.UCCNo
                         WHERE RPL.PickSlipNo = @cPickSlipNo 
-                           AND RPL.Mobile = @nMobile 
-                           AND RPL.AddWho = @cUserName 
+                           AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                            AND RPL.Descr <> @cSuggUCC
                            AND UCC.Lot = @cSuggLOT
                            AND RPL.PickMethod = 'GetTask-U'
@@ -1983,7 +1965,7 @@ BEGIN
                            SET @nErrNo = 255514
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Suggested UCC is missing in rdtPickLog
                            EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                           GOTO UPD_RDTMOBREC
+                           GOTO STEP_SKUQTY_FAIL
                         END
                      END
                      
@@ -1999,7 +1981,7 @@ BEGIN
                         SET @nErrNo = 255516
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update rdtPickLog failed
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
                      
                      END CATCH
                   END
@@ -2016,6 +1998,14 @@ BEGIN
                      FROM dbo.LOTATTRIBUTE WITH(NOLOCK)
                      WHERE Lot = @cScannedLot
 
+                     SELECT 
+                        @cScannedLOC = Loc,
+                        @cScannedID = ID,
+                        @cScannedSKU = SKU
+                     FROM dbo.SerialNo WITH(NOLOCK)
+                     WHERE SerialNo = @cScannedSN
+                        AND StorerKey = @cStorerKey
+
                      SELECT TOP 1 
                         @nrdtPickLogID = RowRef,
                         @cCurrentOrderKey = RPL.OrderKey
@@ -2023,10 +2013,12 @@ BEGIN
                      INNER JOIN dbo.LOT WITH(NOLOCK) ON RPL.Descr IS NOT NULL AND RPL.Descr = LOT.Lot
                      INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LOT.Lot = LA.Lot
                      WHERE PickSlipNo = @cPickSlipNo 
-                        AND RPL.Mobile = @nMobile 
-                        AND RPL.AddWho = @cUserName
+                        AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                         AND RPL.PickMethod = 'GetTask-P'
                         AND RPL.Status = '0'
+                        AND ISNULL(RPL.Loc,'') = ISNULL(@cScannedLOC,'')
+                        AND ISNULL(RPL.ID,'') = ISNULL(@cScannedID,'')
+                        AND ISNULL(RPL.SKU,'') = ISNULL(@cScannedSKU,'')
                         AND RPL.PickLockQty < RPL.ActQty
                         AND (LOT.Lot = @cScannedLot OR (LOT.Lot <> @cScannedLot AND @cScannedLottable01 = LA.Lottable01))
                      ORDER BY RPL.OrderKey, IIF(LOT.Lot = @cScannedLot, 1, 2), RPL.PickLockQty DESC, RPL.PickDetailKey
@@ -2038,7 +2030,7 @@ BEGIN
                         SET @nErrNo = 255515
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- uggested SN is missing in rdtPickLog
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
                      END
 
                      BEGIN TRY
@@ -2051,7 +2043,7 @@ BEGIN
                         SET @nErrNo = 255518
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert rdtPickLog failed
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
                      END CATCH
 
                      BEGIN TRY
@@ -2064,7 +2056,7 @@ BEGIN
                         SET @nErrNo = 255536
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update SerialNo failed
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
                      END CATCH
 
                      BEGIN TRY
@@ -2077,7 +2069,7 @@ BEGIN
                         SET @nErrNo = 255519
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
                      END CATCH
                   END
                END
@@ -2089,8 +2081,7 @@ BEGIN
                         @cCurrentOrderKey = OrderKey
                      FROM RDT.rdtPickLog WITH(NOLOCK) 
                      WHERE PickSlipNo = @cPickSlipNo 
-                        AND Mobile = @nMobile 
-                        AND AddWho = @cUserName 
+                        AND (Mobile = @nMobile OR AddWho = @cUserName)
                         AND Descr = @cSuggUCC
                         AND PickMethod = 'GetTask-U'
 
@@ -2104,7 +2095,7 @@ BEGIN
                         SET @nErrNo = 255531
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
                      END CATCH
                   END
                   ELSE IF @cUOM = '6'
@@ -2115,8 +2106,7 @@ BEGIN
                      SELECT RPL.RowRef
                      FROM RDT.rdtPickLog RPL WITH(NOLOCK)
                      WHERE RPL.PickSlipNo = @cPickSlipNo 
-                        AND RPL.Mobile = @nMobile 
-                        AND RPL.AddWho = @cUserName
+                        AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                         AND RPL.PickMethod = 'GetTask-P'
                         AND RPL.Status = '0'
                         AND RPL.PickLockQty = 0
@@ -2143,7 +2133,7 @@ BEGIN
                            SET @nErrNo = 255532
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
                            EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                           GOTO UPD_RDTMOBREC
+                           GOTO STEP_SKUQTY_FAIL
                         END CATCH
                      END
                   END
@@ -2221,7 +2211,7 @@ BEGIN
                            @nScan    = @nScanSNO
 
                         IF @nErrNo <> 0
-                           GOTO UPD_RDTMOBREC
+                           GOTO STEP_SKUQTY_FAIL
 
                         IF @nMoreSNO = 1
                         BEGIN
@@ -2363,7 +2353,7 @@ BEGIN
                            @cDataCapture OUTPUT, @nErrNo      OUTPUT, @cErrMsg     OUTPUT
 
                         IF @nErrNo <> 0
-                           GOTO UPD_RDTMOBREC
+                           GOTO STEP_SKUQTY_FAIL
                      END
                      ELSE
                      BEGIN
@@ -2450,7 +2440,7 @@ BEGIN
                         ,@nErrNo      = @nErrNo  OUTPUT
                         ,@cErrMsg     = @cErrMsg OUTPUT
                      IF @nErrNo <> 0
-                        GOTO UPD_RDTMOBREC
+                        GOTO STEP_SKUQTY_FAIL
 
                      STEP_SKUQTY_GETNEXT:
                      -- Get task in same LOC
@@ -2573,8 +2563,7 @@ BEGIN
                         SELECT TOP 1 @cSuggUCC  = Descr
                         FROM rdt.rdtPickLog WITH(NOLOCK)
                         WHERE PickSlipNo = @cPickSlipNo
-                           AND Mobile = @nMobile
-                           AND AddWho = @cUserName
+                           AND (Mobile = @nMobile OR AddWho = @cUserName)
                            AND PickMethod = 'GetTask-U'
                            AND Status = '0'
                         ORDER BY AddDate DESC
@@ -2584,12 +2573,17 @@ BEGIN
                         -- Display UCC
                         IF @nRowCount > 0
                         BEGIN
-                           SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                           SELECT 
+                              @cSuggLOT = LA.LOT,
+                              @cDisLottable01 = LA.Lottable01
+                           FROM dbo.UCC WITH(NOLOCK)
+                           INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                           WHERE UCC.UCCNo = @cSuggUCC
 
                            SET @cOutField08 = 'UCC:'
                            SET @cOutField09 = @cSuggUCC
-                           SET @cOutField10 = 'LOT:'
-                           SET @cOutField11 = @cSuggLOT
+                           SET @cOutField10 = 'LOT01:'
+                           SET @cOutField11 = ISNULL(@cDisLottable01, '')
                         END
                         ELSE
                         -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -2597,8 +2591,7 @@ BEGIN
                            SELECT TOP 1 @cSuggLOT  = Descr
                            FROM rdt.rdtPickLog WITH(NOLOCK)
                            WHERE PickSlipNo = @cPickSlipNo
-                              AND Mobile = @nMobile
-                              AND AddWho = @cUserName
+                              AND (Mobile = @nMobile OR AddWho = @cUserName)
                               AND PickMethod = 'GetTask-P'
                               AND Status = '0'
                            ORDER BY AddDate DESC
@@ -2765,8 +2758,7 @@ BEGIN
                               SELECT TOP 1 @cSuggUCC  = Descr
                               FROM rdt.rdtPickLog WITH(NOLOCK)
                               WHERE PickSlipNo = @cPickSlipNo
-                                 AND Mobile = @nMobile
-                                 AND AddWho = @cUserName
+                                 AND (Mobile = @nMobile OR AddWho = @cUserName)
                                  AND PickMethod = 'GetTask-U'
                                  AND Status = '0'
                               ORDER BY AddDate DESC
@@ -2776,12 +2768,17 @@ BEGIN
                               -- Display UCC
                               IF @nRowCount > 0
                               BEGIN
-                                 SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                                 SELECT 
+                                    @cSuggLOT = LA.LOT,
+                                    @cDisLottable01 = LA.Lottable01
+                                 FROM dbo.UCC WITH(NOLOCK)
+                                 INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                                 WHERE UCC.UCCNo = @cSuggUCC
 
                                  SET @cOutField08 = 'UCC:'
                                  SET @cOutField09 = @cSuggUCC
-                                 SET @cOutField10 = 'LOT:'
-                                 SET @cOutField11 = @cSuggLOT
+                                 SET @cOutField10 = 'LOT01:'
+                                 SET @cOutField11 = ISNULL(@cDisLottable01, '')
                               END
                               ELSE
                               -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -2789,8 +2786,7 @@ BEGIN
                                  SELECT TOP 1 @cSuggLOT  = Descr
                                  FROM rdt.rdtPickLog WITH(NOLOCK)
                                  WHERE PickSlipNo = @cPickSlipNo
-                                    AND Mobile = @nMobile
-                                    AND AddWho = @cUserName
+                                    AND (Mobile = @nMobile OR AddWho = @cUserName)
                                     AND PickMethod = 'GetTask-P'
                                     AND Status = '0'
                                  ORDER BY AddDate DESC
@@ -2857,8 +2853,7 @@ BEGIN
                            BEGIN
                               IF EXISTS( SELECT 1 FROM rdt.rdtPickLog WITH(NOLOCK) 
                                           WHERE PickSlipNo = @cPickSlipNo
-                                             AND Mobile = @nMobile
-                                             AND AddWho = @cUserName)
+                                             AND (Mobile = @nMobile OR AddWho = @cUserName))
                               BEGIN
                                  SET @cOutField01 = ''
                                  -- No more task, complete pick slip
@@ -2875,7 +2870,7 @@ BEGIN
                                     ,@cErrMsg      OUTPUT
 
                                  IF @nErrNo <> 0
-                                    GOTO UPD_RDTMOBREC
+                                    GOTO STEP_SKUQTY_FAIL
 
                                  -- Prepare next screen var
                                  SET @cOutField01 = '' -- PickSlipNo
@@ -2902,8 +2897,7 @@ BEGIN
                   SELECT TOP 1 @suggestedDropID = DropID
                   FROM RDT.rdtPickLog WITH(NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
-                     AND Mobile = @nMobile
-                     AND AddWho = @cUserName
+                     AND (Mobile = @nMobile OR AddWho = @cUserName)
                      AND DropID <> ''
                      AND OrderKey = @cCurrentOrderKey
 
@@ -2933,6 +2927,11 @@ BEGIN
                SET @nAfterStep = 99
                GOTO UPD_RDTMOBREC
             END
+
+            STEP_SKUQTY_FAIL:
+               SET @cBarcode = ''
+               EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+               GOTO UPD_RDTMOBREC
          END
          /********************************************************************************
          Scn = 6775. To ID screen
@@ -3064,8 +3063,7 @@ BEGIN
                SELECT @cRowRefTemp = RowRef
                FROM RDT.rdtPickLog WITH(NOLOCK)
                WHERE PickSlipNo = @cPickSlipNo
-                  AND Mobile = @nMobile
-                  AND AddWho = @cUserName
+                  AND (Mobile = @nMobile OR AddWho = @cUserName)
                   AND ISNULL(Remarks, '') = IIF(@cUOM = '2', @cScannedUCC, @cScannedSN)
                   AND OrderKey = @cCurrentOrderKey
 
@@ -3158,8 +3156,7 @@ BEGIN
                      IF EXISTS(SELECT 1
                               FROM RDT.rdtPickLog RPL WITH(NOLOCK)
                               WHERE RPL.PickSlipNo = @cPickSlipNo
-                                 AND RPL.Mobile = @nMobile
-                                 AND RPL.AddWho = @cUserName
+                                 AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                                  AND RPL.Loc = @cSuggLOC
                                  AND PickMethod IN ('GetTask-P', 'GetTask-U')
                                  AND Status = '0')
@@ -3313,8 +3310,7 @@ BEGIN
                   SELECT TOP 1 @cSuggUCC  = Descr
                   FROM rdt.rdtPickLog WITH(NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
-                     AND Mobile = @nMobile
-                     AND AddWho = @cUserName
+                     AND (Mobile = @nMobile OR AddWho = @cUserName)
                      AND PickMethod = 'GetTask-U'
                      AND Status = '0'
                   ORDER BY AddDate DESC
@@ -3323,12 +3319,17 @@ BEGIN
                   -- Display UCC
                   IF @nRowCount > 0
                   BEGIN
-                     SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                     SELECT 
+                        @cSuggLOT = LA.LOT,
+                        @cDisLottable01 = LA.Lottable01
+                     FROM dbo.UCC WITH(NOLOCK)
+                     INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                     WHERE UCC.UCCNo = @cSuggUCC
 
                      SET @cOutField08 = 'UCC:'
                      SET @cOutField09 = @cSuggUCC
-                     SET @cOutField10 = 'LOT:'
-                     SET @cOutField11 = @cSuggLOT
+                     SET @cOutField10 = 'LOT01:'
+                     SET @cOutField11 = ISNULL(@cDisLottable01, '')
 
                      UPDATE rdt.RDTMOBREC WITH(ROWLOCK)
                      SET C_String6 = '2'
@@ -3340,8 +3341,7 @@ BEGIN
                      SELECT TOP 1 @cSuggLOT  = Descr
                      FROM rdt.rdtPickLog WITH(NOLOCK)
                      WHERE PickSlipNo = @cPickSlipNo
-                        AND Mobile = @nMobile
-                        AND AddWho = @cUserName
+                        AND (Mobile = @nMobile OR AddWho = @cUserName)
                         AND PickMethod = 'GetTask-P'
                         AND Status = '0'
                      ORDER BY AddDate DESC
@@ -3427,7 +3427,6 @@ BEGIN
                         SET @nAfterScn = @nScn_VerifyID
                         SET @nAfterStep = @nStep_VerifyID
                         GOTO UPD_RDTMOBREC
-
                      END
                      ELSE
                      BEGIN
@@ -3515,8 +3514,7 @@ BEGIN
                         SELECT TOP 1 @cSuggUCC  = Descr
                         FROM rdt.rdtPickLog WITH(NOLOCK)
                         WHERE PickSlipNo = @cPickSlipNo
-                           AND Mobile = @nMobile
-                           AND AddWho = @cUserName
+                           AND (Mobile = @nMobile OR AddWho = @cUserName)
                            AND PickMethod = 'GetTask-U'
                            AND Status = '0'
                         ORDER BY AddDate DESC
@@ -3526,12 +3524,17 @@ BEGIN
                         -- Display UCC
                         IF @nRowCount > 0
                         BEGIN
-                           SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                           SELECT 
+                              @cSuggLOT = LA.LOT,
+                              @cDisLottable01 = LA.Lottable01
+                           FROM dbo.UCC WITH(NOLOCK)
+                           INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                           WHERE UCC.UCCNo = @cSuggUCC
 
                            SET @cOutField08 = 'UCC:'
                            SET @cOutField09 = @cSuggUCC
-                           SET @cOutField10 = 'LOT:'
-                           SET @cOutField11 = @cSuggLOT
+                           SET @cOutField10 = 'LOT01:'
+                           SET @cOutField11 = ISNULL(@cDisLottable01, '')
                         END
                         ELSE
                         -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -3539,8 +3542,7 @@ BEGIN
                            SELECT TOP 1 @cSuggLOT  = Descr
                            FROM rdt.rdtPickLog WITH(NOLOCK)
                            WHERE PickSlipNo = @cPickSlipNo
-                              AND Mobile = @nMobile
-                              AND AddWho = @cUserName
+                              AND (Mobile = @nMobile OR AddWho = @cUserName)
                               AND PickMethod = 'GetTask-P'
                               AND Status = '0'
                            ORDER BY AddDate DESC
@@ -3609,7 +3611,6 @@ BEGIN
                      ELSE
                      BEGIN
                         SET @cOutField01 = ''
-
                         -- Go to No More Task screen
                         SET @nAfterScn = 6828
                         SET @nAfterStep = 99
@@ -3655,8 +3656,7 @@ BEGIN
                   @cRemarks = Remarks
                FROM RDT.rdtPickLog WITH(NOLOCK)
                WHERE PickSlipNo = @cPickSlipNo
-                  AND Mobile = @nMobile
-                  AND AddWho = @cUserName
+                  AND (Mobile = @nMobile OR AddWho = @cUserName)
                   AND Remarks = IIF( @cUOM = '2', @cScannedUCC, @cScannedSN)
 
                IF @@ROWCOUNT > 0
@@ -3698,8 +3698,7 @@ BEGIN
                         FROM RDT.rdtPickLog WITH(NOLOCK)
                         WHERE PickDetailKey =  @cPickDetailKeyRollback
                            AND PickSlipNo = @cPickSlipNo
-                           AND Mobile = @nMobile
-                           AND AddWho = @cUserName
+                           AND (Mobile = @nMobile OR AddWho = @cUserName)
                            AND Remarks = @cScannedUCC
                            AND PickMethod = 'Pick-P'
 
@@ -3753,8 +3752,7 @@ BEGIN
                         FROM RDT.rdtPickLog WITH(NOLOCK)
                         WHERE PickDetailKey =  @cPickDetailKeyRollback
                            AND PickSlipNo = @cPickSlipNo
-                           AND Mobile = @nMobile
-                           AND AddWho = @cUserName
+                           AND (Mobile = @nMobile OR AddWho = @cUserName)
                            AND PickMethod = 'GetTask-P'
 
                         BEGIN TRY
@@ -3781,8 +3779,7 @@ BEGIN
                SELECT TOP 1 @cSuggUCC  = Descr
                FROM rdt.rdtPickLog WITH(NOLOCK)
                WHERE PickSlipNo = @cPickSlipNo
-                  AND Mobile = @nMobile
-                  AND AddWho = @cUserName
+                  AND (Mobile = @nMobile OR AddWho = @cUserName)
                   AND PickMethod = 'GetTask-U'
                   AND Status = '0'
                ORDER BY AddDate DESC
@@ -3792,12 +3789,17 @@ BEGIN
                -- Display UCC
                IF @nRowCount > 0
                BEGIN
-                  SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                  SELECT 
+                     @cSuggLOT = LA.LOT,
+                     @cDisLottable01 = LA.Lottable01
+                  FROM dbo.UCC WITH(NOLOCK)
+                  INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                  WHERE UCC.UCCNo = @cSuggUCC
 
                   SET @cOutField08 = 'UCC:'
                   SET @cOutField09 = @cSuggUCC
-                  SET @cOutField10 = 'LOT:'
-                  SET @cOutField11 = @cSuggLOT
+                  SET @cOutField10 = 'LOT01:'
+                  SET @cOutField11 = ISNULL(@cDisLottable01, '')
                END
                ELSE
                -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -3805,8 +3807,7 @@ BEGIN
                   SELECT TOP 1 @cSuggLOT  = Descr
                   FROM rdt.rdtPickLog WITH(NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
-                     AND Mobile = @nMobile
-                     AND AddWho = @cUserName
+                     AND (Mobile = @nMobile OR AddWho = @cUserName)
                      AND PickMethod = 'GetTask-P'
                      AND Status = '0'
                   ORDER BY AddDate DESC
@@ -4073,8 +4074,7 @@ BEGIN
                   SELECT TOP 1 @cSuggUCC  = Descr
                   FROM rdt.rdtPickLog WITH(NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
-                     AND Mobile = @nMobile
-                     AND AddWho = @cUserName
+                     AND (Mobile = @nMobile OR AddWho = @cUserName)
                      AND PickMethod = 'GetTask-U'
                      AND Status = '0'
                   ORDER BY AddDate DESC
@@ -4084,12 +4084,17 @@ BEGIN
                   -- Display UCC
                   IF @nRowCount > 0
                   BEGIN
-                     SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                     SELECT 
+                        @cSuggLOT = LA.LOT,
+                        @cDisLottable01 = LA.Lottable01
+                     FROM dbo.UCC WITH(NOLOCK)
+                     INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                     WHERE UCC.UCCNo = @cSuggUCC
 
                      SET @cOutField08 = 'UCC:'
                      SET @cOutField09 = @cSuggUCC
-                     SET @cOutField10 = 'LOT:'
-                     SET @cOutField11 = @cSuggLOT
+                     SET @cOutField10 = 'LOT01:'
+                     SET @cOutField11 = ISNULL(@cDisLottable01, '')
                   END
                   ELSE
                   -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -4097,8 +4102,7 @@ BEGIN
                      SELECT TOP 1 @cSuggLOT  = Descr
                      FROM rdt.rdtPickLog WITH(NOLOCK)
                      WHERE PickSlipNo = @cPickSlipNo
-                        AND Mobile = @nMobile
-                        AND AddWho = @cUserName
+                        AND (Mobile = @nMobile OR AddWho = @cUserName)
                         AND PickMethod = 'GetTask-P'
                         AND Status = '0'
                      ORDER BY AddDate DESC
@@ -4177,6 +4181,7 @@ BEGIN
                         -- Go to verify ID screen
                         SET @nAfterScn = @nScn_VerifyID
                         SET @nAfterStep = @nStep_VerifyID
+                        GOTO Quit
                      END
                      ELSE
                      BEGIN
@@ -4281,8 +4286,7 @@ BEGIN
                         SELECT TOP 1 @cSuggUCC  = Descr
                         FROM rdt.rdtPickLog WITH(NOLOCK)
                         WHERE PickSlipNo = @cPickSlipNo
-                           AND Mobile = @nMobile
-                           AND AddWho = @cUserName
+                           AND (Mobile = @nMobile OR AddWho = @cUserName)
                            AND PickMethod = 'GetTask-U'
                            AND Status = '0'
                         ORDER BY AddDate DESC
@@ -4292,12 +4296,17 @@ BEGIN
                         -- Display UCC
                         IF @nRowCount > 0
                         BEGIN
-                           SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+                           SELECT 
+                              @cSuggLOT = LA.LOT,
+                              @cDisLottable01 = LA.Lottable01
+                           FROM dbo.UCC WITH(NOLOCK)
+                           INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+                           WHERE UCC.UCCNo = @cSuggUCC
 
                            SET @cOutField08 = 'UCC:'
                            SET @cOutField09 = @cSuggUCC
-                           SET @cOutField10 = 'LOT:'
-                           SET @cOutField11 = @cSuggLOT
+                           SET @cOutField10 = 'LOT01:'
+                           SET @cOutField11 = ISNULL(@cDisLottable01, '')
                         END
                         ELSE
                         -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -4305,8 +4314,7 @@ BEGIN
                            SELECT TOP 1 @cSuggLOT  = Descr
                            FROM rdt.rdtPickLog WITH(NOLOCK)
                            WHERE PickSlipNo = @cPickSlipNo
-                              AND Mobile = @nMobile
-                              AND AddWho = @cUserName
+                              AND (Mobile = @nMobile OR AddWho = @cUserName)
                               AND PickMethod = 'GetTask-P'
                               AND Status = '0'
                            ORDER BY AddDate DESC
@@ -4377,13 +4385,12 @@ BEGIN
                                                       SELECT 1
                                                       FROM rdt.rdtPickLog WITH(NOLOCK)
                                                       WHERE PickSlipNo = @cPickSlipNo
-                                                         AND Mobile = @nMobile
-                                                         AND AddWho = @cUserName
+                                                         AND (Mobile = @nMobile OR AddWho = @cUserName)
                                                          AND Status IN ( '0', '4')
                                                    )
                         BEGIN
                            -- Prepare next screen var
-                           SET @cOutField01 = '' -- PickSlipNo
+                           SET @cOutField01 = ''
 
                            -- Go to No More Task, Close All DropID screen
                            SET @nAfterScn = 6828
@@ -4522,7 +4529,7 @@ BEGIN
                   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                      COMMIT TRAN
                   
-                  IF @nPre_Step IN( @nStep_PickZone, @nStep_ConfirmLOC, @nStep_SKUQTY)
+                  IF @nPre_Step IN( @nStep_PickZone, @nStep_ConfirmLOC, @nStep_VerifyID, @nStep_SKUQTY)
                   BEGIN
                      SET @nAfterScn = @nScn_PickSlipNo
                      SET @nAfterStep = @nStep_PickSlipNo
@@ -4592,6 +4599,17 @@ BEGIN
 
                      SET @nAfterScn = @nScn_ConfirmLOC
                      SET @nAfterStep = @nStep_ConfirmLOC
+                  END
+                  ELSE IF @nPre_Step = @nStep_VerifyID
+                  BEGIN
+                     -- Prepare next screen var
+                     SET @cOutField01 = @cSuggLOC
+                     SET @cOutField04 = @cSuggID --(yeekung02)
+                     SET @cOutField05 = ''
+
+                     -- Go to verify ID screen
+                     SET @nAfterScn = @nScn_VerifyID
+                     SET @nAfterStep = @nStep_VerifyID
                   END
                END
                ELSE IF @cOption = '9'
@@ -4694,6 +4712,17 @@ BEGIN
                   SET @nAfterScn = @nScn_ConfirmLOC
                   SET @nAfterStep = @nStep_ConfirmLOC
                END
+               ELSE IF @nPre_Step = @nStep_VerifyID
+               BEGIN
+                  -- Prepare next screen var
+                  SET @cOutField01 = @cSuggLOC
+                  SET @cOutField04 = @cSuggID --(yeekung02)
+                  SET @cOutField05 = ''
+
+                  -- Go to verify ID screen
+                  SET @nAfterScn = @nScn_VerifyID
+                  SET @nAfterStep = @nStep_VerifyID
+               END
             END
          END
       END
@@ -4703,8 +4732,7 @@ BEGIN
          SELECT TOP 1 @cSuggUCC  = Descr
          FROM rdt.rdtPickLog WITH(NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
-            AND Mobile = @nMobile
-            AND AddWho = @cUserName
+            AND (Mobile = @nMobile OR AddWho = @cUserName)
             AND PickMethod = 'GetTask-U'
             AND Status = '0'
          ORDER BY AddDate DESC
@@ -4714,12 +4742,17 @@ BEGIN
          -- Display UCC
          IF @nRowCount > 0
          BEGIN
-            SELECT @cSuggLOT = LOT FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cSuggUCC
+            SELECT 
+               @cSuggLOT = LA.LOT,
+               @cDisLottable01 = LA.Lottable01
+            FROM dbo.UCC WITH(NOLOCK)
+            INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.LOT
+            WHERE UCC.UCCNo = @cSuggUCC
 
             SET @cOutField08 = 'UCC:'
             SET @cOutField09 = @cSuggUCC
-            SET @cOutField10 = 'LOT:'
-            SET @cOutField11 = @cSuggLOT
+            SET @cOutField10 = 'LOT01:'
+            SET @cOutField11 = ISNULL(@cDisLottable01, '')
          END
          ELSE
          -- Display Piece info, Lottable01, UOM, UOM Desc
@@ -4727,8 +4760,7 @@ BEGIN
             SELECT TOP 1 @cSuggLOT  = Descr
             FROM rdt.rdtPickLog WITH(NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo
-               AND Mobile = @nMobile
-               AND AddWho = @cUserName
+               AND (Mobile = @nMobile OR AddWho = @cUserName)
                AND PickMethod = 'GetTask-P'
                AND Status = '0'
             ORDER BY AddDate DESC

@@ -24,7 +24,7 @@ EXECUTE rdt.rdtAddMsg 255619, 10, '255619 InsKDtlFail',                       'u
 EXECUTE rdt.rdtAddMsg 255620, 10, '255620 InsKDtlFail',                       'us_english', 839, 0, '255620 Insert @tPickDetail failed'
 EXECUTE rdt.rdtAddMsg 255621, 10, '255621 GenKeyFail',                        'us_english', 839, 0, '255621 Generate key failed'
 EXECUTE rdt.rdtAddMsg 255622, 10, '255622 UpdPKDtlFail',                      'us_english', 839, 0, '255622 Update pickdetail failed'
-EXECUTE rdt.rdtAddMsg 255623, 10, '255623 NoPKDFound',                        'us_english', 839, 0, '255623 No proper pickdetail failed'
+EXECUTE rdt.rdtAddMsg 255623, 10, '255623 NoPKDFound',                        'us_english', 839, 0, '255623 No proper pickdetail found'
 EXECUTE rdt.rdtAddMsg 255624, 10, '255624 DelPKDtlFail',                      'us_english', 839, 0, '255624 Delete pickdetail failed'
 EXECUTE rdt.rdtAddMsg 255625, 10, '255625 DelPKDtlFail',                      'us_english', 839, 0, '255625 Delete pickdetail failed'
 EXECUTE rdt.rdtAddMsg 255626, 10, '255626 UptPKDFail',                        'us_english', 839, 0, '255626 Update @tNewPickDetail failed'
