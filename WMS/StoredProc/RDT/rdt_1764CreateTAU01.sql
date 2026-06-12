@@ -501,9 +501,16 @@ BEGIN
             SET @n_SplitQty = 0  
             IF @n_PDQty < @n_InnerPack  
             BEGIN  
-               UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
-               SET TaskDetailKey = @cNewTaskDetailKey, TRAFFICCOP = NULL, Editdate = getdate()  
-               WHERE PickdetailKey = @c_PickDetailKey  
+               BEGIN TRY
+                  UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
+                  SET TaskDetailKey = @cNewTaskDetailKey, TRAFFICCOP = NULL, Editdate = getdate()  
+                  WHERE PickdetailKey = @c_PickDetailKey 
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 268856
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- UpdPickDtlFail
+                  GOTO RollBackTran
+               END CATCH 
   
                SET @n_SystemQty = @n_SystemQty + @n_PDQty  
             END  

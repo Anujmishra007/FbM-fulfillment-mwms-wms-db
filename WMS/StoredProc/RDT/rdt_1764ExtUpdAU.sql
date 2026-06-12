@@ -132,7 +132,6 @@ BEGIN
                 LEFT JOIN dbo.TASKDETAIL TD WITH (NOLOCK) ON PD.Taskdetailkey = TD.Taskdetailkey AND TD.Sourcetype = @cSourceType AND TD.Tasktype IN ('FPK','FCP','FPP') AND TD.Status <> 'X'  
                 AND PD.STORERKEY = TD.STORERKEY --SY02  
                 LEFT JOIN dbo.STORERSODEFAULT SSO WITH (NOLOCK) ON SSO.Storerkey = O.Consigneekey  
-                --LEFT JOIN dbo.STORERSODEFAULT SSOB WITH (NOLOCK) ON SSO.Storerkey = O.Billtokey  --SY02  
                 LEFT JOIN dbo.STORERSODEFAULT SSOB WITH (NOLOCK) ON SSOB.Storerkey = O.Billtokey   --SY02  
                 LEFT JOIN dbo.LOADPLAN LP WITH (NOLOCK) ON LP.LOADKEY = O.LOADKEY  
                 LEFT JOIN dbo.STORER STC WITH (NOLOCK) ON STC.STORERKEY = O.CONSIGNEEKEY AND STC.CONSIGNEEFOR = O.STORERKEY  

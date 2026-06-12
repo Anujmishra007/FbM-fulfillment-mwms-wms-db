@@ -142,8 +142,8 @@ BEGIN
     
     SET @cPackData1 = ''  
     SET @cPackData2 = ''  
-    SET @cPackData3 = ''  
-    
+    SET @cPackData3 = ''
+
     SET @cUpdatePackDetailInfo = rdt.RDTGetConfig( @nFunc, 'UpdatePackDetailInfo', @cStorerKey)  
     
     SET @cCheckMaxByBatch = rdt.RDTGetConfig( @nFunc, 'CheckMaxByBatch', @cStorerKey)  
@@ -201,6 +201,11 @@ BEGIN
     
     IF ISNULL(@cTaskPickMethod,'') = 'FP'  
         SET @cDropID = @cID  
+
+    -- Handling transaction  
+    SET @nTranCount = @@TRANCOUNT  
+    BEGIN TRAN  -- Begin our own transaction  
+    SAVE TRAN rdt_1812ExtScnAU_PackCtn_Confirm -- For rollback or commit only our own transaction  
     
     IF ISNULL(@cTaskPickMethod,'') = 'FP'  
     BEGIN  
@@ -228,11 +233,16 @@ BEGIN
     
         WHILE @@FETCH_STATUS <> -1  
         BEGIN  
-    
-            UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
-            SET DROPID = @cDropID  
-            WHERE PICKDETAILKEY = @c_PickDetailKey  
-    
+            BEGIN TRY
+                UPDATE dbo.PICKDETAIL WITH (ROWLOCK)  
+                SET DROPID = @cDropID  
+                WHERE PICKDETAILKEY = @c_PickDetailKey
+            END TRY
+            BEGIN CATCH
+                SET @nErrNo = 269511
+                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --UPDPickDtlFail
+                GOTO RollBackTran
+            END CATCH
             FETCH NEXT FROM CUR_PICK INTO @c_PickDetailKey  
         END  
         CLOSE CUR_PICK  
@@ -243,11 +253,6 @@ BEGIN
     SELECT @cPickSlipNo = PickSlipNo  
     FROM dbo.PackHeader WITH (NOLOCK)  
     WHERE OrderKey = @cOrderKey  
-    
-    -- Handling transaction  
-    SET @nTranCount = @@TRANCOUNT  
-    BEGIN TRAN  -- Begin our own transaction  
-    SAVE TRAN rdt_1812ExtScnAU_PackCtn_Confirm -- For rollback or commit only our own transaction  
     
     /***********************************************************************************************  
                                                 PackHeader  
@@ -742,7 +747,8 @@ BEGIN
     ELSE IF CURSOR_STATUS('local', 'CUR_PICK') = -1
         DEALLOCATE CUR_PICK
 
-    ROLLBACK TRAN rdt_1812ExtScnAU_PackCtn_Confirm -- Only rollback change made here
+    IF XACT_STATE() <> 0 AND @@TRANCOUNT > @nTranCount
+         ROLLBACK TRAN rdt_1812ExtScnAU_PackCtn_Confirm -- Rollback only change made here
  
     Fail:  
     Quit:  
