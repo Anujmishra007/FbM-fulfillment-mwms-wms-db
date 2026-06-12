@@ -422,8 +422,7 @@ BEGIN
    SELECT DISTINCT PickDetailKey
    FROM [RDT].[rdtPickLog] WITH(NOLOCK)
    WHERE PickSlipNo = @cPickSlipNo
-      AND Mobile = @nMobile
-      AND AddWho = @cUserName
+      AND (Mobile = @nMobile OR AddWho = @cUserName)
       AND PickMethod IN ('GetTask-U', 'GetTask-P')
       AND Status IN ('4', '9')
 
