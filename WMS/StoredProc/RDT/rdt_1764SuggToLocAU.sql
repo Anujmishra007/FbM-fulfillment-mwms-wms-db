@@ -170,8 +170,11 @@ BEGIN
             IF @nTranCount = 0
                 COMMIT TRAN;
         END TRY
+                END TRY
         BEGIN CATCH
-            IF XACT_STATE() <> 0
+            IF XACT_STATE() = -1
+                ROLLBACK TRAN; -- uncommittable transaction, must rollback fully
+            ELSE IF XACT_STATE() = 1
             BEGIN
                 IF @nTranCount = 0
                     ROLLBACK TRAN;

@@ -747,9 +747,11 @@ BEGIN
     ELSE IF CURSOR_STATUS('local', 'CUR_PICK') = -1
         DEALLOCATE CUR_PICK
 
-    IF XACT_STATE() <> 0 AND @@TRANCOUNT > @nTranCount
-         ROLLBACK TRAN rdt_1812ExtScnAU_PackCtn_Confirm -- Rollback only change made here
- 
+    IF XACT_STATE() = -1
+        ROLLBACK TRAN;
+    ELSE IF XACT_STATE() = 1 AND @@TRANCOUNT > @nTranCount
+        ROLLBACK TRAN rdt_1812ExtScnAU_PackCtn_Confirm -- Rollback only change made here
+
     Fail:  
     Quit:  
         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  

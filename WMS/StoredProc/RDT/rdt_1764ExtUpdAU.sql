@@ -30,6 +30,9 @@ BEGIN
     SET QUOTED_IDENTIFIER OFF  
     SET ANSI_NULLS OFF  
     SET CONCAT_NULL_YIELDS_NULL OFF  
+
+    SET @nErrNo = 0
+    SET @cErrMsg = ''
     
     DECLARE @nTranCount  INT  
 
@@ -240,7 +243,7 @@ BEGIN
                         ,@cLinkTaskToPick_SQL    = @cLinkTaskToPick_SQL  
                         ,@cWIP_RefNo             = @cSourceType  
                         ,@bSuccess               = @bSuccess OUTPUT  
-                        ,@nErr                   = @nErr OUTPUT  
+                        ,@nErr                   = @nErrNo OUTPUT  
                         ,@cErrMsg                = @cInsertErrMsg OUTPUT  
     
                     IF @bSuccess <> 1  
@@ -357,7 +360,7 @@ BEGIN
                         ,@cSplitTaskByCase       ='N'   -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.  
                         ,@cWIP_RefNo             = @cSourceType  
                         ,@bSuccess               = @bSuccess OUTPUT  
-                        ,@nErr                   = @nErr OUTPUT  
+                        ,@nErr                   = @nErrNo OUTPUT  
                         ,@cErrMsg                = @cInsertErrMsg OUTPUT  
     
                     IF @bSuccess <> 1  
@@ -460,7 +463,7 @@ BEGIN
                                ,@cSplitTaskByCase       = 'N'   -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.  
                                ,@cWIP_RefNo             = @cSourceType  
                                ,@bSuccess               = @bSuccess OUTPUT  
-                               ,@nErr                   = @nErr OUTPUT  
+                               ,@nErr                   = @nErrNo OUTPUT  
                                ,@cErrMsg                = @cInsertErrMsg OUTPUT  
     
                             IF @bSuccess <> 1  
@@ -561,7 +564,7 @@ BEGIN
                         ,@cLinkTaskToPick_SQL    = @cLinkTaskToPick_SQL  
                         ,@cWIP_RefNo             = @cSourceType  
                         ,@bSuccess               = @bSuccess OUTPUT  
-                        ,@nErr                   = @nErr OUTPUT  
+                        ,@nErr                   = @nErrNo OUTPUT  
                         ,@cErrMsg                = @cInsertErrMsg OUTPUT  
     
                     IF @bSuccess <> 1  
