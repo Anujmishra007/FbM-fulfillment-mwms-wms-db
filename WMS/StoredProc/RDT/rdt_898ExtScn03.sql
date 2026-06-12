@@ -268,8 +268,8 @@ BEGIN
       END
       IF (@nMOBRECStep = 8 AND @nStep = 9) OR (@nMOBRECStep = 9 AND @nStep = 8)
       BEGIN
-         SELECT @cOutField01 = @cLottable01, @cOutField02 = N'' ,
-         @cOutField03 = N'' , @cOutField04 = CONVERT(NVARCHAR(16),@dLottable04,120)
+         SELECT @cOutField01 = @cLottable01, @cOutField02 = ISNULL(@cLottable02, N'') ,
+            @cOutField03 = ISNULL(@cLottable03, N'') , @cOutField04 = CONVERT(NVARCHAR(16),@dLottable04,120)
 
          SET @nAfterStep = 99
          SET @nAfterScn = 1304

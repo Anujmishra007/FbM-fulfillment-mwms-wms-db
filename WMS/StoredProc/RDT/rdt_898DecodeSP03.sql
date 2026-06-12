@@ -250,27 +250,17 @@ BEGIN
       BEGIN
          SET @cBarcode = REPLACE(TRIM(@cUCC), ' ', '')
 
-         -- Validation - If barcode contains parentheses, must be valid GS1
-         IF CHARINDEX('(', @cBarcode) > 0
+         -- Only validate and decode if barcode starts with (10) - BAT GS1 format
+         IF LEFT(@cBarcode, 4) = '(10)'
          BEGIN
-            IF LEFT(@cBarcode, 4) <> '(10)'
-            BEGIN
-               SET @nErrNo = 263852
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-               GOTO Quit
-            END
-            
+            -- Validation - length must be 40 or 44 for BAT barcodes
             IF LEN(@cBarcode) NOT IN (40, 44)
             BEGIN
                SET @nErrNo = 263853
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                GOTO Quit
             END
-         END
-
-         -- Only decode if barcode length is 40 or 44 AND starts with (10)
-         IF LEN(@cBarcode) IN (40, 44) AND LEFT(@cBarcode, 4) = '(10)'
-         BEGIN
+            
             -- Decode Batch: Value between (10) and (11)
             SET @cLottable02 = 
                CASE 
@@ -306,6 +296,7 @@ BEGIN
                SET @cLottable03 = '20' + @cMfgDateRaw  -- 20 + YYMMDD = YYYYMMDD
             END
          END
+         -- If barcode doesn't start with (10), do nothing - preserves existing lottable values for other SKUs
       END
    END
 
