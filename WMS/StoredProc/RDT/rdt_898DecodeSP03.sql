@@ -99,9 +99,9 @@ BEGIN
          IF LEN(@cBarcode) NOT IN (40, 44, 34, 67)
          BEGIN
             SELECT TOP 1 
-               @cLottable02 = ISNULL(Userdefined01, ''),  -- Maps to Lottable02 in UCCReceive
-               @cLottable03 = ISNULL(Userdefined02, ''),  -- Maps to Lottable03 
-               @dLottable04 = ISNULL(NULLIF(Userdefined03, ''), 0) -- Maps to Lottable04 
+               @cLottable02 = ISNULL(Userdefined01, @cLottable02),  -- Preserves existing value
+               @cLottable03 = ISNULL(Userdefined02, @cLottable03),  -- Preserves existing value
+               @dLottable04 = COALESCE(TRY_CONVERT(DATETIME, NULLIF(Userdefined03, '')), @dLottable04) -- Safe conversion   
             FROM dbo.UCC (NOLOCK)
             WHERE StorerKey = @cStorerKey
               AND UCCNo = @cBarcode
