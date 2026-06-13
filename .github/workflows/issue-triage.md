@@ -9,7 +9,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
-  #copilot-requests: write
+  # copilot-requests: write
 tools:
   github:
     mode: gh-proxy
@@ -18,10 +18,7 @@ tools:
 safe-outputs:
   add-labels:
   add-comment:
-    max: 3
   assign-to-agent:
-    max: 1
-    allowed: [copilot]
 ---
 
 # Issue Triage — WMS SQL Database
@@ -40,13 +37,8 @@ Perform the following steps in order.
 
 ## Step 1: Classify Type
 
-Read the issue title and body. Assign exactly one type label:
+Read the issue title and body. Assign exactly one type label via `add-labels`:
 
-```
-safeoutputs/add_labels(issue_number=<issue_number>, labels=["bug"])
-```
-
-Labels to choose from:
 - `bug` — something is broken or produces incorrect data / output
 - `enhancement` — a new feature, new SP, new storer customization, or behavioural improvement
 - `question` — request for help, clarification, or guidance
@@ -54,11 +46,7 @@ Labels to choose from:
 
 ## Step 2: Assess Priority
 
-Use the criteria from the PR-review playbooks (`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`) and map to a priority label:
-
-```
-safeoutputs/add_labels(issue_number=<issue_number>, labels=["priority: high"])
-```
+Use the criteria from the PR-review playbooks (`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`) and map to a priority label via `add-labels`:
 
 - `priority: critical` — production outage, data-loss risk, MOBREC / session corruption, security vulnerability, or logic error affecting **ALL storers**
 - `priority: high` — blocks development / deployment, logic error affecting **specific storers**, Extension SP bypass, or schema-breaking change (rename / drop / type change on `WMS/Tables/**`)
@@ -67,11 +55,7 @@ safeoutputs/add_labels(issue_number=<issue_number>, labels=["priority: high"])
 
 ## Step 3: Classify WMS Functional Area
 
-Inspect the title, body, any file paths, SP names and table / trigger names mentioned. Apply one or more **area labels**, using the cheatsheet from `WMS_SQL_Router.instructions.md`:
-
-```
-safeoutputs/add_labels(issue_number=<issue_number>, labels=["area: outbound", "area: trigger"])
-```
+Inspect the title, body, any file paths, SP names and table / trigger names mentioned. Apply one or more **area labels** via `add-labels`, using the cheatsheet from `WMS_SQL_Router.instructions.md`:
 
 | Label | Apply when the issue mentions / changes |
 |-------|------------------------------------------|
@@ -92,26 +76,13 @@ Multiple area labels are allowed when an issue spans several areas (e.g. an outb
 
 Search open issues with `gh issue list --state open --limit 50` (and `--search` with key SP / table names if present in the title). Compare titles, body and any mentioned SP / table names. If you find a likely duplicate:
 
-1. Add a comment noting the potential duplicate:
-   ```
-   safeoutputs/add_comment(item_number=<issue_number>, body="Possible duplicate of #<other_number>. Please check if this is already addressed there.")
-   ```
-2. Add the `duplicate` label:
-   ```
-   safeoutputs/add_labels(issue_number=<issue_number>, labels=["duplicate"])
-   ```
+1. Add a comment via `add-comment` noting the potential duplicate issue number and linking to it.
+2. Add the label `duplicate` via `add-labels`.
 3. Stop here. Do not assign to an agent.
 
 ## Step 5: Request Clarification if Needed
 
-If the issue lacks enough context to act on, add the label `needs-info` and a comment asking for the specific missing items:
-
-```
-safeoutputs/add_labels(issue_number=<issue_number>, labels=["needs-info"])
-safeoutputs/add_comment(item_number=<issue_number>, body="Thanks for filing! To act on this we need a bit more detail:\n\n- WMS region / database\n- Storer key(s) affected\n- SP / trigger / table name(s)\n- Steps to reproduce\n- Expected vs actual behaviour\n- Environment (DEV / STG / PROD)")
-```
-
-For WMS issues, the **minimum useful context** is:
+If the issue lacks enough context to act on, add the label `needs-info` and a comment via `add-comment` asking for the specific missing items. For WMS issues, the **minimum useful context** is usually:
 
 - WMS region / database (`AUSWMS`, `EMEA-UK`, `APAC-SG`, `AMER-US`, …)
 - Storer key(s) affected (e.g. `NIKE`, `ADIDAS`, `PUMA`, …)
@@ -125,11 +96,7 @@ Then stop — do not assign to an agent yet.
 
 ## Step 6: Add Routing Hint Comment
 
-If the issue is clear and actionable, post **one short** comment that tells the contributor / Copilot which deeper instruction file(s) to follow, based on Step 3 and the router:
-
-```
-safeoutputs/add_comment(item_number=<issue_number>, body="📋 **Routing**: This is an RDT issue (Function 1812).\n\nFor implementation, follow `RDT_CustomDataUpdate_SP_Template.md`.\nFor review impact, follow `RDT_pr_review.instructions.md`.\nAlways apply `CODE_STANDARDS.md`.")
-```
+If the issue is clear and actionable, post **one short** `add-comment` that tells the contributor / Copilot which deeper instruction file(s) to follow, based on Step 3 and the router:
 
 - If `area: rdt` was applied → mention `RDT_pr_review.instructions.md` for review impact and the matching `RDT_Custom*.md` / `RDT_Extended*.md` template for authoring.
 - If any of `area: inventory | inbound | outbound | interface | reporting | trigger | schema` was applied (and `area: rdt` was **not**) → mention `IOINV_PR_Review.instructions.md` and `CODE_STANDARDS.md`.
@@ -140,26 +107,8 @@ Keep the comment under ~10 lines.
 
 ## Step 7: Assign to Copilot
 
-If the issue is clear, actionable, and not a duplicate, assign it to the Copilot coding agent using the `assign_to_agent` safe-output:
-
-```
-safeoutputs/assign_to_agent(issue_number=<issue_number>, agent="copilot")
-```
-
-Use the exact field name `issue_number` (underscore). Do **not** use `issue-number` (hyphen).
-
-Copilot will pick up the area labels, the routing comment, and the `applyTo`-scoped instructions automatically when it starts working on the issue.
+If the issue is clear, actionable, and not a duplicate, use `assign-to-agent` to assign it to Copilot for resolution. Copilot will pick up the area labels, the routing comment, and the `applyTo`-scoped instructions automatically.
 
 ## No-op
 
 If the issue is spam, completely unintelligible, or clearly belongs to another repository, call `noop` with a brief explanation. Do not assign labels in that case.
-
-```
-safeoutputs/noop(message="Issue is spam / out of scope for this repository.")
-```
-
-## Error Handling
-
-- If the issue cannot be classified or assigned, always call at least one safe-output tool (`noop` if nothing else applies).
-- Never complete a run without making at least one tool call.
-
