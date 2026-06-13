@@ -19,7 +19,6 @@ safe-outputs:
   add-labels:
   add-comment:
     max: 3
-    target: "*"
   assign-to-agent:
     max: 1
     allowed: [copilot]
