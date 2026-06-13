@@ -15,9 +15,6 @@ tools:
     mode: gh-proxy
     toolsets: [default]
   bash: [grep, jq, cat, wc, find, sed, awk]
-engine:
-  id: copilot
-  model: claude-opus-4-6
 safe-outputs:
   add-labels:
   add-comment:
