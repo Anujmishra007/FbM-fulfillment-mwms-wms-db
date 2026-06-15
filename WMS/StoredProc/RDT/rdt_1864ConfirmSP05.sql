@@ -6,12 +6,10 @@ GO
 /* Store procedure: rdt_1864ConfirmSP05                                     */  
 /* Copyright      : Maersk                                                  */    
 /* Client         : PMI                                                     */    
-/* Purpose        : UCC status is not update when Pick pallet               */
+/* Purpose        : PMI Outbound                                            */  
 /*                                                                          */  
-/* Modifications log:                                                       */  
-/*                                                                          */  
-/* Date         Author    Ver.    Purposes                                  */  
-/* 2026-06-15   Navitha   1.0.0  Created                                    */  
+/* Date        Author    Ver.  Purposes                                     */  
+/* 2026-06-15  Navitha   1.0   Created                                      */
 /****************************************************************************/  
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1864ConfirmSP05]  
    @nMobile       INT,            

@@ -7,7 +7,7 @@ GO
 /* Store procedure: rdt_861Decodedrpid01                                      */ 
 /* Copyright: Maersk                                                          */  
 /*                                                                            */  
-/* Purpose: Extended putaway                                                  */  
+/* Purpose: PMI Outbound                                                      */  
 /*                                                                            */  
 /* Date        Author    Ver.  Purposes                                       */  
 /* 2026-06-15  Navitha    1.0   Decoding                                      */
