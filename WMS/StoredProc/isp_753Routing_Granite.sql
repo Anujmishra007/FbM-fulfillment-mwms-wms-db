@@ -25,6 +25,7 @@ GO
 /* 2024-11-18   Shong       1.3         New validation logic before actual SP begins   */
 /* 26-May-2026  WLChooi     1.4         FCR-13104 Added Validation for early submission*/
 /*                                      for 753 (WL01)                                 */
+/* 15-Jun-2026  WLChooi     1.5         FCR-13104 Added date format validation (WL02)  */
 /***************************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_753Routing_Granite]
    @c_WaveKey NVARCHAR(10),
@@ -100,15 +101,23 @@ BEGIN
       GOTO RETURN_SP; 
    END  
 
+   --WL02 S
    SET DATEFORMAT mdy;
-   IF ISDATE(@c_UserDefine02) <> 1 OR @c_UserDefine02 NOT LIKE '[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9]'
+   IF ISDATE(@c_UserDefine02) <> 1
+      OR NOT (
+         @c_UserDefine02 LIKE '[0-9]/[0-9]/[0-9][0-9][0-9][0-9]'
+      OR @c_UserDefine02 LIKE '[0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9]'
+      OR @c_UserDefine02 LIKE '[0-9][0-9]/[0-9]/[0-9][0-9][0-9][0-9]'
+      OR @c_UserDefine02 LIKE '[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9]'
+      )
    BEGIN 
       SELECT @n_continue = 3;
       SELECT @n_err = 500253;
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format - ' + @d_PickupDate + ', Correct Format is (MM/DD/YYYY). (isp_753Routing_Granite)';
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format - ' + @d_PickupDate + ', Correct Format is (M/D/YYYY or MM/DD/YYYY). (isp_753Routing_Granite)';
       GOTO RETURN_SP; 
    END     
-
+   --WL02 E
+   
    IF @cTransmitLogSubmitDate <> '' AND ISDATE(@cTransmitLogSubmitDate) = 1
    BEGIN 
       SELECT @n_continue = 3;
