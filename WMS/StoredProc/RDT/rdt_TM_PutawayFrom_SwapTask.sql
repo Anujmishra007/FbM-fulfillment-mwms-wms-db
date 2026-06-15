@@ -14,6 +14,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author   Purposes                                   */
 /* 14-01-2013  1.0  Ung      SOS256104. Created                         */
+/* 11-06-2026  1.1  Cuize    FCR-7458 Add PreGeneratedLoc config        */
 /************************************************************************/
 
 CREATE PROC [rdt].[rdt_TM_PutawayFrom_SwapTask] (
@@ -41,6 +42,7 @@ BEGIN
    DECLARE @cPickAndDropLOC   NVARCHAR( 10)
    DECLARE @cFitCasesInAisle  NVARCHAR( 1)
    DECLARE @nTransitCount     INT
+   DECLARE @cPreGeneratedLoc   NVARCHAR( 10) = ''
 
    DECLARE @cNewFromLOC        NVARCHAR( 10)
    DECLARE @cNewSuggToLOC      NVARCHAR( 10)
@@ -50,6 +52,7 @@ BEGIN
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
+
 
    -- Get existing task info
    SELECT
@@ -62,6 +65,9 @@ BEGIN
       @cPickAndDropLOC = TransitLOC
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskDetailKey
+
+   -- Get PreGeneratedLoc config
+   SET @cPreGeneratedLoc = rdt.rdtGetConfig(@nFunc, 'PreGeneratedLoc', @cStorerKey)
 
    -- Get new task info
    SET @cNewTaskDetailKey = ''
@@ -135,20 +141,31 @@ BEGIN
       IF @nErrNo <> 0
          GOTO RollBackTran
 
-      UPDATE dbo.TaskDetail SET
-          UserKey = ''
-         ,ReasonKey = ''
-         ,Status = '0'
-         ,ToLOC = ''
-         ,ToID = ''
-         ,ListKey = ''
-         ,TransitLOC = ''
-         ,FinalLOC = ''
-         ,FinalID = ''
-         ,EditDate = GETDATE()
-         ,EditWho  = SUSER_SNAME()
-         ,TrafficCop = NULL
-      WHERE TaskDetailKey = @cTaskDetailKey
+      IF @cPreGeneratedLoc = '1'
+         -- PreGeneratedLoc: keep ToLOC, ToID, ListKey, TransitLOC, FinalLOC, FinalID
+         UPDATE dbo.TaskDetail SET
+             UserKey = ''
+            ,ReasonKey = ''
+            ,Status = '0'
+            ,EditDate = GETDATE()
+            ,EditWho  = SUSER_SNAME()
+            ,TrafficCop = NULL
+         WHERE TaskDetailKey = @cTaskDetailKey
+      ELSE
+         UPDATE dbo.TaskDetail SET
+             UserKey = ''
+            ,ReasonKey = ''
+            ,Status = '0'
+            ,ToLOC = ''
+            ,ToID = ''
+            ,ListKey = ''
+            ,TransitLOC = ''
+            ,FinalLOC = ''
+            ,FinalID = ''
+            ,EditDate = GETDATE()
+            ,EditWho  = SUSER_SNAME()
+            ,TrafficCop = NULL
+         WHERE TaskDetailKey = @cTaskDetailKey
    END
    ELSE
       UPDATE dbo.TaskDetail SET
