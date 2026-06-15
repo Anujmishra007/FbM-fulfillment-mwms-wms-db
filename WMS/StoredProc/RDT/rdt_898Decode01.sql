@@ -14,6 +14,7 @@ GO
 /* 2025-07-30  Jackc    1.1.0   FCR-2961 Support new types of UCC barcode     */
 /* 2025-11-10  Cuize    1.2     FCR-8407 Swedish label58                      */
 /* 2025-12-22  Dennis   1.3     FCR-2307 Decode                               */
+/* 2026-06-12  Cuize    1.4     UWP-58798 code review for PMI                 */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_898Decode01] (
    @nMobile             INT,
@@ -106,7 +107,7 @@ BEGIN
                   SET @cLocalUCC = SUBSTRING(@cUCC, 19, 17)
                   SET @cSKU = SUBSTRING(@cUCC, 39, 11)
 
-                  SET @cSKU = SUBSTRING(@cUCC, 39, 11)
+
 
                   IF LEFT(@cSKU, 2) <> 'NP'
                   BEGIN
@@ -161,7 +162,7 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                      GOTO Quit
                   END
-               END-- len57
+               END-- len58
                ELSE IF LEN(@cUCC) = 40
                BEGIN
                   --V1.0.0 logic
@@ -211,7 +212,110 @@ BEGIN
             END
          END
       END
-   END
+
+
+      --vpa235
+      IF @nStep = 8 -- SKU
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            IF @cTempUCC <> ''
+            BEGIN
+               IF LEN(@cTempUCC) = 49 --Fertin label
+               BEGIN
+                  SET @cSKU = SUBSTRING(@cTempUCC, 39, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 226805
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 226806
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END --len 49
+               ELSE IF LEN(@cTempUCC) = 57 --Swedish label 57
+               BEGIN
+                  SET @cSKU = SUBSTRING(@cTempUCC, 39, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 226803
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 226804
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END --len 57
+               ELSE IF LEN(@cTempUCC) = 58 --Swedish label 58
+               BEGIN
+                  SET @cSKU = SUBSTRING(@cTempUCC, 40, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 226807
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 226808
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END --len 58
+               ELSE IF LEN(@cTempUCC) = 40
+               BEGIN
+                  --V1.0.0 logic
+                  IF SUBSTRING( @cTempUCC, 3, 1) = '0'
+                     SET @cSKU = SUBSTRING( @cTempUCC, 4, 13)
+                  ELSE
+                     SET @cSKU = SUBSTRING( @cTempUCC, 3, 14)
+                  -- SET @cBatch = SUBSTRING( @cTempUCC, 31, 2)
+               END --len 40
+               ELSE
+               BEGIN
+                  SET @nErrNo = 226802
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO Quit
+               END
+
+               SELECT TOP 1
+                  @cUserDefine01 = COALESCE(R.SKU, UPC.SKU)
+               FROM UPC UPC WITH (NOLOCK)
+               LEFT JOIN (
+                  SELECT DISTINCT RD.SKU, R.STORERKEY
+                  FROM RECEIPTDETAIL RD WITH (NOLOCK)
+                  JOIN RECEIPT R WITH (NOLOCK)
+                     ON RD.RECEIPTKEY = R.RECEIPTKEY
+                     AND RD.STORERKEY = R.STORERKEY
+                  WHERE R.RECEIPTKEY = @cReceiptKey
+                    AND R.STORERKEY = @cStorerKey
+               ) R
+                  ON UPC.SKU = R.SKU
+                  AND UPC.STORERKEY = R.STORERKEY
+               WHERE UPC.StorerKey = @cStorerKey
+                 AND (UPC.UPC = @cSKU OR UPC.SKU = @cSKU)
+                 AND UPC.SKU IS NOT NULL
+               ORDER BY
+                  CASE WHEN R.SKU IS NOT NULL THEN 0 ELSE 1 END,
+                  UPC.SKU
+            END
+         END
+      END
+      --vpa235
+   END -- IF @nFunc = 898
 
    Quit:
 

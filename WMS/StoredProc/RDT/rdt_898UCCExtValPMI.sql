@@ -9,6 +9,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author  Purposes                                     */
 /* 2024-10-30 1.0  PYU015  UWP-26527 Created                            */
+/* 2026-06-12 1.1  Cuize   UWP-58798 code review for PMI                 */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898UCCExtValPMI]
@@ -52,31 +53,33 @@ BEGIN
    
    IF @nFunc = 898 -- UCC receiving
    BEGIN
-      IF @nStep = 6 
+
+   IF @nStep = 8
+
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-           SELECT @cId = ToId
-                , @cLottable01 = dtl.Lottable01
-                , @cLottable02 = dtl.Lottable02
-                , @cLottable03 = dtl.Lottable03
-                , @dLottable04 = dtl.Lottable04
-             FROM UCC WITH (NOLOCK)
-            INNER JOIN ReceiptDetail dtl WITH (NOLOCK) 
-            ON UCC.Storerkey = dtl.StorerKey 
-            AND UCC.ExternKey = dtl.ExternReceiptKey 
-            AND UCC.Userdefined07 = dtl.ExternLineNo 
-            AND dtl.DuplicateFrom IS NULL
-            WHERE dtl.Storerkey = @cStorerKey
-              AND dtl.ReceiptKey = @cReceiptKey
-              AND UCC.UCCNo = @cUCC
+                     --SELECT @cId = ToId
+                     --     , @cLottable01 = dtl.Lottable01
+                     --     , @cLottable02 = dtl.Lottable02
+                     --     , @cLottable03 = dtl.Lottable03
+                     --     , @dLottable04 = dtl.Lottable04
+                     --  FROM UCC WITH (NOLOCK)
+                     -- INNER JOIN ReceiptDetail dtl WITH (NOLOCK)
+                     -- ON UCC.Storerkey = dtl.StorerKey
+                     -- AND UCC.ExternKey = dtl.ExternReceiptKey
+                     -- AND UCC.Userdefined07 = dtl.ExternLineNo
+                     -- AND dtl.DuplicateFrom IS NULL
+                     -- WHERE dtl.Storerkey = @cStorerKey
+                     --   AND dtl.ReceiptKey = @cReceiptKey
+                     --   AND UCC.UCCNo = @cUCC
 
-           IF @@ROWCOUNT = 0
-           BEGIN
-              SET @nErrNo = 219926
-              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidUCC
-              GOTO Quit
-           END
+                     --IF @@ROWCOUNT = 0
+                     --BEGIN
+                     --   SET @nErrNo = 219926
+                     --   SET @cErrMsg =  rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidUCC
+                     --   GOTO Quit
+                     --END
 
            SELECT TOP 1 
                   @cToLottable01 = dtl.Lottable01
