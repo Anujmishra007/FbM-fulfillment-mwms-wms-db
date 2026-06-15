@@ -47,7 +47,6 @@ BEGIN
 
     DECLARE @cUCC        NVARCHAR( 20)
     DECLARE @cUCCSKU     NVARCHAR( 20)
-    DECLARE @cID         NVARCHAR( 18)
     IF @nFunc = 838
     BEGIN
         IF @nStep = 1  -- FromDropID/ToDropID
@@ -65,8 +64,6 @@ BEGIN
                     BEGIN
                         SET @cFromDropIDDecode = @cBarcode
                     END
-                    IF @nErrNo <> 0
-                        GOTO Quit
                 END
                 IF @cBarcode2 <> ''
                 BEGIN
@@ -79,8 +76,6 @@ BEGIN
                     BEGIN
                         SET @cToDropIDDecode = @cBarcode2
                     END
-                    IF @nErrNo <> 0
-                        GOTO Quit
                 END
                 GOTO Quit
             END
