@@ -97,13 +97,13 @@ BEGIN
                     IF LEFT(@cUCCSKU, 2) <> 'NP'
                     BEGIN
                         SET @nErrNo = 269851
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269851^GetUPCFail,
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269851^Invalid SKU prefix
                         GOTO Quit
                     END
                     IF NOT EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUCCSKU)
                     BEGIN
                         SET @nErrNo = 269852
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269852^NoUPCQtytoPack,
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269852^SKU not found
                         GOTO Quit
                     END
                 END--Fertin label
@@ -118,13 +118,13 @@ BEGIN
                     IF LEFT(@cUCCSKU, 2) <> 'NP'
                     BEGIN
                         SET @nErrNo = 269853
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269853^GetUPCFail,
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269853^Invalid SKU prefix
                         GOTO Quit
                     END
                     IF NOT EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUCCSKU)
                     BEGIN
                         SET @nErrNo = 269854
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269854^NoUPCQtytoPack,
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269854^SKU not found
                         GOTO Quit
                     END
                 END -- swedish label
@@ -135,13 +135,13 @@ BEGIN
                     IF LEFT(@cUCCSKU, 2) <> 'NP'
                     BEGIN
                         SET @nErrNo = 269855
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269855^GetUPCFail,
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269855^Invalid SKU prefix
                         GOTO Quit
                     END
                     IF NOT EXISTS (SELECT 1 FROM dbo.SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUCCSKU)
                     BEGIN
                         SET @nErrNo = 269856
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269856^NoUPCQtytoPack,
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --269856^SKU not found
                         GOTO Quit
                     END
                 END -- swedish label
