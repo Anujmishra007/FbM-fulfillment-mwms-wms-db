@@ -50,6 +50,9 @@ BEGIN
     SET QUOTED_IDENTIFIER OFF  
     SET CONCAT_NULL_YIELDS_NULL OFF 
 
+    SET @nErrNo = 0
+    SET @cErrMsg = ''
+
     DECLARE @nDebugFlag  INT
     DECLARE @cFacility   NVARCHAR( 5)
 

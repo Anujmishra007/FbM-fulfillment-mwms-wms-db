@@ -215,7 +215,7 @@ BEGIN
     BEGIN
         -- Confirm PickDetail
         BEGIN TRY
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail  WITH (ROWLOCK) SET
                 Status = @cPickConfirmStatus,
                 CaseID = CASE WHEN @cUpdatePickDetailCaseID = '1' THEN ID ELSE CaseID END,
                 DropID = CASE WHEN @cUpdatePickDetailDropID = '1' THEN ID ELSE DropID END, 
@@ -264,7 +264,7 @@ BEGIN
                 END
                 -- Update serial no
                 BEGIN TRY
-                    UPDATE dbo.SerialNo SET
+                    UPDATE dbo.SerialNo WITH (ROWLOCK) SET
                         Status = '5', -- Pick
                         EditWho = SUSER_SNAME(), 
                         EditDate = GETDATE(), 
@@ -361,7 +361,7 @@ BEGIN
             IF @@ROWCOUNT = 0
                 BREAK
             BEGIN TRY
-                UPDATE dbo.UCC SET
+                UPDATE dbo.UCC WITH (ROWLOCK) SET
                     Status = '5', -- Pick
                     PickDetailKey = @cPickDetailKey,
                     EditDate = GETDATE(),
