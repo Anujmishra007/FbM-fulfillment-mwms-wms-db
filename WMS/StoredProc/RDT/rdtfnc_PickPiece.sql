@@ -6851,7 +6851,14 @@ BEGIN
             @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
          IF @nErrNo <> 0
+         BEGIN
+            IF @cExtScnSP = 'rdt_839ExtScn06'
+            BEGIN
+               IF @cUDF01 = 'No Need Update RDTMOBREC'
+                  RETURN
+            END
             GOTO Step_99_Fail
+         END
 
          IF @cExtScnSP = 'rdt_839ExtScn02'
          BEGIN

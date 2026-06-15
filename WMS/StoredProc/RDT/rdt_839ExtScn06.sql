@@ -2930,6 +2930,7 @@ BEGIN
 
             STEP_SKUQTY_FAIL:
                SET @cBarcode = ''
+               SET @cOutField05 = ''
                EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                GOTO UPD_RDTMOBREC
          END
@@ -4779,6 +4780,10 @@ BEGIN
             SET @cOutField10 = @cPackUOM
             SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
          END
+
+         SET @cBarcode = ''
+         SET @cOutField05 = ''
+         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
          
          SET @nAfterScn = 6774
          SET @nAfterStep = 99
