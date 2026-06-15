@@ -10,7 +10,7 @@ GO
 /*                                                                      */
 /* Purpose: FCR-8536 - Brazil-Cajamar-ONBR-Consolidate RPL per PND      */
 /*                                                                      */
-/* Called By:                                                           */
+/* Called By: ispReleaseReplenTask_Wrapper                              */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -21,6 +21,7 @@ GO
 /* 2025-12-12   Michael  1.0  DevOps Combine Script                     */
 /* 2026-04-30   Michael  1.1  FCR-8087 New REPLENCFG SQL_JOIN_TASK,ToID,*/
 /*                            NoQtyReplen,SetTransitLoc (ML01)          */
+/* 2026-06-15   Michael  1.2  FCR-9971 UK-Columbia-Replenishment (ML02) */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLREP09]
    @c_Facility  NVARCHAR(10) = ''
@@ -64,6 +65,7 @@ BEGIN
          , @c_Priority               NVARCHAR(5)  = ''
          , @c_UCCNo                  NVARCHAR(20) = ''
          , @c_TransitLOC             NVARCHAR(10) = ''
+         , @c_TD_TransitLOC          NVARCHAR(10) = ''   --ML02
          , @c_TaskGrouping           NVARCHAR(100)= ''
          , @c_GroupKey               NVARCHAR(10) = ''
          , @c_TaskGrouping_Prev      NVARCHAR(100)= ''
@@ -74,6 +76,7 @@ BEGIN
          , @c_ReplJoin_Exp           NVARCHAR(MAX)= ''
          , @c_TaskJoin_Exp           NVARCHAR(MAX)= ''   --ML01
          , @c_TransitLOC_Exp         NVARCHAR(MAX)= ''
+         , @c_TD_TransitLOC_Exp      NVARCHAR(MAX)= ''   --ML02
          , @c_TaskGrouping_Exp       NVARCHAR(MAX)= ''
          , @c_TaskPriority_Exp       NVARCHAR(MAX)= ''
          , @c_TaskType_Exp           NVARCHAR(MAX)= ''
@@ -104,6 +107,7 @@ BEGIN
     , UCCNo              NVARCHAR(20)  NULL DEFAULT ('')
     , Priority           NVARCHAR(10)  NULL DEFAULT ('')
     , TransitLOC         NVARCHAR(10)  NULL DEFAULT ('')
+    , TD_TransitLOC      NVARCHAR(10)  NULL DEFAULT ('')   --ML02
     --ML01-S
     , ReplenishmentGroup NVARCHAR(10)  NULL DEFAULT ('')
     , ToID               NVARCHAR(18)  NULL DEFAULT ('')
@@ -139,6 +143,7 @@ BEGIN
         , @c_ReplJoin_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN'          THEN Notes END)),'')
         , @c_TaskJoin_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN_TASK'     THEN Notes END)),'')   --ML01
         , @c_TransitLOC_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'TransitLOC'        THEN Notes END)),'')
+        , @c_TD_TransitLOC_Exp  = ISNULL(TRIM(MAX(CASE WHEN Code = 'TD_TransitLOC'     THEN Notes END)),'')   --ML02
         , @c_TaskGrouping_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskGrouping'      THEN Notes END)),'')
         , @c_TaskType_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Notes END)),'')
         , @c_TaskPriority_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Notes END)),'')
@@ -175,6 +180,7 @@ BEGIN
    END
 
    SET @c_SQLStatement = 'INSERT INTO #TEMP_REPLENISHMENT(Replenishmentkey, StorerKey, Sku, Lot, Qty, FromLOC, ID, ToLOC, UCCNo, Priority, TransitLOC'
+     + ', TD_TransitLOC'   --ML02
      + ', ReplenishmentGroup, ToID, QtyMoved, QtyInPickLoc, UOM, PackKey, Confirmed, ReplenNo, Remark, AddDate, AddWho'              --ML01
      + ', EditDate, EditWho, RefNo, DropID, LoadKey, Wavekey, OriginalFromLoc, OriginalQty, MoveRefKey, PendingMoveIn, QtyReplen)'   --ML01
      + ' SELECT RPL.Replenishmentkey'
@@ -188,6 +194,10 @@ BEGIN
      +       ', RPL.RefNo'
      +       ', RPL.Priority'
      +       ', TransitLOC=' + CASE WHEN ISNULL(@c_TransitLOC_Exp  ,'')<>'' THEN @c_TransitLOC_Exp   ELSE 'ISNULL(PA.InLoc,'''')' END
+
+   SET @c_SQLStatement = @c_SQLStatement                                                                                      --ML02
+     +       ', TD_TransitLOC=' + CASE WHEN ISNULL(@c_TD_TransitLOC_Exp  ,'')<>'' THEN @c_TD_TransitLOC_Exp ELSE '''''' END   --ML02
+
      --ML01-S
    SET @c_SQLStatement = @c_SQLStatement
      +       ', RPL.ReplenishmentGroup'
@@ -295,11 +305,12 @@ BEGIN
      +       ', NoQtyReplen='  + CASE WHEN ISNULL(@c_NoQtyReplen_Exp ,'')<>'' THEN @c_NoQtyReplen_Exp
                                       WHEN ISNULL(@c_NoQtyReplen_Val ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_NoQtyReplen_Val),'''','''''') + ''''
                                       WHEN ISNULL(@c_NoQtyReplen_SC  ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_NoQtyReplen_SC),'''','''''') + ''''
-                                      ELSE 'Y'
+                                      ELSE '''Y'''
                                  END
    --ML01-E
 
    SET @c_SQLStatement = @c_SQLStatement
+     +       ', RPL.TD_TransitLOC'   --ML02
      + ' FROM #TEMP_REPLENISHMENT RPL'
 
    IF ISNULL(@c_TaskJoin_Exp,'') <> ''                                --ML01
@@ -327,6 +338,7 @@ BEGIN
       INTO @c_Replenishmentkey, @c_Storer, @c_Sku, @c_Lot, @n_Qty, @c_FromLOC, @c_FromLogicalLoc, @c_ID, @c_ToLOC, @c_ToLogicalLoc
          , @c_UCCNo, @c_TransitLOC, @c_TaskGrouping, @c_Priority, @c_TaskType, @c_PickMethod
          , @c_ToID, @c_NoQtyReplen   --ML01
+         , @c_TD_TransitLOC   --ML02
 
       IF @@FETCH_STATUS <> 0
          BREAK
@@ -369,6 +381,13 @@ BEGIN
       BEGIN
          SET @c_FinalLOC = ''
       END
+
+      --ML02-S
+      IF ISNULL(@c_TransitLOC,'')='' AND ISNULL(@c_TD_TransitLOC,'') <> ''
+      BEGIN
+         SET @c_TransitLOC = @c_TD_TransitLOC   --ML02
+      END
+      --ML02-E
 
       SET @c_UOM = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN '2' ELSE '6' END
       SET @n_QtyReplen = CASE WHEN ISNULL(@c_NoQtyReplen,'') IN ('1','Y') THEN 0 ELSE @n_Qty END   --ML01
