@@ -93,6 +93,7 @@ BEGIN
          , @c_ReplJoin_LLI_Exp       NVARCHAR(MAX)= ''   --ML02
          , @c_Sorting_LLI_Exp        NVARCHAR(MAX)= ''
          , @c_TransitLOC_Exp         NVARCHAR(MAX)= ''
+         , @c_TD_TransitLOC_Exp      NVARCHAR(MAX)= ''   --ML02
          , @c_TaskGrouping_Exp       NVARCHAR(MAX)= ''
          , @c_TaskPriority_Exp       NVARCHAR(MAX)= ''
          , @c_TaskType_Exp           NVARCHAR(MAX)= ''
@@ -104,6 +105,7 @@ BEGIN
          , @c_DelPendingTask         NVARCHAR(10) = ''
          , @c_B2CChannelReplen       NVARCHAR(10) = ''
          , @c_NoUCC                  NVARCHAR(10) = ''   --ML02
+         , @c_SetTransitLoc          NVARCHAR(10) = ''   --ML02
          , @n_LocTolerance           FLOAT        = 1    --ML02
          , @n_CartonTolerance        FLOAT        = 1    --ML02
          , @n_PalletTolerance        FLOAT        = 1    --ML02
@@ -128,6 +130,7 @@ BEGIN
          , @c_ReplenishmentKey       NVARCHAR(10) = ''
          , @n_LotSKUQTY              INT          = 0
          , @c_TransitLOC             NVARCHAR(10) = ''
+         , @c_TD_TransitLOC          NVARCHAR(10) = ''   --ML02
          , @c_ToLOC                  NVARCHAR(10) = ''
          , @c_FinalLOC               NVARCHAR(10) = ''
          , @c_GroupKey               NVARCHAR(10) = ''
@@ -167,6 +170,7 @@ BEGIN
         , @c_ReplJoin_LLI_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'SQL_JOIN_LLI'      THEN Notes END)),'')   --ML02
         , @c_Sorting_LLI_Exp    = ISNULL(TRIM(MAX(CASE WHEN Code = 'Sorting_LLI'       THEN Notes END)),'')
         , @c_TransitLOC_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'TransitLOC'        THEN Notes END)),'')   --ML01
+        , @c_TD_TransitLOC_Exp  = ISNULL(TRIM(MAX(CASE WHEN Code = 'TD_TransitLOC'     THEN Notes END)),'')   --ML02
         , @c_TaskGrouping_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskGrouping'      THEN Notes END)),'')   --ML01
         , @c_TaskType_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Notes END)),'')   --ML01
         , @c_TaskPriority_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Notes END)),'')   --ML01
@@ -178,6 +182,7 @@ BEGIN
         , @c_DelPendingTask     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' THEN Long  END)),'1')
         , @c_B2CChannelReplen   = ISNULL(TRIM(MAX(CASE WHEN Code = 'B2CChannelReplen'  THEN Long  END)),'')
         , @c_NoUCC              = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoUCC'             THEN Long  END)),'')   --ML02
+        , @c_SetTransitLoc      = ISNULL(TRIM(MAX(CASE WHEN Code = 'SetTransitLoc'     THEN Long  END)),'')   --ML02
         , @n_LocTolerance       = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='LocTolerance'    THEN Long END),'') AS FLOAT), 1)   --ML02
         , @n_CartonTolerance    = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='CartonTolerance' THEN Long END),'') AS FLOAT), 0.9) --ML02
         , @n_PalletTolerance    = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='PalletTolerance' THEN Long END),'') AS FLOAT), 1)   --ML02
@@ -204,20 +209,21 @@ BEGIN
 
    CREATE TABLE #TEMP_REPLENISHMENT
    (
-      StorerKey    NVARCHAR(15) NULL DEFAULT ('')
-    , SKU          NVARCHAR(20) NULL DEFAULT ('')
-    , FromLOC      NVARCHAR(10) NULL DEFAULT ('')
-    , ToLOC        NVARCHAR(10) NULL DEFAULT ('')
-    , Lot          NVARCHAR(10) NULL DEFAULT ('')
-    , Id           NVARCHAR(18) NULL DEFAULT ('')
-    , Qty          INT          NULL DEFAULT (0)
-    , QtyMoved     INT          NULL DEFAULT (0)
-    , QtyInPickLOC INT          NULL DEFAULT (0)
-    , Priority     NVARCHAR(10) NULL DEFAULT ('')
-    , UOM          NVARCHAR(10) NULL DEFAULT ('')
-    , PackKey      NVARCHAR(10) NULL DEFAULT ('')
-    , UCCNo        NVARCHAR(20) NULL DEFAULT ('')
-    , TransitLOC   NVARCHAR(10) NULL DEFAULT ('')
+      StorerKey     NVARCHAR(15) NULL DEFAULT ('')
+    , SKU           NVARCHAR(20) NULL DEFAULT ('')
+    , FromLOC       NVARCHAR(10) NULL DEFAULT ('')
+    , ToLOC         NVARCHAR(10) NULL DEFAULT ('')
+    , Lot           NVARCHAR(10) NULL DEFAULT ('')
+    , Id            NVARCHAR(18) NULL DEFAULT ('')
+    , Qty           INT          NULL DEFAULT (0)
+    , QtyMoved      INT          NULL DEFAULT (0)
+    , QtyInPickLOC  INT          NULL DEFAULT (0)
+    , Priority      NVARCHAR(10) NULL DEFAULT ('')
+    , UOM           NVARCHAR(10) NULL DEFAULT ('')
+    , PackKey       NVARCHAR(10) NULL DEFAULT ('')
+    , UCCNo         NVARCHAR(20) NULL DEFAULT ('')
+    , TransitLOC    NVARCHAR(10) NULL DEFAULT ('')
+    , TD_TransitLOC NVARCHAR(10) NULL DEFAULT ('')   --ML02
    )
 
    CREATE TABLE #TEMP_LOT_SORT
@@ -913,25 +919,37 @@ BEGIN
 
    --ML01-S
    -- Update TransitLOC
-   IF ISNULL(@c_TransitLOC_Exp,'')<>'' AND EXISTS(SELECT TOP 1 1 FROM #TEMP_REPLENISHMENT)
+   IF EXISTS(SELECT TOP 1 1 FROM #TEMP_REPLENISHMENT)
    BEGIN
-      SET @c_SQLStatement = 'UPDATE RPL SET TransitLOC = ' + @c_TransitLOC_Exp
-        + ' FROM #TEMP_REPLENISHMENT RPL'
-        + ' LEFT JOIN dbo.LOC FRLOC WITH(NOLOCK) ON RPL.FromLoc=FRLOC.Loc'
-        + ' LEFT JOIN dbo.LOC TOLOC WITH(NOLOCK) ON RPL.ToLoc=TOLOC.Loc'
-        + ' LEFT JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON RPL.Lot=LA.Lot'
-        + ' LEFT JOIN dbo.SKU SKU WITH(NOLOCK) ON RPL.StorerKey=SKU.Storerkey AND RPL.Sku=SKU.Sku'
+      --ML02-S
+      SET @c_SQL = ''
+      IF ISNULL(@c_TransitLOC_Exp,'')<>''
+         SET @c_SQL = @c_SQL + CASE WHEN ISNULL(@c_SQL,'')<>'' THEN ', ' ELSE '' END + 'TransitLOC = (' + @c_TransitLOC_Exp + ')'
 
-      EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms1
-         , @c_Zone01, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
-         , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask, @c_B2CChannelReplen
-         , @c_NoUCC, @n_LocTolerance, @n_CartonTolerance, @n_PalletTolerance   --ML02
-
-      IF @b_debug = 1
+      IF ISNULL(@c_TD_TransitLOC_Exp,'')<>''
+         SET @c_SQL = @c_SQL + CASE WHEN ISNULL(@c_SQL,'')<>'' THEN ', ' ELSE '' END + 'TD_TransitLOC = (' + @c_TD_TransitLOC_Exp + ')'
+      
+      IF ISNULL(@c_SQL,'') <> ''
       BEGIN
-         SET @c_SQL = 'SELECT Update_TransitLOC_SQL = ''' + ISNULL(REPLACE(@c_SQLStatement,'''',''''''),'') + ''''
-         EXEC(@c_SQL)
-      END
+      --ML02-E
+         SET @c_SQLStatement = 'UPDATE RPL SET ' + @c_SQL   --ML02
+           + ' FROM #TEMP_REPLENISHMENT RPL'
+           + ' LEFT JOIN dbo.LOC FRLOC WITH(NOLOCK) ON RPL.FromLoc=FRLOC.Loc'
+           + ' LEFT JOIN dbo.LOC TOLOC WITH(NOLOCK) ON RPL.ToLoc=TOLOC.Loc'
+           + ' LEFT JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON RPL.Lot=LA.Lot'
+           + ' LEFT JOIN dbo.SKU SKU WITH(NOLOCK) ON RPL.StorerKey=SKU.Storerkey AND RPL.Sku=SKU.Sku'
+   
+         EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms1
+            , @c_Zone01, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
+            , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask, @c_B2CChannelReplen
+            , @c_NoUCC, @n_LocTolerance, @n_CartonTolerance, @n_PalletTolerance   --ML02
+   
+         IF @b_debug = 1
+         BEGIN
+            SET @c_SQL = 'SELECT Update_TransitLOC_SQL = ''' + ISNULL(REPLACE(@c_SQLStatement,'''',''''''),'') + ''''
+            EXEC(@c_SQL)
+         END
+      END   --ML02
    END
    --ML01-E
 
@@ -973,6 +991,7 @@ BEGIN
    --ML01-E
 
    SET @c_SQLStatement = @c_SQLStatement
+     +       ', RPL.TD_TransitLOC'   --ML02
      + ' FROM #TEMP_REPLENISHMENT RPL'
      + ' LEFT JOIN dbo.LOC FRLOC WITH(NOLOCK) ON RPL.FromLoc=FRLOC.Loc'
      + ' LEFT JOIN dbo.LOC TOLOC WITH(NOLOCK) ON RPL.ToLoc=TOLOC.Loc'
@@ -1002,6 +1021,7 @@ BEGIN
             @c_CurrentSKU, @n_FromQty, @c_CurrentStorer, @c_FromLot, @c_PackKey,
             @c_Priority, @c_UOM, @c_UCCNo, @c_FromLogicalLocation, @c_CurrentLogicalLocation,
             @c_TransitLOC, @c_TaskGrouping, @c_TaskType, @c_PickMethod   --ML01
+          , @c_TD_TransitLOC   --ML02
 
       IF @@FETCH_STATUS <> 0
          BREAK
@@ -1030,13 +1050,18 @@ BEGIN
 
       IF ISNULL(@c_TransitLOC,'') <> ''
       BEGIN
-         SET @c_ToLOC    = @c_TransitLOC
          SET @c_FinalLOC = @c_CurrentLOC
-         SET @c_CurrentLogicalLocation = @c_ToLOC
 
-         SELECT @c_CurrentLogicalLocation = LogicalLocation
-           FROM LOC(NOLOCK)
-          WHERE Loc = @c_ToLOC
+         IF ISNULL(@c_SetTransitLoc,'') NOT IN ('1','Y')   --ML02
+         BEGIN                                             --ML02
+            SET @c_ToLOC    = @c_TransitLOC
+            SET @c_CurrentLogicalLocation = @c_ToLOC
+            SET @c_TransitLOC = ''                         --ML02
+
+            SELECT @c_CurrentLogicalLocation = LogicalLocation
+              FROM LOC(NOLOCK)
+             WHERE Loc = @c_ToLOC
+         END                                               --ML02
       END
       ELSE
       BEGIN
@@ -1045,6 +1070,12 @@ BEGIN
       END
       --ML01-E
 
+      --ML02-S
+      IF ISNULL(@c_TransitLOC,'')='' AND ISNULL(@c_TD_TransitLOC,'') <> ''
+      BEGIN
+         SET @c_TransitLOC = @c_TD_TransitLOC   --ML02
+      END
+      --ML02-E
 
       IF @c_ReplenType = 'R'
       BEGIN
@@ -1129,6 +1160,7 @@ BEGIN
             , @c_GroupKey              = @c_GroupKey   --ML01
             , @c_Loadkey               = ''
             , @c_AreaKey               = '?F'  -- ?F=Get from location areakey
+            , @c_TransitLOC            = @c_TransitLOC --ML02
             , @c_FinalLOC              = @c_FinalLOC   --ML01
             , @c_Message03             = ''
             , @c_SplitTaskByCase       = 'N'
