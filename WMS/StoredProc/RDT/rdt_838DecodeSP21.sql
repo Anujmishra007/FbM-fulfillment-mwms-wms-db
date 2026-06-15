@@ -44,7 +44,7 @@ BEGIN
 
     SET @nErrNo = 0
     SET @cErrMsg = ''
-    
+
     DECLARE @cUCC        NVARCHAR( 20)
     DECLARE @cUCCSKU     NVARCHAR( 20)
     DECLARE @cID         NVARCHAR( 18)
@@ -67,23 +67,22 @@ BEGIN
                     END
                     IF @nErrNo <> 0
                         GOTO Quit
-                    END
-                    IF @cBarcode2 <> ''
-                    BEGIN
-                        SET @cBarcode2 = LTRIM(RTRIM(@cBarcode2))
-                        IF LEN(@cBarcode2) = 25
-                        BEGIN
-                            SET @cToDropIDDecode = SUBSTRING(@cBarcode2, 8, 18)
-                        END
-                        ELSE
-                        BEGIN
-                            SET @cToDropIDDecode = @cBarcode2
-                        END
-                        IF @nErrNo <> 0
-                            GOTO Quit
-                    END
-                    GOTO Quit
                 END
+                IF @cBarcode2 <> ''
+                BEGIN
+                    SET @cBarcode2 = LTRIM(RTRIM(@cBarcode2))
+                    IF LEN(@cBarcode2) = 25
+                    BEGIN
+                        SET @cToDropIDDecode = SUBSTRING(@cBarcode2, 8, 18)
+                    END
+                    ELSE
+                    BEGIN
+                        SET @cToDropIDDecode = @cBarcode2
+                    END
+                    IF @nErrNo <> 0
+                        GOTO Quit
+                END
+                GOTO Quit
             END
         END
         IF @nStep = 8  -- UCC
