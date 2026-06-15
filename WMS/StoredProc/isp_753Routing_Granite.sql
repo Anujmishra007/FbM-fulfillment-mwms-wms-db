@@ -113,7 +113,7 @@ BEGIN
    BEGIN 
       SELECT @n_continue = 3;
       SELECT @n_err = 500253;
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format - ' + @d_PickupDate + ', Correct Format is (M/D/YYYY or MM/DD/YYYY). (isp_753Routing_Granite)';
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format - ' + TRIM(@c_UserDefine02) + ', Correct Format is (M/D/YYYY or MM/DD/YYYY). (isp_753Routing_Granite)';
       GOTO RETURN_SP; 
    END     
    --WL02 E
