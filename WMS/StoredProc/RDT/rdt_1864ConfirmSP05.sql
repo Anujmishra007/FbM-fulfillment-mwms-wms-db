@@ -49,6 +49,10 @@ BEGIN
     SET QUOTED_IDENTIFIER OFF  
     SET ANSI_NULLS OFF  
     SET CONCAT_NULL_YIELDS_NULL OFF  
+
+    SET @nErrNo = 0
+    SET @cErrMsg = ''
+
     DECLARE @cOrderKey                  NVARCHAR( 10)
     DECLARE @cLoadKey                   NVARCHAR( 10)
     DECLARE @cZone                      NVARCHAR( 18)
