@@ -126,6 +126,8 @@ BEGIN
       @cSKUDescr        = V_SKUDescr,
       @nPUOM_Div        = V_PUOM_Div,
       @nPQTY            = V_PQTY,
+      @cToLOC           = V_String13,
+      @cToID            = V_String14,
       @nMQTY            = V_MQTY,
 
       @nQTY_Avail          = V_Integer1,
