@@ -53,13 +53,6 @@ BEGIN
     SET @nErrNo = 0
     SET @cErrMsg = ''
 
-    DECLARE @nDebugFlag  INT
-    DECLARE @cFacility   NVARCHAR( 5)
-
-    SELECT @cFacility = Facility 
-    FROM RDT.RDTMOBREC WITH (NOLOCK) 
-    WHERE Mobile = @nMobile
-
     IF @nFunc = 861 -- UCC Pick 
     BEGIN  
         IF @nStep = 2  -- DropID/ToDropID
@@ -73,12 +66,6 @@ BEGIN
                     BEGIN
                         SET @cDropID = RIGHT(@cDropID, 18)
                     END
-                    ELSE
-                    BEGIN
-                        SET @cDropID = @cDropID
-                    END
-                    IF @nErrNo <> 0
-                        GOTO Quit
                 END
             END
         END

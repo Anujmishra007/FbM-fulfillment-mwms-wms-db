@@ -344,7 +344,6 @@ BEGIN
             SELECT UCCNo
                 FROM dbo.UCC WITH (NOLOCK)
                 WHERE StorerKey = @cStorerKey
-                --   AND LOC = @cToLOC
                     AND ID = @cID
         END TRY
         BEGIN CATCH
