@@ -9,7 +9,12 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
-  # copilot-requests: write
+  copilot-requests: write
+mcp-servers:
+  atlassian:
+    url: https://mcp.atlassian.com/v1/mcp
+    headers:
+      Authorization: Bearer ${{ secrets.COPILOT_MCP_ATLASSIAN_API_KEY }}
 tools:
   github:
     mode: gh-proxy
