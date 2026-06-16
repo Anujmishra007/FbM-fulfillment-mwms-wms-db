@@ -252,8 +252,11 @@ BEGIN
       END
 
       AS ASNStatus, ' 
+
+  SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, 
+    'SELECT RECEIPT.ReceiptKey, RECEIPT.ExternReceiptKey', 
+    @c_ConvertedColumnStr + ' RECEIPT.ReceiptKey, RECEIPT.ExternReceiptKey')
   
-  SET @c_ConvertedSQLStr = CONCAT(@c_ConvertedColumnStr, RIGHT(@c_ConvertedSQLStr, LEN(@c_ConvertedSQLStr) - 8))
 
   SET @c_ConditionBuilder = ' (1=1' -- default condition, will be updated based on the operation
 
