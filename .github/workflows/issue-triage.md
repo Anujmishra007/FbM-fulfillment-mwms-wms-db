@@ -40,6 +40,22 @@ Before doing anything else, consult these context files (they are part of your i
 
 Perform the following steps in order.
 
+## Step 0: Fetch Jira Context (if ticket key found)
+
+Scan the issue title and body for a Jira ticket key (pattern: `[A-Z][A-Z0-9]+-\d+`, e.g. `UWP-12345`, `WMS-6789`, `CT-332`).
+
+If a ticket key is found, use the **atlassian** MCP server to fetch the Jira issue:
+
+1. Call the `atlassian` MCP `get_issue` tool (or equivalent) with the ticket key to retrieve the issue summary, description, status, priority, assignee, labels, and issue type.
+2. Use this Jira context to enrich your classification in the following steps:
+   - If the Jira priority is "Blocker" or "Critical" → lean towards `priority: critical` or `priority: high`.
+   - If the Jira issue type is "Bug" → assign the `bug` label in Step 1.
+   - If the Jira issue type is "Story" or "Task" → assign the `enhancement` label in Step 1.
+   - Factor any Jira labels (region names, storer keys, component names) into the area classification (Step 3).
+3. Include relevant Jira context (status, assignee, acceptance criteria) in the routing hint comment (Step 6).
+
+If no ticket key is found, or the MCP call fails, skip this step and proceed with GitHub issue content only.
+
 ## Step 1: Classify Type
 
 Read the issue title and body. Assign exactly one type label via `add-labels`:
