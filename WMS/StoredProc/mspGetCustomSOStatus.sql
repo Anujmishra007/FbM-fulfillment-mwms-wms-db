@@ -27,6 +27,7 @@ GO
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspGetCustomSOStatus 
+@c_StorerKey NVARCHAR(20),
 @c_SQLStr NVARCHAR(MAX),
 @c_ConvertedSQLStr NVARCHAR(MAX) OUTPUT,
 @c_ConvertedCountSQLStr NVARCHAR(MAX) OUTPUT

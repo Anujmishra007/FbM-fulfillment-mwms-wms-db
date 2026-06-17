@@ -109,10 +109,10 @@ BEGIN
       ) AS NonMandatorySearchClauses
 
       SET @c_SQL_CallSP = 'EXEC ' + @c_CustomSPName + 
-      ' @c_SQLStr = @c_SQLStr, @c_ConvertedSQLStr = @c_ConvertedSQLStr OUTPUT, @c_ConvertedCountSQLStr = @c_ConvertedCountSQLStr OUTPUT'
+      '@c_StorerKey = @c_StorerKey, @c_SQLStr = @c_SQLStr, @c_ConvertedSQLStr = @c_ConvertedSQLStr OUTPUT, @c_ConvertedCountSQLStr = @c_ConvertedCountSQLStr OUTPUT'
       EXEC sp_executesql @c_SQL_CallSP, 
-         N'@c_SQLStr NVARCHAR(MAX), @c_ConvertedSQLStr NVARCHAR(MAX) OUTPUT, @c_ConvertedCountSQLStr NVARCHAR(MAX) OUTPUT', 
-         @c_SQLStr, @c_ConvertedSQLStr OUTPUT, @c_ConvertedCountSQLStr OUTPUT
+         N'@c_StorerKey NVARCHAR(20), @c_SQLStr NVARCHAR(MAX), @c_ConvertedSQLStr NVARCHAR(MAX) OUTPUT, @c_ConvertedCountSQLStr NVARCHAR(MAX) OUTPUT', 
+         @c_StorerKey, @c_SQLStr, @c_ConvertedSQLStr OUTPUT, @c_ConvertedCountSQLStr OUTPUT
    END
    ELSE
    BEGIN

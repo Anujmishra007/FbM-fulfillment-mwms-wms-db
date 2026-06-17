@@ -24,9 +24,11 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 12-Jun-2026 AYD      1.0   Creation for FCR-11918                    */
+/* 16-Jun-2026 AYD01    1.1   Implementation for VA, UNL                */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspGetCustomASNStatus01 
+@c_StorerKey NVARCHAR(20),
 @c_SQLStr NVARCHAR(MAX),
 @c_ConvertedSQLStr NVARCHAR(MAX) OUTPUT,
 @c_ConvertedCountSQLStr NVARCHAR(MAX) OUTPUT
@@ -47,7 +49,8 @@ BEGIN
   @c_LogicalOperation NVARCHAR(10),
   @c_ConditionBuilder NVARCHAR(MAX),
   @c_Condition NVARCHAR(MAX),
-  @c_SQLOperator NVARCHAR(10)
+  @c_SQLOperator NVARCHAR(10),
+  @c_RefNoLKUP NVARCHAR(20)
 
   IF OBJECT_ID('tempdb..#TMP_SUPPORTED_CONDITIONS','u') IS NOT NULL
   BEGIN
@@ -59,52 +62,106 @@ BEGIN
     [value] NVARCHAR(100) NULL,
     [condition] NVARCHAR(MAX) NULL                
   )  
+  --AYD01 Start
+  SELECT TOP 1 @c_RefNoLKUP = CODE
+  FROM CODELKUP 
+  WHERE LISTNAME = 'REFNOLKUP' 
+  AND StorerKey = @c_StorerKey
+
+  SET @c_RefNoLKUP = ISNULL(TRIM(@c_RefNoLKUP), '') 
+
+  IF @c_RefNoLKUP <> '' AND EXISTS (
+    SELECT 1
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = 'dbo' 
+    AND TABLE_NAME = 'RECEIPT'
+  )
+  BEGIN
+    INSERT INTO #TMP_SUPPORTED_CONDITIONS ([column], [value], [condition])
+    VALUES 
+    ('externasnStatus', 'VA', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
+      JOIN RDT.RDTVASLOG (NOLOCK) rvl ON rvl.REF1 = mspGetCustomASNStatus01_r.' + @c_RefNoLKUP + ' 
+      WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
+      AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
+      AND mspGetCustomASNStatus01_cl.CODE = ''VA''
+      AND RECEIPT.STATUS = ''0''
+      GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
+      )) '),
+    ('externasnStatus', 'UNL', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
+      JOIN RDT.RDTVASLOG (NOLOCK) rvl ON rvl.REF1 = mspGetCustomASNStatus01_r.' + @c_RefNoLKUP + ' 
+      WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
+      AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
+      AND mspGetCustomASNStatus01_cl.CODE = ''UNL''
+      AND RECEIPT.STATUS = ''2''
+      GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
+      )) ')
+  END
+  --AYD01 End
+
 
   INSERT INTO #TMP_SUPPORTED_CONDITIONS ([column], [value], [condition])
   VALUES 
     ('externasnStatus', '0', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''0''
       AND RECEIPT.STATUS NOT IN (''0'',''9'',''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) = 0
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
       )) '), 
     ('externasnStatus', '1', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''1''
       AND mspGetCustomASNStatus01_rd.FINALIZEFLAG =''N''
       AND RECEIPT.STATUS NOT IN (''1'', ''9'', ''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) < SUM(mspGetCustomASNStatus01_rd.QtyExpected)
-      AND SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) > 0  
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) < SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0))
+      AND SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) > 0  
       )) '),
     ('externasnStatus', 'REC', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''REC''
       AND mspGetCustomASNStatus01_rd.FINALIZEFLAG =''N''
       AND RECEIPT.STATUS NOT IN (''REC'', ''9'', ''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) = SUM(mspGetCustomASNStatus01_rd.QtyExpected)
-      AND SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) > 0  
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0))
+      AND SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) > 0  
       )) '),
     ('externasnStatus', 'PFIN', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''PFIN''
       AND RECEIPT.STATUS NOT IN (''PFIN'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS = ''1''
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.QtyExpected) > SUM(mspGetCustomASNStatus01_rd.QtyReceived)
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0)) > SUM(mspGetCustomASNStatus01_rd.QtyReceived)
       AND SUM(mspGetCustomASNStatus01_rd.QtyReceived) > 0
       )) '),
     ('externasnStatus', 'FIN', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''FIN''
@@ -112,7 +169,9 @@ BEGIN
       AND RECEIPT.ASNSTATUS = ''9''
       )) '),
     ('externasnStatus', 'IP', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       JOIN StorerConfig mspGetCustomASNStatus01_sc (NOLOCK) ON mspGetCustomASNStatus01_sc.StorerKey = RECEIPT.StorerKey 
         AND mspGetCustomASNStatus01_sc.ConfigKey = ''UPDATE RECEIPTDETAIL TOLOC'' 
         AND mspGetCustomASNStatus01_sc.SValue IN (''0'', ''1'')
@@ -126,11 +185,13 @@ BEGIN
       AND RECEIPT.STATUS NOT IN (''IP'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS IN (''PFIN'', ''FIN'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.QtyExpected) > SUM(mspGetCustomASNStatus01_rd.QtyReceived)
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0)) > SUM(mspGetCustomASNStatus01_rd.QtyReceived)
       AND SUM(mspGetCustomASNStatus01_rd.QtyReceived) > 0
       )) '),
     ('externasnStatus', 'PC', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       JOIN StorerConfig mspGetCustomASNStatus01_sc (NOLOCK) ON mspGetCustomASNStatus01_sc.StorerKey = RECEIPT.StorerKey 
         AND mspGetCustomASNStatus01_sc.ConfigKey = ''UPDATE RECEIPTDETAIL TOLOC'' 
         AND mspGetCustomASNStatus01_sc.SValue IN (''0'', ''1'')
@@ -157,52 +218,89 @@ BEGIN
       'SELECT CASE
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
+      JOIN RDT.RDTVASLOG (NOLOCK) rvl ON rvl.REF1 = mspGetCustomASNStatus01_r.' + @c_RefNoLKUP + ' 
+      WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
+      AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
+      AND mspGetCustomASNStatus01_cl.CODE = ''VA''
+      AND RECEIPT.STATUS = ''0''
+      GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
+      )) THEN ''VA''  
+
+      WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
+      JOIN RDT.RDTVASLOG (NOLOCK) rvl ON rvl.REF1 = mspGetCustomASNStatus01_r.' + @c_RefNoLKUP + ' 
+      WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
+      AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
+      AND mspGetCustomASNStatus01_cl.CODE = ''UNL''
+      AND RECEIPT.STATUS = ''2''
+      GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
+      )) THEN ''UNL''
+
+      WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''0''
       AND RECEIPT.STATUS NOT IN (''0'',''9'',''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) = 0
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
       )) THEN ''0''  
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''1''
       AND mspGetCustomASNStatus01_rd.FINALIZEFLAG =''N''
       AND RECEIPT.STATUS NOT IN (''1'', ''9'', ''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) < SUM(mspGetCustomASNStatus01_rd.QtyExpected)
-      AND SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) > 0  
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) < SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0))
+      AND SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) > 0  
       )) THEN ''1''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''REC''
       AND mspGetCustomASNStatus01_rd.FINALIZEFLAG =''N''
       AND RECEIPT.STATUS NOT IN (''REC'', ''9'', ''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) = SUM(mspGetCustomASNStatus01_rd.QtyExpected)
-      AND SUM(mspGetCustomASNStatus01_rd.BeforeReceivedQty) > 0  
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0))
+      AND SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) > 0  
       )) THEN ''REC''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''PFIN''
       AND RECEIPT.STATUS NOT IN (''PFIN'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS = ''1''
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.QtyExpected) > SUM(mspGetCustomASNStatus01_rd.QtyReceived)
-      AND SUM(mspGetCustomASNStatus01_rd.QtyReceived) > 0
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0)) > SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyReceived,0))
+      AND SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyReceived,0)) > 0
       )) THEN ''PFIN''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''FIN''
@@ -211,7 +309,9 @@ BEGIN
       )) THEN ''FIN''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       JOIN StorerConfig mspGetCustomASNStatus01_sc (NOLOCK) ON mspGetCustomASNStatus01_sc.StorerKey = RECEIPT.StorerKey 
         AND mspGetCustomASNStatus01_sc.ConfigKey = ''UPDATE RECEIPTDETAIL TOLOC'' 
         AND mspGetCustomASNStatus01_sc.SValue IN (''0'', ''1'')
@@ -225,12 +325,14 @@ BEGIN
       AND RECEIPT.STATUS NOT IN (''IP'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS IN (''PFIN'', ''FIN'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_rd.QtyExpected) > SUM(mspGetCustomASNStatus01_rd.QtyReceived)
-      AND SUM(mspGetCustomASNStatus01_rd.QtyReceived) > 0
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0)) > SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyReceived,0))
+      AND SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyReceived,0)) > 0
       )) THEN ''IP''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
-      JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = RECEIPT.ReceiptKey
+      JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
+        AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
+      LEFT JOIN RECEIPTDETAIL mspGetCustomASNStatus01_rd (NOLOCK) ON mspGetCustomASNStatus01_rd.ReceiptKey = mspGetCustomASNStatus01_r.ReceiptKey
       JOIN StorerConfig mspGetCustomASNStatus01_sc (NOLOCK) ON mspGetCustomASNStatus01_sc.StorerKey = RECEIPT.StorerKey 
         AND mspGetCustomASNStatus01_sc.ConfigKey = ''UPDATE RECEIPTDETAIL TOLOC'' 
         AND mspGetCustomASNStatus01_sc.SValue IN (''0'', ''1'')
@@ -244,8 +346,8 @@ BEGIN
       AND RECEIPT.STATUS NOT IN (''PC'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS IN (''PFIN'', ''FIN'', ''IP'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
-      HAVING SUM(mspGetCustomASNStatus01_lli.Qty) = 0
-      AND SUM(mspGetCustomASNStatus01_rd.QtyReceived) > 0
+      HAVING SUM(COALESCE(mspGetCustomASNStatus01_lli.Qty,0)) = 0
+      AND SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyReceived,0)) > 0
       )) THEN ''PC''
 
       ELSE RECEIPT.ASNStatus
