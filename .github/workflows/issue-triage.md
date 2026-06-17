@@ -24,6 +24,7 @@ safe-outputs:
   add-labels:
   add-comment:
   assign-to-agent:
+    name: "copilot"
 ---
 
 # Issue Triage — WMS SQL Database
@@ -128,7 +129,7 @@ Keep the comment under ~10 lines.
 
 ## Step 7: Assign to Copilot
 
-If the issue is clear, actionable, and not a duplicate, use `assign-to-agent` to assign it to Copilot for resolution. Copilot will pick up the area labels, the routing comment, and the `applyTo`-scoped instructions automatically.
+If the issue is not a duplicate, use `assign-to-agent` to assign it to Copilot for resolution. Copilot will pick up the area labels, the routing comment, and the `applyTo`-scoped instructions automatically.
 
 ## No-op
 
