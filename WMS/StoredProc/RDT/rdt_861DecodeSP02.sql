@@ -53,7 +53,6 @@ BEGIN
     SET @nErrNo = 0
     SET @cErrMsg = ''
 
-    DECLARE @nDebugFlag  INT
     DECLARE @cUCCNo      NVARCHAR(20)
     DECLARE @cUCCSKU     NVARCHAR(20)
     DECLARE @cFacility   NVARCHAR( 5)
@@ -91,10 +90,10 @@ BEGIN
         BEGIN  
             IF @nInputKey = 1 -- ENTER  
             BEGIN
-                IF @cBarCode <> '' 
+                IF @cBarcode <> '' 
                 BEGIN 
                     SET @cBarcode = LTRIM(RTRIM(@cBarcode))
-                    IF LEN(@cBarCode) = 49 --Fertin label
+                    IF LEN(@cBarcode) = 49 --Fertin label
                     BEGIN
                         SET @cUCCNo = SUBSTRING(@cBarcode, 19, 17)
                         SET @cUCCSKU = SUBSTRING(@cBarcode, 39, 11)
