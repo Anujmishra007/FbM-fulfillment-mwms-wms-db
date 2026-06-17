@@ -106,7 +106,6 @@ BEGIN
   END
   --AYD01 End
 
-
   INSERT INTO #TMP_SUPPORTED_CONDITIONS ([column], [value], [condition])
   VALUES 
     ('externasnStatus', '0', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
@@ -215,8 +214,17 @@ BEGIN
   
 
   SET @c_ConvertedColumnStr = 
-      'SELECT CASE
+      'SELECT CASE '
 
+  --AYD01 Start - Add VA and UNL status
+  IF @c_RefNoLKUP <> '' AND EXISTS (
+    SELECT 1
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = 'dbo' 
+    AND TABLE_NAME = 'RECEIPT'
+  )
+  BEGIN
+    SET @c_ConvertedColumnStr = CONCAT(@c_ConvertedColumnStr, '
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
       JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
         AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
@@ -242,7 +250,12 @@ BEGIN
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
       )) THEN ''UNL''
+      ')
+  END
+  --AYD01 End
 
+  SET @c_ConvertedColumnStr = CONCAT(@c_ConvertedColumnStr, 
+      '
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
       JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
         AND mspGetCustomASNStatus01_r.ReceiptKey = RECEIPT.ReceiptKey
@@ -353,7 +366,7 @@ BEGIN
       ELSE RECEIPT.ASNStatus
       END
 
-      AS ASNStatus, ' 
+      AS ASNStatus, ')
 
   SET @c_ConvertedSQLStr = REPLACE(@c_ConvertedSQLStr, 
     'SELECT RECEIPT.ReceiptKey, RECEIPT.ExternReceiptKey', 
