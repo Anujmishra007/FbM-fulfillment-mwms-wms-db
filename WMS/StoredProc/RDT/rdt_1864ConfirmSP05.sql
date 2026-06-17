@@ -341,9 +341,10 @@ BEGIN
         )
         BEGIN TRY
             INSERT INTO @tUCC(UCCNo)
-            SELECT UCCNo
+            SELECT DISTINCT UCCNo
                 FROM dbo.UCC WITH (NOLOCK)
                 WHERE StorerKey = @cStorerKey
+                    AND LOC = @cLOC
                     AND ID = @cID
         END TRY
         BEGIN CATCH
