@@ -34,6 +34,7 @@ BEGIN
    SET NOCOUNT ON
 
    DECLARE
+   @c_WaveKey NVARCHAR(20) = @c_OtherParms, -- for wave pick, pass wavekey through otherparms
    @c_StorerKey NVARCHAR(15),
    @c_SKU NVARCHAR(20),
    @n_PalletQty INT
@@ -42,6 +43,54 @@ BEGIN
    PRINT '@c_uom=' + @c_uom +  ', @n_uombase=' + CONVERT(NVARCHAR, @n_uombase)+ 
    ',@n_qtylefttofulfill=' + CONVERT(NVARCHAR, @n_qtylefttofulfill)+ ', @c_Facility=' + @c_Facility+
    ', @c_HostWHCode=' + @c_HostWHCode + ', @c_OtherParms=' + @c_OtherParms + ', @c_lot=' + @c_lot+ ', @n_PalletQty=' + CONVERT(NVARCHAR, @n_PalletQty)
+
+   CREATE TABLE ##T_INV_nspALSTD08
+   (
+      RowID        INT NOT NULL IDENTITY(1, 1)
+      , WaveKey      NVARCHAR(20)
+      , Lot          NVARCHAR(10)
+      , Loc          NVARCHAR(10)
+      , ID           NVARCHAR(18)
+      , QtyAvailable INT
+      , CaseQty      INT
+      , LooseQty     INT
+      , Casecnt      INT
+      , UsedFlag     INT DEFAULT 0
+      , Lottable04   DATETIME
+      , Lottable05   DATETIME
+   )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
 
    IF OBJECT_ID('tempdb..##TMP_PREALLOCATE_CURSOR_CANDIDATES','u') IS NOT NULL
       AND EXISTS (SELECT 1 FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES)
