@@ -92,14 +92,14 @@ BEGIN
     IF @cMoveQTYAlloc = '1' AND @cPickConfirmStatus = '5'
     BEGIN
         SET @nErrNo = 269801
-        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
+        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Bad Setup
         GOTO Quit
     END
     -- Check move picked, but not pick confirm
     IF @cMoveQTYPick = '1' AND @cPickConfirmStatus < '5'
     BEGIN
         SET @nErrNo = 269802
-        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
+        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Bad Setup
         GOTO Quit
     END
     -- Check pallet status, like HOLD
