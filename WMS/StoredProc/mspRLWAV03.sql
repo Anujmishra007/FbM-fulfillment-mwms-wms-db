@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 5.9                                                  */
+/* GitHub Version: 6.0                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -100,6 +100,7 @@ GO
 /* 20-Nov-2025 WLC015    5.8 UWP-44475 Performance Tune (WL19)          */
 /* 07-May-2026 WLC015    5.9 FCR-12782 Allow Cross Wave Task Linkage by */
 /*                           Taskdetailkey (WL20)                       */
+/* 18-Jun-2026 WLC015    6.0 FCR-13104 Carton Estimation fixing (WL21)  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -3160,12 +3161,15 @@ BEGIN
             SET @n_TotalCube = 0
             SET @n_CartonMaxCube = 0
 
-            SELECT @n_TotalCube = (PD.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 THEN SKU.STDCUBE                             
-                              ELSE (SKU.Length * SKU.Width * SKU.Height) 
-                           END)
-            FROM  PICKDETAIL pd (NOLOCK)
-            JOIN SKU (NOLOCK) ON SKU.StorerKey = PD.Storerkey AND SKU.SKU = PD.SKU
-            WHERE pd.Orderkey = @c_OrderKey
+            --WL21 S
+            SELECT @n_TotalCube = SUM(pd.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 
+                                                    THEN SKU.STDCUBE
+                                                    ELSE (SKU.[Length] * SKU.Width * SKU.Height) 
+                                                    END)
+            FROM PICKDETAIL pd (NOLOCK)
+            JOIN SKU (NOLOCK) ON SKU.StorerKey = pd.Storerkey AND SKU.Sku = pd.Sku
+            WHERE pd.OrderKey = @c_Orderkey
+            --WL21 E
 
             SELECT TOP 1 @n_CartonMaxCube = 
                      CASE WHEN ISNULL(CZ.Cube,0) = 0 
