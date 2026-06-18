@@ -210,18 +210,22 @@ BEGIN
    GOTO Quit
  
 RollBackTran:
-   ROLLBACK TRAN rdt_640ExtUpd03_CSC2 -- Only rollback change made here
+   IF XACT_STATE() = -1
+       ROLLBACK TRAN
+    ELSE
+       ROLLBACK TRAN rdt_640ExtUpd03_CSC2 -- Only rollback change made here
 Commit_Tran:
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+   WHILE @@TRANCOUNT > @nTranCount AND XACT_STATE() = 1 -- Commit until the level we started
       COMMIT TRAN
 Quit:
 -- Safe cursor cleanup for error paths
-   IF CURSOR_STATUS('local', '@cur') >= -1
+   IF CURSOR_STATUS('variable', '@cur') = 1
    BEGIN
-      IF CURSOR_STATUS('local', '@cur') > -1
-         CLOSE @cur
+      CLOSE @cur
       DEALLOCATE @cur
    END
+   ELSE IF CURSOR_STATUS('variable', '@cur') = -1
+      DEALLOCATE @cur
 END
 GO
  
