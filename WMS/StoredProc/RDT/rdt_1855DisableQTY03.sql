@@ -1,6 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
  
 /************************************************************************/  
@@ -64,7 +64,7 @@ BEGIN
                     WHERE LISTNAME = 'PickPcByCT'  
                     AND   Code = @cProductCategory  
                     AND   StorerKey = @cStorerKey  
-                    AND   code2 = @nFunc  
+                    AND   Code2 = CAST( @nFunc AS NVARCHAR(30))
                     AND   Short = '1')  
         BEGIN  
             SET @cDisableQTYField = '1' -- Disable    
