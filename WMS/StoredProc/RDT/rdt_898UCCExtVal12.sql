@@ -1,4 +1,9 @@
 
+ SET ANSI_NULLS OFF
+ GO
+ SET QUOTED_IDENTIFIER OFF
+ GO
+ 
 /***************************************************************************/
 /* Store procedure: rdt_898UCCExtVal12                                     */
 /* Copyright      : Maersk                                                 */
