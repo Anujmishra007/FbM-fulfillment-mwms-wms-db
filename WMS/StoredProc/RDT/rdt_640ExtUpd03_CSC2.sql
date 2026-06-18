@@ -194,9 +194,8 @@ BEGIN
                         END
                      END
                   END
+                  FETCH NEXT FROM @cur INTO @cTaskKey
                END
-               FETCH NEXT FROM @cur INTO @cTaskKey
-
                CLOSE @cur
                DEALLOCATE @cur
  
