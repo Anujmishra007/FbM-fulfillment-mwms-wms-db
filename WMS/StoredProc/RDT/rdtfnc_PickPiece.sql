@@ -212,7 +212,6 @@ DECLARE
 
    @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10366
    @cCheckDigitLOC      NVARCHAR( 20), -- FCR-10366
-   @cShowLocOn04        NVARCHAR( 1),  -- FCR-10366
 
 
    @cLottable01 NVARCHAR( 18),      @cLottable02 NVARCHAR( 18),      @cLottable03 NVARCHAR( 18),
@@ -344,7 +343,6 @@ SELECT
    @cExtScnSP           = V_String46,  
 
    @cLOCCheckDigitSP    = V_String47, -- FCR-10366
-   @cShowLocOn04        = V_String48, -- FCR-10366
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -486,7 +484,6 @@ BEGIN
 
    SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-10366
 
-   SET @cShowLocOn04 = rdt.RDTGetConfig(@nFunc, 'ShowLocOn04', @cStorerKey)  -- FCR-10366
 
 
    -- EventLog
@@ -3611,15 +3608,6 @@ BEGIN
          ELSE
          BEGIN
             -- Go to no more task in loc screen
-
-            -- FCR-10366 
-            IF @cShowLocOn04 = '1'
-            BEGIN
-               SET @cOutField01 = @cSuggLOC  -- Regular LOC
-            END
-            ELSE
-               SET @cOutField01 = ''  -- Don't show LOC
-            -- FCR-10366
             SET @nScn = @nScn_NoMoreTask
             SET @nStep = @nStep_NoMoreTask
          END
@@ -4554,14 +4542,6 @@ BEGIN
          ELSE
          BEGIN
             -- Go to no more task in loc screen
-             -- FCR-10366 
-            IF @cShowLocOn04 = '1'
-            BEGIN
-               SET @cOutField01 = @cSuggLOC  -- Regular LOC
-            END
-            ELSE
-               SET @cOutField01 = ''  -- Don't show LOC
-            -- FCR-10366
             SET @nScn = @nScn_NoMoreTask
             SET @nStep = @nStep_NoMoreTask
          END
@@ -7087,7 +7067,6 @@ BEGIN
       V_String46     = @cExtScnSP,  
 
       V_String47     = @cLOCCheckDigitSP, -- FCR-10366
-      V_String48     = @cShowLocOn04, -- FCR-10366
 
       I_Field01 = '',  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = '',  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
