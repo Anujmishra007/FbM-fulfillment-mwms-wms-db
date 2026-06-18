@@ -3973,7 +3973,19 @@ BEGIN
       
       IF @cOption = '1'
       BEGIN
-         IF @cSKU <> ''  AND @cCartonID <> ''--Dennis 21/01/2025
+         IF EXISTS (
+            SELECT 1
+            FROM dbo.TaskDetail TD WITH (NOLOCK)
+            JOIN dbo.PickDetail PD WITH (NOLOCK)
+               ON TD.TaskDetailKey = PD.TaskDetailKey
+               AND TD.StorerKey = PD.StorerKey
+            WHERE TD.StorerKey = @cStorerKey
+            AND TD.TaskType = 'ASTCPK'
+            AND TD.Groupkey = @cGroupKey
+            AND TD.DeviceID = @cCartID
+            AND TD.UserKey = @cUserName
+            AND PD.[Status] = '5'
+         )
          BEGIN
             SELECT TOP 1 @cSuggToLOC = ToLoc      --PPA374 Added TOP 1 15/01/2025
             FROM dbo.TaskDetail WITH (NOLOCK)      
