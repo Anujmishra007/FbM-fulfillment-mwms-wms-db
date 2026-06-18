@@ -211,7 +211,6 @@ BEGIN
                --go back to UCC
                SET @cOutField01 = ''
                SET @cOutField02 = @cSku
-               SET @cOutField02 = @cSKU
                SET @cOutField03 = SUBSTRING( @cDesc,1,20)
                SET @cOutField04 = SUBSTRING( @cDesc,21,40)
                SET @cOutField05 = CASE WHEN IsNULL(@cPPK, '') = '' THEN '0'  ELSE @cPPK END +

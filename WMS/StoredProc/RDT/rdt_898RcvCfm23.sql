@@ -936,7 +936,7 @@ BEGIN
             ' ,@cCustomSQL OUTPUT ' +
             ' ,@nErrNo   OUTPUT  ' +
             ' ,@cErrMsg  OUTPUT  '
-         SET @cSQLParam = +
+         SET @cSQLParam =
             '  @nMobile     INT       ' +
             ' ,@nFunc       INT       ' +
             ' ,@cLangCode   NVARCHAR(  3) ' +
@@ -2054,7 +2054,7 @@ BEGIN
                   ' ,@cDuplicateFromLineNo OUTPUT ' +
                   ' ,@nErrNo   OUTPUT  ' +
                   ' ,@cErrMsg  OUTPUT  '
-               SET @cSQLParam = +
+               SET @cSQLParam =
                   '  @nMobile     INT       ' +
                   ' ,@nFunc       INT       ' +
                   ' ,@cLangCode   NVARCHAR(  3) ' +
