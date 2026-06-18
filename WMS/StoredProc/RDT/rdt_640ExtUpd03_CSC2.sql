@@ -1,6 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
  
 /*****************************************************************************************/
@@ -188,7 +188,7 @@ BEGIN
  
                               BEGIN CATCH
                                  SET @nErrNo = 270753
-                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd PACKDETAIL Err
+                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd PackKDtl Err
                                  GOTO RollBackTran
                               END CATCH
                            END
