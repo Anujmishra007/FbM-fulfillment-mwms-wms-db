@@ -120,84 +120,83 @@ BEGIN
                
                OPEN @cur
                FETCH NEXT FROM @cur INTO @cTaskKey
-                  WHILE @@FETCH_STATUS = 0
+               WHILE @@FETCH_STATUS = 0
+               BEGIN
+                  IF EXISTS ( SELECT 1
+                              FROM dbo.TaskDetail WITH (NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                              AND   TaskDetailKey = @cTaskKey
+                              AND   TaskType = 'CPK')   --Only update when picked completed for taskdetail
                   BEGIN
                      IF EXISTS ( SELECT 1
-                                 FROM dbo.TaskDetail WITH (NOLOCK)
-                                 WHERE StorerKey = @cStorerKey
-                                 AND   TaskDetailKey = @cTaskKey
-                                 AND   TaskType = 'CPK')   --Only update when picked completed for taskdetail
+                                 FROM dbo.PickDetail PD WITH (NOLOCK)
+                                 WHERE PD.StorerKey = @cStorerKey
+                                 AND   PD.TaskDetailKey = @cTaskKey
+                                 AND   PD.DropID <> PD.CaseID
+                                 AND   PD.UOM IN ('6', '7')
+                                 AND   PD.[Status] > '4')
                      BEGIN
-                        IF EXISTS ( SELECT 1
-                                    FROM dbo.PickDetail PD WITH (NOLOCK)
-                                    WHERE PD.StorerKey = @cStorerKey
-                                    AND   PD.TaskDetailKey = @cTaskKey
-                                    AND   PD.DropID <> PD.CaseID
-                                    AND   PD.UOM IN ('6', '7')
-                                    AND   PD.[Status] > '4')
-                        BEGIN
-                           SELECT TOP 1
-                              @cOrderKey = OrderKey,
-                              @cCaseId = CaseID
-                           FROM dbo.PickDetail WITH (NOLOCK)
+                        SELECT TOP 1
+                           @cOrderKey = OrderKey,
+                           @cCaseId = CaseID
+                        FROM dbo.PickDetail WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                        AND   TaskDetailKey = @cTaskKey  --find orderkey and caseid
+                        
+                        BEGIN TRY
+                           UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                              DropID = @cCaseId,
+                              EditWho = @cUserName,
+                              EditDate = GETDATE()
                            WHERE StorerKey = @cStorerKey
-                           AND   TaskDetailKey = @cTaskKey  --find orderkey and caseid
-                           
+                           AND   TaskDetailKey = @cTaskKey
+                           AND   OrderKey = @cOrderKey
+                           AND   UOM IN ('6', '7')
+                           AND   [Status] > '4'
+                        END TRY
+
+                        BEGIN CATCH
+                           SET @nErrNo = 270752
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd pickdetail Err
+                           GOTO RollBackTran
+                        END CATCH
+
+                        IF @nErrNo = 0
+                        BEGIN
+                           IF NOT EXISTS ( SELECT 1
+                                          FROM dbo.PackDetail PAD WITH (NOLOCK)
+                                          INNER JOIN dbo.PackHeader PH WITH (NOLOCK) ON PAD.PickSlipNo = PH.PickSlipNo
+                                          INNER JOIN dbo.PickDetail PID WITH (NOLOCK) ON PAD.LabelNo = PID.CaseID AND PH.OrderKey = PID.OrderKey
+                                          WHERE PAD.StorerKey = @cStorerKey
+                                          AND   PAD.LabelNo = @cCaseId
+                                          AND   PAD.DropID <> @cCaseId
+                                          AND   PID.[Status] < '4'
+                                          AND   PID.OrderKey = @cOrderKey)
                            BEGIN TRY
-                              UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                              UPDATE PD WITH (ROWLOCK)
+                              SET
                                  DropID = @cCaseId,
                                  EditWho = @cUserName,
                                  EditDate = GETDATE()
-                              WHERE StorerKey = @cStorerKey
-                              AND   TaskDetailKey = @cTaskKey
-                              AND   OrderKey = @cOrderKey
-                              AND   UOM IN ('6', '7')
-                              AND   [Status] > '4'
+                              FROM dbo.PackDetail PD WITH (ROWLOCK)
+                              INNER JOIN dbo.PackHeader PH WITH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+                              WHERE PD.StorerKey = @cStorerKey
+                              AND   PD.LabelNo = @cCaseId
+                              AND   PD.DropID <> PD.LabelNo
+                              AND   PH.OrderKey = @cOrderKey
                            END TRY
- 
+
                            BEGIN CATCH
-                              SET @nErrNo = 270752
-                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd pickdetail Err
+                              SET @nErrNo = 270753
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd PackKDtl Err
                               GOTO RollBackTran
                            END CATCH
- 
-                           IF @nErrNo = 0
-                           BEGIN
-                              IF NOT EXISTS ( SELECT 1
-                                             FROM dbo.PackDetail PAD WITH (NOLOCK)
-                                             INNER JOIN dbo.PackHeader PH WITH (NOLOCK) ON PAD.PickSlipNo = PH.PickSlipNo
-                                             INNER JOIN dbo.PickDetail PID WITH (NOLOCK) ON PAD.LabelNo = PID.CaseID AND PH.OrderKey = PID.OrderKey
-                                             WHERE PAD.StorerKey = @cStorerKey
-                                             AND   PAD.LabelNo = @cCaseId
-                                             AND   PAD.DropID <> @cCaseId
-                                             AND   PID.[Status] < '4'
-                                             AND   PID.OrderKey = @cOrderKey)
-                              BEGIN TRY
-                                 UPDATE PD WITH (ROWLOCK)
-                                 SET
-                                    DropID = @cCaseId,
-                                    EditWho = @cUserName,
-                                    EditDate = GETDATE()
-                                 FROM dbo.PackDetail PD WITH (ROWLOCK)
-                                 INNER JOIN dbo.PackHeader PH WITH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
-                                 WHERE PD.StorerKey = @cStorerKey
-                                 AND   PD.LabelNo = @cCaseId
-                                 AND   PD.DropID <> PD.LabelNo
-                                 AND   PH.OrderKey = @cOrderKey
-                              END TRY
- 
-                              BEGIN CATCH
-                                 SET @nErrNo = 270753
-                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd PackKDtl Err
-                                 GOTO RollBackTran
-                              END CATCH
-                           END
                         END
                      END
                   END
-                  FETCH NEXT FROM @cur INTO @cTaskKey
                END
- 
+               FETCH NEXT FROM @cur INTO @cTaskKey
+
                CLOSE @cur
                DEALLOCATE @cur
  
