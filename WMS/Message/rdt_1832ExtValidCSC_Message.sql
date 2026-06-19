@@ -1,0 +1,7 @@
+-- 270801 - 270850
+EXEC rdt.rdtdropmsg 270801 , 270850	
+
+
+EXECUTE rdt.rdtAddMsg 270801, 10, '270801^ID not in LOC',      'us_english', 1832, 0, '270801 ID not in LOC'
+
+SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 270801 AND 270850
