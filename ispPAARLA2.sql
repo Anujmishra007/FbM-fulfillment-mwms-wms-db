@@ -8,7 +8,7 @@ GO
 /* Creation Date : 26-Feb-2026                                          */
 /* Copyright     : LFL                                                  */
 /* Written by    : SYO054                                               */
-/*                                                                      */
+/*  FCR:UWP-59480                                                       */
 /* Purpose:                                                             */
 /*   ARLA-specific Putaway Release logic with location sequencing,      */
 /*   zone matching, AGV/Manual operation mode routing, and              */
@@ -64,7 +64,7 @@ GO
 /*                            and LocationGroup filtering.              */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispPAARLA2]
+CREATE OR ALTER PROC [dbo].[ispPAARLA2]
     @c_ReceiptKey  NVARCHAR(10),
     @b_Success     INT OUTPUT,
     @n_err         INT OUTPUT,
