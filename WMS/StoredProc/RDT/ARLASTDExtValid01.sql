@@ -18,7 +18,7 @@ GO
 /**          blocked with an appropriate error message.                      **/
 /**                                                                          **/
 /** Called from: rdtfnc_Scan_Pallet_To_Door                                  **/
-/**                                                                          **/
+/**  FCR: UWP-59517                                                          **/
 /** Modifications log:                                                       **/
 /** Version: 1.4                                                             **/
 /** Date       Rev  Author     Purposes                                      **/
@@ -37,7 +37,7 @@ GO
 /**                            signature. Fixes "too many arguments" error   **/
 /******************************************************************************/
 
-CREATE PROC [RDT].[ARLASTDExtValid01] (
+CREATE OR ALTER PROC [RDT].[ARLASTDExtValid01] (
    @nMobile          INT,                       -- Mobile device identifier
    @nFunc            INT,                       -- Function identifier (used for config lookup)
    @cLangCode        NVARCHAR(3),               -- Language code for error messages
