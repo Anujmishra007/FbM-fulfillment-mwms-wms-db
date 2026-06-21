@@ -6,7 +6,7 @@ GO
 /* Stored Procedure: ispPARLARLAMCS                                     */
 /* Creation Date: 17-MAR-2026                                           */
 /* Written by: SYO054                                                   */
-/*                                                                      */
+/*  FCR: UWP-59481                                                      */
 /* Purpose: Denmark Arla Putaway - Release / Update PA Tasks per Pallet */
 /*          - If pallet exists in TASKDETAIL: update ToLoc/LogicalToLoc */
 /*          - Else: insert new TASKDETAIL (only when Message01 = 'AGV') */
@@ -56,7 +56,7 @@ GO
 /*                            restrict SuggestedLoc candidates to       */
 /*                            the same LocationGroup.                   */
 /************************************************************************/
-CREATE   PROC [dbo].[ispPARLARLAMCS]
+CREATE OR ALTER  PROC [dbo].[ispPARLARLAMCS]
       @cPalletId       NVARCHAR(20),
       @bDebug          BIT = 0,              -- Debug flag: 1 = print debug statements
       @cScanLocation   NVARCHAR(20), 
