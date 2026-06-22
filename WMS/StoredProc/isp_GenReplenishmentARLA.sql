@@ -1,4 +1,4 @@
-USE [GLOWMS]
+--USE [GLOWMS]
 GO
 /****** Object:  StoredProcedure [dbo].[isp_GenReplenishmentARLA]    Script Date: 6/21/2026 3:45:52 PM ******/
 SET ANSI_NULLS ON
