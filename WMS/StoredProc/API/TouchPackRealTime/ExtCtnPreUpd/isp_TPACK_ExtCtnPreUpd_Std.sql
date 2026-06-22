@@ -2,17 +2,19 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*********************************************************************************/    
-/* Stored Proc: isp_TPACK_ExtPackInfo_Std                                        */    
-/* Copyright      : Maersk                                                       */
-/*                                                                               */
-/* Purpose        : Get extended pack info standard                              */
-/*                                                                               */
-/* Date         Rev  Author     Purposes                                         */
-/* 2026-04-16   1.0  GCH225     Created                                          */
-/*********************************************************************************/
-CREATE OR ALTER PROC [API].[isp_TPACK_ExtPackInfo_Std] (
-     @cType                NVARCHAR(30)      = ''
+
+/************************************************************************************/
+/* Store procedure: isp_TPACK_ExtCtnPreUpd_Std                                      */
+/* Copyright      : Maersk                                                          */
+/*                                                                                  */
+/* Purpose        : Extended Standard Carton Pre Update                             */
+/*                                                                                  */
+/* Date         Rev  Author     Purposes                                            */
+/* 2026-06-16   1.0  GCH225     Created                                             */
+/************************************************************************************/
+
+CREATE OR ALTER PROC [API].[isp_TPACK_ExtCtnPreUpd_Std] (
+	  @cType                NVARCHAR(30)      = ''
    , @bIsDiscrete          BIT               = 0
    , @bIsCustom            BIT               = 0
    , @cPickSlipNo          NVARCHAR(10)      = ''
@@ -22,8 +24,17 @@ CREATE OR ALTER PROC [API].[isp_TPACK_ExtPackInfo_Std] (
    , @cStorerKey           NVARCHAR(15)      = ''
    , @cFacility            NVARCHAR(5)       = ''
    , @nCartonNo            INT               = 0
-   , @c_UserID             NVARCHAR(256)     = ''
-   , @cLangCode            NVARCHAR(10)      = ''
+   , @cCartonStatus        NVARCHAR(20)      = ''
+   , @cCartonType          NVARCHAR(10)      = ''
+   , @fWeight              FLOAT             = 0
+   , @fCube                FLOAT             = 0
+   , @cLabelNo             NVARCHAR(20)      = ''
+   , @c_UserID             NVARCHAR(256)     = ''  
+   , @cLangCode            NVARCHAR(3)       = ''
+   , @bWeightInterface     BIT               = 0   OUTPUT
+   , @bPrintPaperFlag      BIT               = 0   OUTPUT
+   , @bPrintLabelFlag      BIT               = 0   OUTPUT
+   , @bIsLastCarton        BIT               = 0   OUTPUT
    , @b_Success            INT               = 0   OUTPUT
    , @n_ErrNo              INT               = 0   OUTPUT
    , @c_ErrMsg             NVARCHAR(250)     = ''  OUTPUT
@@ -37,21 +48,11 @@ BEGIN
 
    DECLARE @n_Continue           INT            = 1  
          , @n_StartCnt           INT            = @@TRANCOUNT  
-         , @cExtPackInfoConfig   NVARCHAR(250)
-         , @cSQL                 NVARCHAR(MAX)
-         , @cSQLParam            NVARCHAR(3000)
 
    SET @b_Success             = 0  
    SET @n_ErrNo               = 0  
-   SET @c_ErrMsg              = ''  
-   SET @cExtPackInfoConfig    = ''
+   SET @c_ErrMsg              = ''
 
-   SELECT 'CartonType' AS fieldName
-        ,CartonType AS fieldValue
-   FROM PACKINFO (NOLOCK)
-   WHERE PickSlipNo = @cPickSlipNo
-   AND CartonNo = @nCartonNo
-   AND CartonType <> ''
    
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
@@ -72,7 +73,7 @@ EXIT_SP:
    END      
    ELSE      
    BEGIN      
-      SET @b_Success = 1      
+      SELECT @b_Success = 1      
       WHILE @@TRANCOUNT > @n_StartCnt      
       BEGIN      
          COMMIT TRAN      

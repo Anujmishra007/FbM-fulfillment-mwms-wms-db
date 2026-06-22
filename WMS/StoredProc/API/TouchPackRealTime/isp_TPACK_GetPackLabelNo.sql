@@ -68,7 +68,7 @@ BEGIN
    SET @b_Success       = 0  
    SET @n_ErrNo         = 0  
    SET @c_ErrMsg        = ''  
-   SET @nFunc           = 838
+   SET @nFunc           = 996
 
    SET @cConfigKey = 'TPS-ExtendedGenLBLSP'
    SET @cConfigVal = ''
@@ -100,7 +100,7 @@ BEGIN
                 + ', @cCartonNo         ' +  CHAR(13)   
                 + ', @cLabelNo   OUTPUT ' +  CHAR(13)
                 + ', @b_Success  OUTPUT ' +  CHAR(13)
-                + ', @n_ErrNo    OUTPUT ' +  CHAR(13)
+                + ', @n_Err      OUTPUT ' +  CHAR(13)
                 + ', @c_ErrMsg   OUTPUT ' +  CHAR(13)
 
       SET @cSQLParams = '  @cStorerKey   NVARCHAR(15)          ' + CHAR(13)
@@ -111,7 +111,7 @@ BEGIN
                       + ', @cCartonNo    NVARCHAR(5)           ' + CHAR(13)
                       + ', @cLabelNo     NVARCHAR(20)   OUTPUT ' + CHAR(13)
                       + ', @b_Success    INT            OUTPUT ' + CHAR(13)
-                      + ', @n_ErrNo      INT            OUTPUT ' + CHAR(13)
+                      + ', @n_Err        INT            OUTPUT ' + CHAR(13)
                       + ', @c_ErrMsg     NVARCHAR(255)  OUTPUT ' + CHAR(13)
   
       EXEC sp_ExecuteSQL  @cSQL
@@ -127,11 +127,16 @@ BEGIN
                         , @n_ErrNo     OUTPUT
                         , @c_ErrMsg    OUTPUT 
 
-      IF @b_Success = 0    
+      IF @c_LabelNo = '' OR (@n_ErrNo <> 0 AND @c_ErrMsg <> '')
       BEGIN    
          SET @n_Continue  = 3 
+         IF @n_ErrNo = 0 AND @c_ErrMsg = ''
+         BEGIN
+            SET @n_ErrNo = 11054
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + @cConfigVal + ').' --'Failed to generate label number from (' + @cConfigVal + ').'
+         END
          GOTO EXIT_SP    
-      END    
+      END   
    END  
    ELSE
    BEGIN

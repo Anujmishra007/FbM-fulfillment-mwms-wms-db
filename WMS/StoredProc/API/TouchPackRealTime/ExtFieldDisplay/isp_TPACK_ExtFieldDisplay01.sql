@@ -4,13 +4,14 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /*********************************************************************************/
-/* Store procedure: isp_TPACK_ExtFieldDisplay01                                */
+/* Store procedure: isp_TPACK_ExtFieldDisplay01                                  */
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
 /* Purpose        : Extended Field Display SP for Carton Type                    */
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-02-04   1.0  JWF011     Created                                          */
+/* 2026-06-10   1.1  GCH225     UWP-5857 Updated to include CartonType check     */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtFieldDisplay01] (
@@ -48,6 +49,12 @@ BEGIN
        FROM PACKDETAIL (NOLOCK)
        WHERE PickSlipNo = @cPickSlipNo
       ) > 0
+   AND EXISTS (SELECT 1
+              FROM PACKINFO (NOLOCK)
+              WHERE PickSlipNo = @cPickSlipNo
+              AND CartonStatus = 'INPROGRESS'
+              AND CartonType <> ''
+             )
    BEGIN
       SET @cExtFieldCol = 'Carton Type'
       SET @cExtFieldVal = (SELECT TOP 1 UPPER(CartonType)
