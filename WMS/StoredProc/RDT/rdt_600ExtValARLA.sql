@@ -1,4 +1,4 @@
-USE [GLOWMS]
+--USE [GLOWMS]
 GO
 /****** Object:  StoredProcedure [RDT].[rdt_600ExtValARLA]    Script Date: 6/21/2026 4:11:50 PM ******/
 SET ANSI_NULLS OFF
