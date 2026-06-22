@@ -1,4 +1,4 @@
-USE [GLOWMS]
+--USE [GLOWMS]
 GO
 /****** Object:  StoredProcedure [dbo].[mspRLWAVARLA]    Script Date: 6/21/2026 4:17:26 PM ******/
 SET ANSI_NULLS OFF
