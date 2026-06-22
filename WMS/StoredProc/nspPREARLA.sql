@@ -99,6 +99,7 @@ WHERE
     )
 
     AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+	AND LOC.LocationCategory <> 'STAGE'
     AND LOC.Status = 'OK'
     AND ID.Status = 'OK'
     AND LOT.Status = 'OK'
