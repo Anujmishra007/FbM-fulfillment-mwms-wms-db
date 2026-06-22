@@ -14,6 +14,7 @@ GO
 /* 2026-02-11   2.0  GCH225     UWP:45984: Fix for PreCartonize issue            */
 /* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
 /* 2026-05-14   3.1  GCH225     FCR-13198: Fix Update Multi Line PackDetail      */
+/* 2026-06-22   3.2  GCH225     INC9376346: Fix to ByPassInputValue1 into UPC    */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_Pack_SKU] (
@@ -46,22 +47,23 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
 
-   DECLARE @n_Continue           INT            = 1  
-         , @n_StartCnt           INT            = @@TRANCOUNT  
+   DECLARE @n_Continue              INT            = 1  
+         , @n_StartCnt              INT            = @@TRANCOUNT  
 
-   DECLARE @cRoute               NVARCHAR(10)
-         , @cConsigneeKey        NVARCHAR(15)
-         , @cLabelNo             NVARCHAR(20)
-         , @cLabelLine           NVARCHAR(20)
-         , @cCartonGroup         NVARCHAR(10)
-         , @bIsINS               BIT
-         , @cUCCtoUPC            NVARCHAR(10)
-         , @cUCCtoDropID         NVARCHAR(10)
-         , @nExpQty              INT
-         , @nSUMQty              INT
-         , @nTMPQty              INT
-         , @nRemainingQty        INT
-         , @nCountTLN            INT
+   DECLARE @cRoute                  NVARCHAR(10)
+         , @cConsigneeKey           NVARCHAR(15)
+         , @cLabelNo                NVARCHAR(20)
+         , @cLabelLine              NVARCHAR(20)
+         , @cCartonGroup            NVARCHAR(10)
+         , @bIsINS                  BIT
+         , @cUCCtoUPC               NVARCHAR(10)
+         , @cUCCtoDropID            NVARCHAR(10)
+         , @nExpQty                 INT
+         , @nSUMQty                 INT
+         , @nTMPQty                 INT
+         , @nRemainingQty           INT
+         , @nCountTLN               INT
+         , @bByPassInputValue1ToUPC BIT
    
    DECLARE @tLineNo TABLE (
         RowID     INT IDENTITY(1,1) PRIMARY KEY 
@@ -70,22 +72,23 @@ BEGIN
       , ExpQty    INT DEFAULT(0)
    )
 
-   SET @b_Success          = 0  
-   SET @n_ErrNo            = 0  
-   SET @c_ErrMsg           = '' 
-   SET @cRoute             = ''
-   SET @cConsigneeKey      = ''
-   SET @cLabelNo           = ''
-   SET @cLabelLine         = RIGHT( '00000' + CAST(1 AS NVARCHAR(5)), 5)
-   SET @cCartonGroup       = ''
-   SET @bIsINS             = 1
-   SET @cUCCtoUPC          = ''
-   SET @cUCCtoDropID       = ''
-   SET @nExpQty            = 0
-   SET @nSUMQty            = 0
-   SET @nTMPQty            = 0
-   SET @nRemainingQty      = 0
-   SET @nCountTLN          = 0
+   SET @b_Success                = 0  
+   SET @n_ErrNo                  = 0  
+   SET @c_ErrMsg                 = '' 
+   SET @cRoute                   = ''
+   SET @cConsigneeKey            = ''
+   SET @cLabelNo                 = ''
+   SET @cLabelLine               = RIGHT( '00000' + CAST(1 AS NVARCHAR(5)), 5)
+   SET @cCartonGroup             = ''
+   SET @bIsINS                   = 1
+   SET @cUCCtoUPC                = ''
+   SET @cUCCtoDropID             = ''
+   SET @nExpQty                  = 0
+   SET @nSUMQty                  = 0
+   SET @nTMPQty                  = 0
+   SET @nRemainingQty            = 0
+   SET @nCountTLN                = 0
+   SET @bByPassInputValue1ToUPC  = 0
 
    IF @cScanType = 'ucc'
    BEGIN
@@ -178,6 +181,16 @@ BEGIN
    --    GOTO EXIT_SP
    -- END
 
+   IF EXISTS ( SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+               AND ConfigKey = 'TPS-ByPassInputValue1ToUPC'
+               AND sValue = '1'
+   )
+   BEGIN
+      SET @bByPassInputValue1ToUPC = 1
+   END
+
    -- @cScanType List('sku','retailsku', 'manusku', 'altsku', 'upc', 'ucc', 'serialno')
    SELECT @cLabelNo = LabelNo
    FROM PACKDETAIL (NOLOCK)
@@ -211,7 +224,11 @@ BEGIN
    END
    ELSE
    BEGIN
-     
+      IF @bByPassInputValue1ToUPC = 1
+      BEGIN
+         GOTO STDLBLLINE_CHECK
+      END
+
       IF @cScanType IN( 'upc', 'altsku', 'manusku', 'retailsku') 
       BEGIN
          INSERT INTO @tLineNo (LabelLine, Qty, ExpQty)
@@ -240,6 +257,7 @@ BEGIN
       END
       ELSE -- all other scan type
       BEGIN
+STDLBLLINE_CHECK:
          INSERT INTO @tLineNo (LabelLine, Qty, ExpQty)
          SELECT LabelLine, Qty, ExpQty 
          FROM PACKDETAIL (NOLOCK)
@@ -380,11 +398,11 @@ BEGIN
                         , @nQty
                         , @c_UserID
                         , GETDATE()
-                        , IIF(@cScanType IN ('upc', 'altsku', 'manusku', 'retailsku'), @cInputValue1
-                             , IIF(@cScanType = 'ucc', IIF(@cUCCtoUPC = '1', @cInputValue1, '')
-                                  , ''
-                             )
+                        , IIF(@bByPassInputValue1ToUPC = 1, ''
+                           , IIF(@cScanType IN ('upc', 'altsku', 'manusku', 'retailsku'), @cInputValue1
+                             , IIF(@cScanType = 'ucc', IIF(@cUCCtoUPC = '1', @cInputValue1, ''), '')
                           )
+                        )
                         , IIF(@cScanType = 'ucc', IIF(@cUCCtoDropID = '1', @cInputValue1, @cDropID)
                              , @cDropID
                           )

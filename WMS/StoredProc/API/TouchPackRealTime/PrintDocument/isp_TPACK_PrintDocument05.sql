@@ -361,6 +361,7 @@ BEGIN
          BEGIN
             SET @cPrintPaperJobIDs = IIF(@cPrintPaperJobIDs <> '', @cPrintPaperJobIDs + '|' + @ctempLabelJobIDs, @ctempLabelJobIDs)
          END
+         ELSE
          BEGIN
             SET @cPrintLabelJobIDs = IIF(@cPrintLabelJobIDs <> '', @cPrintLabelJobIDs + '|' + @ctempLabelJobIDs, @ctempLabelJobIDs)
          END
