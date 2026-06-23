@@ -170,12 +170,11 @@ BEGIN
     
    SET @c_SQL = @c_SQL + @c_SQLJOIN    
     
-   SET @c_ExecArguments = N'  @c_Sparm1         NVARCHAR(80)'     
-                        + N' ,@c_Sparm2         NVARCHAR(80)'    
-                        + N' ,@c_Sparm3         NVARCHAR(80)'     
-                        + N' ,@c_Sparm4         NVARCHAR(80)'    
-                        + N' ,@c_Sparm5         NVARCHAR(80)'    
-    
+   SET @c_ExecArguments = N'  @c_Sparm1         NVARCHAR(250)'
+                        + N' ,@c_Sparm2         NVARCHAR(250)'
+                        + N' ,@c_Sparm3         NVARCHAR(250)'
+                        + N' ,@c_Sparm4         NVARCHAR(250)'
+                        + N' ,@c_Sparm5         NVARCHAR(250)'
    EXEC sp_executesql @c_SQL    
                     , @c_ExecArguments    
                     , @c_Sparm1    
