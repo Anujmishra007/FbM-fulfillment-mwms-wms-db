@@ -1,6 +1,5 @@
---USE [GLOWMS]
---GO
-/****** Object:  StoredProcedure [dbo].[nspPREARLA]    Script Date: 6/21/2026 3:44:23 PM ******/
+
+/****** Object:  StoredProcedure [dbo].[nspPREARLA]    Script Date: 6/23/2026 3:59:51 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,7 +25,7 @@ GO
 /* Date         Author   Ver  Purpose                                        */
 /* 01-04-2026   KMS043,SYO054   1.0  Initial version created                        */
 /*****************************************************************************/
-CREATE OR ALTER     PROC    [dbo].[nspPREARLA]
+ALTER       PROC    [dbo].[nspPREARLA]
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
 @c_uom NVARCHAR(10), 
@@ -39,6 +38,16 @@ BEGIN
 
 
 BEGIN
+ 
+   DECLARE @cOrderKey NVARCHAR(10),
+@cOrderLineNumber NVARCHAR(10),
+@cConsigneeKey NVARCHAR(15)
+
+SET @cOrderKey=left(@c_OtherParms,10) 
+SET @cOrderLineNumber=right(left(@c_OtherParms,15),5)
+SELECT @cConsigneeKey=ConsigneeKey
+        FROM ORDERS WITH (NOLOCK)
+        WHERE ORDERKEY =  left(@c_OtherParms,10) 
 DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR  
 /*SELECT LOTXLOCXID.STORERKEY,LOTXLOCXID.SKU,LOTXLOCXID.LOT ,
 QTYAVAILABLE = (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED)
@@ -67,12 +76,13 @@ INNER JOIN ID   WITH (NOLOCK)
     ON LLI.ID = ID.ID
 
 INNER JOIN LOT  WITH  (NOLOCK) 
-    ON LLI.LOT = LOT.LOT
+    ON LLI.LOT = LOT.LOT AND LLI.SKU=LOT.SKU
 
 INNER JOIN LOTATTRIBUTE LA  WITH  (NOLOCK) 
     ON LA.LOT = LLI.LOT 
     AND LA.STORERKEY = LLI.STORERKEY
     AND LA.LOTTABLE10 IS NOT NULL
+	AND LA.SKU=LLI.SKU
 
 INNER JOIN SKU S  WITH  (NOLOCK) 
     ON S.SKU = LLI.SKU 
@@ -81,22 +91,24 @@ INNER JOIN SKU S  WITH  (NOLOCK)
 LEFT JOIN CUSTOMERDATETRACKER CDT  WITH  (NOLOCK) 
     ON CDT.STORERKEY = LLI.STORERKEY
     AND CDT.SKU = LLI.SKU
-    AND CDT.CONSIGNEEKEY = (
+    AND CDT.CONSIGNEEKEY = @cConsigneeKey
+/*	(
         SELECT CONSIGNEEKEY
         FROM ORDERS (NOLOCK)
         WHERE ORDERKEY =  left(@c_OtherParms,10)
-    )
+    )*/
 
 WHERE 
     LOC.Facility = @c_facility
+	AND LLI.SKU=@c_sku
 
-    AND LLI.SKU = (
+   /* AND LLI.SKU = (
         SELECT SKU 
         FROM ORDERDETAIL  WITH  (NOLOCK) 
         WHERE ORDERKEY =left(@c_OtherParms,10)
 		AND ORDERLINENUMBER = right(left(@c_OtherParms,15),5)
         --ORDER BY ADDDATE DESC
-    )
+    )*/
 
     AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
 	AND LOC.LocationCategory <> 'STAGE'
