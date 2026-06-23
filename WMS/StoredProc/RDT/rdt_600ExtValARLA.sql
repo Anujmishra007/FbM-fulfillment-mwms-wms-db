@@ -81,7 +81,7 @@ BEGIN
                INNER JOIN dbo.RECEIPT R WITH (NOLOCK) 
                   ON R.RECEIPTKEY=RD.RECEIPTKEY 
                   AND R.STORERKEY=RD.STORERKEY
-               LEFT JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) 
+               INNER JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) 
                   ON LLI.STORERKEY=@cStorerKey 
                   AND LLI.ID IN (@cID)
                --WHERE RD.ReceiptKey = @cReceiptKey AND RD.ToID = @cID AND R.RECType IN ('DXDOCK','IXDOCK','PACKED','XDOCK'))   
