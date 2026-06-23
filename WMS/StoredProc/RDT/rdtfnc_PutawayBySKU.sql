@@ -312,7 +312,7 @@ SELECT
    @nScanSNO      = V_Integer9, 
    
    --C_Integer1 used in extscn (jackc01)  
-   @cLOCCheckDigitSP    = C_String1,  
+   @cLOCCheckDigitSP    = V_String40,  
 
    @cPASuggestSKU       = V_String20,
    @cPABySKUAndLOT      = V_String21,
@@ -3895,7 +3895,7 @@ BEGIN
       V_Integer9 = @nScanSNO, 
       
       --C_Integer1 used in extscn (jackc01)  
-      C_String1  = @cLOCCheckDigitSP,  
+      V_String40  = @cLOCCheckDigitSP,  
 
       V_String20 = @cPASuggestSKU,
       V_String21 = @cPABySKUAndLOT,
