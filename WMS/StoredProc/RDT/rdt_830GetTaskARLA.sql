@@ -76,7 +76,7 @@ BEGIN
    DECLARE @cZone       NVARCHAR( 18)
    DECLARE @cGetNextSKU NVARCHAR( 1)
    DECLARE @cVerifyID   NVARCHAR( 1)
-   DECLARE @cPUOM       NVARCHAR( 5)
+   --DECLARE @cPUOM       NVARCHAR( 5)
    DECLARE @cSQL        NVARCHAR( MAX)
    DECLARE @cSQLParam   NVARCHAR( MAX)
    DECLARE @cPickConfirmStatus NVARCHAR( 1)
@@ -524,7 +524,7 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
             ELSE ''     
          END, 
       @cMUOM_Desc = Pack.PackUOM3,
-      @cPUOM_Desc =
+    /*  @cPUOM_Desc =
          CASE @cPUOM
             WHEN '2' THEN Pack.PackUOM1 -- Case
             WHEN '3' THEN Pack.PackUOM2 -- Inner pack
@@ -543,7 +543,7 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
             WHEN '4' THEN Pack.OtherUnit1
             WHEN '5' THEN Pack.OtherUnit2
 			ELSE Pack.PackUOM3 
-         END, 1) AS INT)
+         END, 1) AS INT)*/
    FROM dbo.SKU WITH (NOLOCK)
       JOIN dbo.Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
    WHERE SKU.StorerKey = @cStorerKey
