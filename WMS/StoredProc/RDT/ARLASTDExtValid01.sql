@@ -275,7 +275,8 @@ SET ANSI_NULLS OFF
       IF @nDebug = 1
       BEGIN
          PRINT 'DEBUG: @nPalletTempCount = ' + ISNULL(CAST(@nPalletTempCount AS NVARCHAR(20)), 'NULL')
-         PRINT 'DEBUG: Condition check: @nPalletTempCount (' + ISNULL(CAST(ISNULL(@nPalletTempCount, 0) AS NVARCHAR(20)), '0') + ') < @nMinPalletTempReq (' + ISNULL(CAST(@nMinPalletTempReq AS NVARCHAR(20)), 'NULL') + ') = ' + CASE WHEN ISNULL(@nPalletTempCount, 0) < @nMinPalletTempReq THEN 'TRUE (will BLOCK scan)' ELSE 'FALSE (will ALLOW scan)' END
+         PRINT 'DEBUG: Condition check: @nPalletTempCount (' + ISNULL(CAST(ISNULL(@nPalletTempCount, 0) AS NVARCHAR(20)), '0') + ') < @nMinPalletTempReq (' + ISNULL(CAST(@nMinPalletTempReq AS NVARCHAR(20)), 'NULL') + ') = ' + CASE WHEN ISNULL(@nPalletTempCount, 0) < @nMinPalletTempReq THEN 'TRUE (will BLOCK scan)' ELSE 'FALSE (will ALLOW scan)' END
+
          PRINT 'DEBUG: Condition check: @nPalletTempCount (' + ISNULL(CAST(ISNULL(@nPalletTempCount, 0) AS NVARCHAR(20)), '0') + ') < @nMinPalletTempReq (' + ISNULL(CAST(@nMinPalletTempReq AS NVARCHAR(20)), 'NULL') + ') = ' + CASE WHEN ISNULL(@nPalletTempCount, 0) <= @nMinPalletTempReq THEN 'TRUE (will BLOCK scan)' ELSE 'FALSE (will ALLOW scan)' END
       END
 
@@ -286,11 +287,17 @@ SET ANSI_NULLS OFF
             PRINT 'DEBUG: Temperature check FAILED - insufficient pallet temperatures captured'
             PRINT 'DEBUG: Inserting TRACEINFO record for SCNPT2DOOR_TEMP'
          END
-
-         INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3)
-         VALUES ('SCNPT2DOOR_TEMP', GETDATE(), @cPalletID, @cMBOL4Pallet, 'TempNotCaptured')
-
-         IF @nDebug = 1
+         BEGIN TRY
+            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Col1, Col2, Col3)
+            VALUES ('SCNPT2DOOR_TEMP', GETDATE(), @cPalletID, @cMBOL4Pallet, 'TempNotCaptured')
+
+            IF @nDebug = 1
+               PRINT 'DEBUG: TRACEINFO insert complete. @@ROWCOUNT = ' + CAST(@@ROWCOUNT AS NVARCHAR(10))
+         END TRY
+         BEGIN CATCH
+            IF @nDebug = 1
+               PRINT 'DEBUG: TRACEINFO insert failed: ' + ERROR_MESSAGE()
+         END CATCH
             PRINT 'DEBUG: TRACEINFO insert complete. @@ROWCOUNT = ' + CAST(@@ROWCOUNT AS NVARCHAR(10))
 
          SET @nErrNo  = 3735605
