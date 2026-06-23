@@ -1,13 +1,11 @@
---USE [GLOWMS]
+USE [GLOWMS]
 GO
-/****** Object:  StoredProcedure [dbo].[mspRLWAVARLA]    Script Date: 6/21/2026 4:17:26 PM ******/
+/****** Object:  StoredProcedure [dbo].[mspRLWAVARLA]    Script Date: 6/23/2026 4:14:24 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /*****************************************************************************/
-/* Stored Procedure: mspRLWAVARLA                   */
 /* Creation Date: 01-04-2026                                                 */
 /* Copyright: MAERSK                                                         */
 /* Written by: KMS043                                                        */
@@ -28,8 +26,7 @@ GO
 /*****************************************************************************/
 
 
-
-CREATE OR ALTER     PROCEDURE [dbo].[mspRLWAVARLA]
+ALTER       PROCEDURE [dbo].[mspRLWAVARLA]
       @c_Wavekey      NVARCHAR(10)
     , @b_Success      INT        OUTPUT
     , @n_Err          INT        OUTPUT
@@ -49,29 +46,30 @@ BEGIN
    SELECT @n_debug = @n_Err
    SELECT @n_starttcnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 0, @n_Err = 0, @c_Errmsg = '', @n_cnt = 0
 
-   DECLARE @c_Storerkey            NVARCHAR(15)
-         , @c_Facility             NVARCHAR(5)
-         , @c_TaskType             NVARCHAR(10)
-         , @c_SourceType           NVARCHAR(30)
-         , @c_Priority             NVARCHAR(10)
-         , @c_PickMethod           NVARCHAR(10)
-         , @c_LinkTaskToPick_SQL   NVARCHAR(4000)
-         , @c_Sku                  NVARCHAR(20)
-         , @c_Lot                  NVARCHAR(10)
-         , @c_FromLoc              NVARCHAR(10)
-         , @c_ID                   NVARCHAR(18)
-         , @n_Qty                  INT
-         , @c_UOM                  NVARCHAR(10)
-         , @c_SourcePriority       NVARCHAR(10)
-         , @c_WaveStatus           NVARCHAR(10) = ''
-         , @c_TMReleaseFlag        NVARCHAR(1)  = ''
-         , @c_ToLoc                NVARCHAR(10) = ''
-         , @c_Orderkey             NVARCHAR(10) = ''
-         , @n_UOMQty               INT
-		 ,@c_UserKey               NVARCHAR(18)   = 'REACHTRUCK'
-		,@c_Message01             NVARCHAR(20)   = ''       
-		,@c_Message02             NVARCHAR(20)   = '',
-		@c_WStatus NVARCHAR(20)   = ''
+   DECLARE
+      @c_Storerkey          NVARCHAR(15)
+    , @c_Facility           NVARCHAR(5)
+    , @c_TaskType           NVARCHAR(10)
+    , @c_SourceType         NVARCHAR(30)
+    , @c_Priority           NVARCHAR(10)
+    , @c_PickMethod         NVARCHAR(10)
+    , @c_LinkTaskToPick_SQL NVARCHAR(4000)
+    , @c_Sku                NVARCHAR(20)
+    , @c_Lot                NVARCHAR(10)
+    , @c_FromLoc            NVARCHAR(10)
+    , @c_ID                 NVARCHAR(18)
+    , @n_Qty                INT
+    , @c_UOM                NVARCHAR(10)
+    , @c_SourcePriority     NVARCHAR(10)
+    , @c_WaveStatus         NVARCHAR(10) = ''
+    , @c_TMReleaseFlag      NVARCHAR(1)  = ''
+    , @c_ToLoc              NVARCHAR(10) = ''
+    , @c_Orderkey           NVARCHAR(10) = ''
+    , @n_UOMQty             INT
+    , @c_UserKey            NVARCHAR(18) = 'REACHTRUCK'
+    , @c_Message01          NVARCHAR(20) = ''
+    , @c_Message02          NVARCHAR(20) = ''
+    , @c_WStatus            NVARCHAR(20) = '';
 
    SET @c_SourceType = 'mspRLWAVARLA'
    
@@ -84,12 +82,12 @@ BEGIN
            , @c_Storerkey = O.StorerKey
            , @c_Facility = O.Facility
       FROM WAVE W WITH (NOLOCK)
-      JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
-      JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+      JOIN WAVEDETAIL WD WITH (NOLOCK) ON W.Wavekey = WD.Wavekey
+      JOIN ORDERS O WITH (NOLOCK) ON WD.Orderkey = O.Orderkey
       WHERE W.Wavekey = @c_Wavekey
 
      IF  EXISTS ( SELECT 1 
-                  FROM TASKDETAIL TD (NOLOCK)
+                  FROM TASKDETAIL TD WITH (NOLOCK)
                   WHERE TD.Wavekey = @c_Wavekey
                   AND TD.Sourcetype = @c_SourceType
                   AND TD.Tasktype = 'FPK'  )
@@ -118,21 +116,21 @@ BEGIN
 
 
 	  --LOAD & SHIP REFERENCE CHECK & PICKSLIPNO GENERATION CHECK--
-	  IF  EXISTS(SELECT  1 FROM ORDERS WHERE USERDEFINE09=@c_Wavekey AND (LOADKEY IS  NULL OR LOADKEY =''))
+	  IF  EXISTS(SELECT  1 FROM ORDERS WITH (NOLOCK) WHERE USERDEFINE09=@c_Wavekey AND (LOADKEY IS  NULL OR LOADKEY =''))
 	   BEGIN
          SELECT @n_Continue = 3
          SELECT @n_Err = 83020
          SELECT @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + 'Load does not Exists ' + @c_Wavekey+ '. (mspRLWAVARLA)'
       END
 
-	    IF  EXISTS(SELECT  1 FROM ORDERS WHERE USERDEFINE09=@c_Wavekey AND( MBOLKEY IS  NULL OR MBOLKEY =''))
+	    IF  EXISTS(SELECT  1 FROM ORDERS WITH (NOLOCK) WHERE USERDEFINE09=@c_Wavekey AND( MBOLKEY IS  NULL OR MBOLKEY =''))
 	   BEGIN
          SELECT @n_Continue = 3
          SELECT @n_Err = 83025
          SELECT @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + 'Ship Reference does not Exists ' +@c_Wavekey + '. (mspRLWAVARLA)'
       END
 
-	   IF  EXISTS(SELECT  1 FROM PICKDETAIL PD JOIN ORDERS O ON O.ORDERKEY=PD.ORDERKEY AND PD.UOM=6 WHERE O.USERDEFINE09=@c_Wavekey AND (PD.PICKSLIPNO IS  NULL OR PD.PICKSLIPNO =''))
+	   IF  EXISTS(SELECT  1 FROM PICKDETAIL PD WITH (NOLOCK) JOIN ORDERS O WITH (NOLOCK)  ON O.ORDERKEY=PD.ORDERKEY AND TRY_CAST(PD.UOM AS INT)=6 WHERE O.USERDEFINE09=@c_Wavekey AND (PD.PICKSLIPNO IS  NULL OR PD.PICKSLIPNO =''))
 	   BEGIN
          SELECT @n_Continue = 3
          SELECT @n_Err = 83030
@@ -213,6 +211,33 @@ BEGIN
       CREATE INDEX PDWIP_LLI ON #PickDetail_WIP (Lot, Loc, ID)
    END
 
+   IF @n_Continue = 1 OR @n_Continue = 2
+   BEGIN
+CREATE TABLE #CODELKUPS
+(
+      LISTNAME    NVARCHAR(10)   NOT NULL
+    , Code        NVARCHAR(30)   NOT NULL
+    , Description NVARCHAR(250)  NULL
+    , Short       NVARCHAR(10)   NULL
+    , Long        NVARCHAR(250)  NULL
+    , Notes       NVARCHAR(4000) NULL
+    , Storerkey   NVARCHAR(15)   NOT NULL DEFAULT (' ')
+    , code2       NVARCHAR(30)   NOT NULL DEFAULT ('')
+);
+
+CREATE NONCLUSTERED INDEX IX_CODELKUPS_STORERKEY ON #CODELKUPS (Storerkey, LISTNAME, Short, Description)
+
+
+CREATE NONCLUSTERED INDEX IX_CODELKUPS_SHORT ON #CODELKUPS (Short, LISTNAME)
+
+
+INSERT INTO #CODELKUPS
+SELECT LISTNAME,CODE,DESCRIPTION,SHORT,LONG,NOTES,STORERKEY,CODE2
+FROM CODELKUP WITH (NOLOCK)
+WHERE LISTNAME IN ('ARLAPALTYP','ARLAUSR') AND STORERKEY=@c_Storerkey;
+
+END 
+
    --Initialize Pickdetail work in progress staging table
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
@@ -286,17 +311,17 @@ BEGIN
 		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08='4600125') THEN 'NEW'
 		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)>1500) AND (LA.Lottable08<>'4600125') THEN '' ELSE 'NEW' END AS 'c_Message02',
 		    CASE WHEN (O.TYPE='CUSTOMS') THEN 'S' ELSE '0' END AS '@c_WStatus'*/
-			  CASE WHEN ((S.ITEMCLASS='Extra Chil') OR(O.Type='RUSH')) THEN 'REACHTRUCK'
-		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE='CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM CODELKUP WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='AGV')) THEN (SELECT LONG FROM CODELKUP WHERE STORERKEY='ARLA' AND LISTNAME='ARLAUSR' AND SHORT='1')
-		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE='CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)>1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM CODELKUP WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='MANUAL')) THEN 'REACHTRUCK'
-		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM CODELKUP WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='AGV') ) THEN (SELECT LONG FROM CODELKUP WHERE STORERKEY='ARLA' AND LISTNAME='ARLAUSR' AND SHORT='1')
-		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)>1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM CODELKUP WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='MANUAL')) THEN 'REACHTRUCK' ELSE 'REACHTRUCK' END AS '@c_UserKey',
+		   CASE WHEN ((S.ITEMCLASS='Extra Chil') OR(O.Type='RUSH')) THEN 'REACHTRUCK'
+		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE='CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM #CODELKUPS WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='AGV')) THEN (SELECT LONG FROM #CODELKUPS WHERE STORERKEY='ARLA' AND LISTNAME='ARLAUSR' AND SHORT='1')
+		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE='CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)>1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM #CODELKUPS WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='MANUAL')) THEN 'REACHTRUCK'
+		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM #CODELKUPS WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='AGV') ) THEN (SELECT LONG FROM #CODELKUPS WHERE STORERKEY='ARLA' AND LISTNAME='ARLAUSR' AND SHORT='1')
+		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)>1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM #CODELKUPS WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='MANUAL')) THEN 'REACHTRUCK' ELSE 'REACHTRUCK' END AS '@c_UserKey',
 
-		    CASE WHEN ((S.ITEMCLASS='Extra Chil') OR(O.Type='RUSH')) THEN 'REACHTRUCK'
-		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE='CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM CODELKUP WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='AGV')) THEN (SELECT LONG FROM CODELKUP WHERE STORERKEY='ARLA' AND LISTNAME='ARLAUSR' AND SHORT='1')
-		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE='CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)>1500) AND (LA.Lottable08  IN (SELECT DISTINCT CODE FROM CODELKUP WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='MANUAL')) THEN 'REACHTRUCK'
-		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM CODELKUP WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='AGV')) THEN (SELECT LONG FROM CODELKUP WHERE STORERKEY='ARLA' AND LISTNAME='ARLAUSR' AND SHORT='1')
-		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)>1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM CODELKUP WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='MANUAL')) THEN 'REACHTRUCK' ELSE 'REACHTRUCK' END AS '@c_Message01',
+		   CASE WHEN ((S.ITEMCLASS='Extra Chil') OR(O.Type='RUSH')) THEN 'REACHTRUCK'
+		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE='CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM #CODELKUPS WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='AGV')) THEN (SELECT LONG FROM #CODELKUPS WHERE STORERKEY='ARLA' AND LISTNAME='ARLAUSR' AND SHORT='1')
+		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE='CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)>1500) AND (LA.Lottable08  IN (SELECT DISTINCT CODE FROM #CODELKUPS WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='MANUAL')) THEN 'REACHTRUCK'
+		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM #CODELKUPS WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='AGV')) THEN (SELECT LONG FROM #CODELKUPS WHERE STORERKEY='ARLA' AND LISTNAME='ARLAUSR' AND SHORT='1')
+		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE<>'CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)>1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM #CODELKUPS WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='MANUAL')) THEN 'REACHTRUCK' ELSE 'REACHTRUCK' END AS '@c_Message01',
 
 		  /*  CASE WHEN ((S.ITEMCLASS='Extra Chil') OR(O.Type='RUSH')) THEN 'NEW'
 		   WHEN (S.ITEMCLASS='Chilled') AND (O.TYPE='CUSTOMS') AND (TRY_CAST(LA.Lottable09 as float)<=1500) AND (LA.Lottable08 IN (SELECT DISTINCT CODE FROM CODELKUP WHERE listname='ARLAPALTYP' AND STORERKEY=ISNULL(@c_Storerkey,'ARLA') AND SHORT='AGV')) THEN 'CUSTOMS'
@@ -315,7 +340,7 @@ BEGIN
       AND PD.[Status] = '0'
       AND PD.ID <> '' AND PD.ID IS NOT NULL
       AND PD.WIP_RefNo = @c_SourceType
-	  AND PD.UOM=1
+	  AND TRY_CAST(PD.UOM AS INT)=1
       GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.ID, PD.UOM, L.LogicalLocation, PD.OrderKey,S.ITEMCLASS,O.TYPE,LA.Lottable08,LA.LOTTABLE09
       ORDER BY L.LogicalLocation, PD.Loc
 
@@ -435,7 +460,7 @@ BEGIN
    END
 
 
-   ---UPDATE TOLOC IN PICKDETAIL WHERE UOM=6
+  /* ---UPDATE TOLOC IN PICKDETAIL WHERE UOM=6
     IF @n_Continue = 1 or @n_Continue = 2
    BEGIN
       UPDATE PICKDETAIL WITH (ROWLOCK) SET TOLOC=@c_ToLoc ,CASEID=ID      WHERE WaveKey = @c_Wavekey 
@@ -450,17 +475,19 @@ BEGIN
          SELECT @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err) + ': Update on Wave Failed (mspRLWAVARLA)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_Errmsg) + ' ) '
       END
    END
-   --END OF UPDATE
+   --END OF UPDATE*/
 
    ---GENERATE CARTON SEQUENCE IN 
-    IF @n_Continue = 1 or @n_Continue = 2
+   /* IF @n_Continue = 1 or @n_Continue = 2
+	IF  EXISTS(SELECT  1 FROM PICKDETAIL WITH (NOLOCK) WHERE WAVEKEY=@c_Wavekey )
+	BEGIN
    BEGIN
      WITH CTE AS
 (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY ORDERKEY ORDER BY (SELECT NULL)) AS RN
     FROM PICKDETAIL
-    WHERE UOM = 1
+    WHERE UOM = '1'
       AND ORDERKEY IN (
             SELECT ORDERKEY
             FROM WAVEDETAIL
@@ -479,6 +506,7 @@ SET NOTES = RN;
          SELECT @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err) + ': Update on Wave Failed (mspRLWAVARLA)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_Errmsg) + ' ) '
       END
    END
+   END*/
   -- END OF CARTON SEQ
  /*   -----RESERVER LPN FOR PALLETS-----
    IF @n_Continue = 1 or @n_Continue = 2
@@ -529,7 +557,7 @@ JOIN CTE
      -- UPDATE PD SET   PD.STATUS=6,PD.PickSlipNo='' FROM PICKDETAIL PD JOIN ORDERS O ON O.ORDERKEY=PD.ORDERKEY WHERE PD.WAVEKEY= @c_Wavekey AND PD.UOM=1 --AND O.TYPE='CUSTOMS'
 	 IF EXISTS (
     SELECT 1
-    FROM WAVEDETAIL WD
+    FROM WAVEDETAIL WD WITH (NOLOCK)
     JOIN ORDERS O ON O.ORDERKEY = WD.ORDERKEY
     WHERE WD.WAVEKEY = @c_Wavekey
       AND O.TYPE = 'CUSTOMS'
@@ -539,12 +567,12 @@ BEGIN
     SET 
         PD.STATUS = '6',
         PD.PickSlipNo = ''
-    FROM PICKDETAIL PD
+    FROM PICKDETAIL PD WITH (ROWLOCK)
     JOIN ORDERS O 
         ON O.ORDERKEY = PD.ORDERKEY
     WHERE 
         PD.WAVEKEY = @c_Wavekey 
-        AND PD.UOM = 1 AND PD.STATUS IN ('0','4') 
+        AND TRY_CAST(PD.UOM AS INT) = 1 AND PD.STATUS IN ('0','4') 
         AND O.TYPE = 'CUSTOMS';
 END
 ELSE
@@ -552,12 +580,12 @@ BEGIN
     UPDATE PD
     SET PD.STATUS='4',
         PD.PickSlipNo = ''
-    FROM PICKDETAIL PD
+    FROM PICKDETAIL PD WITH (ROWLOCK)
     JOIN ORDERS O 
         ON O.ORDERKEY = PD.ORDERKEY
     WHERE 
         PD.WAVEKEY = @c_Wavekey 
-        AND PD.UOM = 1 AND PD.STATUS ='0'
+        AND TRY_CAST(PD.UOM AS INT) = 1 AND PD.STATUS ='0'
         AND O.TYPE <> 'CUSTOMS';
 END
 
@@ -578,9 +606,8 @@ END
    --INSERT TRANSMITLOG2 
 
     -----Update Wave Status-----
-   IF @n_Continue = 1 or @n_Continue = 2
-   BEGIN
-     INSERT INTO TRANSMITLOG2
+  
+  /*   INSERT INTO TRANSMITLOG2
 (
     TRANSMITLOGKEY,
     TABLENAME,
@@ -616,19 +643,83 @@ WHERE PD.TASKDETAILKEY IS NOT NULL AND PD.TASKDETAILKEY<>''  AND TL.KEY1 IS NULL
          SELECT @n_Continue = 3
          SELECT @c_Errmsg = CONVERT(NVARCHAR(250),@n_Err), @n_Err = 83040   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
          SELECT @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err) + ': Update on Wave Failed (mspRLWAVARLA)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_Errmsg) + ' ) '
-      END
-   END
+      END*/
+	 IF @n_Continue IN (1, 2)
+BEGIN
+    DECLARE 
+          @TASKDETAILKEY NVARCHAR(50)
+      
+
+
+    
+    DECLARE CUR_TRANSMIT CURSOR LOCAL FAST_FORWARD FOR
+
+    SELECT 
+        PD.TASKDETAILKEY
+    FROM PICKDETAIL PD
+    INNER JOIN ORDERS O 
+        ON O.ORDERKEY = PD.ORDERKEY
+    INNER JOIN TASKDETAIL TD 
+        ON TD.TaskDetailKey = PD.TaskDetailKey
+       AND TD.Message01 = 'AGV'
+    LEFT JOIN TRANSMITLOG2 TL    
+        ON TL.KEY1 = PD.TASKDETAILKEY    
+       AND TL.TABLENAME = 'WSTASKMCS'
+    WHERE 
+          PD.TASKDETAILKEY IS NOT NULL 
+      AND PD.TASKDETAILKEY <> ''
+      AND TL.KEY1 IS NULL
+      AND PD.WAVEKEY = @c_Wavekey
+      AND PD.STATUS <= 5
+      AND O.TYPE <> 'CUSTOMS';
+
+    OPEN CUR_TRANSMIT;
+
+    FETCH NEXT FROM CUR_TRANSMIT INTO @TASKDETAILKEY;
+
+    WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
+    BEGIN
+      
+        EXEC dbo.ispGenTransmitLog2
+              @c_TableName     = 'WSTASKMCS'
+            , @c_Key1          = @TASKDETAILKEY
+            , @c_Key2          = ''             
+            , @c_Key3          = 'ARLA'
+            , @c_TransmitBatch = ''             
+            , @b_Success       = @b_Success OUTPUT
+            , @n_err           = @n_err OUTPUT
+            , @c_errmsg        = @c_errmsg OUTPUT;
+
+      
+        IF @b_Success <> 1
+        BEGIN
+            SET @n_Continue = 3;
+            BREAK;
+        END
+
+        FETCH NEXT FROM CUR_TRANSMIT INTO @TASKDETAILKEY;
+    END;
+
+    CLOSE CUR_TRANSMIT;
+    DEALLOCATE CUR_TRANSMIT;
+END
    --END OF TRANSMIT LOG2
+
+
+   
 
    IF @n_Continue = 1 or @n_Continue = 2
    BEGIN
+   IF  EXISTS(SELECT  1 FROM ORDERS WITH (NOLOCK) WHERE USERDEFINE09=@c_Wavekey)
+   BEGIN
+    UPDATE #PickDetail_WIP WITH (ROWLOCK) SET TOLOC=@c_ToLoc ,CASEID=ID      WHERE WaveKey = @c_Wavekey 
       -----Delete pickdetail_WIP work in progress staging table
       EXEC isp_CreatePickdetail_WIP
             @c_Loadkey               = ''
            ,@c_Wavekey               = @c_Wavekey
            ,@c_WIP_RefNo             = @c_SourceType
            ,@c_PickCondition_SQL     = ''
-           ,@c_Action                = 'D'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
+           ,@c_Action                = 'U'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
            ,@c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization
            ,@b_Success               = @b_Success OUTPUT
            ,@n_Err                   = @n_Err     OUTPUT
@@ -638,6 +729,7 @@ WHERE PD.TASKDETAILKEY IS NOT NULL AND PD.TASKDETAILKEY<>''  AND TL.KEY1 IS NULL
       BEGIN
          SET @n_Continue = 3
       END
+   END
    END
 
    IF (XACT_STATE()) = -1
