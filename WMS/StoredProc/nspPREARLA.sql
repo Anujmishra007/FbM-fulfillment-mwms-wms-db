@@ -1,5 +1,5 @@
 
-/****** Object:  StoredProcedure [dbo].[nspPREARLA]    Script Date: 6/23/2026 3:59:51 PM ******/
+/****** Object:  StoredProcedure [dbo].[nspPREARLA]    Script Date: 6/23/2026 4:35:18 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -101,6 +101,7 @@ LEFT JOIN CUSTOMERDATETRACKER CDT  WITH  (NOLOCK)
 WHERE 
     LOC.Facility = @c_facility
 	AND LLI.SKU=@c_sku
+	AND LLI.StorerKey=@c_storerkey
 
    /* AND LLI.SKU = (
         SELECT SKU 
