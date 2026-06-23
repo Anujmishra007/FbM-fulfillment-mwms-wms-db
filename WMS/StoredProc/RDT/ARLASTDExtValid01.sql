@@ -51,7 +51,8 @@ CREATE OR ALTER PROC [RDT].[ARLASTDExtValid01] (
    @nAfterStep       INT,                       -- After step - required by caller
    @nErrNo           INT           OUTPUT,      -- Output: error number (0 = success)
    @cErrMsg          NVARCHAR(20)  OUTPUT,      -- Output: error message text
-   @nDebug           INT = 0                    -- Debug flag (1 = print debug info, 0 = silent)
+   @nDebug           INT = 0                    -- Debug flag (1 = print debug info, 0 = silent)
+
 )
 AS
 SET NOCOUNT ON
@@ -274,7 +275,7 @@ SET ANSI_NULLS OFF
       IF @nDebug = 1
       BEGIN
          PRINT 'DEBUG: @nPalletTempCount = ' + ISNULL(CAST(@nPalletTempCount AS NVARCHAR(20)), 'NULL')
-         PRINT 'DEBUG: @nMinPalletTempReq = ' + ISNULL(CAST(@nMinPalletTempReq AS NVARCHAR(20)), 'NULL')
+         PRINT 'DEBUG: Condition check: @nPalletTempCount (' + ISNULL(CAST(ISNULL(@nPalletTempCount, 0) AS NVARCHAR(20)), '0') + ') < @nMinPalletTempReq (' + ISNULL(CAST(@nMinPalletTempReq AS NVARCHAR(20)), 'NULL') + ') = ' + CASE WHEN ISNULL(@nPalletTempCount, 0) < @nMinPalletTempReq THEN 'TRUE (will BLOCK scan)' ELSE 'FALSE (will ALLOW scan)' END
          PRINT 'DEBUG: Condition check: @nPalletTempCount (' + ISNULL(CAST(ISNULL(@nPalletTempCount, 0) AS NVARCHAR(20)), '0') + ') < @nMinPalletTempReq (' + ISNULL(CAST(@nMinPalletTempReq AS NVARCHAR(20)), 'NULL') + ') = ' + CASE WHEN ISNULL(@nPalletTempCount, 0) <= @nMinPalletTempReq THEN 'TRUE (will BLOCK scan)' ELSE 'FALSE (will ALLOW scan)' END
       END
 
