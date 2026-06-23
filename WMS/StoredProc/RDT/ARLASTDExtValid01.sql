@@ -51,7 +51,7 @@ CREATE OR ALTER PROC [RDT].[ARLASTDExtValid01] (
    @nAfterStep       INT,                       -- After step - required by caller
    @nErrNo           INT           OUTPUT,      -- Output: error number (0 = success)
    @cErrMsg          NVARCHAR(20)  OUTPUT,      -- Output: error message text
-   @nDebug           INT = 1                    -- Debug flag (1 = print debug info, 0 = silent)
+   @nDebug           INT = 0                    -- Debug flag (1 = print debug info, 0 = silent)
 )
 AS
 SET NOCOUNT ON
