@@ -99,7 +99,7 @@ SELECT
     (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) AS QTYAVAILABLE,
     '1'
     
-FROM LOTXLOCXID LLI   
+FROM LOTXLOCXID LLI  WITH (NOLOCK) 
 
 INNER JOIN LOC WITH (NOLOCK) 
     ON LLI.LOC = LOC.LOC
@@ -123,19 +123,20 @@ LEFT JOIN CUSTOMERDATETRACKER CDT WITH (NOLOCK)
     ON CDT.STORERKEY = LLI.STORERKEY
     AND CDT.SKU = LLI.SKU
     AND CDT.CONSIGNEEKEY = (
-        SELECT TOP 1 CONSIGNEEKEY
+        SELECT CONSIGNEEKEY
         FROM ORDERS WITH (NOLOCK)
-        WHERE ORDERKEY = (select ORDERKEY from ORDERS (NOLOCK) where OrderKey = left(@c_OtherParms,10))
+        WHERE ORDERKEY =  left(@c_OtherParms,10)
     )
 
 WHERE 
     LOC.Facility = @c_facility
 
     AND LLI.SKU = (
-        SELECT TOP 1 SKU 
+        SELECT SKU WITH (NOLOCK) 
         FROM ORDERDETAIL 
-        WHERE ORDERKEY =(select ORDERKEY from ORDERS (NOLOCK) where OrderKey = left(@c_OtherParms,10))
-		AND ORDERLINENUMBER =(select OrderLineNumber from ORDERDETAIL (NOLOCK) where OrderKey = left(@c_OtherParms,10) and orderlinenumber = right(left(@c_OtherParms,15),5))
+        WHERE ORDERKEY = left(@c_OtherParms,10)
+		--AND ORDERLINENUMBER =(select OrderLineNumber from ORDERDETAIL WITH (NOLOCK) where OrderKey = left(@c_OtherParms,10) 
+		AND ORDERLINENUMBER = right(left(@c_OtherParms,15),5)
         ORDER BY ADDDATE DESC
     )
 
@@ -145,7 +146,7 @@ WHERE
     AND ID.Status = 'OK'
     AND LOT.Status = 'OK'
 
-    AND NOT EXISTS (
+   /* AND NOT EXISTS (
         SELECT 1 FROM INVENTORYHOLD IH
         WHERE IH.ID = LLI.ID 
           AND IH.HOLD = 1 
@@ -157,7 +158,7 @@ WHERE
         WHERE IH.LOC = LLI.LOC 
           AND IH.HOLD = 1 
           AND IH.LOC <> ''
-    )
+    )*/
 
     AND (
         CDT.LastBestBeforeDate IS NULL
@@ -166,14 +167,14 @@ WHERE
 
     AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) > 0
 	--AND( LA.LOTTABLE03 IS NULL OR LA.Lottable03 ='')
-    AND EXISTS (
+ /*   AND EXISTS (
         SELECT 1
         FROM LOTXLOCXID L2
         WHERE L2.ID = LLI.ID
           AND L2.LOC = LLI.LOC
           AND L2.LOT = LLI.LOT
           AND L2.STORERKEY = LLI.STORERKEY
-    )
+    )*/
 
 ORDER BY 
     CASE 
