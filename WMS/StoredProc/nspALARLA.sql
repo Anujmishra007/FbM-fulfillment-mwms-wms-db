@@ -1,5 +1,5 @@
 
-/****** Object:  StoredProcedure [dbo].[nspALARLA]    Script Date: 6/23/2026 3:46:04 PM ******/
+/****** Object:  StoredProcedure [dbo].[nspALARLA]    Script Date: 6/23/2026 5:11:45 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -55,8 +55,8 @@ DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
    JOIN ID  (NOLOCK) ON LLI.ID = ID.ID
    JOIN LOT (NOLOCK) ON LLI.LOT = LOT.LOT
    JOIN LOTATTRIBUTE LA    ON  LA.Lot       = LLI.Lot    AND LA.StorerKey = LLI.StorerKey    AND LA.Lottable10 IS NOT NULL
-   LEFT JOIN CUSTOMERDATETRACKER CDT    ON  CDT.STORERKEY    = LLI.STORERKEY    AND CDT.SKU          = LLI.SKU
-  AND CDT.ConsigneeKey =(select CONSIGNEEKEY from ORDERS (NOLOCK) where OrderKey = left(@c_OtherParms,10) )
+   LEFT JOIN CUSTOMERDATETRACKER CDT    ON  ATR.STORERKEY    = LLI.STORERKEY    AND ATR.SKU          = LLI.SKU
+  AND ATR.ConsigneeKey =(select CONSIGNEEKEY from ORDERS (NOLOCK) where OrderKey = left(@c_OtherParms,10) )
    WHERE LOC.Facility = @c_facility
    AND ISNULL(LOC.LocationFlag,'') in ('','NONE')
    AND LLI.ID NOT IN (select ID from INVENTORYHOLD (NOLOCK) where hold = 1 and ID <>'')
@@ -65,7 +65,7 @@ DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
    AND ID.Status = 'OK'
    AND LOT.Status = 'OK'
    --AND LOT.LOT = @c_lot
-   AND (        CDT.LastBestBeforeDate IS NULL OR TRY_CONVERT(DATETIME2(3), LA.Lottable04) >= CDT.LastBestBeforeDate    )
+   AND (        ATR.LastBestBeforeDate IS NULL OR TRY_CONVERT(DATETIME2(3), LA.Lottable04) >= ATR.LastBestBeforeDate    )
    AND LA.Lottable04 <=(select LOTTABLE02 from ORDERDETAIL (NOLOCK) where OrderKey = left(@c_OtherParms,10) and orderlinenumber = right(left(@c_OtherParms,15),5))
    AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0
    --AND LLI.ID =(select ID from ORDERDETAIL (NOLOCK) where OrderKey = left(@c_OtherParms,10) and orderlinenumber = right(left(@c_OtherParms,15),5))
@@ -80,8 +80,8 @@ DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
    JOIN LOTATTRIBUTE LA    ON  LA.Lot       = LLI.Lot    AND LA.StorerKey = LLI.StorerKey    AND LA.Lottable10 IS NOT NULL
 
    JOIN SKU S ON S.SKU=LLI.SKU AND S.STORERKEY=LLI.STORERKEY
-   LEFT JOIN CUSTOMERDATETRACKER CDT    ON  CDT.STORERKEY    = LLI.STORERKEY    AND CDT.SKU          = LLI.SKU
-  AND CDT.ConsigneeKey =(select TOP 1  CONSIGNEEKEY from ORDERS (NOLOCK) where OrderKey = left(@c_OtherParms,10) )
+   LEFT JOIN CUSTOMERDATETRACKER CDT    ON  ATR.STORERKEY    = LLI.STORERKEY    AND ATR.SKU          = LLI.SKU
+  AND ATR.ConsigneeKey =(select TOP 1  CONSIGNEEKEY from ORDERS (NOLOCK) where OrderKey = left(@c_OtherParms,10) )
    WHERE LOC.Facility = 'DK001' AND  S.PutawayZone = LOC.PutawayZone
    AND ISNULL(LOC.LocationFlag,'') in ('','NONE')
    AND LLI.ID NOT IN (select ID from INVENTORYHOLD (NOLOCK) where hold = 1 and ID <>'')
@@ -93,8 +93,8 @@ DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
    AND LLI.SKU =(select TOP 1 SKU from ORDERDETAIL (NOLOCK)where OrderKey = left(@c_OtherParms,10) and orderlinenumber = right(left(@c_OtherParms,15),5))
 
     AND (
-        CDT.LastBestBeforeDate IS NULL
-        OR TRY_CONVERT(DATETIME2(3), LA.Lottable04) >= CDT.LastBestBeforeDate  
+        ATR.LastBestBeforeDate IS NULL
+        OR TRY_CONVERT(DATETIME2(3), LA.Lottable04) >= ATR.LastBestBeforeDate  
 		--AND TRY_CONVERT(DATETIME2(3), LA.Lottable04) <=(select LOTTABLE02 from ORDERDETAIL (NOLOCK) where OrderKey = left('000035915600001',10) and orderlinenumber = right(left('000035915600001',15),5)))
 		
     )
@@ -132,10 +132,10 @@ INNER JOIN SKU S WITH (NOLOCK)
     ON S.SKU = LLI.SKU 
     AND S.STORERKEY = LLI.STORERKEY
 
-LEFT JOIN CUSTOMERDATETRACKER CDT WITH (NOLOCK) 
-    ON CDT.STORERKEY = LLI.STORERKEY
-    AND CDT.SKU = LLI.SKU
-    AND CDT.CONSIGNEEKEY =@cConsigneeKey
+LEFT JOIN AllocationTrackARLA ATR WITH (NOLOCK) 
+    ON ATR.STORERKEY = LLI.STORERKEY
+    AND ATR.SKU = LLI.SKU
+    AND ATR.CONSIGNEEKEY =@cConsigneeKey
 	/*(
         SELECT CONSIGNEEKEY
         FROM ORDERS WITH (NOLOCK)
@@ -176,8 +176,11 @@ WHERE
     )*/
 
     AND (
-        CDT.LastBestBeforeDate IS NULL
-        OR TRY_CONVERT(DATETIME2(3), LA.Lottable04, 105) >= CDT.LastBestBeforeDate
+        ATR.LastBestBeforeDate IS NULL
+        OR 
+		CAST(TRY_CONVERT(DATETIME2(3), LA.Lottable04, 105) AS DATE) >= CAST(ATR.LastBestBeforeDate AS DATE)
+ 
+		--OR TRY_CONVERT(DATETIME2(3), LA.Lottable04, 105) >= ATR.LastBestBeforeDate
     )
 
     AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) > 0
