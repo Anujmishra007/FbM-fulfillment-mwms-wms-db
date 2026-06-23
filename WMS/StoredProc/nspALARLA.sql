@@ -1,6 +1,6 @@
---USE [GLOWMS]
---GO
-/****** Object:  StoredProcedure [dbo].[nspALARLA]    Script Date: 6/21/2026 3:43:45 PM ******/
+USE [GLOWMS]
+GO
+/****** Object:  StoredProcedure [dbo].[nspALARLA]    Script Date: 6/23/2026 3:46:04 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -25,7 +25,7 @@ GO
 /* Date         Author   Ver  Purpose                                        */
 /* 01-04-2026   KMS043,SYO054   1.0  Initial version created                        */
 /*****************************************************************************/
-CREATE OR ALTER     PROC [dbo].[nspALARLA]
+ALTER       PROC [dbo].[nspALARLA]
          @c_lot NVARCHAR(10) ,  
          @c_uom NVARCHAR(10) ,  
          @c_HostWHCode NVARCHAR(10),  
@@ -37,6 +37,16 @@ AS
 BEGIN   
    SET NOCOUNT ON 
    
+   DECLARE @cOrderKey NVARCHAR(10),
+@cOrderLineNumber NVARCHAR(10),
+@cConsigneeKey NVARCHAR(15)
+
+SET @cOrderKey=left(@c_OtherParms,10) 
+SET @cOrderLineNumber=right(left(@c_OtherParms,15),5)
+SELECT @cConsigneeKey=ConsigneeKey
+        FROM ORDERS WITH (NOLOCK)
+        WHERE ORDERKEY =  left(@c_OtherParms,10) 
+
 DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
 /*SELECT LOC,ID,QTYAVAILABLE,'1' FROM
 (SELECT LLI.Loc,LLI.ID,--(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) AS QTYAVAILABLE
@@ -93,6 +103,9 @@ DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
     -- Only consider rows where net available > 0
     AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked- LLI.QtyReplen) > 0
 )P*/
+
+
+
 SELECT
     LLI.LOC,
     LLI.ID,
@@ -105,15 +118,16 @@ INNER JOIN LOC WITH (NOLOCK)
     ON LLI.LOC = LOC.LOC
 
 INNER JOIN ID WITH (NOLOCK) 
-    ON LLI.ID = ID.ID
+    ON LLI.ID = ID.ID 
 
 INNER JOIN LOT WITH (NOLOCK) 
-    ON LLI.LOT = LOT.LOT
+    ON LLI.LOT = LOT.LOT AND LOT.SKU=LLI.SKU
 
 INNER JOIN LOTATTRIBUTE LA WITH (NOLOCK) 
     ON LA.LOT = LLI.LOT 
     AND LA.STORERKEY = LLI.STORERKEY
     AND LA.LOTTABLE10 IS NOT NULL
+	AND LA.SKU=LLI.SKU
 
 INNER JOIN SKU S WITH (NOLOCK) 
     ON S.SKU = LLI.SKU 
@@ -122,23 +136,25 @@ INNER JOIN SKU S WITH (NOLOCK)
 LEFT JOIN CUSTOMERDATETRACKER CDT WITH (NOLOCK) 
     ON CDT.STORERKEY = LLI.STORERKEY
     AND CDT.SKU = LLI.SKU
-    AND CDT.CONSIGNEEKEY = (
+    AND CDT.CONSIGNEEKEY =@cConsigneeKey
+	/*(
         SELECT CONSIGNEEKEY
         FROM ORDERS WITH (NOLOCK)
         WHERE ORDERKEY =  left(@c_OtherParms,10)
-    )
+    )*/
 
 WHERE 
-    LOC.Facility = @c_facility
+    LOC.Facility = @c_facility AND 
+	LLI.LOT=@c_lot
 
-    AND LLI.SKU = (
+   /* AND LLI.SKU = (
         SELECT SKU 
         FROM ORDERDETAIL WITH (NOLOCK) 
-        WHERE ORDERKEY = left(@c_OtherParms,10)
+        WHERE ORDERKEY = @cOrderKey
 		--AND ORDERLINENUMBER =(select OrderLineNumber from ORDERDETAIL WITH (NOLOCK) where OrderKey = left(@c_OtherParms,10) 
-		AND ORDERLINENUMBER = right(left(@c_OtherParms,15),5)
+		AND ORDERLINENUMBER =@cOrderLineNumber
         --ORDER BY ADDDATE DESC
-    )
+    )*/
 
     AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
     AND LOC.LocationCategory <> 'STAGE'
