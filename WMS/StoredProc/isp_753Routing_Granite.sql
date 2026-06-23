@@ -54,6 +54,7 @@ BEGIN
          , @b_Debug           INT = 0 
          , @d_PickupDate      DATETIME
          , @c_UserDefine02    NVARCHAR(20)
+         , @c_UserDefine09    NVARCHAR(10) = ''   --WL01
 
    DECLARE @c_SortOrder     NVARCHAR(10)
          , @c_ColumnName01  NVARCHAR(60)
