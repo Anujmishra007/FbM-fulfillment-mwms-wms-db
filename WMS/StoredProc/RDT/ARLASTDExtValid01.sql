@@ -212,10 +212,10 @@ SET ANSI_NULLS OFF
          IF @nDebug = 1
          BEGIN
             PRINT 'DEBUG: ERROR - No OrderKey found for PalletID = ' + ISNULL(@cPalletID, 'NULL')
-            PRINT 'DEBUG: Setting @nErrNo = 3735603 (No Order Found)'
+            PRINT 'DEBUG: Setting @nErrNo = 202001 (No Order Found)'
          END
 
-         SET @nErrNo  = 3735603
+         SET @nErrNo  = 202001
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
 
          IF @nDebug = 1
@@ -245,10 +245,10 @@ SET ANSI_NULLS OFF
          IF @nDebug = 1
          BEGIN
             PRINT 'DEBUG: ERROR - No MbolKey found for OrderKey = ' + ISNULL(@cOrderKey, 'NULL')
-            PRINT 'DEBUG: Setting @nErrNo = 3735604 (No MBOL created)'
+            PRINT 'DEBUG: Setting @nErrNo = 202002 (No MBOL created)'
          END
 
-         SET @nErrNo  = 3735604
+         SET @nErrNo  = 202002
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
 
          IF @nDebug = 1
@@ -342,14 +342,22 @@ QUIT:
       PRINT '------------------------------------------------------------'
       PRINT 'EXIT: ARLASTDExtValid01'
       PRINT 'Timestamp: ' + CONVERT(NVARCHAR(30), GETDATE(), 121)
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.ARLASTDExtValid01 TO NSQL
-GO
+
+
+SET QUOTED_IDENTIFIER OFF
+
+GO
+
+SET ANSI_NULLS ON
+
+GO
+
+
+
+GRANT EXECUTE ON rdt.ARLASTDExtValid01 TO NSQL
+
+GO
+
       PRINT '  Final @nErrNo  = ' + ISNULL(CAST(@nErrNo AS NVARCHAR(20)), 'NULL')
       PRINT '  Final @cErrMsg = ' + ISNULL(@cErrMsg, 'NULL')
       PRINT '  @cFacility     = ' + ISNULL(@cFacility, 'NULL')
