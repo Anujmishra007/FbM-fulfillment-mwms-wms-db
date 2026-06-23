@@ -1,5 +1,5 @@
 --USE [GLOWMS]
-GO
+--GO
 /****** Object:  StoredProcedure [dbo].[nspPREARLA]    Script Date: 6/21/2026 3:44:23 PM ******/
 SET ANSI_NULLS OFF
 GO
@@ -92,10 +92,10 @@ WHERE
 
     AND LLI.SKU = (
         SELECT SKU 
-        FROM ORDERDETAIL 
+        FROM ORDERDETAIL  WITH  (NOLOCK) 
         WHERE ORDERKEY =left(@c_OtherParms,10)
 		AND ORDERLINENUMBER = right(left(@c_OtherParms,15),5)
-        ORDER BY ADDDATE DESC
+        --ORDER BY ADDDATE DESC
     )
 
     AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
@@ -144,4 +144,3 @@ ORDER BY
 END
 
 END
-
