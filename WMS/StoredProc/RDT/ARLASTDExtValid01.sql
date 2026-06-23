@@ -287,17 +287,28 @@ SET ANSI_NULLS OFF
             PRINT 'DEBUG: Temperature check FAILED - insufficient pallet temperatures captured'
             PRINT 'DEBUG: Inserting TRACEINFO record for SCNPT2DOOR_TEMP'
          END
-         BEGIN TRY
-            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Col1, Col2, Col3)
-            VALUES ('SCNPT2DOOR_TEMP', GETDATE(), @cPalletID, @cMBOL4Pallet, 'TempNotCaptured')
-
-            IF @nDebug = 1
-               PRINT 'DEBUG: TRACEINFO insert complete. @@ROWCOUNT = ' + CAST(@@ROWCOUNT AS NVARCHAR(10))
-         END TRY
-         BEGIN CATCH
-            IF @nDebug = 1
-               PRINT 'DEBUG: TRACEINFO insert failed: ' + ERROR_MESSAGE()
-         END CATCH
+         BEGIN TRY
+
+            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Col1, Col2, Col3)
+
+            VALUES ('SCNPT2DOOR_TEMP', GETDATE(), @cPalletID, @cMBOL4Pallet, 'TempNotCaptured')
+
+
+
+            IF @nDebug = 1
+
+               PRINT 'DEBUG: TRACEINFO insert complete. @@ROWCOUNT = ' + CAST(@@ROWCOUNT AS NVARCHAR(10))
+
+         END TRY
+
+         BEGIN CATCH
+
+            IF @nDebug = 1
+
+               PRINT 'DEBUG: TRACEINFO insert failed: ' + ERROR_MESSAGE()
+
+         END CATCH
+
             PRINT 'DEBUG: TRACEINFO insert complete. @@ROWCOUNT = ' + CAST(@@ROWCOUNT AS NVARCHAR(10))
 
          SET @nErrNo  = 3735605
@@ -331,6 +342,14 @@ QUIT:
       PRINT '------------------------------------------------------------'
       PRINT 'EXIT: ARLASTDExtValid01'
       PRINT 'Timestamp: ' + CONVERT(NVARCHAR(30), GETDATE(), 121)
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON rdt.ARLASTDExtValid01 TO NSQL
+GO
       PRINT '  Final @nErrNo  = ' + ISNULL(CAST(@nErrNo AS NVARCHAR(20)), 'NULL')
       PRINT '  Final @cErrMsg = ' + ISNULL(@cErrMsg, 'NULL')
       PRINT '  @cFacility     = ' + ISNULL(@cFacility, 'NULL')
