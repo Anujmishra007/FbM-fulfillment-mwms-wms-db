@@ -1,5 +1,4 @@
-USE [GLOWMS]
-GO
+
 /****** Object:  StoredProcedure [dbo].[nspALARLA]    Script Date: 6/23/2026 3:46:04 PM ******/
 SET ANSI_NULLS OFF
 GO
