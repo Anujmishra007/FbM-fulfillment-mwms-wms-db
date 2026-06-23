@@ -54,6 +54,7 @@ BEGIN
          , @b_Debug           INT = 0 
          , @d_PickupDate      DATETIME
          , @c_UserDefine02    NVARCHAR(20)
+         , @c_UserDefine09    NVARCHAR(10) = ''   --WL01
 
    DECLARE @c_SortOrder     NVARCHAR(10)
          , @c_ColumnName01  NVARCHAR(60)
@@ -90,6 +91,7 @@ BEGIN
    SELECT @c_UserDefine02 = ISNULL(TRIM(UserDefine02),'')
         , @c_TMReleaseFlag=ISNULL(Wave.TMReleaseFlag,'N')
         , @cTransmitLogSubmitDate = ISNULL(Wave.UserDefine10, '')
+        , @c_UserDefine09 = ISNULL(WAVE.UserDefine09, '')   --WL01
    FROM dbo.WAVE WITH (NOLOCK)
    WHERE WaveKey = @c_WaveKey
 
@@ -187,7 +189,7 @@ BEGIN
                       WHERE TL2.Tablename = @c_TableName
                       AND TL2.Key1 = @c_WaveKey
                       AND TL2.Key2 = ''
-                      AND TL2.Key3 = @c_StorerKey )
+                      AND TL2.Key3 = @c_StorerKey ) AND @c_UserDefine09 = 'Y'
       BEGIN
          SELECT @n_continue = 3;
          SELECT @n_err = 500257;
