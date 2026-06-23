@@ -52,7 +52,7 @@ AS
    DECLARE @cID           NVARCHAR( 20)
    DECLARE @cFacility     NVARCHAR( 5)
    DECLARE @cSKU          NVARCHAR( 20)
-   DECLARE @cPalletLabel  NVARCHAR( 10)
+   DECLARE @cShipLabel  NVARCHAR( 10)
    DECLARE @nRowCount     INT
    DECLARE 
  
@@ -94,12 +94,12 @@ AS
 
    -------------------------------------------------------------------------------*/
    -- Get storer config
-   SET @cPalletLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
-   IF @cPalletLabel = '0'
-      SET @cPalletLabel = ''
+   SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
+   IF @cShipLabel = '0'
+      SET @cShipLabel = ''
 
    -- Check report setup
-   IF @cPalletLabel = ''
+   IF @cShipLabel = ''
    BEGIN
       SET @nErrNo = 119104
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --RPTypeNotSetup
@@ -108,14 +108,14 @@ AS
 
    
    BEGIN
-      DECLARE @tPalletLabel VariableTable
+      DECLARE @tShipLabel VariableTable
      
-      INSERT INTO @tPalletLabel (Variable, Value) VALUES
+      INSERT INTO @tShipLabel (Variable, Value) VALUES
       ( '@cSSCC',        @cSSCC)
    
       -- Print label
       EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-      @cPalletLabel, -- Report type
+      @cShipLabel, -- Report type
       @tPalletLabel, -- Report params
       'rdt_593ShipLabelARLA',
       @nErrNo  OUTPUT,
