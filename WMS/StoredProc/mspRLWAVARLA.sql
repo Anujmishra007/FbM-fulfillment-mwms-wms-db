@@ -25,7 +25,7 @@ GO
 /*****************************************************************************/
 
 
-ALTER       PROCEDURE [dbo].[mspRLWAVARLA]
+CREATE OR ALTER       PROCEDURE [dbo].[mspRLWAVARLA]
       @c_Wavekey      NVARCHAR(10)
     , @b_Success      INT        OUTPUT
     , @n_Err          INT        OUTPUT
