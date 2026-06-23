@@ -3,24 +3,25 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdtHandleHttp                                       */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Usage: This SP is calling from the RDT server to get or push an      */
-/*        XML Message between SQL server and RDT server                 */
-/*                                                                      */
-/* Called By: RDT TelNet server or Web Server                           */
-/*                                                                      */
-/* Date        Rev  Author   Purposes                                   */
-/* 20-Sep-2023 1.0  JLC042   Created base on rdtHandle ver 1.28         */
-/* 07-Nov-2023 1.1  JLC042   Fix Message Screen issue UWP-10463         */
-/* 24-May-2024 1.2  NLT013   Add session id to get unique mobile        */
-/* 03-Apr-2025 1.3.0 NLT013  UWP-32244 Extend Menu number               */
-/* 23-Jul-2025 1.4.0 Dennis   Add trace id                              */
-/* 31-Aug-2025 1.5.0 NickT   FCR-7417 Fix an issue: infinity tran loop  */
-/* 06-Nov-2025 1.6.0 NickT   UWP-43698 Check duplicate request          */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdtHandleHttp                                          */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Usage: This SP is calling from the RDT server to get or push an         */
+/*        XML Message between SQL server and RDT server                    */
+/*                                                                         */
+/* Called By: RDT TelNet server or Web Server                              */
+/*                                                                         */
+/* Date        Rev  Author   Purposes                                      */
+/* 20-Sep-2023 1.0  JLC042   Created base on rdtHandle ver 1.28            */
+/* 07-Nov-2023 1.1  JLC042   Fix Message Screen issue UWP-10463            */
+/* 24-May-2024 1.2  NLT013   Add session id to get unique mobile           */
+/* 03-Apr-2025 1.3.0 NLT013  UWP-32244 Extend Menu number                  */
+/* 23-Jul-2025 1.4.0 Dennis   Add trace id                                 */
+/* 31-Aug-2025 1.5.0 NickT   FCR-7417 Fix an issue: infinity tran loop     */
+/* 06-Nov-2025 1.6.0 NickT   UWP-43698 Check duplicate request             */
+/* 2026-06-15  1.7.0 JackC   UWP-57695 Add TraceID when call rdtGetXMLHttp */
+/***************************************************************************/
 CREATE OR ALTER PROC  [RDT].[rdtHandleHttp]
   @InMobile      INT ,
   @InMessage     NVARCHAR(MAX),
@@ -405,7 +406,7 @@ BEGIN
          EXEC RDT.rdtGetScreenHttp @InMobile, @cXML OUTPUT  -- Functional
 
       -- Wrap the XML with header and footer
-      EXEC RDT.rdtGetXMLHttp @InMobile, @cXML OUTPUT
+      EXEC RDT.rdtGetXMLHttp @InMobile, @cXML OUTPUT, @cTraceID
 
       -- Send out the XML
       IF RTRIM( @cXML) IS NOT NULL

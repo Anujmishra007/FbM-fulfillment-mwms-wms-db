@@ -12,11 +12,14 @@ GO
 /* Date         Ver.  Author    Purposes                                    */
 /* 20-Sep-2023  1.0   JLC042    Created base on rdtGetXML 2.0               */
 /* 03-Apr-2025  1.1.0 NLT013    UWP-32244 Extend Menu number                */
+/* 2026-05-29   1.2.0 JackC     UWP-57695 Add storer,facility data          */
+/* 2026-06-15   1.2.1 JackC     UWP-57695 Add TraceID to XML session        */
 /****************************************************************************/
 
 CREATE OR ALTER PROC RDT.rdtGetXMLHttp(
-   @nMobile INT,
-   @cXML NVARCHAR(MAX) OUTPUT
+   @nMobile  INT,
+   @cXML     NVARCHAR(MAX) OUTPUT,
+   @cTraceID NVARCHAR(100) = NULL
 )
 AS
    SET NOCOUNT ON
@@ -38,6 +41,7 @@ AS
       @cLangCode        NVARCHAR( 3),
       @nRemotePrint     INT,
       @cV_MAX           NVARCHAR( MAX),
+      @cFacility        NVARCHAR( 5), --v1.2.0
       @cStorerKey       NVARCHAR( 15),
 
       @cFocus           NVARCHAR( 20),
@@ -56,6 +60,7 @@ AS
       @cLangCode = Lang_Code,
       @nRemotePrint = RemotePrint,
       @cV_MAX = V_MAX,
+      @cFacility = Facility, --V1.2.0
       @cStorerKey = StorerKey
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
@@ -93,6 +98,13 @@ AS
          SET @cXMLSession += ' focus="' + SUBSTRING( @cXML, @iStart, ABS( @iLength - 1)) + '"'
       END
    END
+
+   --V1.2.0 start
+   SET @cXMLSession += ' Storer="' + rdt.rdtReplaceSpecialCharInXMLData(@cStorerKey) + '"'
+   SET @cXMLSession += ' Facility="' + rdt.rdtReplaceSpecialCharInXMLData(@cFacility) + '"'
+   --V1.2.0 end
+   IF @cTraceID IS NOT NULL AND @cTraceID <> ''
+      SET @cXMLSession += ' TraceID="' + rdt.rdtReplaceSpecialCharInXMLData(@cTraceID) + '"' --V1.2.1
 
    IF @cErrMsg <> ''
       SET @cXMLSession += ' status="error"'
