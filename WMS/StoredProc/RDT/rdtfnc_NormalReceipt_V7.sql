@@ -332,7 +332,7 @@ SELECT
    @cDecimalQty         = V_String46,
    @cBacktoScreen1      = V_String47,  --(Tianlei)
 
-   @cLOCCheckDigitSP    = C_String3,
+   @cLOCCheckDigitSP    = V_String48,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -5850,7 +5850,7 @@ BEGIN
       V_String46   = @cDecimalQty,
       V_String47   = @cBacktoScreen1,  --(Tianlei)
 
-      C_String3    = @cLOCCheckDigitSP,
+      V_String48    = @cLOCCheckDigitSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
