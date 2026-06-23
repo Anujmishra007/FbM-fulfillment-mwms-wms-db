@@ -50,7 +50,7 @@ BEGIN
 	
     FROM PICKDETAIL
     WHERE DROPID = RIGHT(@c_Sparm1,18)
-      AND UOM IN (1,2,6);
+      AND UOM IN ('1','2','6');
 
     IF @cOrderkey IS NULL RETURN;
 
