@@ -11,7 +11,7 @@ GO
 /*                                                                           */
 /* Purpose : Validation of SSCC Number during Receiving    UWP-59503         */
 /*                                                                           */
-/* Called By:  rdt_600ExtValARLA                                             */
+/* Called By: rdtfnc_NormalReceipt_V7 (ExtendedValidateSP for Function 600)  */
 /*                                                                           */
 /* PVCS Version: 1.0                                                         */
 /*                                                                           */
@@ -83,7 +83,7 @@ BEGIN
                   AND R.STORERKEY=RD.STORERKEY
                INNER JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) 
                   ON LLI.STORERKEY=@cStorerKey 
-                  AND LLI.ID IN (@cID)
+                  AND LLI.ID = @cID
                --WHERE RD.ReceiptKey = @cReceiptKey AND RD.ToID = @cID AND R.RECType IN ('DXDOCK','IXDOCK','PACKED','XDOCK'))   
 
                   WHERE RD.ReceiptKey = @cReceiptKey 

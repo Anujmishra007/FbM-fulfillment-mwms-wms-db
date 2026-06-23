@@ -11,7 +11,7 @@ GO
 /*                                                                           */
 /* Purpose : Validation of SSCC Number during Receiving  UWP-59503           */
 /*                                                                           */
-/* Called By:  rdt_550ExtValARLA                                             */
+/* Called By:  rdtfnc_NormalReceipt (ExtendedValidateSP for Function 550)    */
 /*                                                                           */
 /* PVCS Version: 1.0                                                         */
 /*                                                                           */
