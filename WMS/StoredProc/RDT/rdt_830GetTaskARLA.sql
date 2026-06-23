@@ -1,20 +1,19 @@
---USE [GLOWMS]
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_830GetTaskARLA]    Script Date: 6/21/2026 3:41:56 PM ******/
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /*****************************************************************************/
-/* Stored Procedure: rdt_830GetTaskARLA                   */
+/* Stored Procedure: rdt_830GetTaskARLA                                      */
 /* Creation Date: 01-04-2026                                                 */
 /* Copyright: MAERSK                                                         */
 /* Written by: KMS043                                                        */
 /*                                                                           */
-/* Purpose : RDT Should suggest highest weight item*qty first for picking using 830 Function   UWP-59502                        */
+/* Purpose : RDT Should suggest highest weight item*qty first for picking    */
+/*using 830 Function   UWP-59502                                             */
 /*                                                                           */
-/* Called By:  rdt_830GetTaskARLA                 */
+/* Called By:  rdt_830GetTaskARLA                                            */
 /*                                                                           */
 /* PVCS Version: 1.0                                                         */
 /*                                                                           */
@@ -152,13 +151,13 @@ BEGIN
       BEGIN
          -- Cross dock PickSlip
          IF @cZone IN ('XD', 'LB', 'LP')
-            IF @cPickZone<>''
+            IF @cPickZone <> ''
                SELECT TOP 1
                   @cTempSKU = PD.SKU
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-				  JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
+				      JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.LOC = @cLOC
                   AND ((@cVerifyID = '1' AND PD.ID = @cID) OR @cVerifyID = '0')
@@ -166,7 +165,7 @@ BEGIN
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.Status < @cPickConfirmStatus
-                  AND   LOC.PickZone=@cPickZone
+                  AND LOC.PickZone=@cPickZone
                ORDER BY (PD.QTY*S.STDGROSSWGT) DESC
             ELSE
                SELECT TOP 1
@@ -174,7 +173,7 @@ BEGIN
                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-				  	  JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
+				  	   JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND LOC.LOC = @cLOC
                   AND ((@cVerifyID = '1' AND PD.ID = @cID) OR @cVerifyID = '0')
@@ -186,12 +185,12 @@ BEGIN
       
          -- Discrete PickSlip
          ELSE IF @cOrderKey <> ''
-            IF @cPickZone<>''
+            IF @cPickZone <> ''
                SELECT TOP 1
                   @cTempSKU = PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-				  JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
+				      JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.LOC = @cLOC
                   AND ((@cVerifyID = '1' AND PD.ID = @cID) OR @cVerifyID = '0')
@@ -199,15 +198,14 @@ BEGIN
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.Status < @cPickConfirmStatus
-				  
-                  AND   LOC.PickZone=@cPickZone
-              ORDER BY (PD.QTY*S.STDGROSSWGT) DESC
+                  AND LOC.PickZone=@cPickZone
+               ORDER BY (PD.QTY*S.STDGROSSWGT) DESC
             ELSE
                SELECT TOP 1
                   @cTempSKU = PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-				  JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
+				      JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
                WHERE PD.OrderKey = @cOrderKey
                   AND LOC.LOC = @cLOC
                   AND ((@cVerifyID = '1' AND PD.ID = @cID) OR @cVerifyID = '0')
@@ -219,14 +217,13 @@ BEGIN
 
          -- Conso PickSlip
          ELSE IF @cLoadKey <> ''
-            IF @cPickZone<>''
+            IF @cPickZone <> ''
                SELECT TOP 1
                   @cTempSKU = PD.SKU
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-				  JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
-
+				      JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
                WHERE LPD.LoadKey = @cLoadKey  
                   AND LOC.LOC = @cLOC
                   AND ((@cVerifyID = '1' AND PD.ID = @cID) OR @cVerifyID = '0')
@@ -234,15 +231,15 @@ BEGIN
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.Status < @cPickConfirmStatus
-                  AND   LOC.PickZone=@cPickZone
+                  AND LOC.PickZone=@cPickZone
              ORDER BY (PD.QTY*S.STDGROSSWGT) DESC
             ELSE
                SELECT TOP 1
                   @cTempSKU = PD.SKU
                FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-				  JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
+				      JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
                WHERE LPD.LoadKey = @cLoadKey  
                   AND LOC.LOC = @cLOC
                   AND ((@cVerifyID = '1' AND PD.ID = @cID) OR @cVerifyID = '0')
@@ -254,13 +251,12 @@ BEGIN
          
          -- Custom PickSlip
          ELSE
-            IF @cPickZone<>''
+            IF @cPickZone <> ''
                SELECT TOP 1
                   @cTempSKU = PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-				  JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
-
+				      JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.LOC = @cLOC
                   AND ((@cVerifyID = '1' AND PD.ID = @cID) OR @cVerifyID = '0')
@@ -268,14 +264,14 @@ BEGIN
                   AND PD.QTY > 0
                   AND PD.Status <> '4'
                   AND PD.Status < @cPickConfirmStatus
-                  AND   LOC.PickZone=@cPickZone
+                  AND LOC.PickZone=@cPickZone
              ORDER BY (PD.QTY*S.STDGROSSWGT) DESC
             ELSE
                SELECT TOP 1
                   @cTempSKU = PD.SKU
                FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-				  JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
+				      JOIN dbo.SKU S WITH (NOLOCK) ON (S.SKU=PD.SKU AND S.STORERKEY=PD.STORERKEY)
                WHERE PD.PickSlipNo = @cPickSlipNo
                   AND LOC.LOC = @cLOC
                   AND ((@cVerifyID = '1' AND PD.ID = @cID) OR @cVerifyID = '0')
@@ -287,23 +283,14 @@ BEGIN
          
          IF @@ROWCOUNT = 0
          BEGIN
-            SET @nErrNo = 102051
+            SET @nErrNo = 271151
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No more task
             SET @nErrNo = -1 -- No more task
-/*
-insert into a (field, value) values ('@cOrderKey', @cOrderKey)
-insert into a (field, value) values ('@cLOC', @cLOC)
-insert into a (field, value) values ('@cVerifyID', @cVerifyID)
-insert into a (field, value) values ('@cID', @cID)
-insert into a (field, value) values ('@cTempSKU', @cTempSKU)
-insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
-*/
             GOTO Quit
          END
       
          -- Get SKU info
-         SELECT 
-            @cTempLottableCode = LottableCode
+         SELECT @cTempLottableCode = LottableCode
          FROM dbo.SKU WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND SKU = @cTempSKU
@@ -343,7 +330,7 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
             ' FROM dbo.RefKeyLookup RKL WITH (NOLOCK)' + 
                ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)' + 
                ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)' + 
-               ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+               ' JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
             ' WHERE RKL.PickSlipNo = @cPickSlipNo ' + 
                ' AND LOC.LOC = @cLOC ' + 
                CASE WHEN @cVerifyID = '1' THEN ' AND PD.ID = @cID ' ELSE '' END + 
@@ -365,7 +352,7 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
                CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END + 
             ' FROM dbo.PickDetail PD WITH (NOLOCK)' + 
                ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)' + 
-               ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+               ' JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
             ' WHERE PD.OrderKey = @cOrderKey ' + 
                ' AND LOC.LOC = @cLOC ' + 
                CASE WHEN @cVerifyID = '1' THEN ' AND PD.ID = @cID ' ELSE '' END + 
@@ -376,8 +363,8 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
                CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone=@cPickZone ' ELSE '' END +  --(yeekung01)  
                CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END + 
                CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END + 
-            CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
-            CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END 
+               CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
+               CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END 
                   
       -- Conso PickSlip
       ELSE IF @cLoadKey <> ''
@@ -386,9 +373,9 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
                ' @nQTY = ISNULL( SUM( PD.QTY), 0) ' + 
                CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END + 
             ' FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) ' + 
-               ' JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' + 
+               ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' + 
                ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' + 
-               ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+               ' JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
             ' WHERE LPD.LoadKey = @cLoadKey ' + 
                ' AND LOC.LOC = @cLOC ' + 
                CASE WHEN @cVerifyID = '1' THEN ' AND PD.ID = @cID ' ELSE '' END + 
@@ -410,7 +397,7 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
                CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END + 
             ' FROM dbo.PickDetail PD WITH (NOLOCK)' + 
                ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)' + 
-               ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+               ' JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
             ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
                ' AND LOC.LOC = @cLOC ' + 
                CASE WHEN @cVerifyID = '1' THEN ' AND PD.ID = @cID ' ELSE '' END + 
@@ -421,8 +408,8 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
                CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone=@cPickZone ' ELSE '' END +  --(yeekung01)  
                CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END + 
                CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END + 
-            CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
-            CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END 
+               CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
+               CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END 
 
       SET @cSQLParam = 
          '@cPickSlipNo NVARCHAR( 10) , ' +  
@@ -475,7 +462,6 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
          @dLottable13 = @dTempLottable13 OUTPUT,  
          @dLottable14 = @dTempLottable14 OUTPUT,  
          @dLottable15 = @dTempLottable15 OUTPUT  
---insert into a (field, value) values ('@nTempQTY', @nTempQTY)
 
       IF @nTempQTY > 0
          BREAK
@@ -489,7 +475,7 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
 
    IF @nTempQTY = 0
    BEGIN
-      SET @nErrNo = 102052
+      SET @nErrNo = 271152
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No more task
       SET @nErrNo = -1 -- No more task
       GOTO Quit
@@ -550,5 +536,14 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
       AND SKU.SKU = @cSKU
 
 Quit:
-
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS ON 
+GO
+
+GRANT EXECUTE ON [RDT].[rdt_830GetTaskARLA] TO NSQL 
+GO   
+

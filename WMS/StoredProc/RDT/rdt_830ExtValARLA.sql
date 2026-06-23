@@ -1,20 +1,18 @@
---USE [GLOWMS]
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_830ExtValARLA]    Script Date: 6/21/2026 3:42:51 PM ******/
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /*****************************************************************************/
-/* Stored Procedure: rdt_830ExtValARLA                   */
+/* Stored Procedure: rdt_830ExtValARLA                                       */
 /* Creation Date: 01-04-2026                                                 */
 /* Copyright: MAERSK                                                         */
 /* Written by: KMS043                                                        */
 /*                                                                           */
-/* Purpose : Validation of DropID during Picking by 830 Function      UWP-59502                     */
+/* Purpose : Validation of DropID during Picking by 830 Function UWP-59502   */
 /*                                                                           */
-/* Called By:  rdt_830ExtValARLA                 */
+/* Called By:  rdt_830ExtValARLA                                             */
 /*                                                                           */
 /* PVCS Version: 1.0                                                         */
 /*                                                                           */
@@ -24,7 +22,7 @@ GO
 /*                                                                           */
 /* Updates:                                                                  */
 /* Date         Author   Ver  Purpose                                        */
-/* 01-04-2026   KMS043,SYO054   1.0  Initial version created                        */
+/* 01-04-2026   KMS043,SYO054   1.0  Initial version created                 */
 /*****************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_830ExtValARLA]
@@ -68,28 +66,31 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
-   DECLARE @cPUOM        NVARCHAR( 10)
-   DECLARE @cUserName    NVARCHAR( 18)
-   DECLARE @cInField15   NVARCHAR( 60)
-   DECLARE @cLocationType  NVARCHAR( 10)
-   
+      
    IF @nFunc = 830 -- PickSKU
    BEGIN
-     IF @nStep = 2 and @nInputKey = 1
+      IF @nStep = 2 
       BEGIN
-       --  IF @nInputKey = 0 -- ENTER
-       --  BEGIN
-              IF rtrim(ltrim(@cDropID)) = ''
+         IF @nInputKey = 1
          BEGIN
-            SET @nErrNo = 217931
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropIDNeeded
+            IF RTRIM(LTRIM(@cDropID)) = ''
+            BEGIN
+               SET @nErrNo = 217931
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropIDNeeded
+            END
          END
-          --  END
-         END
-   
+      END
    END
    
 Quit:
-
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS ON 
+GO
+
+GRANT EXECUTE ON [RDT].[rdt_830ExtValARLA] TO NSQL 
+GO   
+
