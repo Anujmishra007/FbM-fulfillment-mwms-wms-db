@@ -532,6 +532,7 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
             WHEN '1' THEN Pack.PackUOM4 -- Pallet
             WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
             WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+			ELSE Pack.PackUOM3 
          END,
       @nPUOM_Div = CAST( IsNULL(
          CASE @cPUOM
@@ -541,6 +542,7 @@ insert into a (field, value) values ('@cPickConfirmStatus', @cPickConfirmStatus)
             WHEN '1' THEN Pack.Pallet
             WHEN '4' THEN Pack.OtherUnit1
             WHEN '5' THEN Pack.OtherUnit2
+			ELSE Pack.PackUOM3 
          END, 1) AS INT)
    FROM dbo.SKU WITH (NOLOCK)
       JOIN dbo.Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
