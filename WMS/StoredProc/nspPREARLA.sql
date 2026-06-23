@@ -1,5 +1,4 @@
-
-/****** Object:  StoredProcedure [dbo].[nspPREARLA]    Script Date: 6/23/2026 4:35:18 PM ******/
+/****** Object:  StoredProcedure [dbo].[nspPREARLA]    Script Date: 6/23/2026 5:12:29 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -88,10 +87,10 @@ INNER JOIN SKU S  WITH  (NOLOCK)
     ON S.SKU = LLI.SKU 
     AND S.STORERKEY = LLI.STORERKEY
 
-LEFT JOIN CUSTOMERDATETRACKER CDT  WITH  (NOLOCK) 
-    ON CDT.STORERKEY = LLI.STORERKEY
-    AND CDT.SKU = LLI.SKU
-    AND CDT.CONSIGNEEKEY = @cConsigneeKey
+LEFT JOIN AllocationTrackARLA ATR  WITH  (NOLOCK) 
+    ON ATR.STORERKEY = LLI.STORERKEY
+    AND ATR.SKU = LLI.SKU
+    AND ATR.CONSIGNEEKEY = @cConsigneeKey
 /*	(
         SELECT CONSIGNEEKEY
         FROM ORDERS (NOLOCK)
@@ -132,8 +131,9 @@ WHERE
     )*/
 
     AND (
-        CDT.LastBestBeforeDate IS NULL
-        OR TRY_CONVERT(DATETIME2(3), LA.Lottable04, 105) >= CDT.LastBestBeforeDate
+        ATR.LastBestBeforeDate IS NULL
+       -- OR TRY_CONVERT(DATETIME2(3), LA.Lottable04, 105) >= ATR.LastBestBeforeDate
+	  OR  CAST(TRY_CONVERT(DATETIME2(3), LA.Lottable04, 105) AS DATE) >= CAST(ATR.LastBestBeforeDate AS DATE)
     )
 
     AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) > 0
