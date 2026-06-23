@@ -585,7 +585,7 @@ BEGIN
       FROM PACKINFO (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
       AND CartonNo = @nCartonNo
-      AND (CartonType <> @cCartonType
+      AND (CartonType <> @cCartonType AND CartonType <> ''
       OR (CartonStatus = 'PENDAUDIT' AND CartonStatus <> @cCartonStatus)
       )
       
