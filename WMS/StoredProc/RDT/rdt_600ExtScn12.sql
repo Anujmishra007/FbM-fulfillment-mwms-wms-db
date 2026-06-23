@@ -1,17 +1,17 @@
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO 
+GO
 
-/************************************************************************/  
+/************************************************************************/
 /* Store procedure: rdt_600ExtScn12                                     */
 /* CUSTOMER : MICHELIN VN                                               */
-/* Modifications log:                                                   */  
-/*                                                                      */  
-/* Date       Rev  Author     Purposes                                  */  
+/* Modifications log:                                                   */
+/*                                                                      */
+/* Date       Rev  Author     Purposes                                  */
 /* 2026-06-16 1.0  Sreeja     FCR-13976  Created                        */
-/************************************************************************/  
-  
+/************************************************************************/
+
 CREATE OR ALTER PROC [RDT].[rdt_600ExtScn12] (
    @nMobile      INT,
    @nFunc        INT,
@@ -61,103 +61,140 @@ BEGIN
     SET ANSI_NULLS OFF
     SET CONCAT_NULL_YIELDS_NULL OFF
 
-    DECLARE 
+    DECLARE
         @cOption         NVARCHAR(1),
-        @cID             NVARCHAR(18)
+        @cID             NVARCHAR(18),
+        @cReceiptKey     NVARCHAR(10),
+        @cLOC            NVARCHAR(10),
+        @cSKU            NVARCHAR(20)
 
     SET @nErrNo = 0
     SET @cErrMsg = ''
+
+    SET @nAfterStep = @nStep
+    SET @nAfterScn = @nScn
 
     IF @nFunc = 600
     BEGIN
         -- Case 1: Coming from TO ID screen (Step 3, Scn 4032) with ENTER
         -- Show REXLOG prompt screen
-        IF @nStep = 3 
+        IF @nStep = 3
         BEGIN
-            IF @nScn = 4032 
-            BEGIN   
+            IF @nScn = 4032
+            BEGIN
                 IF @nInputKey = 1
                 BEGIN
                     -- Get TO ID from session data
                     SELECT @cID = Value FROM @tExtScnData WHERE Variable = '@cID'
-                    
-                        -- Show REXLOG prompt screen
-                    SET @nAfterScn = 6916  
-                    SET @nAfterStep = 98  
-                    SET @cOutField01 = ''   
-                    GOTO Quit
-                END
-            END
-        END
 
-        -- Case 2: On REXLOG screen (Scn 6916) with ENTER
-        -- Validate option and proceed to SKU screen
-        IF @nScn = 6916 
-        BEGIN 
-            IF @nInputKey = 1
-            BEGIN
-                -- Get user selected option from input field
-                SET @cOption = LTRIM(RTRIM(@cInField01))
-
-                -- Validate option input (must be 1 or 2)
-                IF @cOption NOT IN ('1', '2')
-                BEGIN
-                    SET @nErrNo = 270551
-                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                    -- Show REXLOG prompt screen
                     SET @nAfterScn = 6916
                     SET @nAfterStep = 98
                     SET @cOutField01 = ''
                     GOTO Quit
                 END
-
-                -- Store REXLOG flag in RDTMOBREC.C_String4 for this mobile session
-                -- 1 = YES (REXLOG check enabled), 2 = NO (REXLOG check disabled)
-                BEGIN TRY
-                    UPDATE rdt.RDTMOBREC WITH (ROWLOCK)
-                    SET C_String4 = @cOption 
-                    WHERE Mobile = @nMobile
-                END TRY
-                BEGIN CATCH
-                    SET @nErrNo = 270552
-                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- UPD Fail
-                    GOTO Quit
-                END CATCH
-
-                -- Get TO ID to pass to next screen
-                SELECT @cID = Value FROM @tExtScnData WHERE Variable = '@cID'
-                
-                -- Proceed to SKU screen (step 4, screen 4033)
-                SET @nAfterScn = 4033
-                SET @nAfterStep = 4
-                SET @cOutField01 = @cID  -- Pass TO ID to SKU screen
-                SET @cOutField02 = ''    -- Clear SKU field
-                SET @cOutField03 = ''    -- Clear SKU Desc1
-                SET @cOutField04 = ''    -- Clear SKU Desc2
-                GOTO Quit
             END
         END
 
-        -- Case 3: On REXLOG screen (Scn 6916) with ESC
-        -- Go back to TO ID screen
-        IF @nScn = 6916 
+        -- Case 2: On REXLOG screen (Scn 6916) with ENTER/ESC
+        -- Validate option and proceed to SKU screen
+        IF @nStep = 98
         BEGIN
-            IF @nInputKey = 0
+            IF @nScn = 6916
             BEGIN
-                -- Go back to TO ID screen (step 3, screen 4032)
-                SET @nAfterScn = 4032
-                SET @nAfterStep = 3
-                SET @cOutField01 = ''    -- Clear LOC field
-                SET @cOutField02 = ''    -- Clear ID field
-                GOTO Quit
+                IF @nInputKey = 1
+                BEGIN
+                    -- Get user selected option from input field
+                    SET @cOption = LTRIM(RTRIM(@cInField01))
+
+                    -- Validate option input (must be 1 or 2)
+                    IF @cOption NOT IN ('1', '2')
+                    BEGIN
+                        SET @nErrNo = 270551
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                        SET @nAfterScn = 6916
+                        SET @nAfterStep = 98
+                        SET @cOutField01 = ''
+                        GOTO Quit
+                    END
+
+                    -- Store REXLOG flag in RDTMOBREC.C_String4 for this mobile session
+                    -- 1 = YES (REXLOG check enabled), 2 = NO (REXLOG check disabled)
+                    BEGIN TRY
+                        UPDATE rdt.RDTMOBREC WITH (ROWLOCK)
+                        SET C_String4 = @cOption
+                        WHERE Mobile = @nMobile
+                    END TRY
+                    BEGIN CATCH
+                        SET @nErrNo = 270552
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- UPD Fail
+                        GOTO Quit
+                    END CATCH
+
+                    -- Get TO ID to pass to next screen
+                    SELECT @cID = Value FROM @tExtScnData WHERE Variable = '@cID'
+
+                    -- Proceed to SKU screen (step 4, screen 4033)
+                    SET @nAfterScn = 4033
+                    SET @nAfterStep = 4
+                    SET @cOutField01 = @cID  -- Pass TO ID to SKU screen
+                    SET @cOutField02 = ''    -- Clear SKU field
+                    SET @cOutField03 = ''    -- Clear SKU Desc1
+                    SET @cOutField04 = ''    -- Clear SKU Desc2
+                    GOTO Quit
+                END
+                IF @nInputKey = 0
+                BEGIN
+                    -- Go back to TO ID screen (step 3, screen 4032)
+                    SET @nAfterScn = 4032
+                    SET @nAfterStep = 3
+                    SET @cOutField01 = ''    -- Clear LOC field
+                    SET @cOutField02 = ''    -- Clear ID field
+                    GOTO Quit
+                END
             END
         END
 
-        -- Case 4: On SKU screen (Step 4, Scn 4033) with ESC
-        -- Go back to REXLOG screen
-        IF @nStep = 4 
-        BEGIN 
-            IF @nScn = 4033 
+        -- Case 3: On SKU screen (Step 4, Scn 4033) with ENTER/ESC
+        IF @nStep = 4
+        BEGIN
+            IF @nScn = 4033
             BEGIN
+                IF @nInputKey = 1
+                BEGIN
+                    -- Get session data
+                    SELECT @cID = Value FROM @tExtScnData WHERE Variable = '@cID'
+                    SELECT @cReceiptKey = Value FROM @tExtScnData WHERE Variable = '@cReceiptKey'
+                    SELECT @cLOC = Value FROM @tExtScnData WHERE Variable = '@cLOC'
+                    SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
+
+                    -- Find existing MIN DOT from previously received inventory on same pallet
+                    SELECT TOP 1 @cLottable02 = Lottable02
+                    FROM dbo.ReceiptDetail WITH (NOLOCK)
+                    WHERE ReceiptKey = @cReceiptKey
+                      AND StorerKey = @cStorerKey
+                      AND ToID = @cID
+                      AND ToLoc = @cLOC
+                      AND SKU = @cSKU
+                      AND QtyReceived > 0
+                      AND ISNULL(Lottable02, '') <> ''
+                    ORDER BY EditDate DESC
+
+                    -- Set MIN DOT value to Field 02 (first lottable position)
+                    SET @cOutField02 = ISNULL(@cLottable02, '')
+
+                    SET @cFieldAttr02 = ''    -- MIN DOT (editable)
+                    SET @cFieldAttr04 = 'O'   -- SUB INV CODE (display only)
+                    SET @cFieldAttr06 = 'O'   -- MFG DATE (display only)
+                    SET @cFieldAttr08 = 'O'   -- COO (display only)
+                    SET @cFieldAttr10 = ''    -- PCS DOT (editable)
+
+                    -- Continue to Lottable screen (Step 5)
+                    SET @nAfterStep = 5
+                    SET @nAfterScn = 3990
+                    GOTO Quit
+                END
+
                 IF @nInputKey = 0
                 BEGIN
                     -- Go back to REXLOG prompt screen
@@ -166,6 +203,42 @@ BEGIN
                     SET @cOutField01 = ''    -- Clear option field for input
                     GOTO Quit
                 END
+            END
+        END
+
+        -- Case 4: On Lottable screen (Step 5) with ENTER/ESC
+        IF @nStep = 5
+        BEGIN
+            insert into traceinfo (tracename, step1, step2, col1, col2)
+            values ('rdt_600ExtScn12_Step5', @nStep, @nInputKey, @cInField01, @cInField02)
+            IF @nInputKey = 1  -- ENTER
+            BEGIN
+                -- For ENTER, don't stay on Step 5 - let normal flow continue to validation/update SPs
+                -- Set @nAfterStep to 6 to bypass the "IF @nAfterStep = 5 GOTO Quit" check in main SP
+                SET @nAfterStep = 6
+                SET @nAfterScn = 4035  -- QTY screen (next screen in flow)
+                GOTO Quit
+            END
+
+            IF @nInputKey = 0  -- ESC - Go back to SKU screen
+            BEGIN
+                insert into traceinfo (tracename, step1, step2, col1, col2)
+                values ('rdt_600ExtScn12_aftesc', @nStep, @nScn, @cInField01, @cInField02)
+                -- Get TO ID from session data
+                SELECT @cID = Value FROM @tExtScnData WHERE Variable = '@cID'
+
+                -- Go back to SKU screen (Step 4, Screen 4033)
+                SET @nAfterScn = 4033
+                SET @nAfterStep = 4
+                SET @cOutField01 = @cID  -- Keep TO ID
+                SET @cOutField02 = ''    -- Clear SKU field
+                SET @cOutField03 = ''    -- Clear SKU Desc1
+                SET @cOutField04 = ''    -- Clear SKU Desc2
+
+                insert into traceinfo (tracename, step1, step2, col1, col2)
+                values ('rdt_600ExtScn12_ESC_Step5_AFTER', @nAfterStep, @nAfterScn, @cID, @cOutField01)
+
+                GOTO Quit
             END
         END
     END

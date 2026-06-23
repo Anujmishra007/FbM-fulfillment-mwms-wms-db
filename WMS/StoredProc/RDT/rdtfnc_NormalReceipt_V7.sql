@@ -405,6 +405,18 @@ BEGIN
 
    SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
 
+   -- Load config (FCR-13976)
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerkey)
+
+   SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
+   IF @cExtendedValidateSP = '0'
+      SET @cExtendedValidateSP = ''
+      
+   SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
+
+
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
       @cActionType = '1', -- Sign-in
@@ -3150,7 +3162,7 @@ BEGIN
          @cReceiptKey,
          @nFunc
 
-      IF @nMorePage = 1 -- Yes
+      IF @nMorePage = 1 AND @cExtScnSP = ''-- Yes
          GOTO Quit
 
       -- Enable field
