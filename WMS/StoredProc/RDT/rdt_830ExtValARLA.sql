@@ -75,7 +75,7 @@ BEGIN
          BEGIN
             IF RTRIM(LTRIM(@cDropID)) = ''
             BEGIN
-               SET @nErrNo = 217931
+               SET @nErrNo = 271201
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropIDNeeded
             END
          END
