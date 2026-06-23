@@ -116,7 +116,7 @@ AS
       -- Print label
       EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
       @cShipLabel, -- Report type
-      @tPalletLabel, -- Report params
+      @tShipLabel, -- Report params
       'rdt_593ShipLabelARLA',
       @nErrNo  OUTPUT,
       @cErrMsg OUTPUT
