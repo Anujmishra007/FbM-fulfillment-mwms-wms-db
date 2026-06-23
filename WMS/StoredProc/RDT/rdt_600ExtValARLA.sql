@@ -1,19 +1,17 @@
---USE [GLOWMS]
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_600ExtValARLA]    Script Date: 6/21/2026 4:11:50 PM ******/
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /*****************************************************************************/
-/* Stored Procedure: rdt_600ExtValARLA                   */
+/* Stored Procedure: rdt_600ExtValARLA                                       */
 /* Creation Date: 01-04-2026                                                 */
 /* Copyright: MAERSK                                                         */
 /* Written by: KMS043                                                        */
 /*                                                                           */
-/* Purpose : Validation of SSCC Number during Receiving    UWP-59503                        */
+/* Purpose : Validation of SSCC Number during Receiving    UWP-59503         */
 /*                                                                           */
-/* Called By:  rdt_600ExtValARLA                 */
+/* Called By:  rdt_600ExtValARLA                                             */
 /*                                                                           */
 /* PVCS Version: 1.0                                                         */
 /*                                                                           */
@@ -78,23 +76,41 @@ AS
             IF @cID <> ''
             BEGIN
                -- New ID
-               IF NOT EXISTS( SELECT 1 FROM ReceiptDetail RD WITH (NOLOCK)
-			   INNER JOIN RECEIPT R ON R.RECEIPTKEY=RD.RECEIPTKEY AND R.STORERKEY=RD.STORERKEY
-			   LEFT JOIN LOTXLOCXID LLI ON LLI.STORERKEY=@cStorerKey and LLI.ID  IN (@cID)
-			   --WHERE RD.ReceiptKey = @cReceiptKey AND RD.ToID = @cID AND R.RECType IN ('DXDOCK','IXDOCK','PACKED','XDOCK'))   
+               IF NOT EXISTS( SELECT 1 FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+               INNER JOIN dbo.RECEIPT R WITH (NOLOCK) 
+                  ON R.RECEIPTKEY=RD.RECEIPTKEY 
+                  AND R.STORERKEY=RD.STORERKEY
+               LEFT JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) 
+                  ON LLI.STORERKEY=@cStorerKey 
+                  AND LLI.ID IN (@cID)
+               --WHERE RD.ReceiptKey = @cReceiptKey AND RD.ToID = @cID AND R.RECType IN ('DXDOCK','IXDOCK','PACKED','XDOCK'))   
 
-			      WHERE RD.ReceiptKey = @cReceiptKey AND RD.ToID = @cID AND R.RECType IN (
-				  SELECT CODE   FROM CODELKUP WHERE STORERKEY=@cStorerKey
-				  and LISTNAME='RECTYPE' AND UDF01='Y') )  
+                  WHERE RD.ReceiptKey = @cReceiptKey 
+                  AND RD.ToID = @cID 
+                  AND R.RECType IN (
+               SELECT CODE FROM dbo.CODELKUP WITH (NOLOCK) 
+               WHERE STORERKEY=@cStorerKey
+               AND LISTNAME='RECTYPE' AND UDF01='Y') )  
               
                   BEGIN
-                     SET @nErrNo = 88888
+                     SET @nErrNo = 271351
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SSCC
-                     GOTO Fail
+                     GOTO Quit
                   END
             END
          END
       END
    END
-   Fail:
+   
    Quit:
+END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON [RDT].[rdt_600ExtValARLA] TO NSQL
+GO
+
