@@ -27,31 +27,31 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purpose                                   */
-/* 17-MAR-2026  SYO054   1.1  Dim-based @c_SuggestLoc enhancement       */
-/* 17-MAR-2026  SYO054   1.2  Exclude filled & pending-putaway locs     */
-/* 17-MAR-2026  SYO054   1.3  Update-if-exists, else insert             */
-/* 17-MAR-2026  SYO054   1.4  Join SKU.PutawayZone = LOC.PutawayZone    */
-/* 15-APR-2026  SYO054   1.5  Corrected the SKU.ItemClass & added       */
+/* 17-MAR-2026  SYO054_01   1.1  Dim-based @c_SuggestLoc enhancement       */
+/* 17-MAR-2026  SYO054_02   1.2  Exclude filled & pending-putaway locs     */
+/* 17-MAR-2026  SYO054_03   1.3  Update-if-exists, else insert             */
+/* 17-MAR-2026  SYO054_04   1.4  Join SKU.PutawayZone = LOC.PutawayZone    */
+/* 15-APR-2026  SYO054_05   1.5  Corrected the SKU.ItemClass & added       */
 /*                             weight validation. Disabled              */
 /*                             rdt_1819ExtPASP12 as it's already done   */
 /*                             during Release PA Tasks                  */
-/* 16-APR-2026  SYO054   1.6  Added a check to set @bSuccess = 0        */
+/* 16-APR-2026  SYO054_06   1.6  Added a check to set @bSuccess = 0        */
 /*                             If PalletId is NULL                      */
-/* 20-APR-2026  SYO054   1.7  Enhanced the code to consider             */
+/* 20-APR-2026  SYO054_07   1.7  Enhanced the code to consider             */
 /*                            TaskDetail.Status = 'X' (Hold)            */
-/* 20-APR-2026  SYO054   1.8  Enhanced pallet dimensions to use         */
+/* 20-APR-2026  SYO054_08   1.8  Enhanced pallet dimensions to use         */
 /*                            PalletTypeMaster and PACK if NULL         */
-/* 20-APR-2026  SYO054   1.9  Added additional update to correct        */
+/* 20-APR-2026  SYO054_09   1.9  Added additional update to correct        */
 /*                            SuggestedLoc in RFPUTAWAY & LOTXLOCXID    */
-/* 20-APR-2026  SYO054   1.10 Added logic to putaway pallet to INSP     */
+/* 20-APR-2026  SYO054_10   1.10 Added logic to putaway pallet to INSP     */
 /*                            LocationCatergory if no suggestedloc      */
-/* 20-APR-2026  SYO054   1.11 Added @bDebug flag to enable debug prints */
-/* 19-MAY-2026  SYO054   1.12 Added new parameter @cScanLocation        */
-/* 27-MAY-2026  SYO054   1.13 Restricted TASKDETAIL insert to only      */
+/* 20-APR-2026  SYO054_11   1.11 Added @bDebug flag to enable debug prints */
+/* 19-MAY-2026  SYO054_12   1.12 Added new parameter @cScanLocation        */
+/* 27-MAY-2026  SYO054_13   1.13 Restricted TASKDETAIL insert to only      */
 /*                            occur when @c_Message01 = 'AGV'.          */
 /*                            MANUAL pallets are skipped (no insert,    */
 /*                            no new key consumed).                     */
-/* 27-MAY-2026  SYO054   1.14 Look up LocationGroup of                  */
+/* 27-MAY-2026  SYO054_14   1.14 Look up LocationGroup of                  */
 /*                            RECEIPTDETAIL.ToLoc from LOC table and    */
 /*                            restrict SuggestedLoc candidates to       */
 /*                            the same LocationGroup.                   */
@@ -120,14 +120,14 @@ BEGIN
       PRINT @dbgPrefix + 'Start. PalletId=' + ISNULL(@cPalletId,'<NULL>') + ', User=' + ISNULL(@c_UserId,'<NULL>');
 
    -- Quick stub to simulate Stored procedure returns success but TaskId not found in TASKDETAIL
-   IF @cPalletId = 'AOT202604131000404'
-   BEGIN
-     IF @bDebug = 1
-        PRINT @dbgPrefix + 'Stub pallet hit. Returning TaskDetailKey=404404';
-     SET @bSuccess = 1;
-     SET @cTaskDetailKey = '404404';
-     RETURN;
-   END;
+   --IF @cPalletId = 'AOT202604131000404'
+   --BEGIN
+     --IF @bDebug = 1
+        --PRINT @dbgPrefix + 'Stub pallet hit. Returning TaskDetailKey=404404';
+     --SET @bSuccess = 1;
+     --SET @cTaskDetailKey = '404404';
+     --RETURN;
+   --END;
 
    ----------------------------------------------------------------
    -- Validate pallet id
@@ -300,13 +300,13 @@ BEGIN
       ELSE
       BEGIN
 		 IF UPPER(ISNULL(@c_ItemClass,'')) = 'CHILLED'
-              AND ISNULL(@c_UserDefine01,'') IN (SELECT DISTINCT CODE FROM CODELKUP WHERE Storerkey = 'ARLA' AND LISTNAME = 'ARLAPALTYP' AND SHORT = 'AGV')
-              AND ISNULL(@n_UserDefine02,0) < 1500
+              AND ISNULL(@c_UserDefine01,'') IN (SELECT DISTINCT CODE FROM CODELKUP WITH (NOLOCK) WHERE Storerkey = 'ARLA' AND LISTNAME = 'ARLAPALTYP' AND SHORT = 'AGV')
+              AND ISNULL(@n_UserDefine02,0) <= 1500
          BEGIN
             SET @c_Message01 = 'AGV';
          END
          ELSE IF  UPPER(ISNULL(@c_ItemClass,'')) = 'CHILLED'
-             OR ISNULL(@c_UserDefine01,'') NOT IN (SELECT DISTINCT CODE FROM CODELKUP WHERE Storerkey = 'ARLA' AND LISTNAME = 'ARLAPALTYP' AND SHORT = 'AGV')
+             OR ISNULL(@c_UserDefine01,'') NOT IN (SELECT DISTINCT CODE FROM CODELKUP WITH (NOLOCK) WHERE Storerkey = 'ARLA' AND LISTNAME = 'ARLAPALTYP' AND SHORT = 'AGV')
              OR ISNULL(@n_UserDefine02,0) > 1500
          BEGIN
             SET @c_Message01 = 'MANUAL';
