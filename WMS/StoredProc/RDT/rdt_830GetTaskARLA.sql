@@ -1,4 +1,5 @@
-
+USE [GLOWMS]
+GO
 /****** Object:  StoredProcedure [RDT].[rdt_830GetTaskARLA_SUN]    Script Date: 6/24/2026 12:37:41 PM ******/
 SET ANSI_NULLS OFF
 GO
@@ -620,12 +621,3 @@ Quit:
 
 END
 
-
-   GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
-GO
-
-GRANT EXECUTE ON [RDT].[rdt_830GetTaskARLA] TO NSQL 
-GO   
