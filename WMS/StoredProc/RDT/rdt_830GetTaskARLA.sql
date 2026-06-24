@@ -96,21 +96,20 @@ BEGIN
    DECLARE @dTempLottable14    DATETIME
    DECLARE @dTempLottable15    DATETIME
    DECLARE @cTempLottableCode  NVARCHAR(30)
- 
-	IF EXISTS OBJECT_ID('tempdb..#SkippedSKU') IS NOT NULL DROP TABLE #SkippedSKU
+
+
+   IF EXISTS OBJECT_ID('tempdb..#SkippedSKU') IS NOT NULL DROP TABLE #SkippedSKU
    IF EXISTS OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
-   -- Temp table 1: SKUs already tried with no QTY result
    CREATE TABLE #SkippedSKU (SKU NVARCHAR(20) NOT NULL PRIMARY KEY)
 
-   -- Temp table 2: pre-computed weight per SKU for the pickslip
-   -- Weight computed ONCE before loop, outside ANSI_NULLS influence
+  
    CREATE TABLE #SKUWeight
    (
        SKU         NVARCHAR(20) NOT NULL PRIMARY KEY,
        TotalWeight FLOAT        NOT NULL DEFAULT 0
    )
 
-   -- Assign inputs to temp variables
+  
    SET @cTempSKU          = @cSKU
    SET @nTempQTY          = 0
    SET @cTempLottable01   = @cLottable01
