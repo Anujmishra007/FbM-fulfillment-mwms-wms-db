@@ -62,7 +62,7 @@ AS
 
    -- Check Receipt Key
    SELECT TOP 1 @cSSCC = RD.ToId
-   FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
+   FROM dbo.PODETAIL RD WITH (NOLOCK)
    WHERE RD.StorerKey = @cStorerKey
      AND RD.ToId = @cParam1
   
