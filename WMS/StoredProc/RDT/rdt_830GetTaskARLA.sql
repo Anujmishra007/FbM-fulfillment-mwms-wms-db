@@ -1,4 +1,3 @@
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -98,9 +97,9 @@ BEGIN
    DECLARE @cTempLottableCode  NVARCHAR(30)
 
 
-   DROP TABLE IF EXISTS #SkippedSKU
-   DROP TABLE IF EXISTS #SKUWeight
-DROP TABLE IF EXISTS #SKUWeight;
+   DROP TABLE IF EXISTS #SkippedSKU;
+   DROP TABLE IF EXISTS #SKUWeight;
+
 
    CREATE TABLE #SkippedSKU (SKU NVARCHAR(20) NOT NULL PRIMARY KEY)
 
@@ -169,10 +168,10 @@ DROP TABLE IF EXISTS #SKUWeight;
               TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                       
                        THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                       
                        THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
@@ -192,22 +191,7 @@ DROP TABLE IF EXISTS #SKUWeight;
         AND PD.Status     <> '4'
         AND PD.Status      < @cPickConfirmStatus
       GROUP BY PD.SKU;
-	/* ORDER BY  SUM(
-              TRY_CAST(PD.Qty AS FLOAT) *
-              CASE
-                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
-                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
-                  ELSE 0
-              END
-          )  DESC;  */
+
 
    -- Discrete PickSlip
    ELSE IF @cOrderKey <> ''
@@ -218,11 +202,12 @@ DROP TABLE IF EXISTS #SKUWeight;
               TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                       
                        THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                      
                        THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
                   WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
@@ -240,24 +225,7 @@ DROP TABLE IF EXISTS #SKUWeight;
         AND PD.Status   <> '4'
         AND PD.Status    < @cPickConfirmStatus
       GROUP BY PD.SKU;
-	 /* ORDER BY SUM(
-              TRY_CAST(PD.Qty AS FLOAT) *
-              CASE
-                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
-                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
-                  ELSE 0
-              END
-          )  DESC;  */
-
-   -- Conso PickSlip
+	
    ELSE IF @cLoadKey <> ''
       INSERT INTO #SKUWeight (SKU, TotalWeight)
       SELECT
@@ -266,10 +234,10 @@ DROP TABLE IF EXISTS #SKUWeight;
               CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                     
                        THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                       
                        THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
@@ -289,22 +257,7 @@ DROP TABLE IF EXISTS #SKUWeight;
         AND PD.Status   <> '4'
         AND PD.Status    < @cPickConfirmStatus
       GROUP BY PD.SKU;
-	/*  ORDER BY SUM(
-              CAST(PD.Qty AS FLOAT) *
-              CASE
-                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
-                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
-                  ELSE 0
-              END
-          )  DESC;  */
+	
    -- Custom PickSlip
    ELSE
       INSERT INTO #SKUWeight (SKU, TotalWeight)
@@ -314,10 +267,10 @@ DROP TABLE IF EXISTS #SKUWeight;
               TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                       
                        THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                     
                        THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
@@ -336,23 +289,7 @@ DROP TABLE IF EXISTS #SKUWeight;
         AND PD.Status    <> '4'
         AND PD.Status     < @cPickConfirmStatus
       GROUP BY PD.SKU
-	/*  ORDER BY SUM(
-              TRY_CAST(PD.Qty AS FLOAT) *
-              CASE
-                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
-                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
-                       AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
-                  ELSE 0
-              END
-          )  DESC;  */
-   -- No SKUs found at all
+	
    IF NOT EXISTS (SELECT 1 FROM #SKUWeight)
    BEGIN
       SET @nErrNo  = 271151
@@ -622,4 +559,3 @@ Quit:
    IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
 
 END
-
