@@ -1,7 +1,6 @@
+exec rdt.rdtDropMsg  271401, 271450
 
-exec rdt.rdtDropMsg 3735603, 3735604, 3735605, 3735608 
-
-execute rdt.rdtAddMsg 3735603, 0, 'NoOrderFound',   'us_english', 1650
-execute rdt.rdtAddMsg 3735604, 0, 'NoMBOLCreated',   'us_english', 1650
-execute rdt.rdtAddMsg 3735605, 0, 'PalletTempNotCapture',   'us_english', 1650
-execute rdt.rdtAddMsg 3735608, 0, 'PalletAlreadyScanned',   'us_english', 1650
+execute rdt.rdtAddMsg 271401, 10, '271401^PalletAlreadyScanned',   'us_english', 1650
+execute rdt.rdtAddMsg 271402, 10, '271402^PalletTempNotCapture',   'us_english', 1650
+execute rdt.rdtAddMsg 271403, 10, '271403^MBOLNotFound',           'us_english', 1650
+execute rdt.rdtAddMsg 271404, 10, '271404^PalletTempNotCapture',   'us_english', 1650
