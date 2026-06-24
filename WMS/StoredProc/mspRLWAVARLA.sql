@@ -748,6 +748,13 @@ END
    BEGIN
       CLOSE CUR_ID
       DEALLOCATE CUR_ID   
+
+   END
+ IF CURSOR_STATUS('LOCAL', 'CUR_TRANSMIT') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_TRANSMIT
+      DEALLOCATE CUR_TRANSMIT  
+
    END
 
    IF @n_Continue = 3  -- Error Occured - Process And Return
