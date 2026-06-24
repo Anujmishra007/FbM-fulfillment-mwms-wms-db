@@ -106,9 +106,9 @@ BEGIN
 
       -- Use MBOL key provided by caller (rdtfnc_Scan_Pallet_To_Door) to avoid inconsistencies
 
-      SET @cMBOL4Pallet = @cMbolKey
-
-      ORDER BY MbolKey
+      SELECT @cMBOL4Pallet = MbolKey
+      FROM dbo.MBOLDetail WITH (NOLOCK)
+      WHERE OrderKey = @cOrderKey
 
       IF ISNULL(@cMBOL4Pallet, '') = ''
       BEGIN
@@ -116,16 +116,28 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- MBOL key not found
          GOTO Quit
       END
-
-      -- Count distinct pallets with temperature records logged
+      
+      SELECT @nPalletTempCount = COUNT(DISTINCT TL.PalletId)
       FROM dbo.TemperatureLog TL WITH (NOLOCK)
-      AND   TL.MbolKey   = @cMBOL4Pallet
+      INNER JOIN dbo.MBOLDetail MD WITH (NOLOCK) ON TL.MbolKey = MD.MbolKey
+      WHERE TL.StorerKey = @cStorerKey
       AND   MD.MbolKey   = @cMBOL4Pallet
 
+      -- Count distinct pallets with temperature records logged
       IF ISNULL(@nPalletTempCount, 0) < @nMinPalletTempReq
       BEGIN
+         -- Insert trace record for temperature capture failure
+         BEGIN TRY
+            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Col1, Col2, Col3)
+            VALUES ('SCNPT2DOOR_TEMP', GETDATE(), @cPalletID, @cMBOL4Pallet, 'TempNotCaptured')
+         END TRY
+         BEGIN CATCH
+            -- Silently handle TRACEINFO insert failure;
+            -- the validation error below will still be raised
+         END CATCH
+         -- Insufficient pallet temperatures captured - block with error
          SET @nErrNo  = 271404
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- PalletTempNotCapture
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
          GOTO Quit
       END
    END
