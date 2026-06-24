@@ -25,7 +25,7 @@ GO
 /* Date         Author   Ver  Purpose                                        */
 /* 01-04-2026   KMS043   1.0  Initial version created                        */
 /*****************************************************************************/
-CREATE OR ALTER     PROCEDURE [RDT].[rdt_830GetTaskARLA]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_830GetTaskARLA]
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR(3),
