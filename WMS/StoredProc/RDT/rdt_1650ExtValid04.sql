@@ -47,7 +47,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1650ExtValid04] (
    @cPalletID        NVARCHAR(20),              -- Scanned pallet identifier
 
    @cMbolKey         NVARCHAR(10),              -- MBOL key - required by caller
-   @cDoor            NVARCHAR(20),              -- Door assignment - required by callerExpand commentComment on lines R45 to R50Resolved
+   @cDoor            NVARCHAR(20),              -- Door assignment - required by caller
    @cOption          NVARCHAR(1),               -- Option (close truck) - required by caller
    @nAfterStep       INT,                       -- After step - required by caller
    @nErrNo           INT           OUTPUT,      -- Output: error number (0 = success)
