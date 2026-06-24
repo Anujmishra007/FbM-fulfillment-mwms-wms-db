@@ -1,5 +1,4 @@
-USE [GLOWMS]
-GO
+
 /****** Object:  StoredProcedure [RDT].[rdt_830GetTaskARLA]    Script Date: 6/24/2026 12:07:42 PM ******/
 SET ANSI_NULLS OFF
 GO
@@ -558,3 +557,11 @@ Quit:
    IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
 
 END
+   GO
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS ON 
+GO
+
+GRANT EXECUTE ON [RDT].[rdt_830GetTaskARLA] TO NSQL 
+GO   
