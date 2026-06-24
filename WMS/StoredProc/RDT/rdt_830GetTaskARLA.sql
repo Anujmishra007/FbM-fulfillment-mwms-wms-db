@@ -96,9 +96,9 @@ BEGIN
    DECLARE @dTempLottable15    DATETIME
    DECLARE @cTempLottableCode  NVARCHAR(30)
  
-	IF OBJECT_ID('tempdb..#SkippedSKU') IS NOT NULL 
+   IF OBJECT_ID('tempdb..#SkippedSKU') IS NOT NULL
       DROP TABLE #SkippedSKU
-   IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL 
+   IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL
       DROP TABLE #SKUWeight
    -- Temp table 1: SKUs already tried with no QTY result
    CREATE TABLE #SkippedSKU (SKU NVARCHAR(20) NOT NULL PRIMARY KEY)
