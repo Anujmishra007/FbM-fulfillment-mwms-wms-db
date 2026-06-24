@@ -233,13 +233,15 @@ BEGIN
       SELECT
           PD.SKU,
           SUM(
-                  WHEN ISNULL(NULLIF(SC.USERDEFINE01, ''), '0') <> '0'
-                       AND TRY_CAST(SC.USERDEFINE01 AS FLOAT) IS NOT NULL
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01, ''), '0') <> '0'
+
+                       AND TRY_CAST(SC.USERDEFINE01 AS FLOAT) IS NOT NULL
+
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01, ''), '0') <> '0' AND TRY_CAST(SC.USERDEFINE01 AS FLOAT) IS NOT NULL
-                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                       
                        THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02, ''), '0') <> '0' AND TRY_CAST(SC.USERDEFINE02 AS FLOAT) IS NOT NULL
-                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                       
                        THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
