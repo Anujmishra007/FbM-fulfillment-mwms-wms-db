@@ -53,45 +53,35 @@ CREATE OR ALTER PROC [RDT].[ARLASTDExtValid01] (
    @cErrMsg          NVARCHAR(20)  OUTPUT       -- Output: error message text
 )
 AS
-SET NOCOUNT ON
-SET QUOTED_IDENTIFIER OFF
-SET ANSI_NULLS OFF
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
    -- Local variable declarations
    DECLARE @cFacility          NVARCHAR(5),     -- Facility code from mobile device record
            @cOrderKey          NVARCHAR(10),     -- Order key linked to the scanned pallet
            @cMBOL4Pallet       NVARCHAR(10),     -- MBOL key associated with the pallet's order
            @nPalletTempCount   INT,              -- Count of distinct pallets with temperatures logged
            @nMinPalletTempReq  INT               -- Minimum required pallet temperature count from config
+
    -- Initialize error output to 0 (no error / success)
    SET @nErrNo = 0
-   -- ============================================================
+
    -- Fetch Facility from RDTMOBREC
-   -- The facility is determined by the mobile device being used.
-   -- ============================================================
    SELECT @cFacility = Facility
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE MOBILE = @nMobile
-   -- ============================================================
-   -- Get minimum required pallet temperature count from config
-   -- Uses RDTGetConfig to look up 'MinPalletTempCount' setting.
-   -- Defaults to 1 if not configured or not a valid integer.
-   -- ============================================================
+
    SET @nMinPalletTempReq = ISNULL(
-       TRY_CAST(rdt.RDTGetConfig(@nFunc, 'MinPalletTempCount', @cStorerKey) AS INT),
-       1)
-   -- ============================================================
-   -- Check current step and execute corresponding validation
-   -- ============================================================
-   ----------------------------------------------------------------
+      TRY_CAST(rdt.RDTGetConfig(@nFunc, 'MinPalletTempCount', @cStorerKey) AS INT),
+      1)
+
    -- Step 1: Validate pallet scan (duplicate check + temperature)
-   ----------------------------------------------------------------
    IF @nStep = 1
    BEGIN
-      -- =========================================================
       -- VALIDATION 1: Duplicate pallet scan check
-      -- Ensures the pallet has not already been scanned to door
-      -- by checking RDT.rdtSTDEventLog for a matching record.
-      -- =========================================================
       IF EXISTS (
          SELECT 1
          FROM RDT.rdtSTDEventLog WITH (NOLOCK)
@@ -100,78 +90,65 @@ SET ANSI_NULLS OFF
          AND   StorerKey = @cStorerKey
       )
       BEGIN
-         -- Pallet already scanned to door - block with error
-         SET @nErrNo  = 271402
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         SET @nErrNo  = 271401
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- PalletTempNotCapture
          GOTO Quit
       END
-      -- =========================================================
+
       -- VALIDATION 2: Temperature capture check
-      -- Step 2a: Look up the OrderKey from PickDetail for the
-      --          scanned pallet (only active pick lines, Status < 9)
-      -- =========================================================
       SELECT TOP 1 @cOrderKey = OrderKey
       FROM dbo.PickDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND   ID = @cPalletID
       AND   [Status] < '9'
+
       IF ISNULL(@cOrderKey, '') = ''
       BEGIN
-         -- No order found for the scanned pallet - block with error
-         SET @nErrNo  = 202001
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         SET @nErrNo  = 271402
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- PalletTempNotCapture
          GOTO Quit
       END
-      -- =========================================================
-      -- Step 2b: Get the MBOL key for the scanned pallet's order
-      -- =========================================================
+
+      -- Get the MBOL key for the scanned pallet's order
       SELECT @cMBOL4Pallet = MbolKey
       FROM dbo.MBOLDetail WITH (NOLOCK)
       WHERE OrderKey = @cOrderKey
+
       IF ISNULL(@cMBOL4Pallet, '') = ''
       BEGIN
-         -- No MBOL created for the order - block with error
-         SET @nErrNo  = 202002
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-         GOTO Quit
+         SET @nErrNo  = 271403
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- MBOL key not found
       END
-      -- =========================================================
-      -- Step 2c: Count distinct pallets with temperature records
-      --          logged for the MBOL key and storer
-      -- =========================================================
+
+      -- Count distinct pallets with temperature records logged
       SELECT @nPalletTempCount = COUNT(DISTINCT TL.PalletId)
       FROM dbo.TemperatureLog TL WITH (NOLOCK)
       INNER JOIN dbo.MBOLDetail MD WITH (NOLOCK) ON TL.MbolKey = MD.MbolKey
       WHERE TL.StorerKey = @cStorerKey
       AND   MD.MbolKey   = @cMBOL4Pallet
-      -- =========================================================
-      -- Step 2d: Compare count against minimum required.
-      --          If insufficient, log a TRACEINFO record and block.
-      -- =========================================================
+
       IF ISNULL(@nPalletTempCount, 0) < @nMinPalletTempReq
       BEGIN
-         -- Insert trace record for temperature capture failure
          BEGIN TRY
             INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Col1, Col2, Col3)
             VALUES ('SCNPT2DOOR_TEMP', GETDATE(), @cPalletID, @cMBOL4Pallet, 'TempNotCaptured')
          END TRY
          BEGIN CATCH
-            -- Silently handle TRACEINFO insert failure;
-            -- the validation error below will still be raised
+            SET @nErrNo  = 271404
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Error logging temperature capture
          END CATCH
-         -- Insufficient pallet temperatures captured - block with error
-         SET @nErrNo  = 271401
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
          GOTO Quit
       END
    END
-   -- For all other steps: no validation logic, allow scan to proceed
+
 QUIT:
+END
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
 GRANT EXECUTE ON rdt.ARLASTDExtValid01 TO NSQL
 GO
 
