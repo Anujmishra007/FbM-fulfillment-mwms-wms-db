@@ -3,20 +3,21 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_1764CreateTask17                                      */
-/* Copyright      : Maersk                                                    */
-/*                                                                            */
-/* Purpose: UK Columbia                                                       */
-/*                                                                            */
-/* Called from:                                                               */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev    Author     Purposes                                      */
-/* 2026-01-15 1.0.0  JCH507     FCR-10031 created on base logic               */
-/* 2026-03-04 1.0.1  JCH507     FCR-10031 V1.4,1.5: Logic to create ASTMV     */
-/******************************************************************************/
+/************************************************************************************/
+/* Store procedure: rdt_1764CreateTask17                                            */
+/* Copyright      : Maersk                                                          */
+/*                                                                                  */
+/* Purpose: UK Columbia                                                             */
+/*                                                                                  */
+/* Called from:                                                                     */
+/*                                                                                  */
+/* Modifications log:                                                               */
+/*                                                                                  */
+/* Date       Rev    Author     Purposes                                            */
+/* 2026-01-15 1.0.0  JCH507     FCR-10031 created on base logic                     */
+/* 2026-03-04 1.0.1  JCH507     FCR-10031 V1.4,1.5: Logic to create ASTMV           */
+/* 2026-06-24 1.0.2  JCH507     UWP-59810 Only create new tasks if task status = 9  */
+/************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764CreateTask17] (
    @nMobile        INT,
@@ -114,6 +115,7 @@ BEGIN
    WHERE ListKey = @cListKey
       AND TaskType = 'RPF' -- V1.0.1
       AND TransitCount = 0
+      AND Status = '9' -- V1.0.2
       AND Qty > 0
       AND ReasonKey = '' ----V1.0.0 do not include full short task 
 
@@ -231,7 +233,7 @@ BEGIN
       -- generate replen to task if:
       -- 1) Pallet have multi final LOC and
       -- 2) Pallet not contain INDUCTION TransitLOC
-      IF (SELECT COUNT( DISTINCT FinalLOC) FROM dbo.TaskDetail WITH (NOLOCK) WHERE ListKey = @cListKey AND TransitCount = 0) > 1 
+      IF (SELECT COUNT( DISTINCT FinalLOC) FROM dbo.TaskDetail WITH (NOLOCK) WHERE ListKey = @cListKey AND Status = '9' AND TransitCount = 0) > 1 
          AND NOT EXISTS( SELECT 1 
             FROM @tTask Task 
                JOIN dbo.LOC WITH (NOLOCK) ON (Task.TransitLOC = LOC.LOC)
@@ -249,6 +251,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE ListKey = @cListKey
                AND TaskType = 'RPF' -- V1.0.1
+               AND Status = '9' --V1.0.2
                AND TransitCount = 0 -- Original task
                AND Qty > 0
                AND ReasonKey = '' -- do not include full short task 
@@ -358,6 +361,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE ListKey = @cListKey
                AND TaskType = 'RPF' -- V1.0.1
+               AND Status = '9' -- V1.0.2
                AND TransitCount = 0 -- Original task
                AND Qty > 0
                AND ReasonKey = '' -- do not include full short task 
