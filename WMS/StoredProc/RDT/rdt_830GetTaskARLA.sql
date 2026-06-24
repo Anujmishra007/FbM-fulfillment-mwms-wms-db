@@ -559,4 +559,3 @@ Quit:
    IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
 
 END
-  
