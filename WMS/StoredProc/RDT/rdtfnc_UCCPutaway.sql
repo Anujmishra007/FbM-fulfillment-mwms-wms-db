@@ -49,6 +49,7 @@
 /* 26-Aug-2025 3.1.0    Dennis   UWP-40042 Fix Bug                           */
 /* 23-Oct-2025 3.2      Ung      FCR-8111 Add 2D UCC barcode                 */
 /*                               Add suggest alternate LOC                   */
+/* 23-Jun-2026 3.3.0    Jack     FCR-14022 Add LOC check digit in step 2     */
 /*****************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_UCCPutaway] (  
@@ -113,7 +114,10 @@ DECLARE
    @cPAMatchSuggestLOC  NVARCHAR( 1),     -- (cc02)  
    @cNotDisplayPAZone   NVARCHAR( 1),
    @cPutawayMixSKUUCC   NVARCHAR( 1),     -- (james06)  
-   @cDecodeSP           NVARCHAR( 20),    ---(ShaoAn)  
+   @cDecodeSP           NVARCHAR( 20),    ---(ShaoAn)
+   @cLOCCheckDigitSP    NVARCHAR( 20),    -- FCR-14022
+   @cCheckDigitLOC      NVARCHAR( 20),    -- FCR-14022
+
    @cLottable01         NVARCHAR( 18),
    @cLottable02         NVARCHAR( 18),
    @cLottable03         NVARCHAR( 18),
@@ -193,8 +197,9 @@ SELECT
    @cNotDisplayPAZone   = V_String27,  
    @cDecodeSP           = V_String28, --(ShaoAn) 
    @cExtScnSP           = V_String29,
+   @cLOCCheckDigitSP    = V_String30,  -- FCR-14022
 
-   @nPABookingKey = V_Integer1,  
+   @nPABookingKey = V_Integer1,
   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,  
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,  
@@ -275,7 +280,9 @@ BEGIN
    SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtScnSP = '0'
       SET @cExtScnSP = ''
-   -- reset all output  
+   SET @cLOCCheckDigitSP = rdt.RDTGetConfig( @nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-14022
+
+   -- reset all output
    SET @cUCCNo = ''  
   
    -- Init screen  
@@ -669,6 +676,22 @@ BEGIN
          
          GOTO Quit
       END
+
+      -- FCR-14022
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         SET @cCheckDigitLOC = @cToLOC
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC OUTPUT,
+            @nErrNo         OUTPUT,
+            @cErrMsg        OUTPUT
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_2_Fail
+         END
+         SET @cToLOC = @cCheckDigitLOC
+      END
+      -- FCR-14022
 
       IF NOT EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility)  
       BEGIN  
@@ -1706,6 +1729,7 @@ BEGIN
       V_String27 = @cNotDisplayPAZone,  
       V_String28 = @cDecodeSP,
       V_String29 = @cExtScnSP,
+      V_String30 = @cLOCCheckDigitSP,  -- FCR-14022
 
       V_Integer1 = @nPABookingKey,  
   

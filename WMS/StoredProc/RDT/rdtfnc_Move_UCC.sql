@@ -42,6 +42,7 @@ GO
 /* 2024-11-07 3.1  PXL009   Merged 2.9 from v0 branch                   */
 /* 2025-07-09 3.2.0 NickT   !!!Cutover, use V0 REPO for new development */
 /* 2026-04-08 3.3.0 NickT   FCR-11631 Add ExtScnSP                      */
+/* 2026-06-23 3.4.0 Jack    FCR-14022 Add LOC check digit               */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_UCC] (
@@ -107,6 +108,8 @@ DECLARE
    @cExtScnSP           NVARCHAR( 20),
    @tExtScnData         VariableTable,
    @nAction             INT,
+   @cLOCCheckDigitSP    NVARCHAR( 20),    -- FCR-14022
+   @cCheckDigitLOC      NVARCHAR( 20),    -- FCR-14022
 
    @nTotalUCC  INT,
    @nPage      INT,
@@ -195,6 +198,7 @@ SELECT
    @cDecodeSP           = V_String24,
 
    @cExtScnSP          = V_String25,
+   @cLOCCheckDigitSP   = V_String26,  -- FCR-14022
 
    @nTotalUCC  = V_Integer1,
    @nPage      = V_Integer2,
@@ -282,6 +286,7 @@ BEGIN
    SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtScnSP = '0'
       SET @cExtScnSP = ''
+   SET @cLOCCheckDigitSP = rdt.RDTGetConfig( @nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-14022
 
    -- UCC status allowed
 	SET @cUCCStatus = '1' -- Received
@@ -957,6 +962,20 @@ BEGIN
                GOTO Step_ToLOC_Fail
       END
 
+      -- FCR-14022
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         SET @cCheckDigitLOC = @cToLOC
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC OUTPUT,
+            @nErrNo         OUTPUT,
+            @cErrMsg        OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_ToLOC_Fail
+         SET @cToLOC = @cCheckDigitLOC
+      END
+      -- FCR-14022
+
       IF @cLOCLookUP <> ''
       BEGIN
          EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
@@ -1392,6 +1411,20 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step_FromLOC_Fail
       END
+
+      -- FCR-14022
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         SET @cCheckDigitLOC = @cFromLOC
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC OUTPUT,
+            @nErrNo         OUTPUT,
+            @cErrMsg        OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_FromLOC_Fail
+         SET @cFromLOC = @cCheckDigitLOC
+      END
+      -- FCR-14022
 
       IF @cLOCLookUP <> ''
       BEGIN
@@ -1986,6 +2019,7 @@ BEGIN
       V_String23 = @cLOCLookUP,
       V_String24 = @cDecodeSP,
       V_String25 = @cExtScnSP,
+      V_String26 = @cLOCCheckDigitSP,  -- FCR-14022
 
       V_Integer1 = @nTotalUCC,
       V_Integer2 = @nPage,
