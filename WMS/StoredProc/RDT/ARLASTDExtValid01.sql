@@ -91,7 +91,7 @@ BEGIN
       )
       BEGIN
          SET @nErrNo  = 271401
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- PalletTempNotCapture
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Pallet already scanned to door
          GOTO Quit
       END
 
@@ -118,6 +118,7 @@ BEGIN
       BEGIN
          SET @nErrNo  = 271403
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- MBOL key not found
+         GOTO Quit
       END
 
       -- Count distinct pallets with temperature records logged
@@ -129,14 +130,8 @@ BEGIN
 
       IF ISNULL(@nPalletTempCount, 0) < @nMinPalletTempReq
       BEGIN
-         BEGIN TRY
-            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Col1, Col2, Col3)
-            VALUES ('SCNPT2DOOR_TEMP', GETDATE(), @cPalletID, @cMBOL4Pallet, 'TempNotCaptured')
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo  = 271404
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Error logging temperature capture
-         END CATCH
+         SET @nErrNo  = 271404
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- PalletTempNotCapture
          GOTO Quit
       END
    END
