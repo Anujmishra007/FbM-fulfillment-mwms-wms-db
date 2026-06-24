@@ -1,5 +1,4 @@
 
-/****** Object:  StoredProcedure [RDT].[rdt_830GetTaskARLA]    Script Date: 6/24/2026 12:37:41 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
