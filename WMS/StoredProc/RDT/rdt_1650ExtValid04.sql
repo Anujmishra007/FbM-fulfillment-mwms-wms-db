@@ -88,7 +88,7 @@ BEGIN
          SET @nErrNo  = 271401
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Pallet already scanned to door
          GOTO Quit
-      ENDExpand commentComment on lines R88 to R91Resolved
+      END
 
       -- VALIDATION 2: Temperature capture check
       SELECT TOP 1 @cOrderKey = OrderKey
@@ -102,7 +102,7 @@ BEGIN
          SET @nErrNo  = 271402
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- PalletTempNotCapture
          GOTO Quit
-      ENDExpand commentComment on lines R102 to R105Resolved
+      END
 
       -- Use MBOL key provided by caller (rdtfnc_Scan_Pallet_To_Door) to avoid inconsistencies
 
@@ -115,7 +115,7 @@ BEGIN
          SET @nErrNo  = 271403
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- MBOL key not found
          GOTO Quit
-      ENDExpand commentComment on lines R113 to R118Resolved
+      END
 
       -- Count distinct pallets with temperature records logged
       FROM dbo.TemperatureLog TL WITH (NOLOCK)
@@ -127,12 +127,12 @@ BEGIN
          SET @nErrNo  = 271404
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- PalletTempNotCapture
          GOTO Quit
-      ENDExpand commentComment on lines R125 to R130Resolved
+      END
    END
 
 QUIT:
 END
-GOExpand commentComment on line R135Resolved
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
