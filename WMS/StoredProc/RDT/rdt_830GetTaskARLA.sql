@@ -191,8 +191,8 @@ DROP TABLE IF EXISTS #SKUWeight;
         AND PD.QTY         > 0
         AND PD.Status     <> '4'
         AND PD.Status      < @cPickConfirmStatus
-      GROUP BY PD.SKU
-	 ORDER BY  SUM(
+      GROUP BY PD.SKU;
+	/* ORDER BY  SUM(
               TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
@@ -207,7 +207,7 @@ DROP TABLE IF EXISTS #SKUWeight;
                   WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
-          )  DESC;  
+          )  DESC;  */
 
    -- Discrete PickSlip
    ELSE IF @cOrderKey <> ''
@@ -239,8 +239,8 @@ DROP TABLE IF EXISTS #SKUWeight;
         AND PD.QTY       > 0
         AND PD.Status   <> '4'
         AND PD.Status    < @cPickConfirmStatus
-      GROUP BY PD.SKU
-	  ORDER BY SUM(
+      GROUP BY PD.SKU;
+	 /* ORDER BY SUM(
               TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
@@ -255,7 +255,7 @@ DROP TABLE IF EXISTS #SKUWeight;
                   WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
-          )  DESC;  
+          )  DESC;  */
 
    -- Conso PickSlip
    ELSE IF @cLoadKey <> ''
@@ -288,8 +288,8 @@ DROP TABLE IF EXISTS #SKUWeight;
         AND PD.QTY       > 0
         AND PD.Status   <> '4'
         AND PD.Status    < @cPickConfirmStatus
-      GROUP BY PD.SKU
-	  ORDER BY SUM(
+      GROUP BY PD.SKU;
+	/*  ORDER BY SUM(
               CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
@@ -304,7 +304,7 @@ DROP TABLE IF EXISTS #SKUWeight;
                   WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
-          )  DESC;  
+          )  DESC;  */
    -- Custom PickSlip
    ELSE
       INSERT INTO #SKUWeight (SKU, TotalWeight)
@@ -336,7 +336,7 @@ DROP TABLE IF EXISTS #SKUWeight;
         AND PD.Status    <> '4'
         AND PD.Status     < @cPickConfirmStatus
       GROUP BY PD.SKU
-	  ORDER BY SUM(
+	/*  ORDER BY SUM(
               TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
@@ -351,7 +351,7 @@ DROP TABLE IF EXISTS #SKUWeight;
                   WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
-          )  DESC;  
+          )  DESC;  */
    -- No SKUs found at all
    IF NOT EXISTS (SELECT 1 FROM #SKUWeight)
    BEGIN
