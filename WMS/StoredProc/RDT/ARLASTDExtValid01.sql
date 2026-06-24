@@ -44,7 +44,7 @@ CREATE OR ALTER PROC [RDT].[ARLASTDExtValid01] (
    @nStep            INT,                       -- Current step in the scan workflow
    @nInputKey        INT,                       -- Input key (ENTER=1, ESC=0) - required by caller
    @cStorerKey       NVARCHAR(15),              -- Storer key to identify the customer/storer
-   @cPalletID        NVARCHAR(18),              -- Scanned pallet identifier
+   @cPalletID        NVARCHAR(20),              -- Scanned pallet identifier
    @cMbolKey         NVARCHAR(10),              -- MBOL key - required by caller
    @cDoor            NVARCHAR(20),              -- Door assignment - required by caller
    @cOption          NVARCHAR(1),               -- Option (close truck) - required by caller
@@ -60,20 +60,13 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    -- Local variable declarations
-   DECLARE @cFacility          NVARCHAR(5),     -- Facility code from mobile device record
-           @cOrderKey          NVARCHAR(10),     -- Order key linked to the scanned pallet
+   DECLARE @cOrderKey          NVARCHAR(10),     -- Order key linked to the scanned pallet
            @cMBOL4Pallet       NVARCHAR(10),     -- MBOL key associated with the pallet's order
            @nPalletTempCount   INT,              -- Count of distinct pallets with temperatures logged
            @nMinPalletTempReq  INT               -- Minimum required pallet temperature count from config
 
    -- Initialize error output to 0 (no error / success)
    SET @nErrNo = 0
-
-   -- Fetch Facility from RDTMOBREC
-   SELECT @cFacility = Facility
-   FROM RDT.RDTMOBREC WITH (NOLOCK)
-   WHERE MOBILE = @nMobile
-
    SET @nMinPalletTempReq = ISNULL(
       TRY_CAST(rdt.RDTGetConfig(@nFunc, 'MinPalletTempCount', @cStorerKey) AS INT),
       1)
@@ -109,11 +102,10 @@ BEGIN
          GOTO Quit
       END
 
-      -- Get the MBOL key for the scanned pallet's order
-      SELECT TOP 1 @cMBOL4Pallet = MbolKey
-      FROM dbo.MBOLDetail WITH (NOLOCK)
-      WHERE OrderKey = @cOrderKey
-      ORDER BY MbolKey
+      -- Use MBOL key provided by caller (rdtfnc_Scan_Pallet_To_Door) to avoid inconsistencies
+      SET @cMBOL4Pallet = @cMbolKey
+      ORDER BY MbolKey
+
       IF ISNULL(@cMBOL4Pallet, '') = ''
       BEGIN
          SET @nErrNo  = 271403
@@ -122,10 +114,8 @@ BEGIN
       END
 
       -- Count distinct pallets with temperature records logged
-      SELECT @nPalletTempCount = COUNT(DISTINCT TL.PalletId)
       FROM dbo.TemperatureLog TL WITH (NOLOCK)
-      INNER JOIN dbo.MBOLDetail MD WITH (NOLOCK) ON TL.MbolKey = MD.MbolKey
-      WHERE TL.StorerKey = @cStorerKey
+      AND   TL.MbolKey   = @cMBOL4Pallet
       AND   MD.MbolKey   = @cMBOL4Pallet
 
       IF ISNULL(@nPalletTempCount, 0) < @nMinPalletTempReq
