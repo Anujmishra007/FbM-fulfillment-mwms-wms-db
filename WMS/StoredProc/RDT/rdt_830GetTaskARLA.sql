@@ -1,5 +1,5 @@
 
-/****** Object:  StoredProcedure [RDT].[rdt_830GetTaskARLA]    Script Date: 6/24/2026 12:07:42 PM ******/
+/****** Object:  StoredProcedure [RDT].[rdt_830GetTaskARLA_SUN]    Script Date: 6/24/2026 12:37:41 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,7 +26,7 @@ GO
 /* Date         Author   Ver  Purpose                                        */
 /* 01-04-2026   KMS043   1.0  Initial version created                        */
 /*****************************************************************************/
-ALTER   PROCEDURE [RDT].[rdt_830GetTaskARLA]
+ALTER     PROCEDURE [RDT].[rdt_830GetTaskARLA]
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR(3),
@@ -189,6 +189,22 @@ BEGIN
         AND PD.Status     <> '4'
         AND PD.Status      < @cPickConfirmStatus
       GROUP BY PD.SKU
+	 ORDER BY  SUM(
+              CAST(PD.Qty AS FLOAT) *
+              CASE
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                  ELSE 0
+              END
+          )  DESC;  
 
    -- Discrete PickSlip
    ELSE IF @cOrderKey <> ''
@@ -221,6 +237,22 @@ BEGIN
         AND PD.Status   <> '4'
         AND PD.Status    < @cPickConfirmStatus
       GROUP BY PD.SKU
+	  ORDER BY SUM(
+              CAST(PD.Qty AS FLOAT) *
+              CASE
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                  ELSE 0
+              END
+          )  DESC;  
 
    -- Conso PickSlip
    ELSE IF @cLoadKey <> ''
@@ -254,7 +286,22 @@ BEGIN
         AND PD.Status   <> '4'
         AND PD.Status    < @cPickConfirmStatus
       GROUP BY PD.SKU
-
+	  ORDER BY SUM(
+              CAST(PD.Qty AS FLOAT) *
+              CASE
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                  ELSE 0
+              END
+          )  DESC;  
    -- Custom PickSlip
    ELSE
       INSERT INTO #SKUWeight (SKU, TotalWeight)
@@ -286,7 +333,22 @@ BEGIN
         AND PD.Status    <> '4'
         AND PD.Status     < @cPickConfirmStatus
       GROUP BY PD.SKU
-
+	  ORDER BY SUM(
+              CAST(PD.Qty AS FLOAT) *
+              CASE
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                  ELSE 0
+              END
+          )  DESC;  
    -- No SKUs found at all
    IF NOT EXISTS (SELECT 1 FROM #SKUWeight)
    BEGIN
@@ -557,6 +619,8 @@ Quit:
    IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
 
 END
+
+
    GO
 SET QUOTED_IDENTIFIER OFF 
 GO
