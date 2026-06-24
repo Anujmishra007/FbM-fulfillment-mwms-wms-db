@@ -1,4 +1,5 @@
 
+/****** Object:  StoredProcedure [RDT].[rdt_830GetTaskARLA]    Script Date: 6/24/2026 12:37:41 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -25,7 +26,7 @@ GO
 /* Date         Author   Ver  Purpose                                        */
 /* 01-04-2026   KMS043   1.0  Initial version created                        */
 /*****************************************************************************/
-CREATE OR ALTER PROCEDURE [RDT].[rdt_830GetTaskARLA]
+CREATE OR ALTER     PROCEDURE [RDT].[rdt_830GetTaskARLA]
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR(3),
@@ -95,25 +96,22 @@ BEGIN
    DECLARE @dTempLottable14    DATETIME
    DECLARE @dTempLottable15    DATETIME
    DECLARE @cTempLottableCode  NVARCHAR(30)
- 
-   IF OBJECT_ID('tempdb..#SkippedSKU') IS NOT NULL
 
-      DROP TABLE #SkippedSKU
-   IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL
 
-      DROP TABLE #SKUWeight
-   -- Temp table 1: SKUs already tried with no QTY result
+  
+DROP TABLE IF EXISTS #SkippedSKU;
+DROP TABLE IF EXISTS #SKUWeight;
+
    CREATE TABLE #SkippedSKU (SKU NVARCHAR(20) NOT NULL PRIMARY KEY)
-   -- Weight is computed once before the loop
-   -- Temp table 2: pre-computed weight per SKU for the pickslip
-   -- Weight computed ONCE before loop, outside ANSI_NULLS influence
+
+  
    CREATE TABLE #SKUWeight
    (
        SKU         NVARCHAR(20) NOT NULL PRIMARY KEY,
        TotalWeight FLOAT        NOT NULL DEFAULT 0
    )
 
-   -- Assign inputs to temp variables
+  
    SET @cTempSKU          = @cSKU
    SET @nTempQTY          = 0
    SET @cTempLottable01   = @cLottable01
@@ -168,18 +166,18 @@ BEGIN
       SELECT
           PD.SKU,
           SUM(
-              CAST(PD.Qty AS FLOAT) *
+              TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
           )
@@ -195,18 +193,18 @@ BEGIN
         AND PD.Status      < @cPickConfirmStatus
       GROUP BY PD.SKU
 	 ORDER BY  SUM(
-              CAST(PD.Qty AS FLOAT) *
+              TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
           )  DESC;  
@@ -217,18 +215,18 @@ BEGIN
       SELECT
           PD.SKU,
           SUM(
-              CAST(PD.Qty AS FLOAT) *
+              TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
           )
@@ -243,18 +241,18 @@ BEGIN
         AND PD.Status    < @cPickConfirmStatus
       GROUP BY PD.SKU
 	  ORDER BY SUM(
-              CAST(PD.Qty AS FLOAT) *
+              TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
           )  DESC;  
@@ -269,14 +267,14 @@ BEGIN
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
           )
@@ -296,14 +294,14 @@ BEGIN
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
           )  DESC;  
@@ -313,18 +311,18 @@ BEGIN
       SELECT
           PD.SKU,
           SUM(
-              CAST(PD.Qty AS FLOAT) *
+              TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
           )
@@ -339,18 +337,18 @@ BEGIN
         AND PD.Status     < @cPickConfirmStatus
       GROUP BY PD.SKU
 	  ORDER BY SUM(
-              CAST(PD.Qty AS FLOAT) *
+              TRY_CAST(PD.Qty AS FLOAT) *
               CASE
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE01) = 1
-                       THEN CAST(SC.USERDEFINE01 AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
                   WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
                        AND ISNUMERIC(SC.USERDEFINE02) = 1
-                       THEN CAST(SC.USERDEFINE02 AS FLOAT)
-                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN CAST(S.STDGROSSWGT AS FLOAT)
-                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN CAST(S.GROSSWGT    AS FLOAT)
-                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN CAST(S.NETWGT      AS FLOAT)
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+                  WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
+                  WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
+                  WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
               END
           )  DESC;  
@@ -394,6 +392,7 @@ BEGIN
 
       /************************************** Get QTY and lottables *********************************/
       DECLARE @cSelect  NVARCHAR(MAX)
+      DECLARE @cFrom    NVARCHAR(MAX)
       DECLARE @cWhere1  NVARCHAR(MAX)
       DECLARE @cWhere2  NVARCHAR(MAX)
       DECLARE @cGroupBy NVARCHAR(MAX)
@@ -623,13 +622,4 @@ Quit:
    IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
 
 END
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON [RDT].[rdt_830GetTaskARLA] TO NSQL
-GO
 
