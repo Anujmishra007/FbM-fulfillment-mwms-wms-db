@@ -77,7 +77,7 @@ BEGIN
    DECLARE @cSQL               NVARCHAR(MAX)
    DECLARE @cSQLParam          NVARCHAR(MAX)
    DECLARE @cPickConfirmStatus NVARCHAR(1)
-   DECLARE @cTempSKU           NCHAR(20)
+   DECLARE @cTempSKU           NVARCHAR(20)
    DECLARE @nTempQTY           INT
    DECLARE @cTempLottable01    NVARCHAR(18)
    DECLARE @cTempLottable02    NVARCHAR(18)
