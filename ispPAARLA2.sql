@@ -799,37 +799,15 @@ BEGIN
         IF @b_Debug = 1 AND @@FETCH_STATUS = -1
             PRINT '[ispPAARLA2] No more rows to fetch. Exiting loop.';
     END
-     --------------------------------------------------------------------
-    -- FIX: Close and deallocate cursor immediately after loop ends
-    --      (before QUIT_SP label), with CURSOR_STATUS guard
-    --------------------------------------------------------------------
-    IF CURSOR_STATUS('local', 'CursorASNDetail') >= 0
-    BEGIN
-        CLOSE CursorASNDetail;
-        DEALLOCATE CursorASNDetail;
-    END
-
-    IF @b_Debug = 1
-        PRINT '[ispPAARLA2] Cursor closed and deallocated (normal path).';
+    CLOSE CursorASNDetail;
+    DEALLOCATE CursorASNDetail;
+ 
 QUIT_SP:
-    --CLOSE CursorASNDetail;
-    --DEALLOCATE CursorASNDetail;
-
-    --IF @b_Debug = 1
-        --PRINT '[ispPAARLA2] Cursor closed and deallocated.';
-    --------------------------------------------------------------------
-    -- FIX: Guarded cursor cleanup on error path (GOTO lands here)
-    --      CURSOR_STATUS check prevents errors if cursor was never
-    --      opened or was already closed in the normal path above.
-    --      Returns: 1=open w/rows, 0=open/empty, -1=closed,
-    --               -2=not allocated, -3=doesn't exist
-    --------------------------------------------------------------------
+ 
     IF CURSOR_STATUS('local', 'CursorASNDetail') >= 0
     BEGIN
         CLOSE CursorASNDetail;
         DEALLOCATE CursorASNDetail;
-        IF @b_Debug = 1
-            PRINT '[ispPAARLA2] Cursor closed and deallocated (error path).';
     END
 
     -- Clean up temp table
