@@ -9,8 +9,9 @@ GO
 /*                                                                            */ 
 /* Modifications log:                                                         */ 
 /*                                                                            */ 
-/* Date       Rev    Author     Purposes                                      */ 
+/* Date       Rev    Author     Purposes                                      */
 /* 2025-04-18 1.0.0  Dennis     FCR-4159 Created                              */
+/* 2026-06-18 2.0.0  Dennis     FCR-13604 New 6-screen carton check flow      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Floor_Check] (
@@ -67,6 +68,17 @@ DECLARE
    @cSealNo6      NVARCHAR(10),
    @nTotal         INT,
    @nScanned       INT,
+
+   @cFromID            NVARCHAR(20),
+   @cCartonID          NVARCHAR(20),
+   @cActualPalletKey   NVARCHAR(20),
+   @cStatusCode        NVARCHAR(20),
+   @cUCC01        NVARCHAR(20),
+   @cUCC02        NVARCHAR(20),
+   @cUCC03        NVARCHAR(20),
+   @cUCC04        NVARCHAR(20),
+   @cUCC05        NVARCHAR(20),
+   @cDisplayUCC   NVARCHAR(10),
    @cExtScnSP     NVARCHAR(20),
    @nAction             INT,
    @nAfterScn           INT,
@@ -136,7 +148,9 @@ DECLARE
    @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
    @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
    @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
-   
+
+DECLARE @tUCC TABLE (RowNum INT, UCC NVARCHAR(20))
+
 -- Load RDT.RDTMobRec
 SELECT 
    @nFunc      = Func,
@@ -155,7 +169,8 @@ SELECT
  --@cOrderKey   = V_OrderKey,
    
    @cMBOLKey      = V_String1,
-   @cTruckID      = V_String2,     
+   @cTruckID      = V_String2,
+   @cFromID       = V_String3,
    @cSealNo1      = V_String4,
    @cSealNo2      = V_String5,
    @cSealNo3      = V_String6,
@@ -166,6 +181,8 @@ SELECT
 
    @cExtScnSP     = V_String8,
    @cFromLoc      = V_String9,
+   @cCartonID     = V_String10,
+   @cDisplayUCC   = V_String11,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -199,28 +216,35 @@ Declare @n_debug INT
 
 SET @n_debug = 0
 
--- Screen constant  
-DECLARE  
-   @nStep_FROMLOC          INT,  @nScn_FROMLOC           INT,  
-   @nStep_PalletID         INT,  @nScn_PalletID          INT,  
-   @nStep_Option           INT,  @nScn_Option            INT,  
-   @nStep_ScanPalletID     INT,  @nScn_ScanPalletID      INT,  
-   @nStep_SealNo1st        INT,  @nScn_SealNo1st         INT,  
-   @nStep_SealNo2nd        INT,  @nScn_SealNo2nd         INT,  
-   @nStep_Success          INT,  @nScn_Success           INT  
-  
-SELECT  
-   @nStep_FROMLOC          = 1,   @nScn_FROMLOC          = 6580,  
-   @nStep_PalletID         = 2,   @nScn_PalletID         = 6581
+-- Screen constant
+DECLARE
+   @nStep_FROMLOC    INT,  @nScn_FROMLOC    INT,
+   @nStep_FromID     INT,  @nScn_FromID     INT,
+   @nStep_CartonID   INT,  @nScn_CartonID   INT,
+   @nStep_UCCList    INT,  @nScn_UCCList    INT,
+   @nStep_Msg      INT,  @nScn_Msg      INT,
+   @nStep_CartonMsg  INT,  @nScn_CartonMsg  INT
+
+SELECT
+   @nStep_FROMLOC   = 1,  @nScn_FROMLOC   = 6580,
+   @nStep_FromID    = 2,  @nScn_FromID    = 6581,
+   @nStep_CartonID  = 3,  @nScn_CartonID  = 6582,
+   @nStep_UCCList   = 4,  @nScn_UCCList   = 6583,
+   @nStep_Msg     = 5,  @nScn_Msg     = 6584,
+   @nStep_CartonMsg = 6,  @nScn_CartonMsg = 6585
   
 
 
 IF @nFunc = 927 -- Floor Check
 BEGIN
    -- Redirect to respective screen
-   IF @nStep = 0 GOTO Step_0   -- Truck Loading
-   IF @nStep = 1 GOTO Step_1   -- Scn = 6580. Fromloc
-   IF @nStep = 2 GOTO Step_2   -- Scn = 6581. Pallet ID
+   IF @nStep = 0 GOTO Step_0   -- Init
+   IF @nStep = 1 GOTO Step_1   -- Scn = 6580. FROM LOC
+   IF @nStep = 2 GOTO Step_2   -- Scn = 6581. FROM ID
+   IF @nStep = 3 GOTO Step_3   -- Scn = 6582. CARTON ID
+   IF @nStep = 4 GOTO Step_4   -- Scn = 6583. UCC List
+   IF @nStep = 5 GOTO Step_5   -- Scn = 6584. Msg
+   IF @nStep = 6 GOTO Step_6   -- Scn = 6585. Carton Msg
 
 END
 
@@ -248,10 +272,11 @@ BEGIN
    @cStorerKey  = @cStorerkey,
    @nStep       = @nStep
 
+   -- Load storer config
+   SET @cDisplayUCC = rdt.RDTGetConfig(@nFunc, 'DISPLAYUCC', @cStorerKey)
 
    -- Init screen
-   SET @cOutField01 = '' 
-   
+   SET @cOutField01 = ''
    SET @cFromLoc = ''
 
    -- Set the entry point
@@ -285,8 +310,8 @@ BEGIN
       SET @cOutField01 = @cFromLoc
        
       -- GOTO Next Screen
-      SET @nScn = @nScn_PalletID
-      SET @nStep = @nStep_PalletID
+      SET @nScn  = @nScn_FromID
+      SET @nStep = @nStep_FromID
 
    END  -- Inputkey = 1
 
@@ -321,107 +346,565 @@ END
 GOTO QUIT
 
 /********************************************************************************
-Step 2. Scn = 6581. 
-   Pallet ID (field02, input)
+Step 2. Scn = 6581. FROM ID
+   FROM LOC  (field01, display)
+   FROM ID   (field02, input)
 ********************************************************************************/
 Step_2:
 BEGIN
-   IF @nInputKey = 1 --ENTER
+   IF @nInputKey = 1 -- ENTER
    BEGIN
-      SET @cPallet = ISNULL(RTRIM(@cInField02),'')
-      -- Validate blank
-      IF @cPallet = ''
+      SET @cFromID = ISNULL(RTRIM(@cInField02), '')
+
+      IF @cFromID = ''
       BEGIN
-         SET @nErrNo = 237302
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet ID
+         SET @nErrNo  = 237302
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Invalid Pallet ID
          GOTO Step_2_Fail
       END
 
-      IF EXISTS (SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE 
-      ID = @cPallet AND Status = '9' AND StorerKey = @cStorerKey
-      AND LOC = @cFromLoc)
+      IF EXISTS (SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
+         WHERE ID = @cFromID AND Status = '9'
+         AND StorerKey = @cStorerKey AND LOC = @cFromLoc)
       BEGIN
+         -- SHIPPED: insert record + show message, stay on Step 2
          SET @cStatusMessage = 'SHIPPED'
-         SET @nErrNo = 237303
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet shipped
-         SET @cMsg01 = 'Pallet ID:' + @cPallet
-         SET @cMsg02 = 'Shipped '
-         GOTO STEP_2_SUCCESS
-      END
-      
-      ELSE IF EXISTS (SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK) WHERE 
-      PalletKey = @cPallet AND StorerKey = @cStorerKey
-      AND LOC = @cFromLoc)
-      BEGIN
-         SET @cStatusMessage = 'GOOD'
-         SET @cMsg01 = 'Pallet ID:' + @cPallet
-         SET @cMsg02 = 'Floor Checked '
-         SET @cMsg03 = @cFromLoc
-         GOTO STEP_2_SUCCESS
+         SET @nErrNo  = 237303
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Pallet shipped
+         SET @cMsg01  = 'Pallet ID:' + @cFromID
+         SET @cMsg02  = 'Shipped'
+
+         INSERT INTO RDT.RDTDataCapture
+            (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String2, V_STRING3)
+         VALUES
+            (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'P',
+             @cFromLoc, CONVERT(VARCHAR(19), GETDATE(), 120), @cStatusMessage)
+
+         EXEC rdt.rdtInsertMsgQueue
+            @nMobile     = @nMobile,
+            @nErrNo      = @nErrNo,
+            @cErrMsg     = @cErrMsg,
+            @cLine01     = @cMsg01,
+            @cLine02     = @cMsg02,
+            @cLine03     = @cMsg03,
+            @cLine04     = @cMsg04,
+            @cLine05     = @cMsg05,
+            @cLine06     = @cMsg06,
+            @cLine07     = @cMsg07,
+            @cLine08     = @cMsg08,
+            @cLine09     = @cMsg09,
+            @nDisplayMsg = 0
+
+         SET @cFromID     = ''
+         SET @cOutField02 = ''
+         GOTO Quit
       END
 
-      ELSE IF EXISTS (SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK) WHERE 
-      PalletKey = @cPallet AND StorerKey = @cStorerKey
-      AND LOC <> @cFromLoc)
+      ELSE IF EXISTS (SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK)
+         WHERE PalletKey = @cFromID AND StorerKey = @cStorerKey)
       BEGIN
-         SET @cStatusMessage = 'Wrong Loc'
-         SET @cMsg01 = 'Pallet ID:' + @cPallet
-         SET @cMsg02 = 'In Different Loc '
-         SET @cMsg03 =  @cFromLoc
-         GOTO STEP_2_SUCCESS
+         -- GOOD or WRONG LOC: proceed to Step 3 (carton-level check)
+         SET @cCartonID   = ''
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+
+         SET @nScn  = @nScn_CartonID
+         SET @nStep = @nStep_CartonID
+         GOTO Quit
       END
       ELSE
       BEGIN
-         SET @nErrNo = 237302
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet ID
+         SET @nErrNo  = 237302
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Invalid Pallet ID
          GOTO Step_2_Fail
       END
+   END -- InputKey = 1
 
-   STEP_2_SUCCESS:
-      INSERT INTO [RDT].[RDTDataCapture]
-         (STORERKEY,FACILITY,V_ID,V_STRING1,V_Loc,V_String2,V_STRING3)
-      VALUES
-         (@cStorerKey, @cFacility, @cPallet,@nFunc, @cFromLoc, CONVERT(VARCHAR(19), GETDATE(), 120), @cStatusMessage)
-
-      EXEC rdt.rdtInsertMsgQueue 
-      @nMobile = @nMobile,
-      @nErrNo  = @nErrNo,
-      @cErrMsg = @cErrMsg,
-      @cLine01 = @cMsg01,
-      @cLine02 = @cMsg02,
-      @cLine03 = @cMsg03,
-      @cLine04 = @cMsg04,
-      @cLine05 = @cMsg05,
-      @cLine06 = @cMsg06,
-      @cLine07 = @cMsg07,
-      @cLine08 = @cMsg08,
-      @cLine09 = @cMsg09,
-      @nDisplayMsg = 0
-
-      -- Prepare Next Screen Variable
-      SET @cOutField02 = ''  
-   END  -- Inputkey = 1
-
-   IF @nInputKey = 0 
+   IF @nInputKey = 0 -- ESC
    BEGIN
-        -- Prepare Previous Screen Variable
-       SET @cOutField01 = ''
-          
-       -- GOTO Previous Screen
-       SET @nScn = @nScn_FROMLOC
-       SET @nStep = @nStep_FROMLOC
+      SET @cFromID     = ''
+      SET @cOutField01 = ''
+
+      SET @nScn  = @nScn_FROMLOC
+      SET @nStep = @nStep_FROMLOC
    END
    GOTO Quit
 
-   STEP_2_FAIL:
+   Step_2_Fail:
    BEGIN
       SET @cOutField02 = ''
-      SET @cPallet = ''
    END
-   
 
-END 
-GOTO QUIT
+END
+GOTO Quit
+
+/********************************************************************************
+Step 3. Scn = 6582. CARTON ID
+   FROM LOC  (field01, display)
+   FROM ID   (field02, display)
+   CARTON ID (field03, input)
+********************************************************************************/
+Step_3:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      SET @cCartonID = ISNULL(RTRIM(@cInField03), '')
+
+      IF @cCartonID = '99'
+      BEGIN
+         -- Pallet-level floor check using FROM ID (@cFromID)
+         SET @cStatusMessage = ''
+
+         IF EXISTS (SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK)
+            WHERE PalletKey = @cFromID AND StorerKey = @cStorerKey
+            AND LOC = @cFromLoc)
+         BEGIN
+            SET @cStatusMessage = 'GOOD'
+         END
+         ELSE IF EXISTS (SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK)
+            WHERE PalletKey = @cFromID AND StorerKey = @cStorerKey
+            AND LOC <> @cFromLoc)
+         BEGIN
+            SET @cStatusMessage = 'WRONG LOC'
+         END
+
+         INSERT INTO RDT.RDTDataCapture
+            (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String2, V_STRING3)
+         VALUES
+            (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'P',
+             @cFromLoc, CONVERT(VARCHAR(19), GETDATE(), 120), @cStatusMessage)
+
+         -- Prepare next screen var
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = @cStatusMessage
+
+         SET @nScn  = @nScn_Msg
+         SET @nStep = @nStep_Msg
+         GOTO Quit
+      END
+
+      -- Validate CARTON ID against PALLETDETAIL.CaseID
+      IF NOT EXISTS (SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK)
+         WHERE CaseID    = @cCartonID
+         AND   StorerKey = @cStorerKey
+         AND   LOC       = @cFromLoc)
+      BEGIN
+         SET @nErrNo  = 237304
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Invalid Carton ID
+         GOTO Step_3_Fail
+      END
+
+      -- Check DISPLAYUCC storer config
+      IF @cDisplayUCC = '1'
+      BEGIN
+         -- Fetch all UCCs via PICKDETAIL → UCC table (page 1)
+         DELETE FROM @tUCC
+         INSERT INTO @tUCC (RowNum, UCC)
+         SELECT ROW_NUMBER() OVER (ORDER BY PD.PickDetailKey), U.UCCNo
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+         JOIN dbo.UCC U WITH (NOLOCK)
+            ON  U.SKU       = PD.SKU
+            AND U.Lot       = PD.Lot
+            AND U.WaveKey   = PD.WaveKey
+            AND U.StorerKey = PD.StorerKey
+         WHERE PD.StorerKey = @cStorerKey
+         AND   PD.CaseID    = @cCartonID
+         AND   PD.Status   <> '4'
+
+         SELECT @nTotal = COUNT(1) FROM @tUCC
+
+         IF @nTotal > 0
+         BEGIN
+            SET @nScanned = 1
+
+            SELECT @cUCC01 = ISNULL(MAX(CASE WHEN RowNum = 1 THEN UCC END), '') FROM @tUCC
+            SELECT @cUCC02 = ISNULL(MAX(CASE WHEN RowNum = 2 THEN UCC END), '') FROM @tUCC
+            SELECT @cUCC03 = ISNULL(MAX(CASE WHEN RowNum = 3 THEN UCC END), '') FROM @tUCC
+            SELECT @cUCC04 = ISNULL(MAX(CASE WHEN RowNum = 4 THEN UCC END), '') FROM @tUCC
+            SELECT @cUCC05 = ISNULL(MAX(CASE WHEN RowNum = 5 THEN UCC END), '') FROM @tUCC
+
+            -- XX = current page, YY = total pages (CEILING(@nTotal/5))
+            SET @cOutField01 = @cFromLoc
+            SET @cOutField02 = @cFromID
+            SET @cOutField03 = @cCartonID
+            SET @cOutField04 = @cUCC01
+            SET @cOutField05 = @cUCC02
+            SET @cOutField06 = @cUCC03
+            SET @cOutField07 = @cUCC04
+            SET @cOutField08 = @cUCC05
+            SET @cOutField09 = RIGHT('00' + TRY_CAST(@nScanned AS NVARCHAR(2)), 2)
+                             + '/' + RIGHT('00' + TRY_CAST((@nTotal + 4) / 5 AS NVARCHAR(2)), 2)
+
+            SET @nScn  = @nScn_UCCList
+            SET @nStep = @nStep_UCCList
+            GOTO Quit
+         END
+      END
+
+      -- DISPLAYUCC = 0, or no UCCs found: run status checks then go to Screen 6
+      SET @cActualPalletKey = ''
+
+      IF EXISTS (
+         SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+         AND   CaseID    = @cCartonID
+         AND   Status    = '9'
+      )
+      BEGIN
+         SET @cStatusMessage = 'CARTON SHIPPED'
+         SET @cStatusCode    = 'SHIPPED'
+      END
+      ELSE IF EXISTS (
+         SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
+         WHERE REFNO      = @cCartonID
+         AND   CartonType <> '9999'
+      )
+      BEGIN
+         SET @cStatusMessage = 'LOOSE PICK: NO UCCs'
+         SET @cStatusCode    = 'NO UCCs'
+      END
+      ELSE IF EXISTS (
+         SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
+         WHERE REFNO  = @cCartonID
+         AND   STATUS <> 'PACKED'
+      )
+      BEGIN
+         SET @cStatusMessage = 'CARTON NOT PACKED'
+         SET @cStatusCode    = 'CARTON NOT PACKED'
+      END
+      ELSE
+      BEGIN
+         SELECT @cStatusMessage   = CASE
+                  WHEN PalletKey <> ISNULL(@cFromID, '') THEN 'CARTON DIFF PALLET:'
+                  ELSE 'FLOOR CHECKED'
+               END,
+               @cStatusCode      = CASE
+                  WHEN PalletKey <> ISNULL(@cFromID, '') THEN 'WRONG PALLET'
+                  ELSE 'GOOD'
+               END,
+               @cActualPalletKey = CASE
+                  WHEN PalletKey <> ISNULL(@cFromID, '') THEN PalletKey
+                  ELSE ''
+               END
+         FROM dbo.PALLETDETAIL WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+         AND   CaseID    = @cCartonID
+      END
+
+      INSERT INTO RDT.RDTDataCapture
+         (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String4, V_String2, V_STRING3)
+      VALUES
+         (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'C',
+          @cFromLoc, @cCartonID, CONVERT(NVARCHAR(19), GETDATE(), 120), @cStatusCode)
+
+      SET @cOutField01 = @cFromLoc
+      SET @cOutField02 = @cFromID
+      SET @cOutField03 = @cCartonID
+      SET @cOutField04 = @cStatusMessage
+      SET @cOutField05 = ISNULL(@cActualPalletKey, '')
+
+      SET @nScn  = @nScn_CartonMsg
+      SET @nStep = @nStep_CartonMsg
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      SET @cCartonID   = ''
+      SET @cOutField03 = ''
+
+      SET @nScn  = @nScn_FromID
+      SET @nStep = @nStep_FromID
+   END
+   GOTO Quit
+
+   Step_3_Fail:
+   BEGIN
+      SET @cOutField03 = ''
+   END
+
+END
+GOTO Quit
+
+/********************************************************************************
+Step 4. Scn = 6583. UCC List
+   FROM LOC  (field01, display)
+   FROM ID   (field02, display)
+   CARTON ID (field03, display)
+   UCC 1-5   (field04-08, display)
+   XX/YY     (field09, display)
+********************************************************************************/
+Step_4:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      -- Advance to next page
+      SET @nScanned = ISNULL(@nScanned, 1) + 1
+
+      IF @nScanned > (ISNULL(@nTotal, 0) + 4) / 5
+      BEGIN
+         SET @cActualPalletKey = ''
+
+         -- Priority 1: SHIPPED
+         IF EXISTS (
+            SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+            AND   CaseID    = @cCartonID
+            AND   Status    = '9'
+         )
+         BEGIN
+            SET @cStatusMessage = 'CARTON SHIPPED'
+            SET @cStatusCode    = 'SHIPPED'
+         END
+         -- Priority 2: Loose pick (CartonType <> '9999')
+         ELSE IF EXISTS (
+            SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
+            WHERE REFNO      = @cCartonID
+            AND   CartonType <> '9999'
+         )
+         BEGIN
+            SET @cStatusMessage = 'LOOSE PICK: NO UCCs'
+            SET @cStatusCode    = 'NO UCCs'
+         END
+         -- Priority 3: Carton not packed
+         ELSE IF EXISTS (
+            SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
+            WHERE REFNO   = @cCartonID
+            AND   STATUS  <> 'PACKED'
+         )
+         BEGIN
+            SET @cStatusMessage = 'CARTON NOT PACKED'
+            SET @cStatusCode    = 'CARTON NOT PACKED'
+         END
+         ELSE
+         BEGIN
+            -- Priority 4: Wrong pallet / Priority 5: Floor checked
+            SELECT @cStatusMessage    = CASE
+                     WHEN PalletKey <> ISNULL(@cFromID, '') THEN 'CARTON DIFF PALLET:'
+                     ELSE 'FLOOR CHECKED'
+                  END,
+                  @cStatusCode       = CASE
+                     WHEN PalletKey <> ISNULL(@cFromID, '') THEN 'WRONG PALLET'
+                     ELSE 'GOOD'
+                  END,
+                  @cActualPalletKey  = CASE
+                     WHEN PalletKey <> ISNULL(@cFromID, '') THEN PalletKey
+                     ELSE ''
+                  END
+            FROM dbo.PALLETDETAIL WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+            AND   CaseID    = @cCartonID
+         END
+
+         INSERT INTO RDT.RDTDataCapture
+            (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String4, V_String2, V_STRING3)
+         VALUES
+            (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'C',
+             @cFromLoc, @cCartonID, CONVERT(NVARCHAR(19), GETDATE(), 120), @cStatusCode)
+
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = @cCartonID
+         SET @cOutField04 = @cStatusMessage
+         SET @cOutField05 = ISNULL(@cActualPalletKey, '')
+
+         SET @nScn  = @nScn_CartonMsg
+         SET @nStep = @nStep_CartonMsg
+      END
+      ELSE
+      BEGIN
+         -- Fetch next page; rows (@nScanned-1)*5+1 to @nScanned*5
+         DELETE FROM @tUCC
+         INSERT INTO @tUCC (RowNum, UCC)
+         SELECT ROW_NUMBER() OVER (ORDER BY PD.PickDetailKey), U.UCCNo
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+         JOIN dbo.UCC U WITH (NOLOCK)
+            ON  U.SKU       = PD.SKU
+            AND U.Lot       = PD.Lot
+            AND U.WaveKey   = PD.WaveKey
+            AND U.StorerKey = PD.StorerKey
+         WHERE PD.StorerKey = @cStorerKey
+         AND   PD.CaseID    = @cCartonID
+         AND   PD.Status   <> '4'
+
+         SELECT @cUCC01 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 1 THEN UCC END), '') FROM @tUCC
+         SELECT @cUCC02 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 2 THEN UCC END), '') FROM @tUCC
+         SELECT @cUCC03 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 3 THEN UCC END), '') FROM @tUCC
+         SELECT @cUCC04 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 4 THEN UCC END), '') FROM @tUCC
+         SELECT @cUCC05 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 5 THEN UCC END), '') FROM @tUCC
+
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = @cCartonID
+         SET @cOutField04 = @cUCC01
+         SET @cOutField05 = @cUCC02
+         SET @cOutField06 = @cUCC03
+         SET @cOutField07 = @cUCC04
+         SET @cOutField08 = @cUCC05
+         SET @cOutField09 = RIGHT('00' + TRY_CAST(@nScanned AS NVARCHAR(2)), 2)
+                          + '/' + RIGHT('00' + TRY_CAST((@nTotal + 4) / 5 AS NVARCHAR(2)), 2)
+
+         SET @nScn  = @nScn_UCCList
+         SET @nStep = @nStep_UCCList
+      END
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      IF ISNULL(@nScanned, 1) <= 1
+      BEGIN
+         -- Already on first page, go back to Step 3
+         SET @cCartonID   = ''
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = ''
+
+         SET @nScn  = @nScn_CartonID
+         SET @nStep = @nStep_CartonID
+      END
+      ELSE
+      BEGIN
+         -- Go back one page
+         SET @nScanned = @nScanned - 1
+
+         DELETE FROM @tUCC
+         INSERT INTO @tUCC (RowNum, UCC)
+         SELECT ROW_NUMBER() OVER (ORDER BY PD.PickDetailKey), U.UCCNo
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+         JOIN dbo.UCC U WITH (NOLOCK)
+            ON  U.SKU       = PD.SKU
+            AND U.Lot       = PD.Lot
+            AND U.WaveKey   = PD.WaveKey
+            AND U.StorerKey = PD.StorerKey
+         WHERE PD.StorerKey = @cStorerKey
+         AND   PD.CaseID    = @cCartonID
+         AND   PD.Status   <> '4'
+
+         SELECT @cUCC01 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 1 THEN UCC END), '') FROM @tUCC
+         SELECT @cUCC02 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 2 THEN UCC END), '') FROM @tUCC
+         SELECT @cUCC03 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 3 THEN UCC END), '') FROM @tUCC
+         SELECT @cUCC04 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 4 THEN UCC END), '') FROM @tUCC
+         SELECT @cUCC05 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 5 THEN UCC END), '') FROM @tUCC
+
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = @cCartonID
+         SET @cOutField04 = @cUCC01
+         SET @cOutField05 = @cUCC02
+         SET @cOutField06 = @cUCC03
+         SET @cOutField07 = @cUCC04
+         SET @cOutField08 = @cUCC05
+         SET @cOutField09 = RIGHT('00' + TRY_CAST(@nScanned AS NVARCHAR(2)), 2)
+                          + '/' + RIGHT('00' + TRY_CAST((@nTotal + 4) / 5 AS NVARCHAR(2)), 2)
+
+         SET @nScn  = @nScn_UCCList
+         SET @nStep = @nStep_UCCList
+      END
+   END
+   GOTO Quit
+
+END
+GOTO Quit
+
+/********************************************************************************
+Step 5. Scn = 6584. Msg
+   FROM LOC      (field01, display)
+   FROM ID       (field02, display)
+   MESSAGE TEXT  (field03, display)
+   Instructions: Press ENTER to scan next ID. Press ESC to scan next LOC.
+********************************************************************************/
+Step_5:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      -- ENTER: scan next FROM ID (back to Step 2)
+      SET @cFromID     = ''
+      SET @cCartonID   = ''
+      SET @cOutField01 = @cFromLoc
+      SET @cOutField02 = ''
+
+      SET @nScn  = @nScn_FromID
+      SET @nStep = @nStep_FromID
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- ESC: scan next LOC (back to Step 1)
+      SET @cFromLoc    = ''
+      SET @cFromID     = ''
+      SET @cCartonID   = ''
+      SET @cOutField01 = ''
+
+      SET @nScn  = @nScn_FROMLOC
+      SET @nStep = @nStep_FROMLOC
+   END
+   GOTO Quit
+
+END
+GOTO Quit
+
+/********************************************************************************
+Step 6. Scn = 6585. Carton Msg
+   FROM LOC      (field01, display)
+   FROM ID       (field02, display)
+   CARTON ID     (field03, display)
+   MESSAGE TEXT  (field04, display)
+   Instructions: Press ENTER to scan next CARTON/ID. Press ESC to scan next LOC.
+********************************************************************************/
+Step_6:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      -- Check if pallet has unchecked cartons (in PALLETDETAIL but not yet in RDTDATACAPTURE)
+      IF EXISTS (
+         SELECT 1 FROM dbo.PALLETDETAIL PD WITH (NOLOCK)
+         WHERE PD.PalletKey = @cFromID
+         AND   PD.StorerKey = @cStorerKey
+         AND   NOT EXISTS (
+            SELECT 1 FROM RDT.RDTDATACAPTURE DC WITH (NOLOCK)
+            WHERE DC.StorerKey = @cStorerKey
+            AND   DC.V_ID      = @cFromID
+            AND   DC.V_String4 = PD.CaseID
+         )
+      )
+      BEGIN
+         -- More cartons to check: go to Screen 3
+         SET @cCartonID   = ''
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = ''
+
+         SET @nScn  = @nScn_CartonID
+         SET @nStep = @nStep_CartonID
+      END
+      ELSE
+      BEGIN
+         -- All cartons checked: go to Screen 2 to scan new pallet
+         SET @cFromID     = ''
+         SET @cCartonID   = ''
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = ''
+
+         SET @nScn  = @nScn_FromID
+         SET @nStep = @nStep_FromID
+      END
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- ESC: go back to Screen 1 to scan new LOC
+      SET @cFromLoc    = ''
+      SET @cFromID     = ''
+      SET @cCartonID   = ''
+      SET @cOutField01 = ''
+
+      SET @nScn  = @nScn_FROMLOC
+      SET @nStep = @nStep_FROMLOC
+   END
+   GOTO Quit
+
+END
+GOTO Quit
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
@@ -445,12 +928,15 @@ BEGIN
   
       V_String1 = @cMBOLKey,
       V_String2 = @cTruckID,
+      V_String3 = @cFromID,
       V_String4 = @cSealNo1,
       V_String5 = @cSealNo2,
       V_String6 = @cSealNo3,
       V_String7 = @c_ContainerKey,
       V_String8 = @cExtScnSP,
       V_String9 = @cFromLoc,
+      V_String10 = @cCartonID,
+      V_String11 = @cDisplayUCC,
       V_Integer1 = @nTotal,
       V_Integer2 = @nScanned,
       
