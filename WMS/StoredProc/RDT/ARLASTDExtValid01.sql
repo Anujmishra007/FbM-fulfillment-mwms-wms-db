@@ -44,7 +44,8 @@ CREATE OR ALTER PROC [RDT].[ARLASTDExtValid01] (
    @nStep            INT,                       -- Current step in the scan workflow
    @nInputKey        INT,                       -- Input key (ENTER=1, ESC=0) - required by caller
    @cStorerKey       NVARCHAR(15),              -- Storer key to identify the customer/storer
-   @cPalletID        NVARCHAR(20),              -- Scanned pallet identifier
+   @cPalletID        NVARCHAR(20),              -- Scanned pallet identifier
+
    @cMbolKey         NVARCHAR(10),              -- MBOL key - required by caller
    @cDoor            NVARCHAR(20),              -- Door assignment - required by caller
    @cOption          NVARCHAR(1),               -- Option (close truck) - required by caller
@@ -60,7 +61,8 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    -- Local variable declarations
-   DECLARE @cOrderKey          NVARCHAR(10),     -- Order key linked to the scanned pallet
+   DECLARE @cOrderKey          NVARCHAR(10),     -- Order key linked to the scanned pallet
+
            @cMBOL4Pallet       NVARCHAR(10),     -- MBOL key associated with the pallet's order
            @nPalletTempCount   INT,              -- Count of distinct pallets with temperatures logged
            @nMinPalletTempReq  INT               -- Minimum required pallet temperature count from config
@@ -102,8 +104,10 @@ BEGIN
          GOTO Quit
       END
 
-      -- Use MBOL key provided by caller (rdtfnc_Scan_Pallet_To_Door) to avoid inconsistencies
-      SET @cMBOL4Pallet = @cMbolKey
+      -- Use MBOL key provided by caller (rdtfnc_Scan_Pallet_To_Door) to avoid inconsistencies
+
+      SET @cMBOL4Pallet = @cMbolKey
+
       ORDER BY MbolKey
 
       IF ISNULL(@cMBOL4Pallet, '') = ''
@@ -115,7 +119,7 @@ BEGIN
 
       -- Count distinct pallets with temperature records logged
       FROM dbo.TemperatureLog TL WITH (NOLOCK)
-      AND   TL.MbolKey   = @cMBOL4Pallet
+      AND   TL.MbolKey   = @cMBOL4Pallet
       AND   MD.MbolKey   = @cMBOL4Pallet
 
       IF ISNULL(@nPalletTempCount, 0) < @nMinPalletTempReq
