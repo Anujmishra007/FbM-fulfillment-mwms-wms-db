@@ -26,7 +26,7 @@ GO
 /* Date         Author   Ver  Purpose                                        */
 /* 01-04-2026   KMS043   1.0  Initial version created                        */
 /*****************************************************************************/
-ALTER     PROCEDURE [RDT].[rdt_830GetTaskARLA]
+CREATE OR ALTER     PROCEDURE [RDT].[rdt_830GetTaskARLA]
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR(3),
@@ -96,7 +96,9 @@ BEGIN
    DECLARE @dTempLottable14    DATETIME
    DECLARE @dTempLottable15    DATETIME
    DECLARE @cTempLottableCode  NVARCHAR(30)
-
+ 
+	IF EXISTS OBJECT_ID('tempdb..#SkippedSKU') IS NOT NULL DROP TABLE #SkippedSKU
+   IF EXISTS OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
    -- Temp table 1: SKUs already tried with no QTY result
    CREATE TABLE #SkippedSKU (SKU NVARCHAR(20) NOT NULL PRIMARY KEY)
 
