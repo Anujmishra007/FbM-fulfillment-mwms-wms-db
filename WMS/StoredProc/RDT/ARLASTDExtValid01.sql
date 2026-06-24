@@ -110,10 +110,10 @@ BEGIN
       END
 
       -- Get the MBOL key for the scanned pallet's order
-      SELECT @cMBOL4Pallet = MbolKey
+      SELECT TOP 1 @cMBOL4Pallet = MbolKey
       FROM dbo.MBOLDetail WITH (NOLOCK)
       WHERE OrderKey = @cOrderKey
-
+      ORDER BY MbolKey
       IF ISNULL(@cMBOL4Pallet, '') = ''
       BEGIN
          SET @nErrNo  = 271403
