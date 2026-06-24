@@ -61,9 +61,10 @@ AS
    WHERE Mobile = @nMobile
 
    -- Check Receipt Key
-   SELECT TOP 1 @cSSCC =PD.DROPID 
-   FROM dbo.PICKDETAIL PD WITH (NOLOCK) 
-   WHERE PD.DropID=@cParam1
+   SELECT TOP 1 @cSSCC = PD.DROPID
+   FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+   WHERE PD.StorerKey = @cStorerKey
+     AND PD.DropID = @cParam1
   
    SET @nRowCount = @@ROWCOUNT
 
