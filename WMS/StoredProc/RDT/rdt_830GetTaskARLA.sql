@@ -266,9 +266,11 @@ BEGIN
           PD.SKU,
           SUM(
               TRY_CAST(PD.Qty AS FLOAT) *
-                       THEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0)
+                       THEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0)
+
                        
-                       THEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0)
+                       THEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0)
+
                      
                        THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
@@ -326,7 +328,6 @@ BEGIN
          SET @cGetNextSKU = 'N'
       END
 
-      /************************************** Get QTY and lottables *********************************/
       DECLARE @cSelect  NVARCHAR(MAX)
       DECLARE @cFrom    NVARCHAR(MAX)
       DECLARE @cWhere1  NVARCHAR(MAX)
