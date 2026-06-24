@@ -105,8 +105,10 @@ BEGIN
   
    CREATE TABLE #SKUWeight
    (
-      SKU         NVARCHAR(20)   NOT NULL PRIMARY KEY,
-      TotalWeight DECIMAL(38, 6) NOT NULL DEFAULT (0)
+      SKU         NVARCHAR(20)   NOT NULL PRIMARY KEY,
+
+      TotalWeight DECIMAL(38, 6) NOT NULL DEFAULT (0)
+
    )
 
   
@@ -231,8 +233,8 @@ BEGIN
       SELECT
           PD.SKU,
           SUM(
-              TRY_CAST(PD.Qty AS FLOAT) *
-              CASE
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01, ''), '0') <> '0'
+                       AND TRY_CAST(SC.USERDEFINE01 AS FLOAT) IS NOT NULL
                   WHEN ISNULL(NULLIF(SC.USERDEFINE01, ''), '0') <> '0' AND TRY_CAST(SC.USERDEFINE01 AS FLOAT) IS NOT NULL
                        AND ISNUMERIC(SC.USERDEFINE01) = 1
                        THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
