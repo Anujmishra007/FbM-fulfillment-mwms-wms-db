@@ -202,21 +202,16 @@ BEGIN
       SELECT
           PD.SKU,
           SUM(
-              TRY_CAST(PD.Qty AS FLOAT) *
-                       THEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0)
-
-                       
-                       THEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0)
-
-                      
-                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
-
+               TRY_CAST(PD.Qty AS FLOAT) *
+               CASE
+                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
+                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
                   WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,      0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
-              END
+               END
           )
       FROM dbo.PickDetail PD         WITH (NOLOCK)
           JOIN dbo.SKU S             WITH (NOLOCK) ON S.SKU        = PD.SKU
@@ -261,16 +256,22 @@ BEGIN
         AND PD.Status    < @cPickConfirmStatus
       GROUP BY PD.SKU;
 	
-               TRY_CAST(PD.Qty AS FLOAT) *
-               CASE
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+               TRY_CAST(PD.Qty AS FLOAT) *
+
+               CASE
+
+                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
+
+                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+
 
                        
                        THEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0)
-                  WHEN ISNULL(S.NETWGT,      0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
+                  WHEN ISNULL(S.NETWGT,      0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
+
                      
-               END
+               END
+
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
                   WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
