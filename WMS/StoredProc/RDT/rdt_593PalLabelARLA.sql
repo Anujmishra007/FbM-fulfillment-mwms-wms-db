@@ -61,9 +61,10 @@ AS
    WHERE Mobile = @nMobile
 
    -- Check Receipt Key
-   SELECT TOP 1 @cSSCC =RD.ToId 
+   SELECT TOP 1 @cSSCC = RD.ToId
    FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
-   WHERE RD.ToId=@cParam1
+   WHERE RD.StorerKey = @cStorerKey
+     AND RD.ToId = @cParam1
   
    SET @nRowCount = @@ROWCOUNT
 
