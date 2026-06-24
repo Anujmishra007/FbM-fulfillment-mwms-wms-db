@@ -1,5 +1,4 @@
 
-/****** Object:  StoredProcedure [RDT].[rdt_830GetTaskARLA]    Script Date: 6/24/2026 12:37:41 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,7 +25,7 @@ GO
 /* Date         Author   Ver  Purpose                                        */
 /* 01-04-2026   KMS043   1.0  Initial version created                        */
 /*****************************************************************************/
-CREATE OR ALTER     PROCEDURE [RDT].[rdt_830GetTaskARLA]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_830GetTaskARLA]
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR(3),
@@ -97,8 +96,11 @@ BEGIN
    DECLARE @dTempLottable15    DATETIME
    DECLARE @cTempLottableCode  NVARCHAR(30)
  
-	IF EXISTS OBJECT_ID('tempdb..#SkippedSKU') IS NOT NULL DROP TABLE #SkippedSKU
-   IF EXISTS OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
+	IF OBJECT_ID('tempdb..#SkippedSKU') IS NOT NULL 
+      DROP TABLE #SkippedSKU
+   IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL 
+      DROP TABLE #SKUWeight
+
    -- Temp table 1: SKUs already tried with no QTY result
    CREATE TABLE #SkippedSKU (SKU NVARCHAR(20) NOT NULL PRIMARY KEY)
 
@@ -391,7 +393,6 @@ BEGIN
 
       /************************************** Get QTY and lottables *********************************/
       DECLARE @cSelect  NVARCHAR(MAX)
-      DECLARE @cFrom    NVARCHAR(MAX)
       DECLARE @cWhere1  NVARCHAR(MAX)
       DECLARE @cWhere2  NVARCHAR(MAX)
       DECLARE @cGroupBy NVARCHAR(MAX)
@@ -621,4 +622,13 @@ Quit:
    IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
 
 END
+GO
+
+GRANT EXECUTE ON [RDT].[rdt_830GetTaskARLA] TO NSQL
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
 
