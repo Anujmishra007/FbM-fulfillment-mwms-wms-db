@@ -566,8 +566,8 @@ BEGIN
     SET 
         PD.STATUS = '6',
         PD.PickSlipNo = ''
-    FROM PICKDETAIL PD 
-    JOIN ORDERS O  
+    FROM PICKDETAIL PD WITH (NOLOCK)
+    JOIN ORDERS O  WITH (NOLOCK)
         ON O.ORDERKEY = PD.ORDERKEY
     WHERE 
         PD.WAVEKEY = @c_Wavekey 
@@ -579,8 +579,8 @@ BEGIN
     UPDATE PD WITH (ROWLOCK)
     SET PD.STATUS='4',
         PD.PickSlipNo = ''
-    FROM PICKDETAIL PD 
-    JOIN ORDERS O 
+    FROM PICKDETAIL PD WITH (NOLOCK)
+    JOIN ORDERS O  WITH (NOLOCK)
         ON O.ORDERKEY = PD.ORDERKEY
     WHERE 
         PD.WAVEKEY = @c_Wavekey 
