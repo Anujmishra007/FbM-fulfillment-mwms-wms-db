@@ -1,5 +1,5 @@
 
-exec rdt.rdtDropMsg  271401, 271450 
+exec rdt.rdtDropMsg  271401, 271402, 271403, 271404
 
 execute rdt.rdtAddMsg 271401, 0, '271401^PalletAlreadyScanned',   'us_english', 1650
 execute rdt.rdtAddMsg 271402, 0, '271402^PalletTempNotCapture',   'us_english', 1650
