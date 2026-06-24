@@ -101,7 +101,7 @@ SET ANSI_NULLS OFF
       )
       BEGIN
          -- Pallet already scanned to door - block with error
-         SET @nErrNo  = 3735608
+         SET @nErrNo  = 271402
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
          GOTO Quit
       END
@@ -160,7 +160,7 @@ SET ANSI_NULLS OFF
             -- the validation error below will still be raised
          END CATCH
          -- Insufficient pallet temperatures captured - block with error
-         SET @nErrNo  = 3735605
+         SET @nErrNo  = 271401
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
          GOTO Quit
       END
