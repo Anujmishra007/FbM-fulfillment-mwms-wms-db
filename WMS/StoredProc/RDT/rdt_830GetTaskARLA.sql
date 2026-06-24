@@ -105,8 +105,8 @@ BEGIN
   
    CREATE TABLE #SKUWeight
    (
-       SKU         NVARCHAR(20) NOT NULL PRIMARY KEY,
-       TotalWeight FLOAT        NOT NULL DEFAULT 0
+      SKU         NVARCHAR(20)   NOT NULL PRIMARY KEY,
+      TotalWeight DECIMAL(38, 6) NOT NULL DEFAULT (0)
    )
 
   
