@@ -1,3 +1,4 @@
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -25,7 +26,6 @@ GO
 /* 01-04-2026   KMS043   1.0  Initial version created                        */
 /*****************************************************************************/
 CREATE OR ALTER PROCEDURE [RDT].[rdt_830GetTaskARLA]
-
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR(3),
@@ -77,8 +77,7 @@ BEGIN
    DECLARE @cSQL               NVARCHAR(MAX)
    DECLARE @cSQLParam          NVARCHAR(MAX)
    DECLARE @cPickConfirmStatus NVARCHAR(1)
-   DECLARE @cTempSKU           NVARCHAR(20)
-
+   DECLARE @cTempSKU           NCHAR(20)
    DECLARE @nTempQTY           INT
    DECLARE @cTempLottable01    NVARCHAR(18)
    DECLARE @cTempLottable02    NVARCHAR(18)
@@ -98,9 +97,8 @@ BEGIN
    DECLARE @cTempLottableCode  NVARCHAR(30)
 
 
-   DROP TABLE IF EXISTS #SkippedSKU;
-   DROP TABLE IF EXISTS #SKUWeight;
-
+   IF OBJECT_ID('tempdb..#SkippedSKU') IS NOT NULL DROP TABLE #SkippedSKU
+   IF OBJECT_ID('tempdb..#SKUWeight')  IS NOT NULL DROP TABLE #SKUWeight
 
    CREATE TABLE #SkippedSKU (SKU NVARCHAR(20) NOT NULL PRIMARY KEY)
 
@@ -166,22 +164,20 @@ BEGIN
       SELECT
           PD.SKU,
           SUM(
-               TRY_CAST(PD.Qty AS FLOAT) *
-
-               CASE
-
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
-
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
-
+              TRY_CAST(PD.Qty AS FLOAT) *
+              CASE
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
+                   
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
+                     
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
                   WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,      0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
-
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
-               END
-
+              END
           )
       FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
           JOIN dbo.PickDetail PD     WITH (NOLOCK) ON PD.PickDetailKey  = RKL.PickDetailKey
@@ -193,8 +189,8 @@ BEGIN
         AND PD.QTY         > 0
         AND PD.Status     <> '4'
         AND PD.Status      < @cPickConfirmStatus
-      GROUP BY PD.SKU;
-
+      GROUP BY PD.SKU
+	
 
    -- Discrete PickSlip
    ELSE IF @cOrderKey <> ''
@@ -202,22 +198,20 @@ BEGIN
       SELECT
           PD.SKU,
           SUM(
-               TRY_CAST(PD.Qty AS FLOAT) *
-
-               CASE
-
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
-
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
-
+              TRY_CAST(PD.Qty AS FLOAT) *
+              CASE
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
+                       
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
+                      
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
                   WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
-                  WHEN ISNULL(S.NETWGT,      0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
-
+                  WHEN ISNULL(S.NETWGT,       0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
                   ELSE 0
-               END
-
+              END
           )
       FROM dbo.PickDetail PD         WITH (NOLOCK)
           JOIN dbo.SKU S             WITH (NOLOCK) ON S.SKU        = PD.SKU
@@ -228,17 +222,23 @@ BEGIN
         AND PD.QTY       > 0
         AND PD.Status   <> '4'
         AND PD.Status    < @cPickConfirmStatus
-      GROUP BY PD.SKU;
-               CAST(PD.Qty AS FLOAT) *
-               CASE
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
+      GROUP BY PD.SKU
+	
 
-                     
-                       THEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0)
-                  WHEN ISNULL(S.NETWGT,      0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
-                       
-               END
+   -- Conso PickSlip
+   ELSE IF @cLoadKey <> ''
+      INSERT INTO #SKUWeight (SKU, TotalWeight)
+      SELECT
+          PD.SKU,
+          SUM(
+              TRY_CAST(PD.Qty AS FLOAT) *
+              CASE
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE01) = 1
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
+                       AND ISNUMERIC(SC.USERDEFINE02) = 1
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
                   WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
@@ -256,24 +256,21 @@ BEGIN
         AND PD.QTY       > 0
         AND PD.Status   <> '4'
         AND PD.Status    < @cPickConfirmStatus
-      GROUP BY PD.SKU;
-	
-               TRY_CAST(PD.Qty AS FLOAT) *
-
-               CASE
-
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE01 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
-
-                  WHEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0) > 0 THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
-
-
+      GROUP BY PD.SKU
+   -- Custom PickSlip
+   ELSE
+      INSERT INTO #SKUWeight (SKU, TotalWeight)
+      SELECT
+          PD.SKU,
+          SUM(
+              TRY_CAST(PD.Qty AS FLOAT) *
+              CASE
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE01,''),'0') <> '0'
                        
-                       THEN ISNULL(TRY_CAST(SC.USERDEFINE02 AS FLOAT), 0)
-                  WHEN ISNULL(S.NETWGT,      0) > 0 THEN TRY_CAST(S.NETWGT      AS FLOAT)
-
-                     
-               END
-
+                       THEN TRY_CAST(SC.USERDEFINE01 AS FLOAT)
+                  WHEN ISNULL(NULLIF(SC.USERDEFINE02,''),'0') <> '0'
+                   
+                       THEN TRY_CAST(SC.USERDEFINE02 AS FLOAT)
                   WHEN ISNULL(S.STDGROSSWGT, 0) > 0 THEN TRY_CAST(S.STDGROSSWGT AS FLOAT)
                   WHEN ISNULL(S.GROSSWGT,    0) > 0 THEN TRY_CAST(S.GROSSWGT    AS FLOAT)
                   WHEN ISNULL(S.STDNETWGT,   0) > 0 THEN TRY_CAST(S.STDNETWGT   AS FLOAT)
@@ -291,7 +288,8 @@ BEGIN
         AND PD.Status    <> '4'
         AND PD.Status     < @cPickConfirmStatus
       GROUP BY PD.SKU
-	
+	 
+   -- No SKUs found at all
    IF NOT EXISTS (SELECT 1 FROM #SKUWeight)
    BEGIN
       SET @nErrNo  = 271151
@@ -329,6 +327,7 @@ BEGIN
          SET @cGetNextSKU = 'N'
       END
 
+      /************************************** Get QTY and lottables *********************************/
       DECLARE @cSelect  NVARCHAR(MAX)
       DECLARE @cFrom    NVARCHAR(MAX)
       DECLARE @cWhere1  NVARCHAR(MAX)
@@ -546,7 +545,7 @@ BEGIN
       @cLottableCode = LottableCode,
       @cPPK          =
          CASE WHEN SKU.PrePackIndicator = '2'
-            THEN CAST(SKU.PackQtyIndicator AS NVARCHAR(5))
+            THEN TRY_CAST(SKU.PackQtyIndicator AS NVARCHAR(5))
             ELSE ''
          END,
       @cMUOM_Desc    = Pack.PackUOM3
@@ -561,6 +560,7 @@ Quit:
 
 END
 
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
@@ -568,3 +568,4 @@ GO
  
 GRANT EXECUTE ON [RDT].[rdt_830GetTaskARLA] TO NSQL
 GO
+ 
