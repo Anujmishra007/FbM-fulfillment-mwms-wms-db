@@ -81,7 +81,7 @@ BEGIN
                INNER JOIN dbo.RECEIPT R WITH (NOLOCK) 
                   ON R.RECEIPTKEY=RD.RECEIPTKEY 
                   AND R.STORERKEY=RD.STORERKEY
-               INNER JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) 
+               LEFT JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) 
                   ON LLI.STORERKEY=@cStorerKey 
                   AND LLI.ID = @cID
                --WHERE RD.ReceiptKey = @cReceiptKey AND RD.ToID = @cID AND R.RECType IN ('DXDOCK','IXDOCK','PACKED','XDOCK'))   
@@ -114,4 +114,3 @@ GO
 
 GRANT EXECUTE ON [RDT].[rdt_600ExtValARLA] TO NSQL
 GO
-
