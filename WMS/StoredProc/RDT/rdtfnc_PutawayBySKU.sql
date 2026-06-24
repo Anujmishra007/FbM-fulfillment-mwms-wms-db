@@ -334,7 +334,7 @@ SELECT
    @cSKUDefault         = V_String37,
    @cPieceScan          = V_String38,
    @cPAToIDSP           = V_String39,
-   @cSerialNoCapture    = V_String40,
+   @cSerialNoCapture    = V_String44,
    @cSerialNo           = V_String41, 
    @cFlowThruScreen     = V_String42,
    @cDefaultPutawayQTY  = V_String43,
@@ -3915,7 +3915,7 @@ BEGIN
       V_String35 = @cMultiSKUBarcode, --(yeekung03)
       V_String38 = @cPieceScan,
       V_String39 = @cPAToIDSP,
-      V_String40 = @cSerialNoCapture,
+      V_String44 = @cSerialNoCapture,
       V_String41 = @cSerialNo, 
       V_String42 = @cFlowThruScreen,
       V_String43 = @cDefaultPutawayQTY,
