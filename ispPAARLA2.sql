@@ -168,14 +168,14 @@ BEGIN
     --------------------------------------------------------------------
     SELECT @c_agvOperationMode = Short,
            @c_agvUserKey       = Long
-    FROM CODELKUP
+    FROM CODELKUP WITH (NOLOCK)
     WHERE LISTNAME  = 'ARLAMODE'
       AND StorerKey = ISNULL(@c_Storerkey, 'ARLA')
       AND Code      = 'AGV';
 
     SELECT @c_manualOperationMode = Short,
            @c_manualUserKey       = Long
-    FROM CODELKUP
+    FROM CODELKUP WITH (NOLOCK)
     WHERE LISTNAME  = 'ARLAMODE'
       AND StorerKey = ISNULL(@c_Storerkey, 'ARLA')
       AND Code      = 'MANUAL';
@@ -402,7 +402,7 @@ BEGIN
             IF UPPER(ISNULL(@c_ItemClass, '')) = 'CHILLED'
                AND ISNULL(@c_UserDefine01, '') IN (
                        SELECT DISTINCT Code
-                       FROM CODELKUP
+                       FROM CODELKUP WITH (NOLOCK)
                        WHERE StorerKey = ISNULL(@c_Storerkey, 'ARLA')
                          AND LISTNAME  = 'ARLAPALTYP'
                          AND Short     = 'AGV')
@@ -416,7 +416,7 @@ BEGIN
             ELSE IF UPPER(ISNULL(@c_ItemClass, '')) = 'CHILLED'
                  OR ISNULL(@c_UserDefine01, '') IN (
                         SELECT DISTINCT Code
-                        FROM CODELKUP
+                        FROM CODELKUP WITH (NOLOCK)
                         WHERE StorerKey = ISNULL(@c_Storerkey, 'ARLA')
                           AND LISTNAME  = 'ARLAPALTYP'
                           AND Short     = 'MANUAL')
@@ -799,13 +799,38 @@ BEGIN
         IF @b_Debug = 1 AND @@FETCH_STATUS = -1
             PRINT '[ispPAARLA2] No more rows to fetch. Exiting loop.';
     END
-
-QUIT_SP:
-    CLOSE CursorASNDetail;
-    DEALLOCATE CursorASNDetail;
+     --------------------------------------------------------------------
+    -- FIX: Close and deallocate cursor immediately after loop ends
+    --      (before QUIT_SP label), with CURSOR_STATUS guard
+    --------------------------------------------------------------------
+    IF CURSOR_STATUS('local', 'CursorASNDetail') >= 0
+    BEGIN
+        CLOSE CursorASNDetail;
+        DEALLOCATE CursorASNDetail;
+    END
 
     IF @b_Debug = 1
-        PRINT '[ispPAARLA2] Cursor closed and deallocated.';
+        PRINT '[ispPAARLA2] Cursor closed and deallocated (normal path).';
+QUIT_SP:
+    --CLOSE CursorASNDetail;
+    --DEALLOCATE CursorASNDetail;
+
+    --IF @b_Debug = 1
+        --PRINT '[ispPAARLA2] Cursor closed and deallocated.';
+    --------------------------------------------------------------------
+    -- FIX: Guarded cursor cleanup on error path (GOTO lands here)
+    --      CURSOR_STATUS check prevents errors if cursor was never
+    --      opened or was already closed in the normal path above.
+    --      Returns: 1=open w/rows, 0=open/empty, -1=closed,
+    --               -2=not allocated, -3=doesn't exist
+    --------------------------------------------------------------------
+    IF CURSOR_STATUS('local', 'CursorASNDetail') >= 0
+    BEGIN
+        CLOSE CursorASNDetail;
+        DEALLOCATE CursorASNDetail;
+        IF @b_Debug = 1
+            PRINT '[ispPAARLA2] Cursor closed and deallocated (error path).';
+    END
 
     -- Clean up temp table
     IF OBJECT_ID('tempdb..#LOC_Candidates') IS NOT NULL
