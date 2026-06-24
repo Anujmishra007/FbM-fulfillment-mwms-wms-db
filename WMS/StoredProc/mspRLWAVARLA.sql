@@ -651,7 +651,7 @@ BEGIN
 
 
     
-    DECLARE CUR_TRANSMIT CURSOR LOCAL FAST_FORWARD FOR
+    DECLARE CUR_TRANSMIT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 
     SELECT 
         PD.TASKDETAILKEY
@@ -709,8 +709,7 @@ END
 
    IF @n_Continue = 1 or @n_Continue = 2
    BEGIN
-   IF  EXISTS(SELECT  1 FROM ORDERS WITH (NOLOCK) WHERE USERDEFINE09=@c_Wavekey)
-   BEGIN
+   
     UPDATE #PickDetail_WIP WITH (ROWLOCK) SET TOLOC=@c_ToLoc ,CASEID=ID      WHERE WaveKey = @c_Wavekey 
       -----Delete pickdetail_WIP work in progress staging table
       EXEC isp_CreatePickdetail_WIP
@@ -729,7 +728,7 @@ END
          SET @n_Continue = 3
       END
    END
-   END
+
 
    IF (XACT_STATE()) = -1
    BEGIN
