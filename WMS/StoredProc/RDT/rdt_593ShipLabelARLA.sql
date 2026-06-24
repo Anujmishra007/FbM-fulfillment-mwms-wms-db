@@ -40,6 +40,7 @@ CREATE OR ALTER PROC [RDT].[rdt_593ShipLabelARLA] (
    @cErrMsg    NVARCHAR( 20) OUTPUT
 )
 AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
@@ -52,6 +53,9 @@ AS
    DECLARE @nRowCount     INT
    DECLARE @cSSCC         NVARCHAR( 20)
 
+   SET @nErrNo = 0
+   SET @cErrMsg = ''
+
    -- Get login info
    SELECT
       @cFacility = Facility,
@@ -60,7 +64,7 @@ AS
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   -- Check Receipt Key
+   -- Check drop id
    SELECT TOP 1 @cSSCC = PD.DROPID
    FROM dbo.PICKDETAIL PD WITH (NOLOCK)
    WHERE PD.StorerKey = @cStorerKey
@@ -71,7 +75,7 @@ AS
    IF @nRowCount = 0
    BEGIN
       SET @nErrNo = 271101
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')  -- Invalid Pallet ID
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')  -- Invalid Drop ID
       GOTO Quit
    END
    
@@ -90,27 +94,25 @@ AS
    IF @cShipLabel = ''
    BEGIN
       SET @nErrNo = 271102
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --RPTypeNotSetup
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- RPTypeNotSetup
       GOTO Quit
    END
    
-   BEGIN
-      DECLARE @tShipLabel VariableTable
-     
-      INSERT INTO @tShipLabel (Variable, Value) VALUES
-      ( '@cSSCC',        @cSSCC)
+   DECLARE @tShipLabel VariableTable
    
-      -- Print label
-      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-      @cShipLabel, -- Report type
-      @tShipLabel, -- Report params
-      'rdt_593ShipLabelARLA',
-      @nErrNo  OUTPUT,
-      @cErrMsg OUTPUT
+   INSERT INTO @tShipLabel (Variable, Value) VALUES
+   ( '@cSSCC',        @cSSCC)
 
-      IF @nErrNo <> 0
-         GOTO Quit      
-   END
+   -- Print label
+   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+   @cShipLabel, -- Report type
+   @tShipLabel, -- Report params
+   'rdt_593ShipLabelARLA',
+   @nErrNo  OUTPUT,
+   @cErrMsg OUTPUT
+
+   IF @nErrNo <> 0
+      GOTO Quit      
 
 Quit:
 END    

@@ -40,6 +40,7 @@ CREATE OR ALTER PROC [RDT].[rdt_593PalLabelARLA] (
    @cErrMsg    NVARCHAR( 20) OUTPUT
 )
 AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
@@ -51,6 +52,9 @@ AS
    DECLARE @cPalletLabel  NVARCHAR( 10)
    DECLARE @nRowCount     INT
    DECLARE @cSSCC         NVARCHAR( 20)
+
+   SET @nErrNo = 0
+   SET @cErrMsg = ''
    
    -- Get login info
    SELECT
@@ -60,7 +64,7 @@ AS
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   -- Check Receipt Key
+   -- Check pallet id
    SELECT TOP 1 @cSSCC = RD.ToId
    FROM dbo.PODETAIL RD WITH (NOLOCK)
    WHERE RD.StorerKey = @cStorerKey
@@ -94,24 +98,22 @@ AS
       GOTO Quit
    END
 
-   
-   BEGIN
-      DECLARE @tPalletLabel VariableTable
 
-      INSERT INTO @tPalletLabel (Variable, Value) 
-      VALUES ('@cSSCC', @cSSCC)
-   
-      -- Print label
-      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-      @cPalletLabel, -- Report type
-      @tPalletLabel, -- Report params
-      'rdt_593PalLabelARLA',
-      @nErrNo  OUTPUT,
-      @cErrMsg OUTPUT
+   DECLARE @tPalletLabel VariableTable
 
-      IF @nErrNo <> 0
-         GOTO Quit
-   END
+   INSERT INTO @tPalletLabel (Variable, Value) 
+   VALUES ('@cSSCC', @cSSCC)
+
+   -- Print label
+   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+   @cPalletLabel, -- Report type
+   @tPalletLabel, -- Report params
+   'rdt_593PalLabelARLA',
+   @nErrNo  OUTPUT,
+   @cErrMsg OUTPUT
+
+   IF @nErrNo <> 0
+      GOTO Quit
 
 Quit:
 END    
