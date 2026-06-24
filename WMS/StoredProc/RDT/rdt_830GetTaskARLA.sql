@@ -509,7 +509,7 @@ BEGIN
             THEN CAST( SKU.PackQtyIndicator AS NVARCHAR( 5))     
             ELSE ''     
          END, 
-      @cMUOM_Desc = Pack.PackUOM3,
+      @cMUOM_Desc = Pack.PackUOM3
     /*  @cPUOM_Desc =
          CASE @cPUOM
             WHEN '2' THEN Pack.PackUOM1 -- Case
