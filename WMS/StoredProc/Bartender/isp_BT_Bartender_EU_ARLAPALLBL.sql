@@ -1,5 +1,4 @@
-USE [GLOWMS]
-GO
+
 /****** Object:  StoredProcedure [dbo].[isp_BT_Bartender_EU_ARLAPALLBL]    Script Date: 6/21/2026 3:38:59 PM ******/
 SET ANSI_NULLS OFF
 GO
@@ -151,9 +150,9 @@ BEGIN
 +N' '''','''','''','''','''','''','''','''','''','''','+CHAR(13)
 +N' '''','''','''','''','''','''','''','''','''','''','+CHAR(13)
 +N' '''','''','''','''','''','''','''','''','''','''''+CHAR(13)
-+N'FROM PODETAIL POD WITH (NOLOCK) '+CHAR(13)
-+N'LEFT JOIN SKU S WITH (NOLOCK) ON S.SKU=POD.SKU AND S.StorerKey=POD.StorerKey'+CHAR(13)
-+N'LEFT JOIN UPC U  WITH (NOLOCK) ON S.SKU=U.SKU AND S.StorerKey=U.StorerKey AND LEN(U.UPC)=13'+CHAR(13)
++N'FROM dbo.PODETAIL POD WITH (NOLOCK) '+CHAR(13)
++N'LEFT JOIN dbo.SKU S WITH (NOLOCK) ON S.SKU=POD.SKU AND S.StorerKey=POD.StorerKey'+CHAR(13)
++N'LEFT JOIN dbo.UPC U  WITH (NOLOCK) ON S.SKU=U.SKU AND S.StorerKey=U.StorerKey AND LEN(U.UPC)=13'+CHAR(13)
 +N'WHERE POD.TOID=RIGHT(@c_Sparm1,18) '+CHAR(13)
 
  IF @b_debug = 1    
@@ -170,11 +169,16 @@ BEGIN
     
    SET @c_SQL = @c_SQL + @c_SQLJOIN    
     
-   SET @c_ExecArguments = N'  @c_Sparm1         NVARCHAR(250)'
-                        + N' ,@c_Sparm2         NVARCHAR(250)'
-                        + N' ,@c_Sparm3         NVARCHAR(250)'
-                        + N' ,@c_Sparm4         NVARCHAR(250)'
-                        + N' ,@c_Sparm5         NVARCHAR(250)'
+   SET @c_ExecArguments = N'  @c_Sparm1         NVARCHAR(250)'
+
+                        + N' ,@c_Sparm2         NVARCHAR(250)'
+
+                        + N' ,@c_Sparm3         NVARCHAR(250)'
+
+                        + N' ,@c_Sparm4         NVARCHAR(250)'
+
+                        + N' ,@c_Sparm5         NVARCHAR(250)'
+
    EXEC sp_executesql @c_SQL    
                     , @c_ExecArguments    
                     , @c_Sparm1    
