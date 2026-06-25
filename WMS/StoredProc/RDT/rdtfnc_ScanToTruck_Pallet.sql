@@ -1,13 +1,10 @@
-IF (objectProperty(object_id('rdt.rdtfnc_ScanToTruck_Pallet'), 'IsProcedure') is not null)
-	DROP PROCEDURE [RDT].[rdtfnc_ScanToTruck_Pallet] 
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/ 
-/* Copyright: IDS                                                             */ 
+/* Copyright: MAERSK                                                          */
 /* Purpose: IDSUK rdtfnc_ScanToTruck_Pallet SOS#262664                        */ 
 /*                                                                            */ 
 /* Modifications log:                                                         */ 
@@ -17,9 +14,11 @@ GO
 /* 2015-01-26 1.1  James      SOS331117 Add ExtendedUpdateSP (james01)        */
 /* 2016-09-30 1.2  Ung        Performance tuning                              */
 /* 2018-11-14 1.3  Gan        Performance tuning                              */
+/* 2024-06-25 1.4  James      WMS-25703 Add ExtendedValidateSP (james02)      */
+/* 2025-12-15 1.5  Cuize      FCR-7458 Add ExtendedValidateSP                 */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_ScanToTruck_Pallet] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_Pallet] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 NVARCHAR max
@@ -56,13 +55,13 @@ DECLARE
    @cPUOM         NVARCHAR( 10),    
    @cTruckID      NVARCHAR( 20),
    @cOption       NVARCHAR( 1),
-   @cPalletID     NVARCHAR( 20),
+   @cPalletID     NVARCHAR( 30),
 	@cContainerKey NVARCHAR( 10),
 	@cSealNo       NVARCHAR( 20),
 	@cVessel       NVARCHAR( 20),
 	@cOtherReference NVARCHAR( 30),
    @cMBOLKey        NVARCHAR( 10),
-   @cRoute          NVARCHAR( 20), 
+   @cRoute          NVARCHAR( 20),
    @cContainerType  NVARCHAR( 10),
    @bSuccess        INT,
    @nScanned        INT,
@@ -74,6 +73,10 @@ DECLARE
    @cErrMsg3            NVARCHAR( 20),    -- (james01)
    @cErrMsg4            NVARCHAR( 20),    -- (james01)
    @cErrMsg5            NVARCHAR( 20),    -- (james01)
+   @cConfirmStatus      NVARCHAR(5),
+   @cExtendedValidateSP NVARCHAR( 20),
+   @cExtendedInfoSP     NVARCHAR( 20),
+   @tExtValidate        VARIABLETABLE,
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -115,15 +118,16 @@ SELECT
    @cUserName  = UserName,
    
    @cPUOM       = V_UOM,
- --@cOrderKey   = V_OrderKey,
- 
+
    @nScanned    = V_Integer1,
    
-	@cTruckID    = V_String1,
-   @cPalletID   = V_String2,
-   @cContainerKey = V_String3, 
-  -- @nScanned      = CASE WHEN rdt.rdtIsValidQTY(LEFT(V_String4, 5), 0) = 1 THEN LEFT(V_String4, 5) ELSE 0 END, 
-   
+	@cTruckID     = V_String1,
+   @cContainerKey       = V_String2,
+   @cExtendedValidateSP = V_String3,
+   @cExtendedUpdateSP   = V_String4,
+   @cExtendedInfoSP     = V_String5,
+   @cConfirmStatus      = V_String6,
+   @cPalletID           = V_String41,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -157,8 +161,6 @@ Declare @n_debug INT
 
 SET @n_debug = 0
 
-
-
 IF @nFunc = 1718  -- Scan To Truck
 BEGIN
    -- Redirect to respective screen
@@ -168,16 +170,7 @@ BEGIN
 	IF @nStep = 3 GOTO Step_3   -- Scn = 3332. Close Truck
 	IF @nStep = 4 GOTO Step_4   -- Scn = 3333. Remove Pallet 
 	IF @nStep = 5 GOTO Step_5   -- Scn = 3334. Add Pallet
-	
-	
-   
 END
-
---IF @nStep = 3
---BEGIN
---	SET @cErrMsg = 'STEP 3'
---	GOTO QUIT
---END
 
 RETURN -- Do nothing if incorrect step
 
@@ -193,6 +186,30 @@ BEGIN
       INNER JOIN RDT.rdtUser U WITH (NOLOCK) ON (M.UserName = U.UserName)
    WHERE M.Mobile = @nMobile
 
+   SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
+   IF @cExtendedValidateSP = '0'
+      SET @cExtendedValidateSP = ''
+
+   SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
+
+   SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
+   IF @cExtendedInfoSP = '0'
+      SET @cExtendedInfoSP = ''
+
+
+   --rdt.rdtGetConfig will return '0', we don't know this is null or status = '0'
+   SELECT
+      @cConfirmStatus = SValue
+   FROM rdt.StorerConfig (NOLOCK)
+   WHERE Function_ID = @nFunc
+     AND StorerKey = @cStorerKey
+     AND ConfigKey = 'PalletStatus'
+
+   IF ISNULL(@cConfirmStatus,'') = ''
+      SET @cConfirmStatus = '3'
+
    -- Initiate var
 	-- EventLog - Sign In Function
    EXEC RDT.rdt_STD_EventLog
@@ -204,19 +221,14 @@ BEGIN
      @cStorerKey  = @cStorerkey,
      @nStep       = @nStep
 
-
    -- Init screen
    SET @cOutField01 = '' 
-   
-	
 
    -- Set the entry point
 	SET @nScn = 3330
 	SET @nStep = 1
-	
 END
 GOTO Quit
-
 
 /********************************************************************************
 Step 1. Scn = 3330. 
@@ -237,15 +249,7 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step_1_Fail
       END
-      
---      IF EXISTS (SELECT 1 FROM dbo.Container WITH (NOLOCK) WHERE Vessel =  @cTruckID And Status >= '5')
---      BEGIN
---         SET @nErrNo = 78253
---         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TruckIDClosed
---         EXEC rdt.rdtSetFocusField @nMobile, 1
---         GOTO Step_1_Fail
---      END
-      
+
       IF NOT EXISTS (SELECT 1 FROM dbo.IDS_VEHICLE WITH (NOLOCK) WHERE VehicleNumber = @cTruckID )
       BEGIN
          SET @nErrNo = 78252
@@ -253,10 +257,7 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step_1_Fail
       END
-      
-      
-      
-   	
+
 		-- Prepare Next Screen Variable
 		SET @cOutField01 = @cTruckID
 		SET @cOutField02 = ''
@@ -264,11 +265,7 @@ BEGIN
 		-- GOTO Next Screen
 		SET @nScn = @nScn + 1
 	   SET @nStep = @nStep + 1
-	    
-	    
-		
 	END  -- Inputkey = 1
-
 
 	IF @nInputKey = 0 
    BEGIN
@@ -287,19 +284,13 @@ BEGIN
       SET @nScn  = @nMenu
       SET @nStep = 0
       SET @cOutField01 = ''
-      
-      
-      
    END
 	GOTO Quit
 
    STEP_1_FAIL:
    BEGIN
       SET @cOutField01 = ''
-      
    END
-   
-
 END 
 GOTO QUIT
 
@@ -313,8 +304,6 @@ Step_2:
 BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
-	   
-	   	
 		SET @cOption = ISNULL(RTRIM(@cInField02),'')
 		
 		IF ISNULL(@cOption, '') = ''
@@ -330,55 +319,89 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid Option'
          GOTO Step_2_Fail
       END
-      
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                        ' @cTruckID, @cPalletID, @cSealNo, @tExtValidate, ' +
+                        ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+                    '@nMobile        INT,                   ' +
+                    '@nFunc          INT,                   ' +
+                    '@cLangCode       NVARCHAR( 3),  ' +
+                    '@nStep          INT,                   ' +
+                    '@nInputKey      INT,                   ' +
+                    '@cFacility      NVARCHAR( 5),          ' +
+                    '@cStorerKey      NVARCHAR( 15), ' +
+                    '@cTruckID       NVARCHAR( 20),         ' +
+                    '@cPalletID       NVARCHAR( 30), ' +
+                    '@cSealNo         NVARCHAR( 20), ' +
+                    '@tExtValidate    VARIABLETABLE READONLY, ' +
+                    '@nErrNo         INT           OUTPUT, ' +
+                    '@cErrMsg        NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                 @cTruckID, @cPalletID, @cSealNo, @tExtValidate,
+                 @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+         END
+      END
+
       IF @cOption = '1'
 		BEGIN
-         	-- Prepare Next Screen Variable
-      		SET @cOutField01 = @cTruckID
-      		SET @cOutField02 = ''
-      		
-      		-- GOTO Next Screen
-      		SET @nScn = @nScn + 1
-      	   SET @nStep = @nStep + 1	   
+         -- Prepare Next Screen Variable
+         SET @cOutField01 = @cTruckID
+         SET @cOutField02 = ''
+
+         -- GOTO Next Screen
+         SET @nScn = @nScn + 1
+         SET @nStep = @nStep + 1
 	   END
 	   ELSE
 		IF @cOption = '5'
 		BEGIN
-		      SET @cPalletID = ''
-		      
-   		   -- Prepare Next Screen Variable
-      		SET @cOutField01 = @cTruckID
-      		SET @cOutField02 = ''
-      		
-      		-- GOTO Next Screen
-      		SET @nScn = @nScn + 2
-      	   SET @nStep = @nStep + 2	 
+         SET @cPalletID = ''
+
+         -- Prepare Next Screen Variable
+         SET @cOutField01 = @cTruckID
+         SET @cOutField02 = ''
+
+         -- GOTO Next Screen
+         SET @nScn = @nScn + 2
+         SET @nStep = @nStep + 2
 	   END 
 	   ELSE
 		IF @cOption = '9'
 		BEGIN
-		      SET @cPalletID = ''
-		      
-   		   -- Prepare Next Screen Variable
-      		SET @cOutField01 = @cTruckID
-      		SET @cOutField02 = ''
-      		
-      		SET @nScanned = 0
-      		
-      		SELECT @nScanned = Count(CD.PalletKey)
-            FROM dbo.Container C WITH (NOLOCK)
-            INNER JOIN dbo.ContainerDetail CD WITH (NOLOCK) ON CD.ContainerKey = C.ContainerKey
-            WHERE C.Vessel = @cTruckID
-            AND C.Status = '0'
-      		
-      		SET @cOutField03 = @nScanned
-      		
-      		-- GOTO Next Screen
-      		SET @nScn = @nScn + 3
-      	   SET @nStep = @nStep + 3	 
+         SET @cPalletID = ''
+
+         -- Prepare Next Screen Variable
+         SET @cOutField01 = @cTruckID
+         SET @cOutField02 = ''
+
+         SET @nScanned = 0
+
+         SELECT @nScanned = Count(CD.PalletKey)
+         FROM dbo.Container C WITH (NOLOCK)
+         INNER JOIN dbo.ContainerDetail CD WITH (NOLOCK) ON CD.ContainerKey = C.ContainerKey
+         WHERE C.Vessel = @cTruckID
+         AND C.Status = '0'
+
+         SET @cOutField03 = @nScanned
+
+         -- GOTO Next Screen
+         SET @nScn = @nScn + 3
+         SET @nStep = @nStep + 3
 	   END
 	END  -- Inputkey = 1
-
 
 	IF @nInputKey = 0 
    BEGIN
@@ -397,11 +420,8 @@ BEGIN
       SET @cOutField01 = @cTruckID
       SET @cOutField02 = ''
    END
-   
-
 END 
 GOTO QUIT
-
 
 /********************************************************************************
 Step 3. Scn = 3332. 
@@ -415,11 +435,8 @@ Step_3:
 BEGIN
    IF @nInputKey = 1
    BEGIN
-      
       SET @cSealNo = ISNULL(RTRIM(@cInField02),'')
-      
-      
-      
+
       IF @cSealNo = ''
       BEGIN
          SET @nErrNo = 78256
@@ -434,7 +451,6 @@ BEGIN
          GOTO Step_3_Fail
       END
 
-      -- Update Container , ContainerDetail , Pallet, PalletDetail Status = '5'
       BEGIN TRAN
       
       SELECT Top 1 @cContainerKey = ContainerKey
@@ -442,7 +458,6 @@ BEGIN
       WHERE Vessel = @cTruckID
       AND Status <> '9'
 
-      
       DECLARE CUR_PD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
 		   
       SELECT CD.PalletKey, C.ContainerType
@@ -450,19 +465,16 @@ BEGIN
       INNER JOIN dbo.ContainerDetail CD WITH (NOLOCK) ON CD.ContainerKey = C.ContainerKey
       WHERE C.Vessel = @cTruckID
       AND C.ContainerKey = @cContainerKey
-      
       Order By CD.PalletKey
-  
-      OPEN CUR_PD  
-      
+      OPEN CUR_PD
       FETCH NEXT FROM CUR_PD INTO @cPalletID, @cContainerType
       WHILE @@FETCH_STATUS <> -1  
-      BEGIN  
-         
-         
+      BEGIN
          UPDATE Pallet
-         SET Status = CASE WHEN @cContainerType = 'DIRECT' THEN '9' ELSE '5'
-                      END      
+            SET Status = CASE WHEN @cContainerType = 'DIRECT' THEN '9'
+                      ELSE '5' END,
+                      EditWho = @cUserName,
+                      EditDate = GETDATE()
          WHERE PalletKey = @cPalletID
          
          IF @@ERROR <> 0    
@@ -472,11 +484,12 @@ BEGIN
             ROLLBACK TRAN
             GOTO Step_3_Fail
          END  
-         
-         
+
          UPDATE PalletDetail
-         SET Status = CASE WHEN @cContainerType = 'DIRECT' THEN '9' ELSE '5'
-                      END      
+         SET Status = CASE WHEN @cContainerType = 'DIRECT' THEN '9'
+                      ELSE '5' END,
+                      EditWho = @cUserName,
+                      EditDate = GETDATE()
          WHERE PalletKey = @cPalletID
          
          IF @@ERROR <> 0    
@@ -488,15 +501,16 @@ BEGIN
          END  
          
          FETCH NEXT FROM CUR_PD INTO @cPalletID, @cContainerType
-         
       END
       CLOSE CUR_PD  
       DEALLOCATE CUR_PD  
       
       Update dbo.Container   
-      SET Status = CASE WHEN @cContainerType = 'DIRECT' THEN '9' ELSE '5'
-                   END   
-         ,Seal01 = @cSealNo
+      SET Status = CASE WHEN @cContainerType = 'DIRECT' THEN '9'
+                   ELSE '5' END,
+                   Seal01 = @cSealNo,
+                   EditWho = @cUserName,
+                   EditDate = GETDATE()
       WHERE ContainerKey = @cContainerKey
       
       IF @@ERROR <> 0 
@@ -508,9 +522,7 @@ BEGIN
       END
 
       -- (james01)
-      SET @cExtendedUpdateSP = ''
-      SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerkey)
-      IF @cExtendedUpdateSP NOT IN ('0', '')
+      IF @cExtendedUpdateSP <> ''
       BEGIN
          SET @nErrNo = 0
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +     
@@ -525,7 +537,7 @@ BEGIN
             '@nInputKey                INT, '           + 
             '@cStorerKey               NVARCHAR( 15), ' +
             '@cTruckID                 NVARCHAR( 20), ' +
-            '@cPalletID                NVARCHAR( 20), ' +
+            '@cPalletID                NVARCHAR( 30), ' +
             '@cSealNo                  NVARCHAR( 20), ' +
             '@nErrNo                   INT           OUTPUT,  ' +
             '@cErrMsg                  NVARCHAR( 20) OUTPUT   ' 
@@ -552,18 +564,12 @@ BEGIN
         @cFacility   = @cFacility,
         @cStorerKey  = @cStorerkey,
         @cTruckID    = @cTruckID,
-        --@cRefNo1     = @cTruckID,
         @cID         = @cPalletID,
-        --@cRefNo2     = @cPalletID,
         @nStep       = @nStep
 		
       -- Prepare Next Screen Variable
       SET @cOutField01 = ''
-      
-      -- Display Message on Screen
---      SET @nErrNo = 78261
---      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Truck Closed'
-      
+
       SET @nErrNo = 0
       SET @cErrMsg1 = 'Truck Closed'
       EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1
@@ -575,7 +581,6 @@ BEGIN
       -- GOTO Next Screen
       SET @nScn = @nScn - 2
       SET @nStep = @nStep - 2
-      
 	END  -- Inputkey = 1
    
    IF @nInputKey = 0 
@@ -609,8 +614,6 @@ Step_4:
 BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
-	   
-	   	
 		SET @cPalletID = ISNULL(RTRIM(@cInField02),'')
 		
 		IF @cPalletID = ''
@@ -627,8 +630,7 @@ BEGIN
 	   FROM dbo.PalletDetail PD WITH (NOLOCK)
 	   INNER JOIN dbo.Container C WITH (NOLOCK) ON C.MBOLKey = PD.UserDefine03
 	   WHERE PD.PalletKey = @cPalletID
-	   
-	   
+
       IF ISNULL(@cVessel,'') <> ''
 	   BEGIN
 	      IF @cVessel <> @cTruckID
@@ -639,14 +641,13 @@ BEGIN
          END
 	   END
 	   
-	   IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK) WHERE PalletKey = @cPalletID AND Status = '3')
+	   IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK) WHERE PalletKey = @cPalletID AND Status = @cConfirmStatus)
 	   BEGIN
 		   SET @nErrNo = 78274
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InvalidPalletID'
          GOTO Step_4_Fail
 	   END
-	   
-	   
+
 	   BEGIN TRAN 
 	      
 	   DELETE FROM dbo.ContainerDetail
@@ -662,7 +663,9 @@ BEGIN
 	   END
 		
 		UPDATE dbo.Pallet
-		SET Status = '3'
+		SET Status = @cConfirmStatus,
+          EditWho = @cUserName,
+          EditDate = GETDATE()
 		WHERE PalletKey = @cPalletID
 		
 		IF @@ERROR <> 0 
@@ -674,7 +677,9 @@ BEGIN
 	   END
 	   
 	   UPDATE dbo.PalletDetail
-		SET Status = '3'
+		SET Status = @cConfirmStatus,
+          EditWho = @cUserName,
+          EditDate = GETDATE()
 		WHERE PalletKey = @cPalletID
 		
 		IF @@ERROR <> 0 
@@ -695,15 +700,11 @@ BEGIN
         @cFacility   = @cFacility,
         @cStorerKey  = @cStorerkey,
         @cTruckID    = @cTruckID,
-        --@cRefNo1     = @cTruckID,
         @cID         = @cPalletID,
-        --@cRefNo2     = @cPalletID
         @nStep       = @nStep
 
-      SET @cOutField02 = ''        
-		
+      SET @cOutField02 = ''
 	END  -- Inputkey = 1
-
 
 	IF @nInputKey = 0 
    BEGIN
@@ -722,8 +723,6 @@ BEGIN
       SET @cOutField01 = @cTruckID
       SET @cOutField02 = ''
    END
-   
-
 END 
 GOTO QUIT
 
@@ -737,8 +736,6 @@ Step_5:
 BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
-	   
-	   	
 		SET @cPalletID = ISNULL(RTRIM(@cInField02),'')
 		
 		IF @cPalletID = ''
@@ -747,10 +744,10 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'PalletID Req'
          GOTO Step_5_Fail
 	   END
-	   
-	   IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK)
+
+      IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK)
 	                   WHERE PalletKey= @cPalletID
-	                   AND Status = '3')
+	                   AND Status = @cConfirmStatus)
 	   BEGIN
 	      SET @nErrNo = 78269
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid PalletID'
@@ -763,10 +760,41 @@ BEGIN
          SET @nErrNo = 78273
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'PalletScannedB4'
          GOTO Step_5_Fail
-      END	               
-	                
-	   
-	                
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                  ' @cTruckID, @cPalletID, @cSealNo, @tExtValidate, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile        INT,                   ' +
+               '@nFunc          INT,                   ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep          INT,                   ' +
+               '@nInputKey      INT,                   ' +
+               '@cFacility      NVARCHAR( 5),          ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cTruckID       NVARCHAR( 20),         ' +
+               '@cPalletID       NVARCHAR( 30), ' +
+               '@cSealNo         NVARCHAR( 20), ' +
+               '@tExtValidate    VARIABLETABLE READONLY, ' +
+               '@nErrNo         INT           OUTPUT, ' +
+               '@cErrMsg        NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cTruckID, @cPalletID, @cSealNo, @tExtValidate,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_5_Fail
+         END
+      END
 	   
 	   IF NOT EXISTS ( SELECT 1 FROM dbo.Container WITH (NOLOCK) 
                       WHERE Vessel = @cTruckID
@@ -877,9 +905,7 @@ BEGIN
         @cFacility   = @cFacility,
         @cStorerKey  = @cStorerkey,
         @cTruckID    = @cTruckID,
-        --@cRefNo1     = @cTruckID,
         @cID         = @cPalletID,
-        --@cRefNo2     = @cPalletID
         @nStep       = @nStep
 
       SET @nScanned = 0 
@@ -937,8 +963,7 @@ BEGIN
 
       StorerKey = @cStorerKey,
       Facility  = @cFacility, 
-      Printer   = @cPrinter, 
-      -- UserName  = @cUserName,
+      Printer   = @cPrinter,
 		InputKey  =	@nInputKey,
 
       V_UOM = @cPUOM,
@@ -946,9 +971,12 @@ BEGIN
       V_Integer1 = @nScanned,
   
       V_String1 = @cTruckID,
-      V_String2 = @cPalletID,
-      V_String3 = @cContainerKey, 
-	   --V_String4 = @nScanned,
+      V_String2 = @cContainerKey,
+      V_String3 = @cExtendedValidateSP,
+      V_String4 = @cExtendedUpdateSP,
+      V_String5 = @cExtendedInfoSP,
+      V_String6 = @cConfirmStatus,
+      V_String41 = @cPalletID,
       
       I_Field01 = @cInField01,  O_Field01 = @cOutField01, 
       I_Field02 = @cInField02,  O_Field02 = @cOutField02, 

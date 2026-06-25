@@ -32,21 +32,21 @@ BEGIN
 
    DECLARE @nTranCount INT
 
-   DECLARE    
+   DECLARE
       @cConfirmStatus          NVARCHAR( 20),
       @cUserName               NVARCHAR( 18),
       @cMBOLKey                NVARCHAR( 10),
       @nLoopIndex              INT
 
-   SELECT
-      @cUserName  = UserName
-   FROM RDTMOBREC (NOLOCK)
-   WHERE Mobile = @nMobile
+      SELECT
+         @cUserName  = UserName
+      FROM RDTMOBREC (NOLOCK)
+      WHERE Mobile = @nMobile
 
-   SET @cConfirmStatus = rdt.RDTGetConfig( @nFunc, 'ConfirmStatus', @cStorerKey)
+      SET @cConfirmStatus = rdt.RDTGetConfig( @nFunc, 'ConfirmStatus', @cStorerKey)
 
-   IF ISNULL(@cConfirmStatus,'') = ''
-      SET @cConfirmStatus = '7'
+      IF ISNULL(@cConfirmStatus,'') = ''
+         SET @cConfirmStatus = '7'
 
    IF @nFunc = 1718
    BEGIN
@@ -54,7 +54,7 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            DECLARE @tMBOL TABLE 
+            DECLARE @tMBOL TABLE
             (
                Rowref INT IDENTITY(1,1),
                MbolKey NVARCHAR( 10) PRIMARY KEY
@@ -66,11 +66,12 @@ BEGIN
             INNER JOIN dbo.CONTAINER CT WITH(NOLOCK) ON CT.ContainerKey = CD.ContainerKey
             INNER JOIN dbo.PALLETDETAIL PD WITH(NOLOCK) ON PD.PalletKey = CD.PalletKey
             INNER JOIN dbo.MBOLDETAIL MD WITH(NOLOCK) ON MD.OrderKey = PD.UserDefine01
+            INNER JOIN dbo.MBOL M WITH(NOLOCK) ON M.MbolKey = MD.MbolKey
             WHERE CT.Vessel = @cTruckID
-               AND CT.Status <> '9'
+               AND M.Status <> @cConfirmStatus
 
-            SET @nTranCount = @@TRANCOUNT  
-            BEGIN TRAN  
+            SET @nTranCount = @@TRANCOUNT
+            BEGIN TRAN
             SAVE TRAN rdt_1718ExtUpd01
             BEGIN TRY
                UPDATE M WITH(ROWLOCK)
@@ -82,19 +83,19 @@ BEGIN
                INNER JOIN @tMBOL T ON M.MbolKey = T.MbolKey
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 266001  
+               SET @nErrNo = 266001
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Close MBOL failed
                GOTO RollBackTran
             END CATCH
          END
       END
    END
-   GOTO Quit  
-  
-RollBackTran:  
-   ROLLBACK TRAN rdt_1718ExtUpd01  
-Quit:  
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
+                  GOTO Quit
+
+RollBackTran:
+   ROLLBACK TRAN rdt_1718ExtUpd01
+   Quit:
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END
 GO

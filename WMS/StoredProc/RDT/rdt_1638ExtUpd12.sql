@@ -45,6 +45,7 @@ BEGIN
    SAVE TRAN rdt_1638ExtUpd12
 
    DECLARE @cOrderKey         NVARCHAR( 10)
+   DECLARE @cMBolKey         NVARCHAR( 10)
    DECLARE @cPalletLineNumber NVARCHAR( 5)
    DECLARE @cUserName         NVARCHAR( 18)
 
@@ -58,8 +59,10 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            SELECT TOP 1 @cOrderKey = PH.OrderKey 
-            FROM dbo.ORDERS O WITH (NOLOCK) 
+            SELECT TOP 1
+               @cOrderKey = PH.OrderKey,
+               @cMBolKey = O.Mbolkey
+            FROM dbo.ORDERS O WITH (NOLOCK)
             JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON (O.ORDERKEY = PH.ORDERKEY) 
             JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON (PH.PICKSLIPNO=PD.PICKSLIPNO)
             WHERE O.STORERKEY = @cStorerkey 
@@ -88,6 +91,7 @@ BEGIN
             BEGIN
                UPDATE dbo.PALLETDETAIL SET
                   UserDefine01 = @cOrderKey,
+                  UserDefine03 = @cMbolKey,
                   EditWho = 'rdt.' + @cUserName,
                   EditDate = GETDATE()
                WHERE PalletKey = @cPalletKey
@@ -99,6 +103,9 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Upd PLTD Fail'
                   GOTO RollBackTran
                END
+
+               UPDATE MBOL SET PlaceOfLoadingQualifier = 'O'
+                  WHERE MbolKey = @cMBolKey
 
                FETCH NEXT FROM @curUpdPlt INTO @cPalletLineNumber
             END
