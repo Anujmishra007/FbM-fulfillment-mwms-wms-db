@@ -313,7 +313,7 @@ BEGIN
                PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, SourceKey, WaveKey, Priority, SourcePriority, TrafficCop)
             VALUES (
                @cNewTaskDetailKey, CASE WHEN @bIsASTMV = 1 THEN 'ASTMV' ELSE 'ASTTPA' END, '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, @nQTY, @cCaseID, @cToLOCAreaKey, @nUOMQty,
-               'PP', @cStorerKey, @cSKU, @cLOT, @cListKey, @nTransitCount, @cSourceType, @cOrgTaskKey, @cTaskWaveKey, @cPriority, @cSourcePriority, NULL)
+               'PP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount, @cSourceType, @cOrgTaskKey, @cTaskWaveKey, @cPriority, @cSourcePriority, NULL)
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 256503
@@ -423,7 +423,7 @@ BEGIN
                PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, SourceKey, WaveKey, Priority, SourcePriority, TrafficCop)
             VALUES (
                @cNewTaskDetailKey, CASE WHEN @bIsASTMV2 = 1 THEN 'ASTMV' ELSE 'ASTTPA' END, '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, @nQTY, @cCaseID, @cToLOCAreaKey, @nUOMQty,
-               'PP', @cStorerKey, @cSKU, @cLOT, @cListKey, @nTransitCount, @cSourceType, @cOrgTaskKey, @cTaskWaveKey, @cPriority, @cSourcePriority, NULL)
+               'PP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount, @cSourceType, @cOrgTaskKey, @cTaskWaveKey, @cPriority, @cSourcePriority, NULL)
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 256507
@@ -462,7 +462,7 @@ BEGIN
          PickMethod, Storerkey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, Priority, SourcePriority, TrafficCop)
       VALUES (
          @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey, 
-         'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cPriority, @cSourcePriority, NULL)
+         'FP', @cStorerkey, '', '', '', @nTransitCount, @cSourceType, @cWaveKey, @cPriority, @cSourcePriority, NULL)
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 256505
