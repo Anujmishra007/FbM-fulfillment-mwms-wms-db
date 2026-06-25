@@ -87,7 +87,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''VA''
-      AND RECEIPT.STATUS = ''0''
+      AND RECEIPT.' + @c_RefNoLKUP + ' = ''0''
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
       )) '),
@@ -99,7 +99,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''UNL''
-      AND RECEIPT.STATUS = ''2''
+      AND RECEIPT.' + @c_RefNoLKUP + ' = ''2''
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
       )) ')
@@ -115,7 +115,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''0''
-      AND RECEIPT.STATUS NOT IN (''0'',''9'',''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''0'',''9'',''CANC'',''VA'',''UNL'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
       )) '), 
@@ -127,7 +127,7 @@ BEGIN
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''1''
       AND mspGetCustomASNStatus01_rd.FINALIZEFLAG =''N''
-      AND RECEIPT.STATUS NOT IN (''1'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''1'', ''9'', ''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) < SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0))
       AND SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) > 0  
@@ -140,7 +140,7 @@ BEGIN
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''REC''
       AND mspGetCustomASNStatus01_rd.FINALIZEFLAG =''N''
-      AND RECEIPT.STATUS NOT IN (''REC'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''REC'', ''9'', ''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0))
       AND SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) > 0  
@@ -152,7 +152,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''PFIN''
-      AND RECEIPT.STATUS NOT IN (''PFIN'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''PFIN'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS = ''1''
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0)) > SUM(mspGetCustomASNStatus01_rd.QtyReceived)
@@ -164,7 +164,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''FIN''
-      AND RECEIPT.STATUS NOT IN (''FIN'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''FIN'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS = ''9''
       )) '),
     ('externasnStatus', 'IP', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
@@ -181,7 +181,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''IP''
-      AND RECEIPT.STATUS NOT IN (''IP'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''IP'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS IN (''PFIN'', ''FIN'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0)) > SUM(mspGetCustomASNStatus01_rd.QtyReceived)
@@ -201,7 +201,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''PC''
-      AND RECEIPT.STATUS NOT IN (''PC'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''PC'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS IN (''PFIN'', ''FIN'', ''IP'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(mspGetCustomASNStatus01_lli.Qty) = 0
@@ -233,7 +233,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''VA''
-      AND RECEIPT.STATUS = ''0''
+      AND RECEIPT.' + @c_RefNoLKUP + '  = ''0''
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
       )) THEN ''VA''  
@@ -246,7 +246,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''UNL''
-      AND RECEIPT.STATUS = ''2''
+      AND RECEIPT.' + @c_RefNoLKUP + '  = ''2''
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
       )) THEN ''UNL''
@@ -263,7 +263,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''0''
-      AND RECEIPT.STATUS NOT IN (''0'',''9'',''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''0'',''9'',''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = 0
       )) THEN ''0''  
@@ -276,7 +276,7 @@ BEGIN
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''1''
       AND mspGetCustomASNStatus01_rd.FINALIZEFLAG =''N''
-      AND RECEIPT.STATUS NOT IN (''1'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''1'', ''9'', ''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) < SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0))
       AND SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) > 0  
@@ -290,7 +290,7 @@ BEGIN
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''REC''
       AND mspGetCustomASNStatus01_rd.FINALIZEFLAG =''N''
-      AND RECEIPT.STATUS NOT IN (''REC'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''REC'', ''9'', ''CANC'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) = SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0))
       AND SUM(COALESCE(mspGetCustomASNStatus01_rd.BeforeReceivedQty,0)) > 0  
@@ -303,7 +303,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''PFIN''
-      AND RECEIPT.STATUS NOT IN (''PFIN'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''PFIN'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS = ''1''
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0)) > SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyReceived,0))
@@ -317,7 +317,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''FIN''
-      AND RECEIPT.STATUS NOT IN (''FIN'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''FIN'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS = ''9''
       )) THEN ''FIN''
 
@@ -335,7 +335,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''IP''
-      AND RECEIPT.STATUS NOT IN (''IP'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''IP'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS IN (''PFIN'', ''FIN'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyExpected,0)) > SUM(COALESCE(mspGetCustomASNStatus01_rd.QtyReceived,0))
@@ -356,7 +356,7 @@ BEGIN
       WHERE mspGetCustomASNStatus01_cl.LISTNAME = ''ASNSTATUS'' 
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''PC''
-      AND RECEIPT.STATUS NOT IN (''PC'', ''9'', ''CANC'')
+      AND RECEIPT.ASNSTATUS NOT IN (''PC'', ''9'', ''CANC'')
       AND RECEIPT.ASNSTATUS IN (''PFIN'', ''FIN'', ''IP'')
       GROUP BY mspGetCustomASNStatus01_rd.ReceiptKey 
       HAVING SUM(COALESCE(mspGetCustomASNStatus01_lli.Qty,0)) = 0
