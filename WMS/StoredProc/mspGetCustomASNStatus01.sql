@@ -165,7 +165,7 @@ BEGIN
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''FIN''
       AND RECEIPT.ASNSTATUS NOT IN (''FIN'', ''9'', ''CANC'')
-      AND RECEIPT.ASNSTATUS = ''9''
+      AND RECEIPT.STATUS = ''9''
       )) '),
     ('externasnStatus', 'IP', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
       JOIN RECEIPT mspGetCustomASNStatus01_r (NOLOCK) ON mspGetCustomASNStatus01_r.StorerKey = mspGetCustomASNStatus01_cl.StorerKey 
@@ -318,7 +318,7 @@ BEGIN
       AND mspGetCustomASNStatus01_cl.StorerKey = RECEIPT.StorerKey 
       AND mspGetCustomASNStatus01_cl.CODE = ''FIN''
       AND RECEIPT.ASNSTATUS NOT IN (''FIN'', ''9'', ''CANC'')
-      AND RECEIPT.ASNSTATUS = ''9''
+      AND RECEIPT.STATUS = ''9''
       )) THEN ''FIN''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomASNStatus01_cl (NOLOCK) 
