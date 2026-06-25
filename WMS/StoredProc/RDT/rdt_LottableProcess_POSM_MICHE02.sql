@@ -111,7 +111,7 @@ BEGIN
             END
 
             -- Validate PCS DOT format (must be exactly 4 digits and numeric)
-            IF LEN(@WeekYear) = 4 AND ISNUMERIC(SUBSTRING(@WeekYear, 1, 2)) > 0 AND ISNUMERIC(SUBSTRING(@WeekYear, 3, 2)) > 0
+            IF LEN(@WeekYear) = 4 AND @WeekYear LIKE '[0-9][0-9][0-9][0-9]'
             BEGIN
                 -- Parse week and year from XXYY format
                 SET @nWeek = CAST(SUBSTRING(@WeekYear, 1, 2) AS INT)
