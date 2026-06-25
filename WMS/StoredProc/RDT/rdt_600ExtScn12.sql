@@ -162,6 +162,9 @@ BEGIN
             BEGIN
                 IF @nInputKey = 1
                 BEGIN
+                    -- Get LOC from RDTMOBREC since it's not in @tExtScnData
+                    SELECT @cLOC = V_Loc FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
+
                     -- Get session data
                     SELECT @cID = Value FROM @tExtScnData WHERE Variable = '@cID'
                     SELECT @cReceiptKey = Value FROM @tExtScnData WHERE Variable = '@cReceiptKey'
@@ -180,16 +183,6 @@ BEGIN
                       AND ISNULL(Lottable02, '') <> ''
                     ORDER BY EditDate DESC
 
-                    -- Set MIN DOT value to Field 02 (first lottable position)
-                    SET @cOutField02 = ISNULL(@cLottable02, '')
-
-                    SET @cFieldAttr02 = ''    -- MIN DOT (editable)
-                    SET @cFieldAttr04 = 'O'   -- SUB INV CODE (display only)
-                    SET @cFieldAttr06 = 'O'   -- MFG DATE (display only)
-                    SET @cFieldAttr08 = 'O'   -- COO (display only)
-                    SET @cFieldAttr10 = ''    -- PCS DOT (editable)
-
-                    -- Continue to Lottable screen (Step 5)
                     SET @nAfterStep = 5
                     SET @nAfterScn = 3990
                     GOTO Quit
@@ -209,36 +202,19 @@ BEGIN
         -- Case 4: On Lottable screen (Step 5) with ENTER/ESC
         IF @nStep = 5
         BEGIN
-            insert into traceinfo (tracename, step1, step2, col1, col2)
-            values ('rdt_600ExtScn12_Step5', @nStep, @nInputKey, @cInField01, @cInField02)
             IF @nInputKey = 1  -- ENTER
             BEGIN
-                -- For ENTER, don't stay on Step 5 - let normal flow continue to validation/update SPs
-                -- Set @nAfterStep to 6 to bypass the "IF @nAfterStep = 5 GOTO Quit" check in main SP
+                -- Set next screen to QTY screen
+                -- ExtVal32 validation must pass for framework to proceed
                 SET @nAfterStep = 6
-                SET @nAfterScn = 4035  -- QTY screen (next screen in flow)
-                GOTO Quit
+                SET @nAfterScn = 4035
             END
 
-            IF @nInputKey = 0  -- ESC - Go back to SKU screen
+            IF @nInputKey = 0  -- ESC
             BEGIN
-                insert into traceinfo (tracename, step1, step2, col1, col2)
-                values ('rdt_600ExtScn12_aftesc', @nStep, @nScn, @cInField01, @cInField02)
-                -- Get TO ID from session data
-                SELECT @cID = Value FROM @tExtScnData WHERE Variable = '@cID'
-
-                -- Go back to SKU screen (Step 4, Screen 4033)
-                SET @nAfterScn = 4033
+                -- Go back to SKU screen
                 SET @nAfterStep = 4
-                SET @cOutField01 = @cID  -- Keep TO ID
-                SET @cOutField02 = ''    -- Clear SKU field
-                SET @cOutField03 = ''    -- Clear SKU Desc1
-                SET @cOutField04 = ''    -- Clear SKU Desc2
-
-                insert into traceinfo (tracename, step1, step2, col1, col2)
-                values ('rdt_600ExtScn12_ESC_Step5_AFTER', @nAfterStep, @nAfterScn, @cID, @cOutField01)
-
-                GOTO Quit
+                SET @nAfterScn = 4033
             END
         END
     END
