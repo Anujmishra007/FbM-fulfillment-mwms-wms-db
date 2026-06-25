@@ -3040,17 +3040,89 @@ BEGIN
                END
 
                IF @cDropID = '' AND @cScannedDropID <> ''
-                  AND EXISTS (
-                     SELECT 1
-                     FROM RDT.rdtPickLog WITH(NOLOCK)
-                     WHERE DropID = @cScannedDropID
-                  )
                BEGIN
-                  SET @nErrNo = 255530
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID is in use
-                  GOTO UPD_RDTMOBREC
+                  IF EXISTS ( SELECT 1
+                              FROM RDT.rdtPickLog WITH(NOLOCK)
+                              WHERE DropID = @cScannedDropID )
+                  BEGIN
+                     SET @nErrNo = 255530
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID is in use
+                     GOTO UPD_RDTMOBREC
+                  END
+
+                  IF EXISTS(SELECT 1 
+                              FROM dbo.PackDetail PD WITH(NOLOCK)
+                              WHERE DropID = @cScannedDropID
+                                 AND Status <> '9')
+                  BEGIN
+                     SET @nErrNo = 255548
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID is in use
+                     GOTO UPD_RDTMOBREC
+                  END
+
+                  DECLARE 
+                           @cOrderKeyTemp          NVARCHAR( 10),
+                           @cPickSlipNoTemp        NVARCHAR( 18),
+                           @cLoadKeyTemp           NVARCHAR( 10)
+
+                  SET @cOrderKeyTemp = ''
+                  SELECT TOP 1
+                     @cOrderKeyTemp = OrderKey
+                  FROM PickDetail WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cFromDropID
+                     AND Status <= '5'
+                     AND OrderKey <> @cCurrentOrderKey
+                  ORDER BY EditDate DESC
+
+                  IF @@ROWCOUNT > 0 AND @cOrderKeyTemp IS NOT NULL AND @cOrderKeyTemp <> ''
+                  BEGIN
+                     -- Get discrete pick slip
+                     SELECT @cPickSlipNoTemp = PickHeaderKey
+                     FROM dbo.PickHeader WITH (NOLOCK)
+                     WHERE OrderKey = @cOrderKeyTemp
+
+                     IF ISNULL(@cPickSlipNoTemp , '') = ''
+                     BEGIN
+                        SET @cLoadKeyTemp = ''
+                        SELECT @cLoadKeyTemp = LoadKey 
+                        FROM dbo.LoadPlanDetail WITH (NOLOCK) 
+                        WHERE OrderKey = @cOrderKey
+
+                        IF ISNULL(@cLoadKeyTemp, '' ) <> ''
+                        BEGIN
+                           SELECT @cPickSlipNoTemp = PickHeaderKey
+                           FROM PickHeader WITH (NOLOCK)
+                           WHERE ExternOrderKey = @cLoadKeyTemp
+                              AND OrderKey = ''
+                        END
+                     END
+
+                     IF ISNULL(@cPickSlipNoTemp, '') <> ''
+                     BEGIN
+                        IF NOT EXISTS(SELECT 1
+                                 FROM dbo.PackDetail WITH(NOLOCK)
+                                 WHERE PickSlipNo = @cPickSlipNoTemp
+                                    AND DropID = @cScannedDropID)
+                        BEGIN
+                           SET @nErrNo = 255549
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID is in use
+                           GOTO UPD_RDTMOBREC
+                        END
+
+                        IF EXISTS(SELECT 1
+                                 FROM dbo.PackDetail WITH(NOLOCK)
+                                 WHERE PickSlipNo = @cPickSlipNoTemp
+                                    AND DropID = @cScannedDropID
+                                    AND Status <> '9')
+                        BEGIN
+                           SET @nErrNo = 255550
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID is in use
+                           GOTO UPD_RDTMOBREC
+                        END
+                     END
+                  END
                END
-               
 
                IF @cDropID <> '' AND @cScannedDropID <> @cDropID
                BEGIN
