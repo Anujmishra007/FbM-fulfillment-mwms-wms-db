@@ -118,7 +118,7 @@ BEGIN
                 SET @nYear = CAST(SUBSTRING(@WeekYear, 3, 2) AS INT)
 
                 -- Validate week range (01-52)
-                IF @nWeek < 1 OR @nWeek > 52
+                IF @nWeek < 1 OR @nWeek > 53
                 BEGIN
                     SET @nErrNo = 270502
                     SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
