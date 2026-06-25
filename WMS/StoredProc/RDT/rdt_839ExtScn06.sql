@@ -3052,8 +3052,9 @@ BEGIN
 
                   IF EXISTS(SELECT 1 
                               FROM dbo.PackDetail PD WITH(NOLOCK)
-                              WHERE DropID = @cScannedDropID
-                                 AND Status <> '9')
+                              INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+                              WHERE PD.DropID = @cScannedDropID
+                                 AND PH.Status <> '9')
                   BEGIN
                      SET @nErrNo = 255548
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID is in use
@@ -3070,7 +3071,7 @@ BEGIN
                      @cOrderKeyTemp = OrderKey
                   FROM PickDetail WITH (NOLOCK)
                   WHERE StorerKey = @cStorerKey
-                     AND DropID = @cFromDropID
+                     AND DropID = @cScannedDropID
                      AND Status <= '5'
                      AND OrderKey <> @cCurrentOrderKey
                   ORDER BY EditDate DESC
@@ -3110,11 +3111,12 @@ BEGIN
                            GOTO UPD_RDTMOBREC
                         END
 
-                        IF EXISTS(SELECT 1
-                                 FROM dbo.PackDetail WITH(NOLOCK)
-                                 WHERE PickSlipNo = @cPickSlipNoTemp
-                                    AND DropID = @cScannedDropID
-                                    AND Status <> '9')
+                        IF EXISTS(SELECT 1 
+                              FROM dbo.PackDetail PD WITH(NOLOCK)
+                              INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+                              WHERE PD.DropID = @cScannedDropID
+                                 AND PD.PickSlipNo = @cPickSlipNoTemp
+                                 AND PH.Status <> '9')
                         BEGIN
                            SET @nErrNo = 255550
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID is in use
