@@ -43,17 +43,67 @@ BEGIN
    @c_Loc NVARCHAR(50),
    @c_ID NVARCHAR(50)
 
+   SELECT TOP 1 @c_StorerKey = o.StorerKey
+   FROM ORDERS o (NOLOCK)
+   JOIN WAVEDETAIL wd (NOLOCK) ON o.OrderKey = wd.OrderKey
+   WHERE wd.WaveKey = @c_WaveKey
+   
+
    --debug
-   PRINT '@c_uom=' + @c_uom +  ', @n_uombase=' + CONVERT(NVARCHAR, @n_uombase)+ 
+   PRINT '@c_StorerKey='+ @c_StorerKey +', @c_uom=' + @c_uom +  ', @n_uombase=' + CONVERT(NVARCHAR, @n_uombase)+ 
    ',@n_qtylefttofulfill=' + CONVERT(NVARCHAR, @n_qtylefttofulfill)+ ', @c_Facility=' + @c_Facility+
    ', @c_HostWHCode=' + @c_HostWHCode + ', @c_OtherParms=' + @c_OtherParms + ', @c_lot=' + @c_lot+ ', @n_PalletQty=' + CONVERT(NVARCHAR, @n_PalletQty)
 
-   --debug
-   SELECT * FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES
-   SELECT * FROM #T_INV
-   SELECT * FROM #ALLOCATE_CANDIDATES  
 
    EXEC isp_Init_Allocate_Candidates
+
+   
+   IF OBJECT_ID('tempdb..##TMP_PREALLOCATE_CURSOR_CANDIDATES','u') IS NULL
+   BEGIN
+      CREATE TABLE ##TMP_PREALLOCATE_CURSOR_CANDIDATES
+      ( 
+         StorerKey NVARCHAR(15), 
+         Facility NVARCHAR(10),
+         SKU NVARCHAR(20),
+         LOT NVARCHAR(100)
+      )
+   END
+
+   --debug
+   print ''
+
+   INSERT INTO ##TMP_PREALLOCATE_CURSOR_CANDIDATES
+      SELECT 
+      STORERKEY = MIN(LOTXLOCXID.STORERKEY), 
+      FACILITY = LOC.FACILITY,
+      SKU = MIN(LOTXLOCXID.SKU), 
+      LOT = LOT.LOT     
+      FROM LOT (NOLOCK), LOTATTRIBUTE (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK), ID (NOLOCK), SKU (NOLOCK), SKUxLOC (NOLOCK) 
+      WHERE LOTXLOCXID.STORERKEY =  @c_storerkey 
+        AND LOTXLOCXID.SKU = @c_sku 
+        AND LOT.STATUS = 'OK' AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK' And LOC.LocationFlag = 'NONE' 
+        AND LOTXLOCXID.ID = ID.ID AND lot.lot = lotattribute.lot 
+        AND LOTXLOCXID.LOT = LOT.LOT AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT 
+        AND LOTXLOCXID.LOC = LOC.LOC 
+        AND SKU.SKU = LOTXLOCxID.SKU 
+        AND SKU.STORERKEY = LOTXLOCXID.STORERKEY 
+        AND LOTATTRIBUTE.SKU = SKU.SKU AND LOTATTRIBUTE.STORERKEY = SKU.STORERKEY 
+        AND LOC.FACILITY = @c_Facility 
+        AND SKUxLOC.StorerKey = LOTxLOCxID.StorerKey 
+        AND SKUxLOC.SKU = LOTxLOCxID.SKU 
+        AND SKUxLOC.LOC = LOTxLOCxID.LOC 
+        AND NOT EXISTS(SELECT 1 FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES TPC 
+          WHERE TPC.LOT = LOT.LOT AND TPC.SKU = LOTXLOCXID.SKU AND TPC.STORERKEY = LOTXLOCXID.STORERKEY AND TPC.FACILITY = LOC.FACILITY)
+        GROUP BY LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05, LOC.Facility
+        HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked) - MIN(LOT.QtyPreAllocated)) >=  @n_uombase
+        ORDER BY CASE WHEN (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) >=  @n_uombase
+                            AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) %  @n_UOMBase   = 0 
+                      THEN 1 ELSE 0 END, 
+                      (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)),
+                      LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 
+
+   --debug
+   SELECT * FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES
 
    CREATE TABLE #T_INV
    (
@@ -95,7 +145,11 @@ BEGIN
       LOTATTRIBUTE.Lottable05, 
       F.FacSort, LOC.LogicalLocation, LOC.LOC   
 
-
+   --debug
+   SELECT * FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES
+   SELECT * FROM #T_INV
+   SELECT * FROM #ALLOCATE_CANDIDATES  
+   ---------
    SELECT TOP 1
    @c_StorerKey = TPC.STORERKEY,
    @c_SKU = TPC.SKU
@@ -109,25 +163,35 @@ BEGIN
    WHERE S.SKU = @c_SKU
    AND S.StorerKey = @c_StorerKey
 
-   WHILE @n_qtylefttofulfill > 0
-   BEGIN
-      SELECT TOP 1
-      @c_Loc = INV.Loc, 
-      @c_ID = INV.ID,
-      @n_QtyToAllocate = IIF(@n_qtylefttofulfill >= (INV.QtyAvailable), INV.QtyAvailable, @n_qtylefttofulfill),
-      @n_IDQtyAvailable = INV.QtyAvailable
-      FROM #T_INV INV (NOLOCK)
-      WHERE SKUxLOC.Locationtype = "PICK"
+   DECLARE CUR_INV CURSOR READ_ONLY FAST_FORWARD FOR
+   SELECT 
+      INV.Loc,
+      INV.Lot, 
+      INV.ID,
+      IIF(@n_qtylefttofulfill >= (INV.QtyAvailable), INV.QtyAvailable, @n_qtylefttofulfill),
+      INV.QtyAvailable
+   FROM #T_INV INV (NOLOCK)
+      JOIN LOTxLOCxID (NOLOCK) ON LOTxLOCxID.Loc = INV.LOC AND LOTxLOCxID.ID = INV.ID AND INV.LOT = LOTxLOCxID.LOT
+      JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   
+      JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey AND LOTxLOCxID.Sku = SKUxLOC.Sku AND LOTxLOCxID.Loc = SKUxLOC.Loc  
+      JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot AND LOTxLOCxID.StorerKey = LOTATTRIBUTE.StorerKey AND LOTxLOCxID.Sku = LOTATTRIBUTE.Sku   
+   WHERE SKUxLOC.Locationtype = "PICK"
       AND LOC.Locationflag <> "HOLD"
       AND LOC.Locationflag <> "DAMAGE"
       AND LOC.Status <> "HOLD"
       AND LOC.Facility = @c_Facility   
-      AND LOC.Facility = F.Facility   
       AND INV.QtyAvailable > 0
-      ORDER BY 
+   ORDER BY 
       LOTATTRIBUTE.Lottable05, 
-      F.FacSort, LOC.LogicalLocation, LOC.LOC   
+      LOC.LogicalLocation, 
+      LOC.LOC   
 
+   OPEN CUR_INV
+   FETCH NEXT FROM CUR_INV INTO @c_Loc, @c_Lot, @c_ID, @n_QtyToAllocate, @n_IDQtyAvailable
+
+   WHILE @@FETCH_STATUS = 0 AND @n_qtylefttofulfill > 0
+   BEGIN
+      
       SET @n_qtylefttofulfill = @n_qtylefttofulfill - @n_QtyToAllocate
       SET @n_IDQtyAvailable = @n_IDQtyAvailable - @n_QtyToAllocate
 
@@ -136,14 +200,16 @@ BEGIN
       WHERE Lot = @c_lot AND Loc = @c_Loc AND ID = @c_ID AND WaveKey = @c_WaveKey
 
       EXEC isp_Insert_Allocate_Candidates
-         @c_Lot = @c_Lot
-      ,  @c_Loc = @c_Loc
-      ,  @c_ID  = @c_ID
-      ,  @n_QtyAvailable = @n_QtyToAllocate
-      ,  @c_OtherValue = '1'
+            @c_Lot = @c_Lot
+         ,  @c_Loc = @c_Loc
+         ,  @c_ID  = @c_ID
+         ,  @n_QtyAvailable = @n_QtyToAllocate
+         ,  @c_OtherValue = '1'
 
+      FETCH NEXT FROM CUR_INV INTO @c_Loc, @c_Lot, @c_ID, @n_QtyToAllocate, @n_IDQtyAvailable
    END
-
+   CLOSE CUR_INV
+   DEALLOCATE CUR_INV
 
 
 
