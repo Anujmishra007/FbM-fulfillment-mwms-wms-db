@@ -29,7 +29,7 @@ CREATE OR ALTER PROC [RDT].[rdt_600ExtUpd18] (
    @cID          NVARCHAR( 18),   -- Pallet ID (ToID)
    @cSKU         NVARCHAR( 20), 
    @cLottable01  NVARCHAR( 18), 
-   @cLottable02  NVARCHAR( 18) OUTPUT,   -- MIN DOT (XXYY format)
+   @cLottable02  NVARCHAR( 18),   -- MIN DOT (XXYY format)
    @cLottable03  NVARCHAR( 18), 
    @dLottable04  DATETIME,      
    @dLottable05  DATETIME,      
@@ -67,8 +67,7 @@ BEGIN
         @nPCSDOT_Year     INT,
         @nMINDOT_Week     INT,
         @nMINDOT_Year     INT,
-        @bPCSDOT_Older    BIT,
-        @nRowsUpdated     INT
+        @bPCSDOT_Older    BIT
 
     IF @nFunc = 600 -- Normal receiving
     BEGIN
@@ -129,7 +128,6 @@ BEGIN
                           AND SKU = @cSKU
                           AND QtyReceived > 0
                         
-                        SET @nRowsUpdated = @@ROWCOUNT
                     END TRY
                     BEGIN CATCH
                         -- Handle any errors that occur during the update

@@ -407,6 +407,8 @@ BEGIN
 
    -- Load config (FCR-13976)
    SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerkey)
+   IF @cExtScnSP = '0'
+       SET @cExtScnSP = ''
       
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
    IF @cExtendedUpdateSP = '0'
@@ -2748,7 +2750,7 @@ BEGIN
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
-               ' @cLottable01, @cLottable02 OUTPUT, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
                ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
                ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
                ' @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber, ' +
@@ -2767,7 +2769,7 @@ BEGIN
                '@cID          NVARCHAR( 18), ' +
                '@cSKU         NVARCHAR( 20), ' +
                '@cLottable01  NVARCHAR( 18), ' +
-               '@cLottable02  NVARCHAR( 18) OUTPUT, ' +
+               '@cLottable02  NVARCHAR( 18), ' +
                '@cLottable03  NVARCHAR( 18), ' +
                '@dLottable04  DATETIME,      ' +
                '@dLottable05  DATETIME,      ' +
@@ -2791,7 +2793,7 @@ BEGIN
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
-               @cLottable01, @cLottable02 OUTPUT, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
                @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
                @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber,
