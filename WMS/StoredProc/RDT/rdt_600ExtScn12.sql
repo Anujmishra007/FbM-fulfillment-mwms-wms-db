@@ -168,7 +168,6 @@ BEGIN
                     -- Get session data
                     SELECT @cID = Value FROM @tExtScnData WHERE Variable = '@cID'
                     SELECT @cReceiptKey = Value FROM @tExtScnData WHERE Variable = '@cReceiptKey'
-                    SELECT @cLOC = Value FROM @tExtScnData WHERE Variable = '@cLOC'
                     SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
 
                     -- Find existing MIN DOT from previously received inventory on same pallet
@@ -205,7 +204,6 @@ BEGIN
             IF @nInputKey = 1  -- ENTER
             BEGIN
                 -- Set next screen to QTY screen
-                -- ExtVal32 validation must pass for framework to proceed
                 SET @nAfterStep = 6
                 SET @nAfterScn = 4035
             END
