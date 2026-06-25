@@ -170,6 +170,8 @@ BEGIN
                     SELECT @cReceiptKey = Value FROM @tExtScnData WHERE Variable = '@cReceiptKey'
                     SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
 
+                    SET @cLottable02 = ''
+                    
                     -- Find existing MIN DOT from previously received inventory on same pallet
                     SELECT TOP 1 @cLottable02 = Lottable02
                     FROM dbo.ReceiptDetail WITH (NOLOCK)
@@ -227,5 +229,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [RDT].[rdt_600ExtScn12] TO nSQL
+GRANT EXECUTE ON [RDT].[rdt_600ExtScn12] TO NSQL
 GO

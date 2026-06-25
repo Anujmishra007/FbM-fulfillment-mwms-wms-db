@@ -242,6 +242,7 @@ BEGIN
 
                 -- Check if MIN DOT (Lottable02) has value
                 IF ISNULL(@cLottable02Value, '') <> '' AND LEN(@cLottable02Value) = 4
+                   AND @cLottable02Value LIKE '[0-9][0-9][0-9][0-9]'
                 BEGIN
                     -- Parse MIN DOT
                     SET @nMINDOT_Week = TRY_CAST(LEFT(@cLottable02Value, 2) AS INT)
