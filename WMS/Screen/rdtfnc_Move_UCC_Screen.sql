@@ -65,3 +65,21 @@ EXECUTE rdt.rdtAddScn 811, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 514
+
+-- 812 = Move from
+DELETE rdt.RDTScn WHERE Scn = 812 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 812, 'ENG', 
+   @cLine01 = 'UCC:             %03d13', 
+   @cLine02 = '%20d01', -- UCC1
+   @cLine03 = '%20d02', 
+   @cLine04 = '%20d03', 
+   @cLine05 = '%20d04', 
+   @cLine06 = '%20d05', 
+   @cLine07 = '%20d06', 
+   @cLine08 = '%20d07', 
+   @cLine09 = '%20d08', 
+   @cLine10 = '%200iV_Barcode', -- UCC9
+   @cLine11 = '%20d10', -- SKU
+   @cLine12 = '%20d11', -- Desc1
+   @cLine13 = '%20d12', -- Desc2
+   @cLine14 = '%e'
