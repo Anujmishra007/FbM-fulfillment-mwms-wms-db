@@ -3035,7 +3035,7 @@ BEGIN
                   BEGIN
                      SET @nErrNo = 255544
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid DropID format
-                     GOTO Quit
+                     GOTO UPD_RDTMOBREC
                   END
                END
 
