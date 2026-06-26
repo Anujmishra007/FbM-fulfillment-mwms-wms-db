@@ -5502,7 +5502,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 62122
          SET @cErrMsg = rdt.rdtgetmessage( 62122, @cLangCode, 'DSP') -- 'Invalid QTY'
-         EXEC rdt.rdtSetFocusField @nMobile, 1   -- QTY
+         EXEC rdt.rdtSetFocusField @nMobile, 5   -- QTY
          GOTO Quit
       END
       SET @nQTY = CAST( @cUCCQTY AS INT)
