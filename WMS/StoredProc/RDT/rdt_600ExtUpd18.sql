@@ -96,7 +96,6 @@ BEGIN
                 -- STEP 4: If MIN DOT (Lottable02) is blank, copy PCS DOT to MIN DOT
                 IF ISNULL(@cLottable02, '') = ''
                 BEGIN
-                    SET @cLottable02 = @cLottable07
                     GOTO Quit
                 END
 
@@ -137,9 +136,6 @@ BEGIN
                             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') 
                             GOTO Quit
                         END CATCH
-
-                        -- Set the new MIN DOT for current receipt
-                        SET @cLottable02 = @cLottable07
                     END
                     -- If PCS DOT is newer or equal, keep the current MIN DOT
                 END
