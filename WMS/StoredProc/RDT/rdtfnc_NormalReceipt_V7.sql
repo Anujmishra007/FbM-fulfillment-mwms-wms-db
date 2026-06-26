@@ -66,6 +66,8 @@ GO
 /* 2025-06-25 5.6  Cuize    FCR-6888 GOTO step 98                                */
 /* 2025-11-04 5.7  NickT    UWP-43481 Fix: SQL Exception happens                 */
 /* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                        */
+/* 2026-06-17 5.9  Sreeja   FCR-13976 Add call of ExtUpd in Step_5 and           */
+/*                          ExtScnSP call in Step_3                              */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -1542,6 +1544,10 @@ BEGIN
       END
    END
 
+   -- Extended screen SP (Step_98 section)  (FCR-13976)
+   IF @cExtScnSP <> ''
+      GOTO STEP_98
+
    GOTO Quit
 
    Step_3_Fail:
@@ -2683,6 +2689,67 @@ BEGIN
       IF @nMorePage = 1 -- Yes
          GOTO Quit
 
+      -- Extended update (for MIN DOT update)  FCR-13976
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile      INT,           ' +
+               '@nFunc        INT,           ' +
+               '@cLangCode    NVARCHAR( 3),  ' +
+               '@nStep        INT,           ' +
+               '@nInputKey    INT,           ' +
+               '@cFacility    NVARCHAR( 5),  ' +
+               '@cStorerKey   NVARCHAR( 15), ' +
+               '@cReceiptKey  NVARCHAR( 10), ' +
+               '@cPOKey       NVARCHAR( 10), ' +
+               '@cLOC         NVARCHAR( 10), ' +
+               '@cID          NVARCHAR( 18), ' +
+               '@cSKU         NVARCHAR( 20), ' +
+               '@cLottable01  NVARCHAR( 18), ' +
+               '@cLottable02  NVARCHAR( 18), ' +
+               '@cLottable03  NVARCHAR( 18), ' +
+               '@dLottable04  DATETIME,      ' +
+               '@dLottable05  DATETIME,      ' +
+               '@cLottable06  NVARCHAR( 30), ' +
+               '@cLottable07  NVARCHAR( 30), ' +
+               '@cLottable08  NVARCHAR( 30), ' +
+               '@cLottable09  NVARCHAR( 30), ' +
+               '@cLottable10  NVARCHAR( 30), ' +
+               '@cLottable11  NVARCHAR( 30), ' +
+               '@cLottable12  NVARCHAR( 30), ' +
+               '@dLottable13  DATETIME,      ' +
+               '@dLottable14  DATETIME,      ' +
+               '@dLottable15  DATETIME,      ' +
+               '@nQTY         INT,           ' +
+               '@cReasonCode  NVARCHAR( 10), ' +
+               '@cSuggToLOC   NVARCHAR( 10), ' +
+               '@cFinalLOC    NVARCHAR( 10), ' +
+               '@cReceiptLineNumber NVARCHAR( 10), ' +
+               '@nErrNo             INT            OUTPUT, ' +
+               '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_5_Fail
+         END
+      END
+
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
       IF @cExtendedScreenSP <> ''
@@ -2978,7 +3045,7 @@ BEGIN
          @cReceiptKey,
          @nFunc
 
-      IF @nMorePage = 1 -- Yes
+      IF @nMorePage = 1  -- Yes
          GOTO Quit
 
       -- Enable field
