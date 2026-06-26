@@ -29,7 +29,7 @@ GO
 /*                            the task has already completed (WL03)     */
 /* 27-Feb-2026 WLChooi  1.4   UWP-48732 Init #PICKDETAIL_WIP with       */
 /*                            condition (WL04)                          */
-/* 22-Jun-2026 WLC015   1.5   FCR-12719 Cross-wave UCC short pick       */
+/* 22-Jun-2026 WLChooi  1.5   FCR-12719 Cross-wave UCC short pick       */
 /*                            reallocation (WL05)                       */
 /************************************************************************/
 
