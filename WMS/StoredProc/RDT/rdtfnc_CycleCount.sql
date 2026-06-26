@@ -152,7 +152,8 @@ GO
 /* 18-Sep-2025 6.8  James    FCR-2614 Fix uom conversion issue (james34)*/
 /*                           Add decodesp to add new ucc step           */
 /* 17-04-2026  6.9  NYE018  FCR-9688 error handling after decode        */
-/* 29-05-2026  7.0  Sreeja  FCR-13447 Change IdBarcode to Barcode       */                      
+/* 29-05-2026  7.0  Sreeja  FCR-13447 Change IdBarcode to Barcode       */
+/* 26-06-2026  7.1  NYE018  UWP-59740 Add the scn 703 and correct field */                       
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -5494,7 +5495,7 @@ BEGIN
       DECLARE @cUCCQTY NVARCHAR( 5)
 
       -- Screen mapping
-      SET @cUCCQTY = @cInField01
+      SET @cUCCQTY = @cInField05
 
       -- Validate QTY
       IF rdt.rdtIsValidQTY( @cUCCQTY, 20) <> 1 -- Do Not Check for zero
