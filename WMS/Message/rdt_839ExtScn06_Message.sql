@@ -48,5 +48,8 @@ EXECUTE rdt.rdtAddMsg 255544, 10, '255544 InvDropID',          'us_english', 839
 EXECUTE rdt.rdtAddMsg 255545, 10, '255545 UPDAlertFail',       'us_english', 839, 0, '255545 Update ALERT failed'
 EXECUTE rdt.rdtAddMsg 255546, 10, '255546 UPDRdtPickLogFail',  'us_english', 839, 0, '255546 Update RDT Pick Log failed'
 EXECUTE rdt.rdtAddMsg 255547, 10, '255547 ExecConfirmFail',    'us_english', 839, 0, '255547 Execute confirm SP failed'
+EXECUTE rdt.rdtAddMsg 255548, 10, '255548 DropIDInUse',        'us_english', 839, 0, '255548 DropID is in use'
+EXECUTE rdt.rdtAddMsg 255549, 10, '255549 DropIDInUse',        'us_english', 839, 0, '255549 DropID is in use'
+EXECUTE rdt.rdtAddMsg 255550, 10, '255550 DropIDInUse',        'us_english', 839, 0, '255550 DropID is in use'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 255501 AND 255550
