@@ -9,7 +9,6 @@ EXECUTE rdt.rdtAddMsg 270053, 10, '270053^DelRPFLogFail ', 'us_english', 1764, 0
 EXECUTE rdt.rdtAddMsg 270054, 10, '270054^LockOrderFail ', 'us_english', 1764, 0, '270054 Lock order fail'
 
 EXECUTE rdt.rdtAddMsg 270055, 10, '270055^UPD UCC Fail   ', 'us_english', 1764, 0, '270055 Update UCC fail'
-EXECUTE rdt.rdtAddMsg 270056, 10, '270056^UPD PKD Fail   ', 'us_english', 1764, 0, '270056 Update PickDetail fail'
 EXECUTE rdt.rdtAddMsg 270057, 10, '270057^UPD PKD Fail   ', 'us_english', 1764, 0, '270057 Update FCP PickDetail.Loc as PND fail'
 
 SELECT * FROM rdt.rdtmsg WITH (NOLOCK) WHERE message_id BETWEEN 270051 AND 270100

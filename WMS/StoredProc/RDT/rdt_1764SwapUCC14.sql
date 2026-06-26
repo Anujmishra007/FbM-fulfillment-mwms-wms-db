@@ -191,7 +191,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK) 
             WHERE StorerKey = @cStorerKey
                AND TaskType = 'RPF'
-               AND Status <> '0'
+               AND Status IN( '3', '5' )
                AND CaseID IS NOT NULL
                AND CaseID = @cScannedUCC 
             )
@@ -199,7 +199,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK) 
             WHERE StorerKey = @cStorerKey
                AND TaskType = 'FCP'
-               AND Status NOT IN ('0', 'H')
+               AND Status IN ('3', '5')
                AND CaseID IS NOT NULL
                AND CaseID = @cScannedUCC 
             )
@@ -233,7 +233,7 @@ BEGIN
          BEGIN TRY
             UPDATE dbo.TaskDetail WITH (ROWLOCK)
             SET 
-               CaseID = NULL,
+               CaseID = '',
                FromID = '',
                EditDate = GETDATE(),
                EditWho = @cUserName,
