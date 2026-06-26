@@ -3069,7 +3069,7 @@ BEGIN
                   SET @cOrderKeyTemp = ''
                   SELECT TOP 1
                      @cOrderKeyTemp = OrderKey
-                  FROM PickDetail WITH (NOLOCK)
+                  FROM dbo.PickDetail WITH (NOLOCK)
                   WHERE StorerKey = @cStorerKey
                      AND DropID = @cScannedDropID
                      AND Status <= '5'
@@ -3088,12 +3088,12 @@ BEGIN
                         SET @cLoadKeyTemp = ''
                         SELECT @cLoadKeyTemp = LoadKey 
                         FROM dbo.LoadPlanDetail WITH (NOLOCK) 
-                        WHERE OrderKey = @cOrderKey
+                        WHERE OrderKey = @cOrderKeyTemp
 
                         IF ISNULL(@cLoadKeyTemp, '' ) <> ''
                         BEGIN
                            SELECT @cPickSlipNoTemp = PickHeaderKey
-                           FROM PickHeader WITH (NOLOCK)
+                           FROM dbo.PickHeader WITH (NOLOCK)
                            WHERE ExternOrderKey = @cLoadKeyTemp
                               AND OrderKey = ''
                         END
