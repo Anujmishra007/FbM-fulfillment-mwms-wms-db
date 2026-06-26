@@ -93,7 +93,7 @@ BEGIN
                 SET @nPCSDOT_Week = TRY_CAST(LEFT(@cLottable07, 2) AS INT)
                 SET @nPCSDOT_Year = TRY_CAST(RIGHT(@cLottable07, 2) AS INT)
 
-                -- STEP 4: If MIN DOT (Lottable02) is blank, copy PCS DOT to MIN DOT
+                -- STEP 4: If MIN DOT (Lottable02) is blank, skip DB update (MIN DOT will be set earlier in the flow)
                 IF ISNULL(@cLottable02, '') = ''
                 BEGIN
                     GOTO Quit

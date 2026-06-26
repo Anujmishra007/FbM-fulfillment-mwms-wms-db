@@ -66,7 +66,7 @@ GO
 /* 2025-06-25 5.6  Cuize    FCR-6888 GOTO step 98                                */
 /* 2025-11-04 5.7  NickT    UWP-43481 Fix: SQL Exception happens                 */
 /* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                        */
-/* 2026-06-17 5.9  Sreeja   FCR-13976 Add call of  ExtUpd in Step_5 and          */
+/* 2026-06-17 5.9  Sreeja   FCR-13976 Add call of ExtUpd in Step_5 and           */
 /*                          ExtScnSP call in Step_3                              */
 /*********************************************************************************/
 
@@ -1544,7 +1544,7 @@ BEGIN
       END
    END
 
-   -- Extended screen SP (Step_99 section)  (FCR-13976)
+   -- Extended screen SP (Step_98 section)  (FCR-13976)
    IF @cExtScnSP <> ''
       GOTO STEP_98
 
