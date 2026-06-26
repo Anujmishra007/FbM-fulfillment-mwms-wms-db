@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.4                                                  */
+/* GitHub Version: 1.5                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,6 +29,8 @@ GO
 /*                            the task has already completed (WL03)     */
 /* 27-Feb-2026 WLChooi  1.4   UWP-48732 Init #PICKDETAIL_WIP with       */
 /*                            condition (WL04)                          */
+/* 22-Jun-2026 WLChooi  1.5   FCR-12719 Cross-wave UCC short pick       */
+/*                            reallocation (WL05)                       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -117,6 +119,12 @@ BEGIN
          , @n_QtyLeftToFulFill         INT = 0
          , @CUR_SHORT                  CURSOR
          , @c_PickCondition_SQL        NVARCHAR(MAX) = ''   --WL04
+         , @c_AllowCrossWaveTaskLinking NVARCHAR(10) = 'N'  --WL05
+         , @c_RLWAV_Opt5                NVARCHAR(4000) = '' --WL05
+         , @c_PDSourceType              NVARCHAR(10) = 'N'  --WL05
+         , @c_GetWavekey                NVARCHAR(10) = ''   --WL05
+         , @CUR_WAVE                    CURSOR              --WL05
+         , @n_AvailableSOH              INT = 0             --WL05
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -212,11 +220,20 @@ BEGIN
             Pickdetailkey NVARCHAR(18) PRIMARY KEY
       )
 
-      CREATE TABLE #T_ShortPick (    
+      CREATE TABLE #T_ShortPick (    --WL05
             Pickdetailkey     NVARCHAR(18) PRIMARY KEY
           , Orderkey          NVARCHAR(10)
+          , WaveKey           NVARCHAR(10)
           , Qty               INT
       )
+
+      --WL05 S
+      CREATE TABLE #T_RelatedWaves (
+            RowID      INT IDENTITY(1, 1) PRIMARY KEY
+          , WaveKey    NVARCHAR(10)
+      )
+      CREATE NONCLUSTERED INDEX IDX_TRW_WAVEKEY ON #T_RelatedWaves (WaveKey)
+      --WL05 E
    END
 
    IF @b_debug = 0 AND @n_Continue IN (1,2)
@@ -240,6 +257,16 @@ BEGIN
 
       SELECT @c_DefaultPackInfoFlag = dbo.fnc_GetRight('', @c_StorerKey, '', 'DEFAULT_PACKINFO')
 
+      --WL05 S
+      SELECT @c_RLWAV_Opt5 = SC.Option5
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_StorerKey, '', 'ReleaseWave_SP') AS SC
+
+      SELECT @c_AllowCrossWaveTaskLinking = dbo.fnc_GetParamValueFromString('@c_AllowCrossWaveTaskLinking', @c_RLWAV_Opt5, @c_AllowCrossWaveTaskLinking)
+
+      IF ISNULL(@c_AllowCrossWaveTaskLinking, '') = ''
+         SET @c_AllowCrossWaveTaskLinking = 'N'
+      --WL05 E
+
       IF ISNULL(@c_Taskdetailkey, '') <> ''
       BEGIN
          SELECT @c_Message02 = ISNULL(TD.Message02, '')
@@ -250,10 +277,10 @@ BEGIN
       BEGIN
          SELECT @c_Message02 = MAX(ISNULL(TD.Message02, ''))
          FROM TASKDETAIL TD WITH (NOLOCK)
-         WHERE TD.WaveKey = @c_Wavekey
-         AND TD.Storerkey = @c_StorerKey
+         WHERE TD.Storerkey = @c_StorerKey
          AND TD.SKU = @c_SKU
          AND TD.Caseid = @c_UCCNo
+         AND ( @c_AllowCrossWaveTaskLinking = 'Y' OR TD.WaveKey = @c_Wavekey )   --WL05
       END
 
       IF ISNULL(@c_Message02, '') = ''
@@ -271,6 +298,33 @@ BEGIN
       SET @c_PickCondition_SQL = 'AND PICKDETAIL.Storerkey = ' + QUOTENAME(TRIM(ISNULL(@c_Storerkey, '')), '''')
                                + ' AND PICKDETAIL.SKU = ' + QUOTENAME(TRIM(ISNULL(@c_SKU, '')), '''')
       --WL04 E
+
+      --WL05 S
+      IF @c_AllowCrossWaveTaskLinking = 'Y'
+      BEGIN
+         INSERT INTO #T_RelatedWaves (WaveKey)
+         SELECT X.WaveKey
+         FROM ( SELECT DISTINCT W.WaveKey
+                              , ROW_NUMBER() OVER (
+                                   ORDER BY IIF(W.UserDefine04 = 'ACTIVE', 1, 2)
+                                              , W.Wavekey
+                                ) AS Seq
+                FROM PICKDETAIL PD WITH (NOLOCK)
+                JOIN WAVEDETAIL WD WITH (NOLOCK) ON PD.Orderkey = WD.Orderkey
+                JOIN WAVE W WITH (NOLOCK) ON WD.Wavekey = W.Wavekey
+                WHERE PD.Storerkey = @c_StorerKey
+                AND   PD.Sku       = @c_SKU
+                AND   PD.DropID    = @c_UCCNo
+                AND   PD.[Status]  = '4'
+              ) X
+         ORDER BY X.Seq
+      END
+      ELSE
+      BEGIN
+         INSERT INTO #T_RelatedWaves (WaveKey)
+         SELECT @c_Wavekey
+      END
+      --WL05 E
    END
 
    --Get Storerconfig setup
@@ -307,10 +361,11 @@ BEGIN
                       AND PD.QtyMoved > 0
                       AND PD.Qty = 0
                       AND PD.[Status] = '4'
-                      AND EXISTS ( SELECT 1 
-                                   FROM WAVEDETAIL WD (NOLOCK)
-                                   WHERE WD.WaveKey = @c_Wavekey
-                                   AND WD.OrderKey = PD.OrderKey ) 
+                      AND ( @c_AllowCrossWaveTaskLinking = 'Y'   --WL05
+                         OR EXISTS ( SELECT 1 
+                                     FROM WAVEDETAIL WD (NOLOCK)
+                                     WHERE WD.WaveKey = @c_Wavekey
+                                     AND WD.OrderKey = PD.OrderKey ) )
                     )    
       BEGIN
          SELECT @n_Continue = 3
@@ -323,18 +378,19 @@ BEGIN
    --Get Orderkeys that have UCC being shorted
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      INSERT INTO #T_ShortPick (Pickdetailkey, Orderkey, Qty)
-      SELECT PD.PickDetailKey, PD.OrderKey, PD.QtyMoved
+      INSERT INTO #T_ShortPick (Pickdetailkey, Orderkey, WaveKey, Qty)
+      SELECT PD.PickDetailKey, PD.OrderKey, PD.WaveKey, PD.QtyMoved
       FROM PICKDETAIL PD WITH (NOLOCK)
       WHERE PD.Storerkey = @c_StorerKey    
       AND   PD.Sku = @c_SKU    
       AND   PD.DropID = @c_UCCNo    
       AND   PD.[Status] = '4'
-      AND   EXISTS ( SELECT 1 
-                     FROM WAVEDETAIL WD (NOLOCK)
-                     WHERE WD.WaveKey = @c_Wavekey
-                     AND WD.OrderKey = PD.OrderKey )
-      GROUP BY PD.PickDetailKey, PD.OrderKey, PD.QtyMoved
+      AND   ( @c_AllowCrossWaveTaskLinking = 'Y'   --WL05
+            OR EXISTS ( SELECT 1 
+                        FROM WAVEDETAIL WD (NOLOCK)
+                        WHERE WD.WaveKey = @c_Wavekey
+                        AND WD.OrderKey = PD.OrderKey ) )
+      GROUP BY PD.PickDetailKey, PD.OrderKey, PD.WaveKey, PD.QtyMoved
 
       INSERT INTO #T_ShortOrders (OrderKey)
       SELECT DISTINCT T.Orderkey
@@ -425,117 +481,182 @@ BEGIN
       END CATCH
    END
 
-   -- FCR v1.5 - Condition to allow reallocate/trigger TL2
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      SET @n_QtyLeftToFulFill = 0
+      --WL05 S - Check SOH per wave; consume available qty in #T_RelatedWaves priority order
+      SET @n_AvailableSOH = 0
 
-      SELECT @n_QtyLeftToFulFill = SUM(T.Qty)
-      FROM #T_ShortPick T
+      SELECT @n_AvailableSOH = ISNULL(SUM(UCC.Qty), 0)
+      FROM UCC (NOLOCK)
+      WHERE UCC.Storerkey = @c_StorerKey
+      AND   UCC.SKU = @c_SKU
+      AND   UCC.[Status] = '1'
 
-      -- If SOH Qty not able to fulfill, do not reallocate and just trigger TL2
-      IF NOT EXISTS ( SELECT 1
-                      FROM UCC (NOLOCK)
-                      WHERE UCC.Storerkey = @c_StorerKey
-                      AND UCC.SKU = @c_SKU
-                      AND UCC.[Status] = '1'
-                      HAVING SUM(UCC.qty) >= @n_QtyLeftToFulFill )
+      SET @CUR_WAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT R.WaveKey
+      FROM #T_RelatedWaves R
+      ORDER BY R.RowID
+
+      OPEN @CUR_WAVE
+
+      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
-         -- Trigger ITF
-         SET @CUR_SHORT = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT DISTINCT T.Pickdetailkey, T.Orderkey
+         SET @n_QtyLeftToFulFill = 0
+
+         SELECT @n_QtyLeftToFulFill = ISNULL(SUM(T.Qty), 0)
          FROM #T_ShortPick T
+         WHERE T.Wavekey = @c_GetWavekey
 
-         OPEN @CUR_SHORT
-
-         FETCH NEXT FROM @CUR_SHORT INTO @c_PickDetailKey, @c_Orderkey
-
-         WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+         -- If remaining SOH can fulfill this wave's short qty, proceed; else TL2 and drop wave
+         IF @n_AvailableSOH >= @n_QtyLeftToFulFill
          BEGIN
-            BEGIN TRY
-               EXEC dbo.ispGenTransmitLog2 @c_TableName = N'WSSOAlloUpd' -- nvarchar(30)
-                                         , @c_Key1 = @c_Orderkey -- nvarchar(10)
-                                         , @c_Key2 = @c_PickDetailKey -- nvarchar(30)
-                                         , @c_Key3 = @c_Storerkey -- nvarchar(20)
-                                         , @c_TransmitBatch = N'' -- nvarchar(30)
-                                         , @b_Success = @b_Success OUTPUT -- int
-                                         , @n_err = @n_Err OUTPUT -- int
-                                         , @c_errmsg = @c_Errmsg OUTPUT -- nvarchar(250)
-            END TRY
-            BEGIN CATCH
-               SET @n_Continue = 3
-               SET @c_ErrMsg = ERROR_MESSAGE()
-               GOTO QUIT_SP
-            END CATCH
+            SET @n_AvailableSOH = @n_AvailableSOH - @n_QtyLeftToFulFill
+         END
+         ELSE
+         BEGIN
+            -- Trigger ITF
+            SET @CUR_SHORT = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT DISTINCT T.Pickdetailkey, T.Orderkey
+            FROM #T_ShortPick T
+            WHERE T.Wavekey = @c_GetWavekey
 
-            BEGIN TRY
-               UPDATE P
-               SET P.TaskManagerReasonKey = 'SHORT'
-                 , P.TrafficCop = NULL
-               FROM PICKDETAIL P
-               WHERE P.PickDetailKey = @c_PickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @n_Continue = 3
-               SET @c_ErrMsg = ERROR_MESSAGE()
-            END CATCH
+            OPEN @CUR_SHORT
 
             FETCH NEXT FROM @CUR_SHORT INTO @c_PickDetailKey, @c_Orderkey
-         END
-         CLOSE @CUR_SHORT
-         DEALLOCATE @CUR_SHORT
 
-         GOTO QUIT_SP
+            WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+            BEGIN
+               BEGIN TRY
+                  EXEC dbo.ispGenTransmitLog2 @c_TableName = N'WSSOAlloUpd' -- nvarchar(30)
+                                            , @c_Key1 = @c_Orderkey -- nvarchar(10)
+                                            , @c_Key2 = @c_PickDetailKey -- nvarchar(30)
+                                            , @c_Key3 = @c_Storerkey -- nvarchar(20)
+                                            , @c_TransmitBatch = N'' -- nvarchar(30)
+                                            , @b_Success = @b_Success OUTPUT -- int
+                                            , @n_err = @n_Err OUTPUT -- int
+                                            , @c_errmsg = @c_Errmsg OUTPUT -- nvarchar(250)
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  GOTO QUIT_SP
+               END CATCH
+
+               BEGIN TRY
+                  UPDATE P
+                  SET P.TaskManagerReasonKey = 'SHORT'
+                    , P.TrafficCop = NULL
+                  FROM PICKDETAIL P
+                  WHERE P.PickDetailKey = @c_PickDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+               END CATCH
+
+               FETCH NEXT FROM @CUR_SHORT INTO @c_PickDetailKey, @c_Orderkey
+            END
+            CLOSE @CUR_SHORT
+            DEALLOCATE @CUR_SHORT
+
+            DELETE FROM #T_RelatedWaves WHERE WaveKey = @c_GetWavekey   --WL05
+         END
+
+         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
       END
+      CLOSE @CUR_WAVE
+      DEALLOCATE @CUR_WAVE
+
+      IF NOT EXISTS ( SELECT 1 FROM #T_RelatedWaves )   --WL05
+         GOTO QUIT_SP
+      --WL05 E
    END
    
    --Reallocate
    IF (@n_Continue = 1 OR @n_Continue = 2) AND @c_StrategykeyParm <> ''
    BEGIN
-      -- Update to ALLOC to indicate shorted line
-      UPDATE P
-      SET P.TaskManagerReasonKey = IIF(P.TaskManagerReasonKey = 'SHORT', P.TaskManagerReasonKey, 'ALLOC')
-        , P.TrafficCop = NULL
-      FROM PICKDETAIL P
-      JOIN #T_ShortPick T ON T.Pickdetailkey = P.PickDetailKey
+      --WL05 S
+      SET @CUR_WAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT R.WaveKey
+      FROM #T_RelatedWaves R
+      ORDER BY R.RowID
 
-      BEGIN TRY
-         EXEC dbo.ispWaveProcessing @c_WaveKey = @c_Wavekey -- nvarchar(10)
-                                  , @b_Success = @b_Success OUTPUT -- int
-                                  , @n_Err = @n_Err OUTPUT -- int
-                                  , @c_ErrMsg = @c_ErrMsg OUTPUT -- nvarchar(250)
-                                  , @b_debug = @b_debug -- int
-                                  , @c_StrategykeyParm = @c_StrategykeyParm -- nvarchar(10)
-      END TRY
-      BEGIN CATCH
-         SET @n_Continue = 3
-         SET @c_ErrMsg = ERROR_MESSAGE()
-      END CATCH
+      OPEN @CUR_WAVE
 
-      -- Revert
-      UPDATE P
-      SET P.TaskManagerReasonKey = IIF(P.TaskManagerReasonKey = 'SHORT', P.TaskManagerReasonKey, '')
-        , P.TrafficCop = NULL
-      FROM PICKDETAIL P
-      JOIN #T_ShortPick T ON T.Pickdetailkey = P.PickDetailKey
+      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
+      BEGIN
+         -- Update to ALLOC to indicate shorted line
+         UPDATE P
+         SET P.TaskManagerReasonKey = IIF(P.TaskManagerReasonKey = 'SHORT', P.TaskManagerReasonKey, 'ALLOC')
+           , P.TrafficCop = NULL
+         FROM PICKDETAIL P
+         JOIN #T_ShortPick T ON T.Pickdetailkey = P.PickDetailKey AND T.WaveKey = @c_GetWavekey   --WL05
+
+         BEGIN TRY
+            EXEC dbo.ispWaveProcessing @c_WaveKey = @c_GetWavekey -- nvarchar(10)   --WL05
+                                     , @b_Success = @b_Success OUTPUT -- int
+                                     , @n_Err = @n_Err OUTPUT -- int
+                                     , @c_ErrMsg = @c_ErrMsg OUTPUT -- nvarchar(250)
+                                     , @b_debug = @b_debug -- int
+                                     , @c_StrategykeyParm = @c_StrategykeyParm -- nvarchar(10)
+         END TRY
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @c_ErrMsg = ERROR_MESSAGE()
+         END CATCH
+
+         -- Revert
+         UPDATE P
+         SET P.TaskManagerReasonKey = IIF(P.TaskManagerReasonKey = 'SHORT', P.TaskManagerReasonKey, '')
+           , P.TrafficCop = NULL
+         FROM PICKDETAIL P
+         JOIN #T_ShortPick T ON T.Pickdetailkey = P.PickDetailKey AND T.WaveKey = @c_GetWavekey   --WL05
+
+         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+      END
+      CLOSE @CUR_WAVE
+      DEALLOCATE @CUR_WAVE
+      --WL05 E
    END
 
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      --Initialize Pickdetail work in progress staging table   
-      EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
-                                  , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = @c_PickCondition_SQL   --WL04
-                                  , @c_Action = 'I' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
-                                  , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
-                                  , @b_Success = @b_Success OUTPUT
-                                  , @n_Err = @n_err OUTPUT
-                                  , @c_ErrMsg = @c_errmsg OUTPUT
-   
-      IF @b_Success <> 1
+      --Initialize Pickdetail work in progress staging table
+      --WL05 S
+      SET @CUR_WAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT R.WaveKey
+      FROM #T_RelatedWaves R
+      ORDER BY R.RowID
+
+      OPEN @CUR_WAVE
+
+      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
-         SET @n_Continue = 3
+         EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_GetWavekey   --WL05
+                                     , @c_WIP_RefNo = @c_SourceType
+                                     , @c_PickCondition_SQL = @c_PickCondition_SQL   --WL04
+                                     , @c_Action = 'I' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
+                                     , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization
+                                     , @b_Success = @b_Success OUTPUT
+                                     , @n_Err = @n_err OUTPUT
+                                     , @c_ErrMsg = @c_errmsg OUTPUT
+
+         IF @b_Success <> 1
+         BEGIN
+            SET @n_Continue = 3
+         END
+
+         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
       END
+      CLOSE @CUR_WAVE
+      DEALLOCATE @CUR_WAVE
+      --WL05 E
    END
 
    -- Delete Packdetail based on CaseID
@@ -546,7 +667,7 @@ BEGIN
       SELECT SP.CaseID, SP.Storerkey, SP.SKU
       FROM #PickDetail_WIP SP
       JOIN #T_ShortOrders T ON SP.OrderKey = T.OrderKey
-      WHERE SP.WaveKey = @c_Wavekey
+      WHERE ( @c_AllowCrossWaveTaskLinking = 'Y' OR SP.WaveKey = @c_Wavekey )   --WL05
       AND SP.UOM = '2'
       AND SP.[Status] = '4'
       AND SP.DropID = @c_UCCNo
@@ -587,7 +708,7 @@ BEGIN
          SELECT SP.PickDetailKey
          FROM #PickDetail_WIP SP
          JOIN #T_ShortOrders T ON SP.OrderKey = T.OrderKey
-         WHERE SP.WaveKey = @c_Wavekey
+         WHERE ( @c_AllowCrossWaveTaskLinking = 'Y' OR SP.WaveKey = @c_Wavekey )   --WL05
          AND SP.UOM = '2'
          AND SP.[Status] = '4'
          AND SP.DropID = @c_UCCNo
@@ -626,7 +747,7 @@ BEGIN
       JOIN #T_ShortOrders T ON PD.OrderKey = T.OrderKey
       LEFT JOIN PICKHEADER PH (NOLOCK) ON PH.OrderKey = T.OrderKey
       WHERE PD.[Status] NOT IN ('4', '9')
-      AND PD.WaveKey = @c_Wavekey
+      AND ( @c_AllowCrossWaveTaskLinking = 'Y' OR PD.WaveKey = @c_Wavekey )   --WL05
       AND PD.UOM = '2'
       AND PD.Storerkey  = @c_StorerKey
       AND PD.SKU = @c_SKU
@@ -854,21 +975,35 @@ BEGIN
    --Compare Pickdetail Line
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      -- ReAllocStatus
-      -- 0 - Not Allocated after shorted
-      IF NOT EXISTS ( SELECT 1
-                      FROM #PickDetail_WIP P
-                      WHERE P.Storerkey = @c_StorerKey
-                      AND   P.Sku = @c_SKU
-                      AND   P.[Status] < '4' 
-                      AND NOT EXISTS ( SELECT 1
-                                        FROM #T_PICKDETAIL_CURRENT T
-                                        WHERE T.Pickdetailkey = P.PickDetailKey ) )
+      --WL05 S
+      SET @CUR_WAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT R.WaveKey
+      FROM #T_RelatedWaves R
+      WHERE NOT EXISTS ( SELECT 1
+                         FROM #PickDetail_WIP P
+                         WHERE P.Storerkey = @c_StorerKey
+                         AND   P.Sku = @c_SKU
+                         AND   P.Wavekey = R.Wavekey
+                         AND   P.[Status] < '4' 
+                         AND NOT EXISTS ( SELECT 1
+                                           FROM #T_PICKDETAIL_CURRENT T
+                                           WHERE T.Pickdetailkey = P.PickDetailKey )
+                       )
+      ORDER BY R.RowID
+
+      OPEN @CUR_WAVE
+
+      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
+         -- ReAllocStatus
+         -- 0 - Not Allocated after shorted
          -- Trigger ITF
          SET @CUR_SHORT = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT T.Pickdetailkey, T.Orderkey
          FROM #T_ShortPick T
+         WHERE T.Wavekey = @c_GetWavekey
 
          OPEN @CUR_SHORT
 
@@ -914,8 +1049,18 @@ BEGIN
          CLOSE @CUR_SHORT
          DEALLOCATE @CUR_SHORT
 
-         GOTO UPD_PD
+         --GOTO UPD_PD
+         DELETE FROM #PICKDETAIL_WIP WHERE Wavekey = @c_GetWavekey
+         DELETE FROM #T_RelatedWaves WHERE WaveKey = @c_GetWavekey
+
+         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
       END
+      CLOSE @CUR_WAVE
+      DEALLOCATE @CUR_WAVE
+      --WL05 E
+
+      IF NOT EXISTS (SELECT 1 FROM #T_RelatedWaves)
+         GOTO UPD_PD
    END
    
    --Initialize Data - Copy from mspRLWAV03
@@ -937,7 +1082,11 @@ BEGIN
       INSERT INTO #T_ORDERSKU (Orderkey, Storerkey, SKU, WCS)
       SELECT DISTINCT P.OrderKey, P.Storerkey, P.SKU, 0
       FROM #PickDetail_WIP P
-      WHERE P.WaveKey = @c_Wavekey
+      --WL05 S
+      WHERE EXISTS ( SELECT 1
+                     FROM #T_ShortOrders T
+                     WHERE T.OrderKey = P.OrderKey )
+      --WL05 E
       AND P.UOM IN ('2','6')
       --AND P.UOM IN ('2')
       AND (P.TaskDetailKey = '' OR P.TaskDetailKey IS NULL)
@@ -1019,7 +1168,11 @@ BEGIN
                              AND OD.Storerkey = P.Storerkey
                              AND OD.Sku = P.Sku
          JOIN LOC L (NOLOCK) ON L.Loc = P.Loc
-         WHERE P.WaveKey = @c_Wavekey
+         --WL05 S
+         WHERE EXISTS ( SELECT 1
+                        FROM #T_ShortOrders T
+                        WHERE T.OrderKey = P.OrderKey )
+         --WL05 E
          AND P.UOM IN ('2','6')
          --AND P.UOM IN ('2')
          AND (P.TaskDetailKey = '' OR P.TaskDetailKey IS NULL)
@@ -1049,7 +1202,7 @@ BEGIN
       
          OPEN @CUR_PTASK
       
-         FETCH NEXT FROM @CUR_PTASK INTO @c_WaveKey, @c_Orderkey, @c_OrderLineNumber
+         FETCH NEXT FROM @CUR_PTASK INTO @c_GetWavekey, @c_Orderkey, @c_OrderLineNumber   --WL05
                                        , @c_Storerkey, @c_Sku, @c_LOT, @c_FromLOC, @c_ID, @n_PickdetQty 
                                        , @c_UOM, @c_PickMethod, @c_DropId, @c_LabelNo, @b_WCS
                                        , @c_FromLogicalLoc, @c_FromLocType, @c_FromPAZone
@@ -1291,16 +1444,35 @@ BEGIN
                IF @c_TaskType = 'RPF'
                BEGIN 
                   SET @b_InsertTask = 1
+                  SET @c_NewTaskdetailKey = ''
 
                   IF EXISTS(SELECT 1 FROM TASKDETAIL TD (NOLOCK)
-                            WHERE WaveKey = @c_WaveKey
+                            WHERE WaveKey = @c_GetWavekey   --WL05
                             AND TaskType = 'RPF'
                             AND Caseid = CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END
-                            AND FromLoc = @c_FromLoc
-                            AND [Status] <> '9' )   --WL03
+                            AND FromLoc = @c_FromLoc) AND @c_AllowCrossWaveTaskLinking = 'N'   --WL05
                   BEGIN
                      SET @b_InsertTask = 0
                   END
+
+                  --WL05 S
+                  IF @c_AllowCrossWaveTaskLinking = 'Y' AND @b_InsertTask = 1
+                  BEGIN
+                     SET @c_NewTaskdetailKey  = ''
+                     SELECT @c_NewTaskdetailKey = MIN(TD.TaskdetailKey)
+                     FROM TASKDETAIL TD WITH (NOLOCK)
+                     WHERE TD.Storerkey = @c_Storerkey
+                     AND TD.TaskType = 'RPF'
+                     AND TD.Caseid = CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END
+                     AND TD.FromLoc = @c_FromLoc
+                     AND (TD.[Status] < '5' OR TD.[Status] = 'H')
+
+                     IF @c_NewTaskdetailKey > ''
+                     BEGIN
+                        SET @b_InsertTask = 2
+                     END
+                  END
+                  --WL05 E
                   
                   SELECT @n_PickdetQty = SUM(UCC.Qty) 
                   FROM UCC (NOLOCK)
@@ -1381,7 +1553,7 @@ BEGIN
                      , '' -- PickDetailKey
                      , @c_PickMethod_TD
                      , @c_TaskStatus  --Status
-                     , @c_WaveKey
+                     , @c_GetWavekey   --WL05
                      , @c_AreaKey
                      , ''
                      , @c_Message02
@@ -1404,27 +1576,63 @@ BEGIN
                   END
                END
 
-               IF @n_Continue IN (1,2) AND @b_InsertTask = 1
+               IF @n_Continue IN (1,2) AND @b_InsertTask IN (1, 2)   --WL05
                BEGIN
                   SET @CUR_UPDATEPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-                  SELECT P.PickDetailKey
+                  SELECT P.PickDetailKey, PDSourceType = '1'
                   FROM #PickDetail_WIP P
                   WHERE P.UOM = @c_UOM
                   AND   P.PickMethod = @c_PickMethod
-                  AND   p.Lot = @c_Lot
-                  AND   p.Loc = @c_FromLoc
-                  AND   p.ID  = @c_ID
-                  AND   p.DropID  = @c_DropID
+                  AND   P.Lot = @c_Lot
+                  AND   P.Loc = @c_FromLoc
+                  AND   P.ID  = @c_ID
+                  AND   P.DropID  = @c_DropID
+                  --WL05 S
+                  AND   ( @c_AllowCrossWaveTaskLinking = 'Y' OR P.Wavekey = @c_GetWavekey )
+                  AND   ( P.TaskDetailKey IS NULL OR P.TaskDetailKey = '' )
+                  UNION
+                  SELECT P.PickDetailKey, PDSourceType = '2'
+                  FROM dbo.PICKDETAIL P WITH (NOLOCK)
+                  WHERE P.UOM = @c_UOM
+                  AND   P.PickMethod = @c_PickMethod
+                  AND   P.Lot = @c_Lot
+                  AND   P.Loc = @c_FromLoc
+                  AND   P.ID  = @c_ID
+                  AND   P.DropID = @c_DropID
+                  AND   P.[Status] < '5'
+                  AND   P.Storerkey = @c_Storerkey
+                  AND   P.SKU = @c_SKU
+                  AND   @c_AllowCrossWaveTaskLinking = 'Y'
+                  AND   (P.TaskDetailKey IS NULL OR P.TaskDetailKey = '')
+                  AND   NOT EXISTS ( SELECT 1
+                                     FROM #PickDetail_WIP pw
+                                     WHERE pw.PickDetailKey = P.PickDetailKey )
+                  ORDER BY PDSourceType, PickDetailKey
+                  --WL05 E
 
                   OPEN @CUR_UPDATEPD
 
-                  FETCH NEXT FROM @CUR_UPDATEPD INTO @c_PickDetailKey
+                  FETCH NEXT FROM @CUR_UPDATEPD INTO @c_PickDetailKey, @c_PDSourceType   --WL05
          
                   WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
                   BEGIN
-                     UPDATE #PickDetail_WIP
-                     SET TaskDetailKey = @c_NewTaskdetailKey 
-                     WHERE PickDetailKey = @c_PickDetailKey
+                     --WL05 S
+                     IF @c_PDSourceType = '1'
+                     BEGIN
+                        UPDATE #PickDetail_WIP
+                        SET TaskDetailKey = @c_NewTaskdetailKey 
+                        WHERE PickDetailKey = @c_PickDetailKey
+                     END
+                     ELSE IF @c_PDSourceType = '2'
+                     BEGIN
+                        UPDATE PICKDETAIL
+                        SET TaskDetailKey = @c_NewTaskdetailKey
+                          , TrafficCop = NULL
+                          , EditDate = dbo.fnc_GetDate()
+                          , EditWho = dbo.fnc_GetUserName()
+                        WHERE PickDetailKey = @c_PickDetailKey
+                     END
+                     --WL05 E
 
                      SET @n_err = @@ERROR
                      IF @n_err <> 0
@@ -1435,13 +1643,13 @@ BEGIN
                         SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) + ': Updating PickDetail Failed (msp_ProcessShortPickReAlloc01)'  
                                        + ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
                      END
-                     FETCH NEXT FROM @CUR_UPDATEPD INTO @c_PickDetailKey
+                     FETCH NEXT FROM @CUR_UPDATEPD INTO @c_PickDetailKey, @c_PDSourceType   --WL05
                   END
                   CLOSE @CUR_UPDATEPD
                   DEALLOCATE @CUR_UPDATEPD
                END
             END
-            FETCH NEXT FROM @CUR_PTASK INTO @c_WaveKey, @c_Orderkey, @c_OrderLineNumber
+            FETCH NEXT FROM @CUR_PTASK INTO @c_GetWavekey, @c_Orderkey, @c_OrderLineNumber   --WL05
                                           , @c_Storerkey, @c_Sku, @c_LOT, @c_FromLOC, @c_ID, @n_PickdetQty  
                                           , @c_UOM, @c_PickMethod, @c_DropId, @c_LabelNo, @b_WCS
                                           , @c_FromLogicalLoc, @c_FromLocType, @c_FromPAZone 
@@ -1463,37 +1671,73 @@ BEGIN
    --Update pickdetail_WIP work in progress staging table back to pickdetail 
    IF (@n_Continue = 1 or @n_Continue = 2)
    BEGIN
-      EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
-                                  , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = @c_PickCondition_SQL   --WL04
-                                  , @c_Action = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
-                                  , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
-                                  , @b_Success = @b_Success OUTPUT
-                                  , @n_Err = @n_err OUTPUT
-                                  , @c_ErrMsg = @c_errmsg OUTPUT
+      --WL05 S
+      SET @CUR_WAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT R.WaveKey
+      FROM #T_RelatedWaves R
+      ORDER BY R.RowID
 
-      IF @b_Success <> 1
+      OPEN @CUR_WAVE
+
+      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
-         SET @n_Continue = 3
+         EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_GetWavekey   --WL05
+                                     , @c_WIP_RefNo = @c_SourceType
+                                     , @c_PickCondition_SQL = @c_PickCondition_SQL
+                                     , @c_Action = 'U' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
+                                     , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
+                                     , @b_Success = @b_Success OUTPUT
+                                     , @n_Err = @n_err OUTPUT
+                                     , @c_ErrMsg = @c_errmsg OUTPUT
+
+         IF @b_Success <> 1
+         BEGIN
+            SET @n_Continue = 3
+         END
+
+         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
       END
+      CLOSE @CUR_WAVE
+      DEALLOCATE @CUR_WAVE
+      --WL05 E
    END
 
    --Delete pickdetail_WIP work in progress staging table    
    IF (@n_Continue = 1 or @n_Continue = 2)
    BEGIN
-      EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_Wavekey
-                                  , @c_WIP_RefNo = @c_SourceType
-                                  , @c_PickCondition_SQL = ''
-                                  , @c_Action = 'D' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
-                                  , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
-                                  , @b_Success = @b_Success OUTPUT
-                                  , @n_Err = @n_err OUTPUT
-                                  , @c_ErrMsg = @c_errmsg OUTPUT
+      --WL05 S
+      SET @CUR_WAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT R.WaveKey
+      FROM #T_RelatedWaves R
+      ORDER BY R.RowID
 
-      IF @b_Success <> 1
+      OPEN @CUR_WAVE
+
+      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
-         SET @n_Continue = 3
+         EXEC isp_CreatePickdetail_WIP @c_Wavekey = @c_GetWavekey   --WL05
+                                     , @c_WIP_RefNo = @c_SourceType
+                                     , @c_PickCondition_SQL = ''
+                                     , @c_Action = 'D' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records   
+                                     , @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
+                                     , @b_Success = @b_Success OUTPUT
+                                     , @n_Err = @n_err OUTPUT
+                                     , @c_ErrMsg = @c_errmsg OUTPUT
+
+         IF @b_Success <> 1
+         BEGIN
+            SET @n_Continue = 3
+         END
+
+         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
       END
+      CLOSE @CUR_WAVE
+      DEALLOCATE @CUR_WAVE
+      --WL05 E
    END
 
    QUIT_SP:
@@ -1511,6 +1755,11 @@ BEGIN
 
    IF OBJECT_ID('tempdb..#T_Packdetail ','u') IS NOT NULL 
       DROP TABLE #T_Packdetail
+
+   --WL05 S
+   IF OBJECT_ID('tempdb..#T_RelatedWaves ','u') IS NOT NULL 
+      DROP TABLE #T_RelatedWaves
+   --WL05 E
       
    IF (XACT_STATE()) = -1 
    BEGIN
