@@ -3,19 +3,20 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_1764ClosePlt07                                        */
-/* Copyright      : IDS                                                       */
-/*                                                                            */
-/* Purpose: Confirm replenish                                                 */
-/*                                                                            */
-/* Called from:                                                               */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date        Rev  Author    Purposes                                        */
-/* 2026-01-29  1.0  NickT     FCR-10467 copied from rdt_TM_Replen_ClosePallet */
-/******************************************************************************/
+/***************************************************************************************/
+/* Store procedure: rdt_1764ClosePlt07                                                 */
+/* Copyright      : Maersk                                                             */
+/* Customer       : AMERICAN EAGLE                                                     */
+/*                                                                                     */
+/* Purpose: Confirm replenish                                                          */
+/*                                                                                     */
+/* Called from:                                                                        */
+/*                                                                                     */
+/* Modifications log:                                                                  */
+/*                                                                                     */
+/* Date        Rev  Author    Purposes                                                 */
+/* 2026-06-16  1.0  NickT     FCR-12990 Created, copied from rdt_TM_Replen_ClosePallet */
+/***************************************************************************************/
 
 
 CREATE OR ALTER PROC [RDT].[rdt_1764ClosePlt07] (
@@ -60,7 +61,14 @@ BEGIN
    DECLARE @cClosePalletSP NVARCHAR( 20)
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
-   DECLARE @nRowRef        INT
+   DECLARE @cCaseID        NVARCHAR( 20)
+
+   DECLARE @tPickDetail TABLE 
+   (
+      RowRef INT IDENTITY(1,1) PRIMARY KEY,
+      PickDetailKey NVARCHAR(18),
+      TaskDetailKey NVARCHAR(10)
+   )
 
    -- Init var
    SET @nErrNo = 0
@@ -77,8 +85,11 @@ BEGIN
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_1764ClosePlt07 -- For rollback or commit only our own transaction
+
+   IF @nTranCount = 0
+      BEGIN TRAN  -- Begin our own transaction
+   ELSE
+      SAVE TRAN rdt_1764ClosePlt07 -- For rollback or commit only our own transaction
 
    -- Lock orders to prevent deadlock
    DECLARE @curPD CURSOR
@@ -97,31 +108,32 @@ BEGIN
    WHILE @@FETCH_STATUS = 0
    BEGIN
       -- Dummy update to lock order
-      UPDATE Orders SET
-         EditDate = GETDATE(),
-         EditWho = SUSER_SNAME(),
-         TrafficCop = NULL
-      WHERE OrderKey = @cOrderKey
-      IF @@ERROR <> 0
-      BEGIN
-         SET @nErrNo = 257656
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- LockOrderFail
-         GOTO RollBackTran
-      END
+      BEGIN TRY
+         UPDATE Orders SET
+            EditDate = GETDATE(),
+            EditWho = SUSER_SNAME(),
+            TrafficCop = NULL
+         WHERE OrderKey = @cOrderKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 270054
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Lock order fail
+         GOTO ROLLBACK_TRAN
+      END CATCH
       FETCH NEXT FROM @curPD INTO @cOrderKey
    END
 
    -- Loop tasks
    DECLARE @curRPTask CURSOR
    SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-      SELECT TaskDetailKey, PickMethod, StorerKey, FromLOC, FromID, ToLOC, ToID, SKU, LOT, QTY, SystemQTY, WaveKey
+      SELECT TaskDetailKey, PickMethod, StorerKey, FromLOC, FromID, ToLOC, ToID, SKU, LOT, QTY, SystemQTY, WaveKey, CaseID
       FROM dbo.TaskDetail WITH (NOLOCK)
       WHERE ListKey = @cListKey
          AND UserKey = @cUserName
          AND Status = '5' -- 3=Fetch, 5=Picked, 9=Complete
       ORDER BY TaskDetailKey
    OPEN @curRPTask
-   FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLOC, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey
+   FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLOC, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey, @cCaseID
    WHILE @@FETCH_STATUS = 0
    BEGIN
       SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
@@ -130,16 +142,18 @@ BEGIN
       IF @cPickMethod = 'FP'
       BEGIN
          -- Reduce QTYReplen
-         UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
-            QTYReplen = 0
-         WHERE LOC = @cFromLOC
-            AND ID = @cFromID
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 257651
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
-            GOTO RollBackTran
-         END
+         BEGIN TRY
+            UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) 
+            SET
+               QTYReplen = 0
+            WHERE LOC = @cFromLOC
+               AND ID = @cFromID
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 270051
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update LOTXLOCXID fail
+            GOTO ROLLBACK_TRAN
+         END CATCH
 
          -- Move inventory
          EXECUTE rdt.rdt_Move
@@ -156,7 +170,7 @@ BEGIN
             @cToID       = @cFromID,
             @nFunc       = @nFunc
          IF @nErrNo <> 0
-            GOTO RollBackTran
+            GOTO ROLLBACK_TRAN
 
          EXEC RDT.rdt_STD_EventLog
             @cActionType    = '5', -- Replenish
@@ -196,18 +210,29 @@ BEGIN
                -- Single sku ucc
                IF EXISTS ( SELECT 1 FROM dbo.UCC WITH (NOLOCK)
                            WHERE Storerkey = @cStorerKey
-                           AND   UCCNo = @cUCCNo
+                              AND UCCNo = @cUCCNo
                            GROUP BY UCCNo
                            HAVING COUNT( DISTINCT SKU) = 1)
                BEGIN
+                  
                   -- Calc QTYAlloc
                   IF @cMoveQTYAlloc = '1'
                   BEGIN
-                     IF @nUCCQTY < @nSystemQTY -- Short replen
-                        SET @nQTYAlloc = @nUCCQTY
+                     IF EXISTS (SELECT 1 
+                              FROM dbo.PickDetail WITH(NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND DropID = @cUCCNo
+                                 AND Status = '0')
+                     BEGIN
+                        IF @nUCCQTY < @nSystemQTY -- Short replen
+                           SET @nQTYAlloc = @nUCCQTY
+                        ELSE
+                           SET @nQTYAlloc = @nSystemQTY
+                     END
                      ELSE
-                        SET @nQTYAlloc = @nSystemQTY
-
+                     BEGIN
+                        SET @nQTYAlloc = 0
+                     END
                      SET @nSystemQTY = @nSystemQTY - @nQTYAlloc
                   END
                   ELSE
@@ -243,7 +268,7 @@ BEGIN
                      @nFunc       = @nFunc,
                      @cDropID     = @cUCCNo
                   IF @nErrNo <> 0
-                     GOTO RollBackTran
+                     GOTO ROLLBACK_TRAN
 
                   EXEC RDT.rdt_STD_EventLog
                      @cActionType    = '5', -- Replenish
@@ -273,8 +298,9 @@ BEGIN
                   SELECT SKU, Lot, SUM( Qty)
                   FROM dbo.UCC WITH (NOLOCK)
                   WHERE Storerkey = @cStorerKey
-                  AND   UCCNo = @cUCCNo
+                     AND UCCNo = @cUCCNo
                   GROUP BY SKU, Lot
+
                   OPEN @curMultiSKUUCC
                   FETCH NEXT FROM @curMultiSKUUCC INTO @cUCC_SKU, @cLOT, @nUCCQTY
                   WHILE @@FETCH_STATUS = 0
@@ -340,54 +366,55 @@ BEGIN
                         @cTaskDetailKey = @cTaskDetailKey
 
                      IF @nErrNo <> 0
-                        GOTO RollBackTran
+                        GOTO ROLLBACK_TRAN
 
                      -- Get LocationType
                      SELECT @cToLocType = SL.LocationType
                      FROM dbo.SKUxLOC SL (NOLOCK)
                      WHERE SL.StorerKey = @cStorerKey
-                     AND   SL.SKU = @cUCC_SKU
-                     AND   SL.LOC = @cToLOC
+                        AND SL.SKU = @cUCC_SKU
+                        AND SL.LOC = @cToLOC
 
                      SET @cLoseUCC = ''
                      SET @cLoseID = ''
+
                      SELECT
                         @cLoseID = LoseID,
                         @cLoseUCC = LoseUCC
                      FROM dbo.LOC (NOLOCK)
                      WHERE LOC = @cToLOC
+                        AND Facility = @cFacility
 
                      -- Update UCC (rdt_move not support move ucc with multisku ucc)
-                     UPDATE dbo.UCC WITH (ROWLOCK) SET
-                        LOC = @cToLOC,
-                        ID = CASE
-                              WHEN @cLoseID = '1' THEN '' -- Lose ID
-                              WHEN @cToID IS NULL THEN ID -- ID not change
-                              ELSE @cToID
-                              END,
-                        -- Lose UCC. Status 5=Picked/Repl
-                        Status = CASE WHEN (@cToLocType = 'PICK' OR @cToLocType = 'CASE')  THEN '5'
-                                      WHEN @cLoseUCC = '1' THEN '6'
-                                      ELSE Status
+                     BEGIN TRY
+                        UPDATE dbo.UCC WITH (ROWLOCK) SET
+                           LOC = @cToLOC,
+                           ID = CASE
+                                 WHEN @cLoseID = '1' THEN '' -- Lose ID
+                                 WHEN @cToID IS NULL THEN ID -- ID not change
+                                 ELSE @cToID
                                  END,
-                        EditWho = SUSER_SNAME(),
-                        EditDate = GETDATE(),
-                        TrafficCop = NULL
-                     WHERE StorerKey = @cStorerKey
-                     AND   LOT = @cLOT
-                     AND   LOC = @cFromLOC
-                     AND   ID  = @cFromID
-                     AND   UCCNo = @cUCCNo
-                     AND   SKU = @cUCC_SKU
-                     AND   Status IN ('1', '3') -- Received, , Allocated
-                     AND   Status <> ''
-
-                     IF @@ERROR <> 0
-                     BEGIN
-                        SET @nErrNo = 257658
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD UCC Fail
-                        GOTO RollBackTran
-                     END
+                           Status = CASE WHEN (@cToLocType = 'PICK' OR @cToLocType = 'CASE')  THEN '5'
+                                       WHEN @cLoseUCC = '1' THEN '6'
+                                       ELSE Status
+                                    END,
+                           EditWho = SUSER_SNAME(),
+                           EditDate = GETDATE(),
+                           TrafficCop = NULL
+                        WHERE StorerKey = @cStorerKey
+                           AND LOT = @cLOT
+                           AND LOC = @cFromLOC
+                           AND ID  = @cFromID
+                           AND UCCNo = @cUCCNo
+                           AND SKU = @cUCC_SKU
+                           AND Status IN ('1', '3') -- Received, , Allocated
+                           AND Status <> ''
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 270055
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update UCC fail
+                        GOTO ROLLBACK_TRAN
+                     END CATCH
 
                      EXEC RDT.rdt_STD_EventLog
                         @cActionType    = '5', -- Replenish
@@ -411,13 +438,14 @@ BEGIN
                END
 
                -- Clear rdtRPFLog
-               DELETE rdt.rdtRPFLog WHERE TaskDetailKey = @cTaskDetailKey AND UCCNo = @cUCCNo
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 257655
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DelRPFLogFail
-                  GOTO RollBackTran
-               END
+               BEGIN TRY
+                  DELETE rdt.rdtRPFLog WHERE TaskDetailKey = @cTaskDetailKey AND UCCNo = @cUCCNo
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 270053
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 
+                  GOTO ROLLBACK_TRAN
+               END CATCH
 
                FETCH NEXT FROM @curUCC INTO @cUCCNo, @nUCCQTY
             END
@@ -470,9 +498,8 @@ BEGIN
                   @cFromLOT    = @cLOT,
                   @nFunc       = @nFunc,
                   @cTaskDetailKey = @cTaskDetailKey
-                  --@cWaveKey    = @cWaveKey
                IF @nErrNo <> 0
-                  GOTO RollBackTran
+                  GOTO ROLLBACK_TRAN
 
                EXEC RDT.rdt_STD_EventLog
                   @cActionType    = '5', -- Replenish
@@ -494,53 +521,67 @@ BEGIN
          END
       END
 
-      BEGIN TRY
-         EXEC rdt.rdt_Putaway_PendingMoveIn 
-            @cUserName     = '',
-            @cType         = 'UNLOCK',      -- LOCK / UNLOCK
-            @cFromLOC      = '',
-            @cFromID       = '',
-            @cSuggestedLOC = @cToLOC,
-            @cStorerKey    = '',
-            @nErrNo        = @nErrNo    OUTPUT,
-            @cErrMsg       = @cErrMsg   OUTPUT, 
-            @cSKU          = @cSKU,
-            @nPutawayQTY   = @nQTY,
-            @cUCCNo        = '', 
-            @cFromLOT      = '', 
-            @cToID         = '', 
-            @cTaskDetailKey= '', 
-            @nFunc         = @nFunc, 
-            @cMoveQTYAlloc = '',
-            @cMoveQTYPick  = ''
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 257659
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Exec rdt_Putaway_PendingMoveIn failed
-         GOTO RollBackTran
-      END CATCH
+      -- Unlock  suggested location
+      EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+         ,''      --@cFromLOC
+         ,@cFromID--@cFromID
+         ,@cToLOC --@cSuggestedLOC
+         ,''      --@cStorerKey
+         ,@nErrNo  OUTPUT
+         ,@cErrMsg OUTPUT
 
       IF @nErrNo <> 0
-      BEGIN
-         GOTO RollBackTran
-      END
+         GOTO ROLLBACK_TRAN
 
       -- Update Task
-      UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
-         Status = '9', -- Closed
-         -- UserPosition = @cUserPosition,
-         EndTime = GETDATE(),
-         EditDate = GETDATE(),
-         EditWho  = @cUserName,
-         Trafficcop = NULL
-      WHERE TaskDetailKey = @cTaskDetailKey
-      IF @@ERROR <> 0
+      BEGIN TRY
+         UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
+            Status = '9', -- Closed
+            EndTime = GETDATE(),
+            EditDate = GETDATE(),
+            EditWho  = @cUserName,
+            Trafficcop = NULL
+         WHERE TaskDetailKey = @cTaskDetailKey
+            AND StorerKey = @cStorerKey
+            AND Status = '5' -- 3=Fetch, 5=Picked, 9=Complete
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 270052
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail fail
+         GOTO ROLLBACK_TRAN
+      END CATCH
+
+      -- Update PickDetail's Loc if ToLoc does not match with scanned location
+      DELETE FROM @tPickDetail
+
+      INSERT INTO @tPickDetail (PickDetailKey, TaskDetailKey)
+      SELECT PickDetailKey, TaskDetailKey
+      FROM dbo.PickDetail WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND Status = 'H'
+         AND DropID IS NOT NULL
+         AND DropID = @cCaseID
+
+      IF EXISTS (SELECT 1 FROM @tPickDetail)
       BEGIN
-         SET @nErrNo = 257654
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
-         GOTO RollBackTran
+         BEGIN TRY
+            UPDATE PD WITH (ROWLOCK)
+            SET
+               Loc = IIF(ISNULL(@cScannedToLoc, '') <> '' AND @cScannedToLoc <> @cToLOC, @cScannedToLoc, @cToLOC),
+               EditDate = GETDATE(),
+               EditWho = @cUserName,
+               TrafficCop = NULL
+            FROM dbo.PickDetail PD
+            JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 270057
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update FCP PickDetail.Loc as PND fail
+            GOTO ROLLBACK_TRAN
+         END CATCH
       END
-      FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLOC, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey
+
+      FETCH NEXT FROM @curRPTask INTO @cTaskDetailKey, @cPickMethod, @cStorerKey, @cFromLOC, @cFromID, @cToLOC, @cToID, @cSKU, @cLOT, @nQTY, @nSystemQTY, @cWaveKey, @cCaseID
    END
 
    -- Create next task
@@ -549,18 +590,33 @@ BEGIN
       @cListKey,
       @nErrNo  OUTPUT,
       @cErrMsg OUTPUT
+
    IF @nErrNo <> 0
-      GOTO RollBackTran
+      GOTO ROLLBACK_TRAN
 
-   COMMIT TRAN rdt_1764ClosePlt07 -- Only commit change made here
-   GOTO Quit
+   IF @@TRANCOUNT > @nTranCount
+   BEGIN
+      IF XACT_STATE() = 1
+         COMMIT TRANSACTION
+   END
+   GOTO QUIT
 
-RollBackTran:
-   ROLLBACK TRAN rdt_1764ClosePlt07 -- Only rollback change made here
-Fail:
-Quit:
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN
+   ROLLBACK_TRAN:
+   IF @@TRANCOUNT > 0
+   BEGIN
+      IF @nTranCount = 0
+      BEGIN
+         ROLLBACK TRANSACTION
+      END
+      ELSE
+      BEGIN
+         IF XACT_STATE() <> -1
+            ROLLBACK TRANSACTION rdt_1764ClosePlt07
+         ELSE
+            ROLLBACK TRANSACTION 
+      END
+   END
+   QUIT:
 END
 GO
 
