@@ -86,60 +86,63 @@ BEGIN
         -- STEPS 4 & 5: Only when REXLOG flag = '2' (NO)
         -------------------------------------------------------------
         IF @cREXLOGFlag = '2'
-        BEGIN
-            -- Parse PCS DOT
-            SET @nPCSDOT_Week = TRY_CAST(LEFT(@cLottable07, 2) AS INT)
-            SET @nPCSDOT_Year = TRY_CAST(RIGHT(@cLottable07, 2) AS INT)
-
-            -- STEP 4: If MIN DOT (Lottable02) is blank, copy PCS DOT to MIN DOT
-            IF ISNULL(@cLottable02, '') = ''
+        BEGIN 
+            IF @nStep IN (5, 6)
             BEGIN
-                SET @cLottable02 = @cLottable07
-                GOTO Quit
-            END
+                -- Parse PCS DOT
+                SET @nPCSDOT_Week = TRY_CAST(LEFT(@cLottable07, 2) AS INT)
+                SET @nPCSDOT_Year = TRY_CAST(RIGHT(@cLottable07, 2) AS INT)
 
-            -- STEP 5: Compare PCS DOT with MIN DOT
-            -- If PCS DOT is older than MIN DOT, update all RECEIPTDETAIL entries
-            IF LEN(@cLottable02) = 4
-            BEGIN
-                SET @nMINDOT_Week = TRY_CAST(LEFT(@cLottable02, 2) AS INT)
-                SET @nMINDOT_Year = TRY_CAST(RIGHT(@cLottable02, 2) AS INT)
-
-                -- Check if PCS DOT is older than MIN DOT
-                -- Older means: same year with smaller week (years must match per validation)
-                SET @bPCSDOT_Older = 0
-                
-                IF @nPCSDOT_Year = @nMINDOT_Year AND @nPCSDOT_Week < @nMINDOT_Week
+                -- STEP 4: If MIN DOT (Lottable02) is blank, copy PCS DOT to MIN DOT
+                IF ISNULL(@cLottable02, '') = ''
                 BEGIN
-                    SET @bPCSDOT_Older = 1
-                END
-
-                -- If PCS DOT is older, update Lottable02 for all RECEIPTDETAIL entries
-                IF @bPCSDOT_Older = 1
-                BEGIN
-                    BEGIN TRY
-                        -- Update all previously received entries on same pallet, location, SKU
-                        UPDATE dbo.ReceiptDetail WITH (ROWLOCK)
-                        SET Lottable02 = @cLottable07
-                        WHERE ReceiptKey = @cReceiptKey
-                          AND StorerKey = @cStorerKey
-                          AND ToID = @cID
-                          AND ToLoc = @cLOC
-                          AND SKU = @cSKU
-                          AND QtyReceived > 0
-                        
-                    END TRY
-                    BEGIN CATCH
-                        -- Handle any errors that occur during the update
-                        SET @nErrNo = 270601
-                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') 
-                        GOTO Quit
-                    END CATCH
-
-                    -- Set the new MIN DOT for current receipt
                     SET @cLottable02 = @cLottable07
+                    GOTO Quit
                 END
-                -- If PCS DOT is newer or equal, keep the current MIN DOT
+
+                -- STEP 5: Compare PCS DOT with MIN DOT
+                -- If PCS DOT is older than MIN DOT, update all RECEIPTDETAIL entries
+                IF LEN(@cLottable02) = 4
+                BEGIN
+                    SET @nMINDOT_Week = TRY_CAST(LEFT(@cLottable02, 2) AS INT)
+                    SET @nMINDOT_Year = TRY_CAST(RIGHT(@cLottable02, 2) AS INT)
+
+                    -- Check if PCS DOT is older than MIN DOT
+                    -- Older means: same year with smaller week (years must match per validation)
+                    SET @bPCSDOT_Older = 0
+                    
+                    IF @nPCSDOT_Year = @nMINDOT_Year AND @nPCSDOT_Week < @nMINDOT_Week
+                    BEGIN
+                        SET @bPCSDOT_Older = 1
+                    END
+
+                    -- If PCS DOT is older, update Lottable02 for all RECEIPTDETAIL entries
+                    IF @bPCSDOT_Older = 1
+                    BEGIN
+                        BEGIN TRY
+                            -- Update all previously received entries on same pallet, location, SKU
+                            UPDATE dbo.ReceiptDetail WITH (ROWLOCK)
+                            SET Lottable02 = @cLottable07
+                            WHERE ReceiptKey = @cReceiptKey
+                            AND StorerKey = @cStorerKey
+                            AND ToID = @cID
+                            AND ToLoc = @cLOC
+                            AND SKU = @cSKU
+                            AND QtyReceived > 0
+                            
+                        END TRY
+                        BEGIN CATCH
+                            -- Handle any errors that occur during the update
+                            SET @nErrNo = 270601
+                            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') 
+                            GOTO Quit
+                        END CATCH
+
+                        -- Set the new MIN DOT for current receipt
+                        SET @cLottable02 = @cLottable07
+                    END
+                    -- If PCS DOT is newer or equal, keep the current MIN DOT
+                END
             END
         END
     END
