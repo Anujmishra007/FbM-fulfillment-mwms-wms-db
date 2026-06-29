@@ -8,11 +8,14 @@ GO
 /*                                                                         */
 /* Purpose: FCR-8087 - SKU Consolidation                                   */
 /*                                                                         */
+/* Called By: WM.lsp_Start_Replenishment_Wrapper                           */
+/*                                                                         */
 /* Updates:                                                                */
 /* Date         Author     Ver   Purpose                                   */
 /* 18-OCT-2025  USH022     1.0   FCR-8087 SKU Consolidation                */
 /* 30-DEC-2025  Michael    1.1   FCR-8087 Fine tunning                     */
 /* 27-APR-2026  Michael    1.2   FCR-8087 New requirement FBR V1.8         */
+/* 29-MAY-2026  Michael    1.3   UWP-57317 Bug fix (ML01)                  */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_GeneratePutBackTasks]
@@ -43,7 +46,7 @@ BEGIN
 
    DECLARE
         @c_Facility          NVARCHAR(10)  = ISNULL(@c_Zone01,'')
-      , @c_SourceType        NVARCHAR(30)  = 'isp_GeneratePutBackTasks'
+      , @c_SourceType        NVARCHAR(30)  = ''
       , @c_TaskType          NVARCHAR(10)  = ''
       , @c_Clear_SourceType  NVARCHAR(250) = ''
       , @c_Clear_TaskType    NVARCHAR(250) = ''
@@ -66,6 +69,9 @@ BEGIN
       , @c_ToDPLoc_Cond_Exp  NVARCHAR(MAX) = ''
       , @c_ToPKLoc_Sort_Exp  NVARCHAR(MAX) = ''
       , @c_ToDPLoc_Sort_Exp  NVARCHAR(MAX) = ''
+      , @c_ToPKLoc_Join_Exp  NVARCHAR(MAX) = ''   --ML01
+      , @c_ToDPLoc_Join_Exp  NVARCHAR(MAX) = ''   --ML01
+      , @c_FinalTsk_Excl_Exp NVARCHAR(MAX) = ''   --ML01
       , @c_TaskDetailKey     NVARCHAR(10)  = ''
       , @n_debug             INT           = 0
       , @n_continue          INT           = 1
@@ -122,6 +128,8 @@ BEGIN
       DROP TABLE #TEMP_FROMLOC
    IF OBJECT_ID('tempdb..#TEMP_TASK') IS NOT NULL
       DROP TABLE #TEMP_TASK
+   IF OBJECT_ID('tempdb..#TEMP_TaskDetailKey') IS NOT NULL   --ML01
+      DROP TABLE #TEMP_TaskDetailKey                         --ML01
 
    CREATE TABLE #TEMP_UsedFromLoc (
       Loc NVARCHAR(10) PRIMARY KEY
@@ -170,6 +178,9 @@ BEGIN
     , AddDate        DATETIME DEFAULT (GETDATE())
     , SelectFlag     NVARCHAR(1)  NULL
    )
+   CREATE TABLE #TEMP_TaskDetailKey (    --ML01
+      TaskDetailKey  NVARCHAR(10) NULL   --ML01
+   )                                     --ML01
 
    -- Optional zone filters if provided (these are appended to the WHERE clause)
    SET @c_SQL_Zones = ''
@@ -214,11 +225,12 @@ BEGIN
 
    SET @c_SQL = @c_SQL
      + ') X ON SL2.Storerkey = X.Storerkey AND SL2.Sku = X.Sku'
-     +' OUTER APPLY (SELECT TOP 1 LocType = RTRIM(Long) FROM CODELKUP a(NOLOCK)'
+     +' OUTER APPLY (SELECT TOP 1 LocType = RTRIM(Long) FROM dbo.CODELKUP a(NOLOCK)'
      +    ' WHERE a.Listname=''REPLENCFG'' AND a.Code=''DynPick_LocType'' AND a.Code2=''isp_GeneratePutBackTasks'' AND a.Storerkey=SL2.Storerkey'
      +' ) DP'
      +' WHERE (SL2.LocationType = ''PICK'''
      +    ' OR (SL2.Qty > 0 AND LOC2.LocationType = ISNULL(NULLIF(DP.LocType,''''),''DYNPPICK'')))'
+     +  ' AND LOC2.Facility = ''' + ISNULL(REPLACE(@c_Facility,'''',''''''),'') + ''''
      + ' GROUP BY SL2.StorerKey, SL2.SKU'
      +' HAVING COUNT(DISTINCT SL2.LOC) > 1'
 
@@ -289,15 +301,18 @@ BEGIN
               , @c_MoveAllocQty       = ISNULL(RTRIM(MAX(CASE WHEN Code='MoveAllocQty'       THEN Long END)), '0'      )
               , @c_MovePickedQty      = ISNULL(RTRIM(MAX(CASE WHEN Code='MovePickedQty'      THEN Long END)), '0'      )
               , @c_TaskFilterZone     = ISNULL(RTRIM(MAX(CASE WHEN Code='TaskFilterZone'     THEN Long END)), 'Y'      )
-              , @c_DynPick_LocType    = ISNULL(NULLIF(RTRIM(MAX(CASE WHEN Code='DynPick_LocType'    THEN Long END)),''), 'DYNPPICK')
+              , @c_DynPick_LocType    = ISNULL(NULLIF(RTRIM(MAX(CASE WHEN Code='DynPick_LocType'   THEN Long END)),''), 'DYNPPICK')
               , @n_DftCartonCube      = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='DftCartonCube' THEN Long END),'') AS FLOAT), 50020)
               , @n_DftSkuStdCube      = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='DftSkuStdCube' THEN Long END),'') AS FLOAT), 1000 )
               , @n_LocTolerance       = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='LocTolerance'  THEN Long END),'') AS FLOAT), 1.2  )
               , @n_CtnCubeFactor      = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='CtnCubeFactor' THEN Long END),'') AS FLOAT), 1)
+              , @c_ToPKLoc_Join_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code='ToPickLoc_Join'      THEN Notes END)), '')   --ML01
               , @c_ToPKLoc_Cond_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code='ToPickLoc_Condition' THEN Notes END)), '')
               , @c_ToPKLoc_Sort_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code='ToPickLoc_Sort'      THEN Notes END)), '')
+              , @c_ToDPLoc_Join_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code='ToDPLoc_Join'        THEN Notes END)), '')   --ML01
               , @c_ToDPLoc_Cond_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code='ToDPLoc_Condition'   THEN Notes END)), '')
               , @c_ToDPLoc_Sort_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code='ToDPLoc_Sort'        THEN Notes END)), '')
+              , @c_FinalTsk_Excl_Exp  =        TRIM(MAX(CASE WHEN Code='FinalTask_ExclCond'  THEN Notes END))        --ML01
            FROM dbo.CODELKUP WITH(NOLOCK)
           WHERE ListName = 'REPLENCFG'
             AND Code2 = 'isp_GeneratePutBackTasks'
@@ -308,6 +323,9 @@ BEGIN
 
          IF LEFT(@c_ToDPLoc_Cond_Exp,4) = 'AND '
             SET @c_ToDPLoc_Cond_Exp = TRIM(SUBSTRING(@c_ToDPLoc_Cond_Exp,5,LEN(@c_ToDPLoc_Cond_Exp)))
+
+         IF LEFT(@c_FinalTsk_Excl_Exp,4) = 'AND '                                                          --ML01
+            SET @c_FinalTsk_Excl_Exp = TRIM(SUBSTRING(@c_FinalTsk_Excl_Exp,5,LEN(@c_FinalTsk_Excl_Exp)))   --ML01
 
          -- Prepare Dynamic Pick Loc
          TRUNCATE TABLE #TEMP_DPLOC
@@ -336,14 +354,20 @@ BEGIN
          -- Clear incomplete/pending putback tasks
          IF @c_ReplenType = 'R'
          BEGIN
-            DECLARE CUR_REPLEN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            TRUNCATE TABLE #TEMP_TaskDetailKey   --ML01
+            INSERT INTO #TEMP_TaskDetailKey (TaskDetailKey)   --ML01
             SELECT R.ReplenishmentKey
-              FROM dbo.REPLENISHMENT R
+              FROM dbo.REPLENISHMENT R   WITH(NOLOCK)
               JOIN dbo.LOC           LOC WITH(NOLOCK) ON R.FromLoc = LOC.Loc
              WHERE R.Confirmed = 'N'
                AND R.ReplenishmentGroup = 'PUTBACK'
                AND R.Storerkey = @c_Storerkey
                AND LOC.Facility = @c_Facility
+
+            DECLARE CUR_REPLEN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT TaskDetailKey       --ML01
+            FROM #TEMP_TaskDetailKey   --ML01
+            ORDER BY 1                 --ML01
 
             OPEN CUR_REPLEN
 
@@ -365,7 +389,8 @@ BEGIN
          IF @c_ReplenType = 'T' OR
            (@c_ReplenType = 'R' AND ISNULL(@c_Clear_SourceType,'')<>'' AND ISNULL(@c_Clear_TaskType,'')<>'')
          BEGIN
-            DECLARE CUR_TASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            TRUNCATE TABLE #TEMP_TaskDetailKey   --ML01
+            INSERT INTO #TEMP_TaskDetailKey (TaskDetailKey)   --ML01
             SELECT TD.TaskDetailKey
             FROM dbo.TASKDETAIL TD  WITH (NOLOCK)
             JOIN dbo.LOC        LOC WITH (NOLOCK) ON TD.FromLoc = LOC.Loc
@@ -375,8 +400,13 @@ BEGIN
               AND CASE WHEN @c_ReplenType = 'R'
                        THEN IIF(EXISTS(SELECT TOP 1 1 FROM STRING_SPLIT(@c_Clear_SourceType,',') WHERE value<>'' AND value=TD.SourceType) AND
                                 EXISTS(SELECT TOP 1 1 FROM STRING_SPLIT(@c_Clear_TaskType  ,',') WHERE value<>'' AND value=TD.TaskType), 1, 0)
-                       ELSE IIF(TD.SourceType=@c_SourceType AND TD.TaskType=@c_TaskType, 1, 0)
+                       ELSE IIF(TD.SourceType='isp_GeneratePutBackTasks' AND TD.TaskType=@c_TaskType, 1, 0)
                   END = 1
+
+            DECLARE CUR_TASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT TaskDetailKey       --ML01
+            FROM #TEMP_TaskDetailKey   --ML01
+            ORDER BY 1                 --ML01
 
             OPEN CUR_TASK
 
@@ -413,6 +443,11 @@ BEGIN
            +      ' FROM #TEMP_TASK a'
            +     ' WHERE a.Storerkey = @c_Storerkey AND a.Sku = @c_Sku AND a.ToLoc = LOC.Loc'
            +  ') TS'
+
+         IF ISNULL(@c_ToPKLoc_Join_Exp,'')<>''                                       --ML01
+            SET @c_SQL_Rule1 = @c_SQL_Rule1 + ' AND (' + @c_ToPKLoc_Join_Exp + ')'   --ML01
+
+         SET @c_SQL_Rule1 = @c_SQL_Rule1                                             --ML01
            +' WHERE LOC.Facility = @c_Facility'
            +  ' AND SL.StorerKey = @c_Storerkey'
            +  ' AND SL.Sku = @c_Sku'
@@ -428,7 +463,7 @@ BEGIN
            +         ' WHERE a.Storerkey = SL.Storerkey AND a.Sku = SL.Sku AND a.Loc = SL.Loc'
            +         ' HAVING SUM(a.Qty - a.QtyPicked + ISNULL(d.PendingQty,0)) + @n_Qty > SL.QtyLocationLimit * @n_LocTolerance)'
            +  ' AND ((LOC.CommingleSku = ''1'' AND ISNULL(@c_NoCommingleSku,'''')<>''1'')'
-           +    ' OR (NOT EXISTS(SELECT TOP 1 1 FROM LOTxLOCxID a WITH (NOLOCK)'
+           +    ' OR (NOT EXISTS(SELECT TOP 1 1 FROM dbo.LOTxLOCxID a WITH (NOLOCK)'
            +          ' OUTER APPLY ('
            +             ' SELECT PendingQty = SUM(Qty)'
            +                ' FROM #TEMP_TASK c'
@@ -443,7 +478,9 @@ BEGIN
             SET @c_SQL_Rule1 = @c_SQL_Rule1
            +   ' AND NOT EXISTS(SELECT TOP 1 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE ToLoc = LOC.Loc AND FromLoc<>'''' AND Sku <> @c_Sku AND Status IN (''0'',''3''))'
 
-         SET @c_SQL_Rule1 = @c_SQL_Rule1 + '))'
+         SET @c_SQL_Rule1 = @c_SQL_Rule1
+           +   ' AND NOT EXISTS(SELECT TOP 1 1 FROM #TEMP_TASK a WHERE a.ToLoc=SL.Loc AND a.Sku<>@c_Sku)'                             --ML01
+           +   ' AND NOT EXISTS(SELECT TOP 1 1 FROM dbo.RFPutaway a WITH (NOLOCK) WHERE a.SuggestedLoc=SL.Loc AND a.Sku<>@c_Sku)))'   --ML01
 
          IF ISNULL(@c_ToPKLoc_Cond_Exp,'')<>''
             SET @c_SQL_Rule1 = @c_SQL_Rule1 + ' AND (' + @c_ToPKLoc_Cond_Exp + ')'
@@ -478,7 +515,28 @@ BEGIN
            +      ' FROM #TEMP_TASK a'
            +     ' WHERE a.Storerkey = @c_Storerkey AND a.Sku = @c_Sku AND a.ToLoc = LOC.Loc'
            +  ') TS'
+           --ML01-S
+           + ' OUTER APPLY ('
+           +    ' SELECT LocCube = SUM((a.Qty - a.QtyPicked + ISNULL(d.PendingQty,0)) * ISNULL(NULLIF(b.StdCube,0),@n_SkuStdCube))'
+           +         ' FROM dbo.LOTxLOCxID a WITH (NOLOCK)'
+           +         ' JOIN dbo.SKU        b WITH (NOLOCK) ON a.Storerkey = b.Storerkey AND a.Sku = b.Sku'
+           +         ' OUTER APPLY ('
+           +            ' SELECT PendingQty = SUM(Qty)'
+           +               ' FROM #TEMP_TASK c'
+           +               ' WHERE c.Storerkey = a.Storerkey AND c.Sku = a.Sku AND c.Lot = a.Lot AND c.ToLoc = a.Loc AND c.ToID  = a.ID'
+           +          ') d'
+           +         ' WHERE a.Loc = LOC.Loc'
+           +  ') LOCCUBE'
+
+         IF ISNULL(@c_ToDPLoc_Join_Exp,'')<>''
+            SET @c_SQL_Rule2 = @c_SQL_Rule2 + ' AND (' + @c_ToDPLoc_Join_Exp + ')'
+
+         SET @c_SQL_Rule2 = @c_SQL_Rule2
+           --ML01-E
            +' WHERE LOC.Loc NOT IN (SELECT Loc FROM #TEMP_UsedFromLoc)'
+           + ' AND ISNULL(LOCCUBE.LocCube,0) + @n_Qty * @n_SkuStdCube <='                                           --ML01
+           +     ' @n_CartonCube * ISNULL(TRY_PARSE(ISNULL(LOC.LocationRoom,'''') AS FLOAT),1) * @n_LocTolerance'   --ML01
+/* ML01-S
            +  ' AND NOT EXISTS(SELECT TOP 1 1'
            +         ' FROM dbo.LOTxLOCxID a WITH (NOLOCK)'
            +         ' JOIN dbo.SKU        b WITH (NOLOCK) ON a.Storerkey = b.Storerkey AND a.Sku = b.Sku'
@@ -492,6 +550,7 @@ BEGIN
            +         ' HAVING SUM((a.Qty - a.QtyPicked + ISNULL(d.PendingQty,0)) * ISNULL(NULLIF(b.StdCube,0),@n_SkuStdCube)) + @n_Qty * @n_SkuStdCube'
            +              ' > @n_CartonCube * ISNULL(TRY_PARSE(ISNULL(LOC.LocationRoom,'''') AS FLOAT),1) * @n_LocTolerance'
            +       ')'
+ML01-E */
            +  ' AND ((LOC.CommingleSku = ''1'' AND ISNULL(@c_NoCommingleSku,'''')<>''1'')'
            +   ' OR (NOT EXISTS(SELECT TOP 1 1 FROM dbo.LOTxLOCxID a WITH (NOLOCK)'
            +         ' OUTER APPLY ('
@@ -508,15 +567,19 @@ BEGIN
             SET @c_SQL_Rule2 = @c_SQL_Rule2
               +   ' AND NOT EXISTS(SELECT TOP 1 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE ToLoc = LOC.Loc AND FromLoc<>'''' AND Sku <> @c_Sku AND Status IN (''0'',''3''))'
 
-         SET @c_SQL_Rule2 = @c_SQL_Rule2 + '))'
+         SET @c_SQL_Rule2 = @c_SQL_Rule2
+           +   ' AND NOT EXISTS(SELECT TOP 1 1 FROM #TEMP_TASK a WHERE a.ToLoc=LOC.Loc AND a.Sku<>@c_Sku)'                             --ML01
+           +   ' AND NOT EXISTS(SELECT TOP 1 1 FROM dbo.RFPutaway a WITH (NOLOCK) WHERE a.SuggestedLoc=LOC.Loc AND a.Sku<>@c_Sku)))'   --ML01
 
          IF ISNULL(@c_ToDPLoc_Cond_Exp,'')<>''
             SET @c_SQL_Rule2 = @c_SQL_Rule2 + ' AND (' + @c_ToDPLoc_Cond_Exp + ')'
          ELSE
             SET @c_SQL_Rule2 = @c_SQL_Rule2
               +  ' AND ((ISNULL(@c_PickLoc,'''')<>'''' AND LOC.Loc=@c_PickLoc AND LOC.LocAisle=@c_PickAisle)'
-              +    ' OR (ISNULL(@c_StylePickLoc,'''')<>'''' AND ISNULL(@c_PickLoc,'''')='''' AND LOC.LocAisle=@c_StylePickAisle)'
-              +    ' OR (ISNULL(LLI.Qty,0)-ISNULL(LLI.QtyPicked,0)+ISNULL(TS.PendingQty,0)>0))'
+              +    ' OR (ISNULL(@c_StylePickLoc,'''')<>'''' AND ISNULL(@c_PickLoc,'''')='''' AND LOC.LocAisle=@c_StylePickAisle'
+              +        ' AND ISNULL(LOC.LocAisle,'''')<>ISNULL(@c_FromAisle,''''))'   --ML01
+              +    ' OR (ISNULL(@c_PickLoc,'''')='''' AND ISNULL(@c_StylePickLoc,'''')='''' AND'  --ML01
+              +        ' ISNULL(LLI.Qty,0)-ISNULL(LLI.QtyPicked,0)+ISNULL(TS.PendingQty,0)>0))'
               +  ' AND LOC.PutawayZone = @c_FromPAZone'
               +  ' AND CASE WHEN @c_SkuClass=''Bigger'' THEN IIF(ISNULL(TRY_PARSE(ISNULL(LOC.LocationRoom,'''') AS FLOAT),1)>=2,1,0) ELSE 1 END=1'
 
@@ -547,6 +610,8 @@ BEGIN
       SET @n_SkuStdCube     = @n_DftSkuStdCube
 
       SELECT TOP 1 @n_SkuStdCube = ISNULL(NULLIF(STDCUBE,0),@n_SkuStdCube)
+           , @c_SkuClass   = ISNULL(RTRIM(S.[Class]),'')   --ML01
+           , @c_SkuStyle   = ISNULL(RTRIM(S.Style),'')     --ML01
       FROM dbo.SKU S (NOLOCK)
       WHERE S.Sku = @c_Sku AND S.StorerKey = @c_Storerkey
 
@@ -556,11 +621,11 @@ BEGIN
            , @c_PickBay        = ISNULL(RTRIM(LOC.LocBay),'')
            , @c_PickLoc        = ISNULL(RTRIM(LOC.Loc),'')
            , @c_PickLogicalLoc = ISNULL(RTRIM(LOC.LogicalLocation),'')
-           , @c_SkuClass       = ISNULL(RTRIM(SKU.[Class]),'')
-           , @c_SkuStyle       = ISNULL(RTRIM(SKU.Style),'')
+--ML01           , @c_SkuClass       = ISNULL(RTRIM(SKU.[Class]),'')
+--ML01           , @c_SkuStyle       = ISNULL(RTRIM(SKU.Style),'')
         FROM dbo.SKUxLOC SL  WITH (NOLOCK)
         JOIN dbo.LOC     LOC WITH (NOLOCK) ON SL.Loc = LOC.Loc
-        JOIN dbo.SKU     SKU WITH (NOLOCK) ON SL.Storerkey = SKU.Storerkey AND SL.Sku = SKU.Sku
+--ML01        JOIN dbo.SKU     SKU WITH (NOLOCK) ON SL.Storerkey = SKU.Storerkey AND SL.Sku = SKU.Sku
        WHERE LOC.Facility = @c_Facility
          AND SL.StorerKey = @c_Storerkey
          AND SL.Sku = @c_Sku
@@ -610,6 +675,16 @@ BEGIN
         FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
         JOIN dbo.LOC        LOC WITH (NOLOCK) ON LOC.Loc = LLI.Loc
         JOIN dbo.SKUxLOC    SL  WITH (NOLOCK) ON LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc
+        --ML01-S
+        LEFT JOIN (
+           SELECT SL.Loc
+                , Qty = SUM(SL.Qty - CASE WHEN @c_MoveAllocQty ='1' THEN 0 ELSE SL.QtyAllocated END
+                                   - CASE WHEN @c_MovePickedQty='1' THEN 0 ELSE SL.QtyPicked    END)
+             FROM dbo.SKUxLOC SL WITH (NOLOCK)
+            WHERE SL.StorerKey = @c_Storerkey AND SL.SKU = @c_Sku
+            GROUP BY SL.Loc
+        ) LOCQ ON LLI.Loc = LOCQ.Loc
+        --ML01-E
        WHERE LLI.StorerKey = @c_Storerkey
          AND LLI.SKU = @c_Sku
          AND LOC.Facility = @c_Facility
@@ -624,6 +699,7 @@ BEGIN
                       AND ISNULL(LOC.LocBay  ,'') <> ISNULL(@c_PickBay  ,'') THEN 20   -- FROM Priority 2: same aisle but different bay
                      ELSE                                                         30   -- FROM Priority 3: same bay or any dynamic (qty asc)
                 END
+              , LOCQ.Qty   --ML01
               , LLI.Qty - CASE WHEN @c_MoveAllocQty ='1' THEN 0 ELSE LLI.QtyAllocated END
                         - CASE WHEN @c_MovePickedQty='1' THEN 0 ELSE LLI.QtyPicked    END
               , ISNULL(TRY_PARSE(ISNULL(LOC.LogicalLocation,'') AS FLOAT),0)
@@ -759,7 +835,7 @@ BEGIN
             INSERT INTO #TEMP_TASK (TaskType, Storerkey, Sku, Lot, Qty, FromLoc, FromLogicalLoc, FromID, ToLoc, ToLogicalLoc, ToID,
                                     UOM, PackKey, Priority, PickMethod, SourceType, GroupKey, SelectFlag)
             VALUES(@c_TaskType, @c_Storerkey, @c_Sku, @c_Lot, @n_Qty, @c_FromLoc, @c_FromLogicalLoc, @c_FromID, @c_ToLoc, @c_ToLogicalLoc, @c_FromID,
-                   @c_UOM, @c_PackKey, @c_Priority, @c_PickMethod, @c_SourceType, @c_GroupKey, @c_SelectFlag)
+                   @c_UOM, @c_PackKey, @c_Priority, @c_PickMethod, 'isp_GeneratePutBackTasks', @c_GroupKey, @c_SelectFlag)
          END
       END
       CLOSE CUR_FROMLOC
@@ -774,17 +850,17 @@ BEGIN
       BEGIN
          IF ISNULL(@c_SQL_Zones,'') <> ''
          BEGIN
-            SET @c_SQL = 'UPDATE T SET SelectFlag = ''Y'''
-              + ' FROM #TEMP_TASK T'
-              + ' JOIN LOC WITH(NOLOCK) ON T.FromLoc = LOC.Loc'
-              + ' WHERE ISNULL(T.SelectFlag,'''')<>''Y'''
+            SET @c_SQL = 'UPDATE TMP SET SelectFlag = ''Y'''
+              + ' FROM #TEMP_TASK TMP'
+              + ' JOIN dbo.LOC WITH(NOLOCK) ON TMP.FromLoc = LOC.Loc'
+              + ' WHERE ISNULL(TMP.SelectFlag,'''')<>''Y'''
               + ISNULL(@c_SQL_Zones,'')
             EXEC (@c_SQL)
-         
-            SET @c_SQL = 'UPDATE T SET SelectFlag = ''Y'''
-              + ' FROM #TEMP_TASK T'
-              + ' JOIN LOC WITH(NOLOCK) ON T.ToLoc = LOC.Loc'
-              + ' WHERE ISNULL(T.SelectFlag,'''')<>''Y'''
+
+            SET @c_SQL = 'UPDATE TMP SET SelectFlag = ''Y'''
+              + ' FROM #TEMP_TASK TMP'
+              + ' JOIN dbo.LOC WITH(NOLOCK) ON TMP.ToLoc = LOC.Loc'
+              + ' WHERE ISNULL(TMP.SelectFlag,'''')<>''Y'''
               + ISNULL(@c_SQL_Zones,'')
             EXEC (@c_SQL)
          END
@@ -793,6 +869,32 @@ BEGIN
             UPDATE #TEMP_TASK SET SelectFlag = 'Y'
          END
       END
+
+      --ML01-S
+      IF @c_FinalTsk_Excl_Exp IS NULL
+      BEGIN
+         -- Exclude Partial From-Loc Movement
+         SET @c_FinalTsk_Excl_Exp
+           = 'ISNULL((SELECT SUM(a.Qty) FROM #TEMP_TASK a WHERE a.FromLoc = TMP.FromLoc), 0) <> ISNULL('
+           + '(SELECT SUM(LLI.Qty - CASE WHEN MAQ.MoveAllocQty =''1'' THEN 0 ELSE LLI.QtyAllocated END'
+           +          ' - CASE WHEN MPQ.MovePickedQty=''1'' THEN 0 ELSE LLI.QtyPicked END)'
+           + ' FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)'
+           + ' OUTER APPLY (SELECT MoveAllocQty  = ISNULL(Long,''0'')'
+           +    ' FROM dbo.CODELKUP a WITH(NOLOCK) WHERE a.Listname=''REPLENCFG'' AND a.Code=''MoveAllocQty'' AND a.Code2=''isp_GeneratePutBackTasks'' AND a.Storerkey=LLI.Storerkey) MAQ'
+           + ' OUTER APPLY (SELECT MovePickedQty = ISNULL(Long,''0'')'
+           +    ' FROM dbo.CODELKUP a WITH(NOLOCK) WHERE a.Listname=''REPLENCFG'' AND a.Code=''MovePickedQty'' AND a.Code2=''isp_GeneratePutBackTasks'' AND a.Storerkey=LLI.Storerkey) MPQ'
+           + ' WHERE LLI.Loc = TMP.FromLoc), 0)'
+      END
+
+      IF ISNULL(@c_FinalTsk_Excl_Exp,'') <> ''
+      BEGIN
+         SET @c_SQL = 'UPDATE TMP SET SelectFlag = ''N'''
+           + ' FROM #TEMP_TASK TMP'
+           + ' WHERE ISNULL(TMP.SelectFlag,'''')=''Y'''
+           + ' AND (' + @c_FinalTsk_Excl_Exp + ')'
+         EXEC (@c_SQL)
+      END
+      --ML01-E
 
       DECLARE CUR_TASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT TaskType, Storerkey, Sku, Lot, Qty, FromLoc, FromLogicalLoc, FromID, ToLoc, ToLogicalLoc, ToID,
@@ -821,7 +923,7 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 81140
-               SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_err) + ': Get REPLENISHKEY failed. (isp_GenReplenishmentTask_01)'
+               SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_err) + ': Get REPLENISHKEY failed. (isp_GeneratePutBackTasks)'
                BREAK
             END
 
@@ -837,7 +939,7 @@ BEGIN
                SELECT @n_continue = 3
                SELECT @c_errmsg = CONVERT(CHAR(250), @n_err), @n_err = 81141
                SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_err)
-                    + ': Insert REPLENISHMENT table failed. (isp_GenReplenishmentTask_01) ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+                    + ': Insert REPLENISHMENT table failed. (isp_GeneratePutBackTasks) ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
                BREAK
             END
          END
@@ -874,7 +976,7 @@ BEGIN
                SELECT @n_continue = 3
                SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81142
                SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
-                    + ': Insert Taskdetail Failed. (ispRLWAV05)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                    + ': Insert Taskdetail Failed. (isp_GeneratePutBackTasks)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
                BREAK
             END
          END
