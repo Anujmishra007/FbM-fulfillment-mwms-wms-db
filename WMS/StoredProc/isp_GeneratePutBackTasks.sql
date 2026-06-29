@@ -8,6 +8,8 @@ GO
 /*                                                                         */
 /* Purpose: FCR-8087 - SKU Consolidation                                   */
 /*                                                                         */
+/* Called By: WM.lsp_Start_Replenishment_Wrapper                           */
+/*                                                                         */
 /* Updates:                                                                */
 /* Date         Author     Ver   Purpose                                   */
 /* 18-OCT-2025  USH022     1.0   FCR-8087 SKU Consolidation                */
