@@ -56,9 +56,7 @@ BEGIN
       @cSKUClass      NVARCHAR(10),
       @cDefaultQty    NVARCHAR(10),
       @nDefaultQty    INT,
-      @cMasterUOM     NVARCHAR(10),
-      @cPUOM          NVARCHAR(1),
-      @nPUOM_Div      INT
+      @cMasterUOM     NVARCHAR(10)
 
     SET @nErrNo = 0
     SET @cErrMsg = ''

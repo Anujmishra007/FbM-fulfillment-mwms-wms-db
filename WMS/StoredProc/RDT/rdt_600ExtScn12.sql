@@ -67,10 +67,7 @@ BEGIN
         @cID             NVARCHAR(18),
         @cReceiptKey     NVARCHAR(10),
         @cLOC            NVARCHAR(10),
-        @cSKU            NVARCHAR(20),
-        @cSKUClass       NVARCHAR(10),
-        @cDefaultQty     NVARCHAR(10),
-        @nDefaultQty     INT
+        @cSKU            NVARCHAR(20)
 
     SET @nErrNo = 0
     SET @cErrMsg = ''
