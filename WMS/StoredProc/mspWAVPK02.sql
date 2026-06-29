@@ -21,8 +21,11 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
-/* 15-Sep-2025  AYD      1.0  Created procedure                         */
+/* 15-Sep-2025  AYD      1.0  Created procedure - ispWAVPK19            */
 /* 30-Mar-2026  AYD      1.1  Rename to mspWAVPK02 (was ispWAVPK19)     */
+/* 26-Nov-2025  API      1.2  Generate custom SSCCC as customer request */
+/* 29-Apr-2026  TKLIM    1.3  FCR-12721 - Generate TL2 by LabelNo (TK01)*/
+/* 05-Jun-2026  TKLIM    1.4  UWP-58334 - GenSSCC based on config (TK02)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspWAVPK02]
    @c_Wavekey   NVARCHAR(10),
@@ -36,38 +39,70 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @c_Storerkey                    NVARCHAR(15),
-           @c_Sku                          NVARCHAR(20),
-           @n_Qty                          INT,
-           @n_CaseCnt                      INT,
-           @c_LottableNum                  NVARCHAR(2),
-           @n_CtnQty                       INT,
-           @c_PickslipNo                   NVARCHAR(10),
-           @n_CartonNo                     INT,
-           @c_LabelNo                      NVARCHAR(20),
-           @n_LabelLineNo                  INT,
-           @c_LabelLineNo                  NVARCHAR(5),
-           @c_Orderkey                     NVARCHAR(10),
-           @c_Loadkey                      NVARCHAR(10),
-           @c_Conso                        NVARCHAR(10)
+   DECLARE @c_Storerkey          NVARCHAR(15)
+         , @c_Sku                NVARCHAR(20)
+         , @n_Qty                INT
+         , @n_CaseCnt            INT
+         , @c_LottableNum        NVARCHAR(2)
+         , @n_CtnQty             INT
+         , @c_PickslipNo         NVARCHAR(10)
+         , @n_CartonNo           INT
+         , @c_LabelNo            NVARCHAR(20)
+         , @n_LabelLineNo        INT
+         , @c_LabelLineNo        NVARCHAR(5)
+         , @c_Orderkey           NVARCHAR(10)
+         , @c_Loadkey            NVARCHAR(10)
+         , @c_Conso              NVARCHAR(10)
+         , @c_CustomSSCC         NVARCHAR(30) --API178
+         , @c_CustomSSCCPrefix   NVARCHAR(30)   = ''           --(TK02)
+     
+   DECLARE @c_Facility           NVARCHAR(5)    = ''           --(TK01)
+         , @c_WAVGENPACK_Opt5    NVARCHAR(1000) = ''           --(TK01)
+         , @c_GenTL2ByLabelNo    NVARCHAR(MAX)  = ''           --(TK01)
+         , @c_Transmitlogkey     NVARCHAR(10)   = ''           --(TK01)
+         , @c_TableName          NVARCHAR(30)   = 'WSSOMAAC'   --(TK01)
+         , @c_TLOrderKey         NVARCHAR(10)   = ''           --(TK01)
+         , @c_TLLabelNo          NVARCHAR(20)   = ''           --(TK01)
+         , @c_TLStorerkey        NVARCHAR(15)   = ''           --(TK01)
 
-   DECLARE @n_Continue   INT,
-           @n_StartTCnt  INT,
-           @n_debug      INT
+   DECLARE @n_Continue   INT
+         , @n_StartTCnt  INT
+         , @b_Debug      INT
 
-   IF @n_err =  1
-      SET @n_debug = 1
-   ELSE
-      SET @n_debug = 0
+   SET @b_Debug = @n_Err
 
    SELECT @n_Continue=1, @n_StartTCnt=@@TRANCOUNT, @n_Err = 0, @c_ErrMsg = '', @b_success = 1
 
    IF @@TRANCOUNT = 0
       BEGIN TRAN
 
+   --(TK01)
+   CREATE TABLE #TEMP_TLOG2
+   (
+        RowID      INT IDENTITY(1, 1) PRIMARY KEY
+      , Orderkey   NVARCHAR(10)
+      , LabelNo    NVARCHAR(20)
+      , Storerkey  NVARCHAR(15)
+   )
+
+
    --Validation
    IF @n_continue IN(1,2)
    BEGIN
+
+      --(TK01)
+      SELECT TOP 1 @c_Facility = OH.Facility, @c_Storerkey = OH.Storerkey
+      FROM WAVEDETAIL WD (NOLOCK)
+      JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
+      WHERE WD.Wavekey = @c_WaveKey
+      
+      --(TK01)
+      SELECT @c_WAVGENPACK_Opt5 = SC.Option5
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey,'','WAVGENPACKFROMPICKED_SP') AS SC
+
+      SET @c_GenTL2ByLabelNo = dbo.fnc_GetParamValueFromString('@c_GenTL2ByLabelNo', @c_WAVGENPACK_Opt5, @c_GenTL2ByLabelNo)     --(TK01)
+      SET @c_CustomSSCCPrefix = dbo.fnc_GetParamValueFromString('@c_CustomSSCCPrefix', @c_WAVGENPACK_Opt5, @c_CustomSSCCPrefix)  --(TK02)
+
       IF EXISTS(SELECT 1 FROM PickDetail PD WITH (NOLOCK)
                 JOIN  WAVEDETAIL WD WITH (NOLOCK) ON PD.Orderkey = WD.Orderkey
                 WHERE PD.Status='4' AND PD.Qty > 0
@@ -97,6 +132,16 @@ BEGIN
          SET @c_Conso = 'Y'
       ELSE
          SET @c_Conso = 'N'
+
+      IF @b_Debug > 0
+      BEGIN
+         SELECT '==> Initial'
+         , @c_Conso  [@c_Conso]
+         , @c_WAVGENPACK_Opt5  [@c_WAVGENPACK_Opt5]
+         , @c_GenTL2ByLabelNo  [@c_GenTL2ByLabelNo]
+
+      END
+
 
       IF @c_Conso = 'Y'
       BEGIN
@@ -204,6 +249,7 @@ BEGIN
 
          SET @c_LabelNo = ''
          SET @n_CartonNo = 0
+         SET @c_CustomSSCC  = '' --API178
 
          DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT RTRIM(X.SKU), SUM(X.Qty), X.CaseCnt
@@ -246,11 +292,18 @@ BEGIN
                   BREAK
                END
 
+               --(TK02) - Remove Hardcoded SSCC Prefix, Generate SSCC based on config
+               IF @c_CustomSSCCPrefix <> ''
+               BEGIN
+                  --SET @c_CustomSSCC = '0000035051' + @c_LabelNo --API178
+                  SET @c_CustomSSCC = @c_CustomSSCCPrefix + @c_LabelNo --API178
+               END
+           
                INSERT INTO PACKDETAIL
-                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)
+                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, RefNo2)  --API178
                VALUES
                   (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,
-                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())
+                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @c_CustomSSCC) --API178
 
                SET @n_err = @@ERROR
 
@@ -263,7 +316,7 @@ BEGIN
 
                INSERT INTO PACKINFO 
                   (Pickslipno, CartonNo, Qty)
-   	  	      VALUES 
+                   VALUES 
                   (@c_PickslipNo, @n_CartonNo, @n_CtnQty)
 
                SET @n_err = @@ERROR
@@ -309,6 +362,26 @@ BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38090
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+         END
+
+         --(TK01)
+         IF @b_Debug > 2
+         BEGIN
+            SELECT '==> PACKHEADER',* FROM PACKHEADER WHERE PickSlipNo = @c_PickSlipNo
+            SELECT '==> PACKDETAIL',* FROM PACKDETAIL WHERE PickSlipNo = @c_PickSlipNo
+            SELECT '==> PACKINFO  ',* FROM PACKINFO WHERE PickSlipNo = @c_PickSlipNo
+         END
+
+         --(TK01)
+         IF @c_GenTL2ByLabelNo = 'Y'
+         BEGIN 
+
+            INSERT INTO #TEMP_TLOG2 (Orderkey, LabelNo, Storerkey)
+            SELECT PH.Orderkey, PD.LabelNo, PH.Storerkey
+            FROM PACKHEADER PH (NOLOCK)
+            JOIN PACKDETAIL PD (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
+            WHERE PH.PickSlipNo = @c_Pickslipno
+
          END
 
          FETCH NEXT FROM CUR_DISCPACK INTO @c_Orderkey, @c_Storerkey
@@ -375,6 +448,7 @@ BEGIN
 
          SET @c_LabelNo = ''
          SET @n_CartonNo = 0
+         SET @c_CustomSSCC = '' --API178
 
          DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT RTRIM(X.SKU), SUM(X.Qty), X.CaseCnt
@@ -418,11 +492,18 @@ BEGIN
                   BREAK
                END
 
+               --(TK02) - Remove Hardcoded SSCC Prefix, Generate SSCC based on config
+               IF @c_CustomSSCCPrefix <> ''
+               BEGIN
+                  --SET @c_CustomSSCC = '0000035051' + @c_LabelNo --API178
+                  SET @c_CustomSSCC = @c_CustomSSCCPrefix + @c_LabelNo --API178
+               END
+
                INSERT INTO PACKDETAIL
-                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)
+                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, RefNo2) --API178
                VALUES
                   (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,
-                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())
+                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @c_CustomSSCC) --API178
 
                SET @n_err = @@ERROR
 
@@ -435,7 +516,7 @@ BEGIN
 
                INSERT INTO PACKINFO 
                   (Pickslipno, CartonNo, Qty)
-   	  	      VALUES 
+                   VALUES 
                   (@c_PickslipNo, @n_CartonNo, @n_CtnQty)
 
                SET @n_err = @@ERROR
@@ -483,13 +564,151 @@ BEGIN
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Error On PACKHEADER Table. (mspWAVPK02)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
 
-         FETCH NEXT FROM CUR_CONSOCPACK INTO @c_Orderkey, @c_Storerkey
+         --(TK01)
+         IF @b_Debug > 2
+         BEGIN
+            SELECT '==> PACKHEADER',* FROM PACKHEADER WHERE PickSlipNo = @c_PickSlipNo
+            SELECT '==> PACKDETAIL',* FROM PACKDETAIL WHERE PickSlipNo = @c_PickSlipNo
+            SELECT '==> PACKINFO  ',* FROM PACKINFO WHERE PickSlipNo = @c_PickSlipNo
+         END
+
+         --(TK01)
+         IF @c_GenTL2ByLabelNo = 'Y'
+         BEGIN 
+
+            INSERT INTO #TEMP_TLOG2 (Orderkey, LabelNo, Storerkey)
+            SELECT PH.Orderkey, PD.LabelNo, PH.Storerkey
+            FROM PACKHEADER PH (NOLOCK)
+            JOIN PACKDETAIL PD (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
+            WHERE PH.PickSlipNo = @c_Pickslipno
+
+         END
+
+         FETCH NEXT FROM CUR_CONSOCPACK INTO @c_Loadkey, @c_Storerkey
       END
       CLOSE CUR_CONSOCPACK
       DEALLOCATE CUR_CONSOCPACK
    END
 
+   --(TK01) - Start
+   IF @c_GenTL2ByLabelNo = 'Y' AND @n_continue IN (1,2)
+   BEGIN
+      SET @b_success = 1  
+
+      DECLARE CUR_TLOG2 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT Orderkey, LabelNo, Storerkey
+      FROM #TEMP_TLOG2
+      ORDER BY RowID ASC
+
+      OPEN CUR_TLOG2
+      FETCH NEXT FROM CUR_TLOG2 INTO @c_TLOrderkey, @c_TLLabelNo, @c_TLStorerkey
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_continue IN (1,2)
+      BEGIN
+
+         EXECUTE nspg_getkey  
+            @KeyName     = 'TransmitlogKey2'  
+         ,  @fieldlength = 10  
+         ,  @keystring   = @c_Transmitlogkey OUTPUT  
+         ,  @b_success   = @b_success        OUTPUT  
+         ,  @n_err       = @n_err            OUTPUT  
+         ,  @c_errmsg    = @c_errmsg         OUTPUT
+                 
+         IF @b_success = 0
+         BEGIN  
+            SET @n_Continue = 3
+         END 
+         
+         IF @n_Continue = 1
+         BEGIN
+            IF NOT EXISTS (SELECT 1 FROM TransmitLog2 (NOLOCK) 
+                           WHERE TableName = @c_Tablename 
+                           AND Key1 = @c_TLOrderKey 
+                           AND Key2 = @c_TLLabelNo 
+                           AND Key3 = @c_TLStorerkey
+                           )  
+            BEGIN  
+
+               IF @b_Debug > 0
+               BEGIN
+                  SELECT '==> INSERT TL2'
+                        , @c_Transmitlogkey  [@c_Transmitlogkey]
+                        , @c_Tablename       [@c_Tablename]
+                        , @c_TLOrderKey      [@c_TLOrderKey]
+                        , @c_TLLabelNo       [@c_TLLabelNo]
+                        , @c_TLStorerkey     [@c_TLStorerkey]
+               END
+
+               INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag)  
+               VALUES (@c_Transmitlogkey, @c_Tablename, @c_TLOrderKey, @c_TLLabelNo, @c_TLStorerkey, '0')  
+
+               SET @n_Err = @@ERROR
+
+               IF @n_Err > 0
+               BEGIN
+                  SET @n_Continue = 3
+               END
+
+               IF @n_Continue = 1
+               BEGIN
+                  EXEC [dbo].[isp_QCmd_WSTransmitLogInsertAlert]   
+                        @c_QCmdClass        = ''      
+                     , @c_FrmTransmitlogKey= @c_Transmitlogkey 
+                     , @c_ToTransmitlogKey = @c_Transmitlogkey                  
+                     , @b_Debug            = 0              
+                     , @b_Success          = @b_Success  OUTPUT                        
+                     , @n_Err              = @n_Err      OUTPUT    
+                     , @c_ErrMsg           = @c_ErrMsg   OUTPUT    
+                     , @n_PortLimit        = 0   
+
+                  IF @n_Err <> 0  
+                  BEGIN
+                     SET @n_Continue = 3
+                  END
+               END
+            END   --IF not exist in TransmitLog2
+            ELSE
+            BEGIN
+               IF @b_Debug > 0
+               BEGIN
+                  SELECT '==> TL2 Exist', @c_TLOrderKey [@c_TLOrderKey], @c_TLLabelNo [@c_TLLabelNo], @c_TLStorerkey [@c_TLStorerkey]
+               END
+            END
+         END
+
+
+
+         FETCH NEXT FROM CUR_TLOG2 INTO @c_TLOrderkey, @c_TLLabelNo, @c_TLStorerkey
+      END
+      CLOSE CUR_TLOG2
+      DEALLOCATE CUR_TLOG2
+
+   END   --IF (@n_continue = 1 OR @n_continue = 2)
+   --(TK01) - End
+   
    QUIT_SP:
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_DISCPACK') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_DISCPACK
+      DEALLOCATE CUR_DISCPACK
+   END
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_CONSOCPACK') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_CONSOCPACK
+      DEALLOCATE CUR_CONSOCPACK
+   END
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_TLOG2') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_TLOG2
+      DEALLOCATE CUR_TLOG2
+   END
+
+   IF OBJECT_ID('tempdb..#TEMP_TLOG2') IS NOT NULL
+      DROP TABLE #TEMP_TLOG2
+
 
    IF @n_Continue=3  -- Error Occured - Process AND Return
    BEGIN
