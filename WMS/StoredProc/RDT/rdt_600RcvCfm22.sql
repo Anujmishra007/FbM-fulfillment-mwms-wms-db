@@ -12,6 +12,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author  Purposes                                        */  
 /* 2025-05-20 1.0  CYU027   FCR-4213 Created                               */
+/* 2026-06-29 1.1  Sreeja   FCR-14112 Default QTY for PC&TB tires          */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_600RcvCfm22](
@@ -77,7 +78,7 @@ BEGIN
    SET DATEFIRST 1 -- Monday as first day
 
    DECLARE @cSKUType NVARCHAR(10) = ''
-   SELECT @cSKUType = itemclass FROM SKU (NOLOCK)
+   SELECT @cSKUType = Class FROM dbo.SKU WITH (NOLOCK)
    WHERE SKU = @cSKUCode
      AND StorerKey = @cStorerKey
 
@@ -155,6 +156,32 @@ BEGIN
 --    WHERE ReceiptKey = @cReceiptKey
 --      AND ReceiptLineNumber = @cReceiptLineNumber
 
+   -- FCR-14112: VND Michelin - Default QTY from CODELKUP for PC/TB tires if incoming QTY is 0
+   IF ISNULL(@nSKUQTY, 0) = 0 AND @cSKUType IN ('PC', 'TB')
+   BEGIN
+       DECLARE @cDefaultQty NVARCHAR(10)
+       DECLARE @nDefaultQty INT
+
+       -- Lookup default QTY from CODELKUP based on SKU CLASS and master UoM
+       SELECT TOP 1 @cDefaultQty = Short
+       FROM dbo.CODELKUP WITH (NOLOCK)
+       WHERE ListName = 'MICPCSIBDF'
+         AND StorerKey = @cStorerKey
+         AND Code = @cSKUType
+         AND Long = @cSKUUOM  -- Validate master UoM matches
+
+       -- Set QTY only if valid number found in CODELKUP
+       IF ISNULL(@cDefaultQty, '') <> '' AND ISNUMERIC(@cDefaultQty) = 1
+       BEGIN
+           SET @nDefaultQty = TRY_CAST(@cDefaultQty AS INT)
+           IF ISNULL(@nDefaultQty, 0) > 0
+           BEGIN
+               SET @nSKUQTY = @nDefaultQty
+           END
+       END
+       -- If no CODELKUP entry found, QTY remains as-is (blank behavior per requirement)
+   END
+
    Receive:
    -- Receive    
    EXEC rdt.rdt_Receive_V7
@@ -192,11 +219,10 @@ BEGIN
       @dLottable14   = @dLottable14,    
       @dLottable15   = @dLottable15,    
       @nNOPOFlag     = @nNOPOFlag,    
-      @cConditionCode = @cConditionCode,    
-      @cSubreasonCode = '',     
-      @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT    
-  
-  
+      @cConditionCode = @cConditionCode,
+      @cSubreasonCode = '',
+      @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT
+
 END  
 GO
 
