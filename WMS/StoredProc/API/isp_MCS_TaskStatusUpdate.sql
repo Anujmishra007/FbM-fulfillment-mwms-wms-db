@@ -26,7 +26,6 @@ GO
 /* Date         Author   Ver  Purpose                                        */
 /* 25-03-2026   VMA237   1.0  Initial version created                        */
 /* 25-06-2026   VMA237   1.1  "NoLoad" process update                        */
-/*							  + SP rename to macth TCO standard naming       */
 /*																			 */
 /*****************************************************************************/
 CREATE OR ALTER             PROC [dbo].[isp_MCS_TaskStatusUpdate]
