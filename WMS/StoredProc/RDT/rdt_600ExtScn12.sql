@@ -177,25 +177,6 @@ BEGIN
                 END
             END
         END
-
-        -- Case 4: On Lottable screen (Step 5) with ENTER/ESC
-        IF @nStep = 5
-        BEGIN
-            IF @nInputKey = 1  -- ENTER
-            BEGIN
-                -- FCR-14112: Default QTY is handled in rdt_600RcvCfm22 at confirmation time
-                -- Advance to QTY screen (Step 6)
-                SET @nAfterStep = 6
-                SET @nAfterScn = 4035
-            END
-
-            IF @nInputKey = 0  -- ESC
-            BEGIN
-                -- Go back to SKU screen
-                SET @nAfterStep = 4
-                SET @nAfterScn = 4033
-            END
-        END
     END
 
 Quit:
