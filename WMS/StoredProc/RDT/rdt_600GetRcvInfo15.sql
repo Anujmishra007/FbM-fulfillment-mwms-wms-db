@@ -113,7 +113,7 @@ BEGIN
                     AND SKU = @cSKU
 
                 -- Lookup default QTY if CLASS found
-                IF ISNULL(@cSKUClass, '') <> ''
+                IF ISNULL(@cSKUClass, '')  IN ('PC', 'TB') AND ISNULL(@nQTY, 0) = 0
                 BEGIN
                     SELECT @cMasterUOM = P.PackUOM3
                     FROM dbo.SKU S WITH (NOLOCK)
@@ -152,7 +152,7 @@ BEGIN
                   AND SKU = @cSKU
 
                 -- Lookup default QTY if CLASS found
-                IF ISNULL(@cSKUClass, '') <> ''
+                IF ISNULL(@cSKUClass, '') IN ('PC', 'TB')
                 BEGIN
                     SELECT @cMasterUOM = P.PackUOM3
                     FROM dbo.SKU S WITH (NOLOCK)
