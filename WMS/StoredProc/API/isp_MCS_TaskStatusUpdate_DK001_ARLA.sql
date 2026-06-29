@@ -341,8 +341,7 @@ BEGIN
 						EditWho = @cUserName
 					WHERE TaskDetailKey = @cTaskDetailKey;
 					
-					-- VMA237 - v1.1 Start
-					IF (
+					IF ( -- VMA237 - v1.1 Start
 						@cTaskType = 'FPK'
 					)
 					BEGIN
@@ -378,8 +377,7 @@ BEGIN
 								  ,@c_ErrMsg = @cErrMsg OUTPUT
 								  ,@c_UserName = @cUserName
 								  ,@c_UCCNo = NULL
-					END
-					-- VMA237 - v1.1 End
+					END -- VMA237 - v1.1 End
 					
 					SET @bSuccess = 1;
 					RETURN;
