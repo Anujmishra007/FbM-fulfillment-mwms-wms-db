@@ -367,12 +367,8 @@ BEGIN
          WHERE ID = @cFromID AND Status = '9'
          AND StorerKey = @cStorerKey AND LOC = @cFromLoc)
       BEGIN
-         -- SHIPPED: insert record + show message, stay on Step 2
+         -- SHIPPED: insert record + navigate to Msg screen (Screen 5)
          SET @cStatusMessage = 'SHIPPED'
-         SET @nErrNo  = 237303
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Pallet shipped
-         SET @cMsg01  = 'Pallet ID:' + @cFromID
-         SET @cMsg02  = 'Shipped'
 
          INSERT INTO RDT.RDTDataCapture
             (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String2, V_STRING3)
@@ -380,23 +376,12 @@ BEGIN
             (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'P',
              @cFromLoc, CONVERT(VARCHAR(19), GETDATE(), 120), @cStatusMessage)
 
-         EXEC rdt.rdtInsertMsgQueue
-            @nMobile     = @nMobile,
-            @nErrNo      = @nErrNo,
-            @cErrMsg     = @cErrMsg,
-            @cLine01     = @cMsg01,
-            @cLine02     = @cMsg02,
-            @cLine03     = @cMsg03,
-            @cLine04     = @cMsg04,
-            @cLine05     = @cMsg05,
-            @cLine06     = @cMsg06,
-            @cLine07     = @cMsg07,
-            @cLine08     = @cMsg08,
-            @cLine09     = @cMsg09,
-            @nDisplayMsg = 0
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = @cStatusMessage
 
-         SET @cFromID     = ''
-         SET @cOutField02 = ''
+         SET @nScn  = @nScn_Msg
+         SET @nStep = @nStep_Msg
          GOTO Quit
       END
 
