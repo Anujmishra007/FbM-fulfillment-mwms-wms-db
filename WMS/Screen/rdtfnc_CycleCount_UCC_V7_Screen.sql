@@ -119,7 +119,7 @@ EXECUTE rdt.rdtAddScn 5418, 'ENG',
    @nFunc = 634  
 
 -- 5419. UCC - Add UCC
-DELETE rdt.RDTScn WHERE Scn = 5418 AND Lang_Code = 'ENG'
+DELETE rdt.RDTScn WHERE Scn = 5419 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5419, 'ENG', 
    @cLine01 = 'LOC: %10d01',
    @cLine02 = 'ID:',
