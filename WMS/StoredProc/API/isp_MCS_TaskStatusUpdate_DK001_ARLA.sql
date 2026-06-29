@@ -340,7 +340,8 @@ BEGIN
 						EditDate = GETDATE(),
 						EditWho = @cUserName
 					WHERE TaskDetailKey = @cTaskDetailKey;
-
+					
+					-- VMA237 - v1.1 Start
 					IF (
 						@cTaskType = 'FPK'
 					)
@@ -378,6 +379,7 @@ BEGIN
 								  ,@c_UserName = @cUserName
 								  ,@c_UCCNo = NULL
 					END
+					-- VMA237 - v1.1 End
 					
 					SET @bSuccess = 1;
 					RETURN;
