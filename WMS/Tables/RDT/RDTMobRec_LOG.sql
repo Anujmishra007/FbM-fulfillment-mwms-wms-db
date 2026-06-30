@@ -225,6 +225,7 @@ BEGIN
    ALTER TABLE [RDT].[RDTMobRec_LOG] ADD CONSTRAINT [PK__RDTMobRe__78C97797E79397F6] PRIMARY KEY CLUSTERED ([Rowref]) WITH (FILLFACTOR=80) ON [PRIMARY]
 END
 
+-- UWP-56557 Extend MenuStack column to 120 characters to support longer menu stack values
 IF EXISTS (
    SELECT 1
    FROM sys.columns c
