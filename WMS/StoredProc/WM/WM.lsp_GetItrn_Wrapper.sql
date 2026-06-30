@@ -46,7 +46,8 @@ GO
 /*                             and cleanup.                             */
 /* 2026-03-23  USH022   2.0   UWP-47962 -Transactions view only 10000   */
 /*                                  records-Pagination added.           */
-/************************************************************************/
+/* 2026-03-23  USH022   2.1   UWP-13432 -SKU.DESCR Added in the resultset*/
+/*************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_GetItrn_Wrapper]
    @c_WhereClause       NVARCHAR(MAX),                 --Contain WHERE for eg. WHERE ITRN.Storerkey = ''NIKEPH''
    @c_SortPreference    NVARCHAR(MAX) = '',            --Only sort column. Multiple Sort Columns are seperated to be , (comma)
@@ -226,6 +227,7 @@ BEGIN
                   +', ITRN.SourceType'
                   +', ITRN.StorerKey'
                   +', ITRN.Sku'
+                  +', SKU.DESCR'                        --(2.1)
                   +', ITRN.FromLoc'
                   +', ITRN.FromID'
                   +', ITRN.ToLoc'
@@ -304,6 +306,7 @@ BEGIN
          ,  SourceType
          ,  StorerKey
          ,  Sku
+         ,  SkuDescr                  --(2.1)
          ,  FromLoc
          ,  FromID
          ,  ToLoc
