@@ -1261,7 +1261,11 @@ BEGIN
   
          EXEC(@c_SQL)                                                 
       END        
-        
+
+      --debug
+      SELECT * FROM #OPORDERLINES
+      -----
+
       OPEN C_OPORDERLINES        
         
       WHILE (1 = 1) AND (@n_Continue = 1 OR @n_Continue = 2)        
@@ -1314,7 +1318,10 @@ BEGIN
                   @c_HostWHCode, --NJOW24                                
                   @c_Oparms --NJOW17  
          END        
-                 
+
+         --debug
+         print '@c_aUOM='+@c_aUOM+', @n_aQtyLeftToFulfill='+CONVERT(NVARCHAR, @n_aQtyLeftToFulfill)
+         
          IF @@Fetch_Status <> 0        
          BEGIN        
             BREAK        
@@ -1473,26 +1480,15 @@ BEGIN
             SELECT @c_sCurrentLineNumber = SPACE(5)        
             SELECT @n_NumberOfRetries = 0        
         
-        END -- @n_Continue = 1 or @n_Continue = 2        
-        
+         END 
+         
          LOOPPICKSTRATEGY:        
          WHILE (@n_Continue = 1 OR @n_Continue = 2) AND @n_NumberOfRetries <= 7 AND @c_aUOM <= 9 AND @n_aQtyLeftToFulfill > 0        
          BEGIN        
             IF ISNULL(@c_SkipPreAllocationFlag,'0') = '1'        
             BEGIN        
-               GET_NEXT_STRATEGY:        
-        
-               SELECT TOP 1        
-                      @c_sCurrentLineNumber = AllocateStrategyLineNumber ,        
-                      @c_sAllocatePickCode = PickCode ,        
-                      @c_sLocationTypeOverride = LocationTypeOverride,        
-                      @c_sLocationTypeOverridestripe = LocationTypeOverrideStripe,        
-                      @c_aUOM = UOM        
-                 FROM AllocateStrategyDetail (NOLOCK)        
-                WHERE AllocateStrategyLineNumber > @c_sCurrentLineNumber        
-                  AND AllocateStrategyKey = @c_aStrategyKey        
-               ORDER BY AllocateStrategyLineNumber         
-        
+               GET_NEXT_STRATEGY:      
+
                IF @@ROWCOUNT = 0        
                BEGIN        
                   IF @b_debug = 1 OR @b_debug = 2        
@@ -1559,6 +1555,9 @@ BEGIN
         
                IF @@ROWCOUNT = 0        
                BEGIN        
+                  --debug
+                  print '-- 2.Allocate Strategy Not Found For UOM: ' + RTRIM(@c_aUOM)
+                  ----
                   IF @b_debug = 1 OR @b_debug = 2        
                   BEGIN                         PRINT ''        
                      PRINT ''        
@@ -1656,6 +1655,9 @@ BEGIN
                             WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)  
                             AND   P.name = N'@c_LOT')  
                   BEGIN  
+                     --debug
+                     PRINT 'DECLARE  CURSOR_CANDIDATES '
+                     ---
                      DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY  
                      FOR SELECT LOC = '', ID='', QTYAVAILABLE = 0, '1'  
                      FROM LOTxLOCxID (NOLOCK)  
@@ -1669,6 +1671,9 @@ BEGIN
                         + '@c_uom = N''' + RTRIM(@c_aUOM) + '''' + ','  
                         + '@c_HostWHCode = N''' + RTRIM(@c_HostWHCode) + '''' + ','   
                         + '@c_Facility = N''' + RTRIM(@c_aFacility) + '''' + RTRIM(@c_EndString)  
+
+                     --debug
+                     print @c_SQLExecute
                        
                      EXEC(@c_SQLExecute)  
                   END  

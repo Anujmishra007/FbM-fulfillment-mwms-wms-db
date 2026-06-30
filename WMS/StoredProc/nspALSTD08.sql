@@ -9,7 +9,7 @@ GO
 /* Copyright:                                                           */
 /* Written by:                                                          */
 /*                                                                      */
-/* Purpose:                                                             */
+/* Purpose:     replace nspRBClrPl                                      */
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
@@ -21,22 +21,47 @@ GO
 /* Date         Author   Ver. Purposes                                  */
 /* 24-May-2026  AYD      1.0  DevOps Combine Script                     */
 /************************************************************************/
-CREATE OR ALTER PROC nspALSTD06
-@c_lot NVARCHAR(10) ,
-@c_uom NVARCHAR(10) ,
-@c_HostWHCode NVARCHAR(10),
-@c_Facility NVARCHAR(5),
-@n_uombase int ,
-@n_qtylefttofulfill int,
-@c_OtherParms       NVARCHAR(200) = ''
+CREATE OR ALTER PROC nspALSTD08
+-- @c_lot NVARCHAR(10) ,
+-- @c_uom NVARCHAR(10) ,
+-- @c_HostWHCode NVARCHAR(10),
+-- @c_Facility NVARCHAR(5),
+-- @n_uombase int ,
+-- @n_qtylefttofulfill int,
+-- @c_OtherParms       NVARCHAR(200) = ''
+   @c_Orderkey   NVARCHAR(10),  
+   @c_Facility   NVARCHAR(5),     
+   @c_StorerKey  NVARCHAR(15),     
+   @c_SKU        NVARCHAR(20),    
+   @c_Lottable01 NVARCHAR(18),    
+   @c_Lottable02 NVARCHAR(18),    
+   @c_Lottable03 NVARCHAR(18),    
+   @d_Lottable04 DATETIME,    
+   @d_Lottable05 DATETIME,    
+   @c_Lottable06 NVARCHAR(30),    
+   @c_Lottable07 NVARCHAR(30),    
+   @c_Lottable08 NVARCHAR(30),    
+   @c_Lottable09 NVARCHAR(30),    
+   @c_Lottable10 NVARCHAR(30),    
+   @c_Lottable11 NVARCHAR(30),    
+   @c_Lottable12 NVARCHAR(30),    
+   @d_Lottable13 DATETIME,    
+   @d_Lottable14 DATETIME,    
+   @d_Lottable15 DATETIME,    
+   @c_UOM        NVARCHAR(10),    
+   @c_HostWHCode NVARCHAR(10),    
+   @n_UOMBase    INT,    
+   @n_QtyLeftToFulfill INT,
+   @c_OtherParms NVARCHAR(200)=''
 AS
 BEGIN
    SET NOCOUNT ON
 
    DECLARE
+   @c_lot NVARCHAR(10),
    @c_WaveKey NVARCHAR(20) = @c_OtherParms, -- for wave pick, pass wavekey through otherparms
-   @c_StorerKey NVARCHAR(15),
-   @c_SKU NVARCHAR(20),
+   -- @c_StorerKey NVARCHAR(15),
+   -- @c_SKU NVARCHAR(20),
    @n_PalletQty INT,
    @n_QtyToAllocate INT,
    @n_IDQtyAvailable INT,
@@ -68,9 +93,6 @@ BEGIN
          LOT NVARCHAR(100)
       )
    END
-
-   --debug
-   print ''
 
    INSERT INTO ##TMP_PREALLOCATE_CURSOR_CANDIDATES
       SELECT 
@@ -317,5 +339,5 @@ BEGIN
 
 END
 GO
-GRANT EXECUTE ON nspALSTD06 TO NSQL
+GRANT EXECUTE ON nspALSTD08 TO NSQL
 GO
