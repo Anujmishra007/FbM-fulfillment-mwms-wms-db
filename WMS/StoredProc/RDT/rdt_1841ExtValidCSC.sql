@@ -57,7 +57,7 @@ BEGIN
 							RD.ExternReceiptKey = u.sourcekey
 							AND RD.StorerKey = U.Storerkey
 							)
-                    JOIN RECEIPT R on (R.ReceiptKey = RD.ReceiptKey and R.StorerKey = RD.StorerKey)         
+                    JOIN RECEIPT R WITH (NOLOCK) on (R.ReceiptKey = RD.ReceiptKey and R.StorerKey = RD.StorerKey)         
 					WHERE U.UccNo = @cUCC
 						AND RD.ReceiptKey = @cReceiptKey
 						AND RD.StorerKey = @cStorerKey
