@@ -15,7 +15,7 @@ GO
 /* 2026-03-27  1.0.0  MMA982       Created                                    */
 /******************************************************************************/
 
-ALTER   PROCEDURE [RDT].[rdt_1841ExtValidCSC]
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_1841ExtValidCSC]
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
