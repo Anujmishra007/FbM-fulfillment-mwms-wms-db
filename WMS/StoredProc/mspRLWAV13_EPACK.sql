@@ -176,7 +176,7 @@ BEGIN
             ,  CartonWidth   = ISNULL(cz.CartonWidth,0.00) 
             ,  CartonHeight  = ISNULL(cz.CartonHeight,0.00)  
             ,  FillTolerance = ISNULL(cz.FillTolerance,0.00) 
-      FROM CARTONIZATION cz
+      FROM CARTONIZATION cz (NOLOCK)
       WHERE cz.CartonizationGroup = @c_CartonGroup
       ORDER BY cz.[Cube] 
    END
