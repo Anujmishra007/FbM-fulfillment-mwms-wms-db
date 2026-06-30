@@ -47,6 +47,7 @@ GO
 /* 25-Sep-2018  Ung           WMS-6410 Add field 16-20                        */
 /* 03-Apr-2025  NLT013        UWP-32244 Extend Menu number                    */
 /* 12-Sep-2025  NLT013        UWP-41083 Fix issue for Extend Menu number      */
+/* 30-Jun-2026  NLT013        UWP-56557 Extend menuStack column to 120 bytes  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtProcessMenu] (
@@ -109,7 +110,7 @@ AS
       ELSE
       BEGIN
          -- Check if reach max menu level
-         IF (SELECT LEN( MenuStack) FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile) = 60
+         IF (SELECT LEN( MenuStack) FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile) >= 120
          BEGIN
             SELECT @nErrNo = -1
             SELECT @cErrMsg = rdt.rdtgetmessage(51,@cLang_Code,'DSP') --51^MaxMenuLevel
