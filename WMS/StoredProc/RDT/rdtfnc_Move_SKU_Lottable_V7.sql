@@ -22,8 +22,9 @@ GO
 /* 17-Aug-2022 1.5  YeeKung  WMS-20075 Fix fromID (yeekung03)           */
 /* 17-Apr-2023 1.6  Ung      WMS-22217 Add ConfirmSP                    */
 /* 22-Aug-2025 2.0  Cuize    FCR-7251 Add CheckDigit                    */
-/* 15-Dec-2025 3.0  BHA212   FCR-9582 Add DecodedSP                     */
-/* 13-Jan-2026 2.1  PPA374   UWP-47065 Adding ExtVal to steps 2 and 7   */
+/* 15-Dec-2025 2.1  BHA212   FCR-9582 Add DecodedSP                     */
+/* 13-Jan-2026 2.2  PPA374   UWP-47065 Adding ExtVal to steps 2 and 7   */
+/* 01-Jul-2026 2.3  NickT    FCR-13666 Support standard Decode on step 3*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable_V7] (
@@ -122,8 +123,7 @@ DECLARE
    @cPrevOutField15        NVARCHAR(20),  --(yeekung03)
    @cLOCCheckDigitSP       NVARCHAR( 20), -- (Cuize)
    @cCheckDigitLOC         NVARCHAR( 20), -- (Cuize)
-
-
+   @cMax                   NVARCHAR( MAX),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -212,6 +212,7 @@ SELECT
 
    @nFromStep           = V_FromStep,  --(yeekung01)
    @nFromScn            = V_FromScn,   --(yeekung01)
+   @cMax                = V_Max,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -631,7 +632,7 @@ BEGIN
       -- Prep next screen var
       SET @cOutField01 = @cFromLOC
       SET @cOutField02 = @cFromID
-      SET @cOutField03 = CASE WHEN @cDefaultSKU2Move = '' THEN '' ELSE @cDefaultSKU2Move END --@cSKU
+      SET @cMax = CASE WHEN @cDefaultSKU2Move = '' THEN '' ELSE @cDefaultSKU2Move END --@cSKU
 
       -- Go to next screen
       SET @nScn = @nScn_SKU
@@ -685,9 +686,21 @@ Step_SKU:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
+      DECLARE @cSKUBarcode NVARCHAR( 2000)
+      SET @cSKUBarcode = SUBSTRING( @cMax, 1, 2000)
+
       -- Screen mapping
-      SET @cSKU = @cInField03
+      SET @cSKU = SUBSTRING( @cSKUBarcode, 1, 60) -- SKU
       DECLARE @cDecodedSKU NVARCHAR(20)
+
+            -- Validate blank
+      IF @cSKU = '' OR @cSKU IS NULL
+         OR @cSKUBarcode = '' OR @cSKUBarcode IS NULL
+      BEGIN
+         SET @nErrNo = 125556
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'SKU needed'
+         GOTO Step_SKU_Fail
+      END
 
       -- FCR-9582: Reset lottables before decode SP (moved from line 906)
       SELECT
@@ -698,11 +711,26 @@ BEGIN
       -- Decode barcode/QR code for SKU
       IF @cDecodeSP <> ''
       BEGIN
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cSKUBarcode,
+                  @cID         OUTPUT, @cSKU        OUTPUT, @nQTY        OUTPUT,
+                  @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
+                  @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
+                  @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
+                  @nErrNo      = @nErrNo  OUTPUT,
+                  @cErrMsg     = @cErrMsg OUTPUT,
+                  @cType   = 'UPC'
+
+            IF @nErrNo <> 0
+               GOTO Step_SKU_Fail
+         END
+
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cBarcode = @cSKU
             --SELECT TOP 1 @cBarcode = I_Field03 FROM [RDT].[RDTMOBREC] WITH (NOLOCK) WHERE Func = @nFunc AND Mobile = @nMobile
-           
+         
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, ' +
                ' @cID            OUTPUT, @cSKU           OUTPUT, @nQTY           OUTPUT,   ' +
@@ -710,7 +738,7 @@ BEGIN
                ' @cLottable06    OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT, ' +
                ' @cLottable11    OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT, ' +
                ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
-           
+         
             SET @cSQLParam =
                ' @nMobile        INT,           ' +
                ' @nFunc          INT,           ' +
@@ -739,7 +767,7 @@ BEGIN
                ' @dLottable15    DATETIME       OUTPUT, ' +
                ' @nErrNo         INT            OUTPUT, ' +
                ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
- 
+
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cBarcode,
                @cID           OUTPUT, @cDecodedSKU    OUTPUT, @nQTY           OUTPUT,
@@ -752,14 +780,6 @@ BEGIN
             IF ISNULL(@nErrNo, 0) <> 0
                GOTO Step_SKU_Fail
          END
-      END
-
-      -- Validate blank
-      IF @cSKU = '' OR @cSKU IS NULL
-      BEGIN
-         SET @nErrNo = 125556
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'SKU needed'
-         GOTO Step_SKU_Fail
       END
 
       -- Validate SKU
@@ -1229,7 +1249,7 @@ BEGIN
       SET @cSKUDescr = ''
       SET @cOutField01 = @cFromLOC
       SET @cOutField02 = @cFromID
-      SET @cOutField03 = CASE WHEN @cDefaultSKU2Move = '' THEN '' ELSE @cDefaultSKU2Move END -- SKU
+      SET @cMax = CASE WHEN @cDefaultSKU2Move = '' THEN '' ELSE @cDefaultSKU2Move END -- SKU
       SET @cOutField04 = '' -- SKU desc 1
       SET @cOutField05 = '' -- SKU desc 2
 
@@ -1609,7 +1629,7 @@ BEGIN
          -- Prep next screen var
          SET @cOutField01 = @cFromLOC
          SET @cOutField02 = @cFromID
-         SET @cOutField03 = ''  -- SKU desc 2
+         SET @cMax = ''  -- SKU/UPC (V_Max input)
 
          -- Go to QTY screen
          SET @nScn = @nScn_SKU
@@ -2249,6 +2269,7 @@ BEGIN
 
       V_FromStep = @nFromStep, --(yeekung01)
       V_FromScn  = @nFromScn,  --(yeekung01)
+      V_Max     = @cMax,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

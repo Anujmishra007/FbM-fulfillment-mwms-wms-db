@@ -30,7 +30,7 @@ EXECUTE rdt.rdtAddScn 5192, 'ENG'
    ,@cLine02 = 'FROM ID:'
    ,@cLine03 = '%18d02'
    ,@cLine04 = 'SKU/UPC:'
-   ,@cLine05 = '%20i03'
+   ,@cLine05 = '%2000iV_Max' --FCR-13666
    ,@cLine14 = '%e'
    ,@nFunc = 629
 
