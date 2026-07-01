@@ -15,7 +15,8 @@ GO
 /* 2024-6-21   1.1   JackC    FCR-236.Upd retrieve UCC logic               */
 /* 2024-12-04  1.2   ShaoAn   FCR-1103.Upd Changes in UCC Receive          */
 /*                            to process for returns                       */
-/* 2026-01-02  2.0   VSA253   FCR-9162 VSA253. Check pallet closed         */
+/* 2026-01-02  1.3   VSA253   FCR-9162 VSA253. Check pallet closed         */
+/* 2026-07-01  1.4   NickT    FCR-13229 Add validation for DropID          */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898UCCExtVal09]
@@ -54,6 +55,10 @@ BEGIN
                , @cUCCUDF09            NVARCHAR(30)
                , @cDocType             NVARCHAR(1)
                , @nRowCount            INT
+               , @cIVAS                NVARCHAR(30)
+               , @cLVSIDPrefix         NVARCHAR(15) = 'LVSIDPrefix'
+               , @cLVS                 NVARCHAR(3) = 'LVS'
+               , @cVAS                 NVARCHAR(3) = 'VAS'
 
 
       -- Get StorerKey
@@ -166,7 +171,8 @@ BEGIN
       END
 
       --GET SKU
-      SELECT @cSKUSUSR1 = SUSR1 
+      SELECT @cSKUSUSR1 = SUSR1,
+         @cIVAS = IVAS
       FROM SKU WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
          AND SKU = @cSKU
@@ -180,6 +186,64 @@ BEGIN
 
       IF @cDocType = 'R' 
          GOTO Quit
+
+      SET @cIVAS = ISNULL(@cIVAS, '')
+      IF @cIVAS = 'Y'
+      BEGIN
+         IF NOT EXISTS(SELECT 1
+            FROM CODELKUP WITH (NOLOCK) 
+            WHERE LISTNAME = @cLVSIDPrefix
+               AND Long IS NOT NULL
+               AND Long = @cLVS
+               AND TRIM(Code) <> ''
+               AND Storerkey = @cStorerKey)
+         BEGIN
+            SET @nErrNo = 215315
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --   LVS data is missing in CODELKUP
+            GOTO Quit
+         END
+
+         IF EXISTS(SELECT 1
+            FROM CODELKUP WITH (NOLOCK) 
+            WHERE LISTNAME = @cLVSIDPrefix
+               AND Long IS NOT NULL
+               AND Long = @cLVS
+               AND Storerkey = @cStorerKey
+               AND TRIM(Code) <> ''
+               AND LEFT(@cToID, LEN(TRIM(Code))) = TRIM(Code))
+         BEGIN
+            SET @nErrNo = 215314
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --  VAS Needed
+            GOTO Quit
+         END
+
+         IF NOT EXISTS(SELECT 1
+               FROM CODELKUP WITH (NOLOCK) 
+               WHERE LISTNAME = @cLVSIDPrefix
+                  AND Long IS NOT NULL
+                  AND Long = @cVAS
+                  AND TRIM(Code) <> ''
+                  AND Storerkey = @cStorerKey)
+         BEGIN
+            SET @nErrNo = 215316
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --   VAS data is missing in CODELKUP
+            GOTO Quit
+         END
+
+         IF NOT EXISTS(SELECT 1
+               FROM CODELKUP WITH (NOLOCK) 
+               WHERE LISTNAME = @cLVSIDPrefix
+                  AND Long IS NOT NULL
+                  AND Long = @cVAS
+                  AND Storerkey = @cStorerKey
+                  AND TRIM(Code) <> ''
+                  AND LEFT(@cToID, LEN(TRIM(Code))) = TRIM(Code))
+         BEGIN
+            SET @nErrNo = 215317
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --  Pallet ID prefix is invalid
+            GOTO Quit
+         END
+      END
 
       ------------------------------------------------------------------------------------------------------------------------------
       -- Main validation logic
