@@ -22,8 +22,9 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date        Author   Ver   Purposes                                  */
-/* 18-May-2026 AYD      1.0   Creation for FCR-11923                    */
+/* Date         Author   Ver   Purposes                                 */
+/* 18-May-2026  AYD      1.0   Creation for FCR-11923                   */
+/* 01-Jul-2026  AYD01    1.1   FCR-11923: FBR v1.1                      */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspGetCustomSOStatus 
@@ -68,29 +69,30 @@ BEGIN
         AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
         AND mspGetCustomSOStatus_cl.CODE = ''0''
         AND ORDERS.Status = ''0''
-        AND ORDERS.SOStatus NOT IN (''0'', ''9'', ''CANC'')
+        AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
         )) '), 
     ('sostatus', 'PA', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
         WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
         AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
         AND mspGetCustomSOStatus_cl.CODE = ''PA''
         AND ORDERS.Status = ''1''
-        AND ORDERS.SOStatus NOT IN (''PA'', ''9'', ''CANC'')
+        AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
         )) '),
     ('sostatus', 'FA', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''FA''
       AND ORDERS.Status = ''2''
-      AND ORDERS.SOStatus NOT IN (''FA'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       )) '),
     ('sostatus', 'IPK', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''IPK''
       AND ORDERS.Status = ''3''
-      AND ORDERS.SOStatus NOT IN (''IPK'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       )) '),
+      --AYD01: v1.3, Update PKD
     ('sostatus', 'PKD', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey
       JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
@@ -98,8 +100,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''PKD''
       AND ORDERS.Status = ''5''
-      AND ORDERS.SOSTATUS IN (''IPKD'',''MBL'')
-      AND ORDERS.SOStatus NOT IN (''PKD'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND pah.STATUS = ''9''
       )) '),
     ('sostatus', 'PC', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
@@ -107,8 +108,9 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''PC''
       AND ORDERS.Status = ''5''
-      AND ORDERS.SOStatus NOT IN (''PC'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       )) '),
+    --AYD01: v1.3, Update IPKD 
     ('sostatus', 'IPKD', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey
       JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
@@ -117,54 +119,74 @@ BEGIN
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''IPKD''
-      AND ORDERS.Status = ''5''
-      AND ORDERS.SOSTATUS = ''PC''
-      AND ORDERS.SOStatus NOT IN (''IPKD'', ''9'', ''CANC'')
-      GROUP BY o.OrderKey HAVING SUM(pid.Qty) > SUM(pad.Qty)
+      AND ORDERS.Status IN (''3'', ''5'') 
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
+      GROUP BY o.OrderKey HAVING SUM(COALESCE(pad.Qty, 0)) > 0
       )) '),
-    ('sostatus', 'INV', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+    ('sostatus', 'INV', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK)
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''INV''
-      AND ORDERS.SOSTATUS IN (''PKD'')
-      AND ORDERS.SOStatus NOT IN (''INV'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.InvoiceNo <> ''''
       AND ORDERS.TrackingNo = ''''
       AND ORDERS.ShipperKey = ''''
       AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
       )) '),
     ('sostatus', 'IEG', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''IEG''
-      AND ORDERS.SOSTATUS IN (''PKD'')
-      AND ORDERS.SOStatus NOT IN (''IEG'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.InvoiceNo <> ''''
       AND ORDERS.TrackingNo <> ''''
       AND ORDERS.ShipperKey = ''''
       AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
       )) '),
     ('sostatus', 'ILR', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''ILR''
-      AND ORDERS.SOSTATUS IN (''PKD'')
-      AND ORDERS.SOStatus NOT IN (''ILR'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.InvoiceNo <> ''''
       AND ORDERS.TrackingNo = ''''
       AND ORDERS.ShipperKey <> ''''
       AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
       )) '),
     ('sostatus', 'ELR', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''ELR''
-      AND ORDERS.SOSTATUS IN (''PKD'')
-      AND ORDERS.SOStatus NOT IN (''ELR'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.InvoiceNo = ''''
       AND ORDERS.TrackingNo <> ''''
       AND ORDERS.ShipperKey <> ''''
       AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
+      )) '),
+    ('sostatus', 'IEL', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
+      WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
+      AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
+      AND mspGetCustomSOStatus_cl.CODE = ''IEL''
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
+      AND ORDERS.InvoiceNo <> ''''
+      AND ORDERS.TrackingNo <> ''''
+      AND ORDERS.ShipperKey <> ''''
+      AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
       )) '),
     ('sostatus', 'MBL', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey
@@ -172,7 +194,7 @@ BEGIN
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''MBL''
-      AND ORDERS.SOStatus NOT IN (''MBL'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.STATUS = ''5''
       AND pah.STATUS = ''9''
       AND ORDERS.MBOLKey <> ''''
@@ -185,7 +207,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''IL''
       AND ORDERS.Status = ''5''
-      AND ORDERS.SOStatus NOT IN (''IL'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       GROUP BY o.OrderKey 
       HAVING COUNT(stt.URNNo) > 0 
       AND COUNT(pid.DropID) <> COUNT(stt.URNNo)
@@ -198,7 +220,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''LD''
       AND ORDERS.Status = ''5''
-      AND ORDERS.SOStatus NOT IN (''LD'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       GROUP BY o.OrderKey 
       HAVING COUNT(pid.DropID) = COUNT(stt.URNNo)
       )) ')
@@ -217,7 +239,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''0''
       AND ORDERS.Status = ''0''
-      AND ORDERS.SOStatus NOT IN (''0'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       )) THEN ''0''  
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
@@ -225,7 +247,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''PA''
       AND ORDERS.Status = ''1''
-      AND ORDERS.SOStatus NOT IN (''PA'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       )) THEN ''PA''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
@@ -233,7 +255,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''FA''
       AND ORDERS.Status = ''2''
-      AND ORDERS.SOStatus NOT IN (''FA'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       )) THEN ''FA''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
@@ -241,7 +263,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''IPK''
       AND ORDERS.Status = ''3''
-      AND ORDERS.SOStatus NOT IN (''IPK'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       )) THEN ''IPK''
       
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
@@ -251,8 +273,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''PKD''
       AND ORDERS.Status = ''5''
-      AND ORDERS.SOSTATUS IN (''IPKD'',''MBL'')
-      AND ORDERS.SOStatus NOT IN (''PKD'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND pah.STATUS = ''9''
       )) THEN ''PKD''
 
@@ -261,7 +282,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''PC''
       AND ORDERS.Status = ''5''
-      AND ORDERS.SOStatus NOT IN (''PC'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       )) THEN ''PC''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
@@ -272,59 +293,80 @@ BEGIN
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''IPKD''
-      AND ORDERS.Status = ''5''
-      AND ORDERS.SOSTATUS = ''PC''
-      AND ORDERS.SOStatus NOT IN (''IPKD'', ''9'', ''CANC'')
-      GROUP BY o.OrderKey HAVING SUM(pid.Qty) > SUM(pad.Qty)
+      AND ORDERS.Status IN (''3'', ''5'') 
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
+      GROUP BY o.OrderKey HAVING SUM(COALESCE(pad.Qty, 0)) > 0
       )) THEN ''IPKD''
 
-      WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+      WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK)
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''INV''
-      AND ORDERS.SOSTATUS IN (''PKD'')
-      AND ORDERS.SOStatus NOT IN (''INV'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.InvoiceNo <> ''''
       AND ORDERS.TrackingNo = ''''
       AND ORDERS.ShipperKey = ''''
       AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
       )) THEN ''INV''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''IEG''
-      AND ORDERS.SOSTATUS IN (''PKD'')
-      AND ORDERS.SOStatus NOT IN (''IEG'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.InvoiceNo <> ''''
       AND ORDERS.TrackingNo <> ''''
       AND ORDERS.ShipperKey = ''''
       AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
       )) THEN ''IEG''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''ILR''
-      AND ORDERS.SOSTATUS IN (''PKD'')
-      AND ORDERS.SOStatus NOT IN (''ILR'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.InvoiceNo <> ''''
       AND ORDERS.TrackingNo = ''''
       AND ORDERS.ShipperKey <> ''''
       AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
       )) THEN ''ILR''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus_cl.CODE = ''ELR''
-      AND ORDERS.SOSTATUS IN (''PKD'')
-      AND ORDERS.SOStatus NOT IN (''ELR'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.InvoiceNo = ''''
       AND ORDERS.TrackingNo <> ''''
       AND ORDERS.ShipperKey <> ''''
       AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
       )) THEN ''ELR''
+
+      WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
+      JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
+      JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
+      WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
+      AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
+      AND mspGetCustomSOStatus_cl.CODE = ''IEL''
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
+      AND ORDERS.InvoiceNo <> ''''
+      AND ORDERS.TrackingNo <> ''''
+      AND ORDERS.ShipperKey <> ''''
+      AND ORDERS.MBOLKey = ''''
+      AND pah.STATUS = ''9''
+      )) THEN ''IEL''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus_cl (NOLOCK) 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey
@@ -332,7 +374,7 @@ BEGIN
       WHERE mspGetCustomSOStatus_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus_cl.CODE = ''MBL''
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
-      AND ORDERS.SOStatus NOT IN (''MBL'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       AND ORDERS.STATUS = ''5''
       AND pah.STATUS = ''9''
       AND ORDERS.MBOLKey <> ''''
@@ -346,7 +388,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.CODE = ''IL''
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND ORDERS.Status = ''5''
-      AND ORDERS.SOStatus NOT IN (''IL'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       GROUP BY o.OrderKey 
       HAVING COUNT(stt.URNNo) > 0 
       AND COUNT(pid.DropID) <> COUNT(stt.URNNo)
@@ -360,7 +402,7 @@ BEGIN
       AND mspGetCustomSOStatus_cl.CODE = ''LD''
       AND mspGetCustomSOStatus_cl.StorerKey = ORDERS.StorerKey 
       AND ORDERS.Status = ''5''
-      AND ORDERS.SOStatus NOT IN (''LD'', ''9'', ''CANC'')
+      AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
       GROUP BY o.OrderKey 
       HAVING COUNT(pid.DropID) = COUNT(stt.URNNo)
       )) THEN ''LD''
