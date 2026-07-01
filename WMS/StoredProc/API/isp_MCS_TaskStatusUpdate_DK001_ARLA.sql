@@ -25,7 +25,7 @@ GO
 /* Updates:                                                                  */
 /* Date         Author   Ver  Purpose                                        */
 /* 25-03-2026   VMA237   1.0  Initial version created                        */
-/* 25-06-2026   VMA237   1.1  "NoLoad" process update                        */
+/* 25-06-2026   VMA01	 1.1  "NoLoad" process update                        */
 /*							  + SP rename to macth TCO standard naming       */
 /*																			 */
 /*****************************************************************************/
@@ -341,7 +341,7 @@ BEGIN
 						EditWho = @cUserName
 					WHERE TaskDetailKey = @cTaskDetailKey;
 					
-					IF ( -- VMA237 - v1.1 Start
+					IF ( --(VMA01) - START
 						@cTaskType = 'FPK'
 					)
 					BEGIN
@@ -377,7 +377,7 @@ BEGIN
 								  ,@c_ErrMsg = @cErrMsg OUTPUT
 								  ,@c_UserName = @cUserName
 								  ,@c_UCCNo = NULL
-					END -- VMA237 - v1.1 End
+					END --(VMA01) - END
 					
 					SET @bSuccess = 1;
 					RETURN;
