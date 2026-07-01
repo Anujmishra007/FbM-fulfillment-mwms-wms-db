@@ -19,6 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-01  Wan      1.0   Remove raise Error                          */
 /**************************************************************************/ 
 
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_VLDN]       
@@ -393,7 +394,6 @@ QUIT_SP:
       END
 
       EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'mspRLWAV13_VLDN'
-      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
    END
    ELSE
    BEGIN
