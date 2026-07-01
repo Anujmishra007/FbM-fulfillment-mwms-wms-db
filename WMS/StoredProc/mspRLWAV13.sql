@@ -19,6 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-01  Wan      1.0   Remove Delete #Pickdetail_WIP record        */
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13]        
    @c_Wavekey     NVARCHAR(10)    
@@ -287,24 +288,13 @@ BEGIN
             ,  @b_Success               = @b_Success OUTPUT  
             ,  @n_Err                   = @n_Err     OUTPUT   
             ,  @c_ErrMsg                = @c_ErrMsg  OUTPUT  
+
+      IF @b_Success <> 1                                                             
+      BEGIN  
+         SET @n_Continue = 3  
+      END     
    END
-QUIT_SP:  
-   EXEC isp_CreatePickdetail_WIP  
-         @c_Loadkey               = '' --@c_Loadkey                                
-      ,  @c_Wavekey               = @c_Wavekey    
-      ,  @c_WIP_RefNo             = @c_SourceType   
-      ,  @c_PickCondition_SQL     = ''  
-      ,  @c_Action                = 'D'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records  
-      ,  @c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization  
-      ,  @b_Success               = @b_Success OUTPUT  
-      ,  @n_Err                   = @n_Err     OUTPUT   
-      ,  @c_ErrMsg                = @c_ErrMsg  OUTPUT  
-             
-   IF @b_Success <> 1  
-   BEGIN  
-      SET @n_Continue = 3  
-   END               
-    
+QUIT_SP: 
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NOT NULL
    BEGIN
       DROP TABLE #PICKDETAIL_WIP  
