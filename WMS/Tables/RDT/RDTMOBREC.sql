@@ -150,7 +150,7 @@ BEGIN
    [AddDate] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_AddDate] DEFAULT (getdate()),
    [EditDate] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_EditDate] DEFAULT (getdate()),
    [Printer_Paper] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-   [MenuStack] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_MenuStack] DEFAULT (''),
+   [MenuStack] [nvarchar] (120) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_MenuStack] DEFAULT (''),
    [V_TaskDetailKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMobRec_V_TaskDetailKey] DEFAULT (''),
    [V_Max] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Max] DEFAULT (''),
    [RemotePrint] [int] NULL CONSTRAINT [DF_RDTMOBREC_RemotePrint] DEFAULT ((0)),
@@ -1079,6 +1079,20 @@ BEGIN
       Alter column  C_String10  nvarchar(250) NULL
     END
 
+   -- UWP-56557 Extend MenuStack column to 120 characters to support longer menu stack values
+   IF EXISTS (
+    SELECT 1
+    FROM sys.columns c
+    INNER JOIN sys.objects o ON c.object_id = o.object_id
+    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+    WHERE s.name    = 'RDT'
+      AND o.name    = 'RDTMOBREC'
+      AND c.name    = 'MenuStack'
+      AND c.max_length = 120   -- nvarchar(60) stores as 120 bytes (2 bytes/char)
+   )
+   BEGIN
+      ALTER TABLE [RDT].[RDTMOBREC] ALTER COLUMN [MenuStack] NVARCHAR(120)
+   END
 END
 
 --END
