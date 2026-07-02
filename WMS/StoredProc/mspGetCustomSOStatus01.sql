@@ -137,9 +137,9 @@ BEGIN
       AND pah.STATUS = ''9''
       )) '),
     ('sostatus', 'IEG', ' (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus01_cl (NOLOCK) 
-      WHERE mspGetCustomSOStatus01_cl.LISTNAME = ''SOSTATUS'' 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus01_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
       JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
+      WHERE mspGetCustomSOStatus01_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus01_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus01_cl.CODE = ''IEG''
       AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
@@ -313,9 +313,9 @@ BEGIN
       )) THEN ''INV''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus01_cl (NOLOCK) 
-      WHERE mspGetCustomSOStatus01_cl.LISTNAME = ''SOSTATUS'' 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus01_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
       JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
+      WHERE mspGetCustomSOStatus01_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus01_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus01_cl.CODE = ''IEG''
       AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
@@ -327,9 +327,9 @@ BEGIN
       )) THEN ''IEG''
 
       WHEN (EXISTS (SELECT 1 FROM CODELKUP mspGetCustomSOStatus01_cl (NOLOCK) 
-      WHERE mspGetCustomSOStatus01_cl.LISTNAME = ''SOSTATUS'' 
       JOIN ORDERS o (NOLOCK) ON mspGetCustomSOStatus01_cl.StorerKey = o.StorerKey AND o.OrderKey = ORDERS.OrderKey 
       JOIN PackHeader pah (NOLOCK) ON o.OrderKey = pah.OrderKey
+      WHERE mspGetCustomSOStatus01_cl.LISTNAME = ''SOSTATUS'' 
       AND mspGetCustomSOStatus01_cl.StorerKey = ORDERS.StorerKey 
       AND mspGetCustomSOStatus01_cl.CODE = ''ILR''
       AND ORDERS.SOStatus NOT IN (''9'', ''CANC'')
