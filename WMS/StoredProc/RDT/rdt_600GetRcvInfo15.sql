@@ -151,8 +151,8 @@ BEGIN
                 WHERE StorerKey = @cStorerKey
                   AND SKU = @cSKU
 
-                -- Lookup default QTY if CLASS found
-                IF ISNULL(@cSKUClass, '') IN ('PC', 'TB')
+                -- Lookup default QTY if CLASS is PC/TB and QTY is 0
+                IF ISNULL(@cSKUClass, '') IN ('PC', 'TB') AND ISNULL(@nQTY, 0) = 0
                 BEGIN
                     SELECT @cMasterUOM = P.PackUOM3
                     FROM dbo.SKU S WITH (NOLOCK)
@@ -166,12 +166,12 @@ BEGIN
                       AND Code = @cSKUClass
                       AND Long = @cMasterUOM  -- Validate master UoM matches
 
-                    -- Set QTY if valid number found and @nQTY is 0
+                    -- Set QTY if valid number found
                     IF ISNULL(@cDefaultQty, '') <> '' AND RDT.rdtIsValidQty(@cDefaultQty, 1) = 1
                     BEGIN
                         SET @nDefaultQty = TRY_CAST(@cDefaultQty AS INT)
 
-                        IF ISNULL(@nDefaultQty, 0) > 0 AND ISNULL(@nQTY, 0) = 0
+                        IF ISNULL(@nDefaultQty, 0) > 0
                         BEGIN
                             SET @nQTY = @nDefaultQty
                         END

@@ -10,7 +10,6 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2026-06-16 1.0  Sreeja     FCR-13976  Created                        */
-/* 2026-06-29 1.1  Sreeja     FCR-14112  Default QTY for PC&TB          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_600ExtScn12] (

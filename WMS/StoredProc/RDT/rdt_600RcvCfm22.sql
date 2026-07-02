@@ -161,6 +161,7 @@ BEGIN
 --    WHERE ReceiptKey = @cReceiptKey
 --      AND ReceiptLineNumber = @cReceiptLineNumber
 
+   Receive:
    -- FCR-14112: VND Michelin - Default QTY from CODELKUP for PC/TB tires if incoming QTY is 0
    IF ISNULL(@nSKUQTY, 0) = 0 AND @cSKUType IN ('PC', 'TB')
    BEGIN
@@ -187,8 +188,7 @@ BEGIN
        -- If no CODELKUP entry found, QTY remains as-is (blank behavior per requirement)
    END
 
-   Receive:
-   -- Receive    
+   -- Call rdt_Receive_V7 to complete receiving
    EXEC rdt.rdt_Receive_V7
       @nFunc         = @nFunc,    
       @nMobile       = @nMobile,    
