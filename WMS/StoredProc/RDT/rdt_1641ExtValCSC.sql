@@ -42,6 +42,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
 IF @nFunc = 1641
 BEGIN
+   IF @cStorerKey <> 'CSCUK01'
+      GOTO QUIT
+
    IF @nStep = 3
    BEGIN
       IF @nInputKey = 1
