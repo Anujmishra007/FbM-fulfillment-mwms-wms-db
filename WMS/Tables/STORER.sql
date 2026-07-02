@@ -1,3 +1,7 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 IF NOT EXISTS (SELECT *
 FROM sys.tables
 WHERE name = 'STORER' AND type = 'U')
@@ -6,7 +10,7 @@ BEGIN
     (
         [StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
         [type] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_STORER_Type] DEFAULT ('1'),
-        [Company] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+        [Company] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [VAT] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [Address1] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [Address2] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
@@ -17,17 +21,17 @@ BEGIN
         [Zip] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [Country] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [ISOCntryCode] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-        [Contact1] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-        [Contact2] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+        [Contact1] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+        [Contact2] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [Phone1] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [Phone2] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [Fax1] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [Fax2] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [Email1] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [Email2] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-        [B_contact1] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-        [B_Contact2] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-        [B_Company] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+        [B_contact1] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+        [B_Contact2] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+        [B_Company] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [B_Address1] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [B_Address2] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
         [B_Address3] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
@@ -303,4 +307,55 @@ BEGIN
         ALTER TABLE Storer ADD ArcheType NVARCHAR(40) DEFAULT '';
         EXEC sp_addextendedproperty N'MS_Description', N'Arche Type.', 'SCHEMA', N'dbo', 'TABLE', N'STORER', 'COLUMN', N'ArcheType'
     END
+
 END
+
+-- UWP-59121 ALTER COLUMN 
+	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Company' AND Object_ID = Object_ID('[dbo].[Storer]') AND max_length <> 400)
+	BEGIN
+
+	ALTER TABLE [dbo].[Storer]
+	ALTER COLUMN [Company] [nvarchar](200) NULL;
+
+	END
+        
+   	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Contact1' AND Object_ID = Object_ID('[dbo].[Storer]') AND max_length <> 400)
+	BEGIN
+
+	ALTER TABLE [dbo].[Storer]
+	ALTER COLUMN [Contact1] [nvarchar](200) NULL;
+
+	END
+
+   	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Contact2' AND Object_ID = Object_ID('[dbo].[Storer]') AND max_length <> 400)
+	BEGIN
+
+	ALTER TABLE [dbo].[Storer]
+	ALTER COLUMN [Contact2] [nvarchar](200) NULL;
+
+	END
+
+   	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='B_contact1' AND Object_ID = Object_ID('[dbo].[Storer]') AND max_length <> 400)
+	BEGIN
+
+	ALTER TABLE [dbo].[Storer]
+	ALTER COLUMN [B_contact1] [nvarchar](200) NULL;
+
+	END
+
+   	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='B_contact2' AND Object_ID = Object_ID('[dbo].[Storer]') AND max_length <> 400)
+	BEGIN
+
+	ALTER TABLE [dbo].[Storer]
+	ALTER COLUMN [B_contact2] [nvarchar](200) NULL;
+
+	END
+
+   	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='B_Company' AND Object_ID = Object_ID('[dbo].[Storer]') AND max_length <> 400)
+	BEGIN
+
+	ALTER TABLE [dbo].[Storer]
+	ALTER COLUMN [B_Company] [nvarchar](200) NULL;
+
+	END
+        
