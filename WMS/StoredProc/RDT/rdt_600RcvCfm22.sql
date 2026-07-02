@@ -140,7 +140,9 @@ BEGIN
 
 
    DECLARE @cFacilityPrefix NVARCHAR(30)
-   SELECT @cFacilityPrefix = UserDefine01 FROM Facility where Facility = @cFacility
+   SELECT @cFacilityPrefix = UserDefine01 
+   FROM dbo.Facility WITH (NOLOCK) 
+   WHERE Facility = @cFacility
 
    IF (MONTH(@CurrentDate) < 7 AND YEAR(@TargetDate) < (YEAR(@CurrentDate)-1))
       OR (MONTH(@CurrentDate) >= 7 AND YEAR(@TargetDate) < YEAR(@CurrentDate))
@@ -171,7 +173,7 @@ BEGIN
          AND Long = @cSKUUOM  -- Validate master UoM matches
 
        -- Set QTY only if valid number found in CODELKUP
-       IF ISNULL(@cDefaultQty, '') <> '' AND ISNUMERIC(@cDefaultQty) = 1
+       IF ISNULL(@cDefaultQty, '') <> '' AND RDT.rdtIsValidQty(@cDefaultQty, 1) = 1
        BEGIN
            SET @nDefaultQty = TRY_CAST(@cDefaultQty AS INT)
            IF ISNULL(@nDefaultQty, 0) > 0

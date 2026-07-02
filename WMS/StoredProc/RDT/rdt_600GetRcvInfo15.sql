@@ -128,7 +128,7 @@ BEGIN
                       AND Long = @cMasterUOM  -- Validate master UoM matches
 
                     -- Set QTY if valid number found
-                    IF ISNULL(@cDefaultQty, '') <> '' AND ISNUMERIC(@cDefaultQty) = 1
+                    IF ISNULL(@cDefaultQty, '') <> '' AND RDT.rdtIsValidQty(@cDefaultQty, 1) = 1
                     BEGIN
                         SET @nDefaultQty = TRY_CAST(@cDefaultQty AS INT)
                         IF ISNULL(@nDefaultQty, 0) > 0
@@ -167,7 +167,7 @@ BEGIN
                       AND Long = @cMasterUOM  -- Validate master UoM matches
 
                     -- Set QTY if valid number found and @nQTY is 0
-                    IF ISNULL(@cDefaultQty, '') <> '' AND ISNUMERIC(@cDefaultQty) = 1
+                    IF ISNULL(@cDefaultQty, '') <> '' AND RDT.rdtIsValidQty(@cDefaultQty, 1) = 1
                     BEGIN
                         SET @nDefaultQty = TRY_CAST(@cDefaultQty AS INT)
 
