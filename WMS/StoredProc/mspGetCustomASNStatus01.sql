@@ -25,6 +25,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 12-Jun-2026 AYD      1.0   Creation for FCR-11918                    */
 /* 16-Jun-2026 AYD01    1.1   Implementation for VA, UNL                */
+/* 01-Jul-2026 AYD02    1.2   FCR-11918: FBR v1.3                       */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspGetCustomASNStatus01 
