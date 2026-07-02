@@ -78,11 +78,14 @@ BEGIN
    SET DATEFIRST 1 -- Monday as first day
 
    DECLARE @cSKUType NVARCHAR(10) = ''
-   SELECT @cSKUType = Class FROM dbo.SKU WITH (NOLOCK)
+   DECLARE @cItemClass NVARCHAR(10) = ''
+   SELECT @cSKUType = Class, @cItemClass = ItemClass
+   FROM dbo.SKU WITH (NOLOCK)
    WHERE SKU = @cSKUCode
      AND StorerKey = @cStorerKey
 
-   IF (ISNULL(@cSKUType,'') = 'POSM')
+   -- Use ItemClass for POSM check (POSM is stored in ItemClass column)
+   IF (ISNULL(@cItemClass,'') = 'POSM')
    BEGIN
       GOTO Receive
    END
