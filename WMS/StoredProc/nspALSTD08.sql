@@ -66,12 +66,25 @@ BEGIN
    @n_QtyToAllocate INT,
    @n_IDQtyAvailable INT,
    @c_Loc NVARCHAR(50),
-   @c_ID NVARCHAR(50)
+   @c_ID NVARCHAR(50),
+   @n_CNT INT = 0
+
+   IF @n_QtyLeftToFulfill <= 0
+   BEGIN
+      GOTO EXIT_SP
+   END
 
    SELECT TOP 1 @c_StorerKey = o.StorerKey
    FROM ORDERS o (NOLOCK)
    JOIN WAVEDETAIL wd (NOLOCK) ON o.OrderKey = wd.OrderKey
    WHERE wd.WaveKey = @c_WaveKey
+   
+   SELECT @n_PalletQty = P.Pallet
+      FROM SKU (NOLOCK) S
+      JOIN PACK (NOLOCK) P ON (S.Packkey = P.Packkey)
+   WHERE S.SKU = @c_sku
+     AND S.StorerKey = @c_storerkey
+
    
 
    --debug
@@ -83,9 +96,9 @@ BEGIN
    EXEC isp_Init_Allocate_Candidates
 
    
-   IF OBJECT_ID('tempdb..##TMP_PREALLOCATE_CURSOR_CANDIDATES','u') IS NULL
+   IF OBJECT_ID('tempdb..#TMP_PREALLOCATE_CURSOR_CANDIDATES','u') IS NULL
    BEGIN
-      CREATE TABLE ##TMP_PREALLOCATE_CURSOR_CANDIDATES
+      CREATE TABLE #TMP_PREALLOCATE_CURSOR_CANDIDATES
       ( 
          StorerKey NVARCHAR(15), 
          Facility NVARCHAR(10),
@@ -94,7 +107,7 @@ BEGIN
       )
    END
 
-   INSERT INTO ##TMP_PREALLOCATE_CURSOR_CANDIDATES
+   INSERT INTO #TMP_PREALLOCATE_CURSOR_CANDIDATES
       SELECT 
       STORERKEY = MIN(LOTXLOCXID.STORERKEY), 
       FACILITY = LOC.FACILITY,
@@ -114,18 +127,16 @@ BEGIN
         AND SKUxLOC.StorerKey = LOTxLOCxID.StorerKey 
         AND SKUxLOC.SKU = LOTxLOCxID.SKU 
         AND SKUxLOC.LOC = LOTxLOCxID.LOC 
-        AND NOT EXISTS(SELECT 1 FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES TPC 
+        AND NOT EXISTS(SELECT 1 FROM #TMP_PREALLOCATE_CURSOR_CANDIDATES TPC 
           WHERE TPC.LOT = LOT.LOT AND TPC.SKU = LOTXLOCXID.SKU AND TPC.STORERKEY = LOTXLOCXID.STORERKEY AND TPC.FACILITY = LOC.FACILITY)
         GROUP BY LOT.LOT, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05, LOC.Facility
-        HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked) - MIN(LOT.QtyPreAllocated)) >=  @n_uombase
-        ORDER BY CASE WHEN (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) >=  @n_uombase
-                            AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) %  @n_UOMBase   = 0 
-                      THEN 1 ELSE 0 END, 
-                      (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)),
-                      LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 
-
-   --debug
-   SELECT * FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES
+        HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked) - MIN(LOT.QtyPreAllocated)) > 0
+      --   HAVING (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QtyAllocated) - SUM(LOTXLOCXID.QTYPicked) - MIN(LOT.QtyPreAllocated)) >=  @n_uombase
+      --   ORDER BY CASE WHEN (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) >=  @n_uombase
+      --                       AND (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)) %  @n_UOMBase   = 0 
+      --                 THEN 1 ELSE 0 END, 
+      --                 (SUM(LOTXLOCXID.QTY) - SUM(LOTXLOCXID.QTYALLOCATED) - SUM(LOTXLOCXID.QTYPICKED) - MIN(LOT.QtyPreallocated)),
+      --                 LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05 
 
    CREATE TABLE #T_INV
    (
@@ -151,31 +162,30 @@ BEGIN
       (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED),
       LOTATTRIBUTE.Lottable05
    FROM LOTxLOCxID (NOLOCK)
+   JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
    JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   
+   JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
    JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey AND LOTxLOCxID.Sku = SKUxLOC.Sku AND LOTxLOCxID.Loc = SKUxLOC.Loc  
    JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot AND LOTxLOCxID.StorerKey = LOTATTRIBUTE.StorerKey AND LOTxLOCxID.Sku = LOTATTRIBUTE.Sku   
-   CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   
-   JOIN ##TMP_PREALLOCATE_CURSOR_CANDIDATES TPC ON TPC.LOT = LOTxLOCxID.Lot AND TPC.SKU = LOTxLOCxID.Sku 
-   WHERE SKUxLOC.Locationtype = "PICK"
-      AND LOC.Locationflag <> "HOLD"
-      AND LOC.Locationflag <> "DAMAGE"
-      AND LOC.Status <> "HOLD"
+   WHERE LOC.LocationFlag <> 'HOLD'
+      AND LOC.LocationFlag <> 'DAMAGE'
+      AND LOC.Status <> 'HOLD'
+      AND LOT.Status <> 'HOLD'
+      AND ID.Status <> 'HOLD'
       AND LOC.Facility = @c_Facility   
-      AND LOC.Facility = F.Facility   
       AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED > 0
+      AND EXISTS (SELECT 1 FROM #TMP_PREALLOCATE_CURSOR_CANDIDATES TPC 
+         WHERE TPC.LOT = LOTxLOCxID.Lot AND TPC.SKU = LOTxLOCxID.SKU AND TPC.STORERKEY = LOTxLOCxID.STORERKEY AND TPC.FACILITY = LOC.FACILITY)
    ORDER BY 
       LOTATTRIBUTE.Lottable05, 
-      F.FacSort, LOC.LogicalLocation, LOC.LOC   
+      LOC.LogicalLocation, LOC.LOC   
 
-   --debug
-   SELECT * FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES
-   SELECT * FROM #T_INV
-   SELECT * FROM #ALLOCATE_CANDIDATES  
-   ---------
+   -- --debug
+   -- select * from #T_INV order by QtyAvailable
    SELECT TOP 1
-   @c_StorerKey = TPC.STORERKEY,
-   @c_SKU = TPC.SKU
-   FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES TPC
+      @c_StorerKey = TPC.STORERKEY,
+      @c_SKU = TPC.SKU
+   FROM #TMP_PREALLOCATE_CURSOR_CANDIDATES TPC
    WHERE TPC.LOT = @c_lot
    AND TPC.FACILITY = @c_Facility
 
@@ -185,38 +195,77 @@ BEGIN
    WHERE S.SKU = @c_SKU
    AND S.StorerKey = @c_StorerKey
 
-   DECLARE CUR_INV CURSOR READ_ONLY FAST_FORWARD FOR
-   SELECT 
-      INV.Loc,
-      INV.Lot, 
-      INV.ID,
-      IIF(@n_qtylefttofulfill >= (INV.QtyAvailable), INV.QtyAvailable, @n_qtylefttofulfill),
-      INV.QtyAvailable
-   FROM #T_INV INV (NOLOCK)
-      JOIN LOTxLOCxID (NOLOCK) ON LOTxLOCxID.Loc = INV.LOC AND LOTxLOCxID.ID = INV.ID AND INV.LOT = LOTxLOCxID.LOT
-      JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   
-      JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey AND LOTxLOCxID.Sku = SKUxLOC.Sku AND LOTxLOCxID.Loc = SKUxLOC.Loc  
-      JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot AND LOTxLOCxID.StorerKey = LOTATTRIBUTE.StorerKey AND LOTxLOCxID.Sku = LOTATTRIBUTE.Sku   
-   WHERE SKUxLOC.Locationtype = "PICK"
-      AND LOC.Locationflag <> "HOLD"
-      AND LOC.Locationflag <> "DAMAGE"
-      AND LOC.Status <> "HOLD"
-      AND LOC.Facility = @c_Facility   
-      AND INV.QtyAvailable > 0
-   ORDER BY 
-      LOTATTRIBUTE.Lottable05, 
-      LOC.LogicalLocation, 
-      LOC.LOC   
+   WHILE @n_qtylefttofulfill > 0 
+      AND EXISTS (SELECT 1 FROM #T_INV WHERE QtyAvailable > 0)
+   BEGIN 
+      SET @n_CNT = 0
+      IF @n_qtylefttofulfill < @n_PalletQty
+      BEGIN
+         --debug 
+         print 'Loose allocate: @n_qtylefttofulfill=' + CONVERT(NVARCHAR, @n_qtylefttofulfill)
 
-   OPEN CUR_INV
-   FETCH NEXT FROM CUR_INV INTO @c_Loc, @c_Lot, @c_ID, @n_QtyToAllocate, @n_IDQtyAvailable
+         SELECT TOP 1
+            @n_CNT = 1,
+            @c_Loc = INV.Loc,
+            @c_Lot = INV.Lot, 
+            @c_ID = INV.ID,
+            @n_QtyToAllocate = IIF(@n_qtylefttofulfill >= (INV.QtyAvailable % @n_PalletQty), 
+               INV.QtyAvailable % @n_PalletQty, @n_qtylefttofulfill),
+            @n_IDQtyAvailable = INV.QtyAvailable
+         FROM #T_INV INV (NOLOCK)
+            JOIN LOTxLOCxID (NOLOCK) ON LOTxLOCxID.Loc = INV.LOC AND LOTxLOCxID.ID = INV.ID AND INV.LOT = LOTxLOCxID.LOT
+            JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
+            JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   
+            JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
+            JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey AND LOTxLOCxID.Sku = SKUxLOC.Sku AND LOTxLOCxID.Loc = SKUxLOC.Loc  
+         WHERE LOC.LocationFlag <> 'HOLD'
+            AND LOC.LocationFlag <> 'DAMAGE'
+            AND LOC.Status <> 'HOLD'
+            AND LOT.Status <> 'HOLD'
+            AND ID.Status <> 'HOLD'
+            AND LOC.Facility = @c_Facility   
+            AND (INV.QtyAvailable % @n_PalletQty) > 0
+         ORDER BY 
+            INV.Lottable05,
+            INV.QtyAvailable,
+            LOC.LogicalLocation, 
+            LOC.LOC   
 
-   WHILE @@FETCH_STATUS = 0 AND @n_qtylefttofulfill > 0
-   BEGIN
+         --debug 
+         print 'Loose allocate: @n_qtylefttofulfill=' + CONVERT(NVARCHAR, @n_qtylefttofulfill) + ', @n_QtyToAllocate=' + CONVERT(NVARCHAR, @n_QtyToAllocate) + ', @n_IDQtyAvailable=' + CONVERT(NVARCHAR, @n_IDQtyAvailable) + ', @c_Loc=' + @c_Loc + ', @c_Lot=' + @c_Lot + ', @c_ID=' + @c_ID
+      END
+      IF @n_CNT = 0 
+      BEGIN
+         SELECT TOP 1
+            @c_Loc = INV.Loc,
+            @c_Lot = INV.Lot, 
+            @c_ID = INV.ID,
+            @n_QtyToAllocate = IIF(@n_qtylefttofulfill >= (INV.QtyAvailable), INV.QtyAvailable, @n_qtylefttofulfill),
+            @n_IDQtyAvailable = INV.QtyAvailable
+         FROM #T_INV INV (NOLOCK)
+            JOIN LOTxLOCxID (NOLOCK) ON LOTxLOCxID.Loc = INV.LOC AND LOTxLOCxID.ID = INV.ID AND INV.LOT = LOTxLOCxID.LOT
+            JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
+            JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   
+            JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
+            JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey AND LOTxLOCxID.Sku = SKUxLOC.Sku AND LOTxLOCxID.Loc = SKUxLOC.Loc  
+         WHERE LOC.LocationFlag <> 'HOLD'
+            AND LOC.LocationFlag <> 'DAMAGE'
+            AND LOC.Status <> 'HOLD'
+            AND LOT.Status <> 'HOLD'
+            AND ID.Status <> 'HOLD'
+            AND LOC.Facility = @c_Facility   
+            AND INV.QtyAvailable > 0
+         ORDER BY 
+            INV.Lottable05,
+            INV.QtyAvailable,
+            LOC.LogicalLocation, 
+            LOC.LOC   
+      END
       
       SET @n_qtylefttofulfill = @n_qtylefttofulfill - @n_QtyToAllocate
       SET @n_IDQtyAvailable = @n_IDQtyAvailable - @n_QtyToAllocate
 
+      -----------------------------
       UPDATE #T_INV
          SET QtyAvailable = @n_IDQtyAvailable
       WHERE Lot = @c_lot AND Loc = @c_Loc AND ID = @c_ID AND WaveKey = @c_WaveKey
@@ -228,10 +277,99 @@ BEGIN
          ,  @n_QtyAvailable = @n_QtyToAllocate
          ,  @c_OtherValue = '1'
 
-      FETCH NEXT FROM CUR_INV INTO @c_Loc, @c_Lot, @c_ID, @n_QtyToAllocate, @n_IDQtyAvailable
+      --debug
+
+        select @c_UOM, * from #ALLOCATE_CANDIDATES 
    END
-   CLOSE CUR_INV
-   DEALLOCATE CUR_INV
+
+
+ 
+
+   -- DECLARE CUR_INV CURSOR READ_ONLY FAST_FORWARD FOR
+   -- SELECT 
+   --    INV.Loc,
+   --    INV.Lot, 
+   --    INV.ID,
+   --    IIF(@n_qtylefttofulfill >= (INV.QtyAvailable), INV.QtyAvailable, @n_qtylefttofulfill),
+   --    INV.QtyAvailable
+   -- FROM #T_INV INV (NOLOCK)
+   --    JOIN LOTxLOCxID (NOLOCK) ON LOTxLOCxID.Loc = INV.LOC AND LOTxLOCxID.ID = INV.ID AND INV.LOT = LOTxLOCxID.LOT
+   --    JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
+   --    JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   
+   --    JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
+   --    JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey AND LOTxLOCxID.Sku = SKUxLOC.Sku AND LOTxLOCxID.Loc = SKUxLOC.Loc  
+   --    JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot AND LOTxLOCxID.StorerKey = LOTATTRIBUTE.StorerKey AND LOTxLOCxID.Sku = LOTATTRIBUTE.Sku   
+   -- WHERE LOC.LocationFlag <> 'HOLD'
+   --    AND LOC.LocationFlag <> 'DAMAGE'
+   --    AND LOC.Status <> 'HOLD'
+   --    AND LOT.Status <> 'HOLD'
+   --    AND ID.Status <> 'HOLD'
+   --    AND LOC.Facility = @c_Facility   
+   --    AND INV.QtyAvailable > 0
+   -- ORDER BY 
+   --    LOTATTRIBUTE.Lottable05, 
+   --    LOC.LogicalLocation, 
+   --    LOC.LOC   
+
+   -- OPEN CUR_INV
+   -- FETCH NEXT FROM CUR_INV INTO @c_Loc, @c_Lot, @c_ID, @n_QtyToAllocate, @n_IDQtyAvailable
+   -- WHILE @@FETCH_STATUS = 0 AND @n_qtylefttofulfill > 0
+   -- BEGIN
+   --    IF @n_qtylefttofulfill < @n_UOMBase AND (@n_IDQtyAvailable % @n_UOMBase) = 0
+   --    BEGIN
+   --       SELECT TOP 1
+   --          @c_Loc = INV.Loc,
+   --          @c_Lot = INV.Lot, 
+   --          @c_ID = INV.ID,
+   --          @n_QtyToAllocate = IIF(@n_qtylefttofulfill >= (INV.QtyAvailable % @n_UOMBase), 
+   --             INV.QtyAvailable % @n_UOMBase, @n_qtylefttofulfill),
+   --          @n_IDQtyAvailable = INV.QtyAvailable
+   --       FROM #T_INV INV (NOLOCK)
+   --          JOIN LOTxLOCxID (NOLOCK) ON LOTxLOCxID.Loc = INV.LOC AND LOTxLOCxID.ID = INV.ID AND INV.LOT = LOTxLOCxID.LOT
+   --          JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
+   --          JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.LOC   
+   --          JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
+   --          JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey AND LOTxLOCxID.Sku = SKUxLOC.Sku AND LOTxLOCxID.Loc = SKUxLOC.Loc  
+   --          JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot AND LOTxLOCxID.StorerKey = LOTATTRIBUTE.StorerKey AND LOTxLOCxID.Sku = LOTATTRIBUTE.Sku   
+   --       WHERE LOC.LocationFlag <> 'HOLD'
+   --          AND LOC.LocationFlag <> 'DAMAGE'
+   --          AND LOC.Status <> 'HOLD'
+   --          AND LOT.Status <> 'HOLD'
+   --          AND ID.Status <> 'HOLD'
+   --          AND LOC.Facility = @c_Facility   
+   --          AND (INV.QtyAvailable % @n_UOMBase) > 0
+   --       ORDER BY 
+   --          LOTATTRIBUTE.Lottable05, 
+   --          LOC.LogicalLocation, 
+   --          LOC.LOC   
+
+   --       --debug 
+   --       print 'Loose allocate: @n_qtylefttofulfill=' + CONVERT(NVARCHAR, @n_qtylefttofulfill) + ', @n_QtyToAllocate=' + CONVERT(NVARCHAR, @n_QtyToAllocate) + ', @n_IDQtyAvailable=' + CONVERT(NVARCHAR, @n_IDQtyAvailable) + ', @c_Loc=' + @c_Loc + ', @c_Lot=' + @c_Lot + ', @c_ID=' + @c_ID
+   --    END
+      
+   --    SET @n_qtylefttofulfill = @n_qtylefttofulfill - @n_QtyToAllocate
+   --    SET @n_IDQtyAvailable = @n_IDQtyAvailable - @n_QtyToAllocate
+
+      
+
+   --    UPDATE #T_INV
+   --       SET QtyAvailable = @n_IDQtyAvailable
+   --    WHERE Lot = @c_lot AND Loc = @c_Loc AND ID = @c_ID AND WaveKey = @c_WaveKey
+
+   --    EXEC isp_Insert_Allocate_Candidates
+   --          @c_Lot = @c_Lot
+   --       ,  @c_Loc = @c_Loc
+   --       ,  @c_ID  = @c_ID
+   --       ,  @n_QtyAvailable = @n_QtyToAllocate
+   --       ,  @c_OtherValue = '1'
+
+   --    --debug
+   --    print 'Allocate: @n_qtylefttofulfill=' + CONVERT(NVARCHAR, @n_qtylefttofulfill) + ', @n_QtyToAllocate=' + CONVERT(NVARCHAR, @n_QtyToAllocate) + ', @n_IDQtyAvailable=' + CONVERT(NVARCHAR, @n_IDQtyAvailable) + ', @c_Loc=' + @c_Loc + ', @c_Lot=' + @c_Lot + ', @c_ID=' + @c_ID
+
+   --    FETCH NEXT FROM CUR_INV INTO @c_Loc, @c_Lot, @c_ID, @n_QtyToAllocate, @n_IDQtyAvailable
+   -- END
+   -- CLOSE CUR_INV
+   -- DEALLOCATE CUR_INV
 
 
 
@@ -261,14 +399,14 @@ BEGIN
 
 
 
-   -- IF OBJECT_ID('tempdb..##TMP_PREALLOCATE_CURSOR_CANDIDATES','u') IS NOT NULL
-   --    AND EXISTS (SELECT 1 FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES)
+   -- IF OBJECT_ID('tempdb..#TMP_PREALLOCATE_CURSOR_CANDIDATES','u') IS NOT NULL
+   --    AND EXISTS (SELECT 1 FROM #TMP_PREALLOCATE_CURSOR_CANDIDATES)
    -- BEGIN
 
    --    SELECT TOP 1
    --    @c_StorerKey = TPC.STORERKEY,
    --    @c_SKU = TPC.SKU
-   --    FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES TPC
+   --    FROM #TMP_PREALLOCATE_CURSOR_CANDIDATES TPC
    --    WHERE TPC.LOT = @c_lot
    --    AND TPC.FACILITY = @c_Facility
 
@@ -290,7 +428,7 @@ BEGIN
    --    JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUxLOC.Storerkey AND LOTxLOCxID.Sku = SKUxLOC.Sku AND LOTxLOCxID.Loc = SKUxLOC.Loc  
    --    JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot AND LOTxLOCxID.StorerKey = LOTATTRIBUTE.StorerKey AND LOTxLOCxID.Sku = LOTATTRIBUTE.Sku   
    --    CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   
-   --    JOIN ##TMP_PREALLOCATE_CURSOR_CANDIDATES TPC ON TPC.LOT = LOTxLOCxID.Lot AND TPC.SKU = LOTxLOCxID.Sku 
+   --    JOIN #TMP_PREALLOCATE_CURSOR_CANDIDATES TPC ON TPC.LOT = LOTxLOCxID.Lot AND TPC.SKU = LOTxLOCxID.Sku 
    --    WHERE SKUxLOC.Locationtype ="PICK"
    --    AND LOC.Locationflag <>"HOLD"
    --    AND LOC.Locationflag <> "DAMAGE"
@@ -328,9 +466,7 @@ BEGIN
    -- END
 
    --debug
-   SELECT * FROM ##TMP_PREALLOCATE_CURSOR_CANDIDATES
-   SELECT * FROM #T_INV
-   SELECT * FROM #ALLOCATE_CANDIDATES  
+   select * from #ALLOCATE_CANDIDATES order by id
 
    EXIT_SP:
 
