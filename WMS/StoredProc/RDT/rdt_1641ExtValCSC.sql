@@ -6,7 +6,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /***********************************************************************/
-/* Store procedure: rdt_1641ExtValidSPCSC                              */
+/* Stored procedure: rdt_1641ExtValCSC                                 */
 /* Purpose: CSCUK01 Pallet Build Step 3 validation                     */
 /*          Do not allow scan of DropID if it is not yet packed        */
 /*                                                                     */
