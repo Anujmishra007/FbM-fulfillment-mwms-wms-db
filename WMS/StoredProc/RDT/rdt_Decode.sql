@@ -24,8 +24,9 @@ GO
 /* 24-08-2020  Ung       2.0   WMS-13505 Add UCCNo                            */
 /* 20-03-2023  Ung       2.1   WMS-21946 Add SerialNo                         */
 /* 27-09-2023  Ung       2.2   WMS-23678 Fix UPC and ID co exist at same time */
-/* 25-11-2024  YYS027    2.3   v0 migrate to v2: to void error when           */
+/* 25-11-2024  YYS027    2.3   v0 migrate to v2: to avoid error when          */
 /*                             no matched records for all fixed case          */
+/* 02-07-2026  NickT     2.4   FCR-13666 Extend length of @cBarcode to max    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_Decode (
@@ -36,7 +37,7 @@ CREATE OR ALTER PROC rdt.rdt_Decode (
    @nInputKey     INT,
    @cStorerKey    NVARCHAR( 15),
    @cFacility     NVARCHAR( 5), 
-   @cBarcode      NVARCHAR( 60),
+   @cBarcode      NVARCHAR( MAX),
    @cID           NVARCHAR( 18) = NULL OUTPUT,
    @cUPC          NVARCHAR( 30) = NULL OUTPUT,
    @nQTY          INT           = NULL OUTPUT,
@@ -98,9 +99,9 @@ BEGIN
    DECLARE @cFormatSP         NVARCHAR( 50)
    DECLARE @cProcessSP        NVARCHAR( 50)
    
-   DECLARE @cCode             NVARCHAR( 60)
-   DECLARE @cFieldData        NVARCHAR( 60)
-   DECLARE @cString           NVARCHAR( 60)
+   DECLARE @cCode             NVARCHAR( MAX)
+   DECLARE @cFieldData        NVARCHAR( MAX)
+   DECLARE @cString           NVARCHAR( MAX)
    DECLARE @dDate             DATETIME
    DECLARE @nInteger          INT
    DECLARE @fFloat            FLOAT
