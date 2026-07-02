@@ -453,7 +453,7 @@ BEGIN
    SET @nScn = 2880
    SET @nStep = 1
 
-   -- FCR-14629: DEFAULTCURSOR - Set default cursor position based on config
+   -- FCR-14064: DEFAULTCURSOR - Set default cursor position based on config
    IF UPPER(rdt.RDTGetConfig(@nFunc, 'DEFAULTCURSOR', @cStorer)) = 'UCC'
    BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode'
