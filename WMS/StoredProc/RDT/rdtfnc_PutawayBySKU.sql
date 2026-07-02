@@ -94,7 +94,7 @@ GO
 /* 2026-01-26 5.7  Jackc    FCR-9756 Add ExtScn                               */   
 /* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                     */  
 /* 2026-06-02 5.9  Dennis   UWP-52316 Remove Barcode in RDTMOBREC             */
-/* 2026-06-02 6.0  Sreeja   FCR-14064 Add DEFAULTCURSOR Config                */
+/* 2026-06-02 6.0  Sreeja   FCR-14094 Add DEFAULTCURSOR Config                */
 /*                          for cursor position                               */
 /******************************************************************************/
 
@@ -453,7 +453,7 @@ BEGIN
    SET @nScn = 2880
    SET @nStep = 1
 
-   -- FCR-14629: DEFAULTCURSOR - Set default cursor position based on config
+   -- FCR-14094: DEFAULTCURSOR - Set default cursor position based on config
    IF UPPER(rdt.RDTGetConfig(@nFunc, 'DEFAULTCURSOR', @cStorer)) = 'UCC'
    BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode'
