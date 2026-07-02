@@ -71,9 +71,6 @@ BEGIN
     SET @nErrNo = 0
     SET @cErrMsg = ''
 
-    SET @nAfterStep = @nStep
-    SET @nAfterScn = @nScn
-
     IF @nFunc = 600
     BEGIN
         -- Case 1: Coming from TO ID screen (Step 3, Scn 4032) with ENTER
@@ -162,28 +159,8 @@ BEGIN
             BEGIN
                 IF @nInputKey = 1
                 BEGIN
-                    -- Get LOC from RDTMOBREC since it's not in @tExtScnData
-                    SELECT @cLOC = V_Loc FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
-
-                    -- Get session data
-                    SELECT @cID = Value FROM @tExtScnData WHERE Variable = '@cID'
-                    SELECT @cReceiptKey = Value FROM @tExtScnData WHERE Variable = '@cReceiptKey'
-                    SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
-
-                    SET @cLottable02 = ''
-                    
-                    -- Find existing MIN DOT from previously received inventory on same pallet
-                    SELECT TOP 1 @cLottable02 = Lottable02
-                    FROM dbo.ReceiptDetail WITH (NOLOCK)
-                    WHERE ReceiptKey = @cReceiptKey
-                      AND StorerKey = @cStorerKey
-                      AND ToID = @cID
-                      AND ToLoc = @cLOC
-                      AND SKU = @cSKU
-                      AND QtyReceived > 0
-                      AND ISNULL(Lottable02, '') <> ''
-                    ORDER BY EditDate DESC
-
+                    -- Proceed to Lottable screen (Step 5)
+                    -- NOTE: Do NOT pre-populate MIN DOT (Lottable02) - user must enter it
                     SET @nAfterStep = 5
                     SET @nAfterScn = 3990
                     GOTO Quit
@@ -197,24 +174,6 @@ BEGIN
                     SET @cOutField01 = ''    -- Clear option field for input
                     GOTO Quit
                 END
-            END
-        END
-
-        -- Case 4: On Lottable screen (Step 5) with ENTER/ESC
-        IF @nStep = 5
-        BEGIN
-            IF @nInputKey = 1  -- ENTER
-            BEGIN
-                -- Set next screen to QTY screen
-                SET @nAfterStep = 6
-                SET @nAfterScn = 4035
-            END
-
-            IF @nInputKey = 0  -- ESC
-            BEGIN
-                -- Go back to SKU screen
-                SET @nAfterStep = 4
-                SET @nAfterScn = 4033
             END
         END
     END
