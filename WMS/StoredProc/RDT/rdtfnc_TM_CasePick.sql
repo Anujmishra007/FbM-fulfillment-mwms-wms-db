@@ -3694,11 +3694,11 @@ BEGIN
             END
          END
 
-         IF @cExtScnSP = 'rdt_1812ExtScn09' --ONBR
+         IF @cExtScnSP IN ('rdt_1812ExtScn09', 'rdt_1812ExtScn11') --ONBR/AEOMX
          BEGIN
             IF @cUDF01 = 'SKIPFromID'
             BEGIN
-               IF @nScn = 4022 AND @nStep = 3 
+               IF @nScn = 4022 AND @nStep = 3
                BEGIN
                   IF @nInputKey = 1
                   BEGIN
@@ -3713,10 +3713,10 @@ BEGIN
                      GOTO Step_3
                   END
                END --FromID scn
-            END--Skip FromID scn
-         END
+            END --Skip FromID scn
+         END -- extscn09, extscn11
       END
-   END
+   END --extscn <> ''
 
    -- Extended info
    IF @cExtendedInfoSP <> ''
