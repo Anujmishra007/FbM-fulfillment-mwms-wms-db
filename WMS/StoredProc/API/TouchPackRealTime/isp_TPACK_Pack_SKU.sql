@@ -15,6 +15,7 @@ GO
 /* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
 /* 2026-05-14   3.1  GCH225     FCR-13198: Fix Update Multi Line PackDetail      */
 /* 2026-06-22   3.2  GCH225     INC9376346: Fix to ByPassInputValue1 into UPC    */
+/* 2026-07-02   3.3  GCH225     UWP-60582: Fix PackInfo Not Tally issue          */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_Pack_SKU] (
