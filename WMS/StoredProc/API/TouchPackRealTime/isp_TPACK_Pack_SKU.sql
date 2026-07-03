@@ -417,23 +417,35 @@ STDLBLLINE_CHECK:
    END
    ELSE
    BEGIN
-      UPDATE PD
-      SET PD.Qty = TLN.Qty
-         , PD.EditWho = @c_UserID
-         , PD.EditDate = GETDATE()
-      FROM PACKDETAIL PD WITH (ROWLOCK)
-      INNER JOIN @tLineNo TLN
-      ON PD.LabelLine = TLN.LabelLine
-      WHERE PickSlipNo = @cPickSlipNo
-      AND CartonNo = @nCartonNo
-      AND LabelNo = @cLabelNo
-
-      IF @@ERROR <> 0
+      WHILE EXISTS ( SELECT 1 
+                  FROM @tLineNo TLN
+                  WHERE TLN.Qty > 0 )
       BEGIN
-         SET @n_Continue = 3
-         SET @n_ErrNo = 11153
-         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Update into PackDetail.'
-         GOTO EXIT_SP
+         SELECT TOP 1 @cLabelLine = LabelLine
+            , @nTMPQty = Qty
+         FROM @tLineNo TLN
+         WHERE TLN.Qty > 0
+         ORDER BY TLN.LabelLine ASC
+
+         UPDATE PACKDETAIL WITH (ROWLOCK)
+         SET Qty = @nTMPQty
+            , EditWho = @c_UserID
+            , EditDate = GETDATE()
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+         AND LabelNo = @cLabelNo
+         AND LabelLine = @cLabelLine
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_ErrNo = 11153
+            SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Failed to Update into PackDetail.'
+            GOTO EXIT_SP
+         END
+
+         DELETE FROM @tLineNo
+         WHERE LabelLine = @cLabelLine
       END
    END
 
