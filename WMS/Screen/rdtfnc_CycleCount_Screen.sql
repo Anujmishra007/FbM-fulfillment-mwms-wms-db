@@ -274,7 +274,7 @@ EXECUTE rdt.rdtAddScn 677, 'ENG',
    @cLine02 = 'ID:',
    @cLine03 = '%18d02',
    @cLine05 = 'SKU/UPC:',
-   @cLine06 = '%30i03',
+   @cLine06 = '%200iV_Barcode',
    @cLine14 = '%e', 
    @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5","6"]}', 
    @nFunc = 610

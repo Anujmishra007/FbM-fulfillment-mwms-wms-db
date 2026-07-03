@@ -415,6 +415,7 @@ DECLARE
    @cDecodeSP           NVARCHAR( 20),
    @cIDBarcode          NVARCHAR( 60),
    @cBarcode            NVARCHAR( MAX),
+   @cDecodeBuf          NVARCHAR( 60),
    @cUPC                NVARCHAR( 30),
    @cFromID             NVARCHAR( 18),
    @cToLOC              NVARCHAR( 10),
@@ -9229,18 +9230,17 @@ GOTO Quit
 Step_SINGLE_SKU_Sku_Scan. Scn = 677. Screen 15.
    LOC (field01)
    ID          (field02)
-   SKU/UPC     (field03) - Input
+   SKU/UPC     (V_Barcode) - Input
 ************************************************************************************/
 Step_SINGLE_SKU_Sku_Scan:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
       -- Screen mapping
-     SET @cNewSKU = @cInField03
-      SET @cLabel2Decode = @cInField03
+      SET @cNewSKU = LEFT(@cBarcode, 30)
+      SET @cLabel2Decode = LEFT(@cBarcode, 60)
 
-      -- Retain the key-in value
-      SET @cOutField03 = @cNewSKU
+      -- Screen 677 uses V_Barcode; keeping @cBarcode unchanged is enough to retain the scan value
 
       SET @cFieldAttr01 = ''
       SET @cFieldAttr02 = ''
@@ -9494,13 +9494,13 @@ BEGIN
 
          IF @cDecodeSP <> ''
          BEGIN
-            SET @cBarcode = @cInField03
+            SET @cDecodeBuf = LEFT(@cBarcode, 60)
             SET @cUPC = ''
 
             -- Standard decode
             IF @cDecodeSP = '1'
             BEGIN
-               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cDecodeBuf,
                   @cID           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
                   @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
                   @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
@@ -9561,7 +9561,7 @@ BEGIN
                   ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cBarcode, @cCCRefNo, @cCCSheetNo,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cDecodeBuf, @cCCRefNo, @cCCSheetNo,
                   @cLOC          OUTPUT, @cID            OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
                   @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
                   @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
@@ -9752,6 +9752,7 @@ BEGIN
          SET @cOutField11 = ''
          SET @cOutField12 = ''
          SET @cOutField13 = ''
+         SET @cBarcode = ''
 
          -- Initiate labels
          SELECT
@@ -10010,6 +10011,7 @@ BEGIN
          SET @cOutField08 = @cEachUOM                       -- UOM (master unit)
          SET @cOutField09 = CAST( @nQTY AS NVARCHAR( 5))     -- ID QTY
          SET @cOutField10 = @cEachUOM                       -- UOM (master unit)
+         SET @cBarcode = ''
 
          EXEC rdt.rdtSetFocusField @nMobile, 3  -- SKU/UPC
 
@@ -10136,7 +10138,7 @@ BEGIN
    SINGLE_SKU_Sku_Scan_Fail:
    BEGIN
       -- Reset this screen var
-      SET @cOutField03 = '' -- SKU/UPC
+      SET @cBarcode    = '' -- SKU/UPC
    END
 END
 GOTO Quit
