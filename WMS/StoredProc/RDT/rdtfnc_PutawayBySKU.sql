@@ -456,11 +456,16 @@ BEGIN
    -- FCR-14094: DefaultCursor - Set default cursor position based on config
    DECLARE @cDefaultCursor NVARCHAR(20)
    SET @cDefaultCursor = rdt.RDTGetConfig(@nFunc, 'DefaultCursor', @cStorer)
-   
+
    IF @cDefaultCursor = 'UCC'
    BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode'
    END
+   ELSE IF @cDefaultCursor = 'LOC'
+   BEGIN
+      EXEC rdt.rdtSetFocusField @nMobile, 3
+   END
+   -- If 'ID' or not configured, cursor defaults to ID field (field 1) - no action needed
 
 END
 GOTO Quit
