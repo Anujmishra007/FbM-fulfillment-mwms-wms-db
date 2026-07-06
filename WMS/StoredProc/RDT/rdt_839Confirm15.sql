@@ -831,10 +831,11 @@ BEGIN
                GOTO RollBackTran
             END CATCH
 
+            -- for partil pick UCC, mark it as 6, the ops team discards the UCC box and keeps the material without the UCC
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET 
-                  Status = '5',
+                  Status = '6',
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE UCCNo = @cPieceLotUCC
