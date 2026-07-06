@@ -13,7 +13,7 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          :                                                             */    
-/* Version: 1.0                                                           */    
+/* PVCS Version: 1.0                                                      */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
@@ -61,7 +61,7 @@ BEGIN
          , @c_SectionKey         NVARCHAR(10)= ''
          , @c_SectionKey_P       NVARCHAR(10)= ''
          , @c_LoseID             NVARCHAR(1) = ''
-         , @c_PutawayZone        NVARCHAR(10)= '' 
+         , @c_PickZone           NVARCHAR(10)= '' 
          , @c_AreaKey_P          NVARCHAR(10)= '' 
          , @c_AreaKey            NVARCHAR(10)= '' 
 
@@ -235,7 +235,7 @@ BEGIN
             SELECT TOP 1 @c_FinalLoc = l.Loc
                , @n_ToLocLevel = l.locLevel
                , @c_LoseID = l.LoseID
-               , @c_PutawayZone = l.PutawayZone
+               , @c_PickZone = l.PutawayZone
             FROM LOC l (NOLOCK)
             WHERE l.Facility = @c_Facility
             AND   l.SectionKey = @c_SectionKey
@@ -250,7 +250,7 @@ BEGIN
 
             SELECT @c_AreaKey = ad.Areakey
             FROM AREADETAIL ad (NOLOCK) 
-            WHERE ad.Putawayzone = @c_PutawayZone
+            WHERE ad.Putawayzone = @c_PickZone
 
             IF @c_AreaKey = ''
             BEGIN

@@ -13,7 +13,7 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          :                                                             */    
-/* Version: 1.0                                                           */    
+/* PVCS Version: 1.0                                                      */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    

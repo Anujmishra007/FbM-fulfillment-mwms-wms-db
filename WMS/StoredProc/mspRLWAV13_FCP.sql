@@ -13,7 +13,7 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          :                                                             */    
-/* Version: 1.0                                                           */    
+/* PVCS Version: 1.0                                                      */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
@@ -70,7 +70,7 @@ BEGIN
          , @c_GroupKey           NVARCHAR(10)= ''
          , @c_SectionKey         NVARCHAR(10)= ''
          , @c_SectionKey_P       NVARCHAR(10)= ''
-         , @c_PutawayZone        NVARCHAR(10)= '' 
+         , @c_PickZone           NVARCHAR(10)= '' 
          , @c_AreaKey_P          NVARCHAR(10)= '' 
          , @c_AreaKey            NVARCHAR(10)= '' 
          , @c_LinkTaskToPick_SQL NVARCHAR(1000)= '' 
@@ -260,7 +260,7 @@ BEGIN
    
    IF @n_Continue = 1
    BEGIN
-      SET @cur_FCP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SET @cur_FCP = CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT pw.Storerkey
             ,pw.Sku 
             ,pw.Lot                                                                  
@@ -276,7 +276,7 @@ BEGIN
             ,p.CubeUOM3 
       FROM #PICKDETAIL_WIP AS pw      
       JOIN LOC l (NOLOCK) ON l.Loc = pw.ToLoc  
-      JOIN AreaDetail AD (NOLOCK) ON ad.PutawayZone = l.PutawayZone   
+      JOIN AreaDetail AD (NOLOCK) ON ad.PutawayZone = l.PickZone   
       JOIN SKU S (NOLOCK) ON s.StorerKey = pw.Storerkey AND s.SKU = pw.Sku 
       JOIN PACK P (NOLOCK) ON p.PackKey = s.PACKKey  
       LEFT OUTER JOIN TaskDetail rpf (NOLOCK) ON rpf.TaskDetailKey = pw.ReplenishZone
@@ -308,7 +308,7 @@ BEGIN
                                  ,  @c_Areakey, @n_CubeUOM3
 
          
-      WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)  
       BEGIN  
          SET @c_TaskType   = 'FCP'
          SET @c_PickMethod = 'PP'

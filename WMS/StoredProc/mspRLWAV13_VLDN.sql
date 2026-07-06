@@ -13,7 +13,7 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          :                                                             */    
-/* Version: 1.0                                                           */    
+/* PVCS Version: 1.0                                                      */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
@@ -164,7 +164,7 @@ BEGIN
       SELECT TOP 1 @c_Loc = l.loc
       FROM #PICKDETAIL_WIP AS pw
       JOIN LOC l (NOLOCK) ON l.loc = pw.Loc                         
-      LEFT JOIN AreaDetail ad (NOLOCK) ON ad.PutawayZone = l.PutawayZone
+      LEFT JOIN AreaDetail ad (NOLOCK) ON ad.PutawayZone = l.PickZone
       WHERE pw.TaskDetailKey = ''
       AND ad.AreaKey IS NULL
 
@@ -354,7 +354,7 @@ BEGIN
             ,  @c_AreaKey = ad.Areakey
       FROM #PICKDETAIL_WIP AS pw  
       JOIN LOC l (NOLOCK) ON l.loc = pw.loc
-      JOIN Areadetail ad (NOLOCK) ON ad.putawayzone = l.PutawayZone
+      JOIN Areadetail ad (NOLOCK) ON ad.putawayzone = l.PickZone
       WHERE pw.UOM > '2'
       AND l.LocationType IN ('PICK','DYNPPICK')
       AND   NOT EXISTS (SELECT 1  
