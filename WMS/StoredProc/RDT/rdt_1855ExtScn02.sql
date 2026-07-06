@@ -15,6 +15,7 @@ GO
 /*                                                                                 */  
 /* Date       Rev    Author     Purposes                                           */  
 /* 2026-03-02 1.0    NickT      FCR-10824. Created                                 */
+/* 2026-07-06 1.1    NickT      UWP-59041 Support re-use toteid                    */
 /***********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn02] (
@@ -104,7 +105,6 @@ BEGIN
       @cContinuePickOnAssignedCart  NVARCHAR( 1),
       @tGetTask            VariableTable,
       @cCartPickMethod     NVARCHAR( 40),
-      @nCartLitmit         INT,
       @nCartonCnt          INT,
       @nTranCount          INT,
       @nLoopIndex          INT,
@@ -382,9 +382,9 @@ BEGIN
                   AND Code = @cMethod
                   AND Storerkey = @cStorerKey
 
-               SET @nCartLitmit = ISNULL(TRY_CAST(@cShort AS INT), -1)
+               SET @nCartLimit = ISNULL(TRY_CAST(@cShort AS INT), -1)
 
-               IF @nCartLitmit < 1
+               IF @nCartLimit < 1
                BEGIN
                   SET @nErrNo = 260422
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid carton limit configuration for method 2
@@ -873,8 +873,17 @@ BEGIN
                   GOTO UPD_RDTMOBREC
                END
 
-               IF EXISTS(SELECT 1 FROM dbo.DropID WITH(NOLOCK)
-                          WHERE DropID = @cCartonID)
+               DECLARE 
+                  @cDropIDStatus NVARCHAR(10),
+                  @cDropIDLoadKey NVARCHAR(10)
+
+               SELECT @cDropIDStatus = Status,
+                  @cDropIDLoadKey = LoadKey
+               FROM dbo.DropID WITH(NOLOCK)
+                  WHERE DropID = @cCartonID
+               SELECT @nRowCount = @@ROWCOUNT
+
+               IF @nRowCount > 0
                BEGIN
                   IF EXISTS(SELECT 1 FROM TaskDetail TD1 WITH(NOLOCK)
                            INNER JOIN TaskDetail TD2 WITH(NOLOCK) 
@@ -893,6 +902,25 @@ BEGIN
                      SET @nErrNo = 260432
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToteID is used in other wave/group
                      GOTO UPD_RDTMOBREC
+                  END
+
+                  IF ISNULL(@cDropIDStatus, '') <> '9'
+                  BEGIN
+                     IF EXISTS(
+                        SELECT 1
+                        FROM dbo.LoadPlanDetail LP WITH(NOLOCK)
+                        INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON LP.OrderKey = PD.OrderKey
+                        INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey
+                        WHERE TD.StorerKey = @cStorerKey
+                           AND LP.LoadKey = @cDropIDLoadKey
+                           AND TD.TaskType = 'ASTCPK'
+                           AND (TD.WaveKey <> @cWaveKey OR TD.GroupKey <> @cGroupKey)
+                     )
+                     BEGIN
+                        SET @nErrNo = 260434
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToteID is used in other wave/group
+                        GOTO UPD_RDTMOBREC
+                     END
                   END
                END
 

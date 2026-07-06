@@ -14,6 +14,7 @@ GO
 /*                                                                         */
 /* Date         Ver.    Author  Purposes                                   */
 /* 2026-03-16   1.0.0   NLT013  FCR-10824 Created                          */
+/* 2026-07-06   1.2     NickT   UWP-59041 Support re-use toteid            */
 /***************************************************************************/
       
 CREATE OR ALTER PROCEDURE [rdt].[rdt_1855ExtUpd06]
@@ -49,6 +50,7 @@ BEGIN
       @cWaveKey               NVARCHAR( 10),
       @nTranCount             INT,
       @nLoopIndex             INT,
+      @nRowCount              INT,
 
       @cDropID                NVARCHAR(20),
       @cDropLoc               NVARCHAR(10),
@@ -57,6 +59,11 @@ BEGIN
       @cLabelPrinted          NVARCHAR(10),
       @cLoadkey               NVARCHAR(10),
       @cStatus                NVARCHAR(10),
+      @cDropIDStatus          NVARCHAR(10),
+      @cDropIDOrderKey        NVARCHAR(10),
+      @cDropIDLoadKey         NVARCHAR(10),
+      @cDropIDGroupKey        NVARCHAR(10),
+      @cDropIDWaveKey         NVARCHAR(10),
       @cLockTaskKey           NVARCHAR(10)
   
    SET @nErrNo = 0
@@ -145,18 +152,112 @@ BEGIN
             BEGIN TRAN
             SAVE TRAN rdt_1855ExtUpd06_Step7
 
-            BEGIN TRY
-               INSERT INTO dbo.DropID(DropID, DropLoc, AdditionalLoc, DropIDType, LabelPrinted, Loadkey, Status)
-               SELECT DropID, DropLoc, AdditionalLoc, DropIDType, LabelPrinted, Loadkey, Status
-               FROM @tDropIDInfo AS TDI
-               WHERE NOT EXISTS(SELECT 1 FROM dbo.DropID WITH(NOLOCK) WHERE DropID = TDI.DropID)
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 261253
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert data into DropID failed
-               GOTO Step7_RollBackTran
-            END CATCH
+            SET @nLoopIndex = -1
+            WHILE 1 = 1
+            BEGIN
+               SELECT TOP 1 @cLoadkey = Loadkey,
+                  @cDropID = DropID,
+                  @cDropLoc = DropLoc,
+                  @cAdditionalLoc = AdditionalLoc,
+                  @cDropIDType = DropIDType,
+                  @cLabelPrinted = LabelPrinted,
+                  @cStatus = Status,
+                  @nLoopIndex = RowRef
+               FROM @tDropIDInfo
+               WHERE RowRef > @nLoopIndex
+               ORDER BY RowRef
+               SELECT @nRowCount = @@ROWCOUNT
 
+               IF @nRowCount = 0
+                  BREAK
+
+               SET @cDropIDLoadKey = ''
+               SET @cDropIDStatus = ''
+               SELECT @cDropIDStatus = Status,
+                  @cDropIDLoadKey = LoadKey
+               FROM dbo.DropID WITH(NOLOCK)
+               WHERE DropID = @cDropID
+               SELECT @nRowCount = @@ROWCOUNT
+
+               -- DropID does not exist, insert new record into DropID table
+               IF @nRowCount = 0
+               BEGIN
+                  BEGIN TRY
+                     INSERT INTO dbo.DropID(DropID, DropLoc, AdditionalLoc, DropIDType, LabelPrinted, Loadkey, Status)
+                     SELECT @cDropID, @cDropLoc, @cAdditionalLoc, @cDropIDType, @cLabelPrinted, @cLoadkey, @cStatus
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 261253
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert data into DropID failed
+                     GOTO Step7_RollBackTran
+                  END CATCH
+               END
+               -- DropID exists, check if it is in use by other Wave/Group
+               ELSE
+               BEGIN
+                  IF ISNULL(@cDropIDStatus, '') NOT IN ('', '9')
+                  BEGIN
+                     IF ISNULL(@cDropIDLoadKey, '') <> ''
+                     BEGIN
+                        SET @cDropIDOrderKey = ''
+                        SELECT TOP 1 @cDropIDOrderKey = OrderKey
+                        FROM dbo.LoadPlanDetail WITH(NOLOCK)
+                        WHERE LoadKey = @cDropIDLoadKey
+                        ORDER BY OrderKey DESC
+
+                        IF ISNULL(@cDropIDOrderKey, '') <> ''
+                        BEGIN
+                           SET @cDropIDWaveKey = ''
+                           SET @cDropIDGroupKey = ''
+                           SELECT @cDropIDWaveKey = ORDERS.UserDefine09
+                           FROM dbo.Orders WITH(NOLOCK)
+                           WHERE OrderKey = @cDropIDOrderKey
+                              AND StorerKey = @cStorerKey
+                           SET @cDropIDWaveKey = ISNULL(@cDropIDWaveKey, '')
+
+                           SELECT TOP 1 @cDropIDGroupKey = TD.GroupKey
+                           FROM dbo.TaskDetail TD WITH(NOLOCK)
+                           INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey
+                           WHERE TD.StorerKey = @cStorerKey
+                              AND TD.TaskType = 'ASTCPK'
+                              AND PD.OrderKey = @cDropIDOrderKey
+                           ORDER BY TD.TaskDetailKey DESC
+                           SET @cDropIDGroupKey = ISNULL(@cDropIDGroupKey, '')
+
+                           IF @cDropIDWaveKey NOT IN ('', @cWaveKey)
+                              OR @cDropIDGroupKey NOT IN ('', @cGroupKey)
+                           BEGIN
+                              SET @nErrNo = 261256
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  DropID is in use by other Wave/Group
+                              GOTO Step7_RollBackTran
+                           END
+                        END
+                     END
+                  END
+                  -- DropID exists and is not in use by other Wave/Group, update the record in DropID table
+                  ELSE
+                  BEGIN
+                     BEGIN TRY
+                        UPDATE dbo.DropID WITH(ROWLOCK)
+                        SET DropLoc = @cDropLoc,
+                           AdditionalLoc = @cAdditionalLoc,
+                           DropIDType = @cDropIDType,
+                           LabelPrinted = @cLabelPrinted,
+                           Loadkey = @cLoadkey,
+                           Status = @cStatus
+                        WHERE DropID = @cDropID
+                           AND Status = '9'
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 261257
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update DropID failed
+                        GOTO Step7_RollBackTran
+                     END CATCH
+                  END
+               END
+            END
+
+            
             --Release Other tasks
             DECLARE @tTaskDetail TABLE 
             (
