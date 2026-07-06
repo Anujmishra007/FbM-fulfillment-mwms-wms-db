@@ -1,5 +1,6 @@
 --rdt_1855ExtScn02
 --FCR-10824
+--UWP-59041
 EXECUTE rdt.rdtDropMsg 260401, 260450
 
 EXECUTE rdt.rdtAddMsg 260401, 10, '260401 NeedPickZone',          'us_english', 1855, 0, '260401 Need PickZone'
@@ -35,5 +36,6 @@ EXECUTE rdt.rdtAddMsg 260430, 10, '260430 WaveKeyMissing',        'us_english', 
 EXECUTE rdt.rdtAddMsg 260431, 10, '260431 ToteIDInUse',           'us_english', 1855, 0, '260431 ToteID is used in other wave/group'
 EXECUTE rdt.rdtAddMsg 260432, 10, '260432 ToteIDInUse',           'us_english', 1855, 0, '260432 ToteID is used in other wave/group'
 EXECUTE rdt.rdtAddMsg 260433, 10, '260433 ToteIDNotInPickList',   'us_english', 1855, 0, '260433 ToteID is used by order not in the current pick list'
+EXECUTE rdt.rdtAddMsg 260434, 10, '260434 ToteIDInUse',           'us_english', 1855, 0, '260434 ToteID is used in other wave/group'
 
 SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 260401 AND 260450
