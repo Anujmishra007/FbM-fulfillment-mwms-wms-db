@@ -14,6 +14,7 @@ GO
 /* 2026-03-14   1.1  JWF011     FCR-11435 Update Weight calculation              */
 /* 2026-03-16   1.2  JWF011     FCR-11639 Add LWH and update Cube                */
 /* 2026-04-02   1.3  GCH225     FCR-12173 Weight + Cartonization carton Weight   */
+/* 2026-07-03   1.4  GCH225     UWP-60606 Fix the empty CartonType issue         */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtMeasurement01] (
@@ -57,11 +58,27 @@ BEGIN
    SET @n_ErrNo         = 0  
    SET @c_ErrMsg        = ''
   
-  SELECT TOP 1 @fTtlLength = ISNULL(C.CartonLength, 0)
-              , @fTtlWidth = ISNULL(C.CartonWidth, 0)
-              , @fTtlHeight = ISNULL(C.CartonHeight,0)
-              , @fTtlCube = ISNULL(C.Cube, 0)
-              , @fTtlWeight = ISNULL(C.CartonWeight, 0)
+   IF ISNULL(@cCartonType, '') = ''
+   BEGIN
+      SELECT @cCartonType = P.CartonType
+      FROM PACKINFO P (NOLOCK)
+      WHERE P.PickSlipNo = @cPickSlipNo
+      AND P.CartonNo = @nCartonNo
+
+      IF @@ROWCOUNT = 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_ErrNo = 1
+         SET @c_ErrMsg = 'CartonType is not found for PickSlipNo: ' + @cPickSlipNo + ' and CartonNo: ' + CAST(@nCartonNo AS NVARCHAR(10))
+         GOTO EXIT_SP
+      END
+   END
+
+   SELECT TOP 1 @fTtlLength = ISNULL(C.CartonLength, 0)
+            , @fTtlWidth = ISNULL(C.CartonWidth, 0)
+            , @fTtlHeight = ISNULL(C.CartonHeight,0)
+            , @fTtlCube = ISNULL(C.Cube, 0)
+            , @fTtlWeight = ISNULL(C.CartonWeight, 0)
    FROM Cartonization C (NOLOCK)
    WHERE C.CartonType = @cCartonType
    AND C.CartonizationGroup = @cStorerKey
@@ -69,7 +86,8 @@ BEGIN
    SELECT  @fTtlWeight = @fTtlWeight + SUM(IIF((ISNULL(S.STDGROSSWGT, 0) = 0), 0, ROUND((S.STDGROSSWGT * T.TtlQty), 4)))
    FROM SKU S (NOLOCK)
    INNER JOIN (
-      SELECT PD.SKU AS SKU, SUM(PD.Qty) AS TtlQty
+      SELECT PD.SKU AS SKU
+           , SUM(PD.Qty) AS TtlQty
       FROM PACKDETAIL PD (NOLOCK)
       WHERE PD.PickSlipNo = @cPickSlipNo
       AND PD.CartonNo = @nCartonNo
