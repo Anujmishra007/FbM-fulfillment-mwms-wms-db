@@ -54,4 +54,8 @@ EXECUTE rdt.rdtAddMsg 263623, 10, '263623 UpdPkInfoCSOnly',       'us_english', 
 EXECUTE rdt.rdtAddMsg 263624, 10, '263624 GetTransKeyCSOnly',     'us_english', 1812, 0, '263624 Get TransmitKey Failed (Specialised CS Only)'
 EXECUTE rdt.rdtAddMsg 263625, 10, '263625 InsTransLogCSOnly',     'us_english', 1812, 0, '263625 Insert TransmitLog Failed (Specialised CS Only)'
 
+-- Specialised Orders (FCR-14641) - QC
+EXECUTE rdt.rdtAddMsg 263626, 10, '263626 InsPkDtlQC',            'us_english', 1812, 0, '263626 Insert PackDetail Failed (QC)'
+EXECUTE rdt.rdtAddMsg 263627, 10, '263627 UpdPkInfoQC',           'us_english', 1812, 0, '263627 Update PackInfo Failed (QC)'
+
 SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 263601 AND 263650

@@ -13,6 +13,7 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 2026-04-03   NYE018    1.0   FCR-11492 Created                       */
 /* 2026-04-05   NYE018    1.1   FCR-12113 Add Pickcode/Packing Message  */
+/* 2026-07-03   NYE018    1.2   FCR-13937 use QC validation also        */
 /************************************************************************/
 
 CREATE OR ALTER  PROCEDURE [RDT].[rdt_1812ExtInfoAU02]
@@ -73,6 +74,7 @@ BEGIN
       DECLARE @nCartonNo         INT
 
       DECLARE @cOrderUserDefine01 NVARCHAR(30) = ''
+      DECLARE @cOrderUserDefine03 NVARCHAR(30) = ''
       DECLARE @cPickCode          NVARCHAR(10) = ''
       DECLARE @cSKU               NVARCHAR(20) = ''
       DECLARE @cPackingMessage    NVARCHAR(50) = ''
@@ -88,6 +90,7 @@ BEGIN
          SELECT @cConsigneeKey = ConsigneeKey, @cBillToKey = BillToKey, @cOrderType = [Type]
               , @cPWaveKey = UserDefine09, @cPLoadkey = LoadKey
               , @cOrderUserDefine01 = UserDefine01
+              , @cOrderUserDefine03 = ISNULL(UserDefine03, '')
          FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
 
       -- Get SKU Pickcode
@@ -248,13 +251,13 @@ BEGIN
             SET @cPackMethod = ISNULL(@cPackMethod,'')+' '+CAST(@nPackMaxSku AS NVARCHAR)+'SK'  
   
         --  SET @cExtendedInfo1 = ISNULL(@cPackCaseType,'')+' '+ISNULL(@cPackMethod,'') 
-         -- Build packing message based on Pickcode and OrderUserDefine01
+         -- Build packing message based on Pickcode, OrderUserDefine01 and OrderUserDefine03
          SET @cPackingMessage = ''
-         IF @cPickCode = 'CS Only' AND @cOrderUserDefine01 IN (SELECT DISTINCT code FROM dbo.CODELKUP   
+         IF @cPickCode = 'CS Only' AND @cOrderUserDefine03 <> 'QC' AND @cOrderUserDefine01 IN (SELECT DISTINCT code FROM dbo.CODELKUP
              (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'AUTO' AND STORERKEY = @cStorerkey
          )
             SET @cPackingMessage = 'Do Not Break Case'
-         ELSE IF @cPickCode = 'CS or EA' AND @cOrderUserDefine01 IN (SELECT DISTINCT code FROM dbo.CODELKUP   
+         ELSE IF @cPickCode = 'CS or EA' AND @cOrderUserDefine03 <> 'QC' AND @cOrderUserDefine01 IN (SELECT DISTINCT code FROM dbo.CODELKUP
              (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'AUTO' AND STORERKEY = @cStorerkey
          )
             SET @cPackingMessage = 'Break the case'
@@ -262,6 +265,10 @@ BEGIN
             (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'NOAUTO' AND STORERKEY = @cStorerkey
          )
             SET @cPackingMessage = 'Consolidate @ PK Stn'
+         ELSE IF @cPickCode IN ('CS or EA', 'CS Only') AND @cOrderUserDefine03 = 'QC' AND @cOrderUserDefine01 IN (SELECT DISTINCT code FROM dbo.CODELKUP
+             (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'AUTO' AND STORERKEY = @cStorerkey
+         )
+            SET @cPackingMessage = 'QC ORDER'
 
          -- Display: Pickcode + Message (limited to 20 chars)
          SET @cExtendedInfo1 = LEFT(ISNULL(@cPackingMessage,''), 20)
