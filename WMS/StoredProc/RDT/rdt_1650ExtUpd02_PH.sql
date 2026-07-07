@@ -292,7 +292,7 @@ BEGIN
             BEGIN CATCH
                SET @nErrNo = 273007
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDATE ORDERS FAIL 
-               GOTO Quit
+               GOTO RollBackTran
             END CATCH
             
             
