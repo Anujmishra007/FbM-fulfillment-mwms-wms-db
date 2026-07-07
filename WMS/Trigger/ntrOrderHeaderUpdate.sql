@@ -698,9 +698,9 @@ END
                         WHERE INSERTED.OrderKey = DELETED.OrderKey
                           AND INSERTED.[status] = DELETED.[status]
                           AND INSERTED.[status] = '5'
-                          AND LEN(TRIM(@c_MBOLKey)) > 0
-                          AND ISNULL(ORDERS.C_Country,'') IN ('GBR','NOR','GB','NO')
-                      )
+                          AND LEN(TRIM(INSERTED.MBOLKey)) > 0
+                          AND ISNULL(INSERTED.MBOLKey,'') <> ISNULL(DELETED.MBOLKey,'')
+                          AND ISNULL(INSERTED.C_Country,'') IN ('GBR','NOR','GB','NO')
             BEGIN
                 EXEC ispGenTransmitLog2 'XDCBWEXPDL', @c_MBolKey,
                 				'', @c_Storer, ''
