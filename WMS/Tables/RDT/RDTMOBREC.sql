@@ -153,6 +153,7 @@ BEGIN
    [MenuStack] [nvarchar] (120) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_MenuStack] DEFAULT (''),
    [V_TaskDetailKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMobRec_V_TaskDetailKey] DEFAULT (''),
    [V_Max] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Max] DEFAULT (''),
+   [V_Barcode] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Barcode] DEFAULT (''),
    [RemotePrint] [int] NULL CONSTRAINT [DF_RDTMOBREC_RemotePrint] DEFAULT ((0)),
    [DeviceID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_DeviceID] DEFAULT (''),
    [LightMode] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_LightMode] DEFAULT (''),
@@ -1093,6 +1094,15 @@ BEGIN
    BEGIN
       ALTER TABLE [RDT].[RDTMOBREC] ALTER COLUMN [MenuStack] NVARCHAR(120)
    END
+
+   -- FCR-13666 Add V_Barcode column to RDTMOBREC table to store barcode value for mobile transactions
+   IF NOT EXISTS (SELECT 1
+               FROM sys.columns
+               WHERE Name = 'V_Barcode' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+   BEGIN
+      ALTER TABLE [RDT].[RDTMOBREC] ADD  V_Barcode [nvarchar](MAX)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Barcode] DEFAULT ('')
+   END
+
 END
 
 --END
