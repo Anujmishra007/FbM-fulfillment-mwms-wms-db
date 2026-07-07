@@ -152,7 +152,7 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOCK PDTL FAIL 
                CLOSE CUR_UPDMOVREF
                DEALLOCATE CUR_UPDMOVREF
-               GOTO Quit
+               GOTO RollBackTran
             END CATCH
 
                INSERT INTO @tPickDetailKey (PickDetailKey)
