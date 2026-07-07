@@ -77,6 +77,7 @@ BEGIN
          , @c_DoCycleCount             NVARCHAR(1) = ''
          , @c_TaskDetailKeyCC          NVARCHAR(10) = ''
          , @c_CCKey                    NVARCHAR(10) = ''
+         , @n_UCCRowRef                BIGINT = 0
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -221,13 +222,19 @@ BEGIN
          FROM TASKDETAIL TD WITH (NOLOCK)
          WHERE TD.Taskdetailkey = @c_Taskdetailkey
          
-         SET @n_ByUCC = CASE WHEN ISNULL(@c_GetUCCNo, '') <> ''
-                                  AND EXISTS ( SELECT 1
-                                               FROM UCC WITH (NOLOCK)
-                                               WHERE UCCNo = @c_GetUCCNo
-                                               AND Storerkey = @c_Storerkey
-                                               AND SKU = @c_SKU )
-                             THEN 1 ELSE 0 END
+         IF ISNULL(@c_GetUCCNo, '') <> ''
+         BEGIN
+            SELECT @n_UCCRowRef = UCC.UCC_RowRef
+            FROM UCC WITH (NOLOCK)
+            WHERE UCC.UCCNo = @c_GetUCCNo
+            AND UCC.Storerkey = @c_Storerkey
+            AND UCC.SKU = @c_SKU
+
+            IF @n_UCCRowRef > 0
+            BEGIN
+               SET @n_ByUCC = 1
+            END
+         END
       END
       ELSE
       BEGIN
@@ -405,7 +412,7 @@ BEGIN
 
          IF @n_Continue = 1
             AND @c_DoCycleCount = '1'
-            AND @c_TaskType NOT IN ('CC', 'CCSV', 'CCSUP')
+            -- AND @c_TaskType NOT IN ('CC', 'CCSV', 'CCSUP')
          BEGIN
             SET @c_TaskDetailKeyCC = ''
             SET @c_CCKey = ''
@@ -521,9 +528,7 @@ BEGIN
            , UCC.OrderKey = ''
            , UCC.OrderLineNumber = ''
            , UCC.WaveKey = ''
-         WHERE UCC.Storerkey = @c_Storerkey
-         AND UCC.SKU = @c_SKU
-         AND UCC.UCCNo = @c_GetUCCNo
+         WHERE UCC.UCC_RowRef = @n_UCCRowRef
          AND UCC.[Status] = '3'
       END TRY
       BEGIN CATCH
