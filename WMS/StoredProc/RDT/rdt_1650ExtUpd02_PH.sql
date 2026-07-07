@@ -119,7 +119,7 @@ BEGIN
             BEGIN    
                SET @nErrNo = 273002   
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get RFKey Fail 
-               GOTO Quit
+               GOTO RollBackTran
             END
 
             DELETE FROM @tPickDetailKey
