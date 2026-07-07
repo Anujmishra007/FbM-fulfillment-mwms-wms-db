@@ -153,6 +153,7 @@ BEGIN
    [MenuStack] [nvarchar] (120) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
    [V_TaskDetailKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
    [V_Max] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+   [V_Barcode] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
    [RemotePrint] [int] NULL,
    [DeviceID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
    [LightMode] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
@@ -238,6 +239,14 @@ IF EXISTS (
 )
 BEGIN
    ALTER TABLE [RDT].[rdtMobRec_LOG] ALTER COLUMN [MenuStack] NVARCHAR(120)
+END
+
+-- FCR-13666 Add V_Barcode column to support barcode scanning functionality
+IF NOT EXISTS (SELECT 1
+               FROM sys.columns
+               WHERE Name = 'V_Barcode' AND Object_ID = Object_ID('RDT.RDTMobRec_LOG'))
+BEGIN
+   ALTER TABLE [RDT].[RDTMobRec_LOG] ADD  V_Barcode [nvarchar](MAX)  NOT NULL DEFAULT ('')
 END
 GO
 
