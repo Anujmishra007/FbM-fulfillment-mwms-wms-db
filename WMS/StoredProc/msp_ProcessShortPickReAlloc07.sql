@@ -25,10 +25,10 @@ GO
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc07] (    
-       @c_Wavekey          NVARCHAR(10)
-     , @c_SKU              NVARCHAR(20)
-     , @c_UCCNo            NVARCHAR(20)
-     , @c_Taskdetailkey    NVARCHAR(10)   = ''
+       @c_Wavekey          NVARCHAR(10)   = ''
+     , @c_SKU              NVARCHAR(20)   = ''
+     , @c_UCCNo            NVARCHAR(20)   = ''
+     , @c_Taskdetailkey    NVARCHAR(10)
      , @b_Success          INT            = 0   OUTPUT
      , @n_Err              INT            = 0   OUTPUT
      , @c_ErrMsg           NVARCHAR(225)  = ''  OUTPUT
@@ -199,7 +199,8 @@ BEGIN
    -- Initialize Data
    IF @n_Continue = 1
    BEGIN
-      SELECT @c_StorerKey  = OH.StorerKey
+      SELECT TOP 1
+             @c_StorerKey  = OH.StorerKey
            , @c_Facility   = OH.Facility
       FROM WAVEDETAIL WD WITH (NOLOCK)
       JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
