@@ -109,7 +109,7 @@ BEGIN
                 GOTO Quit
             END
 
-            --Check if Palllet is in Correct Location Type
+            --Check if Pallet is in Correct Location Type
             IF @cLocationType in ('PND')
             BEGIN
                 SET @nErrNo = 273054
