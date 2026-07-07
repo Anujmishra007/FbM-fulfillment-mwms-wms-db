@@ -1,6 +1,6 @@
 SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON OFF
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
 /* Store procedure: rdt_1650ExtValidPH                                  */
