@@ -122,7 +122,7 @@ BEGIN
             FROM dbo.MBOLDetail WITH (NOLOCK)
             WHERE OrderKey = @cOrderKey
 
-            -- Every dropid must have assocaited mbol created. Prompt error if mbol not created
+            -- Every dropid must have associated mbol created. Prompt error if mbol not created
             IF ISNULL( @cMBOL4Pallet, '') = ''
             BEGIN
                 SET @nErrNo = 273055
