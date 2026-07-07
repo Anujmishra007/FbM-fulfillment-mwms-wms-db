@@ -214,7 +214,7 @@ BEGIN
             BEGIN
                SET @nErrNo = 273004   
                SET @cErrMsg = @cErrMsg--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lose ID Fail 
-               GOTO Quit
+               GOTO RollBackTran
             END
 
             BEGIN TRY
