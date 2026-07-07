@@ -9,7 +9,7 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
-/* 2026-04-03 1.0  WSE016     Fn573 COD Validation fir Wolverine (NLD)  */
+/* 2026-04-03 1.0  WSE016     Fn573 COD Validation for Wolverine (NLD)  */
 /* 2026-07-03 1.1  WSE016     UWP-60780 Request to remove LOC check     */
 /************************************************************************/
 
