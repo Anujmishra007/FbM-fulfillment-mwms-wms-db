@@ -42,6 +42,11 @@ BEGIN
          
          , @c_VehicleNo       NVARCHAR(150)  = ''
         , @c_populateByGetDate NVARCHAR(10) = '0'   --YGO01
+        , @c_Storerkey             NVARCHAR(15)     --YGO01
+         , @c_Facility              NVARCHAR(5)     --YGO01
+
+   SET @c_Storerkey = ''   --YGO01
+   SET @c_Facility  = ''   --YGO01
 
    DECLARE @t_ShipmentKey     TABLE (  ShipmentGID    NVARCHAR(50)   NOT NULL DEFAULT ('')
                                     ,  MBOLkey        NVARCHAR(10)   NOT NULL DEFAULT ('') )       
@@ -50,8 +55,16 @@ BEGIN
    SET @n_Continue = 1
    SET @n_err      = 0
    SET @c_errmsg   = ''
+                                             --YGO01(START)
+   SELECT TOP 1 @c_Storerkey = ORDERS.Storerkey
+         , @c_Facility = MBOL.Facility
+   FROM MBOL       WITH (NOLOCK)
+   JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)
+   JOIN ORDERS     WITH (NOLOCK) ON (MBOLDETAIL.Orderkey = ORDERS.Orderkey)
+   WHERE MBOL.MBOLKey = @c_MBOLKey
 
-   SELECT @c_populateByGetDate  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PopulateByGetDate')  --YGO01
+   SELECT @c_populateByGetDate  = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PopulateByGetDate')
+                                            --YGO01(END)
 
    INSERT INTO dbo.TMS_Shipment
        (
@@ -75,7 +88,7 @@ BEGIN
        ,  VehicleLPN  = @c_VehicleNo         
        ,  EquipmentID = ISNULL(m.Equipment,'')          
        ,  DriveName   = ISNULL(m.DriverName,'') 
-       ,  ShipmentPlannedStartDate =  IIF((m.LoadingDate IS NULL OR m.LoadingDate = '') AND @c_populateByGetDate = '1', GETDATE(), m.LoadingDate)  --YGO01
+       ,  ShipmentPlannedStartDate =  IIF(m.LoadingDate IS NULL AND @c_populateByGetDate = '1', GETDATE(), m.LoadingDate)  --YGO01
        ,  ShipmentPlannedEndDate   =  GETDATE()           
        ,  [Route]     =  ISNULL(m.[Route],'')
        ,  ServiceProviderID  = ISNULL(m.Carrierkey,'')                  
