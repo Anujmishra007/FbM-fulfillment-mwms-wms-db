@@ -232,7 +232,7 @@ BEGIN
             BEGIN CATCH
                SET @nErrNo = 273005
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --REL PDTL FAIL 
-               GOTO Quit
+               GOTO RollBackTran
             END CATCH
 
             FETCH NEXT FROM CUR_LOOP INTO @cStorerKey, @cSku, @cLot, @cFromLoc, @nQty
