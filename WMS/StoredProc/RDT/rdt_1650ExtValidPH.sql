@@ -1,6 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER ON OFF
 GO
 /************************************************************************/
 /* Store procedure: rdt_1650ExtValidPH                                  */
@@ -49,7 +49,7 @@ BEGIN
             @cFacility                  NVARCHAR( 5),
             @cID                        NVARCHAR( 18),
             @cMBOL4Pallet               NVARCHAR( 10),
-            @cStatus                    INT,
+            @cStatus                    NVARCHAR( 10),
             @cLocationType              NVARCHAR( 10)
 
 
@@ -66,7 +66,7 @@ BEGIN
     FROM DBO.ORDERS O
     WHERE MBOLKey = @cMbolKey
 
-    IF @cStatus IN (8,9) 
+    IF @cStatus IN ('8','9')
     BEGIN
         SET @cMbolKey = ''
     END

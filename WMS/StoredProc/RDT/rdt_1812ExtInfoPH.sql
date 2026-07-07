@@ -1,6 +1,6 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
 /* Store procedure: rdt_1812ExtInfoPH                                   */
