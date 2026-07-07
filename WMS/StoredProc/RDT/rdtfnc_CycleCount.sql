@@ -9236,11 +9236,10 @@ Step_SINGLE_SKU_Sku_Scan:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
-      -- Screen mapping
-      SET @cNewSKU = LEFT(@cBarcode, 30)
+      -- Screen mapping (screen 677 uses V_Barcode for scan input)
+      SET @cNewSKU       = LEFT(@cBarcode, 30)
       SET @cLabel2Decode = LEFT(@cBarcode, 60)
-
-      -- Screen 677 uses V_Barcode; keeping @cBarcode unchanged is enough to retain the scan value
+      SET @cBarcode      = LEFT(@cBarcode, 60)
 
       SET @cFieldAttr01 = ''
       SET @cFieldAttr02 = ''
@@ -9346,7 +9345,6 @@ BEGIN
 
             IF @cDecodeSP <> ''
             BEGIN
-               SET @cBarcode = @cInField03
                SET @cUPC = ''
 
                -- Standard decode
@@ -10563,9 +10561,9 @@ Step_SINGLE_SKU_Increase_Qty:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
-      -- Screen mapping
-      SET @cNewSKU = @cInField03
-      SET @cLabel2Decode = @cInField03
+      -- Screen mapping (screen 679 uses V_Barcode for scan input)
+      SET @cNewSKU      = LEFT(@cBarcode, 30)
+      SET @cLabel2Decode = LEFT(@cBarcode, 60)
 
       -- Retain the key-in value
       SET @cOutField03 = @cNewSKU
@@ -10644,7 +10642,7 @@ BEGIN
 
             IF @cDecodeSP <> ''
             BEGIN
-               SET @cBarcode = @cInField03
+               SET @cBarcode      = LEFT(@cBarcode, 60)
                SET @cUPC = ''
 
                -- Standard decode
