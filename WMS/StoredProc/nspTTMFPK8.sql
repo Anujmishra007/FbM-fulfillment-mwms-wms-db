@@ -4,18 +4,18 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************************/
-/* Stored Procedure: nspTTMFPK8                                         			*/
-/* Copyright: Maersk                                                    			*/
-/*                                                                      			*/
+/* Stored Procedure: nspTTMFPK8                                         	   		*/
+/* Copyright: Maersk                                                    	   		*/
+/*                                                                      	   		*/
 /* Purpose: TM pallet pick strategy - MATTEL                               			*/
-/*                                                                      			*/
-/* Modifications log:                                                   			*/
-/* Date        Author    Ver  Purposes                                  			*/
+/*                                                                      		   	*/
+/* Modifications log:                                                    		   	*/
+/* Date        Author    Ver  Purposes                                     			*/
 /* 2026-07-06  PSJ036    1.0  RITM8976012/UWP-60717 Is's a copy from SP nspTTMFPK1	*/
-/*							  this change is to find the candidates for				*/
-/*							  Taskdetailkey instead GroupKey. 						*/
+/*							  this change is to find the candidates for			         	*/
+/*							  Taskdetailkey instead GroupKey. 					            	*/
 /************************************************************************************/
-ALTER   PROC [dbo].[nspTTMFPK8]
+ALTER   PROC [dbo].[nspTTMFPK8](
     @c_UserID        NVARCHAR(18)
    ,@c_AreaKey01     NVARCHAR(10)
    ,@c_AreaKey02     NVARCHAR(10)
@@ -27,6 +27,7 @@ ALTER   PROC [dbo].[nspTTMFPK8]
    ,@c_errmsg        NVARCHAR(250)  OUTPUT
    ,@c_FromLOC       NVARCHAR(10)   OUTPUT
    ,@c_TaskDetailKey NVARCHAR(10)   OUTPUT
+)
 AS
 BEGIN
    SET NOCOUNT ON
