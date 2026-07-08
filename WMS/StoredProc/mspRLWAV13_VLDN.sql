@@ -19,7 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-07-01  Wan      1.0   Remove raise Error                          */
+/* 2026-07-07  Wan      1.0   Remove raise Error, CR v8.6                 */
 /**************************************************************************/ 
 
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_VLDN]       
@@ -29,7 +29,6 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_VLDN]
 ,  @b_Success     INT            = 1   OUTPUT
 ,  @n_Err         INT            = 0   OUTPUT
 ,  @c_ErrMsg      NVARCHAR(255)  = ''  OUTPUT 
-,  @b_ReCartonize INT            = 0
 ,  @n_debug       INT            = 0
 AS    
 BEGIN    
@@ -355,9 +354,7 @@ BEGIN
       FROM #PICKDETAIL_WIP AS pw  
       JOIN LOC l (NOLOCK) ON l.loc = pw.loc
       JOIN Areadetail ad (NOLOCK) ON ad.putawayzone = l.PutawayZone
-      WHERE pw.UOM > '2'
-      AND l.LocationType IN ('PICK','DYNPPICK')
-      AND   NOT EXISTS (SELECT 1  
+      WHERE NOT EXISTS (SELECT 1                                                  --(Wan)
                         FROM @t_CL cl  
                         WHERE cl.ListName = 'AREA_MEZZA'
                         AND   cl.Code = ad.Areakey

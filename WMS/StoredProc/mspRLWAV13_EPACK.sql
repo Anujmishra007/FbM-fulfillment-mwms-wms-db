@@ -19,6 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-07  Wan      1.0   FCR-12980 - CR v8.6                         */
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_ePack]        
@@ -378,6 +379,7 @@ BEGIN
          BEGIN
             UPDATE pw
                SET pw.DoCartonize= 'Y'
+                  ,pw.PickSlipNo = @c_PickSlipNo                                    --(Wan)
                   ,pw.CartonType = @c_CartonType
                   ,pw.CaseID     = @c_LabelNo
                   ,pw.EditWho    = @c_UserName 
