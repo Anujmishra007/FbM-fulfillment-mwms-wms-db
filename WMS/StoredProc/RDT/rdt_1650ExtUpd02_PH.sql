@@ -138,9 +138,8 @@ BEGIN
                AND    LOC <> @cDoor
             OPEN CUR_UPDMOVREF 
             FETCH NEXT FROM CUR_UPDMOVREF INTO @cPickDetailKey
-            WHILE @@FETCH_STATUS <> -1
+            WHILE @@FETCH_STATUS = 0
             BEGIN TRY
-               UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
                 MoveRefKey = @cMoveRefKey
                ,EditWho    = SUSER_NAME()
                ,EditDate   = GETDATE()
