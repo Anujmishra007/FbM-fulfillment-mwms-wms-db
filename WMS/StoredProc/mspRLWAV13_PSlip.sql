@@ -4,13 +4,13 @@ SET ANSI_NULLS OFF
 GO
 
 /**************************************************************************/    
-/* Stored Procedure: mspRLWAV13_DATA                                      */    
-/* Creation Date: 2026-06-16                                              */    
+/* Stored Procedure: mspRLWAV13_PSlip                                     */    
+/* Creation Date: 2026-07-05                                              */    
 /* Copyright: Maersk                                                      */    
 /* Written by: Wan                                                        */    
 /*                                                                        */    
 /* Purpose: FCR-12980 - AEOMX Release Wave                                */  
-/*                                                                        */  
+/*          CR v8.5                                                       */  
 /* Called By: Wave Release                                                */    
 /*          :                                                             */    
 /* Version: 1.0                                                           */    
@@ -19,10 +19,8 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-07-07  Wan      1.0   Fix Issue compare taskdetailkey with tasktype*/
 /**************************************************************************/   
- 
-CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_DATA]        
+CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_PSlip]        
    @c_Wavekey     NVARCHAR(10)
 ,  @c_Storerkey   NVARCHAR(15)   = '' 
 ,  @c_Facility    NVARCHAR(5)    = '' 
@@ -40,16 +38,22 @@ BEGIN
    DECLARE
            @n_StartTCnt          INT   = @@TRANCOUNT
          , @n_Continue           INT   = 1
-         , @n_RowCount           INT   = 0
 
          , @c_SourceType         NVARCHAR(30)= 'mspRLWAV13'
-         , @c_PickCondition_SQL  NVARCHAR(MAX)= ''
+         , @c_UserName           NVARCHAR(128) = ''
 
-   --@n_Err Start 62010
+         , @c_Orderkey           NVARCHAR(10)= ''
+         , @c_Loadkey            NVARCHAR(10)= ''
+         , @c_PickHeaderKey      NVARCHAR(10)= ''
+
+         , @cur_ORD              CURSOR
+
+   --@n_Err Start 64010
    SET @b_Success = 1    
    SET @n_Err     = 0    
-   SET @c_ErrMsg  = ''    
- 
+   SET @c_ErrMsg  = ''   
+   SET @c_UserName = dbo.fnc_GetUserName()
+   
    IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NULL
    BEGIN
       CREATE TABLE #PickDetail_WIP(
@@ -100,71 +104,89 @@ BEGIN
       )
       CREATE INDEX IDX_Case ON #PickDetail_WIP (CaseID, Lot, Loc, ID)
       CREATE INDEX IDX_RPF ON #PickDetail_WIP (ReplenishZone)
+
+      EXEC [dbo].[mspRLWAV13_DATA]        
+         @c_Wavekey     = @c_Wavekey 
+      ,  @b_Success     = @b_Success   OUTPUT
+      ,  @n_Err         = @n_Err       OUTPUT
+      ,  @c_ErrMsg      = @c_ErrMsg    OUTPUT 
+      ,  @n_debug       = @n_debug  
+ 
+      SET @n_Continue = CASE WHEN @b_Success = 0 THEN 3
+                             ELSE 1
+                             END
    END
 
-   --@n_Err Start 62010
-   SET @c_PickCondition_SQL = 'PICKDETAIL.Status < ''5'' AND PICKDETAIL.Qty > 0'
-
-   IF @n_debug = 5
-   BEGIN
-      SET @c_PickCondition_SQL = 'PICKDETAIL.Status >= ''0'''
-   END
- 
-   SET @c_PickCondition_SQL = @c_PickCondition_SQL 
-                            + ' AND NOT EXISTS (SELECT 1'
-                            +                '  FROM TASKDETAIL td (NOLOCK)' 
-                            +                '  WHERE td.TaskdetailKey = PICKDETAIL.TaskdetailKey'
-                            +                '  AND td.TaskType = ''FCP'''          --(Wan)       
-                            +                '  AND td.SourceType    = ''mspRLWAV13'''
-                            +                '  AND td.[Status]      <> ''X'''
-                            +                ' )'
- 
-   EXEC isp_CreatePickdetail_WIP 
-      @c_Loadkey = ''                                 
-   ,  @c_Wavekey   = @c_Wavekey
-   ,  @c_WIP_RefNo = @c_SourceType
-   ,  @c_PickCondition_SQL = @c_PickCondition_SQL  
-   ,  @c_Action  = 'I' --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records    
-   ,  @c_RemoveTaskdetailkey = 'N' --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization    
-   ,  @b_Success = @b_Success OUTPUT
-   ,  @n_Err     = @n_err     OUTPUT
-   ,  @c_ErrMsg  = @c_errmsg  OUTPUT
- 
-   IF @b_Success <> 1
-   BEGIN
-      SET @n_continue = 3
-   END
-
-   IF @b_Success <> 1
-   BEGIN
-      SET @n_continue = 3
-   END
- 
    IF @n_Continue = 1
    BEGIN
-      UPDATE pw
-         SET pw.Taskdetailkey = ''
-      FROM #PICKDETAIL_WIP AS pw
-
-      -- Get RPF FinalLoc to Pickdetail WIP ToLoc for Validation, Pre-Cartonization & Picking
-      -- UOM = 2  UCC (Multiple Orderkey) 
-      -- UOM = 6, RPF to DPP, Pick from DPP
-      UPDATE pw
-         SET pw.ToLoc        = ISNULL(td.FinalLoc,IIF(pw.UOM = '6' AND pw.DropID = u.UCCNo,'',pw.Loc))  
-            ,pw.ReplenishZone= ISNULL(td.TaskDetailKey,'')
-      FROM #PICKDETAIL_WIP AS pw
-      LEFT OUTER JOIN TaskDetail td (NOLOCK) ON  td.TaskType = 'RPF' 
-                                             AND td.CaseID   = pw.DropID
-                                             AND td.Status   <> 'X'
-                                             AND td.Storerkey= pw.Storerkey
-                                             AND td.SourceType = @c_SourceType
-      OUTER APPLY (SELECT TOP 1 ucc.UCCNo
-                   FROM UCC (NOLOCK) 
-                   WHERE ucc.Storerkey = pw.Storerkey
-                   AND ucc.UCCNo   = pw.DropID
-                   ) u
-   END
+      IF @c_Storerkey = ''
+      BEGIN
+         SELECT TOP 1 @c_Storerkey = pw.Storerkey
+         FROM #PICKDETAIL_WIP AS pw
+      END
  
+      SET @cur_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT  
+               Orderkey = ''  
+            ,  lpd.Loadkey      
+      FROM #PICKDETAIL_WIP AS pw 
+      JOIN Loadplandetail lpd (NOLOCK) ON lpd.Orderkey = pw.Orderkey
+      WHERE pw.[Status] < '5'
+      AND pw.Qty > 0 
+      AND pw.WIP_RefNo = @c_SourceType 
+      AND pw.Taskdetailkey = '' 
+  
+      OPEN @cur_ORD
+
+      FETCH NEXT FROM @cur_ORD INTO @c_Orderkey
+                                 ,  @c_Loadkey
+         
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1  
+      BEGIN  
+          EXEC [dbo].[isp_CreatePickSlip]     
+               @c_Orderkey              = ''       
+            ,  @c_Loadkey               = @c_Loadkey  --Create discrete or conso load determine by @c_ConsolidateByLoad setting  
+            ,  @c_Wavekey               = @c_Wavekey  --Create discrete or conso load of the wave determine by @c_ConsolidateByLoad setting     
+            ,  @c_PickslipType          = '5'   --Discrete('8', '3', 'D')  Conso('5','6','7','9','C')  Xdock ('XD','LB','LP')  
+            ,  @c_ConsolidateByLoad     = 'Y'   --Y=Create load consolidate pickslip  N=create discrete pickslip  
+            ,  @c_Refkeylookup          = 'N'   --Y=Create refkeylookup records  N=Not create  
+            ,  @c_LinkPickSlipToPick    = 'N'   --Y=Update pickslipno to pickdetail.pickslipno  N=Not update to pickdetail  
+            ,  @c_AutoScanIn            = 'N'   --Y=Auto scan in the pickslip N=Not auto scan in                                              
+            ,  @b_Success               = @b_Success  OUTPUT  
+            ,  @n_Err                   = @n_Err      OUTPUT   
+            ,  @c_ErrMsg                = @c_ErrMsg   OUTPUT
+            ,  @c_PickSlipWithWavekey   = 'Y'   --Y=Create Wavekey to PickHeader if not blank    
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3
+         END
+
+         SET @c_PickHeaderKey = ''
+         SELECT @c_PickHeaderKey = ph.PickHeaderkey
+         FROM PICKHEADER ph (NOLOCK)
+         WHERE ph.Loadkey = @c_Loadkey
+         AND   ph.Orderkey= ''
+         AND   ph.[Zone]  = '5'
+
+         IF @c_PickHeaderKey > ''
+         BEGIN
+            UPDATE pw
+               SET pw.PickSlipNo = @c_PickHeaderKey
+            FROM #PICKDETAIL_WIP AS pw 
+            JOIN Loadplandetail lpd (NOLOCK) ON lpd.Orderkey = pw.Orderkey
+            WHERE pw.[Status] < '5'
+            AND pw.Qty > 0 
+            AND pw.WIP_RefNo = @c_SourceType 
+            AND pw.Taskdetailkey = ''
+         END
+
+         FETCH NEXT FROM @cur_ORD INTO @c_Orderkey
+                                    ,  @c_Loadkey
+      END  
+      CLOSE @cur_ORD  
+      DEALLOCATE @cur_ORD         
+   END
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
@@ -181,7 +203,7 @@ QUIT_SP:
          END
       END
 
-      EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'mspRLWAV13_DATA'
+      EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'mspRLWAV13_PSlip'
    END
    ELSE
    BEGIN
@@ -195,5 +217,5 @@ QUIT_SP:
    END
 END 
 GO
-GRANT EXECUTE ON mspRLWAV10_DATA TO NSQL
+GRANT EXECUTE ON mspRLWAV13_PSlip TO NSQL
 GO

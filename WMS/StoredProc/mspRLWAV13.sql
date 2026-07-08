@@ -19,7 +19,8 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-07-01  Wan      1.0   Remove Delete #Pickdetail_WIP record        */
+/* 2026-07-07  Wan      1.0   Remove Delete #Pickdetail_WIP record        */
+/*                            FCR-12980: CRv 8.5 & 8.6                    */
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13]        
    @c_Wavekey     NVARCHAR(10)    
@@ -204,11 +205,11 @@ BEGIN
       END
    END
 
-   IF @n_Continue = 1 AND @c_Channel_b IN ('WHSLE', 'RTL')
+   IF @n_Continue = 1 AND @c_Channel_b IN ('WHSLE', 'RTL')                          --(Wan)
    BEGIN
       -- None B2C
-      -- @n_Err Start 66010
-      EXEC [dbo].[mspRLWAV13_SLOT]
+      -- @n_Err Start 64010
+      EXEC [dbo].[mspRLWAV13_PSLIP]                            
          @c_Wavekey  = @c_Wavekey
       ,  @c_Storerkey= @c_Storerkey
       ,  @c_Facility = @c_Facility 
@@ -220,6 +221,24 @@ BEGIN
       IF @b_Success = 0
       BEGIN
          SET @n_Continue = 3
+      END
+
+      IF @n_Continue = 1
+      BEGIN
+         -- @n_Err Start 66010
+         EXEC [dbo].[mspRLWAV13_SLOT]
+            @c_Wavekey  = @c_Wavekey
+         ,  @c_Storerkey= @c_Storerkey
+         ,  @c_Facility = @c_Facility 
+         ,  @b_Success  = @b_Success   OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @n_debug    = @n_debug  
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3
+         END
       END
    END
    
