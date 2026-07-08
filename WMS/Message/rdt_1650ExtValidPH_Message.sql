@@ -13,6 +13,8 @@ execute rdt.rdtAddMsg 273058, 10, '273058^Partial Picked',           'us_english
 execute rdt.rdtAddMsg 273059, 10, '273059^Invalid Door',             'us_english', 1650
 execute rdt.rdtAddMsg 273060, 10, '273060^ALL PALLETS LOADED',       'us_english', 1650
 execute rdt.rdtAddMsg 273061, 10, '273061^ALL PALLETS LOADED',       'us_english', 1650
+execute rdt.rdtAddMsg 273062, 10, '273062^PLEASE CHOOSE',            'us_english', 1650
+execute rdt.rdtAddMsg 273063, 10, '273063^OPTION 1',                 'us_english', 1650
 execute rdt.rdtAddMsg 273064, 10, '273064^There Are Pallets',        'us_english', 1650
 execute rdt.rdtAddMsg 273065, 10, '273065^Not Scanned To Door',      'us_english', 1650
 execute rdt.rdtAddMsg 273066, 10, '273066^Cannot Close',             'us_english', 1650
