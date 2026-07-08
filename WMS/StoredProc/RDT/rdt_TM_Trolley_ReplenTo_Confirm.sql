@@ -9,6 +9,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2026-02-01 1.0  Cuize      FCR-9735. Created                               */
+/* 2026-07-08 1.1  NYE018     UWP-60625 Set UCC status=6 for loseUCC loc      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_TM_Trolley_ReplenTo_Confirm] (
@@ -129,6 +130,24 @@ AS
       @cDropID     = @cUCC
    IF @nErrNo <> 0
       GOTO RollBackTran
+
+   -- UWP-60625: set UCC status=6 for loseUCC loc
+   IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND loseUCC = '1' AND Facility = @cFacility)
+   BEGIN
+      UPDATE dbo.UCC WITH (ROWLOCK) SET
+         Status   = '6',
+         EditWho  = SUSER_SNAME(),
+         EditDate = GETDATE()
+      WHERE StorerKey = @cStorerKey
+        AND UCCNo     = @cUCC
+        AND Status   <> '6'
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo  = 256672
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Upd UCC lost fail
+         GOTO RollBackTran
+      END
+   END
 
    UPDATE dbo.TaskDetail WITH(ROWLOCK)  -- close task
    SET
