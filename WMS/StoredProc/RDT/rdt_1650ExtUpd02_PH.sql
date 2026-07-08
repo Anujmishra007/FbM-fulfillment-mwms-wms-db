@@ -51,7 +51,7 @@ BEGIN
            @bSuccess          INT
         
 
-   DECLARE @curUpd            CURSOR
+   -- @curUpd cursor declaration removed (unused)
 
 	DECLARE @tPickDetailKey TABLE 
    (
