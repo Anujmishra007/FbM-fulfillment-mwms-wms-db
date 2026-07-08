@@ -103,7 +103,7 @@ BEGIN
          
          OPEN CUR_LOOP
          FETCH NEXT FROM CUR_LOOP INTO @cStorerKey, @cSku, @cLot, @cFromLoc, @nQty
-         WHILE @@FETCH_STATUS <> -1 
+         WHILE @@FETCH_STATUS = 0 
          BEGIN
             SET @cMoveRefKey = ''
             SET @bSuccess = 1    
@@ -140,6 +140,7 @@ BEGIN
             FETCH NEXT FROM CUR_UPDMOVREF INTO @cPickDetailKey
             WHILE @@FETCH_STATUS = 0
             BEGIN TRY
+               UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                 MoveRefKey = @cMoveRefKey
                ,EditWho    = SUSER_NAME()
                ,EditDate   = GETDATE()
