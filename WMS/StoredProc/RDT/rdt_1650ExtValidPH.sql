@@ -199,8 +199,8 @@ BEGIN
                     SET @nErrNo = 273060
                     SET @cErrMsg1 = ''
                     SET @cErrMsg2 = rdt.rdtgetmessage( 273061, @cLangCode, 'DSP') -- ALL PALLETS LOADED
-                    SET @cErrMsg3 = rdt.rdtgetmessage( 218262, @cLangCode, 'DSP') -- PLEASE CHOOSE
-                    SET @cErrMsg4 = rdt.rdtgetmessage( 218263, @cLangCode, 'DSP') -- OPTION 1
+                    SET @cErrMsg3 = rdt.rdtgetmessage( 273062, @cLangCode, 'DSP') -- PLEASE CHOOSE
+                    SET @cErrMsg4 = rdt.rdtgetmessage( 273063, @cLangCode, 'DSP') -- OPTION 1
                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3,@cErrMsg4
                 END
             GOTO Quit
