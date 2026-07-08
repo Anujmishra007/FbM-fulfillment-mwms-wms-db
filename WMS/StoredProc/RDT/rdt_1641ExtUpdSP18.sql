@@ -14,6 +14,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2025-03-07  1.0  Dennis   FCR-10354  Created                         */
+/* 2026-07-08  2.0  Dennis   FCR-12828  Add Step 4 Close Pallet         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP18] (
@@ -71,11 +72,28 @@ BEGIN
       SKU      NVARCHAR(18)
    )
 
-   SELECT @nStep = Step,
+   SELECT @nStep     = Step,
           @nInputKey = InputKey,
-          @cDropLOC  = V_String5
+          @cDropLOC  = V_String5,
+          @cOption   = LEFT(ISNULL(I_Field01, ''), 1)
    FROM RDT.RDTMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
+
+   IF @nStep = 4
+   BEGIN
+      IF @nInputKey = 1 AND @cOption = '1'
+      BEGIN
+         UPDATE dbo.DROPID WITH (ROWLOCK) SET
+            Status = '9'
+         WHERE DropID = @cDropID
+         IF @@ERROR <> 0 OR @@ROWCOUNT = 0
+         BEGIN
+            SET @nErrNo = 69206
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd DROPIDFail
+            GOTO Quit
+         END
+      END
+   END
 
    IF @nStep = 3
    BEGIN
