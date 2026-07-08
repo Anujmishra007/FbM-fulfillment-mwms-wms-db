@@ -273,6 +273,8 @@ GO
 /*                             Partial Shipment-Multi Allocation, Picking*/
 /*                             & Shipment for an Order Status            */ 
 /* 06-Oct-2025  AK01      4.14 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
+/* 06-Jul-2026  Preetham  5.0  UWP-60189 Interface records Automatic     */
+/*                                 Trigger - HP NLD (VNI01)              */
 /*************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrOrderHeaderUpdate]
@@ -406,6 +408,9 @@ DECLARE
 ,        @c_deletedSOstatus               NVARCHAR(10)
 ,        @c_ECOM_Platform                 NVARCHAR(30)   --WL02
 ,        @c_TrafficCopAllowITFTriggerCfg  NVARCHAR(10)   --WL03
+,        @c_customsExportDeclForMbolFlag  NVARCHAR(30)   --(VNI01)
+,        @c_MBOLKey                       NVARCHAR(10)   --(VNI01)
+,        @c_Storer                        NVARCHAR(15)   --(VNI01)
 
    DECLARE   @n_debug int
    DECLARE   @c_OrdStatus NVARCHAR(4)
@@ -676,6 +681,40 @@ BEGIN
       SELECT @n_continue = '4'
    END
 END
+    -- HP Customs: Automated Export Declaration for MBOL (VNI01)  **START**
+    IF @n_continue=1 or @n_continue=2
+    BEGIN
+        SELECT @c_customsExportDeclForMbolFlag = ISNULL(S.SValue, '0'),
+               @c_MBOLKey = ISNULL(I.MBOLKey, ''),
+               @c_Storer = ISNULL(I.Storerkey, '')
+        FROM INSERTED I
+        JOIN StorerConfig S WITH (NOLOCK) ON I.Storerkey = S.Storerkey
+        WHERE S.Configkey = 'CustomsExportDecl_MBL_XD'
+
+
+        IF @c_customsExportDeclForMbolFlag = '1'
+        BEGIN
+            IF EXISTS ( SELECT 1 FROM INSERTED, DELETED
+                        WHERE INSERTED.OrderKey = DELETED.OrderKey
+                          AND INSERTED.[status] = DELETED.[status]
+                          AND INSERTED.[status] = '5'
+                          AND LEN(TRIM(INSERTED.MBOLKey)) > 0
+                          AND ISNULL(INSERTED.MBOLKey,'') <> ISNULL(DELETED.MBOLKey,'')
+                          AND ISNULL(INSERTED.C_Country,'') IN ('GBR','NOR','GB','NO')
+            BEGIN
+                EXEC ispGenTransmitLog2 'XDCBWEXPDL', @c_MBolKey,
+                				'', @c_Storer, ''
+                                , @b_success OUTPUT
+                                , @n_Err     OUTPUT
+                                , @c_ErrMsg  OUTPUT
+
+                UPDATE MBOL WITH (ROWLOCK)
+                SET DepotStatus = 'CusSubmit'
+                WHERE MBOLKey = @c_MBolKey
+            END
+        END
+    END
+    -- HP Customs: Automated Export Declaration for MBOL (VNI01) **END**
 
 -- Validation Script here
 IF @n_continue=1 or @n_continue=2
