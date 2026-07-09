@@ -1,3 +1,6 @@
+USE [GBRWMS]
+GO
+/****** Object:  StoredProcedure [dbo].[isp_BT_Bartender_GB_C5CTNLABEL_CSCUK01]    Script Date: 7/9/2026 4:45:40 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -9,9 +12,10 @@ GO
 /* Modifications log:                                                           */  
 /*                                                                              */  
 /* Date       Rev  Author     Purposes                                          */  
-/* 2026-02-27 1.0  SKA900     Created (WCEET-4248)                               */  
+/* 2026-02-27 1.0  SKA900     Created (WCEET-4248)                              */  
+/* 2026-07-09 2.0  SKA900     Carton qty correction                            */
 /********************************************************************************/ 
-CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_GB_C5CTNLABEL_CSCUK01]
+CREATE OR ALTER   PROC [dbo].[isp_BT_Bartender_GB_C5CTNLABEL_CSCUK01]
 (  @c_Sparm01            NVARCHAR(250)   -- StorerKey
  , @c_Sparm02            NVARCHAR(250)   -- LabelNo
  , @c_Sparm03            NVARCHAR(250)   -- CartonNo  
@@ -38,6 +42,7 @@ BEGIN
  DECLARE @c_LabelEff  NVARCHAR(250) = COALESCE(@c_Sparm04, @c_Sparm01);
  DECLARE @c_CartonEff NVARCHAR(250) = @c_Sparm02;
  Declare @c_UserID NVARCHAR(50);
+ Declare @ORD_KEY NVARCHAR(50);
    DECLARE @c_PickslipNo NVARCHAR(10)  = @c_Sparm01  
          , @n_CartonNo   INT           = TRY_PARSE(ISNULL(@c_Sparm02,'') AS INT)  
          , @b_Success    INT           = 0  
@@ -51,6 +56,10 @@ BEGIN
             SET @c_UserID = dbo.fnc_GetUserName()
          END
       END
+
+	--get orderkey from labelno 
+	select @ORD_KEY=OrderKey from packheader where pickslipno IN(
+	select pickslipno from PackDetail where LabelNo=@c_LabelEff and CartonNo=@c_CartonEff)
 
    IF OBJECT_ID('tempdb..#TEMP_PACKDET','U') IS NOT NULL  
       DROP TABLE #TEMP_PACKDET;  
@@ -118,103 +127,189 @@ BEGIN
     , [Col58] [NVARCHAR](80) NULL  
     , [Col59] [NVARCHAR](80) NULL  
     , [Col60] [NVARCHAR](80) NULL  
-   );
+   )
    
- WITH src AS (
+ ;WITH LineQty AS (
     SELECT
-          PH.StorerKey
-        , PD.PickslipNo
-        , PD.CartonNo
-        , PD.Sku
-        , PD.Qty              AS PackedQty
-		, PD.ExpQty			  AS ExpectedQty
-        , PD.LabelNo
-        , OH.OrderKey
-        , OH.ExternOrderKey
-        , OHI.OrderInfo03
-        , OH.Status
-        , OHI.Notes2          AS CustDept
-        , OHD.ExternLineNo
-        , OHD.RetailSku
-        , OHD.Sku             AS DetailSku
-        , OHD.OpenQty
-        , SKU.itemclass
-        , SKU.Color
-        , SKU.Size
-        , SKU.DESCR
-		,PAI.CartonType
-		,OHI.ReferenceID
-    FROM dbo.PACKHEADER   PH  WITH (NOLOCK)
-    JOIN dbo.ORDERS       OH  WITH (NOLOCK) ON PH.Orderkey   = OH.Orderkey  AND PH.StorerKey = OH.StorerKey
-    JOIN dbo.ORDERDETAIL  OHD WITH (NOLOCK) ON OH.Orderkey   = OHD.Orderkey AND OH.StorerKey = OHD.StorerKey
-    JOIN dbo.PACKDETAIL   PD  WITH (NOLOCK) ON PH.PickslipNo = PD.PickslipNo AND PH.StorerKey = PD.StorerKey
-											AND OHD.Sku=PD.SKU
-	JOIN dbo.PackInfo PAI WITH (NOLOCK) ON PAI.PickslipNo = PD.PickslipNo AND PAI.CartonNo = PD.CartonNo
-    LEFT JOIN dbo.OrderInfo OHI WITH (NOLOCK) ON OH.Orderkey = OHI.Orderkey
-    JOIN dbo.SKU          SKU WITH (NOLOCK) ON PD.Storerkey  = SKU.Storerkey AND PD.Sku = SKU.Sku
-    WHERE PD.StorerKey  ='CSCUK01'
-		  AND PD.CartonNo = @c_CartonEff
-          AND PD.LabelNo  = @c_LabelEff
-),
-grp AS (
+        ord.OrderKey,
+        ord.StorerKey,
+        ord.Sku,
+        ord.OrderLineNumber,
+        MAX(ord.ExternLineNo) AS ExternLineNo,
+        SUM(ord.OpenQty)      AS LineQty,
+        SUM(SUM(ord.OpenQty)) OVER (
+            PARTITION BY ord.OrderKey, ord.StorerKey, ord.Sku
+            ORDER BY ord.OrderLineNumber
+            ROWS UNBOUNDED PRECEDING
+        ) AS LineCumEnd
+    FROM ORDERDETAIL ord WITH (NOLOCK)
+    WHERE ord.OrderKey = @ORD_KEY
+      AND ord.StorerKey = 'CSCUK01'
+      AND ord.sku IN (SELECT sku FROM PackDetail WHERE LabelNo = @c_LabelEff AND CartonNo = @c_CartonEff)
+    GROUP BY
+        ord.OrderKey,
+        ord.StorerKey,
+        ord.Sku,
+        ord.OrderLineNumber
+)
+,
+LineRange AS (
     SELECT
-          PickslipNo   = ISNULL(RTRIM(PickslipNo), '')
-        , CartonNo
-        , Sku
-        , ExternOrderKey = ISNULL(RTRIM(MAX(ExternOrderKey)), '')
-        , OrderInfo03        = ISNULL(RTRIM(MAX(OrderInfo03)), '')
-        , ordKey         = ISNULL(RTRIM(MAX(OrderKey)), '')
-        , CustDept       = ISNULL(RTRIM(MAX(CustDept)), '')
-        , ExternLineNo   = ISNULL(RTRIM(MAX(ExternLineNo)), '')
-        , RetailSkuMax   = ISNULL(RTRIM(MAX(RetailSku)), '')
-        , DetailSkuMax   = ISNULL(RTRIM(MAX(DetailSku)), '')
-        , StatusAgg      = MAX(Status)
-        , SumOpenQty     = SUM(OpenQty)
-        , SumPackedQty   = SUM(PackedQty)
-		, SumExpectedQty =SUM(ExpectedQty)
-        , LabelNo        = ISNULL(RTRIM(MAX(LabelNo)), '')
-        , itemclass  = ISNULL(RTRIM(MAX(REPLACE(itemclass, ',', ''))), '')
-        , Color		 = ISNULL(RTRIM(MAX(REPLACE(Color, ',', ''))), '')
-        , Size		 = ISNULL(RTRIM(MAX(REPLACE(Size, ',', ''))), '')
-        , DESCR		 = ISNULL(RTRIM(MAX(REPLACE(DESCR, ',', ''))), '')
-		,CartonType = ISNULL(RTRIM(MAX(CartonType)), '')
-		,ReferenceID = ISNULL(RTRIM(MAX(ReferenceID)), '')
-    FROM src
-    GROUP BY PickslipNo, CartonNo, Sku
+        OrderKey,
+        StorerKey,
+        Sku,
+        OrderLineNumber,
+        ExternLineNo,
+        LineQty,
+        LineCumEnd - LineQty AS LineCumStart,
+        LineCumEnd
+    FROM LineQty
+)
+,
+CartonQty AS (
+    SELECT
+        ph.OrderKey,
+        pd.StorerKey,
+        pd.Sku,
+        pd.PickSlipNo,
+        pd.CartonNo,
+        pd.LabelNo,
+        SUM(pd.ExpQty) AS CartonQty,
+        SUM(pd.Qty)    AS CartonPackedQty,
+        SUM(SUM(pd.ExpQty)) OVER (
+            PARTITION BY ph.OrderKey, pd.StorerKey, pd.Sku
+            ORDER BY pd.CartonNo, pd.LabelNo
+            ROWS UNBOUNDED PRECEDING
+        ) AS CartonCumEnd,
+        SUM(SUM(pd.Qty)) OVER (
+            PARTITION BY ph.OrderKey, pd.StorerKey, pd.Sku
+            ORDER BY pd.CartonNo, pd.LabelNo
+            ROWS UNBOUNDED PRECEDING
+        ) AS CartonPackedCumEnd
+    FROM PackHeader ph WITH (NOLOCK)
+    JOIN PackDetail pd WITH (NOLOCK)
+        ON ph.PickSlipNo = pd.PickSlipNo
+       AND ph.StorerKey = pd.StorerKey
+    WHERE ph.OrderKey = @ORD_KEY
+      AND ph.StorerKey = 'CSCUK01'
+      AND pd.LabelNo = @c_LabelEff AND pd.CartonNo = @c_CartonEff
+    GROUP BY
+        ph.OrderKey,
+        pd.StorerKey,
+        pd.Sku,
+        pd.PickSlipNo,
+        pd.CartonNo,
+        pd.LabelNo
+)
+,
+CartonRange AS (
+    SELECT
+        OrderKey,
+        StorerKey,
+        Sku,
+        PickSlipNo,
+        CartonNo,
+        LabelNo,
+        CartonQty,
+        CartonPackedQty,
+        CartonCumEnd - CartonQty AS CartonCumStart,
+        CartonCumEnd,
+        CartonPackedCumEnd - CartonPackedQty AS CartonPackedCumStart,
+        CartonPackedCumEnd
+    FROM CartonQty
+)
+,
+Allocated AS (
+    SELECT
+        l.OrderKey,
+        l.StorerKey,
+        l.Sku,
+        MAX(l.ExternLineNo) AS ExternLineNo,
+        c.PickSlipNo,
+        c.CartonNo,
+        c.LabelNo,
+        SUM(
+            CASE
+                WHEN
+                    CASE WHEN l.LineCumEnd < c.CartonCumEnd THEN l.LineCumEnd ELSE c.CartonCumEnd END >
+                    CASE WHEN l.LineCumStart > c.CartonCumStart THEN l.LineCumStart ELSE c.CartonCumStart END
+                THEN
+                    CASE WHEN l.LineCumEnd < c.CartonCumEnd THEN l.LineCumEnd ELSE c.CartonCumEnd END
+                    -
+                    CASE WHEN l.LineCumStart > c.CartonCumStart THEN l.LineCumStart ELSE c.CartonCumStart END
+                ELSE 0
+            END
+        ) AS AllocQty,
+        SUM(
+            CASE
+                WHEN
+                    CASE WHEN l.LineCumEnd < c.CartonPackedCumEnd THEN l.LineCumEnd ELSE c.CartonPackedCumEnd END >
+                    CASE WHEN l.LineCumStart > c.CartonPackedCumStart THEN l.LineCumStart ELSE c.CartonPackedCumStart END
+                THEN
+                    CASE WHEN l.LineCumEnd < c.CartonPackedCumEnd THEN l.LineCumEnd ELSE c.CartonPackedCumEnd END
+                    -
+                    CASE WHEN l.LineCumStart > c.CartonPackedCumStart THEN l.LineCumStart ELSE c.CartonPackedCumStart END
+                ELSE 0
+            END
+        ) AS AllocPackedQty
+    FROM LineRange l
+    JOIN CartonRange c
+        ON l.OrderKey = c.OrderKey
+       AND l.StorerKey = c.StorerKey
+       AND l.Sku = c.Sku
+    GROUP BY
+        l.OrderKey,
+        l.StorerKey,
+        l.Sku,
+        c.PickSlipNo,
+        c.CartonNo,
+        c.LabelNo
 )
 SELECT
-      LabelNo
-    , ExternOrderKey
-    , OrderInfo03
-    , ordKey
-    , CustDept
-	, PickslipNo
-    , ExternLineNo
-    , Qty = CASE 
-                WHEN StatusAgg IN (0,1,2) THEN SumOpenQty
-                ELSE CASE WHEN SumPackedQty=0 THEN SumExpectedQty ELSE SumPackedQty END
+      LabelNo         = a.LabelNo
+    , ExternOrderKey   = NULLIF(RTRIM(o.ExternOrderKey), '')
+    , OrderInfo03      = NULLIF(RTRIM(ohi.OrderInfo03), '')
+    , ordKey           = a.OrderKey
+    , CustDept         = NULLIF(RTRIM(ohi.Notes2), '')
+    , PickslipNo       = a.PickSlipNo
+    , ExternLineNo     = a.ExternLineNo
+    , Qty = CASE
+                WHEN o.Status IN (0,1,2) THEN a.AllocQty
+                ELSE CASE WHEN a.AllocPackedQty = 0 THEN a.AllocQty ELSE a.AllocPackedQty END
             END
     , TotalQty = SUM(
-                    CASE 
-                        WHEN StatusAgg IN (0,1,2) THEN SumOpenQty
-                        ELSE CASE WHEN SumPackedQty=0 THEN SumExpectedQty ELSE SumPackedQty END
+                    CASE
+                        WHEN o.Status IN (0,1,2) THEN a.AllocQty
+                        ELSE CASE WHEN a.AllocPackedQty = 0 THEN a.AllocQty ELSE a.AllocPackedQty END
                     END
-                  ) OVER (PARTITION BY PickslipNo, CartonNo)
-    , CartonNo
-    , itemclass
-    , Color
-    , Size
-    , DESCR
-    , Sku
-    , Line_No = ROW_NUMBER() OVER (
-                  PARTITION BY PickslipNo, CartonNo
-                  ORDER BY Sku
-              )
-     ,CartonType
-	 ,ReferenceID
-INTO #TEMP_PACKDET 
-FROM grp
-ORDER BY PickslipNo, CartonNo, Sku;
+                 ) OVER (PARTITION BY a.PickSlipNo, a.CartonNo)
+    , CartonNo    = a.CartonNo
+    , itemclass   = NULLIF(RTRIM(REPLACE(sku.itemclass, ',', '')), '')
+    , Color       = NULLIF(RTRIM(REPLACE(sku.Color, ',', '')), '')
+    , Size        = NULLIF(RTRIM(REPLACE(sku.Size, ',', '')), '')
+    , DESCR       = NULLIF(RTRIM(REPLACE(sku.DESCR, ',', '')), '')
+    , Sku         = a.Sku
+    , Line_No     = ROW_NUMBER() OVER (
+                       PARTITION BY a.PickSlipNo, a.CartonNo
+                       ORDER BY a.Sku
+                     )
+    , CartonType  = pai.CartonType
+    , ReferenceID = NULLIF(RTRIM(ohi.ReferenceID), '')
+INTO #TEMP_PACKDET
+FROM Allocated a
+JOIN ORDERS o WITH (NOLOCK)
+    ON o.OrderKey = a.OrderKey
+   AND o.StorerKey = a.StorerKey
+LEFT JOIN OrderInfo ohi WITH (NOLOCK)
+    ON ohi.OrderKey = a.OrderKey
+LEFT JOIN SKU sku WITH (NOLOCK)
+    ON sku.StorerKey = a.StorerKey
+   AND sku.Sku = a.Sku
+LEFT JOIN PackInfo pai WITH (NOLOCK)
+    ON pai.PickSlipNo = a.PickSlipNo
+   AND pai.CartonNo = a.CartonNo
+WHERE a.AllocQty > 0
+ORDER BY a.PickSlipNo, a.CartonNo, a.Sku;
   
   
    INSERT INTO #Result (
@@ -297,8 +392,9 @@ SELECT
     , Col53 = ISNULL(MAX(CASE WHEN X.Line = 8 THEN X.DESCR END), '')
     , Col54 = ISNULL(MAX(CASE WHEN X.Line = 8 AND X.Qty > 0 THEN CAST(X.Qty AS NVARCHAR(50)) END), '')
 
-    /* LINE 9 */
+    /* Totals */
     , Col55 = ISNULL(MAX(X.TotalQty), '')
+
     /* Empty placeholders */
     , Col56 = ISNULL(MAX(X.CartonType), '')
     , Col57 = ISNULL(MAX(X.ReferenceID), '')
@@ -308,8 +404,10 @@ SELECT
 
 FROM (
     SELECT *,
-           PageNo = (ROW_NUMBER() OVER(PARTITION BY PickslipNo, CartonNo ORDER BY itemclass) -1) / 12 + 1,
-           Line   = (ROW_NUMBER() OVER(PARTITION BY PickslipNo, CartonNo ORDER BY itemclass) -1) % 12 + 1
+           /* FIX: page size is 8 lines here (Col07-Col54), not 12 -- was copied from
+              the C4 template which has 12 line-slots. Divisor/modulo corrected to 8. */
+           PageNo = (ROW_NUMBER() OVER(PARTITION BY PickslipNo, CartonNo ORDER BY itemclass) -1) / 8 + 1,
+           Line   = (ROW_NUMBER() OVER(PARTITION BY PickslipNo, CartonNo ORDER BY itemclass) -1) % 8 + 1
     FROM #TEMP_PACKDET
 ) X
 GROUP BY X.PickslipNo, X.CartonNo, X.PageNo
@@ -332,7 +430,7 @@ ORDER BY X.PickslipNo, X.CartonNo, X.PageNo;
 
   EXEC isp_InsertTraceInfo   
       @c_TraceCode = 'BARTENDER',  
-      @c_TraceName = 'isp_BT_Bartender_GB_C4CTNLABEL_CSCUK01',  
+      @c_TraceName = 'isp_BT_Bartender_GB_C5CTNLABEL_CSCUK01',  
       @c_starttime = @d_Trace_StartTime,  
       @c_endtime = @d_Trace_EndTime,  
       @c_step1 = @c_UserName,  
@@ -350,4 +448,3 @@ ORDER BY X.PickslipNo, X.CartonNo, X.PageNo;
       @c_ErrMsg = '' 
 
 END
-GO
