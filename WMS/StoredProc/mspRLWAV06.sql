@@ -20,6 +20,7 @@ GO
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
+/*24-Jun-2026  AndyWu01 1.1   bug fix for  UWP-59134                     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV06]
   @c_Wavekey      NVARCHAR(10)
@@ -115,7 +116,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV06]
             ,TdoLoc = ISNULL(cl.Short,'') 
             ,pd.DropID
             ,p.PackKey
-            ,p.PackUOM1
+            --,p.PackUOM1 --AndyWu01
+			,p.PackUOM3
             ,UCC.UCC_RowRef
             ,Qty = UCC.Qty
       FROM PICKDETAIL pd (NOLOCK)
@@ -142,7 +144,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV06]
             ,  pd.DropID
             ,  pd.UOM 
             ,  p.PackKey
-            ,  p.PackUOM1
+            --,p.PackUOM1 --AndyWu01
+			,  p.PackUOM3
             ,  UCC.UCC_RowRef
             ,  UCC.Qty
             ,  ISNULL(cl.Short,'') 

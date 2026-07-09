@@ -43,9 +43,6 @@ BEGIN
    DECLARE @cFacility            NVARCHAR(5)
    DECLARE @cReasonKey           NVARCHAR(10)
    DECLARE @cTaskStatus          NVARCHAR(10)
-   DECLARE @cTaskFromLoc         NVARCHAR(10)
-   DECLARE @cTaskSKU             NVARCHAR(20)
-   DECLARE @cTaskWaveKey         NVARCHAR(10)
    DECLARE @cTaskTaskType        NVARCHAR(10)
    DECLARE @cGroupKey            NVARCHAR(10)
    DECLARE @cAreaKey             NVARCHAR(10)
@@ -98,13 +95,10 @@ BEGIN
                GOTO FAIL 
             END
 
-            SELECT 
+            SELECT
                @cTaskTaskType = TaskType,
                @cTaskStatus   = Status,
-               @cReasonKey    = ReasonKey,
-               @cTaskFromLoc  = FromLoc,
-               @cTaskSKU      = SKU,
-               @cTaskWaveKey  = WaveKey
+               @cReasonKey    = ReasonKey
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE StorerKey = @cStorerkey
                AND TaskDetailKey = @cTaskDetailKey
@@ -129,34 +123,7 @@ BEGIN
                               AND Status = '4'
                         )
                BEGIN
-                  IF ISNULL(@cTaskFromLoc, '') = ''
-                  BEGIN
-                     SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
-                     SET @cErrMsg1 = '270103-FromLocEmpty'
-                     SET @cErrMsg2 = 'Trigger reallocation fail '
-                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
-                     GOTO FAIL 
-                  END
-
-                  IF ISNULL(@cTaskSKU, '') = ''
-                  BEGIN
-                     SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
-                     SET @cErrMsg1 = '270104-SKUEmpty'
-                     SET @cErrMsg2 = 'Trigger reallocation fail '
-                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
-                     GOTO FAIL 
-                  END
-
-                  IF ISNULL(@cTaskWaveKey, '') = ''
-                  BEGIN
-                     SELECT @cErrMsg1 = '', @cErrMsg2 = '', @cErrMsg3 = ''
-                     SET @cErrMsg1 = '270105-WaveKeyEmpty'
-                     SET @cErrMsg2 = 'Trigger reallocation fail '
-                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
-                     GOTO FAIL 
-                  END
-
-                  SELECT 
+                  SELECT
                      @cAPP_DB_Name         = APP_DB_Name,
                      @cDataStream          = DataStream,
                      @nThreadPerAcct       = ThreadPerAcct,
@@ -185,10 +152,7 @@ BEGIN
                   IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = LTRIM(RTRIM(@cExecStatements)) AND type = 'P')
                   BEGIN
                      SET @cExecStatements = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements)
-                                    + ' @c_Wavekey = ''' + @cTaskWaveKey + ''''
-                                    + ', @c_SKU = ''' + @cTaskSKU + ''''
-                                    + ', @c_Loc = ''' + @cTaskFromLoc + ''''
-                                    + ', @c_TaskDetailKey = ''' + @cTaskDetailKey + ''''
+                                    + ' @c_TaskDetailKey = ''' + @cTaskDetailKey + ''''
 
                      IF @nDebugFlag = 1
                         SELECT 'Start to submit Qcmd', @cExecStatements
@@ -196,10 +160,10 @@ BEGIN
                      IF @nDebugFlag = 2
                      BEGIN
                         BEGIN TRY   
-                           INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, 
-                                                   Col1, Col2, Col3, Col4, Col5)  
+                           INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2,
+                                                   Col1, Col2, Col3, Col4, Col5)
                            VALUES ('1812ExtUpd07', GETDATE(), @cUserName, CAST(@nMobile AS NVARCHAR(10)),
-                                 @cTaskDetailKey,@cTaskWaveKey, @cTaskSKU, @cTaskFromLoc, 'SubmitQcmd')
+                                 @cTaskDetailKey, '', '', '', 'SubmitQcmd')
                         END TRY
                         BEGIN CATCH
                            PRINT 'Insert TraceInfo failed'
