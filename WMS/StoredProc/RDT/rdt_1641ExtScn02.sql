@@ -11,36 +11,37 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2026-02-11 1.0  NickT    FCR-10354. Created                          */
+/* 2026-07-08 1.1  Dennis   UWP-60869. Add dbo prefix, resume pallet    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1641ExtScn02] (
-   @nMobile          INT,           
-   @nFunc            INT,           
-   @cLangCode        NVARCHAR( 3),  
-   @nStep            INT,           
-   @nScn             INT,           
-   @nInputKey        INT,           
-   @cFacility        NVARCHAR( 5),  
-   @cStorerKey       NVARCHAR( 15), 
+   @nMobile          INT,
+   @nFunc            INT,
+   @cLangCode        NVARCHAR( 3),
+   @nStep            INT,
+   @nScn             INT,
+   @nInputKey        INT,
+   @cFacility        NVARCHAR( 5),
+   @cStorerKey       NVARCHAR( 15),
    @tExtScnData      VariableTable READONLY,
-   @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT,  @cLottable01 NVARCHAR( 18) OUTPUT,  
-   @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT,  @cLottable02 NVARCHAR( 18) OUTPUT,  
-   @cInField03       NVARCHAR( 60) OUTPUT,  @cOutField03 NVARCHAR( 60) OUTPUT,  @cFieldAttr03 NVARCHAR( 1) OUTPUT,  @cLottable03 NVARCHAR( 18) OUTPUT,  
-   @cInField04       NVARCHAR( 60) OUTPUT,  @cOutField04 NVARCHAR( 60) OUTPUT,  @cFieldAttr04 NVARCHAR( 1) OUTPUT,  @dLottable04 DATETIME      OUTPUT,  
-   @cInField05       NVARCHAR( 60) OUTPUT,  @cOutField05 NVARCHAR( 60) OUTPUT,  @cFieldAttr05 NVARCHAR( 1) OUTPUT,  @dLottable05 DATETIME      OUTPUT,  
-   @cInField06       NVARCHAR( 60) OUTPUT,  @cOutField06 NVARCHAR( 60) OUTPUT,  @cFieldAttr06 NVARCHAR( 1) OUTPUT,  @cLottable06 NVARCHAR( 30) OUTPUT, 
-   @cInField07       NVARCHAR( 60) OUTPUT,  @cOutField07 NVARCHAR( 60) OUTPUT,  @cFieldAttr07 NVARCHAR( 1) OUTPUT,  @cLottable07 NVARCHAR( 30) OUTPUT, 
-   @cInField08       NVARCHAR( 60) OUTPUT,  @cOutField08 NVARCHAR( 60) OUTPUT,  @cFieldAttr08 NVARCHAR( 1) OUTPUT,  @cLottable08 NVARCHAR( 30) OUTPUT, 
-   @cInField09       NVARCHAR( 60) OUTPUT,  @cOutField09 NVARCHAR( 60) OUTPUT,  @cFieldAttr09 NVARCHAR( 1) OUTPUT,  @cLottable09 NVARCHAR( 30) OUTPUT, 
-   @cInField10       NVARCHAR( 60) OUTPUT,  @cOutField10 NVARCHAR( 60) OUTPUT,  @cFieldAttr10 NVARCHAR( 1) OUTPUT,  @cLottable10 NVARCHAR( 30) OUTPUT, 
+   @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT,  @cLottable01 NVARCHAR( 18) OUTPUT,
+   @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT,  @cLottable02 NVARCHAR( 18) OUTPUT,
+   @cInField03       NVARCHAR( 60) OUTPUT,  @cOutField03 NVARCHAR( 60) OUTPUT,  @cFieldAttr03 NVARCHAR( 1) OUTPUT,  @cLottable03 NVARCHAR( 18) OUTPUT,
+   @cInField04       NVARCHAR( 60) OUTPUT,  @cOutField04 NVARCHAR( 60) OUTPUT,  @cFieldAttr04 NVARCHAR( 1) OUTPUT,  @dLottable04 DATETIME      OUTPUT,
+   @cInField05       NVARCHAR( 60) OUTPUT,  @cOutField05 NVARCHAR( 60) OUTPUT,  @cFieldAttr05 NVARCHAR( 1) OUTPUT,  @dLottable05 DATETIME      OUTPUT,
+   @cInField06       NVARCHAR( 60) OUTPUT,  @cOutField06 NVARCHAR( 60) OUTPUT,  @cFieldAttr06 NVARCHAR( 1) OUTPUT,  @cLottable06 NVARCHAR( 30) OUTPUT,
+   @cInField07       NVARCHAR( 60) OUTPUT,  @cOutField07 NVARCHAR( 60) OUTPUT,  @cFieldAttr07 NVARCHAR( 1) OUTPUT,  @cLottable07 NVARCHAR( 30) OUTPUT,
+   @cInField08       NVARCHAR( 60) OUTPUT,  @cOutField08 NVARCHAR( 60) OUTPUT,  @cFieldAttr08 NVARCHAR( 1) OUTPUT,  @cLottable08 NVARCHAR( 30) OUTPUT,
+   @cInField09       NVARCHAR( 60) OUTPUT,  @cOutField09 NVARCHAR( 60) OUTPUT,  @cFieldAttr09 NVARCHAR( 1) OUTPUT,  @cLottable09 NVARCHAR( 30) OUTPUT,
+   @cInField10       NVARCHAR( 60) OUTPUT,  @cOutField10 NVARCHAR( 60) OUTPUT,  @cFieldAttr10 NVARCHAR( 1) OUTPUT,  @cLottable10 NVARCHAR( 30) OUTPUT,
    @cInField11       NVARCHAR( 60) OUTPUT,  @cOutField11 NVARCHAR( 60) OUTPUT,  @cFieldAttr11 NVARCHAR( 1) OUTPUT,  @cLottable11 NVARCHAR( 30) OUTPUT,
    @cInField12       NVARCHAR( 60) OUTPUT,  @cOutField12 NVARCHAR( 60) OUTPUT,  @cFieldAttr12 NVARCHAR( 1) OUTPUT,  @cLottable12 NVARCHAR( 30) OUTPUT,
    @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT,  @dLottable13 DATETIME      OUTPUT,
    @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT,  @dLottable14 DATETIME      OUTPUT,
    @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT,  @dLottable15 DATETIME      OUTPUT,
    @nAction          INT,
-   @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT, 
-   @nErrNo           INT            OUTPUT, 
+   @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT,
+   @nErrNo           INT            OUTPUT,
    @cErrMsg          NVARCHAR( 20)  OUTPUT,
    @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
    @cUDF04  NVARCHAR( 250) OUTPUT, @cUDF05 NVARCHAR( 250) OUTPUT, @cUDF06 NVARCHAR( 250) OUTPUT,
@@ -87,7 +88,7 @@ BEGIN
       @cFromID                NVARCHAR(18),
       @cMarShallLoc           NVARCHAR(10),
       @cDefaultLoc            NVARCHAR(20),
-      @cPriority              NVARCHAR(1),  
+      @cPriority              NVARCHAR(1),
       @cWavekey               NVARCHAR(10),
       @cDefaultClosePalletOption NVARCHAR( 1),
       @cUCCNo              NVARCHAR(20),
@@ -108,7 +109,7 @@ BEGIN
       UCC   NVARCHAR(20)
    )
 
-   SELECT 
+   SELECT
       @nCurrentStep = Step,
       @nCurrentScn = Scn,
       @cDropID          = V_String1,
@@ -155,13 +156,13 @@ BEGIN
                   GOTO Quit
                END
 
-               SELECT TOP 1 
+               SELECT TOP 1
                   @cStatus = PD.Status,
                   @cPickDetailKey = PD.PickDetailKey,
                   @cOrderKey = PD.OrderKey
                FROM dbo.PickDetail PD WITH (NOLOCK)
                JOIN dbo.Orders O WITH (NOLOCK) ON PD.OrderKey = O.OrderKey
-               WHERE PD.StorerKey = @cStorerKey 
+               WHERE PD.StorerKey = @cStorerKey
                   AND PD.ID = @cFromID
                   AND CASE WHEN @cParam1 <> '' THEN O.ConsigneeKey ELSE '' END = @cParam1 -- If consignee criteria exist, validate consignee, otherwise skip this check
                ORDER BY PD.STATUS
@@ -200,14 +201,14 @@ BEGIN
                FROM dbo.DocInfo WITH(NOLOCK)
                WHERE DOCINFO.Key2 = @cOrderKey
                   AND DOCINFO.StorerKey = @cStorerKey
-                  AND DOCINFO.TableName = 'ORDERS'   
+                  AND DOCINFO.TableName = 'ORDERS'
                   AND DocInfo.Key3 = 'Z017'
 
                SET @cScannedDropID = @cFromID
                SET @cOutField01 = @cFromID
                SET @nAfterStep = 99
                SET @nAfterScn = 6826
-               GOTO QUIT     
+               GOTO QUIT
             END
             IF @nInputKey = 0
             BEGIN
@@ -272,7 +273,7 @@ BEGIN
             END
          END
          IF @nCurrentScn = 6826
-         BEGIN 
+         BEGIN
             IF @nInputKey = 1
             BEGIN
                SET @cOutField01 = ''
@@ -296,11 +297,53 @@ BEGIN
             BEGIN
                -- All UCC on this ip should be added
                INSERT INTO @tUccNo(UCC)
-               SELECT CASEID 
-               FROM PickDetail (NOLOCK)
+               SELECT CASEID
+               FROM dbo.PickDetail WITH (NOLOCK)
                WHERE ID = @cScannedDropID
-                  AND StorerKey = @cStorerKey 
-               -- Check UCC build on multi pallets
+                  AND StorerKey = @cStorerKey
+               -- Resume previously built open pallet instead of failing with UCC Exists
+               IF EXISTS
+               (
+                  SELECT 1
+                  FROM dbo.DropID D WITH (NOLOCK)
+                  WHERE D.DropID = @cScannedDropID
+                     AND D.DropIDType = 'B'
+                     AND D.Status = '0'
+               )
+               AND NOT EXISTS
+               (
+                  SELECT 1
+                  FROM @tUccNo U
+                  WHERE NOT EXISTS
+                  (
+                     SELECT 1
+                     FROM dbo.DropID D WITH (NOLOCK)
+                     JOIN dbo.DropIDDetail DID WITH (NOLOCK)
+                        ON D.DropID = DID.DropID
+                     WHERE D.DropID = @cScannedDropID
+                        AND D.DropIDType = 'B'
+                        AND D.Status = '0'
+                        AND DID.ChildID = U.UCC
+                  )
+               )
+               AND NOT EXISTS
+               (
+                  SELECT 1
+                  FROM @tUccNo U
+                  JOIN dbo.DropIDDetail DID WITH (NOLOCK)
+                     ON DID.ChildID = U.UCC
+                  JOIN dbo.DropID D WITH (NOLOCK)
+                     ON D.DropID = DID.DropID
+                  WHERE D.DropIDType = 'B'
+                     AND D.DropID <> @cScannedDropID
+               )
+               BEGIN
+                  SET @cDropID = @cScannedDropID
+                  SET @cOutField01 = ''
+                  SET @nAfterScn = 2323
+                  SET @nAfterStep = 4
+                  GOTO QUIT
+               END
 
                SET @nTranCount = @@TRANCOUNT
                BEGIN TRAN  -- Begin our own transaction
@@ -319,7 +362,7 @@ BEGIN
                      BREAK
 
                   IF EXISTS (SELECT 1
-                     FROM DropID D WITH (NOLOCK)
+                     FROM dbo.DropID D WITH (NOLOCK)
                         JOIN dbo.DropIDDetail DID WITH (NOLOCK) ON (D.DropID = DID.DropID)
                      WHERE D.DropIDType = 'B'
                         AND DID.ChildID = @cUCCNo)
@@ -355,7 +398,11 @@ BEGIN
                      GOTO Step_1_Fail
                   END
                END
-               UPDATE PICKDETAIL SET DROPID = @cScannedDropID WHERE ID = @cScannedDropID AND StorerKey = @cStorerKey
+
+               UPDATE dbo.PickDetail WITH (ROWLOCK) SET DROPID = @cScannedDropID WHERE ID = @cScannedDropID AND StorerKey = @cStorerKey
+
+               IF @@ERROR <> 0 GOTO Step_1_Fail
+
                COMMIT TRAN rdt_1641ExtScn02
 
                SET @cOutField01 = ''
@@ -395,68 +442,80 @@ BEGIN
          BEGIN
             IF ISNULL(RTRIM(@cInField01), '') = '1'
             BEGIN
-               SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.ID,@cWaveKey = O.USERDEFINE09
-               FROM PickDetail PD (NOLOCK) 
-               LEFT JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
-               LEFT JOIN MBOL M WITH(NOLOCK) ON O.MBOLKey = M.MBOLKey
-               WHERE PD.ID = @cDropID AND PD.StorerKey = @cStorerKey
-
-               -- Get new TaskDetailKeys      
-               SET @nSuccess = 1
-               EXECUTE dbo.nspg_getkey      
-                  'TASKDETAILKEY'      
-                  , 10      
-                  , @cNewTaskDetailKey OUTPUT      
-                  , @nSuccess          OUTPUT      
-                  , @nErrNo            OUTPUT      
-                  , @cErrMsg           OUTPUT      
-               IF @nSuccess <> 1      
-               BEGIN      
-                  SET @nErrNo = 233355      
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey      
-                  GOTO Quit      
-               END
-
-               SET @cPriority = '9'
-
-               IF ISNULL(@cMarShallLoc,'') <> ''
+               IF NOT EXISTS
+               (
+                  SELECT 1
+                  FROM dbo.TaskDetail TD WITH (NOLOCK)
+                  WHERE TD.StorerKey = @cStorerKey
+                     AND TD.FromID = @cDropID
+                     AND TD.ToID = @cDropID
+                     AND TD.SourceType = 'rdt_1641ExtScn02'
+                     AND TD.TaskType IN ('ASTMV', 'ASTPA')
+               )
                BEGIN
-                  BEGIN TRY
-                     INSERT INTO TaskDetail (
-                        TaskDetailKey, TaskType, Status, UserKey, FromLOC, LogicalFromLoc, FromID, ToLOC, LogicalToLoc, ToID, 
-                        QTY, CaseID, AreaKey, UOMQty, PickMethod, StorerKey, SKU, LOT, ListKey, SourceType, SourceKey, WaveKey, 
-                        Priority, TrafficCop)
-                     VALUES (
-                        @cNewTaskDetailKey, 'ASTMV', '0', '', @cFromLOC, @cFromLOC, @cDropID, @cMarShallLoc, @cMarShallLoc, @cDropID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', @cWaveKey, 
-                        @cPriority, NULL)
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 233353
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
+                  SELECT @cMarShallLoc = M.PlaceOfLoading, @cFromLOC = PD.LOC, @cFromID = PD.ID,@cWaveKey = O.USERDEFINE09
+                  FROM dbo.PickDetail PD WITH (NOLOCK)
+                  LEFT JOIN dbo.Orders O WITH (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
+                  LEFT JOIN dbo.MBOL M WITH(NOLOCK) ON O.MBOLKey = M.MBOLKey
+                  WHERE PD.ID = @cDropID AND PD.StorerKey = @cStorerKey
+
+                  -- Get new TaskDetailKeys
+                  SET @nSuccess = 1
+                  EXECUTE dbo.nspg_getkey
+                     'TASKDETAILKEY'
+                     , 10
+                     , @cNewTaskDetailKey OUTPUT
+                     , @nSuccess          OUTPUT
+                     , @nErrNo            OUTPUT
+                     , @cErrMsg           OUTPUT
+                  IF @nSuccess <> 1
+                  BEGIN
+                     SET @nErrNo = 233355
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
                      GOTO Quit
-                  END CATCH
-               END
-               ELSE 
-               BEGIN
-                  SELECT @cMarShallLoc = LOC FROM LOC WITH(NOLOCK) WHERE
-                  Status <> 'HOLD' AND LOC.LocationFlag = 'NONE'
-                  AND PutawayZone = 'CSCPNHOLD' AND Facility = @cFacility
-                  BEGIN TRY
-                     INSERT INTO TaskDetail (
-                        TaskDetailKey, TaskType, Status, UserKey, FromLOC, LogicalFromLoc, FromID, ToLOC, LogicalToLoc, ToID, 
-                        QTY, CaseID, AreaKey, UOMQty, PickMethod, StorerKey, SKU, LOT, ListKey, SourceType, SourceKey, WaveKey, 
-                        Priority, TrafficCop)
-                     VALUES (
-                        @cNewTaskDetailKey, 'ASTPA', '0', '', @cFromLOC, @cFromLOC, @cDropID, @cMarShallLoc, @cMarShallLoc, @cDropID, 
-                        0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', @cWaveKey, 
-                        @cPriority, NULL)
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 233353
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
-                     GOTO Quit
-                  END CATCH
+                  END
+
+                  SET @cPriority = '9'
+
+                  IF ISNULL(@cMarShallLoc,'') <> ''
+                  BEGIN
+                     BEGIN TRY
+                        INSERT INTO dbo.TaskDetail (
+                           TaskDetailKey, TaskType, Status, UserKey, FromLOC, LogicalFromLoc, FromID, ToLOC, LogicalToLoc, ToID,
+                           QTY, CaseID, AreaKey, UOMQty, PickMethod, StorerKey, SKU, LOT, ListKey, SourceType, SourceKey, WaveKey,
+                           Priority, TrafficCop)
+                        VALUES (
+                           @cNewTaskDetailKey, 'ASTMV', '0', '', @cFromLOC, @cFromLOC, @cDropID, @cMarShallLoc, @cMarShallLoc, @cDropID,
+                           0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', @cWaveKey,
+                           @cPriority, NULL)
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 233353
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
+                        GOTO Quit
+                     END CATCH
+                  END
+                  ELSE
+                  BEGIN
+                     SELECT @cMarShallLoc = LOC FROM dbo.LOC WITH(NOLOCK) WHERE
+                     Status <> 'HOLD' AND LOC.LocationFlag = 'NONE'
+                     AND PutawayZone = 'CSCPNHOLD' AND Facility = @cFacility
+                     BEGIN TRY
+                        INSERT INTO dbo.TaskDetail (
+                           TaskDetailKey, TaskType, Status, UserKey, FromLOC, LogicalFromLoc, FromID, ToLOC, LogicalToLoc, ToID,
+                           QTY, CaseID, AreaKey, UOMQty, PickMethod, StorerKey, SKU, LOT, ListKey, SourceType, SourceKey, WaveKey,
+                           Priority, TrafficCop)
+                        VALUES (
+                           @cNewTaskDetailKey, 'ASTPA', '0', '', @cFromLOC, @cFromLOC, @cDropID, @cMarShallLoc, @cMarShallLoc, @cDropID,
+                           0, '', '', 0, 'FP', @cStorerKey, '', '',  '', 'rdt_1641ExtScn02',  '', @cWaveKey,
+                           @cPriority, NULL)
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 233353
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
+                        GOTO Quit
+                     END CATCH
+                  END
                END
             END
             SET @cOutField01 = ''
@@ -464,7 +523,7 @@ BEGIN
             SET @nAfterStep = 99
          END
       END
-      
+
    END
 
    Quit:
@@ -473,11 +532,11 @@ BEGIN
       WHERE Mobile = @nMobile
 
 
-END; 
+END;
 
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON 
+SET ANSI_NULLS ON
 GO
 
 GRANT EXECUTE ON rdt.rdt_1641ExtScn02 TO NSQL
