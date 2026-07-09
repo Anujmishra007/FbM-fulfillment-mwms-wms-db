@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/  
-/* Store procedure: rdt_1837ExtInfo1_JCB                                */  
+/* Store procedure: rdt_1837ExtValJCB                                   */  
 /*                                                                      */  
 /* Purpose:       Not merging non-completed task IDs                    */  
 /*                                                                      */  
@@ -51,3 +51,4 @@ END
 GO
 GRANT EXECUTE ON rdt_1837ExtValJCB TO NSQL
 GO
+
