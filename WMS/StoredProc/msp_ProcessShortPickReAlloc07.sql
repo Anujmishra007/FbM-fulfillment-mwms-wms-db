@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 06-Jul-2026 WLChooi  1.0   Initial Version                           */
+/* 09-Jul-2026 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc07] (    
@@ -676,9 +676,9 @@ BEGIN
       -- mspRLWAV13_Slot -> Pickdetail.CaseID = Virtual Case ID - No Packdetail
       -- mspRLWAV13_EPACK -> Pickdetail.CaseID = Packdetail.LabelNo based on Pack.CubeUOM3
       -- If new alloc qty <= shorted qty, stamp old CaseID to new pick lines.
-      -- Packdetail: ActiveQty = NewAllocQty + PickedQty (PickedQty = Packdetail.Qty - ShortedQty, floored at 0).
-      --   ActiveQty = Packdetail.Qty or > : no change;
-      --   0 < ActiveQty < Packdetail.Qty : update Qty;
+      -- Packdetail: ActiveQty = NewAllocQty + PickedQty (PickedQty = Packdetail.ExpQty - ShortedQty, floored at 0).
+      --   ActiveQty = Packdetail.ExpQty or > : no change;
+      --   0 < ActiveQty < Packdetail.ExpQty : update ExpQty;
       --   ActiveQty = 0 (all shorted, realloc failed) : delete Packdetail.
       INSERT INTO #T_ShortCases (CaseID, Storerkey, SKU, QtyMoved)
       SELECT SP.CaseID
@@ -789,20 +789,20 @@ BEGIN
 
          IF @n_Continue = 1
          BEGIN
-            -- Packdetail.Qty = original carton qty.
-            -- ActiveQty = NewAllocQty + PickedQty (PickedQty floored at 0 if ShortedQty > Packdetail.Qty).
-            -- ActiveQty >= Packdetail.Qty : no change.
-            -- ActiveQty < Packdetail.Qty and > 0 : update Qty.
+            -- Packdetail.ExpQty = original carton expected qty.
+            -- ActiveQty = NewAllocQty + PickedQty (PickedQty floored at 0 if ShortedQty > Packdetail.ExpQty).
+            -- ActiveQty >= Packdetail.ExpQty : no change.
+            -- ActiveQty < Packdetail.ExpQty and > 0 : update ExpQty.
             -- ActiveQty = 0 (all shorted, realloc failed) : delete Packdetail.  
             MERGE PACKDETAIL AS TGT
             USING (
                SELECT PD.PickSlipNo
                     , PD.CartonNo
-                    , PackDetailQty = PD.Qty
+                    , PackDetailQty = PD.ExpQty
                     , NewAllocQty   = ISNULL(W.StampedQty, 0)
-                    , PickedQty     = CASE WHEN PD.Qty > SC.QtyMoved THEN PD.Qty - SC.QtyMoved ELSE 0 END
+                    , PickedQty     = CASE WHEN PD.ExpQty > SC.QtyMoved THEN PD.ExpQty - SC.QtyMoved ELSE 0 END
                     , ActiveQty     = ISNULL(W.StampedQty, 0)
-                                    + CASE WHEN PD.Qty > SC.QtyMoved THEN PD.Qty - SC.QtyMoved ELSE 0 END
+                                    + CASE WHEN PD.ExpQty > SC.QtyMoved THEN PD.ExpQty - SC.QtyMoved ELSE 0 END
                FROM PACKDETAIL PD (NOLOCK)
                JOIN #T_ShortCases SC ON PD.LabelNo = SC.CaseID
                                     AND PD.StorerKey = SC.Storerkey
@@ -821,7 +821,7 @@ BEGIN
             WHEN MATCHED AND SRC.ActiveQty = 0 THEN
                DELETE
             WHEN MATCHED AND SRC.ActiveQty > 0 AND SRC.ActiveQty < SRC.PackDetailQty THEN
-               UPDATE SET Qty = SRC.ActiveQty;
+               UPDATE SET ExpQty = SRC.ActiveQty;
          END
 
          IF @b_debug = 0 AND @n_Continue = 1 
