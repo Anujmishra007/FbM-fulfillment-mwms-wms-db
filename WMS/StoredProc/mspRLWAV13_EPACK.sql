@@ -19,7 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-07-07  Wan      1.0   FCR-12980 - CR v8.6                         */
+/* 2026-07-09  Wan      1.0   FCR-12980 - CR v8.6                         */
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_ePack]        
@@ -312,7 +312,7 @@ BEGIN
                         ,  LabelLine
                         ,  Storerkey
                         ,  Sku
-                        ,  Qty
+                        ,  ExpQty                                                   --(Wan01)         
                         )
             SELECT @c_PickSlipNo
                   ,CartonNo = @n_CartonNo
@@ -321,7 +321,7 @@ BEGIN
                                  OVER (ORDER BY pw.Storerkey, pw.Sku)),5)
                   ,pw.Storerkey
                   ,pw.Sku
-                  ,Qty = ISNULL(SUM(pw.Qty),0)
+                  ,ExpQty = ISNULL(SUM(pw.Qty),0)                                   --(Wan01) 
             FROM #PICKDETAIL_WIP AS pw
             WHERE pw.Orderkey = @c_Orderkey
             GROUP BY pw.Storerkey
