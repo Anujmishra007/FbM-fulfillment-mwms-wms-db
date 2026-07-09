@@ -1,161 +1,113 @@
-CREATE TABLE [RDT].[rdtTrackLog]
-(
-[RowRef] [int] NOT NULL IDENTITY(1, 1),
-[Mobile] [int] NULL,
-[Username] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Storerkey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Orderkey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[TrackNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Qty] [int] NOT NULL CONSTRAINT [DF_rdtTrackLog_Qty] DEFAULT ((0)),
-[QtyAllocated] [int] NOT NULL CONSTRAINT [DF_rdtTrackLog_QtyAllocated] DEFAULT ((0)),
-[Status] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTrackLog_Status] DEFAULT ('0'),
-[ErrMsg] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTrackLog_AddWho] DEFAULT (suser_sname()),
-[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtTrackLog_AddDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtTrackLog_EditWho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NOT NULL CONSTRAINT [DF_rdtTrackLog_EditDate] DEFAULT (getdate()),
-[TrafficCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ArchiveCop] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[PickSlipNo] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtTrackLog_PickSlipNo] DEFAULT (''),
-[CartonNo] [int] NULL CONSTRAINT [DF_rdtTrackLog_CartonNo] DEFAULT ((0)),
-[LabelNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtTrackLog_LabelNo] DEFAULT ('')
-) ON [PRIMARY]
+SET ANSI_NULLS ON
 GO
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER ON
 GO
-SET ANSI_NULLS OFF
-GO
-
-
-/*******************************************************************************/
-/* Trigger: ntrRdtTrackLogUpdate                                               */
-/* Creation Date:  26/09/2018                                                  */
-/* Copyright: IDS                                                              */
-/* Written by:                                                                 */
-/*                                                                             */
-/* Purpose:  Keep track ntrRdtTrackLogUpdate Transaction                       */
-/*                                                                             */
-/* Input Parameters:                                                           */
-/*                                                                             */
-/* Output Parameters:                                                          */
-/*                                                                             */
-/* Return Status:                                                              */
-/*                                                                             */
-/* Usage:                                                                      */
-/*                                                                             */
-/* Local Variables:                                                            */
-/*                                                                             */
-/* Called By: When update records                                              */
-/*                                                                             */
-/* PVCS Version: 1.2                                                           */
-/*                                                                             */
-/* Version: 6.0                                                                */
-/*                                                                             */
-/* Data Modifications:                                                         */
-/*                                                                             */
-/* Updates:                                                                    */
-/* Date         Author       Ver.   Purposes                                   */    
-/* 06-March-19  kelvinongcy  1.0     Update EditDate &                         */
-/*                                   EditWho in RdtTrackLog related tables     */
-/*                                                                             */
-/*                                                                             */
-/*******************************************************************************/
-
-CREATE TRIGGER [RDT].[ntrRdtTrackLogUpdate]
-ON  [RDT].[rdtTrackLog] FOR UPDATE
-AS
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtTrackLog]') AND type in (N'U'))
 BEGIN
-	IF @@ROWCOUNT = 0
-	BEGIN
-		RETURN
-	END
-   SET NOCOUNT ON
-   SET ANSI_NULLS OFF
-   SET QUOTED_IDENTIFIER OFF
-   SET CONCAT_NULL_YIELDS_NULL OFF
-
-	DECLARE @b_Success    int       -- Populated by calls to stored procedures - was the proc successful?
-			, @n_err        int       -- Error number returned by stored procedure or this trigger
-			, @n_err2       int       -- For Additional Error Detection
-			, @c_errmsg     NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-			, @n_continue   int                 
-			, @n_starttcnt  int       -- Holds the current transaction count
-			, @c_preprocess NVARCHAR(250) -- preprocess
-			, @c_pstprocess NVARCHAR(250) -- post process
-			, @n_cnt        int                  
-
-	SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
-
-	IF UPDATE(ArchiveCop)
-	BEGIN
-		SELECT @n_continue = 4 
-	END
-
-   IF UPDATE(TrafficCop)
-	BEGIN
-		SELECT @n_continue = 4 
-	END
-	
-	
-	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
-	BEGIN
-		UPDATE rdtTrackLog
-		SET EditDate = GETDATE(),
-		    EditWho = SUSER_SNAME(),
-          TrafficCop = NULL
-		FROM rdtTrackLog (NOLOCK), INSERTED (NOLOCK)
-    WHERE rdtTrackLog.RowRef = INSERTED.RowRef
-	  
-		SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-
-		IF @n_err <> 0
-		BEGIN
-			SELECT @n_continue = 3
-			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69701   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-			SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table rdtTrackLog. (ntrRdtTrackLogUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
-		END
-	END
-
-	IF @n_continue=3  -- Error Occured - Process And Return
-	BEGIN
-		IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt
-		BEGIN
-			ROLLBACK TRAN
-		END
-		ELSE
-		BEGIN
-			WHILE @@TRANCOUNT > @n_starttcnt
-			BEGIN
-				COMMIT TRAN
-			END
-		END
-		execute nsp_logerror @n_err, @c_errmsg, 'ntrRdtSTDEventLogLookUp'
-		RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
-		RETURN
-	 END
-	 ELSE
-	 BEGIN
-		 WHILE @@TRANCOUNT > @n_starttcnt
-		 BEGIN
-			 COMMIT TRAN
-		 END
-		 RETURN
-	 END
+CREATE TABLE [RDT].[rdtTrackLog](
+	[RowRef] [int] IDENTITY(1,1) NOT NULL,
+	[Mobile] [int] NULL,
+	[Username] [nvarchar](128) NOT NULL,
+	[Storerkey] [nvarchar](15) NOT NULL,
+	[Orderkey] [nvarchar](10) NOT NULL,
+	[TrackNo] [nvarchar](40) NOT NULL,
+	[SKU] [nvarchar](20) NOT NULL,
+	[Qty] [int] NOT NULL,
+	[QtyAllocated] [int] NOT NULL,
+	[Status] [nvarchar](1) NOT NULL,
+	[ErrMsg] [nvarchar](250) NULL,
+	[AddWho] [nvarchar](128) NOT NULL,
+	[AddDate] [datetime] NOT NULL,
+	[EditWho] [nvarchar](128) NOT NULL,
+	[EditDate] [datetime] NOT NULL,
+	[TrafficCop] [nvarchar](1) NULL,
+	[ArchiveCop] [nvarchar](1) NULL,
+	[PickSlipNo] [nvarchar](10) NULL,
+	[CartonNo] [int] NULL,
+	[LabelNo] [nvarchar](20) NULL,
+ CONSTRAINT [PK_rdtTrackLog] PRIMARY KEY CLUSTERED 
+(
+	[RowRef] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
 END
+GO
+SET ANSI_PADDING ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[RDT].[rdtTrackLog]') AND name = N'IX_rdtTrackLog01')
+CREATE NONCLUSTERED INDEX [IX_rdtTrackLog01] ON [RDT].[rdtTrackLog]
+(
+	[Orderkey] ASC,
+	[TrackNo] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
 
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[RDT].[rdtTrackLog]') AND name = N'IX_rdtTrackLog_Addwho')
+CREATE NONCLUSTERED INDEX [IX_rdtTrackLog_Addwho] ON [RDT].[rdtTrackLog]
+(
+	AddWho ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[RDT].[rdtTrackLog]') AND name = N'IX_rdtTrackLog_PickSlipNo')
+CREATE NONCLUSTERED INDEX [IX_rdtTrackLog_PickSlipNo] ON [RDT].[rdtTrackLog]
+(
+	PickSlipNo ASC, CartonNo ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+ 
 
-
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_Qty]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_Qty]  DEFAULT ((0)) FOR [Qty]
+END
 GO
-ALTER TABLE [RDT].[rdtTrackLog] ADD CONSTRAINT [PK_rdtTrackLog] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_QtyAllocated]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_QtyAllocated]  DEFAULT ((0)) FOR [QtyAllocated]
+END
 GO
-CREATE NONCLUSTERED INDEX [IX_rdtTrackLog01] ON [RDT].[rdtTrackLog] ([Orderkey], [TrackNo]) WITH (FILLFACTOR=90) ON [PRIMARY]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_Status]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_Status]  DEFAULT ('0') FOR [Status]
+END
 GO
-GRANT DELETE ON  [RDT].[rdtTrackLog] TO [NSQL]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_AddWho]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_AddWho]  DEFAULT (suser_sname()) FOR [AddWho]
+END
 GO
-GRANT INSERT ON  [RDT].[rdtTrackLog] TO [NSQL]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_AddDate]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_AddDate]  DEFAULT (getdate()) FOR [AddDate]
+END
 GO
-GRANT SELECT ON  [RDT].[rdtTrackLog] TO [NSQL]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_EditWho]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_EditWho]  DEFAULT (suser_sname()) FOR [EditWho]
+END
 GO
-GRANT UPDATE ON  [RDT].[rdtTrackLog] TO [NSQL]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_EditDate]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_EditDate]  DEFAULT (getdate()) FOR [EditDate]
+END
+GO
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_PickSlipNo]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_PickSlipNo]  DEFAULT ('') FOR [PickSlipNo]
+END
+GO
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_CartonNo]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_CartonNo]  DEFAULT ((0)) FOR [CartonNo]
+END
+GO
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[DF_rdtTrackLog_LabelNo]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtTrackLog] ADD  CONSTRAINT [DF_rdtTrackLog_LabelNo]  DEFAULT ('') FOR [LabelNo]
+END
+GO
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTTRACKLOG' AND COLUMN_NAME = 'TrackNo' AND CHARACTER_MAXIMUM_LENGTH = 40)
+BEGIN
+ALTER TABLE RDT.RDTTRACKLOG ALTER COLUMN TrackNo NVARCHAR(40) NOT NULL 
+END
 GO
