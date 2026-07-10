@@ -96,9 +96,8 @@ BEGIN
       ELSE    
          SET @c_Lottable02 = ''    
    END    
-END  
-
-SET QUOTED_IDENTIFIER OFF
+END
 GO
-SET ANSI_NULLS OFF
+
+GRANT EXECUTE ON dbo.ispDefLot2FrRcptDtlPMI TO NSQL
 GO
