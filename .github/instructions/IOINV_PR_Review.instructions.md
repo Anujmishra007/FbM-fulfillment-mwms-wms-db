@@ -1,6 +1,6 @@
 ---
 applyTo: "WMS/Trigger/*.sql,WMS/Trigger/API/*.sql,WMS/StoredProc/WM/*.sql,WMS/StoredProc/API/*.sql,WMS/StoredProc/*.sql,WMS/Tables/*.sql,WMS/Tables/API/*.sql,WMS/Tables/WM/*.sql,WMS/Function/*.sql,WMS/Function/API/*.sql"
-exclude: "WMS/StoredProc/rdt*.sql,WMS/Message/rdt*.sql,WMS/Screen/rdt*.sql,WMS/Trigger/RDT/*.sql,WMS/Tables/RDT/*.sql"
+exclude: "WMS/StoredProc/rdt*.sql,WMS/Message/rdt*.sql,WMS/Screen/rdt*.sql,WMS/Trigger/RDT/*.sql,WMS/Tables/RDT/*.sql,WMS/StoredProc/isp_RPT*.sql,WMS/StoredProc/isp_BT_*.sql,WMS/StoredProc/Reports/*.sql"
 ---
 
 
@@ -54,7 +54,7 @@ If asked to review again after new commits, regenerate the report from scratch c
 
 | Severity     | Criteria                                                                                       |
 |--------------|------------------------------------------------------------------------------------------------|
-| **CRITICAL** | Logic error affecting ALL storers, MOBREC corruption, data loss risk, session state corruption |
+| **CRITICAL** | Logic error affecting ALL storers, critical data corruption, data loss risk, session state corruption |
 | **HIGH**     | Logic error affecting specific storers, execution flow break, Extension SP bypass              |
 | **MEDIUM**   | Non-critical behavior change, variable state change with limited impact                        |
 | **LOW**      | Tech debt, code cleanup, no functional impact, **new SP not yet configured**                   |
@@ -82,7 +82,7 @@ If asked to review again after new commits, regenerate the report from scratch c
 
 Look up affected storers from `.github/instructions/data/V2_IO_Config.csv` where:
 - `ConfigKey` contains SP-type config ( CustomizedSP, Flags to enable code blocks, etc.)
-- `Svalue` matches the Extension SP name pattern for the Function ID
+- `Svalue` matches the Extension/Custom SP name found in the changed files
 
 ### 4. Severity Classification (REQUIRED)
 
@@ -112,7 +112,7 @@ Look up affected storers from `.github/instructions/data/V2_IO_Config.csv` where
 
 **Issue Type Legend:**
 - **RUNTIME_BUG**: Logic error, SP exists and executes incorrectly
-- **SESSION_BUG**: Affects MOBREC state at Quit (impacts ALL storers)
+- **SESSION_BUG**: Affects persisted state/session data at commit (impacts ALL storers)
 - **CONFIG_ISSUE**: SP configured but file missing (pre-existing, LOW)
 
 ---
@@ -150,6 +150,9 @@ When a PR contains non-RDT SQL file changes, follow these steps:
   - `WMS/Screen/rdt*.sql`
   - `WMS/Trigger/RDT/*.sql`
   - `WMS/Tables/RDT/*.sql`
+  - `WMS/StoredProc/isp_RPT*.sql` (Report SPs)
+  - `WMS/StoredProc/isp_BT_*.sql` (Bartender/Label SPs)
+  - `WMS/StoredProc/Reports/*.sql` (Reports folder)
 
 
 #### 1.2 Classify SP Types
@@ -170,11 +173,25 @@ When a PR contains non-RDT SQL file changes, follow these steps:
 
 ### Phase 2: Extract Function Info
 
-From all changed SPs, extract **ConfigKeys**: All `dbo.fnc_GetRight`,`nspGetRight`,`nspGetRight2` or any such related calls that trigger customized SP.
+From all changed SPs, extract **ConfigKeys**: All `dbo.fnc_GetRight`, `dbo.fnc_GetRight2`, `dbo.fnc_SelectGetRight`, `nspGetRight`, `nspGetRight2` or any such related calls that trigger customized SP.
 - Extract the `ConfigKey` parameter value from these calls
 - This will be used to identify which Custom/ Extension SPs are executed and which Storers are affected
 - The output of these calls would be SValue which determines which SP is executed for which storer based on the mapping file or if the codeblock within the SP is executed at all (like in the case of return statement before the code block)
 - If ConfigKey is not found, look for any direct calls to Extension SPs within the Main SP and extract those SP names as well
+
+#### 2.1 Additional SP Configuration Sources
+
+Besides the `ConfigKey`-driven lookups above, a Custom/Extension SP may also be configured (and thus triggered) via these sources. Check these when tracing how a changed SP is invoked:
+
+| Source | Description |
+|--------|-------------|
+| `Codelkup.Long` (`Listname = 'DYNAMICRCM'`) | Dynamic RCM SP configuration lookup |
+| `AllocateStrategyDetail.Pickcode` | Allocation strategy pick code SP reference |
+| `PreAllocateStrategyDetail.PreAllocatePickCode` | Pre-allocation strategy pick code SP reference |
+| `TTMStrategyDetail.TTMPickCode` | TTM strategy pick code SP reference |
+| SQL Job | SP scheduled/invoked directly via a SQL Server Agent Job |
+
+If a changed SP is referenced by any of these sources, treat it the same as a Custom/Extension SP found via `ConfigKey` lookups for the purposes of Phase 3 (Storer/WMS mapping) and Section 6 (Custom SP Impact) of the report.
 
 ### Phase 3: Load Storer/WMS Mapping
 
@@ -202,9 +219,9 @@ Using the config file at `.github/instructions/data/V2_IO_Config.csv`:
 Identify:
 - Added lines (+)
 - Removed lines (-)
-- Affected Step labels
+- Affected code blocks/labels
 - Variable changes
-- GOTO flow changes
+- GOTO / control flow changes
 - **Extension SPs with changes** (mark in Section 6)
 
 **IMPORTANT**:
@@ -217,7 +234,7 @@ Identify:
 Check:
 1. **Skipped Logic**: What code is bypassed by the change?
 2. **Variable State**: How do variables change?
-3. **MOBREC Impact**: What's saved to MOBREC at Quit?
+3. **Data/State Impact**: What data is written/updated (e.g., table inserts/updates, status flags) that persists after the transaction commits?
 4. **Extension SP Impact**: Which SPs are affected?
 5. **Extension SP Changes**: For any Extension SP that also has changes:
     - Analyze its git diff
@@ -250,7 +267,7 @@ Check:
 | **Base Branch**   | {base_branch}                  |
 | **Change Type**   | {brief description}            |
 | **Severity**      | **{CRITICAL/HIGH/MEDIUM/LOW}** |
-| **Affected Step** | {Step_X (Step N, Screen NNNN)} |
+| **Affected Area** | {SP/Trigger/Table/Function affected} |
 | **Analysis Date** | {YYYY-MM-DD}                   |
 
 ## 2. Git Diff Changes
@@ -259,7 +276,7 @@ Check:
 {actual diff content}
 ```
 
-## 3. Dependency Tree (Function {func_id})
+## 3. Dependency Tree
 
 ```
 {main_sp} 
@@ -313,7 +330,7 @@ Check:
 
 **Issue Type Legend:**
 - **RUNTIME_BUG**: Logic error, SP exists and executes
-- **SESSION_BUG**: Affects MOBREC state at Quit (impacts ALL storers)
+- **SESSION_BUG**: Affects persisted state/session data at commit (impacts ALL storers)
 - **CONFIG_ISSUE**: SP configured but file missing (pre-existing, LOW)
 
 ## 6. Custom SP Impact
@@ -344,14 +361,14 @@ Check:
 | Extension SP | Has Changes? | Will Execute? | Affected Storers | Change Impact |
 |--------------|--------------|---------------|------------------|---------------|
 
-## 7. Test Recommendations
+## 8. Test Recommendations
 
 | Test Scenario | Expected Result (Fixed) | Current Result (Bug) |
 |---------------|-------------------------|----------------------|
 | {scenario1}   | {expected}              | {actual}             |
 | {scenario2}   | {expected}              | {actual}             |
 
-## 8. Suggested Fix
+## 9. Suggested Fix
 
 ~~~sql
 -- Remove/Change the problematic code
@@ -360,7 +377,7 @@ Check:
 {after_code}
 ~~~
 
-## 9. Confidence Level
+## 10. Confidence Level
 
 | Assessment            | Confidence                     |
 |-----------------------|--------------------------------|
@@ -368,7 +385,7 @@ Check:
 | Impact Scope          | **HIGH/MEDIUM/LOW** - {reason} |
 | Fix Suggestion        | **HIGH/MEDIUM/LOW** - {reason} |
 
-## 10. Deployment Recommendation
+## 11. Deployment Recommendation
 
 **CRITICAL SECTION - MUST PROVIDE CLEAR CONCLUSION**
 
