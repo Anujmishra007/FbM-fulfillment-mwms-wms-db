@@ -25,6 +25,7 @@ GO
 /*                            Sub SP                                    */
 /* 2025-07-25  AK01     1.2   FCR-6532 - Add support for time-based job */
 /*                            scheduling using Notes2 config            */
+/* 2026-06-10  VNI01    1.3   FCR-12991 - Time based scheduling update  */
 /************************************************************************/
 CREATE OR ALTER PROC msp_BEJ
    @c_jobname   NVARCHAR(30) = 'BEJ-STD-01'
@@ -52,7 +53,19 @@ BEGIN
          , @c_IntervalType    NVARCHAR(50)   = ''
          , @t_OccurAt         TIME           = ''
          --AK01 END
-
+           --VNI01 START
+         , @c_ExecutionHour   NVARCHAR(500)  = ''
+         , @c_ExecutionMinute NVARCHAR(500)  = ''
+         , @n_DailyFrequency  INT            = 0
+         , @dt_NextRunSlot    DATETIME       = NULL
+         , @n_ParsedSlotCnt   INT            = 0
+         , @c_HourList        NVARCHAR(510)  = ''
+         , @c_MinList         NVARCHAR(510)  = ''
+         , @n_Pos             INT            = 0
+         , @n_SlotIdx         INT            = 0
+         , @c_HourItem        NVARCHAR(10)   = ''
+         , @c_MinItem         NVARCHAR(10)   = ''
+           --VNI01 END
          , @c_SQL             NVARCHAR(500)  = ''
          , @c_PName           NVARCHAR(30)   = '' 
 
@@ -63,6 +76,19 @@ BEGIN
    BEGIN
       DROP TABLE #TMP_BEJCL;
    END
+   --VNI01 START
+   IF OBJECT_ID('tempdb..#TMP_BEJSCHED','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #TMP_BEJSCHED;
+   END
+
+   CREATE TABLE #TMP_BEJSCHED
+   (  SlotIndex     INT          NOT NULL
+   ,  ExecutionHour TINYINT      NULL
+   ,  ExecutionMin  TINYINT      NULL
+   ,  SlotDateTime  DATETIME     NULL
+   )
+   --VNI01 END
    --sp_help codelkup
    CREATE TABLE #TMP_BEJCL
    (  ListName    NVARCHAR(10)   NOT NULL    DEFAULT ('')
@@ -149,6 +175,58 @@ BEGIN
                END
             END
          END
+         ELSE IF @c_IntervalType = 'DailySchedule'    --VNI01 START
+         BEGIN
+            SET @c_ExecutionHour   = dbo.fnc_GetParamValueFromString('@ExecutionHour'  , @c_JobSchedConfig, '')
+            SET @c_ExecutionMinute = dbo.fnc_GetParamValueFromString('@ExecutionMinute', @c_JobSchedConfig, '')
+            SET @n_DailyFrequency  = ISNULL(TRY_CAST(dbo.fnc_GetParamValueFromString('@DailyFrequency', @c_JobSchedConfig, '1') AS INT), 1)
+
+            TRUNCATE TABLE #TMP_BEJSCHED
+
+            SET @c_HourList = ISNULL(@c_ExecutionHour  ,'') + ','
+            SET @c_MinList  = ISNULL(@c_ExecutionMinute,'') + ','
+            SET @n_SlotIdx  = 0
+
+            WHILE CHARINDEX(',', @c_HourList) > 0 AND CHARINDEX(',', @c_MinList) > 0
+            BEGIN
+               SET @n_Pos      = CHARINDEX(',', @c_HourList)
+               SET @c_HourItem = LTRIM(RTRIM(SUBSTRING(@c_HourList, 1, @n_Pos - 1)))
+               SET @c_HourList = SUBSTRING(@c_HourList, @n_Pos + 1, LEN(@c_HourList))
+
+               SET @n_Pos     = CHARINDEX(',', @c_MinList)
+               SET @c_MinItem = LTRIM(RTRIM(SUBSTRING(@c_MinList, 1, @n_Pos - 1)))
+               SET @c_MinList = SUBSTRING(@c_MinList, @n_Pos + 1, LEN(@c_MinList))
+
+               IF ISNULL(@c_HourItem,'') = '' AND ISNULL(@c_MinItem,'') = ''
+                  CONTINUE
+
+               SET @n_SlotIdx = @n_SlotIdx + 1
+
+               INSERT INTO #TMP_BEJSCHED (SlotIndex, ExecutionHour, ExecutionMin, SlotDateTime)
+               SELECT @n_SlotIdx
+                    , TRY_CAST(@c_HourItem AS TINYINT)
+                    , TRY_CAST(@c_MinItem  AS TINYINT)
+                    , CASE WHEN TRY_CAST(@c_HourItem AS INT) BETWEEN 0 AND 23
+                            AND TRY_CAST(@c_MinItem  AS INT) BETWEEN 0 AND 59
+                           THEN DATEADD(MINUTE, TRY_CAST(@c_MinItem AS INT)
+                                , DATEADD(HOUR, TRY_CAST(@c_HourItem AS INT), CAST(CAST(GETDATE() AS DATE) AS DATETIME)))
+                           ELSE NULL
+                      END
+            END
+
+            SELECT @n_ParsedSlotCnt = COUNT(1) FROM #TMP_BEJSCHED WHERE SlotDateTime IS NOT NULL
+
+
+            SELECT @dt_NextRunSlot = MAX(SlotDateTime)
+            FROM #TMP_BEJSCHED
+            WHERE SlotDateTime IS NOT NULL
+              AND SlotDateTime <= GETDATE()
+
+            IF @dt_NextRunSlot IS NULL OR @dt_NextRunSlot <= TRY_CAST(@dt_LastRunDTime AS DATETIME)
+            BEGIN
+               GOTO NEXT_JOB
+            END
+         END                                    --VNI01 END
 
          -- Future development notes:
          -- For @IntervalType=SpecificDay: Run if today matches one of the days listed in @Days (e.g., Mon,Wed,Fri).
@@ -240,3 +318,7 @@ QUIT_SP:
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR
    END
 END
+GO
+
+GRANT EXECUTE ON dbo.msp_BEJ TO NSQL
+GO
