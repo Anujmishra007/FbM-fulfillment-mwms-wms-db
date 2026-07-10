@@ -50,9 +50,6 @@ BEGIN
            @cMoveRefKey       NVARCHAR( 10), 
            @bSuccess          INT
         
-
-   -- @curUpd cursor declaration removed (unused)
-
 	DECLARE @tPickDetailKey TABLE 
    (
       PickDetailKey NVARCHAR(10) PRIMARY KEY CLUSTERED NOT NULL
@@ -139,27 +136,28 @@ BEGIN
             OPEN CUR_UPDMOVREF 
             FETCH NEXT FROM CUR_UPDMOVREF INTO @cPickDetailKey
             WHILE @@FETCH_STATUS = 0
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-                MoveRefKey = @cMoveRefKey
-               ,EditWho    = SUSER_NAME()
-               ,EditDate   = GETDATE()
-               ,Trafficcop = NULL
-               WHERE PickDetailKey = @cPickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 273003
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOCK PDTL FAIL 
-               CLOSE CUR_UPDMOVREF
-               DEALLOCATE CUR_UPDMOVREF
-               GOTO RollBackTran
-            END CATCH
+            BEGIN
+               BEGIN TRY
+                  UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                  MoveRefKey = @cMoveRefKey
+                  ,EditWho    = SUSER_NAME()
+                  ,EditDate   = GETDATE()
+                  ,Trafficcop = NULL
+                  WHERE PickDetailKey = @cPickDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 273003
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOCK PDTL FAIL 
+                  CLOSE CUR_UPDMOVREF
+                  DEALLOCATE CUR_UPDMOVREF
+                  GOTO RollBackTran
+               END CATCH
 
                INSERT INTO @tPickDetailKey (PickDetailKey)
                VALUES (@cPickDetailKey)
 
                FETCH NEXT FROM CUR_UPDMOVREF INTO @cPickDetailKey
-            END
+            END  -- WHILE
             CLOSE CUR_UPDMOVREF
             DEALLOCATE CUR_UPDMOVREF
 
