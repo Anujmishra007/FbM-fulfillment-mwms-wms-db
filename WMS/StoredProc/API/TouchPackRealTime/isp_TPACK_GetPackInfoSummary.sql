@@ -10,6 +10,7 @@
 /* 2026-02-05   2.0  GCH225     UWP-48241: Support Show Closed Carton status     */
 /* 2026-02-11   3.0  GCH225     UWP-48267: Fix AllocQty and PickQty Null issue   */
 /* 2026-04-27   3.1  GCH225     UWP-54975: Fix ToteConso display PackInfo issue  */
+/* 2026-07-07   3.2  MBR282     UWP-60522: Delete TempCarton if TPS-CtnRec 0     */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_GetPackInfoSummary] (
      @cType                NVARCHAR(30)      = ''
@@ -485,7 +486,28 @@ BEGIN
    IF @nPrecedingCartonNo > 0
    BEGIN
       SET @cPrecedingCartonStatus = 'INPROGRESS'
-      GOTO PROCEED
+      --If 'TPS-CtnRec' = 0, delete tempcarton in PackInfo table where Qty=0 and CartonType <> ''
+      IF EXISTS ( SELECT 1 FROM STORERCONFIG (NOLOCK)
+                  WHERE Storerkey = @cStorerKey
+                  AND ConfigKey = 'TPS-CtnRec' AND SValue = '0' )
+      AND EXISTS ( SELECT 1 FROM PACKINFO (NOLOCK)
+                   WHERE PickSlipNo = @cPickSlipNo
+                   AND CartonNo = @nPrecedingCartonNo
+                   AND Qty = 0 AND CartonType <> '' )
+      BEGIN
+         DELETE FROM PACKINFO
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nPrecedingCartonNo
+         AND Qty = 0 AND CartonType <> ''
+
+         -- If Temporary carton no longer exists
+         SET @nPrecedingCartonNo     = 0
+         SET @cPrecedingCartonStatus = ''
+      END
+      ELSE
+      BEGIN
+         GOTO PROCEED
+      END
    END
    
    IF @cType = 'toteid'
