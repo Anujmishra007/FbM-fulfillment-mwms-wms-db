@@ -4,7 +4,7 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/    
-/* Store procedure: ispDefLot2FrRcptDtl                                 */    
+/* Store procedure: ispDefLot2FrRcptDtlPMI                              */
 /* Copyright: IDS                                                       */    
 /* Purpose: Default lottable02 from ReceiptDetail                       */    
 /*                                                                      */    
