@@ -64,6 +64,9 @@ BEGIN
    IF @nFunc = 839
    BEGIN
       IF @nStep = 3
+         OR (@nStep = 99 AND EXISTS(
+               SELECT 1 FROM RDT.RDTMobrec WITH(NOLOCK)
+               WHERE Mobile = @nMobile AND Scn = 6774))
       BEGIN
          IF @cBarcode <> ''
          BEGIN
@@ -123,7 +126,7 @@ BEGIN
 
             GOTO Quit
          END
-      END -- IF @nStep = 3
+      END -- IF @nStep = 3 OR @nStep = 99
    END -- IF @nFunc = 839
 
    Quit:
