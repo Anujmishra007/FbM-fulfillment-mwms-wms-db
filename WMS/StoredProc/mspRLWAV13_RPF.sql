@@ -19,6 +19,8 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-10  Wan      1.9   FCR-12980. Fix.                             */
+/*                            - GroupKey Break by toloclevel, LP capacity */
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_RPF]        
@@ -270,8 +272,8 @@ BEGIN
                SET @c_FinalID = ''
             END
 
-            IF @n_ToLocLevel_P <> @n_ToLocLevel OR
-               @c_AreaKey_P = @c_AreaKey
+            IF @n_ToLocLevel_P <> @n_ToLocLevel --OR                                --(Wan)
+               --@c_AreaKey_P <> @c_AreaKey                                         --(Wan)
             BEGIN
                SET @n_UCCCnt = 0
                SET @c_GroupKey = ''
