@@ -1217,7 +1217,7 @@ BEGIN
       ELSE IF @c_ReplenType = 'T'
       BEGIN
          SET @c_UOM = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN '2' ELSE '6' END   --ML01
-         SET @n_QtyReplen = CASE WHEN ISNULL(@c_NoQtyReplen,'') IN ('1','Y') THEN 0 ELSE @n_Qty END   --ML04
+         SET @n_QtyReplen = CASE WHEN ISNULL(@c_NoQtyReplen,'') IN ('1','Y') THEN 0 ELSE @n_FromQty END   --ML04
 
          EXEC isp_InsertTaskDetail
               @c_TaskType              = @c_TaskType    --ML01
