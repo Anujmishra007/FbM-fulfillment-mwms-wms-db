@@ -41,6 +41,7 @@ BEGIN
       FROM TaskDetail WITH(NOLOCK)
       WHERE Status NOT IN ('x','9')
 	     AND FromID = @cCartonID
+	     AND FromID <> ''
 		 AND Storerkey = @cStorerKey
    )
    BEGIN
