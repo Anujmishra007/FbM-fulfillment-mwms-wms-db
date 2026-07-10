@@ -8,7 +8,7 @@ GO
 /* Copyright: MAERSK                                                       */
 /* Written by: PREETHAM                                                    */
 /*                                                                         */
-/* Purpose: Schedule Job for AEOMX REPLENISHMENT - T                       */
+/* Purpose: Generate replenishment tasks for AEOMX (ReplenType = T)          */
 /*                                                                         */
 /* Called By: msp_BEJ                                                      */
 /*                                                                         */
