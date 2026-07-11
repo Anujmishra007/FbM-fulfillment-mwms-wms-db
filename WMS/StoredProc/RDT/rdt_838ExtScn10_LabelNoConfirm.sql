@@ -14,6 +14,7 @@ GO
 /*                                                                                     */
 /* Date        Rev    Author     Purposes                                              */
 /* 2026-07-06  1.0.0  JackC      FCR-12984 Move inv to marshalling lane and send IML   */
+/* 2026-07-11  1.0.1  JackC      FCR-12984 Update IML parameters                       */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn10_LabelNoConfirm] (
@@ -338,8 +339,8 @@ BEGIN
 
       EXEC dbo.ispGenTransmitLog2   
          @c_TableName      = 'WSSOTMSGENLBL',   
-         @c_Key1           = @cLabelNo,   
-         @c_Key2           = '', 
+         @c_Key1           = @cPickSlipNo,   
+         @c_Key2           = @cLabelNo, 
          @c_Key3           = @cStorerKey,   
          @c_TransmitBatch  = '',   
          @b_success        = @bSuccess    OUTPUT,   
