@@ -1,9 +1,7 @@
-USE [GBRWMS]
-GO
 /****** Object:  StoredProcedure [RDT].[rdt_1641ExtValCSC]    Script Date: 7/13/2026 11:14:04 AM ******/
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /***********************************************************************/
 /* Store procedure: rdt_1641ExtValCSC                                  */
