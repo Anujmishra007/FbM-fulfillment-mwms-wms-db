@@ -19,7 +19,8 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-07-07  Wan      1.0   FCR-12980 CRv8.6                            */
+/* 2026-07-13  Wan      1.0   FCR-12980 CRv8.6, Set blank to Pickdetail   */
+/*                            CartonType and Caseid                       */
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV13]        
    @c_Wavekey     NVARCHAR(10) 
@@ -280,17 +281,14 @@ BEGIN
 
                WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
                BEGIN
-                  IF @c_Channel_b = 'ECOM'                                          --Wan
-                  BEGIN
-                     SET @c_CartonType = ''
-                     SET @c_Caseid = ''
-                  END
+                  SET @c_CartonType = ''
+                  SET @c_Caseid     = ''
 
                   UPDATE PICKDETAIL   
                      SET PICKDETAIL.TaskdetailKey = ''
                         ,PICKDETAIL.PickSlipNo = ''                                 --Wan                     
-                        ,PICKDETAIL.CartonType = @c_CartonType
-                        ,PICKDETAIL.Caseid = @c_Caseid
+                        ,PICKDETAIL.CartonType = @c_CartonType                                  
+                        ,PICKDETAIL.Caseid = @c_Caseid                                     
                         ,PICKDETAIL.TrafficCop = NULL  
                   WHERE PICKDETAIL.PickDetailKey = @c_PickDetailKey    
            
