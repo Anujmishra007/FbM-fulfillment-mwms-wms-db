@@ -25,7 +25,8 @@ GO
 /* 2025-12-08   Michael    1.1   FCR-8536 ONBR-Replen per PND (ML01)       */
 /* 2026-01-20   Michael    1.2   FCR-9971 UK-Columbia-Replenishment (ML02) */
 /* 2026-06-18   Michael    1.3   FCR-14240 Add custom define PickFace(ML03)*/
-/* 2026-07-03   Michael    1.4   FCR-12991 Add NoQtyReplen config (ML04)   */
+/* 2026-07-03   Michael    1.4   FCR-12991 Add config NoQtyReplen,         */
+/*                               Sourcekey, Message03 (ML04)               */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_GenReplenishmentTask_01]
@@ -73,14 +74,16 @@ BEGIN
    TaskType           Task Type expression (Value will be ignored if SQL setup)             Value  SQL
    TaskPriority       Task Priority expression (Value will be ignored if SQL setup)         Value  SQL
    PickMethod         Pick Method Value (Value will be ignored if SQL setup)                Value  SQL
-   NoQtyReplen        Do not use QtyReplen                                                  0/1    SQL
-   LocTolerance       Loc Tolerance (default = 1)                                           Value 
-   CartonTolerance    Carton Tolerance (default = 0.9)                                      Value 
-   PalletTolerance    Pallet Tolerance (default = 1)                                        Value 
-   DeletePendingTask  Delete Pending Task (1=Yes, else=No)                                  0/1   
-   B2CChannelReplen   Special logic for Puma AU B2C Channel Replenishment (1=Yes, else=No)  0/1   
-   NoUCC              Disable UCC Replenishment (1=Yes, else=No)                            0/1   
-   SetTransitLoc      Set ToLoc = TransitLOC                                                0/1   
+   SourceKey          Source Key (Value will be ignored if SQL setup)                       Value  SQL
+   Message03          Message03 (Value will be ignored if SQL setup)                        Value  SQL
+   NoQtyReplen        Do not use QtyReplen (Value will be ignored if SQL setup)             0/1    SQL
+   DeletePendingTask  Delete Pending Task (default=1)(Value will be ignored if SQL setup)   0/1    SQL
+   LocTolerance       Loc Tolerance (default = 1)                                           Value
+   CartonTolerance    Carton Tolerance (default = 0.9)                                      Value
+   PalletTolerance    Pallet Tolerance (default = 1)                                        Value
+   B2CChannelReplen   Special logic for Puma AU B2C Channel Replenishment (1=Yes, else=No)  0/1
+   NoUCC              Disable UCC Replenishment (1=Yes, else=No)                            0/1
+   SetTransitLoc      Set ToLoc = TransitLOC                                                0/1
    Clear_SourceType   Delete TaskDetail SourceType(s)                                       Value
    Clear_TaskType     Delete TaskDetail TaskType(s)                                         Value
 */
@@ -141,10 +144,15 @@ BEGIN
          , @c_PickMethod_Exp         NVARCHAR(MAX)= ''
          , @c_ReplenQty_Exp          NVARCHAR(MAX)= ''   --ML02
          , @c_SL_LocType_Exp         NVARCHAR(MAX)= ''   --ML03
+         , @c_SourceKey_Exp          NVARCHAR(MAX)= ''   --ML04
+         , @c_Message03_Exp          NVARCHAR(MAX)= ''   --ML04
          , @c_NoQtyReplen_Exp        NVARCHAR(MAX)= ''   --ML04
+         , @c_DelPendingTask_Exp     NVARCHAR(MAX)= ''   --ML04
          , @c_TaskType_Val           NVARCHAR(10) = ''
          , @c_PickMethod_Val         NVARCHAR(10) = ''
          , @c_TaskPriority_Val       NVARCHAR(10) = ''
+         , @c_SourceKey_Val          NVARCHAR(30) = ''   --ML04
+         , @c_Message03_Val          NVARCHAR(20) = ''   --ML04
          , @c_NoQtyReplen_Val        NVARCHAR(10) = ''   --ML04
          , @c_DelPendingTask         NVARCHAR(10) = ''
          , @c_B2CChannelReplen       NVARCHAR(10) = ''
@@ -178,6 +186,8 @@ BEGIN
          , @n_LotSKUQTY              INT          = 0
          , @c_TransitLOC             NVARCHAR(10) = ''
          , @c_TD_TransitLOC          NVARCHAR(10) = ''   --ML02
+         , @c_SourceKey              NVARCHAR(30) = ''   --ML04
+         , @c_Message03              NVARCHAR(20) = ''   --ML04
          , @c_NoQtyReplen            NVARCHAR(10) = ''   --ML04
          , @c_ToLOC                  NVARCHAR(10) = ''
          , @c_FinalLOC               NVARCHAR(10) = ''
@@ -194,16 +204,35 @@ BEGIN
          , @c_ValidateAction         NVARCHAR(60) = ''   --ML02
          , @c_ValidateStep           NVARCHAR(30) = ''   --ML02
          , @c_WarningMsg             NVARCHAR(250)= ''   --ML02
+         , @c_ResourceLockName       NVARCHAR(255)       --ML04
+         , @n_LockResult             INT                 --ML04
 
    DECLARE @b_success INT,
            @n_err INT,
            @c_errmsg NVARCHAR(255)
 
    SET @c_Facility = @c_Zone01
-
-   IF @c_Zone12 = '1'
+   
+   --ML04-S
+   SET @c_Storerkey = ISNULL(RTRIM(@c_Storerkey),'')
+   SET @c_Facility  = ISNULL(RTRIM(@c_Facility),'')
+   SET @c_ResourceLockName = @c_SP_Name +'/'+ @c_Storerkey +'/'+ @c_Facility
+   
+   EXEC @n_LockResult = sp_getapplock @Resource = @c_ResourceLockName, @LockMode = N'Exclusive', @LockOwner = N'Session', @LockTimeout = 0, @DbPrincipal = 'public'
+      
+   IF @n_LockResult <> 0
    BEGIN
-      SET @b_debug = ISNULL(TRY_PARSE(ISNULL(@c_Zone12,'') AS INT),0)
+      SET @n_continue = 3
+      SELECT @n_err = 63520
+      SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_err) +
+            ': Same ReplenishStrategy/Storer/Facility is running by another process (' + ISNULL(@c_SP_Name,'') + ')'
+      GOTO EXIT_SP
+   END
+   --ML04-E
+
+   IF @c_Zone12 = 'debug'
+   BEGIN
+      SET @b_debug = 1
       SET @c_Zone12 = ''
    END
 
@@ -226,10 +255,15 @@ BEGIN
         , @c_PickMethod_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Notes END)),'')   --ML01
         , @c_ReplenQty_Exp      = ISNULL(TRIM(MAX(CASE WHEN Code = 'ReplenQty'         THEN Notes END)),'')   --ML02
         , @c_SL_LocType_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'SL_LocType'        THEN Notes END)),'')   --ML03
+        , @c_SourceKey_Exp      = ISNULL(TRIM(MAX(CASE WHEN Code = 'SourceKey'         THEN Notes END)),'')   --ML04
+        , @c_Message03_Exp      = ISNULL(TRIM(MAX(CASE WHEN Code = 'Message03'         THEN Notes END)),'')   --ML04
         , @c_NoQtyReplen_Exp    = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoQtyReplen'       THEN Notes END)),'')   --ML04
+        , @c_DelPendingTask_Exp = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' THEN Notes END)),'')   --ML04
         , @c_TaskType_Val       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          THEN Long  END)),'')   --ML01
         , @c_PickMethod_Val     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        THEN Long  END)),'')   --ML01
         , @c_TaskPriority_Val   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      THEN Long  END)),'')
+        , @c_SourceKey_Val      = ISNULL(TRIM(MAX(CASE WHEN Code = 'SourceKey'         THEN Long  END)),'')   --ML04
+        , @c_Message03_Val      = ISNULL(TRIM(MAX(CASE WHEN Code = 'Message03'         THEN Long  END)),'')   --ML04
         , @c_NoQtyReplen_Val    = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoQtyReplen'       THEN Long  END)),'')   --ML04
         , @c_DelPendingTask     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' THEN Long  END)),'1')
         , @c_B2CChannelReplen   = ISNULL(TRIM(MAX(CASE WHEN Code = 'B2CChannelReplen'  THEN Long  END)),'')
@@ -386,7 +420,7 @@ BEGIN
                     +', @c_Storerkey  NVARCHAR(15)'
                     +', @c_Facility   NVARCHAR(10)'
                     +', @c_ReplenType NVARCHAR(5)'
-                    +', @c_DelPendingTask   NVARCHAR(10)'
+                    +', @c_DelPendingTask   NVARCHAR(10) OUTPUT'   --ML04
                     +', @c_B2CChannelReplen NVARCHAR(10)'
                     +', @c_NoUCC            NVARCHAR(10)'   --ML02
                     +', @n_LocTolerance     FLOAT'          --ML02
@@ -472,6 +506,21 @@ BEGIN
              , @n_ReplenQty OUTPUT
       END
       --ML02-E
+      
+      --ML04-S
+      IF ISNULL(@c_DelPendingTask_Exp,'') <> ''
+      BEGIN
+          SET @c_SQLStatement = N'SET @c_DelPendingTask = (' + @c_DelPendingTask_Exp + ')'
+
+          EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms2
+             , @c_Zone01, @c_Zone02, @c_Zone03, @c_Zone04, @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09, @c_Zone10
+             , @c_Zone11, @c_Zone12, @c_ReplenFlag, @c_Storerkey, @c_Facility, @c_ReplenType, @c_DelPendingTask OUTPUT, @c_B2CChannelReplen
+             , @c_NoUCC, @n_LocTolerance, @n_CartonTolerance, @n_PalletTolerance
+             , @c_CurrentStorer, @c_CurrentSKU, @c_CurrentLOC, @c_LocationType
+             , @c_CurrentPriority, @n_Qty, @n_QtyPicked, @n_QtyAllocated, @n_QtyLocationLimit, @n_QtyLocationMinimum, @n_CaseCnt, @n_Pallet, @c_PickCode
+             , @c_ReplExclProdNearExpiry, @n_PendingTaskQty, @n_ReplenQty
+      END
+      --ML04-E
 
       IF @b_debug = 1
       BEGIN
@@ -1064,13 +1113,24 @@ BEGIN
                                       ELSE '''PP'''
                                  END
    --ML01-E
-
    SET @c_SQLStatement = @c_SQLStatement
      +       ', RPL.TD_TransitLOC'   --ML02
-     +       ', NoQtyReplen='  + CASE WHEN ISNULL(@c_NoQtyReplen_Exp ,'')<>'' THEN @c_NoQtyReplen_Exp                                             --ML04
-                                      WHEN ISNULL(@c_NoQtyReplen_Val ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_NoQtyReplen_Val),'''','''''') + ''''   --ML04
-                                      ELSE '''N'''                                                                                                --ML04
-                                 END                                                                                                              --ML04
+   --ML04-S
+     +       ', SourceKey='    + CASE WHEN ISNULL(@c_SourceKey_Exp ,'')<>'' THEN @c_SourceKey_Exp
+                                      WHEN ISNULL(@c_SourceKey_Val ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_SourceKey_Val),'''','''''') + ''''
+                                      ELSE ''''''
+                                 END
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', Message03='    + CASE WHEN ISNULL(@c_Message03_Exp ,'')<>'' THEN @c_Message03_Exp
+                                      WHEN ISNULL(@c_Message03_Val ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_Message03_Val),'''','''''') + ''''
+                                      ELSE ''''''
+                                 END
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', NoQtyReplen='  + CASE WHEN ISNULL(@c_NoQtyReplen_Exp ,'')<>'' THEN @c_NoQtyReplen_Exp
+                                      WHEN ISNULL(@c_NoQtyReplen_Val ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_NoQtyReplen_Val),'''','''''') + ''''
+                                      ELSE '''N'''
+                                 END
+   --ML04-E
      + ' FROM #TEMP_REPLENISHMENT RPL'
      + ' LEFT JOIN dbo.LOC FRLOC WITH(NOLOCK) ON RPL.FromLoc=FRLOC.Loc'
      + ' LEFT JOIN dbo.LOC TOLOC WITH(NOLOCK) ON RPL.ToLoc=TOLOC.Loc'
@@ -1101,7 +1161,7 @@ BEGIN
             @c_Priority, @c_UOM, @c_UCCNo, @c_FromLogicalLocation, @c_CurrentLogicalLocation,
             @c_TransitLOC, @c_TaskGrouping, @c_TaskType, @c_PickMethod   --ML01
           , @c_TD_TransitLOC   --ML02
-          , @c_NoQtyReplen     --ML04
+          , @c_SourceKey, @c_Message03, @c_NoQtyReplen   --ML04
 
       IF @@FETCH_STATUS <> 0
          BREAK
@@ -1239,6 +1299,7 @@ BEGIN
             , @c_Priority              = @c_Priority
             , @c_SourcePriority        = @c_Priority
             , @c_SourceType            = @c_SP_Name
+            , @c_SourceKey             = @c_SourceKey  --ML04
             , @c_OrderKey              = ''
             , @c_GroupKey              = @c_GroupKey   --ML01
             , @n_QtyReplen             = @n_QtyReplen  --ML04
@@ -1246,7 +1307,7 @@ BEGIN
             , @c_AreaKey               = '?F'  -- ?F=Get from location areakey
             , @c_TransitLOC            = @c_TransitLOC --ML02
             , @c_FinalLOC              = @c_FinalLOC   --ML01
-            , @c_Message03             = ''
+            , @c_Message03             = @c_Message03  --ML04
             , @c_SplitTaskByCase       = 'N'
             , @c_ReservePendingMoveIn  = 'Y'
             , @n_SystemQty             = @n_FromQty
@@ -1264,6 +1325,14 @@ BEGIN
    -- End Insert Replenishment
 
 EXIT_SP:
+   --ML04-S
+   BEGIN TRY
+      EXEC @n_LockResult = sp_releaseapplock @Resource = @c_ResourceLockName, @LockOwner = N'Session', @DbPrincipal = 'public'
+   END TRY
+   BEGIN CATCH
+   END CATCH
+   --ML04-E
+
    IF ISNULL(@c_WarningMsg,'')<>''   --ML02
       SET @n_continue = 3            --ML02
 
