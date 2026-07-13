@@ -46,10 +46,10 @@ BEGIN
       IF @nInputKey = 1 -- Once enter is pressed
       BEGIN
          -- Display all opened pallets
-         IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH(NOLOCK) WHERE Status=1 AND LOC LIKE 'T2PPS%')
+         IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH(NOLOCK) WHERE Status=1 AND LOC LIKE 'T2PPS%') --(v1.1 13/07/2026) 
          BEGIN
          	DECLARE Plts CURSOR LOCAL FAST_FORWARD FOR
-         		SELECT DISTINCT ID FROM rdt.rdtSortLaneLocLog WITH(NOLOCK) WHERE Status=1 AND LOC LIKE 'T2PPS%';
+         		SELECT DISTINCT ID FROM rdt.rdtSortLaneLocLog WITH(NOLOCK) WHERE Status=1 AND LOC LIKE 'T2PPS%'; --(v1.1 13/07/2026)
          	OPEN Plts;
    			FETCH NEXT FROM Plts INTO @cPallet
    			WHILE @@FETCH_STATUS = 0
