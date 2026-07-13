@@ -6,7 +6,7 @@ SET QUOTED_IDENTIFIER OFF
 
 GO
 /***********************************************************************/
-/* Stored procedure: rdt_1641ExtValCSC                                  */
+/* Stored procedure: rdt_1641ExtValCSC                                 */
 /* Purpose: CSCUK01 Pallet Build validation                            */
 /*          Step 1: pallet ID must start with OUT                      */
 /*          Step 3: scanned UCC must already be packed for DocType N   */
