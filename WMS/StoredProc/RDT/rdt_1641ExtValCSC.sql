@@ -97,6 +97,23 @@ BEGIN
 
          IF @cDocType = 'N'
          BEGIN
+             IF EXISTS
+             (
+                 SELECT 1
+                 FROM dbo.PackDetail PDK WITH (NOLOCK)
+                 JOIN dbo.PackInfo PI WITH (NOLOCK)
+                   ON PI.PickSlipNo = PDK.PickSlipNo
+                  AND PI.CartonNo   = PDK.CartonNo
+                 WHERE PDK.StorerKey = @cStorerKey
+                   AND PDK.DropID    = @cUCCNo
+                   AND PI.CartonStatus IN ('HOLD', 'PENDAUDIT')
+             )
+             BEGIN
+                 SET @nErrNo = 161001
+                 SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                 GOTO QUIT
+             END
+   
             IF NOT EXISTS
             (
                SELECT 1
