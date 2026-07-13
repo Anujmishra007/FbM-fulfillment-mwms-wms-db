@@ -9,6 +9,7 @@ GO
 /*                                                                      */
 /* Date        Rev   Author     Purposes                                */
 /* 2026-01-22  1.0   Dennis     FCR-10136                               */
+/* 2026-07-13  1.1   Dennis     UWP-60992 Fix dup pallet in diff PPSLOC */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_1837ExtScn02] (
    @nMobile      INT,           
@@ -878,6 +879,7 @@ BEGIN
                   END
                   ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE WAVEKEY = @cWAVEKey AND ID = @cPalletID AND Status = '9')
                   OR EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE WAVEKEY = @cWAVEKey AND ID <> @cPalletID AND ID <> '' AND STATUS < '9' )
+                  OR EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE ID = @cPalletID AND STATUS = '1' AND LOC <> @cPPS_Loc)
                   BEGIN
                      SET @nErrNo = 256953
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --Scan Another ID
@@ -910,6 +912,7 @@ BEGIN
                      END
                      ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey AND STATUS = '9' AND ID = @cPalletID)
                      OR EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE  LoadKey = 'HOSPITAL' AND OrderKey = @cStorerKey AND ID <> @cPalletID AND ID <> '' AND STATUS < '9' )
+                     OR EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE ID = @cPalletID AND STATUS = '1' AND LOC <> @cPPS_Loc)
                      BEGIN
                         SET @nErrNo = 256953
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --Scan Another ID
@@ -931,6 +934,7 @@ BEGIN
                      END
                      ELSE IF EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = @cLoadKey AND ConsigneeKey = @cConsigneeKey AND STATUS = '9' AND ID = @cPalletID)
                      OR EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE LoadKey = @cLoadKey AND ConsigneeKey = @cConsigneeKey AND ID <> @cPalletID AND ID <> '' AND STATUS < '9' )
+                     OR EXISTS (SELECT 1 FROM rdt.rdtSortLaneLocLog WITH (NOLOCK) WHERE ID = @cPalletID AND STATUS = '1' AND LOC <> @cPPS_Loc)
                      BEGIN
                         SET @nErrNo = 256953
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --Scan Another ID
