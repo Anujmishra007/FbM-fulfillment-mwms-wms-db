@@ -22,7 +22,7 @@ GO
 /* 2026-07-13 1.1  SKE140  WaveKey validation update                   */
 /***********************************************************************/
 
-ALTER   PROC [RDT].[rdt_1641ExtValCSC]
+CREATE OR ALTER   PROC [RDT].[rdt_1641ExtValCSC]
 (
    @nMobile      INT,
    @nFunc        INT,
