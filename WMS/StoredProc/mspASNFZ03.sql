@@ -45,6 +45,8 @@ GO
 /* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
 /* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */ 
 /* 2025-09-02  CZJ01   2.1   UWP-40477 - LCL SP Enhancement                */ 
+/* 2026-07-10  AndyWu01 3.0   UWP-60989 - NLD - WLVR - Wolverine Unable to */
+/*                                        Finalize ASN                     */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspASNFZ03]
 (     @c_Receiptkey  NVARCHAR(10)
@@ -484,7 +486,7 @@ BEGIN
 				  ,  GrossWeight        --(CZJ01)
 				  ,  UserDefine03		--(CZJ01)
                   )
-                  SELECT
+                  SELECT TOP 1 --AndyWu01
                      @c_Orderkey
                   ,  @c_Storerkey
                   ,  'XDOCK'
@@ -527,6 +529,7 @@ BEGIN
                   LEFT JOIN  STORER S WITH (NOLOCK) ON (S.StorerKey = RD.UserDefine02 AND S.Type = '2'  AND S.ConsigneeFor = RD.StorerKey)
                   WHERE RD.ExternReceiptkey = @c_ExternReceiptkey                                        --(JH01)
 			  AND RD.ReceiptKey = @c_Receiptkey                                              --(JH03)
+			  AND ISNULL(RD.UserDefine02,'') = @c_Consigneekey --AndyWu01
                   -- FROM  PO  (NOLOCK)                                                                  --(JH01)
                   -- WHERE PO.Pokey = @c_POKey                                                           --(JH01)
                   GROUP BY S.Company, S.Address1, S.Address2, S.Address3, RH.SellerCompany, RH.CarrierReference, RH.SellerName, RH.SellerAddress1, --(JH01)
