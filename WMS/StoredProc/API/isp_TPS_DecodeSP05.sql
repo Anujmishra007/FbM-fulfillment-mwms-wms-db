@@ -11,7 +11,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 2023-05-17   1.0  yeekung   TPS-703 Created                                */
 /* 2025-01-16   1.1  yeekung   UWP-28824 Correct the QTY when cast to JSON    */
-/* 2025-07-09   1.2  MBR282    UWP-60874 Add StorerKey condition to decoce UCC*/              
+/* 2025-07-09   1.2  MBR282    UWP-60874 Add StorerKey condition to decode UCC*/              
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPS_DecodeSP05] (
