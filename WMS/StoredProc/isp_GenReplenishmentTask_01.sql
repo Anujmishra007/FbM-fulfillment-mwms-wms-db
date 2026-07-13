@@ -25,8 +25,8 @@ GO
 /* 2025-12-08   Michael    1.1   FCR-8536 ONBR-Replen per PND (ML01)       */
 /* 2026-01-20   Michael    1.2   FCR-9971 UK-Columbia-Replenishment (ML02) */
 /* 2026-06-18   Michael    1.3   FCR-14240 Add custom define PickFace(ML03)*/
-/* 2026-07-03   Michael    1.4   FCR-12991 Add config NoQtyReplen,         */
-/*                               Sourcekey, Message03 (ML04)               */
+/* 2026-07-03   Michael    1.4   FCR-12991 Add AppLock and ConfigKey       */
+/*                               NoQtyReplen, Sourcekey, Message03 (ML04)  */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_GenReplenishmentTask_01]
