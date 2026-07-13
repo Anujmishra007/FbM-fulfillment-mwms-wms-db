@@ -65,13 +65,17 @@ BEGIN
    DECLARE @c_OrigRefNo        NVARCHAR(20)
    DECLARE @c_OrigCartonStatus NVARCHAR(10)
    DECLARE @n_OrigCartonNo     INT
-   DECLARE @c_OrigOrderKey     NVARCHAR(10)
    DECLARE @c_OrigLOT          NVARCHAR(10)
    DECLARE @n_TranCount        INT
    DECLARE @n_CartonLength     DECIMAL(18,5)
    DECLARE @n_CartonWidth      DECIMAL(18,5)
    DECLARE @n_CartonHeight     DECIMAL(18,5)
    DECLARE @n_CartonWeight     DECIMAL(18,5)
+   -- PICKDETAIL split cursor variables
+   DECLARE @c_PickDetailKey      NVARCHAR(10)
+   DECLARE @c_OldPickDetailKey   NVARCHAR(18)
+   DECLARE @n_RowQty             INT
+   DECLARE @n_SplitQty           INT
 
    SET @nErrNo    = 0
    SET @cErrMsg   = ''
@@ -231,12 +235,6 @@ BEGIN
                WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @n_OrigCartonNo
 
                SELECT TOP 1
-                  @c_OrigOrderKey = OrderKey,
-                  @c_OrigLOT      = LOT
-               FROM dbo.PICKDETAIL WITH (NOLOCK)
-               WHERE DropID = @cFromDropID AND StorerKey = @cStorerKey
-
-               SELECT TOP 1
                   @n_CartonLength = ISNULL(cz.CartonLength, 0),
                   @n_CartonWidth  = ISNULL(cz.CartonWidth,  0),
                   @n_CartonHeight = ISNULL(cz.CartonHeight, 0),
@@ -306,40 +304,106 @@ BEGIN
                   GOTO RollBackTran_Step4
                END CATCH
 
-               BEGIN TRY
-                  -- Insert new PICKDETAIL for the split carton
-                  INSERT INTO dbo.PICKDETAIL (
-                     StorerKey,    OrderKey,        SKU,
-                     LOT,          Qty,             DropID,
-                     CaseID,       CartonType,      AddWho,
-                     AddDate,      EditWho,         EditDate
-                  )
-                  VALUES (
-                     @cStorerKey,  @c_OrigOrderKey, @c_OrigSKU,
-                     @c_OrigLOT,   @nQTY,           @c_NewLabelNo,
-                     @c_NewLabelNo,@cCartonType,    @c_UserName,
-                     GETDATE(),    @c_UserName,     GETDATE()
-                  )
-               END TRY
-               BEGIN CATCH
-                  SET @nErrNo  = 273658
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                  GOTO RollBackTran_Step4
-               END CATCH
+                              -- Split PICKDETAIL: one new row per matching source row.
+               -- @cSKU = '' → all lines move (scenarios: 1-line split, 2-line split).
+               -- @cSKU = specific SKU → only that line moves (mixed scenario: 1 of N lines).
+               -- Qty per new row: full row Qty when splitting all lines; @nQTY when targeting one SKU.
+               DECLARE cur_PD CURSOR LOCAL FAST_FORWARD FOR
+                  SELECT PickDetailKey, Qty
+                  FROM dbo.PICKDETAIL WITH (NOLOCK)
+                  WHERE DropID    = @cFromDropID
+                    AND StorerKey = @cStorerKey
+                    AND (ISNULL(@cSKU, '') = '' OR Sku = @cSKU)
 
-               BEGIN TRY
-                  -- Reduce Qty on original PICKDETAIL
-                  UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
-                  SET Qty      = Qty - @nQTY,
-                      EditWho  = @c_UserName,
-                      EditDate = GETDATE()
-                  WHERE DropID = @cFromDropID AND StorerKey = @cStorerKey
-               END TRY
-               BEGIN CATCH
-                  SET @nErrNo  = 273659
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                  GOTO RollBackTran_Step4
-               END CATCH
+               OPEN cur_PD
+               FETCH NEXT FROM cur_PD INTO @c_OldPickDetailKey, @n_RowQty
+
+               WHILE @@FETCH_STATUS = 0
+               BEGIN
+                  -- Full-carton split (no SKU filter): move each row's own Qty.
+                  -- Single-line split (SKU filter): move @nQTY.
+                  SET @n_SplitQty = CASE
+                                       WHEN ISNULL(@cSKU, '') = '' THEN @n_RowQty
+                                       ELSE @nQTY
+                                    END
+
+                  SET @b_Success       = 0
+                  SET @c_PickDetailKey = ''
+
+                  EXEC dbo.nspg_GetKey
+                     'PICKDETAILKEY',
+                     10,
+                     @c_PickDetailKey OUTPUT,
+                     @b_Success        OUTPUT,
+                     @n_Err            OUTPUT,
+                     @c_ErrMsg         OUTPUT
+
+                  IF @b_Success <> 1
+                  BEGIN
+                     CLOSE cur_PD
+                     DEALLOCATE cur_PD
+                     SET @nErrNo  = 273658
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                     GOTO RollBackTran_Step4
+                  END
+
+                  BEGIN TRY
+                     -- Insert new PICKDETAIL row for the split carton
+                     INSERT INTO dbo.PICKDETAIL (
+                        PickDetailKey,   CaseID,         PickHeaderKey,  OrderKey,
+                        OrderLineNumber, Lot,            Storerkey,      Sku,
+                        AltSku,          UOM,            UOMQty,         Qty,
+                        QtyMoved,        Status,         DropID,         Loc,
+                        ID,              PackKey,        UpdateSource,   CartonGroup,
+                        CartonType,      ToLoc,          DoReplenish,    ReplenishZone,
+                        DoCartonize,     PickMethod,     WaveKey,        EffectiveDate,
+                        TrafficCop,      ArchiveCop,     OptimizeCop,    ShipFlag,
+                        PickSlipNo,      AddWho,         AddDate,        EditWho,
+                        EditDate
+                     )
+                     SELECT
+                        @c_PickDetailKey, CaseID,        PickHeaderKey,  OrderKey,
+                        OrderLineNumber,  Lot,           Storerkey,      Sku,
+                        AltSku,           UOM,           UOMQty,         @n_SplitQty,
+                        0,                Status,        @c_NewLabelNo,  Loc,
+                        ID,               PackKey,       UpdateSource,   CartonGroup,
+                        @cCartonType,     ToLoc,         DoReplenish,    ReplenishZone,
+                        DoCartonize,      PickMethod,    WaveKey,        EffectiveDate,
+                        NULL,             ArchiveCop,    '1',            ShipFlag,
+                        PickSlipNo,       @c_UserName,   GETDATE(),      @c_UserName,
+                        GETDATE()
+                     FROM dbo.PICKDETAIL WITH (NOLOCK)
+                     WHERE PickDetailKey = @c_OldPickDetailKey
+                  END TRY
+                  BEGIN CATCH
+                     CLOSE cur_PD
+                     DEALLOCATE cur_PD
+                     SET @nErrNo  = 273658
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                     GOTO RollBackTran_Step4
+                  END CATCH
+
+                  BEGIN TRY
+                     -- Reduce Qty on original PICKDETAIL row
+                     UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
+                     SET Qty      = Qty - @n_SplitQty,
+                         EditWho  = @c_UserName,
+                         EditDate = GETDATE()
+                     WHERE PickDetailKey = @c_OldPickDetailKey
+                  END TRY
+                  BEGIN CATCH
+                     CLOSE cur_PD
+                     DEALLOCATE cur_PD
+                     SET @nErrNo  = 273659
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                     GOTO RollBackTran_Step4
+                  END CATCH
+
+                  FETCH NEXT FROM cur_PD INTO @c_OldPickDetailKey, @n_RowQty
+               END
+
+               CLOSE cur_PD
+               DEALLOCATE cur_PD
 
                BEGIN TRY
                   -- Delete original PACKDETAIL + PACKINFO if ExpQty=0
@@ -440,6 +504,7 @@ BEGIN
                       EditWho    = SUSER_SNAME(),
                       TrafficCop = NULL
                   WHERE DropID = @cFromDropID
+                  AND StorerKey = @cStorerKey
                END TRY
                BEGIN CATCH
                   SET @nErrNo  = 273662
