@@ -1,20 +1,28 @@
+USE [GBRWMS]
 GO
-/****** Object:  StoredProcedure [RDT].[rdt_1641ExtValCSC]    Script Date: 7/2/2026 9:17:50 AM ******/
-SET ANSI_NULLS OFF
+/****** Object:  StoredProcedure [RDT].[rdt_1641ExtValCSC]    Script Date: 7/13/2026 11:14:04 AM ******/
+SET ANSI_NULLS ON
 GO
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER ON
 GO
-
 /***********************************************************************/
-/* Stored procedure: rdt_1641ExtValCSC                                 */
-/* Purpose: CSCUK01 Pallet Build Step 3 validation                     */
-/*          Do not allow scan of DropID if it is not yet packed        */
+/* Store procedure: rdt_1641ExtValCSC                                  */
+/* Purpose: CSCUK01 Pallet Build validation                            */
+/*          Step 1: pallet ID must start with OUT                      */
+/*          Step 3: scanned UCC must already be packed for DocType N   */
+/*                  and pallet must not mix wavekeys                   */
 /*                                                                     */
 /* Applies only to:                                                    */
 /* - StorerKey = CSCUK01                                               */
-/* - Orders.DocType = 'N'                                              */
+/* - Orders.DocType = 'N' for packed-carton validation                 */
+/*                                                                     */
+/* Modifications log:                                                  */
+/* 2026-07-06 1.0  SKE140  CSCUK01 pallet build validation             */
+/*                         Do not allow DropID if not yet packed       */
+/* 2026-07-13 1.1  SKE140  WaveKey validation update                   */
 /***********************************************************************/
-CREATE OR ALTER   PROC [RDT].[rdt_1641ExtValCSC]
+
+ALTER   PROC [RDT].[rdt_1641ExtValCSC]
 (
    @nMobile      INT,
    @nFunc        INT,
@@ -42,21 +50,34 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
 IF @nFunc = 1641
 BEGIN
-   IF @cStorerKey <> 'CSCUK01'
-      GOTO QUIT
+   IF @nStep = 1
+   BEGIN
+      IF UPPER(LTRIM(RTRIM(ISNULL(@cDropID, '')))) NOT LIKE 'OUT%'
+      BEGIN
+         SET @nErrNo = 218048
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         GOTO QUIT
+      END
+   END
 
    IF @nStep = 3
    BEGIN
       IF @nInputKey = 1
       BEGIN
          DECLARE
-              @cOrderKey NVARCHAR(10)
-            , @cDocType  NVARCHAR(10)
+              @cOrderKey            NVARCHAR(10)
+            , @cDocType             NVARCHAR(10)
+            , @cUCCWaveKey          NVARCHAR(20)
+            , @cExistingWaveKey     NVARCHAR(20)
+            , @nExistingWaveKeyCnt  INT
 
-         SET @nErrNo    = 0
-         SET @cErrMsg   = ''
-         SET @cOrderKey = ''
-         SET @cDocType  = ''
+         SET @nErrNo               = 0
+         SET @cErrMsg              = ''
+         SET @cOrderKey            = ''
+         SET @cDocType             = ''
+         SET @cUCCWaveKey          = ''
+         SET @cExistingWaveKey     = ''
+         SET @nExistingWaveKeyCnt  = 0
 
          SELECT TOP 1
               @cOrderKey = PD.OrderKey
@@ -68,7 +89,7 @@ BEGIN
          WHERE PD.StorerKey = @cStorerKey
          AND   PD.DropID = @cUCCNo
 
-         IF  @cDocType = 'N'
+         IF @cDocType = 'N'
          BEGIN
             IF NOT EXISTS
             (
@@ -86,10 +107,48 @@ BEGIN
                AND   PD.DropID = @cUCCNo
             )
             BEGIN
-               SET @nErrNo = 161001   --161001DropIDNotPack 
+               SET @nErrNo = 161001
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                GOTO QUIT
             END
+         END
+
+         /**************************************************************/
+         /* WaveKey validation - keep separate from existing logic     */
+         /**************************************************************/
+
+         SELECT TOP 1
+              @cUCCWaveKey = LTRIM(RTRIM(ISNULL(PD.WaveKey, '')))
+         FROM dbo.PickDetail PD WITH (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+         AND  (PD.CaseID = @cUCCNo OR PD.DropID = @cUCCNo)
+         ORDER BY CASE WHEN PD.CaseID = @cUCCNo THEN 0 ELSE 1 END,
+                  PD.PickDetailKey DESC
+
+         SELECT
+              @nExistingWaveKeyCnt = COUNT(DISTINCT LTRIM(RTRIM(ISNULL(PD.WaveKey, ''))))
+            , @cExistingWaveKey    = MIN(LTRIM(RTRIM(ISNULL(PD.WaveKey, ''))))
+         FROM dbo.DropIDDetail DID WITH (NOLOCK)
+         INNER JOIN dbo.PickDetail PD WITH (NOLOCK)
+            ON PD.CaseID = DID.ChildID
+           AND PD.StorerKey = @cStorerKey
+         WHERE DID.DropID = @cDropID
+         AND   LTRIM(RTRIM(ISNULL(PD.WaveKey, ''))) <> ''
+
+         IF @nExistingWaveKeyCnt > 1
+         BEGIN
+            SET @nErrNo = 229952   -- WaveKey does not match
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+            GOTO QUIT
+         END
+
+         IF @nExistingWaveKeyCnt = 1
+         AND LTRIM(RTRIM(ISNULL(@cUCCWaveKey, ''))) <> ''
+         AND LTRIM(RTRIM(ISNULL(@cUCCWaveKey, ''))) <> LTRIM(RTRIM(ISNULL(@cExistingWaveKey, '')))
+         BEGIN
+            SET @nErrNo = 229952   -- WaveKey does not match
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+            GOTO QUIT
          END
       END
    END
