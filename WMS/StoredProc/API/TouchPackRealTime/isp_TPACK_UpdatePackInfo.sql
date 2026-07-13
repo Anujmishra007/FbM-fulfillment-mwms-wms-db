@@ -31,6 +31,7 @@ GO
 /* 2026-03-16   3.7  JWF011     FCR-11639: Update for ExtMeasurement                */
 /* 2026-03-19   3.8  JWF011     FCR-11818: Update TPACK_UserSessionActivityLog      */
 /* 2026-05-11   3.9  JWF011     UWP-52781: Fix weight config                        */
+/* 2026-06-30   4.0  JWF011     UWP-59788: Fix NULL cube                            */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_UpdatePackInfo] (
@@ -82,6 +83,8 @@ BEGIN
          , @fTtlLength           FLOAT
          , @fTtlWidth            FLOAT
          , @fTtlHeight           FLOAT
+         , @cTempCartonType      NVARCHAR(10)
+         , @cTempCartonStatus    NVARCHAR(20)
 
    DECLARE @cVASCodeUDF2         NVARCHAR(60)   = ''
          , @cVASCodeUDF3         NVARCHAR(60)   = ''
@@ -113,6 +116,8 @@ BEGIN
    SET @fTtlLength         = 0
    SET @fTtlWidth          = 0
    SET @fTtlHeight         = 0
+   SET @cTempCartonType    = ''
+   SET @cTempCartonStatus  = ''
    
    IF EXISTS ( SELECT 1 
                FROM PACKHEADER (NOLOCK)
@@ -244,7 +249,7 @@ BEGIN
       )
       BEGIN
          SET @fTtlWeight = @fWeight
-         SET @fTtlCube = @fCube
+         SET @fTtlCube = ISNULL(@fCube, 0.0)
       END
       ELSE
       BEGIN
@@ -581,15 +586,14 @@ BEGIN
    IF @cCartonStatus IN ('CLOSED', 'INPROGRESS')
    BEGIN
       -- Add Audit Log for Carton Type change
-      SELECT 1 
+      SELECT @cTempCartonType = ISNULL(CartonType, '')
+      , @cTempCartonStatus = ISNULL(CartonStatus, '')
       FROM PACKINFO (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
       AND CartonNo = @nCartonNo
-      AND (CartonType <> @cCartonType AND CartonType <> ''
-      OR (CartonStatus = 'PENDAUDIT' AND CartonStatus <> @cCartonStatus)
-      )
       
-      IF @@ROWCOUNT = 1
+      IF (@cTempCartonType <> '' AND @cTempCartonType <> @cCartonType)
+      OR (@cTempCartonStatus = 'PENDAUDIT' AND @cTempCartonStatus <> @cCartonStatus)
       BEGIN
          INSERT INTO PackInfo_AuditLog (
                  ActionType

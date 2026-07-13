@@ -12,6 +12,7 @@ GO
 /* Date       Rev    Author     Purposes                                      */
 /* 2025-04-18 1.0.0  Dennis     FCR-4159 Created                              */
 /* 2026-06-18 2.0.0  Dennis     FCR-13604 New 6-screen carton check flow      */
+/* 2026-07-13 2.1.0  Dennis     FCR-13604 Added TRY/CATCH to DML operations   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Floor_Check] (
@@ -308,7 +309,8 @@ BEGIN
       
       -- Prepare Next Screen Variable
       SET @cOutField01 = @cFromLoc
-       
+      SET @cOutField02 = ''
+
       -- GOTO Next Screen
       SET @nScn  = @nScn_FromID
       SET @nStep = @nStep_FromID
@@ -370,11 +372,18 @@ BEGIN
          -- SHIPPED: insert record + navigate to Msg screen (Screen 5)
          SET @cStatusMessage = 'SHIPPED'
 
-         INSERT INTO RDT.RDTDataCapture
-            (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String2, V_STRING3)
-         VALUES
-            (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'P',
-             @cFromLoc, CONVERT(VARCHAR(19), GETDATE(), 120), @cStatusMessage)
+         BEGIN TRY
+            INSERT INTO RDT.RDTDataCapture
+               (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String2, V_STRING3)
+            VALUES
+               (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'P',
+                @cFromLoc, CONVERT(VARCHAR(19), GETDATE(), 120), @cStatusMessage)
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 237305
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert DataCapture Failed
+            GOTO Quit
+         END CATCH
 
          SET @cOutField01 = @cFromLoc
          SET @cOutField02 = @cFromID
@@ -392,6 +401,7 @@ BEGIN
          SET @cCartonID   = ''
          SET @cOutField01 = @cFromLoc
          SET @cOutField02 = @cFromID
+         SET @cOutField03 = ''
 
          SET @nScn  = @nScn_CartonID
          SET @nStep = @nStep_CartonID
@@ -453,11 +463,18 @@ BEGIN
             SET @cStatusMessage = 'WRONG LOC'
          END
 
-         INSERT INTO RDT.RDTDataCapture
-            (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String2, V_STRING3)
-         VALUES
-            (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'P',
-             @cFromLoc, CONVERT(VARCHAR(19), GETDATE(), 120), @cStatusMessage)
+         BEGIN TRY
+            INSERT INTO RDT.RDTDataCapture
+               (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String2, V_STRING3)
+            VALUES
+               (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'P',
+                @cFromLoc, CONVERT(VARCHAR(19), GETDATE(), 120), @cStatusMessage)
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 237306
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert DataCapture Pallet Failed
+            GOTO Quit
+         END CATCH
 
          -- Prepare next screen var
          SET @cOutField01 = @cFromLoc
@@ -495,24 +512,22 @@ BEGIN
             AND U.StorerKey = PD.StorerKey
          WHERE PD.StorerKey = @cStorerKey
          AND   PD.CaseID    = @cCartonID
+         AND   PD.ID        = @cFromID
+         AND   PD.LOC       = @cFromLoc
          AND   PD.Status   <> '4'
 
          SELECT @nTotal = COUNT(1) FROM @tUCC
 
+         SET @nScanned = 1
+
          IF @nTotal > 0
          BEGIN
-            SET @nScanned = 1
-
             SELECT @cUCC01 = ISNULL(MAX(CASE WHEN RowNum = 1 THEN UCC END), '') FROM @tUCC
             SELECT @cUCC02 = ISNULL(MAX(CASE WHEN RowNum = 2 THEN UCC END), '') FROM @tUCC
             SELECT @cUCC03 = ISNULL(MAX(CASE WHEN RowNum = 3 THEN UCC END), '') FROM @tUCC
             SELECT @cUCC04 = ISNULL(MAX(CASE WHEN RowNum = 4 THEN UCC END), '') FROM @tUCC
             SELECT @cUCC05 = ISNULL(MAX(CASE WHEN RowNum = 5 THEN UCC END), '') FROM @tUCC
 
-            -- XX = current page, YY = total pages (CEILING(@nTotal/5))
-            SET @cOutField01 = @cFromLoc
-            SET @cOutField02 = @cFromID
-            SET @cOutField03 = @cCartonID
             SET @cOutField04 = @cUCC01
             SET @cOutField05 = @cUCC02
             SET @cOutField06 = @cUCC03
@@ -520,11 +535,25 @@ BEGIN
             SET @cOutField08 = @cUCC05
             SET @cOutField09 = RIGHT('00' + TRY_CAST(@nScanned AS NVARCHAR(2)), 2)
                              + '/' + RIGHT('00' + TRY_CAST((@nTotal + 4) / 5 AS NVARCHAR(2)), 2)
-
-            SET @nScn  = @nScn_UCCList
-            SET @nStep = @nStep_UCCList
-            GOTO Quit
          END
+         ELSE
+         BEGIN
+            SET @cOutField04 = 'NO UCCs'
+            SET @cOutField05 = ''
+            SET @cOutField06 = ''
+            SET @cOutField07 = ''
+            SET @cOutField08 = ''
+            SET @cOutField09 = '00/00'
+         END
+
+         -- XX = current page, YY = total pages (CEILING(@nTotal/5))
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = @cCartonID
+
+         SET @nScn  = @nScn_UCCList
+         SET @nStep = @nStep_UCCList
+         GOTO Quit
       END
 
       -- DISPLAYUCC = 0, or no UCCs found: run status checks then go to Screen 6
@@ -542,17 +571,8 @@ BEGIN
       END
       ELSE IF EXISTS (
          SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
-         WHERE REFNO      = @cCartonID
-         AND   CartonType <> '9999'
-      )
-      BEGIN
-         SET @cStatusMessage = 'LOOSE PICK: NO UCCs'
-         SET @cStatusCode    = 'NO UCCs'
-      END
-      ELSE IF EXISTS (
-         SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
          WHERE REFNO  = @cCartonID
-         AND   STATUS <> 'PACKED'
+         AND   CARTONSTATUS <> 'PACKED'
       )
       BEGIN
          SET @cStatusMessage = 'CARTON NOT PACKED'
@@ -577,11 +597,18 @@ BEGIN
          AND   CaseID    = @cCartonID
       END
 
-      INSERT INTO RDT.RDTDataCapture
-         (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String4, V_String2, V_STRING3)
-      VALUES
-         (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'C',
-          @cFromLoc, @cCartonID, CONVERT(NVARCHAR(19), GETDATE(), 120), @cStatusCode)
+      BEGIN TRY
+         INSERT INTO RDT.RDTDataCapture
+            (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String4, V_String2, V_STRING3)
+         VALUES
+            (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'C',
+             @cFromLoc, @cCartonID, CONVERT(NVARCHAR(19), GETDATE(), 120), @cStatusCode)
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 237308
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert DataCapture Carton Failed
+         GOTO Quit
+      END CATCH
 
       SET @cOutField01 = @cFromLoc
       SET @cOutField02 = @cFromID
@@ -596,6 +623,8 @@ BEGIN
    IF @nInputKey = 0 -- ESC
    BEGIN
       SET @cCartonID   = ''
+      SET @cOutField01 = @cFromLoc
+      SET @cOutField02 = ''
       SET @cOutField03 = ''
 
       SET @nScn  = @nScn_FromID
@@ -641,21 +670,11 @@ BEGIN
             SET @cStatusMessage = 'CARTON SHIPPED'
             SET @cStatusCode    = 'SHIPPED'
          END
-         -- Priority 2: Loose pick (CartonType <> '9999')
-         ELSE IF EXISTS (
-            SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
-            WHERE REFNO      = @cCartonID
-            AND   CartonType <> '9999'
-         )
-         BEGIN
-            SET @cStatusMessage = 'LOOSE PICK: NO UCCs'
-            SET @cStatusCode    = 'NO UCCs'
-         END
-         -- Priority 3: Carton not packed
+         -- Priority 2: Carton not packed
          ELSE IF EXISTS (
             SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
             WHERE REFNO   = @cCartonID
-            AND   STATUS  <> 'PACKED'
+            AND   CARTONSTATUS  <> 'PACKED'
          )
          BEGIN
             SET @cStatusMessage = 'CARTON NOT PACKED'
@@ -663,7 +682,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            -- Priority 4: Wrong pallet / Priority 5: Floor checked
+            -- Priority 3: Wrong pallet / Priority 4: Floor checked
             SELECT @cStatusMessage    = CASE
                      WHEN PalletKey <> ISNULL(@cFromID, '') THEN 'CARTON DIFF PALLET:'
                      ELSE 'FLOOR CHECKED'
@@ -681,11 +700,18 @@ BEGIN
             AND   CaseID    = @cCartonID
          END
 
-         INSERT INTO RDT.RDTDataCapture
-            (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String4, V_String2, V_STRING3)
-         VALUES
-            (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'C',
-             @cFromLoc, @cCartonID, CONVERT(NVARCHAR(19), GETDATE(), 120), @cStatusCode)
+         BEGIN TRY
+            INSERT INTO RDT.RDTDataCapture
+               (STORERKEY, FACILITY, V_ID, V_STRING1, V_Loc, V_String4, V_String2, V_STRING3)
+            VALUES
+               (@cStorerKey, @cFacility, @cFromID, TRY_CAST(@nFunc AS NVARCHAR(10)) + 'C',
+                @cFromLoc, @cCartonID, CONVERT(NVARCHAR(19), GETDATE(), 120), @cStatusCode)
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 237309
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert DataCapture UCC Carton Failed
+            GOTO Quit
+         END CATCH
 
          SET @cOutField01 = @cFromLoc
          SET @cOutField02 = @cFromID
@@ -710,6 +736,8 @@ BEGIN
             AND U.StorerKey = PD.StorerKey
          WHERE PD.StorerKey = @cStorerKey
          AND   PD.CaseID    = @cCartonID
+         AND   PD.ID        = @cFromID
+         AND   PD.LOC       = @cFromLoc
          AND   PD.Status   <> '4'
 
          SELECT @cUCC01 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 1 THEN UCC END), '') FROM @tUCC
@@ -763,6 +791,8 @@ BEGIN
             AND U.StorerKey = PD.StorerKey
          WHERE PD.StorerKey = @cStorerKey
          AND   PD.CaseID    = @cCartonID
+         AND   PD.ID        = @cFromID
+         AND   PD.LOC       = @cFromLoc
          AND   PD.Status   <> '4'
 
          SELECT @cUCC01 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 1 THEN UCC END), '') FROM @tUCC
@@ -896,60 +926,66 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
 Quit:
 BEGIN
-   UPDATE RDTMOBREC WITH (ROWLOCK) SET 
-      EditDate = GETDATE(), 
-      ErrMsg = @cErrMsg, 
-      Func   = @nFunc,
-      Step   = @nStep,
-      Scn    = @nScn,
+   BEGIN TRY
+      UPDATE RDTMOBREC WITH (ROWLOCK) SET
+         EditDate = GETDATE(),
+         ErrMsg = @cErrMsg,
+         Func   = @nFunc,
+         Step   = @nStep,
+         Scn    = @nScn,
 
-      StorerKey = @cStorerKey,
-      Facility  = @cFacility, 
-      Printer   = @cPrinter, 
-      -- UserName  = @cUserName,
-      InputKey  =   @nInputKey,
+         StorerKey = @cStorerKey,
+         Facility  = @cFacility,
+         Printer   = @cPrinter,
+         -- UserName  = @cUserName,
+         InputKey  =   @nInputKey,
 
-      V_UOM = @cPUOM,
-  
-      V_String1 = @cMBOLKey,
-      V_String2 = @cTruckID,
-      V_String3 = @cFromID,
-      V_String4 = @cSealNo1,
-      V_String5 = @cSealNo2,
-      V_String6 = @cSealNo3,
-      V_String7 = @c_ContainerKey,
-      V_String8 = @cExtScnSP,
-      V_String9 = @cFromLoc,
-      V_String10 = @cCartonID,
-      V_String11 = @cDisplayUCC,
-      V_Integer1 = @nTotal,
-      V_Integer2 = @nScanned,
-      
-      I_Field01 = @cInField01,  O_Field01 = @cOutField01, 
-      I_Field02 = @cInField02,  O_Field02 = @cOutField02, 
-      I_Field03 = @cInField03,  O_Field03 = @cOutField03, 
-      I_Field04 = @cInField04,  O_Field04 = @cOutField04, 
-      I_Field05 = @cInField05,  O_Field05 = @cOutField05, 
-      I_Field06 = @cInField06,  O_Field06 = @cOutField06, 
-      I_Field07 = @cInField07,  O_Field07 = @cOutField07, 
-      I_Field08 = @cInField08,  O_Field08 = @cOutField08, 
-      I_Field09 = @cInField09,  O_Field09 = @cOutField09, 
-      I_Field10 = @cInField10,  O_Field10 = @cOutField10, 
-      I_Field11 = @cInField11,  O_Field11 = @cOutField11, 
-      I_Field12 = @cInField12,  O_Field12 = @cOutField12, 
-      I_Field13 = @cInField13,  O_Field13 = @cOutField13, 
-      I_Field14 = @cInField14,  O_Field14 = @cOutField14, 
-      I_Field15 = @cInField15,  O_Field15 = @cOutField15,
+         V_UOM = @cPUOM,
 
-      FieldAttr01  = @cFieldAttr01,   FieldAttr02  = @cFieldAttr02,
-      FieldAttr03  = @cFieldAttr03,   FieldAttr04  = @cFieldAttr04,
-      FieldAttr05  = @cFieldAttr05,   FieldAttr06  = @cFieldAttr06,
-      FieldAttr07  = @cFieldAttr07,   FieldAttr08  = @cFieldAttr08,
-      FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,
-      FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,
-      FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
-      FieldAttr15  = @cFieldAttr15 
-   WHERE Mobile = @nMobile
+         V_String1 = @cMBOLKey,
+         V_String2 = @cTruckID,
+         V_String3 = @cFromID,
+         V_String4 = @cSealNo1,
+         V_String5 = @cSealNo2,
+         V_String6 = @cSealNo3,
+         V_String7 = @c_ContainerKey,
+         V_String8 = @cExtScnSP,
+         V_String9 = @cFromLoc,
+         V_String10 = @cCartonID,
+         V_String11 = @cDisplayUCC,
+         V_Integer1 = @nTotal,
+         V_Integer2 = @nScanned,
+
+         I_Field01 = @cInField01,  O_Field01 = @cOutField01,
+         I_Field02 = @cInField02,  O_Field02 = @cOutField02,
+         I_Field03 = @cInField03,  O_Field03 = @cOutField03,
+         I_Field04 = @cInField04,  O_Field04 = @cOutField04,
+         I_Field05 = @cInField05,  O_Field05 = @cOutField05,
+         I_Field06 = @cInField06,  O_Field06 = @cOutField06,
+         I_Field07 = @cInField07,  O_Field07 = @cOutField07,
+         I_Field08 = @cInField08,  O_Field08 = @cOutField08,
+         I_Field09 = @cInField09,  O_Field09 = @cOutField09,
+         I_Field10 = @cInField10,  O_Field10 = @cOutField10,
+         I_Field11 = @cInField11,  O_Field11 = @cOutField11,
+         I_Field12 = @cInField12,  O_Field12 = @cOutField12,
+         I_Field13 = @cInField13,  O_Field13 = @cOutField13,
+         I_Field14 = @cInField14,  O_Field14 = @cOutField14,
+         I_Field15 = @cInField15,  O_Field15 = @cOutField15,
+
+         FieldAttr01  = @cFieldAttr01,   FieldAttr02  = @cFieldAttr02,
+         FieldAttr03  = @cFieldAttr03,   FieldAttr04  = @cFieldAttr04,
+         FieldAttr05  = @cFieldAttr05,   FieldAttr06  = @cFieldAttr06,
+         FieldAttr07  = @cFieldAttr07,   FieldAttr08  = @cFieldAttr08,
+         FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,
+         FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,
+         FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
+         FieldAttr15  = @cFieldAttr15
+      WHERE Mobile = @nMobile
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo  = 237312
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update MobRec Failed
+   END CATCH
 END
 
 

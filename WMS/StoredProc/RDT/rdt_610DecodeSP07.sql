@@ -72,7 +72,7 @@ BEGIN
 
    DECLARE @p1 INT, @p2 INT, @p3 INT, @p4 INT,
            @p5 INT, @p6 INT, @p7 INT, @p8 INT
-
+   SELECT @cUPC = ''
    IF @nStep IN (9, 18, 20)
    BEGIN
       -- Read full barcode, username and facility from RDTMOBREC (@cBarcode param may be truncated)
@@ -110,8 +110,19 @@ BEGIN
       -- Sample: 8901326038215&1406-0310-DKPTD&L&4525003831&NB&0725&021712&4&5490
       IF @nStep = 9
       BEGIN
-         -- SKU = Seg2 + '-' + Seg3
-         SET @cUPC = LEFT(@seg2 + '-' + @seg3, 20)
+         -- SKU = SKU.SKU where BUSR5 = Seg2 and BUSR6 = Seg3
+         SELECT @cUPC = SKU
+         FROM dbo.SKU WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+         AND   BUSR5     = @seg2
+         AND   BUSR6     = @seg3
+
+         IF ISNULL(@cUPC, '') = ''
+         BEGIN
+            SET @nErrNo = 62158
+            SET @cErrMsg = rdt.rdtgetmessage( 62158, @cLangCode, 'DSP') -- SKU Not Found
+            GOTO Quit
+         END
 
          -- UCC = Seg4 + Seg5 + Seg7                -> CCDETAIL.REFNO
          SET @cUCC = LEFT(@seg4 + @seg5 + @seg7, 20)
@@ -121,8 +132,12 @@ BEGIN
       -- Sample: 8901326038215&1406-0310-DKPTD&L&4525003831&NB&0725&000328&5490
       IF @nStep IN (18, 20)
       BEGIN
-         -- SKU = Seg2 + '-' + Seg3
-         SET @cUPC        = LEFT(@seg2 + '-' + @seg3, 20)
+         -- SKU = SKU.SKU where BUSR5 = Seg2 and BUSR6 = Seg3
+         SELECT @cUPC = SKU
+         FROM dbo.SKU WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+         AND   BUSR5     = @seg2
+         AND   BUSR6     = @seg3
 
          -- Batch = Seg6 + Seg8                     -> CCDETAIL.LOTTABLE01
          SET @cLottable01 = LEFT(@seg6 + @seg8, 18)

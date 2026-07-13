@@ -11,14 +11,15 @@ GO
 /*                                                                        */    
 /* Purpose: FCR-13361 - AEOMX Reverse Wave                                */  
 /*                                                                        */  
-/* Called By: Wave Release                                                */    
+/* Called By: Wave Reverse Release                                        */    
 /*          :                                                             */    
-/* PVCS Version: 1.0                                                      */    
+/* Version: 1.0                                                           */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-07  Wan      1.0   FCR-12980 CRv8.6                            */
 /**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV13]        
    @c_Wavekey     NVARCHAR(10) 
@@ -163,7 +164,7 @@ BEGIN
          SET @n_Continue = 3    
          SET @n_Err = 70010    
          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                      +': This Wave has not been released. (mspRVWAV09)'           
+                      +': This Wave has not been released. (mspRVWAV13)'           
       END                   
    END  
 
@@ -177,7 +178,7 @@ BEGIN
           SET @n_Continue = 3    
           SET @n_Err = 70020    
           SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Some Tasks have been started'
-                       +'. Reverse Wave Released Abort. (mspRVWAV09)'         
+                       +'. Reverse Wave Released Abort. (mspRVWAV13)'         
       END                   
    END  
 
@@ -210,14 +211,14 @@ BEGIN
           SET @n_Err = 70030    
           SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
                        +': RPF is needed for multiple released wave picking found'
-                       +'. Reverse Wave Released Abort. (mspRVWAV09)'
+                       +'. Reverse Wave Released Abort. (mspRVWAV13)'
       END
    END
 
    IF @n_Continue = 1  
    BEGIN 
       -- The whole wave ready to reverse
-      SET @CUR_DELTASK = CURSOR FAST_FORWARD READ_ONLY FOR
+      SET @CUR_DELTASK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT tt.TaskDetailKey
             ,tt.TaskType
             ,tt.Storerkey
@@ -250,20 +251,21 @@ BEGIN
             WHERE TASKDETAIL.TaskDetailKey = @c_TaskDetailKey   
             AND TASKDETAIL.Sourcetype = @c_SourceType 
             AND TASKDETAIL.TaskType = @c_TaskType
-  
            
             SET @n_Err = @@ERROR  
             IF @n_Err <> 0   
             BEGIN  
                SET @n_Continue = 3    
                SET @n_Err = 70040   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Delete Taskdetail Table Failed. (mspRVWAV09)' 
+               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Delete Taskdetail Table Failed. (mspRVWAV13)' 
             END 
 
             IF @n_Continue = 1 AND @c_TaskType = 'FCP'
             BEGIN
-               SET @CUR_DELPICK = CURSOR FAST_FORWARD READ_ONLY FOR
+               SET @CUR_DELPICK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                SELECT pd.PickDetailKey
+                     ,pd.CartonType                                                 --Wan
+                     ,pd.CaseID                                                     --Wan             
                FROM WAVEDETAIL wd (NOLOCK)    
                JOIN PICKDETAIL pd (NOLOCK) ON wd.Orderkey = pd.Orderkey  
                WHERE wd.Wavekey = @c_Wavekey
@@ -273,24 +275,35 @@ BEGIN
                OPEN @CUR_DELPICK
 
                FETCH NEXT FROM @CUR_DELPICK INTO @c_PickDetailKey
+                                                ,@c_CartonType                      --Wan
+                                                ,@c_Caseid                          --Wan
 
                WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
                BEGIN
-                  UPDATE PICKDETAIL WITH (ROWLOCK)   
-                     SET PICKDETAIL.TaskdetailKey = ''  
-                        ,CartonType = @c_CartonType
-                        ,Caseid = @c_Caseid                      
-                        ,TrafficCop = NULL  
-                  WHERE PICKDETAIL.PickDetailKey = @c_PickDetailKey   
+                  IF @c_Channel_b = 'ECOM'                                          --Wan
+                  BEGIN
+                     SET @c_CartonType = ''
+                     SET @c_Caseid = ''
+                  END
+
+                  UPDATE PICKDETAIL   
+                     SET PICKDETAIL.TaskdetailKey = ''
+                        ,PICKDETAIL.PickSlipNo = ''                                 --Wan                     
+                        ,PICKDETAIL.CartonType = @c_CartonType
+                        ,PICKDETAIL.Caseid = @c_Caseid
+                        ,PICKDETAIL.TrafficCop = NULL  
+                  WHERE PICKDETAIL.PickDetailKey = @c_PickDetailKey    
            
                   SET @n_Err = @@ERROR  
                   IF @n_Err <> 0   
                   BEGIN  
                      SET @n_Continue = 3    
                      SET @n_Err = 70050   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Update Pickdetail Table Failed. (mspRVWAV09)'      
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Update Pickdetail Table Failed. (mspRVWAV13)'      
                   END 
                   FETCH NEXT FROM @CUR_DELPICK INTO @c_PickDetailKey
+                                                   ,@c_CartonType                   --Wan
+                                                   ,@c_Caseid                       --Wan
                END
                CLOSE @CUR_DELPICK
                DEALLOCATE @CUR_DELPICK
@@ -359,7 +372,7 @@ BEGIN
                WHERE ph.Orderkey  = @c_Orderkey
             END
 
-            IF @c_PickSlipNo > ''
+            IF @c_Channel_b = 'ECOM' AND @c_PickSlipNo > ''
             BEGIN
                SET @CUR_PACK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                SELECT pd.CartonNo 

@@ -56,7 +56,7 @@ BEGIN
                , @cDocType             NVARCHAR(1)
                , @nRowCount            INT
                , @cIVAS                NVARCHAR(30)
-               , @cLVSIDPrefix         NVARCHAR(15) = 'LVSIDPrefix'
+               , @cLVSIDPrefix         NVARCHAR(15) = 'USIDPrefix'
                , @cLVS                 NVARCHAR(3) = 'LVS'
                , @cVAS                 NVARCHAR(3) = 'VAS'
 

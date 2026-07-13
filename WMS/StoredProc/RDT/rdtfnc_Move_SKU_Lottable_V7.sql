@@ -123,7 +123,7 @@ DECLARE
    @cPrevOutField15        NVARCHAR(20),  --(yeekung03)
    @cLOCCheckDigitSP       NVARCHAR( 20), -- (Cuize)
    @cCheckDigitLOC         NVARCHAR( 20), -- (Cuize)
-   @cMax                   NVARCHAR( MAX),
+   @cVBarcode              NVARCHAR( MAX),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -212,7 +212,7 @@ SELECT
 
    @nFromStep           = V_FromStep,  --(yeekung01)
    @nFromScn            = V_FromScn,   --(yeekung01)
-   @cMax                = V_Max,
+   @cVBarcode           = V_Barcode,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -632,7 +632,7 @@ BEGIN
       -- Prep next screen var
       SET @cOutField01 = @cFromLOC
       SET @cOutField02 = @cFromID
-      SET @cMax = CASE WHEN @cDefaultSKU2Move = '' THEN '' ELSE @cDefaultSKU2Move END --@cSKU
+      SET @cVBarcode = CASE WHEN @cDefaultSKU2Move = '' THEN '' ELSE @cDefaultSKU2Move END --@cSKU
 
       -- Go to next screen
       SET @nScn = @nScn_SKU
@@ -687,7 +687,7 @@ BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
       DECLARE @cSKUBarcode NVARCHAR( 2000)
-      SET @cSKUBarcode = SUBSTRING( @cMax, 1, 2000)
+      SET @cSKUBarcode = SUBSTRING( @cVBarcode, 1, 2000)
 
       -- Screen mapping
       SET @cSKU = SUBSTRING( @cSKUBarcode, 1, 60) -- SKU
@@ -1249,7 +1249,7 @@ BEGIN
       SET @cSKUDescr = ''
       SET @cOutField01 = @cFromLOC
       SET @cOutField02 = @cFromID
-      SET @cMax = CASE WHEN @cDefaultSKU2Move = '' THEN '' ELSE @cDefaultSKU2Move END -- SKU
+      SET @cVBarcode = CASE WHEN @cDefaultSKU2Move = '' THEN '' ELSE @cDefaultSKU2Move END -- SKU
       SET @cOutField04 = '' -- SKU desc 1
       SET @cOutField05 = '' -- SKU desc 2
 
@@ -1629,7 +1629,7 @@ BEGIN
          -- Prep next screen var
          SET @cOutField01 = @cFromLOC
          SET @cOutField02 = @cFromID
-         SET @cMax = ''  -- SKU/UPC (V_Max input)
+         SET @cVBarcode = ''  -- SKU/UPC (V_Barcode input)
 
          -- Go to QTY screen
          SET @nScn = @nScn_SKU
@@ -2269,7 +2269,7 @@ BEGIN
 
       V_FromStep = @nFromStep, --(yeekung01)
       V_FromScn  = @nFromScn,  --(yeekung01)
-      V_Max     = @cMax,
+      V_Barcode  = @cVBarcode,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

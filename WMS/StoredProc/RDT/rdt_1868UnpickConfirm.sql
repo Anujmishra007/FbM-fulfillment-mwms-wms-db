@@ -334,7 +334,7 @@ BEGIN
                DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, @cNewPickDetailKey,
                1,
                NULL, --TrafficCop,
-               '1'  --OptimizeCop
+               NULL  --OptimizeCop
             FROM dbo.PickDetail WITH (NOLOCK)
             WHERE PickDetailKey = @cPickDetailKey
          END TRY

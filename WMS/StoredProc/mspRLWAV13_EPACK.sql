@@ -13,12 +13,13 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          :                                                             */    
-/* PVCS Version: 1.0                                                      */    
+/* Version: 1.0                                                           */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-09  Wan      1.0   FCR-12980 - CR v8.6                         */
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_ePack]        
@@ -228,7 +229,7 @@ BEGIN
             ,  @c_PickslipType          = '3'   --Discrete('8', '3', 'D')  Conso('5','6','7','9','C')  Xdock ('XD','LB','LP')  
             ,  @c_ConsolidateByLoad     = 'N'   --Y=Create load consolidate pickslip  N=create discrete pickslip  
             ,  @c_Refkeylookup          = 'N'   --Y=Create refkeylookup records  N=Not create  
-            ,  @c_LinkPickSlipToPick    = 'Y'   --Y=Update pickslipno to pickdetail.pickslipno  N=Not update to pickdetail  
+            ,  @c_LinkPickSlipToPick    = 'N'   --Y=Update pickslipno to pickdetail.pickslipno  N=Not update to pickdetail  
             ,  @c_AutoScanIn            = 'N'   --Y=Auto scan in the pickslip N=Not auto scan in                                              
             ,  @b_Success               = @b_Success  OUTPUT  
             ,  @n_Err                   = @n_Err      OUTPUT   
@@ -311,7 +312,7 @@ BEGIN
                         ,  LabelLine
                         ,  Storerkey
                         ,  Sku
-                        ,  Qty
+                        ,  ExpQty                                                   --(Wan01)         
                         )
             SELECT @c_PickSlipNo
                   ,CartonNo = @n_CartonNo
@@ -320,7 +321,7 @@ BEGIN
                                  OVER (ORDER BY pw.Storerkey, pw.Sku)),5)
                   ,pw.Storerkey
                   ,pw.Sku
-                  ,Qty = ISNULL(SUM(pw.Qty),0)
+                  ,ExpQty = ISNULL(SUM(pw.Qty),0)                                   --(Wan01) 
             FROM #PICKDETAIL_WIP AS pw
             WHERE pw.Orderkey = @c_Orderkey
             GROUP BY pw.Storerkey
@@ -378,6 +379,7 @@ BEGIN
          BEGIN
             UPDATE pw
                SET pw.DoCartonize= 'Y'
+                  ,pw.PickSlipNo = @c_PickSlipNo                                    --(Wan)
                   ,pw.CartonType = @c_CartonType
                   ,pw.CaseID     = @c_LabelNo
                   ,pw.EditWho    = @c_UserName 

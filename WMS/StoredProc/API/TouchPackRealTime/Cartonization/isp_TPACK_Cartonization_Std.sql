@@ -10,6 +10,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-05-14   1.0  GCH225     UWP-55977: Standard Cartonization process.       */
+/* 2026-07-07   1.1  MBR282     UWP-60792: Update logic for #tItemForCartonize   */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_Cartonization_Std] (
      @cType                NVARCHAR(30)      = ''
@@ -279,31 +280,37 @@ BEGIN
       BEGIN
          INSERT INTO #tItemForCartonize (Batch, SKU, Qty)
          SELECT  1 AS Batch
-               , PD1.SKU AS SKU
-               , ISNULL(SUM(PD1.Qty), 0) - ISNULL(SUM(PD2.Qty), 0) AS Qty
-         FROM PICKDETAIL PD1 (NOLOCK)
+         , PD1.SKU AS SKU
+         , ISNULL(PD1.PickedQty, 0) - ISNULL(PD2.Qty, 0) AS Qty
+         FROM (SELECT OrderKey
+         , SKU
+         , SUM(Qty) AS PickedQty
+         FROM PICKDETAIL (NOLOCK)
+         WHERE OrderKey = @cOrderKey
+         AND (@cDropID = '' OR DropID = @cDropID)
+         GROUP BY OrderKey, SKU) PD1
          LEFT JOIN @tPackedItem PD2
          ON PD1.SKU = PD2.SKU
          AND PD1.OrderKey = PD2.OrderKey
-         WHERE PD1.OrderKey = @cOrderKey
-         AND (@cDropID = '' OR PD1.DropID = @cDropID)
-         GROUP BY PD1.SKU
       END
       ELSE IF @cLoadKey <> ''
       BEGIN
          INSERT INTO #tItemForCartonize (Batch, SKU, Qty)
          SELECT  1 AS Batch
-               , PD1.SKU AS SKU
-               , ISNULL(SUM(PD1.Qty), 0) - ISNULL(SUM(PD2.Qty), 0) AS Qty
-         FROM PICKDETAIL PD1 (NOLOCK)
+         , PD1.SKU AS SKU
+         , ISNULL(PD1.PickedQty, 0) - ISNULL(PD2.Qty, 0) AS Qty
+         FROM (SELECT PD.SKU
+         , LPD.LoadKey
+         , SUM(PD.Qty) AS PickedQty
+         FROM PICKDETAIL PD (NOLOCK)
          INNER JOIN LOADPLANDETAIL LPD (NOLOCK)
-         ON LPD.OrderKey = PD1.OrderKey
+         ON PD.OrderKey = LPD.OrderKey
+         WHERE LPD.LoadKey = @cLoadKey
+         AND (@cDropID = '' OR PD.DropID = @cDropID)
+         GROUP BY PD.SKU, LPD.LoadKey) PD1
          LEFT JOIN @tPackedItem PD2
          ON PD1.SKU = PD2.SKU
-         AND LPD.LoadKey = PD2.LoadKey
-         WHERE LPD.LoadKey = @cLoadKey
-         AND (@cDropID = '' OR PD1.DropID = @cDropID)
-         GROUP BY PD1.SKU
+         AND PD1.LoadKey = PD2.LoadKey
       END
 
       IF NOT EXISTS (SELECT 1 
@@ -312,7 +319,7 @@ BEGIN
       BEGIN
          GOTO EXIT_SP
       END
-
+      
       IF EXISTS ( SELECT 1 
                   FROM #tItemForCartonize (NOLOCK) 
                   WHERE Qty < 0

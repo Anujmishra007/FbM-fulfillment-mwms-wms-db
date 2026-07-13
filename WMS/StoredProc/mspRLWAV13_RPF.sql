@@ -13,12 +13,15 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          :                                                             */    
-/* PVCS Version: 1.0                                                      */    
+/* Version: 1.0                                                           */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-13  Wan      1.9   FCR-12980. Fix.                             */
+/*                            - GroupKey Break by toloclevel, LPN capacity*/
+/*                             ,Areakey                                   */
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_RPF]        
@@ -61,7 +64,7 @@ BEGIN
          , @c_SectionKey         NVARCHAR(10)= ''
          , @c_SectionKey_P       NVARCHAR(10)= ''
          , @c_LoseID             NVARCHAR(1) = ''
-         , @c_PickZone           NVARCHAR(10)= '' 
+         , @c_PutawayZone        NVARCHAR(10)= '' 
          , @c_AreaKey_P          NVARCHAR(10)= '' 
          , @c_AreaKey            NVARCHAR(10)= '' 
 
@@ -235,7 +238,7 @@ BEGIN
             SELECT TOP 1 @c_FinalLoc = l.Loc
                , @n_ToLocLevel = l.locLevel
                , @c_LoseID = l.LoseID
-               , @c_PickZone = l.PutawayZone
+               , @c_PutawayZone = l.PutawayZone
             FROM LOC l (NOLOCK)
             WHERE l.Facility = @c_Facility
             AND   l.SectionKey = @c_SectionKey
@@ -250,7 +253,7 @@ BEGIN
 
             SELECT @c_AreaKey = ad.Areakey
             FROM AREADETAIL ad (NOLOCK) 
-            WHERE ad.Putawayzone = @c_PickZone
+            WHERE ad.Putawayzone = @c_PutawayZone
 
             IF @c_AreaKey = ''
             BEGIN
@@ -270,8 +273,8 @@ BEGIN
                SET @c_FinalID = ''
             END
 
-            IF @n_ToLocLevel_P <> @n_ToLocLevel OR
-               @c_AreaKey_P = @c_AreaKey
+            IF @n_ToLocLevel_P <> @n_ToLocLevel OR                                  --(Wan)
+               @c_AreaKey_P <> @c_AreaKey                                           --(Wan)
             BEGIN
                SET @n_UCCCnt = 0
                SET @c_GroupKey = ''
@@ -279,7 +282,6 @@ BEGIN
 
             SET @n_ToLocLevel_P = @n_ToLocLevel
             SET @c_AreaKey_P = @c_AreaKey
-
 
             IF @c_ToLoc > '' AND @c_FinalLoc > ''
             BEGIN

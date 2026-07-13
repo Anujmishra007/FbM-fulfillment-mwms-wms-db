@@ -13,12 +13,13 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          :                                                             */    
-/* PVCS Version: 1.0                                                      */    
+/* Version: 1.0                                                           */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-07  Wan      1.0   Fix Issue compare taskdetailkey with tasktype*/
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_DATA]        
@@ -113,7 +114,7 @@ BEGIN
                             + ' AND NOT EXISTS (SELECT 1'
                             +                '  FROM TASKDETAIL td (NOLOCK)' 
                             +                '  WHERE td.TaskdetailKey = PICKDETAIL.TaskdetailKey'
-                            +                '  AND td.Taskdetailkey = ''FCP'''
+                            +                '  AND td.TaskType = ''FCP'''          --(Wan)       
                             +                '  AND td.SourceType    = ''mspRLWAV13'''
                             +                '  AND td.[Status]      <> ''X'''
                             +                ' )'

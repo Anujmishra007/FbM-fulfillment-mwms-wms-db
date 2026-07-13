@@ -13,12 +13,13 @@ GO
 /*                                                                        */  
 /* Called By: Wave Release                                                */    
 /*          :                                                             */    
-/* PVCS Version: 1.0                                                      */    
+/* Version: 1.0                                                           */    
 /*                                                                        */    
 /* Data Modifications:                                                    */    
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-07  Wan      1.0   FCR-12980: CR v8.5 - v8.7                   */
 /**************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_FCP]        
    @c_Wavekey     NVARCHAR(10)
@@ -70,7 +71,7 @@ BEGIN
          , @c_GroupKey           NVARCHAR(10)= ''
          , @c_SectionKey         NVARCHAR(10)= ''
          , @c_SectionKey_P       NVARCHAR(10)= ''
-         , @c_PickZone           NVARCHAR(10)= '' 
+         , @c_PutawayZone        NVARCHAR(10)= '' 
          , @c_AreaKey_P          NVARCHAR(10)= '' 
          , @c_AreaKey            NVARCHAR(10)= '' 
          , @c_LinkTaskToPick_SQL NVARCHAR(1000)= '' 
@@ -96,14 +97,13 @@ BEGIN
          , @n_MaxCapaci_LPN      FLOAT       = 0.00
          , @n_MaxCapaci_Tote     FLOAT       = 0.00
 
-
          , @c_SQL                NVARCHAR(MAX) = ''
          , @c_SQLParms           NVARCHAR(2000)= ''                                   
   
          , @cur_FCP              CURSOR
          , @CUR_UPD              CURSOR         
 
-   DECLARE @t_CL             TABLE
+   DECLARE @t_CL                 TABLE
          (  [RowID]              INT               IDENTITY(1,1) PRIMARY KEY                   
          ,  [LISTNAME]           [nvarchar](10)    NULL     
          ,  [Code]               [nvarchar](30)    NULL  
@@ -260,7 +260,7 @@ BEGIN
    
    IF @n_Continue = 1
    BEGIN
-      SET @cur_FCP = CURSOR FAST_FORWARD READ_ONLY FOR
+      SET @cur_FCP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT pw.Storerkey
             ,pw.Sku 
             ,pw.Lot                                                                  
@@ -276,7 +276,7 @@ BEGIN
             ,p.CubeUOM3 
       FROM #PICKDETAIL_WIP AS pw      
       JOIN LOC l (NOLOCK) ON l.Loc = pw.ToLoc  
-      JOIN AreaDetail AD (NOLOCK) ON ad.PutawayZone = l.PickZone   
+      JOIN AreaDetail AD (NOLOCK) ON ad.PutawayZone = l.PutawayZone   
       JOIN SKU S (NOLOCK) ON s.StorerKey = pw.Storerkey AND s.SKU = pw.Sku 
       JOIN PACK P (NOLOCK) ON p.PackKey = s.PACKKey  
       LEFT OUTER JOIN TaskDetail rpf (NOLOCK) ON rpf.TaskDetailKey = pw.ReplenishZone
@@ -298,6 +298,7 @@ BEGIN
             ,  p.CubeUOM3 
       ORDER BY pw.UOM
             ,  l.LogicalLocation
+            ,  ad.Areakey                                                           --(Wan)
   
       OPEN @cur_FCP
 
@@ -308,7 +309,7 @@ BEGIN
                                  ,  @c_Areakey, @n_CubeUOM3
 
          
-      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)  
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1 
       BEGIN  
          SET @c_TaskType   = 'FCP'
          SET @c_PickMethod = 'PP'
@@ -332,10 +333,10 @@ BEGIN
          AND   cl.Code = @c_AreaKey
          AND   cl.Storerkey = @c_Storerkey
 
-         IF @c_UOM = '2'
-         BEGIN
-            SET @c_ToLoc    = 'AEOSTGPICK'
-         END
+         --IF @c_UOM = '2'                                                          --(Wan)                     
+         --BEGIN
+         --   SET @c_ToLoc = 'AEOSTGPICK'
+         --END
                                 
          IF ISNULL(@c_Toloc,'') = ''  
          BEGIN           
@@ -365,12 +366,7 @@ BEGIN
                SET @c_Groupkey = ''
             END
 
-            --IF @c_Areakey_P <> @c_Areakey
-            --BEGIN
-            --   SET @c_Groupkey = ''
-            --END
-
-            IF @n_LocLevel_P <> @n_LocLevel 
+            IF @c_Areakey_P <> @c_Areakey                                           --(Wan)
             BEGIN
                SET @c_Groupkey = ''
             END
@@ -379,11 +375,6 @@ BEGIN
             BEGIN
                SET @c_Groupkey = ''
             END
-
-            --IF @c_SectionKey_P <> @c_SectionKey
-            --BEGIN
-            --   SET @c_Groupkey = ''
-            --END
 
             IF @c_Groupkey > '' AND @n_VolDropID > 0.00 AND @n_VolLeftToFill > 0     
             BEGIN
@@ -499,7 +490,8 @@ BEGIN
                   BEGIN  
                      SET @n_Continue = 3  
                   END  
-                 IF @n_Continue = 1 AND @c_Taskdetail_RPF > '' AND @n_Qty > 0
+
+                  IF @n_Continue = 1 AND @c_Taskdetail_RPF > '' AND @n_Qty > 0
                   BEGIN
                      SET @n_QtyTask = @n_Qty
  
