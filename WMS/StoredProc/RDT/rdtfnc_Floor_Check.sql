@@ -308,7 +308,8 @@ BEGIN
       
       -- Prepare Next Screen Variable
       SET @cOutField01 = @cFromLoc
-       
+      SET @cOutField02 = ''
+
       -- GOTO Next Screen
       SET @nScn  = @nScn_FromID
       SET @nStep = @nStep_FromID
@@ -392,6 +393,7 @@ BEGIN
          SET @cCartonID   = ''
          SET @cOutField01 = @cFromLoc
          SET @cOutField02 = @cFromID
+         SET @cOutField03 = ''
 
          SET @nScn  = @nScn_CartonID
          SET @nStep = @nStep_CartonID
@@ -495,24 +497,22 @@ BEGIN
             AND U.StorerKey = PD.StorerKey
          WHERE PD.StorerKey = @cStorerKey
          AND   PD.CaseID    = @cCartonID
+         AND   PD.ID        = @cFromID
+         AND   PD.LOC       = @cFromLoc
          AND   PD.Status   <> '4'
 
          SELECT @nTotal = COUNT(1) FROM @tUCC
 
+         SET @nScanned = 1
+
          IF @nTotal > 0
          BEGIN
-            SET @nScanned = 1
-
             SELECT @cUCC01 = ISNULL(MAX(CASE WHEN RowNum = 1 THEN UCC END), '') FROM @tUCC
             SELECT @cUCC02 = ISNULL(MAX(CASE WHEN RowNum = 2 THEN UCC END), '') FROM @tUCC
             SELECT @cUCC03 = ISNULL(MAX(CASE WHEN RowNum = 3 THEN UCC END), '') FROM @tUCC
             SELECT @cUCC04 = ISNULL(MAX(CASE WHEN RowNum = 4 THEN UCC END), '') FROM @tUCC
             SELECT @cUCC05 = ISNULL(MAX(CASE WHEN RowNum = 5 THEN UCC END), '') FROM @tUCC
 
-            -- XX = current page, YY = total pages (CEILING(@nTotal/5))
-            SET @cOutField01 = @cFromLoc
-            SET @cOutField02 = @cFromID
-            SET @cOutField03 = @cCartonID
             SET @cOutField04 = @cUCC01
             SET @cOutField05 = @cUCC02
             SET @cOutField06 = @cUCC03
@@ -520,11 +520,25 @@ BEGIN
             SET @cOutField08 = @cUCC05
             SET @cOutField09 = RIGHT('00' + TRY_CAST(@nScanned AS NVARCHAR(2)), 2)
                              + '/' + RIGHT('00' + TRY_CAST((@nTotal + 4) / 5 AS NVARCHAR(2)), 2)
-
-            SET @nScn  = @nScn_UCCList
-            SET @nStep = @nStep_UCCList
-            GOTO Quit
          END
+         ELSE
+         BEGIN
+            SET @cOutField04 = 'NO UCCs'
+            SET @cOutField05 = ''
+            SET @cOutField06 = ''
+            SET @cOutField07 = ''
+            SET @cOutField08 = ''
+            SET @cOutField09 = '00/00'
+         END
+
+         -- XX = current page, YY = total pages (CEILING(@nTotal/5))
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = @cCartonID
+
+         SET @nScn  = @nScn_UCCList
+         SET @nStep = @nStep_UCCList
+         GOTO Quit
       END
 
       -- DISPLAYUCC = 0, or no UCCs found: run status checks then go to Screen 6
@@ -542,17 +556,8 @@ BEGIN
       END
       ELSE IF EXISTS (
          SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
-         WHERE REFNO      = @cCartonID
-         AND   CartonType <> '9999'
-      )
-      BEGIN
-         SET @cStatusMessage = 'LOOSE PICK: NO UCCs'
-         SET @cStatusCode    = 'NO UCCs'
-      END
-      ELSE IF EXISTS (
-         SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
          WHERE REFNO  = @cCartonID
-         AND   STATUS <> 'PACKED'
+         AND   CARTONSTATUS <> 'PACKED'
       )
       BEGIN
          SET @cStatusMessage = 'CARTON NOT PACKED'
@@ -596,6 +601,8 @@ BEGIN
    IF @nInputKey = 0 -- ESC
    BEGIN
       SET @cCartonID   = ''
+      SET @cOutField01 = @cFromLoc
+      SET @cOutField02 = ''
       SET @cOutField03 = ''
 
       SET @nScn  = @nScn_FromID
@@ -641,21 +648,11 @@ BEGIN
             SET @cStatusMessage = 'CARTON SHIPPED'
             SET @cStatusCode    = 'SHIPPED'
          END
-         -- Priority 2: Loose pick (CartonType <> '9999')
-         ELSE IF EXISTS (
-            SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
-            WHERE REFNO      = @cCartonID
-            AND   CartonType <> '9999'
-         )
-         BEGIN
-            SET @cStatusMessage = 'LOOSE PICK: NO UCCs'
-            SET @cStatusCode    = 'NO UCCs'
-         END
-         -- Priority 3: Carton not packed
+         -- Priority 2: Carton not packed
          ELSE IF EXISTS (
             SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK)
             WHERE REFNO   = @cCartonID
-            AND   STATUS  <> 'PACKED'
+            AND   CARTONSTATUS  <> 'PACKED'
          )
          BEGIN
             SET @cStatusMessage = 'CARTON NOT PACKED'
@@ -663,7 +660,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            -- Priority 4: Wrong pallet / Priority 5: Floor checked
+            -- Priority 3: Wrong pallet / Priority 4: Floor checked
             SELECT @cStatusMessage    = CASE
                      WHEN PalletKey <> ISNULL(@cFromID, '') THEN 'CARTON DIFF PALLET:'
                      ELSE 'FLOOR CHECKED'
@@ -710,6 +707,8 @@ BEGIN
             AND U.StorerKey = PD.StorerKey
          WHERE PD.StorerKey = @cStorerKey
          AND   PD.CaseID    = @cCartonID
+         AND   PD.ID        = @cFromID
+         AND   PD.LOC       = @cFromLoc
          AND   PD.Status   <> '4'
 
          SELECT @cUCC01 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 1 THEN UCC END), '') FROM @tUCC
@@ -763,6 +762,8 @@ BEGIN
             AND U.StorerKey = PD.StorerKey
          WHERE PD.StorerKey = @cStorerKey
          AND   PD.CaseID    = @cCartonID
+         AND   PD.ID        = @cFromID
+         AND   PD.LOC       = @cFromLoc
          AND   PD.Status   <> '4'
 
          SELECT @cUCC01 = ISNULL(MAX(CASE WHEN RowNum = (@nScanned - 1) * 5 + 1 THEN UCC END), '') FROM @tUCC
