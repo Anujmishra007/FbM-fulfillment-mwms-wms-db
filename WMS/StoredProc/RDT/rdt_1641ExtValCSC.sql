@@ -6,7 +6,7 @@ SET QUOTED_IDENTIFIER OFF
 
 GO
 /***********************************************************************/
-/* Store procedure: rdt_1641ExtValCSC                                  */
+/* Stored procedure: rdt_1641ExtValCSC                                  */
 /* Purpose: CSCUK01 Pallet Build validation                            */
 /*          Step 1: pallet ID must start with OUT                      */
 /*          Step 3: scanned UCC must already be packed for DocType N   */
@@ -48,9 +48,12 @@ SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
-   IF @cStorerKey <> 'CSCUK01'
-      GOTO QUIT
-
+   IF @cStorerKey <> 'CSCUK01'
+
+      GOTO QUIT
+
+
+
 IF @nFunc = 1641
 BEGIN
    IF @nStep = 1
