@@ -1,7 +1,9 @@
 /****** Object:  StoredProcedure [RDT].[rdt_1641ExtValCSC]    Script Date: 7/13/2026 11:14:04 AM ******/
-SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF
+
 GO
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER OFF
+
 GO
 /***********************************************************************/
 /* Store procedure: rdt_1641ExtValCSC                                  */
@@ -46,6 +48,9 @@ SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
+   IF @cStorerKey <> 'CSCUK01'
+      GOTO QUIT
+
 IF @nFunc = 1641
 BEGIN
    IF @nStep = 1
