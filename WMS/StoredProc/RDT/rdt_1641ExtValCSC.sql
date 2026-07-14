@@ -1,5 +1,3 @@
-USE [GBRWMS]
-GO
 /****** Object:  StoredProcedure [RDT].[rdt_1641ExtValCSC]    Script Date: 7/14/2026 10:45:50 AM ******/
 SET ANSI_NULLS OFF
 GO
