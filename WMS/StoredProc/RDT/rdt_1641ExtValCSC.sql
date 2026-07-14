@@ -1,9 +1,9 @@
-/****** Object:  StoredProcedure [RDT].[rdt_1641ExtValCSC]    Script Date: 7/13/2026 11:14:04 AM ******/
+USE [GBRWMS]
+GO
+/****** Object:  StoredProcedure [RDT].[rdt_1641ExtValCSC]    Script Date: 7/14/2026 10:45:50 AM ******/
 SET ANSI_NULLS OFF
-
 GO
 SET QUOTED_IDENTIFIER OFF
-
 GO
 /***********************************************************************/
 /* Stored procedure: rdt_1641ExtValCSC                                 */
@@ -22,7 +22,7 @@ GO
 /* 2026-07-13 1.1  SKE140  WaveKey validation update                   */
 /***********************************************************************/
 
-CREATE OR ALTER   PROC [RDT].[rdt_1641ExtValCSC]
+CREATE OR ALTER     PROC [RDT].[rdt_1641ExtValCSC]
 (
    @nMobile      INT,
    @nFunc        INT,
@@ -97,43 +97,24 @@ BEGIN
 
          IF @cDocType = 'N'
          BEGIN
-             IF EXISTS
-             (
-                 SELECT 1
-                 FROM dbo.PackDetail PDK WITH (NOLOCK)
-                 JOIN dbo.PackInfo PI WITH (NOLOCK)
-                   ON PI.PickSlipNo = PDK.PickSlipNo
-                  AND PI.CartonNo   = PDK.CartonNo
-                 WHERE PDK.StorerKey = @cStorerKey
-                   AND PDK.DropID    = @cUCCNo
-                   AND PI.CartonStatus IN ('HOLD', 'PENDAUDIT')
-             )
-             BEGIN
-                 SET @nErrNo = 161001
-                 SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-                 GOTO QUIT
-             END
-   
-            IF NOT EXISTS
-            (
-               SELECT 1
-               FROM dbo.PackDetail PDK WITH (NOLOCK)
-               WHERE PDK.StorerKey = @cStorerKey
-               AND   PDK.DropID = @cUCCNo
-               AND   PDK.Qty > 0
-            )
-            AND EXISTS
-            (
-               SELECT 1
-               FROM dbo.PickDetail PD WITH (NOLOCK)
-               WHERE PD.StorerKey = @cStorerKey
-               AND   PD.DropID = @cUCCNo
-            )
-            BEGIN
-               SET @nErrNo = 161001
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-               GOTO QUIT
-            END
+
+			IF NOT EXISTS
+			(
+				SELECT 1
+				FROM dbo.PackDetail PDK
+				JOIN dbo.PackInfo PI
+				  ON PI.PickSlipNo = PDK.PickSlipNo
+				 AND PI.CartonNo   = PDK.CartonNo
+				WHERE PDK.StorerKey = @cStorerKey
+				  AND PDK.DropID    = @cUCCNo
+				  AND ISNULL(PDK.Qty, 0) > 0
+				  AND PI.CartonStatus = 'CLOSED'
+			)
+			BEGIN
+				SET @nErrNo = 161001
+				SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+				GOTO QUIT
+			END
          END
 
          /**************************************************************/
