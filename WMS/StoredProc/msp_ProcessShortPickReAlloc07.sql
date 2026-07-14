@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 09-Jul-2026 WLChooi  1.0   Initial Version                           */
+/* 14-Jul-2026 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc07] (    
@@ -252,19 +252,15 @@ BEGIN
    
    IF @n_Continue = 1
    BEGIN
-      -- Message01 = TOTEFULL
-      -- Happy flow
-      IF @c_ExceptionCode = 'TOTEFULL'
-         SET @n_Continue = 4
       -- Short
-      ELSE IF @c_ExceptionReason = 'SHORTAEOMX' AND @c_ExceptionCode = 'SHORT'
+      IF @c_ExceptionReason = 'SHORTAEOMX'
          SET @n_Continue = 1
       -- Reasonkey = SPLITAEOMX
       -- Split taskdetail (done by IML), no reallocation
       -- Release WCS
-      ELSE IF @c_ExceptionReason = 'SPLITAEOMX' AND @c_ExceptionCode = 'SHORT'
+      ELSE IF @c_ExceptionReason = 'SPLITAEOMX'
          SET @n_Continue = 2
-      -- Incorrect Message01/Reasonkey
+      -- Incorrect Reasonkey
       ELSE
          SET @n_Continue = 4
    END
