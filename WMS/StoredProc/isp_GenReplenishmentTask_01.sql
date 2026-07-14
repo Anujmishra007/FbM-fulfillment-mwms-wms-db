@@ -1334,6 +1334,7 @@ BEGIN
     SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_err) + ': SQLSvr MESSAGE=' + TRIM(@c_errmsg)
  END CATCH
 
+EXIT_SP:
    BEGIN TRY
       EXEC @n_LockResult = sp_releaseapplock @Resource = @c_ResourceLockName, @LockOwner = N'Session', @DbPrincipal = 'public'
    END TRY
@@ -1341,7 +1342,6 @@ BEGIN
    END CATCH
    --M04-E
 
-EXIT_SP:
    IF XACT_STATE() = -1   --ML04
       ROLLBACK TRAN       --ML04
 
