@@ -99,8 +99,8 @@ BEGIN
 			IF NOT EXISTS
 			(
 				SELECT 1
-				FROM dbo.PackDetail PDK
-				JOIN dbo.PackInfo PI
+				FROM dbo.PackDetail PDK WITH (NOLOCK)
+				JOIN dbo.PackInfo PI WITH (NOLOCK)
 				  ON PI.PickSlipNo = PDK.PickSlipNo
 				 AND PI.CartonNo   = PDK.CartonNo
 				WHERE PDK.StorerKey = @cStorerKey
