@@ -487,3 +487,12 @@ ELSE
 
 
     END
+
+IF NOT EXISTS (SELECT 1
+                FROM sys.indexes
+                WHERE name = 'IX_ORDERS_Storerkey_Facility_Status'
+                  AND object_id = OBJECT_ID('dbo.ORDERS'))
+    BEGIN
+        CREATE NONCLUSTERED INDEX [IX_ORDERS_Storerkey_Facility_Status] ON [dbo].[ORDERS] ([StorerKey],[Facility],[Status]) INCLUDE ([UserDefine09]) ON [PRIMARY]
+	END
+
