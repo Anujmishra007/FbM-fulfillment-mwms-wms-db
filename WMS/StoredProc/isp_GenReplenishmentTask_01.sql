@@ -212,14 +212,14 @@ BEGIN
            @c_errmsg NVARCHAR(255)
 
    SET @c_Facility = @c_Zone01
-   
+
    --ML04-S
-   SET @c_Storerkey = ISNULL(RTRIM(@c_Storerkey),'')
-   SET @c_Facility  = ISNULL(RTRIM(@c_Facility),'')
-   SET @c_ResourceLockName = @c_SP_Name +'/'+ @c_Storerkey +'/'+ @c_Facility
-   
+   SET @c_Storerkey = ISNULL(RTRIM(UPPER(@c_Storerkey)),'')
+   SET @c_Facility  = ISNULL(RTRIM(UPPER(@c_Facility)),'')
+   SET @c_ResourceLockName = 'LOCK_' + @c_SP_Name +'/'+ @c_Storerkey +'/'+ @c_Facility
+
    EXEC @n_LockResult = sp_getapplock @Resource = @c_ResourceLockName, @LockMode = N'Exclusive', @LockOwner = N'Session', @LockTimeout = 0, @DbPrincipal = 'public'
-      
+
    IF @n_LockResult <> 0
    BEGIN
       SET @n_continue = 3
@@ -228,8 +228,9 @@ BEGIN
             ': Same ReplenishStrategy/Storer/Facility is running by another process (' + ISNULL(@c_SP_Name,'') + ')'
       GOTO EXIT_SP
    END
-   --ML04-E
 
+ BEGIN TRY
+   --ML04-E
    IF @c_Zone12 = 'debug'
    BEGIN
       SET @b_debug = 1
@@ -1324,14 +1325,25 @@ BEGIN
    DEALLOCATE CUR1
    -- End Insert Replenishment
 
-EXIT_SP:
    --ML04-S
+ END TRY
+ BEGIN CATCH
+    SET @n_continue = 3
+    SELECT @c_errmsg = ISNULL(ERROR_MESSAGE(),'')
+         , @n_err = 63530
+    SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_err) + ': SQLSvr MESSAGE=' + TRIM(@c_errmsg)
+ END CATCH
+
    BEGIN TRY
       EXEC @n_LockResult = sp_releaseapplock @Resource = @c_ResourceLockName, @LockOwner = N'Session', @DbPrincipal = 'public'
    END TRY
    BEGIN CATCH
    END CATCH
-   --ML04-E
+   --M04-E
+
+EXIT_SP:
+   IF XACT_STATE() = -1   --ML04
+      ROLLBACK TRAN       --ML04
 
    IF ISNULL(@c_WarningMsg,'')<>''   --ML02
       SET @n_continue = 3            --ML02
