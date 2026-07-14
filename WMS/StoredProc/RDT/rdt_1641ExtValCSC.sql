@@ -87,7 +87,7 @@ BEGIN
               @cOrderKey = PD.OrderKey
             , @cDocType  = O.DocType
          FROM dbo.PickDetail PD WITH (NOLOCK)
-         INNER JOIN dbo.Orders O WITH (NOLOCK)
+			INNER JOIN dbo.Orders O WITH (NOLOCK)
             ON O.OrderKey = PD.OrderKey
            AND O.StorerKey = PD.StorerKey
          WHERE PD.StorerKey = @cStorerKey
@@ -99,8 +99,10 @@ BEGIN
 			IF NOT EXISTS
 			(
 				SELECT 1
-				FROM dbo.PackDetail PDK WITH (NOLOCK)
-				JOIN dbo.PackInfo PI WITH (NOLOCK)
+				FROM dbo.PackDetail PDK WITH (NOLOCK)
+
+				JOIN dbo.PackInfo PI WITH (NOLOCK)
+
 				  ON PI.PickSlipNo = PDK.PickSlipNo
 				 AND PI.CartonNo   = PDK.CartonNo
 				WHERE PDK.StorerKey = @cStorerKey
