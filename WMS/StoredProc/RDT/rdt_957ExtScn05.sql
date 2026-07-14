@@ -8,8 +8,9 @@ GO
 /* Copyright: Maersk WMS                                                */
 /* Customer : South Africa                                              */
 /*                                                                      */
-/* Purpose:                                                             */
-/*                                                                      */
+/* Purpose: Extended screen for Pick Case (Func 957) Short Confirm     */
+/*          Scn 6469: Option 1=Confirm short, 0=Back to SKU/QTY,       */
+/*          9=Skip task and submit reallocation via QCommander          */
 /* Date       Rev   Author   Purposes                                   */
 /* 2025-12-20 1.0   CYU027   FCR-9678                                   */
 /************************************************************************/
@@ -103,16 +104,60 @@ BEGIN
       @nGetTaskSuccess        INT = 0,
       @nTotalQty              INT,
       @nTranCount             INT,
-      @nInnerErrorNo          INT = 0
+      @nInnerErrorNo          INT = 0,
+      @cToLoc                 NVARCHAR( 10),
+      @cToLocLoseUCC          NVARCHAR( 1),
+      @nRowCount              INT,
+      @cUCCNo                 NVARCHAR( 20),
+      @cUCCLoc                NVARCHAR( 10),
+      @nUCCQTY                INT,
+      @cSKU                   NVARCHAR( 20),
+      @cLOT                   NVARCHAR( 10),
+      @cPickDetailKey         NVARCHAR( 18),
+      @cToID                  NVARCHAR( 20),
+      @cOrderKey              NVARCHAR( 10),
+      @cOrderType             NVARCHAR( 10),
+      @cOrderConsigneeKey     NVARCHAR( 15),
+      @cWaveKey               NVARCHAR( 10),
+      @cPickConfirmStatus     NVARCHAR( 1),
+      @cPickListKey           NVARCHAR( 100),
+      @cLOC                   NVARCHAR( 10),
+      @cID                    NVARCHAR( 18),
+      @cLoadKey               NVARCHAR( 10),
+      @cZone                  NVARCHAR( 10),
+      @cSQLCommon             NVARCHAR( MAX),
+      @cSQLCommonParam        NVARCHAR( MAX),
+      @cSQLCustom             NVARCHAR( MAX),
+      @cSQLCustomParam        NVARCHAR( MAX)
+
+   IF OBJECT_ID( 'tempdb..#tTaskPD') IS NOT NULL DROP TABLE #tTaskPD
+   CREATE TABLE #tTaskPD
+   (
+      UCCNo         NVARCHAR( 20) NOT NULL,
+      UCCLoc        NVARCHAR( 10) NOT NULL,
+      UCCQty        INT           NOT NULL,
+      UCCSku        NVARCHAR( 20) NOT NULL,
+      UCCLOT        NVARCHAR( 10) NOT NULL,
+      PickDetailKey NVARCHAR( 18) NOT NULL,
+      ID            NVARCHAR( 20) NOT NULL,
+      OrderKey      NVARCHAR( 10) NOT NULL,
+      PickHeaderKey NVARCHAR( 18) NOT NULL
+   )
 
    SET @nNextStep = @nStep
 
-   SELECT 
-      @nStep = Step,
+   SELECT
+      @nStep        = Step,
       @nCurrentStep = Step,
-      @nCurrentScn = Scn,
-      @cUserKey = UserName
-   FROM rdt.RDTMOBREC WHERE Mobile = @nMobile  
+      @nCurrentScn  = Scn,
+      @cUserKey     = UserName,
+      @cWaveKey     = C_String3,
+      @cPickListKey = C_String4,
+      @cPickSlipNo  = V_PickSlipNo,
+      @cLOC         = V_Loc,
+      @cID          = V_ID,
+      @cSKU         = V_SKU
+   FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
 
    SELECT @cSuggSKU     = Value FROM @tExtScnData WHERE Variable = '@cSuggSKU'
    SELECT @cDropID     = Value FROM @tExtScnData WHERE Variable = '@cDropID'
@@ -127,6 +172,11 @@ BEGIN
    SELECT @nSuggQTY     = CAST(Value AS INT) FROM @tExtScnData WHERE Variable = '@nSuggQTY'
 
    SET @nTranCount = @@TRANCOUNT
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
+   IF @cPickConfirmStatus NOT IN ( '3', '5')
+      SET @cPickConfirmStatus = '5'
 
    IF @nAction = 0
    BEGIN
@@ -139,6 +189,13 @@ BEGIN
 
             SET @cOutField01 = ''
 
+            GOTO Quit
+         END
+         IF @nCurrentStep = 3 AND @nNextStep = 1 -- Jump to ToLoc input screen
+         BEGIN
+            SET @nAfterScn  = 6918
+            SET @nAfterStep = 99
+            SET @cOutField01 = ''
             GOTO Quit
          END
       END
@@ -159,15 +216,15 @@ BEGIN
                   -- Validate blank
                   IF @cOption = ''
                   BEGIN
-                     SET @nErrNo = 230602
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option required
+                     SET @nErrNo = 273101
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OptionRequired
                      GOTO Quit
                   END
 
                   IF @cOption NOT IN ('0', '1', '9')
                   BEGIN
-                     SET @nErrNo = 230603
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
+                     SET @nErrNo = 273102
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidOption
                      GOTO Quit
                   END
 
@@ -277,13 +334,13 @@ BEGIN
                   BEGIN
                      -- Prepare SKU QTY screen var
                      SET @cOutField01 = @cSuggLOC
-                     SET @cOutField02 = ''--@cSuggSKU
-                     SET @cOutField03 = ''--rdt.rdtFormatString( @cSKUDescr, 1, 20)
-                     SET @cOutField04 = ''--rdt.rdtFormatString( @cSKUDescr, 21, 20)
-                     SET @cOutField05 = '' -- SKU/UPC
+                     SET @cOutField02 = ''
+                     SET @cOutField03 = ''
+                     SET @cOutField04 = ''
+                     SET @cOutField05 = ''
                      SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(5))
                      SET @cOutField07 = CAST( @nTotalQty AS NVARCHAR(5))
-                     SET @cOutField08 = @cSuggID 
+                     SET @cOutField08 = @cSuggID
                      SET @cOutField09 = ''
 
                      IF @cFieldAttr07 = 'O'
@@ -299,45 +356,15 @@ BEGIN
 
                   IF @cOption = '9'
                   BEGIN
-
-                     DECLARE @cOrderKey      NVARCHAR( 10)
-                     DECLARE @cLoadKey       NVARCHAR( 10)
-                     DECLARE @cZone          NVARCHAR( 18)
-                     DECLARE @cWavekey               NVARCHAR(10)
-                     DECLARE @cPickDetailKey NVARCHAR( 18)
-                     DECLARE @cPickConfirmStatus NVARCHAR( 1)
-
-                     -- Get storer config
-                     SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
-                     IF @cPickConfirmStatus = '0'
-                        SET @cPickConfirmStatus = '5'
-
-
-
-                     --                      EXEC RDT.rdt_PickCase_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'SHORT'
---                         ,@cPickSlipNo
---                         ,@cPickZone
---                         ,@cDropID
---                         ,@cSuggLOC
---                         ,@cSuggID
---                         ,@cBarcode
---                         ,@cSuggSKU
---                         ,@nActQTY
---                         ,@nErrNo       OUTPUT
---                         ,@cErrMsg      OUTPUT
---                      IF @nErrNo <> 0
---                         GOTO ROLLBACK_rdt_957ExtScn05_6469
-
-                     DECLARE @cUCCNo NVARCHAR( 20)
-
                      SELECT TOP 1
                         @cPickdetailkey = PD.PickDetailKey,
                         @cWavekey = WD.wavekey,
                         @cUCCNo = PD.dropID
                      FROM dbo.PickDetail PD WITH (NOLOCK)
-                        JOIN WAVEDETAIL WD on WD.OrderKey = PD.OrderKey
-                        JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-                     WHERE PD.PickSlipNo = @cPickSlipNo
+                        JOIN dbo.WAVEDETAIL WD WITH(NOLOCK) ON WD.OrderKey = PD.OrderKey
+                        JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC AND LOC.Facility = @cFacility)
+                     WHERE PD.StorerKey = @cStorerKey
+                       AND PD.PickSlipNo = @cPickSlipNo
                        AND PD.LOC = @cSuggLOC
                        AND PD.SKU = @cSuggSKU
                        AND PD.ID  = @cSuggID
@@ -351,14 +378,13 @@ BEGIN
                          Status = '4',
                          EditDate = GETDATE(),
                          EditWho  = SUSER_SNAME(),
-                         --DropID = @cDropID,
                          TrafficCop = NULL
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 100103
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
-                        GOTO ROLLBACK_rdt_957ExtScn05_6469
+                        SET @nErrNo = 273105
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPkDtlFail
+                        GOTO Quit
                      END
 
                      --If @cPickZone is blank, get the pickzone from loc table
@@ -503,13 +529,13 @@ BEGIN
                BEGIN
                   -- Prepare SKU QTY screen var
                   SET @cOutField01 = @cSuggLOC
-                  SET @cOutField02 = ''--@cSuggSKU
-                  SET @cOutField03 = ''--rdt.rdtFormatString( @cSKUDescr, 1, 20)
-                  SET @cOutField04 = ''--rdt.rdtFormatString( @cSKUDescr, 21, 20)
-                  SET @cOutField05 = '' -- SKU/UPC
+                  SET @cOutField02 = ''
+                  SET @cOutField03 = ''
+                  SET @cOutField04 = ''
+                  SET @cOutField05 = ''
                   SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(5))
                   SET @cOutField07 = CAST( @nTotalQty AS NVARCHAR(5))
-                  SET @cOutField08 = @cSuggID 
+                  SET @cOutField08 = @cSuggID
                   SET @cOutField09 = ''
 
                   IF @cFieldAttr07 = 'O'
@@ -522,6 +548,213 @@ BEGIN
                   SET @nAfterScn = @nStep_3_Scn
                   GOTO Quit
                END
+            END
+            IF @nCurrentScn = 6918 -- To Location Input
+            BEGIN
+               IF @nInputKey = 1 -- ENTER
+               BEGIN
+                  SET @cToLoc = ISNULL(RTRIM(@cInField01), '')
+
+                  IF @cToLoc = ''
+                  BEGIN
+                     SET @nErrNo = 273103
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LocRequired
+                     EXEC rdt.rdtSetFocusField @nMobile, 1
+                     GOTO Quit
+                  END
+
+                  SELECT @cToLocLoseUCC = loseucc
+                  FROM dbo.LOC WITH (NOLOCK)
+                  WHERE Facility = @cFacility
+                  AND   Loc      = @cToLoc
+
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @nErrNo = 273104
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLoc
+                     EXEC rdt.rdtSetFocusField @nMobile, 1
+                     SET @cOutField01 = ''
+                     GOTO Quit
+                  END
+                  ELSE
+                  BEGIN
+                     IF @cToLocLoseUCC <> '1'
+                        SET @cToLocLoseUCC = '0'
+                  END
+
+                  DECLARE @cLoopPickSlipNo NVARCHAR( 18)
+
+                  -- Get PickHeader info
+                  SELECT TOP 1
+                     @cOrderKey = OrderKey,
+                     @cLoadKey = ExternOrderKey,
+                     @cZone = Zone
+                  FROM dbo.PickHeader WITH (NOLOCK)
+                  WHERE PickHeaderKey = @cPickSlipNo
+
+                  DECLARE @cUCCJoin NVARCHAR(MAX) =
+                     ' JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = PD.StorerKey AND ucc.UCCNo = PD.DropID AND ucc.Sku = PD.Sku ' +
+                     ' JOIN dbo.PICKHEADER PKH WITH(NOLOCK) ON PKH.StorerKey = PD.StorerKey AND PKH.OrderKey = PD.OrderKey '
+
+                  -- Cross dock PickSlip
+                  IF @cZone IN ('XD', 'LB', 'LP')
+                     SET @cSQLCommon =
+                        ' FROM dbo.RefKeyLookup RKL WITH (NOLOCK) ' +
+                           ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' +
+                           ' JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+                           @cUCCJoin +
+                        ' WHERE RKL.PickSlipNo = @cPickSlipNo '
+
+                  -- Discrete PickSlip
+                  ELSE IF @cOrderKey <> ''
+                     SET @cSQLCommon =
+                        ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
+                           ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
+                           ' JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+                           @cUCCJoin +
+                        ' WHERE PD.OrderKey = @cOrderKey '
+
+                  -- Conso PickSlip
+                  ELSE IF @cLoadKey <> ''
+                     SET @cSQLCommon =
+                        ' FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) ' +
+                           ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
+                           ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
+                           ' JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+                           @cUCCJoin +
+                        ' WHERE LPD.LoadKey = @cLoadKey '
+
+                  -- Custom PickSlip
+                  ELSE
+                     SET @cSQLCommon =
+                        ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
+                           ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
+                           ' JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+                           @cUCCJoin +
+                        ' WHERE PD.PickSlipNo = @cPickSlipNo '
+
+                  SET @cSQLCommon +=
+                     ' AND PD.StorerKey = @cStorerKey ' +
+                     ' AND PD.LOC = @cLOC ' +
+                     ' AND PD.ID  = @cID ' +
+                     ' AND PD.SKU = @cSKU ' +
+                     ' AND PD.QTY > 0 '
+
+                  SET @cSQLCommonParam =
+                     ' @cPickSlipNo NVARCHAR( 10) ' +
+                     ',@cOrderKey   NVARCHAR( 10) ' +
+                     ',@cLoadKey    NVARCHAR( 10) ' +
+                     ',@cStorerKey  NVARCHAR( 15) ' +
+                     ',@cLOC        NVARCHAR( 10) ' +
+                     ',@cID         NVARCHAR( 18) ' +
+                     ',@cSKU        NVARCHAR( 20) '
+
+                  SET @cSQLCustom =
+                     'INSERT INTO #tTaskPD (UCCNo, UCCLoc, UCCQty, UCCSku, UCCLOT, PickDetailKey, ID, OrderKey, PickHeaderKey) ' +
+                     'SELECT ucc.UCCNo, ucc.Loc, ucc.Qty, ucc.Sku, ucc.LOT, PD.PickDetailKey, PD.ID, PD.OrderKey, PKH.PickHeaderKey ' +
+                     @cSQLCommon +
+                     ' AND PD.Status = ''' + @cPickConfirmStatus + ''''
+                  SET @cSQLCustomParam = @cSQLCommonParam
+
+                  BEGIN TRY
+                     IF @nTranCount = 0
+                        BEGIN TRANSACTION
+                     ELSE
+                        SAVE TRANSACTION rdt_957ExtScn05_6918
+
+                     EXEC sp_executeSQL @cSQLCustom, @cSQLCustomParam
+                        ,@cPickSlipNo = @cPickSlipNo
+                        ,@cOrderKey   = @cOrderKey
+                        ,@cLoadKey    = @cLoadKey
+                        ,@cStorerKey  = @cStorerKey
+                        ,@cLOC        = @cLOC
+                        ,@cID         = @cID
+                        ,@cSKU        = @cSKU
+
+                     DECLARE C_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                     SELECT UCCNo, UCCLoc, UCCQty, UCCSku, UCCLOT, PickDetailKey, ID, OrderKey, PickHeaderKey
+                     FROM #tTaskPD
+
+                     OPEN C_UCC
+                     FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID, @cOrderKey, @cLoopPickSlipNo
+
+                     WHILE @@FETCH_STATUS = 0
+                     BEGIN
+                        EXEC RDT.rdt_Move
+                           @nMobile     = @nMobile,
+                           @cLangCode   = @cLangCode,
+                           @nErrNo      = @nErrNo  OUTPUT,
+                           @cErrMsg     = @cErrMsg OUTPUT,
+                           @cSourceType = 'rdt_957ExtScn05',
+                           @cStorerKey  = @cStorerKey,
+                           @cFacility   = @cFacility,
+                           @cFromLOC    = @cUCCLOC,
+                           @cToLOC      = @cToLOC,
+                           @cFromID     = @cToID,
+                           @cToID       = @cDropID,
+                           @cSKU        = @cSKU,
+                           @nQTY        = @nUCCQTY,
+                           @nFunc       = @nFunc,
+                           @nQTYAlloc   = 0,
+                           @nQTYPick    = @nUCCQTY,
+                           @cDropID     = @cUCCNo,
+                           @cFromLOT    = @cLOT
+
+                        IF @nErrNo <> 0
+                        BEGIN
+                           CLOSE C_UCC
+                           DEALLOCATE C_UCC
+
+                           SET @nErrNo = 273106
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MoveUCCFail
+
+                           IF @nTranCount > 0
+                              ROLLBACK TRAN rdt_957ExtScn05_6918
+                           ELSE
+                              ROLLBACK TRAN
+
+                           GOTO Quit
+                        END
+
+                        UPDATE dbo.UCC WITH(ROWLOCK)
+                        SET
+                           Status = CASE WHEN @cToLocLoseUCC = '1'
+                                       THEN '6'
+                                       ELSE '5' END,
+                           Userdefined08 = '',
+                           Loc = @cToLoc,
+                           ID = @cDropID,
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME()
+                        WHERE StorerKey = @cStorerKey
+                           AND UCCNo = @cUCCNo
+
+                        FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID, @cOrderKey, @cLoopPickSlipNo
+                     END -- WHILE
+                     CLOSE C_UCC
+                     DEALLOCATE C_UCC
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 273107
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropPalletFail
+
+                     IF @nTranCount > 0
+                        ROLLBACK TRAN rdt_957ExtScn05_6918
+                     ELSE
+                        ROLLBACK TRAN
+
+                     GOTO Quit
+                  END CATCH
+
+                  SET @cOutField01 = ''
+                  SET @nAfterScn = 5290
+                  SET @nAfterStep = 1
+               END
+               ELSE IF @nInputKey = 0 -- ESC
+               BEGIN
+                  SET @cOutField01 = ''
+               END
+               GOTO Quit
             END
             GOTO Quit
          END
