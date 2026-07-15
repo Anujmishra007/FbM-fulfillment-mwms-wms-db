@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author   Purposes                                    */
 /* 2026-02-11 1.0  NickT    FCR-10354. Created                          */
 /* 2026-07-08 1.1  Dennis   UWP-60869. Add dbo prefix, resume pallet    */
+/* 2026-07-15 1.2  Dennis   UWP-61451. Add PPS open pallet check        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1641ExtScn02] (
@@ -193,6 +194,18 @@ BEGIN
                BEGIN
                   SET @nErrNo = 258956
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Invalid DropID
+                  GOTO Quit
+               END
+
+               IF EXISTS (
+                  SELECT 1
+                  FROM rdt.rdtSortLaneLocLog SL WITH (NOLOCK)
+                  WHERE SL.ID = @cFromID
+                     AND SL.Status = '1'
+               )
+               BEGIN
+                  SET @nErrNo = 258957
+                  SET @cErrMsg = rdt.rdtGetMessageLong( @nErrNo, @cLangCode, 'DSP') -- Pallet ID is still open in PPS
                   GOTO Quit
                END
 
