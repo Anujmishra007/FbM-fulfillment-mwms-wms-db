@@ -39,6 +39,7 @@ execute rdt.rdtAddMsg 272682, 10, '272682^UpdPDStatusFail',    'us_english', 838
 execute rdt.rdtAddMsg 272683, 10, '272683^InsRefKeyFail',      'us_english', 838, 0, '272683: Insert RefKeyLookup failed'
 execute rdt.rdtAddMsg 272684, 10, '272684^DelRefKeyFail',      'us_english', 838, 0, '272684: Delete RefKeyLookup failed'
 execute rdt.rdtAddMsg 272685, 10, '272685^DelPDFail',          'us_english', 838, 0, '272685: Delete PickDetail failed'
+execute rdt.rdtAddMsg 272686, 10, '272686^NoOrdOrLoad',        'us_english', 838, 0, '272686: PickHeader has no OrderKey or LoadKey'
 
 
 select * from rdt.rdtmsg (nolock) where message_id between 272651 and 272700

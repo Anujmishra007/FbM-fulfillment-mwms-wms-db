@@ -109,13 +109,12 @@ BEGIN
    
    SET @nRowCount = 0
    -- Resolve marshalling lane from CODELKUP
-   SELECT @cMarshallingLane = UDF01
+   SELECT @cMarshallingLane = UDF02
    FROM dbo.CODELKUP WITH (NOLOCK)
    WHERE LISTNAME    = 'AEOMXSTG'
      AND StorerKey   = @cStorerKey
      AND Code        = @cWaveType
      AND Code2       = @cWaveSubType
-     AND UDF02       = 'Marshalling_Lane'
    
    SET @nRowCount = @@ROWCOUNT
    
@@ -162,7 +161,7 @@ BEGIN
          Loc,            -- FromLoc
          ID,             -- FromID
          @cMarshallingLane, -- ToLoc
-         '',             -- ToID
+         LEFT(@cLabelNo, 18), --Make labelno as toID
          SKU,
          LOT,
          SUM(QTY),

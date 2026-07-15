@@ -8,8 +8,9 @@ GO
 /* Copyright      : Maersk                                                       */
 /* Customer       : AEOMX                                                        */
 /*                                                                               */
-/* Date        Rev    Author       Purposes                                      */
-/* 2026-07-05  1.0    Jackc        FCR-12984                                     */
+/* Date        Rev      Author       Purposes                                    */
+/* 2026-07-05  1.0.0    Jackc        FCR-12984                                   */
+/* 2026-07-15  1.0.1    Jackc        FCR-12984 PSNO is created by order or load  */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ConfirmSP35 (
@@ -65,6 +66,8 @@ BEGIN
    DECLARE @cGenLabelNo_SP       NVARCHAR( 20)
    DECLARE @cPackDetailCartonID  NVARCHAR( 20)
    DECLARE @cPackByFromDropID    NVARCHAR( 1)
+   DECLARE @cLoadKey             NVARCHAR( 10)
+   DECLARE @cOrderKey            NVARCHAR( 10)
 
    --Customization variables V1.0
    DECLARE
@@ -105,21 +108,29 @@ BEGIN
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_838ConfirmSP35 -- For rollback or commit only our own transaction
    
+   --V1.0.1 start
+   SET @cOrderKey = ''
+   SET @cLoadKey = ''
+
+   SELECT TOP 1
+      @cOrderKey = OrderKey,
+      @cLoadKey = ExternOrderKey
+   FROM dbo.PickHeader WITH (NOLOCK)
+   WHERE PickHeaderKey = @cPickSlipNo
+   --V1.0.1 end
+
+   IF ISNULL(@cOrderKey, '') = '' AND ISNULL(@cLoadKey, '') = ''
+   BEGIN
+      SET @nErrNo = 272686
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --OrderKey and LoadKey both empty
+      GOTO RollBackTran
+   END
+
+
    -- PackHeader
    IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo)
    BEGIN
-      DECLARE @cLoadKey  NVARCHAR( 10)
-      DECLARE @cOrderKey NVARCHAR( 10)
-      SET @cOrderKey = ''
-      SET @cLoadKey = ''
-
       -- Get PickHeader info
-      SELECT TOP 1
-         @cOrderKey = OrderKey,
-         @cLoadKey = ExternOrderKey
-      FROM dbo.PickHeader WITH (NOLOCK)
-      WHERE PickHeaderKey = @cPickSlipNo
-      
       BEGIN TRY
          INSERT INTO dbo.PackHeader (PickSlipNo, StorerKey, OrderKey, LoadKey)
          VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, @cLoadKey)
@@ -130,12 +141,6 @@ BEGIN
          GOTO RollBackTran
       END CATCH
    END
-
-   SELECT @cOrderKey = O.OrderKey
-   FROM dbo.ORDERS O WITH (NOLOCK)
-   JOIN dbo.PICKHEADER PH WITH (NOLOCK) ON PH.OrderKey = O.OrderKey
-   WHERE PH.PickHeaderKey = @cPickSlipNo
-     AND O.StorerKey = @cStorerKey
    
    SET @cNewLine = 'N'
    SET @cNewCarton = 'N'
@@ -321,6 +326,7 @@ BEGIN
       DECLARE @cLoopLot             NVARCHAR(10)
       DECLARE @cLoopLoc             NVARCHAR(10)
       DECLARE @cLoopID              NVARCHAR(18)
+      DECLARE @cLoopOrderKey        NVARCHAR(10)
       DECLARE @cTargetPickDetailKey NVARCHAR(10)
       DECLARE @cNewPickDetailKey    NVARCHAR(10)
       DECLARE @cOperationType       NVARCHAR(10)
@@ -339,14 +345,25 @@ BEGIN
       END
 
       -- Pre-validation: Calculate total available PickDetail quantity
-      SELECT @nTotalPickQTY = SUM(QTY)
-      FROM dbo.PickDetail WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-        AND OrderKey = @cOrderKey
-        AND SKU = @cSKU
-        AND DropID = @cFromDropID
-        AND Status = @cPickStatus
-        AND QTY > 0
+      IF @cOrderKey <> ''
+         SELECT @nTotalPickQTY = SUM(QTY)
+         FROM dbo.PickDetail WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+           AND OrderKey  = @cOrderKey
+           AND SKU       = @cSKU
+           AND DropID    = @cFromDropID
+           AND Status    = @cPickStatus
+           AND QTY       > 0
+      ELSE IF @cLoadKey <> ''
+         SELECT @nTotalPickQTY = SUM(PD.QTY)
+         FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+         JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey
+         WHERE LPD.LoadKey  = @cLoadKey
+           AND PD.StorerKey = @cStorerKey
+           AND PD.SKU       = @cSKU
+           AND PD.DropID    = @cFromDropID
+           AND PD.Status    = @cPickStatus
+           AND PD.QTY       > 0
 
       -- Validation: No PickDetail found
       IF @nTotalPickQTY IS NULL
@@ -373,22 +390,43 @@ BEGIN
          -- Get next PickDetail (order by pickdetailkey)
          SET @cLoopPickDetailKey = NULL
 
-         SELECT TOP 1
-            @cLoopPickDetailKey = PickDetailKey,
-            @nLoopQTY = QTY,
-            @cLoopOrderLineNumber = OrderLineNumber,
-            @cLoopLot = Lot,
-            @cLoopLoc = Loc,
-            @cLoopID = ID
-         FROM dbo.PickDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-           AND OrderKey = @cOrderKey
-           AND SKU = @cSKU
-           AND DropID = @cFromDropID
-           AND CaseId IN (@cVirtualCartonID, '') -- not packed yet
-           AND Status = @cPickStatus
-           AND QTY > 0
-         ORDER BY PickDetailKey
+         IF @cOrderKey <> ''
+            SELECT TOP 1
+               @cLoopPickDetailKey   = PickDetailKey,
+               @nLoopQTY             = QTY,
+               @cLoopOrderLineNumber = OrderLineNumber,
+               @cLoopOrderKey        = OrderKey,
+               @cLoopLot             = Lot,
+               @cLoopLoc             = Loc,
+               @cLoopID              = ID
+            FROM dbo.PickDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+              AND OrderKey  = @cOrderKey
+              AND SKU       = @cSKU
+              AND DropID    = @cFromDropID
+              AND CaseId    IN (@cVirtualCartonID, '') -- not packed yet
+              AND Status    = @cPickStatus
+              AND QTY       > 0
+            ORDER BY PickDetailKey
+         ELSE IF @cLoadKey <> ''
+            SELECT TOP 1
+               @cLoopPickDetailKey   = PD.PickDetailKey,
+               @nLoopQTY             = PD.QTY,
+               @cLoopOrderLineNumber = PD.OrderLineNumber,
+               @cLoopOrderKey        = PD.OrderKey,
+               @cLoopLot             = PD.Lot,
+               @cLoopLoc             = PD.Loc,
+               @cLoopID              = PD.ID
+            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey
+            WHERE LPD.LoadKey  = @cLoadKey
+              AND PD.StorerKey = @cStorerKey
+              AND PD.SKU       = @cSKU
+              AND PD.DropID    = @cFromDropID
+              AND PD.CaseId    IN (@cVirtualCartonID, '') -- not packed yet
+              AND PD.Status    = @cPickStatus
+              AND PD.QTY       > 0
+            ORDER BY PD.PickDetailKey
 
          IF @nDebugFlag = 1
             SELECT 'Loop FromDropID PKD', @cLoopPickDetailKey AS LoopPKD, @nLoopQty AS PKDQty
@@ -409,16 +447,16 @@ BEGIN
 
          SELECT TOP 1 @cTargetPickDetailKey = PickDetailKey
          FROM dbo.PickDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-           AND CaseId = @cLabelNo
-           AND DropID = @cFromDropID
-           AND OrderKey = @cOrderKey
-           AND OrderLineNumber = @cLoopOrderLineNumber
-           AND Lot = @cLoopLot
-           AND SKU = @cSKU
-           AND Loc = @cLoopLoc
-           AND ID = @cLoopID
-           AND Status = @cPickStatus
+         WHERE StorerKey       = @cStorerKey
+           AND CaseId          = @cLabelNo
+           AND DropID          = @cFromDropID
+           AND OrderKey        = @cLoopOrderKey
+           AND OrderLineNumber  = @cLoopOrderLineNumber
+           AND Lot             = @cLoopLot
+           AND SKU             = @cSKU
+           AND Loc             = @cLoopLoc
+           AND ID              = @cLoopID
+           AND Status          = @cPickStatus
 
          IF @nDebugFlag = 1
             SELECT 'Finding exact same pkd', @cTargetPickDetailKey AS TargetPKD
@@ -661,17 +699,32 @@ BEGIN
       BEGIN
          -- Cleanup: Delete RefKeyLookup for zero-qty PickDetails
          BEGIN TRY
-            DELETE FROM dbo.RefKeyLookup
-            WHERE PickDetailKey IN (
-               SELECT PickDetailKey FROM dbo.PickDetail WITH (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-               AND OrderKey = @cOrderKey
-               AND SKU = @cSKU
-               AND DropID = @cFromDropID
-               AND CaseId IN (@cVirtualCartonID, '') -- not packed yet
-               AND Status = @cPickStatus
-               AND QTY = 0
-            )
+            IF @cOrderKey <> ''
+               DELETE FROM dbo.RefKeyLookup
+               WHERE PickDetailKey IN (
+                  SELECT PickDetailKey FROM dbo.PickDetail WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                    AND OrderKey  = @cOrderKey
+                    AND SKU       = @cSKU
+                    AND DropID    = @cFromDropID
+                    AND CaseId    IN (@cVirtualCartonID, '')
+                    AND Status    = @cPickStatus
+                    AND QTY       = 0
+               )
+            ELSE IF @cLoadKey <> ''
+               DELETE FROM dbo.RefKeyLookup
+               WHERE PickDetailKey IN (
+                  SELECT PD.PickDetailKey
+                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey
+                  WHERE LPD.LoadKey  = @cLoadKey
+                    AND PD.StorerKey = @cStorerKey
+                    AND PD.SKU       = @cSKU
+                    AND PD.DropID    = @cFromDropID
+                    AND PD.CaseId    IN (@cVirtualCartonID, '')
+                    AND PD.Status    = @cPickStatus
+                    AND PD.QTY       = 0
+               )
          END TRY
          BEGIN CATCH
             SET @nErrNo = 272684
@@ -681,14 +734,26 @@ BEGIN
 
          -- Cleanup: Delete zero-qty PickDetails
          BEGIN TRY
-            DELETE FROM dbo.PickDetail
-            WHERE StorerKey = @cStorerKey
-            AND OrderKey = @cOrderKey
-            AND SKU = @cSKU
-            AND DropID = @cFromDropID
-            AND CaseId IN (@cVirtualCartonID, '') 
-            AND Status = @cPickStatus
-            AND QTY = 0
+            IF @cOrderKey <> ''
+               DELETE FROM dbo.PickDetail
+               WHERE StorerKey = @cStorerKey
+                 AND OrderKey  = @cOrderKey
+                 AND SKU       = @cSKU
+                 AND DropID    = @cFromDropID
+                 AND CaseId    IN (@cVirtualCartonID, '')
+                 AND Status    = @cPickStatus
+                 AND QTY       = 0
+            ELSE IF @cLoadKey <> ''
+               DELETE PD
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+               JOIN dbo.PickDetail PD ON PD.OrderKey = LPD.OrderKey
+               WHERE LPD.LoadKey  = @cLoadKey
+                 AND PD.StorerKey = @cStorerKey
+                 AND PD.SKU       = @cSKU
+                 AND PD.DropID    = @cFromDropID
+                 AND PD.CaseId    IN (@cVirtualCartonID, '')
+                 AND PD.Status    = @cPickStatus
+                 AND PD.QTY       = 0
          END TRY
          BEGIN CATCH
             SET @nErrNo = 272685
