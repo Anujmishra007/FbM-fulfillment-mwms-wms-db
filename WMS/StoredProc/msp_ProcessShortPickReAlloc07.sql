@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 14-Jul-2026 WLChooi  1.0   Initial Version                           */
+/* 15-Jul-2026 WLChooi  1.0   Initial Version                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc07] (    
@@ -47,7 +47,6 @@ BEGIN
    DECLARE @n_Continue                 INT = 1
          , @n_StartTCnt                INT
          , @c_StorerKey                NVARCHAR(15) = ''
-         , @c_SourceKey                NVARCHAR(50) = ''
          , @c_StrategykeyParm          NVARCHAR(10) = ''
          , @c_SourceType               NVARCHAR(30) = ''
          , @c_PickDetailKey            NVARCHAR(18) = ''
@@ -68,7 +67,6 @@ BEGIN
          , @n_TotalNewAllocQty         INT = 0
          , @n_TotalShortCaseQty        INT = 0
          , @n_TotalShortPickQty        INT = 0
-         , @n_RemoveShort              INT = 0
          , @c_outstring                NVARCHAR(255) = ''
          , @c_UserKey                  NVARCHAR(18) = ''
          , @c_TaskStatus               NVARCHAR(10) = ''
@@ -78,13 +76,13 @@ BEGIN
          , @c_TaskDetailKeyCC          NVARCHAR(10) = ''
          , @c_CCKey                    NVARCHAR(10) = ''
          , @n_UCCRowRef                BIGINT = 0
+         , @n_SkipProcess              INT = 0
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
    SET @n_Err     = 0
    SET @c_ErrMsg  = ''
    SET @b_debug = ISNULL(@b_debug, 0)
-   SET @c_SourceKey = @c_Wavekey
    SET @c_StrategykeyParm = ''
    SET @c_SourceType = 'msp_ProcessShortPickReAlloc07'
 
@@ -180,6 +178,9 @@ BEGIN
        , Storerkey  NVARCHAR(15) NOT NULL
        , SKU        NVARCHAR(20) NOT NULL
        , QtyMoved   INT NOT NULL
+       , CartonType  NVARCHAR(10) NULL
+       , DoCartonize NVARCHAR(1)  NULL
+       , PickSlipNo  NVARCHAR(10) NULL
        , PRIMARY KEY (Storerkey, SKU, CaseID)
       )
 
@@ -200,13 +201,6 @@ BEGIN
    -- Initialize Data
    IF @n_Continue = 1
    BEGIN
-      SELECT TOP 1
-             @c_StorerKey  = OH.StorerKey
-           , @c_Facility   = OH.Facility
-      FROM WAVEDETAIL WD WITH (NOLOCK)
-      JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
-      WHERE WD.WaveKey = @c_Wavekey
-
       IF EXISTS ( SELECT 1
                   FROM TASKDETAIL WITH (NOLOCK)
                   WHERE Taskdetailkey = @c_Taskdetailkey )
@@ -219,9 +213,14 @@ BEGIN
               , @c_ExceptionCode = ISNULL(TD.Message01, '')
               , @c_TaskStatus = ISNULL(TD.Status, '')
               , @c_UserKey = ISNULL(TD.UserKey, '')
+              , @c_Wavekey = ISNULL(TD.Wavekey, '')
+              , @c_StorerKey  = ISNULL(TD.Storerkey, '')
+              , @c_Facility = ISNULL(L.Facility, '')
+              , @c_SKU = ISNULL(TD.SKU, '')
          FROM TASKDETAIL TD WITH (NOLOCK)
+         JOIN LOC L WITH (NOLOCK) ON TD.FromLoc = L.Loc
          WHERE TD.Taskdetailkey = @c_Taskdetailkey
-         
+
          IF ISNULL(@c_GetUCCNo, '') <> ''
          BEGIN
             SELECT @n_UCCRowRef = UCC.UCC_RowRef
@@ -489,7 +488,7 @@ BEGIN
 
       FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
 
-      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
          BEGIN TRY
             UPDATE PICKDETAIL
@@ -676,11 +675,14 @@ BEGIN
       --   ActiveQty = Packdetail.ExpQty or > : no change;
       --   0 < ActiveQty < Packdetail.ExpQty : update ExpQty;
       --   ActiveQty = 0 (all shorted, realloc failed) : delete Packdetail.
-      INSERT INTO #T_ShortCases (CaseID, Storerkey, SKU, QtyMoved)
+      INSERT INTO #T_ShortCases (CaseID, Storerkey, SKU, QtyMoved, CartonType, DoCartonize, PickSlipNo)
       SELECT SP.CaseID
            , SP.Storerkey
            , SP.SKU
            , QtyMoved = SUM(SP.QtyMoved)
+           , CartonType  = MAX(SP.CartonType)
+           , DoCartonize = MAX(SP.DoCartonize)
+           , PickSlipNo  = MAX(SP.PickSlipNo)
       FROM #PickDetail_WIP SP
       WHERE SP.Storerkey = @c_StorerKey
       AND SP.Sku = @c_SKU
@@ -710,9 +712,7 @@ BEGIN
 
       -- Post allocation validation
       IF @n_TotalNewAllocQty = 0
-         SET @n_Continue = 4
-      ELSE IF @n_TotalNewAllocQty = @n_TotalShortPickQty   -- Total short pick qty
-         SET @n_RemoveShort = 1
+         SET @n_SkipProcess = 1
 
       IF @n_Continue = 1
       BEGIN
@@ -732,12 +732,18 @@ BEGIN
             ),
             ShortCasesRunning AS (
                SELECT CaseID
+                    , CartonType
+                    , DoCartonize
+                    , PickSlipNo
                     , CumStart = SUM(QtyMoved) OVER (ORDER BY CaseID) - QtyMoved + 1
                     , CumEnd   = SUM(QtyMoved) OVER (ORDER BY CaseID)
                FROM #T_ShortCases
             )
             UPDATE PD
-            SET CaseID = SC.CaseID
+            SET CaseID      = SC.CaseID
+              , CartonType  = SC.CartonType
+              , DoCartonize = SC.DoCartonize
+              , PickSlipNo  = SC.PickSlipNo
             FROM #PickDetail_WIP PD
             JOIN NewLinesRunning NL ON PD.PickDetailKey = NL.PickDetailKey
             JOIN ShortCasesRunning SC ON NL.CumStart BETWEEN SC.CumStart AND SC.CumEnd
@@ -831,7 +837,7 @@ BEGIN
    END
 
    -- Delete Shorted Pickdetail
-   IF @n_Continue = 1 AND @n_RemoveShort = 1
+   IF @n_Continue = 1
    BEGIN
       SET @CUR_UNALLOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT T.Pickdetailkey
@@ -842,7 +848,7 @@ BEGIN
 
       FETCH NEXT FROM @CUR_UNALLOC INTO @c_PickDetailKey
 
-      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
          BEGIN TRY
             DELETE FROM PICKDETAIL
@@ -892,6 +898,13 @@ BEGIN
       END
       CLOSE @CUR_WAVE
       DEALLOCATE @CUR_WAVE
+   END
+
+   -- If @n_SkipProcess = 1, skip the rest of the processes
+   IF @n_Continue = 1
+   BEGIN
+      IF @n_SkipProcess = 1
+         SET @n_Continue = 4
    END
 
    -- Wave Release - Taskdetail Creation & Pre-cartonization
