@@ -354,7 +354,7 @@ AS
       
          SET @b_DeleteSkuTotQty = 1
       END
-   ELSE
+      ELSE
       BEGIN
          TRUNCATE TABLE #TMP_SKUTOTQTY;
       END
@@ -597,9 +597,12 @@ AS
 
       WHILE @n_RowNum <= @n_MaxRow
       BEGIN
-         SELECT @c_FieldName        = FieldName,        @c_Operator       = Operator,
-            @c_ParmBuildType  = ParmBuildType,    @c_TableName      = TableName,
-            @c_ColName        = ColName,          @c_ColType        = ColType
+         SELECT @c_FieldName        = FieldName
+               , @c_Operator       = Operator
+               , @c_ParmBuildType  = ParmBuildType
+               , @c_TableName      = TableName
+               , @c_ColName        = ColName
+               , @c_ColType        = ColType
          FROM #tBuildSort
          WHERE RowNum = @n_RowNum;
          --(Dilip21) End
@@ -626,9 +629,9 @@ AS
             CONTINUE;
          --GOTO NEXT_SORT --(Dilip21)
          END
-      --(Wan05) - END
+         --(Wan05) - END
 
-      IF ISNULL(RTRIM(@c_ColType), '') = ''
+         IF ISNULL(RTRIM(@c_ColType), '') = ''
       BEGIN
          SET @n_Continue = 3
          SET @n_Err     = 555501
@@ -639,29 +642,29 @@ AS
          GOTO EXIT_SP
       END
 
-      IF @c_ParmBuildType = 'SORT'
-         BEGIN
-            SET @c_SortSeq = CASE WHEN @c_Operator = 'DESC' THEN 'DESC' ELSE ''
-         END
+         IF @c_ParmBuildType = 'SORT'
+            BEGIN
+                SET @c_SortSeq = CASE WHEN @c_Operator = 'DESC' THEN 'DESC' ELSE ''
+            END
    
-         IF @c_TableName IN ( 'ORDERDETAIL', 'PICKDETAIL' )                      --(Wan15)
-         SET @c_FieldName = 'MIN('+RTRIM(@c_FieldName) + ')'
-      ELSE
-         BEGIN
-            IF ISNULL(@c_GroupBySortField,'') = ''
-               SET @c_GroupBySortField = CHAR(13) + @c_FieldName
-            ELSE
-               SET @c_GroupBySortField = @c_GroupBySortField + CHAR(13) + ', ' +  RTRIM(@c_FieldName)
-         END
+            IF @c_TableName IN ( 'ORDERDETAIL', 'PICKDETAIL' )                      --(Wan15)
+               SET @c_FieldName = 'MIN('+RTRIM(@c_FieldName) + ')'
+         ELSE
+            BEGIN
+               IF ISNULL(@c_GroupBySortField,'') = ''
+                  SET @c_GroupBySortField = CHAR(13) + @c_FieldName
+               ELSE
+                  SET @c_GroupBySortField = @c_GroupBySortField + CHAR(13) + ', ' +  RTRIM(@c_FieldName)
+               END
    
-      IF ISNULL(@c_SortBy,'') = ''
-         SET @c_SortBy = CHAR(13) + @c_FieldName + ' ' + RTRIM(@c_SortSeq)
-      ELSE
-         SET @c_SortBy = @c_SortBy + CHAR(13) + ', ' +  RTRIM(@c_FieldName) + ' ' + RTRIM(@c_SortSeq)
-      END
+               IF ISNULL(@c_SortBy,'') = ''
+                  SET @c_SortBy = CHAR(13) + @c_FieldName + ' ' + RTRIM(@c_SortSeq)
+               ELSE
+                  SET @c_SortBy = @c_SortBy + CHAR(13) + ', ' +  RTRIM(@c_FieldName) + ' ' + RTRIM(@c_SortSeq)
+         END
 
-      IF @c_ParmBuildType = 'GROUP' AND @c_BuildWaveType NOT IN ( 'ANALYSIS' )         --Wan03
-      BEGIN
+         IF @c_ParmBuildType = 'GROUP' AND @c_BuildWaveType NOT IN ( 'ANALYSIS' )         --Wan03
+         BEGIN
    
          SET @n_BuildGroupCnt = @n_BuildGroupCnt + 1                      --Fixed counter increase for 'GROUP' only
    
@@ -715,45 +718,45 @@ AS
                --USH022-02 end
                SET @c_SQLBuildByGroupWhere = @c_SQLBuildByGroupWhere
                --USH022-02 start
-               --                   + CHAR(13) + ' AND CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)='
-                                    + CHAR(13) + CASE WHEN ISNULL(@c_DateFormat,'')<>''
-                                           THEN ' AND FORMAT(' + RTRIM(@c_FieldName) + ',''' + REPLACE(@c_DateFormat,'''','''''') + ''')='
-                                       ELSE ' AND CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)='
-                                       END     
-				                        + @c_GroupParam;
+               --                           + CHAR(13) + ' AND CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)='
+                                            + CHAR(13) + CASE WHEN ISNULL(@c_DateFormat,'')<>''
+                                                   THEN ' AND FORMAT(' + RTRIM(@c_FieldName) + ',''' + REPLACE(@c_DateFormat,'''','''''') + ''')='
+                                               ELSE ' AND CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)='
+                                               END     
+				                            + @c_GroupParam;
       
             SET @b_GroupFlag = 1
          END
       END
 
-      IF @c_TableName = 'LOC'
-      BEGIN
-         SET @b_JoinPickDetail = 1
-         SET @b_JoinLoc = 1
-      END
+         IF @c_TableName = 'LOC'
+         BEGIN
+            SET @b_JoinPickDetail = 1
+            SET @b_JoinLoc = 1
+         END
 
-      IF @c_TableName = 'PICKDETAIL'
-      BEGIN
-         SET @b_JoinPickDetail = 1
-      END
+         IF @c_TableName = 'PICKDETAIL'
+         BEGIN
+            SET @b_JoinPickDetail = 1
+         END
    
-      SET @n_RowNum += 1;  --(Dilip21)
+         SET @n_RowNum += 1;  --(Dilip21)
 
-   END
+      END
 
-   IF ISNULL(@c_SortBy,'') = ''
-   BEGIN
-      SET @c_SortBy = 'ORDERS.[OrderKey]'
-   END
+      IF ISNULL(@c_SortBy,'') = ''
+      BEGIN
+         SET @c_SortBy = 'ORDERS.[OrderKey]'
+      END
 
-   ------------------------------------------------------
-   -- Get Build Wave Condition: General
-   ------------------------------------------------------
-   --(Dilip21) Start
-   IF OBJECT_ID('tempdb..#tBUILD_COND') IS NOT NULL
-   DROP TABLE #tBUILD_COND
+      ------------------------------------------------------
+      -- Get Build Wave Condition: General
+      ------------------------------------------------------
+      --(Dilip21) Start
+      IF OBJECT_ID('tempdb..#tBUILD_COND') IS NOT NULL
+      DROP TABLE #tBUILD_COND
 
-   SELECT RowNum = ROW_NUMBER() OVER (ORDER BY BPD.BuildParmLineNo)
+      SELECT RowNum = ROW_NUMBER() OVER (ORDER BY BPD.BuildParmLineNo)
          , BPD.ConditionLevel
          , BPD.FieldName
          , BPD.OrAnd
@@ -765,134 +768,134 @@ AS
                           THEN RTRIM(BPD.BuildValue)
                           ELSE BPD.[Value]
                         END
-   INTO #tBUILD_COND
-   FROM BUILDPARMDETAIL BPD WITH (NOLOCK)
-   WHERE BPD.BuildParmKey = @c_BuildParmKey 
-   AND   BPD.[Type]       = 'CONDITION'
+      INTO #tBUILD_COND
+      FROM BUILDPARMDETAIL BPD WITH (NOLOCK)
+      WHERE BPD.BuildParmKey = @c_BuildParmKey 
+      AND   BPD.[Type]       = 'CONDITION'
 
-   IF NOT EXISTS 
-   (
-      SELECT 1
-      FROM tempdb.sys.indexes
-      WHERE name = 'IX_Cond_RowNum'
-      AND object_id = OBJECT_ID('tempdb..#tBUILD_COND')
-   )
-   BEGIN
-      CREATE CLUSTERED INDEX IX_Cond_RowNum ON #tBUILD_COND(RowNum)
-   END
-
-   DECLARE @n_RowNumBUILD_COND       INT = 1
-         , @n_MaxRowBUILD_COND        INT
-         , @c_ValueR      NVARCHAR(MAX)
-
-   SELECT @n_MaxRowBUILD_COND = MAX(RowNum) FROM #tBUILD_COND
-
-   WHILE @n_RowNumBUILD_COND <= @n_MaxRowBUILD_COND
-   BEGIN
-      SELECT @n_CondLevel = ConditionLevel
-            , @c_FieldName = FieldName
-            , @c_OrAnd     = OrAnd
-            , @c_Operator  = OperatorName
-            , @c_Value     = BuildValue
-      FROM #tBUILD_COND
-      WHERE RowNum = @n_RowNumBUILD_COND
-      --(Dilip21) End
-      IF ISNUMERIC(@n_CondLevel) = 1     -- ZG01
+      IF NOT EXISTS 
+      (
+         SELECT 1
+         FROM tempdb.sys.indexes
+         WHERE name = 'IX_Cond_RowNum'
+         AND object_id = OBJECT_ID('tempdb..#tBUILD_COND')
+      )
       BEGIN
-      
-         IF @n_PreCondLevel = 0
+         CREATE CLUSTERED INDEX IX_Cond_RowNum ON #tBUILD_COND(RowNum)
+      END
+
+      DECLARE @n_RowNumBUILD_COND       INT = 1
+            , @n_MaxRowBUILD_COND        INT
+            , @c_ValueR      NVARCHAR(MAX)
+
+      SELECT @n_MaxRowBUILD_COND = MAX(RowNum) FROM #tBUILD_COND
+
+      WHILE @n_RowNumBUILD_COND <= @n_MaxRowBUILD_COND
+      BEGIN
+         SELECT @n_CondLevel = ConditionLevel
+               , @c_FieldName = FieldName
+               , @c_OrAnd     = OrAnd
+               , @c_Operator  = OperatorName
+               , @c_Value     = BuildValue
+         FROM #tBUILD_COND
+         WHERE RowNum = @n_RowNumBUILD_COND
+         --(Dilip21) End
+         IF ISNUMERIC(@n_CondLevel) = 1     -- ZG01
          BEGIN
-            SET @n_PreCondLevel = @n_CondLevel
+       
+            IF @n_PreCondLevel = 0
+            BEGIN
+               SET @n_PreCondLevel = @n_CondLevel
+            END
+            SET @n_CurrCondLevel = @n_CondLevel
          END
-         SET @n_CurrCondLevel = @n_CondLevel
-      END
    
-      -- Get Column Type
-      --(Dilip21) Start
-      DECLARE @n_DotPos INT
+         -- Get Column Type
+         --(Dilip21) Start
+         DECLARE @n_DotPos INT
    
-      SET @n_DotPos = CHARINDEX('.', @c_FieldName)
+         SET @n_DotPos = CHARINDEX('.', @c_FieldName)
    
-      SET @c_TableName = LEFT(@c_FieldName, @n_DotPos - 1)
-      SET @c_ColName   = SUBSTRING(@c_FieldName, @n_DotPos + 1, LEN(@c_FieldName) - @n_DotPos)
+         SET @c_TableName = LEFT(@c_FieldName, @n_DotPos - 1)
+         SET @c_ColName   = SUBSTRING(@c_FieldName, @n_DotPos + 1, LEN(@c_FieldName) - @n_DotPos)
    
-      SET @c_ColType = ''
-      SELECT @c_ColType = ty.name
-      FROM sys.columns c
-      JOIN sys.tables t ON c.object_id = t.object_id AND t.name = @c_TableName
-      JOIN sys.types ty ON c.user_type_id = ty.user_type_id
-      WHERE c.name = @c_ColName
-      --(Dilip21) End
+         SET @c_ColType = ''
+         SELECT @c_ColType = ty.name
+         FROM sys.columns c
+         JOIN sys.tables t ON c.object_id = t.object_id AND t.name = @c_TableName
+         JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+         WHERE c.name = @c_ColName
+         --(Dilip21) End
    
-      IF ISNULL(RTRIM(@c_ColType), '') = ''
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err     = 555502
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-                        + ': Invalid Condition Column Name: ' + @c_FieldName
-                        + ' (lsp_Build_Wave)'
-                        + '|' + @c_FieldName
-         GOTO EXIT_SP
-      END
-   
-      IF @c_ColType = 'datetime' AND
-         ISDATE(@c_Value) <> 1
-      BEGIN
-         -- SHONG01
-         IF @c_Value IN ('today','now', 'startofmonth', 'endofmonth', 'startofyear', 'endofyear')
-            OR LEFT(@c_Value,6) IN ('today+', 'today-')
+         IF ISNULL(RTRIM(@c_ColType), '') = ''
          BEGIN
-            SET @c_Value =
-               CASE
-                  WHEN @c_Value = 'today'
-                  THEN LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)
-                  WHEN LEFT(@c_Value,6) IN ('today+', 'today-') AND ISNUMERIC(SUBSTRING(@c_Value,7,10)) = 1
-                  THEN LEFT(CONVERT(VARCHAR(30), DATEADD(DAY, CONVERT(INT,SUBSTRING(@c_Value,6,10)),GETDATE()), 120), 10)
-                  WHEN @c_Value = 'now'
-                  THEN CONVERT(VARCHAR(30), GETDATE(), 120)
-                  WHEN @c_Value = 'startofmonth'
-                  THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-'
-                  + ('0' + CAST(DATEPART(MONTH, GETDATE()) AS VARCHAR(2))) + ('-01')
-                  WHEN @c_Value = 'endofmonth'
-                  THEN CONVERT(VARCHAR(30), DATEADD(s,-1,DATEADD(mm, DATEDIFF(m,0,GETDATE())+1,0)), 120)
-                  WHEN @c_Value = 'startofyear'
-                  THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-01-01'
-                  WHEN @c_Value = 'endofyear'
-                  THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-12-31 23:59:59'
-               ELSE LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)
-               END
-      END
-      ELSE
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err     = 555518
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-                        + ': Invalid Date Format: ' + @c_Value
-                        + ' (lsp_Build_Wave)'
-                        + '|' + @c_Value
-         GOTO EXIT_SP
-      END
-   END
+            SET @n_Continue = 3
+            SET @n_Err     = 555502
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                           + ': Invalid Condition Column Name: ' + @c_FieldName
+                           + ' (lsp_Build_Wave)'
+                           + '|' + @c_FieldName
+            GOTO EXIT_SP
+         END
+   
+         IF @c_ColType = 'datetime' AND
+            ISDATE(@c_Value) <> 1
+         BEGIN
+         -- SHONG01
+            IF @c_Value IN ('today','now', 'startofmonth', 'endofmonth', 'startofyear', 'endofyear')
+               OR LEFT(@c_Value,6) IN ('today+', 'today-')
+            BEGIN
+               SET @c_Value =
+                  CASE
+                     WHEN @c_Value = 'today'
+                     THEN LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)
+                     WHEN LEFT(@c_Value,6) IN ('today+', 'today-') AND ISNUMERIC(SUBSTRING(@c_Value,7,10)) = 1
+                     THEN LEFT(CONVERT(VARCHAR(30), DATEADD(DAY, CONVERT(INT,SUBSTRING(@c_Value,6,10)),GETDATE()), 120), 10)
+                     WHEN @c_Value = 'now'
+                     THEN CONVERT(VARCHAR(30), GETDATE(), 120)
+                     WHEN @c_Value = 'startofmonth'
+                     THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-'
+                     + ('0' + CAST(DATEPART(MONTH, GETDATE()) AS VARCHAR(2))) + ('-01')
+                     WHEN @c_Value = 'endofmonth'
+                     THEN CONVERT(VARCHAR(30), DATEADD(s,-1,DATEADD(mm, DATEDIFF(m,0,GETDATE())+1,0)), 120)
+                     WHEN @c_Value = 'startofyear'
+                     THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-01-01'
+                     WHEN @c_Value = 'endofyear'
+                     THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-12-31 23:59:59'
+                  ELSE LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)
+                  END
+            END
+            ELSE
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err     = 555518
+               SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                              + ': Invalid Date Format: ' + @c_Value
+                              + ' (lsp_Build_Wave)'
+                              + '|' + @c_Value
+               GOTO EXIT_SP
+            END
+         END
 
-   IF @n_PreCondLevel < @n_CurrCondLevel
-   BEGIN
-      SET @c_SQLCond = @c_SQLCond + ' ' + CHAR(13) + ' ' + @c_OrAnd + N' ('
-      SET @n_PreCondLevel = @n_CurrCondLevel
-   END
-   ELSE IF @n_PreCondLevel > @n_CurrCondLevel
-      BEGIN
-         SET @c_SQLCond = @c_SQLCond + N') '  + CHAR(13) + ' ' + @c_OrAnd
-         SET @n_PreCondLevel = @n_CurrCondLevel
-      END
-   ELSE
-      BEGIN
-         SET @c_SQLCond = @c_SQLCond + ' ' + CHAR(13) + ' ' + @c_OrAnd
-      END
+         IF @n_PreCondLevel < @n_CurrCondLevel
+            BEGIN
+               SET @c_SQLCond = @c_SQLCond + ' ' + CHAR(13) + ' ' + @c_OrAnd + N' ('
+               SET @n_PreCondLevel = @n_CurrCondLevel
+            END
+         ELSE IF @n_PreCondLevel > @n_CurrCondLevel
+            BEGIN
+               SET @c_SQLCond = @c_SQLCond + N') '  + CHAR(13) + ' ' + @c_OrAnd
+               SET @n_PreCondLevel = @n_CurrCondLevel
+            END
+         ELSE
+            BEGIN
+               SET @c_SQLCond = @c_SQLCond + ' ' + CHAR(13) + ' ' + @c_OrAnd
+            END
    
    
    
-      IF @c_ColType IN ('char', 'nvarchar', 'varchar', 'nchar')
-         SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator +
+         IF @c_ColType IN ('char', 'nvarchar', 'varchar', 'nchar')
+            SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator +
                CASE WHEN @c_Operator IN ( 'IN', 'NOT IN') THEN               --2020-04-24 - fixed
                   CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '(' THEN '(' ELSE '' END +
                   RTRIM(LTRIM(@c_Value)) +
@@ -902,29 +905,29 @@ AS
                   RTRIM(LTRIM(@c_Value)) +
                   CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN ''' ' ELSE '' END
                END
-      ELSE IF @c_ColType IN ('float', 'money', 'int', 'decimal', 'numeric', 'tinyint', 'real', 'bigint')
-         SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator  +
-            CASE
-            WHEN @c_Operator IN ( 'IN', 'NOT IN')  THEN                  --2020-04-24 - fixed
-               CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '(' THEN '(' ELSE '' END +
-               RTRIM(LTRIM(@c_Value)) +
-               CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> ')' THEN ') ' ELSE '' END
-            WHEN @c_Operator IN ( 'LIKE', 'NOT LIKE' ) THEN             --(Wan04)
-               ' N' +
-               CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN '''' ELSE '' END +
-               RTRIM(LTRIM(@c_Value)) +
-               CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN ''' ' ELSE '' END
-            ELSE
-               RTRIM(@c_Value)
-            END
-      ELSE IF @c_ColType IN ('datetime')
-         SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator + ' '''+ @c_Value + ''' '
+         ELSE IF @c_ColType IN ('float', 'money', 'int', 'decimal', 'numeric', 'tinyint', 'real', 'bigint')
+            SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator  +
+               CASE
+                  WHEN @c_Operator IN ( 'IN', 'NOT IN')  THEN                  --2020-04-24 - fixed
+                     CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '(' THEN '(' ELSE '' END +
+                     RTRIM(LTRIM(@c_Value)) +
+                     CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> ')' THEN ') ' ELSE '' END
+                  WHEN @c_Operator IN ( 'LIKE', 'NOT LIKE' ) THEN             --(Wan04)
+                     ' N' +
+                     CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN '''' ELSE '' END +
+                     RTRIM(LTRIM(@c_Value)) +
+                     CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN ''' ' ELSE '' END
+                  ELSE
+                     RTRIM(@c_Value)
+               END
+         ELSE IF @c_ColType IN ('datetime')
+            SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator + ' '''+ @c_Value + ''' '
    
-         IF @c_TableName = 'LOC'
-         BEGIN
-            SET @b_JoinPickDetail = 1
-            SET @b_JoinLoc = 1
-         END
+            IF @c_TableName = 'LOC'
+            BEGIN
+               SET @b_JoinPickDetail = 1
+               SET @b_JoinLoc = 1
+            END
    
          IF @c_TableName = 'PICKDETAIL'
          BEGIN
@@ -934,13 +937,13 @@ AS
          SET @n_RowNumBUILD_COND += 1  --(Dilip21)
       END
 
-   WHILE @n_PreCondLevel > 1
-   BEGIN
-      SET @c_SQLCond = @c_SQLCond + N') '
-      SET @n_PreCondLevel = @n_PreCondLevel - 1
-   END
+      WHILE @n_PreCondLevel > 1
+      BEGIN
+         SET @c_SQLCond = @c_SQLCond + N') '
+         SET @n_PreCondLevel = @n_PreCondLevel - 1
+      END
 
- --USH022-01 - START
+      --USH022-01 - START
       IF @c_Wavekey > '' AND @c_SQLAddToWaveCond > ''
       BEGIN
          IF LEFT(LTRIM(@c_SQLAddToWaveCond),3) <> 'AND'
@@ -951,290 +954,291 @@ AS
          SET @c_SQLCond = @c_SQLCond + @c_SQLAddToWaveCond
       END
       --USH022-01 - END
-   ------------------------------------------------------
-   -- Get Build Wave Custom SP
-   ------------------------------------------------------
-   SET @b_ParmTypeSP = 0
-   SET @c_SQL = ''
-   --(Dilip21) Start
-   DECLARE @t_BUILD_SP TABLE
-   (
-      RowNum     INT IDENTITY(1,1),
-      SQLText    NVARCHAR(MAX),
-      SPName     SYSNAME,
-      SPParms    NVARCHAR(MAX)
-   );
+      ------------------------------------------------------
+      -- Get Build Wave Custom SP
+      ------------------------------------------------------
+      SET @b_ParmTypeSP = 0
+      SET @c_SQL = ''
+      --(Dilip21) Start
+      DECLARE @t_BUILD_SP TABLE
+      (
+         RowNum     INT IDENTITY(1,1),
+         SQLText    NVARCHAR(MAX),
+         SPName     SYSNAME,
+         SPParms    NVARCHAR(MAX)
+      );
 
-   INSERT INTO @t_BUILD_SP (SQLText, SPName)
-      SELECT BPD.[Value],
-               CASE
-                  WHEN CHARINDEX(' ', BPD.[Value]) > 0
-                  THEN LEFT(BPD.[Value], CHARINDEX(' ', BPD.[Value]) - 1)
-                  ELSE BPD.[Value]
-               END
-   FROM BUILDPARMDETAIL BPD WITH (NOLOCK)
-   WHERE BPD.BuildParmKey = @c_BuildParmKey
-   AND   BPD.[Type] = 'STOREDPROC'
-   AND   ISNULL(BPD.[Value], '') <> ''
-   ORDER BY BPD.BuildParmLineNo;
-
-   UPDATE T
-   SET SPParms = X.SPParms
-   FROM @t_BUILD_SP T
-   CROSS APPLY
-   (
-      SELECT SPParms = STRING_AGG(
-         CONVERT(NVARCHAR(MAX),
-         P.name + '=' +
-         CASE
-            WHEN P.name = '@c_ParmCodeCond' THEN '@c_SQLCond'
-            WHEN P.name = '@c_ParmCode' THEN '@c_BuildParmKey'
-            WHEN P.name = '@dt_StartDate' THEN '@dt_Date_Fr'
-            WHEN P.name = '@dt_EndDate' THEN '@dt_Date_To'
-            WHEN P.name = '@n_NoOfOrderToRelease' THEN '@n_MaxWaveOrders'
-            ELSE P.name
-         END
-   ),
-   ','
-   ) WITHIN GROUP (ORDER BY P.parameter_id)
-   FROM sys.parameters P
-   INNER JOIN sys.objects O
-   ON P.object_id = O.object_id
-   WHERE O.type = 'P'
-   AND   O.name = T.SPName
-   AND   P.name NOT IN
-   ( '@c_Parm01', '@c_Parm02', '@c_Parm03', '@c_Parm04', '@c_Parm05')
-   ) X;
-
-   SET @c_SQLParms = N'@c_Facility      NVARCHAR(5)'
-                  + ',@c_StorerKey     NVARCHAR(15)'
-                  + ',@c_BuildParmKey  NVARCHAR(10)'
-                  + ',@c_SQLCond       NVARCHAR(4000)'
-                  + ',@c_BuildWaveType NVARCHAR(30)'
-                  + ',@dt_Date_Fr      DATETIME'
-                  + ',@dt_Date_To      DATETIME'
-                  + ',@n_MaxWaveOrders INT';
-
-   DECLARE @n_RowNumBUILD_SP    INT = 1
-         , @n_MaxRowBUILD_SP   INT
-         , @c_ExecSQL   NVARCHAR(MAX);
-
-   SELECT @n_MaxRowBUILD_SP = MAX(RowNum) FROM @t_BUILD_SP;
-
-   WHILE @n_RowNumBUILD_SP <= @n_MaxRowBUILD_SP
-   BEGIN
-      SELECT
-         @c_SQL    = SQLText, @c_SPName = SPName, @c_SPParms = SPParms
-      FROM @t_BUILD_SP
-      WHERE RowNum = @n_RowNumBUILD_SP;
-   
-      SET @c_ExecSQL = RTRIM(@c_SQL)
-         + CASE
-            WHEN CHARINDEX('@', @c_SQL) > 0
-            THEN ','
-         ELSE ''
-         END
-      + ISNULL(@c_SPParms, '');
-      BEGIN TRY
-   
-         EXEC sp_executesql @c_ExecSQL
-                           , @c_SQLParms
-                           , @c_Facility
-                           , @c_StorerKey
-                           , @c_BuildParmKey
-                           , @c_SQLCond
-                           , @c_BuildWaveType
-                           , @dt_Date_Fr
-                           , @dt_Date_To
-                           , @n_MaxWaveOrders;
-   
-         SET @b_ParmTypeSP = 1;
-   
-      END TRY
-      BEGIN CATCH
-   
-         SET @n_Continue = 3;
-         SET @n_Err = ERROR_NUMBER();
-   
-         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(10), @n_Err)
-                        + ': ERROR Executing Stored Procedure: ' + RTRIM(@c_SPName)
-                        + ' (lsp_Build_Wave)'
-                        + '|' + RTRIM(@c_SPName);
-         GOTO EXIT_SP;
-      END CATCH;
-
-   SET @n_RowNumBUILD_SP += 1;
-   END;
-   --(Dilip21) End
-
-
-   IF @b_ParmTypeSP = 1
-   BEGIN
-      SET @c_SQLCond = @c_SQLCond
-                     + ' AND EXISTS (SELECT 1 FROM #TMP_ORDERS TMP WHERE TMP.Orderkey = ORDERS.Orderkey)'
-   END
-
-   ------------------------------------------------------
-   -- Construct Build Wave SQL
-   ------------------------------------------------------
-   SET @c_OWITF = '0'
-   --Wan02 - START - SCE able to populate any Orders.userdefine08 value to Wave even if storerconfig turn on
-   --SELECT TOP 1 @c_OWITF = sValue
-   --FROM  STORERCONFIG AS sc WITH(NOLOCK)
-   --WHERE sc.StorerKey = @c_StorerKey
-   --AND   sc.ConfigKey = 'OWITF'
-   --AND   sc.SValue = '1'
-   --Wan02 - END
-
-   BUILD_WAVE_SQL:                                                               --(Wan05)
-   SET @c_SQL = ''
-
-   SET @c_SQL = N'INSERT INTO #tOrderData(RNUM,OrderKey,ExternOrderKey,Consigneekey,C_Company,OpenQty'
-      + CHAR(13) + ',[Type],[Priority],[Door],[Route]'
-      + CHAR(13) + ',OrderDate,DeliveryDate,DeliveryPlace,Status'
-      + CHAR(13) + ',[Weight],[Cube],NoOfOrdLines,AddWho)'
-      + CHAR(13) + ' SELECT ROW_NUMBER() OVER (ORDER BY ' + RTRIM(@c_SortBy) + ') AS Number'
-      + CHAR(13) + ',ORDERS.OrderKey,ORDERS.ExternOrderKey,ORDERS.Consigneekey,ORDERS.C_Company,ORDERS.OpenQty'
-      + CHAR(13) + ',ORDERS.[Type],ORDERS.[Priority],ORDERS.[Door],ORDERS.[Route]'
-      + CHAR(13) + ',ORDERS.OrderDate,ORDERS.DeliveryDate,ORDERS.DeliveryPlace,ORDERS.Status'
-      + CHAR(13) + ',SUM(ORDERDETAIL.OpenQty * SKU.StdGrossWgt), SUM(ORDERDETAIL.OpenQty * SKU.StdCube)'
-      + CHAR(13) + ',COUNT(DISTINCT ORDERDETAIL.OrderLineNumber)'
-      + CHAR(13) + ',''*'' + RTRIM(sUser_sName())'
-
-   SET @c_SQLWhere = N' FROM ORDERS WITH (NOLOCK)'
-      + CHAR(13) + 'LEFT OUTER JOIN ORDERDETAIL (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey'
-      + CHAR(13) + 'LEFT OUTER JOIN ORDERINFO (NOLOCK) ON ORDERS.OrderKey = ORDERINFO.OrderKey'
-      + CHAR(13) + 'LEFT OUTER JOIN SKU (NOLOCK) ON ORDERS.StorerKey = SKU.StorerKey AND ORDERDETAIL.SKU = SKU.SKU'
-      + CHAR(13) + 'LEFT OUTER JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = ORDERS.OrderKey'
-      --(Wan05) - START
-      + CASE WHEN @b_JoinTmpSku = 1                                              --(Wan18)
-            THEN CHAR(13) + 'JOIN #TMP_SKUTOTQTY TMP2(NOLOCK) ON TMP2.Storerkey = ORDERDETAIL.Storerkey AND TMP2.SKU = SKU.SKU'
-            ELSE ''
+      INSERT INTO @t_BUILD_SP (SQLText, SPName)
+         SELECT BPD.[Value],
+            CASE
+               WHEN CHARINDEX(' ', BPD.[Value]) > 0
+               THEN LEFT(BPD.[Value], CHARINDEX(' ', BPD.[Value]) - 1)
+               ELSE BPD.[Value]
             END
-      --(Wan05) - END
-      + CASE WHEN @b_JoinPickDetail = 0 AND @b_JoinLoc = 0
-            THEN ''
-            ELSE
-               CHAR(13) + 'LEFT JOIN PICKDETAIL WITH (NOLOCK) ON ORDERDETAIL.OrderKey=PICKDETAIL.Orderkey AND ORDERDETAIL.OrderLineNumber=PICKDETAIL.OrderLineNumber'
+      FROM BUILDPARMDETAIL BPD WITH (NOLOCK)
+      WHERE BPD.BuildParmKey = @c_BuildParmKey
+         AND   BPD.[Type] = 'STOREDPROC'
+         AND   ISNULL(BPD.[Value], '') <> ''
+      ORDER BY BPD.BuildParmLineNo;
+
+      UPDATE T
+         SET SPParms = X.SPParms
+      FROM @t_BUILD_SP T
+      CROSS APPLY
+      (
+         SELECT SPParms = STRING_AGG(
+            CONVERT(NVARCHAR(MAX),
+            P.name + '=' +
+            CASE
+               WHEN P.name = '@c_ParmCodeCond' THEN '@c_SQLCond'
+               WHEN P.name = '@c_ParmCode' THEN '@c_BuildParmKey'
+               WHEN P.name = '@dt_StartDate' THEN '@dt_Date_Fr'
+               WHEN P.name = '@dt_EndDate' THEN '@dt_Date_To'
+               WHEN P.name = '@n_NoOfOrderToRelease' THEN '@n_MaxWaveOrders'
+               ELSE P.name
             END
-      + CASE WHEN @b_JoinLoc = 0
-            THEN ''
-            ELSE
-               CHAR(13) + 'LEFT JOIN LOC WITH (NOLOCK) ON PICKDETAIL.Loc=LOC.Loc AND LOC.Facility = @c_Facility'
-            END
-      + CHAR(13) + 'WHERE ORDERS.StorerKey = @c_StorerKey'
-      + CHAR(13) + 'AND ORDERS.Facility = @c_Facility'
-      + CHAR(13) + 'AND ORDERS.Status < ''9'''
-      --+ CHAR(13) + 'AND ORDERS.[Type] NOT IN (''M'')'                                --(Wan19)
-      + CHAR(13) + 'AND WD.WaveKey IS NULL'
-      + CHAR(13) + 'AND (ORDERS.UserDefine09 = '''' OR ORDERS.UserDefine09 IS NULL)'
-      + CHAR(13) + 'AND ORDERS.SOStatus <> ''PENDING'' '
-      + CASE WHEN @n_MaxOpenQty = 0 THEN ''                                            --2020-07-10
-            ELSE                                                                      --2020-07-10
-               CHAR(13) + 'AND ORDERS.OpenQty <= @n_MaxOpenQty'                               --2020-07-10
-            END                                                                       --2020-07-10
+      ),
+      ','
+      ) WITHIN GROUP (ORDER BY P.parameter_id)
+      FROM sys.parameters P
+         INNER JOIN sys.objects O
+      ON P.object_id = O.object_id
+      WHERE O.type = 'P'
+         AND   O.name = T.SPName
+         AND   P.name NOT IN
+      ( '@c_Parm01', '@c_Parm02', '@c_Parm03', '@c_Parm04', '@c_Parm05')
+      ) X;
 
-      + CHAR(13) + 'AND NOT EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK)'
-      + CHAR(13) +                 'WHERE CODELKUP.Code = ORDERS.SOStatus'
-      + CHAR(13) +                 'AND CODELKUP.Listname = ''LBEXCSOSTS'''
-      + CHAR(13) +                 'AND CODELKUP.Storerkey = ORDERS.Storerkey)'
-      --+ CASE WHEN @c_OWITF = '0' THEN ''                                             --Wan02 - SCE able to populate any Orders.userdefine08 value to Wave even if storerconfig turn on
-      --       ELSE
-      --  CHAR(13) + 'AND (ORDERS.UserDefine08 = ''Y'' '
-      --+ CHAR(13) + 'AND NOT EXISTS(SELECT 1 FROM TRANSMITLOG (NOLOCK) WHERE ORDERS.OrderKey = TRANSMITLOG.Key1'
-      --+ CHAR(13) +                'AND TableName IN (''OWORDALLOC'', ''OWDPREPICK''))) '
-      --       END
-      + RTRIM(@c_SQLCond)
+      SET @c_SQLParms = N'@c_Facility      NVARCHAR(5)'
+                     + ',@c_StorerKey     NVARCHAR(15)'
+                     + ',@c_BuildParmKey  NVARCHAR(10)'
+                     + ',@c_SQLCond       NVARCHAR(4000)'
+                     + ',@c_BuildWaveType NVARCHAR(30)'
+                     + ',@dt_Date_Fr      DATETIME'
+                     + ',@dt_Date_To      DATETIME'
+                     + ',@n_MaxWaveOrders INT';
 
-      --SET @c_SQLWhere = @c_SQLWhere + @c_SQLBuildByGroupWhere         --(Wan03) Do not add @c_SQLBuildByGroupWhere to @c_SQLWhere
+      DECLARE @n_RowNumBUILD_SP    INT = 1
+            , @n_MaxRowBUILD_SP   INT
+            , @c_ExecSQL   NVARCHAR(MAX);
 
-   SET @c_SQLGroupBy = CHAR(13) + N'GROUP BY'
-                     + CHAR(13) +  'ORDERS.OrderKey'
-                     + CHAR(13) + ',ORDERS.ExternOrderKey'
-                     + CHAR(13) + ',ORDERS.ConsigneeKey'
-                     + CHAR(13) + ',ORDERS.C_Company'
-                     + CHAR(13) + ',ORDERS.OpenQty'
-                     + CHAR(13) + ',ORDERS.[Type]'
-                     + CHAR(13) + ',ORDERS.Priority'
-                     + CHAR(13) + ',ORDERS.Door'
-                     + CHAR(13) + ',ORDERS.[Route]'
-                     + CHAR(13) + ',ORDERS.OrderDate'
-                     + CHAR(13) + ',ORDERS.DeliveryDate'
-                     + CHAR(13) + ',ORDERS.DeliveryPlace'
-                     + CHAR(13) + ',ORDERS.[Status]'
+      SELECT @n_MaxRowBUILD_SP = MAX(RowNum) FROM @t_BUILD_SP;
 
-
-   IF @c_GroupBySortField <> ''
-   BEGIN
-      SET @c_SQLGroupBy= @c_SQLGroupBy+ ', ' + @c_GroupBySortField
-   END
-
-   IF @c_BuildWaveType = ''            --(Wan09) - START
-   BEGIN
-      SET @c_SQLCondPreWave = ''
-      EXEC [WM].[lsp_BuildPreWaveCond]
-         @c_BuildParmKey   = @c_BuildParmKey
-         ,  @c_SQLCondPreWave = @c_SQLCondPreWave OUTPUT
-         ,  @b_Success        = @b_Success        OUTPUT
-         ,  @n_err            = @n_err            OUTPUT
-         ,  @c_ErrMsg         = @c_ErrMsg         OUTPUT
-         ,  @b_debug          = @b_debug
-   
-      IF @b_Success = 0
+      WHILE @n_RowNumBUILD_SP <= @n_MaxRowBUILD_SP
       BEGIN
-         SET @n_Continue = 3
+         SELECT @c_SQL         = SQLText
+               , @c_SPName    = SPName
+               , @c_SPParms   = SPParms
+         FROM @t_BUILD_SP
+         WHERE RowNum = @n_RowNumBUILD_SP;
+   
+         SET @c_ExecSQL = RTRIM(@c_SQL)
+                        + CASE
+                              WHEN CHARINDEX('@', @c_SQL) > 0
+                              THEN ','
+                           ELSE ''
+                           END
+                        + ISNULL(@c_SPParms, '');
+         BEGIN TRY
+   
+            EXEC sp_executesql @c_ExecSQL
+                              , @c_SQLParms
+                              , @c_Facility
+                              , @c_StorerKey
+                              , @c_BuildParmKey
+                              , @c_SQLCond
+                              , @c_BuildWaveType
+                              , @dt_Date_Fr
+                              , @dt_Date_To
+                              , @n_MaxWaveOrders;
+   
+            SET @b_ParmTypeSP = 1;
+   
+         END TRY
+         BEGIN CATCH
+   
+            SET @n_Continue = 3;
+            SET @n_Err = ERROR_NUMBER();
+   
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(10), @n_Err)
+                           + ': ERROR Executing Stored Procedure: ' + RTRIM(@c_SPName)
+                           + ' (lsp_Build_Wave)'
+                           + '|' + RTRIM(@c_SPName);
+            GOTO EXIT_SP;
+         END CATCH;
+
+         SET @n_RowNumBUILD_SP += 1;
+      END;
+      --(Dilip21) End
+
+
+      IF @b_ParmTypeSP = 1
+      BEGIN
+         SET @c_SQLCond = @c_SQLCond
+                        + ' AND EXISTS (SELECT 1 FROM #TMP_ORDERS TMP WHERE TMP.Orderkey = ORDERS.Orderkey)'
+      END
+
+      ------------------------------------------------------
+      -- Construct Build Wave SQL
+      ------------------------------------------------------
+      SET @c_OWITF = '0'
+      --Wan02 - START - SCE able to populate any Orders.userdefine08 value to Wave even if storerconfig turn on
+      --SELECT TOP 1 @c_OWITF = sValue
+      --FROM  STORERCONFIG AS sc WITH(NOLOCK)
+      --WHERE sc.StorerKey = @c_StorerKey
+      --AND   sc.ConfigKey = 'OWITF'
+      --AND   sc.SValue = '1'
+      --Wan02 - END
+
+      BUILD_WAVE_SQL:                                                               --(Wan05)
+      SET @c_SQL = ''
+
+      SET @c_SQL = N'INSERT INTO #tOrderData(RNUM,OrderKey,ExternOrderKey,Consigneekey,C_Company,OpenQty'
+                  + CHAR(13) + ',[Type],[Priority],[Door],[Route]'
+                  + CHAR(13) + ',OrderDate,DeliveryDate,DeliveryPlace,Status'
+                  + CHAR(13) + ',[Weight],[Cube],NoOfOrdLines,AddWho)'
+                  + CHAR(13) + ' SELECT ROW_NUMBER() OVER (ORDER BY ' + RTRIM(@c_SortBy) + ') AS Number'
+                  + CHAR(13) + ',ORDERS.OrderKey,ORDERS.ExternOrderKey,ORDERS.Consigneekey,ORDERS.C_Company,ORDERS.OpenQty'
+                  + CHAR(13) + ',ORDERS.[Type],ORDERS.[Priority],ORDERS.[Door],ORDERS.[Route]'
+                  + CHAR(13) + ',ORDERS.OrderDate,ORDERS.DeliveryDate,ORDERS.DeliveryPlace,ORDERS.Status'
+                  + CHAR(13) + ',SUM(ORDERDETAIL.OpenQty * SKU.StdGrossWgt), SUM(ORDERDETAIL.OpenQty * SKU.StdCube)'
+                  + CHAR(13) + ',COUNT(DISTINCT ORDERDETAIL.OrderLineNumber)'
+                  + CHAR(13) + ',''*'' + RTRIM(sUser_sName())'
+
+      SET @c_SQLWhere = N' FROM ORDERS WITH (NOLOCK)'
+                        + CHAR(13) + 'LEFT OUTER JOIN ORDERDETAIL (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey'
+                        + CHAR(13) + 'LEFT OUTER JOIN ORDERINFO (NOLOCK) ON ORDERS.OrderKey = ORDERINFO.OrderKey'
+                        + CHAR(13) + 'LEFT OUTER JOIN SKU (NOLOCK) ON ORDERS.StorerKey = SKU.StorerKey AND ORDERDETAIL.SKU = SKU.SKU'
+                        + CHAR(13) + 'LEFT OUTER JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = ORDERS.OrderKey'
+                        --(Wan05) - START
+                        + CASE WHEN @b_JoinTmpSku = 1                                              --(Wan18)
+                              THEN CHAR(13) + 'JOIN #TMP_SKUTOTQTY TMP2(NOLOCK) ON TMP2.Storerkey = ORDERDETAIL.Storerkey AND TMP2.SKU = SKU.SKU'
+                              ELSE ''
+                              END
+                        --(Wan05) - END
+                        + CASE WHEN @b_JoinPickDetail = 0 AND @b_JoinLoc = 0
+                              THEN ''
+                              ELSE
+                                 CHAR(13) + 'LEFT JOIN PICKDETAIL WITH (NOLOCK) ON ORDERDETAIL.OrderKey=PICKDETAIL.Orderkey AND ORDERDETAIL.OrderLineNumber=PICKDETAIL.OrderLineNumber'
+                              END
+                        + CASE WHEN @b_JoinLoc = 0
+                              THEN ''
+                              ELSE
+                                 CHAR(13) + 'LEFT JOIN LOC WITH (NOLOCK) ON PICKDETAIL.Loc=LOC.Loc AND LOC.Facility = @c_Facility'
+                              END
+                        + CHAR(13) + 'WHERE ORDERS.StorerKey = @c_StorerKey'
+                        + CHAR(13) + 'AND ORDERS.Facility = @c_Facility'
+                        + CHAR(13) + 'AND ORDERS.Status < ''9'''
+                        --+ CHAR(13) + 'AND ORDERS.[Type] NOT IN (''M'')'                                --(Wan19)
+                        + CHAR(13) + 'AND WD.WaveKey IS NULL'
+                        + CHAR(13) + 'AND (ORDERS.UserDefine09 = '''' OR ORDERS.UserDefine09 IS NULL)'
+                        + CHAR(13) + 'AND ORDERS.SOStatus <> ''PENDING'' '
+                        + CASE WHEN @n_MaxOpenQty = 0 THEN ''                                            --2020-07-10
+                              ELSE                                                                      --2020-07-10
+                                 CHAR(13) + 'AND ORDERS.OpenQty <= @n_MaxOpenQty'                               --2020-07-10
+                              END                                                                       --2020-07-10
+
+                        + CHAR(13) + 'AND NOT EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK)'
+                        + CHAR(13) +                 'WHERE CODELKUP.Code = ORDERS.SOStatus'
+                        + CHAR(13) +                 'AND CODELKUP.Listname = ''LBEXCSOSTS'''
+                        + CHAR(13) +                 'AND CODELKUP.Storerkey = ORDERS.Storerkey)'
+                        --+ CASE WHEN @c_OWITF = '0' THEN ''                                             --Wan02 - SCE able to populate any Orders.userdefine08 value to Wave even if storerconfig turn on
+                        --       ELSE
+                        --  CHAR(13) + 'AND (ORDERS.UserDefine08 = ''Y'' '
+                        --+ CHAR(13) + 'AND NOT EXISTS(SELECT 1 FROM TRANSMITLOG (NOLOCK) WHERE ORDERS.OrderKey = TRANSMITLOG.Key1'
+                        --+ CHAR(13) +                'AND TableName IN (''OWORDALLOC'', ''OWDPREPICK''))) '
+                        --       END
+                        + RTRIM(@c_SQLCond)
+
+                        --SET @c_SQLWhere = @c_SQLWhere + @c_SQLBuildByGroupWhere         --(Wan03) Do not add @c_SQLBuildByGroupWhere to @c_SQLWhere
+
+      SET @c_SQLGroupBy = CHAR(13) + N'GROUP BY'
+                        + CHAR(13) +  'ORDERS.OrderKey'
+                        + CHAR(13) + ',ORDERS.ExternOrderKey'
+                        + CHAR(13) + ',ORDERS.ConsigneeKey'
+                        + CHAR(13) + ',ORDERS.C_Company'
+                        + CHAR(13) + ',ORDERS.OpenQty'
+                        + CHAR(13) + ',ORDERS.[Type]'
+                        + CHAR(13) + ',ORDERS.Priority'
+                        + CHAR(13) + ',ORDERS.Door'
+                        + CHAR(13) + ',ORDERS.[Route]'
+                        + CHAR(13) + ',ORDERS.OrderDate'
+                        + CHAR(13) + ',ORDERS.DeliveryDate'
+                        + CHAR(13) + ',ORDERS.DeliveryPlace'
+                        + CHAR(13) + ',ORDERS.[Status]'
+
+
+      IF @c_GroupBySortField <> ''
+      BEGIN
+         SET @c_SQLGroupBy= @c_SQLGroupBy+ ', ' + @c_GroupBySortField
+      END
+
+      IF @c_BuildWaveType = ''            --(Wan09) - START
+      BEGIN
+         SET @c_SQLCondPreWave = ''
+         EXEC [WM].[lsp_BuildPreWaveCond]
+            @c_BuildParmKey   = @c_BuildParmKey
+            ,  @c_SQLCondPreWave = @c_SQLCondPreWave OUTPUT
+            ,  @b_Success        = @b_Success        OUTPUT
+            ,  @n_err            = @n_err            OUTPUT
+            ,  @c_ErrMsg         = @c_ErrMsg         OUTPUT
+            ,  @b_debug          = @b_debug
+   
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO EXIT_SP
+         END
+   
+         IF @c_SQLCondPreWave <> ''
+         BEGIN
+            SET @c_SQLWhere = @c_SQLWhere + @c_SQLCondPreWave
+         END
+      END                                 --(Wan09) - END
+
+      SET @c_SQLWhere = @c_SQLWhere + @c_SQLCondDate                                               --(Wan10)
+
+      SET @c_SQL = @c_SQL + @c_SQLWhere + @c_SQLBuildByGroupWhere +  @c_SQLGroupBy + @c_SQLHaving           --(Wan03)
+
+      --(Wan05) - START
+      IF @c_SQLInsSkuTotQty <> '' AND @c_SortBySkuTotalQty <> ''
+      BEGIN
+         SET @c_SQLParms= N' @c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @n_MaxOpenQty INT'
+   
+         EXEC SP_EXECUTESQL @c_SQL
+                           , @c_SQLParms
+                           , @c_StorerKey
+                           , @c_Facility
+                           , @n_MaxOpenQty
+   
+         EXEC (@c_SQLInsSkuTotQty)
+   
+         TRUNCATE TABLE #tOrderData;
+         SET @c_SortBy = @c_SortBySkuTotalQty + CASE WHEN @c_SortBy = '' THEN '' ELSE ', ' END + @c_SortBy
+         SET @c_SQLInsSkuTotQty = ''
+         SET @b_JoinTmpSku = 1                                                      --(Wan18)
+         GOTO BUILD_WAVE_SQL
+      END
+      --(Wan05) - END
+
+      SET @c_SQLBuildWave = @c_SQL     --2020-07-10  -- To Debug
+
+      IF @c_BuildWaveType = 'ANALYSIS'
+      BEGIN
          GOTO EXIT_SP
       END
-   
-      IF @c_SQLCondPreWave <> ''
+
+      --(Wan09) - START
+      IF @c_BuildWaveType = 'PREWAVE'
       BEGIN
-         SET @c_SQLWhere = @c_SQLWhere + @c_SQLCondPreWave
+         SET @c_SQLBuildWave = @c_SQLWhere
+   
+         GOTO EXIT_SP
       END
-   END                                 --(Wan09) - END
+      --(Wan09) - END
 
-   SET @c_SQLWhere = @c_SQLWhere + @c_SQLCondDate                                               --(Wan10)
-
-   SET @c_SQL = @c_SQL + @c_SQLWhere + @c_SQLBuildByGroupWhere +  @c_SQLGroupBy + @c_SQLHaving           --(Wan03)
-
-   --(Wan05) - START
-   IF @c_SQLInsSkuTotQty <> '' AND @c_SortBySkuTotalQty <> ''
-   BEGIN
-      SET @c_SQLParms= N' @c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @n_MaxOpenQty INT'
-   
-      EXEC SP_EXECUTESQL @c_SQL
-                        ,@c_SQLParms
-                        ,@c_StorerKey
-                        ,@c_Facility
-                        ,@n_MaxOpenQty
-   
-      EXEC (@c_SQLInsSkuTotQty)
-   
-      TRUNCATE TABLE #tOrderData;
-      SET @c_SortBy = @c_SortBySkuTotalQty + CASE WHEN @c_SortBy = '' THEN '' ELSE ', ' END + @c_SortBy
-      SET @c_SQLInsSkuTotQty = ''
-      SET @b_JoinTmpSku = 1                                                      --(Wan18)
-      GOTO BUILD_WAVE_SQL
-   END
-   --(Wan05) - END
-
-   SET @c_SQLBuildWave = @c_SQL     --2020-07-10  -- To Debug
-
-   IF @c_BuildWaveType = 'ANALYSIS'
-   BEGIN
-      GOTO EXIT_SP
-   END
-
-   --(Wan09) - START
-   IF @c_BuildWaveType = 'PREWAVE'
-   BEGIN
-      SET @c_SQLBuildWave = @c_SQLWhere
-   
-      GOTO EXIT_SP
-   END
-   --(Wan09) - END
-
-   IF @c_SQLBuildByGroupWhere <> ''
-   BEGIN
+      IF @c_SQLBuildByGroupWhere <> ''
+      BEGIN
       SET @c_SQLFieldGroupBy = @c_SQLField
    
       WHILE @n_BuildGroupCnt < 10
@@ -1303,62 +1307,62 @@ AS
       GOTO END_BUILDWAVE
    END
 
-   START_BUILDWAVE:
-   SET @c_WaveKey = IIF(ISNULL(@c_WaveKey, '') = '', '', @c_WaveKey)                          --2020-07-10   --WL01
+      START_BUILDWAVE:
+      SET @c_WaveKey = IIF(ISNULL(@c_WaveKey, '') = '', '', @c_WaveKey)                          --2020-07-10   --WL01
 
-   TRUNCATE TABLE #tOrderData
+      TRUNCATE TABLE #tOrderData
 
-   IF @b_debug = 2
-   BEGIN
-      SET @d_EndTime_Debug = GETDATE()
-      PRINT '--Finish Generate SQL Statement--(Check Result In [Select View])'
-      PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)
-      PRINT '--2.Do Execute SQL Statement--'
-      SET @d_StartTime_Debug = GETDATE()
-   END
+      IF @b_debug = 2
+      BEGIN
+         SET @d_EndTime_Debug = GETDATE()
+         PRINT '--Finish Generate SQL Statement--(Check Result In [Select View])'
+         PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)
+         PRINT '--2.Do Execute SQL Statement--'
+         SET @d_StartTime_Debug = GETDATE()
+      END
 
-   SET @c_SQLParms= N'@c_Field01 NVARCHAR(60), @c_Field02 NVARCHAR(60), @c_Field03 NVARCHAR(60), @c_Field04 NVARCHAR(60)'
-                  +', @c_Field05 NVARCHAR(60), @c_Field06 NVARCHAR(60), @c_Field07 NVARCHAR(60), @c_Field08 NVARCHAR(60)'
-                  +', @c_Field09 NVARCHAR(60), @c_Field10 NVARCHAR(60), @c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5)'
-                  +', @c_BuildParmKey NVARCHAR(10)'   --(Wan11)
-                  +', @n_MaxOpenQty INT'         --2020-07-10
+      SET @c_SQLParms= N'@c_Field01 NVARCHAR(60), @c_Field02 NVARCHAR(60), @c_Field03 NVARCHAR(60), @c_Field04 NVARCHAR(60)'
+                     +', @c_Field05 NVARCHAR(60), @c_Field06 NVARCHAR(60), @c_Field07 NVARCHAR(60), @c_Field08 NVARCHAR(60)'
+                     +', @c_Field09 NVARCHAR(60), @c_Field10 NVARCHAR(60), @c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5)'
+                     +', @c_BuildParmKey NVARCHAR(10)'   --(Wan11)
+                     +', @n_MaxOpenQty INT'         --2020-07-10
 
-   BEGIN TRY
-      EXEC SP_EXECUTESQL @c_SQL
-                        ,@c_SQLParms
-                        ,@c_Field01
-                        ,@c_Field02
-                        ,@c_Field03
-                        ,@c_Field04
-                        ,@c_Field05
-                        ,@c_Field06
-                        ,@c_Field07
-                        ,@c_Field08
-                        ,@c_Field09
-                        ,@c_Field10
-                        ,@c_StorerKey
-                        ,@c_Facility
-                        ,@c_BuildParmKey           --(Wan11)
-                        ,@n_MaxOpenQty             --2020-07-10
+      BEGIN TRY
+         EXEC SP_EXECUTESQL @c_SQL
+                           ,@c_SQLParms
+                           ,@c_Field01
+                           ,@c_Field02
+                           ,@c_Field03
+                           ,@c_Field04
+                           ,@c_Field05
+                           ,@c_Field06
+                           ,@c_Field07
+                           ,@c_Field08
+                           ,@c_Field09
+                           ,@c_Field10
+                           ,@c_StorerKey
+                           ,@c_Facility
+                           ,@c_BuildParmKey           --(Wan11)
+                           ,@n_MaxOpenQty             --2020-07-10
    
-   END TRY
-   BEGIN CATCH
-      SET @n_Continue = 3
-   END CATCH
+      END TRY
+      BEGIN CATCH
+         SET @n_Continue = 3
+      END CATCH
 
-   IF @b_debug = 2
-   BEGIN
-      SET @d_EndTime_Debug = GETDATE()
-      PRINT '--Finish Execute SQL Statement--(Check Temp DataStore In [Select View])'
-      PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)
-      --SELECT * FROM #tOrderData --(Dilip21)
-      PRINT '--3.Do Initial Value Set Up--'
-      SET @d_StartTime_Debug = GETDATE()
-   END
+      IF @b_debug = 2
+      BEGIN
+         SET @d_EndTime_Debug = GETDATE()
+         PRINT '--Finish Execute SQL Statement--(Check Temp DataStore In [Select View])'
+         PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)
+         --SELECT * FROM #tOrderData --(Dilip21)
+         PRINT '--3.Do Initial Value Set Up--'
+         SET @d_StartTime_Debug = GETDATE()
+      END
 
-   SELECT TOP 1 @n_Num = RNUM FROM #tOrderData ORDER BY RNUM DESC
+      SELECT TOP 1 @n_Num = RNUM FROM #tOrderData ORDER BY RNUM DESC
 
-   IF @n_Num = 0
+      IF @n_Num = 0
    BEGIN
       SET @n_Continue = 3
       SET @n_Err     = 555504
@@ -1367,144 +1371,102 @@ AS
       GOTO EXIT_SP
    END
 
-   IF EXISTS(SELECT TOP 1 1 FROM WAVEDETAIL WD WITH (NOLOCK)
-   JOIN #tOrderData T ON WD.OrderKey = T.OrderKey)
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err     = 555505
-      SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-                     + ': Found Same Order in Different WAVEDETAIL. (lsp_Build_Wave)'
-      GOTO EXIT_SP
-   END
-
-   SET @n_MaxOrders =  @n_MaxWaveOrders
-   --WL01 S
-   IF @c_TopUpWave = 'Y' AND @c_Wavekey <> '' AND @n_MaxOrders > 0
-   BEGIN
-      SELECT @n_MaxOrders = @n_MaxOrders - COUNT(DISTINCT WD.OrderKey)
-      FROM WAVEDETAIL WD (NOLOCK)
-      WHERE WD.WaveKey = @c_Wavekey
-   END
-   --WL01 E
-   IF @n_MaxWaveOrders = 0
-   BEGIN
-      SELECT @n_MaxOrders = COUNT(DISTINCT OrderKey)
-      FROM   #tOrderData
-   END
-
-   IF @b_debug = 2
-   BEGIN
-      SET @d_EndTime_Debug = GETDATE()
-      PRINT '--Finish Initial Value Setup--'
-      PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)
-      PRINT '@c_BatchNo = ' + @c_BatchNo + ' ,@n_MaxOrders = ' + CAST(@n_MaxOrders AS NVARCHAR(20))
-      + ' ,@n_MaxOpenQty = ' +  CAST(@n_MaxOpenQty AS NVARCHAR(20))
-      PRINT '--4.Do Buil Wave--'
-      SET @d_StartTime_Debug = GETDATE()
-   END
-
-   WHILE @@TRANCOUNT > 0
-   COMMIT TRAN;
-
-   IF @n_MaxWave > 0 AND @n_WaveCnt >= @n_MaxWave  --- Need to check If Wave build By Muiltple Grouping; @n_WaveCnt get from previous wave group
-   BEGIN
-      GOTO END_BUILDWAVE
-   END
-
-   --WL01 S
-   IF @n_MaxOrders <= 0 AND @c_TopUpWave = 'Y' AND @c_Wavekey <> ''
-   BEGIN
-      GOTO END_BUILDWAVE
-   END
-   --WL01 E
-
-   IF @n_BatchNo = 0
-   BEGIN
-      BEGIN TRY
-         INSERT INTO BUILDWAVELOG
-         (  SessionNo
-         ,  Facility
-         ,  Storerkey
-         ,  BuildParmGroup
-         ,  BuildParmKey
-         ,  BuildParmString
-         ,  UDF01
-         ,  AddWho
-         ,  AddDate
-         ,  UDF02   --WL01
-         ,  UDF03   --WL01
-         ,  UDF04   --WL01
-         )
-         VALUES
-         (  @n_SessionNo
-         ,  @c_Facility
-         ,  @c_StorerKey
-         ,  @c_ParmGroup
-         ,  @c_BuildParmKey
-         ,  @c_SQL
-         ,  @@SPID
-         ,  @c_UserName
-         ,  @d_StartBatchTime
-         ,  @c_Wavekey   --WL01
-         ,  IIF(@dt_Date_Fr IS NOT NULL, CONVERT( CHAR(23), @dt_Date_Fr, 121), '')   --WL01
-         ,  IIF(@dt_Date_To IS NOT NULL, CONVERT( CHAR(23), @dt_Date_To, 121), '')   --WL01
-         )
-      END TRY
-   
-      BEGIN CATCH
-         SET @n_Continue = 3
-         SET @c_ErrMsg  = ERROR_MESSAGE()
-         SET @n_Err     = 555506
-         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-                        + ': Insert Into BUILDWAVELOG Failed. (lsp_Build_Wave) '
-                        + '( ' + @c_ErrMsg + ') '
-      
-         IF (XACT_STATE()) = -1
-         BEGIN
-            ROLLBACK TRAN
-         
-            WHILE @@TRANCOUNT < @n_StartTCnt
-            BEGIN
-               BEGIN TRAN
-            END
-         END
-         GOTO EXIT_SP
-      END CATCH
-   
-      SET @n_BatchNo = @@IDENTITY
-   
-      SET @c_BatchNo = ''
-      SET @c_BatchNo  = CONVERT(VARCHAR(30), @n_BatchNo)
-   
-      IF @n_BatchNo = 0
+      IF EXISTS(SELECT TOP 1 1 FROM WAVEDETAIL WD WITH (NOLOCK)
+         JOIN #tOrderData T ON WD.OrderKey = T.OrderKey)
       BEGIN
          SET @n_Continue = 3
-         SET @n_Err     = 555507
+         SET @n_Err     = 555505
          SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-                        + ': Batch # is blank. (lsp_Build_Wave)'
+                        + ': Found Same Order in Different WAVEDETAIL. (lsp_Build_Wave)'
          GOTO EXIT_SP
       END
-   
-      IF @n_SessionNo = 0
+
+      SET @n_MaxOrders =  @n_MaxWaveOrders
+      --WL01 S
+      IF @c_TopUpWave = 'Y' AND @c_Wavekey <> '' AND @n_MaxOrders > 0
+      BEGIN
+         SELECT @n_MaxOrders = @n_MaxOrders - COUNT(DISTINCT WD.OrderKey)
+         FROM WAVEDETAIL WD (NOLOCK)
+         WHERE WD.WaveKey = @c_Wavekey
+      END
+      --WL01 E
+      IF @n_MaxWaveOrders = 0
+      BEGIN
+         SELECT @n_MaxOrders = COUNT(DISTINCT OrderKey)
+         FROM   #tOrderData
+      END
+
+      IF @b_debug = 2
+      BEGIN
+         SET @d_EndTime_Debug = GETDATE()
+         PRINT '--Finish Initial Value Setup--'
+         PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)
+         PRINT '@c_BatchNo = ' + @c_BatchNo + ' ,@n_MaxOrders = ' + CAST(@n_MaxOrders AS NVARCHAR(20))
+         + ' ,@n_MaxOpenQty = ' +  CAST(@n_MaxOpenQty AS NVARCHAR(20))
+         PRINT '--4.Do Buil Wave--'
+         SET @d_StartTime_Debug = GETDATE()
+      END
+
+      WHILE @@TRANCOUNT > 0
+      COMMIT TRAN;
+
+      IF @n_MaxWave > 0 AND @n_WaveCnt >= @n_MaxWave  --- Need to check If Wave build By Muiltple Grouping; @n_WaveCnt get from previous wave group
+      BEGIN
+         GOTO END_BUILDWAVE
+      END
+
+      --WL01 S
+      IF @n_MaxOrders <= 0 AND @c_TopUpWave = 'Y' AND @c_Wavekey <> ''
+      BEGIN
+         GOTO END_BUILDWAVE
+      END
+      --WL01 E
+
+      IF @n_BatchNo = 0
       BEGIN
          BEGIN TRY
-            UPDATE BUILDWAVELOG
-            SET SessionNo = @n_BatchNo
-            WHERE BatchNo = @n_BatchNo
+            INSERT INTO BUILDWAVELOG
+            (  SessionNo
+            ,  Facility
+            ,  Storerkey
+            ,  BuildParmGroup
+            ,  BuildParmKey
+            ,  BuildParmString
+            ,  UDF01
+            ,  AddWho
+            ,  AddDate
+            ,  UDF02   --WL01
+            ,  UDF03   --WL01
+            ,  UDF04   --WL01
+            )
+            VALUES
+            (  @n_SessionNo
+            ,  @c_Facility
+            ,  @c_StorerKey
+            ,  @c_ParmGroup
+            ,  @c_BuildParmKey
+            ,  @c_SQL
+            ,  @@SPID
+            ,  @c_UserName
+            ,  @d_StartBatchTime
+            ,  @c_Wavekey   --WL01
+            ,  IIF(@dt_Date_Fr IS NOT NULL, CONVERT( CHAR(23), @dt_Date_Fr, 121), '')   --WL01
+            ,  IIF(@dt_Date_To IS NOT NULL, CONVERT( CHAR(23), @dt_Date_To, 121), '')   --WL01
+            )
          END TRY
-      
+   
          BEGIN CATCH
             SET @n_Continue = 3
             SET @c_ErrMsg  = ERROR_MESSAGE()
-            SET @n_Err     = 555519
+            SET @n_Err     = 555506
             SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-                           + ': UPDATE BUILDWAVELOG Failed. (lsp_Build_Wave) '
+                           + ': Insert Into BUILDWAVELOG Failed. (lsp_Build_Wave) '
                            + '( ' + @c_ErrMsg + ') '
-         
+      
             IF (XACT_STATE()) = -1
             BEGIN
                ROLLBACK TRAN
-            
+         
                WHILE @@TRANCOUNT < @n_StartTCnt
                BEGIN
                   BEGIN TRAN
@@ -1512,132 +1474,174 @@ AS
             END
             GOTO EXIT_SP
          END CATCH
-      
-         SET @n_SessionNo = @n_BatchNo
-      END
-   END
-
-   SET @n_OrderCnt     = 0
-   SET @n_TotalOrderCnt= 0
-   SET @n_TotalOpenQty = 0
-   SET @c_WaveKey      = IIF(@c_TopUpWave = 'N', '', @c_WaveKey)   --WL01   --WL02
-
-   SET @CUR_BUILDWAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT RNUM, OpenQty, OrderKey, [Weight], [Cube], [Status]                    --(Wan17)
-   FROM #tOrderData
-   ORDER BY RNUM
-
-   OPEN @CUR_BUILDWAVE
-   FETCH NEXT FROM @CUR_BUILDWAVE INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube
-   ,@c_OrderStatus                           --(Wan17)
-   SET @n_FetchOrderStatus = @@FETCH_STATUS
-   WHILE @n_FetchOrderStatus <> -1
-   BEGIN
-      SET @n_Weight = ISNULL(@n_Weight,0.00)             --Wan07  Fix Insert TotalWeigh as NULL to BuildWaveDetailLog
-      SET @n_Cube   = ISNULL(@n_Cube,0.00)               --Wan07  Fix Insert TotalWeigh as NULL to BuildWaveDetailLog
-      IF @@TRANCOUNT = 0
-      BEGIN TRAN;
    
-      --2020-07-10 - START
-      --IF @n_OpenQty > @n_MaxOpenQty AND @n_MaxOpenQty > 0
-      --BEGIN
-         --   IF @n_TotalOpenQty = 0 AND @c_WaveKey = ''
-         --   BEGIN
-            --      SET @n_Continue = 3
-            --      SET @n_Err     = 555508
-            --      SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-            --                     + ': No Order to Generate. (lsp_Build_Wave)'
-            --      GOTO EXIT_SP
-            --   END
-            --   BREAK
-            --END
-            --2020-07-10 - END
+         SET @n_BatchNo = @@IDENTITY
+   
+         SET @c_BatchNo = ''
+         SET @c_BatchNo  = CONVERT(VARCHAR(30), @n_BatchNo)
+   
+         IF @n_BatchNo = 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err     = 555507
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                           + ': Batch # is blank. (lsp_Build_Wave)'
+            GOTO EXIT_SP
+         END
+   
+         IF @n_SessionNo = 0
+         BEGIN
+            BEGIN TRY
+               UPDATE BUILDWAVELOG
+               SET SessionNo = @n_BatchNo
+               WHERE BatchNo = @n_BatchNo
+            END TRY
+      
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @c_ErrMsg  = ERROR_MESSAGE()
+               SET @n_Err     = 555519
+               SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                              + ': UPDATE BUILDWAVELOG Failed. (lsp_Build_Wave) '
+                              + '( ' + @c_ErrMsg + ') '
          
-            IF @c_WaveKey = ''
-            BEGIN
-               IF @n_MaxWave > 0 AND @n_WaveCnt >= @n_MaxWave
+               IF (XACT_STATE()) = -1
                BEGIN
-                  SET @n_Continue = 2                                                  --(Wan17)
-                  GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)
-               END
+                  ROLLBACK TRAN
             
-               SET @d_StartTime = GETDATE()
-               IF @d_StartTime_Load IS NULL SET @d_StartTime_Load = @d_StartTime       --(Wan17)
-               SET @b_success = 1
-               BEGIN TRY
-                  EXECUTE nspg_GetKey
-                        'WaveKey'
-                        , 10
-                        , @c_WaveKey  OUTPUT
-                        , @b_success  OUTPUT
-                        , @n_err      OUTPUT
-                        , @c_ErrMsg   OUTPUT
-               END TRY
-            
-               BEGIN CATCH
-                  SET @n_Err     = 555509
-                  SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-                  + ': Error Executing nspg_GetKey - Wavekey. (lsp_Build_Wave)'
-               END CATCH
-            
-               IF @b_success <> 1 OR @n_Err <> 0
-               BEGIN
-                  SET @n_Continue = 3
-                  GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)
-               END
-            
-               BEGIN TRY
-                  INSERT INTO WAVE (WaveKey, BatchNo)
-                  VALUES (@c_WaveKey, @n_BatchNo)
-               END TRY
-            
-               BEGIN CATCH
-                  SET @n_Continue = 3
-                  SET @c_ErrMsg  = ERROR_MESSAGE()
-                  SET @n_Err     = 555510
-                  SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-                                 + ': Insert Into WAVE Failed. (lsp_Build_Wave) '
-                                 + '( ' + @c_ErrMsg + ') '
-               
-                  IF (XACT_STATE()) = -1
+                  WHILE @@TRANCOUNT < @n_StartTCnt
                   BEGIN
-                     ROLLBACK TRAN
-                  
-                     WHILE @@TRANCOUNT < @n_StartTCnt
-                     BEGIN
-                        BEGIN TRAN
-                     END
+                     BEGIN TRAN
                   END
-                  GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)
-               END CATCH
-            
-               SET @n_OrderCnt      = 0
-               SET @n_TotalOpenQty  = 0
-               SET @n_TotalWeight   = 0.00
-               SET @n_TotalCube     = 0.00
-               SET @n_WaveCnt       = @n_WaveCnt + 1
-               SET @c_BuildWaveKey  = @c_Wavekey
-               SET @c_WaveStatus    = '0'                                              --(Wan17)
-            END
-         ELSE IF @c_TopUpWave = 'Y' AND @c_Wavekey <> ''   --WL01 S
-            BEGIN
-               SET @c_BuildWaveKey  = @c_Wavekey
-               SET @n_WaveCnt = 1
-               SET @d_StartTime = GETDATE()
-               IF @d_StartTime_Load IS NULL SET @d_StartTime_Load = @d_StartTime
-            END
-            --WL01 E
+               END
+               GOTO EXIT_SP
+            END CATCH
+      
+            SET @n_SessionNo = @n_BatchNo
+         END
+      END
+
+      SET @n_OrderCnt     = 0
+      SET @n_TotalOrderCnt= 0
+      SET @n_TotalOpenQty = 0
+      SET @c_WaveKey      = IIF(@c_TopUpWave = 'N', '', @c_WaveKey)   --WL01   --WL02
+
+      SET @CUR_BUILDWAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT RNUM, OpenQty, OrderKey, [Weight], [Cube], [Status]                    --(Wan17)
+      FROM #tOrderData
+      ORDER BY RNUM
+
+      OPEN @CUR_BUILDWAVE
+      FETCH NEXT FROM @CUR_BUILDWAVE INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube
+                                          ,@c_OrderStatus                           --(Wan17)
+      SET @n_FetchOrderStatus = @@FETCH_STATUS
+      WHILE @n_FetchOrderStatus <> -1
+      BEGIN
+         SET @n_Weight = ISNULL(@n_Weight,0.00)             --Wan07  Fix Insert TotalWeigh as NULL to BuildWaveDetailLog
+         SET @n_Cube   = ISNULL(@n_Cube,0.00)               --Wan07  Fix Insert TotalWeigh as NULL to BuildWaveDetailLog
+         IF @@TRANCOUNT = 0
+         BEGIN TRAN;
+   
+         --2020-07-10 - START
+         --IF @n_OpenQty > @n_MaxOpenQty AND @n_MaxOpenQty > 0
+         --BEGIN
+            --   IF @n_TotalOpenQty = 0 AND @c_WaveKey = ''
+            --   BEGIN
+               --      SET @n_Continue = 3
+               --      SET @n_Err     = 555508
+               --      SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+               --                     + ': No Order to Generate. (lsp_Build_Wave)'
+               --      GOTO EXIT_SP
+               --   END
+               --   BREAK
+               --END
+               --2020-07-10 - END
          
-            IF @c_OrderStatus <= '5'                                                   --(Wan17)
+         IF @c_WaveKey = ''
+         BEGIN
+            IF @n_MaxWave > 0 AND @n_WaveCnt >= @n_MaxWave
             BEGIN
-               IF @c_OrderStatus IN (3,4) SET @c_OrderStatus = '2'
+               SET @n_Continue = 2                                                  --(Wan17)
+               GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)
+            END
             
-               SET @c_WaveStatus = CASE WHEN @c_WaveStatus = '1' THEN '1'
-                                       WHEN @c_WaveStatus = '5' AND @c_OrderStatus < '2' THEN '1'
-                                       WHEN @c_WaveStatus = '2' AND @c_OrderStatus < '2' THEN '1'
-                                       WHEN @c_WaveStatus = '2' AND @c_OrderStatus > '2' THEN '2'
-                                       ELSE @c_OrderStatus
-                                       END                                            --(Wan17)
+            SET @d_StartTime = GETDATE()
+            IF @d_StartTime_Load IS NULL SET @d_StartTime_Load = @d_StartTime       --(Wan17)
+            SET @b_success = 1
+            BEGIN TRY
+               EXECUTE nspg_GetKey
+                     'WaveKey'
+                     , 10
+                     , @c_WaveKey  OUTPUT
+                     , @b_success  OUTPUT
+                     , @n_err      OUTPUT
+                     , @c_ErrMsg   OUTPUT
+            END TRY
+            
+            BEGIN CATCH
+               SET @n_Err     = 555509
+               SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+               + ': Error Executing nspg_GetKey - Wavekey. (lsp_Build_Wave)'
+            END CATCH
+            
+            IF @b_success <> 1 OR @n_Err <> 0
+            BEGIN
+               SET @n_Continue = 3
+               GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)
+            END
+            
+            BEGIN TRY
+               INSERT INTO WAVE (WaveKey, BatchNo)
+               VALUES (@c_WaveKey, @n_BatchNo)
+            END TRY
+            
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @c_ErrMsg  = ERROR_MESSAGE()
+               SET @n_Err     = 555510
+               SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
+                              + ': Insert Into WAVE Failed. (lsp_Build_Wave) '
+                              + '( ' + @c_ErrMsg + ') '
+               
+               IF (XACT_STATE()) = -1
+               BEGIN
+                  ROLLBACK TRAN
+                  
+                  WHILE @@TRANCOUNT < @n_StartTCnt
+                  BEGIN
+                     BEGIN TRAN
+                  END
+               END
+               GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)
+            END CATCH
+            
+            SET @n_OrderCnt      = 0
+            SET @n_TotalOpenQty  = 0
+            SET @n_TotalWeight   = 0.00
+            SET @n_TotalCube     = 0.00
+            SET @n_WaveCnt       = @n_WaveCnt + 1
+            SET @c_BuildWaveKey  = @c_Wavekey
+            SET @c_WaveStatus    = '0'                                              --(Wan17)
+         END
+         ELSE IF @c_TopUpWave = 'Y' AND @c_Wavekey <> ''   --WL01 S
+         BEGIN
+            SET @c_BuildWaveKey  = @c_Wavekey
+            SET @n_WaveCnt = 1
+            SET @d_StartTime = GETDATE()
+            IF @d_StartTime_Load IS NULL SET @d_StartTime_Load = @d_StartTime
+         END
+         --WL01 E
+         
+         IF @c_OrderStatus <= '5'                                                   --(Wan17)
+         BEGIN
+            IF @c_OrderStatus IN (3,4) SET @c_OrderStatus = '2'
+            
+            SET @c_WaveStatus = CASE WHEN @c_WaveStatus = '1' THEN '1'
+                                    WHEN @c_WaveStatus = '5' AND @c_OrderStatus < '2' THEN '1'
+                                    WHEN @c_WaveStatus = '2' AND @c_OrderStatus < '2' THEN '1'
+                                    WHEN @c_WaveStatus = '2' AND @c_OrderStatus > '2' THEN '2'
+                                    ELSE @c_OrderStatus
+                                    END                                            --(Wan17)
          END
       
          IF @c_WaveKey = ''
@@ -1650,15 +1654,15 @@ AS
          BEGIN
             SELECT @n_ToBeSkuInWave = COUNT(w.Sku)
             FROM (
-                     SELECT o.Sku
-                     FROM dbo.WAVEDETAIL AS w (NOLOCK)
-                     JOIN dbo.ORDERDETAIL AS o (NOLOCK) ON o.OrderKey = w.OrderKey
-                     WHERE w.WaveKey = @c_WaveKey
-                     UNION
-                     SELECT o.Sku
-                     FROM dbo.ORDERDETAIL AS o (NOLOCK)
-                     WHERE o.OrderKey = @c_Orderkey
-                  ) w
+                  SELECT o.Sku
+                  FROM dbo.WAVEDETAIL AS w (NOLOCK)
+                  JOIN dbo.ORDERDETAIL AS o (NOLOCK) ON o.OrderKey = w.OrderKey
+                  WHERE w.WaveKey = @c_WaveKey
+                  UNION
+                  SELECT o.Sku
+                  FROM dbo.ORDERDETAIL AS o (NOLOCK)
+                  WHERE o.OrderKey = @c_Orderkey
+            ) w
          
             IF @n_ToBeSkuInWave > @n_MaxSkuInWave
             BEGIN
@@ -1707,13 +1711,13 @@ AS
          BEGIN TRY
             INSERT INTO WAVEDETAIL
                   (WavedetailKey, WaveKey, Orderkey, AddWho, Trafficcop)            --(Wan17)
-            SELECT  @c_WavedetailKey
+                  SELECT  @c_WavedetailKey
                   , @c_WaveKey
                   , T.OrderKey
                   , T.AddWho
                   , ''                                                              --(Wan18)
-            FROM #tOrderData T
-            WHERE T.RNUM = @n_Num
+                  FROM #tOrderData T
+                  WHERE T.RNUM = @n_Num
          END TRY
       
          BEGIN CATCH
@@ -1924,7 +1928,7 @@ AS
          END
       
          FETCH NEXT FROM @CUR_BUILDWAVE INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube
-         ,@c_OrderStatus                        --(Wan17)
+                                             ,@c_OrderStatus                        --(Wan17)
       
          SET @n_FetchOrderStatus = @@FETCH_STATUS
       
@@ -1967,7 +1971,7 @@ AS
                   SET @n_Continue = 3
                   SET @n_Err = 555521
                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6),@n_Err) + ': Update BUILDPREWAVE fail.'
-                  + ' (lsp_Build_Wave)'
+                                 + ' (lsp_Build_Wave)'
                   GOTO EXIT_SP
                END
             END
@@ -1977,11 +1981,11 @@ AS
          BEGIN
             SET @b_Success = 1
             EXEC WM.lsp_Build_Wave_Update
-               @n_BatchNo = @n_BatchNo
-            ,  @b_Success = @b_Success  OUTPUT
-            ,  @n_err     = @n_err      OUTPUT
-            ,  @c_ErrMsg  = @c_ErrMsg   OUTPUT
-            ,  @b_debug   = @b_debug
+                     @n_BatchNo = @n_BatchNo
+                  ,  @b_Success = @b_Success  OUTPUT
+                  ,  @n_err     = @n_err      OUTPUT
+                  ,  @c_ErrMsg  = @c_ErrMsg   OUTPUT
+                  ,  @b_debug   = @b_debug
          
             IF @b_Success <> 1
             BEGIN
@@ -2015,7 +2019,7 @@ AS
       SET @c_ErrMsg  = ERROR_MESSAGE()  --(Wan01)
       GOTO EXIT_SP
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
-   --
+      --
    EXIT_SP:
    IF @b_DeleteTmpOrders = 1
    BEGIN
@@ -2047,8 +2051,8 @@ AS
          SET @b_Success = 1
       END
    
-      IF @n_BatchNo > 0
-      BEGIN
+   IF @n_BatchNo > 0
+   BEGIN
          WHILE @@TRANCOUNT > 0
          BEGIN
             COMMIT TRAN
@@ -2059,13 +2063,13 @@ AS
          BEGIN
             SET @b_Success = 1
             EXEC WM.lsp_Build_Wave_Post
-               @n_BatchNo                 = @n_BatchNo
-            ,  @n_BuildWaveDetailLog_From = @n_BuildWaveDetailLog_From
-            ,  @n_BuildWaveDetailLog_To   = @n_BuildWaveDetailLog_To
-            ,  @b_Success                 = @b_Success  OUTPUT
-            ,  @n_err                     = @n_err      OUTPUT
-            ,  @c_ErrMsg                  = @c_ErrMsg   OUTPUT
-            ,  @b_debug                   = @b_debug
+                  @n_BatchNo                 = @n_BatchNo
+                  ,  @n_BuildWaveDetailLog_From = @n_BuildWaveDetailLog_From
+                  ,  @n_BuildWaveDetailLog_To   = @n_BuildWaveDetailLog_To
+                  ,  @b_Success                 = @b_Success  OUTPUT
+                  ,  @n_err                     = @n_err      OUTPUT
+                  ,  @c_ErrMsg                  = @c_ErrMsg   OUTPUT
+                  ,  @b_debug                   = @b_debug
          END                                                                    --Wan14 - END
       
          IF EXISTS ( SELECT 1
@@ -2079,8 +2083,8 @@ AS
                UPDATE BUILDWAVELOG
                SET --Duration = CONVERT(CHAR(12), @d_EndTime - @d_StartTime, 114)            --(Wan12)
                   Duration = CONVERT(CHAR(12),                                             --(Wan12)
-                                    (CONVERT(DATETIME, Duration))                          --(Wan12)
-                                    + (@d_EndTime - @d_StartTime_Load), 114)                 --(Wan12)
+                           (CONVERT(DATETIME, Duration))                          --(Wan12)
+                           + (@d_EndTime - @d_StartTime_Load), 114)                 --(Wan12)
                   , TotalWaveCnt = TotalWaveCnt + @n_WaveCnt                                 --(Wan12)
                   , UDF01    = ''
                   , [Status] = '9'
@@ -2111,23 +2115,23 @@ AS
          END
       END
    
-      WHILE @@TRANCOUNT < @n_StartTCnt
-      BEGIN
-         BEGIN TRAN
-      END
+   WHILE @@TRANCOUNT < @n_StartTCnt
+   BEGIN
+      BEGIN TRAN
+   END
    
-      IF @b_ExecuteAs = 1
-      BEGIN
-         REVERT
-         EXEC [WM].[lsp_ResetUser]
-      END
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+      EXEC [WM].[lsp_ResetUser]
+   END
 
-      IF @b_debug = 2
-      BEGIN
-         PRINT 'SP-lsp_Build_Wave DEBUG-STOP...'
-         PRINT '@b_Success = ' + CAST(@b_Success AS NVARCHAR(2))
-         PRINT '@c_ErrMsg = ' + @c_ErrMsg
-      END
+   IF @b_debug = 2
+   BEGIN
+      PRINT 'SP-lsp_Build_Wave DEBUG-STOP...'
+      PRINT '@b_Success = ' + CAST(@b_Success AS NVARCHAR(2))
+      PRINT '@c_ErrMsg = ' + @c_ErrMsg
+   END
    -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_Build_Wave] TO nSQL
