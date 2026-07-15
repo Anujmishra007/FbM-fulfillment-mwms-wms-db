@@ -11,6 +11,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-05-07   1.0  GCH225     UWP-55977: Custom Cartonization process for CSC  */
 /* 2026-07-07   1.1  MBR282     UWP-60792: Update logic for #tItemForCartonize   */
+/* 2026-07-15   1.2  OAN031     UWP-58236: Update logic for Short-pick           */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_Cartonization01] (
      @cType                NVARCHAR(30)      = ''
@@ -288,6 +289,7 @@ BEGIN
          FROM PICKDETAIL (NOLOCK)
          WHERE OrderKey = @cOrderKey
          AND (@cDropID = '' OR DropID = @cDropID)
+         AND Status NOT IN ('4', '9')
          GROUP BY OrderKey, SKU) PD1
          LEFT JOIN @tPackedItem PD2
          ON PD1.SKU = PD2.SKU
@@ -307,6 +309,7 @@ BEGIN
          ON PD.OrderKey = LPD.OrderKey
          WHERE LPD.LoadKey = @cLoadKey
          AND (@cDropID = '' OR PD.DropID = @cDropID)
+         AND PD.Status NOT IN ('4', '9')
          GROUP BY PD.SKU, LPD.LoadKey) PD1
          LEFT JOIN @tPackedItem PD2
          ON PD1.SKU = PD2.SKU
