@@ -37,5 +37,6 @@ execute rdt.rdtAddMsg 272380, 10, '272380^SKUPacked',             'us_english', 
 execute rdt.rdtAddMsg 272381, 10, '272381^UpdPackDetailFail',     'us_english', 838, 0, '272381: Increase PackDetail Qty failed'
 execute rdt.rdtAddMsg 272382, 10, '272382^ExecCfmSPFail',         'us_english', 838, 0, '272382: Execute Confirm SP failed'
 execute rdt.rdtAddMsg 272383, 10, '272383^ExecCfmSPFail',         'us_english', 838, 0, '272383: Execute Confirm SP failed'
+execute rdt.rdtAddMsg 272384, 10, '272384^NoPKDForPacking',       'us_english', 838, 0, '272384: No PickDetail available for packing'
 
 select * from rdt.rdtmsg (nolock) where message_id between 272351 and 272400

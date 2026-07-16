@@ -327,6 +327,7 @@ BEGIN
       DECLARE @cLoopLoc             NVARCHAR(10)
       DECLARE @cLoopID              NVARCHAR(18)
       DECLARE @cLoopOrderKey        NVARCHAR(10)
+      DECLARE @cLoopTaskDetailKey   NVARCHAR(10)
       DECLARE @cTargetPickDetailKey NVARCHAR(10)
       DECLARE @cNewPickDetailKey    NVARCHAR(10)
       DECLARE @cOperationType       NVARCHAR(10)
@@ -398,7 +399,8 @@ BEGIN
                @cLoopOrderKey        = OrderKey,
                @cLoopLot             = Lot,
                @cLoopLoc             = Loc,
-               @cLoopID              = ID
+               @cLoopID              = ID,
+               @cLoopTaskDetailKey   = TaskDetailKey
             FROM dbo.PickDetail WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
               AND OrderKey  = @cOrderKey
@@ -416,7 +418,8 @@ BEGIN
                @cLoopOrderKey        = PD.OrderKey,
                @cLoopLot             = PD.Lot,
                @cLoopLoc             = PD.Loc,
-               @cLoopID              = PD.ID
+               @cLoopID              = PD.ID,
+               @cLoopTaskDetailKey   = PD.TaskDetailKey
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
             JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey
             WHERE LPD.LoadKey  = @cLoadKey
@@ -457,6 +460,7 @@ BEGIN
            AND Loc             = @cLoopLoc
            AND ID              = @cLoopID
            AND Status          = @cPickStatus
+           AND ISNULL(TaskDetailKey, '')   = ISNULL(@cLoopTaskDetailKey, '')
 
          IF @nDebugFlag = 1
             SELECT 'Finding exact same pkd', @cTargetPickDetailKey AS TargetPKD

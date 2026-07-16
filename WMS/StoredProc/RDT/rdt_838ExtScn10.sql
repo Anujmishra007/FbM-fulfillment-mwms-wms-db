@@ -15,6 +15,7 @@ GO
 /* Date        Rev    Author     Purposes                                  */
 /* 2026-06-30  1.0.0  JackC      FCR-12984 Created                         */
 /* 2026-07-08  1.1.0  NickT      FCR-14763 Add B2C Single logic            */
+/* 2026-07-16  1.2.0  JackC      FCR-12984 Update getting carton type logic*/
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn10] (
@@ -419,7 +420,7 @@ BEGIN
                GOTO Fail_St1toSt2
             END CATCH
 
-            SELECT TOP 1 
+            SELECT TOP 1
                @cWaveKey = ISNULL(WaveKey, ''),
                @cVirtualCartonID = ISNULL(CaseID, ''), -- For ECOM, it is label no.
                @cFromLoc = Loc,
@@ -429,7 +430,14 @@ BEGIN
                   AND StorerKey = @cStorerKey
                   AND Status = @cPickStatus
                   AND Qty > 0
-                  AND NOTES <> 'PACKED'
+                  AND CHARINDEX('[PACKED]', ISNULL(NOTES, '')) = 0
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+               SET @nErrNo  = 272384
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --NoPKDForPacking
+               GOTO Fail_St1toSt2
+            END
 
             SELECT
                @cWaveType = ISNULL(UserDefine03, ''),
@@ -2333,6 +2341,7 @@ BEGIN
                      GOTO New_Step4_Fail
                   END
 
+                  --V1.2.0 start
                   -- Get length, width, height from cartonization table
                   SELECT
                      @fCartonWeight = ISNULL(CartonWeight, 0),
@@ -2340,9 +2349,9 @@ BEGIN
                      @fCartonWidth = ISNULL(CartonWidth, 0),
                      @fCartonHeight = ISNULL(CartonHeight, 0)
                   FROM Cartonization WITH (NOLOCK)
-                     INNER JOIN Storer WITH (NOLOCK) ON (Storer.CartonGroup = Cartonization.CartonizationGroup)
-                  WHERE Storer.StorerKey = @cStorerKey
-                     AND Cartonization.CartonType = @cChkCartonType
+                  WHERE CartonizationGroup LIKE 'AEO%'
+                     AND CartonType = @cChkCartonType
+                  --V1.2.0 end
 
                   SET @nRowCount = @@ROWCOUNT
                   -- Check if valid

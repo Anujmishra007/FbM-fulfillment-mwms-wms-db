@@ -368,7 +368,7 @@ BEGIN
       BEGIN TRY
          UPDATE PD  WITH (ROWLOCK)
          SET PD.DropID = PD.CaseID,
-            PD.Notes = '',
+            PD.Notes = REPLACE(ISNULL(PD.Notes, ''), '[PACKED]', ''),
             PD.EditDate = GETDATE(),
             PD.EditWho = SUSER_SNAME(),
             PD.TrafficCop = NULL

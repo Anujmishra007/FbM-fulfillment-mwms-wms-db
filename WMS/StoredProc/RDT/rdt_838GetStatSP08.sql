@@ -80,7 +80,7 @@ BEGIN
          AND StorerKey = @cStorerKey
          AND Status = @cPickStatus
          AND Qty > 0
-         AND NOTES <> 'PACKED'
+         AND CHARINDEX('[PACKED]', ISNULL(NOTES, '')) = 0
 
    SELECT
       @cWaveType = ISNULL(UserDefine03, ''),

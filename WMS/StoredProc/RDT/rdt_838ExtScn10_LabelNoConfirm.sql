@@ -317,7 +317,7 @@ BEGIN
 
       BEGIN TRY
          UPDATE PD  WITH (ROWLOCK)
-         SET PD.Notes = 'PACKED',
+         SET PD.Notes = ISNULL(PD.Notes, '') + '[PACKED]',
             PD.EditDate = GETDATE(),
             PD.EditWho = @cUserName,
             PD.TrafficCop = NULL
