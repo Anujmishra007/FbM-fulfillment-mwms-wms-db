@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_PieceReceiving_SKULabel]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_PieceReceiving_SKULabel]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,8 +11,9 @@ GO
 /* 2017-05-04 1.0  Ung     WMS-1817 Created                                */
 /* 2017-06-30 1.1  SPChin  IN00391361 - Bug Fixed                          */
 /* 2020-04-15 1.2  Ung     WMS-13140 Surpress error (bypass printing)      */
+/* 2026-07-14 1.3  JackC   FCR-12472 Add EnableRdtPrint rdt_Print support  */
 /***************************************************************************/
-CREATE PROC [RDT].[rdt_PieceReceiving_SKULabel](
+CREATE OR ALTER PROCEDURE [RDT].[rdt_PieceReceiving_SKULabel](
    @nFunc         INT,
    @nMobile       INT,
    @cLangCode     NVARCHAR( 3),
@@ -109,9 +106,42 @@ BEGIN
             @cErrMsg OUTPUT
       END
    END
+   ELSE IF rdt.RDTGetConfig( @nFunc, 'EnableRdtPrint', @cStorerKey) = '1' --(jackc01)
+   BEGIN
+      DECLARE @tSKULabelParam VariableTable
+      DECLARE @cPrinterPaper  NVARCHAR( 10)
+      DECLARE @cSKULabelType NVARCHAR( 10)
+
+      -- Get paper printer from mobile session
+      SELECT @cPrinterPaper = ISNULL( Printer_Paper, '')
+      FROM rdt.rdtMobRec WITH (NOLOCK)
+      WHERE Mobile = @nMobile
+
+      -- Get report type from SKULabel config (value IS the reportType)
+      SET @cSKULabelType = rdt.RDTGetConfig( @nFunc, 'SKULabelType', @cStorerKey)
+      IF ISNULL(@cSKULabelType, '') = '' OR @cSKULabelType = '0'
+      BEGIN
+         SET @nErrNo = -1
+         GOTO Quit
+      END
+
+      INSERT INTO @tSKULabelParam (Variable, Value) VALUES
+         ('@cReceiptKey',        @cReceiptKey),
+         ('@cReceiptLineNumber', @cReceiptLineNumber),
+         ('@nQTY',               TRY_CAST(@nQTY AS NVARCHAR(10)))
+
+      EXEC RDT.rdt_Print
+         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey,
+         @cFacility, @cStorerKey, @cPrinter, @cPrinterPaper,
+         @cSKULabelType,
+         @tSKULabelParam,
+         'rdt_PieceReceiving_SKULabel',
+         @nErrNo  OUTPUT,
+         @cErrMsg OUTPUT
+   END
    ELSE
    BEGIN
-      -- Print
+      -- Print (existing rdt_BuiltPrintJob)
       EXEC RDT.rdt_BuiltPrintJob
          @nMobile,
          @cStorerKey,
