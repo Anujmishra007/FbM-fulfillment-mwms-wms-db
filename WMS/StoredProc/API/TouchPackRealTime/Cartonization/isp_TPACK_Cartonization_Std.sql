@@ -11,7 +11,6 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-05-14   1.0  GCH225     UWP-55977: Standard Cartonization process.       */
 /* 2026-07-07   1.1  MBR282     UWP-60792: Update logic for #tItemForCartonize   */
-/* 2026-07-15   1.2  OAN031     UWP-58236: Update logic for Short-pick           */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_Cartonization_Std] (
      @cType                NVARCHAR(30)      = ''
@@ -616,3 +615,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_Cartonization_Std] TO NSQL
+GO

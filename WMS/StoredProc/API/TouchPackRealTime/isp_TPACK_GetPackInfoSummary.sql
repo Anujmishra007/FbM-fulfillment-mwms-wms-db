@@ -53,7 +53,7 @@ BEGIN
          , @cPrecedingCartonStatus  NVARCHAR(20)
          , @cExtPackInfoJson        NVARCHAR(MAX)
    
-   DECLARE @PickQtyStatus TABLE(
+   CREATE TABLE #tPickQtyStatus(
         TtlPickedQty INT
       , Sku       NVARCHAR(20) 
       , [Status]  NVARCHAR(10) 
@@ -79,8 +79,8 @@ BEGIN
    --Get Default Total Packed Carton Count & Total Packed Qty
    IF @cPickSlipNo <> ''
    BEGIN
-      SELECT  @nTtlPackedCtnCount = ISNULL(COUNT(PickSlipNo), 0) 
-            , @nTtlPackedQty = ISNULL(SUM(ISNULL(Qty,0)),0)
+      SELECT  @nTtlPackedCtnCount = COUNT(PickSlipNo) 
+            , @nTtlPackedQty = ISNULL(SUM(Qty),0)
       FROM PACKINFO (NOLOCK) 
       WHERE PickSlipNo = @cPickSlipNo
    END
@@ -144,8 +144,8 @@ BEGIN
             END
          END
          
-         SELECT  @nTtlPackedCtnCount = ISNULL(COUNT(PIF.PickSlipNo), 0) 
-               , @nTtlPackedQty = ISNULL(SUM(ISNULL(PIF.Qty,0)),0)
+         SELECT  @nTtlPackedCtnCount = COUNT(PIF.PickSlipNo)
+               , @nTtlPackedQty = ISNULL(SUM(PIF.Qty),0)
          FROM PACKINFO PIF (NOLOCK) 
          WHERE (@cPickSlipNo = '' OR PIF.PickSlipNo = @cPickSlipNo)
          AND EXISTS (SELECT 1 
@@ -177,7 +177,7 @@ BEGIN
       IF @cType = 'toteid'
       BEGIN
          -- only tote and b2c
-         INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+         INSERT INTO #tPickQtyStatus (TtlPickedQty, Sku, [Status])
          SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
          FROM PICKDETAIL PD (NOLOCK)
          WHERE PD.StorerKey = @cStorerKey
@@ -197,7 +197,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+         INSERT INTO #tPickQtyStatus (TtlPickedQty, Sku, [Status])
          SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
          FROM PICKDETAIL PD (NOLOCK)
          WHERE PD.StorerKey = @cStorerKey
@@ -242,11 +242,17 @@ BEGIN
       ELSE
       BEGIN
          --Get Total Packed Carton Count & Total Packed Qty
-         SELECT  @nTtlPackedCtnCount = ISNULL(COUNT(DISTINCT CartonNo), 0) 
-               , @nTtlPackedQty = ISNULL(SUM(ISNULL(Qty,0)),0)
-         FROM PACKDETAIL (NOLOCK) 
-         WHERE  (@cPickSlipNo = '' OR PickSlipNo = @cPickSlipNo)
-         AND (@cDropID = '' OR DropID = @cDropID)
+         SELECT @nTtlPackedCtnCount = COUNT(PIF.CartonNo)
+              , @nTtlPackedQty = ISNULL(SUM(PIF.Qty), 0)
+         FROM PACKINFO PIF (NOLOCK)
+         WHERE PIF.PickSlipNo = @cPickSlipNo
+         AND (@cDropID = '' OR EXISTS (SELECT 1 
+                                       FROM PACKDETAIL PD (NOLOCK)
+                                       WHERE PD.PickSlipNo = PIF.PickSlipNo
+                                       AND PD.CartonNo = PIF.CartonNo
+                                       AND PD.DropID = @cDropID
+                                    )
+            )
       END
    END
    ELSE
@@ -256,7 +262,7 @@ BEGIN
          IF @cType = 'toteid'
          BEGIN
             -- only tote and b2c
-            INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+            INSERT INTO #tPickQtyStatus (TtlPickedQty, Sku, [Status])
             SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
             FROM PICKDETAIL PD (NOLOCK)
             WHERE PD.StorerKey = @cStorerKey
@@ -280,7 +286,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+            INSERT INTO #tPickQtyStatus (TtlPickedQty, Sku, [Status])
             SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
             FROM PICKDETAIL PD (NOLOCK)
             WHERE PD.StorerKey = @cStorerKey
@@ -295,7 +301,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         INSERT INTO @PickQtyStatus (TtlPickedQty, Sku, [Status])
+         INSERT INTO #tPickQtyStatus (TtlPickedQty, Sku, [Status])
          SELECT SUM(PD.Qty), PD.Sku, PD.[Status] 
          FROM PICKDETAIL PD (NOLOCK)
          WHERE PD.StorerKey = @cStorerKey
@@ -306,7 +312,7 @@ BEGIN
    
    --Get Total Allocated Qty
    SELECT @nTtlAllocQty = ISNULL(SUM(TtlPickedQty), 0)
-   FROM @PickQtyStatus
+   FROM #tPickQtyStatus
    WHERE [Status] <= '9'
 
 
@@ -317,7 +323,7 @@ BEGIN
                   AND sValue = '1'
    )
    BEGIN
-      DELETE FROM @PickQtyStatus WHERE [Status] = '4'
+      DELETE FROM #tPickQtyStatus WHERE [Status] = '4'
    END
 
    SELECT @cPickStsFilter1 = sValue
@@ -339,7 +345,7 @@ BEGIN
       )
       BEGIN
          SET @nIsFilterFlag = 1
-         DELETE FROM @PickQtyStatus WHERE [Status] > @cPickStsFilter1
+         DELETE FROM #tPickQtyStatus WHERE [Status] > @cPickStsFilter1
       END
       ELSE IF EXISTS ( SELECT 1
                   FROM STORERCONFIG (NOLOCK)
@@ -349,10 +355,10 @@ BEGIN
       )
       BEGIN
          SET @nIsFilterFlag = 2
-         DELETE FROM @PickQtyStatus WHERE [Status] <> @cPickStsFilter1
+         DELETE FROM #tPickQtyStatus WHERE [Status] <> @cPickStsFilter1
       END
 
-      IF NOT EXISTS (SELECT 1 FROM @PickQtyStatus)
+      IF NOT EXISTS (SELECT 1 FROM #tPickQtyStatus)
       BEGIN
          SET @n_Continue  = 3
          SET @n_ErrNo = 11001
@@ -368,7 +374,7 @@ BEGIN
    --Get Total SKU Count & Total Picked Qty with condition check
     SELECT @nTtlPickQty = ISNULL(SUM(TtlPickedQty), 0)
          , @nTtlSkuCount = COUNT(DISTINCT Sku) 
-   FROM @PickQtyStatus
+   FROM #tPickQtyStatus
 
    IF @nCartonNo <> 0
    BEGIN
@@ -392,11 +398,17 @@ BEGIN
       END
       ELSE
       BEGIN
-         SELECT @nTtlCurCtnPackedQty = ISNULL(SUM(Qty), 0)
-         FROM PACKDETAIL (NOLOCK) 
-         WHERE PickSlipNo = @cPickSlipNo
-         AND CartonNo = @nCartonNo
-         AND (@cDropID = '' OR DropID = @cDropID)
+         SELECT @nTtlCurCtnPackedQty = ISNULL(SUM(PIF.Qty), 0)
+         FROM PACKINFO PIF (NOLOCK) 
+         WHERE PIF.PickSlipNo = @cPickSlipNo
+         AND PIF.CartonNo = @nCartonNo
+         AND (@cDropID = '' OR EXISTS (SELECT 1 
+                                       FROM PACKDETAIL PD (NOLOCK)
+                                       WHERE PD.PickSlipNo = PIF.PickSlipNo
+                                       AND PD.CartonNo = PIF.CartonNo
+                                       AND PD.DropID = @cDropID
+                                    )
+            )
 
          SELECT @cCurrentCartonStatus = CartonStatus
          FROM PACKINFO (NOLOCK)
@@ -487,18 +499,25 @@ BEGIN
    BEGIN
       SET @cPrecedingCartonStatus = 'INPROGRESS'
       --If 'TPS-CtnRec' = 0, delete tempcarton in PackInfo table where Qty=0 and CartonType <> ''
-      IF EXISTS ( SELECT 1 FROM STORERCONFIG (NOLOCK)
+      IF EXISTS ( SELECT 1 
+                  FROM STORERCONFIG (NOLOCK)
                   WHERE Storerkey = @cStorerKey
-                  AND ConfigKey = 'TPS-CtnRec' AND SValue = '0' )
-      AND EXISTS ( SELECT 1 FROM PACKINFO (NOLOCK)
-                   WHERE PickSlipNo = @cPickSlipNo
-                   AND CartonNo = @nPrecedingCartonNo
-                   AND Qty = 0 AND CartonType <> '' )
+                  AND ConfigKey = 'TPS-CtnRec' 
+                  AND SValue = '0' 
+      )
+      AND EXISTS (SELECT 1 
+                  FROM PACKINFO (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nPrecedingCartonNo
+                  AND Qty = 0 
+                  AND CartonType <> '' 
+      )
       BEGIN
          DELETE FROM PACKINFO
          WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nPrecedingCartonNo
-         AND Qty = 0 AND CartonType <> ''
+         AND Qty = 0 
+         AND CartonType <> ''
 
          -- If Temporary carton no longer exists
          SET @nPrecedingCartonNo     = 0
@@ -600,6 +619,8 @@ PROCEED:
                                     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                                     ),'')
 EXIT_SP:
+   DROP TABLE #tPickQtyStatus
+
    IF @n_Continue = 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      
@@ -626,3 +647,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_GetPackInfoSummary] TO NSQL
+GO

@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-10-15   1.0  GCH225     Cloned from isp_TPS_ExtPrint05 (TPS-796)         */
+/* 2026-06-29   2.0  GCH225     UWP-52413: Fix the GetReprintOpt for ReportType  */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument05] (
@@ -60,6 +61,7 @@ BEGIN
          , @cPrinterInGroup      NVARCHAR(10)
          , @cCustomLabelSP       NVARCHAR(30)
          , @cDynPrinter          NVARCHAR(30)
+         , @cCurReportType       NVARCHAR(30)
 
    DECLARE @cFieldName1       NVARCHAR(MAX)
          , @cFieldName2       NVARCHAR(MAX)
@@ -97,6 +99,7 @@ BEGIN
    SET @IsAggregate4       = 0
    SET @cModuleID          = 'TPPACK'
    SET @cCustomLabelSP     = ''
+   SET @cCurReportType     = ''
 
    IF @bPrintLabelFlag = 1
    BEGIN
@@ -105,13 +108,14 @@ BEGIN
                      JOIN WMREPORTDETAIL WMRD (NOLOCK) 
                      ON WMR.ReportID =WMRD.ReportID
                      WHERE WMRD.StorerKey  = @cStorerKey 
-                     AND NOT EXISTS (SELECT 1 
+                     AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                                        FROM CODELKUP C (NOLOCK)
                                        WHERE C.StorerKey = WMRD.StorerKey
                                        AND C.LISTNAME = 'TPSPrtLast'
                                        AND C.Code = WMR.ReportType
-                                    )
+                                    )))
                      AND WMR.ModuleID = @cModuleID
+                     AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                      AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                      AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
       )
@@ -127,13 +131,14 @@ BEGIN
                      JOIN WMREPORTDETAIL WMRD (NOLOCK) 
                      ON WMR.ReportID =WMRD.ReportID
                      WHERE WMRD.StorerKey  = @cStorerKey 
-                     AND NOT EXISTS (SELECT 1 
+                     AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                                        FROM CODELKUP C (NOLOCK)
                                        WHERE C.StorerKey = WMRD.StorerKey
                                        AND C.LISTNAME = 'TPSPrtLast'
                                        AND C.Code = WMR.ReportType
-                                    )
+                                    )))
                      AND WMR.ModuleID = @cModuleID
+                     AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                      AND (WMR.KeyFieldName1 = '' OR WMR.KeyFieldName1 IS NULL)
                      AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                      AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
@@ -159,20 +164,21 @@ BEGIN
       JOIN WMREPORTDETAIL WMRD (NOLOCK) 
       ON WMR.ReportID =WMRD.ReportID
       WHERE WMRD.StorerKey  = @cStorerKey 
-      AND NOT EXISTS (SELECT 1 
+      AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                         FROM CODELKUP C (NOLOCK)
                         WHERE C.StorerKey = WMRD.StorerKey
                         AND C.LISTNAME = 'TPSPrtLast'
                         AND C.Code = WMR.ReportType
-                     )
+                     )))
       AND WMR.ModuleID = @cModuleID
+      AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
       AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
       AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
       ORDER BY WMR.ReportID        
       OPEN CUR_LBL
       FETCH NEXT FROM CUR_LBL INTO @cReportID
                                  , @cPrintSource
-                                 , @cReportType
+                                 , @cCurReportType
                                  , @cDefaultPrinterID
                                  , @cFieldName1
                                  , @cFieldName2
@@ -301,7 +307,7 @@ BEGIN
                FROM rdt.RDTREPORTTOPRINTER (NOLOCK)  
                WHERE Function_ID = '838'  
                AND StorerKey = @cStorerKey  
-               AND ReportType = @cReportType
+               AND ReportType = @cCurReportType
                AND PrinterGroup = @cDynPrinter  
 
                IF @cPrinterInGroup = ''  
@@ -368,7 +374,7 @@ BEGIN
 
          FETCH NEXT FROM CUR_LBL INTO @cReportID
                                     , @cPrintSource
-                                    , @cReportType
+                                    , @cCurReportType
                                     , @cDefaultPrinterID
                                     , @cFieldName1
                                     , @cFieldName2
@@ -380,20 +386,21 @@ BEGIN
       DEALLOCATE CUR_LBL
    END
 
-   SET @cSQL         = ''
-   SET @cSQLParam    = ''
-   SET @cFieldName1  = ''
-   SET @cFieldName2  = ''
-   SET @cFieldName3  = ''
-   SET @cFieldName4  = ''
-   SET @cParams1     = ''
-   SET @cParams2     = ''
-   SET @cParams3     = ''
-   SET @cParams4     = ''
-   SET @IsAggregate1 = 0
-   SET @IsAggregate2 = 0
-   SET @IsAggregate3 = 0
-   SET @IsAggregate4 = 0
+   SET @cSQL            = ''
+   SET @cSQLParam       = ''
+   SET @cCurReportType  = ''
+   SET @cFieldName1     = ''
+   SET @cFieldName2     = ''
+   SET @cFieldName3     = ''
+   SET @cFieldName4     = ''
+   SET @cParams1        = ''
+   SET @cParams2        = ''
+   SET @cParams3        = ''
+   SET @cParams4        = ''
+   SET @IsAggregate1    = 0
+   SET @IsAggregate2    = 0
+   SET @IsAggregate3    = 0
+   SET @IsAggregate4    = 0
 
    IF @bPrintPaperFlag = 1
    BEGIN
@@ -403,12 +410,13 @@ BEGIN
                   ON WMR.ReportID = WMRD.ReportID
                   WHERE WMRD.StorerKey  = @cStorerKey 
                   AND WMR.ModuleID = @cModuleID
-                  AND EXISTS (SELECT 1 
+                  AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                               FROM CODELKUP C (NOLOCK)
                               WHERE C.StorerKey = WMRD.StorerKey
                               AND C.LISTNAME = 'TPSPrtLast'
                               AND C.Code = WMR.ReportType
-                             )
+                             )))
+                  AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
       )  
       BEGIN
@@ -424,12 +432,13 @@ BEGIN
                   ON WMR.ReportID = WMRD.ReportID
                   WHERE WMRD.Storerkey = @cStorerKey
                   AND WMR.ModuleID = @cModuleID
-                  AND EXISTS (SELECT 1 
+                  AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                               FROM CODELKUP C (NOLOCK)
                               WHERE C.StorerKey = WMRD.StorerKey
                               AND C.LISTNAME = 'TPSPrtLast'
                               AND C.Code = WMR.ReportType
-                             )
+                             )))                  
+                  AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                   AND (WMR.KeyFieldName1 = '' OR WMR.KeyFieldName1 IS NULL)
                   AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
@@ -456,19 +465,20 @@ BEGIN
       ON WMR.ReportID = WMRD.ReportID
       WHERE WMRD.Storerkey = @cStorerKey
       AND WMR.ModuleID = @cModuleID
-      AND EXISTS (SELECT 1 
+      AND  (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                   FROM CODELKUP C (NOLOCK)
                   WHERE C.StorerKey = WMRD.StorerKey
                   AND C.LISTNAME = 'TPSPrtLast'
                   AND C.Code = WMR.ReportType
-                  )
+                  )))
+      AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
       AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
       AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)    
       ORDER BY WMR.ReportID        
       OPEN CUR_PAPER
       FETCH NEXT FROM CUR_PAPER INTO  @cReportID
                                     , @cPrintSource
-                                    , @cReportType
+                                    , @cCurReportType
                                     , @cDefaultPrinterID
                                     , @cFieldName1
                                     , @cFieldName2
@@ -578,7 +588,7 @@ BEGIN
                FROM rdt.RDTREPORTTOPRINTER (NOLOCK)  
                WHERE Function_ID = '838'  
                AND StorerKey = @cStorerKey  
-               AND ReportType = @cReportType
+               AND ReportType = @cCurReportType
                AND PrinterGroup = @cDynPrinter  
 
                IF @cPrinterInGroup = ''  
@@ -644,7 +654,7 @@ BEGIN
 
          FETCH NEXT FROM CUR_PAPER INTO  @cReportID
                                        , @cPrintSource
-                                       , @cReportType
+                                       , @cCurReportType
                                        , @cDefaultPrinterID
                                        , @cFieldName1
                                        , @cFieldName2
@@ -683,3 +693,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_PrintDocument05] TO NSQL
+GO

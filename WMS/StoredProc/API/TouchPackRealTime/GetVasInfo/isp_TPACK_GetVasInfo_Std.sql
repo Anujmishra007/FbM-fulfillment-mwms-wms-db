@@ -21,6 +21,7 @@ GO
 /* 2026-02-12   8.0  GCH225     UWP-48885 Fix 0H Header flag for PreCartonize case      */
 /* 2026-02-27   8.1  JWF011     UWP-49173 Fix Order Header VAS display 2 times          */
 /* 2026-04-03   8.2  GCH225     UWP-53582 Fix Print Type that Short column ='Y'         */
+/* 2026-07-02   8.3  GCH225     UWP-59664 Fine tune the VAS query process               */
 /****************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_GetVasInfo_Std] (
@@ -160,47 +161,51 @@ BEGIN
       WHERE LoadKey = @cLoadKey
    END
 
-   INSERT INTO @VASInfo ( cSKU
-                        , cCode
-                        , cDescr
-                        , fPrice
-                        , cType
-                        , cPrintDocID
-                        , bIsMandatory
-                        , cStatus
-                        , bShowFlag
-                        , cExternLineNo
-                        )
-                  SELECT  IIF(WOD.ExternLineNo = '0H', @cSKU, WOD.Sku)
-                        , WOD.[Type]
-                        , CLK.[Description]
-                        , WOD.Price
-                        , IIF(CLK.UDF01 <> '', 'print', '')
-                        , IIF(CLK.UDF01 <> '', CLK.UDF01, '')
-                        , @c_Option1
-                        , WOD.[Status]
-                        , IIF(CLK.Short = 'Y', 0, 1)
-                        , WOD.ExternLineNo
-                  FROM WORKORDERDETAIL WOD (NOLOCK)
-                  LEFT JOIN CODELKUP CLK (NOLOCK)
-                  ON WOD.[Type] = CLK.Code
-                  AND CLK.StorerKey = @cStorerKey
-                  WHERE CLK.LISTNAME = 'WKOrdType'
-                  AND CLK.Short <> 'Y'  -- Not equal to Y means required to show VAS.
-                  AND EXISTS (SELECT 1
-                              FROM WORKORDER WO (NOLOCK)
-                              WHERE EXISTS ( SELECT 1 
-                                             FROM @OrderList t
-                                             WHERE t.OrderKey = WO.ExternWorkOrderKey
-                                             )
-                              AND StorerKey = @cStorerKey
-                              AND Facility = @cFacility
-                              AND WO.[Type] IN('PACK', 'VAS')
-                              AND WO.WorkOrderKey = WOD.WorkOrderKey
-                              )
-                  ORDER BY CASE WOD.ExternLineNo WHEN '0H' THEN 0 ELSE 1 END
-                            , WOD.WorkOrderLineNumber     
-   
+   IF (@c_Option2 <> 'Carton' AND @cSKU <> '')
+   OR (@c_Option2 = 'Carton' AND @cSKU = '')
+   BEGIN
+      INSERT INTO @VASInfo ( cSKU
+                           , cCode
+                           , cDescr
+                           , fPrice
+                           , cType
+                           , cPrintDocID
+                           , bIsMandatory
+                           , cStatus
+                           , bShowFlag
+                           , cExternLineNo
+                           )
+                     SELECT  IIF(WOD.ExternLineNo = '0H', @cSKU, WOD.Sku)
+                           , WOD.[Type]
+                           , CLK.[Description]
+                           , WOD.Price
+                           , IIF(CLK.UDF01 <> '', 'print', '')
+                           , IIF(CLK.UDF01 <> '', CLK.UDF01, '')
+                           , @c_Option1
+                           , WOD.[Status]
+                           , IIF(CLK.Short = 'Y', 0, 1)
+                           , WOD.ExternLineNo
+                     FROM WORKORDERDETAIL WOD (NOLOCK)
+                     INNER JOIN CODELKUP CLK (NOLOCK)
+                     ON CLK.LISTNAME = 'WKOrdType'
+                     AND CLK.Code = WOD.[Type]
+                     AND CLK.StorerKey = @cStorerKey
+                     AND CLK.Short <> 'Y'  -- Not equal to Y means required to show VAS.
+                     WHERE EXISTS (SELECT 1
+                                 FROM WORKORDER WO (NOLOCK)
+                                 WHERE EXISTS ( SELECT 1 
+                                                FROM @OrderList t
+                                                WHERE t.OrderKey = WO.ExternWorkOrderKey
+                                                )
+                                 AND StorerKey = @cStorerKey
+                                 AND Facility = @cFacility
+                                 AND WO.[Type] IN('PACK', 'VAS')
+                                 AND WO.WorkOrderKey = WOD.WorkOrderKey
+                                 )
+                     ORDER BY CASE WOD.ExternLineNo WHEN '0H' THEN 0 ELSE 1 END
+                              , WOD.WorkOrderLineNumber     
+   END
+
    INSERT INTO @VASInfo ( cSKU
                         , cCode
                         , cDescr
@@ -223,13 +228,13 @@ BEGIN
                         , 0
                         , ''
                   FROM WORKORDERDETAIL WOD (NOLOCK)
-                  LEFT JOIN CODELKUP CLK (NOLOCK)
-                  ON WOD.[Type] = CLK.Code
+                  INNER JOIN CODELKUP CLK (NOLOCK)
+                  ON CLK.LISTNAME = 'WKOrdType'
+                  AND CLK.Code = WOD.[Type]
                   AND CLK.StorerKey = @cStorerKey
-                  WHERE CLK.LISTNAME = 'WKOrdType'
                   AND CLK.UDF04 = 'PRICELB' -- Get the VAS info with Price for label printing, no matter it's mandatory or not, showflag is 0 as it won't display in VAS list but only used for label printing.
                   AND CLK.UDF01 <> '' -- Only get the VAS with print doc ID for label printing.
-                  AND EXISTS (SELECT 1
+                  WHERE EXISTS (SELECT 1
                               FROM WORKORDER WO (NOLOCK)
                               WHERE EXISTS ( SELECT 1 
                                              FROM @OrderList t
@@ -334,3 +339,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_GetVasInfo_Std] TO NSQL
+GO
