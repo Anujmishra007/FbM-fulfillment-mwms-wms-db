@@ -140,10 +140,10 @@ BEGIN
             END
         END
 
-        -- Step 6: QTY screen - Set default QTY when user presses ENTER
+        -- Step 6: QTY screen - Populate default QTY on screen display
         IF @nStep = 6
         BEGIN
-            IF @nInputKey = 1
+            IF @nInputKey = 0
             BEGIN
                 -- Get SKU CLASS
                 SELECT @cSKUClass = Class
@@ -164,13 +164,11 @@ BEGIN
                     WHERE ListName = 'MICPCSIBDF'
                       AND StorerKey = @cStorerKey
                       AND Code = @cSKUClass
-                      AND Long = @cMasterUOM  -- Validate master UoM matches
+                      AND Long = @cMasterUOM
 
-                    -- Set QTY if valid number found
                     IF ISNULL(@cDefaultQty, '') <> '' AND RDT.rdtIsValidQty(@cDefaultQty, 1) = 1
                     BEGIN
                         SET @nDefaultQty = TRY_CAST(@cDefaultQty AS INT)
-
                         IF ISNULL(@nDefaultQty, 0) > 0
                         BEGIN
                             SET @nQTY = @nDefaultQty
