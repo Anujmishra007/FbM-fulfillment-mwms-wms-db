@@ -19,7 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-07-09  Wan      1.0   FCR-12980 - CR v8.6                         */
+/* 2026-07-16  Wan      1.0   FCR-12980 - CR v8.6, v8.8                   */
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_ePack]        
@@ -191,6 +191,7 @@ BEGIN
       JOIN SKU s (NOLOCK) ON s.Storerkey = pw.Storerkey
                           AND s.Sku = pw.Sku
       JOIN Pack p (NOLOCK) ON p.Packkey = s.Packkey
+      WHERE pw.CaseID = ''       
       GROUP BY pw.Orderkey
 
       OPEN @cur_eCom
@@ -200,27 +201,45 @@ BEGIN
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
       BEGIN
-         SET @c_CartonType = ''
-         SELECT TOP 1 
-                   @c_CartonType  = cz.CartonType
-                  ,@n_CartonCube  = cz.[Cube]                   
-                  ,@n_CartonLength= cz.CartonLength
-                  ,@n_CartonWidth = cz.CartonWidth
-                  ,@n_CartonHeight= cz.CartonHeight
-         FROM Cartonization AS cz
-         WHERE cz.cartonizationGroup = @c_CartonGroup
-         AND   cz.[Cube] >= @n_CBMTotal
-         ORDER BY cz.[Cube] 
- 
-         IF @c_CartonType = ''
-         BEGIN
-            SET @n_Continue = 3  
-            SET @n_Err = 65010 
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
-                           +': Carton Type Not found. (mspRLWAV13_ePack)' 
+         SET @n_CartonNo = 0                                                        --(Wan)  
+         SET @c_LabelNo  = ''        
+         SELECT @c_PickSlipNo = ph.PickHeaderKey
+         FROM PICKHEADER ph (NOLOCK)
+         WHERE ph.Orderkey = @c_Orderkey
+         
+         IF @c_PickSlipNo > ''                                                      --(Wan)                                                                  
+         BEGIN     
+            SELECT TOP 1 @n_CartonNo = pd.CartonNo                                                
+                   ,  @c_LabelNo = pd.LabelNo                                        
+            FROM dbo.PackDetail pd (NOLOCK)
+            WHERE pd.PickSlipNo = @c_PickSlipNo
+            ORDER BY pd.CartonNo DESC
          END
-
-         IF @n_Continue = 1
+            
+         IF @n_CartonNo = 0                                                         --(Wan)
+         BEGIN
+            SET @c_CartonType = '' 
+            SELECT TOP 1 
+                      @c_CartonType  = cz.CartonType
+                     ,@n_CartonCube  = cz.[Cube]                   
+                     ,@n_CartonLength= cz.CartonLength
+                     ,@n_CartonWidth = cz.CartonWidth
+                     ,@n_CartonHeight= cz.CartonHeight
+            FROM Cartonization AS cz
+            WHERE cz.cartonizationGroup = @c_CartonGroup
+            AND   cz.[Cube] >= @n_CBMTotal
+            ORDER BY cz.[Cube] 
+    
+            IF @c_CartonType = ''
+            BEGIN
+               SET @n_Continue = 3  
+               SET @n_Err = 65010 
+               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                              +': Carton Type Not found. (mspRLWAV13_ePack)' 
+            END
+         END
+      
+         IF @n_Continue = 1 AND @c_PickSlipNo = ''                                  --(Wan)
          BEGIN
             EXEC [dbo].[isp_CreatePickSlip]     
                @c_Orderkey              = @c_Orderkey        
@@ -242,11 +261,14 @@ BEGIN
             END
          END
          
-         IF @n_Continue = 1
+         IF @n_Continue = 1 AND @n_CartonNo = 0                                     --(Wan)
          BEGIN
-            SELECT @c_PickSlipNo = ph.PickHeaderKey
-            FROM PICKHEADER ph (NOLOCK)
-            WHERE ph.Orderkey = @c_Orderkey
+            IF @c_PickSlipNo = ''                                                   --(Wan)
+            BEGIN            
+               SELECT @c_PickSlipNo = ph.PickHeaderKey
+               FROM PICKHEADER ph (NOLOCK)
+               WHERE ph.Orderkey = @c_Orderkey
+            END
             
             IF NOT EXISTS (SELECT 1 FROM PACKHEADER ph (NOLOCK)
                            WHERE ph.PickSlipNo = @c_PickSlipNo
@@ -276,7 +298,7 @@ BEGIN
             END
          END
 
-         IF @n_Continue = 1
+         IF @n_Continue = 1 AND @c_LabelNo = ''                                     --(Wan) 
          BEGIN
             EXEC isp_GenUCCLabelNo_Std    
                @cPickslipNo   = @c_PickSlipNo  
@@ -297,35 +319,59 @@ BEGIN
          SET @n_RowCount = 0
          IF @n_Continue = 1 AND @c_LabelNo > ''
          BEGIN
-            SET @n_CartonNo = 0
-            SELECT TOP 1 @n_CartonNo = pd.CartonNo 
-            FROM dbo.PackDetail pd (NOLOCK)
-            WHERE pd.PickSlipNo = @c_PickSlipNo
-            ORDER BY pd.CartonNo DESC
 
-            SET @n_CartonNo = @n_CartonNo + 1
+            IF @n_CartonNo = 0                                                      --(Wan)
+            BEGIN
+               SET @n_CartonNo = @n_CartonNo + 1
+            END
 
-            INSERT INTO dbo.PackDetail
-                        (  PickSlipNo
-                        ,  CartonNo
-                        ,  LabelNo
-                        ,  LabelLine
-                        ,  Storerkey
-                        ,  Sku
-                        ,  ExpQty                                                   --(Wan01)         
-                        )
-            SELECT @c_PickSlipNo
-                  ,CartonNo = @n_CartonNo
-                  ,LabelNo  = @c_LabelNo
-                  ,LabelLine = RIGHT('00000' + CONVERT(NVARCHAR(5), ROW_NUMBER() 
-                                 OVER (ORDER BY pw.Storerkey, pw.Sku)),5)
-                  ,pw.Storerkey
-                  ,pw.Sku
-                  ,ExpQty = ISNULL(SUM(pw.Qty),0)                                   --(Wan01) 
-            FROM #PICKDETAIL_WIP AS pw
-            WHERE pw.Orderkey = @c_Orderkey
-            GROUP BY pw.Storerkey
-                  ,  pw.Sku
+            MERGE dbo.PackDetail AS t                                               --(Wan)
+            USING
+            (
+                SELECT  PickSlipNo = @c_PickSlipNo
+                      , CartonNo   = @n_CartonNo
+                      , LabelNo    = @c_LabelNo
+                      , LabelLine  = RIGHT('00000' + CONVERT(NVARCHAR(5),
+                                      ROW_NUMBER() OVER (ORDER BY pw.Storerkey, pw.Sku)), 5)
+                      , pw.Storerkey
+                      , pw.Sku
+                      , ExpQty = ISNULL(SUM(pw.Qty), 0)
+                FROM #PICKDETAIL_WIP pw
+                WHERE pw.Orderkey = @c_Orderkey
+                AND   pw.CaseID   = ''
+                GROUP BY pw.Storerkey,
+                         pw.Sku
+            ) s
+            ON  t.PickSlipNo = s.PickSlipNo
+            AND t.CartonNo   = s.CartonNo
+            AND t.Storerkey  = s.Storerkey
+            AND t.Sku        = s.Sku
+
+            WHEN MATCHED THEN
+                UPDATE
+                   SET t.ExpQty = t.ExpQty + s.ExpQty
+                    ,  t.ArchiveCop = NULL
+            WHEN NOT MATCHED THEN
+                INSERT
+                (
+                    PickSlipNo,
+                    CartonNo,
+                    LabelNo,
+                    LabelLine,
+                    Storerkey,
+                    Sku,
+                    Qty
+                )
+                VALUES
+                (
+                    s.PickSlipNo,
+                    s.CartonNo,
+                    s.LabelNo,
+                    s.LabelLine,
+                    s.Storerkey,
+                    s.Sku,
+                    s.ExpQty
+                );
 
             SET @n_RowCount = @@ROWCOUNT
             SET @n_err = @@ERROR  
@@ -340,30 +386,58 @@ BEGIN
 
          IF @n_Continue = 1 AND @n_RowCount > 0
          BEGIN      
-            INSERT INTO dbo.PackInfo
-               (  PickSlipNo
-               ,  CartonNo
-               ,  [Weight]
-               ,  [Cube]
-               ,  Qty
-               ,  CartonType
-               ,  [Length] 
-               ,  [Width]  
-               ,  [Height] 
-               )
-            SELECT PickSlipNo = @c_PickSlipNo
-                  ,CartonNo   = @n_CartonNo
-                  ,[Weight]   = ISNULL(SUM(s.StdGrossWgt * pw.Qty),0.00)
-                  ,[Cube]     = @n_CartonCube                                    
-                  ,Qty        = ISNULL(SUM(pw.Qty),0)
-                  ,CartonType = @c_CartonType
-                  ,[Length]   = @n_CartonLength
-                  ,[Width]    = @n_CartonWidth
-                  ,[Height]   = @n_CartonHeight
-            FROM #PICKDETAIL_WIP AS pw
-            JOIN SKU s (NOLOCK) ON  s.Storerkey = pw.Storerkey
-                                AND s.Sku = pw.Sku
-            WHERE pw.Orderkey = @c_Orderkey
+            MERGE dbo.PackInfo AS T                                                 --(Wan)
+            USING
+            (
+                  SELECT PickSlipNo = @c_PickSlipNo
+                        ,CartonNo   = @n_CartonNo
+                        ,[Weight]   = ISNULL(SUM(s.StdGrossWgt * pw.Qty),0.00)
+                        ,[Cube]     = @n_CartonCube
+                        ,Qty        = ISNULL(SUM(pw.Qty),0)
+                        ,CartonType = @c_CartonType
+                        ,[Length]   = @n_CartonLength
+                        ,[Width]    = @n_CartonWidth
+                        ,[Height]   = @n_CartonHeight
+                  FROM #PICKDETAIL_WIP pw
+                  JOIN SKU s (NOLOCK)
+                       ON s.Storerkey = pw.Storerkey
+                      AND s.Sku       = pw.Sku
+                  WHERE pw.Orderkey = @c_Orderkey
+                  AND   pw.CaseID   = ''
+            ) AS S
+            ON  T.PickSlipNo = S.PickSlipNo
+            AND T.CartonNo   = S.CartonNo
+
+            WHEN MATCHED THEN
+                UPDATE SET
+                     T.Qty      = T.Qty + S.Qty
+                    ,T.[Weight] = T.[Weight] + S.[Weight]
+                    ,T.Trafficcop = NULL
+            WHEN NOT MATCHED THEN
+                INSERT
+                (
+                     PickSlipNo
+                    ,CartonNo
+                    ,[Weight]
+                    ,[Cube]
+                    ,Qty
+                    ,CartonType
+                    ,[Length]
+                    ,[Width]
+                    ,[Height]
+                )
+                VALUES
+                (
+                     S.PickSlipNo
+                    ,S.CartonNo
+                    ,S.[Weight]
+                    ,S.[Cube]
+                    ,S.Qty
+                    ,S.CartonType
+                    ,S.[Length]
+                    ,S.[Width]
+                    ,S.[Height]
+                );
  
             SET @n_err = @@ERROR  
             IF @n_err <> 0  
@@ -386,6 +460,7 @@ BEGIN
                   ,pw.EditDate   = GetDate()
             FROM #PICKDETAIL_WIP AS pw
             WHERE pw.Orderkey = @c_Orderkey
+            AND   pw.CaseID   = ''                                                  --(Wan)
          END
  
          FETCH NEXT FROM @cur_eCom INTO @c_Orderkey
