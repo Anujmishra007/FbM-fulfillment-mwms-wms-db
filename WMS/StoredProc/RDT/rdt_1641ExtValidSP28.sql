@@ -40,11 +40,31 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE
-      @cLabelNo            NVARCHAR(20) = '',
-      @nRowCount           INT = 0
+      @cFacility                    NVARCHAR(5) = '',
+      @cLabelNo                     NVARCHAR(20) = '',
+      @cPackedWaveKey               NVARCHAR(10) = '',
+      @cPackedUCCNo                 NVARCHAR(20) = '',
+      @cIntermodalVehicle           NVARCHAR(20) = '',
+      @cConsigneeKey                NVARCHAR(10) = '',
+      @cOrderType                   NVARCHAR(10) = '',
+      @cPickSlipNo                  NVARCHAR(18) = '',
+      @cLoc                         NVARCHAR(10) = '',
+      @cLocationType                NVARCHAR(10) = '',
+      @cWaveKey                     NVARCHAR(10) = '',
+      @cStatus                      NVARCHAR(10) = '',
+      @cPOSTPICK                    NVARCHAR(8) = 'POSTPICK',
+      @cSTAGEOB                     NVARCHAR(8) = 'STAGEOB',
+      @cECOM                        NVARCHAR(8) = 'ECOM',
+      @nRowCount                    INT = 0
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
+
+   SELECT
+      @cFacility     = Facility,
+      @cLoc          = V_String5
+   FROM rdt.RDTMOBREC WITH(NOLOCK)
+   WHERE Mobile = @nMobile
 
    IF @nFunc = 1641
    BEGIN
@@ -53,75 +73,277 @@ BEGIN
          IF @nInputKey = 1 -- Enter
          BEGIN
             SET @cUCCNo = TRIM(@cUCCNo)
-            -- 1. Check if Scanned value is PACKDETAIL.LabelNo
-            IF EXISTS (SELECT 1 FROM dbo.PACKDETAIL WITH(NOLOCK) WHERE LabelNo = @cUCCNo AND StorerKey = @cStorerKey)
-            BEGIN
-               GOTO Quit
-            END
 
-            -- 2. Check if Scanned value is PACKINFO.TrackingNo
-            IF EXISTS (SELECT 1 FROM dbo.PACKINFO WITH(NOLOCK)
-                        WHERE TrackingNo IS NOT NULL
-                        AND TrackingNo = @cUCCNo)
-            BEGIN
-               -- fetch the PACKDETAIL.LabelNo by querying PACKDETAIL.PickSlipNo = PACKINFO.PickSlipNo AND PACKDETAIL.CartonNo = PACKINFO.CartonNo
-               SET @cLabelNo = ''
+            SELECT @cLocationType = LocationType
+            FROM dbo.LOC WITH(NOLOCK)
+            WHERE Facility = @cFacility
+               AND Loc = @cLoc
+            SET @cLocationType = ISNULL(@cLocationType, '')
 
-               SELECT TOP 1 @cLabelNo = TRIM(PD.LabelNo)
-               FROM dbo.PackDetail PD WITH(NOLOCK)
-               INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PD.PickSlipNo = PI.PickSlipNo AND PD.CartonNo = PI.CartonNo
-               WHERE PI.TrackingNo = @cUCCNo
-                  AND PD.StorerKey = @cStorerKey
-               ORDER BY PD.LabelNo
+            IF @cLocationType = @cPOSTPICK
+            BEGIN
+               SET @cWaveKey = ''
+               SET @cStatus = ''
+               SELECT TOP 1 @cWaveKey = WaveKey,
+                     @cStatus = Status
+               FROM dbo.PickDetail WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND DropID = @cUCCNo
+                  AND Loc = @cLoc
+                  AND WaveKey IS NOT NULL
+                  AND WaveKey <> ''
+               ORDER BY PickDetailKey
                SELECT @nRowCount = @@ROWCOUNT
 
-               IF @nRowCount > 0 AND @cLabelNo IS NOT NULL AND @cLabelNo <> ''
-               BEGIN
-                  GOTO Quit
-               END
-               ELSE
+               IF @nRowCount = 0
                BEGIN
                   SET @nErrNo = 271251
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Scanned value does not exist in PackDetail
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Scanned value does not exist in PickDetail
                   GOTO Quit
                END
-            END
 
-            -- 3. Extract the last 12 characters of the scanned barcode. Check this value for PACKINFO.TrackingNo match.
-            IF (LEN(@cUCCNo) >= 12)
-            BEGIN
-               SET @cUCCNo = RIGHT(@cUCCNo, 12)
-               IF EXISTS (SELECT 1 FROM dbo.PACKINFO WITH(NOLOCK)
-                        WHERE TrackingNo IS NOT NULL
-                        AND TrackingNo = @cUCCNo)
+               IF ISNULL(@cStatus, '') <> '5'
                BEGIN
-                  -- Fetch the PACKDETAIL.LabelNo by querying PACKDETAIL.PickSlipNo = PACKINFO.PickSlipNo AND PACKDETAIL.CartonNo = PACKINFO.CartonNo
-                  SET @cLabelNo = ''
+                  SET @nErrNo = 271252
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong pick status
+                  GOTO Quit
+               END
 
-                  SELECT TOP 1 @cLabelNo = TRIM(PD.LabelNo)
-                  FROM dbo.PackDetail PD WITH(NOLOCK)
-                  INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PD.PickSlipNo = PI.PickSlipNo AND PD.CartonNo = PI.CartonNo
-                  WHERE PI.TrackingNo = @cUCCNo
-                     AND PD.StorerKey = @cStorerKey
-                  ORDER BY PD.LabelNo
+               IF EXISTS (SELECT 1 FROM dbo.DropIDDetail WITH(NOLOCK) WHERE DropID = @cDropID AND ChildID = @cUCCNo)
+               BEGIN
+                  SET @nErrNo = 271253
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UCC has been scanned
+                  GOTO Quit
+               END
+
+               -- Get WaveKey from packed UCC
+               SET @cPackedUCCNo = ''
+               SELECT TOP 1 @cPackedUCCNo = ChildID
+               FROM dbo.DropIDDetail WITH(NOLOCK)
+               WHERE DropID = @cDropID
+               AND ChildID IS NOT NULL
+               AND ChildID <> ''
+               ORDER BY ChildID
+
+               IF @cPackedUCCNo IS NOT NULL AND @cPackedUCCNo <> ''
+               BEGIN
+                  SELECT TOP 1 @cPackedWaveKey = WaveKey
+                  FROM dbo.PickDetail WITH(NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cPackedUCCNo
+                     AND Status = '5'
+                     AND WaveKey IS NOT NULL
+                     AND WaveKey <> ''
+                  ORDER BY PickDetailKey
                   SELECT @nRowCount = @@ROWCOUNT
 
-                  IF @nRowCount > 0 AND @cLabelNo IS NOT NULL AND @cLabelNo <> ''
+                  IF @nRowCount > 0 AND ISNULL(@cPackedWaveKey, '') <> ''
                   BEGIN
+                     IF @cPackedWaveKey <> @cWaveKey
+                     BEGIN
+                        SET @nErrNo = 271254
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different WaveKey than the one packed
+                        GOTO Quit
+                     END
+                  END
+               END
+            END
+            ELSE IF @cLocationType = @cSTAGEOB
+            BEGIN
+               -- 1. Check if Scanned value is PACKDETAIL.LabelNo
+               SET @cPickSlipNo = ''
+               SET @cStatus = ''
+               SET @cLabelNo = ''
+
+               SELECT TOP 1
+                  @cPickSlipNo = PD.PickSlipNo,
+                  @cStatus = PKD.Status,
+                  @cLabelNo = PD.LabelNo,
+                  @cWaveKey = PKD.WaveKey,
+                  @cIntermodalVehicle = OD.IntermodalVehicle,
+                  @cConsigneeKey = OD.ConsigneeKey,
+                  @cOrderType = OD.Type
+               FROM dbo.PackDetail PD WITH(NOLOCK)
+               INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PD.LabelNo = PKD.DropID AND PD.StorerKey = PKD.StorerKey
+               INNER JOIN dbo.ORDERS OD WITH(NOLOCK) ON PKD.OrderKey = OD.OrderKey AND PKD.StorerKey = OD.StorerKey
+               WHERE PD.LabelNo = @cUCCNo
+                  AND PD.StorerKey = @cStorerKey
+               ORDER BY PD.PickSlipNo, PD.CartonNo, PD.LabelNo, PD.LabelLine
+               SELECT @nRowCount = @@ROWCOUNT
+
+               IF @nRowCount = 0
+               BEGIN
+                  GOTO CHK_TRACKINGNO_1
+               END
+
+               IF ISNULL(@cStatus, '') <> '5'
+               BEGIN
+                  SET @nErrNo = 271255
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong pick status
+                  GOTO Quit
+               END
+
+               IF ISNULL(@cPickSlipNo, '') <> ''
+               BEGIN
+                  GOTO CHK_BUILD_PALLET
+               END
+
+               -- 2. Check if Scanned value is PACKINFO.TrackingNo
+               CHK_TRACKINGNO_1:
+               IF EXISTS (SELECT 1 FROM dbo.PACKINFO WITH(NOLOCK)
+                           WHERE TrackingNo IS NOT NULL
+                           AND TrackingNo = @cUCCNo)
+               BEGIN
+                  -- fetch the PACKDETAIL.LabelNo by querying PACKDETAIL.PickSlipNo = PACKINFO.PickSlipNo AND PACKDETAIL.CartonNo = PACKINFO.CartonNo
+                  SET @cPickSlipNo = ''
+                  SET @cStatus = ''
+                  SET @cLabelNo = ''
+
+                  SELECT TOP 1
+                     @cPickSlipNo = PD.PickSlipNo,
+                     @cStatus = PKD.Status,
+                     @cLabelNo = PD.LabelNo,
+                     @cWaveKey = PKD.WaveKey,
+                     @cIntermodalVehicle = OD.IntermodalVehicle,
+                     @cConsigneeKey = OD.ConsigneeKey,
+                     @cOrderType = OD.Type
+                  FROM dbo.PackDetail PD WITH(NOLOCK)
+                  INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PD.PickSlipNo = PI.PickSlipNo AND PD.CartonNo = PI.CartonNo
+                  INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PD.LabelNo = PKD.DropID AND PD.StorerKey = PKD.StorerKey
+                  INNER JOIN dbo.ORDERS OD WITH(NOLOCK) ON PKD.OrderKey = OD.OrderKey AND PKD.StorerKey = OD.StorerKey
+                  WHERE PI.TrackingNo = @cUCCNo
+                     AND PD.StorerKey = @cStorerKey
+                  ORDER BY PD.PickSlipNo, PD.CartonNo, PD.LabelNo, PD.LabelLine
+                  SELECT @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount = 0
+                  BEGIN
+                     GOTO CHK_TRACKINGNO_2
+                  END
+
+                  IF ISNULL(@cStatus, '') <> '5'
+                  BEGIN
+                     SET @nErrNo = 271255
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong pick status
                      GOTO Quit
+                  END
+
+                  GOTO CHK_BUILD_PALLET
+               END
+
+               -- 3. Extract the last 12 characters of the scanned barcode. Check this value for PACKINFO.TrackingNo match.
+               CHK_TRACKINGNO_2:
+               IF (LEN(@cUCCNo) >= 12)
+               BEGIN
+                  SET @cUCCNo = RIGHT(@cUCCNo, 12)
+                  IF EXISTS (SELECT 1 FROM dbo.PACKINFO WITH(NOLOCK)
+                           WHERE TrackingNo IS NOT NULL
+                           AND TrackingNo = @cUCCNo)
+                  BEGIN
+                     -- Fetch the PACKDETAIL.LabelNo by querying PACKDETAIL.PickSlipNo = PACKINFO.PickSlipNo AND PACKDETAIL.CartonNo = PACKINFO.CartonNo
+                     SET @cPickSlipNo = ''
+                     SET @cStatus = ''
+                     SET @cLabelNo = ''
+
+                     SELECT TOP 1
+                        @cPickSlipNo = PD.PickSlipNo,
+                        @cStatus = PKD.Status,
+                        @cLabelNo = PD.LabelNo,
+                        @cWaveKey = PKD.WaveKey,
+                        @cIntermodalVehicle = OD.IntermodalVehicle,
+                        @cConsigneeKey = OD.ConsigneeKey,
+                        @cOrderType = OD.Type
+                     FROM dbo.PackDetail PD WITH(NOLOCK)
+                     INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PD.PickSlipNo = PI.PickSlipNo AND PD.CartonNo = PI.CartonNo
+                     INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PD.LabelNo = PKD.DropID AND PD.StorerKey = PKD.StorerKey
+                     INNER JOIN dbo.ORDERS OD WITH(NOLOCK) ON PKD.OrderKey = OD.OrderKey AND PKD.StorerKey = OD.StorerKey
+                     WHERE PI.TrackingNo = @cUCCNo
+                        AND PD.StorerKey = @cStorerKey
+                     ORDER BY PD.PickSlipNo, PD.CartonNo, PD.LabelNo, PD.LabelLine
+                     SELECT @nRowCount = @@ROWCOUNT
+
+                     IF @nRowCount = 0
+                     BEGIN
+                        SET @nErrNo = 271256
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Scanned value does not exist in PackDetail
+                        GOTO Quit
+                     END
+
+                     IF ISNULL(@cStatus, '') <> '5'
+                     BEGIN
+                        SET @nErrNo = 271255
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong pick status
+                        GOTO Quit
+                     END
+                     GOTO CHK_BUILD_PALLET
+                  END
+               END
+
+               -- IF the scanned value is not found in PACKDETAIL.LabelNo or PACKINFO.TrackingNo, return error
+               SET @nErrNo = 271257
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid UCC
+               GOTO Quit
+
+               -- Compare WaveKey from scanned UCC and packed UCC
+               CHK_BUILD_PALLET:
+               IF EXISTS (SELECT 1 FROM dbo.DropIDDetail WITH(NOLOCK) WHERE DropID = @cDropID AND ChildID = @cLabelNo)
+               BEGIN
+                  SET @nErrNo = 271258
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UCC has been scanned
+                  GOTO Quit
+               END
+
+               -- It is not an empty pallet,
+               -- 1. check the IntermodalVehicle for ECOM order
+               -- 2. check the WaveKey and ConsigneeKey for non-ECOM order
+               IF EXISTS (SELECT 1
+                        FROM dbo.DropIDDetail WITH(NOLOCK)
+                        WHERE DropID = @cDropID
+                           AND ChildID IS NOT NULL
+                           AND ChildID <> '')
+               BEGIN
+                  IF @cOrderType = @cECOM
+                  BEGIN
+                     IF EXISTS(SELECT 1
+                              FROM dbo.DropIDDetail WITH(NOLOCK)
+                              WHERE DropID = @cDropID
+                                 AND UserDefine01 <> @cIntermodalVehicle)
+                     BEGIN
+                        SET @nErrNo = 271259
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Different Intermodal Vehicle
+                        GOTO Quit
+                     END
                   END
                   ELSE
                   BEGIN
-                     SET @nErrNo = 271252
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Scanned value does not exist in PackDetail
-                     GOTO Quit
+                     IF EXISTS(SELECT 1
+                              FROM dbo.DropIDDetail WITH(NOLOCK)
+                              WHERE DropID = @cDropID
+                                 AND UserDefine02 <> @cWaveKey)
+                     BEGIN
+                        SET @nErrNo = 271260
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Different WaveKey
+                        GOTO Quit
+                     END
+
+                     IF EXISTS(SELECT 1
+                              FROM dbo.DropIDDetail WITH(NOLOCK)
+                              WHERE DropID = @cDropID
+                                 AND UserDefine03 <> @cConsigneeKey)
+                     BEGIN
+                        SET @nErrNo = 271261
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Different ConsigneeKey
+                        GOTO Quit
+                     END
                   END
                END
             END
-
-            SET @nErrNo = 271253
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid UCC
-            GOTO Quit
+            ELSE
+            BEGIN
+               SET @nErrNo = 271262
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Loc
+               GOTO Quit
+            END
          END
       END
    END
