@@ -51,6 +51,8 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+   
+   DECLARE @nDebugFlag  INT = 0
 
    DECLARE 
       @nCurrentScn            INT,
@@ -68,6 +70,9 @@ BEGIN
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
+   IF @nDebugFlag = 1
+      SELECT 'Executing ExtUpd36', @nCurrentStep AS CurrentStep, @nCurrentScn AS CurrentScn, @cB2CSingleFlag AS B2CSingleFlag
+
    IF @nFunc = 838 -- Pack
    BEGIN
       IF @nCurrentStep = 99 -- ExtScnSP
@@ -76,6 +81,9 @@ BEGIN
          BEGIN
             IF @nInputKey = 1 -- Enter
             BEGIN
+               IF @nDebugFlag = 1
+                  SELECT 'ExtUpd36, Step99, CartonType Screen, Enter'
+
                IF ISNULL(@cB2CSingleFlag, '') = 'Y'
                BEGIN
                   -- Pack completed
@@ -87,6 +95,9 @@ BEGIN
                                     AND PD.StorerKey = @cStorerKey
                                     AND PH.Status <> '9')
                   BEGIN
+                     IF @nDebugFlag = 1
+                        SELECT 'B2C Single, Call PackConfirm', @cPickSlipNo AS PSNO, @cFromDropID AS FromDropID
+
                      EXEC rdt.rdt_Pack_PackConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
                         ,@cPickSlipNo
                         ,@cFromDropID

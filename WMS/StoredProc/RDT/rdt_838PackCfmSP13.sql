@@ -90,7 +90,7 @@ BEGIN
 
 
    SELECT
-      @cB2CSingleLabelNo = C_STRING3, 
+      @cB2CSingleLabelNo = V_STRING3, 
       @cB2CSingleFlag = C_STRING7 
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile

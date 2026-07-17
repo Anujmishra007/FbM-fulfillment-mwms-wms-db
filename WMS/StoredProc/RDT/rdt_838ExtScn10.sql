@@ -869,6 +869,9 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
+            IF @nDebugFlag = 1
+               SELECT 'ExtScn10, Step5, Enter'
+
             SET @cOption = @cInField01
 
             IF @cOption = '1'
@@ -876,6 +879,9 @@ BEGIN
                -- For B2C single handling, check if there is remaining qty to pack, if yes, go back to scan SKU
                IF @cB2CSingleFlag = 'Y'
                BEGIN
+                  IF @nDebugFlag = 1
+                     SELECT 'B2C Single, Option1'
+
                   SET @nRemainQTY = 0
                   SELECT @nRemainQTY = SUM(PAD.ExpQty - PAD.Qty)
                   FROM dbo.PackDetail PAD WITH (NOLOCK)
@@ -939,8 +945,14 @@ BEGIN
          END
          ELSE IF @nInputKey = 0
          BEGIN
+            IF @nDebugFlag = 1
+               SELECT 'ExtScn10, Step5, ESC'
+
             IF @cB2CSingleFlag = 'Y'
             BEGIN
+               IF @nDebugFlag = 1
+                  SELECT 'B2C Single, ESC'
+
                -- Custom PackInfo field setup
                SET @cPackInfo = ''
                IF @cCapturePackInfoSP <> ''

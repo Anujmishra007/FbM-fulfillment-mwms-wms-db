@@ -95,7 +95,7 @@ BEGIN
       ('@cFromDropID',    @cFromDropID),
       ('@cPackDtlDropID', @cFromDropID),
       ('@cLabelNo',       @cLabelNo),
-      ('@nCartonNo',      CAST(@nCartonNo AS NVARCHAR(10)))
+      ('@nCartonNo',      ISNULL(TRY_CAST(@nCartonNo AS NVARCHAR(10)), '0'))
 
    -- Load all report types for this WaveType
    INSERT INTO @tReportList (ReportType)
