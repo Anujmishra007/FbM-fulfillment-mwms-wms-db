@@ -201,6 +201,7 @@ BEGIN
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
       BEGIN
+         SET @c_PickSlipNo = ''                                                     --(Wan)
          SET @n_CartonNo = 0                                                        --(Wan)  
          SET @c_LabelNo  = ''        
          SELECT @c_PickSlipNo = ph.PickHeaderKey
@@ -360,7 +361,7 @@ BEGIN
                     LabelLine,
                     Storerkey,
                     Sku,
-                    Qty
+                    ExpQty
                 )
                 VALUES
                 (
