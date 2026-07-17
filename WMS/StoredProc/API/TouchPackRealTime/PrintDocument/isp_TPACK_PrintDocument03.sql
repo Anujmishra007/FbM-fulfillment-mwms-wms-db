@@ -14,6 +14,7 @@ GO
 /* 2026-03-26   2.0  JWF011     UWP-52945: Convert isp_TPACK_PrintDocument97     */
 /* 2026-04-02   2.1  JWF011     UWP-52832: Update print logic                    */
 /* 2026-05-12   2.2  JWF011     UWP-52781: Add IsAutoPrint logic                 */
+/* 2026-06-29   2.3  GCH225     UWP-52413: Fix the GetReprintOpt for ReportType  */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument03] (
@@ -64,6 +65,7 @@ BEGIN
          , @cCustomLabelSP       NVARCHAR(30)
          , @ctempLabelJobIDs     NVARCHAR(MAX)
          , @cReportLineNo        NVARCHAR(20) = ''
+         , @cCurReportType       NVARCHAR(30) 
    
    DECLARE @cFieldName1       NVARCHAR(MAX)
          , @cFieldName2       NVARCHAR(MAX)
@@ -86,7 +88,8 @@ BEGIN
    SET @cSQLParam          = ''
    SET @cModuleID          = 'TPPACK'
    SET @cCustomLabelSP     = ''
-
+   SET @cCurReportType     = ''
+   
    --Label Print
    IF @bIsAutoPrint = 1
       OR (@bIsAutoPrint = 0 AND @bPrintLabelFlag = 1)
@@ -98,6 +101,7 @@ BEGIN
                   WHERE WMRD.StorerKey  = @cStorerKey 
                   AND WMR.ModuleID = @cModuleID
                   AND WMRD.IsPaperPrinter <> 'Y'
+                  AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                   AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
                   AND WMRD.AutoPrint = 'Y'
@@ -116,6 +120,7 @@ BEGIN
                   WHERE WMRD.Storerkey = @cStorerKey
                   AND WMR.ModuleID = @cModuleID
                   AND WMRD.IsPaperPrinter <> 'Y'
+                  AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                   AND (WMR.KeyFieldName1 = '' OR WMR.KeyFieldName1 IS NULL)
                   AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
@@ -143,6 +148,7 @@ BEGIN
       WHERE WMRD.Storerkey = @cStorerKey
       AND WMR.ModuleID = @cModuleID
       AND WMRD.IsPaperPrinter <> 'Y'
+      AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
       AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
       AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
       AND WMRD.AutoPrint = 'Y'
@@ -150,7 +156,7 @@ BEGIN
       OPEN CUR_LBL
       FETCH NEXT FROM CUR_LBL INTO @cReportID
                                  , @cPrintSource
-                                 , @cReportType
+                                 , @cCurReportType
                                  , @cDefaultPrinterID
                                  , @cFieldName1
                                  , @cFieldName2
@@ -279,7 +285,7 @@ BEGIN
                FROM rdt.RDTREPORTTOPRINTER (NOLOCK)  
                WHERE Function_ID = '838'  
                AND StorerKey = @cStorerKey  
-               AND ReportType = @cReportType
+               AND ReportType = @cCurReportType
                AND PrinterGroup = @cLabelPrinter  
 
                IF @cPrinterInGroup = ''  
@@ -341,7 +347,7 @@ BEGIN
 
          FETCH NEXT FROM CUR_LBL INTO @cReportID
                                     , @cPrintSource
-                                    , @cReportType
+                                    , @cCurReportType
                                     , @cDefaultPrinterID
                                     , @cFieldName1
                                     , @cFieldName2
@@ -357,20 +363,21 @@ BEGIN
       OR (@bIsAutoPrint = 0 AND @bPrintPaperFlag = 1)
    BEGIN
 
-      SET @cSQL         = ''
-      SET @cSQLParam    = ''
-      SET @cFieldName1  = ''
-      SET @cFieldName2  = ''
-      SET @cFieldName3  = ''
-      SET @cFieldName4  = ''
-      SET @cParams1     = ''
-      SET @cParams2     = ''
-      SET @cParams3     = ''
-      SET @cParams4     = ''
-      SET @IsAggregate1 = 0
-      SET @IsAggregate2 = 0
-      SET @IsAggregate3 = 0
-      SET @IsAggregate4 = 0
+   SET @cSQL            = ''
+   SET @cSQLParam       = ''
+   SET @cCurReportType  = ''
+   SET @cFieldName1     = ''
+   SET @cFieldName2     = ''
+   SET @cFieldName3     = ''
+   SET @cFieldName4     = ''
+   SET @cParams1        = ''
+   SET @cParams2        = ''
+   SET @cParams3        = ''
+   SET @cParams4        = ''
+   SET @IsAggregate1    = 0
+   SET @IsAggregate2    = 0
+   SET @IsAggregate3    = 0
+   SET @IsAggregate4    = 0
       
       IF NOT EXISTS ( SELECT 1 
                   FROM WMREPORT WMR (NOLOCK) 
@@ -379,6 +386,7 @@ BEGIN
                   WHERE WMRD.StorerKey  = @cStorerKey 
                   AND WMR.ModuleID = @cModuleID
                   AND WMRD.IsPaperPrinter = 'Y'
+                  AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                   AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
                   AND WMRD.AutoPrint = 'Y'
@@ -397,6 +405,7 @@ BEGIN
                   WHERE WMRD.Storerkey = @cStorerKey
                   AND WMR.ModuleID = @cModuleID
                   AND WMRD.IsPaperPrinter = 'Y'
+                  AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                   AND (WMR.KeyFieldName1 = '' OR WMR.KeyFieldName1 IS NULL)
                   AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
@@ -425,6 +434,7 @@ BEGIN
       WHERE WMRD.Storerkey = @cStorerKey
       AND WMR.ModuleID = @cModuleID
       AND WMRD.IsPaperPrinter = 'Y'
+      AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
       AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
       AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
       AND WMRD.AutoPrint = 'Y'
@@ -432,7 +442,7 @@ BEGIN
       OPEN CUR_PAPER
       FETCH NEXT FROM CUR_PAPER INTO  @cReportID
                                     , @cPrintSource
-                                    , @cReportType
+                                    , @cCurReportType
                                     , @cDefaultPrinterID
                                     , @cFieldName1
                                     , @cFieldName2
@@ -543,7 +553,7 @@ BEGIN
                FROM rdt.RDTREPORTTOPRINTER (NOLOCK)  
                WHERE Function_ID = '838'  
                AND StorerKey = @cStorerKey  
-               AND ReportType = @cReportType
+               AND ReportType = @cCurReportType
                AND PrinterGroup = @cPaperPrinter  
 
                IF @cPrinterInGroup = ''  
@@ -601,7 +611,7 @@ BEGIN
 
          FETCH NEXT FROM CUR_PAPER INTO  @cReportID
                                        , @cPrintSource
-                                       , @cReportType
+                                       , @cCurReportType
                                        , @cDefaultPrinterID
                                        , @cFieldName1
                                        , @cFieldName2
@@ -640,3 +650,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_PrintDocument03] TO NSQL
+GO

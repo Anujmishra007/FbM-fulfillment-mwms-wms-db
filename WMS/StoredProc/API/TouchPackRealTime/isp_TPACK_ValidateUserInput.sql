@@ -1556,7 +1556,7 @@ SEARCHSKU:
 
 GET_PACKDETAIL_LIST:
 
-   EXEC [API].[isp_TPACK_GetPackDetail]
+   EXEC [API].[isp_TPACK_PackDetail_Wrapper]
         @cType             = @cType            
       , @bIsDiscrete       = @bIsDiscrete      
       , @bIsCustom         = @bIsCustom        
@@ -1646,3 +1646,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_ValidateUserInput] TO NSQL
+GO
