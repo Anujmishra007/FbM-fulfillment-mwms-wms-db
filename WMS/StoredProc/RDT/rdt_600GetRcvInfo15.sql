@@ -97,7 +97,7 @@ BEGIN
                 WHERE ReceiptKey = @cReceiptKey
                 AND StorerKey = @cStorerKey
                 AND SKU = @cSKU
-                ORDER BY ReceiptLineNumber
+                ORDER BY CASE WHEN ISNULL(Lottable06, '') <> '' THEN 0 ELSE 1 END, ReceiptLineNumber
             END
         END
 
@@ -140,10 +140,10 @@ BEGIN
             END
         END
 
-        -- Step 6: QTY screen - Populate default QTY on screen display
+        -- Step 6: QTY screen - Set default QTY when user presses ENTER
         IF @nStep = 6
         BEGIN
-            IF @nInputKey = 0
+            IF @nInputKey = 1
             BEGIN
                 -- Get SKU CLASS
                 SELECT @cSKUClass = Class
@@ -164,11 +164,13 @@ BEGIN
                     WHERE ListName = 'MICPCSIBDF'
                       AND StorerKey = @cStorerKey
                       AND Code = @cSKUClass
-                      AND Long = @cMasterUOM
+                      AND Long = @cMasterUOM  -- Validate master UoM matches
 
+                    -- Set QTY if valid number found
                     IF ISNULL(@cDefaultQty, '') <> '' AND RDT.rdtIsValidQty(@cDefaultQty, 1) = 1
                     BEGIN
                         SET @nDefaultQty = TRY_CAST(@cDefaultQty AS INT)
+
                         IF ISNULL(@nDefaultQty, 0) > 0
                         BEGIN
                             SET @nQTY = @nDefaultQty
