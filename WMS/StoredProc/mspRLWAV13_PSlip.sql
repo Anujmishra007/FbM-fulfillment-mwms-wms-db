@@ -19,6 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-20  Wan      1.0   Fixed update not by loadkey                 */
 /**************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_PSlip]        
    @c_Wavekey     NVARCHAR(10)
@@ -179,6 +180,7 @@ BEGIN
             AND pw.Qty > 0 
             AND pw.WIP_RefNo = @c_SourceType 
             AND pw.Taskdetailkey = ''
+            AND lpd.Loadkey = @c_Loadkey                                            --(Wan)
          END
 
          FETCH NEXT FROM @cur_ORD INTO @c_Orderkey
