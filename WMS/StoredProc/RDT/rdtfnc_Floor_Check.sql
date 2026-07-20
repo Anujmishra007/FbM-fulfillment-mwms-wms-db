@@ -444,6 +444,8 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
       SET @cCartonID = ISNULL(RTRIM(@cInField03), '')
+      IF LEN(@cCartonID) = 20
+         SET @cCartonID = SUBSTRING(@cCartonID, 3, 18)
 
       IF @cCartonID = '99'
       BEGIN
