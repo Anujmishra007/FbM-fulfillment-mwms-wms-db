@@ -15,6 +15,7 @@ GO
 /* 2025-05-12 1.1  Dennis      UWP-34249 Performance Tune               */
 /* 2025-10-14 1.2  NickT       UWP-42331 Add PKD query cond: Lottable01 */
 /* 2026-02-09 1.3  Dennis      UWP-48571 BugFix                         */
+/* 2026-07-18 1.4  Dennis      UWP-48571 Add PKD duplicate scan guard   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ConfirmSP24] (
