@@ -684,6 +684,9 @@ BEGIN
                 SELECT @n_err = @@ERROR
                 IF @n_err <> 0
                 BEGIN
+                SET @n_Continue = 3
+                SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
+                                  + ': INSERT INTO MBOL Table Failed. (mspASNFZ05)'
                 GOTO QUIT_SP
                 END
 
@@ -693,8 +696,11 @@ BEGIN
                 WHERE MbolKey = @c_GetMBOLKey
 
                 SELECT @n_err = @@ERROR
-                           IF @n_err <> 0
+                IF @n_err <> 0
                 BEGIN
+                SET @n_Continue = 3
+                SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
+                                  + ': UPDATE MBOL Table Failed. (mspASNFZ05)'
                 GOTO QUIT_SP
                 END
             END
